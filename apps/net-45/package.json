@@ -1,0 +1,20 @@
+{
+  "name": "net-45",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Generatore di rete di cordoncini a 45° su sagoma DXF/SVG. Output SVG. Primo cittadino dell'ecosistema.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@rg/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}

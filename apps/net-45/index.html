@@ -1,0 +1,45 @@
+<!doctype html>
+<html lang="it">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Rete 45° — generatore</title>
+    <link rel="stylesheet" href="./src/style.css" />
+  </head>
+  <body>
+    <aside id="panel">
+      <h1>Rete 45°</h1>
+      <p class="sub">Generatore di rete di cordoncini su sagoma · output SVG</p>
+
+      <section>
+        <h2>1 · Sagoma</h2>
+        <label class="file">
+          <input type="file" id="fileInput" accept=".svg,.dxf" />
+          <span>Carica DXF o SVG…</span>
+        </label>
+        <button id="sampleBtn" class="ghost">Usa sagoma demo</button>
+        <div id="status" class="status"></div>
+      </section>
+
+      <section>
+        <h2>2 · Colori → ruoli</h2>
+        <div id="roles" class="roles"></div>
+      </section>
+
+      <section>
+        <h2>3 · Parametri</h2>
+        <div id="params" class="params"></div>
+      </section>
+
+      <section class="actions">
+        <button id="exportBtn">Esporta SVG</button>
+      </section>
+    </aside>
+
+    <main id="stage">
+      <div id="preview"></div>
+    </main>
+
+    <script type="module" src="./src/main.ts"></script>
+  </body>
+</html>

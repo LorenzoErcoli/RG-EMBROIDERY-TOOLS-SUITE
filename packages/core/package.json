@@ -1,0 +1,10 @@
+{
+  "name": "@rg/core",
+  "version": "0.1.0",
+  "description": "Libreria condivisa dell'ecosistema ricamo. Rispetta COSTITUZIONE-RICAMO.md (regole R1–R26, parametri canonici).",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  }
+}
