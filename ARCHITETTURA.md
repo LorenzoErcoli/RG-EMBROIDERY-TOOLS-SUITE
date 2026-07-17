@@ -106,3 +106,36 @@ graph TD
 | 45-grid | vanilla JS | migra quando lo tocchi |
 | pattern-grammar-engine | TS/node | contribuisce infrastruttura (boundary/import, exporter) al core |
 | bitmap_to_stitch | Python | satellite: contratti sì, codice no |
+
+---
+
+## Suite RG Tools — LIVE (v0.1)
+
+Il monorepo è ora la **suite RG Tools** con una home comune e il design system integrato.
+
+```
+RG Tools (monorepo)
+├─ packages/design-system   ★ RG Design System — SUBMODULE git (fonte di verità del look)
+├─ packages/ui              integra il DS (rg.css) + chrome condiviso (topbar, registro tool)
+├─ packages/core            @rg/core — geometria/IO/rete
+├─ apps/shell               ★ HOME della suite: griglia di card, scegli il tool (hash routing)
+└─ apps/net-45              tool "Rete 45°" — montabile (mountNet45) + standalone
+```
+
+**Come funziona:** `apps/shell` è l'unica app d'ingresso. Home (`#/`) = griglia di tool DS-styled;
+clic su un tool → `#/net-45` → `mountNet45(root, {backHref:'#/'})` monta il tool dentro la shell
+(link "← RG Tools" per tornare). Ogni tool esporta un `mount(root)` → è sia standalone sia integrato.
+
+**Design system:** submodule in `packages/design-system`; `packages/ui/src/rg.css` importa i 6 file DS
+nell'ordine richiesto. Ogni app importa `@rg/ui/rg.css` + usa le classi `.rg-*` e i token
+(`var(--rg-color-*)`, `var(--rg-space-*)`). Nero/bianco, bordi sottili, niente hex inline.
+Nota: i font AGNext/GT America non sono inclusi (regola DS) → fallback di sistema finché non si aggiungono.
+
+**Avvio:** doppio-click su `avvia.bat` (root) → apre la home RG Tools. Aggiornare il DS: `git submodule update --remote`.
+
+**Migrazione tool:** uno alla volta. Per portare oblique/45-grid/cross-stitch nella suite:
+(1) esportare un `mount(root)`, (2) importare `@rg/ui/rg.css` e ri-vestire con le classi `.rg-*`,
+(3) aggiungere una card in `packages/ui/src/tools.ts` e una route nella shell. Il satellite Python resta fuori.
+
+> **Nota submodule locale:** il submodule punta a `../RG-DESIGN-SYSTEM` (path locale, entrambi i repo senza remote).
+> Quando i repo andranno su GitHub, aggiornare l'URL del submodule in `.gitmodules` con quello remoto.

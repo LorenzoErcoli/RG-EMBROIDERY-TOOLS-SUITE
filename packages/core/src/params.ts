@@ -15,6 +15,8 @@ export interface NetParams {
   netInsetMm: number;     // inizio/fine rete: rientro dal perimetro
   netOffsetXMm: number;   // spostamento della griglia rispetto al DXF (X)
   netOffsetYMm: number;   // spostamento della griglia rispetto al DXF (Y)
+  rasoBandMm: number;         // spessore della fascia di bordo dove le celle diventano raso (0 = nessuna)
+  rasoDownwardOnly: number;   // 1 = raso solo sui bordi rivolti in basso/lati (NON in alto); 0 = tutti i bordi
 
   // Cordoncino
   cordWidthMm: number;
@@ -42,6 +44,8 @@ export const defaultNetParams: NetParams = {
   netInsetMm: 0,
   netOffsetXMm: 0,
   netOffsetYMm: 0,
+  rasoBandMm: 8,
+  rasoDownwardOnly: 1,
   cordWidthMm: 1.8,
   cordDensityMm: 0.4,
   travelStitchMm: 3,

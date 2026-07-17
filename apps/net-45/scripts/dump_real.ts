@@ -20,7 +20,7 @@ const scaled = applyRealWidth(result, REAL);
 const eff = measureContours(scaled);
 console.log('reale impostata:', REAL, '→ effettiva', Math.round(eff.widthMm), 'x', Math.round(eff.heightMm), 'mm');
 
-const { layers, bounds } = runPipeline(scaled, { '#ff0000': 'MASTER_OUTLINE' }, { ...defaultNetParams, netInsetMm: 8 });
+const { layers, bounds } = runPipeline(scaled, { '#ff0000': 'MASTER_OUTLINE' }, { ...defaultNetParams, netInsetMm: 0, rasoBandMm: 7 });
 writeFileSync(new URL('./dump.json', import.meta.url), JSON.stringify({
   bounds,
   layers: layers.map((l) => ({ id: l.id, color: l.color, shapeOnly: !!l.shapeOnly, polylines: l.polylines })),

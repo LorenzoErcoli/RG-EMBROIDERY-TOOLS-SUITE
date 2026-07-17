@@ -6,7 +6,8 @@
     "noEmit": true,
     "paths": {
       "@rg/core": ["../../packages/core/src/index.ts"],
-      "@rg/ui/*": ["../../packages/ui/src/*"]
+      "@rg/ui/*": ["../../packages/ui/src/*"],
+      "@app/net-45": ["../net-45/src/tool.ts"]
     }
   },
   "include": ["src", "vite.config.ts"]

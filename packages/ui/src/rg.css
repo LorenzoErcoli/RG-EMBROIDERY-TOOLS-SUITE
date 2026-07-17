@@ -1,0 +1,8 @@
+/* RG Design System — import unico nell'ordine richiesto (AI_CONTEXT.md).
+   Il DS è un submodule in packages/design-system: unica fonte di verità. */
+@import '../../design-system/tokens.css';
+@import '../../design-system/styles/rg-core.css';
+@import '../../design-system/styles/rg-typography.css';
+@import '../../design-system/styles/rg-components.css';
+@import '../../design-system/styles/rg-layout.css';
+@import '../../design-system/styles/rg-utilities.css';

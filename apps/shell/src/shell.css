@@ -1,0 +1,32 @@
+/* Layout della home suite (usa i token del RG Design System). */
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--rg-color-background);
+  color: var(--rg-color-text-primary);
+  font-family: var(--rg-font-body);
+}
+#app { display: flex; flex-direction: column; min-height: 100vh; }
+
+.suite-topbar {
+  display: flex; align-items: center; gap: var(--rg-space-4);
+  height: var(--rg-layout-header); padding: 0 var(--rg-space-6);
+  border-bottom: var(--rg-border-hairline) var(--rg-border-style) var(--rg-color-border);
+  flex: none;
+}
+.suite-topbar__title { margin: 0; }
+.suite-topbar__slot { margin-left: auto; }
+.rg-topbar__brand { font-family: var(--rg-font-identity); font-weight: var(--rg-weight-bold); }
+
+.suite-home {
+  max-width: var(--rg-layout-content-max); width: 100%; box-sizing: border-box;
+  margin: 0 auto; padding: var(--rg-space-12) var(--rg-space-6);
+}
+.suite-home__sub { margin-top: var(--rg-space-2); margin-bottom: var(--rg-space-8); }
+.suite-grid { gap: var(--rg-layout-grid-gap); }
+.suite-card {
+  display: flex; flex-direction: column; gap: var(--rg-space-2);
+  text-decoration: none; color: inherit; padding: var(--rg-space-6); min-height: 128px;
+}
+.suite-card__desc { flex: 1; color: var(--rg-color-text-secondary); margin: 0; }
+a.suite-card:hover { border-color: var(--rg-color-border-strong); }
+.suite-card--soon { opacity: 0.55; }

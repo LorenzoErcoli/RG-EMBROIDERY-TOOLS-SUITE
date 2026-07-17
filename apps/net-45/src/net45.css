@@ -1,0 +1,51 @@
+/* Layout applicativo del tool Rete 45° (usa i token del RG Design System). */
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--rg-color-background);
+  color: var(--rg-color-text-primary);
+  font-family: var(--rg-font-body);
+}
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* Topbar condivisa della suite */
+.suite-topbar {
+  display: flex; align-items: center; gap: var(--rg-space-4);
+  height: var(--rg-layout-header); padding: 0 var(--rg-space-6);
+  border-bottom: var(--rg-border-hairline) var(--rg-border-style) var(--rg-color-border);
+  flex: none;
+}
+.suite-topbar__title { margin: 0; }
+.suite-topbar__slot { margin-left: auto; }
+.rg-topbar__back, .rg-topbar__brand {
+  font-family: var(--rg-font-identity); text-decoration: none; color: var(--rg-color-text-primary);
+}
+.rg-topbar__back:hover { text-decoration: underline; }
+
+.net45 { flex: 1; display: grid; grid-template-columns: var(--rg-layout-sidebar) 1fr; min-height: 0; }
+.net45__panel {
+  border-right: var(--rg-border-hairline) var(--rg-border-style) var(--rg-color-border);
+  padding: var(--rg-space-4); overflow-y: auto;
+}
+.net45__section { padding: var(--rg-space-3) 0; border-top: var(--rg-border-hairline) var(--rg-border-style) var(--rg-color-border); }
+.net45__section:first-child { border-top: 0; padding-top: 0; }
+.net45__section > .rg-label { display: block; margin-bottom: var(--rg-space-2); }
+.net45__file { display: block; position: relative; margin-bottom: var(--rg-space-2); }
+.net45__file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.net45__file span { width: 100%; }
+.net45__prow { display: flex; align-items: center; justify-content: space-between; gap: var(--rg-space-2); margin-bottom: var(--rg-space-2); }
+.net45__prow .rg-input { width: 92px; text-align: right; }
+.net45__rrow { display: flex; align-items: center; gap: var(--rg-space-2); margin-bottom: var(--rg-space-2); }
+.net45__swatch { width: 18px; height: 18px; border: var(--rg-border-hairline) var(--rg-border-style) var(--rg-color-border); flex: none; }
+.net45__rrow .rg-select { flex: 1; }
+#exportBtn { width: 100%; }
+
+.net45__stage {
+  overflow: auto; display: flex; align-items: center; justify-content: center;
+  background: var(--rg-color-surface); padding: var(--rg-space-6);
+}
+#preview { width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; }
+#preview svg {
+  max-width: 100%; max-height: 100%;
+  background: var(--rg-color-white);
+  border: var(--rg-border-hairline) var(--rg-border-style) var(--rg-color-border);
+}

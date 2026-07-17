@@ -71,6 +71,47 @@ export const lerp = (a: Point, b: Point, t: number): Point => ({
   y: a.y + (b.y - a.y) * t,
 });
 
+export function distanceToSegment(p: Point, a: Point, b: Point): number {
+  const dx = b.x - a.x, dy = b.y - a.y;
+  const len2 = dx * dx + dy * dy || 1;
+  let t = ((p.x - a.x) * dx + (p.y - a.y) * dy) / len2;
+  t = Math.max(0, Math.min(1, t));
+  return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+}
+
+/** Distanza minima dal perimetro del poligono. */
+export function distanceToBoundary(p: Point, poly: Polyline): number {
+  let best = Infinity;
+  for (let i = 0; i < poly.length; i++) {
+    best = Math.min(best, distanceToSegment(p, poly[i], poly[(i + 1) % poly.length]));
+  }
+  return best;
+}
+
+/** Normale USCENTE (unitaria) del lato del poligono più vicino a p. y>0 = rivolto in basso (schermo Y-down). */
+export function nearestEdgeNormal(p: Point, poly: Polyline): Point {
+  let bestD = Infinity, bi = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const d = distanceToSegment(p, poly[i], poly[(i + 1) % poly.length]);
+    if (d < bestD) { bestD = d; bi = i; }
+  }
+  const a = poly[bi], b = poly[(bi + 1) % poly.length];
+  const dir = unit(a, b);
+  let n = { x: -dir.y, y: dir.x };
+  const m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  if (pointInPolygon({ x: m.x + n.x * 0.5, y: m.y + n.y * 0.5 }, poly)) n = { x: -n.x, y: -n.y };
+  return n;
+}
+
+/** Intersezione di due RETTE infinite (per p1p2 e p3p4). null se parallele. */
+export function lineIntersection(p1: Point, p2: Point, p3: Point, p4: Point): Point | null {
+  const d1x = p2.x - p1.x, d1y = p2.y - p1.y, d2x = p4.x - p3.x, d2y = p4.y - p3.y;
+  const den = d1x * d2y - d1y * d2x;
+  if (Math.abs(den) < 1e-9) return null;
+  const t = ((p3.x - p1.x) * d2y - (p3.y - p1.y) * d2x) / den;
+  return { x: p1.x + t * d1x, y: p1.y + t * d1y };
+}
+
 /** Versore da a verso b. */
 export function unit(a: Point, b: Point): Point {
   const d = distance(a, b) || 1;

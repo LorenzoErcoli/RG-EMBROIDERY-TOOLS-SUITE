@@ -1,0 +1,3 @@
+[submodule "packages/design-system"]
+	path = packages/design-system
+	url = ../RG-DESIGN-SYSTEM

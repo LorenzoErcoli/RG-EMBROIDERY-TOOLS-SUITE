@@ -2,14 +2,19 @@
   "name": "rg-embroidery-commons",
   "version": "0.1.0",
   "private": true,
-  "description": "Ecosistema di tool per ricamo — core condiviso + app. Vedi COSTITUZIONE-RICAMO.md e ARCHITETTURA.md.",
+  "description": "RG Tools — suite di strumenti per ricamo: core condiviso + design system + app. Vedi COSTITUZIONE-RICAMO.md e ARCHITETTURA.md.",
   "type": "module",
   "workspaces": [
-    "packages/*",
+    "packages/core",
+    "packages/ui",
     "apps/*"
   ],
   "scripts": {
+    "dev": "npm run dev --workspace apps/shell",
+    "suite": "npm run start --workspace apps/shell",
+    "dev:shell": "npm run dev --workspace apps/shell",
     "dev:net-45": "npm run dev --workspace apps/net-45",
+    "build": "npm run build --workspace apps/shell",
     "build:net-45": "npm run build --workspace apps/net-45"
   }
 }

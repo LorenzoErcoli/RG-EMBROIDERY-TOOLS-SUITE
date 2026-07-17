@@ -66,9 +66,15 @@ export function runPipeline(
   // Rete = filo CONTINUO (R26): cordoncino → passaggio → cordoncino → passaggio… in un'unica
   // polilinea per area, UN solo colore. La larghezza del cordoncino è nella geometria (R15).
   const netPaths: Polyline[] = [];
+  const rasoDiamonds: Polyline[] = [];
   for (const b of netBoundaries) {
     const r = buildNet(b, exclusions, params);
     if (r.path.length >= 2) netPaths.push(r.path);
+    rasoDiamonds.push(...r.rasoShapes);
+  }
+  // Diamanti di raso (fascia di bordo) → FORME da riempire su Stilista.
+  if (rasoDiamonds.length) {
+    layers.push({ id: 'net-raso', color: COLORS.square, polylines: rasoDiamonds, strokeMm: SHAPE_STROKE_MM, shapeOnly: true });
   }
   layers.push({ id: 'net', color: COLORS.net, polylines: netPaths, strokeMm: THREAD_STROKE_MM });
 
