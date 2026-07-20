@@ -13,14 +13,19 @@ export const TOOLS: ToolDef[] = [
   { id: 'bitmap', name: 'Bitmap → Stitch', description: 'Da immagine a tracciato di ricamo.', status: 'soon' },
 ];
 
-/** Topbar RG condivisa. `backHref` = link "torna alla home suite" (assente nella home). */
+/**
+ * Topbar dell'applicazione — componente DS `rg-topbar` variante `--app` (direttiva agente design-system).
+ * `backHref` = link "torna alla home suite" (assente nella home, dove si mostra il brand).
+ * Il titolo è `<h1>` dentro un tool (lì è il titolo di pagina) e `<span>` nella home (che ha già il suo h1).
+ */
 export function topbar(title: string, backHref?: string): string {
-  const back = backHref
-    ? `<a class="rg-topbar__back rg-mono" href="${backHref}" aria-label="Torna a RG Tools">← RG Tools</a>`
+  const lead = backHref
+    ? `<a class="rg-topbar__back" href="${backHref}" aria-label="Torna a RG Tools">← RG Tools</a>`
     : `<span class="rg-topbar__brand">RG Tools</span>`;
-  return `<header class="rg-topbar suite-topbar">
-    ${back}
-    <span class="suite-topbar__title rg-h3">${title}</span>
-    <span class="suite-topbar__slot" id="topbarSlot"></span>
+  const tag = backHref ? 'h1' : 'span';
+  return `<header class="rg-topbar rg-topbar--app">
+    ${lead}
+    <${tag} class="rg-topbar__title">${title}</${tag}>
+    <div class="rg-topbar__actions" id="topbarSlot"></div>
   </header>`;
 }

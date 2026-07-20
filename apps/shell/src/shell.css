@@ -7,15 +7,7 @@ body {
 }
 #app { display: flex; flex-direction: column; min-height: 100vh; }
 
-.suite-topbar {
-  display: flex; align-items: center; gap: var(--rg-space-4);
-  height: var(--rg-layout-header); padding: 0 var(--rg-space-6);
-  border-bottom: var(--rg-border-hairline) var(--rg-border-style) var(--rg-color-border);
-  flex: none;
-}
-.suite-topbar__title { margin: 0; }
-.suite-topbar__slot { margin-left: auto; }
-.rg-topbar__brand { font-family: var(--rg-font-identity); font-weight: var(--rg-weight-bold); }
+/* La topbar è il componente DS rg-topbar--app: nessun CSS locale. */
 
 .suite-home {
   max-width: var(--rg-layout-content-max); width: 100%; box-sizing: border-box;

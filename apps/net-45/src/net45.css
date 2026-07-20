@@ -7,17 +7,7 @@ body {
 }
 #app { display: flex; flex-direction: column; height: 100vh; }
 
-/* Topbar condivisa della suite (chrome, non un componente DS). */
-.suite-topbar {
-  display: flex; align-items: center; gap: var(--rg-space-4);
-  height: var(--rg-layout-header); padding: 0 var(--rg-space-6);
-  border-bottom: var(--rg-border-hairline) var(--rg-border-style) var(--rg-color-border);
-  flex: none;
-}
-.suite-topbar__title { margin: 0; }
-.suite-topbar__slot { margin-left: auto; }
-.rg-topbar__back, .rg-topbar__brand { font-family: var(--rg-font-identity); text-decoration: none; color: var(--rg-color-text-primary); }
-.rg-topbar__back:hover { text-decoration: underline; }
+/* La topbar è il componente DS rg-topbar--app: nessun CSS locale. */
 
 /* Il workspace riempie lo spazio sotto la topbar (sizing d'app, come da doc del pattern). */
 .net45-workspace { flex: 1 1 auto; min-height: 0; }
