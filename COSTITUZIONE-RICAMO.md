@@ -8,7 +8,7 @@
 > Questo documento è **stack-agnostic**: vale per i progetti TypeScript/JS e per quelli Python.
 > Ogni nuovo progetto parte da qui, anche prima di condividere una riga di codice.
 
-**Versione:** 0.7 · **Aggiornato:** 2026-07-14
+**Versione:** 0.8 · **Aggiornato:** 2026-07-22
 
 ---
 
@@ -198,6 +198,14 @@ Il **fill vero (tatami)** è il grande assente: va portato nel core come primiti
 ### R27 — L'export si sovrappone all'input: stesso frame della sorgente.
 **Perché:** quando importi un cartamodello e generi il ricamo, l'output deve tornare nel software a valle (Stilista/Illustrator) **allineato esattamente** al cartamodello. Un export in un frame diverso (mm, margine, origine spostata) non si sovrappone → inutilizzabile per il montaggio.
 **Come:** conserva all'import la trasformazione unità-file→mm (`SourceFrame`: scale, offset, viewBox, width/height). All'export riscrivi la geometria in **unità-file** e riusa **viewBox/width/height originali**. Il round-trip della sagoma è l'**identità** (verificato: viewBox e primo punto identici tra input ed export). Helper: `buildSvgInSourceFrame`. La `realWidthMm` (R11) resta valida per i parametri in mm; l'export la reintegra dividendo per il fattore, così l'allineamento non cambia.
+
+### R28 — Un contorno è chiuso se i capi distano meno di 1 mm, e l'anello si salda esatto.
+**Perché:** i cartamodelli chiudono la sagoma ripetendo il primo punto **senza `Z`**, e con l'arrotondamento di CAD/Illustrator i due capi non coincidono mai al bit. Chi pretende l'uguaglianza esatta dichiara *aperto* un contorno chiuso e lo scarta: è il difetto che aveva fatto sparire la rete. 1 mm è enorme rispetto al filo (0.1 mm, R15) e minuscolo rispetto a qualunque apertura voluta in un cartamodello.
+**Come:** `CLOSURE_TOL_MM = 1.0`, `isGeometricallyClosed()`, `closePolygon()` in `@rg/core` (`io/normalize.ts`). `closePolygon` non si limita a marcare: se i capi sono entro tolleranza **porta l'ultimo punto esattamente sul primo**, così a valle non resta un buco sub-millimetrico. Nessun tool riscrive questa domanda per conto suo — le divergenze sono coperte da `test/smoke.mjs`.
+
+**Corollario (R12).** Stessa logica per i colori: il colore è la *chiave* con cui l'utente assegna i ruoli, quindi `red`, `#F00` e `rgb(255,0,0)` devono produrre la stessa chiave. Fonte unica: `normalizeColor()`.
+
+**Corollario (R11).** Una lunghezza senza unità fisica (`width="539"`, o `%`) **non** dice quanto è grande l'oggetto: `svgPhysicalLengthToMm()` torna `null` e chi importa deve chiedere la scala, non inventarla. `svgLengthToMm()` resta per i casi in cui è lecito ripiegare sul DPI canonico.
 
 ---
 

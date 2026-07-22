@@ -3,21 +3,7 @@
 import type { Contour, Point, ImportResult, SourceFrame } from '../types';
 import { pxToMm, svgLengthToMm, DPI_DEFAULT } from '../units';
 import { measureContours } from '../imports';
-
-function rgbToHex(c: string): string {
-  if (!c || c === 'none') return 'none';
-  if (c.startsWith('#')) {
-    if (c.length === 4) return `#${c[1]}${c[1]}${c[2]}${c[2]}${c[3]}${c[3]}`.toLowerCase();
-    return c.toLowerCase();
-  }
-  const m = /rgba?\(([^)]+)\)/.exec(c);
-  if (!m) return 'none';
-  const parts = m[1].split(',').map((s) => parseFloat(s));
-  if (parts.length >= 4 && parts[3] === 0) return 'none';
-  const [r, g, b] = parts;
-  const hx = (n: number) => Math.round(n).toString(16).padStart(2, '0');
-  return `#${hx(r)}${hx(g)}${hx(b)}`;
-}
+import { isGeometricallyClosed, normalizeColor } from './normalize';
 
 export function parseSvgToContours(svgText: string, dpi = DPI_DEFAULT): ImportResult {
   const doc = new DOMParser().parseFromString(svgText, 'image/svg+xml');
@@ -68,13 +54,11 @@ export function parseSvgToContours(svgText: string, dpi = DPI_DEFAULT): ImportRe
       }
       const tag = el.tagName.toLowerCase();
       const d = el.getAttribute('d') || '';
-      const first = pts[0], last = pts[pts.length - 1];
-      // Chiusura geometrica: molti <polyline>/<path> chiudono la forma senza Z ripetendo il primo punto.
-      const geoClosed = pts.length > 2 && Math.hypot(first.x - last.x, first.y - last.y) < 1.0;
-      const closed = geoClosed || /polygon|rect|circle|ellipse/.test(tag) || /[zZ]/.test(d);
+      // Chiusura geometrica: molti <polyline>/<path> chiudono la forma senza Z ripetendo il primo punto (R28).
+      const closed = isGeometricallyClosed(pts) || /polygon|rect|circle|ellipse/.test(tag) || /[zZ]/.test(d);
       const cs = getComputedStyle(el as Element);
-      const strokeC = rgbToHex(cs.stroke);
-      const fillC = rgbToHex(cs.fill);
+      const strokeC = normalizeColor(cs.stroke);
+      const fillC = normalizeColor(cs.fill);
       const color = strokeC !== 'none' ? strokeC : fillC !== 'none' ? fillC : '#000000';
       contours.push({ points: pts, closed, color });
     });

@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Fixture di regressione: il caso reale che aveva fatto sparire la rete.
+  La polyline CHIUDE la sagoma ma non con `Z` e non in modo esatto: l'ultimo
+  punto (10,10.4) e' il primo (10,10) con 0.4 mm di scarto di arrotondamento.
+  Un importer che pretende la coincidenza esatta la dichiara aperta e la scarta.
+  Il colore e' scritto per nome, per verificare che venga normalizzato in #rrggbb.
+-->
+<svg xmlns="http://www.w3.org/2000/svg" width="200mm" height="100mm" viewBox="0 0 200 100">
+  <polyline points="10,10 190,10 190,90 10,90 10,10.4" stroke="red" fill="none"/>
+</svg>

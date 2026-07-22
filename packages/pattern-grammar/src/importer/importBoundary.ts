@@ -1,4 +1,7 @@
 import type { BoundaryPath, ImportedBoundary, Point } from "../grammar/types.ts";
+// Chiusura, colori e lunghezze fisiche vengono dal core: sono le stesse domande
+// che si pone l'importer di net-45, e devono avere le stesse risposte (R28).
+import { closePolygon, isGeometricallyClosed, normalizeColor, svgPhysicalLengthToMm } from "@rg/core";
 
 export type BoundaryChoice = {
   id: string;
@@ -36,17 +39,6 @@ export type ImportBoundaryOptions = {
   scaleMode?: ImportScaleMode;
   customWidthMm?: number;
   customHeightMm?: number;
-};
-
-const namedColors: Record<string, string> = {
-  black: "#000000",
-  white: "#ffffff",
-  red: "#ff0000",
-  green: "#008000",
-  blue: "#0000ff",
-  magenta: "#ff00ff",
-  cyan: "#00ffff",
-  yellow: "#ffff00"
 };
 
 const dxfAciColors: Record<number, string> = {
@@ -132,7 +124,7 @@ function parseDxfBoundary(text: string, fileName: string): ImportedBoundaryModel
       const xs = entity.filter((item) => item.code === "10").map((item) => Number(item.value));
       const ys = entity.filter((item) => item.code === "20").map((item) => Number(item.value));
       const points = xs.slice(0, Math.min(xs.length, ys.length)).map((x, pointIndex) => ({ x, y: ys[pointIndex] }));
-      const closed = (Number(stringCode(entity, "70") || 0) & 1) === 1 || looksClosed(points);
+      const closed = (Number(stringCode(entity, "70") || 0) & 1) === 1 || isGeometricallyClosed(points);
       elements.push({
         id: `dxf-lwpolyline-${elements.length}`,
         points: closed ? closePolygon(points) : points,
@@ -156,8 +148,8 @@ function parseDxfBoundary(text: string, fileName: string): ImportedBoundaryModel
       if (points.length) {
         elements.push({
           id: `dxf-polyline-${elements.length}`,
-          points: looksClosed(points) ? closePolygon(points) : points,
-          closed: looksClosed(points),
+          points: isGeometricallyClosed(points) ? closePolygon(points) : points,
+          closed: isGeometricallyClosed(points),
           layer,
           color: "#000000"
         });
@@ -259,8 +251,8 @@ function resolveSvgModelSpace(
   rawHeight: SvgLength | null,
   options: ImportBoundaryOptions
 ) {
-  const physicalWidth = rawWidth ? svgLengthPhysicalMm(rawWidth) : null;
-  const physicalHeight = rawHeight ? svgLengthPhysicalMm(rawHeight) : null;
+  const physicalWidth = svgPhysicalLengthToMm(rawWidth?.raw);
+  const physicalHeight = svgPhysicalLengthToMm(rawHeight?.raw);
   const hasPhysicalSize = physicalWidth != null && physicalHeight != null;
   const selectedMode = options.scaleMode ?? "auto";
   const effectiveScaleMode: ImportScaleMode = selectedMode === "auto"
@@ -448,29 +440,11 @@ function parseSvgLength(value?: string): SvgLength | null {
   return { raw: String(value).trim(), amount: Number(match[1]), unit: match[2].toLowerCase() || "unitless" };
 }
 
-function svgLengthPhysicalMm(length: SvgLength): number | null {
-  if (length.unit === "mm") return length.amount;
-  if (length.unit === "cm") return length.amount * 10;
-  if (length.unit === "in") return length.amount * 25.4;
-  if (length.unit === "pt") return length.amount * 25.4 / 72;
-  if (length.unit === "pc") return length.amount * 25.4 / 6;
-  if (length.unit === "px") return length.amount * 25.4 / 96;
-  return null;
-}
 
 function parseSvgCoordinate(value?: string): number {
   return parseSvgLength(value)?.amount ?? 0;
 }
 
-function normalizeColor(value?: string): string {
-  if (!value) return "unknown";
-  const color = value.trim().toLowerCase();
-  if (color === "none" || color === "transparent") return color;
-  if (/^#[0-9a-f]{3}$/i.test(color)) return `#${color[1]}${color[1]}${color[2]}${color[2]}${color[3]}${color[3]}`.toLowerCase();
-  const rgb = color.match(/^rgb\(\s*(\d+)[,\s]+(\d+)[,\s]+(\d+)\s*\)$/i);
-  if (rgb) return `#${[rgb[1], rgb[2], rgb[3]].map((item) => clamp(Number(item), 0, 255).toString(16).padStart(2, "0")).join("")}`;
-  return namedColors[color] || color;
-}
 
 function isPaintActive(value?: string): boolean {
   return Boolean(value && value !== "none" && value !== "transparent" && value !== "unknown");
@@ -521,16 +495,7 @@ function parseNumberList(value?: string): number[] {
 }
 
 function pathLooksClosed(d = "", points: Point[]): boolean {
-  return /z\s*$/i.test(d.trim()) || looksClosed(points);
-}
-
-function looksClosed(points: Point[]): boolean {
-  return points.length > 2 && distance(points[0], points.at(-1)!) < 0.001;
-}
-
-function closePolygon(points: Point[]): Point[] {
-  if (!points.length) return [];
-  return looksClosed(points) ? points.slice() : [...points, { ...points[0] }];
+  return /z\s*$/i.test(d.trim()) || isGeometricallyClosed(points);
 }
 
 function boundsOf(points: Point[]): ImportedBoundary["bounds"] {
@@ -563,23 +528,12 @@ function sampleQuadratic(p0: Point, p1: Point, p2: Point): Point[] {
   });
 }
 
-function areaOf(points: Point[]): number {
-  let sum = 0;
-  for (let index = 0; index < points.length - 1; index++) sum += points[index].x * points[index + 1].y - points[index + 1].x * points[index].y;
-  return Math.abs(sum / 2);
-}
 
 function add(a: Point, b: Point): Point {
   return { x: a.x + b.x, y: a.y + b.y };
 }
 
-function distance(a: Point, b: Point): number {
-  return Math.hypot(a.x - b.x, a.y - b.y);
-}
 
-function clamp(value: number, min: number, max: number): number {
-  return Math.min(max, Math.max(min, value));
-}
 
 function slug(value: string): string {
   return value.toLowerCase().replace(/[^a-z0-9#-]+/g, "-").replace(/^-|-$/g, "");

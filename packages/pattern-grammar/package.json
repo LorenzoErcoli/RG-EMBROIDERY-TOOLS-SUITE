@@ -3,5 +3,8 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Motore della grammatica di pattern: generazione, boundary import, export SVG. Migrato da pattern-grammar-engine."
+  "description": "Motore della grammatica di pattern: generazione, boundary import, export SVG. Migrato da pattern-grammar-engine.",
+  "dependencies": {
+    "@rg/core": "*"
+  }
 }

@@ -8,3 +8,6 @@ scratch/
 # artefatti generati dagli script di verifica (i .ts sorgente restano tracciati)
 apps/*/scripts/*.mjs
 apps/*/scripts/dump.json
+
+# artefatti dello smoke test
+test/.build/
