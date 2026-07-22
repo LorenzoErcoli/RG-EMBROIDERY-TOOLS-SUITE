@@ -30,9 +30,10 @@
 - `packages/design-system` — il RG Design System come **submodule**, da GitHub, pinnato al tag **`v1.2.0`**.
 - `packages/pattern-grammar` — motore di generazione pattern migrato da `pattern-grammar-engine` (solo percorso browser). **Ora usa `@rg/core`** per chiusura contorni, colori e lunghezze fisiche.
 - **Primitive d'import condivise** (`core/io/normalize.ts`, senza DOM così valgono anche in Node): `isGeometricallyClosed` / `closePolygon` (R28), `normalizeColor` (R12), `svgPhysicalLengthToMm` (R11). I due importer del repo — quello a DOM di net-45 e quello a testo di pattern-grammar — restano diversi *per architettura*, ma rispondono per costruzione allo stesso modo alle domande di dominio.
+- **Salvataggio unico per la suite** (`@rg/ui/save`, R29): l'export apre la finestra di salvataggio del sistema — scegli **cartella e nome** — invece di scaricare d'ufficio in Download. Il nome proposto parte dalla sagoma importata (`sagoma-rete45.svg`); la cartella se la ricorda il browser tra uno strumento e l'altro. Su Firefox/Safari ripiega sul download classico. **Da provare in un browser vero** (vedi blocchi).
 - **Smoke test** (`npm test`): 12 asserzioni su chiusura, colori e scala, con la fixture del difetto reale (`test/fixtures/contorno-con-scarto.svg`). Verificato che fallisce se si rimette la vecchia tolleranza.
 
-**Regole scritte:** `COSTITUZIONE-RICAMO.md` (28 regole R1–R28 + glossario + parametri canonici) e `ARCHITETTURA.md`.
+**Regole scritte:** `COSTITUZIONE-RICAMO.md` (29 regole R1–R29 + glossario + parametri canonici) e `ARCHITETTURA.md`.
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 

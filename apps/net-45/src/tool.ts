@@ -10,6 +10,7 @@ import { topbar } from '@rg/ui/tools';
 import { runPipeline, type RoleAssignment } from './pipeline';
 import { sampleContours } from './sample';
 import { hookPanZoom } from '@rg/ui/panzoom';
+import { saveTextFile, saveOutcomeMessage } from '@rg/ui/save';
 
 const PARAM_UI: { key: keyof NetParams; label: string; step: number }[] = [
   { key: 'realWidthMm', label: '★ Larghezza reale mm (0=auto)', step: 1 },
@@ -143,6 +144,9 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     }
   }
 
+  /** Nome del file di partenza (senza estensione): serve a proporre un nome d'export sensato. */
+  let sourceName = '';
+
   function loadImport(result: ImportResult, label: string) {
     imported = result;
     autoAssign();
@@ -163,6 +167,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
       try {
         const text = String(reader.result);
         const result = /\.dxf$/i.test(file.name) ? parseDxfToContours(text) : parseSvgToContours(text);
+        sourceName = file.name.replace(/\.[^.]+$/, '');
         loadImport(result, file.name);
       } catch (e) {
         $('status').textContent = 'Errore import: ' + (e as Error).message;
@@ -175,7 +180,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
   $('sampleBtn').addEventListener('click', () => { roles = {}; loadImport(importResultFromContours(sampleContours()), 'Sagoma demo'); });
   $('fitBtn').addEventListener('click', () => pz.fit());
 
-  $('exportBtn').addEventListener('click', () => {
+  $('exportBtn').addEventListener('click', async () => {
     const { layers, bounds } = runPipeline(currentContours(), roles, params);
     const metadata = { rgProject: 'net-45', version: '0.1.0', params, roles, generatedAt: Date.now() };
     let svg: string;
@@ -185,12 +190,9 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     } else {
       svg = buildSvg(layers, { bounds, marginMm: 8, metadata });
     }
-    const blob = new Blob([svg], { type: 'image/svg+xml' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'rete-45.svg';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const name = sourceName ? `${sourceName}-rete45.svg` : 'rete-45.svg';
+    const outcome = await saveTextFile(svg, { suggestedName: name, description: 'Immagine SVG' });
+    $('status').textContent = saveOutcomeMessage(outcome, name);
   });
 
   buildParamUI();

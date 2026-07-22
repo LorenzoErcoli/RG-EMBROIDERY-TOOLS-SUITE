@@ -6,6 +6,7 @@ import {
 } from '@rg/pattern-grammar';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
+import { saveTextFile, saveOutcomeMessage } from '@rg/ui/save';
 import { GROUPS, SCALE_MODES, type Field } from './fields';
 
 const PRESET_KEY = 'pattern-grammar-engine-presets';
@@ -288,14 +289,12 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
 
   // azioni fisse (non rigenerate)
   $('fitBtn').addEventListener('click', () => pz.fit());
-  $('exportBtn').addEventListener('click', () => {
+  $('exportBtn').addEventListener('click', async () => {
     if (!lastSvg) return;
-    const blob = new Blob([lastSvg], { type: 'image/svg+xml' });
-    const a = document.createElement('a');
-    a.href = URL.createObjectURL(blob);
-    a.download = 'pattern.svg';
-    a.click();
-    URL.revokeObjectURL(a.href);
+    const base = boundarySource?.name.replace(/\.[^.]+$/, '');
+    const name = base ? `${base}-pattern.svg` : 'pattern.svg';
+    const outcome = await saveTextFile(lastSvg, { suggestedName: name, description: 'Immagine SVG' });
+    $('status').textContent = saveOutcomeMessage(outcome, name);
   });
 
   buildPanel();

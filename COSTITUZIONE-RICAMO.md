@@ -8,7 +8,7 @@
 > Questo documento è **stack-agnostic**: vale per i progetti TypeScript/JS e per quelli Python.
 > Ogni nuovo progetto parte da qui, anche prima di condividere una riga di codice.
 
-**Versione:** 0.8 · **Aggiornato:** 2026-07-22
+**Versione:** 0.9 · **Aggiornato:** 2026-07-22
 
 ---
 
@@ -204,6 +204,13 @@ Il **fill vero (tatami)** è il grande assente: va portato nel core come primiti
 **Come:** `CLOSURE_TOL_MM = 1.0`, `isGeometricallyClosed()`, `closePolygon()` in `@rg/core` (`io/normalize.ts`). `closePolygon` non si limita a marcare: se i capi sono entro tolleranza **porta l'ultimo punto esattamente sul primo**, così a valle non resta un buco sub-millimetrico. Nessun tool riscrive questa domanda per conto suo — le divergenze sono coperte da `test/smoke.mjs`.
 
 **Corollario (R12).** Stessa logica per i colori: il colore è la *chiave* con cui l'utente assegna i ruoli, quindi `red`, `#F00` e `rgb(255,0,0)` devono produrre la stessa chiave. Fonte unica: `normalizeColor()`.
+
+### R29 — Salvare un file chiede sempre dove e con che nome.
+**Perché:** un export è un pezzo di lavoro, non un allegato: finisce in una cartella di commessa, con un nome che dice a cosa serve. Scaricarlo d'ufficio in `Download` con un nome deciso dal programma sposta su chi lavora la fatica di ritrovarlo e rinominarlo, ogni volta.
+**Come:** `saveTextFile()` in `@rg/ui/save` — unico punto della suite che scrive file. Apre la finestra di salvataggio del sistema (`showSaveFilePicker`); dove non c'è (Firefox, Safari) ripiega sul download classico, così la funzione resta usabile ovunque. Tre dettagli che fanno la differenza e non vanno persi:
+- **il nome proposto parte dalla sagoma**: `<nome-file-importato>-rete45.svg`, non un nome fisso;
+- **la cartella se la ricorda il browser**, con un `id` unico per tutta la suite: il secondo export si apre dove hai salvato il primo, anche cambiando strumento;
+- **annullare non salva niente** e lo dice nella statusbar. Nessun download di nascosto come ripiego.
 
 **Corollario (R11).** Una lunghezza senza unità fisica (`width="539"`, o `%`) **non** dice quanto è grande l'oggetto: `svgPhysicalLengthToMm()` torna `null` e chi importa deve chiedere la scala, non inventarla. `svgLengthToMm()` resta per i casi in cui è lecito ripiegare sul DPI canonico.
 
