@@ -1,0 +1,20 @@
+{
+  "name": "pattern-grammar-app",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Generatore di pattern cannage (grammatica) — guscio RG Tools.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@rg/pattern-grammar": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}

@@ -1,0 +1,20 @@
+/* pattern-grammar — solo chrome app + sizing. Il layout lo fornisce il pattern rg-workspace del DS. */
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--rg-color-background);
+  color: var(--rg-color-text-primary);
+  font-family: var(--rg-font-body);
+}
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* Il workspace riempie lo spazio sotto la topbar (sizing d'app, come da doc del pattern). */
+.pg-workspace { flex: 1 1 auto; min-height: 0; }
+
+/* Helper locali minimi (non coperti dal componente). */
+.pg__file { display: block; position: relative; margin-bottom: var(--rg-space-2); }
+.pg__file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
+.pg__file span { width: 100%; }
+.pg__actions { display: flex; gap: var(--rg-space-2); }
+
+/* L'anteprima riempie il layer; bordo e sfondo sono già sul __canvas del DS. */
+#layer svg { max-width: 100%; max-height: 100%; }

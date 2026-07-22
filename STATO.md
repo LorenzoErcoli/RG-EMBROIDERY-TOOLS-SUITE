@@ -1,6 +1,6 @@
 # STATO — RG Tools (suite strumenti ricamo)
 
-> Aggiornato: 2026-07-22 · Commit base: `565f393` + motore pattern-grammar migrato
+> Aggiornato: 2026-07-22 · Suite con **due tool** funzionanti
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
 
 ---
@@ -17,11 +17,18 @@
 - **Anteprima con pan/zoom** che non si azzera quando cambi i parametri.
 - **Export SVG allineato al file di partenza** (stesso viewBox/coordinate) + metadati per riaprirlo.
 
+**Tool `pattern-grammar` (Pattern cannage) — funzionante:**
+- Genera il pattern cannage dalla grammatica; l'output è un **tracciato continuo** esportabile in SVG.
+- 11 parametri reattivi (dimensioni totali, passo colonna/riga, zig-zag orizzontale e verticale, scala, tratto, punto min/max).
+- Scelta della **forma**: nessuna / rettangolo / cerchio / rombo / **sagoma importata**.
+- **Import DXF/SVG** del contorno, con scelta del contorno per colore/layer.
+- Stessa ergonomia di net-45: guscio `rg-workspace`, anteprima con pan/zoom, export SVG.
+
 **Fondamenta condivise:**
 - `packages/core` (~900 righe) — unità/scala mm, import SVG+DXF, geometria, griglia 45°, clipping, punti (cordoncino/running/min-stitch), passaggi con routing sul bordo, export SVG.
-- `packages/ui` — integrazione del design system + topbar condivisa.
+- `packages/ui` — integrazione del design system + topbar condivisa + **pan/zoom** (promosso qui quando è servito al secondo tool).
 - `packages/design-system` — il RG Design System come **submodule** (commit `fdb69c6`).
-- `packages/pattern-grammar` — motore cannage migrato da `pattern-grammar-engine`: typecheck pulito, smoke test OK (genera SVG valido). **Manca la sua app.**
+- `packages/pattern-grammar` — motore cannage migrato da `pattern-grammar-engine` (solo percorso browser).
 
 **Regole scritte:** `COSTITUZIONE-RICAMO.md` (27 regole R1–R27 + glossario + parametri canonici) e `ARCHITETTURA.md`.
 
@@ -31,16 +38,20 @@
 
 ## 2. STATO
 
-**Metà strada.**
-La suite e il primo tool sono **quasi usabili** (net-45 produce output reale, esportabile e allineato). Il secondo tool è a metà (motore sì, interfaccia no). Manca tutto lo strato "usabile da altri": README, test, e le rifiniture di ricamo che solo Lorenzo sa validare.
+**Metà strada, in salita.**
+La suite ha **due tool funzionanti** (net-45 e pattern-grammar), entrambi con lo stesso guscio e la stessa ergonomia: sono **quasi usabili** da Lorenzo. Manca lo strato "usabile da altri": README, test, e le rifiniture di ricamo che solo Lorenzo può validare.
 
 ---
 
 ## 3. COSA MANCA per renderlo USABILE da qualcuno
 
 - [ ] **README** alla radice: cos'è, come si avvia (`avvia.bat`), requisiti (Node), come si aggiunge un tool.
-- [ ] **App `pattern-grammar`**: interfaccia nel guscio `rg-workspace` + card nella home.
-- [ ] **Verifica visiva reale** di net-45 e della suite in un browser vero (la preview integrata è rotta, vedi blocchi).
+- [x] ~~**App `pattern-grammar`**: interfaccia nel guscio `rg-workspace` + card nella home.~~
+- [ ] **Verifica visiva reale** dei due tool in un browser vero (la preview integrata è rotta, vedi blocchi).
+- [ ] **pattern-grammar — la dimensione totale non è esatta**: chiedi 200mm, escono 209.8 (il motore deriva le colonne e arrotonda per eccesso). Da decidere se rifilare al bordo.
+- [ ] **pattern-grammar — preset** (salva/carica/elimina): c'erano nella UI originale, non migrati.
+- [ ] **pattern-grammar — modalità di scala all'import** (`auto`, `illustrator-72dpi`, `viewbox-mm`, dimensione custom): il motore le supporta, la UI no.
+- [ ] **pattern-grammar — export report** (il motore lo genera già).
 - [ ] **net-45 — quadrato intero garantito** sul bordo (oggi le celle di confine restano tagliate).
 - [ ] **net-45 — cima col cordoncino grande** (il bordo superiore del DXF).
 - [ ] **net-45 — editor delle celle** (scegliere a mano rete / raso / esclusa).
@@ -66,4 +77,4 @@ La suite e il primo tool sono **quasi usabili** (net-45 produce output reale, es
 
 ## 5. PROSSIMA SINGOLA MOSSA
 
-Creare **`apps/pattern-grammar`**: l'app che monta il motore già migrato dentro il guscio `rg-workspace` (pannello parametri + canvas con anteprima), e aggiungerla come card nella home della suite.
+Scrivere il **README** alla radice: cos'è RG Tools, come si avvia (`avvia.bat`), cosa serve (Node), quali tool ci sono e come se ne aggiunge uno. È il pezzo che manca perché qualcuno che non sia Lorenzo possa aprire il repo e usarlo.

@@ -9,7 +9,7 @@ import {
 import { topbar } from '@rg/ui/tools';
 import { runPipeline, type RoleAssignment } from './pipeline';
 import { sampleContours } from './sample';
-import { hookPanZoom } from './panzoom';
+import { hookPanZoom } from '@rg/ui/panzoom';
 
 const PARAM_UI: { key: keyof NetParams; label: string; step: number }[] = [
   { key: 'realWidthMm', label: '★ Larghezza reale mm (0=auto)', step: 1 },

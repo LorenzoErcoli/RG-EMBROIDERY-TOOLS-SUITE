@@ -2,12 +2,14 @@ import '@rg/ui/rg.css';
 import './shell.css';
 import { renderHome } from './home';
 import { mountNet45 } from '@app/net-45';
+import { mountPatternGrammar } from '@app/pattern-grammar';
 
 const app = document.getElementById('app')!;
 
 function route(): void {
   const hash = location.hash || '#/';
   if (hash === '#/net-45') mountNet45(app, { backHref: '#/' });
+  else if (hash === '#/pattern-grammar') mountPatternGrammar(app, { backHref: '#/' });
   else renderHome(app);
 }
 
