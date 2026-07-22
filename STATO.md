@@ -17,8 +17,8 @@
 - **Anteprima con pan/zoom** che non si azzera quando cambi i parametri.
 - **Export SVG allineato al file di partenza** (stesso viewBox/coordinate) + metadati per riaprirlo.
 
-**Tool `pattern-grammar` (Pattern cannage) — funzionante:**
-- Genera il pattern cannage dalla grammatica; l'output è un **tracciato continuo** esportabile in SVG.
+**Tool `pattern-grammar` (Generatore pattern) — funzionante:**
+- Genera **pattern e basi ricamo** dalla grammatica — il cannage è solo uno dei possibili; l'output è un **tracciato continuo** esportabile in SVG.
 - **Pannello fedele alla UI originale**: 26 controlli nei 6 gruppi originali (Formato e scala · Zig-zag orizzontale · Zig-zag verticale · Deformazioni creative · Percorso e confine · Preset), con le due sezioni richiudibili.
 - **Preset** locali: salva / carica / elimina (verificato il giro completo).
 - **Import DXF/SVG** del contorno con modalità di scala (auto / Illustrator 72dpi / ViewBox=mm / dimensione custom) e scelta per colore/layer.
@@ -27,8 +27,8 @@
 **Fondamenta condivise:**
 - `packages/core` (~900 righe) — unità/scala mm, import SVG+DXF, geometria, griglia 45°, clipping, punti (cordoncino/running/min-stitch), passaggi con routing sul bordo, export SVG.
 - `packages/ui` — integrazione del design system + topbar condivisa + **pan/zoom** (promosso qui quando è servito al secondo tool).
-- `packages/design-system` — il RG Design System come **submodule** (commit `fdb69c6`).
-- `packages/pattern-grammar` — motore cannage migrato da `pattern-grammar-engine` (solo percorso browser).
+- `packages/design-system` — il RG Design System come **submodule**, da GitHub, pinnato al tag **`v1.2.0`**.
+- `packages/pattern-grammar` — motore di generazione pattern migrato da `pattern-grammar-engine` (solo percorso browser).
 
 **Regole scritte:** `COSTITUZIONE-RICAMO.md` (27 regole R1–R27 + glossario + parametri canonici) e `ARCHITETTURA.md`.
 

@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "type": "module",
-  "description": "Generatore di pattern cannage (grammatica) — guscio RG Tools.",
+  "description": "Generatore di pattern e basi ricamo (grammatica) — guscio RG Tools.",
   "scripts": {
     "dev": "vite",
     "build": "vite build",

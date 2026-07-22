@@ -1,4 +1,4 @@
-// @rg/pattern-grammar — motore della grammatica di pattern (cannage).
+// @rg/pattern-grammar — motore della grammatica di pattern (reti, basi ricamo, cannage...).
 // Migrato da `pattern-grammar-engine`: solo il percorso browser (niente CLI/analyzer node-only).
 export { generatePattern, generateFinalPatternPoints, createExportReport } from './generator/generatePattern.ts';
 export { parseImportedBoundarySource } from './importer/importBoundary.ts';

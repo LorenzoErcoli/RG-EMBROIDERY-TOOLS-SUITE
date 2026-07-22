@@ -17,10 +17,10 @@ function initialConfig(): PatternConfig {
   return cfg as PatternConfig;
 }
 
-/** Monta il tool "Pattern cannage" dentro `root`. `backHref` = ritorno alla home suite. */
+/** Monta il tool "Generatore pattern" dentro `root`. `backHref` = ritorno alla home suite. */
 export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string } = {}): void {
   root.innerHTML = `
-  ${topbar('Pattern cannage', opts.backHref)}
+  ${topbar('Generatore pattern', opts.backHref)}
   <div class="rg-workspace pg-workspace">
     <aside class="rg-workspace__panel" id="panel"></aside>
     <div class="rg-workspace__stage">
@@ -135,7 +135,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     sec.innerHTML = `<div class="rg-param-section__header"><span class="rg-mono">06</span><h3 class="rg-h3">Preset</h3></div>
       <div class="rg-param-grid">
         <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Nome preset</span>
-          <input id="presetName" class="rg-input" type="text" placeholder="Es. Cannage base"></label>
+          <input id="presetName" class="rg-input" type="text" placeholder="Es. Base rete"></label>
         <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Preset disponibili</span>
           <select id="presetList" class="rg-select"><option value="">Seleziona preset</option></select></label>
         <div class="rg-param-grid__wide pg__actions">
@@ -293,7 +293,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     const blob = new Blob([lastSvg], { type: 'image/svg+xml' });
     const a = document.createElement('a');
     a.href = URL.createObjectURL(blob);
-    a.download = 'pattern-cannage.svg';
+    a.download = 'pattern.svg';
     a.click();
     URL.revokeObjectURL(a.href);
   });
