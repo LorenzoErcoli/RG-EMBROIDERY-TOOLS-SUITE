@@ -32,7 +32,7 @@ const ROLE_OPTIONS: (Role | '')[] = ['', 'MASTER_OUTLINE', 'NET_AREA', 'SATIN_AR
 export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}): void {
   root.innerHTML = `
   ${topbar('Rete 45°', opts.backHref)}
-  <div class="rg-workspace net45-workspace" style="--rg-workspace-panel: var(--rg-layout-sidebar)">
+  <div class="rg-workspace net45-workspace">
     <aside class="rg-workspace__panel">
       <section class="rg-param-section">
         <div class="rg-param-section__header"><span class="rg-mono">01</span><h3 class="rg-h3">Sagoma</h3></div>

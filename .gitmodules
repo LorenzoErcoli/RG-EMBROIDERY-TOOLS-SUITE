@@ -1,3 +1,4 @@
 [submodule "packages/design-system"]
 	path = packages/design-system
-	url = ../RG-DESIGN-SYSTEM
+	url = https://github.com/LorenzoErcoli/RG-DESIGN-SYSTEM.git
+	branch = main

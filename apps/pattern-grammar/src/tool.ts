@@ -21,7 +21,7 @@ function initialConfig(): PatternConfig {
 export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string } = {}): void {
   root.innerHTML = `
   ${topbar('Pattern cannage', opts.backHref)}
-  <div class="rg-workspace pg-workspace" style="--rg-workspace-panel: var(--rg-layout-sidebar)">
+  <div class="rg-workspace pg-workspace">
     <aside class="rg-workspace__panel" id="panel"></aside>
     <div class="rg-workspace__stage">
       <header class="rg-workspace__stage-header">

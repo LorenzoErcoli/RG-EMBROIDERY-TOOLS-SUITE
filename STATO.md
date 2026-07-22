@@ -67,13 +67,13 @@ La suite ha **due tool funzionanti** (net-45 e pattern-grammar), entrambi con lo
 
 ## 4. BLOCCHI E DECISIONI APERTE
 
-- **Submodule vs copia vendorizzata.** Oggi il DS è agganciato come *submodule* con path locale `../RG-DESIGN-SYSTEM`. Ma esiste una decisione annotata di adottarlo per **copia vendorizzata + sync (NON submodule)**. Da sciogliere: il submodule con path locale funziona solo su questa macchina.
-- **Niente remote.** Né il monorepo né il DS sono su GitHub. Finché è così, il submodule non è condivisibile e non c'è backup fuori dal disco.
+- ~~**Submodule vs copia vendorizzata**~~ — risolto: il DS è su GitHub, il submodule punta all'URL remoto ed è **pinnato al tag `v1.2.0`**.
+- **Il monorepo non è su GitHub.** Il DS sì; questo repo no → nessun backup fuori dal disco e il submodule non è ancora clonabile insieme al progetto.
 - **Preview integrata rotta.** Il pannello browser dell'assistente resta a 0×0 e gli screenshot vanno in timeout → **la verifica visiva la deve fare Lorenzo** con `avvia.bat`. Le verifiche automatiche (typecheck, build, ispezione del DOM e del bundle) funzionano e vengono usate al posto suo.
 - **Rifiniture di ricamo da validare**: quadrato intero in cima, cordoncino grande di bordo e comportamento dei quadrati esclusi vanno decisi guardando il DST di riferimento — servono gli occhi di Lorenzo.
 - **"Fit" del pan/zoom** riporta a zoom 1 e centro, non calcola l'inquadratura sul contenuto.
 - **Breaking minore del DS**: `.rg-topbar` base è passata da 56px a 64px (`--rg-layout-header`); se altri progetti usano la topbar nera, cresce di 8px.
-- **Il submodule del DS è indietro**: agganciato a `fdb69c6`, mentre il DS è già a **v1.2.0** con componenti nuovi (modal, chips, folders, app-shell, lightbox, lists) e una policy nuova: *il prefisso `rg-` appartiene solo al DS, le classi app-local usano un prefisso proprio*. Le nostre (`pg-`, `net45-`) sono già conformi. Da riallineare quando serve.
+- **DS v1.3.0 in attesa di merge**: l'agente ha corretto due difetti del DS emersi dal pannello troppo stretto (token `--rg-layout-tool-panel`, e `rg-param-grid` che ora impila via *container query* sulla larghezza del pannello invece che della finestra, più `min-width: 0` sull'input con unità). Sta sul branch `ds/workspace-panel-density` (`0bd0905`, pushato), **non mergiato**: merge su `main` e tag `v1.3.0` sono decisione di Lorenzo. Il fix lato app funziona già su v1.2.0; con 1.3.0 arriva la rete di sicurezza automatica.
 - **Lezione di metodo**: quando si migra un tool, la fonte di verità dell'interfaccia è **la UI esistente**, non l'API del motore. Ricostruendo il pannello dalla config avevo inventato un sottoinsieme arbitrario di parametri; la versione giusta era quella già progettata.
 
 ---
