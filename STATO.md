@@ -19,9 +19,9 @@
 
 **Tool `pattern-grammar` (Pattern cannage) — funzionante:**
 - Genera il pattern cannage dalla grammatica; l'output è un **tracciato continuo** esportabile in SVG.
-- 11 parametri reattivi (dimensioni totali, passo colonna/riga, zig-zag orizzontale e verticale, scala, tratto, punto min/max).
-- Scelta della **forma**: nessuna / rettangolo / cerchio / rombo / **sagoma importata**.
-- **Import DXF/SVG** del contorno, con scelta del contorno per colore/layer.
+- **Pannello fedele alla UI originale**: 26 controlli nei 6 gruppi originali (Formato e scala · Zig-zag orizzontale · Zig-zag verticale · Deformazioni creative · Percorso e confine · Preset), con le due sezioni richiudibili.
+- **Preset** locali: salva / carica / elimina (verificato il giro completo).
+- **Import DXF/SVG** del contorno con modalità di scala (auto / Illustrator 72dpi / ViewBox=mm / dimensione custom) e scelta per colore/layer.
 - Stessa ergonomia di net-45: guscio `rg-workspace`, anteprima con pan/zoom, export SVG.
 
 **Fondamenta condivise:**
@@ -49,9 +49,10 @@ La suite ha **due tool funzionanti** (net-45 e pattern-grammar), entrambi con lo
 - [x] ~~**App `pattern-grammar`**: interfaccia nel guscio `rg-workspace` + card nella home.~~
 - [ ] **Verifica visiva reale** dei due tool in un browser vero (la preview integrata è rotta, vedi blocchi).
 - [ ] **pattern-grammar — la dimensione totale non è esatta**: chiedi 200mm, escono 209.8 (il motore deriva le colonne e arrotonda per eccesso). Da decidere se rifilare al bordo.
-- [ ] **pattern-grammar — preset** (salva/carica/elimina): c'erano nella UI originale, non migrati.
-- [ ] **pattern-grammar — modalità di scala all'import** (`auto`, `illustrator-72dpi`, `viewbox-mm`, dimensione custom): il motore le supporta, la UI no.
+- [x] ~~**pattern-grammar — preset** (salva/carica/elimina).~~
+- [x] ~~**pattern-grammar — modalità di scala all'import.**~~
 - [ ] **pattern-grammar — export report** (il motore lo genera già).
+- [ ] **pattern-grammar — preset condivisi**: oggi sono nel browser (localStorage). Nella versione originale c'era anche il salvataggio lato server.
 - [ ] **net-45 — quadrato intero garantito** sul bordo (oggi le celle di confine restano tagliate).
 - [ ] **net-45 — cima col cordoncino grande** (il bordo superiore del DXF).
 - [ ] **net-45 — editor delle celle** (scegliere a mano rete / raso / esclusa).
@@ -72,6 +73,8 @@ La suite ha **due tool funzionanti** (net-45 e pattern-grammar), entrambi con lo
 - **Rifiniture di ricamo da validare**: quadrato intero in cima, cordoncino grande di bordo e comportamento dei quadrati esclusi vanno decisi guardando il DST di riferimento — servono gli occhi di Lorenzo.
 - **"Fit" del pan/zoom** riporta a zoom 1 e centro, non calcola l'inquadratura sul contenuto.
 - **Breaking minore del DS**: `.rg-topbar` base è passata da 56px a 64px (`--rg-layout-header`); se altri progetti usano la topbar nera, cresce di 8px.
+- **Il submodule del DS è indietro**: agganciato a `fdb69c6`, mentre il DS è già a **v1.2.0** con componenti nuovi (modal, chips, folders, app-shell, lightbox, lists) e una policy nuova: *il prefisso `rg-` appartiene solo al DS, le classi app-local usano un prefisso proprio*. Le nostre (`pg-`, `net45-`) sono già conformi. Da riallineare quando serve.
+- **Lezione di metodo**: quando si migra un tool, la fonte di verità dell'interfaccia è **la UI esistente**, non l'API del motore. Ricostruendo il pannello dalla config avevo inventato un sottoinsieme arbitrario di parametri; la versione giusta era quella già progettata.
 
 ---
 
