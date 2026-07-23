@@ -1,8 +1,8 @@
 {
-  "name": "rg-embroidery-commons",
+  "name": "rg-embroidery-tools-suite",
   "version": "0.1.0",
   "private": true,
-  "description": "RG Tools — suite di strumenti per ricamo: core condiviso + design system + app. Vedi COSTITUZIONE-RICAMO.md e ARCHITETTURA.md.",
+  "description": "RG Embroidery Tools Suite — strumenti per ricamo: core condiviso + design system + app. Vedi COSTITUZIONE-RICAMO.md e ARCHITETTURA.md.",
   "type": "module",
   "workspaces": [
     "packages/core",
