@@ -1,3 +1,4 @@
+import { THREAD_STROKE_MM } from "@rg/core";
 import type { GeneratedPoint, PatternConfig, Point } from "../grammar/types.ts";
 import { resolvePatternGrammar } from "../grammar/patternGrammar.ts";
 import { exportSvg } from "../exporter/svgExporter.ts";
@@ -55,7 +56,7 @@ const ILLUSTRATOR_SAFE_MAX_POINTS_PER_PATH = 5_000;
 export function generateFinalPatternPoints(config: PatternConfig): FinalPatternPoints {
   const grammar = resolvePatternGrammar(config);
   const marginX = grammar.moduleWidth * 1.6;
-  const marginY = grammar.strokeWidth * 3;
+  const marginY = grammar.constructionStroke * 3;
   const path: GeneratedPoint[] = [];
   const baseShape = {
     horizontalZigzagWidth: grammar.horizontalZigzagWidth,
@@ -159,7 +160,7 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
   }));
   const rawScaled = deformed.map((point) => ({ ...point, x: point.x * grammar.scale, y: point.y * grammar.scale }));
   const rawBounds = pointBounds(rawScaled);
-  const inset = grammar.strokeWidth * grammar.scale;
+  const inset = grammar.constructionStroke * grammar.scale;
   const scaled = rawScaled.map((point) => ({
     ...point,
     x: point.x - rawBounds.minX + inset,
@@ -207,7 +208,7 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
     ? removeConsecutiveDuplicatePoints(cleanupBoundaryConnectedPath(
       connectClippedChunksAlongBoundary(
         stitchedPolylines.map((points, index) => ({ points, sourceStartIndex: index, sourceEndIndex: index })),
-        { width, height, inset, shapeType: grammar.shapeType, importedBoundary: grammar.importedBoundary, connectorStep: Math.max(1, grammar.maxStitchLength || grammar.strokeWidth * 4) }
+        { width, height, inset, shapeType: grammar.shapeType, importedBoundary: grammar.importedBoundary, connectorStep: Math.max(1, grammar.maxStitchLength || grammar.constructionStroke * 4) }
       ),
       {
         width,
@@ -238,7 +239,7 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
     visualPathGroups,
     width,
     height,
-    strokeWidth: grammar.strokeWidth * grammar.scale,
+    strokeWidth: THREAD_STROKE_MM, // filo disegnato sempre sottile (R15); la geometria usa constructionStroke
     grammar,
     generatedPointCount: scaled.length,
     startOrientation: oriented.orientation,

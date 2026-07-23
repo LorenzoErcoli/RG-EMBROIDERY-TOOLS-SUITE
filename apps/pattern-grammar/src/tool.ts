@@ -292,6 +292,24 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
   }
 
   // ---- preset ----
+  /** Porta un preset salvato coi vecchi nomi/unità sui campi nuovi (⑥⑦⑧), senza perdere i valori. */
+  function migratePreset(p: PatternConfig): PatternConfig {
+    const c = { ...p } as Record<string, unknown>;
+    if (c.minStitchMm === undefined && c.minPointDistance !== undefined) c.minStitchMm = c.minPointDistance;
+    if (c.maxStitchMm === undefined && c.maxStitchLength !== undefined) c.maxStitchMm = c.maxStitchLength;
+    if (c.constructionStroke === undefined && c.strokeWidth !== undefined) c.constructionStroke = c.strokeWidth;
+    if (c.columnWaveLengthMm === undefined && typeof c.columnWaveFrequency === 'number') {
+      c.columnWaveLengthMm = c.columnWaveFrequency > 0 ? (2 * Math.PI) / c.columnWaveFrequency : 60;
+    }
+    if (c.columnWavePhaseDeg === undefined && typeof c.columnWavePhase === 'number') {
+      c.columnWavePhaseDeg = (c.columnWavePhase * 180) / Math.PI;
+    }
+    // Via i nomi vecchi, così il pannello legge solo i nuovi.
+    delete c.minPointDistance; delete c.minSegmentLength; delete c.maxStitchLength;
+    delete c.strokeWidth; delete c.columnWaveFrequency; delete c.columnWavePhase;
+    return c as PatternConfig;
+  }
+
   const readPresets = (): Record<string, PatternConfig> => {
     try { return JSON.parse(localStorage.getItem(PRESET_KEY) || '{}'); } catch { return {}; }
   };
@@ -335,7 +353,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       const name = ($('presetList') as HTMLSelectElement).value;
       const preset = readPresets()[name];
       if (!preset) return;
-      Object.assign(cfg, preset);
+      Object.assign(cfg, migratePreset(preset));
       buildPanel();          // ricostruisce coi valori del preset (e ricollega gli eventi)
       refreshPresetList();
       render();

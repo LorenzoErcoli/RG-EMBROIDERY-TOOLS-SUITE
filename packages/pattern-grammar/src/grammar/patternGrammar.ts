@@ -22,7 +22,7 @@ export type ResolvedPatternGrammar = {
   verticalZigzagPasses: number;
   verticalConnectorDiagonalOffsetY: number;
   scale: number;
-  strokeWidth: number;
+  constructionStroke: number;
   useConnectors: boolean;
   repeatBack: boolean;
   minSegmentLength: number;
@@ -72,8 +72,15 @@ export function resolvePatternGrammar(config: PatternConfig): ResolvedPatternGra
     : Math.max(1, Math.floor(config.verticalZigzagPasses ?? config.density ?? 2));
   const verticalZigzagInterline = config.verticalZigzagInterline
     ?? (verticalZigzagPasses > 1 ? verticalZigzagWidth / (verticalZigzagPasses - 1) : verticalZigzagWidth);
-  const minPointDistance = scaled(Math.max(0, config.minPointDistance ?? config.minSegmentLength ?? 0));
-  const maxStitchLength = Math.max(0, config.maxStitchLength ?? 0);
+  const minPointDistance = scaled(Math.max(0, config.minStitchMm ?? config.minPointDistance ?? config.minSegmentLength ?? 0));
+  const maxStitchLength = Math.max(0, config.maxStitchMm ?? config.maxStitchLength ?? 0);
+  // Onda (⑦): l'utente dà lunghezza d'onda (mm) e fase (gradi); la matematica interna vuole rad/mm e rad.
+  const columnWaveFrequency = config.columnWaveLengthMm !== undefined
+    ? (config.columnWaveLengthMm > 0 ? (2 * Math.PI) / config.columnWaveLengthMm : 0)
+    : (config.columnWaveFrequency ?? 0.1);
+  const columnWavePhase = config.columnWavePhaseDeg !== undefined
+    ? (config.columnWavePhaseDeg * Math.PI) / 180
+    : (config.columnWavePhase ?? 0);
   const moduleWidth = scaled(config.cellWidth ?? config.moduleWidth ?? analysis?.estimatedGrid.stepX ?? 5.2);
   const moduleHeight = horizontalZigzagSpacing;
   const stepX = config.stepX !== undefined ? scaled(config.stepX) : moduleWidth;
@@ -110,7 +117,7 @@ export function resolvePatternGrammar(config: PatternConfig): ResolvedPatternGra
     verticalZigzagPasses,
     verticalConnectorDiagonalOffsetY: scaled(config.verticalConnectorDiagonalOffsetY ?? 0),
     scale: config.scale ?? 1,
-    strokeWidth: scaled(config.strokeWidth ?? 0.3),
+    constructionStroke: scaled(config.constructionStroke ?? config.strokeWidth ?? 0.3),
     useConnectors: config.useConnectors ?? true,
     repeatBack: config.repeatBack ?? false,
     minSegmentLength: minPointDistance,
@@ -121,8 +128,8 @@ export function resolvePatternGrammar(config: PatternConfig): ResolvedPatternGra
     horizontalAngleDeg: config.horizontalAngleDeg ?? 0,
     alternateHorizontalAngle: config.alternateHorizontalAngle ?? false,
     columnWaveAmplitude: scaled(config.columnWaveAmplitude ?? 0),
-    columnWaveFrequency: config.columnWaveFrequency ?? 0.1,
-    columnWavePhase: config.columnWavePhase ?? 0,
+    columnWaveFrequency,
+    columnWavePhase,
     shapeType: config.shapeType ?? "none",
     importedBoundary: config.importedBoundary,
     boundaryCleanupMode: config.boundaryCleanupMode ?? "adjust-then-delete",

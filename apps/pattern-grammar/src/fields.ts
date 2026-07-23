@@ -38,23 +38,23 @@ export const CORPO: Group[] = [
       { kind: 'num', name: 'verticalConnectorDiagonalOffsetY', label: 'Inclinazione del raccordo', unit: 'mm', min: 0, step: 0.1, value: 0 },
       { kind: 'num', name: 'stepX', label: 'Distanza tra le colonne', unit: 'mm', min: 0.5, step: 0.1, value: 5.2 },
       { kind: 'num', name: 'offsetY', label: 'Sfasamento tra colonne', unit: 'mm', min: 0, step: 0.1, value: 6 },
-      { kind: 'num', name: 'strokeWidth', label: 'Spessore tratto', unit: 'mm', min: 0.05, step: 0.05, value: 0.1 },
     ],
   },
   {
     title: 'Deformazioni creative', collapsible: true, open: false, fields: [
       { kind: 'num', name: 'horizontalAngleDeg', label: 'Inclinazione dello zig-zag orizzontale', unit: '°', step: 1, value: 0 },
       { kind: 'num', name: 'columnWaveAmplitude', label: "Ampiezza dell'onda", unit: 'mm', min: 0, step: 0.1, value: 0 },
-      { kind: 'num', name: 'columnWaveFrequency', label: 'Frequenza onda', unit: 'rad/mm', min: 0, step: 0.01, value: 0.1 },
-      { kind: 'num', name: 'columnWavePhase', label: 'Fase onda', unit: 'rad', step: 0.1, value: 0 },
+      { kind: 'num', name: 'columnWaveLengthMm', label: "Lunghezza d'onda", unit: 'mm', min: 1, step: 1, value: 60, help: 'ogni quanti mm si ripete l’onda' },
+      { kind: 'num', name: 'columnWavePhaseDeg', label: 'Fase', unit: '°', step: 5, value: 0 },
       { kind: 'check', name: 'alternateHorizontalAngle', label: "Inverti l'inclinazione a colonne alterne", value: false },
     ],
   },
   {
     title: 'Percorso e confine', collapsible: true, open: false, fields: [
       { kind: 'check', name: 'repeatBack', label: 'Andata e ritorno (serpentina)', value: false },
-      { kind: 'num', name: 'minPointDistance', label: 'Punto minimo', unit: 'mm', min: 0, step: 0.01, value: 0 },
-      { kind: 'num', name: 'maxStitchLength', label: 'Lunghezza massima del punto', unit: 'mm', min: 0, step: 0.1, value: 0 },
+      { kind: 'num', name: 'minStitchMm', label: 'Punto minimo', unit: 'mm', min: 0, step: 0.01, value: 0 },
+      { kind: 'num', name: 'maxStitchMm', label: 'Lunghezza massima del punto', unit: 'mm', min: 0, step: 0.1, value: 0 },
+      { kind: 'num', name: 'constructionStroke', label: 'Spessore di costruzione', unit: 'mm', min: 0.05, step: 0.05, value: 0.3, help: 'regola rientri, margini e raccordi — non è il filo disegnato' },
       { kind: 'select', name: 'boundaryCleanupMode', label: 'Punti fuori dal contorno', value: 'adjust-then-delete', options: [['adjust-then-delete', 'Avvicina al bordo, poi elimina'], ['delete', 'Elimina']] },
       { kind: 'num', name: 'maxBoundaryAdjustment', label: 'Spostamento massimo verso il bordo', unit: 'mm', min: 0, step: 0.01, value: 0 },
       { kind: 'select', name: 'exportCompatibilityMode', label: 'Compatibilità export', value: 'illustrator-safe', options: [['normal', 'Normale'], ['illustrator-safe', 'Sicuro per Illustrator']] },

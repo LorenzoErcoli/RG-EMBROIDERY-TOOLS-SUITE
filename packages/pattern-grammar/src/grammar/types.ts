@@ -102,14 +102,20 @@ export type PatternConfig = {
   horizontalCordWidth?: number;
   density?: number;
   scale?: number;
+  /** Legacy: guidava spessore disegnato E geometria. Ora la geometria usa constructionStroke, il filo è fisso 0.1mm (R15/⑥). */
   strokeWidth?: number;
+  /** Spessore di costruzione (mm): rientri, margini, raccordi. Distinto dal filo disegnato. */
+  constructionStroke?: number;
   useConnectors?: boolean;
   /** Alternate column traversal without changing module coordinates. */
   repeatBack?: boolean;
   /** Post-process controls. Defaults preserve the existing geometry exactly. */
   minSegmentLength?: number;
-  /** Preferred name; minSegmentLength remains as a compatibility alias. */
+  /** Canonico (§3.1): punto minimo. `minPointDistance`/`minSegmentLength` restano come alias legacy. */
+  minStitchMm?: number;
   minPointDistance?: number;
+  /** Canonico (§3.1): lunghezza massima del punto. `maxStitchLength` resta come alias legacy. */
+  maxStitchMm?: number;
   /** Adds evenly spaced stitch points on visible segments longer than this mm value. 0 disables it. */
   maxStitchLength?: number;
   preserveSharpAngles?: boolean;
@@ -118,6 +124,9 @@ export type PatternConfig = {
   horizontalAngleDeg?: number;
   alternateHorizontalAngle?: boolean;
   columnWaveAmplitude?: number;
+  /** Preferiti (⑦): lunghezza d'onda in mm e fase in gradi. `columnWaveFrequency` (rad/mm) e `columnWavePhase` (rad) restano legacy. */
+  columnWaveLengthMm?: number;
+  columnWavePhaseDeg?: number;
   columnWaveFrequency?: number;
   columnWavePhase?: number;
   shapeType?: ShapeType;
