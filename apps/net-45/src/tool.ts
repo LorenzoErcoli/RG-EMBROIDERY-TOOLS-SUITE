@@ -41,21 +41,21 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
   <div class="rg-workspace net45-workspace">
     <aside class="rg-workspace__panel">
       <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">01</span><h3 class="rg-param-section__title">Sagoma</h3></div>
+        <div class="rg-param-section__header"><span class="rg-param-section__index">01</span><h3 class="rg-param-section__title">Cartamodello</h3></div>
         <div class="rg-param-grid">
           <div class="rg-file-input rg-param-grid__wide">
             <label class="rg-file-input__control">
               <input type="file" id="fileInput" accept=".svg,.dxf" />
               <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
             </label>
-            <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file: uso la sagoma demo.</p>
+            <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file: uso il cartamodello demo.</p>
           </div>
           <label class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Larghezza reale (0 = auto)</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="realWidth" type="number" min="0" step="1" value="0"><span>mm</span></span>
             <small class="rg-field__help">0 = usa la misura letta dal file.</small>
           </label>
-          <div class="rg-cluster rg-param-grid__wide"><button id="sampleBtn" class="rg-button rg-button--ghost" type="button">Sagoma demo</button></div>
+          <div class="rg-cluster rg-param-grid__wide"><button id="sampleBtn" class="rg-button rg-button--ghost" type="button">Cartamodello demo</button></div>
         </div>
       </section>
 
@@ -158,7 +158,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     host.innerHTML = '';
     const colors = uniqueColors();
     if (!colors.length) {
-      host.innerHTML = '<li><p class="rg-color-map__empty">Nessuna sagoma: carica un DXF o un SVG.</p></li>';
+      host.innerHTML = '<li><p class="rg-color-map__empty">Nessun cartamodello: carica un DXF o un SVG.</p></li>';
       return;
     }
     const counts = contourColors().reduce<Record<string, number>>((m, c) => (m[c] = (m[c] ?? 0) + 1, m), {});
@@ -248,10 +248,10 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     const v = parseFloat(($('realWidth') as HTMLInputElement).value);
     params.realWidthMm = Number.isNaN(v) ? 0 : Math.max(0, v);
     render();
-    updateFileStatus(sourceName || 'Sagoma');
+    updateFileStatus(sourceName || 'Cartamodello');
   });
 
-  $('sampleBtn').addEventListener('click', () => { roles = {}; sourceName = ''; loadImport(importResultFromContours(sampleContours()), 'Sagoma demo'); });
+  $('sampleBtn').addEventListener('click', () => { roles = {}; sourceName = ''; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
   $('fitBtn').addEventListener('click', () => pz.fit());
 
   $('exportBtn').addEventListener('click', async () => {
@@ -270,5 +270,5 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
   });
 
   buildParamUI();
-  loadImport(imported, 'Sagoma demo');
+  loadImport(imported, 'Cartamodello demo');
 }

@@ -175,7 +175,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     ul.innerHTML = '';
     const choices = boundaryModel?.choices ?? [];
     if (!choices.length) {
-      ul.innerHTML = '<li><p class="rg-color-map__empty">Nessuna sagoma importata: il piano non viene ritagliato.</p></li>';
+      ul.innerHTML = '<li><p class="rg-color-map__empty">Nessun cartamodello importato: il piano non viene ritagliato.</p></li>';
       return;
     }
     choices.forEach((c, i) => {
@@ -224,7 +224,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     // TESTA (sempre aperta): 01 Formato · 02 Sagoma · 03 Colori e ruoli
     panel.appendChild(headSection(n(1), FORMATO));
 
-    const sagoma = headSection(n(2), { title: 'Sagoma', fields: [] });
+    const sagoma = headSection(n(2), { title: 'Cartamodello', fields: [] });
     sagoma.appendChild(sagomaGrid());
     panel.appendChild(sagoma);
 
