@@ -76,6 +76,14 @@ check('onda: fase 90° ≡ π/2 rad',
 check('minStitchMm/maxStitchMm ≡ minPointDistance/maxStitchLength',
   geom(rg.generatePattern({ ...base, minStitchMm: 2, maxStitchMm: 5 })) === geom(rg.generatePattern({ ...base, minPointDistance: 2, maxStitchLength: 5 })), true);
 
+console.log('\n⑤ — larghezza esatta: il formato è il pannello, il resto si taglia al bordo');
+const dims = (svg) => { const m = /width="([\d.]+)mm" height="([\d.]+)mm"/.exec(svg); return { w: +m[1], h: +m[2] }; };
+const maxX = (svg) => { let mx = 0; for (const m of svg.matchAll(/points="([^"]+)"/g)) for (const p of m[1].trim().split(/\s+/)) { const x = +p.split(',')[0]; if (Number.isFinite(x)) mx = Math.max(mx, x); } return mx; };
+const s200 = rg.generatePattern({ totalWidth: 200, totalHeight: 160 });
+check('200mm chiesti → width esatta 200 (non 209.8)', dims(s200).w, 200);
+check('niente geometria oltre il bordo del pannello', maxX(s200) <= 200 + 0.05, true);
+check('formato più grande della geometria → esatto, senza allargare oltre', dims(rg.generatePattern({ totalWidth: 400, totalHeight: 300 })).w, 400);
+
 rmSync(outDir, { recursive: true, force: true });
 console.log(failed ? `\n${failed} test falliti\n` : '\nTutti i test passati\n');
 process.exit(failed ? 1 : 0);

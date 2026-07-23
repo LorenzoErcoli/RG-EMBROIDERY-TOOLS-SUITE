@@ -175,18 +175,27 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
   const importedWidth = importedBounds ? Math.max(0, importedBounds.maxX) : 0;
   const importedHeight = importedBounds ? Math.max(0, importedBounds.maxY) : 0;
   const usesImportedBoundary = Boolean(importedBounds);
+  // ⑤ Formato esatto: se l'utente fissa larghezza/altezza, il pannello è QUELLO. La geometria
+  //    in eccesso si TAGLIA al bordo (rifila), non si allarga il pannello. Senza formato dichiarato
+  //    resta la dimensione naturale del disegno.
   const width = usesImportedBoundary
     ? Math.max(grammar.totalWidth ?? importedWidth, importedWidth)
-    : Math.max(grammar.totalWidth ?? naturalWidth, naturalWidth);
+    : (grammar.totalWidth ?? naturalWidth);
   const height = usesImportedBoundary
     ? Math.max(grammar.totalHeight ?? importedHeight, importedHeight)
-    : Math.max(grammar.totalHeight ?? naturalHeight, naturalHeight);
+    : (grammar.totalHeight ?? naturalHeight);
+  // "Nessuna sagoma di ritaglio" + un formato impostato = il pannello è comunque delimitato dal
+  //    suo rettangolo (è il bordo del pannello, non un ritaglio interno). Le forme vere (cerchio,
+  //    rombo, importata) restano come scelte.
+  const clipShape = (grammar.shapeType === "none" && (grammar.totalWidth !== undefined || grammar.totalHeight !== undefined))
+    ? "rectangle"
+    : grammar.shapeType;
   const layoutPoints = scaled;
   const clipResult = clipPathToBoundaryChunks(layoutPoints, {
     width,
     height,
     inset,
-    shapeType: grammar.shapeType,
+    shapeType: clipShape,
     importedBoundary: grammar.importedBoundary
   });
   const cleanedChunks = clipResult.chunks
@@ -196,7 +205,7 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
       angleThresholdDeg: grammar.angleThresholdDeg
     })))
     .filter((chunk) => chunk.length > 1);
-  const clippedToShape = grammar.shapeType === "circle" || grammar.shapeType === "diamond" || grammar.shapeType === "imported";
+  const clippedToShape = clipShape === "circle" || clipShape === "diamond" || clipShape === "imported" || clipShape === "rectangle";
   const cleanedPoints = cleanedChunks.flat();
   const baseVisualPolylines = grammar.repeatBack
     ? [cleanedPoints]
@@ -208,13 +217,13 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
     ? removeConsecutiveDuplicatePoints(cleanupBoundaryConnectedPath(
       connectClippedChunksAlongBoundary(
         stitchedPolylines.map((points, index) => ({ points, sourceStartIndex: index, sourceEndIndex: index })),
-        { width, height, inset, shapeType: grammar.shapeType, importedBoundary: grammar.importedBoundary, connectorStep: Math.max(1, grammar.maxStitchLength || grammar.constructionStroke * 4) }
+        { width, height, inset, shapeType: clipShape, importedBoundary: grammar.importedBoundary, connectorStep: Math.max(1, grammar.maxStitchLength || grammar.constructionStroke * 4) }
       ),
       {
         width,
         height,
         inset,
-        shapeType: grammar.shapeType,
+        shapeType: clipShape,
         importedBoundary: grammar.importedBoundary,
         minPointDistance: grammar.minPointDistance,
         boundaryCleanupMode: grammar.boundaryCleanupMode,

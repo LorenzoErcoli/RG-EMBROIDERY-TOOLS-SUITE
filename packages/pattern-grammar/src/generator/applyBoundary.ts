@@ -53,7 +53,12 @@ function metrics(options: BoundaryOptions) {
 }
 
 export function isInsideBoundary(point: Point, options: BoundaryOptions, tolerance = 1e-7): boolean {
-  if (options.shapeType === "none" || options.shapeType === "rectangle") return true;
+  if (options.shapeType === "none") return true;
+  if (options.shapeType === "rectangle") {
+    const inset = Math.max(0, options.inset ?? 0);
+    return point.x >= inset - tolerance && point.x <= options.width - inset + tolerance
+      && point.y >= inset - tolerance && point.y <= options.height - inset + tolerance;
+  }
   if (options.shapeType === "imported") {
     const polygon = importedBoundaryPolygon(options);
     if (!polygon.length) return true;
@@ -119,8 +124,32 @@ function diamondSegmentInterval(a: Point, b: Point, options: BoundaryOptions): [
   return [Math.max(0, enter), Math.min(1, exit)];
 }
 
+/** Taglio del segmento al rettangolo del pannello [inset..width-inset] × [inset..height-inset] (Liang-Barsky). */
+function rectangleSegmentInterval(a: Point, b: Point, options: BoundaryOptions): [number, number] | undefined {
+  const inset = Math.max(0, options.inset ?? 0);
+  const minX = inset, maxX = options.width - inset;
+  const minY = inset, maxY = options.height - inset;
+  const dx = b.x - a.x, dy = b.y - a.y;
+  let enter = 0, exit = 1;
+  const edges: Array<[number, number]> = [
+    [-dx, a.x - minX], // x >= minX
+    [dx, maxX - a.x],  // x <= maxX
+    [-dy, a.y - minY], // y >= minY
+    [dy, maxY - a.y],  // y <= maxY
+  ];
+  for (const [p, q] of edges) {
+    if (Math.abs(p) <= EPSILON) { if (q < -EPSILON) return undefined; continue; }
+    const t = q / p;
+    if (p < 0) enter = Math.max(enter, t);
+    else exit = Math.min(exit, t);
+    if (enter > exit + EPSILON) return undefined;
+  }
+  return [Math.max(0, enter), Math.min(1, exit)];
+}
+
 function segmentInterval(a: Point, b: Point, options: BoundaryOptions): [number, number] | undefined {
-  if (options.shapeType === "none" || options.shapeType === "rectangle") return [0, 1];
+  if (options.shapeType === "none") return [0, 1];
+  if (options.shapeType === "rectangle") return rectangleSegmentInterval(a, b, options);
   if (options.shapeType === "imported") return polygonSegmentInterval(a, b, options);
   return options.shapeType === "circle"
     ? circleSegmentInterval(a, b, options)
@@ -512,6 +541,7 @@ function boundaryConnector(from: GeneratedPoint, to: GeneratedPoint, options: Bo
   if (options.shapeType === "circle") return circleBoundaryConnector(from, to, options);
   if (options.shapeType === "diamond") return diamondBoundaryConnector(from, to, options);
   if (options.shapeType === "imported") return polygonBoundaryConnector(from, to, importedBoundaryPolygon(options), options);
+  if (options.shapeType === "rectangle") return polygonBoundaryConnector(from, to, rectangleVertices(options), options);
   return [connectorPoint(to, to)];
 }
 
@@ -543,7 +573,8 @@ export function clipPathToBoundaryChunks(
   options: BoundaryOptions
 ): BoundaryClipResult<GeneratedPoint> {
   if (points.length === 0) return { chunks: [], travelMoves: [] };
-  if (options.shapeType === "none" || options.shapeType === "rectangle") {
+  if (options.shapeType === "none") {
+    // Nessun ritaglio: tutto passa. "rectangle" invece taglia davvero (cade nel ciclo sotto).
     return { chunks: [{ points: points.slice(), sourceStartIndex: 0, sourceEndIndex: points.length - 1 }], travelMoves: [] };
   }
 

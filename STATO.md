@@ -52,7 +52,7 @@ La suite ha **due tool funzionanti** (net-45 e pattern-grammar), entrambi con lo
 - [ ] **README** alla radice: cos'è, come si avvia (`avvia.bat`), requisiti (Node), come si aggiunge un tool.
 - [x] ~~**App `pattern-grammar`**: interfaccia nel guscio `rg-workspace` + card nella home.~~
 - [ ] **Verifica visiva reale** dei due tool in un browser vero (la preview integrata è rotta, vedi blocchi).
-- [ ] **pattern-grammar — la dimensione totale non è esatta**: chiedi 200mm, escono 209.8 (il motore deriva le colonne e arrotonda per eccesso). Da decidere se rifilare al bordo.
+- [x] ~~**pattern-grammar — la dimensione totale non è esatta** (200 → 209.8)~~ risolto (⑤): il formato è esatto, il resto si rifila al bordo.
 - [x] ~~**pattern-grammar — preset** (salva/carica/elimina).~~
 - [x] ~~**pattern-grammar — modalità di scala all'import.**~~
 - [ ] **pattern-grammar — export report** (il motore lo genera già).
@@ -89,7 +89,9 @@ La suite ha **due tool funzionanti** (net-45 e pattern-grammar), entrambi con lo
   3. [x] **pattern-grammar** — pannello Testa B + accordion + etichette (stadio 1); ⑥ split `strokeWidth` (filo 0,1 + `constructionStroke`), ⑦ onda mm/gradi, ⑧ rinomina `minStitchMm`/`maxStitchMm` con conversione preset (stadi 6-7-8). **Da vedere in un browser vero.**
   4. **④** densità rasi/quadratini: restano nascoste finché non ci sono i riempimenti veri.
   5. [x] `test/smoke.mjs` esteso: 5 asserzioni ⑥⑦⑧ (le conversioni non cambiano la geometria).
-  6. [ ] **⑤ Larghezza esatta, rifila al bordo** — rimasto indietro di proposito: è geometria delicata (oggi `width = max(totalWidth, larghezza naturale)` → 200 diventa 209,8 perché le colonne sono `ceil+2`). "Rifilare" vuol dire onorare `totalWidth` esatto e **tagliare** la geometria in eccesso al bordo — serve un clip, e la verifica va fatta a occhio da Lorenzo. Da fare come passo mirato.
+  6. [x] **⑤ Larghezza esatta, rifila al bordo** — il formato è il pannello: se fissi 200×160 esce **200×160 esatto** e la geometria in eccesso viene **tagliata al bordo**. Completato il taglio a rettangolo che nel motore era codice morto (`isInsideBoundary`/`segmentInterval`/il connettore ignoravano `rectangle`); il "Nessuna sagoma di ritaglio" con un formato impostato è comunque delimitato dal rettangolo del pannello. **Bonus:** anche l'opzione "Rettangolo" del menu ora taglia davvero (prima era inerte). Invarianti nel test (`npm test`); **la resa del taglio va comunque guardata a occhio.**
+
+**→ Le 8 decisioni parametri sono TUTTE implementate.** Restano solo verifiche visive e le mosse sul repo DS (di Lorenzo).
 - **Struttura pannello — regola DS aggiornata (v1.7.0, docs-only)**. Risolta la riflessione di Lorenzo:
   - *Due teste*, scelte dalla domanda-radice «la misura del prodotto nasce dalla sorgente o è indipendente?». **Testa A (sorgente-guidata)**: 01 Sagoma → 02 Colori e ruoli, niente Formato (net-45, bitmap, cross-stitch da immagine). **Testa B (formato-guidata)**: 01 Formato → 02 Sagoma → 03 Colori e ruoli (pattern-grammar, oblique, 45-grid). Corpo e coda identici.
   - *Accordion*: la **testa non si chiude mai** (`<section>`); corpo e coda richiudibili **tutti o nessuno** (`<details class="rg-param-section rg-disclosure">`). Default senza memoria: testa aperta; corpo tutto aperto se **≤5 sezioni**, altrimenti (**≥6**) solo il primo gruppo aperto; coda (Esportazione, Preset) **sempre chiusa**. Stato ricordato **per tool** (localStorage) — meccanismo JS lato app, la regola la fissa il DS.
