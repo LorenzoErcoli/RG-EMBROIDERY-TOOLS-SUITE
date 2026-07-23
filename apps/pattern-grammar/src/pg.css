@@ -10,11 +10,8 @@ body {
 /* Il workspace riempie lo spazio sotto la topbar (sizing d'app, come da doc del pattern). */
 .pg-workspace { flex: 1 1 auto; min-height: 0; }
 
-/* Helper locali minimi (non coperti dal componente). */
-.pg__file { display: block; position: relative; margin-bottom: var(--rg-space-2); }
-.pg__file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.pg__file span { width: 100%; }
-.pg__actions { display: flex; gap: var(--rg-space-2); }
+/* File-input, cluster di azioni e mappa colori→ruoli ora sono componenti del DS (v1.6.0):
+   rg-file-input, rg-cluster, rg-color-map. Nessun helper locale da mantenere. */
 
 /* L'anteprima riempie il layer; bordo e sfondo sono già sul __canvas del DS. */
 #layer svg { max-width: 100%; max-height: 100%; }
