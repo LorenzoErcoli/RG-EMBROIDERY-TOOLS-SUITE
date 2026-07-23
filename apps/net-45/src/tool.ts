@@ -64,10 +64,10 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
         <ul class="rg-color-map" id="roles"></ul>
       </section>
 
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">03</span><h3 class="rg-param-section__title">Parametri</h3></div>
+      <details class="rg-param-section rg-disclosure" open>
+        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">03</span><span class="rg-param-section__title">Parametri</span></summary>
         <div id="params" class="rg-param-grid"></div>
-      </section>
+      </details>
     </aside>
 
     <div class="rg-workspace__stage">
