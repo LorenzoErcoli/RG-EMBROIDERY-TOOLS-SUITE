@@ -8,7 +8,7 @@
 > Questo documento è **stack-agnostic**: vale per i progetti TypeScript/JS e per quelli Python.
 > Ogni nuovo progetto parte da qui, anche prima di condividere una riga di codice.
 
-**Versione:** 0.9 · **Aggiornato:** 2026-07-22
+**Versione:** 0.10 · **Aggiornato:** 2026-07-23
 
 ---
 
@@ -214,6 +214,10 @@ Il **fill vero (tatami)** è il grande assente: va portato nel core come primiti
 
 **Corollario (R11).** Una lunghezza senza unità fisica (`width="539"`, o `%`) **non** dice quanto è grande l'oggetto: `svgPhysicalLengthToMm()` torna `null` e chi importa deve chiedere la scala, non inventarla. `svgLengthToMm()` resta per i casi in cui è lecito ripiegare sul DPI canonico.
 
+### R30 — Interlinea (lungo il filo) e spaziatura (di traverso) sono due misure diverse.
+**Perché:** in un cordoncino zig-zag due distanze decidono la resa, e sono **ortogonali**: quanto sono ravvicinati i punti *lungo* il filo (**interlinea**) e quanto sono vicine le file di filo *di traverso* (**spaziatura**). Chiamarle entrambe "densità" — come faceva il codice — è già costato lo stesso nome per grandezze diverse: un valore giusto per una è sbagliato per l'altra. Deciso con Lorenzo che per il cordoncino la misura che governa è l'interlinea longitudinale (distanza tra due punti *consecutivi* lungo il filo, la "misura A").
+**Come:** interlinea longitudinale = `cordInterlineMm` (etichetta "Interlinea del cordoncino"); spaziatura trasversale = `densitySpacingMm` (R22). Nelle etichette **non** usare "densità" da sola per nessuna delle due: dì *lungo il filo* o *tra le file*.
+
 ---
 
 ## 2. Vocabolario di dominio (glossario canonico)
@@ -262,8 +266,8 @@ Convenzione di naming: **camelCase + suffisso `Mm`** per lunghezze in millimetri
 ### 3.1 Stitch e pulizia
 | Nome canonico | Default | Unità | Sostituisce | Cosa controlla |
 |---|---|---|---|---|
-| `minStitchMm` | 1.0 | mm | `minimumSegmentLength`, `minSegmentLengthMm`, `min_dist` | lunghezza minima di un punto (pass **dopo** routing, R3) |
-| `maxStitchMm` | 3.0 | mm | `resamplePathMaxSpacing`, `baseRasoStitchLengthMm` | spaziatura massima → suddivisione (R4) |
+| `minStitchMm` | 1.0 | mm | `minimumSegmentLength`, `minSegmentLengthMm`, `min_dist`, `minPointDistance` | lunghezza minima di un punto (pass **dopo** routing, R3) |
+| `maxStitchMm` | 3.0 | mm | `resamplePathMaxSpacing`, `baseRasoStitchLengthMm`, `maxStitchLength` | spaziatura massima → suddivisione (R4) |
 | `travelStitchMm` | 3.0 | mm | `minimumTravelStitchLength`, `connectorStitchLengthMm` | passo dei punti di travel |
 | `cleanupToleranceMm` | 0.25 | mm | `cleanupTolerance` | tolleranza semplificazione (Douglas-Peucker) |
 | `snapToleranceMm` | 0.5 | mm | `snapToEdgeDistance`, `edgeSnapToleranceMm` | snap dei punti al bordo |
@@ -301,6 +305,8 @@ Convenzione di naming: **camelCase + suffisso `Mm`** per lunghezze in millimetri
 | `satinWidthMm` | 4.0 | mm | larghezza satin |
 | `satinDensityMm` | 0.8 | mm | passo satin |
 | `cordWidthMm` | 2.0 | mm | larghezza cordoncino |
+| `cordInterlineMm` | 0.4 | mm | **interlinea del cordoncino**: passo *longitudinale* tra due punti consecutivi lungo il filo (misura A, R30). Sostituisce `cordDensityMm`. **Non** è `densitySpacingMm` (trasversale) |
+| `constructionStrokeMm` | 0.3 | mm | **spessore di costruzione** (generatore pattern): guida rientri dal bordo, margini e passo dei raccordi — *distinto* dal filo disegnato (0.1 mm, R15) |
 | `zigZagWidthMm` | 2.0 | mm | larghezza zig-zag/fissaggio |
 | `hatchAngleDeg` | 0 | deg | angolo del riempimento tatami |
 | `hatchSpacingMm` | 0.4 | mm | passo linee tatami |
@@ -329,7 +335,7 @@ Convenzione di naming: **camelCase + suffisso `Mm`** per lunghezze in millimetri
 ### 3.7 Densità, tipi di punto e concatenamento (R22–R26)
 | Nome canonico | Default | Unità | Sostituisce | Cosa controlla |
 |---|---|---|---|---|
-| `densitySpacingMm` | 0.4 | mm | `satinDensity`, `cordoncinoStepMm`, `line_spacing`, `baseRasoPasses` (via width/(n−1)) | **densità canonica**: spaziatura trasversale tra file di filo (R22) |
+| `densitySpacingMm` | 0.4 | mm | `satinDensity`, `line_spacing`, `baseRasoPasses` (via width/(n−1)) | **spaziatura trasversale** tra file di filo (R22). **Non** l'interlinea longitudinale del cordoncino → quella è `cordInterlineMm` (R30) |
 | `runningStitchMm` | 3.0 | mm | `baseRasoStitchLengthMm`, `level05StitchLength`, `connectorStitchLengthMm` | passo longitudinale del punto corsa/running |
 | `satinMaxWidthMm` | 8.0 | mm | — | oltre questa larghezza il satin cede → split o converti in fill (R23) |
 | `fillStaggerRatio` | 0.5 | ratio | — | sfalsamento (brick) tra righe di fill, per evitare la linea di split (R23) |

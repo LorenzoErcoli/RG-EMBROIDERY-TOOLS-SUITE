@@ -92,7 +92,7 @@ graph TD
 
 1. Il `core` **cresce per estrazione**, non per anticipazione: una primitiva entra nel core quando **un secondo tool** la richiede (o quando è ovviamente fondamentale: geometry, io, export).
 2. Un tool **non modifica il core per un bisogno solo suo**: prima lo tiene in locale nell'app, poi — se si dimostra generale — lo promuove.
-3. Ogni cosa nel core **rispetta la Costituzione** (nomi canonici §3, regole R1–R29).
+3. Ogni cosa nel core **rispetta la Costituzione** (nomi canonici §3, regole R1–R30).
 4. I tool esistenti **migrano uno alla volta**, quando li tocchi. Nessun big-bang.
 5. Il satellite Python **non entra nel workspace-link**: condivide contratti (`params.schema.json`), non codice.
 6. **Un tool migrato arriva col suo motore: la regola 1 da sola non basta.** L'estrazione scatta quando un *secondo tool ha bisogno* di una primitiva — ma un tool che arriva già completo non "ha bisogno" di niente, e si porta dietro la sua risposta a domande già risolte nel core. Quindi: **a ogni migrazione si confrontano le primitive** (chiusura, colori, unità, tolleranze) e le divergenze si risolvono *esplicitamente*, prima di considerare finita la migrazione.

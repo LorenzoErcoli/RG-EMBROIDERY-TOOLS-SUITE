@@ -34,7 +34,7 @@
 - **Salvataggio unico per la suite** (`@rg/ui/save`, R29): l'export apre la finestra di salvataggio del sistema — scegli **cartella e nome** — invece di scaricare d'ufficio in Download. Il nome proposto parte dalla sagoma importata (`sagoma-rete45.svg`); la cartella se la ricorda il browser tra uno strumento e l'altro. Su Firefox/Safari ripiega sul download classico. **Da provare in un browser vero** (vedi blocchi).
 - **Smoke test** (`npm test`): 12 asserzioni su chiusura, colori e scala, con la fixture del difetto reale (`test/fixtures/contorno-con-scarto.svg`). Verificato che fallisce se si rimette la vecchia tolleranza.
 
-**Regole scritte:** `COSTITUZIONE-RICAMO.md` (29 regole R1–R29 + glossario + parametri canonici) e `ARCHITETTURA.md`.
+**Regole scritte:** `COSTITUZIONE-RICAMO.md` (30 regole R1–R30 + glossario + parametri canonici) e `ARCHITETTURA.md`.
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 
