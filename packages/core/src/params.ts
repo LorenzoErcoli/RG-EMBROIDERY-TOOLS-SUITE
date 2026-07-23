@@ -20,7 +20,7 @@ export interface NetParams {
 
   // Cordoncino
   cordWidthMm: number;
-  cordDensityMm: number;  // passo longitudinale dello zig-zag (densità)
+  cordInterlineMm: number; // interlinea: passo longitudinale tra punti consecutivi lungo il filo (R30)
 
   // Passaggi / travel
   travelStitchMm: number; // lunghezza punto dei passaggi
@@ -47,7 +47,7 @@ export const defaultNetParams: NetParams = {
   rasoBandMm: 8,
   rasoDownwardOnly: 1,
   cordWidthMm: 1.8,
-  cordDensityMm: 0.4,
+  cordInterlineMm: 0.4,
   travelStitchMm: 3,
   satinDensityMm: 0.4,
   squareDensityMm: 0.4,

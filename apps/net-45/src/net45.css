@@ -12,14 +12,8 @@ body {
 /* Il workspace riempie lo spazio sotto la topbar (sizing d'app, come da doc del pattern). */
 .net45-workspace { flex: 1 1 auto; min-height: 0; }
 
-/* Helper locali minimi (non coperti dal componente). */
-.net45__file { display: block; position: relative; margin-bottom: var(--rg-space-2); }
-.net45__file input { position: absolute; inset: 0; opacity: 0; cursor: pointer; }
-.net45__file span { width: 100%; }
-.net45__actions { display: flex; gap: var(--rg-space-2); }
-.net45__rrow { display: flex; align-items: center; gap: var(--rg-space-2); margin-bottom: var(--rg-space-2); }
-.net45__swatch { width: 18px; height: 18px; border: var(--rg-border-hairline) var(--rg-border-style) var(--rg-color-border); flex: none; }
-.net45__rrow .rg-select { flex: 1; }
+/* Sagoma, colori→ruoli, file-input e cluster ora sono componenti del DS (v1.6.0):
+   rg-file-input, rg-color-map, rg-cluster. Nessun helper locale da mantenere. */
 
 /* L'anteprima riempie il layer; bordo e sfondo sono già sul __canvas del DS. */
 #layer svg { max-width: 100%; max-height: 100%; }

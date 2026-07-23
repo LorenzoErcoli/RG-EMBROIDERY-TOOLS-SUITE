@@ -91,7 +91,7 @@ export function buildNet(boundary: Polyline, exclusions: Polyline[], params: Net
   };
   const goCord = (a: Point, b: Point) => {
     goTravel(a);
-    append(buildCordoncino(a, b, params.cordWidthMm, params.cordDensityMm));
+    append(buildCordoncino(a, b, params.cordWidthMm, params.cordInterlineMm));
     pen = b;
   };
 

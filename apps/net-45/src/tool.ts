@@ -12,20 +12,25 @@ import { sampleContours } from './sample';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveOutcomeMessage } from '@rg/ui/save';
 
-const PARAM_UI: { key: keyof NetParams; label: string; step: number }[] = [
-  { key: 'realWidthMm', label: '★ Larghezza reale mm (0=auto)', step: 1 },
-  { key: 'squareSizeMm', label: 'Lato quadrato (rete) mm', step: 0.5 },
-  { key: 'angleADeg', label: 'Angolo A °', step: 1 },
-  { key: 'angleBDeg', label: 'Angolo B °', step: 1 },
-  { key: 'netInsetMm', label: 'Rientro rete mm', step: 0.5 },
-  { key: 'netOffsetXMm', label: 'Sposta rete X mm', step: 1 },
-  { key: 'netOffsetYMm', label: 'Sposta rete Y mm', step: 1 },
-  { key: 'rasoBandMm', label: 'Fascia raso bordo mm', step: 1 },
-  { key: 'rasoDownwardOnly', label: 'Raso solo sotto (1/0)', step: 1 },
-  { key: 'cordWidthMm', label: 'Largh. cordoncino mm', step: 0.1 },
-  { key: 'cordDensityMm', label: 'Densità cordoncino mm', step: 0.05 },
-  { key: 'travelStitchMm', label: 'Punto passaggi mm', step: 0.5 },
-  { key: 'minStitchMm', label: 'Punto minimo mm', step: 0.1 },
+/** Un campo del gruppo "Parametri". `check` = sì/no (interno 1/0). `unit` va nello slot del DS, mai nell'etichetta (R-panello). */
+type Field =
+  | { key: keyof NetParams; label: string; unit: string; step: number; help?: string; kind?: 'num' }
+  | { key: keyof NetParams; label: string; kind: 'check' };
+
+// Ordine e nomi decisi con Lorenzo (REVISIONE-PARAMETRI.md). `realWidthMm` sta nel gruppo Sagoma, non qui.
+const PARAMS: Field[] = [
+  { key: 'squareSizeMm', label: 'Lato del quadrato', unit: 'mm', step: 0.5 },
+  { key: 'angleADeg', label: 'Angolo diagonali principali', unit: '°', step: 1 },
+  { key: 'angleBDeg', label: 'Angolo diagonali secondarie', unit: '°', step: 1 },
+  { key: 'netInsetMm', label: 'Rientro della rete dal bordo', unit: 'mm', step: 0.5 },
+  { key: 'netOffsetXMm', label: 'Sposta rete — orizzontale', unit: 'mm', step: 1 },
+  { key: 'netOffsetYMm', label: 'Sposta rete — verticale', unit: 'mm', step: 1 },
+  { key: 'rasoBandMm', label: 'Spessore della fascia di raso', unit: 'mm', step: 1 },
+  { key: 'rasoDownwardOnly', label: 'Raso solo sui bordi bassi e laterali', kind: 'check' },
+  { key: 'cordWidthMm', label: 'Larghezza del cordoncino', unit: 'mm', step: 0.1 },
+  { key: 'cordInterlineMm', label: 'Interlinea del cordoncino', unit: 'mm', step: 0.05, help: 'distanza tra un punto e il successivo lungo il filo' },
+  { key: 'travelStitchMm', label: 'Lunghezza del punto nei passaggi', unit: 'mm', step: 0.5 },
+  { key: 'minStitchMm', label: 'Punto minimo', unit: 'mm', step: 0.1 },
 ];
 const ROLE_OPTIONS: (Role | '')[] = ['', 'MASTER_OUTLINE', 'NET_AREA', 'SATIN_AREA', 'SQUARE_AREA', 'BORDER', 'EXCLUSION'];
 
@@ -36,16 +41,31 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
   <div class="rg-workspace net45-workspace">
     <aside class="rg-workspace__panel">
       <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-mono">01</span><h3 class="rg-h3">Sagoma</h3></div>
-        <label class="net45__file"><input type="file" id="fileInput" accept=".svg,.dxf" /><span class="rg-button rg-button--outline rg-button--small">Carica DXF o SVG…</span></label>
-        <button id="sampleBtn" class="rg-button rg-button--ghost rg-button--small">Sagoma demo</button>
+        <div class="rg-param-section__header"><span class="rg-param-section__index">01</span><h3 class="rg-param-section__title">Sagoma</h3></div>
+        <div class="rg-param-grid">
+          <div class="rg-file-input rg-param-grid__wide">
+            <label class="rg-file-input__control">
+              <input type="file" id="fileInput" accept=".svg,.dxf" />
+              <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
+            </label>
+            <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file: uso la sagoma demo.</p>
+          </div>
+          <label class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Larghezza reale (0 = auto)</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="realWidth" type="number" min="0" step="1" value="0"><span>mm</span></span>
+            <small class="rg-field__help">0 = usa la misura letta dal file.</small>
+          </label>
+          <div class="rg-cluster rg-param-grid__wide"><button id="sampleBtn" class="rg-button rg-button--ghost" type="button">Sagoma demo</button></div>
+        </div>
       </section>
+
       <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-mono">02</span><h3 class="rg-h3">Colori → ruoli</h3></div>
-        <div id="roles"></div>
+        <div class="rg-param-section__header"><span class="rg-param-section__index">02</span><h3 class="rg-param-section__title">Colori e ruoli</h3></div>
+        <ul class="rg-color-map" id="roles"></ul>
       </section>
+
       <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-mono">03</span><h3 class="rg-h3">Parametri</h3></div>
+        <div class="rg-param-section__header"><span class="rg-param-section__index">03</span><h3 class="rg-param-section__title">Parametri</h3></div>
         <div id="params" class="rg-param-grid"></div>
       </section>
     </aside>
@@ -53,7 +73,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     <div class="rg-workspace__stage">
       <header class="rg-workspace__stage-header">
         <h2 class="rg-h3">Anteprima</h2>
-        <div class="net45__actions">
+        <div class="rg-cluster">
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Esporta SVG</button>
         </div>
@@ -62,7 +82,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
       </div>
       <footer class="rg-workspace__statusbar">
-        <span id="status">—</span>
+        <span id="status">Pronto</span>
         <span id="zoom" class="rg-mono">zoom 100%</span>
       </footer>
     </div>
@@ -75,7 +95,8 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
   const params: NetParams = { ...defaultNetParams };
 
   const currentContours = () => applyRealWidth(imported, params.realWidthMm);
-  const uniqueColors = () => [...new Set(imported.contours.map((c) => c.color))];
+  const contourColors = () => imported.contours.map((c) => c.color);
+  const uniqueColors = () => [...new Set(contourColors())];
 
   // Pan/zoom del canvas (la vista non si azzera rigenerando l'SVG).
   const pz = hookPanZoom($('canvas'), $('layer'), (z) => { $('zoom').textContent = `zoom ${Math.round(z * 100)}%`; });
@@ -85,42 +106,82 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     if (colors.length === 1 && roles[colors[0]] === undefined) roles[colors[0]] = 'MASTER_OUTLINE';
   }
 
+  // ---- Parametri: componenti DS, unità nello slot, sì/no come casella di spunta ----
   function buildParamUI() {
     const host = $('params');
     host.innerHTML = '';
-    for (const d of PARAM_UI) {
-      const field = document.createElement('label');
-      field.className = 'rg-field rg-param-grid__wide';
-      const lab = document.createElement('span');
-      lab.className = 'rg-field__label';
-      lab.textContent = d.label;
+    for (const f of PARAMS) {
+      if (f.kind === 'check') {
+        const lab = document.createElement('label');
+        lab.className = 'rg-choice rg-param-grid__wide';
+        const inp = document.createElement('input');
+        inp.type = 'checkbox';
+        inp.checked = (params[f.key] as number) !== 0;
+        inp.addEventListener('change', () => { (params[f.key] as number) = inp.checked ? 1 : 0; render(); });
+        lab.append(inp, document.createTextNode(' ' + f.label));
+        host.appendChild(lab);
+        continue;
+      }
+      const lab = document.createElement('label');
+      lab.className = 'rg-field' + (f.help ? ' rg-param-grid__wide' : '');
+      const name = document.createElement('span');
+      name.className = 'rg-field__label';
+      name.textContent = f.label;
+      const wrap = document.createElement('span');
+      wrap.className = 'rg-field-with-unit';
       const inp = document.createElement('input');
       inp.type = 'number';
-      inp.className = 'rg-input rg-mono';
-      inp.step = String(d.step);
-      inp.value = String(params[d.key]);
+      inp.className = 'rg-input rg-input--numeric';
+      inp.step = String(f.step);
+      inp.value = String(params[f.key]);
       inp.addEventListener('change', () => {
         const v = parseFloat(inp.value);
-        if (!Number.isNaN(v)) { (params[d.key] as number) = v; render(); }
+        if (!Number.isNaN(v)) { (params[f.key] as number) = v; render(); }
       });
-      field.append(lab, inp);
-      host.appendChild(field);
+      const unit = document.createElement('span');
+      unit.textContent = f.unit;
+      wrap.append(inp, unit);
+      lab.append(name, wrap);
+      if (f.help) {
+        const help = document.createElement('small');
+        help.className = 'rg-field__help';
+        help.textContent = f.help;
+        lab.appendChild(help);
+      }
+      host.appendChild(lab);
     }
   }
 
+  // ---- Colori → ruoli: componente DS rg-color-map (campione + codice colore + conteggio + bersaglio) ----
   function buildRoleUI() {
     const host = $('roles');
     host.innerHTML = '';
     const colors = uniqueColors();
-    if (!colors.length) { host.innerHTML = '<div class="rg-caption rg-u-muted">Nessuna sagoma.</div>'; return; }
+    if (!colors.length) {
+      host.innerHTML = '<li><p class="rg-color-map__empty">Nessuna sagoma: carica un DXF o un SVG.</p></li>';
+      return;
+    }
+    const counts = contourColors().reduce<Record<string, number>>((m, c) => (m[c] = (m[c] ?? 0) + 1, m), {});
     for (const color of colors) {
-      const row = document.createElement('div');
-      row.className = 'net45__rrow';
+      const none = color === 'none';
+      const row = document.createElement('li');
+      row.className = 'rg-color-map__row';
+
       const sw = document.createElement('span');
-      sw.className = 'net45__swatch';
-      sw.style.background = color === 'none' ? 'transparent' : color;
+      sw.className = 'rg-color-map__swatch' + (none ? ' rg-color-map__swatch--none' : '');
+      if (!none) sw.style.setProperty('--swatch', color);
+
+      const code = document.createElement('span');
+      code.className = 'rg-color-map__code';
+      code.textContent = none ? 'nessun colore ' : color.toUpperCase() + ' ';
+      const meta = document.createElement('span');
+      meta.className = 'rg-color-map__meta';
+      meta.textContent = `${counts[color]} contorni`;
+      code.appendChild(meta);
+
       const sel = document.createElement('select');
-      sel.className = 'rg-select';
+      sel.className = 'rg-select rg-color-map__target';
+      sel.setAttribute('aria-label', `Ruolo per ${none ? 'i contorni senza colore' : color}`);
       for (const r of ROLE_OPTIONS) {
         const o = document.createElement('option');
         o.value = r;
@@ -129,7 +190,8 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
         sel.appendChild(o);
       }
       sel.addEventListener('change', () => { roles[color] = (sel.value || undefined) as Role | undefined; render(); });
-      row.append(sw, sel);
+
+      row.append(sw, code, sel);
       host.appendChild(row);
     }
   }
@@ -147,16 +209,21 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
   /** Nome del file di partenza (senza estensione): serve a proporre un nome d'export sensato. */
   let sourceName = '';
 
+  /** Aggiorna la riga di provenienza del file (nome, misura, metodo, quantità) — è lo status del componente Sagoma. */
+  function updateFileStatus(label: string) {
+    const eff = measureContours(currentContours());
+    const detected = `${Math.round(imported.widthMm)}×${Math.round(imported.heightMm)} mm (${imported.method})`;
+    const effStr = params.realWidthMm > 0 ? ` → reale ${Math.round(eff.widthMm)}×${Math.round(eff.heightMm)} mm` : '';
+    const hint = imported.method === 'dpi' && !params.realWidthMm ? ' · imposta la larghezza reale' : '';
+    $('fileStatus').textContent = `${label}: ${detected}${effStr} · ${imported.contours.length} contorni${hint}`;
+  }
+
   function loadImport(result: ImportResult, label: string) {
     imported = result;
     autoAssign();
     buildRoleUI();
     render();
-    const eff = measureContours(currentContours());
-    const detected = `${Math.round(result.widthMm)}×${Math.round(result.heightMm)} mm (${result.method})`;
-    const effStr = params.realWidthMm > 0 ? ` → reale ${Math.round(eff.widthMm)}×${Math.round(eff.heightMm)} mm` : '';
-    const hint = result.method === 'dpi' && !params.realWidthMm ? ' · imposta ★ larghezza reale' : '';
-    $('status').textContent = `${label}: ${detected}${effStr}. ${result.contours.length} contorni.${hint}`;
+    updateFileStatus(label);
   }
 
   $('fileInput').addEventListener('change', (ev) => {
@@ -170,14 +237,21 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
         sourceName = file.name.replace(/\.[^.]+$/, '');
         loadImport(result, file.name);
       } catch (e) {
-        $('status').textContent = 'Errore import: ' + (e as Error).message;
+        $('fileStatus').textContent = 'Errore import: ' + (e as Error).message;
         console.error(e);
       }
     };
     reader.readAsText(file);
   });
 
-  $('sampleBtn').addEventListener('click', () => { roles = {}; loadImport(importResultFromContours(sampleContours()), 'Sagoma demo'); });
+  $('realWidth').addEventListener('change', () => {
+    const v = parseFloat(($('realWidth') as HTMLInputElement).value);
+    params.realWidthMm = Number.isNaN(v) ? 0 : Math.max(0, v);
+    render();
+    updateFileStatus(sourceName || 'Sagoma');
+  });
+
+  $('sampleBtn').addEventListener('click', () => { roles = {}; sourceName = ''; loadImport(importResultFromContours(sampleContours()), 'Sagoma demo'); });
   $('fitBtn').addEventListener('click', () => pz.fit());
 
   $('exportBtn').addEventListener('click', async () => {
