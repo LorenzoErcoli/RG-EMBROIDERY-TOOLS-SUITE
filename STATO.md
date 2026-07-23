@@ -1,6 +1,7 @@
-# STATO — RG Tools (suite strumenti ricamo)
+# STATO — RG Embroidery Tools Suite
 
-> Aggiornato: 2026-07-22 · Suite con **due tool** funzionanti
+> Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
+> Aggiornato: 2026-07-23 · Suite con **due tool** funzionanti
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
 
 ---
