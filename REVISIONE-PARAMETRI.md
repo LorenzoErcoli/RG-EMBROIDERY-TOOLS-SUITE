@@ -4,6 +4,27 @@
 > La colonna *Proposta* è mia e va corretta: i termini di mestiere li sai tu.
 > Quando le decisioni sono prese, i nomi canonici vanno in `COSTITUZIONE-RICAMO.md` §3 e questo file si cancella.
 
+---
+
+## Decisioni prese (2026-07-23, con Lorenzo)
+
+| # | Tema | Decisione |
+|---|---|---|
+| ① | Nome della cella rete | **"Lato del quadrato"** · interno `squareSizeMm` invariato |
+| ② | Angoli diagonali | **"principali" / "secondarie"** · regge con qualunque angolo |
+| ③ | Densità cordoncino | **misura = A**: distanza tra due punti *consecutivi* lungo il filo, **come oggi**. Nessun fattore 2, nessuna conversione, default 0,4 invariato. *(Etichetta: vedi §aperti.)* |
+| ④ | Densità rasi / quadratini | **non esposte ora**: oggi i rasi sono forme vuote → sarebbero campi inerti. Si mostrano coi riempimenti veri. |
+| ⑤ | Larghezza totale pattern | **esatta, rifila al bordo**: 200 → 200, ultimo modulo tagliato dove finisce il pannello. |
+| ⑥ | `strokeWidth` (due mestieri) | **separare in due**: filo disegnato fisso a **0,1 mm** (R15) + un parametro *geometrico* a parte. *(Nome: vedi §aperti.)* |
+| ⑦ | Onda (deformazioni) | **mm e gradi**: frequenza → lunghezza d'onda in mm, fase in gradi. I preset con onda vengono riconvertiti. |
+| ⑧ | `minPointDistance` / `maxStitchLength` | **rinomina interna** a `minStitchMm` / `maxStitchMm` **+ conversione** che salva i preset già fatti. |
+
+**Due paroline ancora aperte:**
+- **③ etichetta** del campo densità cordoncino (la misura è decisa, manca il nome).
+- **⑥ nome** del parametro geometrico separato da `strokeWidth`.
+
+**Valide per tutta la suite (già decise):** unità sempre nello slot del DS, mai nel testo dell'etichetta; niente inglese nelle etichette (unica eccezione il nome proprio "Illustrator").
+
 **Come leggerlo:** scorri la colonna *Proposta* e scrivi accanto quella giusta dove sbaglio.
 I punti che richiedono una tua decisione sono marcati **①②③…** e raccolti in fondo.
 
