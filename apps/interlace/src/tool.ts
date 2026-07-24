@@ -328,18 +328,19 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   $('fitBtn').addEventListener('click', () => pz.fit());
 
   $('exportBtn').addEventListener('click', async () => {
-    const { layers, bounds } = runPipeline(currentContours(), roles, params);
+    // Export per Stilista: un gruppo per STOP, in ordine di cucitura, con tinta unica (vedi pipeline).
+    const { exportLayers, bounds, stopCount } = runPipeline(currentContours(), roles, params);
     const metadata = { rgProject: 'interlace', version: '0.1.0', params, roles };
     let svg: string;
     if (imported.frame) {
       const r = params.realWidthMm > 0 && imported.widthMm > 0 ? params.realWidthMm / imported.widthMm : 1;
-      svg = buildSvgInSourceFrame(layers, { frame: imported.frame, realWidthFactor: r, metadata });
+      svg = buildSvgInSourceFrame(exportLayers, { frame: imported.frame, realWidthFactor: r, metadata });
     } else {
-      svg = buildSvg(layers, { bounds, marginMm: 8, metadata });
+      svg = buildSvg(exportLayers, { bounds, marginMm: 8, metadata });
     }
     const name = sourceName ? `${sourceName}-interlace.svg` : 'interlace.svg';
     const outcome = await saveTextFile(svg, { suggestedName: name, description: 'Immagine SVG' });
-    $('status').textContent = saveOutcomeMessage(outcome, name);
+    $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${stopCount} stop in sequenza`;
   });
 
   buildParamUI();
