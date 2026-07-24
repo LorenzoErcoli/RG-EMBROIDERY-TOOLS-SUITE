@@ -109,17 +109,39 @@ function fillPolygon(grid: Uint8Array, gw: number, gh: number, x0: number, y0: n
   }
 }
 
-/** Maschera dell'area ricamabile + coordinate. `fillable[c]` = 1 se cucibile (clearance già incorporata). */
-interface Mask {
-  fillable: Uint8Array;
-  gw: number; gh: number; x0: number; y0: number; res: number;
-  at(x: number, y: number): boolean;
+/** Distance transform chamfer (2 passate): distanza in mm dalla cella-sorgente più vicina. */
+function chamferDT(source0: Uint8Array, gw: number, gh: number, res: number): Float32Array {
+  const BIG = 1e9, diag = res * Math.SQRT2;
+  const d = new Float32Array(gw * gh);
+  for (let c = 0; c < d.length; c++) d[c] = source0[c] ? 0 : BIG;
+  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+    const c = j * gw + i; if (d[c] === 0) continue;
+    if (i > 0 && d[c - 1] + res < d[c]) d[c] = d[c - 1] + res;
+    if (j > 0 && d[c - gw] + res < d[c]) d[c] = d[c - gw] + res;
+    if (i > 0 && j > 0 && d[c - gw - 1] + diag < d[c]) d[c] = d[c - gw - 1] + diag;
+    if (i < gw - 1 && j > 0 && d[c - gw + 1] + diag < d[c]) d[c] = d[c - gw + 1] + diag;
+  }
+  for (let j = gh - 1; j >= 0; j--) for (let i = gw - 1; i >= 0; i--) {
+    const c = j * gw + i; if (d[c] === 0) continue;
+    if (i < gw - 1 && d[c + 1] + res < d[c]) d[c] = d[c + 1] + res;
+    if (j < gh - 1 && d[c + gw] + res < d[c]) d[c] = d[c + gw] + res;
+    if (i < gw - 1 && j < gh - 1 && d[c + gw + 1] + diag < d[c]) d[c] = d[c + gw + 1] + diag;
+    if (i > 0 && j < gh - 1 && d[c + gw - 1] + diag < d[c]) d[c] = d[c + gw - 1] + diag;
+  }
+  return d;
 }
 
-function buildMask(boundary: Polyline, voids: Polyline[], clear: number, res0: number): Mask {
+/**
+ * Campo di distanza CON SEGNO dell'area ricamabile: `sdf(x,y)` = distanza in mm dal bordo/vuoto più
+ * vicino, POSITIVA dentro l'area, negativa fuori. La clearance si applica al punto REALE (sdf≥clear),
+ * non a una maschera sì/no: così `clear=0` lascia il filo arrivare esattamente al bordo, e un valore
+ * di clearance è rispettato con precisione (a meno della risoluzione della griglia). O(1) per query.
+ */
+interface Mask { gw: number; gh: number; x0: number; y0: number; res: number; sdf(x: number, y: number): number; }
+
+function buildMask(boundary: Polyline, voids: Polyline[], res0: number): Mask {
   const bb = bounds(boundary);
   const w = bb.maxX - bb.minX, h = bb.maxY - bb.minY;
-  // Tetto memoria: se la griglia sarebbe troppo fine, allarga la cella.
   let res = res0;
   if ((w / res + 2) * (h / res + 2) > MAX_MASK_CELLS) res = Math.sqrt((w * h) / MAX_MASK_CELLS);
   const x0 = bb.minX - res, y0 = bb.minY - res;
@@ -128,37 +150,30 @@ function buildMask(boundary: Polyline, voids: Polyline[], clear: number, res0: n
   fillPolygon(solid, gw, gh, x0, y0, res, boundary, 1); // dentro il bordo = 1
   for (const v of voids) fillPolygon(solid, gw, gh, x0, y0, res, v, 0); // scava i vuoti = 0
 
-  // Erosione per la clearance: cucibile solo se dista ≥ (clear + margine) da qualsiasi cella non-solida
-  // (bordo/vuoto). Il margine ~1.2·res copre la discretizzazione: un punto può cadere nell'angolo di una
-  // cella cucibile, quindi la soglia extra garantisce che RESTI comunque dentro con la clearance richiesta.
-  // Distance transform chamfer a 2 passate (obstacle = solid==0).
-  const fillable = new Uint8Array(gw * gh);
-  const erode = clear + 1.2 * res;
-  const BIG = 1e9, diag = res * Math.SQRT2;
-  const dist = new Float32Array(gw * gh);
-  for (let c = 0; c < solid.length; c++) dist[c] = solid[c] ? BIG : 0;
-  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
-    const c = j * gw + i; if (dist[c] === 0) continue;
-    if (i > 0 && dist[c - 1] + res < dist[c]) dist[c] = dist[c - 1] + res;
-    if (j > 0 && dist[c - gw] + res < dist[c]) dist[c] = dist[c - gw] + res;
-    if (i > 0 && j > 0 && dist[c - gw - 1] + diag < dist[c]) dist[c] = dist[c - gw - 1] + diag;
-    if (i < gw - 1 && j > 0 && dist[c - gw + 1] + diag < dist[c]) dist[c] = dist[c - gw + 1] + diag;
-  }
-  for (let j = gh - 1; j >= 0; j--) for (let i = gw - 1; i >= 0; i--) {
-    const c = j * gw + i; if (dist[c] === 0) continue;
-    if (i < gw - 1 && dist[c + 1] + res < dist[c]) dist[c] = dist[c + 1] + res;
-    if (j < gh - 1 && dist[c + gw] + res < dist[c]) dist[c] = dist[c + gw] + res;
-    if (i < gw - 1 && j < gh - 1 && dist[c + gw + 1] + diag < dist[c]) dist[c] = dist[c + gw + 1] + diag;
-    if (i > 0 && j < gh - 1 && dist[c + gw - 1] + diag < dist[c]) dist[c] = dist[c + gw - 1] + diag;
-  }
-  for (let c = 0; c < solid.length; c++) fillable[c] = solid[c] && dist[c] >= erode ? 1 : 0;
+  const empty = new Uint8Array(gw * gh);
+  for (let c = 0; c < solid.length; c++) empty[c] = solid[c] ? 0 : 1;
+  const dOut = chamferDT(empty, gw, gh, res);  // dist. dal vuoto/bordo (per le celle dentro)
+  const dIn = chamferDT(solid, gw, gh, res);   // dist. dall'area (per le celle fuori)
+  // Campo con segno, con lo zero centrato sul bordo reale (~mezza cella tra dentro e fuori).
+  const field = new Float32Array(gw * gh);
+  for (let c = 0; c < field.length; c++) field[c] = solid[c] ? dOut[c] - 0.5 * res : 0.5 * res - dIn[c];
 
   return {
-    fillable, gw, gh, x0, y0, res,
-    at(x: number, y: number): boolean {
-      const i = Math.floor((x - x0) / res), j = Math.floor((y - y0) / res);
-      if (i < 0 || j < 0 || i >= gw || j >= gh) return false;
-      return fillable[j * gw + i] === 1;
+    gw, gh, x0, y0, res,
+    sdf(x: number, y: number): number {
+      const fx = (x - x0) / res - 0.5, fy = (y - y0) / res - 0.5;
+      let i = Math.floor(fx), j = Math.floor(fy);
+      if (i < 0) i = 0; else if (i > gw - 2) i = gw - 2;
+      if (j < 0) j = 0; else if (j > gh - 2) j = gh - 2;
+      // Frazioni limitate a [0,1]: FUORI dalla griglia NON si estrapola (altrimenti sdf falsa positiva →
+      // punti accettati lontano dal bordo). Ai margini si legge il valore della cella di bordo (negativo).
+      let tx = fx - i, ty = fy - j;
+      if (tx < 0) tx = 0; else if (tx > 1) tx = 1;
+      if (ty < 0) ty = 0; else if (ty > 1) ty = 1;
+      const r = j * gw + i;
+      const a = field[r] + (field[r + 1] - field[r]) * tx;
+      const b = field[r + gw] + (field[r + gw + 1] - field[r + gw]) * tx;
+      return a + (b - a) * ty;
     },
   };
 }
@@ -183,10 +198,14 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
   const maxS = Math.max(minS + 0.1, p.maxStitchMm);
   const spacing = Math.max(0.1, p.densitySpacingMm);
 
-  // Maschera fine: risoluzione abbastanza fitta da cogliere clearance e canali stretti.
-  const fineRes = Math.min(clear > 0 ? clear : 1, minS / 4, 1.2);
-  const mask = buildMask(boundary, voids, clear, Math.max(0.4, fineRes));
-  const inRegion = (x: number, y: number): boolean => mask.at(x, y);
+  // Maschera fine (campo di distanza con segno): risoluzione fitta per clearance accurata e canali stretti.
+  const fineRes = Math.max(0.3, Math.min(0.5, minS / 8));
+  const mask = buildMask(boundary, voids, fineRes);
+  // Un punto è nell'area se dista almeno `clear` dal bordo/vuoto (confronto sul punto REALE, non su una cella).
+  // `SAFE` (~mezza cella) è il solo margine di sicurezza: garantisce R5 (mai dentro il vuoto) anche con
+  // l'errore di griglia, senza reintrodurre il gap grosso. A clear=0 il filo arriva a ridosso del bordo.
+  const SAFE = 0.7 * mask.res;
+  const inRegion = (x: number, y: number): boolean => mask.sdf(x, y) >= clear + SAFE;
   // Segmento valido = tutti i campioni (passo ~maschera) sono cucibili: nessun void/bordo attraversato.
   const segStep = mask.res * 0.9;
   const segOk = (ax: number, ay: number, bx: number, by: number): boolean => {
@@ -280,7 +299,8 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
   };
 
   while (coveredCells < fillableCount * 0.985 && totalPts < MAX_POINTS && iter++ < MAX_ITER) {
-    const saturated = cov[cj(cy) * gx + ci(cx)] >= target;
+    const curCell = cj(cy) * gx + ci(cx);
+    const saturated = cov[curCell] >= target;
     let head = dir, spread = TURN_SPREAD;
     if (saturated) {
       const g = nearestGap(cx, cy);
@@ -295,7 +315,10 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
       ang += FLOW_INFLUENCE * angDelta(ang, fdir);
       const nx = cx + Math.cos(ang) * len, ny = cy + Math.sin(ang) * len;
       if (!inRegion(nx, ny) || !segOk(cx, cy, nx, ny)) continue;
-      const score = -cov[cj(ny) * gx + ci(nx)] + rng() * 0.6;
+      // Preferisci la cella meno coperta; scoraggia i micro-giri nella stessa cella (fonte dei grumi).
+      const destId = cj(ny) * gx + ci(nx);
+      let score = -cov[destId] + rng() * 0.25;
+      if (destId === curCell) score -= 3;
       if (score > bestScore) { bestScore = score; bx = nx; by = ny; bAng = ang; has = true; }
     }
     if (!has) {
