@@ -33,24 +33,34 @@ function pathLength(pl: Polyline): number {
 }
 
 /**
- * Taglia un filo continuo in `stops` tratti CONSECUTIVI e assegna a ciascuno un colore che
- * RUOTA sulla palette (0,1,…,k-1,0,1,…). Ogni tratto condivide il punto di giunzione col
- * successivo, così il filo resta continuo; i colori si ripetono su più strati sovrapposti
- * (l'ultimo colore non è solo in cima). Ritorna: per ogni colore, l'elenco dei suoi tratti.
+ * Colora una lista di tratti (ogni tratto = filo continuo) facendo RUOTARE i colori della palette
+ * lungo TUTTA la sequenza dei segmenti (0,1,…,k-1,0,1,…): ogni colore ricompare su più strati
+ * sovrapposti — l'ultimo non è solo in cima. Il cambio-colore avviene ogni `per` segmenti; i colori
+ * non vengono mai uniti attraverso il confine tra due tratti (lì c'è un salto a penna alzata, non
+ * disegnato). Ritorna: per ogni colore, l'elenco delle sue polilinee.
  */
-function rotateColorStops(path: Polyline, palette: string[], stops: number): Map<string, Polyline[]> {
+function colorizeRuns(runs: Polyline[], palette: string[], stops: number): Map<string, Polyline[]> {
   const byColor = new Map<string, Polyline[]>();
   for (const col of palette) byColor.set(col, []);
-  const segCount = path.length - 1;
-  if (segCount < 1) return byColor;
-  const per = Math.max(1, Math.ceil(segCount / stops));
-  for (let s = 0, seg = 0; seg < segCount; s++) {
-    const from = seg;
-    const to = Math.min(segCount, seg + per); // indice di vertice finale del tratto
-    const chunk = path.slice(from, to + 1);   // include il vertice di giunzione col tratto dopo
-    const col = palette[s % palette.length];
-    if (chunk.length >= 2) byColor.get(col)!.push(chunk);
-    seg = to;
+  const totalSegs = runs.reduce((s, r) => s + Math.max(0, r.length - 1), 0);
+  if (totalSegs < 1) return byColor;
+  const per = Math.max(1, Math.ceil(totalSegs / stops));
+  let seg = 0;
+  for (const run of runs) {
+    if (run.length < 2) continue;
+    let curCol = palette[Math.floor(seg / per) % palette.length];
+    let chunk: Polyline = [run[0]];
+    for (let i = 1; i < run.length; i++) {
+      const col = palette[Math.floor(seg / per) % palette.length];
+      if (col !== curCol) {
+        if (chunk.length >= 2) byColor.get(curCol)!.push(chunk);
+        chunk = [run[i - 1]]; // il nuovo tratto-colore riparte dal punto di giunzione (continuo)
+        curCol = col;
+      }
+      chunk.push(run[i]);
+      seg++;
+    }
+    if (chunk.length >= 2) byColor.get(curCol)!.push(chunk);
   }
   return byColor;
 }
@@ -80,19 +90,20 @@ export function runPipeline(
   const cycles = Math.max(1, Math.floor(params.paletteCycles) || 1);
   const stops = palette.length * cycles;
 
-  // Riempimento a intreccio: un filo continuo per ogni area MASTER_OUTLINE, escludendo i void interni.
-  // Ogni filo è tagliato in cambi-ago che ruotano sulla palette; accumuliamo i tratti per colore.
-  const perColor = new Map<string, Polyline[]>();
-  for (const col of palette) perColor.set(col, []);
+  // Riempimento a intreccio: per ogni area MASTER_OUTLINE il motore rende una LISTA di tratti
+  // (con salti a penna alzata tra le tasche del labirinto). Raccogliamo tutti i tratti, poi
+  // facciamo ruotare i colori su tutta la sequenza.
+  const allRuns: Polyline[] = [];
   let threadMm = 0;
   for (const m of master) {
     const innerVoids = exclusions.filter((v) => v.length > 0 && pointInPolygon(v[0], m.points));
-    const path = generateFill(m.points, innerVoids, params);
-    if (path.length < 2) continue;
-    threadMm += pathLength(path);
-    const chunks = rotateColorStops(path, palette, stops);
-    for (const [col, list] of chunks) perColor.get(col)!.push(...list);
+    for (const run of generateFill(m.points, innerVoids, params)) {
+      if (run.length < 2) continue;
+      allRuns.push(run);
+      threadMm += pathLength(run);
+    }
   }
+  const perColor = colorizeRuns(allRuns, palette, stops);
   // Il filo si disegna sottile (R15): lo spessore reale è nella densità dei passaggi.
   // Un layer per colore (come nell'SVG di riferimento: un <path>/gruppo per colore).
   palette.forEach((col, i) => {

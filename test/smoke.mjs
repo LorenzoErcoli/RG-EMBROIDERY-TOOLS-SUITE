@@ -89,11 +89,13 @@ console.log('\ninterlace — riempimento: dentro il bordo, fuori dai vuoti, punt
 const iSquare = [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 100 }, { x: 0, y: 100 }];
 const iVoid = (() => { const a = []; for (let i = 0; i <= 28; i++) { const t = (i / 28) * 2 * Math.PI; a.push({ x: 80 + Math.cos(t) * 18, y: 35 + Math.sin(t) * 18 }); } return a; })();
 const iParams = { ...rg.defaultInterlaceParams, minStitchMm: 6, maxStitchMm: 15, densitySpacingMm: 1.2, voidClearanceMm: 0.6 };
-const iPath = rg.generateFill(iSquare, [iVoid], iParams);
+const iRuns = rg.generateFill(iSquare, [iVoid], iParams); // lista di tratti
+const iPts = iRuns.flat();
 let iInVoid = 0, iOut = 0, iShort = 0, iLong = 0;
-for (const p of iPath) { if (rg.pointInPolygon(p, iVoid)) iInVoid++; if (!rg.pointInPolygon(p, iSquare)) iOut++; }
-for (let i = 1; i < iPath.length; i++) { const d = Math.hypot(iPath[i].x - iPath[i - 1].x, iPath[i].y - iPath[i - 1].y); if (d < 6 - 0.01) iShort++; if (d > 15 + 0.01) iLong++; }
-check('genera un tracciato non vuoto', iPath.length > 100, true);
+for (const p of iPts) { if (rg.pointInPolygon(p, iVoid)) iInVoid++; if (!rg.pointInPolygon(p, iSquare)) iOut++; }
+// lunghezze SOLO dentro ogni tratto (tra tratti c'è un salto a penna alzata, non un punto)
+for (const run of iRuns) for (let i = 1; i < run.length; i++) { const d = Math.hypot(run[i].x - run[i - 1].x, run[i].y - run[i - 1].y); if (d < 6 - 0.01) iShort++; if (d > 15 + 0.01) iLong++; }
+check('genera un tracciato non vuoto', iPts.length > 100, true);
 check('nessun punto dentro il vuoto (R5)', iInVoid, 0);
 check('nessun punto fuori dal bordo', iOut, 0);
 check('nessun segmento sotto il punto minimo (R3)', iShort, 0);
