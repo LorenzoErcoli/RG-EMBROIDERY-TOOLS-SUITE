@@ -58,8 +58,23 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
         <ul class="rg-color-map" id="roles"></ul>
       </section>
 
+      <details class="rg-param-section rg-disclosure" id="paletteSection" open>
+        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">03</span><span class="rg-param-section__title">Colori del filo</span></summary>
+        <ul class="rg-color-map" id="paletteList"></ul>
+        <div class="rg-cluster">
+          <button type="button" id="addColorBtn" class="rg-button rg-button--ghost rg-button--small">Aggiungi colore</button>
+        </div>
+        <div class="rg-param-grid">
+          <label class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Ripetizioni della sequenza</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="paletteCycles" type="number" min="1" step="1" value="1"><span>cicli</span></span>
+            <small class="rg-field__help">quante volte l’intera sequenza di colori si ripete lungo il tracciato (genera i cambi-ago)</small>
+          </label>
+        </div>
+      </details>
+
       <details class="rg-param-section rg-disclosure" open>
-        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">03</span><span class="rg-param-section__title">Riempimento</span></summary>
+        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">04</span><span class="rg-param-section__title">Riempimento</span></summary>
         <div id="params" class="rg-param-grid"></div>
       </details>
     </aside>
@@ -187,6 +202,61 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     }
   }
 
+  // ---- Palette "Colori del filo": righe rg-color-map con picker nativo (markup del subagent design-system) ----
+  const MAX_COLORS = 8;
+  const NEW_COLORS = ['#8a5a44', '#4f7d9c', '#b0863b', '#6a7d4f', '#9c4f6a', '#3f6f7d'];
+  const asHex6 = (c: string) => (/^#[0-9a-fA-F]{6}$/.test(c) ? c : '#888888');
+
+  function buildPaletteUI() {
+    const host = $('paletteList');
+    host.innerHTML = '';
+    params.colors.forEach((col, i) => {
+      const li = document.createElement('li');
+      li.className = 'rg-color-map__row';
+      li.dataset.colorIndex = String(i);
+
+      const sw = document.createElement('label');
+      sw.className = 'rg-color-map__swatch';
+      sw.style.setProperty('--swatch', col);
+      const picker = document.createElement('input');
+      picker.type = 'color';
+      picker.className = 'rg-u-visually-hidden';
+      picker.value = asHex6(col);
+      picker.setAttribute('aria-label', `Colore ${i + 1}`);
+
+      const cluster = document.createElement('span');
+      cluster.className = 'rg-cluster';
+      const code = document.createElement('span');
+      code.className = 'rg-color-map__code';
+      code.textContent = col.toUpperCase();
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'rg-icon-button rg-icon-button--danger';
+      rm.textContent = '×';
+      rm.setAttribute('aria-label', `Rimuovi colore ${i + 1} (${col.toUpperCase()})`);
+      rm.disabled = params.colors.length <= 1;
+      rm.addEventListener('click', () => {
+        if (params.colors.length <= 1) return;
+        params.colors.splice(i, 1);
+        buildPaletteUI();
+        render();
+      });
+      picker.addEventListener('input', () => {
+        params.colors[i] = picker.value;
+        sw.style.setProperty('--swatch', picker.value);
+        code.textContent = picker.value.toUpperCase();
+        rm.setAttribute('aria-label', `Rimuovi colore ${i + 1} (${picker.value.toUpperCase()})`);
+        render();
+      });
+
+      sw.appendChild(picker);
+      cluster.append(code, rm);
+      li.append(sw, cluster);
+      host.appendChild(li);
+    });
+    ($('addColorBtn') as HTMLButtonElement).disabled = params.colors.length >= MAX_COLORS;
+  }
+
   function render() {
     try {
       const { layers, bounds, threadMm } = runPipeline(currentContours(), roles, params);
@@ -241,6 +311,19 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     updateFileStatus(sourceName || 'Cartamodello');
   });
 
+  $('addColorBtn').addEventListener('click', () => {
+    if (params.colors.length >= MAX_COLORS) return;
+    params.colors.push(NEW_COLORS[(params.colors.length - 1) % NEW_COLORS.length]);
+    buildPaletteUI();
+    render();
+  });
+  ($('paletteCycles') as HTMLInputElement).value = String(params.paletteCycles);
+  $('paletteCycles').addEventListener('change', () => {
+    const v = parseInt(($('paletteCycles') as HTMLInputElement).value, 10);
+    params.paletteCycles = Number.isNaN(v) ? 1 : Math.max(1, v);
+    render();
+  });
+
   $('sampleBtn').addEventListener('click', () => { roles = {}; sourceName = ''; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
   $('fitBtn').addEventListener('click', () => pz.fit());
 
@@ -260,5 +343,6 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   });
 
   buildParamUI();
+  buildPaletteUI();
   loadImport(imported, 'Cartamodello demo');
 }

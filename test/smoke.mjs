@@ -15,6 +15,7 @@ const posix = (p) => join(root, p).replace(/\\/g, '/');
 const entry = join(outDir, 'entry.ts');
 writeFileSync(entry, `
 export { parseImportedBoundarySource, generatePattern } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
+export { generateFill, defaultInterlaceParams } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
@@ -83,6 +84,20 @@ const s200 = rg.generatePattern({ totalWidth: 200, totalHeight: 160 });
 check('200mm chiesti → width esatta 200 (non 209.8)', dims(s200).w, 200);
 check('niente geometria oltre il bordo del pannello', maxX(s200) <= 200 + 0.05, true);
 check('formato più grande della geometria → esatto, senza allargare oltre', dims(rg.generatePattern({ totalWidth: 400, totalHeight: 300 })).w, 400);
+
+console.log('\ninterlace — riempimento: dentro il bordo, fuori dai vuoti, punto in [min,max]');
+const iSquare = [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 100 }, { x: 0, y: 100 }];
+const iVoid = (() => { const a = []; for (let i = 0; i <= 28; i++) { const t = (i / 28) * 2 * Math.PI; a.push({ x: 80 + Math.cos(t) * 18, y: 35 + Math.sin(t) * 18 }); } return a; })();
+const iParams = { ...rg.defaultInterlaceParams, minStitchMm: 6, maxStitchMm: 15, densitySpacingMm: 1.2, voidClearanceMm: 0.6 };
+const iPath = rg.generateFill(iSquare, [iVoid], iParams);
+let iInVoid = 0, iOut = 0, iShort = 0, iLong = 0;
+for (const p of iPath) { if (rg.pointInPolygon(p, iVoid)) iInVoid++; if (!rg.pointInPolygon(p, iSquare)) iOut++; }
+for (let i = 1; i < iPath.length; i++) { const d = Math.hypot(iPath[i].x - iPath[i - 1].x, iPath[i].y - iPath[i - 1].y); if (d < 6 - 0.01) iShort++; if (d > 15 + 0.01) iLong++; }
+check('genera un tracciato non vuoto', iPath.length > 100, true);
+check('nessun punto dentro il vuoto (R5)', iInVoid, 0);
+check('nessun punto fuori dal bordo', iOut, 0);
+check('nessun segmento sotto il punto minimo (R3)', iShort, 0);
+check('nessun segmento sopra il punto massimo (R4)', iLong, 0);
 
 rmSync(outDir, { recursive: true, force: true });
 console.log(failed ? `\n${failed} test falliti\n` : '\nTutti i test passati\n');
