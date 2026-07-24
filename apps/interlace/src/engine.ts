@@ -280,65 +280,85 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
   let run: Point[] = [{ x: sx, y: sy }];
   let cx = sx, cy = sy, dir = rng() * Math.PI * 2;
   let curId = cj(sy) * gx + ci(sx); // cella dove il tratto corrente è iniziato
-  let runMoves = 0, noProgress = 0, lastCovered = 0, iter = 0, totalPts = 1;
-  const MAX_ITER = fillableCount * 400 + 60000;
-  const RELOCATE_AFTER = 50;
+  let runMoves = 0, totalPts = 1;
 
-  // Salto a penna alzata verso la tasca scoperta più vicina; apre un nuovo tratto. false se non resta nulla.
-  const relocate = (): boolean => {
-    // Se la cella d'arrivo non si è potuta riempire (nessun passo valido), la marchiamo "morta":
-    // niente copertura fittizia, solo esclusione dalla ricerca del prossimo vuoto (termina il loop).
-    if (curId >= 0 && runMoves === 0) dead[curId] = 1;
-    const g = nearestGap(cx, cy);
-    if (!g) return false;
-    if (run.length >= 2) runs.push(run);
-    run = [{ x: g.x, y: g.y }];
-    cx = g.x; cy = g.y; dir = rng() * Math.PI * 2;
-    curId = g.id; runMoves = 0; noProgress = 0;
-    return true;
-  };
-
-  while (coveredCells < fillableCount * 0.985 && totalPts < MAX_POINTS && iter++ < MAX_ITER) {
+  // Sceglie il prossimo punto: candidati verso `head` (± `spread`), preferendo la cella MENO coperta
+  // e scoraggiando la sovra-copertura (i grumi = celle troppo cariche → una volta a target si evitano).
+  // Se nessun candidato è valido prova un passo corto (escape). Ritorna null se davvero bloccato.
+  const advance = (head: number, spread: number): { x: number; y: number; ang: number } | null => {
     const curCell = cj(cy) * gx + ci(cx);
-    const saturated = cov[curCell] >= target;
-    let head = dir, spread = TURN_SPREAD;
-    if (saturated) {
-      const g = nearestGap(cx, cy);
-      if (g) { head = Math.atan2(g.y - cy, g.x - cx); spread = 1.0; } // vira verso il vuoto (se raggiungibile dritto)
-    }
-
-    let bx = 0, by = 0, bAng = 0, bestScore = -Infinity, has = false;
     const fdir = flowAng(cx, cy);
+    let bx = 0, by = 0, bAng = 0, best = -Infinity, has = false;
     for (let k = 0; k < CANDIDATES; k++) {
       const len = minS + rng() * (maxS - minS);
       let ang = head + (rng() * 2 - 1) * spread;
       ang += FLOW_INFLUENCE * angDelta(ang, fdir);
       const nx = cx + Math.cos(ang) * len, ny = cy + Math.sin(ang) * len;
       if (!inRegion(nx, ny) || !segOk(cx, cy, nx, ny)) continue;
-      // Preferisci la cella meno coperta; scoraggia i micro-giri nella stessa cella (fonte dei grumi).
       const destId = cj(ny) * gx + ci(nx);
       let score = -cov[destId] + rng() * 0.25;
-      if (destId === curCell) score -= 3;
-      if (score > bestScore) { bestScore = score; bx = nx; by = ny; bAng = ang; has = true; }
+      if (destId === curCell) score -= 3;         // no micro-giri nella stessa cella
+      if (cov[destId] >= target) score -= 6;       // no sovra-copertura → livella i picchi
+      if (score > best) { best = score; bx = nx; by = ny; bAng = ang; has = true; }
     }
-    if (!has) {
-      // Bloccato: gira secco e prova un passo corto (MAI un salto lungo disegnato).
-      dir += (rng() * 2 - 1) * 2.5;
-      let esc = false;
-      for (let k = 0; k < 24 && !esc; k++) {
-        const a = rng() * Math.PI * 2;
-        const nx = cx + Math.cos(a) * minS, ny = cy + Math.sin(a) * minS;
-        if (inRegion(nx, ny) && segOk(cx, cy, nx, ny)) { bx = nx; by = ny; bAng = a; esc = true; }
-      }
-      if (!esc) { if (!relocate()) break; continue; } // tasca chiusa → riloca a penna alzata
+    if (has) return { x: bx, y: by, ang: bAng };
+    for (let k = 0; k < 24; k++) { // escape: passo corto in qualunque direzione valida
+      const a = rng() * Math.PI * 2;
+      const nx = cx + Math.cos(a) * minS, ny = cy + Math.sin(a) * minS;
+      if (inRegion(nx, ny) && segOk(cx, cy, nx, ny)) return { x: nx, y: ny, ang: a };
     }
-    stamp(cx, cy, bx, by);
-    run.push({ x: bx, y: by });
-    cx = bx; cy = by; dir = bAng; totalPts++; runMoves++;
+    return null;
+  };
+  const commit = (nx: number, ny: number, ang: number): void => {
+    stamp(cx, cy, nx, ny);
+    run.push({ x: nx, y: ny });
+    cx = nx; cy = ny; dir = ang; totalPts++; runMoves++;
+  };
+  // Salto a penna alzata (non disegnato): chiude il tratto e ne apre uno nuovo altrove.
+  const openRunAt = (x: number, y: number, id: number): void => {
+    if (run.length >= 2) runs.push(run);
+    run = [{ x, y }];
+    cx = x; cy = y; dir = rng() * Math.PI * 2; curId = id; runMoves = 0;
+  };
 
+  // FASE 1 — riempimento principale a passi brevi, con rilocazione tra le tasche del labirinto.
+  let noProgress = 0, lastCovered = 0, iter = 0;
+  const MAX_ITER = fillableCount * 400 + 60000;
+  const RELOCATE_AFTER = 50;
+  while (coveredCells < fillableCount * 0.985 && totalPts < MAX_POINTS && iter++ < MAX_ITER) {
+    let head = dir, spread = TURN_SPREAD;
+    if (cov[cj(cy) * gx + ci(cx)] >= target) { const g = nearestGap(cx, cy); if (g) { head = Math.atan2(g.y - cy, g.x - cx); spread = 1.0; } }
+    const nxt = advance(head, spread);
+    if (!nxt) { if (runMoves === 0 && curId >= 0) dead[curId] = 1; const g = nearestGap(cx, cy); if (!g) break; openRunAt(g.x, g.y, g.id); continue; }
+    commit(nxt.x, nxt.y, nxt.ang);
     if (coveredCells > lastCovered) { lastCovered = coveredCells; noProgress = 0; }
-    else if (++noProgress > RELOCATE_AFTER) { if (!relocate()) break; } // tasca finita → nuova tasca
+    else if (++noProgress > RELOCATE_AFTER) { noProgress = 0; const g = nearestGap(cx, cy); if (!g) break; openRunAt(g.x, g.y, g.id); }
   }
+
+  // FASE 2 — CONTROLLO SUCCESSIVO: livella la densità. Riparte SEMPRE dalla cella più scarsa e la porta
+  // a target, tenendo la mira su di lei; così le zone rade vengono riempite e la densità si uniforma.
+  let refineIter = 0;
+  const REFINE_MAX = fillableCount * 8 + 20000;
+  while (totalPts < MAX_POINTS && refineIter++ < REFINE_MAX) {
+    let lowId = -1, low = Infinity, lx = 0, ly = 0;
+    for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++) {
+      const id = j * gx + i; if (!cfill[id] || dead[id]) continue;
+      if (cov[id] < low) { low = cov[id]; lowId = id; lx = cellX(i); ly = cellY(j); }
+    }
+    if (lowId < 0 || low >= target) break; // tutte le celle vive sono a target → densità livellata
+    openRunAt(lx, ly, lowId);
+    let localMoves = 0, guard = 0;
+    while (cov[lowId] < target && guard++ < 400 && totalPts < MAX_POINTS) {
+      let head = dir, spread = TURN_SPREAD;
+      if (Math.hypot(cx - lx, cy - ly) > 4 * cell) { head = Math.atan2(ly - cy, lx - cx); spread = 1.2; } // torna sulla cella scarsa
+      const nxt = advance(head, spread);
+      if (!nxt) break;
+      commit(nxt.x, nxt.y, nxt.ang);
+      localMoves++;
+    }
+    if (localMoves === 0) dead[lowId] = 1; // non riempibile → escludi (evita loop)
+  }
+
   if (run.length >= 2) runs.push(run);
   return runs;
 }
