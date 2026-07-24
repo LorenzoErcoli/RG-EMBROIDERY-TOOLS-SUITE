@@ -32,6 +32,29 @@ function pathLength(pl: Polyline): number {
   return s;
 }
 
+/**
+ * Taglia un filo continuo in `stops` tratti CONSECUTIVI e assegna a ciascuno un colore che
+ * RUOTA sulla palette (0,1,…,k-1,0,1,…). Ogni tratto condivide il punto di giunzione col
+ * successivo, così il filo resta continuo; i colori si ripetono su più strati sovrapposti
+ * (l'ultimo colore non è solo in cima). Ritorna: per ogni colore, l'elenco dei suoi tratti.
+ */
+function rotateColorStops(path: Polyline, palette: string[], stops: number): Map<string, Polyline[]> {
+  const byColor = new Map<string, Polyline[]>();
+  for (const col of palette) byColor.set(col, []);
+  const segCount = path.length - 1;
+  if (segCount < 1) return byColor;
+  const per = Math.max(1, Math.ceil(segCount / stops));
+  for (let s = 0, seg = 0; seg < segCount; s++) {
+    const from = seg;
+    const to = Math.min(segCount, seg + per); // indice di vertice finale del tratto
+    const chunk = path.slice(from, to + 1);   // include il vertice di giunzione col tratto dopo
+    const col = palette[s % palette.length];
+    if (chunk.length >= 2) byColor.get(col)!.push(chunk);
+    seg = to;
+  }
+  return byColor;
+}
+
 export function runPipeline(
   contours: Contour[],
   roles: RoleAssignment,
@@ -51,17 +74,31 @@ export function runPipeline(
     polylines: contours.map((c) => c.points), strokeMm: SHAPE_STROKE_MM, shapeOnly: true,
   });
 
+  // Palette: numero variabile di colori che ruotano lungo il filo. Vuota → mono (fallback).
+  const palette = (params.colors && params.colors.length ? params.colors : [COLORS.fillFallback])
+    .map((c) => c && c !== 'none' ? c : COLORS.fillFallback);
+  const cycles = Math.max(1, Math.floor(params.paletteCycles) || 1);
+  const stops = palette.length * cycles;
+
   // Riempimento a intreccio: un filo continuo per ogni area MASTER_OUTLINE, escludendo i void interni.
-  const fillColor = master[0]?.color && master[0].color !== 'none' ? master[0].color : COLORS.fillFallback;
-  const paths: Polyline[] = [];
+  // Ogni filo è tagliato in cambi-ago che ruotano sulla palette; accumuliamo i tratti per colore.
+  const perColor = new Map<string, Polyline[]>();
+  for (const col of palette) perColor.set(col, []);
   let threadMm = 0;
   for (const m of master) {
     const innerVoids = exclusions.filter((v) => v.length > 0 && pointInPolygon(v[0], m.points));
     const path = generateFill(m.points, innerVoids, params);
-    if (path.length >= 2) { paths.push(path); threadMm += pathLength(path); }
+    if (path.length < 2) continue;
+    threadMm += pathLength(path);
+    const chunks = rotateColorStops(path, palette, stops);
+    for (const [col, list] of chunks) perColor.get(col)!.push(...list);
   }
   // Il filo si disegna sottile (R15): lo spessore reale è nella densità dei passaggi.
-  layers.push({ id: 'fill', color: fillColor, polylines: paths, strokeMm: THREAD_STROKE_MM });
+  // Un layer per colore (come nell'SVG di riferimento: un <path>/gruppo per colore).
+  palette.forEach((col, i) => {
+    const list = perColor.get(col)!;
+    if (list.length) layers.push({ id: `fill-${i}`, color: col, polylines: list, strokeMm: THREAD_STROKE_MM });
+  });
 
   // Contorno dei void (tenue), per mostrare che vengono rispettati.
   if (exclusions.length) {

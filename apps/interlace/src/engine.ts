@@ -21,6 +21,9 @@ export interface InterlaceParams {
   densitySpacingMm: number;  // §3.7 R22 — spaziatura tra le file di filo (piccola = più coprente)
   voidClearanceMm: number;   // §3.2 R5/R7 — distanza minima da bordi e aree vuote
   seed: number;              // ripetibilità dell'anteprima
+  // --- Palette (usata dalla pipeline, non dalla geometria) ---
+  colors: string[];          // palette a numero variabile; l'ordine = ordine di rotazione lungo il filo
+  paletteCycles: number;     // quante volte la palette gira lungo il tracciato → cambi-ago
 }
 
 export const defaultInterlaceParams: InterlaceParams = {
@@ -30,6 +33,8 @@ export const defaultInterlaceParams: InterlaceParams = {
   densitySpacingMm: 0.8,
   voidClearanceMm: 0.6,
   seed: 1,
+  colors: ['#1f3a5f', '#c0392b', '#e0a41f', '#3b7d4f'],
+  paletteCycles: 6,
 };
 
 // --- Costanti interne (implementazione, non parametri utente): il "movimento" del filo.
@@ -75,6 +80,13 @@ function angDelta(from: number, to: number): number {
 
 /**
  * Genera il tracciato continuo che riempie `boundary` evitando i `voids`.
+ *
+ * Camminata "cerca-vuoti": passi brevi pseudo-casuali con vortici organici, ma quando la
+ * zona locale ha già raggiunto la copertura obiettivo il filo **punta verso il vuoto più
+ * vicino** (sempre a passi ≤ maxStitch, niente linee lunghe). Il riempimento **finisce
+ * quando tutte le celle raggiungono la copertura**, non a lunghezza fissa: così l'omogeneità
+ * NON dipende dalla lunghezza del punto (il punto corto ci mette solo più passi).
+ *
  * Ritorna la polilinea (un solo filo). Vuota se non trova un punto d'avvio valido.
  */
 export function generateFill(boundary: Polyline, voids: Polyline[], p: InterlaceParams): Point[] {
@@ -104,31 +116,59 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
     return true;
   };
 
-  // Griglia di copertura → spinge verso le zone meno riempite (omogeneità).
+  // Griglia di copertura. `cell` ≈ spaziatura tra file → una cella "coperta" a `target` passaggi
+  // equivale ad avere file di filo distanti ~spacing. Così la densità governa quanto è pieno.
   const cell = Math.max(maxS * 0.5, 1);
   const gx = Math.ceil((bb.maxX - bb.minX) / cell) + 1;
   const gy = Math.ceil((bb.maxY - bb.minY) / cell) + 1;
   const cov = new Float32Array(gx * gy);
-  const ci = (pt: Point): number => {
-    const i = Math.min(gx - 1, Math.max(0, Math.floor((pt.x - bb.minX) / cell)));
-    const j = Math.min(gy - 1, Math.max(0, Math.floor((pt.y - bb.minY) / cell)));
-    return j * gx + i;
-  };
+  const target = Math.max(1, Math.round(cell / spacing)); // passaggi obiettivo per cella
+  const cellX = (i: number) => bb.minX + (i + 0.5) * cell;
+  const cellY = (j: number) => bb.minY + (j + 0.5) * cell;
+  const ij = (pt: Point): [number, number] => [
+    Math.min(gx - 1, Math.max(0, Math.floor((pt.x - bb.minX) / cell))),
+    Math.min(gy - 1, Math.max(0, Math.floor((pt.y - bb.minY) / cell))),
+  ];
+  const idx = (i: number, j: number) => j * gx + i;
+
+  // Maschera delle celle riempibili (centro dentro l'area): sono quelle che dobbiamo coprire.
+  const fillable = new Uint8Array(gx * gy);
+  let fillableCount = 0;
+  for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++) {
+    if (inRegion({ x: cellX(i), y: cellY(j) })) { fillable[idx(i, j)] = 1; fillableCount++; }
+  }
+  if (fillableCount === 0) return [];
+
+  let coveredCells = 0; // celle riempibili che hanno raggiunto `target`
   const stamp = (a: Point, b: Point): void => {
     const n = Math.max(1, Math.ceil(distance(a, b) / cell));
     for (let k = 0; k <= n; k++) {
       const t = k / n;
-      cov[ci({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t })] += 1;
+      const [i, j] = ij({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+      const id = idx(i, j);
+      const before = cov[id];
+      cov[id] = before + 1;
+      if (fillable[id] && before < target && before + 1 >= target) coveredCells++;
     }
+  };
+
+  // Direzione verso la cella riempibile ancora scoperta più vicina (o null se non ce ne sono).
+  const gapDir = (from: Point): Point | null => {
+    const [ci0, cj0] = ij(from);
+    let bestD = Infinity, bx = 0, by = 0, found = false;
+    for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++) {
+      const id = idx(i, j);
+      if (!fillable[id] || cov[id] >= target) continue;
+      const d = (i - ci0) * (i - ci0) + (j - cj0) * (j - cj0);
+      if (d < bestD) { bestD = d; bx = cellX(i); by = cellY(j); found = true; }
+    }
+    if (!found) return null;
+    const dx = bx - from.x, dy = by - from.y, m = Math.hypot(dx, dy) || 1;
+    return { x: dx / m, y: dy / m };
   };
 
   const rng = mulberry32(p.seed || 1);
   const flowAng = (pt: Point): number => vnoise(pt.x * FLOW_FREQ, pt.y * FLOW_FREQ) * Math.PI * 2 * SWIRL;
-
-  // Lunghezza filo obiettivo ≈ area / spaziatura (come righe parallele distanti `spacing`).
-  let area = polygonArea(boundary);
-  for (const v of voids) area -= polygonArea(v);
-  const targetLen = Math.max(0, area) / spacing;
 
   // Punto d'avvio valido.
   let start: Point | null = null;
@@ -141,19 +181,32 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
   const pts: Point[] = [start];
   let c: Point = start;
   let dir = rng() * Math.PI * 2;
-  let total = 0, blocked = 0;
+  let blocked = 0, stagnation = 0, lastCovered = 0, iter = 0;
+  const MAX_ITER = fillableCount * 200 + 20000;
 
-  while (total < targetLen && pts.length < MAX_POINTS) {
+  // Finisce quando ~tutte le celle riempibili hanno raggiunto la copertura obiettivo.
+  while (coveredCells < fillableCount * 0.985 && pts.length < MAX_POINTS && iter++ < MAX_ITER) {
+    // Se la cella corrente è già coperta, punta verso il vuoto più vicino (a passi brevi).
+    const [ci0, cj0] = ij(c);
+    const saturated = cov[idx(ci0, cj0)] >= target;
+    let head = dir;
+    let spread = TURN_SPREAD;
+    if (saturated) {
+      const g = gapDir(c);
+      if (g) { head = Math.atan2(g.y, g.x); spread = 1.0; } // vira deciso verso il vuoto
+    }
+
     let best: { p: Point; ang: number } | null = null;
     let bestScore = -Infinity;
     const fdir = flowAng(c);
     for (let k = 0; k < CANDIDATES; k++) {
       const len = minS + rng() * (maxS - minS);
-      let ang = dir + (rng() * 2 - 1) * TURN_SPREAD;   // virata ampia → sembra casuale
-      ang += FLOW_INFLUENCE * angDelta(ang, fdir);      // leggera coerenza → vortici
+      let ang = head + (rng() * 2 - 1) * spread;      // virata (ampia se libero, decisa se cerca il vuoto)
+      ang += FLOW_INFLUENCE * angDelta(ang, fdir);     // leggera coerenza → vortici organici
       const nb = { x: c.x + Math.cos(ang) * len, y: c.y + Math.sin(ang) * len };
       if (!inRegion(nb) || !segOk(c, nb)) continue;
-      const score = -cov[ci(nb)] + rng() * 0.6;         // preferisci la zona meno riempita
+      const [ni, nj] = ij(nb);
+      const score = -cov[idx(ni, nj)] + rng() * 0.6;   // preferisci la cella meno piena
       if (score > bestScore) { bestScore = score; best = { p: nb, ang }; }
     }
     if (!best) {
@@ -172,10 +225,13 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
       blocked = 0;
     }
     stamp(c, best.p);
-    total += distance(c, best.p);
     pts.push(best.p);
     c = best.p;
     dir = best.ang;
+
+    // Anti-stallo: se la copertura non avanza per molti passi, ci fermiamo (sacche irraggiungibili).
+    if (coveredCells > lastCovered) { lastCovered = coveredCells; stagnation = 0; }
+    else if (++stagnation > fillableCount + 2000) break;
   }
   return pts;
 }
