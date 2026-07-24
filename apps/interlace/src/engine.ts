@@ -37,7 +37,7 @@ export const defaultInterlaceParams: InterlaceParams = {
   voidClearanceMm: 0.6,
   seed: 1,
   colors: ['#1f3a5f', '#c0392b', '#e0a41f', '#3b7d4f'],
-  paletteCycles: 6,
+  paletteCycles: 2,
 };
 
 // --- Costanti interne (implementazione, non parametri utente): il "movimento" del filo.
@@ -178,66 +178,64 @@ function buildMask(boundary: Polyline, voids: Polyline[], res0: number): Mask {
   };
 }
 
-/**
- * Genera il tracciato continuo che riempie `boundary` evitando i `voids`.
- *
- * Camminata "cerca-vuoti": passi brevi pseudo-casuali con vortici organici; quando la zona locale
- * ha già raggiunto la copertura obiettivo il filo punta verso la zona meno coperta più vicina
- * (sempre a passi ≤ maxStitch). Finisce quando tutte le celle raggiungono la copertura: l'omogeneità
- * NON dipende dalla lunghezza del punto. Tutti i controlli di validità sono O(1) su una maschera.
- *
- * Ritorna una LISTA di tratti (polilinee): dentro un tratto il filo è continuo; tra un tratto e il
- * successivo c'è un salto a penna alzata (non disegnato) verso una nuova tasca scoperta — necessario
- * perché l'area ricamabile è spesso un labirinto (canali che girano attorno agli ostacoli) e un solo
- * filo continuo resterebbe intrappolato. Lista vuota se l'area ricamabile è nulla.
- */
-export function generateFill(boundary: Polyline, voids: Polyline[], p: InterlaceParams): Point[][] {
-  if (boundary.length < 3) return [];
-  const clear = Math.max(0, p.voidClearanceMm);
-  const minS = Math.max(0.5, p.minStitchMm);
-  const maxS = Math.max(minS + 0.1, p.maxStitchMm);
-  const spacing = Math.max(0.1, p.densitySpacingMm);
+/** Contesto di riempimento indipendente dalla densità: maschera + griglia + celle cucibili. */
+interface FillCtx {
+  bb: ReturnType<typeof bounds>; res: number;
+  cell: number; gx: number; gy: number;
+  cellX: (i: number) => number; cellY: (j: number) => number;
+  ci: (x: number) => number; cj: (y: number) => number;
+  cfill: Uint8Array; fillableCount: number; minS: number; maxS: number;
+  inRegion: (x: number, y: number) => boolean;
+  segOk: (ax: number, ay: number, bx: number, by: number) => boolean;
+}
 
+/** Prepara maschera e griglia (una volta): tutto ciò che NON dipende dalla densità. null se area nulla. */
+function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: number, clear: number): FillCtx | null {
   // Maschera fine (campo di distanza con segno): risoluzione fitta per clearance accurata e canali stretti.
   const fineRes = Math.max(0.3, Math.min(0.5, minS / 8));
   const mask = buildMask(boundary, voids, fineRes);
-  // Un punto è nell'area se dista almeno `clear` dal bordo/vuoto (confronto sul punto REALE, non su una cella).
-  // `SAFE` (~mezza cella) è il solo margine di sicurezza: garantisce R5 (mai dentro il vuoto) anche con
-  // l'errore di griglia, senza reintrodurre il gap grosso. A clear=0 il filo arriva a ridosso del bordo.
+  // `SAFE` (~mezza cella) garantisce R5 (mai nel vuoto) anche con l'errore di griglia; a clear=0 il filo
+  // arriva a ridosso del bordo. Confronto sul punto REALE (sdf), non su una cella.
   const SAFE = 0.7 * mask.res;
   const inRegion = (x: number, y: number): boolean => mask.sdf(x, y) >= clear + SAFE;
-  // Segmento valido = tutti i campioni (passo ~maschera) sono cucibili: nessun void/bordo attraversato.
   const segStep = mask.res * 0.9;
   const segOk = (ax: number, ay: number, bx: number, by: number): boolean => {
     const L = Math.hypot(bx - ax, by - ay);
     const n = Math.max(1, Math.ceil(L / segStep));
-    for (let k = 0; k <= n; k++) {
-      const t = k / n;
-      if (!inRegion(ax + (bx - ax) * t, ay + (by - ay) * t)) return false;
-    }
+    for (let k = 0; k <= n; k++) { const t = k / n; if (!inRegion(ax + (bx - ax) * t, ay + (by - ay) * t)) return false; }
     return true;
   };
-
-  // Griglia di copertura. La cella è ~ della taglia del punto (mai più grande del punto minimo),
-  // così la copertura viene tracciata in modo fedele anche in canali stretti.
   const bb = bounds(boundary);
   const cell = Math.max(1.5, Math.min(maxS * 0.5, minS));
   const gx = Math.ceil((bb.maxX - bb.minX) / cell) + 1;
   const gy = Math.ceil((bb.maxY - bb.minY) / cell) + 1;
-  const cov = new Float32Array(gx * gy);
-  const cfill = new Uint8Array(gx * gy); // celle grossolane cucibili (centro nella maschera)
-  const target = Math.max(1, Math.round(cell / spacing));
   const cellX = (i: number) => bb.minX + (i + 0.5) * cell;
   const cellY = (j: number) => bb.minY + (j + 0.5) * cell;
   const ci = (x: number) => Math.min(gx - 1, Math.max(0, Math.floor((x - bb.minX) / cell)));
   const cj = (y: number) => Math.min(gy - 1, Math.max(0, Math.floor((y - bb.minY) / cell)));
-
+  const cfill = new Uint8Array(gx * gy);
   let fillableCount = 0;
   for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++) {
     if (inRegion(cellX(i), cellY(j))) { cfill[j * gx + i] = 1; fillableCount++; }
   }
-  if (fillableCount === 0) return [];
+  if (fillableCount === 0) return null;
+  return { bb, res: mask.res, cell, gx, gy, cellX, cellY, ci, cj, cfill, fillableCount, minS, maxS, inRegion, segOk };
+}
 
+/**
+ * UNA passata di riempimento sul contesto `ctx`, con seme `seed` e un TARGET DI COPERTURA PER CELLA
+ * (`targetArr[id]` = quante volte il filo deve attraversare la cella `id`; 0 = la cella NON appartiene
+ * a questa passata). La camminata "cerca-vuoti" a passi brevi riempie SOLO le celle assegnate, con due
+ * fasi (principale + controllo successivo che livella), rilocando a penna alzata tra le zone assegnate.
+ * Questo permette il mélange: passate diverse ricevono celle diverse (dither), sparse su tutta l'area.
+ */
+function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][] {
+  const { bb, cell, gx, gy, cellX, cellY, ci, cj, minS, maxS, inRegion, segOk } = ctx;
+  const cov = new Float32Array(gx * gy);
+  const dead = new Uint8Array(gx * gy);
+  let need = 0;
+  for (let id = 0; id < targetArr.length; id++) if (targetArr[id] > 0) need++;
+  if (need === 0) return [];
   let coveredCells = 0;
   const stamp = (ax: number, ay: number, bx: number, by: number): void => {
     const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / cell));
@@ -246,45 +244,35 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
       const id = cj(ay + (by - ay) * t) * gx + ci(ax + (bx - ax) * t);
       const before = cov[id];
       cov[id] = before + 1;
-      if (cfill[id] && before < target && before + 1 >= target) coveredCells++;
+      const tg = targetArr[id];
+      if (tg > 0 && before < tg && before + 1 >= tg) coveredCells++;
     }
   };
-
-  // Cella cucibile ancora scoperta più vicina (per lo steering e per la rilocazione). Salta le "morte".
-  const dead = new Uint8Array(gx * gy);
   const nearestGap = (x: number, y: number): { x: number; y: number; id: number } | null => {
     const i0 = ci(x), j0 = cj(y);
     let bestD = Infinity, bx = 0, by = 0, bid = -1;
     for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++) {
-      const id = j * gx + i;
-      if (!cfill[id] || cov[id] >= target || dead[id]) continue;
+      const id = j * gx + i; const tg = targetArr[id];
+      if (tg === 0 || cov[id] >= tg || dead[id]) continue;
       const d = (i - i0) * (i - i0) + (j - j0) * (j - j0);
       if (d < bestD) { bestD = d; bx = cellX(i); by = cellY(j); bid = id; }
     }
     return bid < 0 ? null : { x: bx, y: by, id: bid };
   };
 
-  const rng = mulberry32(p.seed || 1);
+  const rng = mulberry32(seed >>> 0 || 1);
   const flowAng = (x: number, y: number): number => vnoise(x * FLOW_FREQ, y * FLOW_FREQ) * Math.PI * 2 * SWIRL;
 
-  // Punto d'avvio valido (cerco tra le celle grossolane cucibili).
-  let sx = 0, sy = 0, seeded = false;
-  for (let tries = 0; tries < 8000 && !seeded; tries++) {
-    const x = bb.minX + rng() * (bb.maxX - bb.minX);
-    const y = bb.minY + rng() * (bb.maxY - bb.minY);
-    if (inRegion(x, y)) { sx = x; sy = y; seeded = true; }
-  }
-  if (!seeded) return [];
+  // Avvio: la prima cella assegnata a questa passata (partendo da un punto casuale).
+  const g0 = nearestGap(bb.minX + rng() * (bb.maxX - bb.minX), bb.minY + rng() * (bb.maxY - bb.minY));
+  if (!g0) return [];
 
   const runs: Point[][] = [];
-  let run: Point[] = [{ x: sx, y: sy }];
-  let cx = sx, cy = sy, dir = rng() * Math.PI * 2;
-  let curId = cj(sy) * gx + ci(sx); // cella dove il tratto corrente è iniziato
+  let run: Point[] = [{ x: g0.x, y: g0.y }];
+  let cx = g0.x, cy = g0.y, dir = rng() * Math.PI * 2;
+  let curId = g0.id;
   let runMoves = 0, totalPts = 1;
 
-  // Sceglie il prossimo punto: candidati verso `head` (± `spread`), preferendo la cella MENO coperta
-  // e scoraggiando la sovra-copertura (i grumi = celle troppo cariche → una volta a target si evitano).
-  // Se nessun candidato è valido prova un passo corto (escape). Ritorna null se davvero bloccato.
   const advance = (head: number, spread: number): { x: number; y: number; ang: number } | null => {
     const curCell = cj(cy) * gx + ci(cx);
     const fdir = flowAng(cx, cy);
@@ -296,13 +284,16 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
       const nx = cx + Math.cos(ang) * len, ny = cy + Math.sin(ang) * len;
       if (!inRegion(nx, ny) || !segOk(cx, cy, nx, ny)) continue;
       const destId = cj(ny) * gx + ci(nx);
-      let score = -cov[destId] + rng() * 0.25;
-      if (destId === curCell) score -= 3;         // no micro-giri nella stessa cella
-      if (cov[destId] >= target) score -= 6;       // no sovra-copertura → livella i picchi
+      const tg = targetArr[destId];
+      // Preferisci una cella DI QUESTA passata ancora scarsa; penalizza forte le celle non assegnate
+      // (tg=0: il filo di questo colore non deve accumularsi lì) e la sovra-copertura.
+      let score = (tg > 0 ? -cov[destId] : -4) + rng() * 0.25;
+      if (destId === curCell) score -= 3;
+      if (tg > 0 && cov[destId] >= tg) score -= 6;
       if (score > best) { best = score; bx = nx; by = ny; bAng = ang; has = true; }
     }
     if (has) return { x: bx, y: by, ang: bAng };
-    for (let k = 0; k < 24; k++) { // escape: passo corto in qualunque direzione valida
+    for (let k = 0; k < 24; k++) {
       const a = rng() * Math.PI * 2;
       const nx = cx + Math.cos(a) * minS, ny = cy + Math.sin(a) * minS;
       if (inRegion(nx, ny) && segOk(cx, cy, nx, ny)) return { x: nx, y: ny, ang: a };
@@ -314,20 +305,20 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
     run.push({ x: nx, y: ny });
     cx = nx; cy = ny; dir = ang; totalPts++; runMoves++;
   };
-  // Salto a penna alzata (non disegnato): chiude il tratto e ne apre uno nuovo altrove.
   const openRunAt = (x: number, y: number, id: number): void => {
     if (run.length >= 2) runs.push(run);
     run = [{ x, y }];
     cx = x; cy = y; dir = rng() * Math.PI * 2; curId = id; runMoves = 0;
   };
 
-  // FASE 1 — riempimento principale a passi brevi, con rilocazione tra le tasche del labirinto.
+  // FASE 1 — riempimento principale con rilocazione tra le zone assegnate.
   let noProgress = 0, lastCovered = 0, iter = 0;
-  const MAX_ITER = fillableCount * 400 + 60000;
+  const MAX_ITER = need * 400 + 60000;
   const RELOCATE_AFTER = 50;
-  while (coveredCells < fillableCount * 0.985 && totalPts < MAX_POINTS && iter++ < MAX_ITER) {
+  while (coveredCells < need * 0.985 && totalPts < MAX_POINTS && iter++ < MAX_ITER) {
     let head = dir, spread = TURN_SPREAD;
-    if (cov[cj(cy) * gx + ci(cx)] >= target) { const g = nearestGap(cx, cy); if (g) { head = Math.atan2(g.y - cy, g.x - cx); spread = 1.0; } }
+    const cc = cj(cy) * gx + ci(cx);
+    if (targetArr[cc] === 0 || cov[cc] >= targetArr[cc]) { const g = nearestGap(cx, cy); if (g) { head = Math.atan2(g.y - cy, g.x - cx); spread = 1.0; } }
     const nxt = advance(head, spread);
     if (!nxt) { if (runMoves === 0 && curId >= 0) dead[curId] = 1; const g = nearestGap(cx, cy); if (!g) break; openRunAt(g.x, g.y, g.id); continue; }
     commit(nxt.x, nxt.y, nxt.ang);
@@ -335,30 +326,84 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
     else if (++noProgress > RELOCATE_AFTER) { noProgress = 0; const g = nearestGap(cx, cy); if (!g) break; openRunAt(g.x, g.y, g.id); }
   }
 
-  // FASE 2 — CONTROLLO SUCCESSIVO: livella la densità. Riparte SEMPRE dalla cella più scarsa e la porta
-  // a target, tenendo la mira su di lei; così le zone rade vengono riempite e la densità si uniforma.
+  // FASE 2 — controllo successivo: livella (riparte dalla cella assegnata più scarsa e la porta a target).
   let refineIter = 0;
-  const REFINE_MAX = fillableCount * 8 + 20000;
+  const REFINE_MAX = need * 8 + 20000;
   while (totalPts < MAX_POINTS && refineIter++ < REFINE_MAX) {
     let lowId = -1, low = Infinity, lx = 0, ly = 0;
     for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++) {
-      const id = j * gx + i; if (!cfill[id] || dead[id]) continue;
-      if (cov[id] < low) { low = cov[id]; lowId = id; lx = cellX(i); ly = cellY(j); }
+      const id = j * gx + i; const tg = targetArr[id]; if (tg === 0 || dead[id]) continue;
+      if (cov[id] < tg && cov[id] < low) { low = cov[id]; lowId = id; lx = cellX(i); ly = cellY(j); }
     }
-    if (lowId < 0 || low >= target) break; // tutte le celle vive sono a target → densità livellata
+    if (lowId < 0) break;
     openRunAt(lx, ly, lowId);
     let localMoves = 0, guard = 0;
-    while (cov[lowId] < target && guard++ < 400 && totalPts < MAX_POINTS) {
+    while (cov[lowId] < targetArr[lowId] && guard++ < 400 && totalPts < MAX_POINTS) {
       let head = dir, spread = TURN_SPREAD;
-      if (Math.hypot(cx - lx, cy - ly) > 4 * cell) { head = Math.atan2(ly - cy, lx - cx); spread = 1.2; } // torna sulla cella scarsa
+      if (Math.hypot(cx - lx, cy - ly) > 4 * cell) { head = Math.atan2(ly - cy, lx - cx); spread = 1.2; }
       const nxt = advance(head, spread);
       if (!nxt) break;
       commit(nxt.x, nxt.y, nxt.ang);
       localMoves++;
     }
-    if (localMoves === 0) dead[lowId] = 1; // non riempibile → escludi (evita loop)
+    if (localMoves === 0) dead[lowId] = 1;
   }
 
   if (run.length >= 2) runs.push(run);
   return runs;
+}
+
+/** Copertura totale per cella (quante attraversate) alla densità richiesta. */
+function coverageTarget(cell: number, spacing: number): number {
+  return Math.max(1, Math.round(cell / Math.max(0.1, spacing)));
+}
+
+/**
+ * Riempimento a filo singolo: una sola passata alla densità richiesta (tutte le celle a target).
+ * Usato dai test e come base; per il multicolore mélange si usa `generatePasses`.
+ */
+export function generateFill(boundary: Polyline, voids: Polyline[], p: InterlaceParams): Point[][] {
+  if (boundary.length < 3) return [];
+  const clear = Math.max(0, p.voidClearanceMm);
+  const minS = Math.max(0.5, p.minStitchMm);
+  const maxS = Math.max(minS + 0.1, p.maxStitchMm);
+  const ctx = prepare(boundary, voids, minS, maxS, clear);
+  if (!ctx) return [];
+  const T = coverageTarget(ctx.cell, p.densitySpacingMm);
+  const targetArr = new Uint8Array(ctx.gx * ctx.gy);
+  for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = T;
+  return runOneFill(ctx, p.seed || 1, targetArr);
+}
+
+/**
+ * MÉLANGE: distribuisce la copertura TOTALE (quella della densità richiesta, T attraversate per cella)
+ * tra `passCount` passate/colori con un DITHER spaziale: ogni cella assegna le sue T attraversate a T
+ * passate diverse, scelte in base alla posizione. Così la densità resta quella giusta, ma ogni colore
+ * è sparso su TUTTA l'area (celle diverse a seconda del punto) → colore mescolato, niente "macchie".
+ * La maschera è costruita UNA sola volta e condivisa. Ritorna passCount liste-di-tratti (un colore ognuna).
+ */
+export function generatePasses(boundary: Polyline, voids: Polyline[], p: InterlaceParams, passCount: number): Point[][][] {
+  if (boundary.length < 3 || passCount < 1) return [];
+  const clear = Math.max(0, p.voidClearanceMm);
+  const minS = Math.max(0.5, p.minStitchMm);
+  const maxS = Math.max(minS + 0.1, p.maxStitchMm);
+  const ctx = prepare(boundary, voids, minS, maxS, clear);
+  if (!ctx) return [];
+  const { gx, gy, cfill } = ctx;
+  const T = coverageTarget(ctx.cell, p.densitySpacingMm); // copertura totale per cella (densità piena)
+  const base = (p.seed || 1) >>> 0;
+  const passes: Point[][][] = [];
+  for (let pIdx = 0; pIdx < passCount; pIdx++) {
+    const targetArr = new Uint8Array(gx * gy);
+    for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++) {
+      const id = j * gx + i; if (!cfill[id]) continue;
+      // Dither per cella: le T attraversate della cella vanno alle passate d, d+1, …, d+T-1 (mod passCount).
+      const d = Math.floor(hash(i, j) * passCount);
+      let t = 0;
+      for (let k = 0; k < T; k++) if ((d + k) % passCount === pIdx) t++;
+      if (t > 0) targetArr[id] = t;
+    }
+    passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr));
+  }
+  return passes;
 }

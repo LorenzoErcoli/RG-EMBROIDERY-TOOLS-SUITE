@@ -5,7 +5,7 @@ import {
   bounds as boundsOf, polygonArea, pointInPolygon, distance,
   THREAD_STROKE_MM, SHAPE_STROKE_MM,
 } from '@rg/core';
-import { generateFill, type InterlaceParams } from './engine';
+import { generatePasses, type InterlaceParams } from './engine';
 
 export type RoleAssignment = Record<string, Role | undefined>;
 
@@ -35,40 +35,6 @@ function pathLength(pl: Polyline): number {
   let s = 0;
   for (let i = 1; i < pl.length; i++) s += distance(pl[i - 1], pl[i]);
   return s;
-}
-
-/** Un tratto-colore consecutivo della sequenza di cucitura. */
-interface Chunk { color: string; points: Polyline; }
-
-/**
- * Spezza i tratti nella SEQUENZA DI CUCITURA: percorre i tratti in ordine e cambia colore ogni `per`
- * segmenti, ruotando sulla palette (0,1,…,k-1,0,1,…). Ritorna la lista ORDINATA dei tratti-colore
- * (ogni cambio-colore o salto tra tratti apre un nuovo chunk). Questo ORDINE è la sequenza macchina:
- * per Stilista l'export deve seguirlo, NON raggruppare per colore.
- */
-function sequenceChunks(runs: Polyline[], palette: string[], stops: number): Chunk[] {
-  const out: Chunk[] = [];
-  const totalSegs = runs.reduce((s, r) => s + Math.max(0, r.length - 1), 0);
-  if (totalSegs < 1) return out;
-  const per = Math.max(1, Math.ceil(totalSegs / stops));
-  let seg = 0;
-  for (const run of runs) {
-    if (run.length < 2) continue;
-    let curCol = palette[Math.floor(seg / per) % palette.length];
-    let pts: Polyline = [run[0]];
-    for (let i = 1; i < run.length; i++) {
-      const col = palette[Math.floor(seg / per) % palette.length];
-      if (col !== curCol) {
-        if (pts.length >= 2) out.push({ color: curCol, points: pts });
-        pts = [run[i - 1]]; // il nuovo tratto-colore riparte dal punto di giunzione (filo continuo)
-        curCol = col;
-      }
-      pts.push(run[i]);
-      seg++;
-    }
-    if (pts.length >= 2) out.push({ color: curCol, points: pts });
-  }
-  return out;
 }
 
 /**
@@ -114,27 +80,27 @@ export function runPipeline(
   const palette = (params.colors && params.colors.length ? params.colors : [COLORS.fillFallback])
     .map((c) => c && c !== 'none' ? c : COLORS.fillFallback);
   const cycles = Math.max(1, Math.floor(params.paletteCycles) || 1);
-  const stops = palette.length * cycles;
+  const passCount = palette.length * cycles;
 
-  // Riempimento a intreccio: per ogni area MASTER_OUTLINE il motore rende una LISTA di tratti
-  // (con salti a penna alzata tra le tasche del labirinto). Raccogliamo tutti i tratti, poi
-  // facciamo ruotare i colori su tutta la sequenza.
-  const allRuns: Polyline[] = [];
+  // MÉLANGE: ogni STOP è una PASSATA rada su TUTTA l'area (un colore, ruotando la palette). Sovrapponendo
+  // passate di colori diversi il colore si mescola ovunque, senza "macchie". La maschera è costruita una
+  // sola volta dentro generatePasses; la densità di ogni passata è 1/passCount di quella richiesta.
+  const stops: { color: string; polylines: Polyline[] }[] = [];
   let threadMm = 0;
+  let idx = 0;
   for (const m of master) {
     const innerVoids = exclusions.filter((v) => v.length > 0 && pointInPolygon(v[0], m.points));
-    for (const run of generateFill(m.points, innerVoids, params)) {
-      if (run.length < 2) continue;
-      allRuns.push(run);
-      threadMm += pathLength(run);
+    for (const pass of generatePasses(m.points, innerVoids, params, passCount)) {
+      const pls = pass.filter((r) => r.length >= 2);
+      for (const r of pls) threadMm += pathLength(r);
+      stops.push({ color: palette[idx % palette.length], polylines: pls });
+      idx++;
     }
   }
-  // Sequenza di cucitura: tratti-colore in ORDINE (non ancora raggruppati).
-  const chunks = sequenceChunks(allRuns, palette, stops);
 
   // --- ANTEPRIMA: raggruppa per colore (più leggibile a schermo). Il filo si disegna sottile (R15). ---
   const byColor = new Map<string, Polyline[]>();
-  for (const ch of chunks) { const l = byColor.get(ch.color) ?? []; l.push(ch.points); byColor.set(ch.color, l); }
+  for (const s of stops) { const l = byColor.get(s.color) ?? []; l.push(...s.polylines); byColor.set(s.color, l); }
   palette.forEach((col, i) => {
     const list = byColor.get(col);
     if (list && list.length) layers.push({ id: `fill-${i}`, color: col, polylines: list, strokeMm: THREAD_STROKE_MM });
@@ -144,15 +110,15 @@ export function runPipeline(
     layers.push({ id: 'void', color: COLORS.voidOutline, polylines: exclusions, strokeMm: SHAPE_STROKE_MM, shapeOnly: true });
   }
 
-  // --- EXPORT per Stilista: un gruppo per STOP, nell'ORDINE di cucitura, con tinta UNICA per stop.
-  //     NON raggruppato per colore (si perderebbe la sequenza) e ogni stop ha un esadecimale diverso
-  //     (anche due "neri") così Stilista li tratta come cambi-ago distinti. ---
+  // --- EXPORT per Stilista: un gruppo per STOP (= una passata a colore), nell'ORDINE di cucitura, con
+  //     tinta UNICA per stop. NON raggruppato per colore (si perderebbe la sequenza) e ogni stop ha un
+  //     esadecimale diverso (anche due "neri") così Stilista li tratta come cambi-ago distinti. ---
   const exportLayers: ExportLayer[] = [
     { id: 'reference', color: COLORS.reference, polylines: contours.map((c) => c.points), strokeMm: SHAPE_STROKE_MM, shapeOnly: true },
   ];
-  chunks.forEach((ch, i) => {
-    exportLayers.push({ id: `stop-${String(i).padStart(4, '0')}`, color: toneColor(ch.color, i), polylines: [ch.points], strokeMm: THREAD_STROKE_MM });
+  stops.forEach((s, i) => {
+    if (s.polylines.length) exportLayers.push({ id: `stop-${String(i).padStart(4, '0')}`, color: toneColor(s.color, i), polylines: s.polylines, strokeMm: THREAD_STROKE_MM });
   });
 
-  return { layers, exportLayers, bounds: bnds, stopCount: chunks.length, threadMm };
+  return { layers, exportLayers, bounds: bnds, stopCount: stops.length, threadMm };
 }
