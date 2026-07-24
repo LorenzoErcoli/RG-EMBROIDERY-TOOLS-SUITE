@@ -8,6 +8,7 @@ export default defineConfig({
       '@rg/ui': fileURLToPath(new URL('../../packages/ui/src', import.meta.url)),
       '@app/net-45': fileURLToPath(new URL('../net-45/src/tool.ts', import.meta.url)),
       '@app/pattern-grammar': fileURLToPath(new URL('../pattern-grammar/src/tool.ts', import.meta.url)),
+      '@app/interlace': fileURLToPath(new URL('../interlace/src/tool.ts', import.meta.url)),
       '@rg/pattern-grammar': fileURLToPath(new URL('../../packages/pattern-grammar/src/index.ts', import.meta.url)),
     },
   },

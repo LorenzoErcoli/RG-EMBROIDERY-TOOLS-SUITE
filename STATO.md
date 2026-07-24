@@ -1,7 +1,7 @@
 # STATO — RG Embroidery Tools Suite
 
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
-> Aggiornato: 2026-07-23 · Suite con **due tool** funzionanti
+> Aggiornato: 2026-07-24 · Suite con **tre tool** funzionanti (net-45, pattern-grammar, interlace)
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
 
 ---
@@ -24,6 +24,13 @@
 - **Preset** locali: salva / carica / elimina (verificato il giro completo).
 - **Import DXF/SVG** del contorno con modalità di scala (auto / Illustrator 72dpi / ViewBox=mm / dimensione custom) e scelta per colore/layer.
 - Stessa ergonomia di net-45: guscio `rg-workspace`, anteprima con pan/zoom, export SVG.
+
+**Tool `interlace` (Interlace) — motore base funzionante:**
+- Riempie l'area ricamabile con un **filo continuo di passaggi brevi** (6-15mm regolabili) che vagano in modo pseudo-casuale, **omogeneo** con **vortici organici** (campo di flusso a peso basso). È l'effetto "intreccio a nuvola" dell'SVG di riferimento di Lorenzo.
+- **Aree vuote e bordo rispettati** (R5/R7): riusa la convenzione ruoli della suite (colore → `EXCLUSION`), nessun segmento entra nei void o esce dal bordo, con clearance. Verificato headless sul motore reale: 0 punti nel vuoto, 0 fuori dal bordo, 0 segmenti fuori da [min,max] (R3/R4 per costruzione).
+- **Pannello Testa A** (fonte-guidata): 01 Cartamodello (`rg-file-input` + `realWidthMm`), 02 Colori e ruoli (`rg-color-map`, ruoli MASTER_OUTLINE/EXCLUSION), 03 Riempimento (`rg-input--numeric`, solo parametri canonici §3). Stessa ergonomia di net-45: `rg-workspace`, pan/zoom, export SVG con salvataggio di sistema (R29).
+- **Motore locale all'app** (`apps/interlace/src/engine.ts`), non nel core (regole di crescita 1-2): si promuove solo quando un 2° tool lo chiederà. Import/scala/ruoli/geometria/export vengono invece **dal core** (riuso, non copia).
+- **Ancora da fare** (vedi §3): parametri "movimento/spigolosità" (nomi da decidere, processo REVISIONE-PARAMETRI), palette multicolore a stop rotanti (UI via subagent design-system) + modello densità da `bitmap_to_stitch` (R22-R26), verifica visiva in browser vero, smoke test dedicati.
 
 **Fondamenta condivise:**
 - `packages/core` (~900 righe) — unità/scala mm, import SVG+DXF, geometria, griglia 45°, clipping, punti (cordoncino/running/min-stitch), passaggi con routing sul bordo, export SVG.
@@ -68,7 +75,14 @@ La suite ha **due tool funzionanti** (net-45 e pattern-grammar), entrambi con lo
 - [ ] **Fixture dai file veri**: la fixture di oggi è sintetica. Servono un SVG e un DXF **reali** di Lorenzo nel repo, per bloccare i comportamenti che contano davvero.
 - [ ] **`strokeWidth` di pattern-grammar: due default diversi.** L'interfaccia parte da **0.1 mm**, il motore ripiega su **0.3** (`patternGrammar.ts`, `config.strokeWidth ?? 0.3`): un preset salvato senza quel campo genera un pattern diverso da quello che vedi coi valori iniziali. Da decidere quale sia il valore giusto — attenzione, qui **non** è lo stroke di visualizzazione di R15: guida la geometria (`inset`, `marginY`, `connectorStep`) *ed* è anche lo spessore disegnato. Forse vanno separati in due parametri.
 - [ ] **Archi ellittici nell'import a testo**: il parser `d` di pattern-grammar tratta il comando `A` come un segmento dritto fino al punto finale (`importBoundary.ts`, ramo `"A"`). Su una sagoma con raccordi curvi il contorno esce spigoloso. L'importer a DOM di net-45 non ha il problema (campiona con `getPointAtLength`).
-- [ ] **Nuovo tool in arrivo** (in una chat dedicata): riusa la suite + le **aree vuote (void, R5)** da `rg-oblique-embroidery-pattern-generator` e il **calcolo punti** da `bitmap_to_stitch`. Briefing d'avvio + guardrail in `AVVIO-NUOVO-TOOL.md`; la funzione del tool la definisce Lorenzo nel secondo messaggio di quella chat.
+- [x] ~~**Nuovo tool in arrivo**~~ → è **`interlace`** (riempimento a intreccio/nuvola multicolore). Definito con Lorenzo, piano in 5 punti confermato. **Fatto lo step 1+3 base:** scaffold + motore di riempimento a passaggi brevi su sagoma demo, vuoti/bordo rispettati, export SVG. Restano gli step successivi:
+  - [ ] **interlace — parametri "movimento"**: esporre in pannello i controlli oggi interni al motore (influenza del flusso/vortici, ampiezza della virata/spigolosità, scala delle nuvole). Nomi da decidere con Lorenzo prima di entrare nel pannello (processo REVISIONE-PARAMETRI, poi §3).
+  - [ ] **interlace — multicolore a stop rotanti**: un solo filo tagliato in N cambi-ago che ruotano sulla palette (l'ultimo colore non solo in cima). Palette a numero variabile, **UI palette via subagent design-system** (componente nuovo).
+  - [ ] **interlace — modello densità da `bitmap_to_stitch`** (R22-R26): portare il calcolo densità/coprenza in TS, riconciliando `densitySpacingMm` (oggi guida la lunghezza filo obiettivo in modo approssimato). Solo algoritmo, niente Python.
+  - [ ] **interlace — void come primitiva del core**: oggi il clip vuoti/bordo è fatto nel motore dell'app con le primitive geometriche del core; se servirà il *travel che costeggia il perimetro del void* (da oblique) si promuove `routeTravel` nel core con test (regola di crescita 1).
+  - [ ] **interlace — smoke test dedicati**: bloccare le invarianti (nessun punto nel vuoto, nessun segmento fuori da [min,max], filo dentro il bordo).
+  - [ ] **interlace — same-color void**: oggi il void deve avere un colore diverso dall'area (i ruoli sono per-colore); il caso canonico R12 "forma più piccola dello stesso colore = esclusione" va gestito per geometria (annidamento), non solo per colore.
+  - [ ] **interlace — verifica visiva in browser vero** (preview integrata rotta).
 - [ ] **Migrare gli altri tool**: oblique, 45-grid, cross-stitch. (`bitmap_to_stitch` resta satellite Python.)
 - [ ] **Pulizia**: `apps/net-45/src/style.css` non è più usato.
 

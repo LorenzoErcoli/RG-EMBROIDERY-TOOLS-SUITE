@@ -1,0 +1,20 @@
+{
+  "name": "interlace",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Riempimento a intreccio: tessitura ricamata multicolore a passaggi brevi, con aree vuote. Output SVG.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@rg/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}
