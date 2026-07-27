@@ -5,7 +5,7 @@ import {
   bounds as boundsOf, polygonArea, pointInPolygon, distance,
   THREAD_STROKE_MM, SHAPE_STROKE_MM,
 } from '@rg/core';
-import { generatePasses, type InterlaceParams } from './engine';
+import { generateTour, type InterlaceParams } from './engine';
 
 export type RoleAssignment = Record<string, Role | undefined>;
 
@@ -82,19 +82,19 @@ export function runPipeline(
   const cycles = Math.max(1, Math.floor(params.paletteCycles) || 1);
   const P = palette.length * cycles;
 
-  // PASSATE A COLORE: ogni stop è una passata = un FILO CONTINUO che percorre tutta la superficie
-  // (uniforme). Colori a rotazione sulla palette; sovrapponendoli si intrecciano. `densitySpacingMm`
-  // = densità di OGNI colore; la densità totale è quella × numero di passate.
+  // MOTORE DI PERCORSO (tour): ogni stop = un colore = un FILO CONTINUO che copre tutta la superficie
+  // percorrendo l'albero di copertura (pochissimi stacchi: solo tra zone separate) + tremolio organico.
+  // Colori a rotazione; sovrapponendo i tour (semi diversi) si intrecciano. `densitySpacingMm` = densità
+  // di OGNI colore (righe del tour); la densità totale è quella × numero di passate.
   const stops: { color: string; polylines: Polyline[] }[] = [];
   let threadMm = 0;
-  let idx = 0;
   for (const m of master) {
     const innerVoids = exclusions.filter((v) => v.length > 0 && pointInPolygon(v[0], m.points));
-    for (const pass of generatePasses(m.points, innerVoids, params, P)) {
-      const pls = pass.filter((r) => r.length >= 2);
+    for (let c = 0; c < P; c++) {
+      const runs = generateTour(m.points, innerVoids, params, { seed: ((params.seed || 1) + c * 0x9e3779b1) >>> 0 });
+      const pls = runs.filter((r) => r.length >= 2);
       for (const r of pls) threadMm += pathLength(r);
-      stops.push({ color: palette[idx % palette.length], polylines: pls });
-      idx++;
+      stops.push({ color: palette[c % palette.length], polylines: pls });
     }
   }
 
