@@ -254,7 +254,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       // `--rg-input-numeric-width` (nessuna classe inventata). Vedi proposta DS `ds/color-map-aside` (§7).
       const dwrap = document.createElement('span');
       dwrap.className = 'rg-field-with-unit';
-      dwrap.style.setProperty('--rg-input-numeric-width', '5ch');
+      dwrap.style.setProperty('--rg-input-numeric-width', '8ch');
       const dens = document.createElement('input');
       dens.type = 'number';
       dens.className = 'rg-input rg-input--numeric';
