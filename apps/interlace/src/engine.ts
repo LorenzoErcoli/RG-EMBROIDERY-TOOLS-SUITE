@@ -336,9 +336,9 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
   // SOLO se una zona è davvero murata/irraggiungibile cucendo (caso raro → Regola 2, prossimo passo).
   let iter = 0;
   const MAX_ITER = need * 600 + 80000;
-  // BILANCIO: mi fermo al 90% (non 98.5%). L'ultimo 10% richiede tragitti lunghi e costosi che
-  // squilibrano il filo tra un colore e l'altro; quel residuo lo coprono comunque gli ALTRI colori.
-  while (coveredCells < need * 0.90 && totalPts < MAX_POINTS && iter++ < MAX_ITER) {
+  // Copertura piena (il bilancio tra colori lo dà già la densità-totale divisa). Il fine-corsa si ferma
+  // quando non restano più vuoti raggiungibili (nearestGap null) o a soglia alta.
+  while (coveredCells < need * 0.995 && totalPts < MAX_POINTS && iter++ < MAX_ITER) {
     const cc = cj(cy) * gx + ci(cx);
     let head = dir, spread = TURN_SPREAD;
     const covered = targetArr[cc] === 0 || cov[cc] >= targetArr[cc];
