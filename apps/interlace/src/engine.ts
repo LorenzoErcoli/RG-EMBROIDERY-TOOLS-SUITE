@@ -336,7 +336,9 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
   // SOLO se una zona è davvero murata/irraggiungibile cucendo (caso raro → Regola 2, prossimo passo).
   let iter = 0;
   const MAX_ITER = need * 600 + 80000;
-  while (coveredCells < need * 0.985 && totalPts < MAX_POINTS && iter++ < MAX_ITER) {
+  // BILANCIO: mi fermo al 90% (non 98.5%). L'ultimo 10% richiede tragitti lunghi e costosi che
+  // squilibrano il filo tra un colore e l'altro; quel residuo lo coprono comunque gli ALTRI colori.
+  while (coveredCells < need * 0.90 && totalPts < MAX_POINTS && iter++ < MAX_ITER) {
     const cc = cj(cy) * gx + ci(cx);
     let head = dir, spread = TURN_SPREAD;
     const covered = targetArr[cc] === 0 || cov[cc] >= targetArr[cc];
@@ -406,7 +408,10 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
   const ctx = prepare(boundary, voids, minS, maxS, clear);
   if (!ctx) return [];
   const { gx, gy, cfill } = ctx;
-  const T = coverageTarget(ctx.cell, p.densitySpacingMm); // copertura per passata (densità per-colore)
+  // Densità TOTALE (non per-colore): la copertura richiesta è divisa tra i colori, così `densitySpacingMm`
+  // = densità del TESSUTO. Pavimento a 1: ogni colore copre almeno una volta (un filo continuo non può
+  // coprire "meno di una volta"), quindi con N colori il minimo è N strati.
+  const T = Math.max(1, Math.round(coverageTarget(ctx.cell, p.densitySpacingMm) / passCount));
   const targetArr = new Uint8Array(gx * gy);
   for (let id = 0; id < targetArr.length; id++) if (cfill[id]) targetArr[id] = T;
   const base = (p.seed || 1) >>> 0;
