@@ -82,15 +82,18 @@ export function runPipeline(
   const cycles = Math.max(1, Math.floor(params.paletteCycles) || 1);
   const P = palette.length * cycles;
 
-  // PASSATE A COLORE: ogni stop è una passata = un FILO CONTINUO che percorre tutta la superficie
-  // (uniforme). Colori a rotazione sulla palette; sovrapponendoli si intrecciano. `densitySpacingMm`
-  // = densità di OGNI colore; la densità totale è quella × numero di passate.
+  // PASSATE A COLORE: una passata (filo continuo) per stop, alla DENSITÀ del suo colore (per-colore, con
+  // fallback a `densitySpacingMm`). Colori a rotazione sulla palette; sovrapponendoli si intrecciano.
+  const cd = params.colorDensities || [];
+  const densities: number[] = [];
+  for (let i = 0; i < P; i++) { const d = cd[i % palette.length]; densities.push(d && d > 0 ? d : params.densitySpacingMm); }
+
   const stops: { color: string; polylines: Polyline[] }[] = [];
   let threadMm = 0;
   let idx = 0;
   for (const m of master) {
     const innerVoids = exclusions.filter((v) => v.length > 0 && pointInPolygon(v[0], m.points));
-    for (const pass of generatePasses(m.points, innerVoids, params, P)) {
+    for (const pass of generatePasses(m.points, innerVoids, params, densities)) {
       const pls = pass.filter((r) => r.length >= 2);
       for (const r of pls) threadMm += pathLength(r);
       stops.push({ color: palette[idx % palette.length], polylines: pls });

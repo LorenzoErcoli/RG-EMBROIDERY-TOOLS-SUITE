@@ -21,23 +21,27 @@ export interface InterlaceParams {
   realWidthMm: number;       // §3.4 — larghezza reale della sagoma (0 = usa la misura letta)
   minStitchMm: number;       // §3.1 R3 — lunghezza minima del punto
   maxStitchMm: number;       // §3.1 R4 — lunghezza massima del punto
-  densitySpacingMm: number;  // §3.7 R22 — spaziatura tra le file di filo (piccola = più coprente)
+  densitySpacingMm: number;  // §3.7 R22 — spaziatura fra le file = dimensione cella (piccola = più filo)
   voidClearanceMm: number;   // §3.2 R5/R7 — distanza minima da bordi e aree vuote
   seed: number;              // ripetibilità dell'anteprima
   // --- Palette (usata dalla pipeline, non dalla geometria) ---
   colors: string[];          // palette a numero variabile; l'ordine = ordine di rotazione lungo il filo
   paletteCycles: number;     // quante volte la palette gira lungo il tracciato → cambi-ago
+  /** Densità PER-COLORE (spaziatura mm, parallela a `colors`): 0/assente = usa `densitySpacingMm`.
+   *  Serve a controllare il filo quando si aggiungono colori (ognuno indipendente). */
+  colorDensities: number[];
 }
 
 export const defaultInterlaceParams: InterlaceParams = {
   realWidthMm: 0,
   minStitchMm: 6,
   maxStitchMm: 15,
-  densitySpacingMm: 1.0, // densità di OGNI colore; il totale è questa × numero di passate (colori × cicli)
+  densitySpacingMm: 2.0, // spaziatura file (mm) di OGNI colore ≈ 0.8–3.2; piccola = fitto/più filo
   voidClearanceMm: 0.6,
   seed: 1,
   colors: ['#1f3a5f', '#c0392b', '#e0a41f', '#3b7d4f'],
   paletteCycles: 1, // 4 colori = 4 strati già di loro; alza per farli ripetere
+  colorDensities: [], // vuoto = tutti i colori usano densitySpacingMm
 };
 
 // --- Costanti interne (implementazione, non parametri utente): il "movimento" del filo.
@@ -194,8 +198,11 @@ interface FillCtx {
   sdf: (x: number, y: number) => number;
 }
 
-/** Prepara maschera e griglia (una volta): tutto ciò che NON dipende dalla densità. null se area nulla. */
-function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: number, clear: number): FillCtx | null {
+/**
+ * Prepara maschera e griglia. `cell` = SPAZIATURA FRA LE FILE (mm) = la densità: la griglia di copertura ha
+ * celle grandi `cell`, quindi meno celle (più rado) o più celle (più fitto). null se area nulla.
+ */
+function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: number, clear: number, cell: number): FillCtx | null {
   // Maschera fine (campo di distanza con segno): risoluzione fitta per clearance accurata e canali stretti.
   const fineRes = Math.max(0.3, Math.min(0.5, minS / 8));
   const mask = buildMask(boundary, voids, fineRes);
@@ -211,7 +218,6 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
     return true;
   };
   const bb = bounds(boundary);
-  const cell = Math.max(1.5, Math.min(maxS * 0.5, minS));
   const gx = Math.ceil((bb.maxX - bb.minX) / cell) + 1;
   const gy = Math.ceil((bb.maxY - bb.minY) / cell) + 1;
   const cellX = (i: number) => bb.minX + (i + 0.5) * cell;
@@ -349,9 +355,10 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
     // 1) passo normale (preferisce il vuoto, rispetta il tetto).
     let nxt = advance(head, spread, CLUMP_CAP, maxS);
     if (!nxt) {
-      // 2) prosegui verso il vuoto attraversando l'area, sempre CUCENDO (mai staccare), punto fino a max+2.
-      //    A GRADINI: prima senza superare il tetto (i tragitti NON creano autostrade iper-dense), poi con
-      //    tetto doppio, e solo come ULTIMA spiaggia senza tetto (raro).
+      // 2) prosegui verso il vuoto attraversando l'area, sempre CUCENDO (mai staccare), punto fino a max+2
+      //    SOLO qui (l'escape ha bisogno di un filo di raggio in più per non arenarsi in mille passi corti,
+      //    che squilibrerebbero i colori; il minimo NON cambia mai). A GRADINI: prima senza superare il
+      //    tetto-densità (i tragitti NON creano autostrade iper-dense), poi tetto doppio, poi ultima spiaggia.
       const g = nearestGap(cx, cy);
       const h2 = g ? Math.atan2(g.y - cy, g.x - cx) : dir + (rng() * 2 - 1) * 2;
       nxt = advance(h2, Math.PI, CLUMP_CAP, maxS + 2) || advance(h2, Math.PI, CLUMP_CAP * 2, maxS + 2) || advance(h2, Math.PI, Infinity, maxS + 2);
@@ -371,10 +378,20 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
   return runs;
 }
 
-/** Copertura totale per cella (quante attraversate) alla densità richiesta. */
-function coverageTarget(cell: number, spacing: number): number {
-  return Math.max(1, Math.round(cell / Math.max(0.1, spacing)));
+/**
+ * SPAZIATURA fra le file (mm) → dimensione della cella di copertura. È QUESTA a controllare la densità
+ * (e quindi il filo): cella piccola = fitto, cella grande = rado. Limitata a un intervallo ragionevole
+ * perché la griglia resti sana anche nei canali stretti.
+ */
+function cellForSpacing(spacing: number, maxS: number): number {
+  // Oltre ~3.2mm la cella è così grossa che il filo continuo spende più in tragitti che in copertura
+  // (il filo RISALE): inutile andare più radi, quindi limitiamo lì il massimo.
+  return Math.max(0.8, Math.min(Math.min(3.2, maxS), spacing));
 }
+
+/** Copertura per cella (quante attraversate): FISSA. La densità è governata dalla dimensione della cella,
+ * non da questo numero — così a densità bassa NON si moltiplicano i tragitti (il difetto del vecchio modello). */
+const COVER_TARGET = 2;
 
 /**
  * Riempimento a filo singolo: una sola passata alla densità richiesta (tutte le celle a target).
@@ -385,38 +402,36 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
   const clear = Math.max(0, p.voidClearanceMm);
   const minS = Math.max(0.5, p.minStitchMm);
   const maxS = Math.max(minS + 0.1, p.maxStitchMm);
-  const ctx = prepare(boundary, voids, minS, maxS, clear);
+  const ctx = prepare(boundary, voids, minS, maxS, clear, cellForSpacing(p.densitySpacingMm, maxS));
   if (!ctx) return [];
-  const T = coverageTarget(ctx.cell, p.densitySpacingMm);
   const targetArr = new Uint8Array(ctx.gx * ctx.gy);
-  for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = T;
+  for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = COVER_TARGET;
   return runOneFill(ctx, p.seed || 1, targetArr);
 }
 
 /**
- * PASSATE A COLORE: `passCount` passate, ognuna un FILO CONTINUO che percorre TUTTA la superficie in
- * modo UNIFORME (stesso target di copertura ovunque), con un seme diverso → ogni passata è un intreccio
- * diverso. Sovrapponendo passate di colori diversi si ottiene l'effetto "un filo di un colore su tutta
- * l'area, poi un altro, poi un altro". `densitySpacingMm` è la densità DI OGNI passata (per-colore);
- * la densità totale sul tessuto è quella × passCount. Maschera costruita una sola volta e condivisa.
+ * PASSATE A COLORE: una passata per ciascuna densità in `densities`, ognuna un FILO CONTINUO che copre
+ * tutta la superficie alla PROPRIA densità (`densities[i]` mm), con un seme diverso. Sovrapponendo le
+ * passate → intreccio multicolore. La densità PER-COLORE permette di controllare il filo quando si
+ * aggiungono colori (ognuno indipendente). Maschera costruita una sola volta e condivisa.
  */
-export function generatePasses(boundary: Polyline, voids: Polyline[], p: InterlaceParams, passCount: number): Point[][][] {
-  if (boundary.length < 3 || passCount < 1) return [];
+export function generatePasses(boundary: Polyline, voids: Polyline[], p: InterlaceParams, densities: number[]): Point[][][] {
+  if (boundary.length < 3 || densities.length < 1) return [];
   const clear = Math.max(0, p.voidClearanceMm);
   const minS = Math.max(0.5, p.minStitchMm);
   const maxS = Math.max(minS + 0.1, p.maxStitchMm);
-  const ctx = prepare(boundary, voids, minS, maxS, clear);
-  if (!ctx) return [];
-  const { gx, gy, cfill } = ctx;
-  // Densità TOTALE (non per-colore): la copertura richiesta è divisa tra i colori, così `densitySpacingMm`
-  // = densità del TESSUTO. Pavimento a 1: ogni colore copre almeno una volta (un filo continuo non può
-  // coprire "meno di una volta"), quindi con N colori il minimo è N strati.
-  const T = Math.max(1, Math.round(coverageTarget(ctx.cell, p.densitySpacingMm) / passCount));
-  const targetArr = new Uint8Array(gx * gy);
-  for (let id = 0; id < targetArr.length; id++) if (cfill[id]) targetArr[id] = T;
   const base = (p.seed || 1) >>> 0;
+  // La densità PER-COLORE è la dimensione della cella → ogni densità ha una sua griglia. La maschera si
+  // ricostruisce solo quando la cella cambia (cache per valore di cella): densità uguali → una sola build.
+  const ctxByCell = new Map<number, FillCtx | null>();
   const passes: Point[][][] = [];
-  for (let pIdx = 0; pIdx < passCount; pIdx++) {
+  for (let pIdx = 0; pIdx < densities.length; pIdx++) {
+    const cell = cellForSpacing(densities[pIdx], maxS);
+    let ctx = ctxByCell.get(cell);
+    if (ctx === undefined) { ctx = prepare(boundary, voids, minS, maxS, clear, cell); ctxByCell.set(cell, ctx); }
+    if (!ctx) { passes.push([]); continue; }
+    const targetArr = new Uint8Array(ctx.gx * ctx.gy);
+    for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = COVER_TARGET;
     passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr));
   }
   return passes;
