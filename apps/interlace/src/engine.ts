@@ -385,11 +385,11 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
 }
 
 /**
- * MÉLANGE: distribuisce la copertura TOTALE (quella della densità richiesta, T attraversate per cella)
- * tra `passCount` passate/colori con un DITHER spaziale: ogni cella assegna le sue T attraversate a T
- * passate diverse, scelte in base alla posizione. Così la densità resta quella giusta, ma ogni colore
- * è sparso su TUTTA l'area (celle diverse a seconda del punto) → colore mescolato, niente "macchie".
- * La maschera è costruita UNA sola volta e condivisa. Ritorna passCount liste-di-tratti (un colore ognuna).
+ * PASSATE A COLORE: `passCount` passate, ognuna un FILO CONTINUO che percorre TUTTA la superficie in
+ * modo UNIFORME (stesso target di copertura ovunque), con un seme diverso → ogni passata è un intreccio
+ * diverso. Sovrapponendo passate di colori diversi si ottiene l'effetto "un filo di un colore su tutta
+ * l'area, poi un altro, poi un altro". `densitySpacingMm` è la densità DI OGNI passata (per-colore);
+ * la densità totale sul tessuto è quella × passCount. Maschera costruita una sola volta e condivisa.
  */
 export function generatePasses(boundary: Polyline, voids: Polyline[], p: InterlaceParams, passCount: number): Point[][][] {
   if (boundary.length < 3 || passCount < 1) return [];
@@ -399,19 +399,12 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
   const ctx = prepare(boundary, voids, minS, maxS, clear);
   if (!ctx) return [];
   const { gx, gy, cfill } = ctx;
-  const T = coverageTarget(ctx.cell, p.densitySpacingMm); // copertura totale per cella (densità piena)
+  const T = coverageTarget(ctx.cell, p.densitySpacingMm); // copertura per passata (densità per-colore)
+  const targetArr = new Uint8Array(gx * gy);
+  for (let id = 0; id < targetArr.length; id++) if (cfill[id]) targetArr[id] = T;
   const base = (p.seed || 1) >>> 0;
   const passes: Point[][][] = [];
   for (let pIdx = 0; pIdx < passCount; pIdx++) {
-    const targetArr = new Uint8Array(gx * gy);
-    for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++) {
-      const id = j * gx + i; if (!cfill[id]) continue;
-      // Dither per cella: le T attraversate della cella vanno alle passate d, d+1, …, d+T-1 (mod passCount).
-      const d = Math.floor(hash(i, j) * passCount);
-      let t = 0;
-      for (let k = 0; k < T; k++) if ((d + k) % passCount === pIdx) t++;
-      if (t > 0) targetArr[id] = t;
-    }
     passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr));
   }
   return passes;

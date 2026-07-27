@@ -5,7 +5,7 @@ import {
   bounds as boundsOf, polygonArea, pointInPolygon, distance,
   THREAD_STROKE_MM, SHAPE_STROKE_MM,
 } from '@rg/core';
-import { generateFill, type InterlaceParams } from './engine';
+import { generatePasses, type InterlaceParams } from './engine';
 
 export type RoleAssignment = Record<string, Role | undefined>;
 
@@ -29,6 +29,12 @@ const COLORS = {
 
 function contoursWithRole(contours: Contour[], roles: RoleAssignment, role: Role): Contour[] {
   return contours.filter((c) => roles[c.color] === role);
+}
+
+function pathLength(pl: Polyline): number {
+  let s = 0;
+  for (let i = 1; i < pl.length; i++) s += distance(pl[i - 1], pl[i]);
+  return s;
 }
 
 /**
@@ -76,41 +82,21 @@ export function runPipeline(
   const cycles = Math.max(1, Math.floor(params.paletteCycles) || 1);
   const P = palette.length * cycles;
 
-  // MÉLANGE senza macchie: UN SOLO riempimento uniforme (densità esatta, senza sfori) i cui segmenti
-  // vengono colorati con un DITHER per cella — ogni cella prende un colore in base alla sua posizione.
-  // I colori si mescolano finemente su tutta l'area; la densità resta quella impostata (niente accumuli).
-  const colorCell = Math.max(2, params.maxStitchMm || 3); // grana del melange (~ lunghezza punto)
-  const hcol = (i: number, j: number): number => {
-    let h = (Math.imul(i, 374761393) + Math.imul(j, 668265263)) >>> 0;
-    h = Math.imul(h ^ (h >>> 13), 1274126177) >>> 0;
-    return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
-  };
-  const cidx = (x: number) => Math.floor((x - bnds.minX) / colorCell);
-  const cjdx = (y: number) => Math.floor((y - bnds.minY) / colorCell);
-
-  const stopsPL: Polyline[][] = Array.from({ length: P }, () => []);
+  // PASSATE A COLORE: ogni stop è una passata = un FILO CONTINUO che percorre tutta la superficie
+  // (uniforme). Colori a rotazione sulla palette; sovrapponendoli si intrecciano. `densitySpacingMm`
+  // = densità di OGNI colore; la densità totale è quella × numero di passate.
+  const stops: { color: string; polylines: Polyline[] }[] = [];
   let threadMm = 0;
+  let idx = 0;
   for (const m of master) {
     const innerVoids = exclusions.filter((v) => v.length > 0 && pointInPolygon(v[0], m.points));
-    for (const run of generateFill(m.points, innerVoids, params)) {
-      if (run.length < 2) continue;
-      let cur = -1;
-      let poly: Polyline = [run[0]];
-      for (let s = 1; s < run.length; s++) {
-        threadMm += distance(run[s - 1], run[s]);
-        const mx = (run[s - 1].x + run[s].x) / 2, my = (run[s - 1].y + run[s].y) / 2;
-        const k = Math.floor(hcol(cidx(mx), cjdx(my)) * P) % P;
-        if (k !== cur) {
-          if (poly.length >= 2 && cur >= 0) stopsPL[cur].push(poly);
-          poly = [run[s - 1]]; // il tratto del nuovo colore riparte dal punto di giunzione (continuo)
-          cur = k;
-        }
-        poly.push(run[s]);
-      }
-      if (poly.length >= 2 && cur >= 0) stopsPL[cur].push(poly);
+    for (const pass of generatePasses(m.points, innerVoids, params, P)) {
+      const pls = pass.filter((r) => r.length >= 2);
+      for (const r of pls) threadMm += pathLength(r);
+      stops.push({ color: palette[idx % palette.length], polylines: pls });
+      idx++;
     }
   }
-  const stops = stopsPL.map((pls, k) => ({ color: palette[k % palette.length], polylines: pls }));
 
   // --- ANTEPRIMA: raggruppa per colore (più leggibile a schermo). Il filo si disegna sottile (R15). ---
   const byColor = new Map<string, Polyline[]>();
