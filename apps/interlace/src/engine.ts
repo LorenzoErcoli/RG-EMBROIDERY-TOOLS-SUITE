@@ -285,12 +285,15 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
   let curId = g0.id;
   let runMoves = 0, totalPts = 1;
 
-  const advance = (head: number, spread: number): { x: number; y: number; ang: number } | null => {
+  // `cap` = rispetta il tetto ai picchi (non attraversare celle già molto cariche). `hi` = lunghezza max
+  // del passo (di norma maxS; fino a maxS+2 solo nei passi di uscita difficili — il minimo NON cambia mai).
+  // In ogni caso preferisce la cella MENO coperta (score -cov) → il tragitto passa per il vuoto.
+  const advance = (head: number, spread: number, cap: boolean, hi: number): { x: number; y: number; ang: number } | null => {
     const curCell = cj(cy) * gx + ci(cx);
     const fdir = flowAng(cx, cy);
     let bx = 0, by = 0, bAng = 0, best = -Infinity, has = false;
     for (let k = 0; k < CANDIDATES; k++) {
-      const len = minS + rng() * (maxS - minS);
+      const len = minS + rng() * (hi - minS);
       let ang = head + (rng() * 2 - 1) * spread;
       ang += FLOW_INFLUENCE * angDelta(ang, fdir);
       const nx = cx + Math.cos(ang) * len, ny = cy + Math.sin(ang) * len;
@@ -298,22 +301,21 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
       const destId = cj(ny) * gx + ci(nx);
       const tg = targetArr[destId];
       if (tg === 0) continue;
-      if (cov[destId] >= CLUMP_CAP * tg) continue; // TETTO ai picchi: non ammassare oltre ~2× il target
+      if (cap && cov[destId] >= CLUMP_CAP * tg) continue; // tetto ai picchi
       let score = -cov[destId] + rng() * 0.25;
       if (destId === curCell) score -= 3;
       if (cov[destId] >= tg) score -= 6;
       if (score > best) { best = score; bx = nx; by = ny; bAng = ang; has = true; }
     }
     if (has) return { x: bx, y: by, ang: bAng };
-    // Escape: cerca a lungo un passo CONTINUO valido verso una cella non ancora al tetto (evita di
-    // staccare il filo se può proseguire) — così il tetto ai picchi non frammenta in tanti tratti.
+    // Escape ad ampio raggio, stessa regola del tetto.
     for (let k = 0; k < 48; k++) {
       const a = rng() * Math.PI * 2;
-      const len = minS + rng() * (maxS - minS);
+      const len = minS + rng() * (hi - minS);
       const nx = cx + Math.cos(a) * len, ny = cy + Math.sin(a) * len;
       if (!inRegion(nx, ny) || !segOk(cx, cy, nx, ny)) continue;
       const id = cj(ny) * gx + ci(nx);
-      if (targetArr[id] > 0 && cov[id] < CLUMP_CAP * targetArr[id]) return { x: nx, y: ny, ang: a };
+      if (targetArr[id] > 0 && (!cap || cov[id] < CLUMP_CAP * targetArr[id])) return { x: nx, y: ny, ang: a };
     }
     return null;
   };
@@ -328,25 +330,40 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
     cx = x; cy = y; dir = rng() * Math.PI * 2; curId = id; runMoves = 0;
   };
 
-  // FASE 1 — riempimento principale con rilocazione tra le zone assegnate.
-  let noProgress = 0, lastCovered = 0, iter = 0;
-  const MAX_ITER = need * 400 + 60000;
-  const RELOCATE_AFTER = 50;
+  // FASE 1 — riempimento CONTINUO. REGOLA 1: mai staccare "di comodo". Se la zona locale è coperta o il
+  // filo è bloccato, PROSEGUE verso il vuoto più vicino ATTRAVERSANDO l'area (preferendo le celle non
+  // ancora cucite → il tragitto è esso stesso riempimento, niente sovrapposizione inutile). Si stacca
+  // SOLO se una zona è davvero murata/irraggiungibile cucendo (caso raro → Regola 2, prossimo passo).
+  let iter = 0;
+  const MAX_ITER = need * 600 + 80000;
   while (coveredCells < need * 0.985 && totalPts < MAX_POINTS && iter++ < MAX_ITER) {
-    let head = dir, spread = TURN_SPREAD;
     const cc = cj(cy) * gx + ci(cx);
-    // Se la cella corrente è già piena, punta al vuoto più vicino (anti-buco); altrimenti VAGA LIBERO
-    // (nessuna guida di direzione: la disomogeneità del casuale è l'effetto voluto).
-    if (targetArr[cc] === 0 || cov[cc] >= targetArr[cc]) { const g = nearestGap(cx, cy); if (g) { head = Math.atan2(g.y - cy, g.x - cx); spread = 1.0; } }
-    const nxt = advance(head, spread);
-    if (!nxt) { if (runMoves === 0 && curId >= 0) dead[curId] = 1; const g = nearestGap(cx, cy); if (!g) break; openRunAt(g.x, g.y, g.id); continue; }
+    let head = dir, spread = TURN_SPREAD;
+    const covered = targetArr[cc] === 0 || cov[cc] >= targetArr[cc];
+    if (covered) {
+      const g = nearestGap(cx, cy);
+      if (!g) break; // niente più vuoti → passata finita
+      head = Math.atan2(g.y - cy, g.x - cx); spread = 1.0; // punta al vuoto, restando continuo
+    }
+    // 1) passo normale (preferisce il vuoto, rispetta il tetto).
+    let nxt = advance(head, spread, true, maxS);
+    if (!nxt) {
+      // 2) prosegui verso il vuoto attraversando l'area: prima cercando ancora celle libere, poi (se serve)
+      //    attraversando anche celle coperte, sempre CUCENDO (mai staccare), punto fino a max+2.
+      const g = nearestGap(cx, cy);
+      const h2 = g ? Math.atan2(g.y - cy, g.x - cx) : dir + (rng() * 2 - 1) * 2;
+      nxt = advance(h2, Math.PI, true, maxS + 2) || advance(h2, Math.PI, false, maxS + 2);
+    }
+    if (!nxt) {
+      // 3) davvero murato (irraggiungibile cucendo): UNICO stacco ammesso, raro.
+      if (runMoves === 0 && curId >= 0) dead[curId] = 1;
+      const g = nearestGap(cx, cy);
+      if (!g) break;
+      openRunAt(g.x, g.y, g.id);
+      continue;
+    }
     commit(nxt.x, nxt.y, nxt.ang);
-    if (coveredCells > lastCovered) { lastCovered = coveredCells; noProgress = 0; }
-    else if (++noProgress > RELOCATE_AFTER) { noProgress = 0; const g = nearestGap(cx, cy); if (!g) break; openRunAt(g.x, g.y, g.id); }
   }
-
-  // (Niente fase di livellamento "a target": creava bursts meccanici e appiattiva la disomogeneità
-  //  che è l'effetto voluto. Il vagare libero + l'anti-buco della fase 1 bastano.)
 
   if (run.length >= 2) runs.push(run);
   return runs;
