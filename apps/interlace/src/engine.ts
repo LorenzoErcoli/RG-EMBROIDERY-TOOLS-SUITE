@@ -47,6 +47,7 @@ const TURN_SPREAD = 2.2;    // ampiezza della virata casuale a ogni passo (sembr
 const FLOW_FREQ = 0.02;     // scala del campo di flusso (nuvole più o meno grandi)
 const SWIRL = 2.2;          // intensità di rotazione del campo
 const CANDIDATES = 16;      // candidati valutati a ogni passo (si sceglie la zona meno riempita)
+const CLUMP_CAP = 3;        // tetto ai picchi: il filo non passa più di ~3× il target in una stessa cella
 const MAX_POINTS = 200000;  // guardia anti-runaway
 const MAX_MASK_CELLS = 4_000_000; // tetto memoria maschera fine
 
@@ -296,16 +297,23 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
       if (!inRegion(nx, ny) || !segOk(cx, cy, nx, ny)) continue;
       const destId = cj(ny) * gx + ci(nx);
       const tg = targetArr[destId];
-      let score = (tg > 0 ? -cov[destId] : -4) + rng() * 0.25;
+      if (tg === 0) continue;
+      if (cov[destId] >= CLUMP_CAP * tg) continue; // TETTO ai picchi: non ammassare oltre ~2× il target
+      let score = -cov[destId] + rng() * 0.25;
       if (destId === curCell) score -= 3;
-      if (tg > 0 && cov[destId] >= tg) score -= 6;
+      if (cov[destId] >= tg) score -= 6;
       if (score > best) { best = score; bx = nx; by = ny; bAng = ang; has = true; }
     }
     if (has) return { x: bx, y: by, ang: bAng };
-    for (let k = 0; k < 24; k++) {
+    // Escape: cerca a lungo un passo CONTINUO valido verso una cella non ancora al tetto (evita di
+    // staccare il filo se può proseguire) — così il tetto ai picchi non frammenta in tanti tratti.
+    for (let k = 0; k < 48; k++) {
       const a = rng() * Math.PI * 2;
-      const nx = cx + Math.cos(a) * minS, ny = cy + Math.sin(a) * minS;
-      if (inRegion(nx, ny) && segOk(cx, cy, nx, ny)) return { x: nx, y: ny, ang: a };
+      const len = minS + rng() * (maxS - minS);
+      const nx = cx + Math.cos(a) * len, ny = cy + Math.sin(a) * len;
+      if (!inRegion(nx, ny) || !segOk(cx, cy, nx, ny)) continue;
+      const id = cj(ny) * gx + ci(nx);
+      if (targetArr[id] > 0 && cov[id] < CLUMP_CAP * targetArr[id]) return { x: nx, y: ny, ang: a };
     }
     return null;
   };
