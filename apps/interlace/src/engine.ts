@@ -33,11 +33,11 @@ export const defaultInterlaceParams: InterlaceParams = {
   realWidthMm: 0,
   minStitchMm: 6,
   maxStitchMm: 15,
-  densitySpacingMm: 0.8,
+  densitySpacingMm: 1.0, // densità di OGNI colore; il totale è questa × numero di passate (colori × cicli)
   voidClearanceMm: 0.6,
   seed: 1,
   colors: ['#1f3a5f', '#c0392b', '#e0a41f', '#3b7d4f'],
-  paletteCycles: 2,
+  paletteCycles: 1, // 4 colori = 4 strati già di loro; alza per farli ripetere
 };
 
 // --- Costanti interne (implementazione, non parametri utente): il "movimento" del filo.
@@ -189,6 +189,8 @@ interface FillCtx {
   cpx: Float32Array; cpy: Float32Array;
   inRegion: (x: number, y: number) => boolean;
   segOk: (ax: number, ay: number, bx: number, by: number) => boolean;
+  /** Distanza con segno dal bordo/vuoto (mm), per capire quanto è stretto il canale e la sua direzione. */
+  sdf: (x: number, y: number) => number;
 }
 
 /** Prepara maschera e griglia (una volta): tutto ciò che NON dipende dalla densità. null se area nulla. */
@@ -228,7 +230,7 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
     if (!Number.isNaN(vx)) { const id = j * gx + i; cfill[id] = 1; cpx[id] = vx; cpy[id] = vy; fillableCount++; }
   }
   if (fillableCount === 0) return null;
-  return { bb, res: mask.res, cell, gx, gy, cellX, cellY, ci, cj, cfill, fillableCount, cpx, cpy, minS, maxS, inRegion, segOk };
+  return { bb, res: mask.res, cell, gx, gy, cellX, cellY, ci, cj, cfill, fillableCount, cpx, cpy, minS, maxS, inRegion, segOk, sdf: mask.sdf };
 }
 
 /**
@@ -239,7 +241,7 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
  * Questo permette il mélange: passate diverse ricevono celle diverse (dither), sparse su tutta l'area.
  */
 function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][] {
-  const { bb, cell, gx, gy, ci, cj, cpx, cpy, minS, maxS, inRegion, segOk } = ctx;
+  const { bb, cell, gx, gy, ci, cj, cpx, cpy, minS, maxS, inRegion, segOk, sdf, res } = ctx;
   const cov = new Float32Array(gx * gy);
   const dead = new Uint8Array(gx * gy);
   let need = 0;
@@ -272,6 +274,25 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
   const rng = mulberry32(seed >>> 0 || 1);
   const flowAng = (x: number, y: number): number => vnoise(x * FLOW_FREQ, y * FLOW_FREQ) * Math.PI * 2 * SWIRL;
 
+  // Direzione LUNGO il canale (perpendicolare al gradiente del campo di distanza), verso più vicino a `curDir`.
+  const alongWall = (x: number, y: number, curDir: number): number => {
+    const e = res;
+    const gxv = sdf(x + e, y) - sdf(x - e, y);
+    const gyv = sdf(x, y + e) - sdf(x, y - e);
+    if (Math.hypot(gxv, gyv) < 1e-6) return curDir; // cresta/piatto: nessuna direzione imposta
+    let a = Math.atan2(gxv, -gyv); // angolo della perpendicolare al gradiente (= lungo le pareti)
+    if (Math.abs(angDelta(curDir, a)) > Math.PI / 2) a += Math.PI; // scegli il verso di marcia
+    return a;
+  };
+  // In un canale STRETTO segui la sua direzione (meno rimbalzi tra le pareti → densità uniforme);
+  // in zona APERTA lascia libero il vagare organico. `narrow` = 1 vicino alle pareti, 0 in aperto.
+  const guide = (baseDir: number, x: number, y: number): { head: number; spread: number } => {
+    const narrow = Math.max(0, Math.min(1, 1 - sdf(x, y) / (maxS * 1.2)));
+    if (narrow < 0.15) return { head: baseDir, spread: TURN_SPREAD };
+    const aw = alongWall(x, y, baseDir);
+    return { head: baseDir + angDelta(baseDir, aw) * (0.85 * narrow), spread: TURN_SPREAD * (1 - 0.6 * narrow) };
+  };
+
   // Avvio: la prima cella assegnata a questa passata (partendo da un punto casuale).
   const g0 = nearestGap(bb.minX + rng() * (bb.maxX - bb.minX), bb.minY + rng() * (bb.maxY - bb.minY));
   if (!g0) return [];
@@ -294,8 +315,6 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
       if (!inRegion(nx, ny) || !segOk(cx, cy, nx, ny)) continue;
       const destId = cj(ny) * gx + ci(nx);
       const tg = targetArr[destId];
-      // Preferisci una cella DI QUESTA passata ancora scarsa; penalizza forte le celle non assegnate
-      // (tg=0: il filo di questo colore non deve accumularsi lì) e la sovra-copertura.
       let score = (tg > 0 ? -cov[destId] : -4) + rng() * 0.25;
       if (destId === curCell) score -= 3;
       if (tg > 0 && cov[destId] >= tg) score -= 6;
@@ -328,6 +347,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
     let head = dir, spread = TURN_SPREAD;
     const cc = cj(cy) * gx + ci(cx);
     if (targetArr[cc] === 0 || cov[cc] >= targetArr[cc]) { const g = nearestGap(cx, cy); if (g) { head = Math.atan2(g.y - cy, g.x - cx); spread = 1.0; } }
+    else { const gg = guide(dir, cx, cy); head = gg.head; spread = gg.spread; } // stretto → segui il canale
     const nxt = advance(head, spread);
     if (!nxt) { if (runMoves === 0 && curId >= 0) dead[curId] = 1; const g = nearestGap(cx, cy); if (!g) break; openRunAt(g.x, g.y, g.id); continue; }
     commit(nxt.x, nxt.y, nxt.ang);
@@ -350,6 +370,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
     while (cov[lowId] < targetArr[lowId] && guard++ < 400 && totalPts < MAX_POINTS) {
       let head = dir, spread = TURN_SPREAD;
       if (Math.hypot(cx - lx, cy - ly) > 4 * cell) { head = Math.atan2(ly - cy, lx - cx); spread = 1.2; }
+      else { const gg = guide(dir, cx, cy); head = gg.head; spread = gg.spread; }
       const nxt = advance(head, spread);
       if (!nxt) break;
       commit(nxt.x, nxt.y, nxt.ang);
