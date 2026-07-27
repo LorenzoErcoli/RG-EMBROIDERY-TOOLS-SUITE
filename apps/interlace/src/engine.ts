@@ -285,10 +285,10 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
   let curId = g0.id;
   let runMoves = 0, totalPts = 1;
 
-  // `cap` = rispetta il tetto ai picchi (non attraversare celle già molto cariche). `hi` = lunghezza max
-  // del passo (di norma maxS; fino a maxS+2 solo nei passi di uscita difficili — il minimo NON cambia mai).
-  // In ogni caso preferisce la cella MENO coperta (score -cov) → il tragitto passa per il vuoto.
-  const advance = (head: number, spread: number, cap: boolean, hi: number): { x: number; y: number; ang: number } | null => {
+  // `capMult` = tetto ai picchi in multipli del target: NON attraversare celle già a `capMult×target`
+  // (Infinity = nessun tetto, ultima spiaggia). `hi` = lunghezza max del passo (di norma maxS; fino a
+  // maxS+2 solo negli escape — il minimo NON cambia mai). Preferisce la cella MENO coperta (score -cov).
+  const advance = (head: number, spread: number, capMult: number, hi: number): { x: number; y: number; ang: number } | null => {
     const curCell = cj(cy) * gx + ci(cx);
     const fdir = flowAng(cx, cy);
     let bx = 0, by = 0, bAng = 0, best = -Infinity, has = false;
@@ -301,21 +301,20 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
       const destId = cj(ny) * gx + ci(nx);
       const tg = targetArr[destId];
       if (tg === 0) continue;
-      if (cap && cov[destId] >= CLUMP_CAP * tg) continue; // tetto ai picchi
+      if (cov[destId] >= capMult * tg) continue; // tetto ai picchi (vale anche ai tragitti)
       let score = -cov[destId] + rng() * 0.25;
       if (destId === curCell) score -= 3;
       if (cov[destId] >= tg) score -= 6;
       if (score > best) { best = score; bx = nx; by = ny; bAng = ang; has = true; }
     }
     if (has) return { x: bx, y: by, ang: bAng };
-    // Escape ad ampio raggio, stessa regola del tetto.
-    for (let k = 0; k < 48; k++) {
+    for (let k = 0; k < 48; k++) { // escape ad ampio raggio, stesso tetto
       const a = rng() * Math.PI * 2;
       const len = minS + rng() * (hi - minS);
       const nx = cx + Math.cos(a) * len, ny = cy + Math.sin(a) * len;
       if (!inRegion(nx, ny) || !segOk(cx, cy, nx, ny)) continue;
       const id = cj(ny) * gx + ci(nx);
-      if (targetArr[id] > 0 && (!cap || cov[id] < CLUMP_CAP * targetArr[id])) return { x: nx, y: ny, ang: a };
+      if (targetArr[id] > 0 && cov[id] < capMult * targetArr[id]) return { x: nx, y: ny, ang: a };
     }
     return null;
   };
@@ -348,13 +347,14 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
       head = Math.atan2(g.y - cy, g.x - cx); spread = 1.0; // punta al vuoto, restando continuo
     }
     // 1) passo normale (preferisce il vuoto, rispetta il tetto).
-    let nxt = advance(head, spread, true, maxS);
+    let nxt = advance(head, spread, CLUMP_CAP, maxS);
     if (!nxt) {
-      // 2) prosegui verso il vuoto attraversando l'area: prima cercando ancora celle libere, poi (se serve)
-      //    attraversando anche celle coperte, sempre CUCENDO (mai staccare), punto fino a max+2.
+      // 2) prosegui verso il vuoto attraversando l'area, sempre CUCENDO (mai staccare), punto fino a max+2.
+      //    A GRADINI: prima senza superare il tetto (i tragitti NON creano autostrade iper-dense), poi con
+      //    tetto doppio, e solo come ULTIMA spiaggia senza tetto (raro).
       const g = nearestGap(cx, cy);
       const h2 = g ? Math.atan2(g.y - cy, g.x - cx) : dir + (rng() * 2 - 1) * 2;
-      nxt = advance(h2, Math.PI, true, maxS + 2) || advance(h2, Math.PI, false, maxS + 2);
+      nxt = advance(h2, Math.PI, CLUMP_CAP, maxS + 2) || advance(h2, Math.PI, CLUMP_CAP * 2, maxS + 2) || advance(h2, Math.PI, Infinity, maxS + 2);
     }
     if (!nxt) {
       // 3) davvero murato (irraggiungibile cucendo): UNICO stacco ammesso, raro.
