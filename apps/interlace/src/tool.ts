@@ -143,7 +143,12 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       inp.value = String(params[f.key]);
       inp.addEventListener('change', () => {
         const v = parseFloat(inp.value);
-        if (!Number.isNaN(v)) { (params[f.key] as number) = v; render(); }
+        if (!Number.isNaN(v)) {
+          (params[f.key] as number) = v;
+          // la densità globale è il placeholder "eredita" di ogni riga colore → riallinealo
+          if (f.key === 'densitySpacingMm') buildPaletteUI();
+          render();
+        }
       });
       const unit = document.createElement('span');
       unit.textContent = f.unit;
@@ -210,6 +215,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   function buildPaletteUI() {
     const host = $('paletteList');
     host.innerHTML = '';
+    if (!params.colorDensities) params.colorDensities = [];
     params.colors.forEach((col, i) => {
       const li = document.createElement('li');
       li.className = 'rg-color-map__row';
@@ -238,9 +244,35 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       rm.addEventListener('click', () => {
         if (params.colors.length <= 1) return;
         params.colors.splice(i, 1);
+        params.colorDensities.splice(i, 1);
         buildPaletteUI();
         render();
       });
+
+      // Densità PER-COLORE (spaziatura file, mm): vuoto = usa la densità globale. Campo compatto con le
+      // sole classi DS v1.6.0 (`rg-field-with-unit` + `rg-input--numeric`), stretto via il token DS
+      // `--rg-input-numeric-width` (nessuna classe inventata). Vedi proposta DS `ds/color-map-aside` (§7).
+      const dwrap = document.createElement('span');
+      dwrap.className = 'rg-field-with-unit';
+      dwrap.style.setProperty('--rg-input-numeric-width', '5ch');
+      const dens = document.createElement('input');
+      dens.type = 'number';
+      dens.className = 'rg-input rg-input--numeric';
+      dens.min = '0.8'; dens.max = '3.2'; dens.step = '0.1';
+      dens.inputMode = 'decimal';
+      dens.placeholder = String(params.densitySpacingMm);
+      const dv = params.colorDensities[i];
+      dens.value = dv && dv > 0 ? String(dv) : '';
+      dens.setAttribute('aria-label', `Densità per ${col.toUpperCase()} in mm (vuoto: usa la densità globale ${params.densitySpacingMm} mm)`);
+      dens.addEventListener('change', () => {
+        const v = parseFloat(dens.value);
+        if (dens.value.trim() === '' || Number.isNaN(v)) { params.colorDensities[i] = 0; dens.value = ''; }
+        else { const c = Math.max(0.8, Math.min(3.2, v)); params.colorDensities[i] = c; dens.value = String(c); }
+        render();
+      });
+      const dunit = document.createElement('span');
+      dunit.textContent = 'mm';
+      dwrap.append(dens, dunit);
       picker.addEventListener('input', () => {
         params.colors[i] = picker.value;
         sw.style.setProperty('--swatch', picker.value);
@@ -250,7 +282,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       });
 
       sw.appendChild(picker);
-      cluster.append(code, rm);
+      cluster.append(code, dwrap, rm);
       li.append(sw, cluster);
       host.appendChild(li);
     });
@@ -314,6 +346,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   $('addColorBtn').addEventListener('click', () => {
     if (params.colors.length >= MAX_COLORS) return;
     params.colors.push(NEW_COLORS[(params.colors.length - 1) % NEW_COLORS.length]);
+    params.colorDensities.push(0); // 0 = eredita la densità globale finché non lo si imposta
     buildPaletteUI();
     render();
   });
