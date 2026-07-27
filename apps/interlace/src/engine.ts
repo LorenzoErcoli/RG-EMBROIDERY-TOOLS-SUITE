@@ -185,6 +185,8 @@ interface FillCtx {
   cellX: (i: number) => number; cellY: (j: number) => number;
   ci: (x: number) => number; cj: (y: number) => number;
   cfill: Uint8Array; fillableCount: number; minS: number; maxS: number;
+  /** Punto rappresentativo VALIDO della cella (centro se cucibile, altrimenti sotto-punto vicino al bordo). */
+  cpx: Float32Array; cpy: Float32Array;
   inRegion: (x: number, y: number) => boolean;
   segOk: (ax: number, ay: number, bx: number, by: number) => boolean;
 }
@@ -196,7 +198,7 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
   const mask = buildMask(boundary, voids, fineRes);
   // `SAFE` (~mezza cella) garantisce R5 (mai nel vuoto) anche con l'errore di griglia; a clear=0 il filo
   // arriva a ridosso del bordo. Confronto sul punto REALE (sdf), non su una cella.
-  const SAFE = 0.7 * mask.res;
+  const SAFE = 0.5 * mask.res;
   const inRegion = (x: number, y: number): boolean => mask.sdf(x, y) >= clear + SAFE;
   const segStep = mask.res * 0.9;
   const segOk = (ax: number, ay: number, bx: number, by: number): boolean => {
@@ -214,12 +216,19 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
   const ci = (x: number) => Math.min(gx - 1, Math.max(0, Math.floor((x - bb.minX) / cell)));
   const cj = (y: number) => Math.min(gy - 1, Math.max(0, Math.floor((y - bb.minY) / cell)));
   const cfill = new Uint8Array(gx * gy);
+  const cpx = new Float32Array(gx * gy), cpy = new Float32Array(gx * gy);
+  // Sotto-punti per recuperare le celle di BORDO: se il centro non è cucibile ma un punto interno della
+  // cella lo è (vicino al bordo/vuoto entro clearance), la cella è comunque riempibile lì → niente frangia vuota.
+  const SUB: [number, number][] = [[0, 0], [-0.33, 0], [0.33, 0], [0, -0.33], [0, 0.33], [-0.33, -0.33], [0.33, 0.33], [-0.33, 0.33], [0.33, -0.33]];
   let fillableCount = 0;
   for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++) {
-    if (inRegion(cellX(i), cellY(j))) { cfill[j * gx + i] = 1; fillableCount++; }
+    const cxc = cellX(i), cyc = cellY(j);
+    let vx = NaN, vy = NaN;
+    for (const [ox, oy] of SUB) { const x = cxc + ox * cell, y = cyc + oy * cell; if (inRegion(x, y)) { vx = x; vy = y; break; } }
+    if (!Number.isNaN(vx)) { const id = j * gx + i; cfill[id] = 1; cpx[id] = vx; cpy[id] = vy; fillableCount++; }
   }
   if (fillableCount === 0) return null;
-  return { bb, res: mask.res, cell, gx, gy, cellX, cellY, ci, cj, cfill, fillableCount, minS, maxS, inRegion, segOk };
+  return { bb, res: mask.res, cell, gx, gy, cellX, cellY, ci, cj, cfill, fillableCount, cpx, cpy, minS, maxS, inRegion, segOk };
 }
 
 /**
@@ -230,7 +239,7 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
  * Questo permette il mélange: passate diverse ricevono celle diverse (dither), sparse su tutta l'area.
  */
 function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][] {
-  const { bb, cell, gx, gy, cellX, cellY, ci, cj, minS, maxS, inRegion, segOk } = ctx;
+  const { bb, cell, gx, gy, ci, cj, cpx, cpy, minS, maxS, inRegion, segOk } = ctx;
   const cov = new Float32Array(gx * gy);
   const dead = new Uint8Array(gx * gy);
   let need = 0;
@@ -255,7 +264,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
       const id = j * gx + i; const tg = targetArr[id];
       if (tg === 0 || cov[id] >= tg || dead[id]) continue;
       const d = (i - i0) * (i - i0) + (j - j0) * (j - j0);
-      if (d < bestD) { bestD = d; bx = cellX(i); by = cellY(j); bid = id; }
+      if (d < bestD) { bestD = d; bx = cpx[id]; by = cpy[id]; bid = id; }
     }
     return bid < 0 ? null : { x: bx, y: by, id: bid };
   };
@@ -333,7 +342,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
     let lowId = -1, low = Infinity, lx = 0, ly = 0;
     for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++) {
       const id = j * gx + i; const tg = targetArr[id]; if (tg === 0 || dead[id]) continue;
-      if (cov[id] < tg && cov[id] < low) { low = cov[id]; lowId = id; lx = cellX(i); ly = cellY(j); }
+      if (cov[id] < tg && cov[id] < low) { low = cov[id]; lowId = id; lx = cpx[id]; ly = cpy[id]; }
     }
     if (lowId < 0) break;
     openRunAt(lx, ly, lowId);
