@@ -241,6 +241,22 @@ check('DST byte totali (identico al writer di riferimento)', dstBytes.length, 56
 check('DST inizia con "LA:"', String.fromCharCode(dstBytes[0], dstBytes[1], dstBytes[2]), 'LA:');
 check('DST termina col record END (00 00 F3)', dstBytes[dstBytes.length - 3] === 0 && dstBytes[dstBytes.length - 2] === 0 && dstBytes[dstBytes.length - 1] === 0xF3, true);
 
+// adattatore riusabile ExportLayer[] → DST (la "possibilità" globale per tutti i tool): salta i layer
+// 'shapeOnly' (riferimenti/forme), un ago per layer cucito → cambio-colore in sequenza.
+const dstLayers = [
+  { id: 'reference', color: '#ccc', polylines: [[{ x: 0, y: 0 }, { x: 50, y: 0 }]], shapeOnly: true }, // ignorato
+  { id: 'stop-0', color: '#111', polylines: [[{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }]] },
+  { id: 'stop-1', color: '#222', polylines: [[{ x: 5, y: 5 }, { x: 8, y: 8 }]] },
+];
+const dl = rg.dstFromExportLayers(dstLayers, { label: 'LAYERS' });
+const dlHead = String.fromCharCode(...dl.slice(0, 80));
+check('DST-da-layers: header "LA:"', dlHead.startsWith('LA:'), true);
+check('DST-da-layers: 2 layer cuciti → 1 cambio-colore', dlHead.includes('CO:  1'), true);
+check('DST-da-layers: record END', dl[dl.length - 1], 0xF3);
+let dlThrew = false;
+try { rg.dstFromExportLayers([{ id: 'r', color: '#ccc', polylines: [[{ x: 0, y: 0 }, { x: 1, y: 0 }]], shapeOnly: true }]); } catch { dlThrew = true; }
+check('DST-da-layers: solo forme → errore (niente da cucire)', dlThrew, true);
+
 rmSync(outDir, { recursive: true, force: true });
 console.log(failed ? `\n${failed} test falliti\n` : '\nTutti i test passati\n');
 process.exit(failed ? 1 : 0);

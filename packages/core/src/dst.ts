@@ -4,6 +4,7 @@
 //
 // Un record DST = 3 byte, delta RELATIVI in decimi di millimetro, max ±121 (12,1mm) per asse; i movimenti
 // più lunghi si spezzano in più record. Header ASCII da 512 byte + record finale END (00 00 F3).
+import type { ExportLayer } from './types';
 
 export interface DstPath {
   /** Numero ago: serve a ORDINARE i blocchi e a inserire un cambio-colore quando cambia (non è l'ago reale). */
@@ -133,4 +134,44 @@ export function buildDst(program: DstProgram): Uint8Array {
   out.set(header, 0);
   out.set(Uint8Array.from(body), 512);
   return out;
+}
+
+/** Opzioni per il salvataggio di un .dst, uguali per tutti i tool (passale a `saveBinaryFile`). */
+export const DST_FILE = { mime: 'application/octet-stream', extension: '.dst', description: 'Ricamo Tajima DST' } as const;
+
+export interface DstFromLayersOptions {
+  /** Etichetta interna del disegno (max 16 char). */
+  label?: string;
+  /** Sistema coordinate dei punti (default 'svg' = Y verso il basso, invertita nel DST). */
+  coordinateSystem?: 'svg' | 'cartesian';
+  /** Centra il disegno all'origine (default true, convenzione DST). */
+  center?: boolean;
+}
+
+/**
+ * Adattatore RIUSABILE da qualunque tool: `ExportLayer[]` (l'export della suite) → byte .dst. Ogni layer
+ * CUCITO (non `shapeOnly`) è un ago (`needle`) → cambio-colore in sequenza; ogni polilinea è un blocco
+ * cucito (fra blocchi dello stesso ago = salto). I punti sono presi in mm reali e centrati all'origine.
+ * È la "possibilità DST" globale: un tool aggiunge un bottone e fa
+ *   `saveBinaryFile(dstFromExportLayers(exportLayers, { label }), { suggestedName, ...DST_FILE })`.
+ * Lancia se non c'è nulla da cucire (tutti i layer sono forme/vuoti).
+ */
+export function dstFromExportLayers(layers: ExportLayer[], opts: DstFromLayersOptions = {}): Uint8Array {
+  const stroked = (layers || []).filter((l) => !l.shapeOnly && l.polylines && l.polylines.length > 0);
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, n = 0;
+  for (const l of stroked) for (const pl of l.polylines) for (const p of pl) {
+    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; n++;
+  }
+  if (n === 0) throw new Error('Niente da esportare in DST: nessun tracciato cucito.');
+  const center = opts.center !== false;
+  const cx = center ? (minX + maxX) / 2 : 0, cy = center ? (minY + maxY) / 2 : 0;
+  const paths: DstPath[] = [];
+  stroked.forEach((l, i) => {
+    for (const pl of l.polylines) {
+      if (pl.length < 2) continue;
+      paths.push({ needle: i + 1, points_mm: pl.map((p) => [p.x - cx, p.y - cy] as [number, number]) });
+    }
+  });
+  return buildDst({ label: opts.label, coordinate_system: opts.coordinateSystem || 'svg', paths });
 }

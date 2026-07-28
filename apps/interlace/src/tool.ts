@@ -3,7 +3,7 @@ import './interlace.css';
 import {
   type Role, type ImportResult, type Contour,
   ROLE_LABELS, polygonArea, pointInPolygon,
-  buildSvg, buildSvgInSourceFrame, buildDst, type DstProgram,
+  buildSvg, buildSvgInSourceFrame, dstFromExportLayers, DST_FILE,
   parseSvgToContours, parseDxfToContours, readProjectMetadata,
   applyRealWidth, importResultFromContours, measureContours,
 } from '@rg/core';
@@ -489,30 +489,18 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   });
 
   $('exportDstBtn').addEventListener('click', async () => {
-    // Export ricamo Tajima .dst: un path DST per ogni polilinea; needle = indice dello STOP (→ cambio
-    // colore in sequenza). I punti dell'export sono già in mm reali; coordinate_system 'svg' inverte Y.
+    // Export ricamo Tajima .dst tramite la "possibilità" globale del core: l'export dell'interlace è già
+    // in mm reali; l'adattatore fa un blocco per polilinea, un ago per stop (cambio-colore in sequenza).
     const { exportLayers, stopCount } = runPipeline(currentContours(), roles, params);
-    const stops = exportLayers.filter((l) => l.id.startsWith('stop-')); // salta il layer 'reference'
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity, n = 0;
-    for (const s of stops) for (const pl of s.polylines) for (const p of pl) {
-      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y; n++;
-    }
-    if (!n) { $('status').textContent = 'Niente da esportare: assegna un colore all’area da ricamare'; return; }
-    // Centra il disegno all'origine (convenzione DST): sottrai il centro del bounding box.
-    const cx = (minX + maxX) / 2, cy = (minY + maxY) / 2;
-    const paths: DstProgram['paths'] = [];
-    stops.forEach((s, i) => {
-      for (const pl of s.polylines) {
-        if (pl.length < 2) continue;
-        paths.push({ needle: i + 1, points_mm: pl.map((p) => [p.x - cx, p.y - cy] as [number, number]) });
-      }
-    });
-    const program: DstProgram = { label: (sourceName || 'INTERLACE').toUpperCase().slice(0, 16), coordinate_system: 'svg', paths };
     let bytes: Uint8Array;
-    try { bytes = buildDst(program); } catch (e) { $('status').textContent = 'Errore DST: ' + (e as Error).message; return; }
+    try {
+      bytes = dstFromExportLayers(exportLayers, { label: (sourceName || 'INTERLACE').toUpperCase().slice(0, 16) });
+    } catch (e) {
+      $('status').textContent = (e as Error).message;
+      return;
+    }
     const name = sourceName ? `${sourceName}-interlace.dst` : 'interlace.dst';
-    const outcome = await saveBinaryFile(bytes, { suggestedName: name, mime: 'application/octet-stream', extension: '.dst', description: 'Ricamo Tajima DST' });
+    const outcome = await saveBinaryFile(bytes, { suggestedName: name, ...DST_FILE });
     $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${stopCount} stop · ${(bytes.length / 1024).toFixed(1)} KB`;
   });
 
