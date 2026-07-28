@@ -87,9 +87,11 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
         <div class="rg-param-grid">
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Distribuzione dei colori</span>
-            <div class="rg-segmented" id="clusterMode" role="group" aria-label="Distribuzione dei colori">
-              <button type="button" class="rg-segmented__item rg-segmented__item--active" data-cluster="off" aria-pressed="true">Uniforme</button>
-              <button type="button" class="rg-segmented__item" data-cluster="on" aria-pressed="false">Agglomerati</button>
+            <div>
+              <div class="rg-segmented" id="clusterMode" role="group" aria-label="Distribuzione dei colori">
+                <button type="button" class="rg-segmented__item rg-segmented__item--active" data-cluster="off" aria-pressed="true">Uniforme</button>
+                <button type="button" class="rg-segmented__item" data-cluster="on" aria-pressed="false">Agglomerati</button>
+              </div>
             </div>
             <small class="rg-field__help">Uniforme: mélange omogeneo. Agglomerati: ogni colore si addensa in zone → sfumature di colore.</small>
           </div>
