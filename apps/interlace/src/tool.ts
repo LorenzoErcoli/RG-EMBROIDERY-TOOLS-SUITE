@@ -53,11 +53,11 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Oggetto pieno (senza fori)</span>
             <div class="rg-cluster">
-              <span class="rg-field-with-unit" style="--rg-input-numeric-width:6ch"><input class="rg-input rg-input--numeric" id="objW" type="number" min="1" step="1" value="100"><span>mm</span></span>
-              <span class="rg-field-with-unit" style="--rg-input-numeric-width:6ch"><input class="rg-input rg-input--numeric" id="objH" type="number" min="1" step="1" value="100"><span>mm</span></span>
-              <button type="button" id="objBtn" class="rg-button rg-button--ghost rg-button--small">Genera</button>
+              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="objW" type="number" min="1" step="1" value="100"><span>mm</span></span>
+              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="objH" type="number" min="1" step="1" value="100"><span>mm</span></span>
             </div>
-            <small class="rg-field__help">crea un rettangolo pieno largo×alto da riempire, senza importare un file</small>
+            <div class="rg-cluster"><button type="button" id="objBtn" class="rg-button rg-button--outline rg-button--small">Genera oggetto</button></div>
+            <small class="rg-field__help">larghezza × altezza: crea un rettangolo pieno da riempire, senza importare un file</small>
           </div>
         </div>
       </section>
@@ -93,11 +93,19 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
             </div>
             <small class="rg-field__help">Uniforme: mélange omogeneo. Agglomerati: ogni colore si addensa in zone → sfumature di colore.</small>
           </div>
-          <label class="rg-field rg-param-grid__wide">
+          <label class="rg-field rg-param-grid__wide" id="clusterStrengthField" hidden>
             <span class="rg-field__label">Intensità agglomerati</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="clusterStrength" type="number" min="0" max="100" step="5" value="60"><span>%</span></span>
-            <small class="rg-field__help">quanto i colori si separano in zone (attivo solo con “Agglomerati”): basso = appena accennate, alto = molto marcate</small>
+            <small class="rg-field__help">quanto i colori si separano in zone: basso = appena accennate, alto = molto marcate</small>
           </label>
+          <div class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Variante</span>
+            <div class="rg-cluster">
+              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="seed" type="number" min="1" step="1" value="1"><span>#</span></span>
+              <button type="button" id="newSeedBtn" class="rg-button rg-button--outline rg-button--small">Nuova variante</button>
+            </div>
+            <small class="rg-field__help">stessa variante = stesso identico pattern; cambiala per una disposizione diversa (riproducibile, non casuale)</small>
+          </div>
         </div>
         <div id="params" class="rg-param-grid"></div>
       </details>
@@ -356,6 +364,9 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     // riallinea i controlli statici e ricostruisci i gruppi guidati dai parametri
     ($('realWidth') as HTMLInputElement).value = String(params.realWidthMm);
     ($('paletteCycles') as HTMLInputElement).value = String(params.paletteCycles);
+    ($('seed') as HTMLInputElement).value = String(params.seed);
+    ($('clusterStrength') as HTMLInputElement).value = String(params.clusterStrength);
+    syncCluster(); // switch agglomerati + visibilità intensità
     buildParamUI();
     buildPaletteUI();
     return true;
@@ -408,11 +419,14 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
 
   // Switch distribuzione colori (rg-segmented): 'off' = mélange uniforme | 'on' = agglomerati a zone.
   const clusterBtns = Array.from($('clusterMode').querySelectorAll('.rg-segmented__item')) as HTMLButtonElement[];
-  const syncCluster = () => clusterBtns.forEach((b) => {
-    const on = (b.dataset.cluster === 'on') === params.clusterMode;
-    b.classList.toggle('rg-segmented__item--active', on);
-    b.setAttribute('aria-pressed', on ? 'true' : 'false');
-  });
+  const syncCluster = () => {
+    clusterBtns.forEach((b) => {
+      const on = (b.dataset.cluster === 'on') === params.clusterMode;
+      b.classList.toggle('rg-segmented__item--active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    ($('clusterStrengthField') as HTMLElement).hidden = !params.clusterMode; // intensità solo se attivo
+  };
   clusterBtns.forEach((b) => b.addEventListener('click', () => {
     const want = b.dataset.cluster === 'on';
     if (params.clusterMode === want) return;
@@ -427,6 +441,19 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     const v = parseFloat(($('clusterStrength') as HTMLInputElement).value);
     params.clusterStrength = Number.isNaN(v) ? 60 : Math.max(0, Math.min(100, v));
     if (params.clusterMode) render();
+  });
+
+  // Variante = seed: pattern DIVERSO ma RIPRODUCIBILE (stesso seed → stesso identico risultato).
+  ($('seed') as HTMLInputElement).value = String(params.seed);
+  $('seed').addEventListener('change', () => {
+    const v = parseInt(($('seed') as HTMLInputElement).value, 10);
+    params.seed = Number.isNaN(v) ? 1 : Math.max(1, v);
+    render();
+  });
+  $('newSeedBtn').addEventListener('click', () => {
+    params.seed = (params.seed % 999999) + 1; // avanza a una variante nuova, deterministica
+    ($('seed') as HTMLInputElement).value = String(params.seed);
+    render();
   });
 
   $('sampleBtn').addEventListener('click', () => { roles = {}; sourceName = ''; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });

@@ -403,9 +403,12 @@ function cellForSpacing(spacing: number, _maxS: number): number {
 const COVER_TARGET = 2;
 
 const CLUSTER_FREQ = 0.022; // frequenza del campo di zona (agglomerati) → territori ~45mm
-/** Campo di zona [0,1] del colore `k`: rumore a bassa frequenza sfasato per colore. */
-function clusterField(x: number, y: number, k: number): number {
-  const off = k * 913.7 + 41;
+/** Campo di zona [0,1] del colore `k`: rumore a bassa frequenza sfasato per colore E per `seed`, così
+ *  varianti diverse (seed diversi) danno DISPOSIZIONI di zone diverse — ma DETERMINISTICHE (stesso seed
+ *  → stesse zone). Ogni colore si sposta di un passo diverso col seed → le zone si ridispongono, non
+ *  solo traslano. */
+function clusterField(x: number, y: number, k: number, seed: number): number {
+  const off = k * 913.7 + 41 + seed * (167.3 + k * 53.9);
   return vnoise((x + off) * CLUSTER_FREQ, (y + off * 0.61) * CLUSTER_FREQ);
 }
 /**
@@ -414,10 +417,10 @@ function clusterField(x: number, y: number, k: number): number {
  * gli altri restano alla BASE (1, per tenere il filo continuo e attraversabile). Così nascono regioni
  * dominate da un colore con bordi sfumati = sfumature nette, senza zone isolate (niente runaway).
  */
-function clusterTarget(x: number, y: number, pIdx: number, nColors: number, strength: number): number {
-  const self = clusterField(x, y, pIdx);
+function clusterTarget(x: number, y: number, pIdx: number, nColors: number, strength: number, seed: number): number {
+  const self = clusterField(x, y, pIdx, seed);
   let maxOther = -1;
-  for (let k = 0; k < nColors; k++) if (k !== pIdx) { const w = clusterField(x, y, k); if (w > maxOther) maxOther = w; }
+  for (let k = 0; k < nColors; k++) if (k !== pIdx) { const w = clusterField(x, y, k, seed); if (w > maxOther) maxOther = w; }
   const dom = self - maxOther; // >0 = questo colore domina qui
   // `boost` = quanto più denso è il vincitore nel suo nucleo, scalato dall'intensità (0→0, 100→8).
   const boost = Math.round(Math.max(0, Math.min(100, strength)) / 100 * 8);
@@ -467,7 +470,7 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
       for (let id = 0; id < targetArr.length; id++) {
         if (!ctx.cfill[id]) continue;
         const gi = id % ctx.gx, gj = (id / ctx.gx) | 0;
-        targetArr[id] = clusterTarget(ctx.cellX(gi), ctx.cellY(gj), pIdx, densities.length, p.clusterStrength);
+        targetArr[id] = clusterTarget(ctx.cellX(gi), ctx.cellY(gj), pIdx, densities.length, p.clusterStrength, base);
       }
     } else {
       for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = COVER_TARGET;
