@@ -10,6 +10,7 @@ export * from './travel';
 export * from './params';
 export * from './imports';
 export * from './export';
+export * from './dst';
 export * from './io/normalize';
 export { parseSvgToContours } from './io/svg';
 export { parseDxfToContours } from './io/dxf';

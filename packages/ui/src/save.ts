@@ -25,7 +25,7 @@ type SaveFilePicker = (opts: {
   suggestedName?: string;
   id?: string;
   types?: Array<{ description?: string; accept: Record<string, string[]> }>;
-}) => Promise<{ createWritable(): Promise<{ write(data: string): Promise<void>; close(): Promise<void> }> }>;
+}) => Promise<{ createWritable(): Promise<{ write(data: string | BufferSource | Blob): Promise<void>; close(): Promise<void> }> }>;
 
 /**
  * Salva del testo su file. Dove il browser lo consente apre la finestra di
@@ -61,6 +61,36 @@ export async function saveTextFile(text: string, opts: SaveOptions): Promise<Sav
   a.download = suggestedName;
   a.click();
   // Revocare subito può troncare il download su alcuni browser.
+  setTimeout(() => URL.revokeObjectURL(url), 10_000);
+  return 'downloaded';
+}
+
+/**
+ * Salva dati BINARI (Uint8Array) su file — gemello di `saveTextFile` per formati non-testo (es. .dst).
+ * Stessa finestra di sistema dove supportata, altrimenti download classico (R29).
+ */
+export async function saveBinaryFile(data: Uint8Array, opts: SaveOptions): Promise<SaveOutcome> {
+  const { suggestedName, mime = 'application/octet-stream', extension = '.bin', description = 'File' } = opts;
+  const picker = (window as unknown as { showSaveFilePicker?: SaveFilePicker }).showSaveFilePicker;
+
+  if (typeof picker === 'function') {
+    try {
+      const handle = await picker({ suggestedName, id: DIR_ID, types: [{ description, accept: { [mime]: [extension] } }] });
+      const writable = await handle.createWritable();
+      await writable.write(data);
+      await writable.close();
+      return 'saved';
+    } catch (err) {
+      if ((err as DOMException)?.name === 'AbortError') return 'cancelled';
+    }
+  }
+
+  const blob = new Blob([data], { type: mime });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = suggestedName;
+  a.click();
   setTimeout(() => URL.revokeObjectURL(url), 10_000);
   return 'downloaded';
 }
