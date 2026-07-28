@@ -1,7 +1,7 @@
 import '@rg/ui/rg.css';
 import './interlace.css';
 import {
-  type Role, type ImportResult,
+  type Role, type ImportResult, type Contour,
   ROLE_LABELS, polygonArea, pointInPolygon,
   buildSvg, buildSvgInSourceFrame,
   parseSvgToContours, parseDxfToContours, readProjectMetadata,
@@ -50,6 +50,15 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
             <small class="rg-field__help">0 = usa la misura letta dal file.</small>
           </label>
           <div class="rg-cluster rg-param-grid__wide"><button id="sampleBtn" class="rg-button rg-button--ghost" type="button">Cartamodello demo</button></div>
+          <div class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Oggetto pieno (senza fori)</span>
+            <div class="rg-cluster">
+              <span class="rg-field-with-unit" style="--rg-input-numeric-width:6ch"><input class="rg-input rg-input--numeric" id="objW" type="number" min="1" step="1" value="100"><span>mm</span></span>
+              <span class="rg-field-with-unit" style="--rg-input-numeric-width:6ch"><input class="rg-input rg-input--numeric" id="objH" type="number" min="1" step="1" value="100"><span>mm</span></span>
+              <button type="button" id="objBtn" class="rg-button rg-button--ghost rg-button--small">Genera</button>
+            </div>
+            <small class="rg-field__help">crea un rettangolo pieno largo×alto da riempire, senza importare un file</small>
+          </div>
         </div>
       </section>
 
@@ -75,6 +84,21 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
 
       <details class="rg-param-section rg-disclosure" open>
         <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">04</span><span class="rg-param-section__title">Riempimento</span></summary>
+        <div class="rg-param-grid">
+          <div class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Distribuzione dei colori</span>
+            <div class="rg-segmented" id="clusterMode" role="group" aria-label="Distribuzione dei colori">
+              <button type="button" class="rg-segmented__item rg-segmented__item--active" data-cluster="off" aria-pressed="true">Uniforme</button>
+              <button type="button" class="rg-segmented__item" data-cluster="on" aria-pressed="false">Agglomerati</button>
+            </div>
+            <small class="rg-field__help">Uniforme: mélange omogeneo. Agglomerati: ogni colore si addensa in zone → sfumature di colore.</small>
+          </div>
+          <label class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Intensità agglomerati</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="clusterStrength" type="number" min="0" max="100" step="5" value="60"><span>%</span></span>
+            <small class="rg-field__help">quanto i colori si separano in zone (attivo solo con “Agglomerati”): basso = appena accennate, alto = molto marcate</small>
+          </label>
+        </div>
         <div id="params" class="rg-param-grid"></div>
       </details>
     </aside>
@@ -382,7 +406,40 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     render();
   });
 
+  // Switch distribuzione colori (rg-segmented): 'off' = mélange uniforme | 'on' = agglomerati a zone.
+  const clusterBtns = Array.from($('clusterMode').querySelectorAll('.rg-segmented__item')) as HTMLButtonElement[];
+  const syncCluster = () => clusterBtns.forEach((b) => {
+    const on = (b.dataset.cluster === 'on') === params.clusterMode;
+    b.classList.toggle('rg-segmented__item--active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  clusterBtns.forEach((b) => b.addEventListener('click', () => {
+    const want = b.dataset.cluster === 'on';
+    if (params.clusterMode === want) return;
+    params.clusterMode = want;
+    syncCluster();
+    render();
+  }));
+  syncCluster();
+
+  ($('clusterStrength') as HTMLInputElement).value = String(params.clusterStrength);
+  $('clusterStrength').addEventListener('change', () => {
+    const v = parseFloat(($('clusterStrength') as HTMLInputElement).value);
+    params.clusterStrength = Number.isNaN(v) ? 60 : Math.max(0, Math.min(100, v));
+    if (params.clusterMode) render();
+  });
+
   $('sampleBtn').addEventListener('click', () => { roles = {}; sourceName = ''; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
+
+  // Oggetto pieno: genera un rettangolo largo×alto (mm) senza fori, da riempire subito (nessun file).
+  $('objBtn').addEventListener('click', () => {
+    const w = Math.max(1, parseFloat(($('objW') as HTMLInputElement).value) || 100);
+    const h = Math.max(1, parseFloat(($('objH') as HTMLInputElement).value) || 100);
+    const rect: Contour[] = [{ points: [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }], closed: true, color: '#2b6cb0' }];
+    roles = {}; sourceName = `oggetto-${w}x${h}`; params.realWidthMm = 0;
+    ($('realWidth') as HTMLInputElement).value = '0';
+    loadImport(importResultFromContours(rect), `Oggetto pieno ${w}×${h} mm`);
+  });
   $('fitBtn').addEventListener('click', () => pz.fit());
 
   $('exportBtn').addEventListener('click', async () => {

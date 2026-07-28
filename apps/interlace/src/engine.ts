@@ -30,6 +30,12 @@ export interface InterlaceParams {
   /** Densità PER-COLORE (spaziatura mm, parallela a `colors`): 0/assente = usa `densitySpacingMm`.
    *  Serve a controllare il filo quando si aggiungono colori (ognuno indipendente). */
   colorDensities: number[];
+  /** Agglomerati: ogni colore si addensa in ZONE diverse (campo a bassa frequenza) invece del mélange
+   *  uniforme → sfumature di colore più nette. false = mélange uniforme (comportamento storico). */
+  clusterMode: boolean;
+  /** Intensità degli agglomerati 0–100 (solo con `clusterMode`): quanto il colore dominante è più denso
+   *  nella sua zona → 0 ≈ appena percettibile, 100 = zone di colore molto marcate. */
+  clusterStrength: number;
 }
 
 export const defaultInterlaceParams: InterlaceParams = {
@@ -42,6 +48,8 @@ export const defaultInterlaceParams: InterlaceParams = {
   colors: ['#1f3a5f', '#c0392b', '#e0a41f', '#3b7d4f'],
   paletteCycles: 1, // 4 colori = 4 strati già di loro; alza per farli ripetere
   colorDensities: [], // vuoto = tutti i colori usano densitySpacingMm
+  clusterMode: false, // false = mélange uniforme; true = agglomerati a zone (sfumature nette)
+  clusterStrength: 60, // intensità zone 0–100 (solo con clusterMode)
 };
 
 // --- Costanti interne (implementazione, non parametri utente): il "movimento" del filo.
@@ -394,6 +402,28 @@ function cellForSpacing(spacing: number, _maxS: number): number {
  * non da questo numero — così a densità bassa NON si moltiplicano i tragitti (il difetto del vecchio modello). */
 const COVER_TARGET = 2;
 
+const CLUSTER_FREQ = 0.022; // frequenza del campo di zona (agglomerati) → territori ~45mm
+/** Campo di zona [0,1] del colore `k`: rumore a bassa frequenza sfasato per colore. */
+function clusterField(x: number, y: number, k: number): number {
+  const off = k * 913.7 + 41;
+  return vnoise((x + off) * CLUSTER_FREQ, (y + off * 0.61) * CLUSTER_FREQ);
+}
+/**
+ * Copertura obiettivo di UNA cella per il colore `pIdx` in modalità AGGLOMERATI. Ogni colore ha un campo
+ * di zona sfasato; in ogni punto VINCE il colore col campo più alto → quello si addensa (territorio),
+ * gli altri restano alla BASE (1, per tenere il filo continuo e attraversabile). Così nascono regioni
+ * dominate da un colore con bordi sfumati = sfumature nette, senza zone isolate (niente runaway).
+ */
+function clusterTarget(x: number, y: number, pIdx: number, nColors: number, strength: number): number {
+  const self = clusterField(x, y, pIdx);
+  let maxOther = -1;
+  for (let k = 0; k < nColors; k++) if (k !== pIdx) { const w = clusterField(x, y, k); if (w > maxOther) maxOther = w; }
+  const dom = self - maxOther; // >0 = questo colore domina qui
+  // `boost` = quanto più denso è il vincitore nel suo nucleo, scalato dall'intensità (0→0, 100→8).
+  const boost = Math.round(Math.max(0, Math.min(100, strength)) / 100 * 8);
+  return dom > 0.02 ? COVER_TARGET + boost : dom > -0.05 ? COVER_TARGET : 1; // nucleo · confine · base
+}
+
 /**
  * Riempimento a filo singolo: una sola passata alla densità richiesta (tutte le celle a target).
  * Usato dai test e come base; per il multicolore mélange si usa `generatePasses`.
@@ -432,7 +462,16 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
     if (ctx === undefined) { ctx = prepare(boundary, voids, minS, maxS, clear, cell); ctxByCell.set(cell, ctx); }
     if (!ctx) { passes.push([]); continue; }
     const targetArr = new Uint8Array(ctx.gx * ctx.gy);
-    for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = COVER_TARGET;
+    if (p.clusterMode) {
+      // Agglomerati: la copertura di ogni cella dipende dalla ZONA del colore (campo sfasato per colore).
+      for (let id = 0; id < targetArr.length; id++) {
+        if (!ctx.cfill[id]) continue;
+        const gi = id % ctx.gx, gj = (id / ctx.gx) | 0;
+        targetArr[id] = clusterTarget(ctx.cellX(gi), ctx.cellY(gj), pIdx, densities.length, p.clusterStrength);
+      }
+    } else {
+      for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = COVER_TARGET;
+    }
     passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr));
   }
   return passes;

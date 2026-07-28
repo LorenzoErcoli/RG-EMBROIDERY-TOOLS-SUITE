@@ -15,7 +15,7 @@ const posix = (p) => join(root, p).replace(/\\/g, '/');
 const entry = join(outDir, 'entry.ts');
 writeFileSync(entry, `
 export { parseImportedBoundarySource, generatePattern } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
-export { generateFill, defaultInterlaceParams } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
+export { generateFill, generatePasses, defaultInterlaceParams } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
@@ -103,6 +103,17 @@ check('nessun punto fuori dal bordo', iOut, 0);
 check('nessun segmento sotto il punto minimo (R3)', iShort, 0);
 check('nessun segmento oltre max+2 (R4, tolleranza escape)', iOverEscape, 0);
 check('segmenti oltre max solo negli escape (<1%)', iLong <= Math.ceil(iN * 0.01), true);
+
+// interlace — AGGLOMERATI (clusterMode): zone di colore, ma NIENTE runaway (le zone hanno una base ovunque
+// così il filo resta continuo/attraversabile) e i vuoti restano rispettati.
+const clParams = { ...rg.defaultInterlaceParams, minStitchMm: 2, maxStitchMm: 5, densitySpacingMm: 2, voidClearanceMm: 0.4, clusterMode: true };
+const clPasses = rg.generatePasses(iSquare, [iVoid], clParams, [2, 2, 2, 2]); // 4 colori a zone
+let clInVoid = 0, clMm = 0;
+for (const pass of clPasses) for (const run of pass) { for (const p of run) { if (rg.pointInPolygon(p, iVoid)) clInVoid++; } for (let i = 1; i < run.length; i++) clMm += Math.hypot(run[i].x - run[i - 1].x, run[i].y - run[i - 1].y); }
+console.log('\ninterlace — agglomerati (zone di colore, no runaway)');
+check('cluster: genera 4 passate', clPasses.length, 4);
+check('cluster: nessun punto nel vuoto (R5)', clInVoid, 0);
+check('cluster: filo entro un limite sano (no runaway)', clMm < 500000, true);
 
 // core — round-trip del metadata: i parametri salvati nell'SVG si rileggono al reimport (R27).
 console.log('\ncore — parametri salvati e riletti dall’SVG (R27)');
