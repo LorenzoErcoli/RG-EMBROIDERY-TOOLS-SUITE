@@ -104,6 +104,19 @@ check('nessun segmento sotto il punto minimo (R3)', iShort, 0);
 check('nessun segmento oltre max+2 (R4, tolleranza escape)', iOverEscape, 0);
 check('segmenti oltre max solo negli escape (<1%)', iLong <= Math.ceil(iN * 0.01), true);
 
+// core — round-trip del metadata: i parametri salvati nell'SVG si rileggono al reimport (R27).
+console.log('\ncore — parametri salvati e riletti dall’SVG (R27)');
+const rtParams = { densitySpacingMm: 5, colors: ['#123456'], colorDensities: [3] };
+const rtSvg = rg.buildSvg(
+  [{ id: 'stop-0000', color: '#123456', polylines: [[{ x: 0, y: 0 }, { x: 5, y: 0 }]], strokeMm: 0.3 }],
+  { bounds: { minX: 0, minY: 0, maxX: 10, maxY: 10 }, marginMm: 2, metadata: { rgProject: 'interlace', params: rtParams, roles: { '#123456': 'MASTER_OUTLINE' } } },
+);
+const rtBack = rg.readProjectMetadata(rtSvg);
+check('metadata riletto (rgProject)', rtBack?.rgProject, 'interlace');
+check('metadata riletto (parametri identici)', JSON.stringify(rtBack?.params), JSON.stringify(rtParams));
+check('metadata riletto (ruoli)', rtBack?.roles?.['#123456'], 'MASTER_OUTLINE');
+check('SVG senza metadata → null', rg.readProjectMetadata('<svg></svg>'), null);
+
 rmSync(outDir, { recursive: true, force: true });
 console.log(failed ? `\n${failed} test falliti\n` : '\nTutti i test passati\n');
 process.exit(failed ? 1 : 0);

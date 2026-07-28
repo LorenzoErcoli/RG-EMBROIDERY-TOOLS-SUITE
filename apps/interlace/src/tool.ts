@@ -4,7 +4,7 @@ import {
   type Role, type ImportResult,
   ROLE_LABELS, polygonArea, pointInPolygon,
   buildSvg, buildSvgInSourceFrame,
-  parseSvgToContours, parseDxfToContours,
+  parseSvgToContours, parseDxfToContours, readProjectMetadata,
   applyRealWidth, importResultFromContours, measureContours,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
@@ -21,7 +21,7 @@ interface Field { key: keyof InterlaceParams; label: string; unit: string; step:
 const PARAMS: Field[] = [
   { key: 'minStitchMm', label: 'Punto minimo', unit: 'mm', step: 0.5, help: 'lunghezza minima di un passaggio' },
   { key: 'maxStitchMm', label: 'Lunghezza massima del punto', unit: 'mm', step: 0.5, help: 'i passaggi non superano questa misura' },
-  { key: 'densitySpacingMm', label: 'Densità (distanza tra le file di filo)', unit: 'mm', step: 0.1, help: 'densità di base di ogni colore, ~0.8–3.2 mm: più piccola = più fitto e più filo' },
+  { key: 'densitySpacingMm', label: 'Densità (distanza tra le file di filo)', unit: 'mm', step: 0.1, help: 'densità di base di ogni colore, ~0.8–6 mm: più piccola = più fitto; oltre ~3 diventa rado (buchi voluti)' },
   { key: 'voidClearanceMm', label: 'Distanza di sicurezza da bordi e vuoti', unit: 'mm', step: 0.1 },
 ];
 
@@ -318,6 +318,25 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     updateFileStatus(label);
   }
 
+  /** Ripristina parametri e ruoli dal metadata di un SVG esportato dalla suite (R27: file riapribile). */
+  function applyImportedProject(meta: Record<string, unknown>): boolean {
+    if (meta.rgProject !== 'interlace') return false;
+    const mp = meta.params;
+    if (mp && typeof mp === 'object') {
+      for (const k of Object.keys(defaultInterlaceParams) as (keyof InterlaceParams)[]) {
+        const v = (mp as Record<string, unknown>)[k];
+        if (v !== undefined) (params as Record<string, unknown>)[k] = v;
+      }
+    }
+    if (meta.roles && typeof meta.roles === 'object') roles = { ...(meta.roles as RoleAssignment) };
+    // riallinea i controlli statici e ricostruisci i gruppi guidati dai parametri
+    ($('realWidth') as HTMLInputElement).value = String(params.realWidthMm);
+    ($('paletteCycles') as HTMLInputElement).value = String(params.paletteCycles);
+    buildParamUI();
+    buildPaletteUI();
+    return true;
+  }
+
   $('fileInput').addEventListener('change', (ev) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
@@ -325,9 +344,15 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     reader.onload = () => {
       try {
         const text = String(reader.result);
-        const result = /\.dxf$/i.test(file.name) ? parseDxfToContours(text) : parseSvgToContours(text);
+        const isDxf = /\.dxf$/i.test(file.name);
+        const result = isDxf ? parseDxfToContours(text) : parseSvgToContours(text);
         sourceName = file.name.replace(/\.[^.]+$/, '');
+        // Se è un SVG esportato dalla suite, rileggi i parametri salvati PRIMA di caricare (così
+        // realWidth/ruoli restaurati valgono già; autoAssign non sovrascrive i ruoli ripristinati).
+        let restored = false;
+        if (!isDxf) { const meta = readProjectMetadata(text); if (meta) restored = applyImportedProject(meta); }
         loadImport(result, file.name);
+        if (restored) $('fileStatus').textContent = `${file.name} · parametri ripristinati dal file`;
       } catch (e) {
         $('fileStatus').textContent = 'Errore import: ' + (e as Error).message;
         console.error(e);

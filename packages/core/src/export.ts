@@ -87,3 +87,21 @@ function chunk<T>(arr: T[], size: number): T[][] {
   for (let i = 0; i < arr.length; i += size - 1) out.push(arr.slice(i, i + size));
   return out;
 }
+
+/**
+ * Rilegge il blocco `<metadata id="rg-project">…</metadata>` scritto da `buildSvg`/`buildSvgInSourceFrame`
+ * (R27: file riapribile). Ritorna l'oggetto JSON (es. `{ rgProject, params, roles }`) o null se assente/rotto.
+ * Serve ai tool per RIPRISTINARE i parametri quando si ricarica un SVG esportato dalla suite.
+ */
+export function readProjectMetadata(svg: string): Record<string, unknown> | null {
+  const m = /<metadata\b[^>]*id="rg-project"[^>]*>([\s\S]*?)<\/metadata>/.exec(svg);
+  if (!m) return null;
+  // Il JSON è scritto grezzo nel testo XML; de-escape dei soli caratteri XML che potrebbero comparire.
+  const raw = m[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&amp;/g, '&');
+  try {
+    const v = JSON.parse(raw);
+    return v && typeof v === 'object' ? (v as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
+}

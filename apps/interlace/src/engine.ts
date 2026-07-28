@@ -383,10 +383,11 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
  * (e quindi il filo): cella piccola = fitto, cella grande = rado. Limitata a un intervallo ragionevole
  * perché la griglia resti sana anche nei canali stretti.
  */
-function cellForSpacing(spacing: number, maxS: number): number {
-  // Oltre ~3.2mm la cella è così grossa che il filo continuo spende più in tragitti che in copertura
-  // (il filo RISALE): inutile andare più radi, quindi limitiamo lì il massimo.
-  return Math.max(0.8, Math.min(Math.min(3.2, maxS), spacing));
+function cellForSpacing(spacing: number, _maxS: number): number {
+  // La cella = spaziatura fra le file. Fino a ~3mm la densità è regolare e monotòna; da 3 a 6 il filo si
+  // fa più RADO (compaiono buchi voluti, si perde copertura) ma in modo un po' irregolare. Oltre ~6-7 il
+  // filo continuo esplode in tragitti/autostrade (più filo, non più rado) → tetto a 6 per evitarlo.
+  return Math.max(0.8, Math.min(6, spacing));
 }
 
 /** Copertura per cella (quante attraversate): FISSA. La densità è governata dalla dimensione della cella,
