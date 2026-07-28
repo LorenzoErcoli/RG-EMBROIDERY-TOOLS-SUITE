@@ -12,5 +12,7 @@ export default defineConfig({
       '@rg/pattern-grammar': fileURLToPath(new URL('../../packages/pattern-grammar/src/index.ts', import.meta.url)),
     },
   },
-  server: { port: 5270, host: '127.0.0.1' },
+  // host: true → ascolta su tutte le interfacce di rete (LAN), non solo su localhost.
+  // strictPort → la porta resta 5270, così l'indirizzo per gli altri dispositivi è stabile.
+  server: { port: 5270, host: true, strictPort: true },
 });

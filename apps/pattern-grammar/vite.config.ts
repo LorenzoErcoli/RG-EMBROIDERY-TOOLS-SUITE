@@ -9,5 +9,5 @@ export default defineConfig({
       '@rg/pattern-grammar': fileURLToPath(new URL('../../packages/pattern-grammar/src/index.ts', import.meta.url)),
     },
   },
-  server: { port: 5274, host: '127.0.0.1' },
+  server: { port: 5274, host: true, strictPort: true },
 });

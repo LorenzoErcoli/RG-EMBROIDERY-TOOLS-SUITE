@@ -9,5 +9,5 @@ export default defineConfig({
       '@rg/ui': fileURLToPath(new URL('../../packages/ui/src', import.meta.url)),
     },
   },
-  server: { port: 5275, host: '127.0.0.1' },
+  server: { port: 5275, host: true, strictPort: true },
 });

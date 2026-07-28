@@ -12,7 +12,11 @@ if not exist "node_modules\vite\" (
 echo.
 echo ============================================================
 echo   RG Tools - suite strumenti ricamo
-echo   http://127.0.0.1:5270/  (il browser si apre da solo)
+echo.
+echo   Su questo PC:           http://localhost:5270/  (si apre da solo)
+echo   Da altri dispositivi:   guarda la riga "Network:" qui sotto
+echo                           (stessa rete Wi-Fi/LAN, oggi ~192.168.1.116:5270)
+echo.
 echo   Per FERMARE: chiudi questa finestra.
 echo ============================================================
 echo.
