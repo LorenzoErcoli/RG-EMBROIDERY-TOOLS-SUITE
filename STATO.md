@@ -118,7 +118,7 @@ La suite ha **due tool funzionanti** (net-45 e pattern-grammar), entrambi con lo
 - [ ] **net-45 — cima col cordoncino grande** (il bordo superiore del DXF).
 - [ ] **net-45 — editor delle celle** (scegliere a mano rete / raso / esclusa).
 - [ ] **Riempimenti raso veri**: oggi le aree raso escono come *forme* da riempire a mano su Stilista.
-- [ ] **Export DST** (oggi solo SVG); la sequenza di cucitura ordinata è già pronta per generarlo.
+- [x] ~~**Export DST**~~ c'è: funzione globale nel core (`dstFromExportLayers` + `DST_FILE`, salvataggio via `saveBinaryFile`). Bottone "Esporta DST" su **net-45, pattern-grammar, interlace**. **bitmap** ha già `exportLayers` pronti ma il bottone non è ancora agganciato (tool in costruzione in altra chat).
 - [ ] **Font del DS** (AGNext, GT America): non inclusi → l'interfaccia usa i font di sistema.
 - [x] ~~**Test automatici**: zero.~~ C'è `npm test` — copre le primitive d'import (chiusura, colori, scala).
 - [ ] **Test — restano scoperti** i pezzi grossi: geometria/clip del core, generazione della rete 45°, generatore pattern.

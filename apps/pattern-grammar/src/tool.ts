@@ -1,12 +1,13 @@
 import '@rg/ui/rg.css';
 import './pg.css';
 import {
-  generatePattern, parseImportedBoundarySource,
+  generatePattern, generateFinalPatternPoints, parseImportedBoundarySource,
   type PatternConfig, type ImportedBoundaryModel, type ImportScaleMode,
 } from '@rg/pattern-grammar';
+import { dstFromExportLayers, DST_FILE, type ExportLayer } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
-import { saveTextFile, saveOutcomeMessage } from '@rg/ui/save';
+import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { FORMATO, CORPO, ALL_FIELD_GROUPS, SCALE_MODES, type Field, type Group } from './fields';
 
 const PRESET_KEY = 'pattern-grammar-engine-presets';
@@ -29,6 +30,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
         <h2 class="rg-h3">Anteprima</h2>
         <div class="rg-cluster">
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
+          <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Scarica SVG</button>
         </div>
       </header>
@@ -392,6 +394,26 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     const name = base ? `${base}-pattern.svg` : 'pattern.svg';
     const outcome = await saveTextFile(lastSvg, { suggestedName: name, description: 'Immagine SVG' });
     $('status').textContent = saveOutcomeMessage(outcome, name);
+  });
+  $('exportDstBtn').addEventListener('click', async () => {
+    // Export ricamo Tajima .dst tramite la "possibilità" globale del core. Il pattern è un filo continuo:
+    // un solo layer cucito (un ago), un blocco per polilinea visibile. Punti già in mm, coordinate SVG.
+    const base = boundarySource?.name.replace(/\.[^.]+$/, '');
+    let bytes: Uint8Array;
+    try {
+      const final = generateFinalPatternPoints(cfg as PatternConfig);
+      const layer: ExportLayer = {
+        id: 'pattern', color: '#005f27',
+        polylines: final.visualPolylines.map((pl) => pl.map((p) => ({ x: p.x, y: p.y }))),
+      };
+      bytes = dstFromExportLayers([layer], { label: (base || 'PATTERN').toUpperCase().slice(0, 16) });
+    } catch (e) {
+      $('status').textContent = (e as Error).message;
+      return;
+    }
+    const name = base ? `${base}-pattern.dst` : 'pattern.dst';
+    const outcome = await saveBinaryFile(bytes, { suggestedName: name, ...DST_FILE });
+    $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${(bytes.length / 1024).toFixed(1)} KB`;
   });
 
   buildPanel();

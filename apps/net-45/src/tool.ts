@@ -5,12 +5,13 @@ import {
   ROLE_LABELS, defaultNetParams, buildSvg, buildSvgInSourceFrame,
   parseSvgToContours, parseDxfToContours,
   applyRealWidth, importResultFromContours, measureContours,
+  dstFromExportLayers, DST_FILE,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { runPipeline, type RoleAssignment } from './pipeline';
 import { sampleContours } from './sample';
 import { hookPanZoom } from '@rg/ui/panzoom';
-import { saveTextFile, saveOutcomeMessage } from '@rg/ui/save';
+import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 
 /** Un campo del gruppo "Parametri". `check` = sì/no (interno 1/0). `unit` va nello slot del DS, mai nell'etichetta (R-panello). */
 type Field =
@@ -75,6 +76,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
         <h2 class="rg-h3">Anteprima</h2>
         <div class="rg-cluster">
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
+          <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Esporta SVG</button>
         </div>
       </header>
@@ -267,6 +269,22 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     const name = sourceName ? `${sourceName}-rete45.svg` : 'rete-45.svg';
     const outcome = await saveTextFile(svg, { suggestedName: name, description: 'Immagine SVG' });
     $('status').textContent = saveOutcomeMessage(outcome, name);
+  });
+
+  $('exportDstBtn').addEventListener('click', async () => {
+    // Export ricamo Tajima .dst tramite la "possibilità" globale del core: i layer del pipeline sono già in
+    // mm reali; l'adattatore cuce i layer non-forma (rete/cordoncini), un blocco per polilinea.
+    const { layers } = runPipeline(currentContours(), roles, params);
+    let bytes: Uint8Array;
+    try {
+      bytes = dstFromExportLayers(layers, { label: (sourceName || 'RETE45').toUpperCase().slice(0, 16) });
+    } catch (e) {
+      $('status').textContent = (e as Error).message;
+      return;
+    }
+    const name = sourceName ? `${sourceName}-rete45.dst` : 'rete-45.dst';
+    const outcome = await saveBinaryFile(bytes, { suggestedName: name, ...DST_FILE });
+    $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${(bytes.length / 1024).toFixed(1)} KB`;
   });
 
   buildParamUI();

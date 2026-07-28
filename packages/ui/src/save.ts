@@ -77,7 +77,8 @@ export async function saveBinaryFile(data: Uint8Array, opts: SaveOptions): Promi
     try {
       const handle = await picker({ suggestedName, id: DIR_ID, types: [{ description, accept: { [mime]: [extension] } }] });
       const writable = await handle.createWritable();
-      await writable.write(data);
+      // cast: con le lib TS recenti Uint8Array è generico su ArrayBufferLike; a runtime è sempre BufferSource valido.
+      await writable.write(data as unknown as BufferSource);
       await writable.close();
       return 'saved';
     } catch (err) {
@@ -85,7 +86,7 @@ export async function saveBinaryFile(data: Uint8Array, opts: SaveOptions): Promi
     }
   }
 
-  const blob = new Blob([data], { type: mime });
+  const blob = new Blob([data as unknown as BlobPart], { type: mime });
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url;
