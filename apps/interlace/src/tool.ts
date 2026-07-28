@@ -21,7 +21,7 @@ interface Field { key: keyof InterlaceParams; label: string; unit: string; step:
 const PARAMS: Field[] = [
   { key: 'minStitchMm', label: 'Punto minimo', unit: 'mm', step: 0.5, help: 'lunghezza minima di un passaggio' },
   { key: 'maxStitchMm', label: 'Lunghezza massima del punto', unit: 'mm', step: 0.5, help: 'i passaggi non superano questa misura' },
-  { key: 'densitySpacingMm', label: 'Densità (distanza tra le file di filo)', unit: 'mm', step: 0.1, help: 'densità di base di ogni colore, ~0.8–6 mm: più piccola = più fitto; oltre ~3 diventa rado (buchi voluti)' },
+  { key: 'densitySpacingMm', label: 'Densità (distanza tra le file di filo)', unit: 'mm', step: 0.1, help: 'densità di ogni colore, ~0.8–4 mm: piccola = fitto; ~3 è il più rado ancora omogeneo (oltre si ammassa)' },
   { key: 'voidClearanceMm', label: 'Distanza di sicurezza da bordi e vuoti', unit: 'mm', step: 0.1 },
 ];
 

@@ -384,10 +384,10 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
  * perché la griglia resti sana anche nei canali stretti.
  */
 function cellForSpacing(spacing: number, _maxS: number): number {
-  // La cella = spaziatura fra le file. Fino a ~3mm la densità è regolare e monotòna; da 3 a 6 il filo si
-  // fa più RADO (compaiono buchi voluti, si perde copertura) ma in modo un po' irregolare. Oltre ~6-7 il
-  // filo continuo esplode in tragitti/autostrade (più filo, non più rado) → tetto a 6 per evitarlo.
-  return Math.max(0.8, Math.min(6, spacing));
+  // La cella = spaziatura fra le file. Fino a ~3mm la densità è regolare e OMOGENEA; verso 4 inizia a
+  // farsi rada ma un po' disomogenea. Oltre ~4 il filo continuo, per restare tale, rimbalza in tragitti
+  // che si AMMASSANO (zone iper-dense) invece di diradarsi → tetto a 4 (limite pratico dell'omogeneità).
+  return Math.max(0.8, Math.min(4, spacing));
 }
 
 /** Copertura per cella (quante attraversate): FISSA. La densità è governata dalla dimensione della cella,
