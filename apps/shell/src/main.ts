@@ -4,6 +4,7 @@ import { renderHome } from './home';
 import { mountNet45 } from '@app/net-45';
 import { mountPatternGrammar } from '@app/pattern-grammar';
 import { mountInterlace } from '@app/interlace';
+import { mountBitmap } from '@app/bitmap';
 
 const app = document.getElementById('app')!;
 
@@ -12,6 +13,7 @@ function route(): void {
   if (hash === '#/net-45') mountNet45(app, { backHref: '#/' });
   else if (hash === '#/pattern-grammar') mountPatternGrammar(app, { backHref: '#/' });
   else if (hash === '#/interlace') mountInterlace(app, { backHref: '#/' });
+  else if (hash === '#/bitmap') mountBitmap(app, { backHref: '#/' });
   else renderHome(app);
 }
 

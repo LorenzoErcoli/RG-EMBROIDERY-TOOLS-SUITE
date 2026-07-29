@@ -12,7 +12,7 @@ export const TOOLS: ToolDef[] = [
   { id: 'interlace', name: 'Interlace', description: 'Riempimento a intreccio multicolore: passaggi brevi che si intrecciano, con aree vuote.', status: 'live' },
   { id: 'oblique', name: 'Oblique Pattern', description: 'Pattern obliqui a più livelli con fori laser.', status: 'soon' },
   { id: 'cross-stitch', name: 'Cross-Stitch', description: 'Griglia a punto croce con routing ottimizzato.', status: 'soon' },
-  { id: 'bitmap', name: 'Bitmap → Stitch', description: 'Da immagine a tracciato di ricamo.', status: 'soon' },
+  { id: 'bitmap', name: 'Bitmap → Stitch', description: 'Da immagine raster a tracciato di ricamo: selezione pixel, colori e punti ordinati in SVG.', status: 'live' },
 ];
 
 /**

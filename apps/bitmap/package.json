@@ -1,0 +1,20 @@
+{
+  "name": "bitmap",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Bitmap → Stitch: da immagine raster a tracciato di ricamo (punti ordinati) in SVG. Porting della logica di bitmap_to_stitch nella suite.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@rg/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}

@@ -1,0 +1,508 @@
+import '@rg/ui/rg.css';
+import './bitmap.css';
+import { buildSvg, dstFromExportLayers, DST_FILE } from '@rg/core';
+import { topbar } from '@rg/ui/tools';
+import { hookPanZoom } from '@rg/ui/panzoom';
+import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
+import { runBitmapPipeline, runBitmapPreview, type BitmapPreviewColor } from './pipeline';
+import { defaultBitmapParams, type BitmapParams } from './engine';
+import { sampleImage, type PixelImage } from './sample';
+
+/** Sorgente pixel: la demo o un'immagine decodificata, rasterizzabile alla larghezza voluta. */
+interface Source {
+  name: string;
+  pixelsAt: (maxWidthPx: number) => PixelImage;
+}
+
+// Campi numerici cablati genericamente: id nel DOM ↔ chiave del parametro. Unità nello slot (mai nell'etichetta).
+interface NumBind { id: string; key: keyof BitmapParams; int?: boolean; min?: number; max?: number; }
+
+export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {}): void {
+  root.innerHTML = `
+  ${topbar('Bitmap → Stitch', opts.backHref)}
+  <div class="rg-workspace bitmap-workspace">
+    <aside class="rg-workspace__panel">
+      <section class="rg-param-section">
+        <div class="rg-param-section__header"><span class="rg-param-section__index">01</span><h3 class="rg-param-section__title">Immagine</h3></div>
+        <div class="rg-param-grid">
+          <div class="rg-file-input rg-param-grid__wide">
+            <label class="rg-file-input__control">
+              <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/bmp,image/gif" />
+              <span class="rg-button rg-button--outline">Carica un'immagine…</span>
+            </label>
+            <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file: uso l'immagine demo.</p>
+          </div>
+          <label class="rg-field">
+            <span class="rg-field__label">Larghezza reale (0 = auto)</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="realWidth" type="number" min="0" step="1"><span>mm</span></span>
+          </label>
+          <label class="rg-field">
+            <span class="rg-field__label">DPI di stima</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="dpiEstimate" type="number" min="1" step="1"><span>dpi</span></span>
+          </label>
+          <label class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Risoluzione di lavoro</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="maxWidthPx" type="number" min="0" step="50"><span>px</span></span>
+            <small class="rg-field__help">l'immagine viene ridotta a questa larghezza per la resa (0 = nativa); più bassa = più veloce</small>
+          </label>
+          <div class="rg-cluster rg-param-grid__wide"><button id="sampleBtn" class="rg-button rg-button--ghost" type="button">Immagine demo</button></div>
+        </div>
+      </section>
+
+      <section class="rg-param-section">
+        <div class="rg-param-section__header"><span class="rg-param-section__index">02</span><h3 class="rg-param-section__title">Selezione dei pixel</h3></div>
+        <div class="rg-param-grid">
+          <div class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Cosa punciare</span>
+            <div class="rg-segmented" id="coverageMode" role="group" aria-label="Cosa punciare">
+              <button type="button" class="rg-segmented__item rg-segmented__item--active" data-coverage="selected" aria-pressed="true">Solo i colori scelti</button>
+              <button type="button" class="rg-segmented__item" data-coverage="all" aria-pressed="false">Tutta l'immagine</button>
+            </div>
+            <small class="rg-field__help">Solo i colori scelti: usa soglia e sfondo. Tutta l'immagine: riempie tutto, ogni pixel col colore più vicino tra gli N scelti.</small>
+          </div>
+          <label class="rg-field rg-param-grid__wide" id="thresholdField">
+            <span class="rg-field__label">Soglia di selezione</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="threshold" type="number" min="0" max="255" step="5"><span>lum</span></span>
+            <small class="rg-field__help">un pixel è scelto se più scuro della soglia (0–255); più alta = include più pixel chiari</small>
+          </label>
+          <label class="rg-field" id="sampleColorsField">
+            <span class="rg-field__label">Colori da includere</span>
+            <input class="rg-input" id="sampleColors" type="text" placeholder="#000000, #ff0000" />
+          </label>
+          <label class="rg-field" id="sampleToleranceField">
+            <span class="rg-field__label">Tolleranza</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="sampleTolerance" type="number" min="0" step="1"><span>rgb</span></span>
+          </label>
+          <label class="rg-choice rg-param-grid__wide" id="excludeBackgroundField">
+            <input type="checkbox" id="excludeBackground" />
+            <span>Escludi un colore di sfondo</span>
+          </label>
+          <label class="rg-field" id="bgColorsField">
+            <span class="rg-field__label">Colori di sfondo</span>
+            <input class="rg-input" id="backgroundColors" type="text" placeholder="#ffffff" />
+          </label>
+          <label class="rg-field" id="bgToleranceField">
+            <span class="rg-field__label">Tolleranza sfondo</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="backgroundTolerance" type="number" min="0" step="1"><span>rgb</span></span>
+          </label>
+        </div>
+      </section>
+
+      <section class="rg-param-section">
+        <div class="rg-param-section__header"><span class="rg-param-section__index">03</span><h3 class="rg-param-section__title">Colori</h3></div>
+        <div class="rg-param-grid">
+          <label class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Numero di colori (cambi-ago)</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="colorCount" type="number" min="1" max="16" step="1"><span>#</span></span>
+            <small class="rg-field__help">in quante tinte separare l'immagine (quantizzazione)</small>
+          </label>
+        </div>
+        <ul class="rg-color-map" id="stopList"></ul>
+      </section>
+
+      <details class="rg-param-section rg-disclosure" open>
+        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">04</span><span class="rg-param-section__title">Riempimento</span></summary>
+        <div class="rg-param-grid">
+          <label class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Distanza tra i punti</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="densitySpacingMm" type="number" min="0" step="0.1"><span>mm</span></span>
+            <small class="rg-field__help">quanto sono distanti i punti: piccola = fitto (più punti), grande = rado (meno punti); 0 = piena risoluzione</small>
+          </label>
+          <label class="rg-field">
+            <span class="rg-field__label">Punto minimo</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="minStitchMm" type="number" min="0" step="0.5"><span>mm</span></span>
+          </label>
+          <label class="rg-field">
+            <span class="rg-field__label">Reinserimenti</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="reinsertionRounds" type="number" min="0" step="1"><span>giri</span></span>
+          </label>
+          <label class="rg-field">
+            <span class="rg-field__label">Tetto punti (0 = off)</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="maxPoints" type="number" min="0" step="500"><span>#</span></span>
+          </label>
+          <label class="rg-field">
+            <span class="rg-field__label">Densità obiettivo (0 = off)</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="targetDensityPct" type="number" min="0" max="100" step="1"><span>%</span></span>
+          </label>
+        </div>
+      </details>
+
+      <details class="rg-param-section rg-disclosure" open>
+        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">05</span><span class="rg-param-section__title">Stile e percorso</span></summary>
+        <div class="rg-param-grid">
+          <div class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Distribuzione dei punti</span>
+            <div class="rg-segmented" id="styleMode" role="group" aria-label="Distribuzione dei punti">
+              <button type="button" class="rg-segmented__item rg-segmented__item--active" data-style="carpet" aria-pressed="true">Regolare</button>
+              <button type="button" class="rg-segmented__item" data-style="degrade" aria-pressed="false">Degradé</button>
+            </div>
+            <small class="rg-field__help">Regolare: griglia uniforme. Degradé: scarto e spostamento casuali per un effetto sfumato.</small>
+          </div>
+          <label class="rg-field" id="degradeDropField" hidden>
+            <span class="rg-field__label">Scarto casuale</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="degradeDrop" type="number" min="0" max="1" step="0.05"><span>0–1</span></span>
+          </label>
+          <label class="rg-field" id="degradeJitterField" hidden>
+            <span class="rg-field__label">Spostamento casuale</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="degradeJitter" type="number" min="0" step="0.1"><span>mm</span></span>
+          </label>
+          <label class="rg-field rg-param-grid__wide" id="seedField" hidden>
+            <span class="rg-field__label">Variante</span>
+            <div class="rg-cluster">
+              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="seed" type="number" min="1" step="1"><span>#</span></span>
+              <button type="button" id="newSeedBtn" class="rg-button rg-button--outline rg-button--small">Nuova variante</button>
+            </div>
+            <small class="rg-field__help">stessa variante = stesso identico risultato (riproducibile)</small>
+          </label>
+          <div class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Ordinamento del percorso</span>
+            <div class="rg-segmented" id="orderMode" role="group" aria-label="Ordinamento del percorso">
+              <button type="button" class="rg-segmented__item rg-segmented__item--active" data-order="scanline" aria-pressed="true">A righe</button>
+              <button type="button" class="rg-segmented__item" data-order="nearest" aria-pressed="false">Più vicino</button>
+            </div>
+            <small class="rg-field__help">A righe: veloce e regolare. Più vicino: percorso più corto ma pesante su molte migliaia di punti.</small>
+          </div>
+          <label class="rg-field" id="scanlineBandField">
+            <span class="rg-field__label">Altezza banda (a righe)</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="scanlineBandMm" type="number" min="0.2" step="0.2"><span>mm</span></span>
+          </label>
+          <label class="rg-choice rg-param-grid__wide" id="serpentineField">
+            <input type="checkbox" id="serpentine" />
+            <span>Righe a serpentina (alterna il verso)</span>
+          </label>
+        </div>
+      </details>
+
+      <details class="rg-param-section rg-disclosure">
+        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">06</span><span class="rg-param-section__title">Esportazione</span></summary>
+        <div class="rg-param-grid">
+          <label class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Punti massimi per tracciato</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="chunkSize" type="number" min="0" step="500"><span>#</span></span>
+            <small class="rg-field__help">spezza i tracciati lunghi per Illustrator (R6); 0 = nessun taglio</small>
+          </label>
+        </div>
+      </details>
+    </aside>
+
+    <div class="rg-workspace__stage">
+      <header class="rg-workspace__stage-header">
+        <h2 class="rg-h3">Anteprima</h2>
+        <div class="rg-cluster">
+          <button id="analyzeBtn" class="rg-button rg-button--outline rg-button--small">Analizza</button>
+          <button id="generateBtn" class="rg-button rg-button--primary rg-button--small">Genera</button>
+          <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
+          <button id="exportBtn" class="rg-button rg-button--ghost rg-button--small">Esporta SVG</button>
+          <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
+        </div>
+      </header>
+      <div class="rg-workspace__canvas" id="canvas">
+        <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
+      </div>
+      <footer class="rg-workspace__statusbar">
+        <span id="status">Pronto</span>
+        <span id="zoom" class="rg-mono">zoom 100%</span>
+      </footer>
+    </div>
+  </div>`;
+
+  const $ = (id: string) => root.querySelector<HTMLElement>('#' + id)!;
+
+  const params: BitmapParams = { ...defaultBitmapParams };
+  let source: Source = demoSource();
+  let sourceName = '';
+  let onlyColor = '';                 // '' = tutti i colori (filtro di sola generazione, come "Solo SVG")
+  let lastGenerated: { svg: string; stopCount: number } | null = null;
+  let analyzeTimer: number | undefined;
+
+  const pz = hookPanZoom($('canvas'), $('layer'), (z) => { $('zoom').textContent = `zoom ${Math.round(z * 100)}%`; });
+
+  function demoSource(): Source {
+    const img = sampleImage();
+    return { name: '', pixelsAt: () => img };
+  }
+
+  /** mm per pixel: da realWidthMm (fonte di verità, R11) o stima al DPI di `dpiEstimate`. */
+  function mmPerPx(widthPx: number): number {
+    if (params.realWidthMm > 0 && widthPx > 0) return params.realWidthMm / widthPx;
+    return 25.4 / (params.dpiEstimate > 0 ? params.dpiEstimate : 96);
+  }
+
+  // ---- FASE LEGGERA: preview (aggiornata in tempo reale, niente ordinamento). ----
+  let currentPreviewColors: BitmapPreviewColor[] = [];   // colori dell'ultima preview (per ridisegnare le righe onlyColor)
+  function renderPreview() {
+    try {
+      const px = source.pixelsAt(params.maxWidthPx);
+      const prev = runBitmapPreview(px.rgba, px.width, px.height, params, mmPerPx(px.width));
+      currentPreviewColors = prev.colors;
+      $('layer').innerHTML = prev.svg;
+      buildStopList(prev.colors);
+      const selPct = prev.totalPixels ? (100 * prev.selectedPixels / prev.totalPixels).toFixed(1) : '0';
+      const genTip = lastGenerated ? '' : ' · premi Genera per il tracciato';
+      $('status').textContent = prev.colors.length
+        ? `Preview: ${prev.colors.length} colori · ${prev.selectedPixels} pixel (${selPct}%)${genTip}`
+        : 'Nessun colore selezionato: abbassa la soglia o cambia immagine';
+    } catch (e) {
+      $('status').textContent = 'Errore preview: ' + (e as Error).message;
+      console.error(e);
+    }
+  }
+
+  function scheduleAnalyze() {
+    lastGenerated = null;                         // ogni cambio invalida il tracciato generato
+    if (analyzeTimer !== undefined) clearTimeout(analyzeTimer);
+    analyzeTimer = setTimeout(renderPreview, 150) as unknown as number;
+  }
+
+  // ---- FASE PESANTE: generazione del tracciato (solo su richiesta). ----
+  function generate(): { svg: string; stopCount: number } {
+    const px = source.pixelsAt(params.maxWidthPx);
+    const res = runBitmapPipeline(px.rgba, px.width, px.height, params, mmPerPx(px.width), onlyColor || undefined);
+    const cap = params.chunkSize > 0 ? params.chunkSize : 5000;
+    const svg = buildSvg(res.exportLayers, { bounds: res.bounds, marginMm: 4, maxPointsPerPath: cap });
+    lastGenerated = { svg, stopCount: res.stopCount };
+    $('layer').innerHTML = buildSvg(res.layers, { bounds: res.bounds, marginMm: 4, maxPointsPerPath: cap });
+    const only = onlyColor ? ` · solo ${onlyColor}` : '';
+    $('status').textContent = res.stopCount
+      ? `Generato: ${res.stopCount} stop · filo ${(res.threadMm / 1000).toFixed(2)} m${only}`
+      : 'Niente da generare: controlla soglia e colori';
+    return lastGenerated;
+  }
+
+  /** Elenco dei colori (stop) rilevati con conteggio/area% e la scelta "solo questo colore". */
+  function buildStopList(colors: BitmapPreviewColor[]) {
+    const host = $('stopList');
+    host.innerHTML = '';
+    if (!colors.length) {
+      host.innerHTML = '<li><p class="rg-color-map__empty">Nessun colore selezionato: abbassa la soglia o cambia immagine.</p></li>';
+      return;
+    }
+    // riga "Tutti i colori"
+    host.appendChild(stopRow('', 'Tutti i colori', colors.reduce((s, c) => s + c.preparedCount, 0), null));
+    for (const c of colors) host.appendChild(stopRow(c.color, c.color.toUpperCase(), c.preparedCount, c.areaPct));
+  }
+
+  function stopRow(color: string, label: string, count: number, areaPct: number | null): HTMLLIElement {
+    const row = document.createElement('li');
+    row.className = 'rg-color-map__row';
+    const sw = document.createElement('span');
+    sw.className = 'rg-color-map__swatch' + (color ? '' : ' rg-color-map__swatch--none');
+    if (color) sw.style.setProperty('--swatch', color);
+    const code = document.createElement('span');
+    code.className = 'rg-color-map__code';
+    code.textContent = label + ' ';
+    const meta = document.createElement('span');
+    meta.className = 'rg-color-map__meta';
+    meta.textContent = areaPct === null ? `${count} punti` : `${count} punti · ${areaPct.toFixed(1)}%`;
+    code.appendChild(meta);
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'rg-button rg-button--ghost rg-button--small';
+    const active = onlyColor.toUpperCase() === color.toUpperCase();
+    btn.textContent = active ? 'attivo' : (color ? 'solo' : 'tutti');
+    btn.disabled = active;
+    btn.addEventListener('click', () => { onlyColor = color; lastGenerated = null; buildStopList(currentPreviewColors); });
+    row.append(sw, code, btn);
+    return row;
+  }
+
+  // ---- cablaggio dei campi numerici (id ↔ chiave param). ----
+  const NUMS: NumBind[] = [
+    { id: 'realWidth', key: 'realWidthMm', min: 0 },
+    { id: 'dpiEstimate', key: 'dpiEstimate', int: true, min: 1 },
+    { id: 'maxWidthPx', key: 'maxWidthPx', int: true, min: 0 },
+    { id: 'threshold', key: 'threshold', int: true, min: 0, max: 255 },
+    { id: 'sampleTolerance', key: 'sampleToleranceRgb', min: 0 },
+    { id: 'backgroundTolerance', key: 'backgroundToleranceRgb', min: 0 },
+    { id: 'colorCount', key: 'colorCount', int: true, min: 1, max: 16 },
+    { id: 'densitySpacingMm', key: 'densitySpacingMm', min: 0 },
+    { id: 'minStitchMm', key: 'minStitchMm', min: 0 },
+    { id: 'reinsertionRounds', key: 'reinsertionRounds', int: true, min: 0 },
+    { id: 'maxPoints', key: 'maxPoints', int: true, min: 0 },
+    { id: 'targetDensityPct', key: 'targetDensityPct', min: 0, max: 100 },
+    { id: 'degradeDrop', key: 'degradeDrop', min: 0, max: 1 },
+    { id: 'degradeJitter', key: 'degradeJitterMm', min: 0 },
+    { id: 'seed', key: 'seed', int: true, min: 1 },
+    { id: 'scanlineBandMm', key: 'scanlineBandMm', min: 0.2 },
+    { id: 'chunkSize', key: 'chunkSize', int: true, min: 0 },
+  ];
+  function wireNums() {
+    for (const b of NUMS) {
+      const el = $(b.id) as HTMLInputElement;
+      el.value = String(params[b.key]);
+      el.addEventListener('change', () => {
+        let v = b.int ? parseInt(el.value, 10) : parseFloat(el.value);
+        if (Number.isNaN(v)) v = defaultBitmapParams[b.key] as number;
+        if (b.min !== undefined) v = Math.max(b.min, v);
+        if (b.max !== undefined) v = Math.min(b.max, v);
+        (params[b.key] as number) = v;
+        el.value = String(v);
+        if (b.id === 'realWidth' || b.id === 'dpiEstimate' || b.id === 'maxWidthPx') updateFileStatus();
+        scheduleAnalyze();
+      });
+    }
+  }
+
+  function wireText(id: string, apply: (parts: string[]) => void) {
+    ($(id) as HTMLInputElement).addEventListener('change', () => {
+      const parts = ($(id) as HTMLInputElement).value.split(',').map((s) => s.trim()).filter(Boolean);
+      apply(parts);
+      scheduleAnalyze();
+    });
+  }
+  wireText('sampleColors', (p) => { params.sampleColors = p; });
+  wireText('backgroundColors', (p) => { params.backgroundColors = p; });
+
+  function wireCheck(id: string, apply: (on: boolean) => void) {
+    ($(id) as HTMLInputElement).addEventListener('change', () => { apply(($(id) as HTMLInputElement).checked); scheduleAnalyze(); });
+  }
+  wireCheck('excludeBackground', (on) => { params.excludeBackground = on; syncBgFields(); });
+  wireCheck('serpentine', (on) => { params.serpentine = on; });
+
+  function syncBgFields() {
+    const on = params.excludeBackground;
+    ($('bgColorsField') as HTMLElement).hidden = !on;
+    ($('bgToleranceField') as HTMLElement).hidden = !on;
+  }
+
+  // ---- segmented: stile e ordinamento ----
+  function wireSegmented(id: string, attr: string, get: () => string, set: (v: string) => void, after: () => void) {
+    const btns = Array.from($(id).querySelectorAll('.rg-segmented__item')) as HTMLButtonElement[];
+    const sync = () => btns.forEach((b) => {
+      const on = b.dataset[attr] === get();
+      b.classList.toggle('rg-segmented__item--active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+    btns.forEach((b) => b.addEventListener('click', () => {
+      const want = b.dataset[attr]!;
+      if (get() === want) return;
+      set(want); sync(); after(); scheduleAnalyze();
+    }));
+    sync();
+    return sync;
+  }
+  const syncStyle = wireSegmented('styleMode', 'style', () => params.style, (v) => { params.style = v as BitmapParams['style']; }, () => {
+    const deg = params.style === 'degrade';
+    ($('degradeDropField') as HTMLElement).hidden = !deg;
+    ($('degradeJitterField') as HTMLElement).hidden = !deg;
+    ($('seedField') as HTMLElement).hidden = !deg;
+  });
+  const syncOrder = wireSegmented('orderMode', 'order', () => params.ordering, (v) => { params.ordering = v as BitmapParams['ordering']; }, () => {
+    ($('scanlineBandField') as HTMLElement).hidden = params.ordering !== 'scanline';
+    ($('serpentineField') as HTMLElement).hidden = params.ordering !== 'scanline';
+  });
+
+  // Switch "Cosa punciare": in modalità "Tutta l'immagine" i controlli di selezione (soglia/sfondo) non servono.
+  function applyCoverageVisibility() {
+    const all = params.coverage === 'all';
+    (['thresholdField', 'sampleColorsField', 'sampleToleranceField', 'excludeBackgroundField'] as const)
+      .forEach((id) => { ($(id) as HTMLElement).hidden = all; });
+    if (all) { ($('bgColorsField') as HTMLElement).hidden = true; ($('bgToleranceField') as HTMLElement).hidden = true; }
+    else syncBgFields();
+  }
+  const syncCoverage = wireSegmented('coverageMode', 'coverage', () => params.coverage, (v) => { params.coverage = v as BitmapParams['coverage']; }, applyCoverageVisibility);
+
+  $('newSeedBtn').addEventListener('click', () => {
+    params.seed = (params.seed % 999999) + 1;
+    ($('seed') as HTMLInputElement).value = String(params.seed);
+    scheduleAnalyze();
+  });
+
+  // ---- import immagine: File → <canvas> → ImageData → pixel (l'unico pezzo legato al DOM) ----
+  function decodeToSource(imgEl: HTMLImageElement, name: string): Source {
+    return {
+      name,
+      pixelsAt: (maxWidthPx: number) => {
+        let w = imgEl.naturalWidth || imgEl.width;
+        let h = imgEl.naturalHeight || imgEl.height;
+        if (maxWidthPx > 0 && w > maxWidthPx) { const s = maxWidthPx / w; w = maxWidthPx; h = Math.max(1, Math.round(h * s)); }
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        const ctx = cv.getContext('2d', { willReadFrequently: true })!;
+        ctx.drawImage(imgEl, 0, 0, w, h);
+        return { rgba: ctx.getImageData(0, 0, w, h).data, width: w, height: h };
+      },
+    };
+  }
+
+  function updateFileStatus() {
+    const px = source.pixelsAt(params.maxWidthPx);
+    const mmpp = mmPerPx(px.width);
+    const wmm = Math.round(px.width * mmpp), hmm = Math.round(px.height * mmpp);
+    const hint = params.realWidthMm > 0 ? 'reale' : `stima ${params.dpiEstimate} dpi`;
+    $('fileStatus').textContent = `${sourceName || 'Immagine demo'}: ${px.width}×${px.height} px → ${wmm}×${hmm} mm (${hint})`;
+  }
+
+  $('fileInput').addEventListener('change', (ev) => {
+    const file = (ev.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const url = URL.createObjectURL(file);
+    const imgEl = new Image();
+    imgEl.onload = () => {
+      URL.revokeObjectURL(url);
+      sourceName = file.name.replace(/\.[^.]+$/, '');
+      source = decodeToSource(imgEl, sourceName);
+      onlyColor = '';
+      renderPreview(); updateFileStatus(); pz.fit();
+    };
+    imgEl.onerror = () => { URL.revokeObjectURL(url); $('fileStatus').textContent = 'Errore: immagine non leggibile.'; };
+    imgEl.src = url;
+  });
+
+  $('sampleBtn').addEventListener('click', () => {
+    sourceName = ''; source = demoSource(); onlyColor = '';
+    renderPreview(); updateFileStatus(); pz.fit();
+  });
+  $('analyzeBtn').addEventListener('click', () => { if (analyzeTimer !== undefined) clearTimeout(analyzeTimer); renderPreview(); });
+  $('generateBtn').addEventListener('click', () => generate());
+  $('fitBtn').addEventListener('click', () => pz.fit());
+  $('exportBtn').addEventListener('click', async () => {
+    const gen = lastGenerated ?? generate();
+    const name = sourceName ? `${sourceName}-bitmap.svg` : 'bitmap.svg';
+    // metadata riapribile (R27): riscrive l'SVG generato con il blocco rg-project
+    const withMeta = injectMetadata(gen.svg, { rgProject: 'bitmap', version: '0.1.0', params });
+    const outcome = await saveTextFile(withMeta, { suggestedName: name, description: 'Immagine SVG' });
+    $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${gen.stopCount} stop in sequenza`;
+  });
+
+  $('exportDstBtn').addEventListener('click', async () => {
+    // Export ricamo Tajima .dst tramite la "possibilità" globale del core: gli exportLayers sono già in mm
+    // reali; l'adattatore fa un blocco per polilinea, un ago per stop (cambio-colore in sequenza).
+    const px = source.pixelsAt(params.maxWidthPx);
+    const res = runBitmapPipeline(px.rgba, px.width, px.height, params, mmPerPx(px.width), onlyColor || undefined);
+    let bytes: Uint8Array;
+    try {
+      bytes = dstFromExportLayers(res.exportLayers, { label: (sourceName || 'BITMAP').toUpperCase().slice(0, 16) });
+    } catch (e) {
+      $('status').textContent = (e as Error).message;   // niente da cucire → messaggio, non file vuoto
+      return;
+    }
+    const name = sourceName ? `${sourceName}-bitmap.dst` : 'bitmap.dst';
+    const outcome = await saveBinaryFile(bytes, { suggestedName: name, ...DST_FILE });
+    $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${res.stopCount} stop · ${(bytes.length / 1024).toFixed(1)} KB`;
+  });
+
+  /** Inserisce il metadata rg-project subito dopo il tag <svg> (R27), come fa buildSvg quando gli si passa metadata. */
+  function injectMetadata(svg: string, meta: Record<string, unknown>): string {
+    const block = `\n  <metadata id="rg-project">${JSON.stringify(meta)}</metadata>`;
+    return svg.replace(/(<svg\b[^>]*>)/, `$1${block}`);
+  }
+
+  // riallinea i controlli statici ai default e collega la preview alla lista colori
+  function reflectStaticControls() {
+    ($('sampleColors') as HTMLInputElement).value = params.sampleColors.join(', ');
+    ($('backgroundColors') as HTMLInputElement).value = params.backgroundColors.join(', ');
+    ($('excludeBackground') as HTMLInputElement).checked = params.excludeBackground;
+    ($('serpentine') as HTMLInputElement).checked = params.serpentine;
+  }
+
+  wireNums();
+  reflectStaticControls();
+  syncBgFields();
+  syncStyle();
+  syncOrder();
+  syncCoverage();
+  applyCoverageVisibility();
+  renderPreview();
+  updateFileStatus();
+}

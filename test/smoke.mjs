@@ -17,7 +17,7 @@ writeFileSync(entry, `
 export { parseImportedBoundarySource, generatePattern } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
 export { generateFill, generatePasses, defaultInterlaceParams } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
 export { generateStitch, analyzeBitmap, buildSelectionMask, buildPalette, groupByPalette, defaultBitmapParams } from ${JSON.stringify(posix('apps/bitmap/src/engine.ts'))};
-export { runBitmapPreview } from ${JSON.stringify(posix('apps/bitmap/src/pipeline.ts'))};
+export { runBitmapPreview, runBitmapPipeline } from ${JSON.stringify(posix('apps/bitmap/src/pipeline.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
@@ -214,6 +214,13 @@ const bPv = rg.runBitmapPreview(bBuf, bW, bH, bAll, 1.0);
 const bDrawn = (bPv.svg.match(/M/g) || []).length;
 const bListed = bPv.colors.reduce((s, c) => s + c.preparedCount, 0);
 check('anteprima: puntini disegnati = punti totali (niente base nascosta)', bDrawn, bListed);
+
+// export DST (Tajima): gli stessi exportLayers dell'SVG → file .dst con header valido e byte non vuoti.
+const bDstRes = rg.runBitmapPipeline(bBuf, bW, bH, bP0, 1.0);
+const bDst = rg.dstFromExportLayers(bDstRes.exportLayers, { label: 'TEST' });
+check('DST: header Tajima "LA:"', String.fromCharCode(bDst[0], bDst[1], bDst[2]), 'LA:');
+check('DST: corpo non vuoto oltre l’header (512 byte)', bDst.length > 512, true);
+check('DST: termina con END (0x00 0x00 0xF3)', [bDst.at(-3), bDst.at(-2), bDst.at(-1)], [0, 0, 0xf3]);
 
 // core — round-trip del metadata: i parametri salvati nell'SVG si rileggono al reimport (R27).
 console.log('\ncore — parametri salvati e riletti dall’SVG (R27)');

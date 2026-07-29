@@ -16,6 +16,7 @@
     "dev:shell": "npm run dev --workspace apps/shell",
     "dev:net-45": "npm run dev --workspace apps/net-45",
     "dev:interlace": "npm run dev --workspace apps/interlace",
+    "dev:bitmap": "npm run dev --workspace apps/bitmap",
     "build": "npm run build --workspace apps/shell",
     "build:net-45": "npm run build --workspace apps/net-45",
     "test": "node test/smoke.mjs"
