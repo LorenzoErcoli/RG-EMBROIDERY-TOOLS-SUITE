@@ -37,8 +37,10 @@ jobs:
         run: npm test
       - name: Build della suite
         run: npm run build
-      - name: Prepara Pages
-        uses: actions/configure-pages@v4
+      - name: Prepara Pages (abilita da solo se non lo è)
+        uses: actions/configure-pages@v5
+        with:
+          enablement: true
       - name: Carica il sito statico
         uses: actions/upload-pages-artifact@v3
         with:
