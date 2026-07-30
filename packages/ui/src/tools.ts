@@ -10,7 +10,7 @@ export const TOOLS: ToolDef[] = [
   { id: 'net-45', name: 'Rete 45°', description: 'Genera la rete di cordoncini a 45° su una sagoma DXF/SVG.', status: 'live' },
   { id: 'pattern-grammar', name: 'Generatore pattern', description: 'Genera pattern e basi ricamo da grammatica, con sagoma importabile.', status: 'live' },
   { id: 'interlace', name: 'Interlace', description: 'Riempimento a intreccio multicolore: passaggi brevi che si intrecciano, con aree vuote.', status: 'live' },
-  { id: 'oblique', name: 'Oblique Pattern', description: 'Pattern obliqui a più livelli con fori laser.', status: 'soon' },
+  { id: 'oblique', name: 'Oblique Pattern', description: 'Pattern obliqui a più livelli (Broderie Anglaise) con fori laser.', status: 'live' },
   { id: 'cross-stitch', name: 'Cross-Stitch', description: 'Griglia a punto croce con routing ottimizzato.', status: 'soon' },
   { id: 'bitmap', name: 'Bitmap → Stitch', description: 'Da immagine raster a tracciato di ricamo: selezione pixel, colori e punti ordinati in SVG.', status: 'live' },
 ];

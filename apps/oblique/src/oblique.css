@@ -1,0 +1,18 @@
+/* Stile locale del tool Oblique — solo layout, nessuna classe rg-* nuova (regola DS). */
+
+/* Nudge-pad a croce (composto con rg-icon-button, come indicato dal subagent design-system). */
+.oblique-nudge {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  grid-template-areas: ". up ." "left . right" ". down .";
+  gap: var(--rg-space-1);
+  justify-items: center;
+  align-self: center;
+}
+.oblique-nudge__up { grid-area: up; }
+.oblique-nudge__left { grid-area: left; }
+.oblique-nudge__right { grid-area: right; }
+.oblique-nudge__down { grid-area: down; }
+
+/* La preview riempie lo stage. */
+.oblique-workspace #preview { width: 100%; height: 100%; display: block; }

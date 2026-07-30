@@ -9,6 +9,7 @@
       "@rg/ui/*": ["../../packages/ui/src/*"],
       "@app/net-45": ["../net-45/src/tool.ts"],
       "@app/pattern-grammar": ["../pattern-grammar/src/tool.ts"],
+      "@app/oblique": ["../oblique/src/tool.ts"],
       "@rg/pattern-grammar": ["../../packages/pattern-grammar/src/index.ts"]
     }
   },

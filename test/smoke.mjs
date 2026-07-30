@@ -17,6 +17,7 @@ writeFileSync(entry, `
 export { parseImportedBoundarySource, generatePattern } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
 export { generateFill, generatePasses, defaultInterlaceParams } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
 export { generateStitch, analyzeBitmap, buildSelectionMask, buildPalette, groupByPalette, defaultBitmapParams } from ${JSON.stringify(posix('apps/bitmap/src/engine.ts'))};
+export { buildRawLevels, computeGridCounts, moduleFromPolylines, parseModuleSvg, defaultObliqueParams, resolveBoundaries, buildLaserExport, filterLevelByHoles, rectBoundaryOf, boundaryFromFormat, boundaryFromPoints, contourBoundary, simplifyLoop, isInside, applyModuleClipMode, cleanupPolylines, subtractExclusions, cleanupVoids, applyVoids, generateOblique, connectLayerContinuity, connectTechnicalDiagonals, enforceMinimumStitch, reconnectCutFragmentsOnBoundary } from ${JSON.stringify(posix('apps/oblique/src/engine.ts'))};
 export { runBitmapPreview, runBitmapPipeline } from ${JSON.stringify(posix('apps/bitmap/src/pipeline.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 `);
@@ -209,6 +210,11 @@ check('copertura "tutta": seleziona tutti i pixel (soglia/sfondo ignorati)', sel
 const bRAll = rg.generateStitch(bBuf, bW, bH, bAll, 1.0);
 check('copertura "tutta": ogni pixel punciato con N colori', bRAll.colors.reduce((s, c) => s + c.points.length, 0), bW * bH);
 
+// palette MANUALE (contagocce): i colori-livello sono ESATTAMENTE quelli scelti, ogni pixel al più vicino.
+const bMan = { ...rg.defaultBitmapParams, coverage: 'all', paletteMode: 'manual', manualColors: ['#20408a', '#b03040'], densitySpacingMm: 0, minStitchMm: 0, maxWidthPx: 0 };
+const bManA = rg.analyzeBitmap(bBuf, bW, bH, bMan, 1.0);
+check('palette manuale: i colori-livello sono quelli scelti (non median-cut)', bManA.colors.map((c) => c.color).sort(), ['#20408A', '#B03040']);
+
 // anteprima: disegna TUTTI i punti (base inclusa), non un tetto per-colore che nasconde la base.
 const bPv = rg.runBitmapPreview(bBuf, bW, bH, bAll, 1.0);
 const bDrawn = (bPv.svg.match(/M/g) || []).length;
@@ -263,6 +269,211 @@ check('DST-da-layers: record END', dl[dl.length - 1], 0xF3);
 let dlThrew = false;
 try { rg.dstFromExportLayers([{ id: 'r', color: '#ccc', polylines: [[{ x: 0, y: 0 }, { x: 1, y: 0 }]], shapeOnly: true }]); } catch { dlThrew = true; }
 check('DST-da-layers: solo forme → errore (niente da cucire)', dlThrew, true);
+
+// oblique — griglia diagonale + placement (Fase A, sotto-step 2a). Moduli SINTETICI (l'engine è
+// Node-safe: riceve geometrie già parsate; il parse SVG DOM vive in tool.ts). Verifica che la
+// griglia condivisa nasca dal Livello 1, che i moduli coprano il formato e che il global offset trasli.
+console.log('\noblique — griglia diagonale + placement (2a)');
+{
+  const square = (s) => [[{ x: 0, y: 0 }, { x: s, y: 0 }, { x: s, y: s }, { x: 0, y: s }, { x: 0, y: 0 }]];
+  const mod = rg.moduleFromPolylines(square(6));
+  const sources = { level0: mod, level1: mod, level2: mod, holes: mod, panelBounds: null };
+  const p = rg.defaultObliqueParams();
+
+  const grid = rg.computeGridCounts(sources, p);
+  check('griglia: diagonalCount > 0', grid.diagonalCount > 0, true);
+  check('griglia: modulesPerDiagonal > 0', grid.modulesPerDiagonal > 0, true);
+  check('griglia: vettore B = riga (dal Livello 1)', grid.vectorB.y, 54.8);
+
+  const levels = rg.buildRawLevels(sources, p);
+  const allPts = (arr) => arr.flatMap((r) => r.points);
+  const l2 = allPts(levels.level2);
+  check('placement: Livello 2 non vuoto', l2.length > 0, true);
+  check('placement: numero polilinee = diag×mod×elementi', levels.level2.length, grid.diagonalCount * grid.modulesPerDiagonal * mod.elements.length);
+  check('placement: tutti i punti finiti', l2.every((pt) => Number.isFinite(pt.x) && Number.isFinite(pt.y)), true);
+  // La griglia espansa (overflowMargin 80) supera il formato 100×100: copre tutta l'area utile.
+  const coversFormat = l2.some((pt) => pt.x < 20) && l2.some((pt) => pt.x > 80) && l2.some((pt) => pt.y < 20) && l2.some((pt) => pt.y > 80);
+  check('placement: i moduli coprono il formato 100×100', coversFormat, true);
+
+  // Global pattern offset: trasla rigidamente tutte le polilinee.
+  const shifted = rg.buildRawLevels(sources, { ...p, globalPatternOffsetX: 10, globalPatternOffsetY: -5 });
+  const a = levels.level2[0].points[0];
+  const b = shifted.level2[0].points[0];
+  check('offset globale: trasla di (10,−5)', Math.abs(b.x - a.x - 10) < 1e-9 && Math.abs(b.y - a.y + 5) < 1e-9, true);
+
+  // Livelli disattivati → vuoti; niente moduli holes/level0 → vuoti.
+  const noHoles = rg.buildRawLevels({ ...sources, holes: undefined, level0: undefined }, p);
+  check('holes assenti → nessuna polilinea holes', noHoles.holes.length, 0);
+  check('level0 assente → nessuna polilinea level0', noHoles.level0.length, 0);
+  check('determinismo: stessi input → stesso conteggio', rg.buildRawLevels(sources, p).level2.length, levels.level2.length);
+}
+
+// oblique — filtro fori su L0/L1 (Fase A, sotto-step 2b). Costruisco una griglia di "fori"
+// sintetici e verifico: (a) i fori fuori dal boundary laser sono scartati (R7); (b) i moduli
+// L0/L1 restano solo dove la loro cella di griglia ha un foro valido; (c) tolleranza negativa
+// scarta i fori troppo vicini al bordo; (d) trimDiagonalsToHoles taglia gli estremi vuoti.
+console.log('\noblique — filtro fori su L0/L1 (2b)');
+{
+  const p = rg.defaultObliqueParams();
+  const b = rg.rectBoundaryOf(0, 0, 100, 100, 'test');
+  // Fori: 4 celle su una diagonale; uno FUORI dal rettangolo (x≈130), uno a ridosso del bordo.
+  const hole = (cx, cy, d, i) => ({ layer: 'holes', diagonal: d, index: i,
+    points: [{ x: cx - 2, y: cy - 2 }, { x: cx + 2, y: cy - 2 }, { x: cx + 2, y: cy + 2 }, { x: cx - 2, y: cy + 2 }, { x: cx - 2, y: cy - 2 }] });
+  const rawHoles = [hole(20, 50, 0, 0), hole(50, 50, 0, 1), hole(80, 50, 0, 2), hole(130, 50, 0, 3)];
+
+  const laser = rg.buildLaserExport(rawHoles, b, b, 2);
+  check('fori: quello fuori dal perimetro è scartato', laser.validCenters.length, 3);
+  check('fori: gli id validi sono le celle dentro', laser.validIds.has('0:3'), false);
+  check('fori: la cella 0:1 (centro) è valida', laser.validIds.has('0:1'), true);
+
+  // Moduli L0/L1 sulle stesse celle di griglia (0:0..0:3) → tenuti solo dove il foro è valido.
+  const modAt = (cx, cy, d, i) => ({ layer: 'level0', diagonal: d, index: i,
+    points: [{ x: cx - 3, y: cy - 3 }, { x: cx + 3, y: cy - 3 }, { x: cx + 3, y: cy + 3 }, { x: cx - 3, y: cy + 3 }, { x: cx - 3, y: cy - 3 }] });
+  const rawL0 = [modAt(20, 50, 0, 0), modAt(50, 50, 0, 1), modAt(80, 50, 0, 2), modAt(130, 50, 0, 3)];
+  const kept = rg.filterLevelByHoles(rawL0, p, laser, true);
+  check('L0: tenuti solo i moduli con foro valido (3 su 4)', kept.length, 3);
+  check('L0: il modulo senza foro (0:3) è rimosso', kept.some((r) => r.diagonal === 0 && r.index === 3), false);
+  check('L0: holes disattivati → nessun filtro (tutti tenuti)', rg.filterLevelByHoles(rawL0, p, laser, false).length, 4);
+
+  // Tolleranza negativa: scarta i fori troppo vicini al bordo (dentro ma a < |tol| dal bordo).
+  const nearEdge = [hole(3, 50, 0, 0), hole(50, 50, 0, 1)]; // il primo è a 1mm dal bordo sinistro
+  const strict = rg.buildLaserExport(nearEdge, b, b, -5);
+  check('fori: tolleranza negativa scarta quello vicino al bordo', strict.validCenters.length, 1);
+
+  // trimDiagonalsToHoles: estremi vuoti tagliati. Celle 0..4, fori solo su 1..3 → tenute 1..3.
+  const pTrim = { ...p, trimDiagonalsToHoles: true };
+  const holes5 = [hole(30, 50, 0, 1), hole(50, 50, 0, 2), hole(70, 50, 0, 3)];
+  const laser5 = rg.buildLaserExport(holes5, b, b, 2);
+  const l0full = [modAt(10, 50, 0, 0), modAt(30, 50, 0, 1), modAt(50, 50, 0, 2), modAt(70, 50, 0, 3), modAt(90, 50, 0, 4)];
+  const trimmed = rg.filterLevelByHoles(l0full, pTrim, laser5, true);
+  const idxs = trimmed.map((r) => r.index).sort();
+  check('trim: estremi vuoti (0 e 4) tagliati, tenute 1–3', JSON.stringify(idxs), JSON.stringify([1, 2, 3]));
+
+  // Boundary da ruolo-colore (contorno poligonale) sostituisce il rettangolo di inset.
+  const roleLaser = rg.boundaryFromFormat(rg.rectBoundaryOf(10, 10, 60, 60, 'r'), 'laser');
+  const bnds = rg.resolveBoundaries(p, null, { laser: roleLaser });
+  check('boundary: il ruolo LASER sostituisce il rettangolo di default', bnds.laser.minX, 10);
+}
+
+// oblique — clip al perimetro + void (Fase A, sotto-step 2c). Verifica che i moduli vengano
+// tagliati NETTI sul bordo (strict_clip), che niente esca dal boundary, e che le aree vuote
+// sottraggano il ricamo tagliando esatto sul loro bordo (R5).
+console.log('\noblique — clip al perimetro + void (2c)');
+{
+  const p = rg.defaultObliqueParams();
+  const b = rg.rectBoundaryOf(0, 0, 100, 100, 'perimetro');
+  // Una linea che attraversa il bordo: da (-20,50) a (120,50) → tagliata a [0,100].
+  const crossing = { layer: 'level2', diagonal: 0, index: 0, points: [{ x: -20, y: 50 }, { x: 120, y: 50 }] };
+  const clipped = rg.cleanupPolylines([crossing], b, p);
+  const xs = clipped.flatMap((r) => r.points.map((pt) => pt.x));
+  check('clip: niente esce a sinistra del bordo', Math.min(...xs) >= -1e-6, true);
+  check('clip: niente esce a destra del bordo', Math.max(...xs) <= 100 + 1e-6, true);
+  check('clip: il tratto interno resta (non vuoto)', clipped.length > 0, true);
+
+  // Un modulo interamente fuori → scartato del tutto.
+  const outside = { layer: 'level2', diagonal: 0, index: 1, points: [{ x: 200, y: 200 }, { x: 210, y: 210 }] };
+  check('clip: modulo tutto fuori → rimosso', rg.cleanupPolylines([outside], b, p).length, 0);
+
+  // applyModuleClipMode strict_clip = cleanupPolylines.
+  const strict = rg.applyModuleClipMode([crossing], b, 'strict_clip', p);
+  check('applyModuleClipMode strict = cleanup', strict.length, clipped.length);
+
+  // Void: un buco 40..60 al centro sottrae il ricamo che lo attraversa (taglio esatto sul bordo).
+  const voidBox = rg.boundaryFromPoints([{ x: 40, y: 40 }, { x: 60, y: 40 }, { x: 60, y: 60 }, { x: 40, y: 60 }, { x: 40, y: 40 }], 'void');
+  const through = { layer: 'level2', diagonal: 0, index: 0, points: [{ x: 10, y: 50 }, { x: 90, y: 50 }] };
+  const sub = rg.subtractExclusions([through], [voidBox]);
+  const inVoid = sub.flatMap((r) => r.points).some((pt) => pt.x > 41 && pt.x < 59 && pt.y > 41 && pt.y < 59);
+  check('void: nessun punto dentro il vuoto', inVoid, false);
+  check('void: il ricamo è spezzato ai due lati del vuoto', sub.length, 2);
+  check('void: taglia esatto sul bordo del vuoto (x=40 e x=60)',
+    sub.some((r) => r.points.some((pt) => Math.abs(pt.x - 40) < 1e-6)) && sub.some((r) => r.points.some((pt) => Math.abs(pt.x - 60) < 1e-6)), true);
+
+  // applyVoids: OFF → invariato; con exclusions → sottrae. Fori soppressi dal void (R5).
+  check('applyVoids OFF → invariato', rg.applyVoids([through], [voidBox], { ...p, enableExclusionAreas: false })[0].points.length, 2);
+  const hole = { layer: 'holes', diagonal: 0, index: 0, points: [{ x: 48, y: 48 }, { x: 52, y: 48 }, { x: 52, y: 52 }, { x: 48, y: 52 }, { x: 48, y: 48 }] };
+  const le = rg.buildLaserExport([hole], b, b, 2, [voidBox]);
+  check('void: il foro dentro il vuoto è soppresso', le.validCenters.length, 0);
+}
+
+// oblique — routing continuo + min-stitch + lock + orchestratore (Fase A, sotto-step 2d).
+// Integrazione con moduli sintetici su pannello 100×100: verifica che generateOblique produca
+// un ricamo continuo, dentro il bordo (± corsia), coi fori che filtrano L0/L1, min-stitch e lock.
+console.log('\noblique — routing + orchestratore (2d)');
+{
+  const p = rg.defaultObliqueParams();
+  // Motivi sintetici: un quadretto per L0/L1/L2, un forellino per i buchi. Ancora = centro bbox.
+  const square = (s) => [[{ x: 0, y: 0 }, { x: s, y: 0 }, { x: s, y: s }, { x: 0, y: s }, { x: 0, y: 0 }]];
+  const modBig = rg.moduleFromPolylines(square(8));
+  const modHole = rg.moduleFromPolylines(square(3));
+  const sources = { level0: modBig, level1: modBig, level2: modBig, holes: modHole, panelBounds: null };
+
+  const res = rg.generateOblique(sources, p);
+  check('orchestratore: griglia calcolata', res.grid.diagonalCount > 0 && res.grid.modulesPerDiagonal > 0, true);
+  const l2pts = res.level2.flatMap((s) => s.points);
+  check('L2: ricamo non vuoto', l2pts.length > 0, true);
+  check('L2: filo continuo (pochi tratti, non un frammento per modulo)', res.level2.length < res.grid.diagonalCount + 5, true);
+  // Dentro il pannello 100×100, con tolleranza per la corsia perimetrale (laneWidth 3) e i lock sul bordo.
+  const within = l2pts.every((pt) => pt.x >= -6 && pt.x <= 106 && pt.y >= -6 && pt.y <= 106);
+  check('L2: tutto entro il bordo (± corsia)', within, true);
+  check('L2: tutti i punti finiti', l2pts.every((pt) => Number.isFinite(pt.x) && Number.isFinite(pt.y)), true);
+
+  // Fori: filtrano L0/L1 → dove non c'è il foro (fuori dal pannello) niente piazzamento/fissaggio.
+  check('fori: alcuni validi (dentro il pannello)', res.holes.length > 0, true);
+  check('L1: non vuoto', res.level1.flatMap((s) => s.points).length > 0, true);
+
+  // Min-stitch (R3): quasi nessun segmento sotto il minimo (endpoint esclusi).
+  const p1 = { ...p };
+  const segs = res.level2.flatMap((s) => s.points.slice(1).map((pt, i) => rgDist(s.points[i], pt)));
+  const belowMin = segs.filter((d) => d < p1.minimumSegmentLength - 1e-6).length;
+  check('min-stitch: <2% di segmenti sotto il minimo', belowMin / Math.max(1, segs.length) < 0.02, true);
+
+  // Lock (R8): i tratti iniziano/finiscono a ridosso del bordo del pannello.
+  const border = rg.rectBoundaryOf(0, 0, 100, 100, 'p');
+  const near = res.level2.filter((s) => s.points.length > 2)
+    .every((s) => rg.isInside(s.points[0], border, 4) === false || nearBorder(s.points[0]) && nearBorder(s.points[s.points.length - 1]));
+  check('lock: i tratti partono/finiscono vicino al bordo', near, true);
+
+  // Determinismo.
+  const res2 = rg.generateOblique(sources, p);
+  check('determinismo: stesso conteggio punti L2', res2.level2.flatMap((s) => s.points).length, l2pts.length);
+
+  // Senza fori: L0/L1 non filtrati (più moduli restano).
+  const noHoles = rg.generateOblique({ ...sources, holes: undefined }, { ...p, enableHolesLayer: false });
+  check('senza fori: L1 presente (non filtrato dai buchi)', noHoles.level1.flatMap((s) => s.points).length > 0, true);
+
+  function nearBorder(pt) { return Math.min(Math.abs(pt.x - 0), Math.abs(pt.x - 100), Math.abs(pt.y - 0), Math.abs(pt.y - 100)) < 8; }
+  function rgDist(a, b) { return Math.hypot(a.x - b.x, a.y - b.y); }
+
+  // Divergenza R3 bloccata: un modulo campionato FINE (segmenti < minStitch) tagliato dentro un
+  // rettangolo NON deve sparire. app.js scartava i sub-min nel clip (ok col suo sampling grezzo);
+  // col sampling fine del core (~0.6mm) cancellava tutto. La lunghezza minima è del pass finale (R3).
+  const fineSquare = [];
+  for (let i = 0; i <= 40; i++) fineSquare.push({ x: 20 + i * 0.6, y: 20 }); // segmenti 0.6mm, dentro [0,100]
+  const fineClipped = rg.cleanupPolylines([{ layer: 'level2', diagonal: 0, index: 0, points: fineSquare }], rg.rectBoundaryOf(0, 0, 100, 100, 'p'), p);
+  check('R3: modulo a sampling fine dentro il bordo NON sparisce nel clip', fineClipped.length > 0 && fineClipped.flatMap((r) => r.points).length > 2, true);
+
+  // parseModuleSvg legge i punti delle polyline VERBATIM (come app.js), NON ri-campiona come il core
+  // (che a 0.6mm dava ~2.7× i punti = ricamo troppo fitto, "il disastro"). Scala Illustrator pt→mm (72dpi).
+  const modSvg = '<svg id="Livello_1" viewBox="0 0 72 72"><polyline points="0,0 72,0 72,72"/></svg>';
+  const mod = rg.parseModuleSvg(modSvg);
+  check('parseModuleSvg: legge le polyline verbatim (3 punti, non ri-campionati)', mod.elements[0].length, 3);
+  check('parseModuleSvg: scala Illustrator pt→mm (72 → 25.4)', Math.round(mod.elements[0][1].x * 10) / 10, 25.4);
+  const modMm = rg.parseModuleSvg('<svg viewBox="0 0 10 10"><polyline points="0,0 10,10"/></svg>');
+  check('parseModuleSvg: non-Illustrator → viewBox come mm (nessuna scala)', modMm.elements[0][1].x, 10);
+
+  // simplifyLoop: un rettangolo campionato fine (tanti punti collineari) torna a ~4 angoli, così il
+  // boundary del pannello non fa esplodere il clip dei moduli (il "blocco" quando si assegna un ruolo).
+  const fineRect = [];
+  for (let i = 0; i <= 100; i++) fineRect.push({ x: i, y: 0 });
+  for (let i = 1; i <= 100; i++) fineRect.push({ x: 100, y: i });
+  for (let i = 1; i <= 100; i++) fineRect.push({ x: 100 - i, y: 100 });
+  for (let i = 1; i <= 100; i++) fineRect.push({ x: 0, y: 100 - i });
+  const simplified = rg.simplifyLoop(fineRect, 0.2);
+  check('simplifyLoop: rettangolo campionato fine → pochi angoli (≤6)', simplified.length <= 6, true);
+  const bnd = rg.boundaryFromPoints(fineRect, 'p');
+  check('boundaryFromPoints: boundary semplificato (pochi punti, non ~400)', bnd.points.length <= 8, true);
+  check('boundaryFromPoints: ingombro preservato (100×100)', Math.round(bnd.width) === 100 && Math.round(bnd.height) === 100, true);
+}
 
 rmSync(outDir, { recursive: true, force: true });
 console.log(failed ? `\n${failed} test falliti\n` : '\nTutti i test passati\n');
