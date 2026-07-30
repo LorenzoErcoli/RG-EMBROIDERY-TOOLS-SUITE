@@ -11,3 +11,7 @@ apps/*/scripts/dump.json
 
 # artefatti dello smoke test
 test/.build/
+
+# preset ESPORTATI dall'utente (preset-<nome>.json): sono download, non sorgenti.
+# La libreria condivisa vera è presets.shared.json (tracciata), qui NON matchata.
+apps/pattern-grammar/src/preset-*.json
