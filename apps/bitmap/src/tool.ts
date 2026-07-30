@@ -91,11 +91,25 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
       <section class="rg-param-section">
         <div class="rg-param-section__header"><span class="rg-param-section__index">03</span><h3 class="rg-param-section__title">Colori</h3></div>
         <div class="rg-param-grid">
-          <label class="rg-field rg-param-grid__wide">
+          <div class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Colori dei livelli</span>
+            <div class="rg-segmented" id="paletteMode" role="group" aria-label="Colori dei livelli">
+              <button type="button" class="rg-segmented__item rg-segmented__item--active" data-palette="auto" aria-pressed="true">Automatici</button>
+              <button type="button" class="rg-segmented__item" data-palette="manual" aria-pressed="false">Scelgo io</button>
+            </div>
+            <small class="rg-field__help">Automatici: l'algoritmo sceglie i colori. Scelgo io: li prendi dall'immagine col contagocce; gli altri pixel ci rientrano per vicinanza.</small>
+          </div>
+          <label class="rg-field rg-param-grid__wide" id="colorCountField">
             <span class="rg-field__label">Numero di colori (cambi-ago)</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="colorCount" type="number" min="1" max="16" step="1"><span>#</span></span>
             <small class="rg-field__help">in quante tinte separare l'immagine (quantizzazione)</small>
           </label>
+        </div>
+        <div id="manualPalette" hidden>
+          <ul class="rg-color-map" id="manualList"></ul>
+          <div class="rg-cluster">
+            <button type="button" id="addManualBtn" class="rg-button rg-button--ghost rg-button--small">Aggiungi colore</button>
+          </div>
         </div>
         <ul class="rg-color-map" id="stopList"></ul>
       </section>
@@ -402,6 +416,152 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
   }
   const syncCoverage = wireSegmented('coverageMode', 'coverage', () => params.coverage, (v) => { params.coverage = v as BitmapParams['coverage']; }, applyCoverageVisibility);
 
+  // ---- Colori dei livelli: switch Automatici / Scelgo io (palette manuale col contagocce) ----
+  const MAX_MANUAL = 16;
+  const asHex6 = (c: string) => (/^#[0-9a-fA-F]{6}$/.test(c) ? c.toUpperCase() : '#808080');
+
+  function applyPaletteVisibility() {
+    const manual = params.paletteMode === 'manual';
+    ($('colorCountField') as HTMLElement).hidden = manual;
+    ($('manualPalette') as HTMLElement).hidden = !manual;
+  }
+  const syncPalette = wireSegmented('paletteMode', 'palette', () => params.paletteMode,
+    (v) => { params.paletteMode = v as BitmapParams['paletteMode']; },
+    () => {
+      // passando a "Scelgo io" con lista vuota, parto dai colori automatici correnti (così li posso ritoccare)
+      if (params.paletteMode === 'manual' && !params.manualColors.length && currentPreviewColors.length) {
+        params.manualColors = currentPreviewColors.map((c) => asHex6(c.color));
+      }
+      applyPaletteVisibility();
+      buildManualList();
+    });
+
+  function buildManualList() {
+    const host = $('manualList');
+    host.innerHTML = '';
+    params.manualColors.forEach((col, i) => {
+      const li = document.createElement('li');
+      li.className = 'rg-color-map__row';
+
+      const sw = document.createElement('label');
+      sw.className = 'rg-color-map__swatch';
+      sw.style.setProperty('--swatch', col);
+      const picker = document.createElement('input');
+      picker.type = 'color';
+      picker.className = 'rg-u-visually-hidden';
+      picker.value = asHex6(col);
+      picker.setAttribute('aria-label', `Colore livello ${i + 1}`);
+      picker.addEventListener('input', () => {
+        params.manualColors[i] = picker.value.toUpperCase();
+        sw.style.setProperty('--swatch', picker.value);
+        code.textContent = picker.value.toUpperCase();
+        scheduleAnalyze();
+      });
+      sw.appendChild(picker);
+
+      const cluster = document.createElement('span');
+      cluster.className = 'rg-cluster';
+      const code = document.createElement('span');
+      code.className = 'rg-color-map__code';
+      code.textContent = col.toUpperCase();
+      const pick = document.createElement('button');
+      pick.type = 'button';
+      pick.className = 'rg-button rg-button--outline rg-button--small';
+      pick.textContent = 'Campiona';
+      pick.setAttribute('aria-label', `Campiona il colore ${i + 1} dall'immagine`);
+      pick.addEventListener('click', () => enterPickMode(i));
+      const rm = document.createElement('button');
+      rm.type = 'button';
+      rm.className = 'rg-icon-button rg-icon-button--danger';
+      rm.textContent = '×';
+      rm.setAttribute('aria-label', `Rimuovi colore ${i + 1}`);
+      rm.addEventListener('click', () => { params.manualColors.splice(i, 1); buildManualList(); scheduleAnalyze(); });
+
+      cluster.append(code, pick, rm);
+      li.append(sw, cluster);
+      host.appendChild(li);
+    });
+    if (!params.manualColors.length) {
+      host.innerHTML = '<li><p class="rg-color-map__empty">Nessun colore scelto: premi “Aggiungi colore” e campiona dall’immagine.</p></li>';
+    }
+    ($('addManualBtn') as HTMLButtonElement).disabled = params.manualColors.length >= MAX_MANUAL;
+  }
+
+  $('addManualBtn').addEventListener('click', () => {
+    if (params.manualColors.length >= MAX_MANUAL) return;
+    params.manualColors.push('#808080');
+    buildManualList();
+    enterPickMode(params.manualColors.length - 1);   // creo il colore ed entro subito nel contagocce
+  });
+
+  // ---- Contagocce: mostra l'immagine vera, lente sul pixel + codice, clic = quel colore diventa il livello ----
+  function enterPickMode(index: number) {
+    const px = source.pixelsAt(params.maxWidthPx);
+    const W = px.width, H = px.height, SAMPLE = 15, HALF = 7, LENS = 132;
+    const img = document.createElement('canvas');
+    img.width = W; img.height = H;
+    img.className = 'bitmap-pick__img';
+    img.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(px.rgba), W, H), 0, 0);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'bitmap-pick';
+    const hint = document.createElement('div');
+    hint.className = 'bitmap-pick__hint';
+    hint.textContent = 'Muovi sul pixel, clicca per campionare il colore · Esc per annullare';
+    const lens = document.createElement('canvas');
+    lens.className = 'bitmap-pick__lens';
+    lens.width = LENS; lens.height = LENS;
+    const lctx = lens.getContext('2d')!;
+    lctx.imageSmoothingEnabled = false;
+    const tag = document.createElement('div');
+    tag.className = 'bitmap-pick__tag';
+    overlay.append(img, hint, lens, tag);
+    $('canvas').appendChild(overlay);
+
+    const colorAt = (sx: number, sy: number): string => {
+      const o = (sy * W + sx) * 4;
+      const h = (v: number) => v.toString(16).padStart(2, '0');
+      return `#${h(px.rgba[o])}${h(px.rgba[o + 1])}${h(px.rgba[o + 2])}`.toUpperCase();
+    };
+    const pixelOf = (e: MouseEvent) => {
+      const rect = img.getBoundingClientRect();
+      const sx = Math.max(0, Math.min(W - 1, Math.floor((e.clientX - rect.left) / rect.width * W)));
+      const sy = Math.max(0, Math.min(H - 1, Math.floor((e.clientY - rect.top) / rect.height * H)));
+      return { sx, sy };
+    };
+    const onMove = (e: MouseEvent) => {
+      const { sx, sy } = pixelOf(e);
+      lctx.clearRect(0, 0, LENS, LENS);
+      lctx.drawImage(img, sx - HALF, sy - HALF, SAMPLE, SAMPLE, 0, 0, LENS, LENS);
+      const cell = LENS / SAMPLE;
+      lctx.strokeStyle = '#000'; lctx.lineWidth = 1; lctx.strokeRect(HALF * cell + 0.5, HALF * cell + 0.5, cell, cell);
+      lctx.strokeStyle = '#fff'; lctx.strokeRect(HALF * cell + 1.5, HALF * cell + 1.5, cell - 2, cell - 2);
+      const hex = colorAt(sx, sy);
+      tag.textContent = hex; tag.style.setProperty('--c', hex);
+      const orect = overlay.getBoundingClientRect();
+      const lx = Math.min(orect.width - LENS - 8, e.clientX - orect.left + 18);
+      const ly = Math.min(orect.height - LENS - 28, e.clientY - orect.top + 18);
+      lens.style.left = `${lx}px`; lens.style.top = `${ly}px`;
+      tag.style.left = `${lx}px`; tag.style.top = `${ly + LENS + 4}px`;
+    };
+    const exit = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') exit(); };
+    const onClick = (e: MouseEvent) => {
+      const { sx, sy } = pixelOf(e);
+      params.manualColors[index] = colorAt(sx, sy);
+      exit(); buildManualList(); scheduleAnalyze();
+    };
+    img.addEventListener('mousemove', onMove);
+    img.addEventListener('click', onClick);
+    // Il canvas ha pan/zoom (pointerdown → setPointerCapture): se non lo fermo, cattura il puntatore e il
+    // click non arriva all'immagine → il colore non si campiona. Blocco i gesti puntatore/rotella
+    // sull'overlay durante il contagocce.
+    overlay.addEventListener('pointerdown', (e) => e.stopPropagation());
+    overlay.addEventListener('pointerup', (e) => e.stopPropagation());
+    overlay.addEventListener('wheel', (e) => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
+    document.addEventListener('keydown', onKey);
+  }
+
   $('newSeedBtn').addEventListener('click', () => {
     params.seed = (params.seed % 999999) + 1;
     ($('seed') as HTMLInputElement).value = String(params.seed);
@@ -503,6 +663,9 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
   syncOrder();
   syncCoverage();
   applyCoverageVisibility();
+  syncPalette();
+  applyPaletteVisibility();
+  buildManualList();
   renderPreview();
   updateFileStatus();
 }

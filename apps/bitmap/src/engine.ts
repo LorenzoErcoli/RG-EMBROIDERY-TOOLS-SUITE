@@ -22,7 +22,9 @@ export interface BitmapParams {
   excludeBackground: boolean;
   backgroundColors: string[];      // colori di sfondo da togliere dalla selezione
   backgroundToleranceRgb: number;
-  colorCount: number;              // numero di colori (stop/cambi-ago) in cui separare l'immagine
+  colorCount: number;              // numero di colori (stop/cambi-ago), usato solo con paletteMode 'auto'
+  paletteMode: 'auto' | 'manual';  // 'auto' = median-cut; 'manual' = i colori li scegli tu (contagocce)
+  manualColors: string[];          // palette manuale (hex): i colori-livello scelti dall'utente
 
   // --- densità e punto (R22 / R3) ---
   densitySpacingMm: number;        // spaziatura fra le file di filo: griglia metrica (0 = nessuna)
@@ -57,6 +59,8 @@ export const defaultBitmapParams: BitmapParams = {
   excludeBackground: true,
   backgroundColors: ['#FFFFFF'],
   backgroundToleranceRgb: 30,
+  paletteMode: 'auto',
+  manualColors: [],
   colorCount: 2,
   densitySpacingMm: 1.2,
   minStitchMm: 1.0,
@@ -589,6 +593,16 @@ function gridProportionalByColor(
   return out;
 }
 
+/** Palette dei colori-livello: manuale (contagocce) se scelta e non vuota, altrimenti auto (median-cut). */
+function resolvePalette(rgba: Uint8ClampedArray | number[], mask: Uint8Array, params: BitmapParams): RGB[] {
+  if (params.paletteMode === 'manual') {
+    const manual: RGB[] = [];
+    for (const c of params.manualColors) { const p = parseHexColor(c); if (p) manual.push(p); }
+    if (manual.length) return manual;   // se vuota, ripiega su auto per non lasciare l'anteprima vuota
+  }
+  return buildPalette(rgba, mask, params.colorCount);
+}
+
 /**
  * Fase LEGGERA condivisa da `analyzeBitmap` (preview) e `generateStitch` (output):
  * maschera → quantizzazione → densità (griglia unica, un colore per cella, proporzionale) → degrade/tetto.
@@ -607,7 +621,9 @@ function selectAndPrepare(
   let selectedPixels = 0;
   for (let i = 0; i < mask.length; i++) selectedPixels += mask[i];
 
-  const palette = buildPalette(rgba, mask, params.colorCount);
+  // Palette: MANUALE (i colori scelti col contagocce) oppure AUTO (median-cut). In manuale ogni pixel
+  // selezionato rientra nel colore-livello più vicino tra quelli scelti (labelSelected fa già questo).
+  const palette = resolvePalette(rgba, mask, params);
   const paletteHex = palette.map(hexOf);
   const { xs, ys, labels } = labelSelected(rgba, mask, width, palette);
 
