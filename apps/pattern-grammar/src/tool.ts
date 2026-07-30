@@ -9,8 +9,15 @@ import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { FORMATO, CORPO, ALL_FIELD_GROUPS, SCALE_MODES, type Field, type Group } from './fields';
+import sharedPresetsRaw from './presets.shared.json?raw';
 
 const PRESET_KEY = 'pattern-grammar-engine-presets';
+
+/** Preset CONDIVISI: committati in `presets.shared.json`, impacchettati nella build → li vede chiunque apra il sito.
+ *  Per pubblicarne uno: "Esporta file" da un preset locale, poi committa l'entry in quel file. Sola lettura da UI. */
+const SHARED_PRESETS: Record<string, PatternConfig> = (() => {
+  try { return JSON.parse(sharedPresetsRaw) as Record<string, PatternConfig>; } catch { return {}; }
+})();
 
 /** Config iniziale = i valori di default dichiarati nello schema dei campi. */
 function initialConfig(): PatternConfig {
@@ -38,7 +45,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
       </div>
       <footer class="rg-workspace__statusbar">
-        <span id="status">Pronto</span>
+        <span><span id="status">Pronto</span><span id="points" class="rg-mono"></span></span>
         <span id="zoom" class="rg-mono">zoom 100%</span>
       </footer>
     </div>
@@ -258,7 +265,11 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
         <button id="savePreset" class="rg-button rg-button--secondary rg-button--small">Salva</button>
         <button id="loadPreset" class="rg-button rg-button--ghost rg-button--small">Carica</button>
         <button id="deletePreset" class="rg-button rg-button--ghost rg-button--small">Elimina</button>
-      </div>`;
+        <button id="exportPreset" class="rg-button rg-button--ghost rg-button--small">Esporta file</button>
+        <button id="importPreset" class="rg-button rg-button--ghost rg-button--small">Importa file</button>
+        <input id="importPresetFile" type="file" accept=".json,application/json" hidden />
+      </div>
+      <small class="rg-field__help rg-param-grid__wide">I preset <strong>Locali</strong> restano su questo browser. I <strong>Condivisi</strong> li vede chiunque apra il sito: per pubblicarne uno, "Esporta file" e committa l'entry in <code>presets.shared.json</code>.</small>`;
     return grid;
   }
 
@@ -319,11 +330,30 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     const sel = root.querySelector<HTMLSelectElement>('#presetList');
     if (!sel) return;
     sel.innerHTML = '<option value="">Seleziona preset</option>';
-    for (const name of Object.keys(readPresets())) {
-      const o = document.createElement('option');
-      o.value = name; o.textContent = name;
-      sel.appendChild(o);
-    }
+    const addGroup = (label: string, names: string[], source: 'shared' | 'local') => {
+      if (!names.length) return;
+      const og = document.createElement('optgroup');
+      og.label = label;
+      for (const name of names) {
+        const o = document.createElement('option');
+        o.value = `${source}:${name}`; o.textContent = name;
+        og.appendChild(o);
+      }
+      sel.appendChild(og);
+    };
+    addGroup('Condivisi', Object.keys(SHARED_PRESETS), 'shared');
+    addGroup('Locali', Object.keys(readPresets()), 'local');
+  }
+
+  /** Preset attualmente scelto nell'elenco, con la sua origine (condiviso = sola lettura). */
+  function selectedPreset(): { source: 'shared' | 'local'; name: string; config: PatternConfig } | null {
+    const raw = ($('presetList') as HTMLSelectElement).value;
+    const sep = raw.indexOf(':');
+    if (sep < 0) return null;
+    const source = raw.slice(0, sep) as 'shared' | 'local';
+    const name = raw.slice(sep + 1);
+    const config = source === 'shared' ? SHARED_PRESETS[name] : readPresets()[name];
+    return config ? { source, name, config } : null;
   }
 
   /** Ricollega gli eventi degli elementi generati (il pannello può essere ricostruito). */
@@ -352,22 +382,66 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       $('status').textContent = `Preset "${name}" salvato.`;
     });
     $('loadPreset').addEventListener('click', () => {
-      const name = ($('presetList') as HTMLSelectElement).value;
-      const preset = readPresets()[name];
+      const preset = selectedPreset();
       if (!preset) return;
-      Object.assign(cfg, migratePreset(preset));
+      Object.assign(cfg, migratePreset(preset.config));
       buildPanel();          // ricostruisce coi valori del preset (e ricollega gli eventi)
       refreshPresetList();
       render();
-      $('status').textContent = `Preset "${name}" caricato.`;
+      $('status').textContent = `Preset "${preset.name}" caricato${preset.source === 'shared' ? ' (condiviso)' : ''}.`;
     });
     $('deletePreset').addEventListener('click', () => {
-      const name = ($('presetList') as HTMLSelectElement).value;
-      if (!name) return;
+      const preset = selectedPreset();
+      if (!preset) return;
+      if (preset.source === 'shared') {
+        $('status').textContent = 'I preset condivisi si cambiano committando il file, non da qui.';
+        return;
+      }
       const presets = readPresets();
-      delete presets[name];
+      delete presets[preset.name];
       localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
       refreshPresetList();
+      $('status').textContent = `Preset "${preset.name}" eliminato.`;
+    });
+
+    // Esporta il preset scelto (o, se nessuno è scelto, la config corrente) come file .json.
+    // Formato = { nome: config }, identico a presets.shared.json → l'entry si incolla dritta per condividerlo.
+    $('exportPreset').addEventListener('click', async () => {
+      const preset = selectedPreset();
+      const name = preset ? preset.name : (($('presetName') as HTMLInputElement).value.trim() || 'preset');
+      const config = preset ? preset.config : { ...(cfg as PatternConfig) };
+      const json = JSON.stringify({ [name]: config }, null, 2);
+      const fileName = `preset-${name.replace(/[^\w-]+/g, '-')}.json`;
+      const outcome = await saveTextFile(json, { suggestedName: fileName, description: 'Preset JSON' });
+      $('status').textContent = saveOutcomeMessage(outcome, fileName);
+    });
+    // Importa un file .json ({ nome: config }, uno o più) nei preset LOCALI.
+    $('importPreset').addEventListener('click', () => ($('importPresetFile') as HTMLInputElement).click());
+    $('importPresetFile').addEventListener('change', (ev) => {
+      const input = ev.target as HTMLInputElement;
+      const file = input.files?.[0];
+      if (!file) return;
+      const reader = new FileReader();
+      reader.onload = () => {
+        try {
+          const parsed = JSON.parse(String(reader.result)) as Record<string, unknown>;
+          const presets = readPresets();
+          let added = 0;
+          for (const [name, config] of Object.entries(parsed)) {
+            if (config && typeof config === 'object' && !Array.isArray(config)) {
+              presets[name] = migratePreset(config as PatternConfig);
+              added++;
+            }
+          }
+          localStorage.setItem(PRESET_KEY, JSON.stringify(presets));
+          refreshPresetList();
+          $('status').textContent = added ? `Importati ${added} preset nei Locali.` : 'Nessun preset valido nel file.';
+        } catch (e) {
+          $('status').textContent = 'Import preset fallito: ' + (e as Error).message;
+        }
+        input.value = '';
+      };
+      reader.readAsText(file);
     });
 
     refreshPresetList();
@@ -380,8 +454,12 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       const w = /width="([\d.]+)mm"/.exec(lastSvg)?.[1];
       const h = /height="([\d.]+)mm"/.exec(lastSvg)?.[1];
       $('status').textContent = `${w ?? '?'} × ${h ?? '?'} mm`;
+      // Punti effettivamente cuciti: già nei metadati dell'SVG (pointCount.exported = final.points.length).
+      const n = /"exported":(\d+)/.exec(lastSvg)?.[1];
+      $('points').textContent = n ? ` · ${Number(n).toLocaleString('it-IT')} punti` : '';
     } catch (e) {
       $('status').textContent = 'Errore: ' + (e as Error).message;
+      $('points').textContent = '';
       console.error(e);
     }
   }
