@@ -1,6 +1,6 @@
 import '@rg/ui/rg.css';
 import './bitmap.css';
-import { buildSvg, dstFromExportLayers, DST_FILE } from '@rg/core';
+import { buildSvg, dstFromExportLayers, DST_FILE, readDstMetadata, readProjectMetadata } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
@@ -27,7 +27,7 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
         <div class="rg-param-grid">
           <div class="rg-file-input rg-param-grid__wide">
             <label class="rg-file-input__control">
-              <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/bmp,image/gif" />
+              <input type="file" id="fileInput" accept="image/png,image/jpeg,image/webp,image/bmp,image/gif,.svg,.dst" />
               <span class="rg-button rg-button--outline">Carica un'immagine…</span>
             </label>
             <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file: uso l'immagine demo.</p>
@@ -593,9 +593,50 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
     $('fileStatus').textContent = `${sourceName || 'Immagine demo'}: ${px.width}×${px.height} px → ${wmm}×${hmm} mm (${hint})`;
   }
 
-  $('fileInput').addEventListener('change', (ev) => {
+  /** Ripristina i parametri dal metadata di un file esportato dalla suite (R27). Ritorna false se non è nostro. */
+  function restoreParams(meta: Record<string, unknown> | null): boolean {
+    if (!meta || meta.rgProject !== 'bitmap') return false;
+    const mp = meta.params;
+    if (mp && typeof mp === 'object') {
+      for (const k of Object.keys(defaultBitmapParams) as (keyof BitmapParams)[]) {
+        const v = (mp as Record<string, unknown>)[k];
+        if (v !== undefined) (params as unknown as Record<string, unknown>)[k] = v;
+      }
+    }
+    reflectAllControls();
+    return true;
+  }
+
+  /** Riallinea TUTTI i controlli del pannello ai `params` correnti (dopo un ripristino). */
+  function reflectAllControls() {
+    for (const b of NUMS) ($(b.id) as HTMLInputElement).value = String(params[b.key]);
+    reflectStaticControls();
+    syncStyle(); syncOrder(); syncCoverage(); syncPalette();
+    applyCoverageVisibility(); applyPaletteVisibility();
+    (['degradeDropField', 'degradeJitterField', 'seedField'] as const).forEach((id) => { ($(id) as HTMLElement).hidden = params.style !== 'degrade'; });
+    (['scanlineBandField', 'serpentineField'] as const).forEach((id) => { ($(id) as HTMLElement).hidden = params.ordering !== 'scanline'; });
+    buildManualList();
+  }
+
+  $('fileInput').addEventListener('change', async (ev) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
+
+    // .dst / .svg esportati dalla suite → ripristino dei parametri (R27). Il .dst porta i parametri nel
+    // footer dopo l'END; l'immagine sorgente non è nel file → si ricarica a parte per rigenerare.
+    if (/\.dst$/i.test(file.name)) {
+      const meta = readDstMetadata(new Uint8Array(await file.arrayBuffer()));
+      if (restoreParams(meta)) { renderPreview(); $('fileStatus').textContent = `${file.name}: parametri ripristinati dal DST · ricarica l'immagine per rigenerare`; }
+      else $('fileStatus').textContent = `${file.name}: nessun parametro RG nel DST`;
+      return;
+    }
+    if (/\.svg$/i.test(file.name)) {
+      const meta = readProjectMetadata(await file.text());
+      if (restoreParams(meta)) { renderPreview(); $('fileStatus').textContent = `${file.name}: parametri ripristinati dall'SVG · ricarica l'immagine per rigenerare`; }
+      else $('fileStatus').textContent = `${file.name}: nessun parametro RG nell'SVG`;
+      return;
+    }
+
     const url = URL.createObjectURL(file);
     const imgEl = new Image();
     imgEl.onload = () => {
@@ -632,7 +673,10 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
     const res = runBitmapPipeline(px.rgba, px.width, px.height, params, mmPerPx(px.width), onlyColor || undefined);
     let bytes: Uint8Array;
     try {
-      bytes = dstFromExportLayers(res.exportLayers, { label: (sourceName || 'BITMAP').toUpperCase().slice(0, 16) });
+      bytes = dstFromExportLayers(res.exportLayers, {
+        label: (sourceName || 'BITMAP').toUpperCase().slice(0, 16),
+        metadata: { rgProject: 'bitmap', version: '0.1.0', params },   // parametri riapribili dal .dst (R27)
+      });
     } catch (e) {
       $('status').textContent = (e as Error).message;   // niente da cucire → messaggio, non file vuoto
       return;

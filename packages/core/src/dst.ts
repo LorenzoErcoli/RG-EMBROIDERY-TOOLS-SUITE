@@ -17,6 +17,8 @@ export interface DstProgram {
   /** 'svg' (Y verso il basso, invertita per il DST) | 'cartesian' (Y verso l'alto). Default 'svg'. */
   coordinate_system?: 'svg' | 'cartesian';
   paths: DstPath[];
+  /** Metadata di progetto (R9/R27): appeso DOPO l'END → la macchina lo ignora, noi lo rileggiamo. */
+  metadata?: Record<string, unknown>;
 }
 
 const WEIGHTS = [81, 27, 9, 3, 1];
@@ -133,7 +135,52 @@ export function buildDst(program: DstProgram): Uint8Array {
   const out = new Uint8Array(512 + body.length);
   out.set(header, 0);
   out.set(Uint8Array.from(body), 512);
+  return program.metadata ? appendDstMetadata(out, program.metadata) : out;
+}
+
+// ------------------------------------------------------------
+// Metadata di progetto nel .dst (R9/R27) — riapribile come per l'SVG (`readProjectMetadata`).
+// Si appende un footer DOPO il record END: la macchina/Stilista legge fino all'END e ignora il resto,
+// noi lo rileggiamo. Struttura del footer, in coda al file:
+//   [MAGIC 8 byte "RGPROJ01"][JSON utf-8][lunghezza JSON uint32 LE 4 byte]
+// La lunghezza in fondo + il MAGIC prima del JSON rendono la lettura univoca (nessuna scansione fragile).
+// ------------------------------------------------------------
+
+const DST_META_MAGIC = Uint8Array.from([0x52, 0x47, 0x50, 0x52, 0x4f, 0x4a, 0x30, 0x31]); // "RGPROJ01"
+
+/** Appende il footer con i parametri di progetto ai byte di un .dst già completo (header+corpo+END). */
+export function appendDstMetadata(dst: Uint8Array, metadata: Record<string, unknown>): Uint8Array {
+  const json = new TextEncoder().encode(JSON.stringify(metadata));
+  const footer = new Uint8Array(DST_META_MAGIC.length + json.length + 4);
+  footer.set(DST_META_MAGIC, 0);
+  footer.set(json, DST_META_MAGIC.length);
+  new DataView(footer.buffer).setUint32(DST_META_MAGIC.length + json.length, json.length, true); // LE
+  const out = new Uint8Array(dst.length + footer.length);
+  out.set(dst, 0);
+  out.set(footer, dst.length);
   return out;
+}
+
+/**
+ * Rilegge i parametri di progetto dal footer di un .dst scritto con `metadata` (R27: file riapribile).
+ * Ritorna l'oggetto JSON (es. `{ rgProject, params }`) o null se assente/rotto. Non tocca la cucitura.
+ */
+export function readDstMetadata(dst: Uint8Array): Record<string, unknown> | null {
+  const n = dst.length;
+  if (n < DST_META_MAGIC.length + 4) return null;
+  const dv = new DataView(dst.buffer, dst.byteOffset, dst.byteLength);
+  const jsonLen = dv.getUint32(n - 4, true);
+  if (jsonLen <= 0 || jsonLen > n - DST_META_MAGIC.length - 4) return null;
+  const magicAt = n - 4 - jsonLen - DST_META_MAGIC.length;
+  if (magicAt < 0) return null;
+  for (let i = 0; i < DST_META_MAGIC.length; i++) if (dst[magicAt + i] !== DST_META_MAGIC[i]) return null;
+  try {
+    const json = dst.subarray(magicAt + DST_META_MAGIC.length, magicAt + DST_META_MAGIC.length + jsonLen);
+    const v = JSON.parse(new TextDecoder().decode(json));
+    return v && typeof v === 'object' ? (v as Record<string, unknown>) : null;
+  } catch {
+    return null;
+  }
 }
 
 /** Opzioni per il salvataggio di un .dst, uguali per tutti i tool (passale a `saveBinaryFile`). */
@@ -146,6 +193,8 @@ export interface DstFromLayersOptions {
   coordinateSystem?: 'svg' | 'cartesian';
   /** Centra il disegno all'origine (default true, convenzione DST). */
   center?: boolean;
+  /** Metadata di progetto riapribile (R27): appeso dopo l'END, ignorato dalla macchina. */
+  metadata?: Record<string, unknown>;
 }
 
 /**
@@ -173,5 +222,5 @@ export function dstFromExportLayers(layers: ExportLayer[], opts: DstFromLayersOp
       paths.push({ needle: i + 1, points_mm: pl.map((p) => [p.x - cx, p.y - cy] as [number, number]) });
     }
   });
-  return buildDst({ label: opts.label, coordinate_system: opts.coordinateSystem || 'svg', paths });
+  return buildDst({ label: opts.label, coordinate_system: opts.coordinateSystem || 'svg', paths, metadata: opts.metadata });
 }

@@ -3,7 +3,7 @@
 > Come i tool smettono di essere isole e diventano un ecosistema.
 > Compagno della [Costituzione](COSTITUZIONE-RICAMO.md).
 
-**Versione:** 0.1 · **Aggiornato:** 2026-07-14
+**Versione:** 0.2 · **Aggiornato:** 2026-07-31 · 5 tool live
 
 ---
 
@@ -26,7 +26,7 @@ linguaggio (mm, stessi tipi, stessi parametri) e **interoperano** via lo stesso 
 ```mermaid
 graph TD
   subgraph Contratti["CONTRATTI CONDIVISI (il linguaggio comune)"]
-    COST["COSTITUZIONE-RICAMO.md<br/>regole R1–R26 · vocabolario · parametri canonici"]
+    COST["COSTITUZIONE-RICAMO.md<br/>regole R1–R31 · vocabolario · parametri canonici"]
     SCHEMA["params.schema.json"]
   end
 
@@ -36,29 +36,29 @@ graph TD
     SCAFFOLD["scaffold<br/>template nuovo tool"]
   end
 
-  subgraph Apps["apps/ — I TOOL"]
+  subgraph Apps["apps/ — I TOOL (live)"]
+    N45["net-45"]
+    PG["pattern-grammar"]
+    ILC["interlace"]
+    BMP["bitmap (raster)"]
     OBQ["oblique"]
-    G45["45-grid"]
-    CS["cross-stitch"]
-    T6["tool #6 ★ primo cittadino"]
   end
 
-  BITMAP["bitmap_to_stitch<br/>(satellite Python)"]
-  PROJ[("file di progetto<br/>SVG + metadata")]
+  BITMAP["bitmap_to_stitch<br/>(repo Python, satellite)"]
+  PROJ[("file di progetto<br/>SVG + metadata / DST")]
 
   COST -. governa .-> CORE
   COST -. governa .-> Apps
   SCHEMA -->|contratto parametri| CORE
   SCHEMA -. stessi nomi/unità .-> BITMAP
 
-  CORE --> OBQ & G45 & CS & T6
-  UIKIT --> OBQ & G45 & CS & T6
-  SCAFFOLD -. genera .-> T6
-  T6 -. promuove primitiva .-> CORE
+  CORE --> N45 & PG & ILC & BMP & OBQ
+  UIKIT --> N45 & PG & ILC & BMP & OBQ
+  N45 -. promuove primitiva .-> CORE
 
-  T6 -->|esporta| PROJ
-  OBQ -->|esporta| PROJ
-  PROJ -->|riaperto / interop| CS
+  N45 -->|esporta SVG/DST| PROJ
+  BMP -->|esporta SVG/DST| PROJ
+  PROJ -->|riaperto / interop| PG
 ```
 
 ### In ASCII (fallback)
@@ -72,9 +72,9 @@ graph TD
                         └───────────────┬───────────────┘
                                         │ import (workspace link)
                                         ▼
-        APPS            oblique   45-grid   cross-stitch   tool#6★
+        APPS         net-45  pattern-grammar  interlace  bitmap  oblique
                           │                                  │
-                          └──────────► SVG+metadata ◄────────┘
+                          └──────► SVG+metadata / DST ◄───────┘
                                    (interop: output = input)
 
         SATELLITE       bitmap_to_stitch (Python) ── segue params.schema.json + Costituzione
@@ -84,7 +84,7 @@ graph TD
 
 - **Contratti** (in alto): non è codice eseguibile, è il *linguaggio*. La Costituzione governa tutto; `params.schema.json` è il ponte che fa parlare anche il satellite Python.
 - **Packages**: il codice condiviso. `core` è la base che propaga. `ui-kit` e `scaffold` accelerano i nuovi tool ma non sono obbligatori dal giorno 1.
-- **Apps**: i tool. Ognuno importa `core`; nessuno duplica. Il tool #6 nasce qui.
+- **Apps**: i tool (net-45, pattern-grammar, interlace, bitmap, oblique). Ognuno importa `core`; nessuno duplica.
 - **Freccia di promozione** (tool → core): il percorso per cui una buona idea in un tool diventa patrimonio di tutti.
 - **File di progetto** (SVG + metadata, R9): il punto di interoperabilità. L'output di un tool si riapre in un altro.
 
@@ -92,7 +92,7 @@ graph TD
 
 1. Il `core` **cresce per estrazione**, non per anticipazione: una primitiva entra nel core quando **un secondo tool** la richiede (o quando è ovviamente fondamentale: geometry, io, export).
 2. Un tool **non modifica il core per un bisogno solo suo**: prima lo tiene in locale nell'app, poi — se si dimostra generale — lo promuove.
-3. Ogni cosa nel core **rispetta la Costituzione** (nomi canonici §3, regole R1–R30).
+3. Ogni cosa nel core **rispetta la Costituzione** (nomi canonici §3, regole R1–R31).
 4. I tool esistenti **migrano uno alla volta**, quando li tocchi. Nessun big-bang.
 5. Il satellite Python **non entra nel workspace-link**: condivide contratti (`params.schema.json`), non codice.
 6. **Un tool migrato arriva col suo motore: la regola 1 da sola non basta.** L'estrazione scatta quando un *secondo tool ha bisogno* di una primitiva — ma un tool che arriva già completo non "ha bisogno" di niente, e si porta dietro la sua risposta a domande già risolte nel core. Quindi: **a ogni migrazione si confrontano le primitive** (chiusura, colori, unità, tolleranze) e le divergenze si risolvono *esplicitamente*, prima di considerare finita la migrazione.
@@ -102,14 +102,17 @@ graph TD
 
 ## Stato di migrazione
 
-| Tool | Stack | Stato |
-|---|---|---|
-| tool #6 | TS | ★ nasce nell'ecosistema |
-| cross-stitch | TS+React | candidato facile (già TS/modulare) |
-| oblique | vanilla JS | migra quando lo tocchi (consuma bundle ESM del core) |
-| 45-grid | vanilla JS | migra quando lo tocchi |
-| pattern-grammar-engine | TS/node | contribuisce infrastruttura (boundary/import, exporter) al core |
-| bitmap_to_stitch | Python | satellite: contratti sì, codice no |
+| Tool | Stato |
+|---|---|
+| **net-45** (Rete 45°) | ✅ **live** — primo cittadino, rete di cordoncini a 45° |
+| **pattern-grammar** (Generatore pattern) | ✅ **live** — motore migrato da `pattern-grammar-engine` |
+| **interlace** (Interlace) | ✅ **live** — motore locale all'app, multicolore a stop |
+| **bitmap** (Bitmap → Stitch) | ✅ **live** — calcolo punti migrato da `bitmap_to_stitch` (input raster, unico nella suite) |
+| **oblique** (Broderie Anglaise) | ✅ **live** — porting da `rg-oblique-embroidery-pattern-generator` (usa le void, R5) |
+| 45-grid, cross-stitch | da migrare quando li tocchi (stesso schema) |
+| `bitmap_to_stitch` (repo Python) | satellite: contratti sì, codice no. Migrata la sola pipeline *immagine→punti→SVG*; il laboratorio DST/recipe con AI (CLIP/OpenAI) resta fuori scope |
+
+**Capacità globali attive** (una volta, per tutti — vedi Costituzione): export **SVG e DST riapribili** (R9/R27/R31 — `readProjectMetadata` per l'SVG, `readDstMetadata` per il footer del DST; la cucitura resta byte-identica), export **DST macchina** (R31, `dstFromExportLayers`), **salvataggio con finestra di sistema** (R29), **pannello canonico** Testa A/B + accordion (DS v1.7.0).
 
 ---
 
@@ -119,15 +122,20 @@ Il monorepo è ora la **suite RG Tools** con una home comune e il design system 
 
 ```
 RG Tools (monorepo)
-├─ packages/design-system   ★ RG Design System — SUBMODULE git (fonte di verità del look)
-├─ packages/ui              integra il DS (rg.css) + chrome condiviso (topbar, registro tool)
-├─ packages/core            @rg/core — geometria/IO/rete
+├─ packages/design-system   ★ RG Design System — SUBMODULE git (tag v1.6.0)
+├─ packages/ui              integra il DS + chrome condiviso (topbar, registro tool, pan/zoom, salvataggio file)
+├─ packages/core            @rg/core — geometria/IO/mm/punti/export SVG + adattatore DST (R31) + readProjectMetadata
+├─ packages/pattern-grammar @rg/pattern-grammar — motore del Generatore pattern
 ├─ apps/shell               ★ HOME della suite: griglia di card, scegli il tool (hash routing)
-└─ apps/net-45              tool "Rete 45°" — montabile (mountNet45) + standalone
+├─ apps/net-45              "Rete 45°"
+├─ apps/pattern-grammar     "Generatore pattern"
+├─ apps/interlace           "Interlace"
+├─ apps/bitmap              "Bitmap → Stitch"  (input raster)
+└─ apps/oblique             "Broderie Anglaise"
 ```
 
 **Come funziona:** `apps/shell` è l'unica app d'ingresso. Home (`#/`) = griglia di tool DS-styled;
-clic su un tool → `#/net-45` → `mountNet45(root, {backHref:'#/'})` monta il tool dentro la shell
+clic su un tool → `#/<tool>` → `mount<Tool>(root, {backHref:'#/'})` monta il tool dentro la shell
 (link "← RG Tools" per tornare). Ogni tool esporta un `mount(root)` → è sia standalone sia integrato.
 
 **Design system:** submodule in `packages/design-system`; `packages/ui/src/rg.css` importa i 6 file DS
@@ -141,5 +149,4 @@ Nota: i font AGNext/GT America non sono inclusi (regola DS) → fallback di sist
 (1) esportare un `mount(root)`, (2) importare `@rg/ui/rg.css` e ri-vestire con le classi `.rg-*`,
 (3) aggiungere una card in `packages/ui/src/tools.ts` e una route nella shell. Il satellite Python resta fuori.
 
-> **Nota submodule locale:** il submodule punta a `../RG-DESIGN-SYSTEM` (path locale, entrambi i repo senza remote).
-> Quando i repo andranno su GitHub, aggiornare l'URL del submodule in `.gitmodules` con quello remoto.
+> **Submodule e pubblicazione:** il submodule punta al repo GitHub del DS, **pinnato al tag `v1.6.0`** (merge/tag del DS li fa Lorenzo, mai da una chat consumer). Il monorepo è su **GitHub** (`LorenzoErcoli/RG-EMBROIDERY-TOOLS-SUITE`) e si pubblica su **GitHub Pages** via Action (`.github/workflows/deploy.yml`) a ogni push: la suite è 100% lato browser → sito statico.

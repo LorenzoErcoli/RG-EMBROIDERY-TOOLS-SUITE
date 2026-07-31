@@ -8,7 +8,7 @@
 > Questo documento è **stack-agnostic**: vale per i progetti TypeScript/JS e per quelli Python.
 > Ogni nuovo progetto parte da qui, anche prima di condividere una riga di codice.
 
-**Versione:** 0.10 · **Aggiornato:** 2026-07-23
+**Versione:** 0.11 · **Aggiornato:** 2026-07-31
 
 ---
 
@@ -146,7 +146,7 @@ L'IO restituisce SEMPRE un **`ImportResult`** `{ contours (mm), widthMm, heightM
 
 ---
 
-> **R22–R26 — Famiglia "tipi di punto, densità e concatenamento".** Riguardano *cosa* si cuce (tassonomia dei punti), *quanto fitto* (densità e le sue conseguenze fisiche) e *in che ordine* (elementi concatenati uno dopo l'altro). È l'area più sotto-sviluppata: il riempimento vero (tatami) oggi esiste solo in `bitmap_to_stitch`; queste regole sono in parte estratte, in parte **normative** (come dovrebbe essere fatto nel core).
+> **R22–R26 — Famiglia "tipi di punto, densità e concatenamento".** Riguardano *cosa* si cuce (tassonomia dei punti), *quanto fitto* (densità e le sue conseguenze fisiche) e *in che ordine* (elementi concatenati uno dopo l'altro). È l'area più sotto-sviluppata: il riempimento a punti oggi vive nel **motore locale di `apps/bitmap`** (migrato da `bitmap_to_stitch`, calcolo punti in TS), **non ancora estratto nel core**; queste regole sono in parte estratte, in parte **normative** (come andrà fatto nel core quando un 2° tool lo chiederà — regola di crescita 1).
 
 ### R22 — La densità è la spaziatura trasversale in mm tra file di filo adiacenti. È la rappresentazione canonica.
 **Perché:** oggi la densità è espressa in **6 modi diversi** (numero di passate, step mm, punti/mm², % del budget, `min_dist`, interlinea) → impossibile confrontarla o riusarla tra progetti.
@@ -173,7 +173,7 @@ L'IO restituisce SEMPRE un **`ImportResult`** `{ contours (mm), widthMm, heightM
 | **Cordoncino** | zig-zag stretto lungo una linea/bordo | step longitudinale dello zig-zag | 45-grid, oblique |
 | **Catenella / Chain** | moduli-anello ripetuti lungo la linea | passo tra moduli | 45-grid |
 | **Zig-zag / Fissaggio** | zig-zag di ancoraggio | spaziatura d'arco | oblique (rosette L1, bordo) |
-| **Tatami / Fill** | riempimento a righe parallele angolate, serpentina, sfalsate | line spacing (trasversale) + stitch length (longitudinale) + angolo | **solo `bitmap_to_stitch`** (`hatch_fill`) → il buco da colmare nel core |
+| **Tatami / Fill** | riempimento a righe parallele angolate, serpentina, sfalsate | line spacing (trasversale) + stitch length (longitudinale) + angolo | motore locale di **`apps/bitmap`** (migrato da `bitmap_to_stitch`) → da **estrarre nel core** quando un 2° tool lo chiede |
 | **Cross / Punto croce** | diagonali su griglia | ripetizioni per cella | cross-stitch |
 
 Il **fill vero (tatami)** è il grande assente: va portato nel core come primitiva di prima classe (righe parallele ad angolo, serpentina, sfalsamento, underlay).
@@ -217,6 +217,16 @@ Il **fill vero (tatami)** è il grande assente: va portato nel core come primiti
 ### R30 — Interlinea (lungo il filo) e spaziatura (di traverso) sono due misure diverse.
 **Perché:** in un cordoncino zig-zag due distanze decidono la resa, e sono **ortogonali**: quanto sono ravvicinati i punti *lungo* il filo (**interlinea**) e quanto sono vicine le file di filo *di traverso* (**spaziatura**). Chiamarle entrambe "densità" — come faceva il codice — è già costato lo stesso nome per grandezze diverse: un valore giusto per una è sbagliato per l'altra. Deciso con Lorenzo che per il cordoncino la misura che governa è l'interlinea longitudinale (distanza tra due punti *consecutivi* lungo il filo, la "misura A").
 **Come:** interlinea longitudinale = `cordInterlineMm` (etichetta "Interlinea del cordoncino"); spaziatura trasversale = `densitySpacingMm` (R22). Nelle etichette **non** usare "densità" da sola per nessuna delle due: dì *lungo il filo* o *tra le file*.
+
+### R31 — L'export macchina (DST) è una possibilità globale: un adattatore solo, non un encoder per tool.
+**Perché:** ogni tool produce già `ExportLayer[]` in mm reali; il file macchina (Tajima `.dst`) è identico per tutti. Riscrivere l'encoder in ogni tool = divergenza garantita (delta, centratura, cambio-ago diversi) — lo stesso errore che R28/R30 uccidono, ma sui byte.
+**Come:** `dstFromExportLayers(layers, { label })` in `@rg/core` → byte `.dst`, salvati con `saveBinaryFile(bytes, { suggestedName, ...DST_FILE })` (`@rg/ui/save`, R29). Ogni layer **cucito** (non `shapeOnly`) è un **ago** → cambio-colore in sequenza; ogni polilinea è un blocco cucito, fra blocchi = salto. Punti in mm, centrati all'origine, coordinate SVG (Y giù) invertite per il DST. Un tool aggiunge **un bottone e una chiamata**, non riscrive l'encoder. Il DST **non porta** ago reale né colore-filo: li imposta l'operatore in macchina. Bloccato da `test/smoke.mjs` (encoder al byte + invarianti dell'adattatore). Adottato da net-45, pattern-grammar, interlace, bitmap.
+
+**Corollario (riapertura, R9/R27).** Un file esportato dalla suite si **riapre** e ripristina i parametri, sia in SVG che in DST — con **una funzione condivisa per formato** in `@rg/core`, mai re-implementata per tool:
+- SVG → `readProjectMetadata(svg)` (rileva `<metadata id="rg-project">`).
+- DST → `readDstMetadata(bytes)`: i parametri stanno in un **footer DOPO il record END** (`[MAGIC "RGPROJ01"][JSON utf-8][lunghezza uint32 LE]`). La macchina/Stilista legge fino all'END e **ignora il footer** → la cucitura è **byte-identica** con o senza metadata. `dstFromExportLayers`/`buildDst` accettano `metadata` e lo appendono.
+
+Entrambe tornano `{ rgProject, params, … }` o `null` per file non-suite. I tool le riusano per ripristinare pannello/ruoli.
 
 ---
 
@@ -396,8 +406,9 @@ I passi **4** (Placement) e parte del **7** (traversal + passaggi nascosti + tir
 ### 5.3 Riapertura
 - All'import, un extractor rileva `<metadata id="rg-project">` e ripristina params + geometria sorgente (colori originali inclusi).
 
-### 5.4 Formati macchina (futuro)
-- Nessun progetto emette ancora DST/PES nativi tranne i prototipi di `bitmap_to_stitch` (via `pyembroidery`). Quando serve: un `machine-writer` che consuma la stessa polilinea + layer + color-change. Fuori scope per ora.
+### 5.4 Formati macchina
+- **DST (Tajima): la suite lo emette**, come possibilità globale — vedi **R31** (`dstFromExportLayers` nel core, un ago per layer cucito, salvataggio via `saveBinaryFile`/`DST_FILE`). Adottato da net-45, pattern-grammar, interlace, bitmap.
+- **PES e altri formati nativi** restano fuori scope per ora: quando serviranno, un `machine-writer` che consuma la stessa polilinea + layer + color-change (lo stesso ingresso `ExportLayer[]` del writer DST).
 
 ---
 

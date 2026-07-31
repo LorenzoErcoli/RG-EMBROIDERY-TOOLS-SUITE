@@ -5,7 +5,7 @@ Stai per costruire **un nuovo strumento dentro un ecosistema già in piedi**. La
 ## 0. Cosa leggere PRIMA di scrivere una riga
 In questo repo (`RG-EMBROIDERY-TOOLS-SUITE`), nell'ordine:
 1. `STATO.md` — dove siamo, cosa c'è, cosa manca. **Va aggiornato nello stesso commit di ogni modifica.**
-2. `COSTITUZIONE-RICAMO.md` — 30 regole invarianti (R1–R30) + nomi canonici dei parametri (§3). Sono lezioni già pagate: si citano nei commit ("fix R3").
+2. `COSTITUZIONE-RICAMO.md` — 31 regole invarianti (R1–R31) + nomi canonici dei parametri (§3). Sono lezioni già pagate: si citano nei commit ("fix R3").
 3. `ARCHITETTURA.md` — come cresce l'ecosistema (le *regole di crescita* sono la parte che ti riguarda di più).
 4. `REVISIONE-PARAMETRI.md` — convenzioni su etichette/unità decise con Lorenzo.
 

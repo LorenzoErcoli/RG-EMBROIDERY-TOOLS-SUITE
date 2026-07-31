@@ -270,6 +270,20 @@ let dlThrew = false;
 try { rg.dstFromExportLayers([{ id: 'r', color: '#ccc', polylines: [[{ x: 0, y: 0 }, { x: 1, y: 0 }]], shapeOnly: true }]); } catch { dlThrew = true; }
 check('DST-da-layers: solo forme → errore (niente da cucire)', dlThrew, true);
 
+// metadata riapribile NEL .dst (R27): appeso dopo l'END → la macchina lo ignora, noi lo rileggiamo.
+console.log('\ncore — parametri riapribili dal .dst (R27)');
+const dstMetaLayers = [{ id: 'stop-0', color: '#111', polylines: [[{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }]] }];
+const dstMeta = { rgProject: 'bitmap', params: { threshold: 123, colorCount: 3, densitySpacingMm: 1.4 } };
+const dstNo = rg.dstFromExportLayers(dstMetaLayers, { label: 'META' });
+const dstYes = rg.dstFromExportLayers(dstMetaLayers, { label: 'META', metadata: dstMeta });
+const dstReab = rg.readDstMetadata(dstYes);
+check('DST metadata: rgProject riletto', dstReab?.rgProject, 'bitmap');
+check('DST metadata: parametri identici', JSON.stringify(dstReab?.params), JSON.stringify(dstMeta.params));
+check('DST senza metadata → null', rg.readDstMetadata(dstNo), null);
+// machine-safe: il ricamo fino all'END è IDENTICO, il metadata è solo un footer in coda
+check('DST con metadata: la cucitura (fino a END) è invariata', Array.from(dstYes.slice(0, dstNo.length)).join(','), Array.from(dstNo).join(','));
+check('DST con metadata: END ancora presente e integro', [dstYes[dstNo.length - 3], dstYes[dstNo.length - 2], dstYes[dstNo.length - 1]], [0, 0, 0xF3]);
+
 // oblique — griglia diagonale + placement (Fase A, sotto-step 2a). Moduli SINTETICI (l'engine è
 // Node-safe: riceve geometrie già parsate; il parse SVG DOM vive in tool.ts). Verifica che la
 // griglia condivisa nasca dal Livello 1, che i moduli coprano il formato e che il global offset trasli.

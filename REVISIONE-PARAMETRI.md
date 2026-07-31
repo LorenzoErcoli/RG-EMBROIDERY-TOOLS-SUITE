@@ -133,3 +133,12 @@ Nome preset, elenco, salva/carica/elimina. Nessun problema di etichetta.
 **Le unità vanno in un posto solo.** Oggi net-45 le scrive dentro l'etichetta (`Largh. cordoncino mm`) e il generatore pattern usa lo slot apposta del design system. Da uniformare: **unità sempre nello slot**, mai nel testo.
 
 **Niente inglese nelle etichette.** `Repeat back`, `Cleanup`, `connector`, `Normal`, `Illustrator safe` — l'unico inglese che resta è "Illustrator", che è un nome proprio.
+
+---
+
+## In coda al processo (altri tool)
+
+Questo documento è nato per pattern-grammar, ma il *processo* (leggo il codice → cosa fa davvero → nome/unità decisi con Lorenzo → nomi canonici in Costituzione §3) vale per tutti. Parametri di altri tool **ancora da revisionare**:
+
+- **interlace — "movimento / spigolosità"**: parametri del motore locale con nomi provvisori (flaggati in `STATO.md`). Da decidere etichette/unità e capire se qualcuno è un concetto canonico §3 già esistente. I parametri di riempimento devono allinearsi al modello densità di `bitmap` (R22–R26).
+- **bitmap — parametri specifici** (`colorCount`, `coverage`, `style`, `ordering`, `seed`, `degradeDrop`, `degradeJitterMm`, `maxWidthPx`): sono **tool-specifici**, restano locali all'app (non canonici §3). Canonici §3 già usati e corretti: `densitySpacingMm`, `minStitchMm`. Nessuna azione, solo registrato.
