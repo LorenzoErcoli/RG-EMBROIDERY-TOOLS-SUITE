@@ -1,0 +1,11 @@
+/* Stile del contenuto del manuale dentro la finestra (rg-modal). Classi NON-rg: il prefisso rg- è del DS. */
+.manual-body { line-height: 1.5; }
+.manual-body h3 { margin: var(--rg-space-6) 0 var(--rg-space-2); font-family: var(--rg-font-identity); font-size: var(--rg-font-size-md); font-weight: var(--rg-weight-medium); }
+.manual-body h3:first-child { margin-top: 0; }
+.manual-body h4 { margin: var(--rg-space-4) 0 var(--rg-space-1); font-size: var(--rg-font-size-sm); font-weight: var(--rg-weight-medium); }
+.manual-body p { margin: 0 0 var(--rg-space-3); }
+.manual-body ul, .manual-body ol { margin: 0 0 var(--rg-space-3); padding-left: var(--rg-space-6); }
+.manual-body li { margin-bottom: var(--rg-space-1); }
+.manual-body code { font-family: var(--rg-font-mono); font-size: .9em; padding: 1px 4px; background: var(--rg-color-surface); border: 1px solid var(--rg-color-border); border-radius: var(--rg-radius-sm); }
+.manual-body strong { font-weight: var(--rg-weight-medium); }
+.manual-body hr { margin: var(--rg-space-6) 0; border: 0; border-top: 1px solid var(--rg-color-border); }
