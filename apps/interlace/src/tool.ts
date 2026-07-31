@@ -105,10 +105,11 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
               <p class="rg-file-input__status" id="clusterImageStatus" role="status">Nessuna: agglomerati casuali (per variante).</p>
             </div>
             <div class="rg-cluster">
-              <button type="button" id="captureColorsBtn" class="rg-button rg-button--ghost rg-button--small" disabled>Cattura colori dall’immagine</button>
+              <span class="rg-field-with-unit" style="--rg-input-numeric-width:6ch"><input class="rg-input rg-input--numeric" id="colorCount" type="number" min="1" max="12" step="1" value="4"><span>col</span></span>
+              <button type="button" id="captureColorsBtn" class="rg-button rg-button--outline rg-button--small" disabled>Cattura colori</button>
               <button type="button" id="clearImageBtn" class="rg-button rg-button--ghost rg-button--small" disabled>Rimuovi immagine</button>
             </div>
-            <small class="rg-field__help">con un’immagine gli agglomerati la RISPETTANO (ogni colore va dove l’immagine ha quel colore); senza, sono casuali per variante</small>
+            <small class="rg-field__help">“Numero colori” (1–12) + “Cattura colori” quantizza l’immagine in quei colori (esclude lo sfondo bianco). Gli agglomerati poi la RISPETTANO: ogni colore va dove l’immagine ha quel colore.</small>
           </div>
           <label class="rg-field rg-param-grid__wide" id="clusterStrengthField" hidden>
             <span class="rg-field__label">Intensità agglomerati</span>
@@ -186,24 +187,48 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     };
   }
 
-  /** Cattura-colore: estrae fino a `n` colori dominanti dall'immagine (istogramma a bin grossi, dedup). */
+  /**
+   * Cattura-colore stile carpet: QUANTIZZA l'immagine in `n` colori (k-means, 1–12), escludendo lo sfondo
+   * bianco. Init deterministico (farthest-point) → stessa immagine = stessa palette. Ordina per numerosità.
+   */
   function extractPalette(data: Uint8ClampedArray, n: number): string[] {
-    const bins = new Map<number, { c: number; r: number; g: number; b: number }>();
+    n = Math.max(1, Math.min(12, n | 0));
+    const pts: number[][] = [];
     for (let i = 0; i < data.length; i += 4) {
       if (data[i + 3] < 128) continue;
-      const key = ((data[i] >> 4) << 8) | ((data[i + 1] >> 4) << 4) | (data[i + 2] >> 4); // 16 livelli/canale
-      const e = bins.get(key) || { c: 0, r: 0, g: 0, b: 0 };
-      e.c++; e.r += data[i]; e.g += data[i + 1]; e.b += data[i + 2]; bins.set(key, e);
+      const r = data[i], g = data[i + 1], b = data[i + 2];
+      if (r > 240 && g > 240 && b > 240) continue; // salta lo sfondo bianco
+      pts.push([r, g, b]);
     }
-    const sorted = [...bins.values()].sort((a, z) => z.c - a.c);
-    const out: number[][] = [];
-    for (const e of sorted) {
-      const col = [Math.round(e.r / e.c), Math.round(e.g / e.c), Math.round(e.b / e.c)];
-      if (out.some((o) => (o[0] - col[0]) ** 2 + (o[1] - col[1]) ** 2 + (o[2] - col[2]) ** 2 < 900)) continue; // troppo simile
-      out.push(col);
-      if (out.length >= n) break;
+    if (!pts.length) return [];
+    // sotto-campiona per velocità (max ~20k pixel), passo costante
+    const step = pts.length > 20000 ? Math.ceil(pts.length / 20000) : 1;
+    const sample: number[][] = []; for (let i = 0; i < pts.length; i += step) sample.push(pts[i]);
+    // init k-means++ deterministico: primo = mediano, poi il più LONTANO dai centroidi già scelti
+    const cents: number[][] = [sample[(sample.length / 2) | 0].slice()];
+    while (cents.length < n && cents.length < sample.length) {
+      let far: number[] | null = null, farD = -1;
+      for (const p of sample) {
+        let dmin = Infinity;
+        for (const c of cents) { const d = (p[0] - c[0]) ** 2 + (p[1] - c[1]) ** 2 + (p[2] - c[2]) ** 2; if (d < dmin) dmin = d; }
+        if (dmin > farD) { farD = dmin; far = p; }
+      }
+      if (!far) break; cents.push(far.slice());
     }
-    return out.map((c) => '#' + c.map((v) => Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0')).join(''));
+    // iterazioni k-means
+    const counts = new Array(cents.length).fill(0);
+    for (let it = 0; it < 10; it++) {
+      const sum = cents.map(() => [0, 0, 0, 0]);
+      for (const p of sample) {
+        let bi = 0, bd = Infinity;
+        for (let c = 0; c < cents.length; c++) { const d = (p[0] - cents[c][0]) ** 2 + (p[1] - cents[c][1]) ** 2 + (p[2] - cents[c][2]) ** 2; if (d < bd) { bd = d; bi = c; } }
+        const s = sum[bi]; s[0] += p[0]; s[1] += p[1]; s[2] += p[2]; s[3]++;
+      }
+      for (let c = 0; c < cents.length; c++) if (sum[c][3]) { cents[c] = [Math.round(sum[c][0] / sum[c][3]), Math.round(sum[c][1] / sum[c][3]), Math.round(sum[c][2] / sum[c][3])]; counts[c] = sum[c][3]; }
+    }
+    // ordina per numerosità (colori più presenti prima), scarta i cluster vuoti
+    const order = cents.map((c, i) => ({ c, n: counts[i] })).filter((e) => e.n > 0).sort((a, z) => z.n - a.n);
+    return order.map((e) => '#' + e.c.map((v) => Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0')).join(''));
   }
 
   // Pan/zoom del canvas (la vista non si azzera rigenerando l'SVG).
@@ -543,15 +568,24 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       ($('captureColorsBtn') as HTMLButtonElement).disabled = false;
       ($('clearImageBtn') as HTMLButtonElement).disabled = false;
       URL.revokeObjectURL(url);
-      render();
+      // Proporziona la TAVOLA all'immagine (larghezza invariata, altezza = larghezza × aspect) così
+      // l'immagine mappa 1:1 senza deformarsi. Solo su tavola generata: un cartamodello importato si rispetta.
+      const aspect = img.height / img.width;
+      if (!imported.frame && aspect > 0 && Number.isFinite(aspect)) {
+        const bw = Math.max(1, parseFloat(($('objW') as HTMLInputElement).value) || 100);
+        generateObject(bw, Math.max(1, Math.round(bw * aspect))); // fa già render()
+      } else {
+        render();
+      }
     };
     img.onerror = () => { $('clusterImageStatus').textContent = 'Immagine non valida'; URL.revokeObjectURL(url); };
     img.src = url;
   });
   $('captureColorsBtn').addEventListener('click', () => {
     if (!refImage) return;
-    const cols = extractPalette(refImage.data, Math.max(1, params.colors.length || 4));
-    if (!cols.length) return;
+    const n = Math.max(1, Math.min(12, parseInt(($('colorCount') as HTMLInputElement).value, 10) || 4));
+    const cols = extractPalette(refImage.data, n);
+    if (!cols.length) { $('clusterImageStatus').textContent = 'Nessun colore catturato (immagine tutta sfondo?)'; return; }
     params.colors = cols;
     params.colorDensities = cols.map(() => 0);
     buildPaletteUI();
@@ -568,13 +602,18 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   $('sampleBtn').addEventListener('click', () => { roles = {}; sourceName = ''; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
 
   // Oggetto pieno: genera un rettangolo largo×alto (mm) senza fori, da riempire subito (nessun file).
-  $('objBtn').addEventListener('click', () => {
-    const w = Math.max(1, parseFloat(($('objW') as HTMLInputElement).value) || 100);
-    const h = Math.max(1, parseFloat(($('objH') as HTMLInputElement).value) || 100);
+  function generateObject(w: number, h: number) {
     const rect: Contour[] = [{ points: [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }], closed: true, color: '#2b6cb0' }];
     roles = {}; sourceName = `oggetto-${w}x${h}`; params.realWidthMm = 0;
     ($('realWidth') as HTMLInputElement).value = '0';
+    ($('objW') as HTMLInputElement).value = String(w);
+    ($('objH') as HTMLInputElement).value = String(h);
     loadImport(importResultFromContours(rect), `Oggetto pieno ${w}×${h} mm`);
+  }
+  $('objBtn').addEventListener('click', () => {
+    const w = Math.max(1, parseFloat(($('objW') as HTMLInputElement).value) || 100);
+    const h = Math.max(1, parseFloat(($('objH') as HTMLInputElement).value) || 100);
+    generateObject(w, h);
   });
   $('fitBtn').addEventListener('click', () => pz.fit());
 
