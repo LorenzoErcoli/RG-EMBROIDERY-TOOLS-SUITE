@@ -104,12 +104,27 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
               </label>
               <p class="rg-file-input__status" id="clusterImageStatus" role="status">Nessuna: agglomerati casuali (per variante).</p>
             </div>
-            <div class="rg-cluster">
+            <div>
+              <div class="rg-segmented" id="colorMode" role="group" aria-label="Scelta colori">
+                <button type="button" class="rg-segmented__item rg-segmented__item--active" data-cmode="auto" aria-pressed="true">Automatica</button>
+                <button type="button" class="rg-segmented__item" data-cmode="manual" aria-pressed="false">Manuale</button>
+              </div>
+            </div>
+            <div class="rg-cluster" id="autoColorControls">
               <span class="rg-field-with-unit" style="--rg-input-numeric-width:6ch"><input class="rg-input rg-input--numeric" id="colorCount" type="number" min="1" max="12" step="1" value="4"><span>col</span></span>
               <button type="button" id="captureColorsBtn" class="rg-button rg-button--outline rg-button--small" disabled>Cattura colori</button>
+            </div>
+            <div id="imagePicker" hidden>
+              <canvas id="pickerCanvas" style="max-width:100%;display:block;cursor:crosshair;border:1px solid var(--rg-color-border-strong);border-radius:var(--rg-radius-md)"></canvas>
+              <div class="rg-cluster">
+                <button type="button" id="clearPaletteBtn" class="rg-button rg-button--ghost rg-button--small">Svuota palette</button>
+                <small class="rg-field__help">clicca sull’immagine per aggiungere quel colore alla palette</small>
+              </div>
+            </div>
+            <div class="rg-cluster">
               <button type="button" id="clearImageBtn" class="rg-button rg-button--ghost rg-button--small" disabled>Rimuovi immagine</button>
             </div>
-            <small class="rg-field__help">“Numero colori” (1–12) + “Cattura colori” quantizza l’immagine in quei colori (esclude lo sfondo bianco). Gli agglomerati poi la RISPETTANO: ogni colore va dove l’immagine ha quel colore.</small>
+            <small class="rg-field__help">Automatica: “Numero colori” (1–12) + “Cattura colori” quantizza l’immagine (esclude lo sfondo bianco). Manuale: clicchi i colori sull’immagine. Gli agglomerati poi RISPETTANO l’immagine (ogni colore va dove l’immagine ha quel colore).</small>
           </div>
           <label class="rg-field rg-param-grid__wide" id="clusterStrengthField" hidden>
             <span class="rg-field__label">Intensità agglomerati</span>
@@ -568,6 +583,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       ($('captureColorsBtn') as HTMLButtonElement).disabled = false;
       ($('clearImageBtn') as HTMLButtonElement).disabled = false;
       URL.revokeObjectURL(url);
+      drawPicker(); // aggiorna l'anteprima per l'eyedropper (modalità Manuale)
       // Proporziona la TAVOLA all'immagine (larghezza invariata, altezza = larghezza × aspect) così
       // l'immagine mappa 1:1 senza deformarsi. Solo su tavola generata: un cartamodello importato si rispetta.
       const aspect = img.height / img.width;
@@ -598,6 +614,51 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     ($('clearImageBtn') as HTMLButtonElement).disabled = true;
     render();
   });
+
+  // Scelta colori: Automatica (quantizza) | Manuale (eyedropper: si vede l'immagine e si clicca il colore).
+  const pickerCanvas = $('pickerCanvas') as HTMLCanvasElement;
+  let colorMode: 'auto' | 'manual' = 'auto';
+  function drawPicker() {
+    if (!refImage) return;
+    const scale = Math.min(1, 280 / refImage.w);
+    const cw = Math.max(1, Math.round(refImage.w * scale)), ch = Math.max(1, Math.round(refImage.h * scale));
+    pickerCanvas.width = cw; pickerCanvas.height = ch;
+    const cx = pickerCanvas.getContext('2d'); if (!cx) return;
+    const tmp = document.createElement('canvas'); tmp.width = refImage.w; tmp.height = refImage.h;
+    const tcx = tmp.getContext('2d'); if (!tcx) return;
+    tcx.putImageData(new ImageData(new Uint8ClampedArray(refImage.data), refImage.w, refImage.h), 0, 0);
+    cx.imageSmoothingEnabled = false;
+    cx.drawImage(tmp, 0, 0, cw, ch);
+  }
+  const colorModeBtns = Array.from($('colorMode').querySelectorAll('.rg-segmented__item')) as HTMLButtonElement[];
+  function syncColorMode() {
+    colorModeBtns.forEach((b) => { const on = b.dataset.cmode === colorMode; b.classList.toggle('rg-segmented__item--active', on); b.setAttribute('aria-pressed', on ? 'true' : 'false'); });
+    ($('autoColorControls') as HTMLElement).hidden = colorMode !== 'auto';
+    ($('imagePicker') as HTMLElement).hidden = colorMode !== 'manual';
+    if (colorMode === 'manual') { drawPicker(); $('clusterImageStatus').textContent = refImage ? 'Manuale: clicca i colori sull’immagine' : 'Carica un’immagine, poi clicca i colori'; }
+  }
+  colorModeBtns.forEach((b) => b.addEventListener('click', () => { const m = b.dataset.cmode === 'manual' ? 'manual' : 'auto'; if (colorMode === m) return; colorMode = m; syncColorMode(); }));
+  pickerCanvas.addEventListener('click', (ev) => {
+    if (!refImage || params.colors.length >= MAX_COLORS) return;
+    const rect = pickerCanvas.getBoundingClientRect();
+    const u = (ev.clientX - rect.left) / rect.width, v = (ev.clientY - rect.top) / rect.height;
+    if (u < 0 || u > 1 || v < 0 || v > 1) return;
+    const px = Math.min(refImage.w - 1, Math.max(0, Math.floor(u * refImage.w)));
+    const py = Math.min(refImage.h - 1, Math.max(0, Math.floor(v * refImage.h)));
+    const i = (py * refImage.w + px) * 4;
+    const hex = '#' + [refImage.data[i], refImage.data[i + 1], refImage.data[i + 2]].map((c) => c.toString(16).padStart(2, '0')).join('');
+    params.colors.push(hex);
+    params.colorDensities.push(0);
+    buildPaletteUI();
+    render();
+  });
+  $('clearPaletteBtn').addEventListener('click', () => {
+    params.colors = [];
+    params.colorDensities = [];
+    buildPaletteUI();
+    render();
+  });
+  syncColorMode();
 
   $('sampleBtn').addEventListener('click', () => { roles = {}; sourceName = ''; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
 
