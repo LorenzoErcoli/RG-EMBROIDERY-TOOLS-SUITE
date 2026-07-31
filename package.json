@@ -18,6 +18,7 @@
     "dev:interlace": "npm run dev --workspace apps/interlace",
     "dev:bitmap": "npm run dev --workspace apps/bitmap",
     "dev:oblique": "npm run dev --workspace apps/oblique",
+    "dev:striatura": "npm run dev --workspace apps/striatura",
     "build": "npm run build --workspace apps/shell",
     "build:net-45": "npm run build --workspace apps/net-45",
     "test": "node test/smoke.mjs"

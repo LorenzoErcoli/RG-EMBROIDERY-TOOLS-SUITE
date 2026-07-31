@@ -1,0 +1,11 @@
+/* Stili locali del tool "Punto Striato". Solo classi/token del DS (var(--rg-*)); niente hex inline.
+   Placeholder dello scaffold (step ①): il pannello vero arriva col subagent design-system (step ⑤). */
+.striatura-workspace .striatura-placeholder {
+  display: grid;
+  place-items: center;
+  height: 100%;
+  color: var(--rg-color-text-muted, #666);
+  font: var(--rg-text-body, inherit);
+  text-align: center;
+  padding: var(--rg-space-6, 24px);
+}
