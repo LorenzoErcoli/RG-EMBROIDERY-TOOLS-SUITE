@@ -580,34 +580,41 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
 
   $('exportBtn').addEventListener('click', async () => {
     // Export per Stilista: un gruppo per STOP, in ordine di cucitura, con tinta unica (vedi pipeline).
-    const { exportLayers, bounds, stopCount } = runPipeline(currentContours(), roles, params, { imageColorAt: imageSampler() });
-    const metadata = { rgProject: 'interlace', version: '0.1.0', params, roles };
-    let svg: string;
-    if (imported.frame) {
-      const r = params.realWidthMm > 0 && imported.widthMm > 0 ? params.realWidthMm / imported.widthMm : 1;
-      svg = buildSvgInSourceFrame(exportLayers, { frame: imported.frame, realWidthFactor: r, metadata });
-    } else {
-      svg = buildSvg(exportLayers, { bounds, marginMm: 8, metadata });
+    // Sotto try/catch: nessun export deve fallire in silenzio.
+    try {
+      const { exportLayers, bounds, stopCount } = runPipeline(currentContours(), roles, params, { imageColorAt: imageSampler() });
+      const metadata = { rgProject: 'interlace', version: '0.1.0', params, roles };
+      let svg: string;
+      if (imported.frame) {
+        const r = params.realWidthMm > 0 && imported.widthMm > 0 ? params.realWidthMm / imported.widthMm : 1;
+        svg = buildSvgInSourceFrame(exportLayers, { frame: imported.frame, realWidthFactor: r, metadata });
+      } else {
+        svg = buildSvg(exportLayers, { bounds, marginMm: 8, metadata });
+      }
+      const name = sourceName ? `${sourceName}-interlace.svg` : 'interlace.svg';
+      const outcome = await saveTextFile(svg, { suggestedName: name, description: 'Immagine SVG' });
+      $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${stopCount} stop in sequenza`;
+    } catch (e) {
+      $('status').textContent = 'Errore export SVG: ' + (e as Error).message;
+      console.error(e);
     }
-    const name = sourceName ? `${sourceName}-interlace.svg` : 'interlace.svg';
-    const outcome = await saveTextFile(svg, { suggestedName: name, description: 'Immagine SVG' });
-    $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${stopCount} stop in sequenza`;
   });
 
   $('exportDstBtn').addEventListener('click', async () => {
     // Export ricamo Tajima .dst tramite la "possibilità" globale del core: l'export dell'interlace è già
     // in mm reali; l'adattatore fa un blocco per polilinea, un ago per stop (cambio-colore in sequenza).
-    const { exportLayers, stopCount } = runPipeline(currentContours(), roles, params, { imageColorAt: imageSampler() });
-    let bytes: Uint8Array;
+    // Tutto sotto try/catch: un export non deve MAI fallire in silenzio (l'errore va in statusbar).
     try {
-      bytes = dstFromExportLayers(exportLayers, { label: (sourceName || 'INTERLACE').toUpperCase().slice(0, 16) });
+      $('status').textContent = 'Genero il DST…';
+      const { exportLayers, stopCount } = runPipeline(currentContours(), roles, params, { imageColorAt: imageSampler() });
+      const bytes = dstFromExportLayers(exportLayers, { label: (sourceName || 'INTERLACE').toUpperCase().slice(0, 16) });
+      const name = sourceName ? `${sourceName}-interlace.dst` : 'interlace.dst';
+      const outcome = await saveBinaryFile(bytes, { suggestedName: name, ...DST_FILE });
+      $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${stopCount} stop · ${(bytes.length / 1024).toFixed(1)} KB`;
     } catch (e) {
-      $('status').textContent = (e as Error).message;
-      return;
+      $('status').textContent = 'Errore export DST: ' + (e as Error).message;
+      console.error(e);
     }
-    const name = sourceName ? `${sourceName}-interlace.dst` : 'interlace.dst';
-    const outcome = await saveBinaryFile(bytes, { suggestedName: name, ...DST_FILE });
-    $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${stopCount} stop · ${(bytes.length / 1024).toFixed(1)} KB`;
   });
 
   buildParamUI();

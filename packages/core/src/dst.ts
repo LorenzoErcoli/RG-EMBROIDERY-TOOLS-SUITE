@@ -116,10 +116,14 @@ export function buildDst(program: DstProgram): Uint8Array {
   }
   body.push(0x00, 0x00, 0xf3); // END
 
-  // Header ASCII (512 byte, riempito di spazi, terminato da 0x1A).
-  const xs = stitched.map((p) => p[0]), ys = stitched.map((p) => p[1]);
-  const plusX = xs.length ? Math.max(0, ...xs) : 0, minusX = xs.length ? Math.abs(Math.min(0, ...xs)) : 0;
-  const plusY = ys.length ? Math.max(0, ...ys) : 0, minusY = ys.length ? Math.abs(Math.min(0, ...ys)) : 0;
+  // Header ASCII (512 byte, riempito di spazi, terminato da 0x1A). Estensioni con un CICLO (mai spread di
+  // Math.max(...): su programmi lunghi lo spread di 100k+ punti fa "Maximum call stack size exceeded").
+  let maxXv = 0, minXv = 0, maxYv = 0, minYv = 0;
+  for (const [sx, sy] of stitched) {
+    if (sx > maxXv) maxXv = sx; if (sx < minXv) minXv = sx;
+    if (sy > maxYv) maxYv = sy; if (sy < minYv) minYv = sy;
+  }
+  const plusX = maxXv, minusX = Math.abs(minXv), plusY = maxYv, minusY = Math.abs(minYv);
   const text =
     `LA:${label.padEnd(16, ' ')}\r` +
     field('ST', stitchCount, 7) + field('CO', colorChanges, 3) +

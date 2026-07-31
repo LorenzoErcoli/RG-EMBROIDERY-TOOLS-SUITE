@@ -269,6 +269,12 @@ const dstBytes = rg.buildDst(dstProg);
 check('DST byte totali (identico al writer di riferimento)', dstBytes.length, 569);
 check('DST inizia con "LA:"', String.fromCharCode(dstBytes[0], dstBytes[1], dstBytes[2]), 'LA:');
 check('DST termina col record END (00 00 F3)', dstBytes[dstBytes.length - 3] === 0 && dstBytes[dstBytes.length - 2] === 0 && dstBytes[dstBytes.length - 1] === 0xF3, true);
+// Programma LUNGO: niente "Maximum call stack size exceeded" (era lo spread di Math.max su 100k+ punti).
+const bigPts = [];
+for (let i = 0; i < 200000; i++) bigPts.push([(i % 100) * 0.2, Math.floor(i / 100) % 100 * 0.2]);
+let bigDstOk = false;
+try { const b = rg.buildDst({ label: 'BIG', coordinate_system: 'svg', paths: [{ needle: 1, points_mm: bigPts }] }); bigDstOk = b.length > 512 && b[b.length - 1] === 0xF3; } catch { bigDstOk = false; }
+check('DST programma lungo (200k punti) senza stack overflow', bigDstOk, true);
 
 // adattatore riusabile ExportLayer[] → DST (la "possibilità" globale per tutti i tool): salta i layer
 // 'shapeOnly' (riferimenti/forme), un ago per layer cucito → cambio-colore in sequenza.
