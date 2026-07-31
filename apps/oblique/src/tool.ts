@@ -156,17 +156,14 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
       </section>
 
       <details class="rg-param-section rg-disclosure">
-        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">06</span><span class="rg-param-section__title">Esportazione</span></summary>
+        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">06</span><span class="rg-param-section__title">Progetto</span></summary>
         <div class="rg-param-grid">
-          <div class="rg-cluster rg-param-grid__wide">
-            <button type="button" class="rg-button rg-button--primary" id="exportSvgBtn">Esporta tutto (SVG)</button>
-            <button type="button" class="rg-button rg-button--outline" id="exportDstBtn">Esporta DST</button>
-          </div>
           <div class="rg-file-input rg-param-grid__wide">
             <label class="rg-file-input__control">
               <input type="file" id="reopenInput" accept=".svg,image/svg+xml">
               <span class="rg-button rg-button--outline">Riapri progetto salvato (SVG)…</span>
             </label>
+            <p class="rg-field__help">Carica un SVG esportato da qui: ripristina parametri e ruoli. L'export vero è coi pulsanti in alto a destra.</p>
           </div>
         </div>
       </details>
@@ -176,7 +173,11 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
     <section class="rg-workspace__stage">
       <header class="rg-workspace__stage-header">
         <h2 class="rg-h3">Anteprima</h2>
-        <div class="rg-cluster"><button type="button" id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button></div>
+        <div class="rg-cluster">
+          <button type="button" id="exportSvgBtn" class="rg-button rg-button--primary rg-button--small">Esporta SVG</button>
+          <button type="button" id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
+          <button type="button" id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
+        </div>
       </header>
       <div class="rg-workspace__canvas" id="canvas">
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px">
