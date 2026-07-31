@@ -25,6 +25,7 @@ export interface BitmapParams {
   colorCount: number;              // numero di colori (stop/cambi-ago), usato solo con paletteMode 'auto'
   paletteMode: 'auto' | 'manual';  // 'auto' = median-cut; 'manual' = i colori li scegli tu (contagocce)
   manualColors: string[];          // palette manuale (hex): i colori-livello scelti dall'utente
+  manualTolerances: number[];      // tolleranza per-colore (parallela a manualColors), distanza RGB, def 30
 
   // --- densità e punto (R22 / R3) ---
   densitySpacingMm: number;        // spaziatura fra le file di filo: griglia metrica (0 = nessuna)
@@ -61,6 +62,7 @@ export const defaultBitmapParams: BitmapParams = {
   backgroundToleranceRgb: 30,
   paletteMode: 'auto',
   manualColors: [],
+  manualTolerances: [],
   colorCount: 2,
   densitySpacingMm: 1.2,
   minStitchMm: 1.0,
@@ -165,6 +167,26 @@ export function buildSelectionMask(
   if (params.coverage === 'all') {
     for (let i = 0; i < n; i++) if (rgba[i * 4 + 3] > 0) mask[i] = 1;
     return mask;
+  }
+
+  // Palette MANUALE + "solo i colori scelti": la selezione è per VICINANZA ai colori scelti, ognuno con la
+  // sua tolleranza (default 30). Sostituisce "Colori da includere" e la soglia: è selezione E palette in uno.
+  if (params.paletteMode === 'manual') {
+    const manual = parseColorList(params.manualColors);
+    if (manual.length) {
+      const tols = params.manualTolerances || [];
+      const tol2 = manual.map((_, i) => { const t = Math.max(0, tols[i] ?? 30); return t * t; });
+      for (let i = 0; i < n; i++) {
+        const o = i * 4;
+        if (rgba[o + 3] === 0) continue;
+        const r = rgba[o], g = rgba[o + 1], b = rgba[o + 2];
+        for (let c = 0; c < manual.length; c++) {
+          const dr = r - manual[c][0], dg = g - manual[c][1], db = b - manual[c][2];
+          if (dr * dr + dg * dg + db * db <= tol2[c]) { mask[i] = 1; break; }
+        }
+      }
+      return mask;
+    }
   }
 
   const thr = params.threshold;

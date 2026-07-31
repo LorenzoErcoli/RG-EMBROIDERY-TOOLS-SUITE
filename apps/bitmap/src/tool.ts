@@ -17,6 +17,12 @@ interface Source {
 // Campi numerici cablati genericamente: id nel DOM ↔ chiave del parametro. Unità nello slot (mai nell'etichetta).
 interface NumBind { id: string; key: keyof BitmapParams; int?: boolean; min?: number; max?: number; }
 
+// Icona contagocce (pipette, stile Lucide) per il bottone "campiona" delle righe-colore manuali.
+const EYEDROPPER_SVG =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/>'
+  + '<path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>';
+
 export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {}): void {
   root.innerHTML = `
   ${topbar('Bitmap → Stitch', opts.backHref)}
@@ -54,24 +60,16 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
         <div class="rg-param-grid">
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Cosa punciare</span>
-            <div class="rg-segmented" id="coverageMode" role="group" aria-label="Cosa punciare">
+            <div><div class="rg-segmented" id="coverageMode" role="group" aria-label="Cosa punciare">
               <button type="button" class="rg-segmented__item rg-segmented__item--active" data-coverage="selected" aria-pressed="true">Solo i colori scelti</button>
               <button type="button" class="rg-segmented__item" data-coverage="all" aria-pressed="false">Tutta l'immagine</button>
-            </div>
-            <small class="rg-field__help">Solo i colori scelti: usa soglia e sfondo. Tutta l'immagine: riempie tutto, ogni pixel col colore più vicino tra gli N scelti.</small>
+            </div></div>
+            <small class="rg-field__help">Solo i colori scelti: in automatico usa la soglia, in manuale i pixel vicini ai colori scelti. Tutta l'immagine: riempie tutto, ogni pixel col colore più vicino.</small>
           </div>
           <label class="rg-field rg-param-grid__wide" id="thresholdField">
             <span class="rg-field__label">Soglia di selezione</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="threshold" type="number" min="0" max="255" step="5"><span>lum</span></span>
             <small class="rg-field__help">un pixel è scelto se più scuro della soglia (0–255); più alta = include più pixel chiari</small>
-          </label>
-          <label class="rg-field" id="sampleColorsField">
-            <span class="rg-field__label">Colori da includere</span>
-            <input class="rg-input" id="sampleColors" type="text" placeholder="#000000, #ff0000" />
-          </label>
-          <label class="rg-field" id="sampleToleranceField">
-            <span class="rg-field__label">Tolleranza</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="sampleTolerance" type="number" min="0" step="1"><span>rgb</span></span>
           </label>
           <label class="rg-choice rg-param-grid__wide" id="excludeBackgroundField">
             <input type="checkbox" id="excludeBackground" />
@@ -93,11 +91,11 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
         <div class="rg-param-grid">
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Colori dei livelli</span>
-            <div class="rg-segmented" id="paletteMode" role="group" aria-label="Colori dei livelli">
+            <div><div class="rg-segmented" id="paletteMode" role="group" aria-label="Colori dei livelli">
               <button type="button" class="rg-segmented__item rg-segmented__item--active" data-palette="auto" aria-pressed="true">Automatici</button>
-              <button type="button" class="rg-segmented__item" data-palette="manual" aria-pressed="false">Scelgo io</button>
-            </div>
-            <small class="rg-field__help">Automatici: l'algoritmo sceglie i colori. Scelgo io: li prendi dall'immagine col contagocce; gli altri pixel ci rientrano per vicinanza.</small>
+              <button type="button" class="rg-segmented__item" data-palette="manual" aria-pressed="false">Manuale</button>
+            </div></div>
+            <small class="rg-field__help">Automatici: l'algoritmo sceglie i colori. Manuale: li prendi dall'immagine col contagocce, ognuno con la sua tolleranza; i pixel vicini ci rientrano.</small>
           </div>
           <label class="rg-field rg-param-grid__wide" id="colorCountField">
             <span class="rg-field__label">Numero di colori (cambi-ago)</span>
@@ -146,10 +144,10 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
         <div class="rg-param-grid">
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Distribuzione dei punti</span>
-            <div class="rg-segmented" id="styleMode" role="group" aria-label="Distribuzione dei punti">
+            <div><div class="rg-segmented" id="styleMode" role="group" aria-label="Distribuzione dei punti">
               <button type="button" class="rg-segmented__item rg-segmented__item--active" data-style="carpet" aria-pressed="true">Regolare</button>
               <button type="button" class="rg-segmented__item" data-style="degrade" aria-pressed="false">Degradé</button>
-            </div>
+            </div></div>
             <small class="rg-field__help">Regolare: griglia uniforme. Degradé: scarto e spostamento casuali per un effetto sfumato.</small>
           </div>
           <label class="rg-field" id="degradeDropField" hidden>
@@ -170,10 +168,10 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
           </label>
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Ordinamento del percorso</span>
-            <div class="rg-segmented" id="orderMode" role="group" aria-label="Ordinamento del percorso">
+            <div><div class="rg-segmented" id="orderMode" role="group" aria-label="Ordinamento del percorso">
               <button type="button" class="rg-segmented__item rg-segmented__item--active" data-order="scanline" aria-pressed="true">A righe</button>
               <button type="button" class="rg-segmented__item" data-order="nearest" aria-pressed="false">Più vicino</button>
-            </div>
+            </div></div>
             <small class="rg-field__help">A righe: veloce e regolare. Più vicino: percorso più corto ma pesante su molte migliaia di punti.</small>
           </div>
           <label class="rg-field" id="scanlineBandField">
@@ -186,6 +184,17 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
           </label>
         </div>
       </details>
+
+      <section class="rg-param-section">
+        <div class="rg-param-section__header"><h3 class="rg-param-section__title">Carica parametri</h3></div>
+        <div class="rg-file-input">
+          <label class="rg-file-input__control">
+            <input type="file" id="loadParams" accept=".dst,.svg" />
+            <span class="rg-button rg-button--outline rg-button--small">Carica da .dst o .svg…</span>
+          </label>
+          <p class="rg-file-input__status" id="loadParamsStatus" role="status">Ripristina le impostazioni da un file esportato dalla suite (i parametri, non l'immagine).</p>
+        </div>
+      </section>
 
       <details class="rg-param-section rg-disclosure">
         <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">06</span><span class="rg-param-section__title">Esportazione</span></summary>
@@ -326,7 +335,6 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
     { id: 'dpiEstimate', key: 'dpiEstimate', int: true, min: 1 },
     { id: 'maxWidthPx', key: 'maxWidthPx', int: true, min: 0 },
     { id: 'threshold', key: 'threshold', int: true, min: 0, max: 255 },
-    { id: 'sampleTolerance', key: 'sampleToleranceRgb', min: 0 },
     { id: 'backgroundTolerance', key: 'backgroundToleranceRgb', min: 0 },
     { id: 'colorCount', key: 'colorCount', int: true, min: 1, max: 16 },
     { id: 'densitySpacingMm', key: 'densitySpacingMm', min: 0 },
@@ -364,19 +372,30 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
       scheduleAnalyze();
     });
   }
-  wireText('sampleColors', (p) => { params.sampleColors = p; });
   wireText('backgroundColors', (p) => { params.backgroundColors = p; });
 
   function wireCheck(id: string, apply: (on: boolean) => void) {
     ($(id) as HTMLInputElement).addEventListener('change', () => { apply(($(id) as HTMLInputElement).checked); scheduleAnalyze(); });
   }
-  wireCheck('excludeBackground', (on) => { params.excludeBackground = on; syncBgFields(); });
+  wireCheck('excludeBackground', (on) => { params.excludeBackground = on; applySelectionVisibility(); });
   wireCheck('serpentine', (on) => { params.serpentine = on; });
 
-  function syncBgFields() {
-    const on = params.excludeBackground;
-    ($('bgColorsField') as HTMLElement).hidden = !on;
-    ($('bgToleranceField') as HTMLElement).hidden = !on;
+  /**
+   * Visibilità dei controlli di SELEZIONE e PALETTE in un colpo solo:
+   *  - soglia + sfondo servono SOLO in AUTO + "solo i colori scelti" (in manuale la selezione è per
+   *    vicinanza ai colori scelti; in "tutta l'immagine" si prende tutto);
+   *  - numero colori (auto) vs lista manuale (contagocce).
+   */
+  function applySelectionVisibility() {
+    const all = params.coverage === 'all';
+    const manual = params.paletteMode === 'manual';
+    const showThreshold = !all && !manual;                 // soglia/sfondo solo in auto + selezione
+    ($('thresholdField') as HTMLElement).hidden = !showThreshold;
+    ($('excludeBackgroundField') as HTMLElement).hidden = !showThreshold;
+    ($('bgColorsField') as HTMLElement).hidden = !showThreshold || !params.excludeBackground;
+    ($('bgToleranceField') as HTMLElement).hidden = !showThreshold || !params.excludeBackground;
+    ($('colorCountField') as HTMLElement).hidden = manual;
+    ($('manualPalette') as HTMLElement).hidden = !manual;
   }
 
   // ---- segmented: stile e ordinamento ----
@@ -406,40 +425,30 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
     ($('serpentineField') as HTMLElement).hidden = params.ordering !== 'scanline';
   });
 
-  // Switch "Cosa punciare": in modalità "Tutta l'immagine" i controlli di selezione (soglia/sfondo) non servono.
-  function applyCoverageVisibility() {
-    const all = params.coverage === 'all';
-    (['thresholdField', 'sampleColorsField', 'sampleToleranceField', 'excludeBackgroundField'] as const)
-      .forEach((id) => { ($(id) as HTMLElement).hidden = all; });
-    if (all) { ($('bgColorsField') as HTMLElement).hidden = true; ($('bgToleranceField') as HTMLElement).hidden = true; }
-    else syncBgFields();
-  }
-  const syncCoverage = wireSegmented('coverageMode', 'coverage', () => params.coverage, (v) => { params.coverage = v as BitmapParams['coverage']; }, applyCoverageVisibility);
+  const syncCoverage = wireSegmented('coverageMode', 'coverage', () => params.coverage, (v) => { params.coverage = v as BitmapParams['coverage']; }, applySelectionVisibility);
 
-  // ---- Colori dei livelli: switch Automatici / Scelgo io (palette manuale col contagocce) ----
+  // ---- Colori dei livelli: switch Automatici / Manuale (palette scelta col contagocce) ----
   const MAX_MANUAL = 16;
   const asHex6 = (c: string) => (/^#[0-9a-fA-F]{6}$/.test(c) ? c.toUpperCase() : '#808080');
 
-  function applyPaletteVisibility() {
-    const manual = params.paletteMode === 'manual';
-    ($('colorCountField') as HTMLElement).hidden = manual;
-    ($('manualPalette') as HTMLElement).hidden = !manual;
-  }
   const syncPalette = wireSegmented('paletteMode', 'palette', () => params.paletteMode,
     (v) => { params.paletteMode = v as BitmapParams['paletteMode']; },
     () => {
-      // passando a "Scelgo io" con lista vuota, parto dai colori automatici correnti (così li posso ritoccare)
+      // passando a "Manuale" con lista vuota, parto dai colori automatici correnti (così li posso ritoccare)
       if (params.paletteMode === 'manual' && !params.manualColors.length && currentPreviewColors.length) {
         params.manualColors = currentPreviewColors.map((c) => asHex6(c.color));
+        params.manualTolerances = params.manualColors.map(() => 30);
       }
-      applyPaletteVisibility();
+      applySelectionVisibility();
       buildManualList();
     });
 
   function buildManualList() {
     const host = $('manualList');
     host.innerHTML = '';
+    if (!params.manualTolerances) params.manualTolerances = [];
     params.manualColors.forEach((col, i) => {
+      if (params.manualTolerances[i] === undefined) params.manualTolerances[i] = 30;
       const li = document.createElement('li');
       li.className = 'rg-color-map__row';
 
@@ -459,26 +468,46 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
       });
       sw.appendChild(picker);
 
-      const cluster = document.createElement('span');
-      cluster.className = 'rg-cluster';
       const code = document.createElement('span');
       code.className = 'rg-color-map__code';
       code.textContent = col.toUpperCase();
+
+      // Tolleranza per-colore (distanza RGB): quanto largo è il "raggio di cattura" del colore.
+      const tolGroup = document.createElement('span');
+      tolGroup.className = 'bitmap-tol';
+      const tolPre = document.createElement('span');
+      tolPre.className = 'bitmap-tol__pre';
+      tolPre.textContent = '±';
+      const tol = document.createElement('input');
+      tol.type = 'number'; tol.min = '0'; tol.step = '5';
+      tol.className = 'rg-input rg-input--numeric bitmap-tol__input';
+      tol.value = String(params.manualTolerances[i]);
+      tol.setAttribute('aria-label', `Tolleranza colore ${i + 1} (raggio di cattura RGB)`);
+      tol.title = 'Tolleranza: quanto largo è il raggio di cattura di questo colore (distanza RGB)';
+      tol.addEventListener('change', () => {
+        const v = parseFloat(tol.value);
+        params.manualTolerances[i] = Number.isNaN(v) ? 30 : Math.max(0, v);
+        tol.value = String(params.manualTolerances[i]);
+        scheduleAnalyze();
+      });
+      tolGroup.append(tolPre, tol);
+
       const pick = document.createElement('button');
       pick.type = 'button';
-      pick.className = 'rg-button rg-button--outline rg-button--small';
-      pick.textContent = 'Campiona';
+      pick.className = 'rg-icon-button';
+      pick.innerHTML = EYEDROPPER_SVG;
+      pick.title = 'Campiona dall\'immagine';
       pick.setAttribute('aria-label', `Campiona il colore ${i + 1} dall'immagine`);
       pick.addEventListener('click', () => enterPickMode(i));
+
       const rm = document.createElement('button');
       rm.type = 'button';
-      rm.className = 'rg-icon-button rg-icon-button--danger';
+      rm.className = 'rg-icon-button rg-icon-button--danger bitmap-tol__remove';
       rm.textContent = '×';
       rm.setAttribute('aria-label', `Rimuovi colore ${i + 1}`);
-      rm.addEventListener('click', () => { params.manualColors.splice(i, 1); buildManualList(); scheduleAnalyze(); });
+      rm.addEventListener('click', () => { params.manualColors.splice(i, 1); params.manualTolerances.splice(i, 1); buildManualList(); scheduleAnalyze(); });
 
-      cluster.append(code, pick, rm);
-      li.append(sw, cluster);
+      li.append(sw, code, tolGroup, pick, rm);
       host.appendChild(li);
     });
     if (!params.manualColors.length) {
@@ -490,6 +519,7 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
   $('addManualBtn').addEventListener('click', () => {
     if (params.manualColors.length >= MAX_MANUAL) return;
     params.manualColors.push('#808080');
+    params.manualTolerances.push(30);
     buildManualList();
     enterPickMode(params.manualColors.length - 1);   // creo il colore ed entro subito nel contagocce
   });
@@ -612,30 +642,36 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
     for (const b of NUMS) ($(b.id) as HTMLInputElement).value = String(params[b.key]);
     reflectStaticControls();
     syncStyle(); syncOrder(); syncCoverage(); syncPalette();
-    applyCoverageVisibility(); applyPaletteVisibility();
+    applySelectionVisibility();
     (['degradeDropField', 'degradeJitterField', 'seedField'] as const).forEach((id) => { ($(id) as HTMLElement).hidden = params.style !== 'degrade'; });
     (['scanlineBandField', 'serpentineField'] as const).forEach((id) => { ($(id) as HTMLElement).hidden = params.ordering !== 'scanline'; });
     buildManualList();
+  }
+
+  /**
+   * Ripristina i parametri da un file .dst/.svg esportato dalla suite (R27). Il .dst porta i parametri nel
+   * footer dopo l'END; l'SVG nel `<metadata>`. L'immagine sorgente non è nel file → si ricarica a parte.
+   * Ritorna il messaggio di esito. `false` non-nostro/assente.
+   */
+  async function restoreFromFile(file: File): Promise<string> {
+    if (/\.dst$/i.test(file.name)) {
+      const meta = readDstMetadata(new Uint8Array(await file.arrayBuffer()));
+      if (restoreParams(meta)) { renderPreview(); return `${file.name}: parametri ripristinati dal DST · ricarica l'immagine per rigenerare`; }
+      return `${file.name}: nessun parametro RG nel DST`;
+    }
+    if (/\.svg$/i.test(file.name)) {
+      const meta = readProjectMetadata(await file.text());
+      if (restoreParams(meta)) { renderPreview(); return `${file.name}: parametri ripristinati dall'SVG · ricarica l'immagine per rigenerare`; }
+      return `${file.name}: nessun parametro RG nell'SVG`;
+    }
+    return '';
   }
 
   $('fileInput').addEventListener('change', async (ev) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
 
-    // .dst / .svg esportati dalla suite → ripristino dei parametri (R27). Il .dst porta i parametri nel
-    // footer dopo l'END; l'immagine sorgente non è nel file → si ricarica a parte per rigenerare.
-    if (/\.dst$/i.test(file.name)) {
-      const meta = readDstMetadata(new Uint8Array(await file.arrayBuffer()));
-      if (restoreParams(meta)) { renderPreview(); $('fileStatus').textContent = `${file.name}: parametri ripristinati dal DST · ricarica l'immagine per rigenerare`; }
-      else $('fileStatus').textContent = `${file.name}: nessun parametro RG nel DST`;
-      return;
-    }
-    if (/\.svg$/i.test(file.name)) {
-      const meta = readProjectMetadata(await file.text());
-      if (restoreParams(meta)) { renderPreview(); $('fileStatus').textContent = `${file.name}: parametri ripristinati dall'SVG · ricarica l'immagine per rigenerare`; }
-      else $('fileStatus').textContent = `${file.name}: nessun parametro RG nell'SVG`;
-      return;
-    }
+    if (/\.(dst|svg)$/i.test(file.name)) { $('fileStatus').textContent = await restoreFromFile(file); return; }
 
     const url = URL.createObjectURL(file);
     const imgEl = new Image();
@@ -648,6 +684,13 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
     };
     imgEl.onerror = () => { URL.revokeObjectURL(url); $('fileStatus').textContent = 'Errore: immagine non leggibile.'; };
     imgEl.src = url;
+  });
+
+  $('loadParams').addEventListener('change', async (ev) => {
+    const file = (ev.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    $('loadParamsStatus').textContent = (await restoreFromFile(file)) || `${file.name}: formato non riconosciuto (serve .dst o .svg)`;
+    (ev.target as HTMLInputElement).value = '';
   });
 
   $('sampleBtn').addEventListener('click', () => {
@@ -694,7 +737,6 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
 
   // riallinea i controlli statici ai default e collega la preview alla lista colori
   function reflectStaticControls() {
-    ($('sampleColors') as HTMLInputElement).value = params.sampleColors.join(', ');
     ($('backgroundColors') as HTMLInputElement).value = params.backgroundColors.join(', ');
     ($('excludeBackground') as HTMLInputElement).checked = params.excludeBackground;
     ($('serpentine') as HTMLInputElement).checked = params.serpentine;
@@ -702,13 +744,11 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
 
   wireNums();
   reflectStaticControls();
-  syncBgFields();
   syncStyle();
   syncOrder();
   syncCoverage();
-  applyCoverageVisibility();
   syncPalette();
-  applyPaletteVisibility();
+  applySelectionVisibility();
   buildManualList();
   renderPreview();
   updateFileStatus();

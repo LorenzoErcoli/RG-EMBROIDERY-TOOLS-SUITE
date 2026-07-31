@@ -13,6 +13,16 @@ body {
 /* L'anteprima riempie il layer; bordo e sfondo sono già sul __canvas del DS. */
 #layer svg { max-width: 100%; max-height: 100%; }
 
+/* Righe della palette manuale: swatch · hex · tolleranza · contagocce · [×  a destra in fondo]. */
+#manualList .rg-color-map__row { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
+#manualList .rg-color-map__code { flex: 0 1 auto; }
+.bitmap-tol { display: inline-flex; align-items: center; gap: 4px; color: var(--rg-color-text-secondary, #666); }
+.bitmap-tol__pre { font-size: 13px; }
+/* Largo abbastanza da mostrare le cifre nonostante padding DS + freccine su/giù del number input. */
+#manualList .bitmap-tol__input { width: 3.9rem; max-width: none; padding-left: 8px; padding-right: 4px; text-align: right; }
+.bitmap-tol__remove { margin-left: auto; }   /* la × va a destra, in fondo alla riga */
+.rg-icon-button svg { display: block; }
+
 /* Contagocce: overlay sopra il canvas con l'immagine vera + lente d'ingrandimento sul pixel. */
 .bitmap-pick {
   position: absolute; inset: 0; z-index: 20;
