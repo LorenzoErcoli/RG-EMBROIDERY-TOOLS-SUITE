@@ -95,6 +95,21 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
             </div>
             <small class="rg-field__help">Uniforme: mélange omogeneo. Agglomerati: ogni colore si addensa in zone → sfumature di colore.</small>
           </div>
+          <div class="rg-field rg-param-grid__wide" id="clusterImageField" hidden>
+            <span class="rg-field__label">Immagine di riferimento (opzionale)</span>
+            <div class="rg-file-input">
+              <label class="rg-file-input__control">
+                <input type="file" id="clusterImage" accept="image/*" />
+                <span class="rg-button rg-button--outline rg-button--small">Carica immagine…</span>
+              </label>
+              <p class="rg-file-input__status" id="clusterImageStatus" role="status">Nessuna: agglomerati casuali (per variante).</p>
+            </div>
+            <div class="rg-cluster">
+              <button type="button" id="captureColorsBtn" class="rg-button rg-button--ghost rg-button--small" disabled>Cattura colori dall’immagine</button>
+              <button type="button" id="clearImageBtn" class="rg-button rg-button--ghost rg-button--small" disabled>Rimuovi immagine</button>
+            </div>
+            <small class="rg-field__help">con un’immagine gli agglomerati la RISPETTANO (ogni colore va dove l’immagine ha quel colore); senza, sono casuali per variante</small>
+          </div>
           <label class="rg-field rg-param-grid__wide" id="clusterStrengthField" hidden>
             <span class="rg-field__label">Intensità agglomerati</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="clusterStrength" type="number" min="0" max="100" step="5" value="60"><span>%</span></span>
@@ -137,10 +152,59 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   let imported: ImportResult = importResultFromContours(sampleContours());
   let roles: RoleAssignment = {};
   const params: InterlaceParams = { ...defaultInterlaceParams };
+  // Immagine di riferimento per gli agglomerati (opzionale): pixel RGBA campionati da un canvas.
+  let refImage: { data: Uint8ClampedArray; w: number; h: number } | null = null;
 
   const currentContours = () => applyRealWidth(imported, params.realWidthMm);
   const contourColors = () => imported.contours.map((c) => c.color);
   const uniqueColors = () => [...new Set(contourColors())];
+
+  /** Bounding box del disegno (mm) su cui mappare l'immagine. */
+  function designBounds() {
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const c of currentContours()) for (const p of c.points) {
+      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+    }
+    return { minX, minY, maxX, maxY };
+  }
+
+  /** Campionatore colore immagine per gli agglomerati (mm → RGB), o undefined se non c'è immagine/agglomerati. */
+  function imageSampler() {
+    if (!refImage || !params.clusterMode) return undefined;
+    const { data, w, h } = refImage;
+    const b = designBounds();
+    const dw = b.maxX - b.minX || 1, dh = b.maxY - b.minY || 1;
+    return (x: number, y: number): [number, number, number] | null => {
+      const u = (x - b.minX) / dw, v = (y - b.minY) / dh;
+      if (u < 0 || u > 1 || v < 0 || v > 1) return null;
+      const px = Math.min(w - 1, Math.max(0, Math.floor(u * w)));
+      const py = Math.min(h - 1, Math.max(0, Math.floor(v * h)));
+      const i = (py * w + px) * 4;
+      if (data[i + 3] < 128) return null; // trasparente
+      return [data[i], data[i + 1], data[i + 2]];
+    };
+  }
+
+  /** Cattura-colore: estrae fino a `n` colori dominanti dall'immagine (istogramma a bin grossi, dedup). */
+  function extractPalette(data: Uint8ClampedArray, n: number): string[] {
+    const bins = new Map<number, { c: number; r: number; g: number; b: number }>();
+    for (let i = 0; i < data.length; i += 4) {
+      if (data[i + 3] < 128) continue;
+      const key = ((data[i] >> 4) << 8) | ((data[i + 1] >> 4) << 4) | (data[i + 2] >> 4); // 16 livelli/canale
+      const e = bins.get(key) || { c: 0, r: 0, g: 0, b: 0 };
+      e.c++; e.r += data[i]; e.g += data[i + 1]; e.b += data[i + 2]; bins.set(key, e);
+    }
+    const sorted = [...bins.values()].sort((a, z) => z.c - a.c);
+    const out: number[][] = [];
+    for (const e of sorted) {
+      const col = [Math.round(e.r / e.c), Math.round(e.g / e.c), Math.round(e.b / e.c)];
+      if (out.some((o) => (o[0] - col[0]) ** 2 + (o[1] - col[1]) ** 2 + (o[2] - col[2]) ** 2 < 900)) continue; // troppo simile
+      out.push(col);
+      if (out.length >= n) break;
+    }
+    return out.map((c) => '#' + c.map((v) => Math.max(0, Math.min(255, v)).toString(16).padStart(2, '0')).join(''));
+  }
 
   // Pan/zoom del canvas (la vista non si azzera rigenerando l'SVG).
   const pz = hookPanZoom($('canvas'), $('layer'), (z) => { $('zoom').textContent = `zoom ${Math.round(z * 100)}%`; });
@@ -326,7 +390,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
 
   function render() {
     try {
-      const { layers, bounds, threadMm } = runPipeline(currentContours(), roles, params);
+      const { layers, bounds, threadMm } = runPipeline(currentContours(), roles, params, { imageColorAt: imageSampler() });
       $('layer').innerHTML = buildSvg(layers, { bounds, marginMm: 8 });
       $('status').textContent = threadMm > 0 ? `Filo generato: ${(threadMm / 1000).toFixed(2)} m` : 'Assegna un colore all’area da ricamare';
     } catch (e) {
@@ -429,6 +493,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
     ($('clusterStrengthField') as HTMLElement).hidden = !params.clusterMode; // intensità solo se attivo
+    ($('clusterImageField') as HTMLElement).hidden = !params.clusterMode; // immagine solo se attivo
   };
   clusterBtns.forEach((b) => b.addEventListener('click', () => {
     const want = b.dataset.cluster === 'on';
@@ -459,6 +524,47 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     render();
   });
 
+  // Immagine di riferimento per gli agglomerati: campionata su canvas (ridotta a ≤256px per velocità).
+  $('clusterImage').addEventListener('change', (ev) => {
+    const file = (ev.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      const scale = Math.min(1, 256 / Math.max(img.width, img.height));
+      const w = Math.max(1, Math.round(img.width * scale)), h = Math.max(1, Math.round(img.height * scale));
+      const cnv = document.createElement('canvas');
+      cnv.width = w; cnv.height = h;
+      const cx = cnv.getContext('2d');
+      if (!cx) { $('clusterImageStatus').textContent = 'Canvas non disponibile'; URL.revokeObjectURL(url); return; }
+      cx.drawImage(img, 0, 0, w, h);
+      refImage = { data: cx.getImageData(0, 0, w, h).data, w, h };
+      $('clusterImageStatus').textContent = `Immagine ${img.width}×${img.height} — gli agglomerati la rispettano`;
+      ($('captureColorsBtn') as HTMLButtonElement).disabled = false;
+      ($('clearImageBtn') as HTMLButtonElement).disabled = false;
+      URL.revokeObjectURL(url);
+      render();
+    };
+    img.onerror = () => { $('clusterImageStatus').textContent = 'Immagine non valida'; URL.revokeObjectURL(url); };
+    img.src = url;
+  });
+  $('captureColorsBtn').addEventListener('click', () => {
+    if (!refImage) return;
+    const cols = extractPalette(refImage.data, Math.max(1, params.colors.length || 4));
+    if (!cols.length) return;
+    params.colors = cols;
+    params.colorDensities = cols.map(() => 0);
+    buildPaletteUI();
+    render();
+  });
+  $('clearImageBtn').addEventListener('click', () => {
+    refImage = null;
+    $('clusterImageStatus').textContent = 'Nessuna: agglomerati casuali (per variante).';
+    ($('captureColorsBtn') as HTMLButtonElement).disabled = true;
+    ($('clearImageBtn') as HTMLButtonElement).disabled = true;
+    render();
+  });
+
   $('sampleBtn').addEventListener('click', () => { roles = {}; sourceName = ''; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
 
   // Oggetto pieno: genera un rettangolo largo×alto (mm) senza fori, da riempire subito (nessun file).
@@ -474,7 +580,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
 
   $('exportBtn').addEventListener('click', async () => {
     // Export per Stilista: un gruppo per STOP, in ordine di cucitura, con tinta unica (vedi pipeline).
-    const { exportLayers, bounds, stopCount } = runPipeline(currentContours(), roles, params);
+    const { exportLayers, bounds, stopCount } = runPipeline(currentContours(), roles, params, { imageColorAt: imageSampler() });
     const metadata = { rgProject: 'interlace', version: '0.1.0', params, roles };
     let svg: string;
     if (imported.frame) {
@@ -491,7 +597,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   $('exportDstBtn').addEventListener('click', async () => {
     // Export ricamo Tajima .dst tramite la "possibilità" globale del core: l'export dell'interlace è già
     // in mm reali; l'adattatore fa un blocco per polilinea, un ago per stop (cambio-colore in sequenza).
-    const { exportLayers, stopCount } = runPipeline(currentContours(), roles, params);
+    const { exportLayers, stopCount } = runPipeline(currentContours(), roles, params, { imageColorAt: imageSampler() });
     let bytes: Uint8Array;
     try {
       bytes = dstFromExportLayers(exportLayers, { label: (sourceName || 'INTERLACE').toUpperCase().slice(0, 16) });

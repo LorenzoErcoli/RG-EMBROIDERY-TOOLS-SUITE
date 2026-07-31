@@ -118,6 +118,17 @@ check('cluster: genera 4 passate', clPasses.length, 4);
 check('cluster: nessun punto nel vuoto (R5)', clInVoid, 0);
 check('cluster: filo entro un limite sano (no runaway)', clMm < 500000, true);
 
+// interlace — agglomerati GUIDATI DA IMMAGINE: ogni colore va DOVE l'immagine ha quel colore.
+const imgSquare = [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 80 }, { x: 0, y: 80 }];
+const imgSample = (x) => (x < 60 ? [229, 36, 33] : [43, 108, 176]); // metà sx rossa, metà dx blu
+const imgParams = { ...rg.defaultInterlaceParams, minStitchMm: 2, maxStitchMm: 5, densitySpacingMm: 2, voidClearanceMm: 0.3, colors: ['#e52421', '#2b6cb0'], clusterMode: true, clusterStrength: 70 };
+const imgPasses = rg.generatePasses(imgSquare, [], imgParams, [2, 2], (x) => imgSample(x));
+const halfThread = (pass) => { let L = 0, R = 0; for (const r of pass) for (let i = 1; i < r.length; i++) { const mx = (r[i].x + r[i - 1].x) / 2, d = Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y); if (mx < 60) L += d; else R += d; } return { L, R }; };
+const redH = halfThread(imgPasses[0]), bluH = halfThread(imgPasses[1]);
+console.log('\ninterlace — agglomerati guidati da immagine (rispettano l’immagine)');
+check('immagine: rosso più denso a SINISTRA (dov’è rosso)', redH.L > redH.R, true);
+check('immagine: blu più denso a DESTRA (dov’è blu)', bluH.R > bluH.L, true);
+
 // bitmap → stitch — selezione pixel, quantizzazione, punti dentro l'immagine, punto minimo (R3), seed.
 // Immagine sintetica 24×12: due blocchi di colore distinti su sfondo bianco (bianco NON selezionato).
 console.log('\nbitmap — selezione, colori, punto minimo, determinismo');
@@ -214,6 +225,11 @@ check('copertura "tutta": ogni pixel punciato con N colori', bRAll.colors.reduce
 const bMan = { ...rg.defaultBitmapParams, coverage: 'all', paletteMode: 'manual', manualColors: ['#20408a', '#b03040'], densitySpacingMm: 0, minStitchMm: 0, maxWidthPx: 0 };
 const bManA = rg.analyzeBitmap(bBuf, bW, bH, bMan, 1.0);
 check('palette manuale: i colori-livello sono quelli scelti (non median-cut)', bManA.colors.map((c) => c.color).sort(), ['#20408A', '#B03040']);
+// palette manuale + "solo i colori scelti": la tolleranza per-colore filtra la selezione (raggio di cattura).
+const bManSel = { ...rg.defaultBitmapParams, coverage: 'selected', paletteMode: 'manual', manualColors: ['#20408a'], manualTolerances: [5], densitySpacingMm: 0, minStitchMm: 0, maxWidthPx: 0 };
+let selTight = 0; for (const v of rg.buildSelectionMask(bBuf, bW, bH, bManSel)) selTight += v;
+let selWide = 0; for (const v of rg.buildSelectionMask(bBuf, bW, bH, { ...bManSel, manualTolerances: [200] })) selWide += v;
+check('tolleranza per-colore: stretta prende solo il colore vicino, larga di più', selTight > 0 && selTight < selWide, true);
 
 // anteprima: disegna TUTTI i punti (base inclusa), non un tetto per-colore che nasconde la base.
 const bPv = rg.runBitmapPreview(bBuf, bW, bH, bAll, 1.0);

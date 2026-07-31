@@ -5,7 +5,7 @@ import {
   bounds as boundsOf, polygonArea, pointInPolygon, distance,
   THREAD_STROKE_MM, SHAPE_STROKE_MM,
 } from '@rg/core';
-import { generatePasses, type InterlaceParams } from './engine';
+import { generatePasses, type InterlaceParams, type ImageColorAt } from './engine';
 
 export type RoleAssignment = Record<string, Role | undefined>;
 
@@ -61,6 +61,7 @@ export function runPipeline(
   contours: Contour[],
   roles: RoleAssignment,
   params: InterlaceParams,
+  opts: { imageColorAt?: ImageColorAt } = {},
 ): PipelineResult {
   const all: Polyline = contours.flatMap((c) => c.points);
   const bnds: Bounds = all.length ? boundsOf(all) : { minX: 0, minY: 0, maxX: 100, maxY: 100 };
@@ -93,7 +94,7 @@ export function runPipeline(
   let idx = 0;
   for (const m of master) {
     const innerVoids = exclusions.filter((v) => v.length > 0 && pointInPolygon(v[0], m.points));
-    for (const pass of generatePasses(m.points, innerVoids, params, densities)) {
+    for (const pass of generatePasses(m.points, innerVoids, params, densities, opts.imageColorAt)) {
       const pls = pass.filter((r) => r.length >= 2);
       for (const r of pls) threadMm += pathLength(r);
       stops.push({ color: palette[idx % palette.length], polylines: pls });

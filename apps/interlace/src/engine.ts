@@ -427,6 +427,34 @@ function clusterTarget(x: number, y: number, pIdx: number, nColors: number, stre
   return dom > 0.02 ? COVER_TARGET + boost : dom > -0.05 ? COVER_TARGET : 1; // nucleo · confine · base
 }
 
+/** Colore RGB [0..255] di un punto, o null (fuori immagine/trasparente). Passato dall'app (campiona un canvas). */
+export type ImageColorAt = (x: number, y: number) => [number, number, number] | null;
+
+function hexToRgb(hex: string): [number, number, number] {
+  const h = (hex || '').replace('#', '');
+  return [parseInt(h.slice(0, 2), 16) || 0, parseInt(h.slice(2, 4), 16) || 0, parseInt(h.slice(4, 6), 16) || 0];
+}
+
+/**
+ * Copertura obiettivo in modalità AGGLOMERATI GUIDATI DA IMMAGINE: invece del rumore, la zona di ogni
+ * colore è DOVE l'immagine ha quel colore. Nel punto (x,y) si legge il pixel dell'immagine e si trova il
+ * colore-filo più VICINO (cattura-colore): se è il mio colore mi addenso (nucleo), altrimenti resto alla
+ * base minima (1) — così l'area resta continua/attraversabile ma il disegno RISPETTA l'immagine.
+ */
+function imageClusterTarget(x: number, y: number, myColorIdx: number, palRgb: Array<[number, number, number]>, sample: ImageColorAt, strength: number): number {
+  const rgb = sample(x, y);
+  if (!rgb) return 1; // fuori immagine → base
+  let best = -1, bestD = Infinity;
+  for (let k = 0; k < palRgb.length; k++) {
+    const dr = rgb[0] - palRgb[k][0], dg = rgb[1] - palRgb[k][1], db = rgb[2] - palRgb[k][2];
+    const d = dr * dr + dg * dg + db * db;
+    if (d < bestD) { bestD = d; best = k; }
+  }
+  if (best !== myColorIdx) return 1; // qui l'immagine vuole un altro colore → base
+  const boost = Math.round(Math.max(0, Math.min(100, strength)) / 100 * 8);
+  return COVER_TARGET + boost;
+}
+
 /**
  * Riempimento a filo singolo: una sola passata alla densità richiesta (tutte le celle a target).
  * Usato dai test e come base; per il multicolore mélange si usa `generatePasses`.
@@ -449,12 +477,14 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
  * passate → intreccio multicolore. La densità PER-COLORE permette di controllare il filo quando si
  * aggiungono colori (ognuno indipendente). Maschera costruita una sola volta e condivisa.
  */
-export function generatePasses(boundary: Polyline, voids: Polyline[], p: InterlaceParams, densities: number[]): Point[][][] {
+export function generatePasses(boundary: Polyline, voids: Polyline[], p: InterlaceParams, densities: number[], imageColorAt?: ImageColorAt): Point[][][] {
   if (boundary.length < 3 || densities.length < 1) return [];
   const clear = Math.max(0, p.voidClearanceMm);
   const minS = Math.max(0.5, p.minStitchMm);
   const maxS = Math.max(minS + 0.1, p.maxStitchMm);
   const base = (p.seed || 1) >>> 0;
+  // Agglomerati guidati da immagine: palette in RGB, usata solo se c'è un campionatore immagine.
+  const imgPal = imageColorAt && p.colors && p.colors.length ? p.colors.map(hexToRgb) : null;
   // La densità PER-COLORE è la dimensione della cella → ogni densità ha una sua griglia. La maschera si
   // ricostruisce solo quando la cella cambia (cache per valore di cella): densità uguali → una sola build.
   const ctxByCell = new Map<number, FillCtx | null>();
@@ -466,11 +496,16 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
     if (!ctx) { passes.push([]); continue; }
     const targetArr = new Uint8Array(ctx.gx * ctx.gy);
     if (p.clusterMode) {
-      // Agglomerati: la copertura di ogni cella dipende dalla ZONA del colore (campo sfasato per colore).
+      // Agglomerati: la copertura di ogni cella dipende dalla ZONA del colore — da IMMAGINE se caricata
+      // (il colore va dove l'immagine ha quel colore), altrimenti dal campo di rumore per-colore/seed.
+      const myColor = imgPal ? pIdx % imgPal.length : 0;
       for (let id = 0; id < targetArr.length; id++) {
         if (!ctx.cfill[id]) continue;
         const gi = id % ctx.gx, gj = (id / ctx.gx) | 0;
-        targetArr[id] = clusterTarget(ctx.cellX(gi), ctx.cellY(gj), pIdx, densities.length, p.clusterStrength, base);
+        const x = ctx.cellX(gi), y = ctx.cellY(gj);
+        targetArr[id] = imgPal
+          ? imageClusterTarget(x, y, myColor, imgPal, imageColorAt as ImageColorAt, p.clusterStrength)
+          : clusterTarget(x, y, pIdx, densities.length, p.clusterStrength, base);
       }
     } else {
       for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = COVER_TARGET;
