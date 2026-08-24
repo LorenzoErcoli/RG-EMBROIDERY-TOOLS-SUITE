@@ -35,6 +35,8 @@ jobs:
         run: npm install
       - name: Test (rete di sicurezza sulle primitive condivise)
         run: npm test
+      - name: Typecheck (i tipi non li controlla la build: vite usa esbuild)
+        run: npm run typecheck
       - name: Build della suite
         run: npm run build
       - name: Prepara Pages (abilita da solo se non lo è)

@@ -464,7 +464,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     if (mp && typeof mp === 'object') {
       for (const k of Object.keys(defaultInterlaceParams) as (keyof InterlaceParams)[]) {
         const v = (mp as Record<string, unknown>)[k];
-        if (v !== undefined) (params as Record<string, unknown>)[k] = v;
+        if (v !== undefined) (params as unknown as Record<string, unknown>)[k] = v;
       }
     }
     if (meta.roles && typeof meta.roles === 'object') roles = { ...(meta.roles as RoleAssignment) };

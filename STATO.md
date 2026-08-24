@@ -1,8 +1,9 @@
 # STATO — RG Embroidery Tools Suite
 
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
-> Aggiornato: 2026-07-31 · Suite con **sei tool** (net-45, pattern-grammar, interlace, bitmap, oblique, **striatura**) — oblique e **striatura** end-to-end nel browser, in attesa della verifica visiva di Lorenzo
+> Aggiornato: 2026-08-24 · Suite con **sei tool** (net-45, pattern-grammar, interlace, bitmap, oblique, **striatura**) — oblique e **striatura** end-to-end nel browser, in attesa della verifica visiva di Lorenzo
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
+> Rete di sicurezza: `npm test` (121 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
 
 ---
 
@@ -110,6 +111,7 @@
 - **Due bug UI/perf corretti dopo la prova di Lorenzo (import SVG multicolore):**
   1. **La selezione colore→ruolo non si "prendeva".** I `<select>` dei ruoli hanno `data-param="role.X"`: al `change` scattava solo il render generico → `refreshRoleSelects()` rimetteva il valore a `roleColor[role]` (mai aggiornato) = vuoto → la scelta veniva cancellata all'istante. Fix: handler dedicato sui select `[data-param^="role."]` che aggiorna `roleColor` (+ swatch) PRIMA del render; i select dei ruoli sono esclusi dal listener generico.
   2. **Assegnare un ruolo bloccava il tool.** Con un ruolo (es. MASTER_OUTLINE) assegnato, il boundary del pannello diventa un **poligono**; ma il core campiona i contorni a ~0.6mm → un semplice rettangolo = **~600 punti**, e `cleanupPolyline` clippa 6120 moduli contro tutti quei lati (O(segmenti×lati)) ≈ **180M operazioni = freeze**. app.js dà 4 punti per un rettangolo. Fix: `simplifyLoop` (rimozione punti quasi-collineari, tol 0.2mm) in `boundaryFromPoints` → un rettangolo torna a ~4 angoli, le curve restano fedeli. Assegnare un ruolo ora costa **~350ms** (era 30s+). Verificato in browser: selezione persiste, swatch aggiornati, pattern usa il MASTER_OUTLINE assegnato. Smoke: `simplifyLoop` riduce un rettangolo fine a ≤6 punti preservando l'ingombro.
+- **Export sempre a portata di mano:** "Esporta SVG" e "Esporta DST" sono nello **stage-header** dell'anteprima (non in fondo al pannello) → restano visibili qualunque sezione tu stia guardando.
 - **Resta da fare:** verifica visiva finale di Lorenzo (`avvia.bat` → Oblique) col suo cartamodello reale, poi rifiniture di resa (etichette REVISIONE-PARAMETRI); Fase C (generalizzazione a livelli-come-dati).
 
 **Tool `striatura` (Punto Striato) — APPENA AVVIATO, scaffold fatto:**
@@ -155,8 +157,10 @@
 - **Primitive d'import condivise** (`core/io/normalize.ts`, senza DOM così valgono anche in Node): `isGeometricallyClosed` / `closePolygon` (R28), `normalizeColor` (R12), `svgPhysicalLengthToMm` (R11). I due importer del repo — quello a DOM di net-45 e quello a testo di pattern-grammar — restano diversi *per architettura*, ma rispondono per costruzione allo stesso modo alle domande di dominio.
 - **Salvataggio unico per la suite** (`@rg/ui/save`, R29): l'export apre la finestra di salvataggio del sistema — scegli **cartella e nome** — invece di scaricare d'ufficio in Download. Il nome proposto parte dalla sagoma importata (`sagoma-rete45.svg`); la cartella se la ricorda il browser tra uno strumento e l'altro. Su Firefox/Safari ripiega sul download classico. **Da provare in un browser vero** (vedi blocchi).
 - **Smoke test** (`npm test`): 12 asserzioni su chiusura, colori e scala, con la fixture del difetto reale (`test/fixtures/contorno-con-scarto.svg`). Verificato che fallisce se si rimette la vecchia tolleranza.
+- **Guida in-app** (`@rg/ui/manual`, bottone *Guida* nella topbar di ogni tool): apre una finestra `rg-modal` col manuale della **sezione del tool corrente** + Concetti comuni + Se qualcosa non torna (in home: la panoramica intera). La fonte è **`MANUALE.md` importato con `?raw`** e reso con un mini-renderer markdown: **manuale unico**, non sdoppiato tra file e interfaccia. Il tool si riconosce dal titolo della topbar (`resolveKey`), quindi l'intestazione `##` della sezione deve contenere l'id del tool fra apici inversi.
+- **Tre reti di sicurezza, tutte e tre in CI** (`.github/workflows/deploy.yml`): `npm test` (121 asserzioni), **`npm run typecheck`** (`tsc` su tutti e 9 i progetti) e `npm run build`. Il typecheck è stato aggiunto perché **la build non controlla i tipi** (vite usa esbuild): due errori reali erano rimasti nascosti — gli alias `@app/interlace` e `@app/bitmap` mancanti in `apps/shell/tsconfig.json` (c'erano solo nel `vite.config.ts`) e un cast sbagliato in `apps/interlace/src/tool.ts`. Entrambi corretti.
 
-**Regole scritte:** `COSTITUZIONE-RICAMO.md` (31 regole R1–R31 + glossario + parametri canonici) e `ARCHITETTURA.md`.
+**Regole scritte:** `COSTITUZIONE-RICAMO.md` (31 regole R1–R31 + glossario + parametri canonici) e `ARCHITETTURA.md`. **`README.md`** alla radice è la porta d'ingresso per chi non è Lorenzo (cos'è, `avvia.bat`, i sei strumenti, i comandi, come si aggiunge un tool).
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 
@@ -164,16 +168,17 @@
 
 ## 2. STATO
 
-**Metà strada, in salita.**
-La suite ha **due tool funzionanti** (net-45 e pattern-grammar), entrambi con lo stesso guscio e la stessa ergonomia: sono **quasi usabili** da Lorenzo. Manca lo strato "usabile da altri": README, test, e le rifiniture di ricamo che solo Lorenzo può validare.
+**Sei tool in piedi, il cantiere è pulito.**
+Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app. `npm test`, `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice. Quel che resta si divide in tre cose sole: **(a)** le verifiche col ricamo in mano che solo Lorenzo può fare (oblique e striatura per prime), **(b)** le rifiniture di resa che ne discendono, **(c)** i buchi di copertura dei test — striatura e la generazione della rete 45° non hanno ancora invarianti bloccate.
 
 ---
 
 ## 3. COSA MANCA per renderlo USABILE da qualcuno
 
-- [ ] **README** alla radice: cos'è, come si avvia (`avvia.bat`), requisiti (Node), come si aggiunge un tool.
+- [x] ~~**README** alla radice~~: c'è (`README.md`) — cos'è, `avvia.bat`, requisito Node 20, i sei strumenti, i comandi (`test`/`typecheck`/`build`), come si aggiunge un tool, l'indice dei documenti.
 - [x] ~~**App `pattern-grammar`**: interfaccia nel guscio `rg-workspace` + card nella home.~~
-- [ ] **Verifica visiva reale** dei due tool in un browser vero (la preview integrata è rotta, vedi blocchi).
+- [x] ~~**Typecheck fuori dalla rete di sicurezza**~~: `npm run typecheck` (tutti e 9 i progetti) c'è ed è **in CI** accanto a test e build. Aveva già scoperto due difetti veri (alias `@app/interlace`/`@app/bitmap` mancanti nel `tsconfig` della shell, cast sbagliato in interlace) invisibili alla build perché vite non controlla i tipi.
+- [ ] **Verifica visiva reale** dei tool in un browser vero (la preview integrata è rotta, vedi blocchi).
 - [x] ~~**pattern-grammar — la dimensione totale non è esatta** (200 → 209.8)~~ risolto (⑤): il formato è esatto, il resto si rifila al bordo.
 - [x] ~~**pattern-grammar — preset** (salva/carica/elimina).~~
 - [x] ~~**pattern-grammar — modalità di scala all'import.**~~
@@ -185,10 +190,10 @@ La suite ha **due tool funzionanti** (net-45 e pattern-grammar), entrambi con lo
 - [ ] **Riempimenti raso veri**: oggi le aree raso escono come *forme* da riempire a mano su Stilista.
 - [x] ~~**Export DST**~~ c'è: funzione globale nel core (`dstFromExportLayers` + `DST_FILE`, salvataggio via `saveBinaryFile`). Bottone "Esporta DST" su **net-45, pattern-grammar, interlace e bitmap** (agganciato: gli `exportLayers` di bitmap — un layer per stop in ordine di cucitura — diventano cambi-colore in sequenza nel DST; rispetta il filtro `onlyColor`). Smoke: DST da bitmap con header Tajima "LA:", corpo non vuoto, END.
 - [ ] **Font del DS** (AGNext, GT America): non inclusi → l'interfaccia usa i font di sistema.
-- [x] ~~**Test automatici**: zero.~~ C'è `npm test` — copre le primitive d'import (chiusura, colori, scala).
-- [ ] **Test — restano scoperti** i pezzi grossi: geometria/clip del core, generazione della rete 45°, generatore pattern.
-- [ ] **Fixture dai file veri**: la fixture di oggi è sintetica. Servono un SVG e un DXF **reali** di Lorenzo nel repo, per bloccare i comportamenti che contano davvero.
-- [ ] **`strokeWidth` di pattern-grammar: due default diversi.** L'interfaccia parte da **0.1 mm**, il motore ripiega su **0.3** (`patternGrammar.ts`, `config.strokeWidth ?? 0.3`): un preset salvato senza quel campo genera un pattern diverso da quello che vedi coi valori iniziali. Da decidere quale sia il valore giusto — attenzione, qui **non** è lo stroke di visualizzazione di R15: guida la geometria (`inset`, `marginY`, `connectorStep`) *ed* è anche lo spessore disegnato. Forse vanno separati in due parametri.
+- [x] ~~**Test automatici**: zero.~~ C'è `npm test` — 121 asserzioni: primitive d'import (chiusura, colori, scala), conversioni pattern-grammar ⑥⑦⑧, taglio al bordo ⑤, interlace, bitmap (24), core DST/R27, oblique (57).
+- [ ] **Test — restano scoperti**: **striatura (zero asserzioni**, ed è il tool che sta cambiando di più: le invarianti già conquistate — 0 punti fuori bordo, 0 nel vuoto, `segMax` rispettato, filo continuo — non sono bloccate da nulla), generazione della rete 45°, geometria/clip del core (coperti solo di rimbalzo via oblique), generatore pattern.
+- [ ] **Fixture dai file veri**: la fixture di oggi è sintetica (`test/fixtures/contorno-con-scarto.svg`). Gli 8 SVG **reali** in `apps/oblique/fixtures/` esistono ma **lo smoke non li usa** (l'engine gira su moduli sintetici perché `parseSvgToContours` vuole il DOM). Servono un SVG e un DXF reali usati davvero dai test, per bloccare i comportamenti che contano.
+- [x] ~~**`strokeWidth` di pattern-grammar: due default diversi**~~ risolto con lo split ⑥: la geometria usa `constructionStroke` (`patternGrammar.ts`, fallback 0.3 sul vecchio campo per i preset legacy), il filo disegnato è fisso a `THREAD_STROKE_MM` = 0,1 mm (R15). I due significati non si confondono più.
 - [ ] **Archi ellittici nell'import a testo**: il parser `d` di pattern-grammar tratta il comando `A` come un segmento dritto fino al punto finale (`importBoundary.ts`, ramo `"A"`). Su una sagoma con raccordi curvi il contorno esce spigoloso. L'importer a DOM di net-45 non ha il problema (campiona con `getPointAtLength`).
 - [x] ~~**Nuovo tool in arrivo**~~ → è **`interlace`** (riempimento a intreccio/nuvola multicolore). Definito con Lorenzo, piano in 5 punti confermato. **Fatto lo step 1+3 base:** scaffold + motore di riempimento a passaggi brevi su sagoma demo, vuoti/bordo rispettati, export SVG. Restano gli step successivi:
   - [ ] **interlace — parametri "movimento"**: esporre in pannello i controlli oggi interni al motore (influenza del flusso/vortici, ampiezza della virata/spigolosità, scala delle nuvole). Nomi da decidere con Lorenzo prima di entrare nel pannello (processo REVISIONE-PARAMETRI, poi §3).
@@ -216,16 +221,16 @@ La suite ha **due tool funzionanti** (net-45 e pattern-grammar), entrambi con lo
   - [ ] **bitmap — nearest-neighbor pesante**: O(n²) come il sorgente; su molte migliaia di punti è lento. La griglia/densità e il tetto punti lo contengono; se serve, accelerare con una griglia spaziale (ottimizzazione, non logica).
   - [ ] **bitmap — verifica visiva in browser vero** (preview integrata rotta).
   - [ ] **bitmap — modello densità da confrontare** (R22-R26): oggi la densità = spaziatura griglia (empirica, allineata a R22). Se emergono coprenza/tatami veri, ricondurli qui.
-- [ ] **oblique (Broderie Anglaise) — migrazione IN CORSO** (priorità di Lorenzo): scaffold fatto (`apps/oblique`, build+test verdi). Restano gli step 2–5 della Fase A (porting motore, confronto primitive, pannello easy, verifica) + Fase C (generalizzazione a livelli-come-dati). Vedi il blocco `oblique` in §1.
+- [ ] **oblique (Broderie Anglaise) — Fase A completa, manca la verifica.** Motore portato e confermato fedele all'`easy.html` quasi punto-per-punto, tool end-to-end nel browser. Restano: verifica visiva di Lorenzo, rifiniture di resa, **Fase C** (generalizzazione a livelli-come-dati). Vedi il blocco `oblique` in §1.
 - [ ] **Migrare gli altri tool**: 45-grid, cross-stitch. (Il **laboratorio DST/recipe/library con AI** di `bitmap_to_stitch` resta satellite Python, fuori scope.)
-- [ ] **Pulizia**: `apps/net-45/src/style.css` non è più usato.
+- [x] ~~**Pulizia**: `apps/net-45/src/style.css` non è più usato~~ — rimosso (nessun riferimento in tutto il repo; il foglio vivo è `net45.css`).
 
 ---
 
 ## 4. BLOCCHI E DECISIONI APERTE
 
 - ~~**Submodule vs copia vendorizzata**~~ — risolto: il DS è su GitHub, il submodule punta all'URL remoto ed è **pinnato al tag `v1.6.0`**.
-- **Il monorepo non è su GitHub** (ma pronto per **GitHub Pages**, pubblico): la suite è 100% lato browser, quindi si serve come sito statico. Preparati la GitHub Action `.github/workflows/deploy.yml` (build + test + deploy su Pages) e il `base` relativo in `apps/shell/vite.config.ts` (`command === 'build' ? './' : '/'`, così funziona in `/<repo>/`). **Vincolo:** la Action fa un checkout pulito, quindi **tutti i tool registrati devono essere committati** (oggi `apps/bitmap` e le modifiche di `apps/shell` sono WIP non committati di un'altra chat → vanno consolidati prima del push, o la build in CI fallisce). Il submodule DS dev'essere pubblico per il checkout in CI.
+- ~~**Il monorepo non è su GitHub**~~ — risolto: è su `LorenzoErcoli/RG-EMBROIDERY-TOOLS-SUITE` e si pubblica su **GitHub Pages** a ogni push con `.github/workflows/deploy.yml` (test + **typecheck** + build + deploy), col `base` relativo in `apps/shell/vite.config.ts` (`command === 'build' ? './' : '/'`, così funziona in `/<repo>/`). **Vincoli che restano:** la Action fa un checkout pulito → tutto ciò che serve alla build dev'essere **committato** (niente WIP locale), e il submodule del DS dev'essere **pubblico**.
 - **Preview integrata rotta.** Il pannello browser dell'assistente resta a 0×0 e gli screenshot vanno in timeout → **la verifica visiva la deve fare Lorenzo** con `avvia.bat`. Le verifiche automatiche (typecheck, build, ispezione del DOM e del bundle) funzionano e vengono usate al posto suo.
 - **Rifiniture di ricamo da validare**: quadrato intero in cima, cordoncino grande di bordo e comportamento dei quadrati esclusi vanno decisi guardando il DST di riferimento — servono gli occhi di Lorenzo.
 - **"Fit" del pan/zoom** riporta a zoom 1 e centro, non calcola l'inquadratura sul contenuto.
@@ -257,6 +262,8 @@ La suite ha **due tool funzionanti** (net-45 e pattern-grammar), entrambi con lo
 
 ## 5. PROSSIMA SINGOLA MOSSA
 
-**oblique — verifica visiva di Lorenzo.** Il motore + tool sono completi e verdi (build+test+typecheck), e nel dev server generano il pattern completo (L0/L1/L2 continuo + fori) sul default 100×100. Manca l'unica cosa che il codice non può dare: **guardare il ricamo**. Lorenzo apre `avvia.bat` → **Oblique**, carica un cartamodello reale (o usa il default), assegna i colori ai ruoli (Pannello/Pattern/Fori/Piazzamento-fissaggio), e verifica a occhio che la resa combaci col comportamento della "versione easy" originale (`rg-oblique-embroidery-pattern-generator/easy.html`). Da lì escono le rifiniture (etichette REVISIONE-PARAMETRI, eventuali scostamenti dal golden) e poi la **Fase C** (generalizzazione a livelli-come-dati).
+**Smoke test su `striatura`.** Il campo è stato ripulito (README, typecheck in CI, tsconfig della shell, file morto, questo file riallineato): il buco più grande che resta *e che non dipende da Lorenzo* è che il tool più giovane — e quello che sta cambiando a ogni giro di feedback — non ha **nessuna invariante bloccata**. Le conquiste già misurate a mano (0 punti fuori bordo, 0 dentro i vuoti R5, `segMax` mai oltre il passo, filo continuo, salti attorno ai vuoti) vanno messe in `test/smoke.mjs` come è stato fatto per interlace, bitmap e oblique: costa poco e da lì in poi il rework dei passaggi si fa senza paura di rompere quel che funziona già.
+
+*In parallelo, quando Lorenzo ha il tempo e il ricamo in mano:* **verifica visiva di oblique e striatura** (`avvia.bat` → Oblique / Punto Striato). È l'unica cosa che il codice non può dare, ed è il preambolo delle rifiniture di resa, delle etichette REVISIONE-PARAMETRI e — per oblique — della **Fase C** (generalizzazione a livelli-come-dati).
 
 *(Resta aperto, non urgente: il **README** alla radice — cos'è RG Tools, avvio `avvia.bat`, requisiti, come si aggiunge un tool — perché qualcuno che non sia Lorenzo possa aprire il repo e usarlo.)*

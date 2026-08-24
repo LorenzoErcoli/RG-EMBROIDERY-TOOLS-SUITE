@@ -19,8 +19,13 @@ packages/pattern-grammar @rg/pattern-grammar — motore del generatore pattern
 apps/shell               home della suite (griglia di tool + routing)
 apps/net-45              tool "Rete 45°"
 apps/pattern-grammar     tool "Generatore pattern"
+apps/interlace           tool "Interlace"
+apps/bitmap              tool "Bitmap → Stitch" (input raster)
+apps/oblique             tool "Oblique Pattern" (Broderie Anglaise)
+apps/striatura           tool "Punto Striato"
 ```
-Avvio: `avvia.bat`. Test: `npm test`. Build: `npm run build`.
+Avvio: `avvia.bat`. Test: `npm test`. Tipi: `npm run typecheck`. Build: `npm run build`.
+I tre devono restare verdi a ogni passo (la build **non** controlla i tipi: vite usa esbuild).
 
 ## 2. Cosa fa questo tool
 > **La descrizione del tool arriva nel MESSAGGIO SUCCESSIVO** (input, output, a cosa serve).
@@ -46,8 +51,11 @@ Avvio: `avvia.bat`. Test: `npm test`. Build: `npm run build`.
 2. Esporta una funzione `mount<Nome>(root, {backHref})`: il tool è **sia standalone sia integrato** nella shell.
 3. Importa `@rg/ui/rg.css`, usa le classi `.rg-*` e i token `var(--rg-*)`.
 4. Registra il tool in `packages/ui/src/tools.ts` (card della home) e aggiungi la route in `apps/shell`.
-5. Pannello: **struttura canonica** (testa sempre aperta → corpo in accordion → coda Preset), chiedendo la forma esatta al subagent design-system.
-6. Se ti serve una primitiva nuova nel core: **estraila** (con test), non duplicarla.
+   L'alias `@app/<nome>` va messo in **due file**: `apps/shell/vite.config.ts` *e* `apps/shell/tsconfig.json`.
+   Se ne salti uno la build passa lo stesso — se ne accorge solo `npm run typecheck` (successo già visto: interlace e bitmap mancavano nel tsconfig).
+5. Aggiungi la sezione in `MANUALE.md` (intestazione `##` con l'id del tool fra apici inversi): è la *Guida* in-app.
+6. Pannello: **struttura canonica** (testa sempre aperta → corpo in accordion → coda Preset), chiedendo la forma esatta al subagent design-system.
+7. Se ti serve una primitiva nuova nel core: **estraila** (con test), non duplicarla.
 
 ## 6. Prima mossa
 Leggi i 4 documenti del §0 e aspetta il secondo messaggio (§2). Poi, **prima di scrivere codice**, proponi un piano in 5 punti di *come* costruirai il tool e *quali* pezzi porterai da oblique e da bitmap. Poi si procede un pezzo alla volta, con build+test verdi e `STATO.md` aggiornato a ogni passo.
