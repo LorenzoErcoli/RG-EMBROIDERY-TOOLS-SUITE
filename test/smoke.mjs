@@ -19,6 +19,8 @@ export { generateFill, generatePasses, defaultInterlaceParams } from ${JSON.stri
 export { generateStitch, analyzeBitmap, buildSelectionMask, buildPalette, groupByPalette, defaultBitmapParams } from ${JSON.stringify(posix('apps/bitmap/src/engine.ts'))};
 export { buildRawLevels, computeGridCounts, moduleFromPolylines, parseModuleSvg, defaultObliqueParams, resolveBoundaries, buildLaserExport, filterLevelByHoles, rectBoundaryOf, boundaryFromFormat, boundaryFromPoints, contourBoundary, simplifyLoop, isInside, applyModuleClipMode, cleanupPolylines, subtractExclusions, cleanupVoids, applyVoids, generateOblique, connectLayerContinuity, connectTechnicalDiagonals, enforceMinimumStitch, reconnectCutFragmentsOnBoundary } from ${JSON.stringify(posix('apps/oblique/src/engine.ts'))};
 export { runBitmapPreview, runBitmapPipeline } from ${JSON.stringify(posix('apps/bitmap/src/pipeline.ts'))};
+export { generateStriatura, layerThreadMm, defaultStriaturaParams } from ${JSON.stringify(posix('apps/striatura/src/engine.ts'))};
+export { runPipeline as runStriaturaPipeline } from ${JSON.stringify(posix('apps/striatura/src/pipeline.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
@@ -509,6 +511,99 @@ console.log('\noblique — routing + orchestratore (2d)');
   const bnd = rg.boundaryFromPoints(fineRect, 'p');
   check('boundaryFromPoints: boundary semplificato (pochi punti, non ~400)', bnd.points.length <= 8, true);
   check('boundaryFromPoints: ingombro preservato (100×100)', Math.round(bnd.width) === 100 && Math.round(bnd.height) === 100, true);
+}
+
+// ---------------------------------------------------------------------------------------------
+// striatura (Punto Striato) — le invarianti conquistate a mano coi giri di feedback di Lorenzo,
+// bloccate qui perché il rework dei passaggi non le possa perdere di nascosto:
+// niente ago fuori dalla sagoma o dentro un vuoto (R5), punti mai più lunghi del passo (R4, chiesto
+// esplicitamente), filo continuo, verticalità del punto striato, densità monotòna, seed ripetibile.
+// Dati sintetici (rettangolo + vuoto circolare) come per interlace/bitmap/oblique: l'engine è TS puro.
+{
+  const sRect = [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 150 }, { x: 0, y: 150 }];
+  const sVoid = (() => { const a = []; for (let i = 0; i < 32; i++) { const t = (i / 32) * 2 * Math.PI; a.push({ x: 60 + Math.cos(t) * 22, y: 75 + Math.sin(t) * 22 }); } return a; })();
+  const sP = rg.defaultStriaturaParams;
+  const sStep = Math.max(sP.maxStitchMm, sP.travelStitchMm); // il passo più lungo ammesso dai parametri
+
+  /** Misura una lista di polilinee contro la sagoma: fuori bordo, dentro/attraverso i vuoti, lunghezze. */
+  const sMeasure = (polylines, outline, voids, minMm) => {
+    let pts = 0, segs = 0, mm = 0, vertMm = 0, segMax = 0, fuori = 0, nelVuoto = 0, attraversa = 0, sottoMin = 0, zero = 0;
+    for (const pl of polylines) {
+      pts += pl.length;
+      for (const q of pl) {
+        if (!rg.pointInPolygon(q, outline)) fuori++;
+        for (const v of voids) if (rg.pointInPolygon(q, v)) nelVuoto++;
+      }
+      for (let i = 1; i < pl.length; i++) {
+        const a = pl[i - 1], b = pl[i];
+        const d = Math.hypot(b.x - a.x, b.y - a.y);
+        segs++; mm += d;
+        if (d > segMax) segMax = d;
+        if (Math.abs(b.x - a.x) < 1e-6) vertMm += d;   // il punto striato è verticale
+        if (minMm && d < minMm - 1e-9) sottoMin++;
+        if (d < 1e-9) zero++;
+        // il segmento non deve solo AVERE gli estremi fuori dal vuoto: non deve attraversarlo (R5)
+        const k = Math.max(1, Math.ceil(d / 0.4));
+        for (let j = 0; j <= k; j++) {
+          const t = j / k, x = a.x + (b.x - a.x) * t, y = a.y + (b.y - a.y) * t;
+          let dentro = false;
+          for (const v of voids) if (rg.pointInPolygon({ x, y }, v)) { dentro = true; break; }
+          if (dentro) { attraversa++; break; }
+        }
+      }
+    }
+    return { blocchi: polylines.length, pts, segs, mm, vertPerc: mm ? (vertMm / mm) * 100 : 0, segMax, fuori, nelVuoto, attraversa, sottoMin, zero };
+  };
+  const sGen = (params, voids = []) => rg.generateStriatura({ outline: sRect, voids }, params)[0].polylines;
+
+  console.log('\nstriatura — riempimento: dentro la sagoma, fuori dai vuoti, punto mai troppo lungo');
+  const sBase = sMeasure(sGen(sP), sRect, []);
+  check('genera un tracciato non vuoto', sBase.pts > 1000, true);
+  check('nessun punto fuori dalla sagoma', sBase.fuori, 0);
+  check('filo continuo sul pieno (un solo tratto, nessun salto)', sBase.blocchi, 1);
+  check('nessun segmento oltre il passo (R4: "punti mai troppo lunghi")', sBase.segMax <= sStep + 0.01, true);
+  check('il punto striato è verticale (>80% del filo)', sBase.vertPerc > 80, true);
+
+  console.log('\nstriatura — vuoti (R5): il filo non ci entra e non ci passa sopra');
+  const sHole = sMeasure(sGen(sP, [sVoid]), sRect, [sVoid]);
+  check('nessun punto dentro il vuoto', sHole.nelVuoto, 0);
+  check('nessun segmento ATTRAVERSA il vuoto (nemmeno un tragitto)', sHole.attraversa, 0);
+  check('il vuoto spezza il filo in pochi tratti (salti attorno, non ovunque)', sHole.blocchi <= 4, true);
+
+  console.log('\nstriatura — le manopole fanno quello che dicono');
+  const sFitto = sMeasure(sGen({ ...sP, densitySpacingMm: 0.4 }), sRect, []);
+  const sRado = sMeasure(sGen({ ...sP, densitySpacingMm: 1.2 }), sRect, []);
+  check('densità: colonne più fitte = più filo (monotòna)', sFitto.mm > sRado.mm * 1.5, true);
+  const sSingola = sMeasure(sGen({ ...sP, stitchMode: 'boustrophedon' }), sRect, []);
+  check('retrace (default) usa più filo della passata singola', sBase.mm > sSingola.mm, true);
+  const sOnda = sMeasure(sGen({ ...sP, waveAmpMm: 12 }), sRect, []);
+  check('onda: cambia la disposizione ma resta dentro la sagoma', [sOnda.fuori, sOnda.mm !== sBase.mm], [0, true]);
+
+  console.log('\nstriatura — variante (seed): ripetibile e diversa');
+  const sSig = (seed) => { const pl = sGen({ ...sP, seed }); return `${pl.length}:${rg.layerThreadMm({ color: '#000', polylines: pl }).toFixed(2)}`; };
+  check('stesso seed → stesso ricamo', sSig(7), sSig(7));
+  check('seed diverso → ricamo diverso', sSig(7) !== sSig(8), true);
+
+  // R3 — il minimo si impone DOPO il routing, ed è la PIPELINE a farlo (passo 8 della Costituzione §4).
+  // Il motore da solo lascia micro-segmenti nelle giunzioni fra celle e tragitti: qui si verifica che
+  // il pass ci sia davvero e che NON allunghi i punti oltre il passo (sarebbe il difetto opposto).
+  console.log('\nstriatura — R3: il punto minimo lo impone la pipeline, dopo il routing');
+  const sContours = [
+    { points: sRect, closed: true, color: '#000000' },
+    { points: sVoid, closed: true, color: '#ff0000' },
+  ];
+  const sRoles = { '#000000': 'MASTER_OUTLINE', '#ff0000': 'EXCLUSION' };
+  const sPipe = rg.runStriaturaPipeline(sContours, sRoles, sP);
+  const sFilo = sPipe.exportLayers.find((l) => l.id === 'striatura');
+  const sAfter = sMeasure(sFilo.polylines, sRect, [sVoid], sP.minStitchMm);
+  const sBefore = sMeasure(sGen(sP, [sVoid]), sRect, [sVoid], sP.minStitchMm);
+  check('il motore da solo lascia micro-segmenti (senza il pass non passerebbe)', sBefore.sottoMin > 0, true);
+  check('nessun segmento sotto il punto minimo (R3)', sAfter.sottoMin, 0);
+  check('nessun punto nello stesso buco (segmento di lunghezza zero)', sAfter.zero, 0);
+  check('il pass NON allunga i punti oltre il passo (R4 resta)', sAfter.segMax <= sStep + 0.01, true);
+  check('il filo cambia di pochissimo (<1%)', Math.abs(sAfter.mm - sBefore.mm) / sBefore.mm < 0.01, true);
+  check('i vuoti restano rispettati anche dopo il pass (R5)', [sAfter.nelVuoto, sAfter.attraversa], [0, 0]);
+  check('la statusbar conta i tratti generati', sPipe.blockCount, sFilo.polylines.length);
 }
 
 rmSync(outDir, { recursive: true, force: true });

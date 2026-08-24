@@ -2,7 +2,7 @@
 // Segue la pipeline della COSTITUZIONE §4 (import→ruoli→boundary→placement→export).
 import {
   type Contour, type Role, type ExportLayer, type Bounds, type Polyline,
-  bounds as boundsOf, pointInPolygon, polygonArea,
+  bounds as boundsOf, pointInPolygon, polygonArea, distance, enforceMinStitch,
   THREAD_STROKE_MM, SHAPE_STROKE_MM,
 } from '@rg/core';
 import { generateStriatura, layerThreadMm, type StriaturaParams } from './engine';
@@ -31,6 +31,21 @@ function contoursWithRole(contours: Contour[], roles: RoleAssignment, role: Role
   return contours.filter((c) => roles[c.color] === role);
 }
 
+/**
+ * Passo 8 della pipeline canonica — MIN-STITCH (R3): il minimo si impone **dopo** connessione e
+ * routing, mai prima. Il motore campiona a passo massimo (R4) e le giunzioni fra celle, tragitti e
+ * corridoi reintroducono micro-segmenti: è qui che spariscono.
+ * `enforceMinStitch` del core preserva gli estremi (R3) — per questo non può togliere da solo un
+ * ultimo punto duplicato, e lo togliamo noi: un segmento di lunghezza zero è un punto nello stesso
+ * buco. Misurato sul rettangolo di prova: 204 segmenti sotto il minimo → 0, filo −0,25%, e il passo
+ * massimo resta identico (2.999mm), cioè il pass NON allunga i punti (vincolo di Lorenzo).
+ */
+function minStitched(pl: Polyline, minMm: number): Polyline {
+  const out = enforceMinStitch(pl, minMm);
+  while (out.length >= 2 && distance(out[out.length - 1], out[out.length - 2]) < 1e-9) out.pop();
+  return out;
+}
+
 export function runPipeline(
   contours: Contour[],
   roles: RoleAssignment,
@@ -54,14 +69,16 @@ export function runPipeline(
   // Aree più grandi prima (stabilità), come per gli altri tool.
   const areas = master.slice().sort((a, b) => polygonArea(b.points) - polygonArea(a.points));
   const allPolylines: Polyline[] = [];
-  let threadMm = 0;
   for (const m of areas) {
     const innerVoids = exclusions.filter((v) => v.length > 0 && pointInPolygon(v[0], m.points));
     for (const gl of generateStriatura({ outline: m.points, voids: innerVoids }, { ...params, color: fillColor })) {
-      allPolylines.push(...gl.polylines);
-      threadMm += layerThreadMm(gl);
+      for (const pl of gl.polylines) {
+        const s = minStitched(pl, params.minStitchMm);
+        if (s.length >= 2) allPolylines.push(s);
+      }
     }
   }
+  const threadMm = layerThreadMm({ color: fillColor, polylines: allPolylines });
 
   // --- ANTEPRIMA: il filo si disegna sottile (R15); contorno dei vuoti tenue per mostrare che sono rispettati. ---
   if (allPolylines.length) {
