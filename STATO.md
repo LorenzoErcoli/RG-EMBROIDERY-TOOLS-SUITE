@@ -172,8 +172,12 @@
 
 ## 2. STATO
 
-**Sei tool in piedi, il cantiere è pulito.**
-Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app. `npm test`, `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice. Quel che resta si divide in tre cose sole: **(a)** le verifiche col ricamo in mano che solo Lorenzo può fare (oblique e striatura per prime), **(b)** le rifiniture di resa che ne discendono, **(c)** i buchi di copertura dei test — la generazione della rete 45° non ha ancora invarianti bloccate (striatura sì, da oggi).
+**Sei tool in piedi, e adesso ognuno ha le sue invarianti scritte.**
+Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (193 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
+
+**La copertura dei test non era un adempimento: ha trovato cinque difetti veri**, ognuno dei quali violava una regola della Costituzione già scritta e mai verificata — i passaggi di net-45 che attraversavano i vuoti (R5), il punto minimo mai applicato in striatura (R3), `insetPolygon` che rientrava del 30% in meno, il punto massimo di pattern-grammar che lasciava passare segmenti quasi doppi (R4), l'importer che esplodeva sul file vero da 2MB. Tutti corretti, tutti bloccati da un test che fallisce se tornano.
+
+**Quello che resta ha un solo padrone: Lorenzo.** Sono le cose che il codice non può decidere — la resa guardata a occhio (oblique e striatura per prime), le rifiniture che ne discendono, i nomi dei parametri, il merge del DS. Elenco completo in §3 e §4.
 
 ---
 
@@ -268,8 +272,8 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 
 ## 5. PROSSIMA SINGOLA MOSSA
 
-**Il rework dei passaggi di `striatura`** — «fasce ampie», l'ultima cosa che Lorenzo ha chiesto e che non è ancora stata fatta. Adesso si può toccare senza paura: le 21 invarianti dello smoke dicono subito se il rework fa uscire il filo dalla sagoma, se entra in un vuoto, se allunga i punti, se spezza la continuità o se perde la verticalità. Dalla stessa famiglia, in coda: i rari salti da tasca murata, l'ancoraggio del passaggio ai punti reali delle macchie, i salti attorno ai vuoti.
+**La verifica visiva di Lorenzo su oblique e striatura** (`avvia.bat` → Oblique / Punto Striato). Non è una formalità: è l'unica cosa rimasta che il codice non può dare, e da lì dipende tutto il resto — il **rework dei passaggi di striatura** («fasce ampie», l'ultima richiesta rimasta in sospeso) è una scelta di resa che va guidata dal ricamo vero, non da una metrica; le **etichette** REVISIONE-PARAMETRI vogliono i nomi che usa Lorenzo; la **Fase C di oblique** parte solo dopo che il porting è approvato a occhio.
 
-*Serve però prima una cosa che il codice non può dare:* **la verifica visiva di Lorenzo** su oblique e striatura (`avvia.bat` → Oblique / Punto Striato). Il rework dei passaggi è una scelta di resa, e va guidata da come il ricamo viene davvero — non da una metrica. Da lì escono anche le etichette REVISIONE-PARAMETRI e, per oblique, la **Fase C** (generalizzazione a livelli-come-dati).
+Il lavoro che *non* dipendeva da lui è stato fatto: sei motori con le loro invarianti, cinque difetti di dominio corretti, i tre comandi verdi in CI, README e documenti riallineati. Quando il rework dei passaggi partirà, si potrà toccare senza paura: le 21 invarianti di striatura dicono subito se il filo esce dalla sagoma, se entra in un vuoto, se i punti si allungano, se la continuità si spezza o se si perde la verticalità.
 
 *(Resta aperto, non urgente: il **README** alla radice — cos'è RG Tools, avvio `avvia.bat`, requisiti, come si aggiunge un tool — perché qualcuno che non sia Lorenzo possa aprire il repo e usarlo.)*

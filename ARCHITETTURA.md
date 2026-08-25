@@ -3,7 +3,7 @@
 > Come i tool smettono di essere isole e diventano un ecosistema.
 > Compagno della [Costituzione](COSTITUZIONE-RICAMO.md).
 
-**Versione:** 0.2 · **Aggiornato:** 2026-07-31 · 5 tool live
+**Versione:** 0.3 · **Aggiornato:** 2026-08-24 · 6 tool live
 
 ---
 
@@ -42,6 +42,7 @@ graph TD
     ILC["interlace"]
     BMP["bitmap (raster)"]
     OBQ["oblique"]
+    STR["striatura"]
   end
 
   BITMAP["bitmap_to_stitch<br/>(repo Python, satellite)"]
@@ -52,8 +53,8 @@ graph TD
   SCHEMA -->|contratto parametri| CORE
   SCHEMA -. stessi nomi/unità .-> BITMAP
 
-  CORE --> N45 & PG & ILC & BMP & OBQ
-  UIKIT --> N45 & PG & ILC & BMP & OBQ
+  CORE --> N45 & PG & ILC & BMP & OBQ & STR
+  UIKIT --> N45 & PG & ILC & BMP & OBQ & STR
   N45 -. promuove primitiva .-> CORE
 
   N45 -->|esporta SVG/DST| PROJ
@@ -72,7 +73,7 @@ graph TD
                         └───────────────┬───────────────┘
                                         │ import (workspace link)
                                         ▼
-        APPS         net-45  pattern-grammar  interlace  bitmap  oblique
+        APPS      net-45  pattern-grammar  interlace  bitmap  oblique  striatura
                           │                                  │
                           └──────► SVG+metadata / DST ◄───────┘
                                    (interop: output = input)
@@ -98,7 +99,11 @@ graph TD
 6. **Un tool migrato arriva col suo motore: la regola 1 da sola non basta.** L'estrazione scatta quando un *secondo tool ha bisogno* di una primitiva — ma un tool che arriva già completo non "ha bisogno" di niente, e si porta dietro la sua risposta a domande già risolte nel core. Quindi: **a ogni migrazione si confrontano le primitive** (chiusura, colori, unità, tolleranze) e le divergenze si risolvono *esplicitamente*, prima di considerare finita la migrazione.
 7. **Una divergenza numerica è una decisione, non un dettaglio.** Se due implementazioni rispondono diverso alla stessa domanda geometrica, la risposta giusta si decide col ricamo in mano, si scrive in Costituzione con la sua motivazione, e si blocca con un test in `test/smoke.mjs`. Mai risolverla scegliendo "quella che sembra ragionevole".
 
+8. **Il test non serve a difendere il codice che funziona: serve a scoprire quello che non funziona.** Ogni motore, prima di essere considerato a posto, va misurato contro le regole che dice di rispettare — e la misura va scritta in `test/smoke.mjs`, non solo guardata una volta.
+
 > **Da dove viene la 6 e la 7.** Migrando `pattern-grammar` sono entrate nel repo due implementazioni della domanda *"questo contorno è chiuso?"*: tolleranza **1.0 mm** nel core, **0.001** nel motore migrato. Mille volte diverse, entrambe funzionanti sui rispettivi file, nessuna delle due sbagliata di per sé — e nessun modo di accorgersene finché un file storto non fosse finito nel tool sbagliato. Risolta in R28.
+
+> **Da dove viene la 8.** Scrivendo le invarianti dei motori che *non* avevano test sono usciti **cinque difetti veri**, nessuno dei quali si era mai manifestato come "qualcosa si è rotto": i passaggi di net-45 attraversavano le aree vuote (R5) fino a 16.5mm dentro; striatura non applicava il punto minimo (R3) e cuciva punti nello stesso buco; `insetPolygon` rientrava di 7.07mm quando gliene chiedevi 10; il "punto massimo" di pattern-grammar lasciava passare segmenti quasi doppi (R4); e l'importer a stringhe esplodeva sul file vero da 2MB. Tutti trovati **misurando**, non aspettando che qualcosa si rompesse — e ognuno era una regola della Costituzione già scritta e non verificata da nessuno.
 
 ## Stato di migrazione
 
@@ -109,10 +114,13 @@ graph TD
 | **interlace** (Interlace) | ✅ **live** — motore locale all'app, multicolore a stop |
 | **bitmap** (Bitmap → Stitch) | ✅ **live** — calcolo punti migrato da `bitmap_to_stitch` (input raster, unico nella suite) |
 | **oblique** (Broderie Anglaise) | ✅ **live** — porting da `rg-oblique-embroidery-pattern-generator` (usa le void, R5) |
+| **striatura** (Punto Striato) | ✅ **live** — motore nuovo, nato dal DST di riferimento `PUNTO-STRIATURA.dst` |
 | 45-grid, cross-stitch | da migrare quando li tocchi (stesso schema) |
 | `bitmap_to_stitch` (repo Python) | satellite: contratti sì, codice no. Migrata la sola pipeline *immagine→punti→SVG*; il laboratorio DST/recipe con AI (CLIP/OpenAI) resta fuori scope |
 
-**Capacità globali attive** (una volta, per tutti — vedi Costituzione): export **SVG e DST riapribili** (R9/R27/R31 — `readProjectMetadata` per l'SVG, `readDstMetadata` per il footer del DST; la cucitura resta byte-identica), export **DST macchina** (R31, `dstFromExportLayers`), **salvataggio con finestra di sistema** (R29), **pannello canonico** Testa A/B + accordion (DS v1.7.0).
+**Capacità globali attive** (una volta, per tutti — vedi Costituzione): export **SVG e DST riapribili** (R9/R27/R31 — `readProjectMetadata` per l'SVG, `readDstMetadata` per il footer del DST; la cucitura resta byte-identica), export **DST macchina** (R31, `dstFromExportLayers`), **salvataggio con finestra di sistema** (R29), **pannello canonico** Testa A/B + accordion (DS v1.7.0), **passaggi che girano attorno alle aree vuote** (R5, `avoidVoids` in `travel.ts`), **guida in-app** generata da `MANUALE.md` (bottone *Guida* nella topbar di ogni tool).
+
+**Rete di sicurezza comune:** `npm test` (193 asserzioni: le primitive del core più le invarianti di tutti e sei i motori, su fixture sintetiche **e sugli SVG veri**), `npm run typecheck` (la build non controlla i tipi: vite usa esbuild) e `npm run build`. Tutti e tre girano in CI a ogni push.
 
 ---
 
@@ -131,7 +139,8 @@ RG Tools (monorepo)
 ├─ apps/pattern-grammar     "Generatore pattern"
 ├─ apps/interlace           "Interlace"
 ├─ apps/bitmap              "Bitmap → Stitch"  (input raster)
-└─ apps/oblique             "Broderie Anglaise"
+├─ apps/oblique             "Broderie Anglaise"
+└─ apps/striatura           "Punto Striato"
 ```
 
 **Come funziona:** `apps/shell` è l'unica app d'ingresso. Home (`#/`) = griglia di tool DS-styled;
