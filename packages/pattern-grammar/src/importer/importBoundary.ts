@@ -499,11 +499,22 @@ function pathLooksClosed(d = "", points: Point[]): boolean {
   return /z\s*$/i.test(d.trim()) || isGeometricallyClosed(points);
 }
 
+/**
+ * Ingombro dei punti, **a ciclo**. Prima era `Math.min(...xs)`: lo spread passa un argomento per
+ * punto, e su un file vero di Lorenzo (il golden di oblique, 2MB, centinaia di migliaia di punti)
+ * faceva esplodere lo stack — l'import falliva con "Maximum call stack size exceeded" invece di
+ * aprire il file. Un ciclo non ha limiti di dimensione.
+ */
 function boundsOf(points: Point[]): ImportedBoundary["bounds"] {
   if (!points.length) return { minX: 0, minY: 0, maxX: 0, maxY: 0 };
-  const xs = points.map((point) => point.x);
-  const ys = points.map((point) => point.y);
-  return { minX: Math.min(...xs), minY: Math.min(...ys), maxX: Math.max(...xs), maxY: Math.max(...ys) };
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const point of points) {
+    if (point.x < minX) minX = point.x;
+    if (point.x > maxX) maxX = point.x;
+    if (point.y < minY) minY = point.y;
+    if (point.y > maxY) maxY = point.y;
+  }
+  return { minX, minY, maxX, maxY };
 }
 
 function areaOfBounds(bounds: ImportedBoundary["bounds"]): number {

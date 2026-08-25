@@ -84,6 +84,26 @@ const arcZero = rg.parseImportedBoundarySource(
 check('raggio zero → segmento retto (come da specifica SVG)',
   Math.round(arcZero.bounds.maxY - arcZero.bounds.minY), 100);
 
+// I FILE VERI di Lorenzo (gli SVG sorgente di oblique, committati in apps/oblique/fixtures/).
+// Fino a ieri i test giravano solo su fixture sintetiche: qui l'importer legge i file che il tool
+// riceve davvero — compreso il golden da 2MB, che lo faceva esplodere.
+console.log('\nfile veri: gli SVG sorgente di oblique passano dall\'importer');
+const realSvg = (name) => readFileSync(join(root, 'apps/oblique/fixtures', name), 'utf8');
+const liv1 = rg.parseImportedBoundarySource(realSvg('1livello-oblique-fermatura pannello-puntoricamo.svg'), 'liv1.svg');
+check('livello 1: i contorni sono chiusi (sono sagome, non tracciati)',
+  liv1.choices[0].boundary.paths.every((p) => p.closed), true);
+check('livello 1: misura reale ~82.6 × 74.9 mm',
+  [Math.round(liv1.source.widthMm), Math.round(liv1.source.heightMm)], [83, 75]);
+check('livello 1: colore Illustrator normalizzato', liv1.choices[0].color, '#e30613');
+const liv2 = rg.parseImportedBoundarySource(realSvg('2livello-oblique-disegno-puntoricamo.svg'), 'liv2.svg');
+check('livello 2: i 15 tracciati del disegno arrivano tutti', liv2.choices[0].boundary.paths.length, 15);
+// Il golden completo (2MB, centinaia di migliaia di punti) faceva "Maximum call stack size exceeded"
+// in boundsOf (`Math.min(...xs)`, uno spread con un argomento per punto). Ora è un ciclo.
+const golden = rg.parseImportedBoundarySource(realSvg('oblique-punto-ricamo-completo.svg'), 'golden.svg');
+check('il golden da 2MB si apre (prima: stack overflow nell\'ingombro)', golden.choices.length > 0, true);
+check('il golden misura ~1178 × 1019 mm',
+  [Math.round(golden.source.widthMm), Math.round(golden.source.heightMm)], [1178, 1019]);
+
 console.log('\n⑥⑦⑧ — pattern-grammar: le conversioni non cambiano la geometria');
 const base = { totalWidth: 120, totalHeight: 160 };
 const geom = (svg) => svg.replace(/<metadata>[\s\S]*?<\/metadata>/g, '');
