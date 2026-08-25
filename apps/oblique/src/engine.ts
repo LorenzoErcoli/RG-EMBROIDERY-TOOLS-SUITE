@@ -248,7 +248,15 @@ export function defaultObliqueParams(): ObliqueParams {
     travelRoutingStrategy: 'shortest_valid',
     travelSideStrategy: 'auto',
     allowInternalShortcuts: false,
-    perimeterLaneWidth: 3,
+    // DIVERGENZA VOLUTA dall'originale (decisa da Lorenzo, verifica visiva del 2026-08-25).
+    // `app.js`/easy.html porta i passaggi in una corsia larga 3mm FUORI dal formato: misurato sul
+    // default 100×100 erano 877mm di filo del livello pattern + 593 dei 672mm di passaggi a spasso
+    // oltre il bordo del pannello. Lorenzo li vuole dentro il formato → corsia 0: i passaggi
+    // costeggiano il perimetro restandoci sopra. Verificato: **niente esce più** (0 punti oltre il
+    // bordo), il filo resta **un unico tratto continuo** (R26) e cala del 5,5% (35,42 → 33,46 m),
+    // perché il giro largo costava più del bordo. Bloccato da un test in `test/smoke.mjs`.
+    // Per tornare al comportamento originale basta rimettere 3.
+    perimeterLaneWidth: 0,
     perimeterLaneTolerance: 1,
     technicalMaxTravelMm: 0,
     technicalGapBreakFactor: 2.5,

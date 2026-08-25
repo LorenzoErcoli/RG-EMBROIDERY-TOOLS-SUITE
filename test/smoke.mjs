@@ -550,9 +550,13 @@ console.log('\noblique — routing + orchestratore (2d)');
   const l2pts = res.level2.flatMap((s) => s.points);
   check('L2: ricamo non vuoto', l2pts.length > 0, true);
   check('L2: filo continuo (pochi tratti, non un frammento per modulo)', res.level2.length < res.grid.diagonalCount + 5, true);
-  // Dentro il pannello 100×100, con tolleranza per la corsia perimetrale (laneWidth 3) e i lock sul bordo.
-  const within = l2pts.every((pt) => pt.x >= -6 && pt.x <= 106 && pt.y >= -6 && pt.y <= 106);
-  check('L2: tutto entro il bordo (± corsia)', within, true);
+  // NIENTE esce dal formato. `app.js` portava i passaggi in una corsia larga 3mm FUORI dal pannello
+  // (877mm di filo del pattern + 593 dei 672 di passaggi, misurati sul default 100×100): Lorenzo li
+  // vuole dentro, quindi `perimeterLaneWidth` è 0 e questo test è il lucchetto della decisione.
+  const travelPts = res.travel.flatMap((s) => s.points);
+  const dentro = (pt) => pt.x >= -0.01 && pt.x <= 100.01 && pt.y >= -0.01 && pt.y <= 100.01;
+  check('L2: niente esce dal formato (corsia 0, scelta di Lorenzo)', l2pts.every(dentro), true);
+  check('passaggi: nemmeno loro escono dal formato', travelPts.every(dentro), true);
   check('L2: tutti i punti finiti', l2pts.every((pt) => Number.isFinite(pt.x) && Number.isFinite(pt.y)), true);
 
   // Fori: filtrano L0/L1 → dove non c'è il foro (fuori dal pannello) niente piazzamento/fissaggio.
