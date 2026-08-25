@@ -3,7 +3,7 @@
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
 > Aggiornato: 2026-08-24 · Suite con **sei tool** (net-45, pattern-grammar, interlace, bitmap, oblique, **striatura**) — oblique e **striatura** end-to-end nel browser, in attesa della verifica visiva di Lorenzo
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
-> Rete di sicurezza: `npm test` (141 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
+> Rete di sicurezza: `npm test` (157 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
 
 ---
 
@@ -18,6 +18,8 @@
 - Il tracciato è un **filo continuo** (cordoncino → passaggio → cordoncino), con i passaggi che costeggiano il bordo.
 - **Anteprima con pan/zoom** che non si azzera quando cambi i parametri.
 - **Export SVG allineato al file di partenza** (stesso viewBox/coordinate) + metadati per riaprirlo.
+- **Smoke test dedicati (16 asserzioni).** Era l'ultimo motore della suite senza rete di sicurezza. Bloccano: tracciato non vuoto, **filo continuo** (nessun segmento oltre il passo dei passaggi = nessun salto a penna alzata), la rete **copre tutta la sagoma**, niente oltre il perimetro (a parte mezza larghezza di cordoncino, che è la geometria del punto), **R5** (nessun punto e nessun *segmento* dentro il vuoto, col confronto che dimostra che senza vuoto lì si ricamava), fascia di raso (c'è, sparisce con `rasoBandMm` 0, **mai in cima** con `rasoDownwardOnly`, in cima senza), **celle a 45°** verificate sugli angoli del diamante, densità monotòna (cella grande = meno filo), determinismo.
+- **Difetto R5 trovato e corretto: i passaggi attraversavano le aree vuote.** `routeTravel`/`routeAlongBorder` del core conoscevano **solo il perimetro**: una retta "dentro la sagoma" tagliava dritta per il buco. Misurato su un'esclusione di raggio 18mm: **68 punti dentro, fino a 16.5mm di profondità, 44 oltre i 3mm** — il filo passava in mezzo al vuoto. R5 dice l'opposto: *«il travel ci gira attorno»*. Ora il core sa girare attorno ai vuoti (`avoidVoids` + parametro `exclusions` su `routeTravel`/`routeAlongBorder`, **facoltativo**: senza, il comportamento è identico a prima) e net-45 gliele passa, con clearance = mezza larghezza di cordoncino. Dopo il fix: **0 attraversamenti**, penetrazione massima 0.17mm (il filo che sfiora il bordo del vuoto), filo +0,8% (il giro costa, giustamente), e **il caso senza vuoti è invariato punto per punto**.
 
 **Tool `pattern-grammar` (Generatore pattern) — funzionante:**
 - Genera **pattern e basi ricamo** dalla grammatica — il cannage è solo uno dei possibili; l'output è un **tracciato continuo** esportabile in SVG.
@@ -152,7 +154,7 @@
 - **Ancora da fare (con Lorenzo):** rework passaggi (fasce ampie) · rari salti da tasca murata · ancorare passaggio ai punti reali delle macchie · salti attorno ai vuoti. Più: pannello via subagent **design-system**, nomi REVISIONE-PARAMETRI, e **il lock R8** (scarico filo in ingresso/uscita, passo 9 della pipeline canonica): oblique ce l'ha, striatura no — va deciso guardando il ricamo, perché aggiunge punti visibili sul bordo.
 
 **Fondamenta condivise:**
-- `packages/core` (~900 righe) — unità/scala mm, import SVG+DXF, geometria, griglia 45°, clipping, punti (cordoncino/running/min-stitch), passaggi con routing sul bordo, export SVG.
+- `packages/core` (~900 righe) — unità/scala mm, import SVG+DXF, geometria, griglia 45°, clipping, punti (cordoncino/running/min-stitch), **passaggi con routing sul bordo e giro attorno ai vuoti (R5)**, export SVG + DST.
 - `packages/ui` — integrazione del design system + topbar condivisa + **pan/zoom** (promosso qui quando è servito al secondo tool).
 - `packages/design-system` — il RG Design System come **submodule**, da GitHub, pinnato al tag **`v1.6.0`**. Da qui arrivano i componenti del pannello (`rg-file-input`, `rg-color-map`, `rg-input--numeric`) e la struttura canonica.
 - `packages/pattern-grammar` — motore di generazione pattern migrato da `pattern-grammar-engine` (solo percorso browser). **Ora usa `@rg/core`** per chiusura contorni, colori e lunghezze fisiche.
@@ -192,8 +194,8 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 - [ ] **Riempimenti raso veri**: oggi le aree raso escono come *forme* da riempire a mano su Stilista.
 - [x] ~~**Export DST**~~ c'è: funzione globale nel core (`dstFromExportLayers` + `DST_FILE`, salvataggio via `saveBinaryFile`). Bottone "Esporta DST" su **net-45, pattern-grammar, interlace e bitmap** (agganciato: gli `exportLayers` di bitmap — un layer per stop in ordine di cucitura — diventano cambi-colore in sequenza nel DST; rispetta il filtro `onlyColor`). Smoke: DST da bitmap con header Tajima "LA:", corpo non vuoto, END.
 - [ ] **Font del DS** (AGNext, GT America): non inclusi → l'interfaccia usa i font di sistema.
-- [x] ~~**Test automatici**: zero.~~ C'è `npm test` — 141 asserzioni: primitive d'import (chiusura, colori, scala), conversioni pattern-grammar ⑥⑦⑧, taglio al bordo ⑤, interlace, bitmap (24), core DST/R27, oblique (57), **striatura (21)**.
-- [ ] **Test — restano scoperti**: **generazione della rete 45°** (net-45 non ha nessuna asserzione sul suo motore), geometria/clip del core (coperti solo di rimbalzo via oblique), generatore pattern.
+- [x] ~~**Test automatici**: zero.~~ C'è `npm test` — 157 asserzioni: primitive d'import (chiusura, colori, scala), conversioni pattern-grammar ⑥⑦⑧, taglio al bordo ⑤, interlace, bitmap (24), core DST/R27, oblique (57), **striatura (21)**, **net-45 (16)**.
+- [ ] **Test — restano scoperti**: **geometria/clip del core** (coperti solo di rimbalzo dai tool: nessuna asserzione diretta su `clipSegment`, `insetPolygon`, `routeTravel`…) e il **generatore pattern** (`generatePattern` è provato solo sul formato ⑤, non sulla geometria che produce). Tutti e sei i motori dei tool ora hanno le loro invarianti.
 - [ ] **Fixture dai file veri**: la fixture di oggi è sintetica (`test/fixtures/contorno-con-scarto.svg`). Gli 8 SVG **reali** in `apps/oblique/fixtures/` esistono ma **lo smoke non li usa** (l'engine gira su moduli sintetici perché `parseSvgToContours` vuole il DOM). Servono un SVG e un DXF reali usati davvero dai test, per bloccare i comportamenti che contano.
 - [x] ~~**`strokeWidth` di pattern-grammar: due default diversi**~~ risolto con lo split ⑥: la geometria usa `constructionStroke` (`patternGrammar.ts`, fallback 0.3 sul vecchio campo per i preset legacy), il filo disegnato è fisso a `THREAD_STROKE_MM` = 0,1 mm (R15). I due significati non si confondono più.
 - [ ] **Archi ellittici nell'import a testo**: il parser `d` di pattern-grammar tratta il comando `A` come un segmento dritto fino al punto finale (`importBoundary.ts`, ramo `"A"`). Su una sagoma con raccordi curvi il contorno esce spigoloso. L'importer a DOM di net-45 non ha il problema (campiona con `getPointAtLength`).
@@ -209,7 +211,7 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
   - [ ] **interlace — densità per ZONA (macchie)**: densità diverse per regione sui fili sopra, per creare le "macchie" volute (incremento futuro chiesto da Lorenzo).
   - [ ] **interlace — modello densità da `bitmap_to_stitch`** (R22-R26): portare il calcolo densità/coprenza in TS (oggi la densità = spaziatura file/cella, empirica). Solo algoritmo, niente Python.
   - [ ] **DS — adottare `ds/color-map-aside`**: proposta DS (branch, v1.7.0, **non ancora merge/tag** — spetta a Lorenzo) che aggiunge `rg-color-map__aside` + `rg-field-with-unit--compact` per una riga-colore densa più pulita. Oggi il campo densità per-colore usa le sole classi v1.6.0 (`rg-field-with-unit` stretto col token `--rg-input-numeric-width`); dopo il merge/tag e l'avanzamento del submodule, adottare lo slot `__aside`.
-  - [ ] **interlace — void come primitiva del core**: oggi il clip vuoti/bordo è fatto nel motore dell'app con le primitive geometriche del core; se servirà il *travel che costeggia il perimetro del void* (da oblique) si promuove `routeTravel` nel core con test (regola di crescita 1).
+  - [x] ~~**interlace — void come primitiva del core**~~: il *travel che gira attorno al void* **è nel core** (`avoidVoids` in `travel.ts`, con `exclusions` facoltativo su `routeTravel`/`routeAlongBorder`), promosso quando è servito davvero — non a interlace ma a **net-45**, che lo violava (vedi il blocco net-45 in §1). Regola di crescita 1 rispettata: estratto al bisogno, con test. Il clip vuoti/bordo di interlace resta nel motore dell'app (lì la maschera a griglia è la scelta giusta per le prestazioni).
   - [x] ~~**interlace — smoke test dedicati**~~: invarianti bloccate in `test/smoke.mjs` (nessun punto nel vuoto, nessun segmento fuori da [min,max], filo dentro il bordo).
   - [ ] **interlace — same-color void**: oggi il void deve avere un colore diverso dall'area (i ruoli sono per-colore); il caso canonico R12 "forma più piccola dello stesso colore = esclusione" va gestito per geometria (annidamento), non solo per colore.
   - [ ] **interlace — verifica visiva in browser vero** (preview integrata rotta).

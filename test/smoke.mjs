@@ -19,6 +19,7 @@ export { generateFill, generatePasses, defaultInterlaceParams } from ${JSON.stri
 export { generateStitch, analyzeBitmap, buildSelectionMask, buildPalette, groupByPalette, defaultBitmapParams } from ${JSON.stringify(posix('apps/bitmap/src/engine.ts'))};
 export { buildRawLevels, computeGridCounts, moduleFromPolylines, parseModuleSvg, defaultObliqueParams, resolveBoundaries, buildLaserExport, filterLevelByHoles, rectBoundaryOf, boundaryFromFormat, boundaryFromPoints, contourBoundary, simplifyLoop, isInside, applyModuleClipMode, cleanupPolylines, subtractExclusions, cleanupVoids, applyVoids, generateOblique, connectLayerContinuity, connectTechnicalDiagonals, enforceMinimumStitch, reconnectCutFragmentsOnBoundary } from ${JSON.stringify(posix('apps/oblique/src/engine.ts'))};
 export { runBitmapPreview, runBitmapPipeline } from ${JSON.stringify(posix('apps/bitmap/src/pipeline.ts'))};
+export { buildNet } from ${JSON.stringify(posix('apps/net-45/src/net.ts'))};
 export { generateStriatura, layerThreadMm, defaultStriaturaParams } from ${JSON.stringify(posix('apps/striatura/src/engine.ts'))};
 export { runPipeline as runStriaturaPipeline } from ${JSON.stringify(posix('apps/striatura/src/pipeline.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
@@ -604,6 +605,87 @@ console.log('\noblique — routing + orchestratore (2d)');
   check('il filo cambia di pochissimo (<1%)', Math.abs(sAfter.mm - sBefore.mm) / sBefore.mm < 0.01, true);
   check('i vuoti restano rispettati anche dopo il pass (R5)', [sAfter.nelVuoto, sAfter.attraversa], [0, 0]);
   check('la statusbar conta i tratti generati', sPipe.blockCount, sFilo.polylines.length);
+}
+
+// ---------------------------------------------------------------------------------------------
+// net-45 (Rete 45°) — il primo tool della suite era anche l'ultimo senza rete di sicurezza sul
+// proprio motore. Qui si bloccano le cose che rendono la rete UNA RETE: filo continuo, celle a 45°,
+// la fascia di raso automatica sul bordo, il perimetro e i vuoti (R5).
+{
+  const nRect = [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 90 }, { x: 0, y: 90 }];
+  const nVoid = (() => { const a = []; for (let i = 0; i < 48; i++) { const t = (i / 48) * 2 * Math.PI; a.push({ x: 60 + Math.cos(t) * 18, y: 45 + Math.sin(t) * 18 }); } return a; })();
+  const nP = rg.defaultNetParams;
+  const nHalfCord = nP.cordWidthMm / 2; // il cordoncino è LARGO: mezza larghezza sborda dall'asse
+
+  const nMeasure = (res, boundary, voids) => {
+    const p = res.path;
+    let mm = 0, segMax = 0, oltreBordo = 0, dentroVuoto = 0, dentroVuotoProfondo = 0;
+    for (const q of p) {
+      if (!rg.pointInPolygon(q, boundary) && rg.distanceToBoundary(q, boundary) > nHalfCord + 0.01) oltreBordo++;
+      for (const v of voids) if (rg.pointInPolygon(q, v)) {
+        dentroVuoto++;
+        if (rg.distanceToBoundary(q, v) > nHalfCord) dentroVuotoProfondo++; // non è il bordo del cordoncino: è dentro
+      }
+    }
+    for (let i = 1; i < p.length; i++) { const d = rg.distance(p[i - 1], p[i]); mm += d; if (d > segMax) segMax = d; }
+    return { punti: p.length, mm, segMax, oltreBordo, dentroVuoto, dentroVuotoProfondo, raso: res.rasoShapes.length };
+  };
+  const cy = (s) => s.reduce((a, q) => a + q.y, 0) / s.length;
+
+  console.log('\nnet-45 — la rete: filo continuo, dentro la sagoma, punto entro il passo');
+  const nBase = nMeasure(rg.buildNet(nRect, [], nP), nRect, []);
+  check('genera un tracciato non vuoto', nBase.punti > 1000, true);
+  // filo CONTINUO (R26): è una polilinea sola e nessun "buco" — se ci fosse un salto a penna alzata
+  // si vedrebbe qui come un segmento più lungo del passo dei passaggi.
+  check('nessun segmento oltre il passo dei passaggi (filo continuo, R26)', nBase.segMax <= nP.travelStitchMm + 0.01, true);
+  const nSpan = rg.bounds(rg.buildNet(nRect, [], nP).path);
+  check('la rete copre tutta la sagoma (non un angolo solo)',
+    [nSpan.maxX - nSpan.minX > 110, nSpan.maxY - nSpan.minY > 80], [true, true]);
+  check('niente oltre il perimetro (a parte mezza larghezza di cordoncino)', nBase.oltreBordo, 0);
+  check('stessi parametri → stesso ricamo (nessuna casualità)',
+    JSON.stringify(rg.buildNet(nRect, [], nP).path) === JSON.stringify(rg.buildNet(nRect, [], nP).path), true);
+
+  // R5 — il difetto trovato scrivendo questi test: i passaggi tagliavano DRITTO per il vuoto
+  // (fino a 16.5mm dentro un'esclusione di raggio 18, 44 punti oltre i 3mm di profondità), perché
+  // `routeTravel` conosceva solo il perimetro. Ora le esclusioni arrivano al router e il filo gira attorno.
+  console.log('\nnet-45 — R5: il passaggio gira ATTORNO al vuoto, non ci passa dentro');
+  const nHolePath = rg.buildNet(nRect, [nVoid], nP).path;
+  const nHole = nMeasure({ path: nHolePath, rasoShapes: [] }, nRect, [nVoid]);
+  check('nessun punto DENTRO il vuoto (oltre lo sbordo del cordoncino)', nHole.dentroVuotoProfondo, 0);
+  // e non basta guardare i punti: un passaggio lungo può SCAVALCARE il vuoto senza appoggiarci un punto.
+  let nCross = 0;
+  for (let i = 1; i < nHolePath.length; i++) {
+    const a = nHolePath[i - 1], b = nHolePath[i];
+    const k = Math.max(1, Math.ceil(rg.distance(a, b) / 0.3));
+    for (let j = 0; j <= k; j++) {
+      const t = j / k, q = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      if (rg.pointInPolygon(q, nVoid) && rg.distanceToBoundary(q, nVoid) > nHalfCord) { nCross++; break; }
+    }
+  }
+  check('nessun segmento ATTRAVERSA il vuoto (era il difetto: 44 punti fino a 16.5mm dentro)', nCross, 0);
+  // il vuoto sopprime il ricamo, non solo il passaggio: senza vuoto lì c'è rete, col vuoto no.
+  const nInHoleSenza = nBase.punti && rg.buildNet(nRect, [], nP).path.filter((q) => rg.pointInPolygon(q, nVoid)).length;
+  check('senza vuoto quella zona è ricamata (il confronto ha senso)', nInHoleSenza > 100, true);
+  check('col vuoto la zona è sgombra (R5: sopprime il ricamo)', nHole.dentroVuotoProfondo, 0);
+
+  console.log('\nnet-45 — celle e fascia di raso');
+  const nRaso = rg.buildNet(nRect, [], nP).rasoShapes;
+  check('la fascia di bordo genera diamanti di raso', nRaso.length > 0, true);
+  check('rasoBandMm 0 → nessun raso', rg.buildNet(nRect, [], { ...nP, rasoBandMm: 0 }).rasoShapes.length, 0);
+  check('raso solo sui bordi bassi/laterali: niente raso in cima', nRaso.filter((s) => cy(s) < 12).length, 0);
+  check('rasoDownwardOnly 0 → il raso arriva anche in cima',
+    rg.buildNet(nRect, [], { ...nP, rasoDownwardOnly: 0 }).rasoShapes.filter((s) => cy(s) < 12).length > 0, true);
+  const nDiamond = nRaso[0];
+  const nAngles = [];
+  for (let i = 1; i < nDiamond.length; i++) {
+    const d = Math.abs(Math.atan2(nDiamond[i].y - nDiamond[i - 1].y, nDiamond[i].x - nDiamond[i - 1].x) * 180 / Math.PI);
+    nAngles.push(Math.round(Math.min(d, 180 - d)));
+  }
+  check('le celle sono a 45° (lati del diamante)', nAngles.every((a) => a === 45), true);
+  check('cella più grande → meno filo (monotòna)',
+    nMeasure(rg.buildNet(nRect, [], { ...nP, squareSizeMm: 20 }), nRect, []).mm < nBase.mm, true);
+  check('cella più piccola → più filo',
+    nMeasure(rg.buildNet(nRect, [], { ...nP, squareSizeMm: 7 }), nRect, []).mm > nBase.mm, true);
 }
 
 rmSync(outDir, { recursive: true, force: true });

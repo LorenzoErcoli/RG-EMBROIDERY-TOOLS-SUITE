@@ -84,9 +84,14 @@ export function buildNet(boundary: Polyline, exclusions: Polyline[], params: Net
     const s = path.length && distance(path[path.length - 1], pts[0]) < 1e-4 ? 1 : 0;
     for (let i = s; i < pts.length; i++) path.push(pts[i]);
   };
+  // R5: il passaggio non attraversa MAI un'area vuota — le esclusioni vanno passate al router,
+  // altrimenti la retta "dentro il perimetro" taglia dritta per il buco (difetto trovato coi test:
+  // fino a 16.5mm dentro un'esclusione da 18mm di raggio).
+  const travelClearance = params.cordWidthMm / 2;
   const goTravel = (to: Point) => {
-    if (pen && distance(pen, to) > 1e-4) append(routeTravel(pen, to, clipBoundary, params.travelStitchMm));
-    else if (!pen) path.push(to);
+    if (pen && distance(pen, to) > 1e-4) {
+      append(routeTravel(pen, to, clipBoundary, params.travelStitchMm, exclusions, travelClearance));
+    } else if (!pen) path.push(to);
     pen = to;
   };
   const goCord = (a: Point, b: Point) => {
@@ -101,7 +106,7 @@ export function buildNet(boundary: Polyline, exclusions: Polyline[], params: Net
     bList.sort((x, y) => node[a][x]!.y - node[a][y]!.y);
     if (!bList.length) continue;
 
-    if (pen) { append(routeAlongBorder(pen, node[a][bList[0]]!, clipBoundary, params.travelStitchMm)); pen = node[a][bList[0]]!; }
+    if (pen) { append(routeAlongBorder(pen, node[a][bList[0]]!, clipBoundary, params.travelStitchMm, exclusions, travelClearance)); pen = node[a][bList[0]]!; }
 
     // Pioli: dal nodo verso il binario successivo, clippati al bordo; disegnati se il lato confina con rete.
     for (const b of bList) {
