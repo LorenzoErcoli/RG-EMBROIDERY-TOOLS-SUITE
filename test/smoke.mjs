@@ -648,6 +648,60 @@ console.log('\noblique — routing + orchestratore (2d)');
 }
 
 // ---------------------------------------------------------------------------------------------
+// core — le primitive su cui poggiano TUTTI i tool. Finora erano provate solo di rimbalzo: se una
+// si fosse rotta, il test a fallire sarebbe stato quello di un tool a caso, col difetto altrove.
+{
+  const cSquare = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 100 }, { x: 0, y: 100 }];
+  const cHole = [{ x: 40, y: 40 }, { x: 60, y: 40 }, { x: 60, y: 60 }, { x: 40, y: 60 }];
+
+  console.log('\ncore — clip: cosa resta di un segmento dentro la sagoma e fuori dai vuoti (R5)');
+  const cRuns = rg.clipSegment({ x: -20, y: 50 }, { x: 120, y: 50 }, cSquare, [cHole]);
+  check('un segmento che attraversa tutto → due tratti (prima e dopo il vuoto)', cRuns.length, 2);
+  check('il primo tratto va dal bordo al vuoto', [Math.round(cRuns[0][0].x), Math.round(cRuns[0][1].x)], [0, 40]);
+  check('il secondo dal vuoto al bordo opposto', [Math.round(cRuns[1][0].x), Math.round(cRuns[1][1].x)], [60, 100]);
+  check('un segmento tutto fuori non lascia niente',
+    rg.clipSegment({ x: -50, y: -50 }, { x: -10, y: -10 }, cSquare, []).length, 0);
+  check('un segmento tutto dentro il vuoto non lascia niente',
+    rg.clipSegment({ x: 45, y: 50 }, { x: 55, y: 50 }, cSquare, [cHole]).length, 0);
+
+  console.log('\ncore — inset: il rientro dal perimetro è davvero quello chiesto');
+  const cInset = rg.insetPolygon(cSquare, 10);
+  const cInsetBounds = rg.bounds(cInset);
+  // 10mm di rientro = i LATI si spostano di 10, non i vertici (che sulla diagonale fanno 14.14):
+  // prima ne usciva 7.07 = 10/√2, cioè il 30% in meno di quello che chiedevi.
+  check('rientro di 10mm su ogni lato',
+    [+cInsetBounds.minX.toFixed(6), +cInsetBounds.maxX.toFixed(6)], [10, 90]);
+  check('e anche in verticale', [+cInsetBounds.minY.toFixed(6), +cInsetBounds.maxY.toFixed(6)], [10, 90]);
+  check('inset 0 = poligono invariato', rg.insetPolygon(cSquare, 0).length, cSquare.length);
+
+  console.log('\ncore — passaggi: retta se si può, sul bordo se serve, attorno al vuoto (R5)');
+  const cStraight = rg.routeTravel({ x: 10, y: 10 }, { x: 30, y: 10 }, cSquare, 3);
+  check('strada libera → linea retta (solo ricampionata)',
+    cStraight.every((p) => Math.abs(p.y - 10) < 1e-9), true);
+  check('la retta rispetta il passo massimo (R4)',
+    cStraight.every((p, i) => i === 0 || rg.distance(cStraight[i - 1], p) <= 3 + 1e-9), true);
+  const cAround = rg.routeTravel({ x: 20, y: 50 }, { x: 80, y: 50 }, cSquare, 2, [cHole], 0.5);
+  check('col vuoto in mezzo: nessun punto dentro il vuoto',
+    cAround.filter((p) => rg.pointInPolygon(p, cHole)).length, 0);
+  let cAroundMm = 0;
+  for (let i = 1; i < cAround.length; i++) cAroundMm += rg.distance(cAround[i - 1], cAround[i]);
+  check('il giro attorno costa più della retta (60mm)', cAroundMm > 60, true);
+  check('senza esclusioni il comportamento è quello di prima (retta)',
+    rg.routeTravel({ x: 20, y: 50 }, { x: 80, y: 50 }, cSquare, 2).filter((p) => rg.pointInPolygon(p, cHole)).length > 0, true);
+
+  console.log('\ncore — punto: il minimo toglie, il resample suddivide (R3 e R4 sono due cose diverse)');
+  const cLine = [{ x: 0, y: 0 }, { x: 0.2, y: 0 }, { x: 5, y: 0 }, { x: 5.1, y: 0 }];
+  const cMin = rg.enforceMinStitch(cLine, 1);
+  check('i punti troppo vicini spariscono', cMin.length, 3);
+  check('gli estremi restano SEMPRE (R3)',
+    [cMin[0].x, cMin[cMin.length - 1].x], [0, 5.1]);
+  const cRes = rg.resampleUniform([{ x: 0, y: 0 }, { x: 10, y: 0 }], 3);
+  check('il resample spezza a spaziatura massima', cRes.length, 5);
+  check('il resample NON tocca i segmenti corti (R4 non impone il minimo)',
+    rg.resampleUniform([{ x: 0, y: 0 }, { x: 0.1, y: 0 }], 3).length, 2);
+}
+
+// ---------------------------------------------------------------------------------------------
 // net-45 (Rete 45°) — il primo tool della suite era anche l'ultimo senza rete di sicurezza sul
 // proprio motore. Qui si bloccano le cose che rendono la rete UNA RETE: filo continuo, celle a 45°,
 // la fascia di raso automatica sul bordo, il perimetro e i vuoti (R5).

@@ -121,6 +121,15 @@ export function unit(a: Point, b: Point): Point {
 /** Normale (ruotata +90°) del versore. */
 export const normal = (u: Point): Point => ({ x: -u.y, y: u.x });
 
+/**
+ * Sposta ogni vertice sulla bisettrice così che **i LATI** rientrino di `dist` (non i vertici).
+ * Sono due cose diverse: su un angolo retto, muovere il vertice di 10mm lungo la diagonale rientra
+ * i lati di soli 10/√2 = 7.07mm — era il difetto (chiedevi 10 di rientro e ne ottenevi 7).
+ * La distanza giusta lungo la bisettrice è `dist / cos(α)`, con α l'angolo fra bisettrice e normale;
+ * per due normali unitarie `cos(α) = |n1+n2| / 2`, quindi il fattore è `2·dist / |n1+n2|`.
+ * Sugli angoli quasi a punta il fattore esplode: si limita a 4·dist (miter limit), come fanno i
+ * disegnatori vettoriali, altrimenti una punta sottile sparerebbe il vertice lontanissimo.
+ */
 function insetOnce(poly: Polyline, dist: number, sign: number): Polyline {
   const n = poly.length;
   const out: Point[] = [];
@@ -129,9 +138,11 @@ function insetOnce(poly: Polyline, dist: number, sign: number): Polyline {
     const e1 = unit(prev, cur), e2 = unit(cur, next);
     const n1 = { x: e1.y * sign, y: -e1.x * sign };
     const n2 = { x: e2.y * sign, y: -e2.x * sign };
-    let mx = n1.x + n2.x, my = n1.y + n2.y;
-    const ml = Math.hypot(mx, my) || 1;
-    out.push({ x: cur.x + (mx / ml) * dist, y: cur.y + (my / ml) * dist });
+    const mx = n1.x + n2.x, my = n1.y + n2.y;
+    const ml = Math.hypot(mx, my);
+    if (ml < 1e-9) { out.push({ x: cur.x + n1.x * dist, y: cur.y + n1.y * dist }); continue; }
+    const step = Math.min((2 * dist) / ml, 4 * dist);
+    out.push({ x: cur.x + (mx / ml) * step, y: cur.y + (my / ml) * step });
   }
   return out;
 }
