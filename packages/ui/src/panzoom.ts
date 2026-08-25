@@ -45,7 +45,28 @@ export function hookPanZoom(canvas: HTMLElement, layer: HTMLElement, onChange?: 
     zoom = next; apply();
   }, { passive: false });
 
-  const fit = () => { panX = 0; panY = 0; zoom = 1; apply(); };
+  /**
+   * "Adatta" = inquadra il CONTENUTO, non "torna a zoom 1". Il layer è `inset: 0` (grande quanto la
+   * tela) e centra il disegno in flex: la misura da guardare è quella del figlio — l'SVG generato,
+   * che è dimensionato in mm. Si divide per lo zoom corrente per tornare alla taglia naturale, poi
+   * si sceglie il fattore che fa entrare tutto con un margine di respiro.
+   * Senza contenuto (o con misure a zero, es. tela non ancora visibile) si ricade sul vecchio reset.
+   */
+  const fit = () => {
+    panX = 0; panY = 0;
+    const content = layer.firstElementChild as HTMLElement | null;
+    const view = canvas.getBoundingClientRect();
+    const box = content?.getBoundingClientRect();
+    if (content && box && box.width > 0 && box.height > 0 && view.width > 0 && view.height > 0) {
+      const naturalW = box.width / zoom, naturalH = box.height / zoom;
+      const margin = 0.98; // un filo di aria attorno al disegno
+      const wanted = Math.min((view.width * margin) / naturalW, (view.height * margin) / naturalH);
+      zoom = Math.min(8, Math.max(0.2, wanted));
+    } else {
+      zoom = 1;
+    }
+    apply();
+  };
   apply();
   return { fit, getZoom: () => zoom };
 }

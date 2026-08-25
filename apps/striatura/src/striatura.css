@@ -1,5 +1,9 @@
 /* Stili locali del tool "Punto Striato". Solo classi/token del DS (var(--rg-*)); niente hex inline.
    Placeholder dello scaffold (step ①): il pannello vero arriva col subagent design-system (step ⑤). */
+/* L'anteprima non sborda dalla tela: come negli altri tool (net-45, interlace, bitmap, pattern-grammar).
+   Senza questo, su una finestra bassa e larga il disegno usciva dal riquadro e veniva tagliato. */
+#layer svg { max-width: 100%; max-height: 100%; }
+
 .striatura-workspace .striatura-placeholder {
   display: grid;
   place-items: center;
