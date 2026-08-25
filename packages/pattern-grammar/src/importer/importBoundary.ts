@@ -378,9 +378,10 @@ function parsePathPoints(d: string): Point[] {
       }
     } else if (op === "A") {
       while (hasNumber()) {
-        index += 5;
+        const rx = number(), ry = number(), rotation = number();
+        const largeArc = number(), sweep = number();
         const end = relative ? add(current, { x: number(), y: number() }) : { x: number(), y: number() };
-        push(end);
+        sampleArc(current, rx, ry, rotation, largeArc, sweep, end).forEach(push);
       }
     } else if (op === "Z") {
       if (start) push(start);
@@ -516,6 +517,66 @@ function sampleCubic(p0: Point, p1: Point, p2: Point, p3: Point): Point[] {
     return {
       x: mt ** 3 * p0.x + 3 * mt ** 2 * t * p1.x + 3 * mt * t ** 2 * p2.x + t ** 3 * p3.x,
       y: mt ** 3 * p0.y + 3 * mt ** 2 * t * p1.y + 3 * mt * t ** 2 * p2.y + t ** 3 * p3.y
+    };
+  });
+}
+
+/**
+ * Arco ellittico (comando `A`) campionato davvero. Prima veniva **tirato dritto** fino al punto
+ * finale: su una sagoma con raccordi curvi il contorno usciva spigoloso e la misura sbagliata
+ * (una semicirconferenza da 50mm di raggio spariva del tutto).
+ * Conversione endpoint → centro come da specifica SVG (W3C, note di implementazione F.6.5/F.6.6).
+ * *Limite noto:* i flag `large-arc`/`sweep` devono essere separati dagli altri numeri (`0 1` e non
+ * `01`), come li scrivono Illustrator e Inkscape — il tokenizer del parser non li spacchetta.
+ */
+function sampleArc(
+  p0: Point, rxInput: number, ryInput: number, rotationDeg: number,
+  largeArc: number, sweep: number, p1: Point
+): Point[] {
+  let rx = Math.abs(rxInput), ry = Math.abs(ryInput);
+  // raggio nullo o punti coincidenti: per la specifica è un segmento retto
+  if (rx < 1e-9 || ry < 1e-9 || (Math.abs(p1.x - p0.x) < 1e-12 && Math.abs(p1.y - p0.y) < 1e-12)) return [p1];
+
+  const phi = (rotationDeg * Math.PI) / 180;
+  const cosPhi = Math.cos(phi), sinPhi = Math.sin(phi);
+  const dx = (p0.x - p1.x) / 2, dy = (p0.y - p1.y) / 2;
+  const x1 = cosPhi * dx + sinPhi * dy;
+  const y1 = -sinPhi * dx + cosPhi * dy;
+
+  // raggi troppo piccoli per congiungere gli estremi: si ingrandiscono quanto basta (F.6.6)
+  const lambda = (x1 * x1) / (rx * rx) + (y1 * y1) / (ry * ry);
+  if (lambda > 1) { const s = Math.sqrt(lambda); rx *= s; ry *= s; }
+
+  const sign = largeArc !== sweep ? 1 : -1;
+  const numerator = rx * rx * ry * ry - rx * rx * y1 * y1 - ry * ry * x1 * x1;
+  const denominator = rx * rx * y1 * y1 + ry * ry * x1 * x1;
+  const coefficient = sign * Math.sqrt(Math.max(0, numerator / (denominator || 1)));
+  const cx1 = (coefficient * rx * y1) / ry;
+  const cy1 = (-coefficient * ry * x1) / rx;
+  const cx = cosPhi * cx1 - sinPhi * cy1 + (p0.x + p1.x) / 2;
+  const cy = sinPhi * cx1 + cosPhi * cy1 + (p0.y + p1.y) / 2;
+
+  const angleBetween = (ux: number, uy: number, vx: number, vy: number): number => {
+    const dot = ux * vx + uy * vy;
+    const len = Math.hypot(ux, uy) * Math.hypot(vx, vy) || 1;
+    const a = Math.acos(Math.min(1, Math.max(-1, dot / len)));
+    return ux * vy - uy * vx < 0 ? -a : a;
+  };
+  const ux = (x1 - cx1) / rx, uy = (y1 - cy1) / ry;
+  const vx = (-x1 - cx1) / rx, vy = (-y1 - cy1) / ry;
+  const theta = angleBetween(1, 0, ux, uy);
+  let sweepAngle = angleBetween(ux, uy, vx, vy);
+  if (!sweep && sweepAngle > 0) sweepAngle -= 2 * Math.PI;
+  else if (sweep && sweepAngle < 0) sweepAngle += 2 * Math.PI;
+
+  // campionamento proporzionale all'ampiezza: un quarto di giro ≈ 8 punti, un giro intero ≈ 32
+  const samples = Math.max(4, Math.ceil((Math.abs(sweepAngle) / (Math.PI / 2)) * 8));
+  return Array.from({ length: samples }, (_, index) => {
+    const t = theta + sweepAngle * ((index + 1) / samples);
+    const cosT = Math.cos(t), sinT = Math.sin(t);
+    return {
+      x: cosPhi * rx * cosT - sinPhi * ry * sinT + cx,
+      y: sinPhi * rx * cosT + cosPhi * ry * sinT + cy
     };
   });
 }

@@ -64,6 +64,26 @@ check('numero nudo → null (scala da chiedere)', rg.svgPhysicalLengthToMm('539'
 check('1in → 25.4', rg.svgPhysicalLengthToMm('1in'), 25.4);
 check('la fixture è larga 200mm', Math.round(model.source.widthMm), 200);
 
+// Archi ellittici (comando `A`) nell'importer a stringhe: prima venivano TIRATI DRITTI fino al punto
+// finale — su una sagoma con raccordi curvi il contorno usciva spigoloso e la misura sbagliata.
+// Fixture: quadrato 100×100 con un semicerchio (r=50) attaccato sotto → la sagoma è alta 150, non 100.
+console.log('\narchi ellittici: il comando A è una CURVA, non una scorciatoia');
+const arcSvg = `<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="150mm" viewBox="0 0 100 150">
+  <path d="M 0 0 L 100 0 L 100 100 A 50 50 0 0 1 0 100 Z" fill="none" stroke="#ff0000"/>
+</svg>`;
+const arcBoundary = rg.parseImportedBoundarySource(arcSvg, 'arco.svg').choices[0].boundary;
+const arcBelly = arcBoundary.paths[0].points.filter((p) => p.y > 100.001);
+let arcErr = 0;
+for (const p of arcBelly) arcErr = Math.max(arcErr, Math.abs(Math.hypot(p.x - 50, p.y - 100) - 50));
+check('l\'arco è campionato (non due punti e via)', arcBelly.length >= 8, true);
+check('i punti stanno sul cerchio (errore < 0.01mm)', arcErr < 0.01, true);
+check('la sagoma è alta 150mm: la pancia dell\'arco NON si perde',
+  Math.round(arcBoundary.bounds.maxY - arcBoundary.bounds.minY), 150);
+const arcZero = rg.parseImportedBoundarySource(
+  arcSvg.replace('A 50 50 0 0 1 0 100', 'A 0 0 0 0 1 0 100'), 'arco0.svg').choices[0].boundary;
+check('raggio zero → segmento retto (come da specifica SVG)',
+  Math.round(arcZero.bounds.maxY - arcZero.bounds.minY), 100);
+
 console.log('\n⑥⑦⑧ — pattern-grammar: le conversioni non cambiano la geometria');
 const base = { totalWidth: 120, totalHeight: 160 };
 const geom = (svg) => svg.replace(/<metadata>[\s\S]*?<\/metadata>/g, '');
