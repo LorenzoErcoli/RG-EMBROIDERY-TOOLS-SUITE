@@ -699,6 +699,30 @@ console.log('\noblique — routing + orchestratore (2d)');
   check('nessun segmento ATTRAVERSA il vuoto (nemmeno un tragitto)', sHole.attraversa, 0);
   check('il vuoto spezza il filo in pochi tratti (salti attorno, non ovunque)', sHole.blocchi <= 4, true);
 
+  // I COLLEGAMENTI fra un trattino e l'altro devono restare CORTI. Il trattino in retrace entra ed esce
+  // dal proprio centro e i centri di due colonne vicine sono sfasati apposta: il collegamento diretto
+  // diventava una linea verticale di 16mm in mezzo al ricamo, quattro volte gli altri e visibilmente
+  // diversa (bocciata da Lorenzo). Ora il filo ripassa sul trattino appena cucito, e il collegamento
+  // esposto crolla. Qui si blocca il risultato: mediana dei collegamenti sotto i 3mm.
+  console.log('\nstriatura — i collegamenti fra i trattini restano corti (non linee in mezzo al ricamo)');
+  {
+    const pls = sGen(sP);
+    const link = [];
+    for (const pl of pls) {
+      let run = 0;
+      for (let i = 1; i < pl.length; i++) {
+        const a = pl[i - 1], b = pl[i];
+        if (Math.abs(b.x - a.x) < 1e-6) { if (run > 0) { link.push(run); run = 0; } }
+        else run += Math.hypot(b.x - a.x, b.y - a.y);
+      }
+      if (run > 0) link.push(run);
+    }
+    link.sort((a, b) => a - b);
+    const mediana = link[link.length >> 1];
+    check('la mediana dei collegamenti sta sotto i 3mm', mediana <= 3, true);
+    check('i collegamenti sopra i 10mm sono pochi (<2%)', link.filter((l) => l > 10).length < link.length * 0.02, true);
+  }
+
   console.log('\nstriatura — le manopole fanno quello che dicono');
   const sFitto = sMeasure(sGen({ ...sP, densitySpacingMm: 0.4 }), sRect, []);
   const sRado = sMeasure(sGen({ ...sP, densitySpacingMm: 1.2 }), sRect, []);

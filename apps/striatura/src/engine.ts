@@ -442,11 +442,12 @@ export function generateStriatura(input: StriaturaInput, params: StriaturaParams
   const wavePhase = mulberry32((params.seed ^ 0x2545f491) >>> 0)() * Math.PI * 2;
   const warp = (x: number) => waveAmp === 0 ? 0 : waveAmp * Math.sin((2 * Math.PI / waveLen) * x + wavePhase);
   let passDir = 1;             // verso dei trattini-macchia (boustrophedon); il retrace lo ignora
+  let lastSpan: { x: number; y0: number; y1: number } | null = null; // estensione del trattino appena cucito
   let lastWasBase = false;     // per collegare passaggio→passaggio con VOLTATA ORIZZONTALE
   // righe extra (±1) per coprire lo spostamento dell'onda ai bordi.
   for (let r = -1; r <= nRows; r++) {
     const rowY = bb.minY + rowH * (r + 0.5);
-    const order = (r % 2 === 0) ? cols : cols.slice().reverse(); // serpentina di riga
+    const rowCols = (r % 2 === 0) ? cols : cols.slice().reverse(); // serpentina di riga
 
     // Span delle MACCHIE nella riga (indici colonna): i passaggi esistono SOLO per collegare una macchia
     // all'altra → una colonna di base è ammessa solo TRA la prima e l'ultima macchia della riga (niente
@@ -461,7 +462,7 @@ export function generateStriatura(input: StriaturaInput, params: StriaturaParams
       }
     }
 
-    for (const { x, i } of order) {
+    for (const { x, i } of rowCols) {
       const rc = rowY + warp(x);                        // centro-fascia di QUESTA colonna (con movimento)
       const iv = intervalContaining(x, rc, outline, voids, clr, minLen);
       if (!iv) continue;
@@ -510,8 +511,23 @@ export function generateStriatura(input: StriaturaInput, params: StriaturaParams
         && !forbidden(pen, entry)
         && (shortLink || !crossesOcc(pen, entry));
       if (reachable && pen) {
-        // UN SOLO passaggio retto pen→entry (`ceil` = nessun segmento troppo lungo).
-        pushTravel(cur, pen, entry, travelStep);
+        // COLLEGAMENTO NASCOSTO (feedback di Lorenzo, 2026-08-25). Il trattino in retrace entra ed esce
+        // dal proprio CENTRO, e i centri di due colonne vicine sono sfasati apposta (le partenze non
+        // devono allinearsi): il collegamento diretto diventava una linea verticale lunga anche 16mm in
+        // mezzo al ricamo, quattro volte i collegamenti normali e visibilmente diversa da loro.
+        // Ora la quota d'arrivo si insegue RESTANDO sul trattino appena cucito, cioè ripassando sugli
+        // stessi buchi: se ci cade dentro il collegamento sparisce del tutto, se cade oltre (è la riga
+        // sotto) resta esposto solo il pezzo che avanza.
+        const yStop = lastSpan ? Math.max(lastSpan.y0, Math.min(lastSpan.y1, entry.y)) : pen.y;
+        const salita = !!lastSpan && Math.abs(pen.x - lastSpan.x) < 0.01 && Math.abs(yStop - pen.y) > travelStep;
+        if (salita) {
+          const svolta = { x: pen.x, y: yStop };
+          pushTravel(cur, pen, svolta, travelStep);   // gamba nascosta sopra il cucito
+          pushTravel(cur, svolta, entry, travelStep); // gamba corta verso il trattino nuovo
+        } else {
+          // UN SOLO passaggio retto pen→entry (`ceil` = nessun segmento troppo lungo).
+          pushTravel(cur, pen, entry, travelStep);
+        }
         for (let k = 1; k < pts.length; k++) cur.push(pts[k]); // stroke senza il primo (= entry, già aggiunto)
       } else {
         const route = pen ? routeFree(pen, entry) : null;
@@ -533,6 +549,11 @@ export function generateStriatura(input: StriaturaInput, params: StriaturaParams
       }
       markPts(pts);                      // la macchia/passata appena cucita occupa spazio
       pen = pts[pts.length - 1];
+      // estensione verticale del trattino appena cucito: serve al collegamento successivo per capire
+      // se può risalirci sopra (invisibile) invece di tirare una linea nuova in mezzo al ricamo.
+      let y0 = pts[0].y, y1 = pts[0].y;
+      for (const q of pts) { if (q.y < y0) y0 = q.y; if (q.y > y1) y1 = q.y; }
+      lastSpan = { x, y0, y1 };
       passDir = -passDir;
       lastWasBase = !dense;
     }
