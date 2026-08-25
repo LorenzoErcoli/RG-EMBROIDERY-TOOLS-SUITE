@@ -104,7 +104,7 @@ Il procedimento completo è in [`AVVIO-NUOVO-TOOL.md`](AVVIO-NUOVO-TOOL.md). In 
 |---|---|
 | [`COSTITUZIONE-RICAMO.md`](COSTITUZIONE-RICAMO.md) | le regole del dominio (R1–R31), il vocabolario, i parametri canonici |
 | [`ARCHITETTURA.md`](ARCHITETTURA.md) | come i tool restano un ecosistema invece che isole |
-| [`STATO.md`](STATO.md) | cosa fa oggi, cosa manca, cosa è bloccato — **si aggiorna nello stesso commit** del codice |
+| [`STATO.md`](STATO.md) | cosa fa oggi, **cosa c'è da fare** (la lista operativa è in §3, una voce per codice: A1, B2, C3…), cosa è bloccato — **si aggiorna nello stesso commit** del codice |
 | [`MANUALE.md`](MANUALE.md) | il manuale d'uso (è anche la *Guida* in-app) |
 | [`REVISIONE-PARAMETRI.md`](REVISIONE-PARAMETRI.md) | nomi, etichette e unità dei parametri, decisi uno per uno |
 | [`AVVIO-NUOVO-TOOL.md`](AVVIO-NUOVO-TOOL.md) | briefing per chi apre un nuovo strumento |

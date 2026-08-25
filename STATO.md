@@ -177,11 +177,60 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 
 **La copertura dei test non era un adempimento: ha trovato cinque difetti veri**, ognuno dei quali violava una regola della Costituzione già scritta e mai verificata — i passaggi di net-45 che attraversavano i vuoti (R5), il punto minimo mai applicato in striatura (R3), `insetPolygon` che rientrava del 30% in meno, il punto massimo di pattern-grammar che lasciava passare segmenti quasi doppi (R4), l'importer che esplodeva sul file vero da 2MB. Tutti corretti, tutti bloccati da un test che fallisce se tornano.
 
-**Quello che resta ha un solo padrone: Lorenzo.** Sono le cose che il codice non può decidere — la resa guardata a occhio (oblique e striatura per prime), le rifiniture che ne discendono, i nomi dei parametri, il merge del DS. Elenco completo in §3 e §4.
+**Quello che resta ha un solo padrone: Lorenzo.** Sono le cose che il codice non può decidere — la resa guardata a occhio (oblique e striatura per prime), le rifiniture che ne discendono, i nomi dei parametri, il merge del DS. **La lista di cosa c'è da fare è in §3**, con un codice per voce (A1, B2, C3…): per far partire un lavoro basta dire *"facciamo il C4"*.
 
 ---
 
-## 3. COSA MANCA per renderlo USABILE da qualcuno
+## 3. COSA C'È DA FARE — la lista operativa
+
+> **Come si usa questa lista.** Ogni voce ha un codice (A1, B2, C3…): per far partire un lavoro basta
+> dire *"facciamo il C4"*. È ordinata per **chi deve muoversi**, non per argomento, perché è quello il
+> vero vincolo: **A** = serve Lorenzo col ricamo davanti · **B** = decisioni sul repo/DS, sempre di
+> Lorenzo · **C** = lavoro tecnico pronto a partire, che non aspetta nessuno.
+> Il dettaglio storico di ogni voce (com'è nata, cosa è già stato provato) è nell'elenco §3-bis qui
+> sotto e nei blocchi per tool in §1.
+
+### A — Serve Lorenzo, occhi sul ricamo
+
+| # | Cosa | Perché ora |
+|---|---|---|
+| **A1** | **Verifica visiva di `oblique` e `striatura`** — `avvia.bat` → Oblique / Punto Striato, con un cartamodello vero. | **È il tappo di tutto il resto.** Il porting di oblique è confermato fedele all'`easy.html` quasi punto-per-punto *dai numeri*; striatura è stata costruita a colpi di feedback ma mai vista finita. Da questa passata escono A2, A5 e C2. |
+| **A2** | **striatura — rework dei passaggi a "fasce ampie"** (la tua ultima richiesta rimasta in sospeso). Con, nella stessa famiglia: i rari salti da tasca murata, l'ancoraggio del passaggio ai punti reali delle macchie, i salti attorno ai vuoti. | È una scelta di **resa**, va guidata da come viene il ricamo. Si può toccare senza paura: le 21 invarianti dicono subito se il filo esce dalla sagoma, entra in un vuoto, allunga i punti o perde la continuità. |
+| **A3** | **net-45 — le tre rifiniture di ricamo**: quadrato intero garantito sul bordo (oggi le celle di confine restano tagliate), cima col cordoncino grande, editor delle celle a mano (rete/raso/esclusa). | Si decidono guardando il DST di riferimento. Nessuna è una scelta che il codice possa fare da solo. |
+| **A4** | **Riempimenti raso veri** (net-45): oggi le aree raso escono come **forme** da riempire a mano su Stilista. | Serve decidere il tipo di punto e la densità col ricamo in mano (R22/R24). |
+| **A5** | **Etichette dei parametri** col processo `REVISIONE-PARAMETRI.md` per **interlace, bitmap, oblique, striatura** (net-45 e pattern-grammar sono già passati). Dentro qui: battezzare i parametri "movimento" di interlace (`FLOW_INFLUENCE`, `TURN_SPREAD`, `FLOW_FREQ`, `SWIRL`, `CLUMP_CAP`) prima di esporli nel pannello. | I nomi giusti sono quelli che usi tu. Finché non ci sono, quei controlli restano costanti interne. |
+| **A6** | **Due decisioni di dominio, misurate e in attesa di una risposta:** (a) **punto minimo di pattern-grammar** — i punti strutturali sopravvivono alla soglia (chiedi 1,5mm, il più corto misura 0,6): vince la macchina o vince il disegno? (b) **bitmap `maxStitchMm`** — il sorgente non spezza i segmenti lunghi: aggiungiamo il resample R4 o la resa punto-a-punto va bene così? | Sono compromessi reali fra due regole, non sviste. Serve la tua risposta, poi diventano lavoro di mezz'ora. |
+
+### B — Decisioni sul repo e sul design system (Lorenzo)
+
+| # | Cosa | Nota |
+|---|---|---|
+| **B1** | **DS v1.7.0: merge + tag + bump del submodule.** Il branch `ds/workspace-order-accordion` è **docs-only** (ordine del pannello e accordion), la proposta `ds/color-map-aside` aggiunge `rg-color-map__aside` + `rg-field-with-unit--compact`. | Merge e tag li fai solo tu (mai da una chat consumer). Dopo il bump si adotta lo slot `__aside` nella riga-colore di interlace. |
+| **B2** | **Font del DS** (AGNext, GT America): non inclusi nel repo per regola del DS → l'interfaccia usa i font di sistema. | Decidere se e come distribuirli. |
+| **B3** | **Fixture DXF reale**: nel repo non ce n'è nessuna, quindi il ramo DXF dell'import non è bloccato da nessun test. | Basta un tuo file `.dxf` di lavorazione da committare in `test/fixtures/`. |
+
+### C — Lavoro tecnico, pronto a partire
+
+| # | Cosa | Peso |
+|---|---|---|
+| **C1** | **Lock R8 in striatura** (scarico filo in ingresso/uscita sul bordo, passo 9 della pipeline canonica). oblique ce l'ha, striatura no. | Piccolo, ma **aggiunge punti visibili sul bordo** → meglio dopo A1. |
+| **C2** | **oblique — Fase C: i livelli diventano dati.** Broderie Anglaise resta come ricetta-preset protetta dal golden; si potranno scegliere, aggiungere e riordinare i livelli. È lo strumento generale "SVG → pattern a livelli". | Grosso. Il pezzo che ti interessava davvero. Parte dopo A1. |
+| **C3** | **Migrare 45-grid e cross-stitch** nella suite (stesso schema delle altre cinque migrazioni). | Medio, uno alla volta. |
+| **C4** | **interlace — densità per ZONA (macchie)**: densità diverse per regione, per creare le macchie volute. | Medio. Chiesto tempo fa, mai fatto. |
+| **C5** | **interlace — void dello stesso colore** (R12): oggi il vuoto deve avere un colore diverso dall'area; il caso canonico "forma più piccola dentro una più grande, stesso colore" va gestito per **annidamento geometrico**. | Medio. |
+| **C6** | **Modello densità unificato (R22–R26)** portato da `bitmap_to_stitch`: oggi interlace e bitmap usano due densità empiriche diverse (spaziatura cella / spaziatura griglia). | Medio-grosso, e tocca due tool. Solo algoritmo, niente Python. |
+| **C7** | **Prestazioni bitmap**: il nearest-neighbor è O(n²) come il sorgente. Se dà fastidio su molte migliaia di punti, si accelera con una griglia spaziale — **stesso risultato**, bloccato da un test di identità. | Piccolo, solo se serve. |
+| **C8** | **`covered-travel` (R16–R21) nel core**: il "grande assente". Coverage map + distance transform + A*, differito consapevolmente quando è stato portato oblique. | Grosso. Serve quando il generale chiederà i passaggi nascosti. |
+| **C9** | **pattern-grammar — export report** (il motore lo genera già, manca il bottone). | Piccolo. |
+| **C10** | **bitmap — overlay/maschera nella preview** (l'originale mostrava 3 viste, oggi c'è la vista punti, che è la più utile). | Piccolo. Da valutare se serve davvero. |
+
+### Fuori lista (fatto, o non nostro)
+
+Il **satellite Python** `bitmap_to_stitch` (laboratorio DST/recipe/library con AI) resta fuori scope: condivide i contratti, non il codice. La **verifica visiva automatica** non è recuperabile: la preview dell'assistente non compone gli screenshot (§4) — il DOM e i numeri sì, e vengono usati al posto suo.
+
+---
+
+## 3-bis. Il dettaglio, voce per voce (storico)
 
 - [x] ~~**README** alla radice~~: c'è (`README.md`) — cos'è, `avvia.bat`, requisito Node 20, i sei strumenti, i comandi (`test`/`typecheck`/`build`), come si aggiunge un tool, l'indice dei documenti.
 - [x] ~~**App `pattern-grammar`**: interfaccia nel guscio `rg-workspace` + card nella home.~~
@@ -272,7 +321,7 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 
 ## 5. PROSSIMA SINGOLA MOSSA
 
-**La verifica visiva di Lorenzo su oblique e striatura** (`avvia.bat` → Oblique / Punto Striato). Non è una formalità: è l'unica cosa rimasta che il codice non può dare, e da lì dipende tutto il resto — il **rework dei passaggi di striatura** («fasce ampie», l'ultima richiesta rimasta in sospeso) è una scelta di resa che va guidata dal ricamo vero, non da una metrica; le **etichette** REVISIONE-PARAMETRI vogliono i nomi che usa Lorenzo; la **Fase C di oblique** parte solo dopo che il porting è approvato a occhio.
+**→ A1 della lista in §3: la verifica visiva di Lorenzo su oblique e striatura** (`avvia.bat` → Oblique / Punto Striato). Non è una formalità: è l'unica cosa rimasta che il codice non può dare, e da lì dipende tutto il resto — il **rework dei passaggi di striatura** («fasce ampie», l'ultima richiesta rimasta in sospeso) è una scelta di resa che va guidata dal ricamo vero, non da una metrica; le **etichette** REVISIONE-PARAMETRI vogliono i nomi che usa Lorenzo; la **Fase C di oblique** parte solo dopo che il porting è approvato a occhio.
 
 Il lavoro che *non* dipendeva da lui è stato fatto: sei motori con le loro invarianti, cinque difetti di dominio corretti, i tre comandi verdi in CI, README e documenti riallineati. Quando il rework dei passaggi partirà, si potrà toccare senza paura: le 21 invarianti di striatura dicono subito se il filo esce dalla sagoma, se entra in un vuoto, se i punti si allungano, se la continuità si spezza o se si perde la verticalità.
 
