@@ -234,7 +234,15 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
   const oriented = clippedToShape
     ? { polylines: connectedBoundaryPath.length > 1 ? [connectedBoundaryPath] : [], orientation: undefined }
     : orientPolylinesFromTopLeft(stitchedPolylines);
-  const visualPolylines = oriented.polylines;
+  // R4 — la suddivisione va rifatta ALLA FINE. La prima passata avviene prima della riconnessione al
+  // bordo, che poi crea segmenti nuovi (connettori, rientri): è lo stesso inciampo di R3, dove sono
+  // le giunzioni del routing a reintrodurre i micro-punti. Misurato: con "punto massimo" a 4mm
+  // uscivano segmenti da 7.9mm. Suddividere **non sposta nessun punto esistente** — la forma
+  // disegnata resta identica al millesimo, cambia solo quanto è fitta la punzonatura.
+  // Con `maxStitchLength` a 0 (default) la funzione restituisce la lista invariata.
+  const visualPolylines = oriented.polylines
+    .map((polyline) => removeConsecutiveDuplicatePoints(subdivideLongSegments(polyline, grammar.maxStitchLength)))
+    .filter((polyline) => polyline.length > 1);
   const visualPathGroups = clippedToShape
     ? [{ subpaths: visualPolylines }]
     : visualPolylines.map((polyline) => ({

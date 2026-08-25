@@ -131,6 +131,65 @@ check('200mm chiesti → width esatta 200 (non 209.8)', dims(s200).w, 200);
 check('niente geometria oltre il bordo del pannello', maxX(s200) <= 200 + 0.05, true);
 check('formato più grande della geometria → esatto, senza allargare oltre', dims(rg.generatePattern({ totalWidth: 400, totalHeight: 300 })).w, 400);
 
+// La GEOMETRIA del generatore pattern (finora si provavano solo formato e conversioni).
+console.log('\npattern-grammar — la geometria generata: dentro il formato, punto massimo, manopole');
+const pgLines = (svg) => {
+  const out = [];
+  for (const m of svg.matchAll(/points="([^"]+)"/g)) {
+    out.push(m[1].trim().split(/\s+/).map((t) => { const [x, y] = t.split(',').map(Number); return { x, y }; })
+      .filter((p) => Number.isFinite(p.x) && Number.isFinite(p.y)));
+  }
+  for (const m of svg.matchAll(/ d="([^"]+)"/g)) {
+    for (const sub of m[1].split(/(?=M)/)) {
+      const nums = sub.match(/-?\d*\.?\d+/g); if (!nums) continue;
+      const pts = []; for (let i = 0; i + 1 < nums.length; i += 2) pts.push({ x: +nums[i], y: +nums[i + 1] });
+      if (pts.length > 1) out.push(pts);
+    }
+  }
+  return out;
+};
+const pgStats = (svg, W, H) => {
+  let punti = 0, mm = 0, segMax = 0, segMin = Infinity, fuori = 0;
+  const ls = pgLines(svg);
+  for (const l of ls) {
+    punti += l.length;
+    for (const p of l) if (p.x < -0.05 || p.x > W + 0.05 || p.y < -0.05 || p.y > H + 0.05) fuori++;
+    for (let i = 1; i < l.length; i++) {
+      const d = Math.hypot(l[i].x - l[i - 1].x, l[i].y - l[i - 1].y);
+      mm += d; if (d > segMax) segMax = d; if (d < segMin) segMin = d;
+    }
+  }
+  return { tracciati: ls.length, punti, mm, segMax, segMin, fuori };
+};
+const pgBase = { totalWidth: 120, totalHeight: 160 };
+const pgDefault = pgStats(rg.generatePattern(pgBase), 120, 160);
+check('un solo tracciato continuo', pgDefault.tracciati, 1);
+check('nessun punto oltre il formato, in nessuna delle due direzioni', pgDefault.fuori, 0);
+// R4 — il "punto massimo" ora vale DAVVERO: la suddivisione si rifà alla fine, dopo la riconnessione
+// al bordo che creava segmenti nuovi (con 4mm chiesti ne uscivano da 7.9).
+const pgMax4 = pgStats(rg.generatePattern({ ...pgBase, maxStitchMm: 4 }), 120, 160);
+check('punto massimo 4mm: nessun segmento più lungo', pgMax4.segMax <= 4 + 1e-6, true);
+check('suddividere NON cambia la forma (stessa lunghezza di filo)',
+  Math.abs(pgMax4.mm - pgDefault.mm) < 0.5, true);
+check('suddividere aggiunge punti, non li toglie', pgMax4.punti > pgDefault.punti, true);
+check('senza punto massimo il motore non aggiunge niente',
+  geom(rg.generatePattern({ ...pgBase, maxStitchMm: 0 })), geom(rg.generatePattern(pgBase)));
+// il punto minimo dirada (non azzera: i punti strutturali del pattern sopravvivono — vedi §3)
+const pgMin = pgStats(rg.generatePattern({ ...pgBase, minStitchMm: 1.5 }), 120, 160);
+check('il punto minimo dirada i micro-segmenti', pgMin.segMin > pgDefault.segMin, true);
+// ritaglio alla sagoma: col cerchio nessun punto esce dall'ellisse inscritta nel formato
+const pgCircle = pgLines(rg.generatePattern({ ...pgBase, shapeType: 'circle' }));
+let pgOutside = 0;
+for (const l of pgCircle) for (const p of l) {
+  const dx = (p.x - 60) / 60, dy = (p.y - 80) / 80;
+  if (dx * dx + dy * dy > 1.02) pgOutside++;
+}
+check('sagoma cerchio: niente fuori dall\'ellisse inscritta', pgOutside, 0);
+// le manopole fanno quello che dicono
+check('zig-zag orizzontali più fitti = più filo',
+  pgStats(rg.generatePattern({ ...pgBase, horizontalZigzagSpacing: 8 }), 120, 160).mm
+  > pgStats(rg.generatePattern({ ...pgBase, horizontalZigzagSpacing: 20 }), 120, 160).mm, true);
+
 console.log('\ninterlace — riempimento: dentro il bordo, fuori dai vuoti, punto in [min,max]');
 const iSquare = [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 100 }, { x: 0, y: 100 }];
 const iVoid = (() => { const a = []; for (let i = 0; i <= 28; i++) { const t = (i / 28) * 2 * Math.PI; a.push({ x: 80 + Math.cos(t) * 18, y: 35 + Math.sin(t) * 18 }); } return a; })();
