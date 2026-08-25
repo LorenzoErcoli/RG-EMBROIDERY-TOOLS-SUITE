@@ -576,18 +576,37 @@ export function normalizePerimeterLoop(points: Poly, closeTolerance = 0.1): Poly
 }
 
 /**
- * Rimuove i punti quasi-collineari di un loop (semplificazione tipo Douglas-Peucker greedy).
- * Serve perché l'import del core campiona i contorni a ~0.6mm: un semplice rettangolo diventa
- * ~600 punti → il clip dei moduli sul boundary (O(segmenti×lati)) esplode (≈180M op = blocco).
- * Con questa un rettangolo torna a 4 angoli e il clip è veloce; le curve restano fedeli (tol 0.2mm).
+ * Semplifica un loop con **Douglas-Peucker vero**: nessun punto del contorno originale finisce a più
+ * di `tol` dal contorno semplificato. Serve perché l'import del core campiona i contorni a ~0.6mm:
+ * un rettangolo diventa ~600 punti → il clip dei moduli sul boundary (O(segmenti×lati)) esplode
+ * (≈180M operazioni = tool bloccato). Un rettangolo torna a 4 angoli e il clip vola.
+ *
+ * *Prima era una versione "greedy"* che misurava ogni punto rispetto all'**ultimo tenuto**: su una
+ * curva l'errore si accumulava senza limiti, e un cerchio di raggio 25 campionato fine diventava un
+ * **decagono, con 1,5mm di scarto** — dieci volte la tolleranza dichiarata. Su un cartamodello
+ * curvo voleva dire ricamare dentro una sagoma diversa da quella disegnata (trovato misurando,
+ * verifica visiva A1 punto 4). Douglas-Peucker misura sempre rispetto alla **corda originale**,
+ * quindi lo scarto è garantito ≤ `tol`.
  */
 export function simplifyLoop(points: Poly, tol = 0.2): Poly {
-  if (points.length <= 4) return points;
-  const out: Pt[] = [points[0]];
-  for (let i = 1; i < points.length - 1; i += 1) {
-    if (distanceToSegment(points[i], out[out.length - 1], points[i + 1]) > tol) out.push(points[i]);
+  const n = points.length;
+  if (n <= 4) return points;
+  const keep = new Uint8Array(n);
+  keep[0] = 1; keep[n - 1] = 1;
+  // pila esplicita invece della ricorsione: i contorni veri arrivano anche a decine di migliaia di punti
+  const stack: Array<[number, number]> = [[0, n - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop()!;
+    if (b - a < 2) continue;
+    let worst = -1, worstDistance = tol;
+    for (let i = a + 1; i < b; i += 1) {
+      const d = distanceToSegment(points[i], points[a], points[b]);
+      if (d > worstDistance) { worstDistance = d; worst = i; }
+    }
+    if (worst >= 0) { keep[worst] = 1; stack.push([a, worst], [worst, b]); }
   }
-  out.push(points[points.length - 1]);
+  const out: Pt[] = [];
+  for (let i = 0; i < n; i += 1) if (keep[i]) out.push(points[i]);
   return out.length >= 4 ? out : points;
 }
 

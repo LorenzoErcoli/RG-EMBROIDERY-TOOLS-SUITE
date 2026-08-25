@@ -615,6 +615,31 @@ console.log('\noblique — routing + orchestratore (2d)');
   const bnd = rg.boundaryFromPoints(fineRect, 'p');
   check('boundaryFromPoints: boundary semplificato (pochi punti, non ~400)', bnd.points.length <= 8, true);
   check('boundaryFromPoints: ingombro preservato (100×100)', Math.round(bnd.width) === 100 && Math.round(bnd.height) === 100, true);
+
+  // …ma una CURVA deve restare curva: lo scarto dal contorno vero non può superare la tolleranza.
+  // La vecchia semplificazione greedy misurava rispetto all'ultimo punto tenuto e l'errore si
+  // accumulava: un cerchio di raggio 25 diventava un decagono con 1,5mm di scarto (verifica A1
+  // punto 4). Con Douglas-Peucker lo scarto è garantito ≤ tolleranza.
+  const fineCircle = [];
+  const circleN = Math.round((2 * Math.PI * 25) / 0.6);
+  for (let i = 0; i < circleN; i++) {
+    const t = (i / circleN) * 2 * Math.PI;
+    fineCircle.push({ x: 50 + Math.cos(t) * 25, y: 50 + Math.sin(t) * 25 });
+  }
+  const simpleCircle = rg.simplifyLoop(fineCircle, 0.2);
+  const distSeg = (p, a, b) => {
+    const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy || 1;
+    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
+    return Math.hypot(p.x - (a.x + t * dx), p.y - (a.y + t * dy));
+  };
+  let worstCircle = 0;
+  for (const p of fineCircle) {
+    let best = Infinity;
+    for (let i = 0; i < simpleCircle.length; i++) best = Math.min(best, distSeg(p, simpleCircle[i], simpleCircle[(i + 1) % simpleCircle.length]));
+    if (best > worstCircle) worstCircle = best;
+  }
+  check('simplifyLoop: una CURVA resta curva (scarto ≤ tolleranza 0.2mm)', worstCircle <= 0.2, true);
+  check('simplifyLoop: e resta comunque leggera (un cerchio in ≤50 lati, non 262)', simpleCircle.length <= 50, true);
 }
 
 // ---------------------------------------------------------------------------------------------
