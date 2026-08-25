@@ -1,7 +1,7 @@
 import '@rg/ui/rg.css';
 import './oblique.css';
 import {
-  parseSvgToContours, parseDxfToContours, buildSvg, buildSvgInSourceFrame, readProjectMetadata,
+  parseSvgToContours, parseDxfToContours, buildSvg, buildSvgInSourceFrame, readProjectMetadata, readDstMetadata,
   dstFromExportLayers, DST_FILE, THREAD_STROKE_MM, SHAPE_STROKE_MM,
   type ImportResult, type ExportLayer,
 } from '@rg/core';
@@ -160,7 +160,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
         <div class="rg-param-grid">
           <div class="rg-file-input rg-param-grid__wide">
             <label class="rg-file-input__control">
-              <input type="file" id="reopenInput" accept=".svg,image/svg+xml">
+              <input type="file" id="reopenInput" accept=".svg,.dst,image/svg+xml">
               <span class="rg-button rg-button--outline">Riapri progetto salvato (SVG)…</span>
             </label>
             <p class="rg-field__help">Carica un SVG esportato da qui: ripristina parametri e ruoli. L'export vero è coi pulsanti in alto a destra.</p>
@@ -323,10 +323,22 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
       loadPanel(result, file.name);
     });
   });
+  // Riapre un progetto esportato dalla suite: dall'SVG (parametri nel <metadata>, e il disegno si
+  // ricarica come cartamodello) oppure dal .dst (parametri nel footer dopo l'END, R27: il file di
+  // macchina si rigenera identico senza avere l'SVG sotto mano).
   $('reopenInput').addEventListener('change', (ev) => {
     const input = ev.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
+    if (/\.dst$/i.test(file.name)) {
+      file.arrayBuffer().then((buf) => {
+        const meta = readDstMetadata(new Uint8Array(buf));
+        if (meta && meta.rgProject === 'oblique') { restoreProject(meta); render(); setStatus(`${file.name}: parametri ripristinati dal DST`); }
+        else setStatus(`${file.name}: nessun parametro RG nel DST`);
+        input.value = '';
+      });
+      return;
+    }
     file.text().then((text) => {
       if (text.indexOf('rgProject') === -1) { setStatus('SVG senza parametri di progetto: impossibile ripristinare.'); input.value = ''; return; }
       const meta = readProjectMetadata(text);
@@ -351,7 +363,12 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
   async function doExportDst(): Promise<void> {
     readParams();
     const res = lastResult ?? generateOblique(currentSources(), params, { roles: buildRoles() });
-    const bytes = dstFromExportLayers(exportLayersFor(res), { label: 'OBLIQUE' });
+    // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina lo ignora, noi lo
+    // rileggiamo. Senza, il .dst era l'unico file della suite che non sapeva da dove veniva.
+    const bytes = dstFromExportLayers(exportLayersFor(res), {
+      label: 'OBLIQUE',
+      metadata: { rgProject: 'oblique', version: '0.1.0', params, roles: roleColor },
+    });
     const base = (panelName ? panelName.replace(/\.[^.]+$/, '') : 'oblique') + '.dst';
     setStatus(saveOutcomeMessage(await saveBinaryFile(bytes, { suggestedName: base, ...DST_FILE }), base));
   }
