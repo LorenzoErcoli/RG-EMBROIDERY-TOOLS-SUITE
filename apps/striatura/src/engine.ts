@@ -443,7 +443,10 @@ export function generateStriatura(input: StriaturaInput, params: StriaturaParams
   const warp = (x: number) => waveAmp === 0 ? 0 : waveAmp * Math.sin((2 * Math.PI / waveLen) * x + wavePhase);
   let passDir = 1;             // verso dei trattini-macchia (boustrophedon); il retrace lo ignora
   let lastSpan: { x: number; y0: number; y1: number } | null = null; // estensione del trattino appena cucito
-  let lastWasBase = false;     // per collegare passaggio→passaggio con VOLTATA ORIZZONTALE
+  // Collega passaggio→passaggio entrando dal capo che guarda l'ago. La voltata NON è orizzontale al
+  // millimetro (il frastaglio muove anche il capo vicino): misurata, pende di 1,62mm in mediana e mai
+  // più di 2,99mm, cioè meno di un punto. Verificata con Lorenzo il 2026-08-25 e accettata così.
+  let lastWasBase = false;
   // righe extra (±1) per coprire lo spostamento dell'onda ai bordi.
   for (let r = -1; r <= nRows; r++) {
     const rowY = bb.minY + rowH * (r + 0.5);

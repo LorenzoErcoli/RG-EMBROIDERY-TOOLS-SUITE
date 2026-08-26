@@ -721,6 +721,32 @@ console.log('\noblique — routing + orchestratore (2d)');
     const mediana = link[link.length >> 1];
     check('la mediana dei collegamenti sta sotto i 3mm', mediana <= 3, true);
     check('i collegamenti sopra i 10mm sono pochi (<2%)', link.filter((l) => l > 10).length < link.length * 0.02, true);
+
+    // LE VOLTATE (verifica visiva A1, punto 4). Lorenzo le vuole quasi orizzontali e soprattutto NON
+    // allineate in righe. Il codice diceva «SEMPRE orizzontali» e non era vero: il frastaglio muove
+    // anche il capo vicino. Misurato e accettato così — qui si blocca il limite che rende accettabile
+    // il compromesso: la voltata non pende MAI più di un punto di passaggio.
+    const lungo = pls.reduce((a, b) => (a.length > b.length ? a : b));
+    const trattini = [];
+    let corsa = [lungo[0]];
+    for (let i = 1; i < lungo.length; i++) {
+      if (Math.abs(lungo[i].x - corsa[corsa.length - 1].x) < 1e-6) corsa.push(lungo[i]);
+      else { trattini.push(corsa); corsa = [lungo[i]]; }
+    }
+    trattini.push(corsa);
+    let pendenzaMax = 0;
+    for (let k = 1; k < trattini.length; k++) {
+      const a = trattini[k - 1][trattini[k - 1].length - 1], b = trattini[k][0];
+      if (Math.abs(b.x - a.x) < 1e-6) continue;
+      const dy = Math.abs(b.y - a.y);
+      if (dy > pendenzaMax) pendenzaMax = dy;
+    }
+    check('nessuna voltata pende più di un punto di passaggio', pendenzaMax <= sP.travelStitchMm + 0.01, true);
+    // …e i capi dei trattini NON si allineano in righe (era una richiesta esplicita, non protetta da nulla)
+    const capi = trattini.map((t) => Math.min(...t.map((p) => p.y))).filter((y) => y > 60 && y < 110).sort((a, b) => a - b);
+    const mediano = capi[capi.length >> 1];
+    const scarti = capi.map((y) => Math.abs(y - mediano)).sort((a, b) => a - b);
+    check('i capi dei trattini non si allineano in righe', scarti[scarti.length >> 1] > 5, true);
   }
 
   console.log('\nstriatura — le manopole fanno quello che dicono');
