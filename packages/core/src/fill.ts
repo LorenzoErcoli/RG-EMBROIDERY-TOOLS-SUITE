@@ -149,9 +149,20 @@ export function buildParallelFill(
   const runs: Polyline[] = [];
   for (let k = kStart; k <= kEnd; k++) {
     const v = origin + k * spacing;
-    // Il verso alterna in base a k, NON all'ordine in cui capitano le macchie: così due macchie
-    // dello stesso colore restano coerenti fra loro.
-    const avanti = ((k % 2) + 2) % 2 === 0;
+    /*
+     * Da che parte si parte.
+     *
+     * Serpentina: si alterna, ed è il senso stesso della serpentina — la riga finisce dove comincia
+     * la successiva. Il verso dipende da `k`, NON dall'ordine in cui capitano le macchie, così due
+     * macchie dello stesso colore restano coerenti fra loro.
+     *
+     * Pettine: si parte SEMPRE dalla stessa parte, perché la corsa **torna dov'era partita**.
+     * Alternando, l'ago dovrebbe attraversare tutta la macchia a ogni riga per raggiungere il capo
+     * opposto: misurato sulla demo, il filo di solo passaggio passava da poco a **25,8 m su 62,9**
+     * di totale. Il DST di riferimento conferma: le righe a pettine consecutive partono vicine
+     * (−50,10 · −50,70 · −49,60), non da capi opposti.
+     */
+    const avanti = mode === 'comb' ? true : ((k % 2) + 2) % 2 === 0;
 
     let tratti = spans(outerR, holeR, v);
     if (!tratti.length) continue;

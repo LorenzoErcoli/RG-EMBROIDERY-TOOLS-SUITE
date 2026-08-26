@@ -143,7 +143,11 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
 
 **4. Punto** — l’**orientamento** delle righe (uguale per tutti i colori; 0 = orizzontale), la **lunghezza del punto** e lo **sfalsamento del ritorno**, cioè di quanto il pettine sposta il viaggio di ritorno per non ricadere negli stessi buchi dell’andata.
 
-> **In costruzione.** Oggi il tool arriva fino al riempimento a raso. Mancano i **passaggi** — il filo che collega una macchia all’altra nascondendosi sotto i colori successivi — e l’esportazione.
+**I passaggi.** Il filo che va da una macchia all’altra non prende la strada più corta: cerca quella che finirà **sotto il ricamo dei colori successivi**, così non si vede. Preferisce muoversi in orizzontale, e quando davvero non c’è modo di nascondersi stacca il filo invece di lasciare un passaggio in vista. L’ultimo colore della lista non ha più niente sopra di sé: lì il filo cerca i **bordi dei soggetti**, dove si nota meno. È l’ordine di cucitura, quindi, a decidere quanto si vedranno i passaggi — spostare un colore in cima o in fondo cambia il risultato.
+
+La barra in fondo dice quanti **salti** ci sono e che percentuale di passaggi resta nascosta.
+
+> **In costruzione.** Manca l’**esportazione** in SVG e DST.
 
 ---
 

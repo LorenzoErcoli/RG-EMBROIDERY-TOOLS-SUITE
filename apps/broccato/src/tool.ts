@@ -395,9 +395,11 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
       });
       aggiornaPercentuali();
       const tempo = ms === undefined ? '' : ` \u00b7 ${Math.round(ms)} ms`;
+      const nasc = plan.travelMm > 0 ? Math.round((100 * plan.travelCoveredMm) / plan.travelMm) : 100;
       $('status').textContent =
         `${wmm.toFixed(0)} \u00d7 ${hmm.toFixed(0)} mm \u00b7 filo ${(plan.threadMm / 1000).toFixed(1)} m \u00b7 `
-        + `${plan.pointCount.toLocaleString('it-IT')} punti \u00b7 ${plan.runCount.toLocaleString('it-IT')} corse da collegare${tempo}`;
+        + `${plan.pointCount.toLocaleString('it-IT')} punti \u00b7 ${plan.jumps} salti \u00b7 `
+        + `passaggi nascosti ${nasc}%${tempo}`;
       updateFileStatus(img, wmm, hmm);
       return;
     }

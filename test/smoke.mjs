@@ -24,6 +24,8 @@ export { generateStriatura, layerThreadMm, defaultStriaturaParams } from ${JSON.
 export { paletteToColors, applyDensityToAll, colorsToPalette, clampColorCount, mmPerPixel, defaultBroccatoParams } from ${JSON.stringify(posix('apps/broccato/src/engine.ts'))};
 export { reduceStable, prepareImage, flattenLight, despeckle, refinePalette, removeSmallBlobs, NO_COLOR } from ${JSON.stringify(posix('apps/broccato/src/reduce.ts'))};
 export { traceRegions, pointInRegion, regionsAreaMm2 } from ${JSON.stringify(posix('apps/broccato/src/regions.ts'))};
+export { buildCoverGrid, routeColorRuns, CELL_COVERED, CELL_OWN, CELL_EDGE, CELL_BARE } from ${JSON.stringify(posix('apps/broccato/src/routing.ts'))};
+export { buildPlan } from ${JSON.stringify(posix('apps/broccato/src/pipeline.ts'))};
 export { sampleImage as sampleBroccatoImage } from ${JSON.stringify(posix('apps/broccato/src/sample.ts'))};
 export { runPipeline as runStriaturaPipeline } from ${JSON.stringify(posix('apps/striatura/src/pipeline.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
@@ -993,6 +995,21 @@ console.log('\noblique — routing + orchestratore (2d)');
     rg.buildParallelFill(quadrato, [], { spacingMm: 2, mode: 'comb', retraceOffsetMm: 99 })[0].slice(-1)[0].y
       - rg.buildParallelFill(quadrato, [], { spacingMm: 2, mode: 'comb', retraceOffsetMm: 99 })[0][0].y, 1);
 
+  // Il pettine TORNA dove e' partito: se si alternasse il verso, l'ago dovrebbe attraversare tutta
+  // la macchia a ogni riga. Trovato contando il filo di passaggio, non guardando il disegno: era
+  // 25,8 m su 62,9 di totale. Il DST di riferimento conferma — le righe a pettine consecutive
+  // partono vicine (-50,10 / -50,70 / -49,60), non da capi opposti.
+  console.log('\ncore — raso: il pettine riparte sempre dalla stessa parte, la serpentina no');
+  const partenzeP = pett.slice(0, 8).map((r) => Math.round(r[0].x));
+  check('le righe a pettine partono tutte dallo stesso capo', new Set(partenzeP).size, 1);
+  const partenzeS = serp.slice(0, 8).map((r) => Math.round(r[0].x));
+  check('quelle a serpentina si alternano', new Set(partenzeS).size, 2);
+  check('e infatti il pettine NON costa passaggi per cambiare capo', (() => {
+    let salto = 0;
+    for (let i = 1; i < pett.length; i++) salto += Math.abs(pett[i][0].x - pett[i - 1].slice(-1)[0].x);
+    return salto < 1;
+  })(), true);
+
   console.log('\ncore — raso: le manopole fanno quello che dicono');
   const filo = (sp) => rg.fillThreadMm(rg.buildParallelFill(quadrato, [], { spacingMm: sp, maxStitchMm: 3 }));
   check('passo più fitto = più filo (monotòna)', filo(1) > filo(2) && filo(2) > filo(4), true);
@@ -1312,6 +1329,107 @@ console.log('\noblique — routing + orchestratore (2d)');
   const q1 = quoteDi(regs[0]), q2 = quoteDi(regs[1]);
   check('le quote delle due macchie stanno sulla stessa griglia da 1mm',
     q1.every((v) => Math.abs(v - Math.round(v)) < 1e-6) && q2.every((v) => Math.abs(v - Math.round(v)) < 1e-6), true);
+
+  // -------------------------------------------------------------------------------------------
+  // Punto ④ — I PASSAGGI NASCOSTI. Il cuore della tecnica: il filo di collegamento deve finire
+  // sotto il ricamo che verra' dopo; l'ultimo colore non ha piu' niente sopra e cerca i bordi.
+  // -------------------------------------------------------------------------------------------
+  console.log('\nbroccato — ④ il passaggio prende la strada coperta, anche se e\' il doppio piu\' lunga');
+  // Due punti in alto, la retta fra loro e' SCOPERTA, e un corridoio coperto a U li unisce girando
+  // in basso. Se il peso della visibilita' non servisse a niente, il filo taglierebbe dritto.
+  const CO = 60, RO = 40;
+  const kind = new Uint8Array(CO * RO).fill(rg.CELL_BARE);
+  const set = (x, y) => { kind[y * CO + x] = rg.CELL_COVERED; };
+  for (let y = 8; y <= 32; y++) { set(6, y); set(7, y); set(52, y); set(53, y); }
+  for (let x = 6; x <= 53; x++) { set(x, 31); set(x, 32); }
+  const griglia = { cols: CO, rows: RO, cellMm: 1, kind };
+  const rettone = { outer: [{ x: 0, y: 0 }, { x: 60, y: 0 }, { x: 60, y: 40 }, { x: 0, y: 40 }], holes: [], areaMm2: 2400 };
+  const dueCorse = [{ region: rettone, runs: [[{ x: 5.5, y: 8.5 }, { x: 6.5, y: 8.5 }], [{ x: 52.5, y: 8.5 }, { x: 53.5, y: 8.5 }]] }];
+  const conRicerca = rg.routeColorRuns(dueCorse, griglia, { maxDirectMm: 0, maxVisibleTravelMm: 99999, cellMm: 1 });
+  const viaCorta = rg.routeColorRuns(dueCorse, griglia, { maxDirectMm: 0, maxVisibleTravelMm: 99999, cellMm: 1, visibilityWeight: 1, verticalPenalty: 1, edgeDiscount: 1 });
+  const giu = (r) => Math.max(...r.blocks[0].map((p) => p.y));
+  check('con la ricerca il passaggio scende nel corridoio (y oltre 30)', giu(conRicerca) > 30, true);
+  check('senza, taglia dritto in alto (y sotto 12)', giu(viaCorta) < 12, true);
+  check('e il risultato e\' nascosto quasi del tutto',
+    (100 * conRicerca.travelCoveredMm) / conRicerca.travelMm > 95, true);
+  check('mentre la via corta resta scoperta',
+    (100 * viaCorta.travelCoveredMm) / viaCorta.travelMm < 20, true);
+  check('il giro costa filo, ed e\' il prezzo giusto da pagare',
+    conRicerca.travelMm > viaCorta.travelMm * 1.5, true);
+  check('non si stacca il filo quando una strada c\'e\'', conRicerca.jumps, 0);
+
+  console.log('\nbroccato — ④ la mappa di copertura dice il vero');
+  const mappaC = new Uint8Array(40 * 30).fill(0);
+  for (let y = 0; y < 30; y++) for (let x = 0; x < 20; x++) mappaC[y * 40 + x] = 0;   // colore 0 a sinistra
+  for (let y = 0; y < 30; y++) for (let x = 20; x < 40; x++) mappaC[y * 40 + x] = 1;  // colore 1 a destra
+  const tinte = [
+    { hex: '#111111', role: 'macchia', densitySpacingMm: 1, mode: 'pettine' },
+    { hex: '#222222', role: 'macchia', densitySpacingMm: 1, mode: 'pettine' },
+  ];
+  const g0 = rg.buildCoverGrid(mappaC, 40, 30, 0.5, 0, tinte, 1);
+  const g1 = rg.buildCoverGrid(mappaC, 40, 30, 0.5, 1, tinte, 1);
+  const conta = (g, k) => g.kind.reduce((s, v) => s + (v === k ? 1 : 0), 0);
+  check('per il PRIMO ago la meta\' del secondo e\' coperta', conta(g0, rg.CELL_COVERED) > 0, true);
+  check('...e la sua e\' roba propria', conta(g0, rg.CELL_OWN) > 0, true);
+  check('per l\'ULTIMO ago non c\'e\' piu\' niente sopra: zero coperto', conta(g1, rg.CELL_COVERED), 0);
+  check('e allora gli restano i bordi', conta(g1, rg.CELL_EDGE) > 0, true);
+  const tinteBase = [
+    { hex: '#111111', role: 'macchia', densitySpacingMm: 1, mode: 'pettine' },
+    { hex: '#222222', role: 'base', densitySpacingMm: 1, mode: 'pettine' },
+  ];
+  check('una BASE cucita dopo copre tutto',
+    rg.buildCoverGrid(mappaC, 40, 30, 0.5, 0, tinteBase, 1).kind.every((v) => v === rg.CELL_COVERED), true);
+  const tinteEsc = [
+    { hex: '#111111', role: 'macchia', densitySpacingMm: 1, mode: 'pettine' },
+    { hex: '#222222', role: 'escluso', densitySpacingMm: 1, mode: 'pettine' },
+  ];
+  check('un colore ESCLUSO non copre niente (non si ricama)',
+    rg.buildCoverGrid(mappaC, 40, 30, 0.5, 0, tinteEsc, 1).kind.every((v) => v !== rg.CELL_COVERED), true);
+
+  console.log('\nbroccato — ④ sul lavoro intero: la copertura cala lungo l\'ordine di cucitura');
+  // E' la firma della tecnica, misurata sul DST di riferimento: 81 77 66 53 51 29 0.
+  const imgP = rg.sampleBroccatoImage(320, 280);
+  const mmP = 0.28;
+  const ridP = rg.reduceStable(imgP, { colorCount: 6, mmPerPx: mmP, flattenLightMm: 15, smoothMm: 0.9, minBlobMm2: 20 });
+  const parP = { ...rg.defaultBroccatoParams, colors: rg.paletteToColors(ridP.palette) };
+  const piano = rg.buildPlan(ridP, parP, mmP, { widthMm: imgP.width * mmP, heightMm: imgP.height * mmP });
+  const cop = piano.colors.map((c) => (c.travelMm > 0 ? (100 * c.travelCoveredMm) / c.travelMm : 0));
+  check('ogni ago produce del filo', piano.colors.every((c) => c.threadMm > 0), true);
+  check('l\'ULTIMO ago non ha piu\' niente sopra: passaggi scoperti', cop[cop.length - 1] < 1, true);
+  check('i primi aghi si nascondono molto piu\' degli ultimi', (() => {
+    const meta = Math.ceil(cop.length / 2);
+    const primi = cop.slice(0, meta).reduce((a, b) => a + b, 0) / meta;
+    const ultimi = cop.slice(meta).reduce((a, b) => a + b, 0) / (cop.length - meta);
+    return primi > ultimi * 2;
+  })(), true);
+  check('i passaggi corrono in orizzontale (come nel DST, dal 67 al 99%)', (() => {
+    const o = piano.colors.reduce((s, c) => s + c.travelHorizontalMm, 0);
+    return (100 * o) / piano.travelMm > 65;
+  })(), true);
+  check('i salti restano rari come nel riferimento (sotto lo 0,5% dei punti)',
+    piano.jumps / piano.pointCount < 0.005, true);
+  check('la ricerca nasconde piu\' della via piu\' corta, sugli stessi passaggi',
+    piano.routedCoveredMm >= piano.straightCoveredMm, true);
+  // Guardia contro l'esplosione del passaggio. NB: questo conto e' quello INTERNO, che include
+  // anche i passi da una riga all'altra dentro la macchia; con la misura del DST di riferimento
+  // (filo fuori dalle celle dense del proprio colore) lo stesso lavoro da' 10-27%, in linea col
+  // 12-17% del file vero. Il difetto specifico del pettine che alternava capo e' preso dalla
+  // asserzione nel core sulla parte da cui riparte la riga.
+  check('il passaggio non esplode (sotto il 45% del filo, oggi 38%)',
+    piano.travelMm / piano.threadMm < 0.45, true);
+  check('stessi parametri → stesso ricamo (deterministico)',
+    rg.buildPlan(ridP, parP, mmP, { widthMm: imgP.width * mmP, heightMm: imgP.height * mmP }).pointCount,
+    piano.pointCount);
+
+  console.log('\nbroccato — ④ i ruoli dei colori cambiano davvero il ricamo');
+  const parBase = { ...parP, colors: parP.colors.map((c, i) => (i === 0 ? { ...c, role: 'base' } : c)) };
+  const pianoBase = rg.buildPlan(ridP, parBase, mmP, { widthMm: imgP.width * mmP, heightMm: imgP.height * mmP });
+  check('un colore BASE riempie tutto il foglio (una macchia sola, molto piu\' filo)',
+    pianoBase.colors[0].regions.length === 1 && pianoBase.colors[0].threadMm > piano.colors[0].threadMm * 2, true);
+  const parEsc = { ...parP, colors: parP.colors.map((c, i) => (i === 0 ? { ...c, role: 'escluso' } : c)) };
+  const pianoEsc = rg.buildPlan(ridP, parEsc, mmP, { widthMm: imgP.width * mmP, heightMm: imgP.height * mmP });
+  check('un colore ESCLUSO sparisce dal ricamo', pianoEsc.colors.length, piano.colors.length - 1);
+  check('...e il filo cala di conseguenza', pianoEsc.threadMm < piano.threadMm, true);
 
   console.log('\nbroccato — la misura: la larghezza reale prevale sulla stima (R11)');
   check('senza larghezza reale si stima al DPI',

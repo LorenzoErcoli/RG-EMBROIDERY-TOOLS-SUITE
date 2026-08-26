@@ -11,19 +11,30 @@ import {
   type ExportLayer, type Polyline, THREAD_STROKE_MM,
   buildParallelFill, fillThreadMm, hexToRgb,
 } from '@rg/core';
+import { buildCoverGrid, routeColorRuns, type RegionRuns, type RoutingOptions } from './routing';
 import type { BroccatoColor, BroccatoParams } from './engine';
 import { traceRegions, type Region } from './regions';
 import type { ReduceResult } from './reduce';
 
-/** Cosa esce per un ago: le sue regioni, le corse di raso, e quanto filo costa. */
+/** Cosa esce per un ago: le sue regioni, il filo cucito, e come sono andati i passaggi. */
 export interface ColorPlan {
   /** Indice nella palette / nell'ordine di cucitura. */
   index: number;
   color: BroccatoColor;
   regions: Region[];
-  runs: Polyline[];
+  /** I tratti cuciti: fra un tratto e il successivo c'e' un salto. */
+  blocks: Polyline[];
   threadMm: number;
   pointCount: number;
+  /** Filo di solo passaggio, e quanto ne finisce sotto i colori successivi (R16). */
+  travelMm: number;
+  travelCoveredMm: number;
+  travelHorizontalMm: number;
+  jumps: number;
+  /** Quanto la ricerca guadagna rispetto alla via piu' corta, sugli stessi passaggi. */
+  routedMm: number;
+  routedCoveredMm: number;
+  straightCoveredMm: number;
 }
 
 export interface BroccatoPlan {
@@ -31,8 +42,14 @@ export interface BroccatoPlan {
   previewLayers: ExportLayer[];
   threadMm: number;
   pointCount: number;
-  /** Corse non ancora collegate: diventeranno passaggi al punto ④. */
-  runCount: number;
+  /** Quanti tratti separati in tutto: uno solo per colore = filo continuo. */
+  blockCount: number;
+  jumps: number;
+  travelMm: number;
+  travelCoveredMm: number;
+  routedMm: number;
+  routedCoveredMm: number;
+  straightCoveredMm: number;
 }
 
 /** Il rettangolo dell'intero lavoro, in mm. La base lo riempie tutto. */
@@ -59,6 +76,7 @@ export function buildPlan(
   params: BroccatoParams,
   mmPerPx: number,
   sheet: SheetMm,
+  routing: RoutingOptions = {},
 ): BroccatoPlan {
   const colors: ColorPlan[] = [];
   const previewLayers: ExportLayer[] = [];
@@ -72,28 +90,44 @@ export function buildPlan(
           minAreaMm2: params.minBlobMm2,
         });
 
-    const runs: Polyline[] = [];
-    for (const r of regions) {
-      runs.push(...buildParallelFill(r.outer, r.holes, {
+    // Le corse restano raggruppate per macchia: al routing serve sapere da dove vengono, e
+    // ricavarlo dopo con un punto-dentro-poligono costerebbe O(macchie) per ogni corsa.
+    const groups: RegionRuns[] = regions.map((r) => ({
+      region: r,
+      runs: buildParallelFill(r.outer, r.holes, {
         angleDeg: params.fillAngleDeg,
         spacingMm: color.densitySpacingMm,
         maxStitchMm: params.maxStitchMm,
         mode: color.mode === 'pettine' ? 'comb' : 'serpentine',
         retraceOffsetMm: params.retraceOffsetMm,
         gridOriginMm: 0,
-      }));
-    }
+      }),
+    })).filter((g) => g.runs.length);
 
-    const threadMm = fillThreadMm(runs);
-    const pointCount = runs.reduce((s, r) => s + r.length, 0);
-    colors.push({ index: i, color, regions, runs, threadMm, pointCount });
+    // I passaggi si nascondono sotto i colori SUCCESSIVI (R16): la mappa di costo si costruisce
+    // guardando cosa verra' cucito dopo questo ago.
+    const grid = buildCoverGrid(
+      reduced.index, reduced.prepared.width, reduced.prepared.height,
+      mmPerPx, i, params.colors, routing.cellMm ?? 1.5,
+    );
+    const routed = routeColorRuns(groups, grid, { travelStitchMm: params.travelStitchMm, ...routing });
+
+    const threadMm = fillThreadMm(routed.blocks);
+    const pointCount = routed.blocks.reduce((s, r) => s + r.length, 0);
+    colors.push({
+      index: i, color, regions, blocks: routed.blocks, threadMm, pointCount,
+      travelMm: routed.travelMm, travelCoveredMm: routed.travelCoveredMm,
+      travelHorizontalMm: routed.travelHorizontalMm, jumps: routed.jumps,
+      routedMm: routed.routedMm, routedCoveredMm: routed.routedCoveredMm,
+      straightCoveredMm: routed.straightCoveredMm,
+    });
 
     // Anteprima: il filo si disegna SOTTILE (R15) — la larghezza reale del punto sta nella
     // geometria (quanto sono vicine le righe), non nello spessore del tratto.
     previewLayers.push({
       id: `colore-${String(i).padStart(2, '0')}`,
       color: color.hex,
-      polylines: runs,
+      polylines: routed.blocks,
       strokeMm: THREAD_STROKE_MM,
     });
   });
@@ -103,7 +137,13 @@ export function buildPlan(
     previewLayers,
     threadMm: colors.reduce((s, c) => s + c.threadMm, 0),
     pointCount: colors.reduce((s, c) => s + c.pointCount, 0),
-    runCount: colors.reduce((s, c) => s + c.runs.length, 0),
+    blockCount: colors.reduce((s, c) => s + c.blocks.length, 0),
+    jumps: colors.reduce((s, c) => s + c.jumps, 0),
+    travelMm: colors.reduce((s, c) => s + c.travelMm, 0),
+    travelCoveredMm: colors.reduce((s, c) => s + c.travelCoveredMm, 0),
+    routedMm: colors.reduce((s, c) => s + c.routedMm, 0),
+    routedCoveredMm: colors.reduce((s, c) => s + c.routedCoveredMm, 0),
+    straightCoveredMm: colors.reduce((s, c) => s + c.straightCoveredMm, 0),
   };
 }
 

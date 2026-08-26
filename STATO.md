@@ -1,9 +1,9 @@
 # STATO — RG Embroidery Tools Suite
 
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
-> Aggiornato: 2026-08-26 · Suite con **sei tool live** (net-45, pattern-grammar, interlace, bitmap, oblique, striatura) + **`broccato` in costruzione** (punti ①-③ fatti: immagine → tinte → regioni → raso)
+> Aggiornato: 2026-08-26 · Suite con **sei tool live** (net-45, pattern-grammar, interlace, bitmap, oblique, striatura) + **`broccato` in costruzione** (punti ①-④ fatti: immagine → tinte → regioni → raso → passaggi nascosti)
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
-> Rete di sicurezza: `npm test` (286 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
+> Rete di sicurezza: `npm test` (312 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
 
 ---
 
@@ -214,6 +214,25 @@
   - **Il primo ricamo, in numeri:** sulla demo (111×101mm, 6 aghi, passo 0,6mm, tutti a pettine) → **37,1 m di filo, 18.472 punti, 46 macchie, 2.027 corse**. Come ordine di grandezza regge il confronto col riferimento (269mm, 191 m, 84.530 punti). Verificato nel browser: sei gruppi in ordine di cucitura, filo 0,1mm, nessun errore in console.
   - **Quello che ancora NON c'è, ed è il punto ④:** le 2.027 corse sono **staccate**. Ogni stacco oggi sarebbe un salto. Collegarle nascondendole sotto i colori successivi è il cuore della tecnica e la prossima mossa.
   - *Nota di metodo, tre volte in questo giro:* tre asserzioni sono fallite non per un difetto ma perché **le avevo scritte male io** — i capi delle corse cadono ESATTAMENTE sul bordo, e lì un point-in-polygon risponde a caso. Si misura la **profondità** con cui un punto entra dove non deve, non l'appartenenza.
+- **Fatto (punto ④ — I PASSAGGI NASCOSTI, R16-R21; build+typecheck+test verdi).** `routing.ts`, locale all'app. Le 2.027 corse staccate del punto ③ diventano **50 tratti continui con 44 salti**.
+  - **Come.** Per ogni ago una **mappa di costo** a celle da 1,5mm: coperto (ci ricamera' sopra un colore successivo) costa 1, area propria 2, bordo di un soggetto 27, campo scoperto 60. Poi un A* cerca la strada. **Non e' un muro ma un costo**: e' cosi' che l'ultimo colore — che non ha nessuna copertura — trova comunque una strada invece di arrendersi, e sceglie i bordi. Muoversi in verticale costa 1,8 volte l'orizzontale (il DST preferisce l'orizzontale). Tre casi in ordine: dritto dentro la macchia se corto → A* sotto la copertura → **filo staccato** se anche la strada migliore resta scoperta per piu´ di 50mm (fallback graduato R16: mai un passaggio visibile in silenzio).
+  - **Il confronto col riferimento, con la STESSA misura applicata al DST** (filo fuori dalle celle dense del proprio colore):
+
+    | | generato | DST vero |
+    |---|---|---|
+    | copertura per ago | 41 → 34 → 24 → 19 → 2 → 0% | 81 → 77 → 66 → 53 → 51 → 29 → 0% |
+    | ultimo ago | 0% | 0% |
+    | passaggio sul filo | 10-27% | 12-18% (aghi a macchie) |
+    | passaggi orizzontali | 79-99% | 67-99% |
+    | salti | 44 su 25.296 punti = **0,17%** | 163 su 84.530 = **0,19%** |
+
+    La **forma** e' quella giusta — monotona decrescente, ultimo a zero — e salti, orizzontalita' e peso del passaggio combaciano. I valori assoluti della copertura sono piu´ bassi perche' la demo sintetica ha meno area di colori successivi da sfruttare fra una macchia e l'altra.
+  - **Difetto grosso trovato contando il filo, non guardando il disegno: il pettine alternava il capo di partenza.** La corsa a pettine **torna dov'e' partita**, quindi alternare il verso riga per riga costringeva l'ago ad attraversare tutta la macchia a ogni riga. Misurato: filo di solo passaggio **25,8 m su 62,9** di totale. Corretto (il pettine riparte sempre dalla stessa parte, la serpentina continua ad alternare) → filo totale **62,9 → 55,3 m**. Il DST lo conferma: le righe a pettine consecutive partono vicine (−50,10 / −50,70 / −49,60), non da capi opposti. Tre asserzioni nel core.
+  - **La prova che il routing serve davvero, isolata.** Sui numeri aggregati la ricerca sembrava non guadagnare niente rispetto alla via piu´ corta — ma era un **effetto di selezione**: i passaggi che diventano salti escono dalla statistica e la falsano. Due rimedi. (1) Un test **decisivo** invece di una media: due punti con la retta scoperta e un corridoio coperto a U che li unisce → con la ricerca il filo scende nel corridoio (92mm invece di 46), **100% nascosto**; senza, taglia dritto e resta scoperto. (2) Il confronto **onesto** dentro il motore: sugli STESSI passaggi instradati la ricerca nasconde il 33,0% contro il 30,2% della via piu´ corta.
+  - **La soglia dei 50mm non e' scelta, e' calibrata:** riproduce la proporzione di salti del riferimento. Soglia 30 → 120 salti, **50 → 44 (0,17%)**, 80 → 19.
+  - **Prestazioni:** il routing costa ~70ms sulla demo; il grosso resta la riduzione.
+  - **Verificato nel browser:** 6 gruppi, 51 tracciati (erano 2.027 corse), statusbar `51.6 m · 25.296 punti · 44 salti · passaggi nascosti 34%`, nessun errore in console.
+  - **Da guardare a occhio (Lorenzo):** la vista diagnostica coi passaggi verdi (nascosti) e rossi (in vista) dice dove il filo si vedra'. Se i rossi danno fastidio si stringe la soglia dei 50mm — il prezzo sono piu' salti.
 - **Verificato nel browser** (dev server, DOM): il tool monta senza errori in console; sulla demo (420×380 px → 111×101 mm) cattura 6 tinte e le percentuali del pannello coincidono **cifra per cifra** con quelle calcolate headless dallo stesso motore (13,4 / 9,2 / 33,1 / 16,2 / 0,0 / 28,1%). Provate a mano: riordino, *escluso* (14.696 pixel svuotati nell'anteprima, statusbar da 6 a 5 aghi, densità disattivata), *Applica a tutti*, numero colori fuori scala (12 → riportato a 8). *(Screenshot grafico non compositabile — blocco noto §4.)*
 - **Già visto, e serve al punto ②:** sulla demo, **tre aghi su sei finiscono sullo stesso beige** e **uno prende lo 0%** dell'immagine. Il median-cut spende gli aghi a suddividere la tinta dominante, perché il gradiente di luce la spalma su una gamma larga. È esattamente il difetto che il pareggio della luce deve togliere — e la demo lo riproduce apposta, così il punto ② si misura invece di guardarlo.
 - **Divergenza da decidere con Lorenzo (R30), già misurata:** nel DST di riferimento il **4-17% dei punti sta sotto 1 mm** (minimi da 0,10 mm), mentre R3 impone `minStitchMm` 1,0 dopo il routing. Applicandolo, il pettine perde le sue punte corte. È lo stesso tipo di compromesso di **A6**: vince la macchina o vince il disegno? Da guardare col ricamo in mano al punto ④.
@@ -240,7 +259,7 @@
 ## 2. STATO
 
 **Sei tool in piedi, e adesso ognuno ha le sue invarianti scritte. Il settimo, `broccato`, è partito.**
-Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (286 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
+Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (312 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
 
 **La copertura dei test non era un adempimento: ha trovato cinque difetti veri**, ognuno dei quali violava una regola della Costituzione già scritta e mai verificata — i passaggi di net-45 che attraversavano i vuoti (R5), il punto minimo mai applicato in striatura (R3), `insetPolygon` che rientrava del 30% in meno, il punto massimo di pattern-grammar che lasciava passare segmenti quasi doppi (R4), l'importer che esplodeva sul file vero da 2MB. Tutti corretti, tutti bloccati da un test che fallisce se tornano.
 
@@ -292,7 +311,7 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 | **C9** | **pattern-grammar — export report** (il motore lo genera già, manca il bottone). | Piccolo. |
 | **C11** ✅ *chiusa* | ~~broccato — punto ②: la riduzione stabile~~ **fatta**: pareggio della luce, attenuazione della grana, palette affinata, area minima. Due ripetizioni dello stesso motivo dal 33-42% all'85-98% di aghi in comune, isole da 1.029 a 27, nessun ago sprecato. Resta da **tarare i default sull'immagine vera** (B4). | Il dettaglio, coi tre difetti trovati misurando, è nel blocco `broccato` in §1. |
 | **C12** ✅ *chiusa* | ~~broccato — punto ③: regioni + raso nel core~~ **fatto**: `buildParallelFill` in `@rg/core` (R24, «il grande assente»), `regions.ts` locale per i poligoni coi fori, `simplifyPolyline` promosso da oblique. Primo ricamo sulla demo: 37,1 m, 18.472 punti. | **A4 è sbloccata**: net-45 può smettere di esportare i rasi come forme. |
-| **C13** | **broccato — punto ④: i passaggi coperti** *(prossima mossa)* (R16–R21, locali all'app). Mappa di copertura dai colori successivi + instradamento sotto. È il cuore della tecnica e il collo di bottiglia. | Grosso. Parente stretto di **C8**: se regge, è la strada per promuoverlo. |
+| **C13** ✅ *chiusa* | ~~broccato — punto ④: i passaggi coperti~~ **fatto**: mappa di costo + A*, 2.027 corse → 50 tratti, salti allo 0,17% (riferimento 0,19%), copertura monotona decrescente con l'ultimo ago a 0. | **È il candidato naturale per C8** (`covered-travel` nel core), dopo la prova del ricamo vero. |
 | **C10** | **bitmap — overlay/maschera nella preview** (l'originale mostrava 3 viste, oggi c'è la vista punti, che è la più utile). | Piccolo. Da valutare se serve davvero. |
 
 ### Fuori lista (fatto, o non nostro)
@@ -392,9 +411,9 @@ Il **satellite Python** `bitmap_to_stitch` (laboratorio DST/recipe/library con A
 
 ## 5. PROSSIMA SINGOLA MOSSA
 
-**→ C13: il punto ④ di `broccato` — i passaggi nascosti (R16–R21).** È il cuore della tecnica, e adesso il problema è in piedi e contato: sulla demo il riempimento esce in **2.027 corse staccate**, e oggi ogni stacco sarebbe un salto. Vanno collegate passando **sotto le macchie dei colori successivi**, preferendo l'orizzontale, col ripiego a cascata (coperto → quasi coperto → lungo i bordi → salto solo come ultima spiaggia). La misura su cui bloccarlo è già nota: la copertura dei passaggi deve **scendere monotòna lungo l'ordine dei colori**, come nel DST di riferimento (81→77→66→53→51→29→0%).
+**→ Il punto ⑤ di `broccato`: export, pannello e chiusura.** Il motore c'e' tutto — immagine, tinte, regioni, raso, passaggi nascosti — e quello che manca e' il giro finale: **min-stitch R3 e lock R8** nella pipeline (il minimo va imposto DOPO il routing, ed e' lo stesso inciampo gia' pagato da striatura), **export SVG e DST riapribili** (R27/R9/R31, che nella suite sono una chiamata sola), il **pannello Testa A** dal subagent `design-system`, e i nomi dei parametri col processo REVISIONE-PARAMETRI.
 
-Resta utile, non bloccante: **B4**, l'immagine vera del broccato in una cartella leggibile — più quella a colori piatti con le nove tinte, che è il caso opposto (niente luce da pareggiare, tratto nero sottile che l'area minima rischia di mangiare). Su entrambe i default vanno riconfermati.
+E poi la cosa che vale piu' di tutto il resto: **gli occhi di Lorenzo sul ricamo**. Il tool ora gira nel browser (`avvia.bat` → Broccato) con la vista *Ricamo* e quella diagnostica dei passaggi. Serve anche **B4**: le due immagini vere in una cartella leggibile — il broccato fotografato e quella a colori piatti con le nove tinte, che e' il caso opposto (niente luce da pareggiare, tratto nero sottile che l'area minima rischia di mangiare, e nove colori contro un tetto di otto).
 
 **E in parallelo, quando Lorenzo ha il ricamo davanti:** la verifica visiva di **A1** su oblique e striatura è chiusa su entrambi (5/5 e 5/5), quindi quello che resta a lui sono le scelte di resa che ne discendono — **A5** (le etichette col processo REVISIONE-PARAMETRI), **A6** (le due divergenze misurate e in attesa di risposta), **A3/A4** (le rifiniture di net-45) — più le mosse sul repo del design system (**B1**). La **Fase C di oblique** (C2) è sbloccata: il porting è approvato a occhio.
 
