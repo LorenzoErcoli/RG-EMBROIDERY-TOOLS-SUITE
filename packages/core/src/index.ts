@@ -6,6 +6,7 @@ export * from './units';
 export * from './grid45';
 export * from './clip';
 export * from './stitch';
+export * from './fill';
 export * from './travel';
 export * from './params';
 export * from './quantize';

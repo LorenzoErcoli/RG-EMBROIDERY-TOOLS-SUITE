@@ -23,6 +23,7 @@ export { buildNet } from ${JSON.stringify(posix('apps/net-45/src/net.ts'))};
 export { generateStriatura, layerThreadMm, defaultStriaturaParams } from ${JSON.stringify(posix('apps/striatura/src/engine.ts'))};
 export { paletteToColors, applyDensityToAll, colorsToPalette, clampColorCount, mmPerPixel, defaultBroccatoParams } from ${JSON.stringify(posix('apps/broccato/src/engine.ts'))};
 export { reduceStable, prepareImage, flattenLight, despeckle, refinePalette, removeSmallBlobs, NO_COLOR } from ${JSON.stringify(posix('apps/broccato/src/reduce.ts'))};
+export { traceRegions, pointInRegion, regionsAreaMm2 } from ${JSON.stringify(posix('apps/broccato/src/regions.ts'))};
 export { sampleImage as sampleBroccatoImage } from ${JSON.stringify(posix('apps/broccato/src/sample.ts'))};
 export { runPipeline as runStriaturaPipeline } from ${JSON.stringify(posix('apps/striatura/src/pipeline.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
@@ -924,6 +925,126 @@ console.log('\noblique — routing + orchestratore (2d)');
 }
 
 // ---------------------------------------------------------------------------------------------
+// core — IL RASO A RIGHE PARALLELE (R24, "il grande assente"). È una primitiva condivisa: la usa
+// broccato adesso e la aspetta net-45 (A4), quindi le invarianti qui sono strette.
+// ---------------------------------------------------------------------------------------------
+{
+  const quadrato = [{ x: 0, y: 0 }, { x: 60, y: 0 }, { x: 60, y: 40 }, { x: 0, y: 40 }];
+  const buco = [{ x: 20, y: 15 }, { x: 40, y: 15 }, { x: 40, y: 25 }, { x: 20, y: 25 }];
+  const punti = (runs) => runs.flat();
+  const segMax = (runs) => {
+    let m = 0;
+    for (const r of runs) for (let i = 1; i < r.length; i++) m = Math.max(m, Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y));
+    return m;
+  };
+
+  console.log('\ncore — raso: le righe stanno dentro la forma, fuori dai fori, col passo giusto');
+  const base = rg.buildParallelFill(quadrato, [buco], { spacingMm: 2, maxStitchMm: 3 });
+  check('genera delle corse', base.length > 0, true);
+  check('nessun punto esce dalla forma',
+    punti(base).every((p) => p.x >= -0.001 && p.x <= 60.001 && p.y >= -0.001 && p.y <= 40.001), true);
+  // I capi delle corse cadono ESATTAMENTE sul bordo del foro, e li' un point-in-polygon
+  // risponde a caso: si misura quanto un punto ci entra DENTRO, non se ci sta.
+  const dentroDi = (pt, poly) => (rg.pointInPolygon(pt, poly) ? rg.distanceToBoundary(pt, poly) : 0);
+  check('nessun punto entra nel foro (mai oltre un millesimo di mm)',
+    Math.max(...punti(base).map((p) => dentroDi(p, buco))) < 0.001, true);
+  check('nessun SEGMENTO attraversa il foro (non basta guardare gli estremi)', (() => {
+    for (const r of base) for (let i = 1; i < r.length; i++) {
+      for (let t = 1; t < 8; t++) {
+        const q = { x: r[i - 1].x + ((r[i].x - r[i - 1].x) * t) / 8, y: r[i - 1].y + ((r[i].y - r[i - 1].y) * t) / 8 };
+        if (rg.pointInPolygon(q, buco) && rg.distanceToBoundary(q, buco) > 0.001) return false;
+      }
+    }
+    return true;
+  })(), true);
+  check('il punto non supera mai il massimo chiesto (R4)', segMax(base) <= 3.0001, true);
+  const quote = [...new Set(punti(base).map((p) => Math.round(p.y * 1000) / 1000))].sort((a, b) => a - b);
+  const passi = quote.slice(1).map((v, i) => Math.round((v - quote[i]) * 1000) / 1000);
+  check('le righe distano esattamente il passo chiesto', [...new Set(passi)], [2]);
+  check('nella fascia del foro la riga si spezza in due corse', (() => {
+    const suY20 = base.filter((r) => Math.abs(r[0].y - 20) < 0.001);
+    return suY20.length === 2;
+  })(), true);
+
+  console.log('\ncore — raso: la griglia delle righe è ANCORATA, non parte dalla forma');
+  // Due macchie separate dello stesso colore devono avere le righe alla STESSA quota: se ognuna
+  // partisse dal proprio bordo, sul ricamo si vedrebbero le giunte fra una macchia e l'altra.
+  const sinistra = [{ x: 0, y: 0.7 }, { x: 20, y: 0.7 }, { x: 20, y: 30.3 }, { x: 0, y: 30.3 }];
+  const destra = [{ x: 40, y: 3.1 }, { x: 60, y: 3.1 }, { x: 60, y: 33.9 }, { x: 40, y: 33.9 }];
+  const qs = (poly) => [...new Set(punti(rg.buildParallelFill(poly, [], { spacingMm: 2, maxStitchMm: 5 })).map((p) => Math.round(p.y * 100) / 100))];
+  const qa = qs(sinistra), qb = qs(destra);
+  check('le quote delle due macchie cadono sulla stessa griglia',
+    qa.every((v) => Math.abs(v / 2 - Math.round(v / 2)) < 1e-6) && qb.every((v) => Math.abs(v / 2 - Math.round(v / 2)) < 1e-6), true);
+  check('spostando l\'ancoraggio si spostano TUTTE le righe',
+    rg.buildParallelFill(sinistra, [], { spacingMm: 2, gridOriginMm: 0.5 })[0][0].y % 2, 0.5);
+
+  console.log('\ncore — raso: pettine e serpentina fanno cose diverse, come sul ricamo vero');
+  const serp = rg.buildParallelFill(quadrato, [], { spacingMm: 2, maxStitchMm: 3, mode: 'serpentine' });
+  const pett = rg.buildParallelFill(quadrato, [], { spacingMm: 2, maxStitchMm: 3, mode: 'comb', retraceOffsetMm: 0.1 });
+  check('la serpentina alterna il verso riga per riga',
+    serp[0][0].x < serp[0][serp[0].length - 1].x && serp[1][0].x > serp[1][serp[1].length - 1].x, true);
+  check('il pettine va e TORNA sulla stessa riga (parte e finisce dalla stessa parte)',
+    Math.abs(pett[0][0].x - pett[0][pett[0].length - 1].x) < 0.001, true);
+  check('il ritorno del pettine è sfalsato, non ricade negli stessi buchi',
+    Math.round((pett[0][pett[0].length - 1].y - pett[0][0].y) * 1000) / 1000, 0.1);
+  check('il pettine costa circa il doppio di filo (è la sua ragione d\'essere)',
+    Math.abs(rg.fillThreadMm(pett) / rg.fillThreadMm(serp) - 2) < 0.06, true);
+  check('lo sfasamento del ritorno non può superare mezzo passo',
+    rg.buildParallelFill(quadrato, [], { spacingMm: 2, mode: 'comb', retraceOffsetMm: 99 })[0].slice(-1)[0].y
+      - rg.buildParallelFill(quadrato, [], { spacingMm: 2, mode: 'comb', retraceOffsetMm: 99 })[0][0].y, 1);
+
+  console.log('\ncore — raso: le manopole fanno quello che dicono');
+  const filo = (sp) => rg.fillThreadMm(rg.buildParallelFill(quadrato, [], { spacingMm: sp, maxStitchMm: 3 }));
+  check('passo più fitto = più filo (monotòna)', filo(1) > filo(2) && filo(2) > filo(4), true);
+  check('e in proporzione: dimezzare il passo raddoppia il filo', Math.abs(filo(1) / filo(2) - 2) < 0.1, true);
+  const pMax = (mx) => segMax(rg.buildParallelFill(quadrato, [], { spacingMm: 2, maxStitchMm: mx }));
+  check('il punto massimo si rispetta a qualsiasi valore', pMax(1) <= 1.0001 && pMax(5) <= 5.0001, true);
+  check('suddividere NON cambia la forma: stessa lunghezza di filo, solo più punti',
+    Math.abs(rg.fillThreadMm(rg.buildParallelFill(quadrato, [], { spacingMm: 2, maxStitchMm: 1 }))
+      - rg.fillThreadMm(rg.buildParallelFill(quadrato, [], { spacingMm: 2, maxStitchMm: 5 }))) < 0.001, true);
+
+  console.log('\ncore — raso: l\'orientamento');
+  const orizz = rg.buildParallelFill(quadrato, [], { spacingMm: 2, maxStitchMm: 100, angleDeg: 0 });
+  const vert = rg.buildParallelFill(quadrato, [], { spacingMm: 2, maxStitchMm: 100, angleDeg: 90 });
+  const angoli = (runs) => [...new Set(runs.map((r) => {
+    const d = Math.atan2(r[1].y - r[0].y, r[1].x - r[0].x) * 180 / Math.PI;
+    return Math.round(((d % 180) + 180) % 180);
+  }))];
+  check('a 0° le righe sono orizzontali', angoli(orizz), [0]);
+  check('a 90° le righe sono verticali', angoli(vert), [90]);
+  check('ruotando, il filo resta lo stesso (è la stessa forma girata)',
+    Math.abs(rg.fillThreadMm(orizz) / rg.fillThreadMm(vert) - 1) < 0.12, true);
+  const obliquo = rg.buildParallelFill(quadrato, [], { spacingMm: 2, maxStitchMm: 100, angleDeg: 30 });
+  check('a 30° le righe sono a 30° e restano dentro la forma',
+    angoli(obliquo).length === 1 && angoli(obliquo)[0] === 30
+      && punti(obliquo).every((p) => p.x >= -0.001 && p.x <= 60.001 && p.y >= -0.001 && p.y <= 40.001), true);
+
+  console.log('\ncore — raso: i casi storti non esplodono');
+  check('poligono degenere → nessuna corsa', rg.buildParallelFill([{ x: 0, y: 0 }, { x: 1, y: 1 }], [], { spacingMm: 1 }).length, 0);
+  check('passo zero → nessuna corsa', rg.buildParallelFill(quadrato, [], { spacingMm: 0 }).length, 0);
+  check('foro più grande della forma → nessuna corsa',
+    rg.buildParallelFill(quadrato, [[{ x: -10, y: -10 }, { x: 70, y: -10 }, { x: 70, y: 50 }, { x: -10, y: 50 }]], { spacingMm: 2 })
+      .flat().length, 0);
+  const concava = [{ x: 0, y: 0 }, { x: 60, y: 0 }, { x: 60, y: 40 }, { x: 35, y: 40 }, { x: 35, y: 12 }, { x: 25, y: 12 }, { x: 25, y: 40 }, { x: 0, y: 40 }];
+  const conc = rg.buildParallelFill(concava, [], { spacingMm: 2, maxStitchMm: 5 });
+  // Stessa cura: i capi stanno sul bordo dell'incavo. Si guarda se il filo ci passa DENTRO,
+  // campionando i segmenti a meta' e non solo agli estremi.
+  const incavo = [{ x: 25, y: 12 }, { x: 35, y: 12 }, { x: 35, y: 41 }, { x: 25, y: 41 }];
+  check('su una U il riempimento non taglia attraverso l\'incavo', (() => {
+    for (const r of conc) for (let i = 1; i < r.length; i++) {
+      for (let t = 1; t < 8; t++) {
+        const q = { x: r[i - 1].x + ((r[i].x - r[i - 1].x) * t) / 8, y: r[i - 1].y + ((r[i].y - r[i - 1].y) * t) / 8 };
+        if (rg.pointInPolygon(q, incavo) && rg.distanceToBoundary(q, incavo) > 0.001) return false;
+      }
+    }
+    return true;
+  })(), true);
+  check('stessi parametri → stesso identico risultato (deterministico)',
+    JSON.stringify(rg.buildParallelFill(quadrato, [buco], { spacingMm: 2, maxStitchMm: 3, mode: 'comb', retraceOffsetMm: 0.1 })),
+    JSON.stringify(rg.buildParallelFill(quadrato, [buco], { spacingMm: 2, maxStitchMm: 3, mode: 'comb', retraceOffsetMm: 0.1 })));
+}
+
+// ---------------------------------------------------------------------------------------------
 // broccato (punto ①) — la cattura dei colori promossa nel core, e la riduzione dell'immagine.
 // Il test che conta davvero è il PRIMO: promuovere `buildPalette` da apps/bitmap a @rg/core non
 // deve cambiare una virgola di quello che bitmap produceva (ARCHITETTURA, regole di crescita 6/7 —
@@ -1126,6 +1247,71 @@ console.log('\noblique — routing + orchestratore (2d)');
   const palVuota = rg.refinePalette(motivo.rgba, [[0, 0, 0], [1, 1, 1], [2, 2, 2], [250, 250, 250], [251, 251, 251], [252, 252, 252]], 4);
   check('l\'affinamento non perde nessun ago', palVuota.length, 6);
   check('...e li porta su tinte diverse fra loro', new Set(palVuota.map((c) => c.join(','))).size, 6);
+
+  // -------------------------------------------------------------------------------------------
+  // Punto ③ — dalle maschere alle REGIONI. È il pezzo che nella suite non c'era: bitmap va da
+  // raster a punti senza mai costruire un'area, e il raso del core vuole un poligono.
+  // -------------------------------------------------------------------------------------------
+  console.log('\nbroccato — ③ le maschere diventano poligoni in millimetri, coi fori');
+  const W3 = 100, H3 = 80, MM = 0.5;
+  const mappa = new Uint8Array(W3 * H3).fill(0);
+  // un rettangolo del colore 1 da (10,10) a (60,50), con dentro un buco (25,20)-(40,35)
+  for (let y = 10; y < 50; y++) for (let x = 10; x < 60; x++) mappa[y * W3 + x] = 1;
+  for (let y = 20; y < 35; y++) for (let x = 25; x < 40; x++) mappa[y * W3 + x] = 0;
+  // una seconda macchia dello stesso colore, staccata
+  for (let y = 60; y < 70; y++) for (let x = 70; x < 90; x++) mappa[y * W3 + x] = 1;
+  // due pixel che si toccano solo in diagonale: DUE macchie, non una
+  mappa[5 * W3 + 90] = 1; mappa[6 * W3 + 91] = 1;
+
+  const regs = rg.traceRegions(mappa, W3, H3, 1, MM);
+  check('trova tutte le macchie, e la diagonale conta per due', regs.length, 4);
+  const grande = regs[0];
+  check('la più grande è quella col buco', grande.holes.length, 1);
+  check('le altre non hanno buchi', regs.slice(1).every((r) => r.holes.length === 0), true);
+  // area attesa: 50x40 pixel meno 15x15, in mm² con lato 0.5 → (2000-225)*0.25
+  check('l\'area netta è quella giusta (il foro è sottratto)',
+    Math.abs(grande.areaMm2 - (50 * 40 - 15 * 15) * MM * MM) < 3, true);
+  check('il contorno è in MILLIMETRI, non in pixel (R1)', (() => {
+    const xs = grande.outer.map((p) => p.x), ys = grande.outer.map((p) => p.y);
+    return Math.abs(Math.min(...xs) - 5) < 0.6 && Math.abs(Math.max(...xs) - 30) < 0.6
+      && Math.abs(Math.min(...ys) - 5) < 0.6 && Math.abs(Math.max(...ys) - 25) < 0.6;
+  })(), true);
+  check('un rettangolo torna con pochi vertici, non a gradini',
+    regs[1].outer.length <= 6, true);
+  check('il centro del buco NON è dentro la regione',
+    rg.pointInRegion({ x: 32.5 * MM, y: 27.5 * MM }, grande), false);
+  check('un punto del pieno invece sì',
+    rg.pointInRegion({ x: 15 * MM, y: 15 * MM }, grande), true);
+  check('stessa mappa → stesse regioni (deterministico)',
+    JSON.stringify(rg.traceRegions(mappa, W3, H3, 1, MM)), JSON.stringify(regs));
+  check('un colore che non c\'è → nessuna regione', rg.traceRegions(mappa, W3, H3, 7, MM).length, 0);
+  check('l\'area minima scarta le macchie piccole',
+    rg.traceRegions(mappa, W3, H3, 1, MM, { minAreaMm2: 100 }).length, 1);
+
+  console.log('\nbroccato — ③ le regioni e il raso del core si parlano');
+  const corse = rg.buildParallelFill(grande.outer, grande.holes, { spacingMm: 1, maxStitchMm: 3, mode: 'comb', retraceOffsetMm: 0.1 });
+  check('il raso riempie la regione tracciata', corse.length > 10, true);
+  check('e non entra nel buco', (() => {
+    const buco = grande.holes[0];
+    for (const r of corse) for (let i = 1; i < r.length; i++) {
+      for (let t = 1; t < 6; t++) {
+        const q = { x: r[i - 1].x + ((r[i].x - r[i - 1].x) * t) / 6, y: r[i - 1].y + ((r[i].y - r[i - 1].y) * t) / 6 };
+        if (rg.pointInPolygon(q, buco) && rg.distanceToBoundary(q, buco) > 0.3) return false;
+      }
+    }
+    return true;
+  })(), true);
+  // I capi delle corse stanno sul contorno: si misura di quanto lo OLTREPASSANO, non se lo toccano.
+  check('e non esce dal contorno (mai oltre un millesimo di mm)',
+    Math.max(...corse.flat().map((p) => (rg.pointInPolygon(p, grande.outer) ? 0 : rg.distanceToBoundary(p, grande.outer)))) < 0.001, true);
+
+  console.log('\nbroccato — ③ due macchie dello stesso colore hanno le righe ALLINEATE');
+  // Se ogni macchia partisse dal proprio bordo, sul ricamo si vedrebbe la giunta fra una e l'altra.
+  const quoteDi = (r) => [...new Set(rg.buildParallelFill(r.outer, r.holes, { spacingMm: 1, maxStitchMm: 5 })
+    .flat().map((p) => Math.round(p.y * 100) / 100))];
+  const q1 = quoteDi(regs[0]), q2 = quoteDi(regs[1]);
+  check('le quote delle due macchie stanno sulla stessa griglia da 1mm',
+    q1.every((v) => Math.abs(v - Math.round(v)) < 1e-6) && q2.every((v) => Math.abs(v - Math.round(v)) < 1e-6), true);
 
   console.log('\nbroccato — la misura: la larghezza reale prevale sulla stima (R11)');
   check('senza larghezza reale si stima al DPI',

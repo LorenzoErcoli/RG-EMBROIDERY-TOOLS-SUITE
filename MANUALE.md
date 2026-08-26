@@ -137,11 +137,13 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
    - la **densità**, cioè quanto sono vicine le righe di filo: piccola = fitto, grande = rado. Il bottone *Applica a tutti* le mette uguali, poi ne ritocchi una o due;
    - le **frecce** cambiano l’ordine di cucitura. **L'ordine conta**: ogni colore nasconde i propri passaggi sotto i colori che vengono dopo, quindi l’ultimo della lista è quello che non ha più niente sopra.
 
-**Cosa vedi nell’anteprima.** Tre viste, con l’interruttore in alto: *Originale* (l’immagine com’è), *Preparata* (dopo il pareggio della luce e l’attenuazione della grana — serve a capire cosa stanno facendo quelle manopole) e *Ridotta*, l’immagine portata alle tinte scelte: è esattamente ciò che finirà sotto l’ago. Le zone dei colori *esclusi* restano vuote, così si vede subito cosa non si ricama. La percentuale accanto a ogni riga dice quanta parte dell’immagine ha preso quella tinta.
+**Cosa vedi nell’anteprima.** Quattro viste, con l’interruttore in alto: *Originale* (l’immagine com’è), *Preparata* (dopo il pareggio della luce e l’attenuazione della grana — serve a capire cosa stanno facendo quelle manopole) *Ridotta*, l’immagine portata alle tinte scelte, e **Ricamo**, il tracciato vero — un gruppo per ago nell’ordine di cucitura, col filo disegnato sottile. La barra in fondo dice quanti metri di filo, quanti punti e quante corse restano da collegare. Le zone dei colori *esclusi* restano vuote, così si vede subito cosa non si ricama. La percentuale accanto a ogni riga dice quanta parte dell’immagine ha preso quella tinta.
 
 **Esportazione.** SVG o DST.
 
-> **In costruzione.** Oggi il tool arriva fino alla riduzione dei colori. Il riempimento a raso, i passaggi nascosti e l’esportazione stanno arrivando.
+**4. Punto** — l’**orientamento** delle righe (uguale per tutti i colori; 0 = orizzontale), la **lunghezza del punto** e lo **sfalsamento del ritorno**, cioè di quanto il pettine sposta il viaggio di ritorno per non ricadere negli stessi buchi dell’andata.
+
+> **In costruzione.** Oggi il tool arriva fino al riempimento a raso. Mancano i **passaggi** — il filo che collega una macchia all’altra nascondendosi sotto i colori successivi — e l’esportazione.
 
 ---
 

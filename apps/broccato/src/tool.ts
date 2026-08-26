@@ -10,6 +10,7 @@
 
 import '@rg/ui/rg.css';
 import './broccato.css';
+import { buildSvg } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import {
@@ -19,6 +20,7 @@ import {
   colorsToPalette, mmPerPixel, clampColorCount,
 } from './engine';
 import { reduceStable, type ReduceResult } from './reduce';
+import { buildPlan, type BroccatoPlan } from './pipeline';
 import { sampleImage } from './sample';
 
 /** Sorgente pixel: la demo o un'immagine caricata, rasterizzabile alla larghezza di lavoro. */
@@ -28,7 +30,7 @@ interface Source {
 }
 
 /** Cosa si guarda nell'anteprima. Serve a *vedere* cosa fa la preparazione, non a indovinarlo. */
-type Vista = 'originale' | 'preparata' | 'ridotta';
+type Vista = 'originale' | 'preparata' | 'ridotta' | 'ricamo';
 
 interface NumBind { id: string; key: keyof BroccatoParams; int?: boolean; min?: number; max?: number; }
 
@@ -39,6 +41,9 @@ const NUM_BINDS: NumBind[] = [
   { id: 'flattenLightMm', key: 'flattenLightMm', min: 0 },
   { id: 'smoothMm', key: 'smoothMm', min: 0 },
   { id: 'minBlobMm2', key: 'minBlobMm2', min: 0 },
+  { id: 'fillAngleDeg', key: 'fillAngleDeg', min: -90, max: 90 },
+  { id: 'maxStitchMm', key: 'maxStitchMm', min: 0.5 },
+  { id: 'retraceOffsetMm', key: 'retraceOffsetMm', min: 0 },
 ];
 
 export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {}): void {
@@ -120,6 +125,26 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
         </div>
       </section>
 
+      <section class="rg-param-section">
+        <div class="rg-param-section__header"><span class="rg-param-section__index">04</span><h3 class="rg-param-section__title">Punto</h3></div>
+        <div class="rg-param-grid">
+          <label class="rg-field">
+            <span class="rg-field__label">Orientamento delle righe</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="fillAngleDeg" type="number" min="-90" max="90" step="5"><span>\u00b0</span></span>
+            <span class="rg-field__help">0 = orizzontale, uguale per tutti i colori</span>
+          </label>
+          <label class="rg-field">
+            <span class="rg-field__label">Lunghezza del punto</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="maxStitchMm" type="number" min="0.5" step="0.1"><span>mm</span></span>
+          </label>
+          <label class="rg-field">
+            <span class="rg-field__label">Sfalsamento del ritorno</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="retraceOffsetMm" type="number" min="0" step="0.05"><span>mm</span></span>
+            <span class="rg-field__help">solo a pettine: di quanto il ritorno evita i buchi dell'andata</span>
+          </label>
+        </div>
+      </section>
+
     </aside>
 
     <div class="rg-workspace__stage">
@@ -131,6 +156,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
               <button type="button" class="rg-segmented__item" data-vista="originale" aria-pressed="false">Originale</button>
               <button type="button" class="rg-segmented__item" data-vista="preparata" aria-pressed="false">Preparata</button>
               <button type="button" class="rg-segmented__item rg-segmented__item--active" data-vista="ridotta" aria-pressed="true">Ridotta</button>
+              <button type="button" class="rg-segmented__item" data-vista="ricamo" aria-pressed="false">Ricamo</button>
             </div>
           </div>
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
@@ -149,7 +175,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
   const $ = (id: string) => root.querySelector<HTMLElement>(`#${id}`)!;
   const params: BroccatoParams = { ...defaultBroccatoParams, colors: [] };
   let vista: Vista = 'ridotta';
-  let ultimo: { res: ReduceResult; img: PixelImage; mmpp: number } | null = null;
+  let ultimo: { res: ReduceResult; img: PixelImage; mmpp: number; plan: BroccatoPlan } | null = null;
 
   let source: Source = { name: '', pixelsAt: () => sampleImage() };
   let sourceName = '';
@@ -190,6 +216,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
     if (!Number.isFinite(v) || v <= 0) return;
     params.colors = applyDensityToAll(params.colors, v);
     buildPaletteUI();
+    scheduleAnalyze(false);
   });
 
   for (const b of root.querySelectorAll<HTMLButtonElement>('[data-vista]')) {
@@ -249,7 +276,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
       role.addEventListener('change', () => {
         params.colors[i].role = role.value as BroccatoColorRole;
         buildPaletteUI();
-        if (ultimo) paint();
+        scheduleAnalyze(false);
       });
 
       // Come si costruisce la striscia: pettine (va e torna) o normale.
@@ -263,7 +290,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
         mode.appendChild(o);
       }
       mode.disabled = col.role === 'escluso';
-      mode.addEventListener('change', () => { params.colors[i].mode = mode.value as FillMode; });
+      mode.addEventListener('change', () => { params.colors[i].mode = mode.value as FillMode; scheduleAnalyze(false); });
 
       // Densità per-colore (R22): il campo compatto con le sole classi DS, come in interlace.
       const dwrap = document.createElement('span');
@@ -280,6 +307,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
         const v = Number(dens.value);
         if (Number.isFinite(v) && v > 0) params.colors[i].densitySpacingMm = v;
         dens.value = String(params.colors[i].densitySpacingMm);
+        scheduleAnalyze(false);
       });
       const unit = document.createElement('span');
       unit.textContent = 'mm';
@@ -341,20 +369,38 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
       mmPerPx: mmpp,
       palette: nuova ? undefined : colorsToPalette(params.colors),
     });
-    ultimo = { res, img, mmpp };
-    if (nuova) {
-      params.colors = paletteToColors(res.palette, params.colors);
-      buildPaletteUI();
-    }
+    if (nuova) params.colors = paletteToColors(res.palette, params.colors);
+    const plan = buildPlan(res, params, mmpp, {
+      widthMm: img.width * mmpp,
+      heightMm: img.height * mmpp,
+    });
+    ultimo = { res, img, mmpp, plan };
+    if (nuova) buildPaletteUI();
     paint(performance.now() - t0);
   }
 
   // ---- anteprima ------------------------------------------------------------
   function paint(ms?: number): void {
     if (!ultimo) return;
-    const { res, img, mmpp } = ultimo;
+    const { res, img, mmpp, plan } = ultimo;
     const w = img.width, h = img.height;
     const wmm = w * mmpp, hmm = h * mmpp;
+
+    if (vista === 'ricamo') {
+      // Il ricamo vero: un gruppo per ago, nell'ordine di cucitura, filo sottile (R15).
+      const layer = $('layer');
+      layer.innerHTML = buildSvg(plan.previewLayers, {
+        bounds: { minX: 0, minY: 0, maxX: wmm, maxY: hmm },
+        marginMm: 2,
+      });
+      aggiornaPercentuali();
+      const tempo = ms === undefined ? '' : ` \u00b7 ${Math.round(ms)} ms`;
+      $('status').textContent =
+        `${wmm.toFixed(0)} \u00d7 ${hmm.toFixed(0)} mm \u00b7 filo ${(plan.threadMm / 1000).toFixed(1)} m \u00b7 `
+        + `${plan.pointCount.toLocaleString('it-IT')} punti \u00b7 ${plan.runCount.toLocaleString('it-IT')} corse da collegare${tempo}`;
+      updateFileStatus(img, wmm, hmm);
+      return;
+    }
 
     const cv = document.createElement('canvas');
     cv.width = w; cv.height = h;

@@ -12,7 +12,7 @@
 
 // Primitive geometriche riusate dal core (confrontate con app.js, identiche → nessuna divergenza,
 // regola di crescita 6/7): distanza minima dal loop, punto-in-poligono, distanza fra punti.
-import { pointInPolygon, distanceToBoundary, distance, distanceToSegment, lerp, clamp } from '@rg/core';
+import { pointInPolygon, distanceToBoundary, distance, distanceToSegment, lerp, clamp, simplifyPolyline } from '@rg/core';
 
 // ───────────────────────────── Tipi ─────────────────────────────
 
@@ -588,27 +588,12 @@ export function normalizePerimeterLoop(points: Poly, closeTolerance = 0.1): Poly
  * verifica visiva A1 punto 4). Douglas-Peucker misura sempre rispetto alla **corda originale**,
  * quindi lo scarto è garantito ≤ `tol`.
  */
-export function simplifyLoop(points: Poly, tol = 0.2): Poly {
-  const n = points.length;
-  if (n <= 4) return points;
-  const keep = new Uint8Array(n);
-  keep[0] = 1; keep[n - 1] = 1;
-  // pila esplicita invece della ricorsione: i contorni veri arrivano anche a decine di migliaia di punti
-  const stack: Array<[number, number]> = [[0, n - 1]];
-  while (stack.length) {
-    const [a, b] = stack.pop()!;
-    if (b - a < 2) continue;
-    let worst = -1, worstDistance = tol;
-    for (let i = a + 1; i < b; i += 1) {
-      const d = distanceToSegment(points[i], points[a], points[b]);
-      if (d > worstDistance) { worstDistance = d; worst = i; }
-    }
-    if (worst >= 0) { keep[worst] = 1; stack.push([a, worst], [worst, b]); }
-  }
-  const out: Pt[] = [];
-  for (let i = 0; i < n; i += 1) if (keep[i]) out.push(points[i]);
-  return out.length >= 4 ? out : points;
-}
+/**
+ * Semplificazione del contorno: **ora è la primitiva del core** (`simplifyPolyline`), promossa
+ * quando l'ha chiesta il secondo tool. Qui resta il nome storico, così il resto del motore e i
+ * test di oblique non cambiano di una riga — e non esistono due implementazioni della stessa cosa.
+ */
+export const simplifyLoop = (points: Poly, tol = 0.2): Poly => simplifyPolyline(points, tol);
 
 /** Boundary poligonale da un loop di punti (porting di boundaryFromPoints). */
 export function boundaryFromPoints(points: Poly, name: string, closeTolerance = 0.1): Boundary {

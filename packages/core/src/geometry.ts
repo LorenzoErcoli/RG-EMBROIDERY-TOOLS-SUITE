@@ -158,3 +158,42 @@ export function insetPolygon(poly: Polyline, dist: number): Polyline {
   const cb = insetOnce(p, dist, -1);
   return polygonArea(ca) < polygonArea(cb) ? ca : cb;
 }
+
+/**
+ * Semplifica una polilinea col **Douglas-Peucker**: tiene i punti che la corda non riesce a
+ * rappresentare entro `tolMm`, butta gli altri. Pila esplicita invece della ricorsione — i contorni
+ * veri arrivano a decine di migliaia di punti.
+ *
+ * Nasce in `apps/oblique` e sale qui quando la chiede il secondo tool (`apps/broccato`, che deve
+ * ridurre i contorni tracciati dalle maschere): ARCHITETTURA, regola di crescita 1. Il corpo è
+ * quello di oblique, invariato — `simplifyLoop` di oblique ora è questa funzione, così non
+ * esistono due risposte alla stessa domanda (regole 6/7).
+ *
+ * **Attenzione a com'è scritta:** misura ogni punto rispetto alla **corda originale**, non
+ * rispetto all'ultimo punto tenuto. La versione greedy — che era la prima scritta in oblique —
+ * accumula l'errore senza limite: un cerchio di raggio 25 campionato a 0,6mm diventava un
+ * decagono con 1,495mm di scarto, dieci volte la tolleranza dichiarata.
+ *
+ * Sotto i 4 punti, o se il risultato scenderebbe sotto i 4, torna l'ingresso intatto: un anello
+ * ha bisogno di almeno un triangolo più la chiusura.
+ */
+export function simplifyPolyline(points: Polyline, tolMm = 0.2): Polyline {
+  const n = points.length;
+  if (n <= 4) return points;
+  const keep = new Uint8Array(n);
+  keep[0] = 1; keep[n - 1] = 1;
+  const stack: Array<[number, number]> = [[0, n - 1]];
+  while (stack.length) {
+    const [a, b] = stack.pop()!;
+    if (b - a < 2) continue;
+    let worst = -1, worstDistance = tolMm;
+    for (let i = a + 1; i < b; i += 1) {
+      const d = distanceToSegment(points[i], points[a], points[b]);
+      if (d > worstDistance) { worstDistance = d; worst = i; }
+    }
+    if (worst >= 0) { keep[worst] = 1; stack.push([a, worst], [worst, b]); }
+  }
+  const out: Point[] = [];
+  for (let i = 0; i < n; i += 1) if (keep[i]) out.push(points[i]);
+  return out.length >= 4 ? out : points;
+}
