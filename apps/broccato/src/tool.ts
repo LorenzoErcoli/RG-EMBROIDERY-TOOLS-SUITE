@@ -10,9 +10,10 @@
 
 import '@rg/ui/rg.css';
 import './broccato.css';
-import { buildSvg } from '@rg/core';
+import { buildSvg, dstFromExportLayers, DST_FILE, readDstMetadata, readProjectMetadata } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
+import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import {
   type BroccatoParams, type BroccatoColorRole, type FillMode, type PixelImage,
   COLOR_ROLE_LABELS, FILL_MODE_LABELS, MIN_COLORS, MAX_COLORS,
@@ -44,6 +45,8 @@ const NUM_BINDS: NumBind[] = [
   { id: 'fillAngleDeg', key: 'fillAngleDeg', min: -90, max: 90 },
   { id: 'maxStitchMm', key: 'maxStitchMm', min: 0.5 },
   { id: 'retraceOffsetMm', key: 'retraceOffsetMm', min: 0 },
+  { id: 'minStitchMm', key: 'minStitchMm', min: 0 },
+  { id: 'endLockCount', key: 'endLockCount', int: true, min: 0, max: 8 },
 ];
 
 export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {}): void {
@@ -61,6 +64,13 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
               <span class="rg-button rg-button--outline rg-button--small">Scegli un'immagine</span>
             </label>
             <p class="rg-file-input__status" id="fileStatus">Immagine dimostrativa</p>
+          </div>
+          <div class="rg-file-input rg-param-grid__wide">
+            <label class="rg-file-input__control">
+              <input type="file" id="reopen" accept=".svg,.dst">
+              <span class="rg-button rg-button--ghost rg-button--small">Riapri un progetto</span>
+            </label>
+            <p class="rg-file-input__status" id="reopenStatus">un .svg o .dst esportato da qui rimette i suoi parametri</p>
           </div>
           <label class="rg-field">
             <span class="rg-field__label">Larghezza reale del ricamo</span>
@@ -142,6 +152,16 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="retraceOffsetMm" type="number" min="0" step="0.05"><span>mm</span></span>
             <span class="rg-field__help">solo a pettine: di quanto il ritorno evita i buchi dell'andata</span>
           </label>
+          <label class="rg-field">
+            <span class="rg-field__label">Punto minimo</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="minStitchMm" type="number" min="0" step="0.1"><span>mm</span></span>
+            <span class="rg-field__help">imposto alla fine, dopo i passaggi</span>
+          </label>
+          <label class="rg-field">
+            <span class="rg-field__label">Fermatura di uscita</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="endLockCount" type="number" min="0" max="8" step="1"><span>punti</span></span>
+            <span class="rg-field__help">0 = nessuna. Nel riferimento sono 4, prima del cambio-colore</span>
+          </label>
         </div>
       </section>
 
@@ -160,6 +180,8 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
             </div>
           </div>
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
+          <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
+          <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Esporta SVG</button>
         </div>
       </header>
       <div class="rg-workspace__canvas" id="canvas">
@@ -487,6 +509,75 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
     };
     el.onerror = () => { $('status').textContent = 'Immagine non leggibile'; URL.revokeObjectURL(url); };
     el.src = url;
+  });
+
+  // ---- esportazione: SVG per Illustrator/Stilista, DST per la macchina --------
+  const nomeBase = (): string => (sourceName ? sourceName.replace(/\.[^.]+$/, '') : 'broccato');
+
+  /** I parametri che vale la pena rimettere riaprendo il file: tutto tranne i pixel. */
+  const paramsSalvabili = (): Record<string, unknown> => ({ ...params });
+
+  $('exportBtn').addEventListener('click', async () => {
+    try {
+      if (!ultimo) { $('status').textContent = 'Niente da esportare'; return; }
+      const { plan, img, mmpp } = ultimo;
+      const svg = buildSvg(plan.exportLayers, {
+        bounds: plan.bounds,
+        marginMm: 2,
+        metadata: { rgProject: 'broccato', version: '0.1.0', params: paramsSalvabili() },
+      });
+      const esito = await saveTextFile(svg, {
+        suggestedName: `${nomeBase()}-broccato.svg`,
+        description: 'Immagine SVG',
+      });
+      $('status').textContent = saveOutcomeMessage(esito, `${nomeBase()}-broccato.svg`);
+      void img; void mmpp;
+    } catch (e) {
+      $('status').textContent = `Esportazione non riuscita: ${(e as Error).message}`;
+    }
+  });
+
+  $('exportDstBtn').addEventListener('click', async () => {
+    try {
+      if (!ultimo) { $('status').textContent = 'Niente da esportare'; return; }
+      const bytes = dstFromExportLayers(ultimo.plan.exportLayers, {
+        label: 'BROCCATO',
+        // parametri riapribili dal .dst (R27): stanno DOPO l'END, la macchina li ignora
+        metadata: { rgProject: 'broccato', version: '0.1.0', params: paramsSalvabili() },
+      });
+      const esito = await saveBinaryFile(bytes, { suggestedName: `${nomeBase()}.dst`, ...DST_FILE });
+      $('status').textContent = saveOutcomeMessage(esito, `${nomeBase()}.dst`);
+    } catch (e) {
+      $('status').textContent = `Esportazione non riuscita: ${(e as Error).message}`;
+    }
+  });
+
+  // ---- riapertura: da un .svg o .dst esportato da qui tornano i parametri (R27/R9) ----
+  function applicaParametri(meta: Record<string, unknown> | null): boolean {
+    if (!meta || meta.rgProject !== 'broccato') return false;
+    const salvati = meta.params as Partial<BroccatoParams> | undefined;
+    if (!salvati) return false;
+    Object.assign(params, salvati);
+    for (const b of NUM_BINDS) ($(b.id) as HTMLInputElement).value = String(params[b.key]);
+    countEl.value = String(params.colorCount);
+    buildPaletteUI();
+    scheduleAnalyze(false);
+    return true;
+  }
+
+  ($('reopen') as HTMLInputElement).addEventListener('change', async (ev) => {
+    const f = (ev.target as HTMLInputElement).files?.[0];
+    if (!f) return;
+    try {
+      const meta = /\.dst$/i.test(f.name)
+        ? readDstMetadata(new Uint8Array(await f.arrayBuffer()))
+        : readProjectMetadata(await f.text());
+      $('reopenStatus').textContent = applicaParametri(meta)
+        ? `Parametri ripristinati da ${f.name} — l'immagine va ricaricata a parte`
+        : `${f.name} non contiene i parametri di questo strumento`;
+    } catch (e) {
+      $('reopenStatus').textContent = `Non riesco a leggere ${f.name}: ${(e as Error).message}`;
+    }
   });
 
   analyze(true);

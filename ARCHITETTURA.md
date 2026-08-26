@@ -3,7 +3,7 @@
 > Come i tool smettono di essere isole e diventano un ecosistema.
 > Compagno della [Costituzione](COSTITUZIONE-RICAMO.md).
 
-**Versione:** 0.4 · **Aggiornato:** 2026-08-26 · 6 tool live + 1 in costruzione
+**Versione:** 0.5 · **Aggiornato:** 2026-08-26 · 7 tool live
 
 ---
 
@@ -43,7 +43,7 @@ graph TD
     BMP["bitmap (raster)"]
     OBQ["oblique"]
     STR["striatura"]
-    BRC["broccato (in costruzione)"]
+    BRC["broccato (raster)"]
   end
 
   BITMAP["bitmap_to_stitch<br/>(repo Python, satellite)"]
@@ -116,13 +116,13 @@ graph TD
 | **bitmap** (Bitmap → Stitch) | ✅ **live** — calcolo punti migrato da `bitmap_to_stitch` (input raster, unico nella suite) |
 | **oblique** (Broderie Anglaise) | ✅ **live** — porting da `rg-oblique-embroidery-pattern-generator` (usa le void, R5) |
 | **striatura** (Punto Striato) | ✅ **live** — motore nuovo, nato dal DST di riferimento `PUNTO-STRIATURA.dst` |
-| **broccato** (Broccato) | 🚧 **in costruzione** — da immagine a raso rado orizzontale con i passaggi nascosti; nato dalla decodifica di `BROCCATO.dst` |
+| **broccato** (Broccato) | ✅ **live** — da immagine a raso rado orizzontale coi passaggi nascosti sotto i colori successivi; nato dalla decodifica di `BROCCATO.dst` |
 | 45-grid, cross-stitch | da migrare quando li tocchi (stesso schema) |
 | `bitmap_to_stitch` (repo Python) | satellite: contratti sì, codice no. Migrata la sola pipeline *immagine→punti→SVG*; il laboratorio DST/recipe con AI (CLIP/OpenAI) resta fuori scope |
 
 **Capacità globali attive** (una volta, per tutti — vedi Costituzione): export **SVG e DST riapribili** (R9/R27/R31 — `readProjectMetadata` per l'SVG, `readDstMetadata` per il footer del DST; la cucitura resta byte-identica), export **DST macchina** (R31, `dstFromExportLayers`), **salvataggio con finestra di sistema** (R29), **pannello canonico** Testa A/B + accordion (DS v1.7.0), **passaggi che girano attorno alle aree vuote** (R5, `avoidVoids` in `travel.ts`), **cattura colore da immagine** (`quantize.ts`: median-cut deterministico, colore più vicino — estratta quando l’ha chiesta il terzo tool), **riempimento a righe parallele / raso** (`fill.ts`, R24 — pettine o serpentina, dentro un poligono coi fori: era «il grande assente»), **semplificazione dei contorni** (`simplifyPolyline`, promossa da oblique), **guida in-app** generata da `MANUALE.md` (bottone *Guida* nella topbar di ogni tool).
 
-**Rete di sicurezza comune:** `npm test` (320 asserzioni: le primitive del core più le invarianti di tutti e sei i motori, su fixture sintetiche **e sugli SVG veri**), `npm run typecheck` (la build non controlla i tipi: vite usa esbuild) e `npm run build`. Tutti e tre girano in CI a ogni push.
+**Rete di sicurezza comune:** `npm test` (342 asserzioni: le primitive del core più le invarianti di tutti e sei i motori, su fixture sintetiche **e sugli SVG veri**), `npm run typecheck` (la build non controlla i tipi: vite usa esbuild) e `npm run build`. Tutti e tre girano in CI a ogni push.
 
 ---
 

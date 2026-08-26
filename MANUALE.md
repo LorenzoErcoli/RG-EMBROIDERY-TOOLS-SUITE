@@ -137,7 +137,7 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
    - la **densità**, cioè quanto sono vicine le righe di filo: piccola = fitto, grande = rado. Il bottone *Applica a tutti* le mette uguali, poi ne ritocchi una o due;
    - le **frecce** cambiano l’ordine di cucitura. **L'ordine conta**: ogni colore nasconde i propri passaggi sotto i colori che vengono dopo, quindi l’ultimo della lista è quello che non ha più niente sopra.
 
-**Cosa vedi nell’anteprima.** Quattro viste, con l’interruttore in alto: *Originale* (l’immagine com’è), *Preparata* (dopo il pareggio della luce e l’attenuazione della grana — serve a capire cosa stanno facendo quelle manopole) *Ridotta*, l’immagine portata alle tinte scelte, e **Ricamo**, il tracciato vero — un gruppo per ago nell’ordine di cucitura, col filo disegnato sottile. La barra in fondo dice quanti metri di filo, quanti punti e quante corse restano da collegare. Le zone dei colori *esclusi* restano vuote, così si vede subito cosa non si ricama. La percentuale accanto a ogni riga dice quanta parte dell’immagine ha preso quella tinta.
+**Cosa vedi nell’anteprima.** Quattro viste, con l’interruttore in alto: *Originale* (l’immagine com’è), *Preparata* (dopo il pareggio della luce e l’attenuazione della grana — serve a capire cosa stanno facendo quelle manopole) *Ridotta*, l’immagine portata alle tinte scelte, e **Ricamo**, il tracciato vero — un gruppo per ago nell’ordine di cucitura, col filo disegnato sottile. La barra in fondo dice quanti metri di filo, quanti punti, quanti salti e che percentuale di passaggi resta nascosta. Le zone dei colori *esclusi* restano vuote, così si vede subito cosa non si ricama. La percentuale accanto a ogni riga dice quanta parte dell’immagine ha preso quella tinta.
 
 **Esportazione.** SVG o DST.
 
@@ -147,7 +147,9 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
 
 La barra in fondo dice quanti **salti** ci sono e che percentuale di passaggi resta nascosta.
 
-> **In costruzione.** Manca l’**esportazione** in SVG e DST.
+**Il punto.** Nella sezione *Punto* regoli l’**orientamento** delle righe (uguale per tutti i colori; 0 = orizzontale), la **lunghezza del punto**, lo **sfalsamento del ritorno** — di quanto il pettine sposta il viaggio di ritorno per non ricadere negli stessi buchi dell’andata — il **punto minimo**, che viene imposto alla fine (dopo i passaggi, mai prima) e la **fermatura di uscita**: qualche punto cortissimo in fondo a ogni ago, prima del cambio-colore, perché il filo non si sfili quando la macchina taglia. `0` la toglie.
+
+**Esportazione.** SVG per Illustrator/Stilista e DST per la macchina, dai bottoni sopra l’anteprima. L’SVG ha **un gruppo per ogni ago nell’ordine di cucitura**, e ogni gruppo esce con una tinta leggermente diversa: così, se due aghi hanno lo stesso colore, Stilista li tratta lo stesso come cambi-ago distinti. Entrambi i file sono **riapribili**: il bottone *Riapri un progetto* accetta un `.svg` o un `.dst` uscito da qui e rimette tutti i parametri. L’immagine no — quella si ricarica a parte.
 
 ---
 

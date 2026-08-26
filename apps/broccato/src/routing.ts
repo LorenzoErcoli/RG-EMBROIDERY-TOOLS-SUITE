@@ -382,8 +382,12 @@ export function routeColorRuns(
           if (Math.abs(via[k].y - via[k - 1].y) < Math.abs(via[k].x - via[k - 1].x) * 0.3) orizz += d;
         }
         if (scoperto <= o.maxVisibleTravelMm) {
+          // Il passaggio finisce ESATTAMENTE dove comincia la corsa: se si riattaccasse la corsa
+          // intera si cucirebbe due volte lo stesso punto, cioe' un segmento di lunghezza zero.
           const cucito = resampleUniform(via, o.travelStitchMm);
-          corrente.push(...cucito.slice(1), ...run);
+          const coda = cucito[cucito.length - 1];
+          const attacco = distance(coda, run[0]) < 1e-9 ? run.slice(1) : run;
+          corrente.push(...cucito.slice(1), ...attacco);
           travelMm += lung; travelCoveredMm += lung - scoperto; travelHorizontalMm += orizz;
           // a parita' di passaggio: quanto sarebbe stato coperto andando dritti?
           routedMm += lung; routedCoveredMm += lung - scoperto; routedHorizontalMm += orizz;

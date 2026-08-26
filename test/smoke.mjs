@@ -1495,6 +1495,111 @@ console.log('\noblique — routing + orchestratore (2d)');
   check('un colore ESCLUSO sparisce dal ricamo', pianoEsc.colors.length, piano.colors.length - 1);
   check('...e il filo cala di conseguenza', pianoEsc.threadMm < piano.threadMm, true);
 
+  // -------------------------------------------------------------------------------------------
+  // Punto ⑤ — la chiusura: punto minimo DOPO il routing (R3), fermatura di uscita (R8),
+  // ed export riapribile (R9/R27/R31).
+  // -------------------------------------------------------------------------------------------
+  console.log('\nbroccato — ⑤ il punto minimo si impone DOPO i passaggi (R3)');
+  // Non e' pignoleria: sono le giunzioni fra corse, tragitti e corridoi a reintrodurre i
+  // micro-segmenti, e farlo prima non servirebbe a niente. striatura aveva gia' pagato questo
+  // inciampo — il commento diceva che il pass c'era, e in pipeline non c'era.
+  const sottoMinimo = (piano, minimo) => {
+    let n = 0;
+    for (const c of piano.colors) for (const b of c.blocks) {
+      for (let i = 1; i < b.length; i++) {
+        const d = Math.hypot(b[i].x - b[i - 1].x, b[i].y - b[i - 1].y);
+        if (d > 1e-9 && d < minimo - 1e-6) n++;
+      }
+    }
+    return n;
+  };
+  const senzaMin = rg.buildPlan(ridP, { ...parP, minStitchMm: 0, endLockCount: 0 }, mmP,
+    { widthMm: imgP.width * mmP, heightMm: imgP.height * mmP });
+  const conMin = rg.buildPlan(ridP, { ...parP, minStitchMm: 1, endLockCount: 0 }, mmP,
+    { widthMm: imgP.width * mmP, heightMm: imgP.height * mmP });
+  check('senza il pass restano micro-segmenti', sottoMinimo(senzaMin, 1) > 50, true);
+  check('col pass non ne resta nessuno sotto il minimo', sottoMinimo(conMin, 1), 0);
+  check('e nessun punto cucito nello stesso buco (lunghezza zero)', (() => {
+    for (const c of conMin.colors) for (const b of c.blocks) {
+      for (let i = 1; i < b.length; i++) if (Math.hypot(b[i].x - b[i - 1].x, b[i].y - b[i - 1].y) < 1e-9) return false;
+    }
+    return true;
+  })(), true);
+  check('il pass NON allunga il punto: il massimo resta quello chiesto', (() => {
+    let m = 0;
+    for (const c of conMin.colors) for (const b of c.blocks) {
+      for (let i = 1; i < b.length; i++) m = Math.max(m, Math.hypot(b[i].x - b[i - 1].x, b[i].y - b[i - 1].y));
+    }
+    return m <= Math.max(parP.maxStitchMm, parP.travelStitchMm) + 0.001;
+  })(), true);
+
+  console.log('\nbroccato — ⑤ la fermatura di uscita (R8), nella forma del DST');
+  // Il riferimento NON ha il lock sul bordo di oblique: ha 4 punti da 0,30mm in fondo all'ago
+  // (in 5 blocchi su 7) e nessuna fermatura in ingresso. Si segue quella.
+  const conLock = rg.buildPlan(ridP, { ...parP, minStitchMm: 0, endLockCount: 4, endLockMm: 0.3 }, mmP,
+    { widthMm: imgP.width * mmP, heightMm: imgP.height * mmP });
+  const codaDi = (piano, k) => {
+    const b = piano.colors[k].blocks[piano.colors[k].blocks.length - 1];
+    const out = [];
+    for (let i = Math.max(1, b.length - 4); i < b.length; i++) out.push(Math.hypot(b[i].x - b[i - 1].x, b[i].y - b[i - 1].y));
+    return out;
+  };
+  check('ogni ago finisce con punti cortissimi',
+    conLock.colors.every((_, k) => codaDi(conLock, k).every((d) => d <= 0.31)), true);
+  check('...che senza fermatura non ci sono',
+    senzaMin.colors.every((_, k) => codaDi(senzaMin, k).every((d) => d <= 0.31)), false);
+  check('la fermatura aggiunge 4 punti per ago, non di piu\'',
+    conLock.pointCount - senzaMin.pointCount, 4 * senzaMin.colors.length);
+  check('e NON c\'e\' fermatura in ingresso (come nel riferimento)', (() => {
+    const b = conLock.colors[0].blocks[0];
+    return Math.hypot(b[1].x - b[0].x, b[1].y - b[0].y) > 0.5;
+  })(), true);
+  check('a zero la fermatura sparisce',
+    rg.buildPlan(ridP, { ...parP, endLockCount: 0 }, mmP, { widthMm: imgP.width * mmP, heightMm: imgP.height * mmP }).pointCount
+      < conLock.pointCount, true);
+
+  console.log('\nbroccato — ⑤ l\'export: un gruppo per stop, tinta unica, riapribile');
+  const piano5 = rg.buildPlan(ridP, parP, mmP, { widthMm: imgP.width * mmP, heightMm: imgP.height * mmP });
+  check('un gruppo di export per ogni ago cucito', piano5.exportLayers.length, piano5.colors.length);
+  check('sono nell\'ORDINE di cucitura', piano5.exportLayers.map((l) => l.id),
+    piano5.colors.map((_, k) => `stop-${String(k).padStart(4, '0')}`));
+  check('ogni stop ha una tinta UNICA (due aghi dello stesso colore restano distinti)', (() => {
+    const doppio = { ...parP, colors: parP.colors.map((c, i) => (i < 2 ? { ...c, hex: '#334455' } : c)) };
+    const pd = rg.buildPlan(ridP, doppio, mmP, { widthMm: imgP.width * mmP, heightMm: imgP.height * mmP });
+    return new Set(pd.exportLayers.map((l) => l.color)).size === pd.exportLayers.length;
+  })(), true);
+  check('il filo si esporta SOTTILE (R15)', piano5.exportLayers.every((l) => l.strokeMm === 0.1), true);
+
+  const svgOut = rg.buildSvg(piano5.exportLayers, {
+    bounds: piano5.bounds, marginMm: 2,
+    metadata: { rgProject: 'broccato', version: '0.1.0', params: parP },
+  });
+  const riletto = rg.readProjectMetadata(svgOut);
+  check('l\'SVG si riapre e ridice da dove viene (R9/R27)', riletto && riletto.rgProject, 'broccato');
+  check('...coi parametri intatti', riletto.params.colorCount, parP.colorCount);
+  check('e la misura in mm è quella vera, margine compreso (R1)', (() => {
+    const w = svgOut.split('width="')[1].split('mm"')[0];
+    return Math.abs(Number(w) - (imgP.width * mmP + 4)) < 0.01;
+  })(), true);
+
+  const dstOut = rg.dstFromExportLayers(piano5.exportLayers, {
+    label: 'BROCCATO',
+    metadata: { rgProject: 'broccato', version: '0.1.0', params: parP },
+  });
+  check('il DST ha l\'intestazione Tajima', String.fromCharCode(...dstOut.slice(0, 3)), 'LA:');
+  // Il record di fine NON e' negli ultimi byte: dopo l'END c'e' il footer dei parametri, che la
+  // macchina ignora (R27). Lo si cerca dove finisce davvero la cucitura.
+  const senzaMetaEnd = rg.dstFromExportLayers(piano5.exportLayers, { label: 'BROCCATO' });
+  check('...e il record di fine, prima del footer dei parametri',
+    [...senzaMetaEnd.slice(-3)].join(','), '0,0,243');
+  const metaDst = rg.readDstMetadata(dstOut);
+  check('anche il DST si riapre (R27: i parametri stanno DOPO l\'END)', metaDst && metaDst.rgProject, 'broccato');
+  check('...coi parametri intatti', metaDst.params.colorCount, parP.colorCount);
+  check('e il footer NON tocca la cucitura: identica fino all\'END',
+    [...senzaMetaEnd].join(','), [...dstOut.slice(0, senzaMetaEnd.length)].join(','));
+  check('un file che non viene da qui non confonde nessuno',
+    rg.readProjectMetadata('<svg></svg>'), null);
+
   console.log('\nbroccato — la misura: la larghezza reale prevale sulla stima (R11)');
   check('senza larghezza reale si stima al DPI',
     rg.mmPerPixel(960, { realWidthMm: 0, dpiDefault: 96 }).toFixed(4), (25.4 / 96).toFixed(4));

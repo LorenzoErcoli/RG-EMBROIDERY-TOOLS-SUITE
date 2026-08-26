@@ -1,15 +1,16 @@
-// Dalla riduzione al ricamo: regioni → raso → layer pronti per anteprima ed export.
+// Dalla riduzione al ricamo: regioni → raso → passaggi → punto minimo → fermatura → layer.
 //
-// L'ordine è quello canonico della Costituzione (§4): riduzione (import+ruoli) → regioni
-// (boundary) → riempimento (placement) → *poi* routing, min-stitch e lock, che sono i punti ④-⑤.
-// Qui il collegamento fra una corsa e l'altra ancora non c'è: le corse escono staccate, e ogni
-// stacco sarà un salto finché il routing non le cucirà insieme sotto i colori successivi (R16).
+// L'ordine è quello canonico della Costituzione (§4), e va rispettato: riduzione (import+ruoli) →
+// regioni (boundary) → riempimento (placement) → routing (7) → **min-stitch (8)** → **lock (9)** →
+// export (10). Il minimo del punto si impone DOPO il routing e non prima (R3): sono proprio le
+// giunzioni fra una corsa e l'altra a reintrodurre i micro-segmenti, ed è l'inciampo che striatura
+// aveva già pagato — il commento diceva che il pass c'era, e in pipeline non c'era.
 //
 // Nessun DOM.
 
 import {
-  type ExportLayer, type Polyline, THREAD_STROKE_MM,
-  buildParallelFill, fillThreadMm, hexToRgb,
+  type ExportLayer, type Polyline, type Bounds, type Point,
+  THREAD_STROKE_MM, buildParallelFill, fillThreadMm, hexToRgb, enforceMinStitch, resampleUniform, distance,
 } from '@rg/core';
 import { buildCoverGrid, routeColorRuns, type RegionRuns, type RoutingOptions } from './routing';
 import type { BroccatoColor, BroccatoParams } from './engine';
@@ -41,6 +42,9 @@ export interface ColorPlan {
 export interface BroccatoPlan {
   colors: ColorPlan[];
   previewLayers: ExportLayer[];
+  /** Un gruppo per STOP in ordine di cucitura, con tinta unica: è quello che va a Stilista. */
+  exportLayers: ExportLayer[];
+  bounds: Bounds;
   threadMm: number;
   pointCount: number;
   /** Quanti tratti separati in tutto: uno solo per colore = filo continuo. */
@@ -52,6 +56,72 @@ export interface BroccatoPlan {
   routedCoveredMm: number;
   straightCoveredMm: number;
   routedHorizontalMm: number;
+}
+
+/**
+ * Tinta UNICA per ogni stop (piccolo scostamento base-13, ≤~5%): due aghi che l'utente ha messo
+ * dello stesso colore escono con esadecimali diversi, così Stilista li tratta come cambi-ago
+ * distinti. Identico a interlace e bitmap — è una convenzione della suite, non una scelta locale.
+ */
+function toneColor(hex: string, idx: number): string {
+  const h = hex.replace('#', '');
+  let r = parseInt(h.slice(0, 2), 16) || 0;
+  let g = parseInt(h.slice(2, 4), 16) || 0;
+  let b = parseInt(h.slice(4, 6), 16) || 0;
+  const or = idx % 13, og = Math.floor(idx / 13) % 13, ob = Math.floor(idx / 169) % 13;
+  r = r > 243 ? r - or : r + or;
+  g = g > 243 ? g - og : g + og;
+  b = b > 243 ? b - ob : b + ob;
+  const clamp = (v: number) => Math.max(0, Math.min(255, v));
+  const hx = (v: number) => clamp(v).toString(16).padStart(2, '0');
+  return `#${hx(r)}${hx(g)}${hx(b)}`;
+}
+
+/**
+ * **Fermatura di uscita** (R8, passo 9): qualche punto cortissimo in fondo all'ago, prima del
+ * cambio-colore, perché il filo non si sfili quando la macchina taglia.
+ *
+ * La forma è quella MISURATA sul DST di riferimento, non quella di oblique: là il lock sono 3 punti
+ * che marciano lungo il bordo del pannello, qui invece il file mostra **4 punti da 0,30mm in
+ * fondo** (in 5 blocchi su 7) e **nessuna fermatura in ingresso**. Sono due tecniche diverse e si
+ * segue quella del broccato — divergenza registrata, da confermare col ricamo in mano (R30).
+ */
+function addEndLock(block: Polyline, count: number, lenMm: number): Polyline {
+  if (block.length < 2 || count < 1 || lenMm <= 0) return block;
+  const b = block[block.length - 1], a = block[block.length - 2];
+  const d = distance(a, b);
+  if (d < 1e-6) return block;
+  // si marcia avanti e indietro sull'ultimo tratto: nessun punto nuovo fuori dalla forma
+  const ux = (a.x - b.x) / d, uy = (a.y - b.y) / d;
+  const out: Point[] = [...block];
+  for (let i = 1; i <= count; i++) {
+    const t = i % 2 === 1 ? lenMm : 0;
+    out.push({ x: b.x + ux * t, y: b.y + uy * t });
+  }
+  return out;
+}
+
+/**
+ * Passo 8 — MIN-STITCH (R3), col contorno che il pass del core da solo non copre.
+ *
+ * `enforceMinStitch` preserva SEMPRE gli estremi, ed e' giusto: sono i capi del tratto. Ma proprio
+ * per questo non puo' togliere una coda corta o un punto duplicato in fondo, e restavano
+ * micro-segmenti (misurati: 3 sotto il minimo e qualche segmento di lunghezza zero, cioe' due punti
+ * nello stesso buco — proprio cio' che R3 vieta). Li si toglie qui arretrando il PENULTIMO punto,
+ * mai l'ultimo.
+ *
+ * Poi si rimette il massimo (R4): togliere un punto in mezzo unisce due tratti e puo' allungare il
+ * punto oltre il consentito. `resampleUniform` **suddivide soltanto** — non sposta niente — quindi
+ * rimette il tetto senza toccare la geometria. Vale finche' il minimo sta sotto meta' del massimo
+ * (1 su 3 nei default): una suddivisione in due parti non puo' scendere sotto il minimo.
+ */
+function minStitched(pl: Polyline, minMm: number, maxMm: number): Polyline {
+  const out = enforceMinStitch(pl, minMm);
+  while (out.length >= 3 && distance(out[out.length - 1], out[out.length - 2]) < minMm) {
+    out.splice(out.length - 2, 1);
+  }
+  while (out.length >= 2 && distance(out[out.length - 1], out[out.length - 2]) < 1e-9) out.pop();
+  return maxMm > 0 ? resampleUniform(out, maxMm) : out;
 }
 
 /** Il rettangolo dell'intero lavoro, in mm. La base lo riempie tutto. */
@@ -114,10 +184,21 @@ export function buildPlan(
     );
     const routed = routeColorRuns(groups, grid, { travelStitchMm: params.travelStitchMm, ...routing });
 
-    const threadMm = fillThreadMm(routed.blocks);
-    const pointCount = routed.blocks.reduce((s, r) => s + r.length, 0);
+    // Passo 8 — PUNTO MINIMO, dopo il routing (R3). Le giunzioni fra corse, tragitti e corridoi
+    // sono esattamente ciò che reintroduce i micro-segmenti: farlo prima non servirebbe a niente.
+    // Passo 9 — FERMATURA di uscita sull'ultimo tratto dell'ago (R8).
+    let blocks = routed.blocks
+      .map((b) => minStitched(b, params.minStitchMm, params.maxStitchMm))
+      .filter((b) => b.length >= 2);
+    if (blocks.length && params.endLockCount > 0) {
+      blocks = blocks.map((b, k) =>
+        (k === blocks.length - 1 ? addEndLock(b, params.endLockCount, params.endLockMm) : b));
+    }
+
+    const threadMm = fillThreadMm(blocks);
+    const pointCount = blocks.reduce((s, r) => s + r.length, 0);
     colors.push({
-      index: i, color, regions, blocks: routed.blocks, threadMm, pointCount,
+      index: i, color, regions, blocks, threadMm, pointCount,
       travelMm: routed.travelMm, travelCoveredMm: routed.travelCoveredMm,
       travelHorizontalMm: routed.travelHorizontalMm, jumps: routed.jumps,
       routedMm: routed.routedMm, routedCoveredMm: routed.routedCoveredMm,
@@ -129,14 +210,24 @@ export function buildPlan(
     previewLayers.push({
       id: `colore-${String(i).padStart(2, '0')}`,
       color: color.hex,
-      polylines: routed.blocks,
+      polylines: blocks,
       strokeMm: THREAD_STROKE_MM,
     });
   });
 
+  // L'export va a Stilista/macchina: un gruppo per STOP nell'ORDINE di cucitura, con tinta unica.
+  const exportLayers: ExportLayer[] = colors.map((c, k) => ({
+    id: `stop-${String(k).padStart(4, '0')}`,
+    color: toneColor(c.color.hex, k),
+    polylines: c.blocks,
+    strokeMm: THREAD_STROKE_MM,
+  }));
+
   return {
     colors,
     previewLayers,
+    exportLayers,
+    bounds: { minX: 0, minY: 0, maxX: sheet.widthMm, maxY: sheet.heightMm },
     threadMm: colors.reduce((s, c) => s + c.threadMm, 0),
     pointCount: colors.reduce((s, c) => s + c.pointCount, 0),
     blockCount: colors.reduce((s, c) => s + c.blocks.length, 0),

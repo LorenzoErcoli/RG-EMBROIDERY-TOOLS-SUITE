@@ -105,6 +105,13 @@ export interface BroccatoParams {
   minStitchMm: number;
   /** Di quanto il ritorno del pettine si sposta per non ricadere negli stessi buchi (0,1 mm nel riferimento). */
   retraceOffsetMm: number;
+  /**
+   * Fermatura di uscita (R8): quanti punti cortissimi in fondo a ogni ago, prima del cambio-colore.
+   * 0 = nessuna. Nel DST di riferimento sono **4**, e non c'è fermatura in ingresso.
+   */
+  endLockCount: number;
+  /** Lunghezza dei punti di fermatura. Nel riferimento 0,30 mm. */
+  endLockMm: number;
 
   // --- 05 Passaggi ---
   /** Passo dei punti di passaggio (§3.1). */
@@ -136,6 +143,8 @@ export const defaultBroccatoParams: BroccatoParams = {
   maxStitchMm: 3.0,
   minStitchMm: 1.0,
   retraceOffsetMm: 0.1,
+  endLockCount: 4,
+  endLockMm: 0.3,
 
   travelStitchMm: 3.0,
   voidClearanceMm: 0.3,
