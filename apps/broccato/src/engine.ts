@@ -11,7 +11,7 @@
 // (81 → 77 → 66 → 53 → 51 → 29 → 0%): ogni colore nasconde i propri passaggi sotto i successivi,
 // l'ultimo non ha più niente sopra (R16).
 
-import { type Rgb, medianCutPalette, mapToPalette, rgbToHex, hexToRgb } from '@rg/core';
+import { type Rgb, rgbToHex, hexToRgb } from '@rg/core';
 
 // ------------------------------------------------------------
 // Immagine
@@ -85,12 +85,12 @@ export interface BroccatoParams {
   /**
    * Pareggio della luce prima di quantizzare, in mm (0 = spento). Toglie la variazione LENTA di tono
    * (illuminazione, sporco, invecchiamento) e lascia le differenze di disegno: è ciò che fa cadere
-   * sullo stesso ago lo stesso motivo ripetuto in punti diversi del tessuto. Punto ② — non ancora attivo.
+   * sullo stesso ago lo stesso motivo ripetuto in punti diversi del tessuto.
    */
   flattenLightMm: number;
-  /** Attenuazione della grana tenendo i bordi, in mm. Punto ② — non ancora attivo. */
+  /** Attenuazione della grana tenendo i bordi, in mm (0 = spenta). */
   smoothMm: number;
-  /** Area minima di una macchia: sotto questa soglia sparisce e va al colore vicino. Punto ② — non ancora attivo. */
+  /** Area minima di una macchia: sotto questa soglia sparisce e va al colore vicino. */
   minBlobMm2: number;
 
   // --- 03 Colori (in ordine di cucitura) ---
@@ -118,10 +118,17 @@ export const defaultBroccatoParams: BroccatoParams = {
   dpiDefault: 96,
   maxWidthPx: 900,
 
+  // I tre default della riduzione stabile sono MISURATI, non scelti (punto ②, vedi reduce.ts):
+  //  · 15 mm di pareggio = il raggio più piccolo che NON svuota le campiture piene (10/25/45 mm
+  //    restano di una tinta sola al 100%), tenendo la somiglianza fra ripetizioni all'85-98%.
+  //    Sotto i 12 mm la somiglianza sarebbe anche più alta, ma una macchia da 45 mm si svuota;
+  //  · 0,9 mm di grana = tre passate di mediana, il punto in cui smette di migliorare;
+  //  · 20 mm² di area minima = l'ordine di grandezza delle macchie tenute nel DST di riferimento,
+  //    e la soglia che porta le isole da 1.029 a 27 senza isole residue sotto misura.
   colorCount: 6,
-  flattenLightMm: 0,
-  smoothMm: 0,
-  minBlobMm2: 20,      // ordine di grandezza misurato sul DST: le macchie tenute partono da ~20 mm²
+  flattenLightMm: 15,
+  smoothMm: 0.9,
+  minBlobMm2: 20,
 
   colors: [],
 
@@ -141,14 +148,6 @@ export const defaultBroccatoParams: BroccatoParams = {
 /** Numero di tinte riportato dentro i limiti del sistema (4–8). */
 export const clampColorCount = (n: number): number =>
   Math.max(MIN_COLORS, Math.min(MAX_COLORS, Math.round(Number(n) || MIN_COLORS)));
-
-/**
- * Le `colorCount` tinte dell'immagine (median-cut del core: deterministico, quindi la stessa
- * immagine dà sempre la stessa palette — è il requisito perché un motivo ripetuto si ripeta uguale).
- */
-export function capturePalette(img: PixelImage, colorCount: number): Rgb[] {
-  return medianCutPalette(img.rgba, null, clampColorCount(colorCount));
-}
 
 /**
  * Trasforma una palette in righe di colore pronte per il pannello, **conservando** le scelte già
@@ -181,24 +180,6 @@ export function applyDensityToAll(colors: BroccatoColor[], densitySpacingMm: num
 /** Le tinte correnti come RGB, nell'ordine di cucitura. */
 export function colorsToPalette(colors: BroccatoColor[]): Rgb[] {
   return colors.map((c) => hexToRgb(c.hex) ?? [0, 0, 0]);
-}
-
-/**
- * Riduce l'immagine alle tinte date: per ogni pixel l'indice del colore più vicino (0xff = nessuno).
- * È la fotografia di cosa verrà ricamato, prima ancora di calcolare un punto.
- */
-export function reduceImage(img: PixelImage, palette: Rgb[]): Uint8Array {
-  return mapToPalette(img.rgba, palette);
-}
-
-/** Quanti pixel ha preso ogni tinta (per mostrare le percentuali di area nel pannello). */
-export function colorCounts(indexMap: Uint8Array, paletteSize: number): number[] {
-  const out = new Array(paletteSize).fill(0);
-  for (let i = 0; i < indexMap.length; i++) {
-    const v = indexMap[i];
-    if (v < paletteSize) out[v]++;
-  }
-  return out;
 }
 
 /** Millimetri per pixel: dalla larghezza reale se c'è (R11), altrimenti stima al DPI. */

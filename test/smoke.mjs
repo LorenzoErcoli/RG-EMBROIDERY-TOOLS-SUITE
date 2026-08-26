@@ -21,7 +21,8 @@ export { buildRawLevels, computeGridCounts, moduleFromPolylines, parseModuleSvg,
 export { runBitmapPreview, runBitmapPipeline } from ${JSON.stringify(posix('apps/bitmap/src/pipeline.ts'))};
 export { buildNet } from ${JSON.stringify(posix('apps/net-45/src/net.ts'))};
 export { generateStriatura, layerThreadMm, defaultStriaturaParams } from ${JSON.stringify(posix('apps/striatura/src/engine.ts'))};
-export { capturePalette, paletteToColors, applyDensityToAll, colorsToPalette, reduceImage, colorCounts, clampColorCount, mmPerPixel, defaultBroccatoParams } from ${JSON.stringify(posix('apps/broccato/src/engine.ts'))};
+export { paletteToColors, applyDensityToAll, colorsToPalette, clampColorCount, mmPerPixel, defaultBroccatoParams } from ${JSON.stringify(posix('apps/broccato/src/engine.ts'))};
+export { reduceStable, prepareImage, flattenLight, despeckle, refinePalette, removeSmallBlobs, NO_COLOR } from ${JSON.stringify(posix('apps/broccato/src/reduce.ts'))};
 export { sampleImage as sampleBroccatoImage } from ${JSON.stringify(posix('apps/broccato/src/sample.ts'))};
 export { runPipeline as runStriaturaPipeline } from ${JSON.stringify(posix('apps/striatura/src/pipeline.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
@@ -951,16 +952,18 @@ console.log('\noblique — routing + orchestratore (2d)');
   check('palette vuota → nessun colore', rg.nearestPaletteIndex(1, 2, 3, []), -1);
 
   console.log('\nbroccato — riduzione dell\'immagine alle tinte scelte');
-  const bp = { ...rg.defaultBroccatoParams, colorCount: 6 };
-  const pal = rg.capturePalette(bImg, bp.colorCount);
+  const bRid = rg.reduceStable(bImg, { colorCount: 6, mmPerPx: 0.3, flattenLightMm: 15, smoothMm: 0.9, minBlobMm2: 0 });
+  const pal = bRid.palette;
   check('cattura il numero di colori chiesto', pal.length, 6);
-  const idx = rg.reduceImage(bImg, pal);
   check('ogni pixel finisce su una tinta della palette (nessuno scoperto)',
-    idx.every((v) => v < pal.length), true);
-  const counts = rg.colorCounts(idx, pal.length);
-  check('nessuna tinta resta vuota', counts.every((c) => c > 0), true);
+    bRid.index.every((v) => v < pal.length), true);
+  check('NESSUN AGO SPRECATO: nessuna tinta resta senza pixel',
+    bRid.counts.every((c) => c > 0), true);
   check('i conteggi tornano al totale dei pixel',
-    counts.reduce((s, v) => s + v, 0), bImg.width * bImg.height);
+    bRid.counts.reduce((s, v) => s + v, 0), bImg.width * bImg.height);
+  check('stessa immagine, stessi parametri → stesso identico risultato (ripetibile)',
+    JSON.stringify(rg.reduceStable(bImg, { colorCount: 6, mmPerPx: 0.3, flattenLightMm: 15, smoothMm: 0.9, minBlobMm2: 0 }).palette),
+    JSON.stringify(pal));
 
   console.log('\nbroccato — il numero di aghi resta nei limiti del sistema (4–8)');
   check('meno di 4 non si può', rg.clampColorCount(1), 4);
@@ -981,6 +984,148 @@ console.log('\noblique — routing + orchestratore (2d)');
   check('«applica a tutti» non tocca i ruoli', tutte[0].role, 'base');
   check('le tinte tornano indietro identiche',
     JSON.stringify(rg.colorsToPalette(cols)), JSON.stringify(pal));
+
+  // -------------------------------------------------------------------------------------------
+  // Punto ② — LA RIDUZIONE STABILE. L'invariante che conta: **lo stesso motivo, ripetuto in due
+  // punti dove la luce cambia, deve finire sugli STESSI aghi**. È la richiesta esplicita di Lorenzo
+  // («un motivo deve ripetersi in maniera molto simile») e finora nessun test la proteggeva.
+  // L'immagine di prova è fatta apposta: due piastrelle IDENTICHE (stessa grana, stesso disegno)
+  // con una sola differenza — la luce che scivola da sinistra a destra.
+  // -------------------------------------------------------------------------------------------
+  const tileW = 150, tileH = 150;
+  const motivo = (() => {
+    const W = tileW * 2, H = tileH;
+    const rgba = new Uint8ClampedArray(W * H * 4);
+    const CUOIO = [186, 156, 120], SCURO = [64, 62, 60], ARG = [176, 176, 172], GIALLO = [226, 208, 46];
+    let a = 4242 >>> 0;
+    const rnd = () => { a = (a + 0x6d2b79f5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const grana = new Float32Array(tileW * H);
+    for (let i = 0; i < tileW * H; i++) grana[i] = rnd() - 0.5;
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const lx = x % tileW;                                  // stessa posizione dentro la piastrella
+      const orn = Math.sin(lx * 0.062) * Math.cos(y * 0.052) + 0.5 * Math.sin((lx + y) * 0.04);
+      const arg = Math.sin(lx * 0.031 + 2.1) * Math.cos(y * 0.037 - 2.1);
+      const gia = Math.sin(lx * 0.019 + 4.2) * Math.cos(y * 0.021 - 4.2);
+      let c = CUOIO;
+      if (gia > 0.82) c = GIALLO; else if (arg > 0.72) c = ARG; else if (orn > 0.35) c = SCURO;
+      const g = grana[y * tileW + lx] * (c === SCURO ? 60 : 40);
+      const luce = 34 * (x / (W - 1) - 0.5);                  // la variazione LENTA: il nemico
+      const o = (y * W + x) * 4;
+      rgba[o] = c[0] + g + luce; rgba[o + 1] = c[1] + g + luce; rgba[o + 2] = c[2] + g + luce; rgba[o + 3] = 255;
+    }
+    return { rgba, width: W, height: H };
+  })();
+  const somiglianza = (idx) => {
+    let uguali = 0, tot = 0;
+    for (let y = 0; y < tileH; y++) for (let x = 0; x < tileW; x++) { tot++; if (idx[y * tileW * 2 + x] === idx[y * tileW * 2 + x + tileW]) uguali++; }
+    return 100 * uguali / tot;
+  };
+  const rid = (o) => rg.reduceStable(motivo, { colorCount: 6, mmPerPx: 0.3, flattenLightMm: 0, smoothMm: 0, minBlobMm2: 0, ...o });
+
+  console.log('\nbroccato — ② lo stesso motivo, ripetuto dove la luce cambia, finisce sugli stessi aghi');
+  const senza = somiglianza(rid({}).index);
+  const conPareggio = somiglianza(rid({ flattenLightMm: 15, smoothMm: 0.9 }).index);
+  check('senza pareggio della luce le due ripetizioni NON si somigliano (< 60%)', senza < 60, true);
+  check('col pareggio della luce si somigliano (> 80%)', conPareggio > 80, true);
+  check('il pareggio della luce migliora di almeno 30 punti', conPareggio - senza > 30, true);
+  check('il default del pannello è già quello buono',
+    somiglianza(rid({ flattenLightMm: rg.defaultBroccatoParams.flattenLightMm, smoothMm: rg.defaultBroccatoParams.smoothMm }).index) > 80, true);
+
+  console.log('\nbroccato — ② la pulizia rende il disegno ricamabile, e CONVERGE');
+  const isole = (idx, W, H, minCells) => {
+    const seen = new Uint8Array(W * H); let tot = 0, sotto = 0;
+    for (let s0 = 0; s0 < W * H; s0++) {
+      if (seen[s0]) continue;
+      const col = idx[s0]; const st = [s0]; seen[s0] = 1; let n = 0;
+      while (st.length) { const i = st.pop(); n++; const x = i % W, y = (i / W) | 0;
+        for (const j of [x > 0 ? i - 1 : -1, x < W - 1 ? i + 1 : -1, y > 0 ? i - W : -1, y < H - 1 ? i + W : -1])
+          if (j >= 0 && !seen[j] && idx[j] === col) { seen[j] = 1; st.push(j); } }
+      tot++; if (n < minCells) sotto++;
+    }
+    return { tot, sotto };
+  };
+  const minCells = Math.round(20 / (0.3 * 0.3));
+  const sporco = rid({ flattenLightMm: 15, smoothMm: 0.9, minBlobMm2: 0 });
+  const pulito = rid({ flattenLightMm: 15, smoothMm: 0.9, minBlobMm2: 20 });
+  const iSporco = isole(sporco.index, motivo.width, motivo.height, minCells);
+  const iPulito = isole(pulito.index, motivo.width, motivo.height, minCells);
+  check('senza pulizia il disegno è fatto di schegge (centinaia sotto misura)', iSporco.sotto > 200, true);
+  check('con la pulizia NON resta nessuna isola sotto misura (converge)', iPulito.sotto, 0);
+  check('e le isole crollano di almeno dieci volte', iPulito.tot * 10 < iSporco.tot, true);
+  // La pulizia PAGA un prezzo in somiglianza, e va detto: due macchie gemelle che stanno una
+  // sopra e una sotto la soglia vengono trattate in modo diverso, e la differenza si amplifica.
+  // Misurato: da ~86% a ~67% sulla piastrella da 45 mm. Qui si blocca il pavimento, non l'illusione.
+  check('anche dopo la pulizia le ripetizioni restano largamente simili (> 60%)',
+    somiglianza(pulito.index) > 60, true);
+  check('una passata sola NON basterebbe',
+    rg.removeSmallBlobs(sporco.index, motivo.width, motivo.height, minCells, 1).removed
+      < rg.removeSmallBlobs(sporco.index, motivo.width, motivo.height, minCells, 6).removed, true);
+
+  // Questa è la misura che ha impedito di scegliere male. Guardando SOLO la somiglianza, il raggio
+  // migliore sarebbe 2-3 mm; ma con un raggio così piccolo il pareggio toglie la luce **e anche il
+  // colore**, e una campitura piena si svuota al centro. Serve un secondo metro.
+  console.log('\nbroccato — ② un raggio troppo piccolo SVUOTA le campiture piene');
+  const campitura = (() => {
+    const W = 400, H = 220, rgba = new Uint8ClampedArray(W * H * 4);
+    const FONDO = [186, 156, 120], PIENO = [226, 208, 46];
+    let a = 77 >>> 0;
+    const rnd = () => { a = (a + 0x6d2b79f5) >>> 0; let t = Math.imul(a ^ (a >>> 15), 1 | a); t = (t + Math.imul(t ^ (t >>> 7), 61 | t)) ^ t; return ((t ^ (t >>> 14)) >>> 0) / 4294967296; };
+    const cx = 200, cy = 110, r = 45 / 2 / 0.3;                    // un cerchio pieno da 45 mm
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      const dentro = (x - cx) ** 2 + (y - cy) ** 2 < r * r;
+      const c = dentro ? PIENO : FONDO;
+      const g = (rnd() - 0.5) * 30, l = 34 * (x / (W - 1) - 0.5), o = (y * W + x) * 4;
+      rgba[o] = c[0] + g + l; rgba[o + 1] = c[1] + g + l; rgba[o + 2] = c[2] + g + l; rgba[o + 3] = 255;
+    }
+    return { rgba, width: W, height: H, cx, cy, r };
+  })();
+  const tenuta = (idx) => {
+    const conta = new Map(); let n = 0;
+    const { cx, cy, r, width, height } = campitura;
+    for (let y = Math.max(0, Math.floor(cy - r)); y < Math.min(height, Math.ceil(cy + r)); y++)
+      for (let x = Math.max(0, Math.floor(cx - r)); x < Math.min(width, Math.ceil(cx + r)); x++) {
+        if ((x - cx) ** 2 + (y - cy) ** 2 >= r * r * 0.81) continue;   // l'interno, non il bordo sfumato
+        const v = idx[y * width + x]; conta.set(v, (conta.get(v) ?? 0) + 1); n++;
+      }
+    return 100 * Math.max(...conta.values()) / n;
+  };
+  // Tre aghi su un'immagine che di colori ne ha due: uno solo deve spaccarsi, e non dev'essere il
+  // cerchio. (Con quattro o più aghi la palette è costretta a spaccare comunque il cerchio, e la
+  // misura direbbe di più sul numero di aghi che sul raggio.)
+  const campRid = (f) => rg.reduceStable(campitura, { colorCount: 3, mmPerPx: 0.3, flattenLightMm: f, smoothMm: 0.9, minBlobMm2: 0 }).index;
+  check('con un raggio piccolo (3 mm) la campitura si svuota (meno del 70% di una tinta sola)',
+    tenuta(campRid(3)) < 70, true);
+  check('col default (15 mm) la campitura resta tutta di una tinta (> 95%)',
+    tenuta(campRid(rg.defaultBroccatoParams.flattenLightMm)) > 95, true);
+  check('e anche senza pareggio resterebbe intera: il rischio è del raggio piccolo, non del pareggio',
+    tenuta(campRid(0)) > 95, true);
+
+  console.log('\nbroccato — ② i pezzi della preparazione, uno per uno');
+  const piatta = rg.flattenLight(motivo, 50);
+  const gamma = (im) => { let lo = 255, hi = 0; for (let i = 0; i < im.width * im.height; i++) { const v = im.rgba[i * 4]; if (v < lo) lo = v; if (v > hi) hi = v; } return hi - lo; };
+  const mediaMeta = (im, da, a) => { let s0 = 0, n = 0; for (let y = 0; y < im.height; y++) for (let x = da; x < a; x++) { s0 += im.rgba[(y * im.width + x) * 4]; n++; } return s0 / n; };
+  const dislivelloPrima = Math.abs(mediaMeta(motivo, 0, tileW) - mediaMeta(motivo, tileW, tileW * 2));
+  const dislivelloDopo = Math.abs(mediaMeta(piatta, 0, tileW) - mediaMeta(piatta, tileW, tileW * 2));
+  check('il pareggio livella le due metà (dislivello ridotto di almeno quattro volte)',
+    dislivelloDopo * 4 < dislivelloPrima, true);
+  check('...senza appiattire l\'immagine (la gamma di toni resta)', gamma(piatta) > 100, true);
+  const rumorosa = { width: 60, height: 60, rgba: new Uint8ClampedArray(60 * 60 * 4) };
+  for (let i = 0; i < 3600; i++) { const v = (i % 97 === 0) ? 255 : 100; const o = i * 4; rumorosa.rgba[o] = v; rumorosa.rgba[o + 1] = v; rumorosa.rgba[o + 2] = v; rumorosa.rgba[o + 3] = 255; }
+  const senzaGrana = rg.despeckle(rumorosa, 1);
+  let picchiPrima = 0, picchiDopo = 0;
+  for (let i = 0; i < 3600; i++) { if (rumorosa.rgba[i * 4] === 255) picchiPrima++; if (senzaGrana.rgba[i * 4] === 255) picchiDopo++; }
+  // Questa asserzione ha trovato un difetto vero: la mediana saltava la cornice di un pixel e
+  // lasciava la grana tutt'attorno all'immagine. Ora l'intorno si ferma al bordo invece di uscirne.
+  check('la mediana toglie i punti isolati, bordo compreso', picchiPrima > 30 && picchiDopo === 0, true);
+  const bordo = { width: 20, height: 20, rgba: new Uint8ClampedArray(20 * 20 * 4) };
+  for (let y = 0; y < 20; y++) for (let x = 0; x < 20; x++) { const v = x < 10 ? 30 : 220; const o = (y * 20 + x) * 4; bordo.rgba[o] = v; bordo.rgba[o + 1] = v; bordo.rgba[o + 2] = v; bordo.rgba[o + 3] = 255; }
+  const bordoDopo = rg.despeckle(bordo, 3);
+  let sbavato = 0;
+  for (let i = 0; i < 400; i++) { const v = bordoDopo.rgba[i * 4]; if (v !== 30 && v !== 220) sbavato++; }
+  check('...ma NON sbava i contorni (nessun colore intermedio inventato)', sbavato, 0);
+  const palVuota = rg.refinePalette(motivo.rgba, [[0, 0, 0], [1, 1, 1], [2, 2, 2], [250, 250, 250], [251, 251, 251], [252, 252, 252]], 4);
+  check('l\'affinamento non perde nessun ago', palVuota.length, 6);
+  check('...e li porta su tinte diverse fra loro', new Set(palVuota.map((c) => c.join(','))).size, 6);
 
   console.log('\nbroccato — la misura: la larghezza reale prevale sulla stima (R11)');
   check('senza larghezza reale si stima al DPI',

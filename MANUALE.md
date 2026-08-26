@@ -130,13 +130,14 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
 
 **Come si usa.**
 1. **Immagine** — carica la foto del tessuto e di’ quanto deve venire largo il ricamo. La *larghezza reale* comanda su tutto: se la metti, la sagoma misura esattamente quella.
-2. **Colori** — scegli quante tinte usare (da 4 a 8, la base compresa) e premi *Cattura colori*: il sistema le trova nell’immagine e ogni pixel va alla più vicina. Poi, riga per riga:
+2. **Preparazione** — è il passaggio che fa somigliare fra loro le ripetizioni dello stesso motivo, anche dove la luce del tessuto cambia. Tre manopole: il **pareggio della luce** (toglie la variazione lenta di tono; tienilo grande almeno un terzo della macchia più grande che vuoi tenere intera, altrimenti la svuota al centro), l’**attenuazione della grana** (spiana il tratteggio fine senza sbavare i contorni) e la **macchia più piccola** (sotto quella misura la macchia sparisce e va al colore vicino — è lei a rendere il disegno ricamabile).
+3. **Colori** — scegli quante tinte usare (da 4 a 8, la base compresa) e premi *Cattura colori*: il sistema le trova nell’immagine e ogni pixel va alla più vicina. Poi, riga per riga:
    - il **quadratino** apre il selettore se vuoi correggere una tinta a mano;
    - **cosa fa** quel colore: *Macchia* (riempie le sue aree), *Base* (riempie tutta la sagoma, sotto tutto il resto), *Escluso dall’immagine* (non si ricama — serve a togliere il colore di fondo della foto e lasciare che sia la base a coprire);
    - la **densità**, cioè quanto sono vicine le righe di filo: piccola = fitto, grande = rado. Il bottone *Applica a tutti* le mette uguali, poi ne ritocchi una o due;
    - le **frecce** cambiano l’ordine di cucitura. **L'ordine conta**: ogni colore nasconde i propri passaggi sotto i colori che vengono dopo, quindi l’ultimo della lista è quello che non ha più niente sopra.
 
-**Cosa vedi nell’anteprima.** L’immagine ridotta alle tinte scelte: è esattamente ciò che finirà sotto l’ago. Le zone dei colori *esclusi* restano vuote, così si vede subito cosa non si ricama. La percentuale accanto a ogni riga dice quanta parte dell’immagine ha preso quella tinta.
+**Cosa vedi nell’anteprima.** Tre viste, con l’interruttore in alto: *Originale* (l’immagine com’è), *Preparata* (dopo il pareggio della luce e l’attenuazione della grana — serve a capire cosa stanno facendo quelle manopole) e *Ridotta*, l’immagine portata alle tinte scelte: è esattamente ciò che finirà sotto l’ago. Le zone dei colori *esclusi* restano vuote, così si vede subito cosa non si ricama. La percentuale accanto a ogni riga dice quanta parte dell’immagine ha preso quella tinta.
 
 **Esportazione.** SVG o DST.
 
