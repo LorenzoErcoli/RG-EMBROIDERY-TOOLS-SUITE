@@ -146,29 +146,18 @@ export function buildParallelFill(
   const kStart = Math.ceil((minV - origin) / spacing);
   const kEnd = Math.floor((maxV - origin) / spacing);
 
-  const runs: Polyline[] = [];
+  // ---------------------------------------------------------------------------------------
+  // 1. I tratti pieni di ogni riga.
+  // ---------------------------------------------------------------------------------------
+  interface Riga { v: number; tratti: Array<[number, number]>; ritorni: Array<[number, number] | null>; }
+  const righe: Riga[] = [];
   for (let k = kStart; k <= kEnd; k++) {
     const v = origin + k * spacing;
-    /*
-     * Da che parte si parte.
-     *
-     * Serpentina: si alterna, ed è il senso stesso della serpentina — la riga finisce dove comincia
-     * la successiva. Il verso dipende da `k`, NON dall'ordine in cui capitano le macchie, così due
-     * macchie dello stesso colore restano coerenti fra loro.
-     *
-     * Pettine: si parte SEMPRE dalla stessa parte, perché la corsa **torna dov'era partita**.
-     * Alternando, l'ago dovrebbe attraversare tutta la macchia a ogni riga per raggiungere il capo
-     * opposto: misurato sulla demo, il filo di solo passaggio passava da poco a **25,8 m su 62,9**
-     * di totale. Il DST di riferimento conferma: le righe a pettine consecutive partono vicine
-     * (−50,10 · −50,70 · −49,60), non da capi opposti.
-     */
-    const avanti = mode === 'comb' ? true : ((k % 2) + 2) % 2 === 0;
-
     let tratti = spans(outerR, holeR, v);
-    if (!tratti.length) continue;
+    if (!tratti.length) { righe.push({ v, tratti: [], ritorni: [] }); continue; }
 
-    // Col pettine il ritorno corre a `v + offset`: si tiene solo la parte comune alle due quote,
-    // altrimenti su un bordo obliquo il ritorno uscirebbe dalla forma.
+    // Col pettine il ritorno corre a `v + offset`: si tiene solo la parte percorribile a ENTRAMBE
+    // le quote, altrimenti su un bordo obliquo il ritorno uscirebbe dalla forma.
     let ritorni: Array<[number, number] | null> = tratti.map(() => null);
     if (mode === 'comb' && offset > 0) {
       const altri = spans(outerR, holeR, v + offset);
@@ -180,23 +169,123 @@ export function buildParallelFill(
         }
         return best;
       });
-      // la corsa si accorcia alla parte percorribile in entrambi i sensi
-      tratti = tratti.map(([x0, x1], i) => (ritorni[i] ? (ritorni[i] as [number, number]) : [x0, x1]));
+      tratti = tratti.map(([x0, x1], t) => (ritorni[t] ? (ritorni[t] as [number, number]) : [x0, x1]));
     }
+    righe.push({ v, tratti, ritorni });
+  }
 
-    const ordine = avanti ? tratti.map((_, i) => i) : tratti.map((_, i) => i).reverse();
-    for (const i of ordine) {
-      const [x0, x1] = tratti[i];
-      if (x1 - x0 <= 1e-9) continue;
+  // ---------------------------------------------------------------------------------------
+  // 2. Le CAMERE: catene di tratti che si sovrappongono da una riga alla successiva.
+  //
+  // Senza questo passo il riempimento va riga per riga su tutta la forma, e su una macchia
+  // frastagliata — dove una riga si spezza in più tratti — l'ago finisce per attraversarla
+  // avanti e indietro a ogni riga. È il difetto che Lorenzo ha visto per primo guardando
+  // l'anteprima: «la macchia dovrebbe lavorare da un punto e arrivare a un altro, senza mille
+  // passaggi interni».
+  //
+  // La catena si spezza dove la forma si biforca o si richiude (un tratto con due figli, o due
+  // padri): lì una camera finisce e ne cominciano altre. Ogni camera è una zona in cui si scende
+  // riga per riga senza mai tornare indietro.
+  // ---------------------------------------------------------------------------------------
+  const sovrappone = (a: [number, number], b: [number, number]): boolean =>
+    Math.min(a[1], b[1]) - Math.max(a[0], b[0]) > 1e-9;
+
+  interface Cella { r: number; t: number; }
+  const figli: number[][][] = righe.map(() => []);
+  const padri: number[][][] = righe.map(() => []);
+  for (let r = 0; r + 1 < righe.length; r++) {
+    figli[r] = righe[r].tratti.map(() => []);
+    padri[r + 1] = righe[r + 1].tratti.map(() => []);
+  }
+  if (righe.length) { figli[righe.length - 1] = righe[righe.length - 1].tratti.map(() => []); }
+  if (righe.length) { padri[0] = righe[0].tratti.map(() => []); }
+  for (let r = 0; r + 1 < righe.length; r++) {
+    for (let a = 0; a < righe[r].tratti.length; a++) {
+      for (let b = 0; b < righe[r + 1].tratti.length; b++) {
+        if (sovrappone(righe[r].tratti[a], righe[r + 1].tratti[b])) {
+          figli[r][a].push(b);
+          padri[r + 1][b].push(a);
+        }
+      }
+    }
+  }
+
+  const preso: boolean[][] = righe.map((x) => x.tratti.map(() => false));
+  const camere: Cella[][] = [];
+  for (let r = 0; r < righe.length; r++) {
+    for (let t = 0; t < righe[r].tratti.length; t++) {
+      if (preso[r][t]) continue;
+      // una camera comincia dove non c'è un padre unico che la continui
+      if (padri[r][t].length === 1) {
+        const p = padri[r][t][0];
+        if (figli[r - 1][p].length === 1) continue;   // la continua la camera del padre
+      }
+      const camera: Cella[] = [];
+      let cr = r, ct = t;
+      for (;;) {
+        preso[cr][ct] = true;
+        camera.push({ r: cr, t: ct });
+        if (cr + 1 >= righe.length) break;
+        const f = figli[cr][ct];
+        if (f.length !== 1) break;                    // si biforca: la camera finisce qui
+        const nt = f[0];
+        if (padri[cr + 1][nt].length !== 1) break;    // due rami si richiudono: idem
+        if (preso[cr + 1][nt]) break;
+        cr += 1; ct = nt;
+      }
+      camere.push(camera);
+    }
+  }
+
+  // ---------------------------------------------------------------------------------------
+  // 3. Le corse, camera per camera.
+  // ---------------------------------------------------------------------------------------
+  const runs: Polyline[] = [];
+  for (const camera of camere) {
+    camera.forEach((cella, idx) => {
+      const { r, t } = cella;
+      const riga = righe[r];
+      const [x0, x1] = riga.tratti[t];
+      if (x1 - x0 <= 1e-9) return;
+      const v = riga.v;
+
+      /*
+       * Da che parte si parte.
+       *
+       * Serpentina: si alterna dentro la camera — la riga finisce dove comincia la successiva.
+       *
+       * Pettine: si parte SEMPRE dalla stessa parte, perché la corsa **torna dov'era partita**.
+       * Alternando, l'ago dovrebbe attraversare tutta la macchia a ogni riga per raggiungere il
+       * capo opposto: misurato, il filo di solo passaggio passava a 25,8 m su 62,9 di totale.
+       */
+      const avanti = mode === 'comb' ? true : idx % 2 === 0;
       const da = avanti ? x0 : x1, a2 = avanti ? x1 : x0;
       const xs = subdivide(da, a2, maxStitch);
-      const corsa: Point[] = xs.map((x) => rot({ x, y: v }, cb, sb));
-      if (mode === 'comb') {
-        const vr = ritorni[i] ? v + offset : v;
-        for (let t = xs.length - 1; t >= 0; t--) corsa.push(rot({ x: xs[t], y: vr }, cb, sb));
+
+      if (mode !== 'comb') {
+        runs.push(xs.map((x) => rot({ x, y: v }, cb, sb)));
+        return;
       }
+
+      /*
+       * La voltata del pettine è una DIAGONALE, non un gradino.
+       *
+       * Lo scostamento sta sull'**ultimo punto dell'andata**: l'ago arriva in fondo già spostato
+       * di `retraceOffsetMm`, e da lì il ritorno corre perfettamente orizzontale. Mettere invece
+       * un punto in più alla stessa ascissa creerebbe un micro-passaggio verticale che nel ricamo
+       * non c'è.
+       *
+       * È così nel DST di riferimento — la riga a −7,10 fa −50,10 → −48,80 → −46,40 (qui scende
+       * di 0,10) → −48,80 → −50,10, con il ritorno a dy esattamente 0. Segnalato da Lorenzo
+       * guardando l'anteprima, e il file gli dava ragione.
+       */
+      const vr = riga.ritorni[t] ? v + offset : v;
+      const corsa: Point[] = [];
+      for (let q = 0; q < xs.length - 1; q++) corsa.push(rot({ x: xs[q], y: v }, cb, sb));
+      corsa.push(rot({ x: xs[xs.length - 1], y: vr }, cb, sb));       // il capo: già spostato
+      for (let q = xs.length - 2; q >= 0; q--) corsa.push(rot({ x: xs[q], y: vr }, cb, sb));
       runs.push(corsa);
-    }
+    });
   }
   return runs;
 }

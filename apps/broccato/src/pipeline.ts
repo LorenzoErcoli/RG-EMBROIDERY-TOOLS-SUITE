@@ -35,6 +35,7 @@ export interface ColorPlan {
   routedMm: number;
   routedCoveredMm: number;
   straightCoveredMm: number;
+  routedHorizontalMm: number;
 }
 
 export interface BroccatoPlan {
@@ -50,6 +51,7 @@ export interface BroccatoPlan {
   routedMm: number;
   routedCoveredMm: number;
   straightCoveredMm: number;
+  routedHorizontalMm: number;
 }
 
 /** Il rettangolo dell'intero lavoro, in mm. La base lo riempie tutto. */
@@ -119,7 +121,7 @@ export function buildPlan(
       travelMm: routed.travelMm, travelCoveredMm: routed.travelCoveredMm,
       travelHorizontalMm: routed.travelHorizontalMm, jumps: routed.jumps,
       routedMm: routed.routedMm, routedCoveredMm: routed.routedCoveredMm,
-      straightCoveredMm: routed.straightCoveredMm,
+      straightCoveredMm: routed.straightCoveredMm, routedHorizontalMm: routed.routedHorizontalMm,
     });
 
     // Anteprima: il filo si disegna SOTTILE (R15) — la larghezza reale del punto sta nella
@@ -144,6 +146,7 @@ export function buildPlan(
     routedMm: colors.reduce((s, c) => s + c.routedMm, 0),
     routedCoveredMm: colors.reduce((s, c) => s + c.routedCoveredMm, 0),
     straightCoveredMm: colors.reduce((s, c) => s + c.straightCoveredMm, 0),
+    routedHorizontalMm: colors.reduce((s, c) => s + c.routedHorizontalMm, 0),
   };
 }
 

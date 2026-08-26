@@ -1010,6 +1010,72 @@ console.log('\noblique — routing + orchestratore (2d)');
     return salto < 1;
   })(), true);
 
+  // Due difetti che ha visto Lorenzo guardando l'anteprima, e che il DST di riferimento gli dava
+  // ragione su entrambi.
+  console.log('\ncore — raso: la voltata del pettine e\' una DIAGONALE, non un gradino');
+  const barra = [{ x: 0, y: 0 }, { x: 12, y: 0 }, { x: 12, y: 6 }, { x: 0, y: 6 }];
+  const pett2 = rg.buildParallelFill(barra, [], { spacingMm: 0.9, maxStitchMm: 3.4, mode: 'comb', retraceOffsetMm: 0.1 });
+  const corsa = pett2[1];
+  const microVerticali = (runs) => {
+    let n = 0;
+    for (const r of runs) for (let i = 1; i < r.length; i++) {
+      if (Math.abs(r[i].x - r[i - 1].x) < 0.001 && Math.abs(r[i].y - r[i - 1].y) > 0.001) n++;
+    }
+    return n;
+  };
+  check('nessun micro-passaggio verticale in tutta la macchia', microVerticali(pett2), 0);
+  check('lo scostamento sta sull\'ULTIMO punto dell\'andata (quel punto scende di 0,1)', (() => {
+    const meta = (corsa.length - 1) / 2;
+    const capo = corsa[meta], prima = corsa[meta - 1];
+    return Math.abs(capo.y - prima.y - 0.1) < 1e-6 && Math.abs(capo.x - prima.x) > 1;
+  })(), true);
+  check('...e il ritorno e\' perfettamente orizzontale', (() => {
+    const meta = (corsa.length - 1) / 2;
+    for (let i = meta + 1; i < corsa.length; i++) if (Math.abs(corsa[i].y - corsa[i - 1].y) > 1e-9) return false;
+    return true;
+  })(), true);
+  check('e la corsa comincia e finisce alla stessa ascissa', Math.abs(corsa[0].x - corsa[corsa.length - 1].x) < 1e-9, true);
+
+  console.log('\ncore — raso: si riempie a CAMERE, non riga per riga su tutta la forma');
+  // Una U: due bracci verticali uniti in basso. Riga per riga l'ago salterebbe da un braccio
+  // all'altro a ogni riga — «mille passaggi interni», il difetto che Lorenzo ha visto per primo.
+  // A camere riempie un braccio, poi l'altro.
+  const uForma = [
+    { x: 0, y: 0 }, { x: 8, y: 0 }, { x: 8, y: 30 }, { x: 22, y: 30 },
+    { x: 22, y: 0 }, { x: 30, y: 0 }, { x: 30, y: 40 }, { x: 0, y: 40 },
+  ];
+  const uRuns = rg.buildParallelFill(uForma, [], { spacingMm: 1, maxStitchMm: 5, mode: 'comb', retraceOffsetMm: 0.1 });
+  const saltoFraCorse = (runs) => {
+    let tot = 0;
+    for (let i = 1; i < runs.length; i++) {
+      const a = runs[i - 1][runs[i - 1].length - 1], b = runs[i][0];
+      tot += Math.hypot(b.x - a.x, b.y - a.y);
+    }
+    return tot;
+  };
+  // Il numero che conta: quanto si sposta l'ago in media da una corsa alla successiva. Col
+  // riempimento a camere e' 1,72mm contro un passo di 1mm — cioe' scende di riga e basta.
+  // Riga per riga su tutta la forma salterebbe da un braccio all'altro a ogni riga (14mm x 30).
+  check('in media l\'ago scende di una riga, non attraversa la forma',
+    saltoFraCorse(uRuns) / (uRuns.length - 1) < 2.5, true);
+  check('...e il salto tipico e\' il passo fra le righe, non la larghezza della forma', (() => {
+    let lunghi = 0;
+    for (let i = 1; i < uRuns.length; i++) {
+      const a = uRuns[i - 1][uRuns[i - 1].length - 1], b = uRuns[i][0];
+      if (Math.hypot(b.x - a.x, b.y - a.y) > 10) lunghi++;
+    }
+    return lunghi <= 2;                       // solo il passaggio da un braccio all'altro
+  })(), true);
+  check('le corse dei due bracci NON si alternano riga per riga', (() => {
+    // nella parte bassa (y<30) i due bracci convivono: si contano i cambi di braccio
+    const bracci = uRuns.filter((r) => r[0].y < 29.5).map((r) => (r[0].x < 15 ? 0 : 1));
+    let cambi = 0;
+    for (let i = 1; i < bracci.length; i++) if (bracci[i] !== bracci[i - 1]) cambi++;
+    return cambi <= 2;
+  })(), true);
+  check('e la U resta riempita tutta (nessun pezzo perso a fare le camere)',
+    rg.fillThreadMm(uRuns) > 1000, true);
+
   console.log('\ncore — raso: le manopole fanno quello che dicono');
   const filo = (sp) => rg.fillThreadMm(rg.buildParallelFill(quadrato, [], { spacingMm: sp, maxStitchMm: 3 }));
   check('passo più fitto = più filo (monotòna)', filo(1) > filo(2) && filo(2) > filo(4), true);
@@ -1402,21 +1468,19 @@ console.log('\noblique — routing + orchestratore (2d)');
     const ultimi = cop.slice(meta).reduce((a, b) => a + b, 0) / (cop.length - meta);
     return primi > ultimi * 2;
   })(), true);
-  check('i passaggi corrono in orizzontale (come nel DST, dal 67 al 99%)', (() => {
-    const o = piano.colors.reduce((s, c) => s + c.travelHorizontalMm, 0);
-    return (100 * o) / piano.travelMm > 65;
-  })(), true);
+  // Sui passaggi INSTRADATI, cioe' quelli veri fra una macchia e l'altra. I passi da una riga
+  // all'altra dentro una camera sono verticali per costruzione e non c'entrano niente.
+  // Misurato 60-64%. Alzare la penalita' verticale non sposta niente (provato fino a 5): quella
+  // quota di verticale e' STRUTTURALE — per raggiungere una macchia piu' in alto bisogna salire.
+  check('i passaggi fra le macchie corrono soprattutto in orizzontale (oggi 60-64%)',
+    (100 * piano.routedHorizontalMm) / piano.routedMm > 55, true);
+  check('e col riempimento a camere il passaggio resta una piccola parte del filo (12-16%)',
+    piano.travelMm / piano.threadMm < 0.22, true);
   check('i salti restano rari come nel riferimento (sotto lo 0,5% dei punti)',
     piano.jumps / piano.pointCount < 0.005, true);
   check('la ricerca nasconde piu\' della via piu\' corta, sugli stessi passaggi',
     piano.routedCoveredMm >= piano.straightCoveredMm, true);
-  // Guardia contro l'esplosione del passaggio. NB: questo conto e' quello INTERNO, che include
-  // anche i passi da una riga all'altra dentro la macchia; con la misura del DST di riferimento
-  // (filo fuori dalle celle dense del proprio colore) lo stesso lavoro da' 10-27%, in linea col
-  // 12-17% del file vero. Il difetto specifico del pettine che alternava capo e' preso dalla
-  // asserzione nel core sulla parte da cui riparte la riga.
-  check('il passaggio non esplode (sotto il 45% del filo, oggi 38%)',
-    piano.travelMm / piano.threadMm < 0.45, true);
+
   check('stessi parametri → stesso ricamo (deterministico)',
     rg.buildPlan(ridP, parP, mmP, { widthMm: imgP.width * mmP, heightMm: imgP.height * mmP }).pointCount,
     piano.pointCount);

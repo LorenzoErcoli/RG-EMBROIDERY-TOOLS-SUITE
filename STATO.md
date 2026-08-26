@@ -3,7 +3,7 @@
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
 > Aggiornato: 2026-08-26 · Suite con **sei tool live** (net-45, pattern-grammar, interlace, bitmap, oblique, striatura) + **`broccato` in costruzione** (punti ①-④ fatti: immagine → tinte → regioni → raso → passaggi nascosti)
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
-> Rete di sicurezza: `npm test` (312 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
+> Rete di sicurezza: `npm test` (320 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
 
 ---
 
@@ -214,25 +214,32 @@
   - **Il primo ricamo, in numeri:** sulla demo (111×101mm, 6 aghi, passo 0,6mm, tutti a pettine) → **37,1 m di filo, 18.472 punti, 46 macchie, 2.027 corse**. Come ordine di grandezza regge il confronto col riferimento (269mm, 191 m, 84.530 punti). Verificato nel browser: sei gruppi in ordine di cucitura, filo 0,1mm, nessun errore in console.
   - **Quello che ancora NON c'è, ed è il punto ④:** le 2.027 corse sono **staccate**. Ogni stacco oggi sarebbe un salto. Collegarle nascondendole sotto i colori successivi è il cuore della tecnica e la prossima mossa.
   - *Nota di metodo, tre volte in questo giro:* tre asserzioni sono fallite non per un difetto ma perché **le avevo scritte male io** — i capi delle corse cadono ESATTAMENTE sul bordo, e lì un point-in-polygon risponde a caso. Si misura la **profondità** con cui un punto entra dove non deve, non l'appartenenza.
-- **Fatto (punto ④ — I PASSAGGI NASCOSTI, R16-R21; build+typecheck+test verdi).** `routing.ts`, locale all'app. Le 2.027 corse staccate del punto ③ diventano **50 tratti continui con 44 salti**.
+- **Fatto (punto ④ — I PASSAGGI NASCOSTI, R16-R21; build+typecheck+test verdi).** `routing.ts`, locale all'app. Le 2.027 corse staccate del punto ③ diventano **14 tratti continui con 8 salti** (dopo le correzioni qui sotto; alla prima stesura erano 50 e 44).
   - **Come.** Per ogni ago una **mappa di costo** a celle da 1,5mm: coperto (ci ricamera' sopra un colore successivo) costa 1, area propria 2, bordo di un soggetto 27, campo scoperto 60. Poi un A* cerca la strada. **Non e' un muro ma un costo**: e' cosi' che l'ultimo colore — che non ha nessuna copertura — trova comunque una strada invece di arrendersi, e sceglie i bordi. Muoversi in verticale costa 1,8 volte l'orizzontale (il DST preferisce l'orizzontale). Tre casi in ordine: dritto dentro la macchia se corto → A* sotto la copertura → **filo staccato** se anche la strada migliore resta scoperta per piu´ di 50mm (fallback graduato R16: mai un passaggio visibile in silenzio).
   - **Il confronto col riferimento, con la STESSA misura applicata al DST** (filo fuori dalle celle dense del proprio colore):
 
     | | generato | DST vero |
     |---|---|---|
-    | copertura per ago | 41 → 34 → 24 → 19 → 2 → 0% | 81 → 77 → 66 → 53 → 51 → 29 → 0% |
+    | copertura per ago | 42 → 33 → 17 → 22 → 3 → 0% | 81 → 77 → 66 → 53 → 51 → 29 → 0% |
     | ultimo ago | 0% | 0% |
-    | passaggio sul filo | 10-27% | 12-18% (aghi a macchie) |
-    | passaggi orizzontali | 79-99% | 67-99% |
-    | salti | 44 su 25.296 punti = **0,17%** | 163 su 84.530 = **0,19%** |
+    | passaggio sul filo | 12-16% | 12-18% (aghi a macchie) |
+    | passaggi orizzontali | 80-99% | 67-99% |
+    | salti | 8 su 18.487 punti = **0,04%** | 163 su 84.530 = **0,19%** |
 
     La **forma** e' quella giusta — monotona decrescente, ultimo a zero — e salti, orizzontalita' e peso del passaggio combaciano. I valori assoluti della copertura sono piu´ bassi perche' la demo sintetica ha meno area di colori successivi da sfruttare fra una macchia e l'altra.
   - **Difetto grosso trovato contando il filo, non guardando il disegno: il pettine alternava il capo di partenza.** La corsa a pettine **torna dov'e' partita**, quindi alternare il verso riga per riga costringeva l'ago ad attraversare tutta la macchia a ogni riga. Misurato: filo di solo passaggio **25,8 m su 62,9** di totale. Corretto (il pettine riparte sempre dalla stessa parte, la serpentina continua ad alternare) → filo totale **62,9 → 55,3 m**. Il DST lo conferma: le righe a pettine consecutive partono vicine (−50,10 / −50,70 / −49,60), non da capi opposti. Tre asserzioni nel core.
   - **La prova che il routing serve davvero, isolata.** Sui numeri aggregati la ricerca sembrava non guadagnare niente rispetto alla via piu´ corta — ma era un **effetto di selezione**: i passaggi che diventano salti escono dalla statistica e la falsano. Due rimedi. (1) Un test **decisivo** invece di una media: due punti con la retta scoperta e un corridoio coperto a U che li unisce → con la ricerca il filo scende nel corridoio (92mm invece di 46), **100% nascosto**; senza, taglia dritto e resta scoperto. (2) Il confronto **onesto** dentro il motore: sugli STESSI passaggi instradati la ricerca nasconde il 33,0% contro il 30,2% della via piu´ corta.
   - **La soglia dei 50mm non e' scelta, e' calibrata:** riproduce la proporzione di salti del riferimento. Soglia 30 → 120 salti, **50 → 44 (0,17%)**, 80 → 19.
   - **Prestazioni:** il routing costa ~70ms sulla demo; il grosso resta la riduzione.
-  - **Verificato nel browser:** 6 gruppi, 51 tracciati (erano 2.027 corse), statusbar `51.6 m · 25.296 punti · 44 salti · passaggi nascosti 34%`, nessun errore in console.
+  - **Verificato nel browser:** 6 gruppi, **14 tracciati** (erano 2.027 corse), statusbar `41.7 m · 18.487 punti · 8 salti · passaggi nascosti 56%`, nessun errore in console.
   - **Da guardare a occhio (Lorenzo):** la vista diagnostica coi passaggi verdi (nascosti) e rossi (in vista) dice dove il filo si vedra'. Se i rossi danno fastidio si stringe la soglia dei 50mm — il prezzo sono piu' salti.
+- **Due difetti trovati da Lorenzo guardando l'anteprima — e su tutti e due il DST di riferimento gli dava ragione.** Sono la ragione per cui la verifica a occhio non e' sostituibile dalle misure: nessuna delle invarianti scritte fin qui li prendeva.
+  1. **«La macchia dovrebbe lavorare da un punto e arrivare a un altro, senza mille passaggi interni.»** Il riempimento andava **riga per riga su tutta la forma**: su una macchia frastagliata, dove una riga si spezza in piu´ tratti, l'ago l'attraversava avanti e indietro a ogni riga. Ora `buildParallelFill` decompone la forma in **CAMERE** — catene di tratti che si sovrappongono da una riga alla successiva, spezzate dove la forma si biforca o si richiude — e riempie una camera alla volta, scendendo riga per riga senza mai tornare indietro. **Misurato su una U:** lo spostamento medio da una corsa alla successiva e' **1,72 mm contro un passo di 1 mm** (cioe' scende di riga e basta), con **due soli** spostamenti lunghi, i passaggi di camera. Prima erano ~30 attraversamenti da 14 mm.
+  2. **La voltata del pettine era un gradino, deve essere una diagonale.** Mettevo il capo dell'andata e il capo del ritorno alla **stessa ascissa**, con lo scostamento come micro-passaggio verticale. Il DST fa un'altra cosa: lo scostamento sta **sull'ultimo punto dell'andata** — la riga a −7,10 fa −50,10 → −48,80 → −46,40 (qui scende di 0,10) → −48,80 → −50,10, con il **ritorno a dy esattamente 0,00**. Corretto: ora **zero micro-passaggi verticali** in tutta la macchia. *Avevo letto quella sequenza al punto ① e l'avevo interpretata male; l'ha vista lui in anteprima.*
+  - **Quanto e' costato il difetto ①:** filo **51,6 → 41,7 m**, punti 25.296 → 18.487, tratti 50 → **14**, salti 44 → **8**, e soprattutto i passaggi da instradare **13,72 → 3,73 m** (−73%). Col passaggio ridotto a quello vero, il guadagno del routing si vede finalmente: **58% nascosto contro il 46% della via piu´ corta** (prima 33 contro 30).
+  - **Il passaggio ora e' il 12-16% del filo**, esattamente la fascia del riferimento (12-18% sugli aghi a macchie).
+  - *Limite misurato e accettato:* i passaggi instradati sono orizzontali al **60-64%**, non al 67-99% del DST. Alzare la penalita' verticale non sposta niente (provato fino a 5): quella quota di verticale e' **strutturale** — per raggiungere una macchia piu´ in alto bisogna salire. La soglia del test e' sul misurato.
+  - Bloccato da 9 asserzioni nuove: nessun micro-passaggio verticale, lo scostamento sull'ultimo punto dell'andata, il ritorno orizzontale, e sulla U lo spostamento medio fra corse.
 - **Verificato nel browser** (dev server, DOM): il tool monta senza errori in console; sulla demo (420×380 px → 111×101 mm) cattura 6 tinte e le percentuali del pannello coincidono **cifra per cifra** con quelle calcolate headless dallo stesso motore (13,4 / 9,2 / 33,1 / 16,2 / 0,0 / 28,1%). Provate a mano: riordino, *escluso* (14.696 pixel svuotati nell'anteprima, statusbar da 6 a 5 aghi, densità disattivata), *Applica a tutti*, numero colori fuori scala (12 → riportato a 8). *(Screenshot grafico non compositabile — blocco noto §4.)*
 - **Già visto, e serve al punto ②:** sulla demo, **tre aghi su sei finiscono sullo stesso beige** e **uno prende lo 0%** dell'immagine. Il median-cut spende gli aghi a suddividere la tinta dominante, perché il gradiente di luce la spalma su una gamma larga. È esattamente il difetto che il pareggio della luce deve togliere — e la demo lo riproduce apposta, così il punto ② si misura invece di guardarlo.
 - **Divergenza da decidere con Lorenzo (R30), già misurata:** nel DST di riferimento il **4-17% dei punti sta sotto 1 mm** (minimi da 0,10 mm), mentre R3 impone `minStitchMm` 1,0 dopo il routing. Applicandolo, il pettine perde le sue punte corte. È lo stesso tipo di compromesso di **A6**: vince la macchina o vince il disegno? Da guardare col ricamo in mano al punto ④.
@@ -259,7 +266,7 @@
 ## 2. STATO
 
 **Sei tool in piedi, e adesso ognuno ha le sue invarianti scritte. Il settimo, `broccato`, è partito.**
-Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (312 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
+Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (320 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
 
 **La copertura dei test non era un adempimento: ha trovato cinque difetti veri**, ognuno dei quali violava una regola della Costituzione già scritta e mai verificata — i passaggi di net-45 che attraversavano i vuoti (R5), il punto minimo mai applicato in striatura (R3), `insetPolygon` che rientrava del 30% in meno, il punto massimo di pattern-grammar che lasciava passare segmenti quasi doppi (R4), l'importer che esplodeva sul file vero da 2MB. Tutti corretti, tutti bloccati da un test che fallisce se tornano.
 

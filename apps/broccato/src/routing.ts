@@ -276,6 +276,8 @@ export interface RoutedColor {
   routedMm: number;
   routedCoveredMm: number;
   straightCoveredMm: number;
+  /** Di quelli instradati, quanto corre in orizzontale (il DST li fa dal 67 al 99% orizzontali). */
+  routedHorizontalMm: number;
 }
 
 /** Quanta parte di un segmento sta sotto la copertura futura. */
@@ -327,9 +329,9 @@ export function routeColorRuns(
   const o = { ...DEF, ...options };
   const blocks: Polyline[] = [];
   let travelMm = 0, travelCoveredMm = 0, travelHorizontalMm = 0, jumps = 0;
-  let routedMm = 0, routedCoveredMm = 0, straightCoveredMm = 0;
+  let routedMm = 0, routedCoveredMm = 0, straightCoveredMm = 0, routedHorizontalMm = 0;
   const vivi = groups.filter((g) => g.runs.length);
-  if (!vivi.length) return { blocks, travelMm, travelCoveredMm, travelHorizontalMm, jumps, routedMm, routedCoveredMm, straightCoveredMm };
+  if (!vivi.length) return { blocks, travelMm, travelCoveredMm, travelHorizontalMm, jumps, routedMm, routedCoveredMm, straightCoveredMm, routedHorizontalMm };
 
   // Catena minima fra le macchie (R26): si va sempre alla più vicina che resta.
   const restano = [...vivi];
@@ -384,7 +386,7 @@ export function routeColorRuns(
           corrente.push(...cucito.slice(1), ...run);
           travelMm += lung; travelCoveredMm += lung - scoperto; travelHorizontalMm += orizz;
           // a parita' di passaggio: quanto sarebbe stato coperto andando dritti?
-          routedMm += lung; routedCoveredMm += lung - scoperto;
+          routedMm += lung; routedCoveredMm += lung - scoperto; routedHorizontalMm += orizz;
           straightCoveredMm += lung * coveredFraction(pen, meta, grid);
           regCorrente = gruppo.region;
           continue;
@@ -399,7 +401,7 @@ export function routeColorRuns(
     regCorrente = gruppo.region;
   }
   if (corrente.length) blocks.push(corrente);
-  return { blocks, travelMm, travelCoveredMm, travelHorizontalMm, jumps, routedMm, routedCoveredMm, straightCoveredMm };
+  return { blocks, travelMm, travelCoveredMm, travelHorizontalMm, jumps, routedMm, routedCoveredMm, straightCoveredMm, routedHorizontalMm };
 }
 
 /** Il segmento resta dentro la macchia? (campionato: gli estremi non bastano) */
