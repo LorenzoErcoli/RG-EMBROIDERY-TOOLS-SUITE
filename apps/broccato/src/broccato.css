@@ -1,0 +1,15 @@
+/* Stili locali del tool "Broccato". Solo classi/token del DS (var(--rg-*)); niente hex inline.
+   Placeholder dello scaffold (punto ①): la composizione vera del pannello arriva col subagent
+   design-system al punto ⑤. */
+
+/* L'anteprima non sborda dalla tela: come negli altri tool. Senza questa regola, su una finestra
+   bassa e larga il disegno esce dal riquadro e viene tagliato (difetto già trovato in striatura). */
+#layer svg,
+#layer canvas { max-width: 100%; max-height: 100%; }
+
+/* L'immagine ridotta va guardata a pixel netti: è una mappa di tinte, non una fotografia —
+   l'interpolazione del browser inventerebbe colori che non sono nella palette. */
+.broccato-workspace #layer canvas {
+  image-rendering: pixelated;
+  background: var(--rg-color-surface, #fff);
+}

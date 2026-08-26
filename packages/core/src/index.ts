@@ -8,6 +8,7 @@ export * from './clip';
 export * from './stitch';
 export * from './travel';
 export * from './params';
+export * from './quantize';
 export * from './imports';
 export * from './export';
 export * from './dst';

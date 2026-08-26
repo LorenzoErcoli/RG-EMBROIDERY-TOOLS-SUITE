@@ -15,6 +15,7 @@ export default defineConfig(({ command }) => ({
       '@app/bitmap': fileURLToPath(new URL('../bitmap/src/tool.ts', import.meta.url)),
       '@app/oblique': fileURLToPath(new URL('../oblique/src/tool.ts', import.meta.url)),
       '@app/striatura': fileURLToPath(new URL('../striatura/src/tool.ts', import.meta.url)),
+      '@app/broccato': fileURLToPath(new URL('../broccato/src/tool.ts', import.meta.url)),
       '@rg/pattern-grammar': fileURLToPath(new URL('../../packages/pattern-grammar/src/index.ts', import.meta.url)),
     },
   },

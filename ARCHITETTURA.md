@@ -3,7 +3,7 @@
 > Come i tool smettono di essere isole e diventano un ecosistema.
 > Compagno della [Costituzione](COSTITUZIONE-RICAMO.md).
 
-**Versione:** 0.3 · **Aggiornato:** 2026-08-24 · 6 tool live
+**Versione:** 0.4 · **Aggiornato:** 2026-08-26 · 6 tool live + 1 in costruzione
 
 ---
 
@@ -43,6 +43,7 @@ graph TD
     BMP["bitmap (raster)"]
     OBQ["oblique"]
     STR["striatura"]
+    BRC["broccato (in costruzione)"]
   end
 
   BITMAP["bitmap_to_stitch<br/>(repo Python, satellite)"]
@@ -53,8 +54,8 @@ graph TD
   SCHEMA -->|contratto parametri| CORE
   SCHEMA -. stessi nomi/unità .-> BITMAP
 
-  CORE --> N45 & PG & ILC & BMP & OBQ & STR
-  UIKIT --> N45 & PG & ILC & BMP & OBQ & STR
+  CORE --> N45 & PG & ILC & BMP & OBQ & STR & BRC
+  UIKIT --> N45 & PG & ILC & BMP & OBQ & STR & BRC
   N45 -. promuove primitiva .-> CORE
 
   N45 -->|esporta SVG/DST| PROJ
@@ -73,7 +74,7 @@ graph TD
                         └───────────────┬───────────────┘
                                         │ import (workspace link)
                                         ▼
-        APPS      net-45  pattern-grammar  interlace  bitmap  oblique  striatura
+        APPS      net-45  pattern-grammar  interlace  bitmap  oblique  striatura  broccato
                           │                                  │
                           └──────► SVG+metadata / DST ◄───────┘
                                    (interop: output = input)
@@ -115,12 +116,13 @@ graph TD
 | **bitmap** (Bitmap → Stitch) | ✅ **live** — calcolo punti migrato da `bitmap_to_stitch` (input raster, unico nella suite) |
 | **oblique** (Broderie Anglaise) | ✅ **live** — porting da `rg-oblique-embroidery-pattern-generator` (usa le void, R5) |
 | **striatura** (Punto Striato) | ✅ **live** — motore nuovo, nato dal DST di riferimento `PUNTO-STRIATURA.dst` |
+| **broccato** (Broccato) | 🚧 **in costruzione** — da immagine a raso rado orizzontale con i passaggi nascosti; nato dalla decodifica di `BROCCATO.dst` |
 | 45-grid, cross-stitch | da migrare quando li tocchi (stesso schema) |
 | `bitmap_to_stitch` (repo Python) | satellite: contratti sì, codice no. Migrata la sola pipeline *immagine→punti→SVG*; il laboratorio DST/recipe con AI (CLIP/OpenAI) resta fuori scope |
 
-**Capacità globali attive** (una volta, per tutti — vedi Costituzione): export **SVG e DST riapribili** (R9/R27/R31 — `readProjectMetadata` per l'SVG, `readDstMetadata` per il footer del DST; la cucitura resta byte-identica), export **DST macchina** (R31, `dstFromExportLayers`), **salvataggio con finestra di sistema** (R29), **pannello canonico** Testa A/B + accordion (DS v1.7.0), **passaggi che girano attorno alle aree vuote** (R5, `avoidVoids` in `travel.ts`), **guida in-app** generata da `MANUALE.md` (bottone *Guida* nella topbar di ogni tool).
+**Capacità globali attive** (una volta, per tutti — vedi Costituzione): export **SVG e DST riapribili** (R9/R27/R31 — `readProjectMetadata` per l'SVG, `readDstMetadata` per il footer del DST; la cucitura resta byte-identica), export **DST macchina** (R31, `dstFromExportLayers`), **salvataggio con finestra di sistema** (R29), **pannello canonico** Testa A/B + accordion (DS v1.7.0), **passaggi che girano attorno alle aree vuote** (R5, `avoidVoids` in `travel.ts`), **cattura colore da immagine** (`quantize.ts`: median-cut deterministico, colore più vicino — estratta quando l’ha chiesta il terzo tool), **guida in-app** generata da `MANUALE.md` (bottone *Guida* nella topbar di ogni tool).
 
-**Rete di sicurezza comune:** `npm test` (193 asserzioni: le primitive del core più le invarianti di tutti e sei i motori, su fixture sintetiche **e sugli SVG veri**), `npm run typecheck` (la build non controlla i tipi: vite usa esbuild) e `npm run build`. Tutti e tre girano in CI a ogni push.
+**Rete di sicurezza comune:** `npm test` (225 asserzioni: le primitive del core più le invarianti di tutti e sei i motori, su fixture sintetiche **e sugli SVG veri**), `npm run typecheck` (la build non controlla i tipi: vite usa esbuild) e `npm run build`. Tutti e tre girano in CI a ogni push.
 
 ---
 

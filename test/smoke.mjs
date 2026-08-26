@@ -21,6 +21,8 @@ export { buildRawLevels, computeGridCounts, moduleFromPolylines, parseModuleSvg,
 export { runBitmapPreview, runBitmapPipeline } from ${JSON.stringify(posix('apps/bitmap/src/pipeline.ts'))};
 export { buildNet } from ${JSON.stringify(posix('apps/net-45/src/net.ts'))};
 export { generateStriatura, layerThreadMm, defaultStriaturaParams } from ${JSON.stringify(posix('apps/striatura/src/engine.ts'))};
+export { capturePalette, paletteToColors, applyDensityToAll, colorsToPalette, reduceImage, colorCounts, clampColorCount, mmPerPixel, defaultBroccatoParams } from ${JSON.stringify(posix('apps/broccato/src/engine.ts'))};
+export { sampleImage as sampleBroccatoImage } from ${JSON.stringify(posix('apps/broccato/src/sample.ts'))};
 export { runPipeline as runStriaturaPipeline } from ${JSON.stringify(posix('apps/striatura/src/pipeline.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 `);
@@ -918,6 +920,73 @@ console.log('\noblique — routing + orchestratore (2d)');
     nMeasure(rg.buildNet(nRect, [], { ...nP, squareSizeMm: 20 }), nRect, []).mm < nBase.mm, true);
   check('cella più piccola → più filo',
     nMeasure(rg.buildNet(nRect, [], { ...nP, squareSizeMm: 7 }), nRect, []).mm > nBase.mm, true);
+}
+
+// ---------------------------------------------------------------------------------------------
+// broccato (punto ①) — la cattura dei colori promossa nel core, e la riduzione dell'immagine.
+// Il test che conta davvero è il PRIMO: promuovere `buildPalette` da apps/bitmap a @rg/core non
+// deve cambiare una virgola di quello che bitmap produceva (ARCHITETTURA, regole di crescita 6/7 —
+// le divergenze non si vedono, vanno cercate).
+// ---------------------------------------------------------------------------------------------
+{
+  console.log('\ncore — cattura colore: la promozione dal motore di bitmap non cambia il risultato');
+  const bImg = rg.sampleBroccatoImage(200, 160);
+  for (const n of [3, 4, 6, 8]) {
+    const daBitmap = rg.buildPalette(bImg.rgba, new Uint8Array(bImg.width * bImg.height).fill(1), n);
+    const dalCore = rg.medianCutPalette(bImg.rgba, null, n);
+    check(`palette a ${n} colori identica fra bitmap e core`,
+      JSON.stringify(dalCore), JSON.stringify(daBitmap));
+  }
+  check('stessa immagine → stessa palette (deterministico: il motivo si ripete uguale)',
+    JSON.stringify(rg.medianCutPalette(bImg.rgba, null, 6)),
+    JSON.stringify(rg.medianCutPalette(bImg.rgba, null, 6)));
+
+  console.log('\ncore — esadecimale e colore più vicino');
+  check('rgb → hex a 6 cifre minuscole', rg.rgbToHex([12, 250, 7]), '#0cfa07');
+  check('hex corto e lungo danno lo stesso colore',
+    JSON.stringify(rg.hexToRgb('#0f0')), JSON.stringify(rg.hexToRgb('#00ff00')));
+  check('hex non valido → null', rg.hexToRgb('non-un-colore'), null);
+  const pal3 = [[0, 0, 0], [255, 0, 0], [0, 0, 255]];
+  check('il colore più vicino è quello giusto', rg.nearestPaletteIndex(230, 20, 20, pal3), 1);
+  check('palette vuota → nessun colore', rg.nearestPaletteIndex(1, 2, 3, []), -1);
+
+  console.log('\nbroccato — riduzione dell\'immagine alle tinte scelte');
+  const bp = { ...rg.defaultBroccatoParams, colorCount: 6 };
+  const pal = rg.capturePalette(bImg, bp.colorCount);
+  check('cattura il numero di colori chiesto', pal.length, 6);
+  const idx = rg.reduceImage(bImg, pal);
+  check('ogni pixel finisce su una tinta della palette (nessuno scoperto)',
+    idx.every((v) => v < pal.length), true);
+  const counts = rg.colorCounts(idx, pal.length);
+  check('nessuna tinta resta vuota', counts.every((c) => c > 0), true);
+  check('i conteggi tornano al totale dei pixel',
+    counts.reduce((s, v) => s + v, 0), bImg.width * bImg.height);
+
+  console.log('\nbroccato — il numero di aghi resta nei limiti del sistema (4–8)');
+  check('meno di 4 non si può', rg.clampColorCount(1), 4);
+  check('più di 8 non si può', rg.clampColorCount(99), 8);
+  check('un valore buono passa intatto', rg.clampColorCount(6), 6);
+
+  console.log('\nbroccato — la palette diventa righe-colore senza perdere le scelte fatte');
+  let cols = rg.paletteToColors(pal);
+  check('una riga per tinta', cols.length, pal.length);
+  check('di default sono tutte macchie', cols.every((c) => c.role === 'macchia'), true);
+  cols[0] = { ...cols[0], role: 'base', densitySpacingMm: 0.8, mode: 'normale' };
+  const ricatturate = rg.paletteToColors(pal, cols);
+  check('ricatturare i colori NON butta via ruolo, densità e modo già scelti',
+    JSON.stringify(ricatturate[0]), JSON.stringify(cols[0]));
+  const tutte = rg.applyDensityToAll(cols, 0.5);
+  check('«applica a tutti» mette la stessa densità ovunque',
+    tutte.every((c) => c.densitySpacingMm === 0.5), true);
+  check('«applica a tutti» non tocca i ruoli', tutte[0].role, 'base');
+  check('le tinte tornano indietro identiche',
+    JSON.stringify(rg.colorsToPalette(cols)), JSON.stringify(pal));
+
+  console.log('\nbroccato — la misura: la larghezza reale prevale sulla stima (R11)');
+  check('senza larghezza reale si stima al DPI',
+    rg.mmPerPixel(960, { realWidthMm: 0, dpiDefault: 96 }).toFixed(4), (25.4 / 96).toFixed(4));
+  check('con la larghezza reale la sagoma misura ESATTAMENTE quella',
+    (rg.mmPerPixel(900, { realWidthMm: 270, dpiDefault: 96 }) * 900).toFixed(3), '270.000');
 }
 
 rmSync(outDir, { recursive: true, force: true });

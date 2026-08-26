@@ -7,6 +7,7 @@ import { mountInterlace } from '@app/interlace';
 import { mountBitmap } from '@app/bitmap';
 import { mountOblique } from '@app/oblique';
 import { mountStriatura } from '@app/striatura';
+import { mountBroccato } from '@app/broccato';
 
 const app = document.getElementById('app')!;
 
@@ -18,6 +19,7 @@ function route(): void {
   else if (hash === '#/bitmap') mountBitmap(app, { backHref: '#/' });
   else if (hash === '#/oblique') mountOblique(app, { backHref: '#/' });
   else if (hash === '#/striatura') mountStriatura(app, { backHref: '#/' });
+  else if (hash === '#/broccato') mountBroccato(app, { backHref: '#/' });
   else renderHome(app);
 }
 

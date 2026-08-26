@@ -13,6 +13,7 @@
       "@app/bitmap": ["../bitmap/src/tool.ts"],
       "@app/oblique": ["../oblique/src/tool.ts"],
       "@app/striatura": ["../striatura/src/tool.ts"],
+      "@app/broccato": ["../broccato/src/tool.ts"],
       "@rg/pattern-grammar": ["../../packages/pattern-grammar/src/index.ts"]
     }
   },
