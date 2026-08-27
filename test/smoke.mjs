@@ -1400,29 +1400,43 @@ console.log('\noblique — routing + orchestratore (2d)');
   // Punto ④ — I PASSAGGI NASCOSTI. Il cuore della tecnica: il filo di collegamento deve finire
   // sotto il ricamo che verra' dopo; l'ultimo colore non ha piu' niente sopra e cerca i bordi.
   // -------------------------------------------------------------------------------------------
-  console.log('\nbroccato — ④ il passaggio prende la strada coperta, anche se e\' il doppio piu\' lunga');
-  // Due punti in alto, la retta fra loro e' SCOPERTA, e un corridoio coperto a U li unisce girando
-  // in basso. Se il peso della visibilita' non servisse a niente, il filo taglierebbe dritto.
-  const CO = 60, RO = 40;
-  const kind = new Uint8Array(CO * RO).fill(rg.CELL_BARE);
-  const set = (x, y) => { kind[y * CO + x] = rg.CELL_COVERED; };
-  for (let y = 8; y <= 32; y++) { set(6, y); set(7, y); set(52, y); set(53, y); }
-  for (let x = 6; x <= 53; x++) { set(x, 31); set(x, 32); }
-  const griglia = { cols: CO, rows: RO, cellMm: 1, kind };
-  const rettone = { outer: [{ x: 0, y: 0 }, { x: 60, y: 0 }, { x: 60, y: 40 }, { x: 0, y: 40 }], holes: [], areaMm2: 2400 };
-  const dueCorse = [{ region: rettone, runs: [[{ x: 5.5, y: 8.5 }, { x: 6.5, y: 8.5 }], [{ x: 52.5, y: 8.5 }, { x: 53.5, y: 8.5 }]] }];
-  const conRicerca = rg.routeColorRuns(dueCorse, griglia, { maxDirectMm: 0, maxVisibleTravelMm: 99999, cellMm: 1 });
-  const viaCorta = rg.routeColorRuns(dueCorse, griglia, { maxDirectMm: 0, maxVisibleTravelMm: 99999, cellMm: 1, visibilityWeight: 1, verticalPenalty: 1, edgeDiscount: 1 });
-  const giu = (r) => Math.max(...r.blocks[0].map((p) => p.y));
-  check('con la ricerca il passaggio scende nel corridoio (y oltre 30)', giu(conRicerca) > 30, true);
-  check('senza, taglia dritto in alto (y sotto 12)', giu(viaCorta) < 12, true);
-  check('e il risultato e\' nascosto quasi del tutto',
-    (100 * conRicerca.travelCoveredMm) / conRicerca.travelMm > 95, true);
-  check('mentre la via corta resta scoperta',
-    (100 * viaCorta.travelCoveredMm) / viaCorta.travelMm < 20, true);
-  check('il giro costa filo, ed e\' il prezzo giusto da pagare',
-    conRicerca.travelMm > viaCorta.travelMm * 1.5, true);
-  check('non si stacca il filo quando una strada c\'e\'', conRicerca.jumps, 0);
+  console.log('\nbroccato — ④ il passaggio COSTEGGIA il contorno, non taglia dentro');
+  // La regola che Lorenzo ha corretto guardando l'anteprima: il filo di collegamento non attraversa
+  // mai il riempimento. Qui una macchia lunga e stretta a U: andare dritti da un braccio all'altro
+  // taglierebbe in pieno; costeggiando si gira attorno.
+  const uMacchia = {
+    outer: [
+      { x: 0, y: 0 }, { x: 12, y: 0 }, { x: 12, y: 40 }, { x: 48, y: 40 },
+      { x: 48, y: 0 }, { x: 60, y: 0 }, { x: 60, y: 52 }, { x: 0, y: 52 },
+    ],
+    holes: [], areaMm2: 1000,
+  };
+  const CO = 60, RO = 60;
+  const griglia = { cols: CO, rows: RO, cellMm: 1, kind: new Uint8Array(CO * RO).fill(rg.CELL_BARE) };
+  const dueCorse = [{
+    region: uMacchia,
+    runs: [[{ x: 2, y: 6 }, { x: 10, y: 6 }], [{ x: 50, y: 6 }, { x: 58, y: 6 }]],
+  }];
+  const r4 = rg.routeColorRuns(dueCorse, griglia, { maxDirectMm: 0, cellMm: 1, travelStitchMm: 2 });
+  const viaggio = r4.travels[0] ?? [];
+  check('il passaggio esiste ed e\' cucito', viaggio.length > 3, true);
+  // Le due cose che devono valere, misurate come PROFONDITÀ e non come appartenenza (il filo corre
+  // proprio SUL contorno, e lì un point-in-polygon risponde a caso): non entra nel vuoto, e non si
+  // stacca dal contorno per tagliare dentro il pieno.
+  const incavo = [{ x: 12, y: 0 }, { x: 48, y: 0 }, { x: 48, y: 40 }, { x: 12, y: 40 }];
+  const dentroDi = (pt, poly) => (rg.pointInPolygon(pt, poly) ? rg.distanceToBoundary(pt, poly) : 0);
+  check('non entra nel vuoto dell\'incavo (mai oltre mezzo millimetro)',
+    Math.max(...viaggio.map((p) => dentroDi(p, incavo))) < 0.5, true);
+  // I capi si escludono: il primo punto E' la penna (sta dentro il riempimento per forza) e
+  // l'ultimo e' l'attacco della corsa successiva. Conta il tragitto in mezzo.
+  check('e resta appiccicato al contorno: in mezzo non taglia dentro il pieno',
+    Math.max(...viaggio.slice(1, -1).map((p) => dentroDi(p, uMacchia.outer))) < 1.5, true);
+  check('il giro costa piu\' filo della retta, ed e\' il prezzo giusto', (() => {
+    let lung = 0;
+    for (let i = 1; i < viaggio.length; i++) lung += Math.hypot(viaggio[i].x - viaggio[i - 1].x, viaggio[i].y - viaggio[i - 1].y);
+    return lung > 40 * 1.5;
+  })(), true);
+  check('dentro una macchia il filo NON si stacca mai', r4.jumps, 0);
 
   console.log('\nbroccato — ④ la mappa di copertura dice il vero');
   const mappaC = new Uint8Array(40 * 30).fill(0);
@@ -1470,12 +1484,39 @@ console.log('\noblique — routing + orchestratore (2d)');
   })(), true);
   // Sui passaggi INSTRADATI, cioe' quelli veri fra una macchia e l'altra. I passi da una riga
   // all'altra dentro una camera sono verticali per costruzione e non c'entrano niente.
-  // Misurato 60-64%. Alzare la penalita' verticale non sposta niente (provato fino a 5): quella
-  // quota di verticale e' STRUTTURALE — per raggiungere una macchia piu' in alto bisogna salire.
-  check('i passaggi fra le macchie corrono soprattutto in orizzontale (oggi 60-64%)',
-    (100 * piano.routedHorizontalMm) / piano.routedMm > 55, true);
-  check('e col riempimento a camere il passaggio resta una piccola parte del filo (12-16%)',
-    piano.travelMm / piano.threadMm < 0.22, true);
+  // L'orizzontalita' NON e' piu' la misura giusta. Lo era finche' il passaggio cercava la strada
+  // piu' nascosta e si poteva spingerlo a preferire l'orizzontale; ora **costeggia il contorno**,
+  // e la direzione se la detta la forma della macchia. Al suo posto si misura la cosa che conta
+  // davvero, e che Lorenzo ha indicato guardando l'anteprima: quanto il filo TAGLIA DENTRO.
+  const tagliaDentro = (piano, bandaMm) => {
+    let pass = 0, dentro = 0;
+    for (const c of piano.colors) for (const t of c.travels) {
+      for (let i = 1; i < t.length; i++) {
+        const a = t[i - 1], z = t[i];
+        const d = Math.hypot(z.x - a.x, z.y - a.y); if (!d) continue;
+        const n = Math.max(1, Math.ceil(d / 0.5));
+        for (let u = 0; u < n; u++) {
+          const f = (u + 0.5) / n, seg = d / n;
+          const q = { x: a.x + (z.x - a.x) * f, y: a.y + (z.y - a.y) * f };
+          pass += seg;
+          for (const r of c.regions) {
+            if (rg.pointInPolygon(q, r.outer) && rg.distanceToBoundary(q, r.outer) > bandaMm) { dentro += seg; break; }
+          }
+        }
+      }
+    }
+    return pass ? (100 * dentro) / pass : 0;
+  };
+  check('il passaggio COSTEGGIA: quasi mai taglia dentro la macchia (misurato 6%)',
+    tagliaDentro(piano, 1.5) < 12, true);
+  check('e il filo non si stacca MAI (deciso da Lorenzo: niente salti)', piano.jumps, 0);
+  // Il prezzo del costeggiare, misurato e accettato: su una macchia merlettata il giro sul
+  // contorno e' lungo, e il passaggio sale dal 12-16% al 21% (demo grande) e fino al 42%
+  // (immagine piccola, tutta filamenti). Si paga per non tagliare dentro e non staccare mai il
+  // filo. La leva per farlo riscendere e' scegliere INGRESSO e USCITA di ogni macchia, che e' il
+  // lavoro dopo: qui si tiene solo una guardia contro l'esplosione.
+  check('il passaggio non esplode (sotto il 50% del filo)',
+    piano.travelMm / piano.threadMm < 0.5, true);
   check('i salti restano rari come nel riferimento (sotto lo 0,5% dei punti)',
     piano.jumps / piano.pointCount < 0.005, true);
   check('la ricerca nasconde piu\' della via piu\' corta, sugli stessi passaggi',

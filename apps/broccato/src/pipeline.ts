@@ -37,6 +37,8 @@ export interface ColorPlan {
   routedCoveredMm: number;
   straightCoveredMm: number;
   routedHorizontalMm: number;
+  /** I passaggi instradati, tenuti a parte per poterli guardare e misurare. */
+  travels: Polyline[];
 }
 
 export interface BroccatoPlan {
@@ -203,6 +205,7 @@ export function buildPlan(
       travelHorizontalMm: routed.travelHorizontalMm, jumps: routed.jumps,
       routedMm: routed.routedMm, routedCoveredMm: routed.routedCoveredMm,
       straightCoveredMm: routed.straightCoveredMm, routedHorizontalMm: routed.routedHorizontalMm,
+      travels: routed.travels,
     });
 
     // Anteprima: il filo si disegna SOTTILE (R15) — la larghezza reale del punto sta nella

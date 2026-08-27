@@ -144,7 +144,7 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
 
 **4. Punto** — l’**orientamento** delle righe (uguale per tutti i colori; 0 = orizzontale), la **lunghezza del punto** e lo **sfalsamento del ritorno**, cioè di quanto il pettine sposta il viaggio di ritorno per non ricadere negli stessi buchi dell’andata.
 
-**I passaggi.** Il filo che va da una macchia all’altra non prende la strada più corta: cerca quella che finirà **sotto il ricamo dei colori successivi**, così non si vede. Preferisce muoversi in orizzontale, e quando davvero non c’è modo di nascondersi stacca il filo invece di lasciare un passaggio in vista. L’ultimo colore della lista non ha più niente sopra di sé: lì il filo cerca i **bordi dei soggetti**, dove si nota meno. È l’ordine di cucitura, quindi, a decidere quanto si vedranno i passaggi — spostare un colore in cima o in fondo cambia il risultato.
+**I passaggi.** Il filo che va da una macchia all’altra non taglia mai attraverso il ricamo: **costeggia il contorno** della macchia. Se tagliasse, in quel punto il filo sarebbe doppio e la densità non sarebbe più uniforme. Fra una macchia e l’altra costeggia il contorno di **quella che viene dopo** — è ancora vergine, e il nero che passerà sui contorni la coprirà. E **il filo non si stacca mai** dentro una macchia: il giro sul contorno si paga, il taglio no.
 
 La barra in fondo dice quanti **salti** ci sono e che percentuale di passaggi resta nascosta.
 

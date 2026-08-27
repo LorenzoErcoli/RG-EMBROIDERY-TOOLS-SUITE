@@ -10,11 +10,14 @@
 // infine 0% per l'ultimo — e i passaggi sono orizzontali dal 67 al 99%. Sono i due numeri su cui
 // questo file si misura.
 //
-// Come funziona. Per ogni ago si costruisce una **mappa di costo** a celle: dove ci sarà ricamo
-// dopo il passaggio è nascosto e costa poco, dove resterà scoperto costa moltissimo (R16: la
-// visibilità è un peso dominante), e muoversi in verticale costa più che in orizzontale. Poi un A*
-// cerca la strada. Non è un vincolo rigido ma un costo, così l'ultimo colore — che non ha nessuna
-// copertura — trova comunque una strada invece di arrendersi: sceglie i bordi, che costano meno.
+// Come funziona. Il filo di collegamento **costeggia sempre il contorno** della macchia, non
+// taglia mai dentro il riempimento: se tagliasse, lì il filo sarebbe doppio e la densità non
+// sarebbe più uniforme. Fra una macchia e l'altra si costeggia il contorno di **quella che viene
+// dopo** — è ancora vergine, e il nero che passerà sui contorni la coprirà.
+//
+// *Prima c'era un A* su una mappa di costo che cercava la strada più nascosta.* Funzionava per
+// nascondere, ma tagliava dentro il proprio riempimento, ed è il difetto che Lorenzo ha visto in
+// anteprima. La mappa di costo resta, ma solo per MISURARE quanto i passaggi finiscono coperti.
 //
 // Resta locale all'app (deciso con Lorenzo): `covered-travel` nel core è la voce C8, e si promuove
 // quando questo avrà passato la prova del ricamo vero.
@@ -23,7 +26,7 @@
 
 import {
   type Point, type Polyline,
-  distance, simplifyPolyline, resampleUniform,
+  distance, resampleUniform, routeAlongBorder, pointInPolygon,
 } from '@rg/core';
 import { NO_COLOR } from './reduce';
 import { pointInRegion, type Region } from './regions';
@@ -50,36 +53,29 @@ export interface CoverGrid {
 export interface RoutingOptions {
   /** Lato della cella della mappa, in mm. */
   cellMm?: number;
-  /** Quanto costa passare allo scoperto rispetto al nascosto (R16: dominante). */
-  visibilityWeight?: number;
-  /** Sconto sulle celle di bordo: è lì che va l'ultimo colore. */
-  edgeDiscount?: number;
-  /** Quanto costa muoversi in verticale rispetto all'orizzontale (il DST preferisce l'orizzontale). */
-  verticalPenalty?: number;
   /** Sotto questa lunghezza, e restando dentro la regione, si va dritti senza cercare strade. */
   maxDirectMm?: number;
   /** Passo dei punti di passaggio (§3.1). */
   travelStitchMm?: number;
   /**
-   * Oltre questo tratto SCOPERTO il passaggio non si cuce: si stacca il filo (R16 — «nascondi se
-   * puoi; se proprio non puoi, spezza il percorso, mai un travel visibile silenzioso»).
+   * Oltre questo tratto il filo si stacca. **Dentro una macchia non si stacca MAI** (deciso da
+   * Lorenzo: «il salto va sempre evitato, soprattutto negli oggetti unici»), quindi vale solo per
+   * lo spostamento da una macchia all'altra, ed e' tenuto alto apposta: il giro sul contorno si
+   * paga, il taglio del filo no.
    */
   maxVisibleTravelMm?: number;
 }
 
 const DEF: Required<RoutingOptions> = {
   cellMm: 1.5,
-  visibilityWeight: 60,
-  edgeDiscount: 0.45,
-  verticalPenalty: 1.8,
   maxDirectMm: 6,
   travelStitchMm: 3,
-  maxVisibleTravelMm: 50,
+  maxVisibleTravelMm: 400,
 };
 
-// Perche' 50mm di tratto scoperto prima di staccare il filo. Non e' un numero scelto: e' quello che
-// riproduce la proporzione del DST di riferimento, dove i salti sono 163 su 84.530 punti (0,19%).
-// Sulla demo: soglia 30 -> 120 salti, soglia 50 -> 44 salti su 25.296 punti (0,17%), soglia 80 -> 19.
+// La soglia del salto e' alta apposta. Prima era 50mm, tarata sulla proporzione di salti del DST di
+// riferimento; poi Lorenzo ha chiarito che **il salto va sempre evitato**, e che il giro sul
+// contorno si paga comunque. Resta un ultimo appiglio per i casi impossibili, non una scelta.
 
 /**
  * La mappa di costo per l'ago `colorIndex`: cosa gli verrà cucito sopra, cosa è suo, cosa resta
@@ -143,53 +139,11 @@ export function buildCoverGrid(
   return { cols, rows, cellMm, kind };
 }
 
-/** Il moltiplicatore di costo di una cella. */
-function cellCost(kind: number, o: Required<RoutingOptions>): number {
-  if (kind === CELL_COVERED) return 1;
-  if (kind === CELL_OWN) return 2;
-  if (kind === CELL_EDGE) return o.visibilityWeight * o.edgeDiscount;
-  return o.visibilityWeight;
-}
 
 // ------------------------------------------------------------
-// A* sulla mappa
+// Il passaggio che costeggia
 // ------------------------------------------------------------
 
-/** Coda di priorità minima, array binario: basta e avanza per queste dimensioni. */
-class Heap {
-  private a: number[] = [];
-  private p: number[] = [];
-  get size(): number { return this.a.length; }
-  push(v: number, pri: number): void {
-    this.a.push(v); this.p.push(pri);
-    let i = this.a.length - 1;
-    while (i > 0) {
-      const g = (i - 1) >> 1;
-      if (this.p[g] <= this.p[i]) break;
-      [this.a[g], this.a[i]] = [this.a[i], this.a[g]];
-      [this.p[g], this.p[i]] = [this.p[i], this.p[g]];
-      i = g;
-    }
-  }
-  pop(): number {
-    const top = this.a[0], lastV = this.a.pop()!, lastP = this.p.pop()!;
-    if (this.a.length) {
-      this.a[0] = lastV; this.p[0] = lastP;
-      let i = 0;
-      for (;;) {
-        const l = 2 * i + 1, r = l + 1;
-        let m = i;
-        if (l < this.a.length && this.p[l] < this.p[m]) m = l;
-        if (r < this.a.length && this.p[r] < this.p[m]) m = r;
-        if (m === i) break;
-        [this.a[m], this.a[i]] = [this.a[i], this.a[m]];
-        [this.p[m], this.p[i]] = [this.p[i], this.p[m]];
-        i = m;
-      }
-    }
-    return top;
-  }
-}
 
 /** La cella che contiene un punto in mm. */
 const cellOf = (p: Point, g: CoverGrid): number => {
@@ -197,60 +151,35 @@ const cellOf = (p: Point, g: CoverGrid): number => {
   const r = Math.min(g.rows - 1, Math.max(0, Math.floor(p.y / g.cellMm)));
   return r * g.cols + c;
 };
-const centerOf = (i: number, g: CoverGrid): Point => ({
-  x: ((i % g.cols) + 0.5) * g.cellMm,
-  y: (Math.floor(i / g.cols) + 0.5) * g.cellMm,
-});
 
 /**
- * La strada meno visibile da `a` a `b`. Non c'è nessun muro: dove non si può nascondere si paga, e
- * questo è ciò che permette all'ultimo colore di passare comunque, scegliendo i bordi.
+ * Il passaggio da `a` a `b` che **costeggia il contorno** della macchia, invece di tagliarci dentro.
+ *
+ * È la regola che Lorenzo ha corretto guardando l'anteprima, ed è tutta qui: il filo di
+ * collegamento non attraversa mai il riempimento. Se attraversa, lì il filo è doppio, il ricamo si
+ * ingrossa e la densità non è più uniforme — misurato prima della correzione: **il 42% del filo di
+ * passaggio correva sopra il proprio riempimento**.
+ *
+ * `routeAlongBorder` del core fa esattamente questo e lo fa già per net-45: va al punto più vicino
+ * sul contorno, lo percorre dalla parte più corta, e rientra. I fori valgono da vuoti (R5).
+ *
+ * **Su quale contorno.** Fra una macchia e l'altra si costeggia il contorno di **quella che viene
+ * dopo**, non di quella che si lascia: quella nuova è ancora vergine (costeggiare quella già
+ * cucita significherebbe sfiorarne il filo), e il nero che passerà dopo sui contorni lo coprirà.
  */
-function routeHidden(a: Point, b: Point, g: CoverGrid, o: Required<RoutingOptions>): Point[] | null {
-  const start = cellOf(a, g), goal = cellOf(b, g);
-  if (start === goal) return [a, b];
+function passaggioSulContorno(a: Point, b: Point, r: Region, o: Required<RoutingOptions>): Polyline {
+  return routeAlongBorder(a, b, r.outer, o.travelStitchMm, r.holes, 0);
+}
 
-  const n = g.cols * g.rows;
-  const gScore = new Float64Array(n).fill(Infinity);
-  const from = new Int32Array(n).fill(-1);
-  const chiuso = new Uint8Array(n);
-  const gx = goal % g.cols, gy = Math.floor(goal / g.cols);
-  const h = (i: number): number =>
-    (Math.abs((i % g.cols) - gx) + Math.abs(Math.floor(i / g.cols) - gy)) * g.cellMm;
-
-  const open = new Heap();
-  gScore[start] = 0;
-  open.push(start, h(start));
-
-  let visitate = 0;
-  const tetto = Math.min(n, 60000);
-  while (open.size) {
-    const cur = open.pop();
-    if (chiuso[cur]) continue;
-    chiuso[cur] = 1;
-    if (cur === goal) break;
-    if (++visitate > tetto) return null;                 // rete di sicurezza, non deve mai scattare
-
-    const cx = cur % g.cols, cy = Math.floor(cur / g.cols);
-    for (let d = 0; d < 4; d++) {
-      const nx = cx + (d === 0 ? 1 : d === 1 ? -1 : 0);
-      const ny = cy + (d === 2 ? 1 : d === 3 ? -1 : 0);
-      if (nx < 0 || ny < 0 || nx >= g.cols || ny >= g.rows) continue;
-      const ni = ny * g.cols + nx;
-      if (chiuso[ni]) continue;
-      const verticale = d >= 2;
-      const passo = g.cellMm * (verticale ? o.verticalPenalty : 1);
-      const t = gScore[cur] + passo * cellCost(g.kind[ni], o);
-      if (t < gScore[ni]) { gScore[ni] = t; from[ni] = cur; open.push(ni, t + h(ni)); }
-    }
+/** Il segmento entra in un foro? (i fori sono vuoti: il filo non ci passa, R5) */
+function attraversaFori(a: Point, b: Point, r: Region): boolean {
+  if (!r.holes.length) return false;
+  const n = Math.max(2, Math.ceil(distance(a, b) / 0.4));
+  for (let i = 0; i <= n; i++) {
+    const p = { x: a.x + ((b.x - a.x) * i) / n, y: a.y + ((b.y - a.y) * i) / n };
+    for (const h of r.holes) if (pointInPolygon(p, h)) return true;
   }
-  if (from[goal] < 0 && start !== goal) return null;
-
-  const celle: number[] = [];
-  for (let i = goal; i >= 0; i = from[i]) { celle.push(i); if (i === start) break; }
-  celle.reverse();
-  const via: Point[] = [a, ...celle.slice(1, -1).map((i) => centerOf(i, g)), b];
-  return simplifyPolyline(via, g.cellMm * 0.5);
+  return false;
 }
 
 // ------------------------------------------------------------
@@ -278,6 +207,13 @@ export interface RoutedColor {
   straightCoveredMm: number;
   /** Di quelli instradati, quanto corre in orizzontale (il DST li fa dal 67 al 99% orizzontali). */
   routedHorizontalMm: number;
+  /**
+   * I passaggi instradati, come polilinee a se'. Nei `blocks` sono cuciti dentro il filo continuo e
+   * non si distinguono piu' (dopo il resample R4 hanno la stessa lunghezza di punto del
+   * riempimento): serve tenerli da parte per poterli guardare e misurare — per esempio per sapere
+   * quanto filo di passaggio finisce SOPRA il riempimento gia' cucito.
+   */
+  travels: Polyline[];
 }
 
 /** Quanta parte di un segmento sta sotto la copertura futura. */
@@ -330,8 +266,9 @@ export function routeColorRuns(
   const blocks: Polyline[] = [];
   let travelMm = 0, travelCoveredMm = 0, travelHorizontalMm = 0, jumps = 0;
   let routedMm = 0, routedCoveredMm = 0, straightCoveredMm = 0, routedHorizontalMm = 0;
+  const travels: Polyline[] = [];
   const vivi = groups.filter((g) => g.runs.length);
-  if (!vivi.length) return { blocks, travelMm, travelCoveredMm, travelHorizontalMm, jumps, routedMm, routedCoveredMm, straightCoveredMm, routedHorizontalMm };
+  if (!vivi.length) return { blocks, travelMm, travelCoveredMm, travelHorizontalMm, jumps, routedMm, routedCoveredMm, straightCoveredMm, routedHorizontalMm, travels };
 
   // Catena minima fra le macchie (R26): si va sempre alla più vicina che resta.
   const restano = [...vivi];
@@ -350,6 +287,22 @@ export function routeColorRuns(
   let corrente: Point[] = [];
   let regCorrente: Region | null = null;
 
+  const conta = (via: Polyline, dritto: boolean, pen: Point, meta: Point): void => {
+    let lung = 0, coperto = 0, orizz = 0;
+    for (let k = 1; k < via.length; k++) {
+      const d = distance(via[k - 1], via[k]);
+      lung += d;
+      coperto += d * coveredFraction(via[k - 1], via[k], grid);
+      if (Math.abs(via[k].y - via[k - 1].y) < Math.abs(via[k].x - via[k - 1].x) * 0.3) orizz += d;
+    }
+    travelMm += lung; travelCoveredMm += coperto; travelHorizontalMm += orizz;
+    if (!dritto) {
+      routedMm += lung; routedCoveredMm += coperto; routedHorizontalMm += orizz;
+      straightCoveredMm += lung * coveredFraction(pen, meta, grid);
+      travels.push(via);
+    }
+  };
+
   for (const gruppo of ordine) {
     for (const run of gruppo.runs) {
       if (!corrente.length) {
@@ -362,50 +315,43 @@ export function routeColorRuns(
       const dritto = distance(pen, meta);
       const stessaMacchia = regCorrente === gruppo.region;
 
-      // 1. il normale passo da una riga all'altra
-      if (stessaMacchia && dritto <= o.maxDirectMm && segmentoDentro(pen, meta, gruppo.region)) {
+      // 1. Il normale passo da una riga all'altra: corto, dentro la macchia, senza attraversare fori.
+      if (stessaMacchia && dritto <= o.maxDirectMm && !attraversaFori(pen, meta, gruppo.region)
+          && segmentoDentro(pen, meta, gruppo.region)) {
         corrente.push(...run);
-        travelMm += dritto;
-        travelCoveredMm += dritto * coveredFraction(pen, meta, grid);
-        if (Math.abs(meta.y - pen.y) < Math.abs(meta.x - pen.x) * 0.3) travelHorizontalMm += dritto;
+        conta([pen, meta], true, pen, meta);
         continue;
       }
 
-      // 2. la strada meno visibile
-      const via = routeHidden(pen, meta, grid, o);
-      if (via && via.length >= 2) {
-        let lung = 0, scoperto = 0, orizz = 0;
-        for (let k = 1; k < via.length; k++) {
-          const d = distance(via[k - 1], via[k]);
-          lung += d;
-          scoperto += d * (1 - coveredFraction(via[k - 1], via[k], grid));
-          if (Math.abs(via[k].y - via[k - 1].y) < Math.abs(via[k].x - via[k - 1].x) * 0.3) orizz += d;
-        }
-        if (scoperto <= o.maxVisibleTravelMm) {
-          // Il passaggio finisce ESATTAMENTE dove comincia la corsa: se si riattaccasse la corsa
-          // intera si cucirebbe due volte lo stesso punto, cioe' un segmento di lunghezza zero.
-          const cucito = resampleUniform(via, o.travelStitchMm);
-          const coda = cucito[cucito.length - 1];
-          const attacco = distance(coda, run[0]) < 1e-9 ? run.slice(1) : run;
-          corrente.push(...cucito.slice(1), ...attacco);
-          travelMm += lung; travelCoveredMm += lung - scoperto; travelHorizontalMm += orizz;
-          // a parita' di passaggio: quanto sarebbe stato coperto andando dritti?
-          routedMm += lung; routedCoveredMm += lung - scoperto; routedHorizontalMm += orizz;
-          straightCoveredMm += lung * coveredFraction(pen, meta, grid);
-          regCorrente = gruppo.region;
-          continue;
-        }
+      // 2. Altrimenti si COSTEGGIA. Dentro la macchia si costeggia la sua; passando a una macchia
+      //    nuova si costeggia quella nuova (è vergine, e il nero la coprirà).
+      const via = passaggioSulContorno(pen, meta, gruppo.region, o);
+      let scoperto = 0;
+      for (let k = 1; k < via.length; k++) {
+        scoperto += distance(via[k - 1], via[k]) * (1 - coveredFraction(via[k - 1], via[k], grid));
       }
 
-      // 3. si stacca il filo: meglio un salto che un passaggio visibile (R16)
-      blocks.push(corrente);
-      corrente = [...run];
-      jumps++;
+      // 3. Il filo si stacca solo cambiando macchia, e solo se il giro è davvero fuori scala.
+      //    Dentro una macchia non si stacca MAI.
+      if (!stessaMacchia && scoperto > o.maxVisibleTravelMm) {
+        blocks.push(corrente);
+        corrente = [...run];
+        regCorrente = gruppo.region;
+        jumps++;
+        continue;
+      }
+
+      const cucito = resampleUniform(via, o.travelStitchMm);
+      const coda = cucito[cucito.length - 1];
+      const attacco = distance(coda, run[0]) < 1e-9 ? run.slice(1) : run;
+      corrente.push(...cucito.slice(1), ...attacco);
+      conta(via, false, pen, meta);
+      regCorrente = gruppo.region;
     }
     regCorrente = gruppo.region;
   }
   if (corrente.length) blocks.push(corrente);
-  return { blocks, travelMm, travelCoveredMm, travelHorizontalMm, jumps, routedMm, routedCoveredMm, straightCoveredMm, routedHorizontalMm };
+  return { blocks, travelMm, travelCoveredMm, travelHorizontalMm, jumps, routedMm, routedCoveredMm, straightCoveredMm, routedHorizontalMm, travels };
 }
 
 /** Il segmento resta dentro la macchia? (campionato: gli estremi non bastano) */
