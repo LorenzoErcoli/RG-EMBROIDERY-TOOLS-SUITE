@@ -13,3 +13,40 @@
   image-rendering: pixelated;
   background: var(--rg-color-surface, #fff);
 }
+
+/* Contagocce — stessa resa di `apps/bitmap` (l'utente lo conosce gia' da li'): l'immagine vera a
+   pixel netti, la lente d'ingrandimento sul pixel sotto il puntatore e il codice colore.
+   Classi locali all'app, come `bitmap-pick`: non sono componenti del DS. */
+.broccato-pick {
+  position: absolute; inset: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--rg-color-background) 82%, transparent);
+  cursor: crosshair;
+}
+.broccato-pick__img {
+  max-width: 100%; max-height: 100%;
+  image-rendering: pixelated;
+  box-shadow: 0 0 0 1px var(--rg-color-border, #ccc);
+}
+.broccato-pick__hint {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  padding: 4px 10px; border-radius: 4px;
+  background: var(--rg-color-text-primary); color: var(--rg-color-background);
+  font-size: 12px; white-space: nowrap; pointer-events: none;
+}
+.broccato-pick__lens {
+  position: absolute; left: 0; top: 0; pointer-events: none;
+  border: 2px solid var(--rg-color-text-primary); border-radius: 6px;
+  background: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
+}
+.broccato-pick__tag {
+  position: absolute; left: 0; top: 0; pointer-events: none;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 6px; border-radius: 4px;
+  background: var(--rg-color-text-primary); color: var(--rg-color-background);
+  font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.broccato-pick__tag::before {
+  content: ""; width: 12px; height: 12px; border-radius: 2px;
+  background: var(--c, #000); box-shadow: 0 0 0 1px rgba(255, 255, 255, .6);
+}

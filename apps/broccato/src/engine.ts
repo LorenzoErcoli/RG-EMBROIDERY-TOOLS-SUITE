@@ -94,6 +94,16 @@ export interface BroccatoParams {
   minBlobMm2: number;
 
   // --- 03 Colori (in ordine di cucitura) ---
+  /**
+   * Da dove vengono le tinte.
+   * - `auto`    — le trova il sistema nell'immagine, e le ricattura quando cambi la preparazione;
+   * - `manuale` — le hai scelte tu (col contagocce o col selettore) e **non si toccano piu'**.
+   *
+   * Serve una modalita' esplicita, non basta lasciar modificare le righe: senza, la prima
+   * ricattura — che scatta appena muovi il pareggio della luce o il numero di colori — spazzerebbe
+   * via i colori presi a mano. E' lo stesso motivo per cui ce l'ha `apps/bitmap`.
+   */
+  paletteMode: 'auto' | 'manuale';
   colors: BroccatoColor[];
 
   // --- 04 Riempimento ---
@@ -137,6 +147,7 @@ export const defaultBroccatoParams: BroccatoParams = {
   smoothMm: 0.9,
   minBlobMm2: 20,
 
+  paletteMode: 'auto',
   colors: [],
 
   fillAngleDeg: 0,

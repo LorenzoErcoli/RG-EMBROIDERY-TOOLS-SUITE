@@ -122,7 +122,7 @@ graph TD
 
 **Capacità globali attive** (una volta, per tutti — vedi Costituzione): export **SVG e DST riapribili** (R9/R27/R31 — `readProjectMetadata` per l'SVG, `readDstMetadata` per il footer del DST; la cucitura resta byte-identica), export **DST macchina** (R31, `dstFromExportLayers`), **salvataggio con finestra di sistema** (R29), **pannello canonico** Testa A/B + accordion (DS v1.7.0), **passaggi che girano attorno alle aree vuote** (R5, `avoidVoids` in `travel.ts`), **cattura colore da immagine** (`quantize.ts`: median-cut deterministico, colore più vicino — estratta quando l’ha chiesta il terzo tool), **riempimento a righe parallele / raso** (`fill.ts`, R24 — pettine o serpentina, dentro un poligono coi fori: era «il grande assente»), **semplificazione dei contorni** (`simplifyPolyline`, promossa da oblique), **guida in-app** generata da `MANUALE.md` (bottone *Guida* nella topbar di ogni tool).
 
-**Rete di sicurezza comune:** `npm test` (342 asserzioni: le primitive del core più le invarianti di tutti e sei i motori, su fixture sintetiche **e sugli SVG veri**), `npm run typecheck` (la build non controlla i tipi: vite usa esbuild) e `npm run build`. Tutti e tre girano in CI a ogni push.
+**Rete di sicurezza comune:** `npm test` (348 asserzioni: le primitive del core più le invarianti di tutti e sei i motori, su fixture sintetiche **e sugli SVG veri**), `npm run typecheck` (la build non controlla i tipi: vite usa esbuild) e `npm run build`. Tutti e tre girano in CI a ogni push.
 
 ---
 

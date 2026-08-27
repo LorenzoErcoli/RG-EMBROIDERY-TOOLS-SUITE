@@ -1600,6 +1600,35 @@ console.log('\noblique — routing + orchestratore (2d)');
   check('un file che non viene da qui non confonde nessuno',
     rg.readProjectMetadata('<svg></svg>'), null);
 
+  console.log('\nbroccato — le tinte scelte a mano non si perdono');
+  // Il contagocce e' DOM, quindi qui si prova quello che sta sotto: una palette data non viene
+  // ricatturata. Senza questo, muovere il pareggio della luce spazzerebbe via i colori presi a
+  // mano — ed e' il motivo per cui serve la modalita' esplicita, come in `apps/bitmap`.
+  const aMano = [[200, 30, 40], [20, 20, 20], [240, 230, 90], [130, 140, 200], [180, 160, 120], [90, 120, 80]];
+  const conMia = rg.reduceStable(imgP, {
+    colorCount: 6, mmPerPx: mmP, flattenLightMm: 15, smoothMm: 0.9, minBlobMm2: 20, palette: aMano,
+  });
+  check('la palette data e\' ESATTAMENTE quella che si usa',
+    JSON.stringify(conMia.palette), JSON.stringify(aMano));
+  check('...anche cambiando la preparazione', JSON.stringify(rg.reduceStable(imgP, {
+    colorCount: 6, mmPerPx: mmP, flattenLightMm: 30, smoothMm: 1.5, minBlobMm2: 20, palette: aMano,
+  }).palette), JSON.stringify(aMano));
+  check('e ogni pixel finisce comunque su una di quelle tinte',
+    conMia.index.every((v) => v < aMano.length), true);
+  check('senza palette data, invece, le tinte le trova lui (e sono altre)',
+    JSON.stringify(rg.reduceStable(imgP, { colorCount: 6, mmPerPx: mmP, flattenLightMm: 15, smoothMm: 0.9, minBlobMm2: 20 }).palette)
+      !== JSON.stringify(aMano), true);
+  check('il ricamo esce lo stesso con le tinte scelte a mano', (() => {
+    const pm = rg.buildPlan(conMia, { ...parP, colors: rg.paletteToColors(aMano), paletteMode: 'manuale' },
+      mmP, { widthMm: imgP.width * mmP, heightMm: imgP.height * mmP });
+    return pm.colors.length === 6 && pm.threadMm > 0;
+  })(), true);
+  check('e i fili escono proprio delle tinte scelte', (() => {
+    const pm = rg.buildPlan(conMia, { ...parP, colors: rg.paletteToColors(aMano), paletteMode: 'manuale' },
+      mmP, { widthMm: imgP.width * mmP, heightMm: imgP.height * mmP });
+    return pm.colors.map((c) => c.color.hex).join(',');
+  })(), aMano.map((c) => rg.rgbToHex(c)).join(','));
+
   console.log('\nbroccato — la misura: la larghezza reale prevale sulla stima (R11)');
   check('senza larghezza reale si stima al DPI',
     rg.mmPerPixel(960, { realWidthMm: 0, dpiDefault: 96 }).toFixed(4), (25.4 / 96).toFixed(4));

@@ -24,6 +24,13 @@ import { reduceStable, type ReduceResult } from './reduce';
 import { buildPlan, type BroccatoPlan } from './pipeline';
 import { sampleImage } from './sample';
 
+// Icona contagocce (pipette, stile Lucide): la stessa di `apps/bitmap`, cosi' il gesto e' quello
+// che Lorenzo conosce gia' dal punto tappeto.
+const EYEDROPPER_SVG =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/>'
+  + '<path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>';
+
 /** Sorgente pixel: la demo o un'immagine caricata, rasterizzabile alla larghezza di lavoro. */
 interface Source {
   name: string;
@@ -89,8 +96,8 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
         </div>
       </section>
 
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">02</span><h3 class="rg-param-section__title">Preparazione</h3></div>
+      <details class="rg-param-section rg-disclosure" open>
+        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">02</span><span class="rg-param-section__title">Preparazione</span></summary>
         <div class="rg-param-grid">
           <p class="rg-field__help rg-param-grid__wide">Serve a far cadere sugli stessi aghi lo stesso motivo ripetuto in punti diversi del tessuto, dove la luce cambia.</p>
           <label class="rg-field">
@@ -109,7 +116,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
             <span class="rg-field__help">sotto questa misura la macchia va al colore vicino</span>
           </label>
         </div>
-      </section>
+      </details>
 
       <section class="rg-param-section">
         <div class="rg-param-section__header"><span class="rg-param-section__index">03</span><h3 class="rg-param-section__title">Colori</h3></div>
@@ -119,6 +126,14 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="colorCount" type="number" min="${MIN_COLORS}" max="${MAX_COLORS}" step="1"><span>aghi</span></span>
             <span class="rg-field__help">da ${MIN_COLORS} a ${MAX_COLORS}, base compresa</span>
           </label>
+          <div class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Da dove vengono le tinte</span>
+            <div><div class="rg-segmented" id="paletteMode" role="group" aria-label="Da dove vengono le tinte">
+              <button type="button" class="rg-segmented__item rg-segmented__item--active" data-palette="auto" aria-pressed="true">Automatiche</button>
+              <button type="button" class="rg-segmented__item" data-palette="manuale" aria-pressed="false">Manuali</button>
+            </div></div>
+            <span class="rg-field__help">Automatiche: le trova il sistema. Manuali: le scegli tu col contagocce, e non vengono più ricatturate.</span>
+          </div>
           <div class="rg-field">
             <span class="rg-field__label">Cattura dall'immagine</span>
             <button type="button" id="captureBtn" class="rg-button rg-button--outline rg-button--small">Cattura colori</button>
@@ -135,8 +150,8 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
         </div>
       </section>
 
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">04</span><h3 class="rg-param-section__title">Punto</h3></div>
+      <details class="rg-param-section rg-disclosure">
+        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">04</span><span class="rg-param-section__title">Punto</span></summary>
         <div class="rg-param-grid">
           <label class="rg-field">
             <span class="rg-field__label">Orientamento delle righe</span>
@@ -163,7 +178,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
             <span class="rg-field__help">0 = nessuna. Nel riferimento sono 4, prima del cambio-colore</span>
           </label>
         </div>
-      </section>
+      </details>
 
     </aside>
 
@@ -231,7 +246,99 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
     scheduleAnalyze(true);
   });
 
-  $('captureBtn').addEventListener('click', () => scheduleAnalyze(true));
+  function setPaletteMode(m: 'auto' | 'manuale'): void {
+    params.paletteMode = m;
+    for (const b of root.querySelectorAll<HTMLButtonElement>('[data-palette]')) {
+      const on = b.dataset.palette === m;
+      b.classList.toggle('rg-segmented__item--active', on);
+      b.setAttribute('aria-pressed', String(on));
+    }
+  }
+  for (const b of root.querySelectorAll<HTMLButtonElement>('[data-palette]')) {
+    b.addEventListener('click', () => {
+      setPaletteMode(b.dataset.palette as 'auto' | 'manuale');
+      // tornando in automatico le tinte si ripescano dall'immagine
+      scheduleAnalyze(params.paletteMode === 'auto');
+    });
+  }
+
+  // Il bottone ricattura sempre, e riporta la palette in automatico: e' quello che uno si aspetta
+  // premendo «Cattura colori».
+  $('captureBtn').addEventListener('click', () => { setPaletteMode('auto'); scheduleAnalyze(true); });
+
+  /**
+   * Contagocce — la vista passa all'IMMAGINE VERA, con la lente d'ingrandimento sul pixel sotto il
+   * puntatore e il codice colore; il clic prende quel colore esatto. Ricalca `apps/bitmap`.
+   */
+  function enterPickMode(index: number): void {
+    const px = source.pixelsAt(params.maxWidthPx);
+    const W = px.width, H = px.height, SAMPLE = 15, HALF = 7, LENS = 132;
+    const img = document.createElement('canvas');
+    img.width = W; img.height = H;
+    img.className = 'broccato-pick__img';
+    img.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(px.rgba), W, H), 0, 0);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'broccato-pick';
+    const hint = document.createElement('div');
+    hint.className = 'broccato-pick__hint';
+    hint.textContent = 'Muovi sul pixel, clicca per campionare il colore · Esc per annullare';
+    const lens = document.createElement('canvas');
+    lens.className = 'broccato-pick__lens';
+    lens.width = LENS; lens.height = LENS;
+    const lctx = lens.getContext('2d')!;
+    lctx.imageSmoothingEnabled = false;
+    const tag = document.createElement('div');
+    tag.className = 'broccato-pick__tag';
+    overlay.append(img, hint, lens, tag);
+    $('canvas').appendChild(overlay);
+
+    const colorAt = (sx: number, sy: number): string => {
+      const o = (sy * W + sx) * 4;
+      const h = (v: number) => v.toString(16).padStart(2, '0');
+      return `#${h(px.rgba[o])}${h(px.rgba[o + 1])}${h(px.rgba[o + 2])}`;
+    };
+    const pixelOf = (e: MouseEvent) => {
+      const rect = img.getBoundingClientRect();
+      const sx = Math.max(0, Math.min(W - 1, Math.floor(((e.clientX - rect.left) / rect.width) * W)));
+      const sy = Math.max(0, Math.min(H - 1, Math.floor(((e.clientY - rect.top) / rect.height) * H)));
+      return { sx, sy };
+    };
+    const onMove = (e: MouseEvent): void => {
+      const { sx, sy } = pixelOf(e);
+      lctx.clearRect(0, 0, LENS, LENS);
+      lctx.drawImage(img, sx - HALF, sy - HALF, SAMPLE, SAMPLE, 0, 0, LENS, LENS);
+      const cell = LENS / SAMPLE;
+      lctx.strokeStyle = '#000'; lctx.lineWidth = 1;
+      lctx.strokeRect(HALF * cell + 0.5, HALF * cell + 0.5, cell, cell);
+      lctx.strokeStyle = '#fff';
+      lctx.strokeRect(HALF * cell + 1.5, HALF * cell + 1.5, cell - 2, cell - 2);
+      const hex = colorAt(sx, sy);
+      tag.textContent = hex.toUpperCase(); tag.style.setProperty('--c', hex);
+      const orect = overlay.getBoundingClientRect();
+      const lx = Math.min(orect.width - LENS - 8, e.clientX - orect.left + 18);
+      const ly = Math.min(orect.height - LENS - 28, e.clientY - orect.top + 18);
+      lens.style.left = `${lx}px`; lens.style.top = `${ly}px`;
+      tag.style.left = `${lx}px`; tag.style.top = `${ly + LENS + 4}px`;
+    };
+    const esci = (): void => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (e: KeyboardEvent): void => { if (e.key === 'Escape') esci(); };
+    img.addEventListener('mousemove', onMove);
+    img.addEventListener('click', (e) => {
+      const { sx, sy } = pixelOf(e);
+      params.colors[index].hex = colorAt(sx, sy);
+      setPaletteMode('manuale');
+      esci();
+      buildPaletteUI();
+      scheduleAnalyze(false);
+    });
+    // La tela ha il pan/zoom (pointerdown → setPointerCapture): senza fermarlo si prende il
+    // puntatore e il clic non arriva mai all'immagine. Lezione gia' pagata in bitmap.
+    overlay.addEventListener('pointerdown', (e) => e.stopPropagation());
+    overlay.addEventListener('pointerup', (e) => e.stopPropagation());
+    overlay.addEventListener('wheel', (e) => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
+    document.addEventListener('keydown', onKey);
+  }
 
   $('densityAllBtn').addEventListener('click', () => {
     const v = Number(($('densityAll') as HTMLInputElement).value);
@@ -277,6 +384,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
         params.colors[i].hex = picker.value.toLowerCase();
         sw.style.setProperty('--swatch', params.colors[i].hex);
         code.textContent = params.colors[i].hex.toUpperCase();
+        setPaletteMode('manuale');          // l'hai scelto tu: non te lo ricatturo piu'
         scheduleAnalyze(false);
       });
       sw.appendChild(picker);
@@ -351,9 +459,20 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
       meta.className = 'rg-color-map__meta';
       meta.id = `share-${i}`;
 
+      // Contagocce: prende la tinta dall'immagine vera, con la lente sul pixel. Stesso gesto di
+      // `apps/bitmap`, e come li' passa la palette in MANUALE — altrimenti la prima ricattura
+      // butterebbe via il colore appena scelto.
+      const pick = document.createElement('button');
+      pick.type = 'button';
+      pick.className = 'rg-icon-button';
+      pick.innerHTML = EYEDROPPER_SVG;
+      pick.title = 'Campiona dall\'immagine';
+      pick.setAttribute('aria-label', `Campiona il colore ${i + 1} dall'immagine`);
+      pick.addEventListener('click', () => enterPickMode(i));
+
       const cluster = document.createElement('span');
       cluster.className = 'rg-cluster';
-      cluster.append(code, meta, dwrap, mode, up, down);
+      cluster.append(code, meta, dwrap, mode, pick, up, down);
 
       li.append(sw, cluster, role);
       host.appendChild(li);
@@ -381,7 +500,8 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
   function analyze(ricattura: boolean): void {
     const img = source.pixelsAt(params.maxWidthPx);
     const mmpp = mmPerPixel(img.width, params);
-    const nuova = ricattura || !params.colors.length;
+    // In manuale le tinte sono di Lorenzo e non si toccano; si ricattura solo se non ce n'e' nessuna.
+    const nuova = (ricattura || !params.colors.length) && (params.paletteMode === 'auto' || !params.colors.length);
     const t0 = performance.now();
     const res = reduceStable(img, {
       colorCount: params.colorCount,
@@ -560,6 +680,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
     Object.assign(params, salvati);
     for (const b of NUM_BINDS) ($(b.id) as HTMLInputElement).value = String(params[b.key]);
     countEl.value = String(params.colorCount);
+    setPaletteMode(params.paletteMode ?? 'auto');
     buildPaletteUI();
     scheduleAnalyze(false);
     return true;
