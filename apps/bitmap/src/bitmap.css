@@ -13,6 +13,13 @@ body {
 /* L'anteprima riempie il layer; bordo e sfondo sono già sul __canvas del DS. */
 #layer svg { max-width: 100%; max-height: 100%; }
 
+/* Avviso e avanzamento sono due righe in più della griglia dello stage:
+   intestazione · avviso · tela · avanzamento · barra di stato.
+   Vuoti non hanno margini né altezza, quindi non spostano niente. */
+.bitmap-workspace .rg-workspace__stage { grid-template-rows: auto auto minmax(0, 1fr) auto auto; }
+.bitmap-alert:not(:empty) { margin: var(--rg-space-6) var(--rg-space-6) 0; }
+.bitmap-progress:not(:empty) { margin: 0 var(--rg-space-6) var(--rg-space-4); }
+
 /* Righe della palette manuale: swatch · hex · tolleranza · contagocce · [×  a destra in fondo]. */
 #manualList .rg-color-map__row { display: flex; align-items: center; gap: 8px; flex-wrap: nowrap; }
 #manualList .rg-color-map__code { flex: 0 1 auto; }

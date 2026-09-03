@@ -3,9 +3,9 @@ import './bitmap.css';
 import { buildSvg, dstFromExportLayers, DST_FILE, readDstMetadata, readProjectMetadata } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
-import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { runBitmapPipeline, runBitmapPreview, type BitmapPreviewColor } from './pipeline';
-import { defaultBitmapParams, type BitmapParams } from './engine';
+import { pickSaveTarget, saveOutcomeMessage } from '@rg/ui/save';
+import { runBitmapPreview, bitmapPipelineSteps, PREVIEW_MAX_DOTS, type BitmapPreviewColor, type BitmapPipelineResult } from './pipeline';
+import { defaultBitmapParams, type BitmapParams, type StitchProgress } from './engine';
 import { sampleImage, type PixelImage } from './sample';
 
 /** Sorgente pixel: la demo o un'immagine decodificata, rasterizzabile alla larghezza voluta. */
@@ -219,9 +219,11 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
         </div>
       </header>
+      <div class="bitmap-alert" id="previewAlert" role="status" aria-live="polite"></div>
       <div class="rg-workspace__canvas" id="canvas">
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
       </div>
+      <div class="bitmap-progress" id="progress"></div>
       <footer class="rg-workspace__statusbar">
         <span id="status">Pronto</span>
         <span id="zoom" class="rg-mono">zoom 100%</span>
@@ -235,8 +237,15 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
   let source: Source = demoSource();
   let sourceName = '';
   let onlyColor = '';                 // '' = tutti i colori (filtro di sola generazione, come "Solo SVG")
-  let lastGenerated: { svg: string; stopCount: number } | null = null;
+  /**
+   * L'ULTIMO tracciato generato, tenuto per INTERO (risultato + SVG + i parametri con cui è nato):
+   * così "Esporta" dopo "Genera" non ricalcola niente — prima l'SVG riusava e il DST no, e rifaceva
+   * tutto da capo. Lo azzera `scheduleAnalyze()` a ogni cambio di parametro: non può essere stantio.
+   */
+  let lastGenerated: { res: BitmapPipelineResult; svg: string; params: BitmapParams } | null = null;
   let analyzeTimer: number | undefined;
+  let busy = false;                   // una generazione alla volta
+  let cambiatoDurante = false;        // parametri toccati MENTRE si generava → il risultato non si tiene
 
   const pz = hookPanZoom($('canvas'), $('layer'), (z) => { $('zoom').textContent = `zoom ${Math.round(z * 100)}%`; });
 
@@ -254,12 +263,14 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
   // ---- FASE LEGGERA: preview (aggiornata in tempo reale, niente ordinamento). ----
   let currentPreviewColors: BitmapPreviewColor[] = [];   // colori dell'ultima preview (per ridisegnare le righe onlyColor)
   function renderPreview() {
+    if (busy) return;                 // durante la generazione la tela mostra il tracciato, non i puntini
     try {
       const px = source.pixelsAt(params.maxWidthPx);
       const prev = runBitmapPreview(px.rgba, px.width, px.height, params, mmPerPx(px.width));
       currentPreviewColors = prev.colors;
       $('layer').innerHTML = prev.svg;
       buildStopList(prev.colors);
+      showThinningAlert(prev.previewPoints, prev.drawnPoints);
       const selPct = prev.totalPixels ? (100 * prev.selectedPixels / prev.totalPixels).toFixed(1) : '0';
       const genTip = lastGenerated ? '' : ' · premi Genera per il tracciato';
       $('status').textContent = prev.colors.length
@@ -271,25 +282,139 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
     }
   }
 
+  /**
+   * L'anteprima ha un tetto di DISEGNO (`PREVIEW_MAX_DOTS`): oltre quello dirada i puntini in modo
+   * proporzionale, e sullo schermo compaiono buchi regolari che NEL RICAMO NON CI SONO. Il difetto
+   * non è il diradamento, è che prima taceva: qui lo dichiara, con la via d'uscita (Genera).
+   */
+  function showThinningAlert(previewPoints: number, drawnPoints: number) {
+    const host = $('previewAlert');
+    if (drawnPoints >= previewPoints) { host.innerHTML = ''; return; }
+    const n = (v: number) => v.toLocaleString('it-IT');
+    const pct = Math.round((100 * drawnPoints) / previewPoints);
+    host.innerHTML = `<div class="rg-alert rg-alert--warning">
+      <div>
+        <p class="rg-alert__title">Anteprima diradata: ne vedi il ${pct}%</p>
+        <p class="rg-alert__message">I punti sono ${n(previewPoints)}, oltre il tetto di disegno (${n(PREVIEW_MAX_DOTS)}): l'anteprima ne mostra ${n(drawnPoints)}, quindi i buchi che vedi non sono nel ricamo. Premi <strong>Genera</strong> per il tracciato completo, oppure aumenta la distanza tra i punti.</p>
+      </div>
+    </div>`;
+  }
+
   function scheduleAnalyze() {
     lastGenerated = null;                         // ogni cambio invalida il tracciato generato
+    if (busy) cambiatoDurante = true;             // ...compreso quello che si sta generando proprio ora
     if (analyzeTimer !== undefined) clearTimeout(analyzeTimer);
     analyzeTimer = setTimeout(renderPreview, 150) as unknown as number;
   }
 
+  // ---- BARRA DI AVANZAMENTO: cosa sta facendo, e che sta andando avanti. ----
+  let progLabel: HTMLElement | null = null, progPct: HTMLElement | null = null, progValue: HTMLElement | null = null;
+
+  function showProgress(): void {
+    const host = $('progress');
+    host.innerHTML = `<div class="rg-progress">
+      <div class="rg-progress__meta"><span data-p="label"></span><span class="rg-mono" data-p="pct"></span></div>
+      <div class="rg-progress__track"><div class="rg-progress__value" data-p="value" style="--progress:0%"></div></div>
+    </div>`;
+    progLabel = host.querySelector('[data-p="label"]');
+    progPct = host.querySelector('[data-p="pct"]');
+    progValue = host.querySelector('[data-p="value"]');
+  }
+
+  function setProgress(label: string, pct: number): void {
+    const v = Math.max(0, Math.min(100, Math.round(pct)));
+    if (progLabel) progLabel.textContent = label;
+    if (progPct) progPct.textContent = `${v}%`;
+    if (progValue) progValue.style.setProperty('--progress', `${v}%`);
+  }
+
+  function hideProgress(): void {
+    $('progress').innerHTML = '';
+    progLabel = progPct = progValue = null;
+  }
+
+  const BOTTONI = ['analyzeBtn', 'generateBtn', 'exportBtn', 'exportDstBtn'] as const;
+  function setBusy(on: boolean): void {
+    for (const id of BOTTONI) ($(id) as HTMLButtonElement).disabled = on;
+  }
+
+  /**
+   * Cede il turno al browser e torna appena può.
+   *
+   * NON usa `setTimeout`: in una scheda in secondo piano i timer vengono strozzati a un secondo,
+   * e misurandolo si vede — con la scheda nascosta gli aggiornamenti della barra passavano da 60ms
+   * a 1000ms l'uno dall'altro e la generazione si trascinava per minuti invece che per secondi.
+   * Un messaggio su MessageChannel è un compito normale, non un timer: non viene strozzato.
+   */
+  function respira(): Promise<void> {
+    return new Promise((res) => {
+      const ch = new MessageChannel();
+      ch.port1.onmessage = () => { ch.port1.close(); ch.port2.close(); res(); };
+      ch.port2.postMessage(0);
+    });
+  }
+
+  /**
+   * Consuma il motore a passi mostrando la barra. Il respiro ogni ~60ms non è una pausa decorativa:
+   * è l'unico modo di lasciar DIPINGERE il browser. Senza, il lavoro sincrono tiene il filo occupato
+   * dall'inizio alla fine e la barra resterebbe ferma sullo 0% — cioè il contrario di quello che
+   * deve fare. Con l'ordinamento "Più vicino" (O(n²)) si parla di secondi veri.
+   */
+  async function runWithProgress<T>(steps: Generator<StitchProgress, T, void>): Promise<T> {
+    showProgress();
+    setProgress('Avvio…', 0);
+    let ultimoRespiro = 0;              // 0 = il primo passo respira SUBITO, così la prima etichetta si vede
+    let r = steps.next();
+    while (!r.done) {
+      const p = r.value;
+      setProgress(p.phase, p.total ? (100 * p.done) / p.total : 0);
+      if (performance.now() - ultimoRespiro > 60) {
+        await respira();
+        ultimoRespiro = performance.now();
+      }
+      r = steps.next();
+    }
+    return r.value;
+  }
+
   // ---- FASE PESANTE: generazione del tracciato (solo su richiesta). ----
-  function generate(): { svg: string; stopCount: number } {
-    const px = source.pixelsAt(params.maxWidthPx);
-    const res = runBitmapPipeline(px.rgba, px.width, px.height, params, mmPerPx(px.width), onlyColor || undefined);
-    const cap = params.chunkSize > 0 ? params.chunkSize : 5000;
-    const svg = buildSvg(res.exportLayers, { bounds: res.bounds, marginMm: 4, maxPointsPerPath: cap });
-    lastGenerated = { svg, stopCount: res.stopCount };
-    $('layer').innerHTML = buildSvg(res.layers, { bounds: res.bounds, marginMm: 4, maxPointsPerPath: cap });
-    const only = onlyColor ? ` · solo ${onlyColor}` : '';
-    $('status').textContent = res.stopCount
-      ? `Generato: ${res.stopCount} stop · filo ${(res.threadMm / 1000).toFixed(2)} m${only}`
-      : 'Niente da generare: controlla soglia e colori';
-    return lastGenerated;
+  async function generate(): Promise<{ res: BitmapPipelineResult; svg: string; params: BitmapParams } | null> {
+    if (busy) return null;
+    busy = true; cambiatoDurante = false; setBusy(true);
+    try {
+      const px = source.pixelsAt(params.maxWidthPx);
+      // I parametri si CONGELANO qui. Finché la generazione era sincrona nessuno poteva toccarli a
+      // metà strada; ora che cede il turno al browser, sì — e il motore li leggerebbe cambiati a
+      // lavoro iniziato. Si copiano anche gli array: le liste di colori si modificano sul posto.
+      const snap: BitmapParams = {
+        ...params,
+        sampleColors: [...params.sampleColors],
+        backgroundColors: [...params.backgroundColors],
+        manualColors: [...params.manualColors],
+        manualTolerances: [...params.manualTolerances],
+      };
+      const res = await runWithProgress(bitmapPipelineSteps(px.rgba, px.width, px.height, snap, mmPerPx(px.width), onlyColor || undefined));
+      const cap = snap.chunkSize > 0 ? snap.chunkSize : 5000;
+      setProgress('Costruzione del tracciato', 100);
+      const svg = buildSvg(res.exportLayers, { bounds: res.bounds, marginMm: 4, maxPointsPerPath: cap });
+      $('layer').innerHTML = buildSvg(res.layers, { bounds: res.bounds, marginMm: 4, maxPointsPerPath: cap });
+      $('previewAlert').innerHTML = '';        // il tracciato generato è completo: niente da avvisare
+      const only = onlyColor ? ` · solo ${onlyColor}` : '';
+      $('status').textContent = res.stopCount
+        ? `Generato: ${res.stopCount} stop · filo ${(res.threadMm / 1000).toFixed(2)} m${only}`
+        : 'Niente da generare: controlla soglia e colori';
+      // Parametri cambiati mentre si generava? Allora questo tracciato è già vecchio: non si tiene in
+      // cache, altrimenti un export lo userebbe credendolo aggiornato.
+      lastGenerated = cambiatoDurante ? null : { res, svg, params: snap };
+      return lastGenerated;
+    } catch (e) {
+      $('status').textContent = 'Errore in generazione: ' + (e as Error).message;
+      console.error(e);
+      return null;
+    } finally {
+      busy = false; setBusy(false); hideProgress();
+      if (cambiatoDurante) { cambiatoDurante = false; renderPreview(); }
+    }
   }
 
   /** Elenco dei colori (stop) rilevati con conteggio/area% e la scelta "solo questo colore". */
@@ -698,35 +823,46 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
     renderPreview(); updateFileStatus(); pz.fit();
   });
   $('analyzeBtn').addEventListener('click', () => { if (analyzeTimer !== undefined) clearTimeout(analyzeTimer); renderPreview(); });
-  $('generateBtn').addEventListener('click', () => generate());
+  $('generateBtn').addEventListener('click', () => { void generate(); });
   $('fitBtn').addEventListener('click', () => pz.fit());
   $('exportBtn').addEventListener('click', async () => {
-    const gen = lastGenerated ?? generate();
+    if (busy) return;
     const name = sourceName ? `${sourceName}-bitmap.svg` : 'bitmap.svg';
+    // La finestra "dove salvo" si apre SUBITO, prima di qualsiasi calcolo: il browser la concede solo
+    // finché l'attivazione del clic è fresca (pochi secondi). Chiedendola DOPO una generazione lunga
+    // veniva rifiutata e il file finiva zitto in Download — che è esattamente il difetto segnalato.
+    const target = await pickSaveTarget({ suggestedName: name, description: 'Immagine SVG' });
+    if (!target) { $('status').textContent = saveOutcomeMessage('cancelled', name); return; }
+    const gen = lastGenerated ?? await generate();      // già generato? non si ricalcola niente
+    if (!gen) return;
     // metadata riapribile (R27): riscrive l'SVG generato con il blocco rg-project
-    const withMeta = injectMetadata(gen.svg, { rgProject: 'bitmap', version: '0.1.0', params });
-    const outcome = await saveTextFile(withMeta, { suggestedName: name, description: 'Immagine SVG' });
-    $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${gen.stopCount} stop in sequenza`;
+    const withMeta = injectMetadata(gen.svg, { rgProject: 'bitmap', version: '0.1.0', params: gen.params });
+    const outcome = await target.write(withMeta);
+    $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${gen.res.stopCount} stop in sequenza`;
   });
 
   $('exportDstBtn').addEventListener('click', async () => {
     // Export ricamo Tajima .dst tramite la "possibilità" globale del core: gli exportLayers sono già in mm
     // reali; l'adattatore fa un blocco per polilinea, un ago per stop (cambio-colore in sequenza).
-    const px = source.pixelsAt(params.maxWidthPx);
-    const res = runBitmapPipeline(px.rgba, px.width, px.height, params, mmPerPx(px.width), onlyColor || undefined);
+    if (busy) return;
+    const name = sourceName ? `${sourceName}-bitmap.dst` : 'bitmap.dst';
+    const target = await pickSaveTarget({ suggestedName: name, ...DST_FILE });   // destinazione PRIMA del calcolo
+    if (!target) { $('status').textContent = saveOutcomeMessage('cancelled', name); return; }
+    // Prima qui si rigenerava SEMPRE da zero, anche subito dopo aver premuto Genera. Ora riusa.
+    const gen = lastGenerated ?? await generate();
+    if (!gen) return;
     let bytes: Uint8Array;
     try {
-      bytes = dstFromExportLayers(res.exportLayers, {
+      bytes = dstFromExportLayers(gen.res.exportLayers, {
         label: (sourceName || 'BITMAP').toUpperCase().slice(0, 16),
-        metadata: { rgProject: 'bitmap', version: '0.1.0', params },   // parametri riapribili dal .dst (R27)
+        metadata: { rgProject: 'bitmap', version: '0.1.0', params: gen.params },   // parametri riapribili dal .dst (R27)
       });
     } catch (e) {
       $('status').textContent = (e as Error).message;   // niente da cucire → messaggio, non file vuoto
       return;
     }
-    const name = sourceName ? `${sourceName}-bitmap.dst` : 'bitmap.dst';
-    const outcome = await saveBinaryFile(bytes, { suggestedName: name, ...DST_FILE });
-    $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${res.stopCount} stop · ${(bytes.length / 1024).toFixed(1)} KB`;
+    const outcome = await target.write(bytes);
+    $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${gen.res.stopCount} stop · ${(bytes.length / 1024).toFixed(1)} KB`;
   });
 
   /** Inserisce il metadata rg-project subito dopo il tag <svg> (R27), come fa buildSvg quando gli si passa metadata. */
