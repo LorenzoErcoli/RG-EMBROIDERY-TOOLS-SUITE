@@ -11,7 +11,9 @@
    l'interpolazione del browser inventerebbe colori che non sono nella palette. */
 .broccato-workspace #layer canvas {
   image-rendering: pixelated;
-  background: var(--rg-color-surface, #fff);
+  /* Contenitore SOLLEVATO (la tela su cui si guarda l'immagine), non superficie incassata:
+     dal DS 1.13.0 `--rg-color-surface` è il grigio incassato. */
+  background: var(--rg-color-surface-raised, #fff);
 }
 
 /* Contagocce — stessa resa di `apps/bitmap` (l'utente lo conosce gia' da li'): l'immagine vera a

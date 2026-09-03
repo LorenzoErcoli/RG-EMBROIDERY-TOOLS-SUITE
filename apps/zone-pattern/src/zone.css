@@ -14,5 +14,8 @@ body {
 #layer svg { max-width: 100%; max-height: 100%; }
 
 /* Anteprima del pattern di un ago: un quadretto dentro il pannello, non un componente DS —
-   è un'immagine, e come immagine si comporta (riempie la colonna, resta quadrata). */
-.zone-swatch svg { width: 100%; height: auto; display: block; background: var(--rg-color-surface, #fff); }
+   è un'immagine, e come immagine si comporta (riempie la colonna, resta quadrata).
+   Il fondo è `surface-raised` (bianco): è un contenitore SOLLEVATO, la carta su cui si guarda
+   il punto. Dal DS 1.13.0 `--rg-color-surface` vuol dire "superficie incassata" (grigio), e
+   usarlo qui darebbe un quadretto grigio senza che nessun test se ne accorga. */
+.zone-swatch svg { width: 100%; height: auto; display: block; background: var(--rg-color-surface-raised, #fff); }
