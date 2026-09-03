@@ -35,10 +35,18 @@ export type ImportedBoundaryModel = {
 type SvgLength = { raw: string; amount: number; unit: string };
 type SvgElement = BoundaryPath & { stroke?: string; fill?: string };
 export type ImportScaleMode = "auto" | "explicit-units" | "illustrator-72dpi" | "viewbox-mm" | "custom-size";
+/**
+ * Quale vernice identifica l'elemento. Un file di CONTORNI si riconosce dal tratto
+ * (`stroke`, il default storico); un file di ZONE PIENE si riconosce dal riempimento
+ * (`fill`) — lì il tratto è il nero del bordo, uguale per tutte, e farlo vincere
+ * collasserebbe ogni zona in un colore solo.
+ */
+export type PaintPriority = "stroke" | "fill";
 export type ImportBoundaryOptions = {
   scaleMode?: ImportScaleMode;
   customWidthMm?: number;
   customHeightMm?: number;
+  paintPriority?: PaintPriority;
 };
 
 const dxfAciColors: Record<number, string> = {
@@ -59,6 +67,44 @@ export function parseImportedBoundarySource(text: string, fileName: string, opti
     : parseSvgBoundary(text, fileName, options);
 }
 
+/** Un disegno letto come TRACCIATI, non come sagome: è la forma che serve a un modulo di pattern. */
+export type SvgPolylinesModel = {
+  polylines: Point[][];
+  bounds: ImportedBoundary["bounds"];
+  widthMm: number;
+  heightMm: number;
+  effectiveScaleMode: ImportScaleMode;
+  warning?: string;
+};
+
+/**
+ * Le polilinee di un SVG in mm, coi `transform` applicati e SENZA chiuderle né raggrupparle
+ * per colore.
+ *
+ * È l'altra domanda che si fa allo stesso file: `parseImportedBoundarySource` chiede "quali
+ * SAGOME contiene" (e quindi chiude gli anelli e raggruppa per tinta), questa chiede "quali
+ * TRACCIATI contiene" — che è quello che serve quando l'SVG non è un cartamodello ma un
+ * MODULO di ricamo da ripetere. Stessa macchina di lettura (scala, transform, curve), così
+ * le due risposte non possono divergere (R28).
+ */
+export function parseSvgPolylines(text: string, options: ImportBoundaryOptions = {}): SvgPolylinesModel {
+  const viewBox = parseNumberList(attribute(text, "viewBox"));
+  const rawWidth = parseSvgLength(attribute(text, "width"));
+  const rawHeight = parseSvgLength(attribute(text, "height"));
+  const modelSpace = resolveSvgModelSpace(viewBox, rawWidth, rawHeight, options);
+  const polylines = extractSvgElements(text, parseSvgCssStyles(text), options.paintPriority)
+    .map((element) => transformSvgPointsToModelSpace(element.points, modelSpace))
+    .filter((points) => points.length >= 2);
+  return {
+    polylines,
+    bounds: boundsOf(polylines.flat()),
+    widthMm: modelSpace.widthMm,
+    heightMm: modelSpace.heightMm,
+    effectiveScaleMode: modelSpace.effectiveScaleMode,
+    warning: polylines.length ? undefined : "Nessun tracciato utilizzabile nell'SVG.",
+  };
+}
+
 export function selectBoundaryChoice(model: ImportedBoundaryModel, choiceId?: string): ImportedBoundary | undefined {
   return (choiceId ? model.choices.find((choice) => choice.id === choiceId) : model.choices[0])?.boundary;
 }
@@ -70,7 +116,7 @@ function parseSvgBoundary(text: string, fileName: string, options: ImportBoundar
   const rawHeight = parseSvgLength(attribute(text, "height"));
   const modelSpace = resolveSvgModelSpace(viewBox, rawWidth, rawHeight, options);
   const cssStyles = parseSvgCssStyles(text);
-  const elements = extractSvgElements(text, cssStyles).map((element) => ({
+  const elements = extractSvgElements(text, cssStyles, options.paintPriority).map((element) => ({
     ...element,
     points: transformSvgPointsToModelSpace(element.points, modelSpace)
   }));
@@ -208,18 +254,44 @@ function buildChoices(sourceFileName: string, sourceType: "svg" | "dxf", element
   }).sort((a, b) => areaOfBounds(b.bounds) - areaOfBounds(a.bounds));
 }
 
-function extractSvgElements(text: string, cssStyles: Record<string, Record<string, string>>): SvgElement[] {
+/**
+ * Elementi del disegno, coi `transform` GIÀ applicati.
+ *
+ * Perché conta: Illustrator scrive spessissimo i rombi ruotati come
+ * `<rect … transform="translate(…) rotate(-45)">`. Ignorare il transform non dà
+ * errore — dà un quadrato dritto nel posto sbagliato, in silenzio. Misurato sul
+ * cannage di Lorenzo: 4 zone su 37 arrivavano così.
+ * Il testo si percorre in ORDINE DI DOCUMENTO tenendo una pila di matrici, così
+ * valgono anche i `transform` dei `<g>` annidati (il figlio eredita il padre).
+ */
+function extractSvgElements(
+  text: string,
+  cssStyles: Record<string, Record<string, string>>,
+  paintPriority: PaintPriority = "stroke"
+): SvgElement[] {
   const elements: SvgElement[] = [];
-  const elementRegex = /<(path|polyline|polygon|rect)\b([^>]*)\/?>/gi;
+  const stack: Matrix[] = [IDENTITY_MATRIX];
+  const tokenRegex = /<(g|path|polyline|polygon|rect)\b([^>]*?)(\/?)>|<\/g\s*>/gi;
   let match: RegExpExecArray | null;
-  while ((match = elementRegex.exec(text))) {
+  while ((match = tokenRegex.exec(text))) {
+    if (match[1] === undefined) {            // </g>
+      if (stack.length > 1) stack.pop();
+      continue;
+    }
     const tag = match[1].toLowerCase();
     const attrs = parseAttributes(match[2]);
-    const points = svgElementPoints(tag, attrs);
+    const matrix = multiplyMatrix(stack.at(-1)!, parseSvgTransform(attrs.transform));
+    if (tag === "g") {
+      if (match[3] !== "/") stack.push(matrix);
+      continue;
+    }
+    const points = svgElementPoints(tag, attrs).map((point) => applyMatrix(matrix, point));
     if (points.length < 2) continue;
     const stroke = paint(attrs, cssStyles, "stroke");
     const fill = paint(attrs, cssStyles, "fill");
-    const color = normalizeColor(isPaintActive(stroke) ? stroke : fill);
+    const preferred = paintPriority === "fill" ? fill : stroke;
+    const fallback = paintPriority === "fill" ? stroke : fill;
+    const color = normalizeColor(isPaintActive(preferred) ? preferred : fallback);
     elements.push({
       id: attrs.id || `svg-${tag}-${elements.length}`,
       points,
@@ -230,6 +302,61 @@ function extractSvgElements(text: string, cssStyles: Record<string, Record<strin
     });
   }
   return elements;
+}
+
+/** Matrice affine SVG `[a b c d e f]`: x' = a·x + c·y + e, y' = b·x + d·y + f. */
+export type Matrix = [number, number, number, number, number, number];
+const IDENTITY_MATRIX: Matrix = [1, 0, 0, 1, 0, 0];
+
+function multiplyMatrix(parent: Matrix, child: Matrix): Matrix {
+  const [a1, b1, c1, d1, e1, f1] = parent;
+  const [a2, b2, c2, d2, e2, f2] = child;
+  return [
+    a1 * a2 + c1 * b2,
+    b1 * a2 + d1 * b2,
+    a1 * c2 + c1 * d2,
+    b1 * c2 + d1 * d2,
+    a1 * e2 + c1 * f2 + e1,
+    b1 * e2 + d1 * f2 + f1
+  ];
+}
+
+function applyMatrix(matrix: Matrix, point: Point): Point {
+  const [a, b, c, d, e, f] = matrix;
+  return { x: a * point.x + c * point.y + e, y: b * point.x + d * point.y + f };
+}
+
+/** `transform="translate(…) rotate(…)"`: le funzioni si compongono da sinistra a destra. */
+export function parseSvgTransform(value?: string): Matrix {
+  if (!value) return IDENTITY_MATRIX;
+  let matrix = IDENTITY_MATRIX;
+  const functionRegex = /([a-zA-Z]+)\s*\(([^)]*)\)/g;
+  let match: RegExpExecArray | null;
+  while ((match = functionRegex.exec(value))) {
+    matrix = multiplyMatrix(matrix, transformFunctionMatrix(match[1].toLowerCase(), parseNumberList(match[2])));
+  }
+  return matrix;
+}
+
+function transformFunctionMatrix(name: string, args: number[]): Matrix {
+  const rad = (deg: number) => (deg * Math.PI) / 180;
+  if (name === "matrix" && args.length >= 6) return [args[0], args[1], args[2], args[3], args[4], args[5]];
+  if (name === "translate") return [1, 0, 0, 1, args[0] ?? 0, args[1] ?? 0];
+  if (name === "scale") return [args[0] ?? 1, 0, 0, args[1] ?? args[0] ?? 1, 0, 0];
+  if (name === "rotate") {
+    const cos = Math.cos(rad(args[0] ?? 0));
+    const sin = Math.sin(rad(args[0] ?? 0));
+    const rotation: Matrix = [cos, sin, -sin, cos, 0, 0];
+    if (args.length < 3) return rotation;
+    // rotate(a, cx, cy) = translate(cx,cy) · rotate(a) · translate(-cx,-cy)
+    return multiplyMatrix(
+      multiplyMatrix([1, 0, 0, 1, args[1], args[2]], rotation),
+      [1, 0, 0, 1, -args[1], -args[2]]
+    );
+  }
+  if (name === "skewx") return [1, 0, Math.tan(rad(args[0] ?? 0)), 1, 0, 0];
+  if (name === "skewy") return [1, Math.tan(rad(args[0] ?? 0)), 0, 1, 0, 0];
+  return IDENTITY_MATRIX;
 }
 
 function svgElementPoints(tag: string, attrs: Record<string, string>): Point[] {
@@ -398,9 +525,17 @@ function parseSvgCssStyles(text: string): Record<string, Record<string, string>>
   const styleRegex = /<style\b[^>]*>([\s\S]*?)<\/style>/gi;
   let styleMatch: RegExpExecArray | null;
   while ((styleMatch = styleRegex.exec(text))) {
-    const ruleRegex = /\.([A-Za-z0-9_-]+)\s*\{([^}]+)\}/g;
+    // Un selettore può valere per PIÙ classi (`.cls-1, .cls-2 { stroke:#000 }`, come le
+    // scrive Illustrator) e le regole si SOMMANO: la seconda non cancella la prima.
+    const ruleRegex = /([^{}]+)\{([^}]*)\}/g;
     let ruleMatch: RegExpExecArray | null;
-    while ((ruleMatch = ruleRegex.exec(styleMatch[1]))) styles[ruleMatch[1]] = parseStyleDeclaration(ruleMatch[2]);
+    while ((ruleMatch = ruleRegex.exec(styleMatch[1]))) {
+      const declaration = parseStyleDeclaration(ruleMatch[2]);
+      for (const selector of ruleMatch[1].split(",")) {
+        const className = selector.trim().match(/^\.([A-Za-z0-9_-]+)$/)?.[1];
+        if (className) styles[className] = { ...styles[className], ...declaration };
+      }
+    }
   }
   return styles;
 }

@@ -41,6 +41,8 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
 
 **Consiglio.** Se la rete "sparisce", quasi sempre manca l'assegnazione del ruolo *area rete* a un colore.
 
+
+**Riaprire un progetto.** Il campo di caricamento accetta anche un `.dst` uscito da qui: i parametri stanno dopo il record di fine, dove la macchina non guarda, e ricaricandolo tornano com'erano. Il cartamodello no — quello si ricarica a parte.
 ---
 
 ## Generatore pattern (`pattern-grammar`)
@@ -58,6 +60,8 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
 
 **Consiglio.** Le sezioni di generazione partono chiuse: aprile una alla volta per capire cosa muove ciascun parametro guardando l'anteprima.
 
+
+**Riaprire un progetto.** Il campo di caricamento accetta anche un `.dst` uscito da qui: i parametri stanno dopo il record di fine, dove la macchina non guarda, e ricaricandolo tornano com'erano. Il cartamodello no — quello si ricarica a parte.
 ---
 
 ## Interlace (`interlace`)
@@ -72,6 +76,8 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
 
 **Esportazione.** SVG o DST (un ago per stop → cambi-colore in sequenza per la macchina).
 
+
+**Riaprire un progetto.** Il campo di caricamento accetta anche un `.dst` uscito da qui: i parametri stanno dopo il record di fine, dove la macchina non guarda, e ricaricandolo tornano com'erano. Il cartamodello no — quello si ricarica a parte.
 ---
 
 ## Oblique Pattern — Broderie Anglaise (`oblique`)
@@ -122,6 +128,8 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
 
 **Esportazione.** SVG o DST.
 
+
+**Riaprire un progetto.** Il campo di caricamento accetta anche un `.dst` uscito da qui: i parametri stanno dopo il record di fine, dove la macchina non guarda, e ricaricandolo tornano com'erano. Il cartamodello no — quello si ricarica a parte.
 ---
 
 ## Broccato (`broccato`)
@@ -151,6 +159,41 @@ La barra in fondo dice quanti **salti** ci sono e che percentuale di passaggi re
 **Il punto.** Nella sezione *Punto* regoli l’**orientamento** delle righe (uguale per tutti i colori; 0 = orizzontale), la **lunghezza del punto**, lo **sfalsamento del ritorno** — di quanto il pettine sposta il viaggio di ritorno per non ricadere negli stessi buchi dell’andata — il **punto minimo**, che viene imposto alla fine (dopo i passaggi, mai prima) e la **fermatura di uscita**: qualche punto cortissimo in fondo a ogni ago, prima del cambio-colore, perché il filo non si sfili quando la macchina taglia. `0` la toglie.
 
 **Esportazione.** SVG per Illustrator/Stilista e DST per la macchina, dai bottoni sopra l’anteprima. L’SVG ha **un gruppo per ogni ago nell’ordine di cucitura**, e ogni gruppo esce con una tinta leggermente diversa: così, se due aghi hanno lo stesso colore, Stilista li tratta lo stesso come cambi-ago distinti. Entrambi i file sono **riapribili**: il bottone *Riapri un progetto* accetta un `.svg` o un `.dst` uscito da qui e rimette tutti i parametri. L’immagine no — quella si ricarica a parte.
+
+---
+
+## Pattern a zone (`zone-pattern`)
+
+**A cosa serve.** Riempie di pattern le **zone colorate di un disegno**, una per una. Ogni tinta del file dice due cose: *quale* pattern va in quelle zone e *con che correzione d'angolo*. Il tool misura da solo l'inclinazione di ogni zona e ci ruota sopra il pattern, così il disegno rispetta le perpendicolari delle celle anche dove sono deformate — è il caso del **cannage**, dove lo stesso pattern va posato su rombi regolari a 45°, su una striscia inclinata e su una banda di celle allungate.
+
+**L'asse del pattern.** Dentro un rombo le linee corrono **da vertice a vertice** — verticali rispetto al rombo, non parallele ai suoi lati. Il tool legge il reticolo dai lati (è il modo robusto: i lati sono lunghi e si misurano bene) e poi ruota di 45° per metterlo sulla diagonale. L'eccezione sono le **strisce**: dove la cella è lunga e sottile non c'è nessun rombo, il pattern corre per il lungo, e lì non si ruota niente. Il tool distingue i due casi dall'**allungamento** della cella, deciso per tinta e pesato sull'area — così una scheggia rifilata non cambia la regola alle sue sorelle. Se in un caso particolare sbaglia, la **correzione d'angolo** in *02 Colori e ruoli* è lì per quello: `+45` o `-45` rimette a posto.
+
+**L'idea.** Non si ruota il modulo: si ruota il **piano**. Per una zona inclinata, il tool gira il poligono fino a raddrizzarlo, genera il pattern come lo genererebbe su un rombo dritto, e rimette tutto al suo posto ruotando indietro. Il pattern è quello del *Generatore pattern*, identico: cambia solo da che parte lo guardi.
+
+**Come si usa.**
+1. **Disegno** — carichi il DXF o l'SVG a zone piene. **Appena caricato lo vedi**, ancora prima di generare: ogni zona col suo colore, inquadrata da sola. È il controllo che il file è entrato giusto — scala, forme, tinte — invece di scoprirlo dopo il calcolo. Se qualcosa non torna (mancano zone, le tinte si sono fuse in una) si vede lì. Se viene da Illustrator lascia *Illustrator 72 dpi*: la misura reale la legge dal file, non c'è da dichiararla. *La zona è definita da*: **riempimento** per un disegno a zone piene (il caso normale), **tratto** per un file di soli contorni. La riga sotto dice quante zone e quante tinte ha trovato, e quanto misura il pezzo.
+2. **Colori e ruoli** — una riga per tinta, col numero di zone e l'angolo misurato. Scegli il pattern (**A**, **B**, o *non ricamare*) e, se serve, una **correzione d'angolo** in gradi per quella tinta.
+3. **Pattern A** e **Pattern B** — i due pattern, uno per ago: i controlli del *Generatore pattern* meno il formato e la sagoma, che qui li dà la zona. Non sei obbligato a compilarli a mano — in cima a ogni gruppo ci sono due scorciatoie:
+   - **Parti da un pattern esistente**: scegli uno dei preset condivisi (gli stessi del *Generatore pattern*) e i suoi valori entrano nei campi.
+   - **…oppure leggi i valori da un SVG**: gli dai un SVG e lui ne ricava **i valori di costruzione**, che finiscono nei campi. Non ricalca il disegno: lo **rimisura e lo rigenera**, così il ricamo esce con filo continuo, punto minimo e bordi puliti invece che a pezzi staccati. Se l'SVG è uscito da questa suite i valori sono **esatti** (li porta scritti dentro), anche se è un file vecchio coi nomi di prima; se viene da fuori vengono **misurati** e la riga sotto dice cosa ha capito — passo delle colonne, passo delle file, larghezza dello zig-zag, distanza fra i fili — e cosa non è riuscito a misurare. Quello che non misura non se lo inventa: quel campo resta come l'hai lasciato.
+   In fondo a ogni gruppo c'è la **pulizia del bordo** di quella zona, con le stesse due voci del *Generatore pattern*: *Avvicina al bordo, poi elimina* prova prima a tirare il punto sul contorno (fin dove glielo concede lo *spostamento massimo*) e lo toglie solo se non ci riesce; *Elimina* lo toglie e basta. Attenzione a una cosa: **il motore ci lavora solo sui punti più vicini fra loro del punto minimo**, quindi con un punto minimo piccolo la scelta cambia poco, e più lo alzi più pesa (sul cannage: 44 punti di differenza con 0,4 mm, **225** con 2 mm). E nessuna delle due *garantisce* il punto minimo — quella è la **pulizia punti** in *Zone e sequenza*.
+
+   Due pattern sono già **dentro il programma**: *CANNAGE BASE — LEGGERO* e *CANNAGE BASE — PIENA*, presi dagli originali di riferimento. In tutti i casi i valori restano **visibili e modificabili**: la scorciatoia riempie i campi, non li sostituisce. Sotto ogni gruppo c'è l'**anteprima del pattern**: un quadretto di 26 × 26 mm generato con quei valori, col numero di punti — serve a vedere che punto è, che i numeri da soli non lo dicono. La riga sotto dice **quanti** valori sono entrati e, se il file ne portava di non pertinenti qui (il formato, la sagoma), lo dice invece di ingoiarli in silenzio.
+4. **Zone e sequenza** — la **libertà d'angolo** decide quanto ogni zona può discostarsi dalla sua famiglia: a `0` tutte le zone di una tinta prendono lo stesso angolo (i "blocchi secchi"), alzandola ognuna segue la propria deformazione. L'**altezza della riga** è la fascia entro cui due zone contano come stessa riga; a `0` la ricava dal disegno. Qui stanno anche le tre cose che decidono come si comporta il filo fra una zona e l'altra:
+   - i **passaggi**: *impunture sui bordi dei rombi* fa camminare il filo lungo le giunzioni invece di tagliare in mezzo al ricamo — il **punto dei passaggi** dice quanto sono lunghe quelle impunture; *nessuno* torna al salto a filo alzato;
+   - il **margine sul bordo esterno**: il ricamo deborda di tanto oltre il perimetro del disegno, come l'*overflow* dell'Oblique Pattern. Vale **solo** sul perimetro: i bordi fra un rombo e l'altro non si muovono di un millimetro, altrimenti due zone vicine si ricamerebbero addosso;
+   - la **pulizia punti**: toglie i punti più vicini della misura data, **alla fine di tutto** (passaggi compresi). A `0` non tocca niente e il disegno resta esattamente com'è. È la manopola che decide chi vince fra la macchina e il disegno: alzandola spariscono i punti nello stesso buco, che sono quelli che spezzano il filo.
+5. **Genera** — il calcolo non parte a ogni tasto: si preme il bottone.
+
+**L'ordine di cucitura.** Dentro un pattern si va **a righe: da sinistra a destra, poi si riparte da sinistra**. Ogni zona è un blocco a sé che **attacca dal suo lato sinistro**. Le zone dello stesso pattern si cuciono in sequenza continua su **un solo ago**: si cambia ago solo quando si cambia pattern.
+
+**Esportazione.** SVG e DST, entrambi coi parametri dentro: l'SVG si riapre e rimette pannello e ruoli.
+
+**Riapri un progetto.** Il bottone in *01 Disegno* accetta un `.svg` o un `.dst` usciti da qui e **rimette tutto com'era: parametri, ruoli dei colori e il disegno**. Non serve ricaricare il cartamodello — a differenza degli altri tool, dove l'ingresso è un'immagine e non ci sta dentro, qui l'ingresso sono poligoni e viaggiano nel file (il cannage intero costa ~11 kB). I parametri stanno **dopo il record di fine**: la macchina legge fino a lì e li ignora, quindi il file resta un DST normale da cucire. Del disegno si salva la sola geometria: centro, area e angoli si rimisurano all'apertura, così un progetto vecchio gode delle regole di oggi invece di riaprire i difetti di ieri. Se il cartamodello fosse troppo pesante (un contorno tracciato male, con decine di migliaia di punti) il file esce **coi soli parametri** e la barra di stato te lo dice: non gonfia il DST alle tue spalle.
+
+L'**SVG** esce con **un gruppo per ogni pezzo**, numerato nell'ordine di cucitura: `0000-agoA-zona-…`, `0001-agoA-passaggio`, `0002-agoA-zona-…` e così via. Blocchi e passaggi restano quindi oggetti separati e riconoscibili — se a valle ti serve spostare un rombo o togliere un passaggio, lo trovi per nome invece di cercarlo fra tracciati anonimi. I passaggi tengono il **colore del loro ago**: sono lo stesso filo, e dargli una tinta diversa direbbe al software che è un altro ago.
+
+Il **DST** invece resta a **due layer, uno per ago**: lì un gruppo per pezzo diventerebbe un cambio-colore per pezzo, cioè la macchina si fermerebbe a ogni rombo.
 
 ---
 

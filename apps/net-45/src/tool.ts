@@ -3,7 +3,7 @@ import './net45.css';
 import {
   type Role, type NetParams, type ImportResult,
   ROLE_LABELS, defaultNetParams, buildSvg, buildSvgInSourceFrame,
-  parseSvgToContours, parseDxfToContours,
+  parseSvgToContours, parseDxfToContours, readProjectMetadata, readDstMetadata,
   applyRealWidth, importResultFromContours, measureContours,
   dstFromExportLayers, DST_FILE,
 } from '@rg/core';
@@ -46,7 +46,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
         <div class="rg-param-grid">
           <div class="rg-file-input rg-param-grid__wide">
             <label class="rg-file-input__control">
-              <input type="file" id="fileInput" accept=".svg,.dxf" />
+              <input type="file" id="fileInput" accept=".svg,.dxf,.dst" />
               <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
             </label>
             <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file: uso il cartamodello demo.</p>
@@ -109,6 +109,29 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
   }
 
   // ---- Parametri: componenti DS, unità nello slot, sì/no come casella di spunta ----
+  /**
+   * Rimette in piedi un progetto uscito da qui: parametri e ruoli dei colori.
+   *
+   * Vale sia per un `.svg` (parametri nel `<metadata>`) sia per un `.dst` (nel footer dopo
+   * l'END, R27). Il disegno no: net-45 lavora sul cartamodello importato, che resta quello
+   * caricato — il progetto ripristina COME ricamarlo, non COSA.
+   */
+  function applyImportedProject(meta: Record<string, unknown>): boolean {
+    if (meta.rgProject !== 'net-45') return false;
+    const mp = meta.params;
+    if (mp && typeof mp === 'object') {
+      for (const k of Object.keys(defaultNetParams) as (keyof NetParams)[]) {
+        const v = (mp as Record<string, unknown>)[k];
+        if (v !== undefined) (params as unknown as Record<string, unknown>)[k] = v;
+      }
+    }
+    if (meta.roles && typeof meta.roles === 'object') roles = { ...(meta.roles as RoleAssignment) };
+    ($('realWidth') as HTMLInputElement).value = String(params.realWidthMm);
+    buildParamUI();
+    buildRoleUI();
+    return true;
+  }
+
   function buildParamUI() {
     const host = $('params');
     host.innerHTML = '';
@@ -231,19 +254,36 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
   $('fileInput').addEventListener('change', (ev) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
+    const isDst = /\.dst$/i.test(file.name);
     const reader = new FileReader();
     reader.onload = () => {
       try {
+        // Un .dst uscito da qui non è un cartamodello: è un PROGETTO. Si legge il footer e si
+        // rimettono parametri e ruoli, senza toccare il disegno che c'è già.
+        if (isDst) {
+          const meta = readDstMetadata(new Uint8Array(reader.result as ArrayBuffer));
+          if (meta && applyImportedProject(meta)) {
+            render();
+            $('fileStatus').textContent = `${file.name}: parametri ripristinati dal DST`;
+          } else $('fileStatus').textContent = `${file.name}: nessun parametro di questo tool nel DST`;
+          return;
+        }
         const text = String(reader.result);
-        const result = /\.dxf$/i.test(file.name) ? parseDxfToContours(text) : parseSvgToContours(text);
+        const isDxf = /\.dxf$/i.test(file.name);
+        const result = isDxf ? parseDxfToContours(text) : parseSvgToContours(text);
         sourceName = file.name.replace(/\.[^.]+$/, '');
+        // Se l'SVG viene dalla suite, i parametri si rimettono PRIMA di caricare, così valgono
+        // già quando il disegno entra (e l'assegnazione automatica non li sovrascrive).
+        let restored = false;
+        if (!isDxf) { const meta = readProjectMetadata(text); if (meta) restored = applyImportedProject(meta); }
         loadImport(result, file.name);
+        if (restored) $('fileStatus').textContent = `${file.name} · parametri ripristinati dal file`;
       } catch (e) {
         $('fileStatus').textContent = 'Errore import: ' + (e as Error).message;
         console.error(e);
       }
     };
-    reader.readAsText(file);
+    if (isDst) reader.readAsArrayBuffer(file); else reader.readAsText(file);
   });
 
   $('realWidth').addEventListener('change', () => {
@@ -277,7 +317,12 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     const { layers } = runPipeline(currentContours(), roles, params);
     let bytes: Uint8Array;
     try {
-      bytes = dstFromExportLayers(layers, { label: (sourceName || 'RETE45').toUpperCase().slice(0, 16) });
+      // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge
+      // fino all'END e lo ignora, noi lo rileggiamo. Senza, il .dst non sapeva da dove veniva.
+      bytes = dstFromExportLayers(layers, {
+        label: (sourceName || 'RETE45').toUpperCase().slice(0, 16),
+        metadata: { rgProject: 'net-45', version: '0.1.0', params, roles },
+      });
     } catch (e) {
       $('status').textContent = (e as Error).message;
       return;

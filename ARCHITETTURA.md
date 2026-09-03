@@ -3,7 +3,7 @@
 > Come i tool smettono di essere isole e diventano un ecosistema.
 > Compagno della [Costituzione](COSTITUZIONE-RICAMO.md).
 
-**Versione:** 0.5 · **Aggiornato:** 2026-08-26 · 7 tool live
+**Versione:** 0.6 · **Aggiornato:** 2026-09-03 · 8 tool live
 
 ---
 
@@ -43,6 +43,7 @@ graph TD
     BMP["bitmap (raster)"]
     OBQ["oblique"]
     STR["striatura"]
+    ZON["zone-pattern"]
     BRC["broccato (raster)"]
   end
 
@@ -54,8 +55,8 @@ graph TD
   SCHEMA -->|contratto parametri| CORE
   SCHEMA -. stessi nomi/unità .-> BITMAP
 
-  CORE --> N45 & PG & ILC & BMP & OBQ & STR & BRC
-  UIKIT --> N45 & PG & ILC & BMP & OBQ & STR & BRC
+  CORE --> N45 & PG & ILC & BMP & OBQ & STR & BRC & ZON
+  UIKIT --> N45 & PG & ILC & BMP & OBQ & STR & BRC & ZON
   N45 -. promuove primitiva .-> CORE
 
   N45 -->|esporta SVG/DST| PROJ
@@ -74,7 +75,7 @@ graph TD
                         └───────────────┬───────────────┘
                                         │ import (workspace link)
                                         ▼
-        APPS      net-45  pattern-grammar  interlace  bitmap  oblique  striatura  broccato
+        APPS      net-45  pattern-grammar  interlace  bitmap  oblique  striatura  broccato  zone-pattern
                           │                                  │
                           └──────► SVG+metadata / DST ◄───────┘
                                    (interop: output = input)
@@ -116,13 +117,14 @@ graph TD
 | **bitmap** (Bitmap → Stitch) | ✅ **live** — calcolo punti migrato da `bitmap_to_stitch` (input raster, unico nella suite) |
 | **oblique** (Broderie Anglaise) | ✅ **live** — porting da `rg-oblique-embroidery-pattern-generator` (usa le void, R5) |
 | **striatura** (Punto Striato) | ✅ **live** — motore nuovo, nato dal DST di riferimento `PUNTO-STRIATURA.dst` |
+| **zone-pattern** (Pattern a zone) | ✅ **live** — riempie le zone colorate di un disegno col pattern del *Generatore pattern*, ruotato sulle perpendicolari di ogni zona (ruota il piano, non il modulo). Nato dal cannage Dior. |
 | **broccato** (Broccato) | ✅ **live** — da immagine a raso rado orizzontale coi passaggi nascosti sotto i colori successivi; nato dalla decodifica di `BROCCATO.dst` |
 | 45-grid, cross-stitch | da migrare quando li tocchi (stesso schema) |
 | `bitmap_to_stitch` (repo Python) | satellite: contratti sì, codice no. Migrata la sola pipeline *immagine→punti→SVG*; il laboratorio DST/recipe con AI (CLIP/OpenAI) resta fuori scope |
 
-**Capacità globali attive** (una volta, per tutti — vedi Costituzione): export **SVG e DST riapribili** (R9/R27/R31 — `readProjectMetadata` per l'SVG, `readDstMetadata` per il footer del DST; la cucitura resta byte-identica), export **DST macchina** (R31, `dstFromExportLayers`), **salvataggio con finestra di sistema** (R29), **pannello canonico** Testa A/B + accordion (DS v1.7.0), **passaggi che girano attorno alle aree vuote** (R5, `avoidVoids` in `travel.ts`), **cattura colore da immagine** (`quantize.ts`: median-cut deterministico, colore più vicino — estratta quando l’ha chiesta il terzo tool), **riempimento a righe parallele / raso** (`fill.ts`, R24 — pettine o serpentina, dentro un poligono coi fori: era «il grande assente»), **semplificazione dei contorni** (`simplifyPolyline`, promossa da oblique), **guida in-app** generata da `MANUALE.md` (bottone *Guida* nella topbar di ogni tool).
+**Capacità globali attive** (una volta, per tutti — vedi Costituzione): export **SVG e DST riapribili** (R9/R27/R31 — `readProjectMetadata` per l'SVG, `readDstMetadata` per il footer del DST; la cucitura resta byte-identica) — **vero per tutti e otto i tool dal 2026-09-03, e verificato tool per tool da uno smoke test**: prima era dichiarato qui ma implementato solo in due, ed è il motivo per cui ora è un test e non una frase, export **DST macchina** (R31, `dstFromExportLayers`), **salvataggio con finestra di sistema** (R29, in una fase con `saveTextFile`/`saveBinaryFile` o in **due** con `pickSaveTarget` — destinazione prima, calcolo dopo: serve a chi ha un export lento, perché la finestra la concede solo l'attivazione fresca del clic), **pannello canonico** Testa A/B + accordion (DS v1.7.0), **passaggi che girano attorno alle aree vuote** (R5, `avoidVoids` in `travel.ts`), **cattura colore da immagine** (`quantize.ts`: median-cut deterministico, colore più vicino — estratta quando l’ha chiesta il terzo tool), **riempimento a righe parallele / raso** (`fill.ts`, R24 — pettine o serpentina, dentro un poligono coi fori: era «il grande assente»), **semplificazione dei contorni** (`simplifyPolyline`, promossa da oblique), **guida in-app** generata da `MANUALE.md` (bottone *Guida* nella topbar di ogni tool).
 
-**Rete di sicurezza comune:** `npm test` (348 asserzioni: le primitive del core più le invarianti di tutti e sei i motori, su fixture sintetiche **e sugli SVG veri**), `npm run typecheck` (la build non controlla i tipi: vite usa esbuild) e `npm run build`. Tutti e tre girano in CI a ogni push.
+**Rete di sicurezza comune:** `npm test` (372 asserzioni: le primitive del core più le invarianti di tutti e sei i motori, su fixture sintetiche **e sugli SVG veri**), `npm run typecheck` (la build non controlla i tipi: vite usa esbuild) e `npm run build`. Tutti e tre girano in CI a ogni push.
 
 ---
 
@@ -142,7 +144,8 @@ RG Tools (monorepo)
 ├─ apps/interlace           "Interlace"
 ├─ apps/bitmap              "Bitmap → Stitch"  (input raster)
 ├─ apps/oblique             "Broderie Anglaise"
-└─ apps/striatura           "Punto Striato"
+├─ apps/striatura           "Punto Striato"
+└─ apps/zone-pattern        "Pattern a zone"
 ```
 
 **Come funziona:** `apps/shell` è l'unica app d'ingresso. Home (`#/`) = griglia di tool DS-styled;

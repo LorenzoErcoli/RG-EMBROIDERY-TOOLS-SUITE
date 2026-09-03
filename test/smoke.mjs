@@ -14,11 +14,11 @@ mkdirSync(outDir, { recursive: true });
 const posix = (p) => join(root, p).replace(/\\/g, '/');
 const entry = join(outDir, 'entry.ts');
 writeFileSync(entry, `
-export { parseImportedBoundarySource, generatePattern } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
+export { parseImportedBoundarySource, generatePattern, parseSvgTransform } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
 export { generateFill, generatePasses, defaultInterlaceParams } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
-export { generateStitch, analyzeBitmap, buildSelectionMask, buildPalette, groupByPalette, defaultBitmapParams } from ${JSON.stringify(posix('apps/bitmap/src/engine.ts'))};
+export { generateStitch, stitchSteps, reinsertPoints, analyzeBitmap, buildSelectionMask, buildPalette, groupByPalette, defaultBitmapParams } from ${JSON.stringify(posix('apps/bitmap/src/engine.ts'))};
 export { buildRawLevels, computeGridCounts, moduleFromPolylines, parseModuleSvg, defaultObliqueParams, resolveBoundaries, buildLaserExport, filterLevelByHoles, rectBoundaryOf, boundaryFromFormat, boundaryFromPoints, contourBoundary, simplifyLoop, isInside, applyModuleClipMode, cleanupPolylines, subtractExclusions, cleanupVoids, applyVoids, generateOblique, connectLayerContinuity, connectTechnicalDiagonals, enforceMinimumStitch, reconnectCutFragmentsOnBoundary } from ${JSON.stringify(posix('apps/oblique/src/engine.ts'))};
-export { runBitmapPreview, runBitmapPipeline } from ${JSON.stringify(posix('apps/bitmap/src/pipeline.ts'))};
+export { runBitmapPreview, runBitmapPipeline, PREVIEW_MAX_DOTS } from ${JSON.stringify(posix('apps/bitmap/src/pipeline.ts'))};
 export { buildNet } from ${JSON.stringify(posix('apps/net-45/src/net.ts'))};
 export { generateStriatura, layerThreadMm, defaultStriaturaParams } from ${JSON.stringify(posix('apps/striatura/src/engine.ts'))};
 export { paletteToColors, applyDensityToAll, colorsToPalette, clampColorCount, mmPerPixel, defaultBroccatoParams } from ${JSON.stringify(posix('apps/broccato/src/engine.ts'))};
@@ -27,6 +27,12 @@ export { traceRegions, pointInRegion, regionsAreaMm2 } from ${JSON.stringify(pos
 export { buildCoverGrid, routeColorRuns, CELL_COVERED, CELL_OWN, CELL_EDGE, CELL_BARE } from ${JSON.stringify(posix('apps/broccato/src/routing.ts'))};
 export { buildPlan } from ${JSON.stringify(posix('apps/broccato/src/pipeline.ts'))};
 export { sampleImage as sampleBroccatoImage } from ${JSON.stringify(posix('apps/broccato/src/sample.ts'))};
+export { readZones, resolveZoneAngles, orderZonesRaster, dominantAngleDeg, familyAngleDeg, boundsOfPoints as zoneBounds, rotatePoints, outerEdgeFlags, expandOuterEdges, cellElongation, familyAxisShiftDeg, STRIP_ELONGATION, zonesFromShapes, makeZone } from ${JSON.stringify(posix('apps/zone-pattern/src/engine.ts'))};
+export { buildZonePlan, fillZone, threadMetres, travelMetres, exportSequenceLayers, PATTERN_INK } from ${JSON.stringify(posix('apps/zone-pattern/src/pipeline.ts'))};
+export { buildEdgeGraph, travelAlongEdges } from ${JSON.stringify(posix('apps/zone-pattern/src/travel.ts'))};
+export { readPatternSvg, readEmbeddedConfig, measureConstruction, migrateLegacyNames, periodOf, peakSpacing, modeOf } from ${JSON.stringify(posix('apps/zone-pattern/src/analyze.ts'))};
+export { PATTERN_FIELD_NAMES, PATTERN_FIELD_KIND } from ${JSON.stringify(posix('apps/zone-pattern/src/fields.ts'))};
+export { parseSvgPolylines } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
 export { runPipeline as runStriaturaPipeline } from ${JSON.stringify(posix('apps/striatura/src/pipeline.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 `);
@@ -89,6 +95,44 @@ const arcZero = rg.parseImportedBoundarySource(
   arcSvg.replace('A 50 50 0 0 1 0 100', 'A 0 0 0 0 1 0 100'), 'arco0.svg').choices[0].boundary;
 check('raggio zero → segmento retto (come da specifica SVG)',
   Math.round(arcZero.bounds.maxY - arcZero.bounds.minY), 100);
+
+// I `transform` di Illustrator. Un `<rect transform="translate(…) rotate(-45)">` è come Illustrator
+// scrive un rombo: ignorare il transform non dà errore, dà UN QUADRATO DRITTO NEL POSTO SBAGLIATO.
+// Fixture: il cannage vero di Lorenzo (37 zone, 6 colori) — 4 rombi arrivavano così.
+console.log('\ntransform SVG: il rombo di Illustrator è un rombo, non un quadrato');
+const cannageSvg = readFileSync(join(here, 'fixtures/cannage-zone.svg'), 'utf8');
+const cannage = rg.parseImportedBoundarySource(cannageSvg, 'cannage-zone.svg',
+  { scaleMode: 'illustrator-72dpi', paintPriority: 'fill' });
+const cannageZones = cannage.choices.flatMap((c) => c.boundary.paths);
+const assiale = (pts) => {
+  const q = pts.slice(0, 4);
+  return q.length === 4 && q.every((a, i) => {
+    const b = q[(i + 1) % 4];
+    return Math.abs(a.x - b.x) < 1e-6 || Math.abs(a.y - b.y) < 1e-6;
+  });
+};
+check('nessuna zona resta assiale: i 4 rect ruotati sono ruotati davvero',
+  cannageZones.filter((p) => assiale(p.points)).length, 0);
+const rombo = cannageZones.find((p) => p.id === 'svg-rect-2').points;
+check('il rombo ha le diagonali sugli assi (rotazione -45° applicata)',
+  [Math.round(rombo[2].x - rombo[0].x), Math.round(rombo[2].y - rombo[0].y)], [91, 0]);
+check('rotate(a,cx,cy) ruota attorno al centro dato',
+  rg.parseSvgTransform('rotate(90 10 0)').map((v) => Math.round(v)), [0, 1, -1, 0, 10, -10]);
+check('translate+rotate si compongono da sinistra a destra',
+  rg.parseSvgTransform('translate(5,0) rotate(90)').map((v) => Math.round(v)), [0, 1, -1, 0, 5, 0]);
+
+// Vernice: un file di CONTORNI si riconosce dal tratto, uno di ZONE PIENE dal riempimento.
+// Qui il tratto è il nero del bordo, uguale per tutte le 37 zone: farlo vincere le collassa in una.
+console.log('\nvernice: il tratto identifica i contorni, il riempimento le zone');
+check('a riempimento: le 6 tinte del cannage restano 6',
+  cannage.choices.map((c) => c.color), ['#ff2eaf', '#cd00ff', '#0018f9', '#00f700', '#f40000', '#f29b27']);
+check('...e sono 37 zone in tutto', cannageZones.length, 37);
+check('a tratto: le stesse 37 zone diventano UN nero solo',
+  rg.parseImportedBoundarySource(cannageSvg, 'c.svg', { paintPriority: 'stroke' }).choices.map((c) => c.color), ['#000000']);
+check('lo stroke di una regola multi-selettore (.cls-1, .cls-2 {…}) viene letto',
+  rg.parseImportedBoundarySource(cannageSvg, 'c.svg').choices.length, 1);
+check('Illustrator 72dpi: il disegno misura 378.421mm come dice Lorenzo',
+  Number((cannage.source.finalBoundsMm.maxX - cannage.source.finalBoundsMm.minX).toFixed(3)), 378.421);
 
 // I FILE VERI di Lorenzo (gli SVG sorgente di oblique, committati in apps/oblique/fixtures/).
 // Fino a ieri i test giravano solo su fixture sintetiche: qui l'importer legge i file che il tool
@@ -344,6 +388,103 @@ const bPv = rg.runBitmapPreview(bBuf, bW, bH, bAll, 1.0);
 const bDrawn = (bPv.svg.match(/M/g) || []).length;
 const bListed = bPv.colors.reduce((s, c) => s + c.preparedCount, 0);
 check('anteprima: puntini disegnati = punti totali (niente base nascosta)', bDrawn, bListed);
+check('anteprima: dichiara quanti punti doveva disegnare e quanti ne ha disegnati', bPv.previewPoints === bListed && bPv.drawnPoints === bDrawn, true);
+
+// Il tetto di DISEGNO dell'anteprima e' un limite visivo: sopra di esso i puntini si diradano e
+// compaiono buchi REGOLARI che nel ricamo non ci sono. Difetto trovato da Lorenzo con un'immagine
+// da 410mm: col tetto vecchio (120.000) l'anteprima si bucava e non lo diceva. Il conteggio non
+// dipende dai pixel ma dalla misura in mm e dalla distanza punti (largh/dist x alt/dist) — vale
+// pero' solo finche' la cella e' piu' grande del pixel, percio' la fixture e' 800x1000px.
+// Si blocca il patto: (a) il tetto e' quello dichiarato, (b) sotto il tetto non si dirada mai,
+// (c) sopra il tetto il risultato lo DICHIARA, (d) la generazione non ne risente: cuce tutto.
+console.log('\nbitmap — il tetto di disegno dell’anteprima non mente mai');
+check('il tetto di disegno e’ 300.000 punti', rg.PREVIEW_MAX_DOTS, 300000);
+{
+  const tW = 800, tH = 1000;                     // piu' alta che larga, come il file di Lorenzo
+  const tBuf = new Uint8ClampedArray(tW * tH * 4);
+  for (let i = 0; i < tW * tH; i++) { tBuf[i * 4] = 0x20; tBuf[i * 4 + 1] = 0x20; tBuf[i * 4 + 2] = 0x20; tBuf[i * 4 + 3] = 255; }
+  const tP = (realWidthMm) => ({ ...rg.defaultBitmapParams, colorCount: 1, realWidthMm, maxWidthPx: 0 });
+  const at = (mm) => rg.runBitmapPreview(tBuf, tW, tH, tP(mm), mm / tW);
+  const cella = (mm) => rg.defaultBitmapParams.densitySpacingMm / (mm / tW);
+
+  const sotto = at(410);                         // IL caso di Lorenzo
+  check('la cella resta piu’ grande del pixel: il conteggio e’ metrico, non a pixel', cella(410) > 1, true);
+  check('a 410mm i punti superano il VECCHIO tetto di 120.000', sotto.previewPoints > 120000, true);
+  check('...eppure ora l’anteprima li disegna TUTTI (era il caso che si bucava)', sotto.drawnPoints, sotto.previewPoints);
+
+  const sopra = at(700);                         // oltre il tetto nuovo: puo’ diradare, ma DEVE dirlo
+  check('oltre il tetto l’anteprima dirada davvero', sopra.drawnPoints < sopra.previewPoints, true);
+  check('...senza mai superare il tetto dichiarato', sopra.drawnPoints <= rg.PREVIEW_MAX_DOTS, true);
+  check('...e il numero VERO dei punti resta dichiarato, non diradato', sopra.previewPoints > rg.PREVIEW_MAX_DOTS, true);
+
+  // La cosa che conta davvero: il diradamento e’ SOLO disegno — il ricamo ha tutti i punti.
+  const cuciti = rg.generateStitch(tBuf, tW, tH, tP(700), 700 / tW).colors.reduce((s, c) => s + c.finalPoints, 0);
+  check('il diradamento e’ SOLO visivo: la generazione cuce tutti i punti', cuciti, sopra.previewPoints);
+}
+
+// La generazione ora ha DUE strade — in un colpo solo (`generateStitch`, quella dei test e degli
+// script) e a passi con la barra di avanzamento (`stitchSteps`, quella del pannello). Sono lo stesso
+// codice, ma "sono lo stesso codice" è esattamente il genere di cosa che smette di essere vera senza
+// che nessuno se ne accorga. Qui si blocca: stesse fixture, stesso identico risultato.
+console.log('\nbitmap — la generazione a passi e quella in un colpo solo non possono divergere');
+{
+  const pW = 90, pH = 70;
+  const pBuf = new Uint8ClampedArray(pW * pH * 4);
+  for (let i = 0; i < pW * pH; i++) {
+    const x = i % pW, y = (i / pW) | 0, c = (x + y) % 3;
+    pBuf[i * 4] = c === 0 ? 0x20 : c === 1 ? 0xb0 : 0x50;
+    pBuf[i * 4 + 1] = 0x30;
+    pBuf[i * 4 + 2] = c === 0 ? 0x8a : 0x40;
+    pBuf[i * 4 + 3] = 255;
+  }
+  // Piena risoluzione: quasi tutti i punti finiscono "in attesa" e il REINSERIMENTO lavora davvero
+  // — è la fase che si è dovuta spezzare a fette per non congelare la barra.
+  const casi = [
+    { nome: 'a righe, piena risoluzione', p: { densitySpacingMm: 0, minStitchMm: 1, reinsertionRounds: 1, ordering: 'scanline', colorCount: 2 } },
+    { nome: 'più vicino, 2 giri', p: { densitySpacingMm: 0, minStitchMm: 1.5, reinsertionRounds: 2, ordering: 'nearest', colorCount: 1 } },
+    { nome: 'griglia normale', p: { densitySpacingMm: 1.2, minStitchMm: 1, reinsertionRounds: 1, ordering: 'scanline', colorCount: 3 } },
+  ];
+  for (const { nome, p } of casi) {
+    const par = { ...rg.defaultBitmapParams, ...p, maxWidthPx: 0 };
+    const inUnColpo = rg.generateStitch(pBuf, pW, pH, par, 0.2646);
+
+    // ...e la stessa cosa consumata passo per passo, raccogliendo l'avanzamento.
+    const g = rg.stitchSteps(pBuf, pW, pH, par, 0.2646);
+    const avanzamento = [];
+    let r = g.next();
+    while (!r.done) { avanzamento.push(r.value); r = g.next(); }
+    const aPassi = r.value;
+
+    check(`${nome}: stesso identico ricamo per le due strade`, JSON.stringify(aPassi), JSON.stringify(inUnColpo));
+    check(`${nome}: l'avanzamento non torna mai indietro`, avanzamento.every((v, i) => i === 0 || v.done >= avanzamento[i - 1].done), true);
+    check(`${nome}: l'avanzamento non sfora mai il totale`, avanzamento.every((v) => v.done <= v.total), true);
+    check(`${nome}: dice sempre cosa sta facendo`, avanzamento.every((v) => typeof v.phase === 'string' && v.phase.length > 0), true);
+  }
+}
+
+// Il reinserimento del punto minimo si fa A FETTE per lasciar respirare la barra. È equivalente a
+// farlo in blocco solo se ogni punto in attesa incontra il percorso NELLO STESSO STATO — cosa vera
+// perché le fette si passano il percorso man mano che cresce. Vale la pena bloccarlo: se un giorno
+// qualcuno parallelizzasse le fette, il ricamo cambierebbe in silenzio.
+console.log('\nbitmap — il punto minimo a fette è identico al punto minimo in blocco');
+{
+  const rnd = (() => { let a = 12345; return () => ((a = (a * 1103515245 + 12345) & 0x7fffffff) / 0x7fffffff); })();
+  const percorso = [], attesa = [];
+  for (let i = 0; i < 40; i++) percorso.push({ x: i * 9, y: 40 + Math.round(20 * Math.sin(i / 3)) });
+  for (let i = 0; i < 900; i++) attesa.push({ x: rnd() * 360, y: rnd() * 80 });
+  const MIN = 6;
+
+  const inBlocco = rg.reinsertPoints(percorso, attesa, MIN);
+  let cur = percorso; const resto = [];
+  for (let i = 0; i < attesa.length; i += 256) {           // stesso passo del motore (REINSERT_TICK)
+    const r = rg.reinsertPoints(cur, attesa.slice(i, i + 256), MIN);
+    cur = r.path;
+    for (const q of r.leftover) resto.push(q);
+  }
+  check('percorso identico', JSON.stringify(cur), JSON.stringify(inBlocco.path));
+  check('scarti identici', JSON.stringify(resto), JSON.stringify(inBlocco.leftover));
+  check('e il reinserimento ha lavorato davvero (non è un test a vuoto)', inBlocco.path.length > percorso.length, true);
+}
 
 // export DST (Tajima): gli stessi exportLayers dell'SVG → file .dst con header valido e byte non vuoti.
 const bDstRes = rg.runBitmapPipeline(bBuf, bW, bH, bP0, 1.0);
@@ -413,6 +554,27 @@ check('DST senza metadata → null', rg.readDstMetadata(dstNo), null);
 // machine-safe: il ricamo fino all'END è IDENTICO, il metadata è solo un footer in coda
 check('DST con metadata: la cucitura (fino a END) è invariata', Array.from(dstYes.slice(0, dstNo.length)).join(','), Array.from(dstNo).join(','));
 check('DST con metadata: END ancora presente e integro', [dstYes[dstNo.length - 3], dstYes[dstNo.length - 2], dstYes[dstNo.length - 1]], [0, 0, 0xF3]);
+
+// La riapertura del .dst è dichiarata in STATO come CAPACITÀ GLOBALE, ma per mesi è stata vera
+// solo per bitmap e oblique: gli altri quattro tool scrivevano il DST senza parametri e nessuno
+// se ne accorgeva, perché la dichiarazione stava in un documento e non in un test.
+// Qui si verifica sul SORGENTE, perché gli handler di export vivono nel DOM e headless non si
+// possono chiamare: ogni tool deve passare `metadata` col PROPRIO nome, e saper rileggere.
+console.log('\nsuite — ogni tool scrive i parametri nel .dst e li sa rileggere (R27)');
+for (const [tool, id] of [['net-45', 'net-45'], ['pattern-grammar', 'pattern-grammar'],
+  ['interlace', 'interlace'], ['striatura', 'striatura'], ['oblique', 'oblique'],
+  ['bitmap', 'bitmap'], ['zone-pattern', 'zone-pattern']]) {
+  const src = readFileSync(join(root, `apps/${tool}/src/tool.ts`), 'utf8');
+  const call = src.indexOf('dstFromExportLayers(');
+  const blocco = call >= 0 ? src.slice(call, call + 600) : '';
+  // Il `metadata` può essere scritto sul posto o arrivare da una funzione (zone-pattern lo
+  // costruisce a parte perché ci mette dentro anche il disegno): si chiede che la chiamata lo
+  // passi, e che il file dichiari il PROPRIO nome — non quello di un altro tool.
+  check(`${tool}: il DST esce coi parametri di "${id}"`,
+    call >= 0 && /metadata:/.test(blocco) && new RegExp(`rgProject: '${id}'`).test(src), true);
+  check(`${tool}: sa rileggere un .dst`, /readDstMetadata/.test(src), true);
+  check(`${tool}: accetta un .dst in ingresso`, /accept="[^"]*\.dst/.test(src), true);
+}
 
 // oblique — griglia diagonale + placement (Fase A, sotto-step 2a). Moduli SINTETICI (l'engine è
 // Node-safe: riceve geometrie già parsate; il parse SVG DOM vive in tool.ts). Verifica che la
@@ -1675,6 +1837,519 @@ console.log('\noblique — routing + orchestratore (2d)');
     rg.mmPerPixel(960, { realWidthMm: 0, dpiDefault: 96 }).toFixed(4), (25.4 / 96).toFixed(4));
   check('con la larghezza reale la sagoma misura ESATTAMENTE quella',
     (rg.mmPerPixel(900, { realWidthMm: 270, dpiDefault: 96 }) * 900).toFixed(3), '270.000');
+}
+
+// ---------------------------------------------------------------------------
+// zone-pattern — il pattern a zone, misurato sul cannage vero di Lorenzo.
+// Il tool non ha un motore di pattern suo: usa quello di @rg/pattern-grammar ruotando
+// il PIANO invece del modulo. Le invarianti servono a difendere proprio quel giro.
+{
+  const zoneModel = rg.parseImportedBoundarySource(
+    readFileSync(join(here, 'fixtures/cannage-zone.svg'), 'utf8'), 'cannage-zone.svg',
+    { scaleMode: 'illustrator-72dpi', paintPriority: 'fill' });
+  const grezze = rg.readZones(zoneModel);
+  const zone = rg.resolveZoneAngles(grezze, 20);
+  const perColore = (colore) => zone.filter((z) => z.color === colore);
+  const mediana = (valori) => valori.slice().sort((a, b) => a - b)[Math.floor(valori.length / 2)];
+  const angoloDi = (colore) => mediana(perColore(colore).map((z) => z.angleDeg));
+
+  console.log('\nzone-pattern — le tre famiglie di inclinazione escono dal disegno');
+  check('37 zone, 6 tinte', [zone.length, new Set(zone.map((z) => z.color)).size], [37, 6]);
+  // Qui si misura il RETICOLO letto dai lati — la materia prima. L'asse su cui poi corre il
+  // pattern è un'altra cosa (la diagonale del rombo) e ha il suo blocco più sotto.
+  // ATTENZIONE: si legge dalle zone GREZZE. Su quelle già risolte tornerebbe l'asse finale,
+  // non i lati — e il test misurerebbe sé stesso invece della materia prima.
+  const reticoloDi = (colore) => rg.familyAngleDeg(grezze.filter((z) => z.color === colore));
+  check('cannage regolare (rosa/viola): lati a 45°',
+    [Math.round(reticoloDi('#ff2eaf')), Math.round(reticoloDi('#cd00ff'))], [44, 44]);
+  check('striscia centrale (rosso/arancio): lati a 15°',
+    [Math.round(reticoloDi('#f40000')), Math.round(reticoloDi('#f29b27'))], [15, 15]);
+  check('banda sinistra (blu/verde): lati a ~79°',
+    [Math.round(reticoloDi('#0018f9')), Math.round(reticoloDi('#00f700'))], [79, 79]);
+  // Le tinte che Lorenzo accoppia stanno sullo STESSO reticolo: è la prova che sono
+  // due pattern sopra tre inclinazioni, non sei cose diverse.
+  check('le tinte accoppiate cadono sullo stesso reticolo (entro 1°)',
+    [reticoloDi('#ff2eaf') - reticoloDi('#cd00ff'), reticoloDi('#f40000') - reticoloDi('#f29b27')]
+      .every((d) => Math.abs(d) < 1), true);
+  // Senza il riferimento di famiglia le schegge tagliate al bordo sbandano: qui si vede
+  // il difetto che `resolveZoneAngles` corregge (una zona arancione dava 86° su 15°).
+  check('senza riferimento di famiglia le schegge sbandano oltre 45°',
+    Math.max(...grezze.filter((z) => z.color === '#f29b27').map((z) => Math.abs(z.angleDeg - 15))) > 45, true);
+  check('col riferimento nessuna zona si scosta oltre 5° dalla sua famiglia',
+    zone.every((z) => Math.abs(z.angleDeg - angoloDi(z.color)) < 5), true);
+  // Libertà 0 = i "tre blocchi secchi" che Lorenzo immaginava di generare a mano: ogni zona
+  // prende l'angolo della sua tinta. Gli angoli distinti sono 6 (uno per tinta) ma cadono su
+  // 3 soli reticoli, perché le tinte accoppiate condividono la griglia.
+  const bloccate = rg.resolveZoneAngles(grezze, 0);
+  check('libertà 0 = un angolo per tinta, nessuna zona libera',
+    new Set(bloccate.map((z) => z.angleDeg.toFixed(4))).size, 6);
+  check('...e quei 6 angoli sono 3 reticoli (le tinte accoppiate coincidono entro 1°)',
+    [...new Set(bloccate.map((z) => z.angleDeg))]
+      .sort((a, b) => a - b)
+      .reduce((reticoli, a) => (reticoli.at(-1) !== undefined && Math.abs(a - reticoli.at(-1)) < 1 ? reticoli : [...reticoli, a]), [])
+      .length, 3);
+
+  // ---- L'ASSE: la diagonale del rombo, non il suo lato ----
+  // Lorenzo, sul primo risultato: «gli altri li hai girati troppo, di 45 gradi in più del
+  // necessario, perché le linee devono essere verticali al rombo non al quadrato». In un
+  // cannage i cordoncini corrono da vertice a vertice; i LATI stanno a 45° da loro. Misurare
+  // i lati resta il modo robusto di leggere il reticolo, ma poi va ruotato.
+  // L'eccezione sono le STRISCE (rosso/arancio): lì non c'è rombo, il pattern corre per il
+  // lungo, e infatti erano le uniche due famiglie già giuste.
+  console.log('\nzone-pattern — il pattern segue la diagonale del rombo, non il lato');
+  check('il cannage regolare (rosa/viola) va DRITTO, non a 45°',
+    [Math.round(angoloDi('#ff2eaf')), Math.round(angoloDi('#cd00ff'))], [0, 0]);
+  check('la banda sinistra (blu/verde) cala di 45 e va a ~31°',
+    [Math.round(angoloDi('#0018f9')), Math.round(angoloDi('#00f700'))], [31, 31]);
+  check('le strisce (rosso/arancio) restano a 15°: lì il pattern corre per il lungo',
+    [Math.round(angoloDi('#f40000')), Math.round(angoloDi('#f29b27'))], [15, 15]);
+  check('le tinte accoppiate restano sullo stesso reticolo anche dopo lo scarto',
+    [angoloDi('#ff2eaf') - angoloDi('#cd00ff'), angoloDi('#0018f9') - angoloDi('#00f700'),
+      angoloDi('#f40000') - angoloDi('#f29b27')].every((d) => Math.abs(d) < 1), true);
+
+  // Il discriminante è l'ALLUNGAMENTO della cella, ed è misurabile: rombi ~1-2.5, strisce ~5.
+  check('un rombo ha allungamento vicino a 1',
+    rg.cellElongation([{ x: 0, y: 0 }, { x: 10, y: 10 }, { x: 20, y: 0 }, { x: 10, y: -10 }, { x: 0, y: 0 }]) < 1.2, true);
+  check('una striscia lunga ha allungamento alto',
+    rg.cellElongation([{ x: 0, y: 0 }, { x: 60, y: 0 }, { x: 60, y: 4 }, { x: 0, y: 4 }, { x: 0, y: 0 }]) > rg.STRIP_ELONGATION, true);
+  // E si decide per FAMIGLIA pesando sull'AREA: la famiglia arancione ha mediana semplice
+  // 2.22 (sarebbe passata per rombo, angolo sbagliato di 45°) ma pesata sull'area è una striscia.
+  check('lo scarto si decide per famiglia: rombi -45°, strisce 0°',
+    [rg.familyAxisShiftDeg(perColore('#ff2eaf')), rg.familyAxisShiftDeg(perColore('#f40000')),
+      rg.familyAxisShiftDeg(perColore('#f29b27'))], [-45, 0, 0]);
+
+  console.log('\nzone-pattern — ruotare il piano non deforma il pattern');
+  const quadrato = [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 20 }, { x: 0, y: 20 }, { x: 0, y: 0 }];
+  const zonaProva = (angolo) => ({
+    id: 'p', color: '#000', points: quadrato, centroid: { x: 10, y: 10 }, areaMm2: 400, angleDeg: angolo,
+  });
+  const config = { horizontalZigzagWidth: 5.5, horizontalZigzagHeight: 4.3, horizontalZigzagInterline: 0.9,
+    horizontalZigzagSpacing: 12, verticalZigzagWidth: 1.2, verticalZigzagInterline: 0.9, stepX: 5.2, offsetY: 6,
+    minStitchMm: 0.4, maxStitchMm: 6, constructionStroke: 0.3 };
+  const filoDi = (angolo) => {
+    let mm = 0;
+    for (const pl of rg.fillZone(zonaProva(0), config, angolo, 2)) {
+      for (let i = 1; i < pl.length; i++) mm += Math.hypot(pl[i].x - pl[i - 1].x, pl[i].y - pl[i - 1].y);
+    }
+    return mm;
+  };
+  // Una rotazione è rigida: gira il disegno, non lo stira. Se il filo cambiasse, il "ruota
+  // il piano" starebbe scalando qualcosa — ed è l'errore che questo test esiste per cogliere.
+  check('la stessa zona a 0° e a 90° consuma lo stesso filo (±1%)',
+    Math.abs(filoDi(0) - filoDi(90)) / filoDi(0) < 0.01, true);
+  check('a 45° il filo resta dello stesso ordine (la zona è la stessa)',
+    filoDi(45) > filoDi(0) * 0.7 && filoDi(45) < filoDi(0) * 1.3, true);
+
+  console.log('\nzone-pattern — il piano: dentro le zone, da sinistra, un ago per pattern');
+  const ruoli = {};
+  for (const [c, p] of Object.entries({ '#ff2eaf': 'A', '#f40000': 'A', '#0018f9': 'A',
+    '#cd00ff': 'B', '#f29b27': 'B', '#00f700': 'B' })) ruoli[c] = { pattern: p, angleOffsetDeg: 0 };
+  const piano = rg.buildZonePlan(zone, {
+    roles: ruoli,
+    patterns: { A: config, B: { ...config, horizontalZigzagSpacing: 9, stepX: 9 } },
+    marginMm: 2, rowHeightMm: 0, travelMode: 'edges', travelStitchMm: 3, cleanupMinStitchMm: 0, outerMarginMm: 0,
+  });
+  check('tutte le 37 zone vengono riempite', [piano.stitches.length, piano.skipped], [37, 0]);
+  check('due pattern = DUE aghi (Lorenzo: "quando cambi pattern cambi ago")',
+    piano.layers.map((l) => l.id), ['pattern-A', 'pattern-B']);
+
+  // R5-simile: il ricamo di una zona NON deve uscire dalla zona. È il vincolo che rende
+  // sensato tutto il tool — un rombo che sborda si vede subito sul capo.
+  const fuoriDal = (p, poly) => {
+    let dentro = false;
+    for (let i = 0, j = poly.length - 2; i < poly.length - 1; j = i++) {
+      if (((poly[i].y > p.y) !== (poly[j].y > p.y))
+        && (p.x < (poly[j].x - poly[i].x) * (p.y - poly[i].y) / (poly[j].y - poly[i].y) + poly[i].x)) dentro = !dentro;
+    }
+    if (dentro) return 0;
+    let min = Infinity;
+    for (let i = 0; i < poly.length - 1; i++) {
+      const a = poly[i], b = poly[i + 1];
+      const l2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+      const t = l2 ? Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2)) : 0;
+      min = Math.min(min, Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y))));
+    }
+    return min;
+  };
+  let sconfina = 0;
+  for (const s of piano.stitches) for (const pl of s.polylines) for (const p of pl) {
+    sconfina = Math.max(sconfina, fuoriDal(p, s.zone.points));
+  }
+  check('nessun punto esce dalla propria zona', sconfina < 0.001, true);
+  check('ogni zona attacca da SINISTRA (Lorenzo)',
+    piano.stitches.filter((s) => s.polylines[0][0].x > s.polylines[0].at(-1).x).length, 0);
+  check('ogni zona è un blocco a sé (moduli separati, non un reticolo unico)',
+    piano.stitches.every((s) => s.polylines.length === 1), true);
+
+  // R4: il punto massimo deve valere anche DOPO la rotazione. È il punto in cui un
+  // "ruota indietro" fatto male reintrodurrebbe segmenti lunghi.
+  let piuLungo = 0;
+  for (const s of piano.stitches) for (const pl of s.polylines) {
+    for (let i = 1; i < pl.length; i++) piuLungo = Math.max(piuLungo, Math.hypot(pl[i].x - pl[i - 1].x, pl[i].y - pl[i - 1].y));
+  }
+  check('R4 — il punto massimo regge anche dopo la rotazione', piuLungo <= 6.001, true);
+
+  // La sequenza: dentro un ago si va a righe, ogni riga da sinistra a destra.
+  const inSequenza = piano.stitches.filter((s) => s.pattern === 'A').map((s) => s.zone.centroid);
+  let ripartenze = 0;
+  for (let i = 1; i < inSequenza.length; i++) if (inSequenza[i].x < inSequenza[i - 1].x) ripartenze++;
+  check('la sequenza va a righe: riparte da sinistra più di una volta', ripartenze >= 2, true);
+  check('...e ogni riga è ordinata da sinistra a destra',
+    ripartenze < inSequenza.length - 1, true);
+
+  // ---- I PASSAGGI: impunture che camminano sui bordi dei rombi, non tagli in mezzo ----
+  // Lorenzo: «impunture che si muovono sui bordi dei rombi o all'esterno delle forme».
+  // La misura che conta non è "esistono", è "stanno sui bordi": un passaggio che taglia
+  // dentro un rombo già ricamato lascia il filo doppio, e si vede sul capo.
+  console.log('\nzone-pattern — i passaggi camminano sui bordi');
+  check('senza passaggi il piano non ne produce',
+    rg.buildZonePlan(zone, { roles: ruoli, patterns: { A: config, B: config }, marginMm: 2, rowHeightMm: 0,
+      travelMode: 'none', travelStitchMm: 3, cleanupMinStitchMm: 0, outerMarginMm: 0 }).travels.length, 0);
+  check('con i passaggi ce n\'è uno fra ogni coppia di zone dello stesso ago',
+    piano.travels.length, piano.stitches.length - 2);   // meno uno per ago
+
+  // Ogni punto di ogni passaggio deve stare VICINO al bordo di qualche zona. Si misura la
+  // distanza dal lato più vicino di tutta la rete: se il passaggio tagliasse in diagonale
+  // dentro un rombo, in mezzo si allontanerebbe di parecchi millimetri.
+  const latiDelDisegno = zone.flatMap((z) => {
+    const lati = [];
+    for (let i = 1; i < z.points.length; i++) lati.push([z.points[i - 1], z.points[i]]);
+    return lati;
+  });
+  const distanzaDaiBordi = (p) => {
+    let min = Infinity;
+    for (const [a, b] of latiDelDisegno) {
+      const l2 = (b.x - a.x) ** 2 + (b.y - a.y) ** 2;
+      const t = l2 ? Math.max(0, Math.min(1, ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / l2)) : 0;
+      min = Math.min(min, Math.hypot(p.x - (a.x + t * (b.x - a.x)), p.y - (a.y + t * (b.y - a.y))));
+    }
+    return min;
+  };
+  let lontano = 0;
+  for (const t of piano.travels) for (const p of t.points) lontano = Math.max(lontano, distanzaDaiBordi(p));
+  // Non "quasi sui bordi": ESATTAMENTE sui bordi. Si entra nella rete proiettando sul lato
+  // più vicino, non puntando al vertice — col vertice si tagliava l'angolo (misurato: 1.05mm
+  // dentro il ricamo, 1 punto su 1303). Con la proiezione lo scostamento è zero.
+  check('ogni punto di passaggio sta SUL bordo di una zona (<0.01mm)', lontano < 0.01, true);
+  // Il confronto che dimostra che il lavoro serve: la retta fra le stesse due zone taglierebbe.
+  const inRetta = piano.travels.map((t) => {
+    const a = t.points[0];
+    const b = t.points.at(-1);
+    return distanzaDaiBordi({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 });
+  });
+  check('...mentre andando in retta si taglierebbe in mezzo al ricamo',
+    Math.max(...inRetta) > 3, true);
+  check('i passaggi rispettano il punto chiesto (R4)',
+    piano.travels.every((t) => t.points.every((p, i) => i === 0
+      || Math.hypot(p.x - t.points[i - 1].x, p.y - t.points[i - 1].y) <= 3.001)), true);
+  check('e finiscono nel layer del loro ago (un filo unico, niente stacchi)',
+    piano.layers[0].polylines.length, piano.stitches.filter((s) => s.pattern === 'A').length * 2 - 1);
+
+  // ---- LA PULIZIA DEI BORDI, per zona (come nel Generatore pattern) ----
+  // Lorenzo: «manca tutto il controllo della pulizia bordi; ora mi sembra sia attivo lo
+  // spostamento ma vorrei poter selezionare anche elimina punti». Era vero: i due campi non
+  // stavano nel pannello e restavano inchiodati sul default "avvicina, poi elimina".
+  // ---- SEPARATI MA IN SEQUENZA ----
+  // Lorenzo: «potrebbe essere necessario cambiare ordine degli oggetti; è possibile mantenere
+  // separati i blocchi e i passaggi ma lasciando tutto in sequenza? ora è un'unica linea».
+  // I pezzi erano già tracciati distinti, ma dentro due soli gruppi ANONIMI: a valle si vedeva
+  // "un gruppo, 37 tracciati" senza sapere quale fosse un rombo e quale un passaggio.
+  console.log('\nzone-pattern — blocchi e passaggi separati, ma in ordine di cucitura');
+  const gruppi = rg.exportSequenceLayers(piano);
+  check('un gruppo per PEZZO, non uno per ago',
+    gruppi.length, piano.stitches.length + piano.travels.length);
+  check('numerati nell\'ordine di cucitura, senza buchi',
+    gruppi.every((g, i) => Number(g.id.slice(0, 4)) === i), true);
+  check('il nome dice ago, tipo e zona: si riconoscono a colpo d\'occhio',
+    [/^0000-ago[AB]-zona-/.test(gruppi[0].id), gruppi.some((g) => g.id.endsWith('-passaggio'))], [true, true]);
+  check('dentro un ago zone e passaggi si ALTERNANO',
+    gruppi.filter((g) => g.id.includes('agoA')).map((g) => (g.id.endsWith('passaggio') ? 'p' : 'z')).join('').slice(0, 8),
+    'zpzpzpzp');
+  // I passaggi tengono il colore del LORO ago: sono lo stesso filo, e una tinta diversa
+  // direbbe al software a valle che è un altro ago.
+  check('un passaggio ha il colore del suo ago, non un colore suo',
+    gruppi.filter((g) => g.id.endsWith('passaggio')).every((g) => g.color === rg.PATTERN_INK[g.id.includes('agoA') ? 'A' : 'B']), true);
+  check('nessun punto si perde per strada rispetto ai layer del DST',
+    gruppi.reduce((sum, g) => sum + g.polylines.flat().length, 0),
+    piano.layers.reduce((sum, l) => sum + l.polylines.flat().length, 0));
+  // E il DST NON si tocca: lì un gruppo per pezzo diventerebbe un cambio-colore per pezzo.
+  check('il DST resta a due aghi, uno per pattern', piano.layers.length, 2);
+
+  console.log('\nzone-pattern — la pulizia dei bordi si può scegliere, e cambia il risultato');
+  const conBordi = (modo, minimo, spostamento) => {
+    const cfg = { ...config, minStitchMm: minimo, boundaryCleanupMode: modo, maxBoundaryAdjustment: spostamento };
+    return rg.buildZonePlan(zone, { roles: ruoli, patterns: { A: cfg, B: cfg }, marginMm: 2, rowHeightMm: 0,
+      travelMode: 'none', travelStitchMm: 3, cleanupMinStitchMm: 0, outerMarginMm: 0 });
+  };
+  const puntiDi = (piano) => piano.stitches.reduce((sum, s) => sum + s.pointCount, 0);
+  check('entrambe le modalità arrivano al motore (i due campi esistono nel pannello)',
+    ['boundaryCleanupMode', 'maxBoundaryAdjustment'].every((n) => rg.PATTERN_FIELD_NAMES.includes(n)), true);
+  check('"Elimina" toglie più punti di "Avvicina, poi elimina"',
+    puntiDi(conBordi('delete', 0.4, 0)) < puntiDi(conBordi('adjust-then-delete', 0.4, 0)), true);
+  // Quanto morde dipende dal PUNTO MINIMO: il motore ci lavora solo dove i punti sono più
+  // vicini di quella misura. Con 0.4 sono poche decine, con 2 sono centinaia.
+  const scartoA = puntiDi(conBordi('adjust-then-delete', 0.4, 0)) - puntiDi(conBordi('delete', 0.4, 0));
+  const scartoB = puntiDi(conBordi('adjust-then-delete', 2, 0)) - puntiDi(conBordi('delete', 2, 0));
+  check('e morde di più quanto più alto è il punto minimo', scartoB > scartoA * 3, true);
+  // Onestà: NESSUNA delle due garantisce il punto minimo (i punti strutturali sopravvivono).
+  // È il compromesso storico del motore migrato: chi lo garantisce è la "pulizia punti" finale.
+  const piuCortoDi = (piano) => {
+    let min = Infinity;
+    for (const s of piano.stitches) for (const pl of s.polylines) for (let i = 1; i < pl.length; i++) {
+      min = Math.min(min, Math.hypot(pl[i].x - pl[i - 1].x, pl[i].y - pl[i - 1].y));
+    }
+    return min;
+  };
+  check('nessuna delle due modalità GARANTISCE il punto minimo (serve la pulizia punti)',
+    piuCortoDi(conBordi('delete', 2, 0)) < 2, true);
+
+  // ---- IL MARGINE SUL BORDO ESTERNO (come l'`overflowMarginMm` di oblique) ----
+  // Lorenzo: «sui bordi esterni avrei bisogno di avere del margine». Il ricamo deve debordare
+  // dal perimetro, MA non fra un rombo e l'altro: lì due zone allargate si sovrapporrebbero,
+  // cioè filo doppio proprio dove il disegno è già pieno.
+  console.log('\nzone-pattern — il margine deborda fuori, non dentro');
+  const flags = rg.outerEdgeFlags(zone);
+  const latiEsterni = flags.flat().filter(Boolean).length;
+  const latiTotali = flags.flat().length;
+  check('ci sono lati esterni e lati interni, e sono riconosciuti come tali',
+    latiEsterni > 0 && latiEsterni < latiTotali, true);
+  // La misura che vale davvero: un rombo PIENO in mezzo al disegno non ha nemmeno un lato
+  // esterno. Se l'avesse, il margine gli si aprirebbe addosso al vicino.
+  const rombiPieni = zone.map((z, i) => ({ z, i })).sort((a, b) => b.z.areaMm2 - a.z.areaMm2).slice(0, 3);
+  check('i rombi pieni al centro non hanno alcun lato esterno',
+    rombiPieni.every(({ i }) => flags[i].every((f) => !f)), true);
+
+  const conMargine = rg.buildZonePlan(zone, { roles: ruoli, patterns: { A: config, B: config },
+    marginMm: 2, rowHeightMm: 0, travelMode: 'none', travelStitchMm: 3, cleanupMinStitchMm: 0,
+    outerMarginMm: 3 });
+  const senzaMargine = rg.buildZonePlan(zone, { roles: ruoli, patterns: { A: config, B: config },
+    marginMm: 2, rowHeightMm: 0, travelMode: 'none', travelStitchMm: 3, cleanupMinStitchMm: 0,
+    outerMarginMm: 0 });
+  const ingombro = (piano) => rg.zoneBounds(piano.stitches.flatMap((s) => s.polylines.flat()));
+  const dentro = ingombro(senzaMargine);
+  const fuori = ingombro(conMargine);
+  check('col margine il ricamo esce dal perimetro', fuori.width > dentro.width + 1, true);
+  // La misura giusta NON è quanto cresce il rettangolo d'ingombro: il margine è perpendicolare
+  // ai lati, e su bordi obliqui il rettangolo cresce di più. Si misura quanto il ricamo esce
+  // dal poligono della PROPRIA zona — quello è il margine.
+  const sporgenzaMax = (piano) => {
+    let max = 0;
+    for (const s of piano.stitches) for (const pl of s.polylines) for (const p of pl) {
+      max = Math.max(max, fuoriDal(p, s.zone.points));
+    }
+    return max;
+  };
+  check('senza margine non sporge niente', sporgenzaMax(senzaMargine) < 0.001, true);
+  // Esattamente quanto chiesto, angoli compresi: dove due lati si incontrano acuti il loro
+  // incrocio spostato schizzerebbe lontano (misurato: 7.55mm con 3 chiesti), e c'è un tetto.
+  check('col margine sporge di ESATTAMENTE quanto chiesto',
+    Number(sporgenzaMax(conMargine).toFixed(2)), 3);
+  check('e il filo aumenta (c\'è più superficie da coprire)',
+    rg.threadMetres(conMargine, 'A') > rg.threadMetres(senzaMargine, 'A'), true);
+
+  // La prova che i bordi INTERNI non si sono mossi: una zona tutta interna (nessun lato sul
+  // perimetro) deve uscire IDENTICA col margine e senza. Se si allargasse anche lei, si
+  // sovrapporrebbe alle vicine.
+  const interne = zone.filter((_, i) => flags[i].every((f) => !f));
+  check('esistono zone tutte interne su cui misurare', interne.length > 0, true);
+  const filoDellaZona = (piano, id) => {
+    const s = piano.stitches.find((x) => x.zone.id === id);
+    if (!s) return -1;
+    let mm = 0;
+    for (const pl of s.polylines) for (let i = 1; i < pl.length; i++) {
+      mm += Math.hypot(pl[i].x - pl[i - 1].x, pl[i].y - pl[i - 1].y);
+    }
+    return Number(mm.toFixed(6));
+  };
+  check('una zona tutta interna è IDENTICA col margine e senza',
+    interne.every((z) => filoDellaZona(conMargine, z.id) === filoDellaZona(senzaMargine, z.id)), true);
+  check('il margine a 0 non cambia niente rispetto a prima',
+    rg.threadMetres(senzaMargine, 'A').toFixed(6), rg.threadMetres(senzaMargine, 'A').toFixed(6));
+
+  console.log('\nzone-pattern — la pulizia punti (R3), la manopola chiesta da Lorenzo');
+  const conPulizia = rg.buildZonePlan(zone, { roles: ruoli, patterns: { A: config, B: config },
+    marginMm: 2, rowHeightMm: 0, travelMode: 'edges', travelStitchMm: 3, cleanupMinStitchMm: 0.5, outerMarginMm: 0 });
+  const piuCortoSenzaUltimo = (piano) => {
+    let min = Infinity;
+    const tutte = [...piano.stitches.flatMap((s) => s.polylines), ...piano.travels.map((t) => t.points)];
+    for (const pl of tutte) for (let i = 1; i < pl.length - 1; i++) {
+      min = Math.min(min, Math.hypot(pl[i].x - pl[i - 1].x, pl[i].y - pl[i - 1].y));
+    }
+    return min;
+  };
+  const piuCorto = (piano) => {
+    let min = Infinity;
+    const tutte = [...piano.stitches.flatMap((s) => s.polylines), ...piano.travels.map((t) => t.points)];
+    for (const pl of tutte) for (let i = 1; i < pl.length; i++) {
+      min = Math.min(min, Math.hypot(pl[i].x - pl[i - 1].x, pl[i].y - pl[i - 1].y));
+    }
+    return min;
+  };
+  check('a 0 non tocca niente (il disegno resta intatto)', piano.cleanedPoints, 0);
+  check('con la pulizia i punti si tolgono davvero', conPulizia.cleanedPoints > 0, true);
+  // L'ULTIMO punto di ogni tracciato non si tocca mai: è dove il filo va consegnato al pezzo
+  // successivo, e spostarlo staccherebbe la sequenza. Quindi la soglia vale su tutto TRANNE
+  // l'ultimo segmento — ed è una scelta del core (`enforceMinStitch`), non una svista qui.
+  check('il punto più corto rispetta la soglia (ultimo segmento escluso)',
+    piuCortoSenzaUltimo(conPulizia) >= 0.5 - 1e-9, true);
+  check('senza pulizia invece restava sotto soglia (è il difetto che chiude)',
+    piuCorto(piano) < 0.5, true);
+  // La pulizia toglie punti, non SPOSTA punti: la forma cucita resta quella.
+  const filoPrima = rg.threadMetres(piano, 'A');
+  const filoDopo = rg.threadMetres(conPulizia, 'A');
+  check('toglie punti senza stravolgere il disegno (filo entro l\'1%)',
+    Math.abs(filoDopo - filoPrima) / filoPrima < 0.01, true);
+
+  // ---- i VALORI di un pattern letti da un SVG (Lorenzo: "a te servono solo i valori") ----
+  // Ricalcare la geometria dell'SVG dentro le zone dava un ricamo a pezzi staccati. La strada
+  // giusta è leggere COME È FATTO quel pattern e rigenerarlo col motore. Due modi, e qui si
+  // misura quanto valgono: i parametri scritti nel file (esatti) e la misura (approssimata).
+  console.log('\nzone-pattern — i valori di costruzione letti da un SVG');
+  const attesi = {
+    totalWidth: 80, totalHeight: 80, horizontalZigzagWidth: 5.5, horizontalZigzagHeight: 4.3,
+    horizontalZigzagInterline: 0.45, horizontalZigzagSpacing: 12, verticalZigzagWidth: 1.2,
+    verticalZigzagInterline: 0.45, stepX: 5.2, offsetY: 6, maxStitchMm: 6, minStitchMm: 0.4,
+  };
+  const campione = rg.generatePattern(attesi);
+
+  const daParametri = rg.readPatternSvg(campione, 'viewbox-mm');
+  check('un SVG uscito dalla suite ridà i suoi valori ESATTI (R27)',
+    [daParametri.origin, daParametri.config.stepX, daParametri.config.horizontalZigzagSpacing,
+      daParametri.config.horizontalZigzagWidth, daParametri.config.horizontalZigzagInterline],
+    ['parametri', 5.2, 12, 5.5, 0.45]);
+  check('...e NON porta con sé formato e sagoma, che qui li dà la zona',
+    [daParametri.config.totalWidth, daParametri.config.shapeType], [undefined, undefined]);
+
+  // Stesso file, ma senza i parametri: si deve MISURARE dalla geometria.
+  const senzaParametri = campione.replace(/<metadata>[\s\S]*?<\/metadata>/, '');
+  const misurato = rg.readPatternSvg(senzaParametri, 'viewbox-mm');
+  const scarto = (campo) => {
+    const got = misurato.config[campo];
+    return got === undefined ? Infinity : Math.abs(got - attesi[campo]) / attesi[campo];
+  };
+  check('senza parametri si passa alla misura', misurato.origin, 'misura');
+  check('la larghezza dello zig-zag si misura esatta', misurato.config.horizontalZigzagWidth, 5.5);
+  check('il punto massimo si misura esatto', misurato.config.maxStitchMm, 6);
+  check('i fili accostati entro il 5%', scarto('horizontalZigzagInterline') < 0.05, true);
+  check('il passo fra le colonne entro il 5%', scarto('stepX') < 0.05, true);
+  check('il passo fra le file entro il 5%', scarto('horizontalZigzagSpacing') < 0.05, true);
+  // Il pericolo vero della misura è dare un numero SBAGLIATO con l'aria di essere giusto.
+  // Su un pattern a zig-zag le direzioni sono due e la loro media non vuol dire niente:
+  // meglio nessun angolo (il campo del pannello resta) che un angolo inventato.
+  check('l\'inclinazione NON si inventa quando il disegno va in più direzioni',
+    misurato.config.horizontalAngleDeg, undefined);
+  check('...e lo dice', misurato.notes.some((n) => n.includes('non misurabile')), true);
+
+  // I FILE DI RIFERIMENTO VERI di Lorenzo (CANNAGE-BASE-ORIGINALE-*, giugno 2026). Sono export
+  // di PRIMA delle rinomine ⑥⑦⑧: scrivono `minPointDistance`, `strokeWidth`, `columnWaveFrequency`.
+  // Senza migrazione dei nomi quei valori non arrivano sbagliati — SPARISCONO, e il pannello resta
+  // sui suoi default come se il file non avesse detto niente. È il difetto che ha visto Lorenzo:
+  // «ho un dubbio, che non venga preso un valore: lo spostamento dello zig-zag verso destra».
+  console.log('\nzone-pattern — i file di riferimento di Lorenzo non perdono valori');
+  const originale = rg.readPatternSvg(
+    readFileSync(join(here, 'fixtures/cannage-base-leggero-metadati.svg'), 'utf8'), 'auto');
+  check('i parametri si leggono dal file', originale.origin, 'parametri');
+  check('LO SPOSTAMENTO DELLO ZIG-ZAG arriva (era quello che si perdeva)',
+    originale.config.horizontalZigzagOffsetX, 0.8);
+  check('e con lui l\'inclinazione del raccordo verticale',
+    originale.config.verticalConnectorDiagonalOffsetY, 0.6);
+  check('`minPointDistance` (nome vecchio) diventa il punto minimo, non sparisce',
+    originale.config.minStitchMm, 2);
+  check('`strokeWidth` (nome vecchio) diventa lo spessore di costruzione',
+    originale.config.constructionStroke, 0.05);
+  check('`columnWaveFrequency` (rad/mm) diventa lunghezza d\'onda in mm',
+    Math.round(originale.config.columnWaveLengthMm), 63);
+  check('anche gli interruttori arrivano (prima si tenevano solo i numeri)',
+    [originale.config.repeatBack, originale.config.useConnectors, originale.config.alternateHorizontalAngle],
+    [false, true, false]);
+  check('le misure di costruzione ci sono tutte',
+    [originale.config.horizontalZigzagWidth, originale.config.horizontalZigzagSpacing,
+      originale.config.stepX, originale.config.offsetY], [1.98, 4.236, 1.83, 1.922]);
+
+  // La difesa strutturale: un elenco solo. Due elenchi divergono, e la divergenza si vede
+  // come un valore che sparisce in silenzio — che è esattamente com'era andata.
+  // Ogni campo, col valore del suo TIPO: un numero per i numerici, un interruttore per i
+  // booleani, una stringa per le scelte. Prima il campione era sempre un numero, e il primo
+  // campo a scelta (la pulizia dei bordi) sarebbe passato per "non leggibile".
+  const valoreDiProva = { num: 7, check: true, select: 'delete' };
+  check('ogni campo del pannello è leggibile da un file, senza eccezioni',
+    rg.PATTERN_FIELD_NAMES.filter((name) => {
+      const svg = `<svg xmlns="http://www.w3.org/2000/svg"><metadata>${
+        JSON.stringify({ sourceConfig: { [name]: valoreDiProva[rg.PATTERN_FIELD_KIND[name]] } })}</metadata></svg>`;
+      return rg.readPatternSvg(svg, 'auto').config[name] === undefined;
+    }), []);
+
+  // I mattoni della misura, presi da soli.
+  check('la moda trova il valore che ricorre, non la media',
+    rg.modeOf([1, 5.1, 5.2, 5.2, 5.3, 40], 0.2), 5.2);
+  check('il periodo si trova anche sotto una struttura più fine',
+    Math.abs(rg.periodOf(
+      Array.from({ length: 400 }, (_, i) => Math.floor(i / 4) * 5 + (i % 4) * 0.4), 0.1, 1.2) - 5) < 0.3, true);
+  check('un file senza tracciati non produce valori inventati',
+    Object.keys(rg.readPatternSvg('<svg xmlns="http://www.w3.org/2000/svg"></svg>', 'viewbox-mm').config).length, 0);
+
+  // ---- IL PROGETTO DENTRO IL FILE: un .dst che si riapre DA SOLO ----
+  // Lorenzo: «come negli altri tool, è possibile creare dei DST rileggibili e rimodificabili?».
+  // Sì, e qui si può fare meglio: negli altri tool l'ingresso è un'immagine e non si incorpora,
+  // quindi riaprendo torni ai parametri ma il disegno lo ricarichi a parte. Qui l'ingresso sono
+  // POLIGONI, e ci stanno dentro — il .dst si riapre col cartamodello e basta.
+  console.log('\nzone-pattern — il progetto viaggia dentro il file (R27/R31)');
+  const disegnoSalvato = {
+    name: 'cannage-zone.svg',
+    zones: zone.map((z) => ({
+      id: z.id, color: z.color,
+      points: z.points.map((p) => ({ x: Number(p.x.toFixed(3)), y: Number(p.y.toFixed(3)) })),
+    })),
+  };
+  const progetto = { rgProject: 'zone-pattern', params: { 'A.stepX': 11 }, roles: ruoli, drawing: disegnoSalvato };
+  const dstNudo = rg.dstFromExportLayers(piano.layers, { label: 'CANNAGE' });
+  const dstPieno = rg.dstFromExportLayers(piano.layers, { label: 'CANNAGE', metadata: progetto });
+
+  // La regola che rende tutto questo lecito: il footer sta DOPO il record END, dove la
+  // macchina non guarda. Se toccasse la cucitura sarebbe una bella idea inutilizzabile.
+  check('la cucitura fino all\'END è byte-identica con e senza progetto',
+    dstNudo.every((b, i) => b === dstPieno[i]), true);
+  check('il progetto pesa poco: il disegno intero sta in pochi kB',
+    (dstPieno.length - dstNudo.length) / 1024 < 20, true);
+
+  const riletto = rg.readDstMetadata(dstPieno);
+  check('il .dst si rilegge e sa da dove viene', riletto?.rgProject, 'zone-pattern');
+  check('...e porta dentro il CARTAMODELLO, non solo i parametri',
+    riletto?.drawing?.zones?.length, zone.length);
+  check('...e i ruoli, per non rifare la mappa dei colori', Object.keys(riletto?.roles ?? {}).length, 6);
+
+  // Le zone si ricostruiscono MISURANDO di nuovo: nel file c'è la sola geometria, così un
+  // progetto vecchio gode delle regole di misura di oggi invece di riaprire i difetti di ieri.
+  const ricostruite = rg.resolveZoneAngles(rg.zonesFromShapes(riletto.drawing.zones), 20);
+  check('le zone tornano tutte', ricostruite.length, zone.length);
+  let scartoPunti = 0;
+  let scartoAngoli = 0;
+  for (let i = 0; i < zone.length; i++) {
+    scartoAngoli = Math.max(scartoAngoli, Math.abs(zone[i].angleDeg - ricostruite[i].angleDeg));
+    for (let k = 0; k < zone[i].points.length; k++) {
+      scartoPunti = Math.max(scartoPunti, Math.hypot(
+        zone[i].points[k].x - ricostruite[i].points[k].x, zone[i].points[k].y - ricostruite[i].points[k].y));
+    }
+  }
+  check('la geometria torna al micron (arrotondata a 3 decimali)', scartoPunti < 0.002, true);
+  check('e gli angoli si rimisurano identici', scartoAngoli < 0.01, true);
+  // Il TETTO. I disegni veri sono leggeri (cannage 10.7 kB, i cartamodelli di oblique 0.9-3,
+  // e persino il suo SVG da 2 MB ne produce 25: quei 2 MB sono ricamo, non contorni). Ma un
+  // contorno tracciato male, con decine di migliaia di punti, gonfierebbe il DST in silenzio.
+  const pesante = Array.from({ length: 40 }, (_, z) => ({
+    id: `p${z}`, color: '#123456',
+    points: Array.from({ length: 900 }, (_, i) => ({ x: Math.cos(i) * 50 + z, y: Math.sin(i) * 50 })),
+  }));
+  const kbDi = (shapes) => JSON.stringify({ name: 'x', zones: shapes }).length / 1024;
+  check('un disegno vero sta comodo sotto il tetto', kbDi(disegnoSalvato.zones) < 256, true);
+  check('...uno patologico invece lo supera, e va riconosciuto', kbDi(pesante) > 256, true);
+
+  check('un file di un altro tool non viene scambiato per uno di questo',
+    rg.readDstMetadata(rg.dstFromExportLayers(piano.layers, { label: 'X', metadata: { rgProject: 'bitmap' } }))?.rgProject !== 'zone-pattern', true);
+
+  const dstZone = rg.dstFromExportLayers(piano.layers, { label: 'CANNAGE', metadata: { rgProject: 'zone-pattern' } });
+  check('il DST esce coi due aghi e si riapre (R27/R31)',
+    [String.fromCharCode(...dstZone.slice(0, 3)), rg.readDstMetadata(dstZone)?.rgProject], ['LA:', 'zone-pattern']);
 }
 
 rmSync(outDir, { recursive: true, force: true });

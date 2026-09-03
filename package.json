@@ -20,9 +20,10 @@
     "dev:oblique": "npm run dev --workspace apps/oblique",
     "dev:striatura": "npm run dev --workspace apps/striatura",
     "dev:broccato": "npm run dev --workspace apps/broccato",
+    "dev:zone-pattern": "npm run dev --workspace apps/zone-pattern",
     "build": "npm run build --workspace apps/shell",
     "build:net-45": "npm run build --workspace apps/net-45",
     "test": "node test/smoke.mjs",
-    "typecheck": "tsc -p packages/core/tsconfig.json && tsc -p packages/pattern-grammar/tsconfig.json && tsc -p apps/net-45/tsconfig.json && tsc -p apps/pattern-grammar/tsconfig.json && tsc -p apps/interlace/tsconfig.json && tsc -p apps/bitmap/tsconfig.json && tsc -p apps/oblique/tsconfig.json && tsc -p apps/striatura/tsconfig.json && tsc -p apps/broccato/tsconfig.json && tsc -p apps/shell/tsconfig.json"
+    "typecheck": "tsc -p packages/core/tsconfig.json && tsc -p packages/pattern-grammar/tsconfig.json && tsc -p apps/net-45/tsconfig.json && tsc -p apps/pattern-grammar/tsconfig.json && tsc -p apps/interlace/tsconfig.json && tsc -p apps/bitmap/tsconfig.json && tsc -p apps/oblique/tsconfig.json && tsc -p apps/striatura/tsconfig.json && tsc -p apps/broccato/tsconfig.json && tsc -p apps/zone-pattern/tsconfig.json && tsc -p apps/shell/tsconfig.json"
   }
 }

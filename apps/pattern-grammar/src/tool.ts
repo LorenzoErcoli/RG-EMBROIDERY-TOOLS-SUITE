@@ -4,7 +4,7 @@ import {
   generatePattern, generateFinalPatternPoints, parseImportedBoundarySource,
   type PatternConfig, type ImportedBoundaryModel, type ImportScaleMode,
 } from '@rg/pattern-grammar';
-import { dstFromExportLayers, DST_FILE, type ExportLayer } from '@rg/core';
+import { dstFromExportLayers, DST_FILE, readDstMetadata, type ExportLayer } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
@@ -156,7 +156,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     box.innerHTML = `
       <div class="rg-file-input rg-param-grid__wide">
         <label class="rg-file-input__control">
-          <input type="file" id="boundaryFile" accept=".svg,.dxf" />
+          <input type="file" id="boundaryFile" accept=".svg,.dxf,.dst" />
           <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
         </label>
         <p class="rg-file-input__status" id="boundaryStatus" role="status">Nessun contorno: il piano non viene ritagliato.</p>
@@ -361,12 +361,29 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     $('boundaryFile').addEventListener('change', (ev) => {
       const file = (ev.target as HTMLInputElement).files?.[0];
       if (!file) return;
+      const isDst = /\.dst$/i.test(file.name);
       const reader = new FileReader();
       reader.onload = () => {
-        try { boundarySource = { text: String(reader.result), name: file.name }; reparseBoundary(); }
-        catch (e) { $('boundaryStatus').textContent = 'Errore import: ' + (e as Error).message; }
+        try {
+          // Un .dst uscito da qui non è un contorno: è un PROGETTO. Si legge il footer dopo
+          // l'END e si rimettono i parametri, lasciando stare il contorno che c'è già.
+          if (isDst) {
+            const meta = readDstMetadata(new Uint8Array(reader.result as ArrayBuffer));
+            if (meta?.rgProject === 'pattern-grammar' && meta.params) {
+              Object.assign(cfg, migratePreset(meta.params as PatternConfig));
+              buildPanel();
+              render();
+              $('boundaryStatus').textContent = `${file.name}: parametri ripristinati dal DST`;
+            } else {
+              $('boundaryStatus').textContent = `${file.name}: nessun parametro di questo tool nel DST`;
+            }
+            return;
+          }
+          boundarySource = { text: String(reader.result), name: file.name };
+          reparseBoundary();
+        } catch (e) { $('boundaryStatus').textContent = 'Errore import: ' + (e as Error).message; }
       };
-      reader.readAsText(file);
+      if (isDst) reader.readAsArrayBuffer(file); else reader.readAsText(file);
     });
     $('scaleMode').addEventListener('change', reparseBoundary);
     $('customW').addEventListener('change', reparseBoundary);
@@ -484,7 +501,14 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
         id: 'pattern', color: '#005f27',
         polylines: final.visualPolylines.map((pl) => pl.map((p) => ({ x: p.x, y: p.y }))),
       };
-      bytes = dstFromExportLayers([layer], { label: (base || 'PATTERN').toUpperCase().slice(0, 16) });
+      // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge
+      // fino all'END e lo ignora, noi lo rileggiamo. Il contorno importato NON ci va: è
+      // l'unico pezzo pesante, e il tool lo tratta comunque come un file a parte.
+      const { importedBoundary, sourceAnalysis, ...saved } = cfg as Record<string, unknown>;
+      bytes = dstFromExportLayers([layer], {
+        label: (base || 'PATTERN').toUpperCase().slice(0, 16),
+        metadata: { rgProject: 'pattern-grammar', version: '0.1.0', params: saved },
+      });
     } catch (e) {
       $('status').textContent = (e as Error).message;
       return;

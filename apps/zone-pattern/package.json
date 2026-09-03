@@ -1,0 +1,21 @@
+{
+  "name": "zone-pattern",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pattern a zone: riempie ogni zona colorata di un disegno col suo pattern, ruotato sulle perpendicolari della zona. Output SVG/DST.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@rg/core": "*",
+    "@rg/pattern-grammar": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}

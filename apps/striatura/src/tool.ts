@@ -4,7 +4,7 @@ import {
   type Role, type ImportResult, type Contour,
   ROLE_LABELS, polygonArea, pointInPolygon,
   buildSvg, buildSvgInSourceFrame, dstFromExportLayers, DST_FILE,
-  parseSvgToContours, parseDxfToContours, readProjectMetadata,
+  parseSvgToContours, parseDxfToContours, readProjectMetadata, readDstMetadata,
   applyRealWidth, importResultFromContours, measureContours,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
@@ -58,7 +58,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
         <div class="rg-param-grid">
           <div class="rg-file-input rg-param-grid__wide">
             <label class="rg-file-input__control">
-              <input type="file" id="fileInput" accept=".svg,.dxf" />
+              <input type="file" id="fileInput" accept=".svg,.dxf,.dst" />
               <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
             </label>
             <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file: uso la sagoma demo.</p>
@@ -365,9 +365,20 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
   $('fileInput').addEventListener('change', (ev) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
+    const isDst = /\.dst$/i.test(file.name);
     const reader = new FileReader();
     reader.onload = () => {
       try {
+        // Un .dst uscito da qui non è un cartamodello: è un PROGETTO. Si legge il footer e si
+        // rimettono i parametri, senza toccare il disegno che c'è già.
+        if (isDst) {
+          const meta = readDstMetadata(new Uint8Array(reader.result as ArrayBuffer));
+          $('fileStatus').textContent = meta && applyImportedProject(meta)
+            ? `${file.name}: parametri ripristinati dal DST`
+            : `${file.name}: nessun parametro di questo tool nel DST`;
+          if (meta) render();
+          return;
+        }
         const text = String(reader.result);
         const isDxf = /\.dxf$/i.test(file.name);
         const result = isDxf ? parseDxfToContours(text) : parseSvgToContours(text);
@@ -381,7 +392,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
         console.error(e);
       }
     };
-    reader.readAsText(file);
+    if (isDst) reader.readAsArrayBuffer(file); else reader.readAsText(file);
   });
 
   $('realWidth').addEventListener('change', () => {
@@ -436,7 +447,12 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     const { exportLayers, blockCount } = runPipeline(currentContours(), roles, params);
     let bytes: Uint8Array;
     try {
-      bytes = dstFromExportLayers(exportLayers, { label: (sourceName || 'STRIATURA').toUpperCase().slice(0, 16) });
+      // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge
+      // fino all'END e lo ignora, noi lo rileggiamo. Senza, il .dst non sapeva da dove veniva.
+      bytes = dstFromExportLayers(exportLayers, {
+        label: (sourceName || 'STRIATURA').toUpperCase().slice(0, 16),
+        metadata: { rgProject: 'striatura', version: '0.1.0', params, roles },
+      });
     } catch (e) {
       $('status').textContent = (e as Error).message;
       return;
