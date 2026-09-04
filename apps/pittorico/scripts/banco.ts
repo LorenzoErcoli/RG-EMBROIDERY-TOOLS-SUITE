@@ -1,0 +1,402 @@
+// IL BANCO DI PROVA — una pagina sola che mostra cosa sa fare il Punto Pittorico oggi.
+//
+// Nasce da una domanda di Lorenzo: «come posso vedere visivamente gli avanzamenti?». Fino a qui gli
+// mandavo SVG sciolti, uno alla volta, senza i numeri accanto: si guarda un disegno e non si sa se
+// è buono. Qui disegno e misura stanno nella stessa riga, e la pagina **si rigenera**: ogni passo
+// avanti aggiunge un pannello invece di aggiungere un file da cercare.
+//
+// Non è l'interfaccia del tool (quella è il punto 5 del piano, e vive nella shell): è il banco su
+// cui si guardano i pezzi mentre si costruiscono.
+//
+//   node apps/pittorico/scripts/misura.mjs                    (rigenera gli SVG dei riempimenti)
+//   node apps/pittorico/scripts/immagine.mjs <cianotipia.bmp> (rigenera i contorni della foto)
+//   npx esbuild apps/pittorico/scripts/banco.ts --bundle --format=esm --platform=node \
+//     --alias:@rg/core=./packages/core/src/index.ts --outfile=apps/pittorico/scripts/banco.mjs
+//   node apps/pittorico/scripts/banco.mjs
+
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+
+const dir = (process.env.RG_OUT ?? new URL('./out/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1'))
+  .replace(/\/?$/, '/');
+mkdirSync(dir, { recursive: true });
+
+/**
+ * Prende un SVG generato e lo rende adatto a una pagina che ha due temi: i colori fissi diventano
+ * `currentColor` e una tinta di contorno, così il filo si vede tanto su carta chiara quanto su
+ * fondo scuro. Senza questo, sul tema scuro il disegno sparirebbe: nero su nero.
+ */
+function svgInline(nome: string, altezzaMax = 0): string {
+  const f = `${dir}${nome}`;
+  if (!existsSync(f)) return `<p class="manca">manca <code>${nome}</code>: rigeneralo con lo script che lo produce.</p>`;
+  let s = readFileSync(f, 'utf8')
+    .replace(/<\?xml[^>]*\?>/g, '')
+    .replace(/stroke="#111111"/g, 'stroke="currentColor"')
+    .replace(/stroke="#bbbbbb"/g, 'stroke="var(--traccia)"')
+    .replace(/stroke="#d02020"/g, 'stroke="var(--misura)"')
+    .replace(/font-family="monospace"/g, 'font-family="var(--mono)" fill="currentColor"')
+    .replace(/width="[^"]*"\s+height="[^"]*"/, 'width="100%"');
+  if (altezzaMax) s = s.replace('<svg ', `<svg style="max-height:${altezzaMax}px" `);
+  return s;
+}
+
+const pagina = `<title>Banco del Punto Pittorico</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=Instrument+Serif:ital@0;1&family=Spectral:wght@300;400;600&display=swap">
+<style>
+  :root {
+    /* Una cianotipia è UN pigmento su carta: la pagina fa lo stesso, e l'unico colore che non è
+       blu è quello della misura — lo stesso rosso col quale il cerchio ritrovato è disegnato. */
+    --carta: #efe8d8;
+    --carta-alta: #f7f2e6;
+    --inchiostro: #0d2340;
+    --inchiostro-2: #3d567a;
+    --riga: #cabfa6;
+    --traccia: #a99e86;
+    --misura: #b3341f;
+    --fatto: #2f5d4a;
+
+    --serif: "Spectral", Georgia, "Times New Roman", serif;
+    --display: "Instrument Serif", Georgia, serif;
+    --mono: "IBM Plex Mono", "SFMono-Regular", Consolas, monospace;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root:not([data-theme="light"]) {
+      --carta: #0a1626;
+      --carta-alta: #101f34;
+      --inchiostro: #e6ded0;
+      --inchiostro-2: #93a7c2;
+      --riga: #23374f;
+      --traccia: #55677f;
+      --misura: #e8735c;
+      --fatto: #7fbfa2;
+    }
+  }
+  :root[data-theme="dark"] {
+    --carta: #0a1626;
+    --carta-alta: #101f34;
+    --inchiostro: #e6ded0;
+    --inchiostro-2: #93a7c2;
+    --riga: #23374f;
+    --traccia: #55677f;
+    --misura: #e8735c;
+    --fatto: #7fbfa2;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    background: var(--carta);
+    color: var(--inchiostro);
+    font-family: var(--serif);
+    font-weight: 300;
+    font-size: 17px;
+    line-height: 1.62;
+    margin: 0;
+    padding: 0 24px 96px;
+  }
+  .foglio { max-width: 980px; margin: 0 auto; }
+  p, li { max-width: 66ch; }
+
+  header.testa {
+    padding: 56px 0 28px;
+    border-bottom: 1px solid var(--riga);
+    display: grid;
+    gap: 18px;
+  }
+  .occhiello {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--inchiostro-2);
+  }
+  h1 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: clamp(40px, 7vw, 68px);
+    line-height: 1.02;
+    letter-spacing: -0.01em;
+    margin: 0;
+    text-wrap: balance;
+  }
+  h1 em { font-style: italic; }
+  .sottotitolo { color: var(--inchiostro-2); margin: 0; }
+
+  /* I fatti fissi del pezzo: non sono "big number tile" decorative, sono le costanti che ogni
+     misura della pagina usa — la scala del disegno e la rete di sicurezza. */
+  .fatti {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0;
+    border-top: 1px solid var(--riga);
+    margin-top: 6px;
+  }
+  .fatto {
+    flex: 1 1 150px;
+    padding: 14px 18px 12px 0;
+  }
+  .fatto dt {
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.13em;
+    text-transform: uppercase;
+    color: var(--inchiostro-2);
+    margin: 0 0 3px;
+  }
+  .fatto dd {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: 19px;
+    font-variant-numeric: tabular-nums;
+  }
+
+  section.passo {
+    display: grid;
+    grid-template-columns: 74px 1fr;
+    gap: 0 26px;
+    padding: 46px 0;
+    border-bottom: 1px solid var(--riga);
+  }
+  @media (max-width: 640px) { section.passo { grid-template-columns: 1fr; gap: 10px; } }
+  .numero {
+    font-family: var(--display);
+    font-size: 46px;
+    line-height: 1;
+    color: var(--inchiostro-2);
+    font-variant-numeric: lining-nums;
+  }
+  .corpo > *:first-child { margin-top: 0; }
+  h2 {
+    font-family: var(--display);
+    font-weight: 400;
+    font-size: 30px;
+    line-height: 1.14;
+    margin: 0 0 4px;
+    text-wrap: balance;
+  }
+  h3 {
+    font-family: var(--mono);
+    font-size: 11px;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--inchiostro-2);
+    margin: 34px 0 10px;
+    font-weight: 500;
+  }
+  .stato {
+    display: inline-block;
+    font-family: var(--mono);
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 2px 8px;
+    border: 1px solid currentColor;
+    margin-bottom: 12px;
+  }
+  .stato.si { color: var(--fatto); }
+  .stato.no { color: var(--inchiostro-2); }
+
+  figure { margin: 22px 0 0; }
+  .lastra {
+    background: var(--carta-alta);
+    border: 1px solid var(--riga);
+    padding: 16px;
+    overflow: auto;
+  }
+  /* La striscia dei tre riempimenti è alta il triplo di quanto è larga: a larghezza piena
+     occuperebbe mezza pagina da sola, quindi scorre dentro il suo riquadro. */
+  .lastra.striscia { max-height: 660px; }
+  .lastra svg { display: block; width: 100%; height: auto; }
+  figcaption {
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--inchiostro-2);
+    margin-top: 8px;
+    max-width: 66ch;
+  }
+
+  .tabella { overflow-x: auto; margin: 18px 0 0; }
+  table { border-collapse: collapse; font-family: var(--mono); font-size: 13px; width: 100%; }
+  th, td { text-align: right; padding: 7px 12px 7px 0; border-bottom: 1px solid var(--riga); white-space: nowrap; }
+  th:first-child, td:first-child { text-align: left; }
+  thead th {
+    font-weight: 500;
+    font-size: 10.5px;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    color: var(--inchiostro-2);
+  }
+  td { font-variant-numeric: tabular-nums; }
+  tr.chiave td { color: var(--misura); }
+  .nota { font-size: 15px; color: var(--inchiostro-2); }
+  code { font-family: var(--mono); font-size: 0.9em; }
+  strong { font-weight: 600; }
+  .manca { font-family: var(--mono); font-size: 13px; color: var(--misura); }
+
+  footer {
+    padding: 40px 0 0;
+    font-family: var(--mono);
+    font-size: 12px;
+    color: var(--inchiostro-2);
+  }
+</style>
+
+<div class="foglio">
+
+<header class="testa">
+  <p class="occhiello">RG Tools · nono strumento · banco di prova</p>
+  <h1>Punto <em>Pittorico</em></h1>
+  <p class="sottotitolo">Da un'immagine, riempimenti pieni che seguono le curve del disegno. Questa pagina
+  mostra i pezzi già in piedi, ognuno con la misura che dice se regge. Si rigenera dagli script: quello
+  che vedi è quello che il codice produce oggi, non un disegno fatto per l'occasione.</p>
+  <dl class="fatti">
+    <div class="fatto"><dt>Il disegno</dt><dd>419,45 × 353,1 mm</dd></div>
+    <div class="fatto"><dt>Un pixel vale</dt><dd>0,353 mm</dd></div>
+    <div class="fatto"><dt>Passo del filo</dt><dd>0,4 mm</dd></div>
+    <div class="fatto"><dt>Rete di sicurezza</dt><dd>576 controlli</dd></div>
+  </dl>
+</header>
+
+<section class="passo">
+  <div class="numero">1</div>
+  <div class="corpo">
+    <span class="stato si">fatto e misurato</span>
+    <h2>Il filo segue la curva senza aprire né ingrossare</h2>
+    <p>Con l'angolo fisso, la distanza fra due file di filo è costante perché la griglia la impone.
+    Appena il punto ruota, quella garanzia sparisce: sul lato esterno della curva le file si allontanano
+    e si vede il tessuto, su quello interno si stringono e il ricamo ingrossa. Qui le file
+    <strong>nascono e muoiono da sole</strong> dove il ventaglio si apre e si chiude, e la distanza
+    resta quella chiesta.</p>
+
+    <figure>
+      <div class="lastra striscia">${svgInline('banda-curva-con-foro.svg')}</div>
+      <figcaption>La stessa forma riempita tre volte. In alto il raso dritto, che è il metro di
+      paragone. In mezzo il modo ingenuo — si seminano le file e si lasciano correre — dove il filo si
+      accavalla e lascia buchi. In basso il metodo vero.</figcaption>
+    </figure>
+
+    <h3>Quanto varia la copertura, cella per cella</h3>
+    <div class="tabella">
+      <table>
+        <thead><tr><th>forma</th><th>raso dritto</th><th>curvo ingenuo</th><th>curvo, distanza costante</th></tr></thead>
+        <tbody>
+          <tr><td>banda che curva</td><td>5,1%</td><td>79,1%</td><td>10,3%</td></tr>
+          <tr><td>banda con un vuoto</td><td>5,0%</td><td>98,5%</td><td>9,7%</td></tr>
+          <tr><td>ventaglio che si apre 3,9 volte</td><td>3,9%</td><td>71,0%</td><td>14,3%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">Il raso dritto non è "il migliore": è lo zero dello strumento, perché lì il passo è
+    costante per costruzione. Quel 4–5% è il rumore della misura. Il metodo vale un fattore 5–20
+    contro il modo ingenuo, e resta sotto il 16% dichiarato.</p>
+
+    <h3>Due cose imparate strada facendo</h3>
+    <p>La distanza che si chiede <strong>non è quella che esce</strong>: coi numeri di partenza della
+    letteratura il riempimento consegnava il 6% di filo in più di quello richiesto, sempre, su tutte le
+    forme. Corretto, ora consegna quello che chiedi entro l'1%.</p>
+    <p>E il punto-ago è una <strong>corda</strong>: su una curva taglia dentro, e con punti da 3 mm si
+    posava sulla fila vicina — due punti nello stesso buco. Ora la corda ha un tetto, e la distanza
+    minima fra file è tornata al 41% del passo invece dell'1%.</p>
+  </div>
+</section>
+
+<section class="passo">
+  <div class="numero">2</div>
+  <div class="corpo">
+    <span class="stato si">fatto e misurato</span>
+    <h2>Un cerchio del disegno torna un cerchio, non una scalinata</h2>
+    <p>Il contorno letto dai pixel è una scalinata. Sul tuo disegno <strong>un pixel vale 0,353 mm</strong>,
+    cioè quasi il passo fra due file di filo: la scalinata è larga come un filo, e sul ricamo si
+    vedrebbe. Riconoscere la forma — dire «questo è un cerchio di raggio tale» invece di smussare i
+    gradini — porta lo scostamento da un filo a un ventesimo di filo.</p>
+
+    <h3>Provato contro cerchi di raggio noto, non a occhio</h3>
+    <div class="tabella">
+      <table>
+        <thead><tr><th>raggio vero</th><th>errore sul raggio</th><th>la scalinata sbaglia di</th><th>la forma riconosciuta sbaglia di</th></tr></thead>
+        <tbody>
+          <tr><td>6,0 mm</td><td>0,049 mm</td><td>0,343 mm</td><td>0,049 mm</td></tr>
+          <tr><td>15,0 mm</td><td>0,010 mm</td><td>0,305 mm</td><td>0,010 mm</td></tr>
+          <tr><td>30,0 mm</td><td>0,021 mm</td><td>0,318 mm</td><td>0,021 mm</td></tr>
+          <tr class="chiave"><td>12,0 mm (fitto)</td><td>0,0006 mm</td><td>0,067 mm</td><td>0,0006 mm</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">Il cerchio non viene da una foto: lo disegna il test, quindi il raggio vero si conosce
+    e l'errore si misura invece di stimarlo. La tolleranza ha un pavimento e non è un'opinione: vale
+    almeno un pixel, perché la scalinata stessa è larga 0,6 pixel e sotto quella misura non ci passa
+    nessun cerchio.</p>
+  </div>
+</section>
+
+<section class="passo">
+  <div class="numero">3</div>
+  <div class="corpo">
+    <span class="stato si">fatto e misurato</span>
+    <h2>La sfera esce dalla tua cianotipia, senza nessun vettore</h2>
+    <p>Non c'è un SVG dietro quel disegno e non ci sarà: il cerchio o si ricava dai pixel o non si
+    ricava. Difficoltà in più: la sfera <strong>non è una macchia di colore</strong>, è dello stesso blu
+    del fondo e ci si attacca dove l'alone chiaro si interrompe. Quindi il suo bordo è solo un pezzo di
+    un contorno più grande, spezzato in più tratti.</p>
+    <p>La prova che il cerchio c'è davvero non è che uno dei tratti ci somiglia: è che
+    <strong>quattro tratti indipendenti dicono lo stesso cerchio</strong>.</p>
+
+    <figure>
+      <div class="lastra">${svgInline('cianotipia-contorni.svg')}</div>
+      <figcaption>In nero i contorni letti dai pixel. In rosso il cerchio ricavato da soli quattro archi
+      del contorno: raggio 77,0 mm, diametro 154. Guarda anche le fasce ondulate — un lato è una linea
+      netta, l'altro una nuvola di puntini: quella nuvola è la sfumatura, e la sua larghezza è già la
+      misura del degradé che serviva più avanti.</figcaption>
+    </figure>
+
+    <h3>Prima però va tolta la grana della stampa</h3>
+    <div class="tabella">
+      <table>
+        <thead><tr><th>come si legge l'immagine</th><th>buchi falsi</th><th>pezzi riconosciuti</th><th>la sfera</th></tr></thead>
+        <tbody>
+          <tr><td>soglia secca, nessuna pulizia</td><td>699</td><td>1.267</td><td>57% del giro</td></tr>
+          <tr><td>pulizia grossolana, 3 passate</td><td>22</td><td>430</td><td>67%</td></tr>
+          <tr><td>riduzione vera, 2 tinte</td><td>10</td><td>408</td><td>61%</td></tr>
+          <tr class="chiave"><td>riduzione vera, 4 tinte</td><td>9</td><td>817</td><td>71,5%</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">699 buchi in una campitura uniforme non sono buchi: sono i puntini della stampa. Con
+    quattro tinte la sfera esce meglio che con due, e non è un caso — gli archi dentro la sfera sono veri
+    gradini di tono, e schiacciare tutto a due colori li butta via.</p>
+    <p class="nota"><strong>Quanto è preciso il raggio, oggi: 76–77 mm, circa l'1%.</strong> Lo scarto non
+    viene dal calcolo del cerchio, viene da come si sceglie di ridurre l'immagine.</p>
+  </div>
+</section>
+
+<section class="passo">
+  <div class="numero">4</div>
+  <div class="corpo">
+    <span class="stato no">il prossimo</span>
+    <h2>In che verso corre il punto, guardato prima di cucire</h2>
+    <p>Il campo di direzione decide l'orientamento del punto in ogni millimetro del disegno: si fissa
+    sul bordo e si risolve verso l'interno cercando il verso più liscio possibile. Il motore c'è già ed
+    è quello che ha prodotto i riempimenti qui sopra. Quello che manca è <strong>l'anteprima</strong> —
+    le linee di flusso disegnate sul tuo disegno, da guardare prima che l'ago tocchi il tessuto.</p>
+    <p>Poi restano i bordi (frange dove il colore sfuma, taglio secco dove stacca, e la sovrapposizione
+    di 5 mm fra un colore e il successivo) e infine la pipeline con l'export e il pannello.</p>
+
+    <h3>Due decisioni che aspettano te</h3>
+    <p class="nota">Quante tinte usare per la cianotipia: quattro danno una sfera migliore di due, ma è
+    una scelta di resa e va guardata sul ricamo. E il ventaglio mostra <strong>anelli concentrici</strong>
+    dove tutte le file nascono allo stesso raggio: i numeri li vedono appena, l'occhio sì. Il rimedio
+    ovvio l'ho provato e peggiora — quindi resta lì, spento, finché non lo guardi tu.</p>
+  </div>
+</section>
+
+<footer>
+  <p>Generato da <code>apps/pittorico/scripts/banco.ts</code> · le misure vengono da
+  <code>misura.mjs</code> e <code>immagine.mjs</code> · rete di sicurezza <code>npm test</code></p>
+</footer>
+
+</div>
+`;
+
+const uscita = `${dir}banco.html`;
+writeFileSync(uscita, pagina);
+console.log(`banco → ${uscita}  (${(pagina.length / 1024).toFixed(0)} kB)`);
