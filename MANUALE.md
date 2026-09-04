@@ -197,6 +197,51 @@ Il **DST** invece resta a **due layer, uno per ago**: lì un gruppo per pezzo di
 
 ---
 
+## Punto Pittorico (`pittorico`)
+
+**A cosa serve.** Da un'immagine — una stampa, una foto, una grafica di cui il vettore non c'è più —
+si ricavano i blocchi di colore e ogni blocco si riempie di ricamo **pieno che segue le curve del
+disegno**. Il punto **attraversa** il passaggio di colore, come i denti di un pettine, e sono i capi
+dei punti a fare il degradé: dove il colore sfuma le frange dei due colori si intrecciano, dove
+stacca netto il colore si ferma preciso.
+
+Non serve nessun file vettoriale: il cerchio, l'arco, il segmento vengono riconosciuti dai pixel.
+
+**Come si usa.**
+
+1. **Immagine.** Carichi il file. Poi — ed è la cosa che conta più di tutte — metti la **larghezza
+   reale del ricamo in mm**. Senza quella il programma non sa quanto è grande un pixel, e ogni altra
+   misura del pannello perde significato.
+2. **Colori.** Quanti fili vuoi: ogni tinta è **un ago**. Il pareggio della luce e l'attenuazione
+   della grana servono a leggere la forma invece della stampa — su una cianotipia, senza, una
+   campitura uniforme risulta piena di centinaia di buchi che sono solo puntini d'inchiostro. Sotto
+   compare l'elenco dei fili trovati, **nell'ordine in cui vanno infilati**, dal più scuro al più
+   chiaro.
+3. **Punto.** La distanza fra le file (quanto è fitto il pieno) e la lunghezza massima del punto.
+4. **Bordi e sfumature.** La **lunghezza della frangia**; la soglia oltre la quale un passaggio è
+   considerato una sfumatura invece di un taglio; e le due sovrapposizioni — quanto il colore sotto
+   entra sotto quello sopra **dove sfuma** (serve alle frange per intrecciarsi) e **dove stacca**
+   (basta poco: serve solo a non far vedere la tela alla giunta).
+5. **Genera**, e poi **Esporta SVG** o **DST**. Tutt'e due si riaprono da *Riapri un progetto* e
+   rimettono i parametri.
+
+**Le cose da sapere.**
+
+- **La frangia non va più lunga della sovrapposizione.** Se la superi, il taglio la appiattisce:
+  tutte le punte finiscono sul bordo e la frangia sparisce, cioè ottieni l'opposto.
+- **Il verso del punto è automatico.** Si posa perpendicolare dove il colore cambia e resta libero
+  dove la forma semplicemente finisce — è la differenza fra un *bordo* e una *testata*, e forzare la
+  perpendicolare anche sulle testate lascia scoperti gli angoli.
+- **I punti partono da una rotaia**, il lato che guarda il colore già cucito, e la attraversano
+  paralleli; dove la fascia si allarga si infila un **cuneo**. Sulle forme che non hanno due fianchi
+  contrapposti — una macchia tonda, un'isola — l'ordine non è definibile e si riempie a distanza
+  costante.
+- **Quello che ancora non fa:** il **punto minimo** e i **passaggi** fra una macchia e l'altra. Le
+  corse escono staccate, quindi il DST di oggi è buono per guardare e misurare, non per mandarlo in
+  macchina così com'è.
+
+---
+
 ## Se qualcosa non torna
 
 - **"Non vedo niente in anteprima."** Controlla di aver assegnato i **ruoli** ai colori (spesso manca l'area da riempire), e prova **Adatta**.

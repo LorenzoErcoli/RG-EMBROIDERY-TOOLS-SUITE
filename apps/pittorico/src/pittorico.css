@@ -1,0 +1,16 @@
+/* Il minimo indispensabile: tutto il resto viene dal Design System (classi .rg-*). */
+.pittorico-workspace .rg-workspace__canvas { background: var(--rg-color-surface-raised); }
+
+/* Le tinte trovate: una riga per ago, nell'ordine di cucitura. Non è una tabella di dati —
+   è l'elenco dei fili che l'operatore infila in macchina, in quell'ordine. */
+.pittorico-aghi { display: grid; gap: var(--rg-space-2xs); }
+.pittorico-ago {
+  display: grid;
+  grid-template-columns: auto 1.6rem 1fr auto;
+  align-items: center;
+  gap: var(--rg-space-xs);
+  font: var(--rg-typography-body-sm, inherit);
+}
+.pittorico-ago__n { font-variant-numeric: tabular-nums; opacity: 0.6; }
+.pittorico-ago__swatch { width: 1.4rem; height: 1.4rem; border: 1px solid var(--rg-color-border); }
+.pittorico-ago__mis { font-variant-numeric: tabular-nums; opacity: 0.75; }

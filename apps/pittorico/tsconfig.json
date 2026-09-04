@@ -10,5 +10,5 @@
       "@rg/ui/*": ["../../packages/ui/src/*"]
     }
   },
-  "include": ["src", "scripts"]
+  "include": ["src", "scripts", "vite.config.ts"]
 }

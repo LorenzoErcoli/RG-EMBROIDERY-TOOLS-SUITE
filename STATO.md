@@ -1,7 +1,7 @@
 # STATO — RG Embroidery Tools Suite
 
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
-> Aggiornato: 2026-09-04 · Suite con **otto tool live** + il nono (`pittorico`) fermo al prototipo headless — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
+> Aggiornato: 2026-09-04 · Suite con **nove tool live**: `pittorico` è entrato nella home e gira in browser — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
 > Rete di sicurezza: `npm test` (627 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
 
@@ -30,7 +30,7 @@
 - **Conteggio punti nella statusbar.** Accanto alla dimensione (`W × H mm`) la barra di stato mostra il **numero di punti effettivamente cuciti** (`… · 1.234 punti`, formato italiano), aggiornato a ogni rigenerazione dell'anteprima. Il valore è `pointCount.exported` (= `final.points.length`) letto dai metadati già incorporati nell'SVG — nessuna doppia generazione, nessuna modifica al motore. Statusbar allineata all'esempio DS (`esito · conteggio` a sinistra, vista a destra), solo classi v1.6.0 (`rg-mono`).
 
 **Tool `pittorico` (Punto Pittorico) — PROTOTIPO HEADLESS, non ancora un tool:**
-- **Cos'è e a che punto è.** Il nono strumento (briefing: [`AVVIO-PUNTO-PITTORICO.md`](AVVIO-PUNTO-PITTORICO.md)). Del piano in cinque punti sono fatti **1, 2, 3 e 4**, e del 5 c'è la **catena**: `pipeline.ts` va da un'immagine ai livelli d'esportazione, con SVG e DST riapribili (R9/R27/R31) — **manca il pannello**, cioè l'interfaccia dentro la suite. I moduli in `apps/pittorico/src` sono `region`, `field`, `curved-fill`, `rail-fill`, `borders`, `primitives`, `coverage`, `pipeline`; gli script di prova in `apps/pittorico/scripts` (`misura`, `taratura`, `forme`, `immagine`, `campo`, `bordi`, `ordine`, `provini`, `piano`, `banco`) si eseguono con esbuild + node, col comando scritto in testa a ciascuno. C'è anche un **banco di prova** che raccoglie i risultati in una pagina sola e si rigenera dagli script (`scripts/banco.ts`).
+- **Cos'è e a che punto è.** Il nono strumento (briefing: [`AVVIO-PUNTO-PITTORICO.md`](AVVIO-PUNTO-PITTORICO.md)). **Tutti e cinque i punti del piano sono fatti**: il tool è nella home, si apre da `avvia.bat` → *Punto Pittorico*, carica un'immagine, genera e esporta SVG e DST riapribili (R9/R27/R31). Provato in browser vero sulla cianotipia intera: **37 macchie, 4 aghi, 644 m di filo, 329.442 punti in 30 secondi**. I moduli in `apps/pittorico/src` sono `region`, `field`, `curved-fill`, `rail-fill`, `borders`, `primitives`, `coverage`, `pipeline`; gli script di prova in `apps/pittorico/scripts` (`misura`, `taratura`, `forme`, `immagine`, `campo`, `bordi`, `ordine`, `provini`, `piano`, `banco`) si eseguono con esbuild + node, col comando scritto in testa a ciascuno. C'è anche un **banco di prova** che raccoglie i risultati in una pagina sola e si rigenera dagli script (`scripts/banco.ts`).
 - **La misura che decide, e come va.** Su tre regioni di prova, a passo 0,4 mm, si riempie tre volte e si confronta la **dispersione della copertura** (filo per mm² cella per cella, celle da 2 mm, bordi esclusi):
 
   | regione | A rettilineo (core) | B curvo ingenuo | C curvo a distanza costante |

@@ -145,7 +145,8 @@ RG Tools (monorepo)
 ├─ apps/bitmap              "Bitmap → Stitch"  (input raster)
 ├─ apps/oblique             "Broderie Anglaise"
 ├─ apps/striatura           "Punto Striato"
-└─ apps/zone-pattern        "Pattern a zone"
+├─ apps/zone-pattern        "Pattern a zone"
+└─ apps/pittorico           "Punto Pittorico"  (input raster)
 ```
 
 **Come funziona:** `apps/shell` è l'unica app d'ingresso. Home (`#/`) = griglia di tool DS-styled;

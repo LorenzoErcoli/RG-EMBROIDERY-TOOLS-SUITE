@@ -21,6 +21,7 @@
     "dev:striatura": "npm run dev --workspace apps/striatura",
     "dev:broccato": "npm run dev --workspace apps/broccato",
     "dev:zone-pattern": "npm run dev --workspace apps/zone-pattern",
+    "dev:pittorico": "npm run dev --workspace apps/pittorico",
     "build": "npm run build --workspace apps/shell",
     "build:net-45": "npm run build --workspace apps/net-45",
     "test": "node test/smoke.mjs",
