@@ -37,6 +37,7 @@ export { makeRegion, regionBounds, BoundaryIndex } from ${JSON.stringify(posix('
 export { harmonicField, radialField, constantField, meanFieldAngleDeg } from ${JSON.stringify(posix('apps/pittorico/src/field.ts'))};
 export { buildCurvedFill, buildNaiveCurvedFill } from ${JSON.stringify(posix('apps/pittorico/src/curved-fill.ts'))};
 export { coverageStats, neighbourSpacing, containment } from ${JSON.stringify(posix('apps/pittorico/src/coverage.ts'))};
+export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('apps/pittorico/src/primitives.ts'))};
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 `);
@@ -2410,6 +2411,83 @@ const mascheraDiProva = () => {
   check('l\'area minima butta via le schegge', rg.traceRegions(idx, W, H, 1, 0.5, { minAreaMm2: 1 }).length, 2);
   check('e il risultato e\' deterministico',
     JSON.stringify(rg.traceRegions(idx, W, H, 1, 0.5)) === JSON.stringify(regioni), true);
+}
+
+// ---------------------------------------------------------------------------------------------
+// PUNTO PITTORICO — le FORME NETTE (punto 2b): dal contorno a gradini alla primitiva che c'era.
+//
+// Si misura contro VERITÀ NOTA: il cerchio lo rasterizza il test, quindi il raggio vero si conosce
+// al millesimo e l'errore si misura invece di stimarlo. Su un'immagine vera non si potrebbe: si
+// direbbe solo che «sembra» un cerchio.
+// ---------------------------------------------------------------------------------------------
+console.log('');
+console.log('Punto Pittorico — riconoscimento delle forme nette');
+{
+  const NO = 0xff;
+  const cerchioRaster = (raggioPx, margine = 4) => {
+    const lato = Math.ceil(raggioPx * 2) + margine * 2;
+    const idx = new Uint8Array(lato * lato).fill(NO);
+    const c = lato / 2;
+    for (let y = 0; y < lato; y++) {
+      for (let x = 0; x < lato; x++) if (Math.hypot(x + 0.5 - c, y + 0.5 - c) <= raggioPx) idx[y * lato + x] = 1;
+    }
+    return { idx, lato, c };
+  };
+  const lontanoDalVero = (ring, cx, cy, r) =>
+    ring.reduce((m, p) => Math.max(m, Math.abs(Math.hypot(p.x - cx, p.y - cy) - r)), 0);
+
+  // --- il cerchio ---
+  const raggioPx = 30, mmPerPx = 0.5;
+  const { idx, lato, c } = cerchioRaster(raggioPx);
+  const rVero = raggioPx * mmPerPx, cVero = c * mmPerPx;
+  // si traccia con semplificazione FINE: il riconoscimento vuole la scalinata vera, non una gia'
+  // smussata da una tolleranza che non ha scelto lui
+  const tracciato = rg.traceRegions(idx, lato, lato, 1, mmPerPx, { simplifyMm: mmPerPx * 0.1 })[0];
+  const scalinata = lontanoDalVero(tracciato.outer, cVero, cVero, rVero);
+  check('la scalinata di un cerchio rasterizzato si scosta dal vero di circa mezzo pixel',
+    scalinata > mmPerPx * 0.5 && scalinata < mmPerPx * 0.8, true);
+
+  const ric = rg.regolarizzaAnello(tracciato.outer, { tolMm: mmPerPx });
+  check('a tolleranza di UN pixel il cerchio e\' riconosciuto intero', ric.cerchioIntero, true);
+  check('il raggio ricostruito sbaglia meno di 0,02 mm su 15', Math.abs(ric.pezzi[0].r - rVero) < 0.02, true);
+  check('e il contorno ricostruito e\' almeno 10 volte piu\' vicino al vero della scalinata',
+    lontanoDalVero(ric.ring, cVero, cVero, rVero) * 10 < scalinata, true);
+
+  // LA TARATURA, e il suo perche'. A mezzo pixel il cerchio NON si riconosce, e non e' un difetto:
+  // la scalinata stessa si scosta dal cerchio vero di piu' di mezzo pixel, quindi nessun cerchio
+  // puo' passarci dentro. E' il pavimento della tolleranza, ed e' il pixel dell'immagine.
+  const stretto = rg.regolarizzaAnello(tracciato.outer, { tolMm: mmPerPx * 0.5 });
+  check('a mezzo pixel non lo riconosce: sotto il pixel non si puo\' scendere', stretto.cerchioIntero, false);
+  check('...e si sbriciola in tanti pezzi, che e\' il segnale che la tolleranza e\' troppo stretta',
+    stretto.pezzi.length > 20, true);
+
+  // --- il rettangolo: quattro segmenti, e la retta che vince sull'arco ---
+  const W = 60, H = 40;
+  const rett = new Uint8Array(W * H).fill(NO);
+  for (let y = 6; y <= 33; y++) for (let x = 8; x <= 49; x++) rett[y * W + x] = 1;
+  const tr = rg.traceRegions(rett, W, H, 1, mmPerPx, { simplifyMm: mmPerPx * 0.1 })[0];
+  const rr = rg.regolarizzaAnello(tr.outer, { tolMm: mmPerPx });
+  check('un rettangolo esce in quattro segmenti, non in archi di raggio assurdo',
+    rr.pezzi.map((p) => p.tipo), ['segmento', 'segmento', 'segmento', 'segmento']);
+  check('e la sua area e\' quella vera, esatta (21 x 14 mm)',
+    Number(Math.abs(rg.polygonArea(rr.ring)).toFixed(4)), 294);
+
+  // --- IL FORO CHE PERDEVA UN ANGOLO. E' il difetto misurato nel lucchetto di `traceRegions`:
+  //     la semplificazione consegnava 32,5 mm² dove la geometria ne vuole 32. Riconoscendo la
+  //     forma invece di smussare la scalinata, torna esatta. E' il motivo per cui il punto 2b
+  //     esiste, non un abbellimento del bordo.
+  const { idx: mask, W: mw, H: mh } = mascheraDiProva();
+  const fine = rg.traceRegions(mask, mw, mh, 1, 0.5, { simplifyMm: 0.05 })[0];
+  const fuori = rg.regolarizzaAnello(fine.outer, { tolMm: 0.25 });
+  const dentro = rg.regolarizzaAnello(fine.holes[0], { tolMm: 0.25 });
+  const netta = Math.abs(rg.polygonArea(fuori.ring)) - Math.abs(rg.polygonArea(dentro.ring));
+  check('il foro riconosciuto torna quadrato: 4,000 mm2 e non 3,500',
+    Number(Math.abs(rg.polygonArea(dentro.ring)).toFixed(4)), 4);
+  check('...e l\'area netta torna la verita\' geometrica: 36 meno 4 fa 32', Number(netta.toFixed(4)), 32);
+
+  // --- determinismo ---
+  check('stessa forma, stesse primitive',
+    JSON.stringify(rg.regolarizzaAnello(tracciato.outer, { tolMm: mmPerPx })) === JSON.stringify(ric), true);
 }
 
 // ---------------------------------------------------------------------------------------------
