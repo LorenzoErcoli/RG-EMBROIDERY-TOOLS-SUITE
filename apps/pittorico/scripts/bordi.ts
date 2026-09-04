@@ -17,6 +17,8 @@ import { traceRegions, reduceStable, prepareImage, type Polyline, type Point } f
 import { leggiBmp } from './bmp.ts';
 import { larghezzaTransizione, cresciVersoISuccessivi, frastaglia } from '../src/borders.ts';
 import { harmonicField } from '../src/field.ts';
+import { makeRegion } from '../src/region.ts';
+import { coverageStats, neighbourSpacing } from '../src/coverage.ts';
 import { buildCurvedFill } from '../src/curved-fill.ts';
 
 const esaTinta = (c: readonly number[]): string =>
@@ -135,15 +137,47 @@ for (const soglia of [1.5, 2, 3, 4]) {
 }
 
 // --------------------------------------------------------------------------------------------
+// LA MASCHERA "QUI SFUMA": dove si puo' crescere e dove si puo' frastagliare.
+//
+// Si costruisce dai campioni gia' misurati: attorno a ogni campione con un passaggio piu' largo
+// della soglia si timbra un disco largo quanto la crescita. Fuori di li' — cioe' sui bordi netti —
+// non si cresce e non si frastaglia, e il colore stacca preciso.
+// --------------------------------------------------------------------------------------------
+const SOGLIA_SECCO_MM = 1.5;
+const CRESCITA = 5;
+const sfuma = new Uint8Array(img.width * img.height);
+{
+  const r = Math.ceil(CRESCITA / MM_PER_PX) + 2;
+  let morbidi = 0;
+  for (const c of campioni) {
+    if (c.larghezzaMm <= SOGLIA_SECCO_MM) continue;
+    morbidi++;
+    const cx = Math.round(c.p.x / MM_PER_PX), cy = Math.round(c.p.y / MM_PER_PX);
+    for (let dy = -r; dy <= r; dy++) {
+      const y = cy + dy;
+      if (y < 0 || y >= img.height) continue;
+      const mezzo = Math.floor(Math.sqrt(Math.max(0, r * r - dy * dy)));
+      for (let dx = -mezzo; dx <= mezzo; dx++) {
+        const x = cx + dx;
+        if (x >= 0 && x < img.width) sfuma[y * img.width + x] = 1;
+      }
+    }
+  }
+  let quanti = 0;
+  for (let i = 0; i < sfuma.length; i++) if (sfuma[i]) quanti++;
+  console.log('');
+  console.log(`   maschera «qui sfuma»: ${morbidi} campioni morbidi su ${campioni.length} · copre il ${((quanti / sfuma.length) * 100).toFixed(0)}% del disegno`);
+}
+
+// --------------------------------------------------------------------------------------------
 // 3. LA CRESCITA DI 5 MM, e la prova che va nel verso giusto
 // --------------------------------------------------------------------------------------------
 console.log('');
 console.log('3. LA SOVRAPPOSIZIONE DI 5 MM — chi sta sotto è abbondante, chi va sopra ci si appoggia');
 const ordine = res.palette.map((_, i) => i).sort((a, b) => luce(res.palette[a]) - luce(res.palette[b]));
 console.log(`   ordine di cucitura (dalla più scura): ${ordine.join(' → ')}`);
-const CRESCITA = 5;
 for (const t of ordine) {
-  const cresciuta = cresciVersoISuccessivi(idx, img.width, img.height, t, ordine, MM_PER_PX, CRESCITA);
+  const cresciuta = cresciVersoISuccessivi(idx, img.width, img.height, t, ordine, MM_PER_PX, CRESCITA, sfuma);
   let miei = 0, guadagnati = 0, rubatiAiPrecedenti = 0;
   const posizione = ordine.indexOf(t);
   const prima = new Set(ordine.slice(0, posizione));
@@ -167,7 +201,6 @@ console.log('   è la decisione 2 di Lorenzo, e i pixel «verso chi era già cuc
 // centinaia di metri di filo e un SVG da decine di megabyte.
 console.log('');
 console.log('4. IL DEGRADÉ — le frange che si intrecciano, su un ritaglio');
-const SOGLIA_SECCO = 1.5;
 let dettaglio = '';
 {
   // si sceglie la finestra dove la sfumatura è più larga, cioè dove il degradé si vede meglio
@@ -180,12 +213,27 @@ let dettaglio = '';
   console.log(`   ritaglio di ${LATO_MM} mm centrato dove il passaggio è largo ${n2(migliore.larghezzaMm)} mm`);
 
   const rit = new Uint8Array(lato * lato);
-  for (let y = 0; y < lato; y++) for (let x = 0; x < lato; x++) rit[y * lato + x] = idx[(y0 + y) * img.width + (x0 + x)];
+  const ritSfuma = new Uint8Array(lato * lato);
+  for (let y = 0; y < lato; y++) for (let x = 0; x < lato; x++) {
+    rit[y * lato + x] = idx[(y0 + y) * img.width + (x0 + x)];
+    ritSfuma[y * lato + x] = sfuma[(y0 + y) * img.width + (x0 + x)];
+  }
+  /** Il corpo del colore PRIMA della crescita: è il confine che la frangia non deve superare. */
+  const corpoDi = (t: number) => (p: Point): boolean => {
+    const x = Math.round(p.x / MM_PER_PX), y = Math.round(p.y / MM_PER_PX);
+    return x >= 0 && y >= 0 && x < lato && y < lato && rit[y * lato + x] === t;
+  };
 
   const pezzi: string[] = [];
+  const tutteLeCorse: Polyline[] = [];
   let filoTot = 0;
+  // la regione su cui si misura la copertura: tutto il ritaglio, che è pieno di ricamo
+  const ritaglioRegion = makeRegion([
+    { x: 0.5, y: 0.5 }, { x: lato * MM_PER_PX - 0.5, y: 0.5 },
+    { x: lato * MM_PER_PX - 0.5, y: lato * MM_PER_PX - 0.5 }, { x: 0.5, y: lato * MM_PER_PX - 0.5 },
+  ]);
   for (const t of ordine) {
-    const mask = cresciVersoISuccessivi(rit, lato, lato, t, ordine, MM_PER_PX, CRESCITA);
+    const mask = cresciVersoISuccessivi(rit, lato, lato, t, ordine, MM_PER_PX, CRESCITA, ritSfuma);
     for (const r of traceRegions(mask, lato, lato, 1, MM_PER_PX, { simplifyMm: MM_PER_PX * 1.5, minAreaMm2: 60 })) {
       const campo = harmonicField(r, { cellMm: 1.2, levels: 4, sweeps: 220 });
       const corse = buildCurvedFill(r, campo, { spacingMm: 0.4, maxStitchMm: 3 }).runs;
@@ -194,23 +242,44 @@ let dettaglio = '';
        * misurato lì — non un numero fisso. Il parametro di pannello (decisione 3) fa da TETTO: si
        * prende il più corto fra quello che l'utente concede e quello che l'immagine chiede.
        */
-      const FRANGIA_MASSIMA = 6;
-      const larghezzaQui = (p: Point): number => {
-        const q = { x: p.x + x0 * MM_PER_PX, y: p.y + y0 * MM_PER_PX };
-        const d = larghezzaTransizione(perMisurare, MM_PER_PX, q, { x: 1, y: 0 }, { raggioMm: 10 })
-          ?? larghezzaTransizione(perMisurare, MM_PER_PX, q, { x: 0, y: 1 }, { raggioMm: 10 });
-        return d ? d.larghezzaMm : 0;
+      const FRANGIA_MASSIMA = 5;
+      const quiSfuma = (p: Point): boolean => {
+        const x = Math.round(p.x / MM_PER_PX), y = Math.round(p.y / MM_PER_PX);
+        return x >= 0 && y >= 0 && x < lato && y < lato && ritSfuma[y * lato + x] === 1;
       };
-      const frangiate = frastaglia(corse, (p) => larghezzaQui(p) > SOGLIA_SECCO, {
-        frangiaMm: FRANGIA_MASSIMA, granaMm: 1.2,
+      // la frangia vive SOLO nel margine cresciuto: `restaFuoriDa` la ferma appena tornerebbe
+      // dentro il corpo del colore, ed è ciò che impedisce i buchi
+      const frangiate = frastaglia(corse, quiSfuma, {
+        frangiaMm: FRANGIA_MASSIMA, granaMm: 1.2, restaFuoriDa: corpoDi(t),
       });
       for (const c of frangiate) for (let i = 1; i < c.length; i++) filoTot += Math.hypot(c[i].x - c[i-1].x, c[i].y - c[i-1].y);
-      const colore = esaTinta(res.palette[t]);
+      tutteLeCorse.push(...frangiate);
+      /**
+       * Il filo si disegna nella sua tinta vera, ma le tinte chiarissime sul fondo tela sarebbero
+       * invisibili — e su un disegno tecnico un filo invisibile si scambia per un buco. Le tinte
+       * più chiare della tela si scuriscono un po' SOLO PER LA VISTA: la geometria non cambia, e il
+       * confronto fra chiaro e scuro resta leggibile.
+       */
+      const t3 = res.palette[t];
+      const chiara = 0.2126 * t3[0] + 0.7152 * t3[1] + 0.0722 * t3[2] > 170;
+      const colore = esaTinta(chiara ? t3.map((v) => v * 0.62 + 20) : t3);
       pezzi.push(`<g fill="none" stroke="${colore}" stroke-width="0.22" stroke-linecap="round">${
         frangiate.map((c) => `<polyline points="${c.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')}" />`).join('')
       }</g>`);
     }
   }
+  // I BUCHI, misurati invece che discussi. Lorenzo, guardando la prima versione: «non mi sembra
+  // molto elegante il modo di fare sfumature, ci sono davvero un sacco di buchi». La frangia che
+  // mangiava il riempimento è corretta; quello che resta è la variazione di densità del
+  // posizionamento a distanza costante, e va detto con un numero perché si possa vedere se cala.
+  {
+    const nom = 1 / 0.4;
+    const cov = coverageStats(tutteLeCorse, ritaglioRegion, 0.4, 2);
+    const sp = neighbourSpacing(tutteLeCorse, 0.4);
+    console.log(`   copertura: media ${n2(cov.media / nom)} del nominale · il 5% più rado sta a ${n2(cov.p05 / nom)} · dispersione ${(cov.cv * 100).toFixed(1)}%`);
+    console.log(`   distanza fra file: mediana ${n2(sp.p50)} mm · il 5% più largo ${n2(sp.p95)} · il vuoto peggiore ${n2(sp.max)} mm (chiesto 0,40)`);
+  }
+
   const L = lato * MM_PER_PX;
   // misure in pixel e non in mm: questo è un DETTAGLIO da guardare ingrandito, non un export.
   // Il vero (1 unità = 1 mm, R1) resta nel viewBox, che è la geometria.
@@ -231,7 +300,7 @@ mkdirSync(dir, { recursive: true });
 {
   const W = LARGHEZZA_MM, H = img.height * MM_PER_PX;
   const esa = esaTinta;
-  const SOGLIA = SOGLIA_SECCO;
+  const SOGLIA = SOGLIA_SECCO_MM;
   const punti = campioni.map((c) => {
     const sfumato = c.larghezzaMm > SOGLIA;
     const r = sfumato ? Math.min(2.4, 0.6 + c.larghezzaMm * 0.22) : 0.55;

@@ -2589,6 +2589,46 @@ console.log('Punto Pittorico — i bordi: sfumato, secco, sovrapposizione, frang
     JSON.stringify(rg.frastaglia(corse, (p) => p.x > 20, { frangiaMm: 6, granaMm: 1.2 })) === JSON.stringify(frangiate), true);
   check('a frangia zero il riempimento resta identico',
     JSON.stringify(rg.frastaglia(corse, () => true, { frangiaMm: 0 })), JSON.stringify(corse));
+
+  // LA FRANGIA VIVE SOLO NEL MARGINE CRESCIUTO, e questo e' il test del difetto che Lorenzo ha
+  // visto per primo: «non mi sembra molto elegante il modo di fare sfumature, ci sono davvero un
+  // sacco di buchi». Nel ricamo vero le frange SPORGONO oltre il blocco di colore — per questo la
+  // regione cresce di 5 mm prima di essere riempita — mentre il ritiro le mangiava dentro. Dove il
+  // blocco non era cresciuto, il riempimento si accorciava e fra due blocchi restava un buco.
+  // Qui il corpo del colore arriva a x=25 e il margine cresciuto va da 25 a 30: la punta di ogni
+  // fila deve cadere dentro quel margine, mai piu' indietro.
+  const margine = (frangiaMm) => rg.frastaglia(corse, () => true, {
+    frangiaMm, granaMm: 0.4, restaFuoriDa: (p) => p.x < 25,
+  }).map((c) => c[c.length - 1].x);
+  const punte = margine(5);
+  check('la frangia non entra mai nel corpo del colore', punte.every((v) => v >= 25 - 1e-6), true);
+  check('...ma dentro il margine varia davvero', new Set(punte.map((v) => v.toFixed(2))).size > 8, true);
+  check('e nessuna corsa viene distrutta dal ritiro',
+    rg.frastaglia(corse, () => true, { frangiaMm: 5, granaMm: 0.4, restaFuoriDa: (p) => p.x < 25 }).length,
+    corse.length);
+
+  // LA TRAPPOLA: se la frangia chiesta supera il margine cresciuto, il taglio la SATURA — tutti i
+  // capi finiscono sul bordo del corpo e la frangia sparisce, cioe' si ottiene l'opposto di quello
+  // che si voleva. Il parametro di pannello va tenuto <= alla crescita (5 mm).
+  const troppa = margine(20);
+  check('una frangia piu' + ' lunga del margine si appiattisce, e va saputo',
+    new Set(troppa.map((v) => v.toFixed(2))).size < new Set(punte.map((v) => v.toFixed(2))).size, true);
+
+  // SUL BORDO NETTO NON SI CRESCE (chiesto da Lorenzo: «sul bordo netto vorrei rimanesse tutto
+  // netto, colore che stacca preciso»). Se il blocco scavalca un taglio secco, il taglio smette di
+  // staccare: la crescita si fa solo dove una maschera dice che li' il colore sfuma.
+  const soloMeta = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (y < H / 2) soloMeta[y * W + x] = 1;
+  const parziale = rg.cresciVersoISuccessivi(fasce, W, H, 0, ordine, mmPerPx, CRESCITA, soloMeta);
+  let sopra = 0, sotto = 0;
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const i = y * W + x;
+      if (parziale[i] && fasce[i] !== 0) { if (y < H / 2) sopra++; else sotto++; }
+    }
+  }
+  check('dove il colore sfuma il blocco cresce', sopra > 0, true);
+  check('...e sul bordo netto non cresce di un pixel', sotto, 0);
 }
 
 // ---------------------------------------------------------------------------------------------

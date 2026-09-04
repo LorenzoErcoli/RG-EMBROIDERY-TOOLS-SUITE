@@ -120,6 +120,15 @@ export function larghezzaTransizione(
 export function cresciVersoISuccessivi(
   index: Uint8Array, width: number, height: number,
   tinta: number, ordine: number[], mmPerPx: number, crescitaMm: number,
+  /**
+   * Dove è lecito crescere: 1 = qui il colore sfuma. Se non si passa, si cresce ovunque.
+   *
+   * Serve perché **sul bordo netto non si cresce**: se il blocco scavalca un taglio secco, il taglio
+   * smette di staccare preciso — ed è la prima cosa che Lorenzo ha chiesto guardando l'anteprima
+   * (*«sul bordo netto vorrei rimanesse tutto netto, colore che stacca preciso»*). La crescita di
+   * 5 mm serve a far intrecciare le frange, e le frange stanno solo dove c'è una sfumatura da fare.
+   */
+  soloDoveSfuma?: Uint8Array | null,
 ): Uint8Array {
   const raggio = crescitaMm / mmPerPx;
   const mia = new Uint8Array(index.length);
@@ -158,7 +167,8 @@ export function cresciVersoISuccessivi(
   const soglia = raggio * 3;
   const fuori = new Uint8Array(index.length);
   for (let i = 0; i < index.length; i++) {
-    fuori[i] = mia[i] || (d[i] <= soglia && dopo.has(index[i])) ? 1 : 0;
+    const puo = !soloDoveSfuma || soloDoveSfuma[i] === 1;
+    fuori[i] = mia[i] || (puo && d[i] <= soglia && dopo.has(index[i])) ? 1 : 0;
   }
   return fuori;
 }
@@ -178,10 +188,24 @@ function disturbo(x: number, y: number, scalaMm: number): number {
 export interface FrastaglioOptions {
   /** Lunghezza massima della frangia, in mm. È il parametro di pannello (decisione 3). */
   frangiaMm: number;
-  /** Sotto questa distanza dal bordo un capo è considerato "sul bordo" e quindi frastagliabile. */
-  tolleranzaMm?: number;
   /** Quanto è grossa la grana della frangia: due capi entro questa distanza si ritirano uguale. */
   granaMm?: number;
+  /**
+   * Il confine che il ritiro **non deve superare**: `true` = qui siamo già nel corpo del colore.
+   *
+   * È la correzione del difetto che Lorenzo ha visto per primo (*«non mi sembra molto elegante il
+   * modo di fare sfumature, ci sono davvero un sacco di buchi»*), e la ragione è geometrica, non
+   * estetica: nel ricamo vero le frange **sporgono oltre** il blocco di colore — per questo la
+   * regione cresce di 5 mm prima di essere riempita — mentre io ritiravo i capi *dentro*. Dove il
+   * blocco non era cresciuto (bordo netto, oppure l'ultima tinta, che non ha nessuno sotto cui
+   * infilarsi) il ritiro mangiava il riempimento, e fra due blocchi che si ritiravano entrambi
+   * restava un buco.
+   *
+   * Con questo confine la frangia vive **solo nel margine cresciuto**: la punta di ogni file cade
+   * fra il bordo vero del colore e i 5 mm di sconfinamento, mai più indietro. Il blocco arriva
+   * sempre almeno al proprio bordo, quindi buchi non se ne aprono.
+   */
+  restaFuoriDa?: (p: Point) => boolean;
 }
 
 /**
@@ -209,12 +233,40 @@ export function frastaglia(
     for (const daCapo of [true, false]) {
       const capo = daCapo ? corsa[0] : corsa[corsa.length - 1];
       if (!daSfumare(capo)) continue;
-      const ritiro = frangia * disturbo(capo.x, capo.y, grana);
+      const voluto = frangia * disturbo(capo.x, capo.y, grana);
+      const ritiro = opts.restaFuoriDa ? Math.min(voluto, quantoSiPuoRitirare(corsa, daCapo, opts.restaFuoriDa)) : voluto;
+      if (ritiro <= 0) continue;
       corsa = ritiraCapo(corsa, ritiro, daCapo);
       if (corsa.length < 2) return corsa;
     }
     return corsa;
   }).filter((r) => r.length >= 2);
+}
+
+/**
+ * Di quanto ci si può ritirare da un capo prima di entrare nel corpo del colore: si cammina
+ * indietro finché `dentro` dice di sì, e ci si ferma lì.
+ */
+function quantoSiPuoRitirare(
+  linea: Polyline, daCapo: boolean, dentro: (p: Point) => boolean, passoMm = 0.2,
+): number {
+  const l = daCapo ? linea.slice() : linea.slice().reverse();   // l[0] è il capo da cui si ritira
+  // Si cammina LUNGO il filo, non di vertice in vertice: coi punti-ago a 3 mm l'uno dall'altro (R4)
+  // il limite si quantizzerebbe a scatti di 3 mm, e su una fila di due soli punti verrebbe zero —
+  // cioè la frangia non varierebbe affatto. Trovato da un test che pretendeva che variasse.
+  let percorso = 0;
+  for (let i = 1; i < l.length; i++) {
+    const a = l[i - 1], b = l[i];
+    const seg = Math.hypot(b.x - a.x, b.y - a.y);
+    if (seg < 1e-9) continue;
+    const passi = Math.max(1, Math.ceil(seg / passoMm));
+    for (let k = 1; k <= passi; k++) {
+      const t = k / passi;
+      if (dentro({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t })) return percorso + (seg * (k - 1)) / passi;
+    }
+    percorso += seg;
+  }
+  return percorso;
 }
 
 /** Accorcia la polilinea di `mm` da un capo, tagliando esattamente alla misura. */

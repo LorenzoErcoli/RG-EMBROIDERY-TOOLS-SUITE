@@ -253,7 +253,7 @@ const pagina = `<title>Banco del Punto Pittorico</title>
     <div class="fatto"><dt>Il disegno</dt><dd>419,45 × 353,1 mm</dd></div>
     <div class="fatto"><dt>Un pixel vale</dt><dd>0,353 mm</dd></div>
     <div class="fatto"><dt>Passo del filo</dt><dd>0,4 mm</dd></div>
-    <div class="fatto"><dt>Rete di sicurezza</dt><dd>591 controlli</dd></div>
+    <div class="fatto"><dt>Rete di sicurezza</dt><dd>597 controlli</dd></div>
   </dl>
 </header>
 
@@ -419,16 +419,20 @@ const pagina = `<title>Banco del Punto Pittorico</title>
   <div class="corpo">
     <span class="stato si">fatto e misurato</span>
     <h2>I bordi: il degradé dove il colore sfuma, il taglio secco dove stacca</h2>
-    <p>Qui sotto, un ritaglio da 70 mm del tuo disegno cucito davvero: passo 0,4 mm, 10 metri di filo
-    su 49 cm². I punti <strong>attraversano</strong> il passaggio di colore e i loro capi
-    <strong>si ritirano di quantità diverse e si intrecciano</strong> con quelli della tinta accanto —
+    <p>Qui sotto, un ritaglio da 70 mm del tuo disegno cucito davvero: passo 0,4 mm, 15 metri di filo
+    su 49 cm². I punti <strong>attraversano</strong> il passaggio di colore e le loro punte
+    <strong>sporgono di quantità diverse e si intrecciano</strong> con quelle della tinta accanto —
     è il degradé fatto col frastaglio del bordo, come avevi detto tu, e non con una texture.</p>
+    <p><strong>Sul bordo netto, invece, non succede niente di tutto questo</strong>: né frangia né
+    sovrapposizione, il colore si ferma preciso sul taglio. Se il blocco scavalcasse il taglio, il
+    taglio smetterebbe di staccare.</p>
 
     <figure>
       <div class="lastra">${svgInline('cianotipia-degrade.svg')}</div>
-      <figcaption>La frangia non è lunga a caso e non è un numero fisso: è lunga quanto il passaggio
-      di colore misurato in quel punto. Il parametro del pannello fa da tetto — si prende il più corto
-      fra quello che concedi tu e quello che chiede l'immagine.</figcaption>
+      <figcaption>La frangia vive <em>solo</em> nel margine dei 5 mm: la punta di ogni fila cade fra il
+      bordo vero del colore e il limite dello sconfinamento, mai più indietro. La prima versione
+      ritirava le punte <em>dentro</em> il blocco e apriva buchi — il ricamo vero fa il contrario, le
+      frange sporgono, ed è per questo che la regione cresce prima di essere riempita.</figcaption>
     </figure>
 
     <h3>Come fa il programma a sapere dove sfuma</h3>
