@@ -49,6 +49,7 @@ const CAMPI: Campo[] = [
   { id: 'crescitaMm', key: 'crescitaMm', min: 0, max: 12 },
   { id: 'sormontoMm', key: 'sormontoMm', min: 0, max: 6 },
   { id: 'sogliaSfumaturaMm', key: 'sogliaSfumaturaMm', min: 0, max: 20 },
+  { id: 'lisciaBordiMm', key: 'lisciaBordiMm', min: 0, max: 5 },
   { id: 'flattenLightMm', key: 'flattenLightMm', min: 0 },
   { id: 'smoothMm', key: 'smoothMm', min: 0 },
   { id: 'minAreaMm2', key: 'minAreaMm2', min: 0 },
@@ -139,6 +140,11 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
             <span class="rg-field__label">Lunghezza della frangia</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="frangiaMm" type="number" min="0" max="12" step="0.5"><span>mm</span></span>
             <span class="rg-field__help">tienila sotto la sovrapposizione, o si appiattisce</span>
+          </label>
+          <label class="rg-field">
+            <span class="rg-field__label">Lisciatura del contorno</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="lisciaBordiMm" type="number" min="0" max="5" step="0.2"><span>mm</span></span>
+            <span class="rg-field__help">0 = il contorno com'esce dalla tracciatura. Alzandola sparisce il dettaglio più piccolo di così</span>
           </label>
           <label class="rg-field">
             <span class="rg-field__label">Da qui in su è una sfumatura</span>

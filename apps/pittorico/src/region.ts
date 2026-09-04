@@ -10,7 +10,10 @@
 //
 // Nessun DOM: si prova in Node.
 
-import { type Point, type Polyline, type Bounds, type Region, bounds, polygonArea } from '@rg/core';
+import {
+  type Point, type Polyline, type Bounds, type Region,
+  bounds, polygonArea, simplifyPolyline,
+} from '@rg/core';
 
 export type { Region };
 
@@ -128,4 +131,88 @@ export class BoundaryIndex {
       tangent: { x: dx / len, y: dy / len },
     };
   }
+}
+
+/**
+ * IL CONTORNO LISCIO — togliere la scalinata dei pixel senza spostare la forma.
+ *
+ * Una macchia nata da un'immagine ha un contorno a gradini: e' fatto di lati di pixel, e non c'e'
+ * niente di curvo dentro. Quei gradini non sono un dettaglio estetico, sono caos che arriva fino al
+ * filo. Si sono gia' visti costare due volte: la corda fra due capi vicini taglia lo scalino e il
+ * routing risponde «fuori», e il campo di direzione prende la perpendicolare del gradino invece di
+ * quella del bordo vero, cosi' il raso ruota dove il disegno non ruota.
+ *
+ * La semplificazione da sola non basta e il motivo e' geometrico: una scalinata devia da una retta
+ * di circa **un pixel**, quindi Douglas-Peucker con tolleranza di un pixel e mezzo — quella che si
+ * usava — puo' solo togliere qualche vertice, non raddrizzare il gradino. E alzare la tolleranza
+ * non liscia: taglia gli angoli veri insieme a quelli finti.
+ *
+ * Qui si fa in tre tempi:
+ *
+ *   1. si ricampiona l'anello a passo costante, perche' i passi successivi presumono vertici
+ *      distribuiti in modo regolare e dopo una semplificazione non lo sono affatto;
+ *   2. si applica **Taubin** (λ/μ), cioe' una passata che liscia seguita da una che ri-gonfia. La
+ *      media mobile normale liscia e RESTRINGE — su un anello chiuso mangia i convessi a ogni giro,
+ *      e a forza di giri una macchia diventa piu' piccola di com'e'. La coppia λ/μ e' fatta apposta
+ *      per non restringere, ed e' il motivo per cui non basta una media mobile;
+ *   3. si semplifica, per non portarsi dietro migliaia di vertici che ora sono allineati.
+ *
+ * `mm` e' il raggio della lisciatura: quanto grande e' il dettaglio che sparisce. Zero lascia tutto
+ * com'e'.
+ */
+export function lisciaAnello(ring: Polyline, mm: number, passoMm: number): Polyline {
+  if (mm <= 0 || ring.length < 8) return ring;
+  const passo = Math.max(passoMm, 1e-3);
+
+  // 1. a passo costante, sull'anello chiuso
+  const chiuso = [...ring, ring[0]];
+  const uni: Point[] = [];
+  let resto = 0;
+  for (let i = 1; i < chiuso.length; i++) {
+    const a = chiuso[i - 1], b = chiuso[i];
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len < 1e-12) continue;
+    let t = resto;
+    while (t < len) {
+      uni.push({ x: a.x + ((b.x - a.x) * t) / len, y: a.y + ((b.y - a.y) * t) / len });
+      t += passo;
+    }
+    resto = t - len;
+  }
+  if (uni.length < 8) return ring;
+
+  /*
+   * 2. Taubin. Il numero di passate viene dal raggio chiesto: una passata di Laplaciano con λ=0,5
+   * ha l'effetto di una gaussiana con σ ≈ passo/√2, e N passate compongono in σ ≈ passo·√(N/2).
+   * Invertita: N ≈ 2·(mm/passo)². Il tetto e' li' perche' su un passo molto fine la formula
+   * esploderebbe in decine di migliaia di giri per un millimetro di lisciatura.
+   */
+  const coppie = Math.min(200, Math.max(1, Math.round((mm / passo) ** 2)));
+  const LAMBDA = 0.5, MU = -0.53;
+  let p = uni;
+  const passata = (src: Point[], k: number): Point[] => {
+    const n = src.length;
+    const out = new Array<Point>(n);
+    for (let i = 0; i < n; i++) {
+      const a = src[(i - 1 + n) % n], b = src[(i + 1) % n], c = src[i];
+      out[i] = { x: c.x + k * ((a.x + b.x) / 2 - c.x), y: c.y + k * ((a.y + b.y) / 2 - c.y) };
+    }
+    return out;
+  };
+  for (let k = 0; k < coppie; k++) { p = passata(p, LAMBDA); p = passata(p, MU); }
+
+  // 3. via i vertici ormai allineati. `simplifyPolyline` tiene sempre i capi: si chiude l'anello
+  //    prima e si toglie il doppione dopo, cosi' la giunzione non resta un angolo vivo.
+  const semplice = simplifyPolyline([...p, p[0]], Math.max(0.05, passo * 0.6));
+  if (semplice.length > 4
+      && Math.hypot(semplice[0].x - semplice[semplice.length - 1].x,
+        semplice[0].y - semplice[semplice.length - 1].y) < 1e-9) semplice.pop();
+  return semplice.length >= 4 ? semplice : ring;
+}
+
+/** L'intera regione con i contorni lisciati: il guscio esterno e ogni foro. */
+export function lisciaRegione(r: Region, mm: number, passoMm: number): Region {
+  if (mm <= 0) return r;
+  return makeRegion(lisciaAnello(r.outer, mm, passoMm),
+    r.holes.map((h) => lisciaAnello(h, mm, passoMm)));
 }

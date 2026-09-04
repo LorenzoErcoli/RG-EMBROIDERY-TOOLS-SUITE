@@ -22,7 +22,7 @@ import {
   type PixelImage, type Polyline, type Point, type Region, type ExportLayer, type Rgb,
   reduceStable, prepareImage, traceRegions, rgbToHex, pointInRegion,
 } from '@rg/core';
-import { BoundaryIndex, regionRings } from './region';
+import { BoundaryIndex, regionRings, lisciaRegione } from './region';
 import { harmonicField, type CondizioneAlBordo } from './field';
 import { buildRailFill } from './rail-fill';
 import { buildCurvedFill } from './curved-fill';
@@ -222,6 +222,17 @@ export interface PittoricoParams {
   smoothMm: number;
   /** Area minima di una macchia perché valga la pena cucirla, in mm². */
   minAreaMm2: number;
+  /**
+   * Raggio della LISCIATURA DEL CONTORNO, in mm: quanto grande e' il dettaglio del bordo che
+   * sparisce. Zero lascia la scalinata dei pixel com'e'.
+   *
+   * Chiesto da Lorenzo guardando le macchie: «i bordi sono davvero frastagliati e questo crea un
+   * sacco di caos al ricamo; possiamo appiattire le frastaglie e vedere come si muove il ricamo con
+   * bordi precisi?». Non e' una rifinitura estetica — il gradino di un pixel e' gia' costato due
+   * volte, al routing (la corda taglia lo scalino e risulta «fuori») e al campo di direzione (la
+   * perpendicolare del gradino non e' quella del bordo, e il raso ruota dove il disegno non ruota).
+   */
+  lisciaBordiMm: number;
   /** Larghezza reale del disegno in mm (R11): è la fonte di verità. */
   realWidthMm: number;
   /** Punto minimo (R3): si impone DOPO il routing, mai prima. */
@@ -267,6 +278,12 @@ export const defaultPittoricoParams: PittoricoParams = {
   flattenLightMm: 40,
   smoothMm: 1.5,
   minAreaMm2: 400,
+  // SPENTA di default, e non per prudenza: la misura non la giustifica (R30). Sul ritaglio vero il
+  // contorno inverte la curvatura una volta ogni 9 mm — cioe' e' gia' liscio — e lisciarlo non
+  // migliora quel numero, lo peggiora appena (0,11 -> 0,15 inversioni/mm) e raddoppia i vertici.
+  // Aiuta un po' il routing (25 giri sul contorno -> 21), ma non abbastanza da accenderla da sola.
+  // Resta la manopola per provare: e' cosi' che si e' scoperto che il frastaglio non e' li'.
+  lisciaBordiMm: 0,
   realWidthMm: 0,
   minStitchMm: 1,
   travelStitchMm: 2.5,
@@ -405,9 +422,25 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
     const cresciuta = cresciVersoISuccessivi(idx, img.width, img.height, t, ordine, mmPerPx, {
       crescitaMm: p.crescitaMm, sormontoMm: p.sormontoMm, sfuma,
     });
+    /*
+     * L'ORDINE CONTA, e mi e' costato una misura per capirlo: **prima si liscia, poi si semplifica**.
+     *
+     * `traceRegions` semplifica il contorno a un pixel e mezzo, e sembra poco. Ma sul ritaglio vero
+     * quei 282 vertici su 1.400 mm di perimetro sono facce dritte da 5 mm che si incontrano a
+     * cinquanta gradi l'una con l'altra: il contorno gira **10,35 gradi per millimetro**, dove una
+     * curva vera da un centimetro di raggio ne farebbe 5,7. Non e' una scalinata di pixel — e' uno
+     * zigzag grosso, e si vede a occhio: e' quello che Lorenzo chiama frastaglio.
+     *
+     * Lisciare DOPO non lo toglie (10,35 -> 8,67, misurato): a quel punto l'informazione e' gia'
+     * stata buttata, e si arrotondano solo gli spigoli di un poligono che resta a facce. Quindi
+     * quando la lisciatura e' accesa si chiede la tracciatura **cruda**, col contorno ancora a
+     * gradini, e si lascia fare tutto a `lisciaRegione`: media che non restringe, e semplificazione
+     * alla fine, quando i vertici sono davvero allineati.
+     */
+    const crudo = p.lisciaBordiMm > 0 ? mmPerPx * 0.2 : mmPerPx * 1.5;
     for (const region of traceRegions(cresciuta, img.width, img.height, 1, mmPerPx, {
-      simplifyMm: mmPerPx * 1.5, minAreaMm2: p.minAreaMm2,
-    })) {
+      simplifyMm: crudo, minAreaMm2: p.minAreaMm2,
+    }).map((r) => lisciaRegione(r, p.lisciaBordiMm, mmPerPx))) {
       /** Che tinta c'è appena fuori dal contorno, in questo punto. −1 = niente. */
       const fuori = (q: Point): number => {
         const x = Math.round(q.x / mmPerPx), y = Math.round(q.y / mmPerPx);
