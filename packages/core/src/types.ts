@@ -49,6 +49,23 @@ export interface ExportLayer {
   shapeOnly?: boolean;
 }
 
+/**
+ * Pixel già rasterizzati: RGBA riga per riga. Lo produce il canvas del browser — l'unico pezzo a
+ * DOM di tutta la catena — e lo consuma il core, che di DOM non sa niente.
+ *
+ * Sta qui dal 2026-09-04, promosso insieme a `reduce`. Prima era definito **due volte**: in
+ * `apps/broccato` e in `apps/bitmap`, e nemmeno uguale — broccato accettava anche un `number[]`
+ * (serve alle immagini sintetiche dei test), bitmap solo un `Uint8ClampedArray`. Vince la versione
+ * larga, che è già il contratto di `medianCutPalette` e `mapToPalette` qui nel core. Due
+ * definizioni della stessa cosa sono la trappola di R28: nessuna delle due è sbagliata, e nessuno
+ * si accorge quando divergono.
+ */
+export interface PixelImage {
+  rgba: Uint8ClampedArray | number[];
+  width: number;
+  height: number;
+}
+
 export interface Bounds {
   minX: number;
   minY: number;

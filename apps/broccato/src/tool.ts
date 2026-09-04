@@ -20,7 +20,7 @@ import {
   defaultBroccatoParams, paletteToColors, applyDensityToAll,
   colorsToPalette, mmPerPixel, clampColorCount,
 } from './engine';
-import { reduceStable, type ReduceResult } from './reduce';
+import { reduceStable, type ReduceResult } from '@rg/core';
 import { buildPlan, type BroccatoPlan } from './pipeline';
 import { sampleImage } from './sample';
 

@@ -17,12 +17,8 @@ import { type Rgb, rgbToHex, hexToRgb } from '@rg/core';
 // Immagine
 // ------------------------------------------------------------
 
-/** Pixel già rasterizzati: RGBA riga per riga. Lo produce tool.ts col canvas, l'unico pezzo a DOM. */
-export interface PixelImage {
-  rgba: Uint8ClampedArray | number[];
-  width: number;
-  height: number;
-}
+/** Pixel già rasterizzati: RGBA riga per riga. Il tipo vive nel core, qui si ri-espone. */
+export type { PixelImage } from '@rg/core';
 
 // ------------------------------------------------------------
 // Colori: ognuno è un ago, e l'ordine è l'ordine di cucitura

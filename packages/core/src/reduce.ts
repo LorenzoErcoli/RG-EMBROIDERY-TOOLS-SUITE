@@ -15,11 +15,18 @@
 //      finisce nessun pixel.
 //   4. AREA MINIMA — i frammenti troppo piccoli per essere ricamati vanno al colore del vicino.
 //
-// Resta locale all'app (ARCHITETTURA, regola di crescita 2): si promuove nel core quando un secondo
-// tool la chiederà davvero. Nessun DOM: si prova in Node dallo smoke test.
+// **Nata in `apps/broccato`, promossa qui il 2026-09-04** quando il secondo cliente si è
+// presentato: il Punto Pittorico. Misurato sulla cianotipia vera di Lorenzo, senza questo passaggio
+// il contorno della macchia più grande ha **699 fori che non sono fori**: è la grana della stampa.
+// Con la pulizia scendono a 22 mentre le forme restano le stesse — cioè tutto quello che viene
+// dopo (contorni, riconoscimento, campo di direzione) lavorerebbe su un contorno che non è la
+// forma. Regola di crescita 1; trasloco a comportamento invariato, col lucchetto in
+// `test/smoke.mjs` scritto PRIMA di muovere una riga.
+//
+// Nessun DOM: si prova in Node dallo smoke test.
 
-import { type Rgb, nearestPaletteIndex, medianCutPalette, NO_COLOR } from '@rg/core';
-import type { PixelImage } from './engine';
+import type { PixelImage } from './types';
+import { type Rgb, nearestPaletteIndex, medianCutPalette, NO_COLOR } from './quantize';
 
 /** Nessun colore assegnato. Vive nel core (`quantize.ts`), dove nascono le mappe di indici. */
 export { NO_COLOR };

@@ -1,6 +1,9 @@
 // Immagine demo sintetica (nessun DOM): un buffer RGBA con qualche zona colorata su sfondo bianco,
 // così il tool rende subito qualcosa senza dover caricare un file (come il cartamodello demo di interlace).
-export interface PixelImage { rgba: Uint8ClampedArray; width: number; height: number; }
+// Il tipo dell'immagine vive nel core dal 2026-09-04: qui c'era la seconda definizione della stessa
+// cosa (l'altra in `apps/broccato`), e non identica — questa accettava solo `Uint8ClampedArray`.
+export type { PixelImage } from '@rg/core';
+import type { PixelImage } from '@rg/core';
 
 export function sampleImage(): PixelImage {
   const width = 240, height = 160;

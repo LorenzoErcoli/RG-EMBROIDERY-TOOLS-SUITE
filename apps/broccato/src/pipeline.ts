@@ -15,7 +15,7 @@ import {
 import { buildCoverGrid, routeColorRuns, type RegionRuns, type RoutingOptions } from './routing';
 import type { BroccatoColor, BroccatoParams } from './engine';
 import { traceRegions, type Region } from '@rg/core';
-import type { ReduceResult } from './reduce';
+import type { ReduceResult } from '@rg/core';
 
 /** Cosa esce per un ago: le sue regioni, il filo cucito, e come sono andati i passaggi. */
 export interface ColorPlan {

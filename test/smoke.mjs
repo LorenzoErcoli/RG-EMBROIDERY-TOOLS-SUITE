@@ -22,7 +22,6 @@ export { runBitmapPreview, runBitmapPipeline, PREVIEW_MAX_DOTS } from ${JSON.str
 export { buildNet } from ${JSON.stringify(posix('apps/net-45/src/net.ts'))};
 export { generateStriatura, layerThreadMm, defaultStriaturaParams } from ${JSON.stringify(posix('apps/striatura/src/engine.ts'))};
 export { paletteToColors, applyDensityToAll, colorsToPalette, clampColorCount, mmPerPixel, defaultBroccatoParams } from ${JSON.stringify(posix('apps/broccato/src/engine.ts'))};
-export { reduceStable, prepareImage, flattenLight, despeckle, refinePalette, removeSmallBlobs, NO_COLOR } from ${JSON.stringify(posix('apps/broccato/src/reduce.ts'))};
 export { buildCoverGrid, routeColorRuns, CELL_COVERED, CELL_OWN, CELL_EDGE, CELL_BARE } from ${JSON.stringify(posix('apps/broccato/src/routing.ts'))};
 export { buildPlan } from ${JSON.stringify(posix('apps/broccato/src/pipeline.ts'))};
 export { sampleImage as sampleBroccatoImage } from ${JSON.stringify(posix('apps/broccato/src/sample.ts'))};
@@ -2355,6 +2354,86 @@ console.log('\noblique — routing + orchestratore (2d)');
   const dstZone = rg.dstFromExportLayers(piano.layers, { label: 'CANNAGE', metadata: { rgProject: 'zone-pattern' } });
   check('il DST esce coi due aghi e si riapre (R27/R31)',
     [String.fromCharCode(...dstZone.slice(0, 3)), rg.readDstMetadata(dstZone)?.rgProject], ['LA:', 'zone-pattern']);
+}
+
+// ---------------------------------------------------------------------------------------------
+// IL LUCCHETTO DI `reduce`, messo PRIMA di promuoverla nel core.
+//
+// `reduce` e' il pezzo che guarda un'immagine e decide di che colore e' ogni pixel: pareggia la
+// luce, attenua la grana, sceglie le tinte, assorbe le isole troppo piccole. Nasce in
+// `apps/broccato`; sale nel core perche' il Punto Pittorico ne ha bisogno — misurato sulla
+// cianotipia vera, senza questo passaggio il contorno della macchia piu' grande ha 699 fori che
+// non sono fori, sono grana della stampa.
+//
+// L'immagine di prova e' finta ma ha tutto quello che serve a esercitarlo: due campiture, una
+// luce che scende da sinistra a destra (per il pareggio), un disturbo deterministico (per la
+// grana) e due isole minuscole (per l'assorbimento). Il disturbo e' a numeri interi di proposito:
+// `Math.sin` non e' identico bit a bit fra motori JavaScript, e un lucchetto che cambia da solo
+// non e' un lucchetto.
+// ---------------------------------------------------------------------------------------------
+console.log('');
+console.log('reduce — il lucchetto prima della promozione nel core');
+const immagineDiProva = () => {
+  const W = 64, H = 48;
+  const rgba = new Uint8ClampedArray(W * H * 4);
+  const disturbo = (x, y) => {
+    let a = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263);
+    a = Math.imul(a ^ (a >>> 13), 1274126177);
+    return ((a ^ (a >>> 16)) >>> 0) / 4294967296;
+  };
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      const dentro = x > 12 && x < 50 && y > 10 && y < 36;      // la campitura chiara
+      const luce = 40 * (x / W);                                 // la luce che scende di traverso
+      const grana = (disturbo(x, y) - 0.5) * 70;                 // la grana della stampa
+      const base = dentro ? 205 : 60;
+      const v = Math.max(0, Math.min(255, base + luce + grana));
+      const o = (y * W + x) * 4;
+      rgba[o] = v * 0.35; rgba[o + 1] = v * 0.55; rgba[o + 2] = v; rgba[o + 3] = 255;
+    }
+  }
+  // due isole piccole, che la pulizia deve assorbire. Cinque pixel di lato e non due: a due,
+  // l'attenuazione della grana se le mangiava PRIMA di arrivare all'assorbimento, e il lucchetto
+  // sorvegliava un pezzo di codice che non girava mai (misurato: `removedBlobs` restava a 0).
+  for (const [cx, cy] of [[4, 40], [55, 3]]) {
+    for (let y = cy; y < cy + 5; y++) for (let x = cx; x < cx + 5; x++) {
+      const o = (y * W + x) * 4;
+      rgba[o] = 220; rgba[o + 1] = 230; rgba[o + 2] = 250;
+    }
+  }
+  return { rgba, width: W, height: H };
+};
+{
+  const img = immagineDiProva();
+  const opzioni = {
+    colorCount: 2, flattenLightMm: 6, smoothMm: 1.5, minBlobMm2: 8, mmPerPx: 0.5, refineIterations: 4,
+  };
+  const res = rg.reduceStable(img, opzioni);
+  // una firma corta di una mappa lunga: se cambia un pixel, cambia il numero
+  const firma = (a) => {
+    let h = 2166136261;
+    for (let i = 0; i < a.length; i++) { h ^= a[i]; h = Math.imul(h, 16777619); }
+    return (h >>> 0).toString(16);
+  };
+
+  check('escono le due tinte chieste', res.palette.length, 2);
+  check('e sono queste, al bit', res.palette.map((c) => c.map((v) => Math.round(v))),
+    [[35, 54, 98], [80, 119, 207]]);
+  check('i pixel per tinta', res.counts, [2151, 921]);
+  check('le due isole minuscole vengono assorbite', res.removedBlobs, 2);
+  check('e bastano due passate per arrivare a stabilita\'', res.cleanPasses, 2);
+  check('la mappa dei colori e\' questa, pixel per pixel', firma(res.index), '5a344c46');
+  check('e l\'immagine preparata e\' questa', firma(res.prepared.rgba), '61534bd2');
+
+  // i pezzi singoli, perche' la catena intera puo' nascondere un cambio dentro uno solo
+  const prep = rg.prepareImage(img, opzioni);
+  check('il pareggio della luce e l\'attenuazione, da soli, danno lo stesso', firma(prep.rgba), firma(res.prepared.rgba));
+  check('il pareggio della luce non cambia la misura dell\'immagine',
+    [prep.width, prep.height], [img.width, img.height]);
+  check('e togliere la grana da sola fa questo', firma(rg.despeckle(img, 3).rgba), '3a6cab82');
+
+  check('stessa immagine, stessa riduzione',
+    JSON.stringify(rg.reduceStable(img, opzioni).counts) === JSON.stringify(res.counts), true);
 }
 
 // ---------------------------------------------------------------------------------------------

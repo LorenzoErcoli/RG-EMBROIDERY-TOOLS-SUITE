@@ -18,7 +18,7 @@
 //   node apps/pittorico/scripts/immagine.mjs <percorso.bmp>
 
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
-import { traceRegions, NO_COLOR, type Polyline } from '@rg/core';
+import { traceRegions, reduceStable, NO_COLOR, type Polyline } from '@rg/core';
 import { regolarizzaAnello, fitCerchio } from '../src/primitives.ts';
 
 const n1 = (v: number): string => v.toFixed(1);
@@ -27,7 +27,7 @@ const n3 = (v: number): string => v.toFixed(3);
 // ---------------------------------------------------------------------------------------------
 // Lettura BMP 24 bit senza compressione: header a offset fisso, righe dal basso, padding a 4 byte.
 // ---------------------------------------------------------------------------------------------
-interface Immagine { W: number; H: number; rgb: Uint8Array; }
+interface Immagine { W: number; H: number; rgb: Uint8Array; rgb4?: Uint8ClampedArray; }
 
 function leggiBmp(percorso: string): Immagine {
   const b = readFileSync(percorso);
@@ -49,6 +49,17 @@ function leggiBmp(percorso: string): Immagine {
     }
   }
   return { W, H, rgb };
+}
+
+/** `reduceStable` vuole RGBA; il BMP dà RGB. Si aggiunge il canale alfa una volta sola. */
+function rgba4(img: Immagine): Uint8ClampedArray {
+  const n = img.W * img.H;
+  const out = new Uint8ClampedArray(n * 4);
+  for (let i = 0; i < n; i++) {
+    out[i * 4] = img.rgb[i * 3]; out[i * 4 + 1] = img.rgb[i * 3 + 1];
+    out[i * 4 + 2] = img.rgb[i * 3 + 2]; out[i * 4 + 3] = 255;
+  }
+  return out;
 }
 
 const luminanza = (img: Immagine, i: number): number =>
@@ -103,6 +114,7 @@ const scostaDaCerchio = (ring: Polyline, cx: number, cy: number, r: number): num
 const percorso = process.argv[2];
 if (!percorso) { console.error('uso: node immagine.mjs <percorso.bmp> [larghezzaMm]'); process.exit(1); }
 const img = leggiBmp(percorso);
+img.rgb4 = rgba4(img);
 const soglia = otsu(img);
 
 /**
@@ -301,6 +313,58 @@ let cerchioSfera: { cx: number; cy: number; r: number } | null = null;
     console.log(`   → LA SFERA: centro ${n1(sfera.cx)},${n1(sfera.cy)} px · raggio ${n1(sfera.r)} px = ${n3(sfera.r * MM_PER_PX)} mm · diametro ${n1(2 * sfera.r * MM_PER_PX)} mm`);
   } else {
     console.log('   → nessun cerchio di raggio da sfera fra gli archi concordi');
+  }
+}
+
+console.log('');
+console.log('6. LA RIDUZIONE VERA contro il mio rimedio casalingo');
+console.log('   `reduceStable` è nel core dal 2026-09-04. Fa quello che il voto di maggioranza');
+console.log('   faceva a mano, ma sapendo cosa fa: pareggia la luce, attenua la grana, sceglie le');
+console.log("   tinte e assorbe le isole. La domanda è se sull'immagine vera si vede.");
+{
+  console.log(`   ${'riduzione'.padEnd(34)} ${'tinte'.padStart(5)} ${'fori 1a scura'.padStart(13)} ${'punti contorno'.padStart(14)} ${'pezzi tol 1px'.padStart(13)} ${'sfera'.padStart(18)}`);
+  const cerca = (mappa: Uint8Array, etichetta: string, tinte: number): void => {
+    const scure = traceRegions(mappa, img.W, img.H, 0, UNO, { simplifyMm: 0.1, minAreaMm2: 2000 });
+    const prima = scure[0];
+    const pezzi = prima ? regolarizzaAnello(prima.outer, { tolMm: 1 }).pezzi.length : 0;
+    // la sfera, con lo stesso metodo della sezione 5
+    const archi: Array<{ cx: number; cy: number; r: number; lung: number }> = [];
+    for (const reg of scure) {
+      for (const anello of [reg.outer, ...reg.holes]) {
+        for (const q of regolarizzaAnello(anello, { tolMm: 2 }).pezzi) {
+          if (q.tipo === 'arco') archi.push({ cx: q.cx, cy: q.cy, r: q.r, lung: Math.abs(q.a - q.da) * q.r });
+        }
+      }
+    }
+    const gruppi: Array<{ cx: number; cy: number; r: number; lung: number; n: number }> = [];
+    for (const a of archi.filter((v) => v.lung >= 40).sort((x, y) => y.lung - x.lung)) {
+      const g = gruppi.find((q) => Math.hypot(q.cx - a.cx, q.cy - a.cy) < a.r * 0.12 && Math.abs(q.r - a.r) < a.r * 0.12);
+      if (g) {
+        const w = g.lung + a.lung;
+        g.cx = (g.cx * g.lung + a.cx * a.lung) / w; g.cy = (g.cy * g.lung + a.cy * a.lung) / w;
+        g.r = (g.r * g.lung + a.r * a.lung) / w; g.lung = w; g.n += 1;
+      } else gruppi.push({ ...a, n: 1 });
+    }
+    const sf = gruppi.sort((a, b) => b.lung - a.lung).find((g) => g.r > 150 && g.r < 300);
+    const dettoSfera = sf
+      ? `${sf.n} archi, ${n1(sf.r * MM_PER_PX)}mm, ${n1((sf.lung / (2 * Math.PI * sf.r)) * 100)}%`
+      : 'non trovata';
+    console.log(`   ${etichetta.padEnd(34)} ${String(tinte).padStart(5)} ${String(prima?.holes.length ?? 0).padStart(13)} ${String(prima?.outer.length ?? 0).padStart(14)} ${String(pezzi).padStart(13)} ${dettoSfera.padStart(18)}`);
+  };
+
+  cerca(idx, 'soglia secca, niente pulizia', 2);
+  for (const [luce, grana, isola, tinte] of [[0, 1, 4, 2], [40, 1, 4, 2], [40, 1.5, 8, 2], [40, 1.5, 8, 4]] as Array<[number, number, number, number]>) {
+    const res = reduceStable({ rgba: img.rgb4 as Uint8ClampedArray, width: img.W, height: img.H }, {
+      colorCount: tinte, flattenLightMm: luce, smoothMm: grana, minBlobMm2: isola, mmPerPx: MM_PER_PX,
+    });
+    // la tinta 0 di `reduceStable` non è per forza la scura: si guarda quale è più buia
+    const buia = res.palette.reduce((best, c, i) => {
+      const l = 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+      return l < best.l ? { i, l } : best;
+    }, { i: 0, l: Infinity }).i;
+    const mappa = new Uint8Array(res.index.length);
+    for (let i = 0; i < mappa.length; i++) mappa[i] = res.index[i] === buia ? 0 : 1;
+    cerca(mappa, `luce ${luce}mm · grana ${grana}mm · isole ${isola}mm²`, res.palette.length);
   }
 }
 
