@@ -3,7 +3,7 @@
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
 > Aggiornato: 2026-09-04 · Suite con **otto tool live** + il nono (`pittorico`) fermo al prototipo headless — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
-> Rete di sicurezza: `npm test` (616 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
+> Rete di sicurezza: `npm test` (627 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
 
 ---
 
@@ -30,7 +30,7 @@
 - **Conteggio punti nella statusbar.** Accanto alla dimensione (`W × H mm`) la barra di stato mostra il **numero di punti effettivamente cuciti** (`… · 1.234 punti`, formato italiano), aggiornato a ogni rigenerazione dell'anteprima. Il valore è `pointCount.exported` (= `final.points.length`) letto dai metadati già incorporati nell'SVG — nessuna doppia generazione, nessuna modifica al motore. Statusbar allineata all'esempio DS (`esito · conteggio` a sinistra, vista a destra), solo classi v1.6.0 (`rg-mono`).
 
 **Tool `pittorico` (Punto Pittorico) — PROTOTIPO HEADLESS, non ancora un tool:**
-- **Cos'è e a che punto è.** Il nono strumento (briefing: [`AVVIO-PUNTO-PITTORICO.md`](AVVIO-PUNTO-PITTORICO.md)). Del piano in cinque punti sono fatti **1, 2, 3 e 4**: manca solo il 5, cioè montarli in un tool vero. C'è anche un **banco di prova** che raccoglie i risultati in una pagina sola e si rigenera dagli script (`scripts/banco.ts`). Il riempimento curvo esiste, gira headless, e **la misura che decide c'è**. Non c'è interfaccia, non c'è `mount()`, non c'è card nella home (arrivano al punto 5): sono quattro moduli in `apps/pittorico/src` (`region`, `field`, `curved-fill`, `coverage`) più le regioni di prova, e due script in `apps/pittorico/scripts` (`misura`, `taratura`). Si eseguono con esbuild + node; il comando è scritto in testa a ciascuno.
+- **Cos'è e a che punto è.** Il nono strumento (briefing: [`AVVIO-PUNTO-PITTORICO.md`](AVVIO-PUNTO-PITTORICO.md)). Del piano in cinque punti sono fatti **1, 2, 3 e 4**, e del 5 c'è la **catena**: `pipeline.ts` va da un'immagine ai livelli d'esportazione, con SVG e DST riapribili (R9/R27/R31) — **manca il pannello**, cioè l'interfaccia dentro la suite. I moduli in `apps/pittorico/src` sono `region`, `field`, `curved-fill`, `rail-fill`, `borders`, `primitives`, `coverage`, `pipeline`; gli script di prova in `apps/pittorico/scripts` (`misura`, `taratura`, `forme`, `immagine`, `campo`, `bordi`, `ordine`, `provini`, `piano`, `banco`) si eseguono con esbuild + node, col comando scritto in testa a ciascuno. C'è anche un **banco di prova** che raccoglie i risultati in una pagina sola e si rigenera dagli script (`scripts/banco.ts`).
 - **La misura che decide, e come va.** Su tre regioni di prova, a passo 0,4 mm, si riempie tre volte e si confronta la **dispersione della copertura** (filo per mm² cella per cella, celle da 2 mm, bordi esclusi):
 
   | regione | A rettilineo (core) | B curvo ingenuo | C curvo a distanza costante |
@@ -431,7 +431,7 @@
 ## 2. STATO
 
 **Sei tool in piedi, e adesso ognuno ha le sue invarianti scritte. Il settimo, `broccato`, è partito.**
-Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (616 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
+Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (627 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
 
 **La copertura dei test non era un adempimento: ha trovato cinque difetti veri**, ognuno dei quali violava una regola della Costituzione già scritta e mai verificata — i passaggi di net-45 che attraversavano i vuoti (R5), il punto minimo mai applicato in striatura (R3), `insetPolygon` che rientrava del 30% in meno, il punto massimo di pattern-grammar che lasciava passare segmenti quasi doppi (R4), l'importer che esplodeva sul file vero da 2MB. Tutti corretti, tutti bloccati da un test che fallisce se tornano.
 
@@ -598,7 +598,20 @@ gli mancano: l'**anteprima delle linee di flusso** — si guarda *prima* di cuci
 reso possibile dal punto 2b: dove il bordo è un **cerchio riconosciuto**, la condizione al contorno
 può essere esatta (concentrica o radiale) invece che letta da una spezzata.
 
-**→ Punto 5: montare i cinque pezzi in un tool vero.** I punti 1–4 sono chiusi e ognuno ha la sua
+**→ Punto 5, seconda metà: il PANNELLO.** La **catena esiste** (`pipeline.ts`): immagine → tinte →
+regioni → crescita → campo → riempimento dalla rotaia → frange → livelli, uno per ago, con SVG e DST
+riapribili. Provata sul ritaglio vero della cianotipia: 90 × 90 mm, 4 aghi, 32 m di filo, 20.130
+punti, 1,1 secondi. Resta l'interfaccia — `mount(root)`, `index.html`, `vite.config.ts`, la card in
+`packages/ui/src/tools.ts`, la route nella shell (e **l'alias in due file**: `vite.config.ts` *e*
+`tsconfig.json`, perché saltarne uno passa la build e lo scopre solo `npm run typecheck`), la sezione
+in `MANUALE.md` e la forma del pannello dal subagent `design-system`.
+
+**→ Punto 5, terza metà — quello che la catena ancora NON fa, e va detto:** il **punto minimo** (R3),
+che per regola si impone *dopo* il routing, e i **passaggi** fra una macchia e l'altra (R16/R26) —
+oggi le corse escono staccate, e in macchina servono i collegamenti nascosti sotto i colori
+successivi. Il candidato è il codice di `broccato`, che li fa già con mappa di costo e A*.
+
+*Storico del punto 5 quando era ancora tutto da fare:* I punti 1–4 sono chiusi e ognuno ha la sua
 misura. Restano l'ordine dei colori, i **passaggi nascosti** fra una macchia e l'altra (R16 — e il
 candidato è il codice di `broccato`, che li fa già: mappa di costo + A*), l'**export SVG e DST
 riapribili** (R9/R27/R31: `dstFromExportLayers` e `readDstMetadata` esistono, è un bottone e una

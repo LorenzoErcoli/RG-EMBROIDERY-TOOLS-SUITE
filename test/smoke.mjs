@@ -36,6 +36,7 @@ export { makeRegion, regionBounds, regionRings, BoundaryIndex } from ${JSON.stri
 export { harmonicField, radialField, concentricField, constantField, meanFieldAngleDeg } from ${JSON.stringify(posix('apps/pittorico/src/field.ts'))};
 export { buildCurvedFill, buildNaiveCurvedFill } from ${JSON.stringify(posix('apps/pittorico/src/curved-fill.ts'))};
 export { coverageStats, neighbourSpacing, containment } from ${JSON.stringify(posix('apps/pittorico/src/coverage.ts'))};
+export { buildPittoricoPlan, pittoricoExportLayers, defaultPittoricoParams } from ${JSON.stringify(posix('apps/pittorico/src/pipeline.ts'))};
 export { buildRailFill } from ${JSON.stringify(posix('apps/pittorico/src/rail-fill.ts'))};
 export { larghezzaTransizione, cresciVersoISuccessivi, frastaglia } from ${JSON.stringify(posix('apps/pittorico/src/borders.ts'))};
 export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('apps/pittorico/src/primitives.ts'))};
@@ -2505,6 +2506,81 @@ const mascheraDiProva = () => {
   const attaccate = rg.traceRegions(bordo, W2, H2, 1, 1);
   check('una macchia che tocca i bordi sinistro e destro resta UNA macchia', attaccate.length, 1);
   check('...e la sua area e\' quella vera (20 x 6)', Number(attaccate[0]?.areaMm2.toFixed(4)), 120);
+}
+
+// ---------------------------------------------------------------------------------------------
+// PUNTO PITTORICO — LA CATENA INTERA: da un'immagine ai punti da cucire.
+//
+// Non c'e' algoritmo nuovo qui: c'e' l'ORDINE in cui i pezzi gia' provati si chiamano, ed e' quello
+// che il test sorveglia. Ogni passo dipende da una cosa misurata nel precedente, e se qualcuno li
+// riordina «per semplificare» il risultato cambia in silenzio.
+// ---------------------------------------------------------------------------------------------
+console.log('');
+const luminanza = (c) => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
+console.log('Punto Pittorico — la catena intera, da immagine a punti');
+{
+  // un'immagine piccola ma con dentro tutto quello che la catena deve saper leggere: due campiture,
+  // un passaggio SFUMATO in mezzo (rampa larga), un passaggio NETTO a destra, e la grana della stampa
+  // W abbondante di proposito: il passaggio si misura camminando ±10 mm di traverso al bordo, e se
+  // due bordi stanno piu' vicini di cosi' il profilo ne prende due e la misura non significa niente.
+  const W = 180, H = 90, mmPerPx = 0.4;
+  const rgba = new Uint8ClampedArray(W * H * 4);
+  const disturbo = (x, y) => {
+    let a = Math.imul(x | 0, 374761393) ^ Math.imul(y | 0, 668265263);
+    a = Math.imul(a ^ (a >>> 13), 1274126177);
+    return ((a ^ (a >>> 16)) >>> 0) / 4294967296;
+  };
+  for (let y = 0; y < H; y++) {
+    for (let x = 0; x < W; x++) {
+      let v;
+      if (x < 120) v = 40 + 175 * Math.max(0, Math.min(1, (x - 25) / 30));  // rampa larga: SFUMA
+      else v = 40;                                                          // gradino secco: STACCA
+      v += (disturbo(x, y) - 0.5) * 40;                                     // la grana
+      const o = (y * W + x) * 4;
+      rgba[o] = v * 0.4; rgba[o + 1] = v * 0.6; rgba[o + 2] = v; rgba[o + 3] = 255;
+    }
+  }
+  const img = { rgba, width: W, height: H };
+  const params = { ...rg.defaultPittoricoParams, colorCount: 3, minAreaMm2: 20, realWidthMm: W * mmPerPx };
+  const plan = rg.buildPittoricoPlan(img, params);
+
+  check('la scala viene dalla larghezza reale, non dai pixel (R11)',
+    [Number(plan.mmPerPx.toFixed(4)), Number(plan.larghezzaMm.toFixed(1))], [mmPerPx, 72]);
+  check('escono le tinte chieste, e l\'ordine di cucitura va dalla piu\' scura alla piu\' chiara',
+    [plan.palette.length, plan.ordine.length,
+      plan.ordine.every((t, i, a) => i === 0 || luminanza(plan.palette[a[i - 1]]) <= luminanza(plan.palette[t]))],
+    [3, 3, true]);
+  check('il disegno viene cucito davvero', [plan.macchie.length > 0, plan.punti > 500, plan.filoMm > 500], [true, true, true]);
+
+  // LA CATENA LEGGE I BORDI: l'immagine ne ha uno sfumato e uno netto, e devono uscire tutt'e due.
+  check('trova sia bordi sfumati sia bordi netti',
+    [plan.bordiSfumati > 0, plan.bordiSfumati < plan.bordiTotali], [true, true]);
+
+  // OGNI TINTA E' UN AGO (R31): un livello per tinta, nell'ordine di cucitura.
+  const layers = rg.pittoricoExportLayers(plan);
+  check('un livello per ago, nell\'ordine di cucitura', layers.length <= plan.palette.length, true);
+  check('e ogni livello porta il colore della sua tinta',
+    layers.every((l) => /^#[0-9a-f]{6}$/.test(l.color)), true);
+  check('il filo si disegna sottile anche in export (R15)',
+    layers.every((l) => l.strokeMm === 0.1), true);
+
+  // R4: il punto massimo vale anche qui, dopo tutta la catena.
+  let piuLungo = 0;
+  for (const l of layers) for (const c of l.polylines) for (let i = 1; i < c.length; i++) {
+    piuLungo = Math.max(piuLungo, Math.hypot(c[i].x - c[i - 1].x, c[i].y - c[i - 1].y));
+  }
+  check('nessun punto oltre il massimo, dopo tutta la catena (R4)', piuLungo <= params.maxStitchMm + 1e-6, true);
+
+  // R9/R27/R31: quello che esce si riapre, in SVG e in DST.
+  const tutti = layers.flatMap((l) => l.polylines.flat());
+  const svg = rg.buildSvg(layers, { bounds: rg.bounds(tutti), marginMm: 4, metadata: { rgProject: 'pittorico', params } });
+  check('l\'SVG si riapre e ritrova i parametri (R9)', rg.readProjectMetadata(svg)?.rgProject, 'pittorico');
+  const dst = rg.dstFromExportLayers(layers, { label: 'PITTORICO', metadata: { rgProject: 'pittorico', params } });
+  check('il DST e\' un DST vero e si riapre (R31)',
+    [String.fromCharCode(...dst.slice(0, 3)), rg.readDstMetadata(dst)?.rgProject], ['LA:', 'pittorico']);
+
+  check('stessa immagine, stesso ricamo',
+    rg.buildPittoricoPlan(img, params).punti === plan.punti, true);
 }
 
 // ---------------------------------------------------------------------------------------------
