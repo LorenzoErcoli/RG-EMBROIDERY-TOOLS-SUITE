@@ -145,6 +145,7 @@ for (const soglia of [1.5, 2, 3, 4]) {
 // --------------------------------------------------------------------------------------------
 const SOGLIA_SECCO_MM = 1.5;
 const CRESCITA = 5;
+const SORMONTO = 1.5;   // il sormonto sui bordi netti, chiesto da Lorenzo
 const sfuma = new Uint8Array(img.width * img.height);
 {
   const r = Math.ceil(CRESCITA / MM_PER_PX) + 2;
@@ -173,11 +174,13 @@ const sfuma = new Uint8Array(img.width * img.height);
 // 3. LA CRESCITA DI 5 MM, e la prova che va nel verso giusto
 // --------------------------------------------------------------------------------------------
 console.log('');
-console.log('3. LA SOVRAPPOSIZIONE DI 5 MM — chi sta sotto è abbondante, chi va sopra ci si appoggia');
+console.log(`3. LA SOVRAPPOSIZIONE — ${CRESCITA} mm dove sfuma, ${SORMONTO} mm dove stacca netto`);
+console.log('   chi sta sotto è abbondante, chi va sopra ci si appoggia: anche sul taglio secco il');
+console.log('   colore sotto sborda di un millimetro e mezzo, così alla giunta non si vede la tela.');
 const ordine = res.palette.map((_, i) => i).sort((a, b) => luce(res.palette[a]) - luce(res.palette[b]));
 console.log(`   ordine di cucitura (dalla più scura): ${ordine.join(' → ')}`);
 for (const t of ordine) {
-  const cresciuta = cresciVersoISuccessivi(idx, img.width, img.height, t, ordine, MM_PER_PX, CRESCITA, sfuma);
+  const cresciuta = cresciVersoISuccessivi(idx, img.width, img.height, t, ordine, MM_PER_PX, { crescitaMm: CRESCITA, sormontoMm: SORMONTO, sfuma });
   let miei = 0, guadagnati = 0, rubatiAiPrecedenti = 0;
   const posizione = ordine.indexOf(t);
   const prima = new Set(ordine.slice(0, posizione));
@@ -233,7 +236,7 @@ let dettaglio = '';
     { x: lato * MM_PER_PX - 0.5, y: lato * MM_PER_PX - 0.5 }, { x: 0.5, y: lato * MM_PER_PX - 0.5 },
   ]);
   for (const t of ordine) {
-    const mask = cresciVersoISuccessivi(rit, lato, lato, t, ordine, MM_PER_PX, CRESCITA, ritSfuma);
+    const mask = cresciVersoISuccessivi(rit, lato, lato, t, ordine, MM_PER_PX, { crescitaMm: CRESCITA, sormontoMm: SORMONTO, sfuma: ritSfuma });
     for (const r of traceRegions(mask, lato, lato, 1, MM_PER_PX, { simplifyMm: MM_PER_PX * 1.5, minAreaMm2: 60 })) {
       const campo = harmonicField(r, { cellMm: 1.2, levels: 4, sweeps: 220 });
       const corse = buildCurvedFill(r, campo, { spacingMm: 0.4, maxStitchMm: 3 }).runs;

@@ -253,7 +253,7 @@ const pagina = `<title>Banco del Punto Pittorico</title>
     <div class="fatto"><dt>Il disegno</dt><dd>419,45 × 353,1 mm</dd></div>
     <div class="fatto"><dt>Un pixel vale</dt><dd>0,353 mm</dd></div>
     <div class="fatto"><dt>Passo del filo</dt><dd>0,4 mm</dd></div>
-    <div class="fatto"><dt>Rete di sicurezza</dt><dd>597 controlli</dd></div>
+    <div class="fatto"><dt>Rete di sicurezza</dt><dd>600 controlli</dd></div>
   </dl>
 </header>
 
@@ -423,9 +423,10 @@ const pagina = `<title>Banco del Punto Pittorico</title>
     su 49 cm². I punti <strong>attraversano</strong> il passaggio di colore e le loro punte
     <strong>sporgono di quantità diverse e si intrecciano</strong> con quelle della tinta accanto —
     è il degradé fatto col frastaglio del bordo, come avevi detto tu, e non con una texture.</p>
-    <p><strong>Sul bordo netto, invece, non succede niente di tutto questo</strong>: né frangia né
-    sovrapposizione, il colore si ferma preciso sul taglio. Se il blocco scavalcasse il taglio, il
-    taglio smetterebbe di staccare.</p>
+    <p><strong>Sul bordo netto niente frangia</strong>, ma un <strong>sormonto di 1,5 mm</strong>: il
+    colore che va sotto sborda di quel tanto, e quello sopra gli si appoggia definendo il bordo. Il
+    taglio resta preciso perché a disegnarlo è il colore di sopra — e alla giunta non si vede la tela,
+    che è quello che succederebbe se i due si accostassero e basta.</p>
 
     <figure>
       <div class="lastra">${svgInline('cianotipia-degrade.svg')}</div>
@@ -460,11 +461,23 @@ const pagina = `<title>Banco del Punto Pittorico</title>
     sopra ci si appoggia: niente buchi alle giunte. Verificato sul tuo disegno — nessuna tinta cresce
     all'indietro, nemmeno di un pixel, e l'ultima non cresce affatto.</p>
 
-    <h3>Due decisioni che aspettano te</h3>
-    <p class="nota">Quante tinte per la cianotipia: quattro danno una sfera migliore di due, ma è una
-    scelta di resa e va guardata sul ricamo. E il ventaglio mostra <strong>anelli concentrici</strong>
-    dove tutte le file nascono allo stesso raggio: i numeri li vedono appena, l'occhio sì. Il rimedio
-    ovvio l'ho provato e peggiora — quindi resta lì, spento, finché non lo guardi tu.</p>
+    <h3>Densità e frastaglio: i due numeri da fissare</h3>
+    <p>Questi due cambiano la resa più di qualunque altra cosa, e non sono una scelta mia. Qui c'è lo
+    stesso ritaglio cucito nove volte: tre densità per tre ampiezze di frangia.</p>
+
+    <figure>
+      <div class="lastra">${svgInline('provini.svg')}</div>
+      <figcaption>Colonne: il passo fra due file di filo. Righe: quanto sporgono le frange. Sotto ogni
+      provino i metri di filo che costa — da 3,9 a 7,8 metri sullo stesso pezzo di 14 cm², cioè il
+      doppio di tempo macchina fra l'angolo in basso a destra e quello in alto a sinistra.</figcaption>
+    </figure>
+
+    <h3>Tre decisioni che aspettano te</h3>
+    <p class="nota"><strong>Quale provino.</strong> Poi quante tinte per la cianotipia: quattro danno
+    una sfera migliore di due, ma è una scelta di resa e va guardata sul ricamo. E il ventaglio mostra
+    <strong>anelli concentrici</strong> dove tutte le file nascono allo stesso raggio: i numeri li
+    vedono appena, l'occhio sì. Il rimedio ovvio l'ho provato e peggiora — quindi resta lì, spento,
+    finché non lo guardi tu.</p>
   </div>
 </section>
 

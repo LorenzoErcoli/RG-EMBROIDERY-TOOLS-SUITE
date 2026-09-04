@@ -106,8 +106,12 @@ export function larghezzaTransizione(
 // ---------------------------------------------------------------------------------------------
 
 /**
- * Ingrandisce la maschera della tinta `tinta` di `crescitaMm`, ma **solo dentro i pixel delle tinte
- * che verranno cucite dopo di lei**. Verso quelle già cucite resta al proprio bordo.
+ * Ingrandisce la maschera della tinta `tinta`, ma **solo dentro i pixel delle tinte che verranno
+ * cucite dopo di lei**. Verso quelle già cucite resta al proprio bordo.
+ *
+ * Di quanto cresce dipende da che bordo è: **5 mm dove il colore sfuma** (è il margine in cui le
+ * frange si intrecciano) e **1,5 mm dove stacca netto** (è il sormonto che impedisce alla tela di
+ * vedersi alla giunta, senza rovinare il taglio).
  *
  * È la decisione 2 di Lorenzo, tradotta in geometria: chi sta sotto è abbondante, chi va sopra ci si
  * appoggia. Così alle giunte non restano buchi, e il degradé nasce dall'intreccio delle frange
@@ -117,20 +121,33 @@ export function larghezzaTransizione(
  * di casi limite — sulle punte acute l'incrocio dei lati schizza lontano, ed è un difetto che questa
  * suite ha già incontrato e misurato in `zone-pattern`. Sui pixel è una distanza e basta.
  */
+export interface CrescitaOptions {
+  /** Quanto si cresce dove il colore SFUMA: è il margine in cui vivono le frange. Default 5. */
+  crescitaMm?: number;
+  /**
+   * Quanto si cresce dove il colore STACCA NETTO. Default 1.5.
+   *
+   * Non zero, e questa è una correzione di Lorenzo: *«anche nelle divisioni nette immagina comunque
+   * di far sormontare di 1/2 millimetri il sopra rispetto al sotto, e quindi il sotto farlo più
+   * grande di quei millimetri»*. Avevo azzerato la crescita sul bordo netto, e sbagliavo — due
+   * colori che si accostano e basta lasciano vedere la tela alla giunta appena il filo tira (R19).
+   * Il bordo resta **visivamente** netto perché a definirlo è il colore che va **sopra**: quello
+   * sotto si allarga e gli sta nascosto sotto. È la stessa regola dei 5 mm, in piccolo e senza
+   * frangia.
+   */
+  sormontoMm?: number;
+  /** 1 = qui il colore sfuma. Senza questa maschera vale `crescitaMm` dappertutto. */
+  sfuma?: Uint8Array | null;
+}
+
 export function cresciVersoISuccessivi(
   index: Uint8Array, width: number, height: number,
-  tinta: number, ordine: number[], mmPerPx: number, crescitaMm: number,
-  /**
-   * Dove è lecito crescere: 1 = qui il colore sfuma. Se non si passa, si cresce ovunque.
-   *
-   * Serve perché **sul bordo netto non si cresce**: se il blocco scavalca un taglio secco, il taglio
-   * smette di staccare preciso — ed è la prima cosa che Lorenzo ha chiesto guardando l'anteprima
-   * (*«sul bordo netto vorrei rimanesse tutto netto, colore che stacca preciso»*). La crescita di
-   * 5 mm serve a far intrecciare le frange, e le frange stanno solo dove c'è una sfumatura da fare.
-   */
-  soloDoveSfuma?: Uint8Array | null,
+  tinta: number, ordine: number[], mmPerPx: number, opts: CrescitaOptions = {},
 ): Uint8Array {
-  const raggio = crescitaMm / mmPerPx;
+  const crescitaMm = opts.crescitaMm ?? 5;
+  const sormontoMm = opts.sormontoMm ?? 1.5;
+  const soloDoveSfuma = opts.sfuma ?? null;
+  const raggio = Math.max(crescitaMm, sormontoMm) / mmPerPx;
   const mia = new Uint8Array(index.length);
   for (let i = 0; i < index.length; i++) if (index[i] === tinta) mia[i] = 1;
   if (!(raggio >= 1)) return mia;
@@ -164,11 +181,14 @@ export function cresciVersoISuccessivi(
     }
   }
 
-  const soglia = raggio * 3;
+  // due soglie, non una: il margine largo dove il colore sfuma, il sormonto stretto dove stacca
+  const sogliaSfuma = (crescitaMm / mmPerPx) * 3;
+  const sogliaSecco = (sormontoMm / mmPerPx) * 3;
   const fuori = new Uint8Array(index.length);
   for (let i = 0; i < index.length; i++) {
-    const puo = !soloDoveSfuma || soloDoveSfuma[i] === 1;
-    fuori[i] = mia[i] || (puo && d[i] <= soglia && dopo.has(index[i])) ? 1 : 0;
+    const quiSfuma = !soloDoveSfuma || soloDoveSfuma[i] === 1;
+    const soglia = quiSfuma ? sogliaSfuma : sogliaSecco;
+    fuori[i] = mia[i] || (d[i] <= soglia && dopo.has(index[i])) ? 1 : 0;
   }
   return fuori;
 }

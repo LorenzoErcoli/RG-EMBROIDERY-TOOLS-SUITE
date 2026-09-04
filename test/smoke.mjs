@@ -2555,7 +2555,7 @@ console.log('Punto Pittorico — i bordi: sfumato, secco, sovrapposizione, frang
   const ordine = [0, 1, 2];
   const CRESCITA = 5;
   const contaPer = (t) => {
-    const m = rg.cresciVersoISuccessivi(fasce, W, H, t, ordine, mmPerPx, CRESCITA);
+    const m = rg.cresciVersoISuccessivi(fasce, W, H, t, ordine, mmPerPx, { crescitaMm: CRESCITA, sormontoMm: 0 });
     let avanti = 0, indietro = 0, oltre = 0;
     const dopo = new Set(ordine.slice(ordine.indexOf(t) + 1));
     for (let i = 0; i < m.length; i++) {
@@ -2619,7 +2619,7 @@ console.log('Punto Pittorico — i bordi: sfumato, secco, sovrapposizione, frang
   // staccare: la crescita si fa solo dove una maschera dice che li' il colore sfuma.
   const soloMeta = new Uint8Array(W * H);
   for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) if (y < H / 2) soloMeta[y * W + x] = 1;
-  const parziale = rg.cresciVersoISuccessivi(fasce, W, H, 0, ordine, mmPerPx, CRESCITA, soloMeta);
+  const parziale = rg.cresciVersoISuccessivi(fasce, W, H, 0, ordine, mmPerPx, { crescitaMm: CRESCITA, sormontoMm: 0, sfuma: soloMeta });
   let sopra = 0, sotto = 0;
   for (let y = 0; y < H; y++) {
     for (let x = 0; x < W; x++) {
@@ -2628,7 +2628,28 @@ console.log('Punto Pittorico — i bordi: sfumato, secco, sovrapposizione, frang
     }
   }
   check('dove il colore sfuma il blocco cresce', sopra > 0, true);
-  check('...e sul bordo netto non cresce di un pixel', sotto, 0);
+  check('...e sul bordo netto non cresce di un pixel, se il sormonto e\' zero', sotto, 0);
+
+  // IL SORMONTO SUL BORDO NETTO, chiesto da Lorenzo: «anche nelle divisioni nette immagina comunque
+  // di far sormontare di 1/2 millimetri il sopra rispetto al sotto, e quindi il sotto farlo piu'
+  // grande di quei millimetri». Non e' una contraddizione col bordo netto: a definire il bordo e' il
+  // colore che va SOPRA, e quello sotto gli sta nascosto sotto. Senza, due colori accostati lasciano
+  // vedere la tela alla giunta appena il filo tira (R19).
+  const conSormonto = rg.cresciVersoISuccessivi(fasce, W, H, 0, ordine, mmPerPx,
+    { crescitaMm: CRESCITA, sormontoMm: 1.5, sfuma: soloMeta });
+  const arrivaA = (m, riga) => {
+    let x = 0;
+    for (let i = 0; i < W; i++) if (m[riga * W + i] && fasce[riga * W + i] !== 0) x = i;
+    return (x - 39) * mmPerPx;   // il confine sta a x=40: quanto si sconfina oltre, in mm
+  };
+  check('dove sfuma si sconfina di 5 mm', Math.abs(arrivaA(conSormonto, 5) - CRESCITA) < 0.6, true);
+  check('...e sul taglio netto di un millimetro e mezzo, non di zero',
+    Math.abs(arrivaA(conSormonto, H - 5) - 1.5) < 0.6, true);
+  check('il sopra non si allarga comunque mai all\'indietro', (() => {
+    const ultimo = rg.cresciVersoISuccessivi(fasce, W, H, 2, ordine, mmPerPx, { crescitaMm: CRESCITA, sormontoMm: 1.5 });
+    for (let i = 0; i < ultimo.length; i++) if (ultimo[i] && fasce[i] !== 2) return false;
+    return true;
+  })(), true);
 }
 
 // ---------------------------------------------------------------------------------------------
