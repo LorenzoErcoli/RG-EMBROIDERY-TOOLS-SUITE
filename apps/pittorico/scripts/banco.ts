@@ -253,7 +253,7 @@ const pagina = `<title>Banco del Punto Pittorico</title>
     <div class="fatto"><dt>Il disegno</dt><dd>419,45 × 353,1 mm</dd></div>
     <div class="fatto"><dt>Un pixel vale</dt><dd>0,353 mm</dd></div>
     <div class="fatto"><dt>Passo del filo</dt><dd>0,4 mm</dd></div>
-    <div class="fatto"><dt>Rete di sicurezza</dt><dd>577 controlli</dd></div>
+    <div class="fatto"><dt>Rete di sicurezza</dt><dd>591 controlli</dd></div>
   </dl>
 </header>
 
@@ -413,22 +413,62 @@ const pagina = `<title>Banco del Punto Pittorico</title>
 <section class="passo">
   <div class="numero">5</div>
   <div class="corpo">
-    <span class="stato no">il prossimo</span>
-    <h2>I bordi: dove il colore sfuma e dove stacca</h2>
-    <p>Guarda i bordi delle zone nell'anteprima qui sopra: sono <strong>sfrangiati</strong>. Non è un
-    difetto da correggere — è l'informazione che serviva. Dove il colore sfuma, tagliarlo in quattro
-    tinte produce per forza un bordo frastagliato, perché non c'è un bordo: c'è un passaggio. Dove
-    invece il colore stacca netto — il taglio verticale della sfera — il bordo esce pulito.</p>
-    <p>Quindi il tool non deve <em>misurare</em> quanto è larga la sfumatura con un calcolo a parte:
-    <strong>la larghezza della frangia è già quella misura</strong>. Dove è larga, i due riempimenti si
-    compenetrano con le frange e nasce il degradé; dove è stretta, il riempimento si ferma secco.
-    Con la sovrapposizione di 5 mm che avevi chiesto, e il sotto più coperto del sopra.</p>
+    <span class="stato si">fatto e misurato</span>
+    <h2>I bordi: il degradé dove il colore sfuma, il taglio secco dove stacca</h2>
+    <p>Qui sotto, un ritaglio da 70 mm del tuo disegno cucito davvero: passo 0,4 mm, 16 metri di filo
+    su 49 cm². I capi delle file <strong>si ritirano di quantità diverse e si intrecciano</strong> con
+    quelli della tinta accanto — è il degradé fatto col frastaglio del bordo, come avevi detto tu, e
+    non con una texture.</p>
+
+    <figure>
+      <div class="lastra">${svgInline('cianotipia-degrade.svg')}</div>
+      <figcaption>La frangia non è lunga a caso e non è un numero fisso: è lunga quanto il passaggio
+      di colore misurato in quel punto. Il parametro del pannello fa da tetto — si prende il più corto
+      fra quello che concedi tu e quello che chiede l'immagine.</figcaption>
+    </figure>
+
+    <h3>Come fa il programma a sapere dove sfuma</h3>
+    <p>Cammina di traverso al bordo e guarda quanti millimetri servono perché la luce passi da una
+    tinta all'altra. Sulla tua cianotipia le due popolazioni si separano da sole:</p>
+    <div class="tabella">
+      <table>
+        <thead><tr><th>fra quali tinte</th><th>campioni</th><th>quanto è largo il passaggio</th><th>in fili da 0,4 mm</th><th>che bordo è</th></tr></thead>
+        <tbody>
+          <tr><td>1 e 2 (toni vicini)</td><td>1.333</td><td>9,47 mm</td><td>24</td><td>sfumato</td></tr>
+          <tr><td>2 e 3 (toni vicini)</td><td>1.390</td><td>9,12 mm</td><td>23</td><td>sfumato</td></tr>
+          <tr><td>0 e 1 (toni vicini)</td><td>1.346</td><td>7,37 mm</td><td>18</td><td>sfumato</td></tr>
+          <tr class="chiave"><td>0 e 3 (scuro contro chiaro)</td><td>786</td><td>0,70 mm</td><td>2</td><td>secco</td></tr>
+          <tr class="chiave"><td>1 e 3 (toni lontani)</td><td>120</td><td>0,70 mm</td><td>2</td><td>secco</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">Con soglia 1,5 mm: <strong>18% dei bordi è secco, 82% sfumato</strong> — ed è il
+    taglio verticale della sfera contro le fasce luminose. La percentuale non cambia alzando la soglia
+    fino a 4 mm, cioè le due famiglie sono davvero separate e la soglia non è un numero delicato.</p>
+
+    <h3>La sovrapposizione di 5 mm</h3>
+    <p>Prima di riempire, ogni zona si ingrandisce di 5 mm <em>verso i colori che verranno cuciti dopo
+    di lei</em>, e resta al proprio bordo verso quelli già fatti. Chi sta sotto è abbondante, chi va
+    sopra ci si appoggia: niente buchi alle giunte. Verificato sul tuo disegno — nessuna tinta cresce
+    all'indietro, nemmeno di un pixel, e l'ultima non cresce affatto.</p>
 
     <h3>Due decisioni che aspettano te</h3>
     <p class="nota">Quante tinte per la cianotipia: quattro danno una sfera migliore di due, ma è una
     scelta di resa e va guardata sul ricamo. E il ventaglio mostra <strong>anelli concentrici</strong>
     dove tutte le file nascono allo stesso raggio: i numeri li vedono appena, l'occhio sì. Il rimedio
     ovvio l'ho provato e peggiora — quindi resta lì, spento, finché non lo guardi tu.</p>
+  </div>
+</section>
+
+<section class="passo">
+  <div class="numero">6</div>
+  <div class="corpo">
+    <span class="stato no">il prossimo</span>
+    <h2>Metterlo insieme: la pipeline, l'export, il pannello</h2>
+    <p>I cinque pezzi ci sono tutti e ognuno ha la sua misura. Resta da montarli in un tool vero:
+    l'ordine dei colori, i passaggi nascosti fra una macchia e l'altra, l'export in SVG e in DST
+    riapribili, e il pannello dentro la suite — così invece di lanciare quattro script carichi
+    l'immagine, giri le manopole e premi Genera.</p>
   </div>
 </section>
 

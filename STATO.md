@@ -3,7 +3,7 @@
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
 > Aggiornato: 2026-09-04 · Suite con **otto tool live** + il nono (`pittorico`) fermo al prototipo headless — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
-> Rete di sicurezza: `npm test` (577 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
+> Rete di sicurezza: `npm test` (591 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
 
 ---
 
@@ -30,7 +30,7 @@
 - **Conteggio punti nella statusbar.** Accanto alla dimensione (`W × H mm`) la barra di stato mostra il **numero di punti effettivamente cuciti** (`… · 1.234 punti`, formato italiano), aggiornato a ogni rigenerazione dell'anteprima. Il valore è `pointCount.exported` (= `final.points.length`) letto dai metadati già incorporati nell'SVG — nessuna doppia generazione, nessuna modifica al motore. Statusbar allineata all'esempio DS (`esito · conteggio` a sinistra, vista a destra), solo classi v1.6.0 (`rg-mono`).
 
 **Tool `pittorico` (Punto Pittorico) — PROTOTIPO HEADLESS, non ancora un tool:**
-- **Cos'è e a che punto è.** Il nono strumento (briefing: [`AVVIO-PUNTO-PITTORICO.md`](AVVIO-PUNTO-PITTORICO.md)). Del piano in cinque punti sono fatti **1, 2 e 3**. C'è anche un **banco di prova** che raccoglie i risultati in una pagina sola e si rigenera dagli script (`scripts/banco.ts`). Il riempimento curvo esiste, gira headless, e **la misura che decide c'è**. Non c'è interfaccia, non c'è `mount()`, non c'è card nella home (arrivano al punto 5): sono quattro moduli in `apps/pittorico/src` (`region`, `field`, `curved-fill`, `coverage`) più le regioni di prova, e due script in `apps/pittorico/scripts` (`misura`, `taratura`). Si eseguono con esbuild + node; il comando è scritto in testa a ciascuno.
+- **Cos'è e a che punto è.** Il nono strumento (briefing: [`AVVIO-PUNTO-PITTORICO.md`](AVVIO-PUNTO-PITTORICO.md)). Del piano in cinque punti sono fatti **1, 2, 3 e 4**: manca solo il 5, cioè montarli in un tool vero. C'è anche un **banco di prova** che raccoglie i risultati in una pagina sola e si rigenera dagli script (`scripts/banco.ts`). Il riempimento curvo esiste, gira headless, e **la misura che decide c'è**. Non c'è interfaccia, non c'è `mount()`, non c'è card nella home (arrivano al punto 5): sono quattro moduli in `apps/pittorico/src` (`region`, `field`, `curved-fill`, `coverage`) più le regioni di prova, e due script in `apps/pittorico/scripts` (`misura`, `taratura`). Si eseguono con esbuild + node; il comando è scritto in testa a ciascuno.
 - **La misura che decide, e come va.** Su tre regioni di prova, a passo 0,4 mm, si riempie tre volte e si confronta la **dispersione della copertura** (filo per mm² cella per cella, celle da 2 mm, bordi esclusi):
 
   | regione | A rettilineo (core) | B curvo ingenuo | C curvo a distanza costante |
@@ -79,6 +79,19 @@
   Metà dei punti gira 1,4 °/mm, che è quanto gira il disegno. Resta una **coda del 5%** — e un massimo di 215 °/mm — che sono le singolarità del campo nelle forme complicate: è lavoro da fare, ed è scritto qui perché non si perda.
 - **Due misure erano sbagliate, e le ha smascherate la teoria.** (a) La fedeltà al bordo campionava da tutt'e due i lati del contorno e poi divideva per due — cioè mescolava punti *dentro* con punti *fuori*, dove il campo è congelato sulla tangente per costruzione e risponde sempre bene: il numero non misurava niente. (b) La rotazione si misurava sui punti-ago già suddivisi, mescolando lo sfarfallio del campo con la corda del punto, che è un'altra cosa. Corrette entrambe, i numeri sono **peggiorati**: giusto così, prima erano falsamente buoni.
 - **E il metro adesso è tarato contro una risposta nota.** Sul ventaglio con campo concentrico la rotazione teorica è 57,3/R: misurata, lo scarto dalla teoria è **0,00%** nel corpo della fila. Ai capi arriva al **93%**, perché lì la fila è stata *tagliata* sul bordo della regione e l'ultimo segmento è corto e irregolare — quindi i capi si escludono, e senza quell'esclusione si misurava il taglio invece del campo. Bloccato in `test/smoke.mjs`.
+- **Punto 4 — i bordi: il degradé col frastaglio, e il taglio secco** (`apps/pittorico/src/borders.ts`, prova in `scripts/bordi.ts`). Tre pezzi, tenuti separati apposta: **quanto è largo il passaggio** di colore, **la crescita di 5 mm** verso i colori successivi, **il frastaglio dei capi**.
+- **La misura del passaggio si prende sull'immagine ORIGINALE**, non su quella ridotta: dopo la riduzione la sfumatura non c'è più, è diventata una scaletta di tinte piatte, e misurarla lì vuol dire misurare la propria semplificazione. E nemmeno su `res.prepared`, che ha il **pareggio della luce a 40 mm**: quel passaggio serve a scegliere bene le tinte ma toglie le variazioni lente — e una sfumatura larga 15 mm *è* una variazione lenta. Si usa la luce com'è, tolta solo la grana.
+- **E le due popolazioni si separano da sole.** Camminando di traverso al bordo e misurando quanti mm servono perché la luce passi dal 10% al 90% del salto:
+
+  | fra quali tinte | campioni | larghezza | in fili da 0,4 mm | che bordo è |
+  |---|---|---|---|---|
+  | toni vicini (1-2, 2-3, 0-1) | 4.069 | 7,4 – 9,5 mm | 18 – 24 | **sfumato** |
+  | toni lontani (0-3, 1-3) | 906 | **0,70 mm** | 2 | **secco** |
+
+  Con soglia 1,5 mm: **18% secco, 82% sfumato** — ed è il taglio verticale della sfera contro le fasce luminose. La percentuale **non cambia** alzando la soglia fino a 4 mm: le due famiglie sono davvero separate, quindi la soglia non è un numero delicato da azzeccare. È il modo in cui il tool legge da solo dove serve il degradé.
+- **La misura era sbagliata, e l'ha smascherata una rampa di larghezza nota.** Cercavo il 90% del salto partendo dal lato dove il profilo è *già alto*, quindi lo trovavo al primo campione: un gradino netto misurava **12 mm invece di 0**, e ogni bordo del disegno risultava sfumato (100%). Corretta — i due livelli si cercano nello stesso verso — un gradino dà 0,00 e una rampa da 10 mm dà 8,12 contro gli 8,00 della teoria. Tarata su rampe da 0, 4, 10 e 16 mm in `test/smoke.mjs`: **è la seconda misura che questo tool sbagliava e che la teoria ha corretto**, dopo quella della rotazione.
+- **La crescita di 5 mm si fa sulla MASCHERA, non sul poligono.** Ingrandire un poligono con rientranze e fori è pieno di casi limite — sulle punte acute l'incrocio dei lati schizza lontano, difetto che questa suite ha già incontrato e misurato in `zone-pattern`. Sui pixel è una distanza e basta, ed è la stessa rappresentazione da cui le regioni nascono. Misurato sul disegno vero: la prima tinta guadagna 23.336 mm², l'ultima non cresce, e **nessuna cresce all'indietro nemmeno di un pixel** — che è la decisione 2 di Lorenzo (chi sta sotto è abbondante, chi va sopra ci si appoggia).
+- **Il frastaglio: la frangia è lunga quanto il passaggio misurato lì**, non un numero fisso. Il parametro di pannello (decisione 3) fa da **tetto**: si prende il più corto fra quello che l'utente concede e quello che l'immagine chiede. Il ritiro è deciso dalla *posizione* e non dal caso, quindi due riempimenti che si affacciano sullo stesso bordo si ritirano ognuno per conto suo — nell'intreccio nasce il degradé — ma ciascuno in modo ripetibile (§7). Guardabile: `out/cianotipia-degrade.svg`, un ritaglio da 70 mm cucito a 0,4 mm, **16 m di filo su 49 cm²**.
 - **IL BANCO DI PROVA**, nato da una domanda di Lorenzo (*«come posso vedere visivamente gli avanzamenti?»*): `apps/pittorico/scripts/banco.ts` raccoglie gli SVG che gli altri script producono e li mette in **una pagina sola**, ogni disegno con la sua misura sulla stessa riga. Si rigenera: ogni passo avanti aggiunge un pannello invece di aggiungere un file da cercare. Non è l'interfaccia del tool (quella è il punto 5 e vivrà nella shell), è il banco su cui si guardano i pezzi mentre si costruiscono.
 - **DECISIONE DI LORENZO (2026-09-04): niente SVG, mai.** *«Non è mai esistito l'SVG. E il sistema deve reggere proprio senza SVG, perché se riusciamo a usare immagini per fare queste cose è figo.»* Questo **cancella §5.2 del briefing** (importare le geometrie esatte da vettore) e promuove il riconoscimento delle primitive da ripiego più automatico a **unica strada**. Cambia anche il §4.1 livello 3: le linee guida restano possibili — sono contorni disegnati *apposta*, non l'SVG della grafica — ma non arrivano più gratis insieme al disegno, quindi **l'automatico deve bastare quasi sempre**.
 - **E regge: la sfera è uscita dai soli pixel.** Non è una macchia di colore (è dello stesso blu del fondo e ci si attacca dove l'alone si interrompe), quindi il cerchio si cerca **fra gli archi** del contorno. **Quattro archi indipendenti**, separati dalle interruzioni, concordano su centro (893,1 · 461,4) px e raggio 218,3 px = **77,003 mm**, coprendo il **67,2% del giro** — diametro 154 mm. Che tratti indipendenti dicano lo stesso cerchio è la prova che il cerchio c'è, non che il fit ci è passato per caso. Bloccato in `test/smoke.mjs` con una fixture che è il **contorno tracciato** (`test/fixtures/cianotipia-contorno.json`, 11 anelli, 82 kB) e non il raster: Node non ha un decoder JPEG, e la forma vera entra nella rete di sicurezza mentre il pixel resta fuori.
@@ -394,7 +407,7 @@
 ## 2. STATO
 
 **Sei tool in piedi, e adesso ognuno ha le sue invarianti scritte. Il settimo, `broccato`, è partito.**
-Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (577 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
+Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (591 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
 
 **La copertura dei test non era un adempimento: ha trovato cinque difetti veri**, ognuno dei quali violava una regola della Costituzione già scritta e mai verificata — i passaggi di net-45 che attraversavano i vuoti (R5), il punto minimo mai applicato in striatura (R3), `insetPolygon` che rientrava del 30% in meno, il punto massimo di pattern-grammar che lasciava passare segmenti quasi doppi (R4), l'importer che esplodeva sul file vero da 2MB. Tutti corretti, tutti bloccati da un test che fallisce se tornano.
 
@@ -561,18 +574,20 @@ gli mancano: l'**anteprima delle linee di flusso** — si guarda *prima* di cuci
 reso possibile dal punto 2b: dove il bordo è un **cerchio riconosciuto**, la condizione al contorno
 può essere esatta (concentrica o radiale) invece che letta da una spezzata.
 
-**→ Punto 4: i bordi — dove il colore sfuma e dove stacca.** I punti 1, 2 e 3 sono chiusi. Il 4 è
-quello che fa il *degradé*, ed è arrivato con un regalo dentro: guardando l'anteprima del campo, i
-bordi delle zone sono **sfrangiati**, e non è un difetto da correggere. Dove il colore sfuma,
-tagliarlo in quattro tinte produce per forza un bordo frastagliato, perché non c'è un bordo — c'è un
-passaggio; dove il colore stacca netto (il taglio verticale della sfera) il bordo esce pulito.
-Quindi il tool **non deve misurare quanto è larga la sfumatura con un calcolo a parte**: la larghezza
-della frangia *è* quella misura. Da lì: frange dove è larga, taglio secco dove è stretta, e la
-sovrapposizione di 5 mm col sotto più coperto del sopra (decisione 2 del briefing).
+**→ Punto 5: montare i cinque pezzi in un tool vero.** I punti 1–4 sono chiusi e ognuno ha la sua
+misura. Restano l'ordine dei colori, i **passaggi nascosti** fra una macchia e l'altra (R16 — e il
+candidato è il codice di `broccato`, che li fa già: mappa di costo + A*), l'**export SVG e DST
+riapribili** (R9/R27/R31: `dstFromExportLayers` e `readDstMetadata` esistono, è un bottone e una
+chiamata), e il **pannello** dentro la suite — Testa A + accordion, forma esatta dal subagent
+`design-system`. Più la registrazione in `packages/ui/src/tools.ts` e la route nella shell, con
+l'alias in **due** file (`vite.config.ts` *e* `tsconfig.json`: saltarne uno passa la build e lo
+scopre solo `npm run typecheck`).
 
-*Resta scoperto dal punto 3, e va detto:* la coda del 5% dello sfarfallio, con punte a 215 °/mm, sono
-**singolarità del campo** nelle forme complicate. Non tolgono il senso all'anteprima (metà dei punti
-gira quanto gira il disegno) ma su un ricamo vero si vedrebbero, e prima o poi vanno affrontate.
+*Due cose restano scoperte, e vanno dette invece che dimenticate:* (a) la coda del 5% dello
+sfarfallio del campo, con punte a 215 °/mm, sono **singolarità** nelle forme complicate — metà dei
+punti gira quanto gira il disegno, ma quella coda su un ricamo vero si vedrebbe; (b) il **punto
+minimo** (R3) non è ancora imposto da nessuna parte in questo tool: va messo *dopo* il routing, come
+dice la regola, quindi è lavoro del punto 5 e non di prima.
 
 *Le due cose che erano in mano a Lorenzo sono chiuse:* (1) la larghezza reale è **419,45 mm**, quindi un pixel vale **0,353 mm**; (2) *chiuse entrambe il 2026-09-04*: la larghezza è **419,45 mm** e l'SVG **non esiste e non deve servire** (vedi il blocco `pittorico` in §1).
 

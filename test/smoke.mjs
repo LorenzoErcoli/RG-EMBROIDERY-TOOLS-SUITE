@@ -36,6 +36,7 @@ export { makeRegion, regionBounds, BoundaryIndex } from ${JSON.stringify(posix('
 export { harmonicField, radialField, concentricField, constantField, meanFieldAngleDeg } from ${JSON.stringify(posix('apps/pittorico/src/field.ts'))};
 export { buildCurvedFill, buildNaiveCurvedFill } from ${JSON.stringify(posix('apps/pittorico/src/curved-fill.ts'))};
 export { coverageStats, neighbourSpacing, containment } from ${JSON.stringify(posix('apps/pittorico/src/coverage.ts'))};
+export { larghezzaTransizione, cresciVersoISuccessivi, frastaglia } from ${JSON.stringify(posix('apps/pittorico/src/borders.ts'))};
 export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('apps/pittorico/src/primitives.ts'))};
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
@@ -2503,6 +2504,91 @@ const mascheraDiProva = () => {
   const attaccate = rg.traceRegions(bordo, W2, H2, 1, 1);
   check('una macchia che tocca i bordi sinistro e destro resta UNA macchia', attaccate.length, 1);
   check('...e la sua area e\' quella vera (20 x 6)', Number(attaccate[0]?.areaMm2.toFixed(4)), 120);
+}
+
+// ---------------------------------------------------------------------------------------------
+// PUNTO PITTORICO — I BORDI (punto 4): dove il colore sfuma e dove stacca.
+// ---------------------------------------------------------------------------------------------
+console.log('');
+console.log('Punto Pittorico — i bordi: sfumato, secco, sovrapposizione, frange');
+{
+  const mmPerPx = 0.353;
+
+  // --- LA MISURA DELLA SFUMATURA, tarata su rampe di larghezza NOTA ---
+  // Su una rampa lineare il passaggio dal 10% al 90% vale 0,8 della larghezza: e' aritmetica, non
+  // un'opinione, quindi la misura si puo' verificare invece che credere. La prima versione sbagliava
+  // e questo test l'avrebbe presa subito: cercavo il 90% partendo dal lato dove il profilo e' gia'
+  // alto, quindi lo trovavo al primo campione e la larghezza usciva uguale alla finestra — un
+  // gradino netto misurava 12 mm invece di 0.
+  const rampa = (larghezzaMm) => {
+    const W = 200, H = 20;
+    const rgba = new Uint8ClampedArray(W * H * 4);
+    const meta = W / 2, semi = (larghezzaMm / mmPerPx) / 2;
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        const t = semi <= 0 ? (x < meta ? 0 : 1) : Math.max(0, Math.min(1, (x - (meta - semi)) / (2 * semi)));
+        const v = 30 + t * 200, o = (y * W + x) * 4;
+        rgba[o] = v; rgba[o + 1] = v; rgba[o + 2] = v; rgba[o + 3] = 255;
+      }
+    }
+    return { rgba, width: W, height: H };
+  };
+  const misura = (larghezzaMm) => rg.larghezzaTransizione(
+    rampa(larghezzaMm), mmPerPx, { x: 100 * mmPerPx, y: 10 * mmPerPx }, { x: 1, y: 0 }, { raggioMm: 12 },
+  );
+  check('un colore che stacca NETTO misura zero', Number(misura(0).larghezzaMm.toFixed(2)), 0);
+  for (const vera of [4, 10, 16]) {
+    const atteso = vera * 0.8;
+    check(`una sfumatura da ${vera} mm si misura ${atteso.toFixed(1)} mm (il 10-90 di una rampa)`,
+      Math.abs(misura(vera).larghezzaMm - atteso) < 0.75, true);
+  }
+  check('dove non c\'e' + ' un salto di colore non si inventa un bordo',
+    rg.larghezzaTransizione(rampa(0), mmPerPx, { x: 20 * mmPerPx, y: 10 * mmPerPx }, { x: 1, y: 0 }, { raggioMm: 4 }), null);
+
+  // --- LA SOVRAPPOSIZIONE DI 5 MM: avanti si', indietro MAI (decisione 2 di Lorenzo) ---
+  // Tre fasce verticali affiancate, cucite da sinistra a destra: la prima deve entrare nella
+  // seconda e nella terza, la terza in nessuna. "Chi sta sotto e' abbondante, chi va sopra ci si
+  // appoggia" — se crescesse anche all'indietro, il colore gia' cucito verrebbe coperto.
+  const W = 120, H = 30;
+  const fasce = new Uint8Array(W * H);
+  for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) fasce[y * W + x] = x < 40 ? 0 : x < 80 ? 1 : 2;
+  const ordine = [0, 1, 2];
+  const CRESCITA = 5;
+  const contaPer = (t) => {
+    const m = rg.cresciVersoISuccessivi(fasce, W, H, t, ordine, mmPerPx, CRESCITA);
+    let avanti = 0, indietro = 0, oltre = 0;
+    const dopo = new Set(ordine.slice(ordine.indexOf(t) + 1));
+    for (let i = 0; i < m.length; i++) {
+      if (!m[i] || fasce[i] === t) continue;
+      if (dopo.has(fasce[i])) avanti++; else indietro++;
+    }
+    // fin dove arriva: la colonna piu' lontana raggiunta oltre il proprio confine
+    for (let x = 0; x < W; x++) if (m[15 * W + x] && fasce[15 * W + x] !== t) oltre = Math.max(oltre, x);
+    return { avanti, indietro, oltre };
+  };
+  const prima = contaPer(0), ultima = contaPer(2);
+  check('la prima tinta cresce verso quelle che verranno dopo', prima.avanti > 0, true);
+  check('...e nessuna tinta cresce verso quelle gia\' cucite',
+    [prima.indietro, contaPer(1).indietro, ultima.indietro], [0, 0, 0]);
+  check('l\'ultima tinta non cresce: non ha nessuno sotto cui infilarsi', ultima.avanti, 0);
+  // il confine e' a x=40; 5 mm a 0,353 mm/px sono 14,2 px, quindi si arriva verso x=54
+  check('e la crescita vale davvero 5 mm, non un pixel a caso',
+    Math.abs((prima.oltre - 39) * mmPerPx - CRESCITA) < 0.6, true);
+
+  // --- LE FRANGE: i capi si ritirano, ma solo dove il colore sfuma ---
+  const corse = Array.from({ length: 40 }, (_, k) => [{ x: 0, y: k * 0.4 }, { x: 30, y: k * 0.4 }]);
+  const frangiate = rg.frastaglia(corse, (p) => p.x > 20, { frangiaMm: 6, granaMm: 1.2 });
+  const capiDestri = frangiate.map((c) => c[c.length - 1].x);
+  const capiSinistri = frangiate.map((c) => c[0].x);
+  check('il capo sul bordo che sfuma si ritira, e non tutti uguali',
+    new Set(capiDestri.map((v) => v.toFixed(2))).size > 10, true);
+  check('...entro la frangia chiesta, mai oltre',
+    capiDestri.every((v) => v <= 30.0001 && v >= 24 - 1e-6), true);
+  check('il capo sul bordo NETTO non si tocca', capiSinistri.every((v) => v === 0), true);
+  check('stessa posizione, stessa frangia (§7: stessi parametri, stesso ricamo)',
+    JSON.stringify(rg.frastaglia(corse, (p) => p.x > 20, { frangiaMm: 6, granaMm: 1.2 })) === JSON.stringify(frangiate), true);
+  check('a frangia zero il riempimento resta identico',
+    JSON.stringify(rg.frastaglia(corse, () => true, { frangiaMm: 0 })), JSON.stringify(corse));
 }
 
 // ---------------------------------------------------------------------------------------------
