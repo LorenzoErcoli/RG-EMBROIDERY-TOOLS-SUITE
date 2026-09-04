@@ -50,6 +50,7 @@ const CAMPI: Campo[] = [
   { id: 'sormontoMm', key: 'sormontoMm', min: 0, max: 6 },
   { id: 'sogliaSfumaturaMm', key: 'sogliaSfumaturaMm', min: 0, max: 20 },
   { id: 'lisciaBordiMm', key: 'lisciaBordiMm', min: 0, max: 5 },
+  { id: 'maxInternalTravelMm', key: 'maxInternalTravelMm', min: 5, max: 400 },
   { id: 'flattenLightMm', key: 'flattenLightMm', min: 0 },
   { id: 'smoothMm', key: 'smoothMm', min: 0 },
   { id: 'minAreaMm2', key: 'minAreaMm2', min: 0 },
@@ -124,6 +125,11 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
             <span class="rg-field__label">Distanza fra le file</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="densitySpacingMm" type="number" min="0.1" max="2" step="0.05"><span>mm</span></span>
             <span class="rg-field__help">quanto è fitto il pieno</span>
+          </label>
+          <label class="rg-field">
+            <span class="rg-field__label">Passaggio scoperto massimo</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="maxInternalTravelMm" type="number" min="5" max="400" step="5"><span>mm</span></span>
+            <span class="rg-field__help">oltre, il filo si taglia invece di attraversare il disegno. Più basso = meno fili tesi, più rasafili</span>
           </label>
           <label class="rg-field">
             <span class="rg-field__label">Punto massimo</span>

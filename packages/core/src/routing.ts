@@ -113,6 +113,20 @@ export interface RoutingOptions {
    * della banda intoccabile — la frangia. Zero vuol dire «basta stare dentro».
    */
   margineDalBordoMm?: number;
+  /**
+   * Solo per `'interno'`: quanto puo' essere lungo il tratto SCOPERTO di un passaggio che taglia
+   * dentro la macchia. Oltre, il filo si stacca.
+   *
+   * Senza questo limite il taglio interno non ne aveva nessuno, e bastava una macchia larga perche'
+   * il filo attraversasse tutto il disegno in linea retta: sul Punto Pittorico erano sei tratti fino
+   * a **241 mm**, ed e' quello che Lorenzo ha visto — «passaggi assurdi che sono fuori il ricamo».
+   * Fuori dal ricamo lo erano davvero, pur restando dentro la macchia: le macchie si fanno crescere
+   * oltre il colore per il sormonto, quindi «dentro la macchia» e «sotto il filo» non sono la stessa
+   * cosa. Quello che conta e' se il passaggio e' coperto, non se e' dentro un poligono.
+   *
+   * `Infinity` (il default) lascia il comportamento di prima: il broccato non cambia.
+   */
+  maxInternalTravelMm?: number;
 }
 
 const DEF: Required<RoutingOptions> = {
@@ -122,6 +136,7 @@ const DEF: Required<RoutingOptions> = {
   maxVisibleTravelMm: 400,
   viaPreferita: 'contorno',
   margineDalBordoMm: 0,
+  maxInternalTravelMm: Infinity,
 };
 
 // La soglia del salto e' alta apposta. Prima era 50mm, tarata sulla proporzione di salti del DST di
@@ -482,6 +497,18 @@ export function routeColorRuns(
           && corridoioDentro(pen, meta, gruppo.region, 0)) {
         const dritti = scostaDalBordo(
           resampleUniform([pen, meta], o.travelStitchMm), gruppo.region, o.margineDalBordoMm);
+        // quanto di questo taglio resterebbe SCOPERTO: e' l'unica cosa che conta per il limite
+        let nudo = 0;
+        for (let z = 1; z < dritti.length; z++) {
+          nudo += distance(dritti[z - 1], dritti[z]) * (1 - coveredFraction(dritti[z - 1], dritti[z], grid));
+        }
+        if (nudo > o.maxInternalTravelMm) {
+          blocks.push(corrente);
+          corrente = [...run];
+          regCorrente = gruppo.region;
+          jumps++;
+          continue;
+        }
         corrente.push(...dritti.slice(1), ...run.slice(1));
         conta(dritti, false, pen, meta);
         perCaso.interno.volte++;
@@ -504,9 +531,22 @@ export function routeColorRuns(
         scoperto += distance(via[k - 1], via[k]) * (1 - coveredFraction(via[k - 1], via[k], grid));
       }
 
-      // 3. Il filo si stacca solo cambiando macchia, e solo se il giro è davvero fuori scala.
-      //    Dentro una macchia non si stacca MAI.
-      if (!stessaMacchia && scoperto > o.maxVisibleTravelMm) {
+      /*
+       * 3. Il filo si stacca. Cambiando macchia, se il giro e' fuori scala; e **dentro** una
+       *    macchia solo se il tratto scoperto supera `maxInternalTravelMm`.
+       *
+       *    La regola era «dentro una macchia non si stacca MAI», ed e' quella giusta per il
+       *    broccato — l'aveva decisa Lorenzo guardando i suoi disegni: «il salto va sempre evitato,
+       *    soprattutto negli oggetti unici». Ma qui una macchia puo' essere larga come tutto il
+       *    lavoro, e allora quella regola non protegge il ricamo: lo attraversa. Sul Punto Pittorico
+       *    erano sei giri sul contorno fino a 241 mm dentro una macchia sola, e nessuna soglia li
+       *    toccava perche' nessuna soglia si applicava a loro.
+       *
+       *    Il default resta `Infinity`, quindi il broccato non cambia di un punto: chi vuole il
+       *    limite lo chiede.
+       */
+      const limite = stessaMacchia ? o.maxInternalTravelMm : o.maxVisibleTravelMm;
+      if (scoperto > limite) {
         blocks.push(corrente);
         corrente = [...run];
         regCorrente = gruppo.region;
