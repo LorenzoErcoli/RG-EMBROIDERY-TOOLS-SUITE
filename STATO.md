@@ -392,6 +392,12 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 | **C15** | **broccato — passata del subagent `design-system`** sul pannello, e etichette dal processo REVISIONE-PARAMETRI (parte di A5). | L'**accordion e il contagocce sono fatti** (pannello allineato agli altri tool); resta la validazione del subagent e i nomi dei parametri. |
 | **C10** | **bitmap — overlay/maschera nella preview** (l'originale mostrava 3 viste, oggi c'è la vista punti, che è la più utile). | Piccolo. Da valutare se serve davvero. |
 
+### In progettazione
+
+| # | Cosa | Stato |
+|---|---|---|
+| **N1** | **"Punto Pittorico", il nono tool** — da un'immagine, riempimenti pieni che seguono le curve del disegno: degradé col frastaglio dei bordi dove il colore sfuma, taglio secco dove stacca. Progettato con Lorenzo il 2026-09-04. | **Briefing pronto**: [`AVVIO-PUNTO-PITTORICO.md`](AVVIO-PUNTO-PITTORICO.md). Decisioni prese (sovrapposizione 5mm col sotto più coperto, frastaglio a parametro, direzione automatica + guide da SVG, forme nette per riconoscimento primitive). Tre quarti dei pezzi esistono già (contorni dal broccato, palette e raso nel core); il nuovo è il riempimento a campo di direzione con le file a distanza costante (Jobard-Lefer). Si parte dal prototipo headless che misura la copertura in curva. |
+
 ### Fuori lista (fatto, o non nostro)
 
 Il **satellite Python** `bitmap_to_stitch` (laboratorio DST/recipe/library con AI) resta fuori scope: condivide i contratti, non il codice. La **verifica visiva automatica** non è recuperabile: la preview dell'assistente non compone gli screenshot (§4) — il DOM e i numeri sì, e vengono usati al posto suo.
