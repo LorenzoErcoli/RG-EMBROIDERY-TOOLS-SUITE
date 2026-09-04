@@ -110,12 +110,22 @@ Tre livelli, dal più automatico:
    la spezzata. È la "regolarizzazione delle forme" dei vettorizzatori. Non serve solo all'estetica del
    bordo: se il bordo è un cerchio vero, **anche il campo di direzione diventa esatto** (concentrico o
    radiale) invece che ballerino.
-2. **SVG accanto all'immagine.** La grafica di Lorenzo nasce vettoriale: il modo più solido di avere il
-   cerchio perfetto è **importarlo**, non indovinarlo. Raster per i colori e le sfumature, vettore per
-   le geometrie esatte — è esattamente il modello di oblique (moduli + cartamodello con ruoli), e la
-   suite lo sa già fare.
-3. **Un disegnatore: no.** Non serve costruirlo. Le linee guida e le forme esatte arrivano da Illustrator
-   come SVG; il pannello serve a **assegnare i ruoli** a quei contorni, non a ridisegnarli.
+2. ~~**SVG accanto all'immagine.**~~ **CADUTA — decisione di Lorenzo, 2026-09-04.** L'SVG di questa
+   grafica **non è mai esistito**, e soprattutto non deve servire: *«il sistema deve reggere proprio
+   senza SVG, perché se riusciamo a usare immagini per fare queste cose è figo»*. Quindi il livello 1
+   — riconoscere la primitiva dai pixel — non è più il più automatico dei tre ripieghi: **è l'unica
+   strada**, e va fatto funzionare bene.
+   *Verificato lo stesso giorno, ed è la prova che la decisione regge:* il cerchio della sfera è stato
+   ricavato dalla sola immagine. Quattro archi indipendenti del contorno — separati dalle interruzioni
+   dell'alone — concordano su centro (893, 461) px e raggio **77,0 mm**, coprendo il **67% del giro**.
+   Bloccato in `test/smoke.mjs` su una fixture che è il contorno tracciato, non il raster.
+3. **Un disegnatore: no.** Resta valido, ma cambia la ragione. Prima le forme esatte «arrivavano da
+   Illustrator»; ora non arrivano da nessuna parte, quindi il pannello non serve ad assegnare ruoli a
+   contorni importati — serve a **correggere quello che il riconoscimento ha capito**.
+   *Da distinguere:* le **linee guida** del §4.1 livello 3 sono un'altra cosa dall'SVG della grafica.
+   Quelle sono contorni disegnati *apposta* per correggere la direzione del punto, e si possono ancora
+   fare in Illustrator e importare. Ma non sono più gratis: prima venivano insieme al disegno, adesso
+   qualcuno le deve disegnare — quindi l'automatico (§4.1 livelli 1 e 2) deve bastare quasi sempre.
 
 ---
 

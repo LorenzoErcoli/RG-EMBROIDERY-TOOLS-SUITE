@@ -2501,6 +2501,55 @@ console.log('Punto Pittorico — riconoscimento delle forme nette');
   // --- determinismo ---
   check('stessa forma, stesse primitive',
     JSON.stringify(rg.regolarizzaAnello(tracciato.outer, { tolMm: mmPerPx })) === JSON.stringify(ric), true);
+
+  // --- LA SFERA DI LORENZO, DAI SOLI PIXEL ---
+  //
+  // L'SVG di quella grafica non e' mai esistito, e non esistera': il sistema deve reggere partendo
+  // dall'immagine, e' questo il punto del tool. Quindi il cerchio della sfera o esce dal raster o
+  // non esce, e questa e' la prova che esce.
+  //
+  // La sfera NON e' una macchia di colore: e' dello stesso blu del fondo e ci si attacca dove
+  // l'alone chiaro si interrompe. Il suo bordo e' un PEZZO del contorno della macchia grande, quindi
+  // il cerchio si cerca fra gli archi — e la prova che c'e' davvero e' che archi INDIPENDENTI,
+  // separati dalle interruzioni, vanno d'accordo sullo stesso centro e sullo stesso raggio.
+  //
+  // La fixture e' il contorno gia' tracciato e ripulito, non l'immagine: Node non ha un decoder
+  // JPEG (nella suite decodifica il canvas del browser) e un raster nel test non ci starebbe. La
+  // forma vera entra nella rete di sicurezza, il pixel resta fuori.
+  const cian = JSON.parse(readFileSync(join(here, 'fixtures/cianotipia-contorno.json'), 'utf8'));
+  // gli anelli sono contorni E fori delle macchie scure: gli archi della sfera non stanno tutti sul
+  // contorno esterno, perche' le interruzioni dell'alone li spezzano. Col solo contorno esterno
+  // usciva un arco solo, il 30% del giro invece del 67 — una prova piu' debole del vero.
+  const anelli = cian.anelli.map((l) => l.map(([x, y]) => ({ x, y })));
+  check('la fixture e\' fatta dei contorni veri della cianotipia',
+    [cian.larghezzaPx, anelli.length, anelli[0].length > 3000], [1189, 11, true]);
+
+  const archi = anelli
+    .flatMap((anello) => rg.regolarizzaAnello(anello, { tolMm: 2 }).pezzi)
+    .filter((p) => p.tipo === 'arco')
+    .map((p) => ({ cx: p.cx, cy: p.cy, r: p.r, lung: Math.abs(p.a - p.da) * p.r }))
+    .filter((a) => a.lung >= 40);
+  // gli archi che concordano su centro e raggio sono lo stesso cerchio visto a pezzi
+  const gruppi = [];
+  for (const a of archi.sort((x, y) => y.lung - x.lung)) {
+    const g = gruppi.find((q) => Math.hypot(q.cx - a.cx, q.cy - a.cy) < a.r * 0.12 && Math.abs(q.r - a.r) < a.r * 0.12);
+    if (g) {
+      const peso = g.lung + a.lung;
+      g.cx = (g.cx * g.lung + a.cx * a.lung) / peso;
+      g.cy = (g.cy * g.lung + a.cy * a.lung) / peso;
+      g.r = (g.r * g.lung + a.r * a.lung) / peso;
+      g.lung = peso; g.pezzi += 1;
+    } else gruppi.push({ ...a, pezzi: 1 });
+  }
+  const sfera = gruppi.sort((a, b) => b.lung - a.lung).find((g) => g.r > 150 && g.r < 300);
+  check('la sfera si ricava dai soli pixel: piu\' archi indipendenti sullo stesso cerchio',
+    !!sfera && sfera.pezzi >= 3, true);
+  check('...il centro cade dove sta la sfera (893, 461 px, entro 15)',
+    !!sfera && Math.hypot(sfera.cx - 893, sfera.cy - 461) < 15, true);
+  check('...il raggio e\' 77 mm entro mezzo millimetro',
+    !!sfera && Math.abs(sfera.r * cian.mmPerPx - 77.0) < 0.5, true);
+  check('...e gli archi coprono piu\' di meta\' del giro (non e\' un caso su tre punti)',
+    !!sfera && sfera.lung / (2 * Math.PI * sfera.r) > 0.5, true);
 }
 
 // ---------------------------------------------------------------------------------------------

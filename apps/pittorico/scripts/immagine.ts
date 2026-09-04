@@ -101,14 +101,24 @@ const scostaDaCerchio = (ring: Polyline, cx: number, cy: number, r: number): num
 // ---------------------------------------------------------------------------------------------
 
 const percorso = process.argv[2];
-if (!percorso) { console.error('uso: node immagine.mjs <percorso.bmp>'); process.exit(1); }
+if (!percorso) { console.error('uso: node immagine.mjs <percorso.bmp> [larghezzaMm]'); process.exit(1); }
 const img = leggiBmp(percorso);
 const soglia = otsu(img);
+
+/**
+ * La larghezza reale, detta da Lorenzo: **419,45 mm** (R11 — è la fonte di verità, e prevale su
+ * qualunque stima). Torna esatta coi 72 dpi dichiarati dal file: 1189 · 25,4 / 72 = 419,4514, quindi
+ * quei 72 dpi non erano una stima da correggere, erano la misura giusta.
+ */
+const LARGHEZZA_MM = Number(process.argv[3] ?? 419.45);
+const MM_PER_PX = LARGHEZZA_MM / img.W;
 
 console.log('');
 console.log('PUNTO PITTORICO — la prova sull\'immagine vera (cianotipia "Brave New World")');
 console.log(`immagine ${img.W} x ${img.H} px · soglia chiaro/scuro (Otsu) ${soglia} su 255`);
-console.log('le misure sono in PIXEL: la larghezza reale in mm la deve dire Lorenzo (R11)');
+console.log(`larghezza reale ${LARGHEZZA_MM} mm → ${n3(MM_PER_PX)} mm per pixel · il ricamo misura ${n1(LARGHEZZA_MM)} x ${n1(img.H * MM_PER_PX)} mm`);
+console.log(`UN PIXEL VALE ${n3(MM_PER_PX)} mm, cioè quasi il passo fra due file di filo (0,4 mm):`);
+console.log('la scalinata dei pixel è larga come un filo, e per questo riconoscere la forma non è un abbellimento.');
 
 // 1 px = 1 unità: si traccia a scala unitaria, così i numeri si leggono in pixel
 const UNO = 1;
@@ -198,6 +208,102 @@ console.log('   incerti. Prima di chiedersi che forma sia, bisogna sapere quanto
   }
 }
 
+console.log('');
+console.log('5. LA SFERA SENZA SVG — il cerchio ricavato dai soli pixel');
+console.log('   l\'SVG di questa grafica non è mai esistito, quindi il cerchio o esce da qui o non esce.');
+console.log('   La sfera NON è una macchia di colore: è dello stesso blu del fondo. Il suo bordo è un');
+console.log('   pezzo del contorno della macchia grande, quindi il cerchio si cerca fra gli ARCHI.');
+let cerchioSfera: { cx: number; cy: number; r: number } | null = null;
+{
+  const maggioranza = (src: Uint8Array, W: number, H: number): Uint8Array => {
+    const out = new Uint8Array(src.length);
+    for (let y = 0; y < H; y++) {
+      for (let x = 0; x < W; x++) {
+        let chiari = 0, totali = 0;
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            const nx = x + dx, ny = y + dy;
+            if (nx < 0 || nx >= W || ny < 0 || ny >= H) continue;
+            totali++; if (src[ny * W + nx] === 1) chiari++;
+          }
+        }
+        out[y * W + x] = chiari * 2 > totali ? 1 : 0;
+      }
+    }
+    return out;
+  };
+  let pulita = idx;
+  for (let k = 0; k < 3; k++) pulita = maggioranza(pulita, img.W, img.H);
+
+  const scure = traceRegions(pulita, img.W, img.H, 0, UNO, { simplifyMm: 0.1, minAreaMm2: 2000 });
+  const archi: Array<{ cx: number; cy: number; r: number; lunghezza: number }> = [];
+  for (const reg of scure) {
+    for (const anello of [reg.outer, ...reg.holes]) {
+      for (const p of regolarizzaAnello(anello, { tolMm: 2 }).pezzi) {
+        if (p.tipo !== 'arco') continue;
+        const ampiezza = Math.abs(p.a - p.da);
+        archi.push({ cx: p.cx, cy: p.cy, r: p.r, lunghezza: ampiezza * p.r });
+      }
+    }
+  }
+  archi.sort((a, b) => b.lunghezza - a.lunghezza);
+  console.log(`   archi trovati: ${archi.length} · i cinque più lunghi:`);
+  for (const a of archi.slice(0, 5)) {
+    console.log(`     centro ${n1(a.cx)},${n1(a.cy)} · raggio ${n1(a.r)} px = ${n1(a.r * MM_PER_PX)} mm · lungo ${n1(a.lunghezza)} px`);
+  }
+
+  // Gli archi che CONCORDANO su centro e raggio sono lo stesso cerchio visto a pezzi: è la prova
+  // che il cerchio c'è davvero e non è un caso, perché tratti indipendenti del contorno lo dicono.
+  const gruppi: Array<{ cx: number; cy: number; r: number; lunghezza: number; pezzi: number }> = [];
+  for (const a of archi) {
+    if (a.lunghezza < 40) continue;
+    const g = gruppi.find((q) => Math.hypot(q.cx - a.cx, q.cy - a.cy) < a.r * 0.12 && Math.abs(q.r - a.r) < a.r * 0.12);
+    if (g) {
+      const peso = g.lunghezza + a.lunghezza;
+      g.cx = (g.cx * g.lunghezza + a.cx * a.lunghezza) / peso;
+      g.cy = (g.cy * g.lunghezza + a.cy * a.lunghezza) / peso;
+      g.r = (g.r * g.lunghezza + a.r * a.lunghezza) / peso;
+      g.lunghezza = peso; g.pezzi += 1;
+    } else gruppi.push({ ...a, pezzi: 1 });
+  }
+  gruppi.sort((a, b) => b.lunghezza - a.lunghezza);
+  console.log('   cerchi su cui più archi indipendenti vanno d\'accordo:');
+  for (const g of gruppi.slice(0, 4)) {
+    console.log(`     ${String(g.pezzi).padStart(2)} archi · centro ${n1(g.cx)},${n1(g.cy)} · raggio ${n1(g.r)} px = ${n1(g.r * MM_PER_PX)} mm · arco totale ${n1(g.lunghezza)} px (${n1((g.lunghezza / (2 * Math.PI * g.r)) * 100)}% del giro)`);
+  }
+  // Il contorno ripulito si SALVA come fixture: cosi' lo smoke puo' rifare questa misura senza un
+  // decoder JPEG e senza l'immagine, che nel test non ci potrebbe stare. La forma vera entra nella
+  // rete di sicurezza; il pixel resta fuori.
+  if (process.env.RG_FIXTURE) {
+    const compatta = (l: Polyline): number[][] => l.map((p) => [Number(p.x.toFixed(1)), Number(p.y.toFixed(1))]);
+    // gli STESSI anelli su cui lavora questo script: contorni e fori delle macchie scure. Gli archi
+    // della sfera non stanno tutti sul contorno esterno — le interruzioni dell'alone li spezzano e
+    // parte del cerchio arriva dagli anelli interni. Una fixture col solo contorno esterno darebbe
+    // un arco solo (misurato: il 30% del giro invece del 67), cioe' una prova piu' debole di quella
+    // che il metodo sa dare davvero.
+    const anelli = scure
+      .flatMap((r) => [r.outer, ...r.holes])
+      .filter((l) => l.length >= 120)
+      .sort((a, b) => b.length - a.length)
+      .slice(0, 24);
+    writeFileSync(process.env.RG_FIXTURE, JSON.stringify({
+      da: 'PROGETTO GRAFICA - BRAVE NEW WORLD.jpg',
+      larghezzaPx: img.W, altezzaPx: img.H, larghezzaMm: LARGHEZZA_MM, mmPerPx: MM_PER_PX,
+      soglia, pulizia: 'voto di maggioranza 3x3, tre passate',
+      anelli: anelli.map(compatta),
+    }));
+    console.log(`   ${anelli.length} anelli salvati come fixture → ${process.env.RG_FIXTURE}`);
+  }
+
+  const sfera = gruppi.find((g) => g.r > 150 && g.r < 300);
+  if (sfera) {
+    cerchioSfera = sfera;
+    console.log(`   → LA SFERA: centro ${n1(sfera.cx)},${n1(sfera.cy)} px · raggio ${n1(sfera.r)} px = ${n3(sfera.r * MM_PER_PX)} mm · diametro ${n1(2 * sfera.r * MM_PER_PX)} mm`);
+  } else {
+    console.log('   → nessun cerchio di raggio da sfera fra gli archi concordi');
+  }
+}
+
 // un ritaglio della sfera, salvato come SVG, per guardarlo invece di leggerlo
 const fuori = process.env.RG_OUT ?? new URL('./out/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 mkdirSync(fuori, { recursive: true });
@@ -205,10 +311,15 @@ mkdirSync(fuori, { recursive: true });
   const regioni = traceRegions(idx, img.W, img.H, 0, UNO, { simplifyMm: 0.1, minAreaMm2: 5000 });
   const linee = regioni.slice(0, 8).flatMap((r) => [r.outer, ...r.holes]);
   const d = linee.map((l) => `<polygon points="${l.map((p) => `${p.x.toFixed(1)},${p.y.toFixed(1)}`).join(' ')}" />`).join('\n    ');
+  // Il cerchio ricavato dai SOLI PIXEL, disegnato sopra il contorno da cui viene: se combacia,
+  // combacia sotto gli occhi e non solo nei numeri. È la prova che senza SVG si può fare.
+  const sfera = cerchioSfera
+    ? `\n  <circle cx="${cerchioSfera.cx.toFixed(2)}" cy="${cerchioSfera.cy.toFixed(2)}" r="${cerchioSfera.r.toFixed(2)}" fill="none" stroke="#d02020" stroke-width="3" />`
+    : '';
   const svg = `<svg xmlns="http://www.w3.org/2000/svg" width="${img.W}" height="${img.H}" viewBox="0 0 ${img.W} ${img.H}">
   <g fill="none" stroke="#111111" stroke-width="1">
     ${d}
-  </g>
+  </g>${sfera}
 </svg>
 `;
   writeFileSync(`${fuori.replace(/\/?$/, '/')}cianotipia-contorni.svg`, svg);
