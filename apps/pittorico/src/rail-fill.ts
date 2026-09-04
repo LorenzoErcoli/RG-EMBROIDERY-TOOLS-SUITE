@@ -25,7 +25,7 @@
 
 import { type Point, type Polyline, pointInRegion, type Region } from '@rg/core';
 import { type DirectionField } from './field';
-import { regionRings } from './region';
+import { regionRings, regionBounds } from './region';
 import { segmentPolygonIntersections } from '@rg/core';
 
 export interface RailFillOptions {
@@ -61,6 +61,17 @@ export interface RailFillOptions {
   sfalsaCunei?: number;
   /** Riempire l'ombra dietro i fori partendo dal bordo del foro. Default true. */
   riempiOmbre?: boolean;
+  /**
+   * Passata finale che chiude i vuoti rimasti. Default true.
+   *
+   * Serve perché il cuneo si infila confrontando due punti vicini **alle profondità in cui esistono
+   * tutt'e due**: quando un punto finisce prima — perché esce dal bordo o incontra un vuoto — oltre
+   * la sua fine non c'è più niente da confrontare, e il vuoto che si apre lì nessuno lo vede. Sono
+   * le losanghe chiare che Lorenzo ha notato sul ritaglio, e sulla misura erano vuoti da 1,02 mm
+   * contro i 0,30 chiesti. Questa passata guarda la copertura invece delle coppie: dove non c'è
+   * filo entro la soglia, semina.
+   */
+  chiudiVuoti?: boolean;
   /** Quanti giri di infilatura dei cunei al massimo. Default 6. */
   giriMassimi?: number;
   maxStepsPerRun?: number;
@@ -75,6 +86,8 @@ export interface RailFillResult {
   semi: number;
   /** Punti aggiunti per riempire le ombre dietro i fori. */
   ombre: number;
+  /** Punti aggiunti dalla passata finale che chiude i vuoti rimasti. */
+  chiusure: number;
 }
 
 const dist = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
@@ -191,6 +204,18 @@ class Occupato {
     const b = this.map.get(k);
     if (b) b.push([x, y]); else this.map.set(k, [[x, y]]);
   }
+  /** Aggiunge una corsa a quello che risulta occupato: serve mentre si semina. */
+  aggiungi(r: Polyline): void {
+    for (let i = 1; i < r.length; i++) {
+      const seg = dist(r[i - 1], r[i]);
+      const n = Math.max(1, Math.ceil(seg / (this.cell / 2)));
+      for (let k = 0; k <= n; k++) {
+        const t = k / n;
+        this.segna(r[i - 1].x + (r[i].x - r[i - 1].x) * t, r[i - 1].y + (r[i].y - r[i - 1].y) * t);
+      }
+    }
+  }
+
   entro(p: Point, d: number): boolean {
     const r = Math.ceil(d / this.cell);
     const ix = Math.floor(p.x / this.cell), iy = Math.floor(p.y / this.cell);
@@ -274,7 +299,7 @@ export function buildRailFill(
   region: Region, field: DirectionField, rotaia: Polyline, opts: RailFillOptions,
 ): RailFillResult {
   const passo = opts.spacingMm;
-  const vuoto: RailFillResult = { runs: [], cuneiPerGiro: [], semi: 0, ombre: 0 };
+  const vuoto: RailFillResult = { runs: [], cuneiPerGiro: [], semi: 0, ombre: 0, chiusure: 0 };
   if (!(passo > 0) || rotaia.length < 2) return vuoto;
 
   const step = Math.min(opts.stepMm && opts.stepMm > 0 ? opts.stepMm : passo / 2, 0.5);
@@ -376,8 +401,36 @@ export function buildRailFill(
     }
   }
 
+  /*
+   * LA PASSATA CHE CHIUDE I VUOTI. Non guarda le coppie ma la COPERTURA: si passa la regione a
+   * setaccio e dove non c'è filo entro la soglia si semina un punto, che marcia nei due sensi e si
+   * ferma appena tocca il filo già posato. È l'unica passata che vede i vuoti «orfani» — quelli
+   * oltre la fine di un punto, dove non c'è una coppia da confrontare.
+   */
+  let chiusure = 0;
+  if (opts.chiudiVuoti ?? true) {
+    const bb = regionBounds(region);
+    const setaccio = passo;
+    const stop = cuneoOltre / 2;
+    const occupato = new Occupato(punti.map((x) => x.linea), Math.max(passo, 0.2));
+    for (let y = bb.minY; y <= bb.maxY; y += setaccio) {
+      for (let x = bb.minX; x <= bb.maxX; x += setaccio) {
+        const p = { x, y };
+        if (!pointInRegion(p, region) || occupato.entro(p, stop)) continue;
+        const d = field.dirAt(p);
+        const avanti = attraversa(region, field, p, d, step, maxPassi, (q) => occupato.entro(q, stop));
+        const indietro = attraversa(region, field, p, { x: -d.x, y: -d.y }, step, maxPassi, (q) => occupato.entro(q, stop));
+        const linea = [...indietro.slice(1).reverse(), ...avanti];
+        if (lunghezza(linea) < passo) continue;
+        punti.push({ linea, da: 0 });
+        occupato.aggiungi(linea);
+        chiusure++;
+      }
+    }
+  }
+
   const finali = punti.map((x) => (maxStitch > 0 ? inPuntiAgo(x.linea, maxStitch, maxSagitta) : x.linea));
-  return { runs: finali, cuneiPerGiro, semi: semi.length, ombre };
+  return { runs: finali, cuneiPerGiro, semi: semi.length, ombre, chiusure };
 }
 
 /** Il verso di marcia di una fila alla profondità `s`, per far proseguire il cuneo come i vicini. */

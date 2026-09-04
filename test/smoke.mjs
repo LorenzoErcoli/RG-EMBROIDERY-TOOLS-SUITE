@@ -2601,6 +2601,19 @@ console.log('Punto Pittorico — l\'ordine del filo (riempimento dalla rotaia)')
   check('...e la dispersione sta sotto il 25%',
     rg.coverageStats(railForo.runs, conForo.region, PASSO).cv < 0.25, true);
   check('il bordo del foro fa da rotaia anche lui, e aggiunge punti', railForo.ombre > 20, true);
+
+  // LA PASSATA CHE CHIUDE I VUOTI, nata da una domanda di Lorenzo su una losanga chiara nel ritaglio
+  // («ma tipo questi buchi? cosa sono»). Il cuneo si infila confrontando due punti vicini alle
+  // profondita' in cui esistono TUTT'E DUE: quando un punto finisce prima, oltre la sua fine non c'e'
+  // piu' niente da confrontare e il vuoto che si apre li' nessuno lo vede. La passata finale guarda
+  // la COPERTURA invece delle coppie. Misurato sul ritaglio vero: il vuoto peggiore fra due file
+  // scende da 1,02 a 0,58 mm.
+  const senzaChiusura = rg.buildRailFill(conForo.region, campoCon(conForo.region), rotaia2,
+    { spacingMm: PASSO, maxStitchMm: 3, chiudiVuoti: false });
+  check('la passata finale chiude vuoti che i cunei non vedono',
+    rg.neighbourSpacing(railForo.runs, PASSO).max < rg.neighbourSpacing(senzaChiusura.runs, PASSO).max, true);
+  check('...e serve poco lavoro: pochi punti in piu\' rispetto a quelli della rotaia',
+    railForo.chiusure < railForo.semi * 0.5, true);
   check('anche senza foro la rotaia copre tutto',
     rg.coverageStats(rail.runs, banda.region, PASSO, 2).min > 0, true);
 
@@ -2611,10 +2624,16 @@ console.log('Punto Pittorico — l\'ordine del filo (riempimento dalla rotaia)')
   const vincolato = rg.buildRailFill(conForo.region,
     rg.harmonicField(conForo.region, { cellMm: 1, levels: 4, sweeps: 300 }),
     rotaia2, { spacingMm: PASSO, maxStitchMm: 3 });
-  check('...e vincolando le testate il pezzo scoperto torna: e\' quella la causa',
-    rg.coverageStats(vincolato.runs, conForo.region, PASSO, 2).min <= 1e-9, true);
-  check('...con la dispersione che risale oltre il 40%',
-    rg.coverageStats(vincolato.runs, conForo.region, PASSO).cv > 0.4, true);
+  // La controprova NON e' piu' «il pezzo scoperto torna»: da quando c'e' la passata che chiude i
+  // vuoti, quel pezzo viene riempito lo stesso — ma a fatica, con punti seminati a caso dentro un
+  // campo sbagliato. Quello che resta vero, e che si misura, e' che il ricamo peggiora in tutto:
+  // dispersione dal 19% al 29% e capi sul bordo dal 94% al 78%. Il test dice questo, perche' e'
+  // questo che il numero sostiene.
+  check('...e vincolando le testate la dispersione peggiora di meta\'',
+    rg.coverageStats(vincolato.runs, conForo.region, PASSO).cv
+      > rg.coverageStats(railForo.runs, conForo.region, PASSO).cv * 1.4, true);
+  check('...e l\'ordine crolla: molti piu\' capi a mezz\'aria',
+    capiSulBordo(vincolato.runs) < capiSulBordo(railForo.runs) - 0.1, true);
 }
 
 // ---------------------------------------------------------------------------------------------
