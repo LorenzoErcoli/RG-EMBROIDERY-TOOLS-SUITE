@@ -32,10 +32,11 @@ export { readPatternSvg, readEmbeddedConfig, measureConstruction, migrateLegacyN
 export { PATTERN_FIELD_NAMES, PATTERN_FIELD_KIND } from ${JSON.stringify(posix('apps/zone-pattern/src/fields.ts'))};
 export { parseSvgPolylines } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
 export { runPipeline as runStriaturaPipeline } from ${JSON.stringify(posix('apps/striatura/src/pipeline.ts'))};
-export { makeRegion, regionBounds, BoundaryIndex } from ${JSON.stringify(posix('apps/pittorico/src/region.ts'))};
+export { makeRegion, regionBounds, regionRings, BoundaryIndex } from ${JSON.stringify(posix('apps/pittorico/src/region.ts'))};
 export { harmonicField, radialField, concentricField, constantField, meanFieldAngleDeg } from ${JSON.stringify(posix('apps/pittorico/src/field.ts'))};
 export { buildCurvedFill, buildNaiveCurvedFill } from ${JSON.stringify(posix('apps/pittorico/src/curved-fill.ts'))};
 export { coverageStats, neighbourSpacing, containment } from ${JSON.stringify(posix('apps/pittorico/src/coverage.ts'))};
+export { buildRailFill } from ${JSON.stringify(posix('apps/pittorico/src/rail-fill.ts'))};
 export { larghezzaTransizione, cresciVersoISuccessivi, frastaglia } from ${JSON.stringify(posix('apps/pittorico/src/borders.ts'))};
 export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('apps/pittorico/src/primitives.ts'))};
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
@@ -2504,6 +2505,74 @@ const mascheraDiProva = () => {
   const attaccate = rg.traceRegions(bordo, W2, H2, 1, 1);
   check('una macchia che tocca i bordi sinistro e destro resta UNA macchia', attaccate.length, 1);
   check('...e la sua area e\' quella vera (20 x 6)', Number(attaccate[0]?.areaMm2.toFixed(4)), 120);
+}
+
+// ---------------------------------------------------------------------------------------------
+// PUNTO PITTORICO — L'ORDINE DEL FILO: il riempimento che parte dalla rotaia.
+//
+// Nasce da una critica di Lorenzo: «mi aspetto che il riempimento sia molto preciso, con densita'
+// costanti dove possibile e accorgimenti quando la densita' cambia. Ora vedo tante linee non
+// ordinate». «Ordinato» sembra un giudizio e invece si misura, e la misura e' questa: **quanti capi
+// di punto finiscono SUL BORDO invece che a mezz'aria**. In un pettine ogni punto va da un bordo
+// all'altro; nel posizionamento a distanza costante le file si fermano contro le vicine e i capi
+// cadono in mezzo alla forma — ed e' quello che si vede come disordine.
+// ---------------------------------------------------------------------------------------------
+console.log('');
+console.log('Punto Pittorico — l\'ordine del filo (riempimento dalla rotaia)');
+{
+  const PASSO = 0.3;
+  const banda = rg.regioniDiProva().find((p) => p.id === 'banda-curva');
+  const campo = rg.harmonicField(banda.region, { cellMm: 1, levels: 4, sweeps: 300 });
+  // la banda di prova e' costruita come «lato sinistro + lato destro rovesciato»: la prima meta'
+  // del contorno e' un fianco, cioe' una rotaia
+  const rotaia = banda.region.outer.slice(0, Math.floor(banda.region.outer.length / 2));
+
+  const rail = rg.buildRailFill(banda.region, campo, rotaia, { spacingMm: PASSO, maxStitchMm: 3 });
+  const bordo = new rg.BoundaryIndex(rg.regionRings(banda.region), 4);
+  const capiSulBordo = (runs) => {
+    let capi = 0, dentro = 0;
+    for (const r of runs) {
+      if (r.length < 2) continue;
+      for (const p of [r[0], r[r.length - 1]]) { capi++; if (bordo.nearest(p).distMm <= 0.35) dentro++; }
+    }
+    return capi ? dentro / capi : 0;
+  };
+  check('quasi tutti i capi finiscono sul bordo: e\' un pettine, non un\'erba',
+    capiSulBordo(rail.runs) > 0.9, true);
+
+  // I CUNEI CONVERGONO. E' l'«accorgimento quando la densita' cambia»: un punto in piu' infilato
+  // dove la fascia si allarga. Deve esaurirsi, non moltiplicarsi — e la prima versione si
+  // moltiplicava (53, 105, 205, 394, 711, 1319 su 444 semi, con 49 m di filo al posto di 9) perche'
+  // confrontavo due punti alla stessa distanza dal LORO inizio invece che alla stessa profondita'
+  // dalla rotaia, e un cuneo comincia piu' avanti.
+  const giri = rail.cuneiPerGiro;
+  check('i cunei si esauriscono invece di moltiplicarsi',
+    giri.length > 1 && giri[giri.length - 1] < giri[0] / 5, true);
+  check('...e sono pochi rispetto ai punti seminati sulla rotaia',
+    giri.reduce((s, v) => s + v, 0) < rail.semi * 0.3, true);
+
+  // LA DENSITA' NON PEGGIORA PER AVERE L'ORDINE: e' la condizione perche' il cambio valga la pena.
+  const curvo = rg.buildCurvedFill(banda.region, campo, { spacingMm: PASSO, maxStitchMm: 3 }).runs;
+  const covRail = rg.coverageStats(rail.runs, banda.region, PASSO);
+  const covCurvo = rg.coverageStats(curvo, banda.region, PASSO);
+  check('la densita' + ' consegnata resta quella chiesta', Math.abs(covRail.media / (1 / PASSO) - 1) <= 0.12, true);
+  check('...e la dispersione non peggiora rispetto al metodo di prima',
+    covRail.cv < covCurvo.cv * 1.35, true);
+  check('e il filo non aumenta', rg.fillThreadMm(rail.runs) < rg.fillThreadMm(curvo) * 1.1, true);
+
+  // IL LIMITE, misurato e non nascosto: dietro un foro il metodo lascia un'OMBRA. I punti che
+  // incontrano il vuoto si fermano, e dietro non arriva niente perche' tutti partono dalla stessa
+  // rotaia. Il posizionamento a distanza costante non ha questo problema (riempie da dentro).
+  // Si risolve spezzando la regione attorno all'ostacolo — e' il prossimo lavoro, non un mistero.
+  const conForo = rg.regioniDiProva().find((p) => p.id === 'banda-curva-con-foro');
+  const campo2 = rg.harmonicField(conForo.region, { cellMm: 1, levels: 4, sweeps: 300 });
+  const rotaia2 = conForo.region.outer.slice(0, Math.floor(conForo.region.outer.length / 2));
+  const railForo = rg.buildRailFill(conForo.region, campo2, rotaia2, { spacingMm: PASSO, maxStitchMm: 3 });
+  const curvoForo = rg.buildCurvedFill(conForo.region, campo2, { spacingMm: PASSO, maxStitchMm: 3 }).runs;
+  check('dietro un foro la rotaia lascia un\'ombra scoperta (limite noto)',
+    rg.coverageStats(railForo.runs, conForo.region, PASSO, 2).min <= 1e-9, true);
+  check('...mentre il metodo a distanza costante non la lascia',
+    rg.coverageStats(curvoForo, conForo.region, PASSO, 2).min > 0, true);
 }
 
 // ---------------------------------------------------------------------------------------------
