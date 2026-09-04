@@ -20,8 +20,9 @@
 
 import {
   type PixelImage, type Polyline, type Point, type Region, type ExportLayer, type Rgb,
-  reduceStable, prepareImage, traceRegions, rgbToHex,
+  reduceStable, prepareImage, traceRegions, rgbToHex, pointInRegion,
 } from '@rg/core';
+import { BoundaryIndex, regionRings } from './region';
 import { harmonicField, type CondizioneAlBordo } from './field';
 import { buildRailFill } from './rail-fill';
 import { buildCurvedFill } from './curved-fill';
@@ -46,6 +47,15 @@ import {
  * girando la corsa se conviene entrarci dall'altra parte. Non si cuce niente — quello è mestiere di
  * `routeColorRuns` — si decide solo la sequenza, così i tratti che dovrà coprire sono i più corti.
  */
+/** Quanto filo di collegamento chiede una sequenza di corse, capo dopo capo. */
+function costoDellOrdine(runs: Polyline[]): number {
+  let mm = 0;
+  for (let i = 1; i < runs.length; i++) {
+    mm += distance(runs[i - 1][runs[i - 1].length - 1], runs[i][0]);
+  }
+  return mm;
+}
+
 function inFila(runs: Polyline[]): Polyline[] {
   if (runs.length < 2) return [...runs];
   const restano = runs.map((r, i) => ({ r, i }));
@@ -61,6 +71,115 @@ function inFila(runs: Polyline[]): Polyline[] {
     }
     const scelta = restano.splice(best, 1)[0].r;
     out.push(gira ? [...scelta].reverse() : scelta);
+  }
+  return out;
+}
+
+/**
+ * IL GIRO IN FONDO ALLA CORSA — dove nasceva la linea di contorno sul degrade'.
+ *
+ * Il riempimento e' un pettine: corse perpendicolari al bordo, e la frangia si fa **accorciandole**
+ * di quantita' diverse, cosi' le punte fanno i denti. Il problema e' cosa succede fra un dente e il
+ * successivo. Se il filo va dritto dalla punta di una corsa alla punta della prossima, quella corda
+ * **attraversa la valle fra i due denti** — e la riempie. Fatto migliaia di volte lungo tutto il
+ * bordo, il risultato non e' una sfumatura: e' una linea di contorno. E' esattamente quello che
+ * Lorenzo ha visto, e sul blu si vede di piu' perche' quell'ago ha poco colore sopra a coprirlo.
+ *
+ * La cura e' quella del ricamo vero: invece della corda, si **ritorna sui propri passi**. Dalla
+ * punta si rientra lungo la corsa appena cucita fino all'altezza dove la prossima comincia, e da li'
+ * si passa. Il filo si raddoppia per un tratto, ma si raddoppia **sopra se stesso**, dello stesso
+ * colore: non si vede. La valle fra i denti resta vuota, che e' il suo mestiere.
+ *
+ * Il prezzo e' filo in piu', limitato dalla profondita' della frangia; il ritorno e' che il
+ * degrade' resta un degrade'.
+ */
+function giroSullaFrangia(runs: Polyline[], soglia: number): Polyline[] {
+  if (runs.length < 2) return runs;
+  const out: Polyline[] = [];
+  for (let i = 0; i < runs.length; i++) {
+    const corsa = runs[i];
+    const prossima = runs[i + 1];
+    if (!prossima || corsa.length < 2) { out.push(corsa); continue; }
+    const meta = prossima[0];
+    // il punto della corsa piu' vicino all'inizio della prossima: e' li' che il giro costa meno
+    let vicino = corsa.length - 1, minD = distance(corsa[corsa.length - 1], meta);
+    for (let k = corsa.length - 2; k >= 0; k--) {
+      const d = distance(corsa[k], meta);
+      if (d < minD) { minD = d; vicino = k; }
+    }
+    // se il capo e' gia' il punto piu' vicino, il giro e' quello normale del pettine: non si tocca
+    if (vicino === corsa.length - 1
+        || distance(corsa[corsa.length - 1], meta) - minD < soglia) { out.push(corsa); continue; }
+    out.push([...corsa, ...corsa.slice(vicino, corsa.length - 1).reverse()]);
+  }
+  return out;
+}
+
+/**
+ * IL COLLEGAMENTO LUNGO PASSA DENTRO, NON SUL BORDO.
+ *
+ * Il pettine paga poco fra una corsa e la vicina — mediana 0,31 mm, cioè la spaziatura. Ma una
+ * corsa su cinque resta orfana e il salto è lungo; e lì il routing, non trovando la via dritta,
+ * **costeggia il contorno**. Misurato: 1,3 m di salti grezzi diventano 6,6 m di filo cucito, e
+ * quel filo finisce quasi tutto nel mezzo millimetro più esterno — dove il riempimento, da solo,
+ * ci mette il 7% della sua densità. Da 7% a 213%: è la linea di contorno che Lorenzo ha visto, e
+ * spostarla di un millimetro non la toglie, la sposta (a un millimetro diventa il 260%).
+ *
+ * La cura è quella del ricamo, non del calcolo: **si torna sui propri passi**. Una corsa ha due
+ * capi, uno sulla punta della frangia e uno dentro nel folto. Se il collegamento parte dalla punta
+ * si è costretti a girare fuori; se prima si rientra lungo la corsa appena cucita, si parte da
+ * dentro — e da dentro la via dritta di solito c'è, e passa dove il colore è pieno.
+ *
+ * Il ritorno costa filo, ma è filo **sopra se stesso**, dello stesso colore: non si vede. Il filo
+ * sul bordo invece si vede tutto. Per ogni salto lungo si provano le quattro combinazioni dei due
+ * capi, e si tiene quella che sta dentro la macchia e passa più lontana dal bordo; a pari
+ * profondità, quella che costa meno filo. Se nessuna sta dentro, non si tocca niente: sarà il
+ * routing a costeggiare, e almeno lo farà per un motivo vero.
+ */
+function passaDentro(
+  runs: Polyline[], region: Region, bordo: BoundaryIndex, sogliaMm: number,
+): Polyline[] {
+  if (runs.length < 2) return runs;
+  const lunghezza = (l: Polyline): number => {
+    let m = 0; for (let i = 1; i < l.length; i++) m += distance(l[i], l[i - 1]); return m;
+  };
+  // quanto sta lontano dal bordo il segmento, nel suo punto peggiore: è il numero che decide
+  const profondita = (a: Point, b: Point): number => {
+    const n = Math.max(2, Math.ceil(distance(a, b) / 1));
+    let min = Infinity;
+    for (let i = 0; i <= n; i++) {
+      const t = i / n;
+      const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      if (!pointInRegion(p, region)) return -1;
+      min = Math.min(min, bordo.nearest(p).distMm);
+    }
+    return min;
+  };
+
+  const out: Polyline[] = runs.map((r) => r);
+  for (let i = 0; i + 1 < out.length; i++) {
+    const a = out[i], b = out[i + 1];
+    if (a.length < 2 || b.length < 2) continue;
+    if (distance(a[a.length - 1], b[0]) <= sogliaMm) continue;
+
+    let meglio: { ritornaA: boolean; entraB: boolean; prof: number; costo: number } | null = null;
+    for (const ritornaA of [false, true]) {
+      for (const entraB of [false, true]) {
+        const da = ritornaA ? a[0] : a[a.length - 1];
+        const al = entraB ? b[b.length - 1] : b[0];
+        const prof = profondita(da, al);
+        if (prof < 0) continue;
+        const costo = distance(da, al)
+          + (ritornaA ? lunghezza(a) : 0) + (entraB ? lunghezza(b) : 0);
+        if (!meglio || prof > meglio.prof + 0.2 || (Math.abs(prof - meglio.prof) <= 0.2 && costo < meglio.costo)) {
+          meglio = { ritornaA, entraB, prof, costo };
+        }
+      }
+    }
+    if (!meglio || (!meglio.ritornaA && !meglio.entraB)) continue;
+    // il ritorno è la corsa stessa a ritroso, senza ripetere il capo da cui si parte
+    if (meglio.ritornaA) out[i] = [...a, ...a.slice(0, a.length - 1).reverse()];
+    if (meglio.entraB) out[i + 1] = [...b.slice(1).reverse(), ...b];
   }
   return out;
 }
@@ -121,6 +240,20 @@ export interface PittoricoParams {
    * resto si taglia. È l'unico livello dove il taglio è la risposta giusta.
    */
   maxVisibleTravelUltimoMm: number;
+  /**
+   * Dove passa il filo di collegamento quando non puo' andare dritto: `'interno'` taglia dentro il
+   * riempimento, `'contorno'` costeggia il bordo. Qui il bordo e' la frangia, quindi il default e'
+   * `'interno'` — vedi il commento al punto d'uso.
+   */
+  viaPassaggi: 'interno' | 'contorno';
+  /** Quanto il passaggio deve stare lontano dal bordo. Zero = basta stare dentro. */
+  margineDalBordoMm: number;
+  /**
+   * Cucire i passaggi, o lasciare le corse staccate. Serve a MISURARE: col profilo della frangia
+   * si vuole sapere quanto della densita' sul bordo e' riempimento e quanto e' filo di passaggio,
+   * e l'unico modo e' guardare le due cose separate. In produzione resta acceso.
+   */
+  cuciPassaggi: boolean;
 }
 
 export const defaultPittoricoParams: PittoricoParams = {
@@ -139,6 +272,9 @@ export const defaultPittoricoParams: PittoricoParams = {
   travelStitchMm: 2.5,
   maxVisibleTravelMm: 400,
   maxVisibleTravelUltimoMm: 5,
+  viaPassaggi: 'interno',
+  margineDalBordoMm: 2,
+  cuciPassaggi: true,
 };
 
 export interface MacchiaCucita {
@@ -180,6 +316,8 @@ export interface PassaggiAgo {
   passaggiCopertiMm: number;
   /** Quante volte il filo si è dovuto staccare: sull'ultimo ago è un rasafilo vero. */
   stacchi: number;
+  /** Quale dei tre casi ha pagato quei millimetri: dritto, dentro il riempimento, sul contorno. */
+  perCaso: { dritto: { volte: number; mm: number }; interno: { volte: number; mm: number }; contorno: { volte: number; mm: number } };
 }
 
 const luce = (c: readonly number[]): number => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
@@ -333,7 +471,27 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
     const t = ordine[k];
     const gruppi: RegionRuns[] = macchie
       .filter((m) => m.tinta === t && m.corse.length)
-      .map((m) => ({ region: m.region, runs: inFila(m.corse) }));
+      .map((m) => {
+        /*
+         * L'ordine delle corse: quello con cui sono nate, o la catena al piu' vicino? **Si misura.**
+         *
+         * Non c'e' un vincitore fisso, e crederlo mi e' costato due volte. La rotaia le fa uscire
+         * gia' in fila, ed e' il senso di quel motore: rimescolarle la peggiorava (41,8 -> 53,5 m).
+         * Ma non tutte le macchie dalla rotaia sono ordinate bene, e su una di quelle tenere
+         * l'ordine di nascita costava 1.769 m contro 30. Due misure opposte, stessa domanda: allora
+         * la domanda si fa fare al conto, macchia per macchia. Costa una passata sui capi.
+         */
+        const nate = m.corse;
+        const incatenate = inFila(nate);
+        const scelte = costoDellOrdine(nate) <= costoDellOrdine(incatenate) ? nate : incatenate;
+        // prima l'ordine, poi il giro: il giro dipende da CHI viene dopo, quindi va deciso dopo
+        const girate = giroSullaFrangia(scelte, p.densitySpacingMm * 2);
+        const bordo = new BoundaryIndex(regionRings(m.region), 4);
+        return {
+          region: m.region,
+          runs: passaDentro(girate, m.region, bordo, p.densitySpacingMm * 3),
+        };
+      });
     if (!gruppi.length) continue;
     const grid = buildCoverGrid(inOrdine, img.width, img.height, mmPerPx, k, aghi, 1.5);
     /*
@@ -347,9 +505,38 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
      * rasafilo della macchina: il tratto corto passa, il resto si taglia.
      */
     const ultimo = k === ordine.length - 1;
+    if (!p.cuciPassaggi) {
+      // solo per misurare: le corse restano com'erano, senza un millimetro di filo di collegamento
+      const blocchi = gruppi.flatMap((g) => g.runs).map((b) => minEMax(b, p.minStitchMm, p.maxStitchMm));
+      for (const m of macchie) if (m.tinta === t) m.corse = [];
+      const prima = macchie.find((m) => m.tinta === t);
+      if (prima) prima.corse = blocchi;
+      passaggiPerAgo.push({
+        tinta: t, corse: blocchi.length, stacchi: blocchi.length,
+        riempimentoMm: 0, passaggiMm: 0, passaggiCopertiMm: 0,
+        perCaso: { dritto: { volte: 0, mm: 0 }, interno: { volte: 0, mm: 0 }, contorno: { volte: 0, mm: 0 } },
+      });
+      for (const b of blocchi) {
+        punti += b.length;
+        for (let i = 1; i < b.length; i++) filoMm += distance(b[i], b[i - 1]);
+      }
+      continue;
+    }
     const routed = routeColorRuns(gruppi, grid, {
       travelStitchMm: p.travelStitchMm,
       maxVisibleTravelMm: ultimo ? p.maxVisibleTravelUltimoMm : p.maxVisibleTravelMm,
+      /*
+       * Sul bordo il filo NON ci va (R30 — la scelta opposta a quella del broccato, e per un motivo
+       * preciso). Nel broccato il contorno e' il posto piu' nascosto: il nero ci passera' sopra.
+       * Qui il contorno e' la frangia, cioe' il degrade' stesso: un filo che lo costeggia riempie i
+       * vuoti fra i denti e la sfumatura diventa una linea. Lorenzo l'ha visto sul blu, dov'e' piu'
+       * evidente perche' quell'ago ha meno colore sopra a coprirlo.
+       *
+       * Il margine e' la frangia: il passaggio deve stare piu' dentro di quanto la frangia arrivi
+       * a mordere, altrimenti la tocca lo stesso.
+       */
+      viaPreferita: p.viaPassaggi,
+      margineDalBordoMm: p.margineDalBordoMm,
     });
     // R3 DOPO il routing, mai prima: sono le giunzioni appena create a reintrodurre i micro-punti
     const blocchi = routed.blocks
@@ -371,6 +558,7 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
       passaggiMm: routed.travelMm,
       passaggiCopertiMm: routed.travelCoveredMm,
       stacchi: routed.jumps,
+      perCaso: routed.perCaso,
     });
     for (let i = 1; i < blocchi.length; i++) {
       const d = Math.hypot(blocchi[i][0].x - blocchi[i - 1][blocchi[i - 1].length - 1].x,

@@ -51,6 +51,10 @@ for (const a of plan.passaggiPerAgo) {
     + `riempimento ${(a.riempimentoMm / 1000).toFixed(1)} m · passaggi ${(a.passaggiMm / 1000).toFixed(1)} m `
     + `(${((a.passaggiMm / a.riempimentoMm) * 100).toFixed(0)}% del riempimento, ${q.toFixed(0)}% nascosti) · `
     + `${a.stacchi} stacchi`);
+  const c = a.perCaso;
+  console.log(`            dritto ${c.dritto.volte}× ${(c.dritto.mm / 1000).toFixed(1)} m · `
+    + `dentro ${c.interno.volte}× ${(c.interno.mm / 1000).toFixed(1)} m · `
+    + `SUL CONTORNO ${c.contorno.volte}× ${(c.contorno.mm / 1000).toFixed(1)} m`);
 }
 
 const layers = pittoricoExportLayers(plan);
