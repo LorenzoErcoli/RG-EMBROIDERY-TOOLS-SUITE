@@ -45,6 +45,22 @@ export interface RailFillOptions {
   cuneoOltre?: number;
   /** Passo di integrazione lungo il punto. Default `spacingMm / 2`, con un tetto a 0.5 mm. */
   stepMm?: number;
+  /**
+   * Di quanto la soglia del cuneo varia da posto a posto, in frazione di se stessa. Default 0.35.
+   *
+   * Serve perché in una fascia che si allarga in modo regolare **tutti i cunei nascerebbero alla
+   * stessa profondità**, e quella fila di inizi allineati si vede come un fronte netto in mezzo al
+   * ricamo. Sfalsandola, i cunei entrano un po' prima e un po' dopo e il fronte diventa una grana.
+   *
+   * È acceso perché l'ha chiesto Lorenzo: sul ventaglio gli avevo mostrato le due versioni — nascite
+   * allineate e nascite sfalsate — dicendo che la seconda peggiorava, e lui: *«l'ordine che ottenevi
+   * con l'esempio di ventaglio disturbo mi sembrava molto efficace»*. Il giudizio sulla resa è suo,
+   * e il mio era sbagliato. Il disturbo è deciso dalla posizione, non dal caso: stessi parametri,
+   * stesso ricamo (§7).
+   */
+  sfalsaCunei?: number;
+  /** Riempire l'ombra dietro i fori partendo dal bordo del foro. Default true. */
+  riempiOmbre?: boolean;
   /** Quanti giri di infilatura dei cunei al massimo. Default 6. */
   giriMassimi?: number;
   maxStepsPerRun?: number;
@@ -57,9 +73,19 @@ export interface RailFillResult {
   cuneiPerGiro: number[];
   /** Punti seminati sulla rotaia. */
   semi: number;
+  /** Punti aggiunti per riempire le ombre dietro i fori. */
+  ombre: number;
 }
 
 const dist = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
+
+/** Disturbo in [0,1) deciso dalla posizione. Tutto a interi: identico su ogni motore (§7). */
+function disturbo(x: number, y: number): number {
+  const ix = Math.round(x * 4) | 0, iy = Math.round(y * 4) | 0;
+  let a = Math.imul(ix, 374761393) ^ Math.imul(iy, 668265263);
+  a = Math.imul(a ^ (a >>> 13), 1274126177);
+  return ((a ^ (a >>> 16)) >>> 0) / 4294967296;
+}
 
 const lunghezza = (l: Polyline): number => {
   let mm = 0;
@@ -113,6 +139,7 @@ function uscita(a: Point, b: Point, region: Region): Point | null {
  */
 function attraversa(
   region: Region, field: DirectionField, da: Point, verso: Point, step: number, maxPassi: number,
+  fermatiSe?: (p: Point) => boolean,
 ): Polyline {
   const pts: Point[] = [da];
   let p = da, prev = verso;
@@ -131,11 +158,52 @@ function attraversa(
       if (q) pts.push(q);
       break;
     }
+    if (fermatiSe && fermatiSe(next)) break;
     pts.push(next);
     prev = { x: vx / m, y: vy / m };
     p = next;
   }
   return pts;
+}
+
+/** Griglia di occupazione: dice se in un punto c'è già del filo. */
+class Occupato {
+  private readonly cell: number;
+  private readonly map = new Map<number, Array<[number, number]>>();
+  constructor(runs: Polyline[], cellMm: number) {
+    this.cell = Math.max(cellMm, 1e-3);
+    for (const r of runs) {
+      for (let i = 1; i < r.length; i++) {
+        // si segnano anche i punti INTERMEDI, perché col punto massimo a 3 mm due vertici
+        // consecutivi lasciano scoperto tutto quello che c'è in mezzo
+        const seg = dist(r[i - 1], r[i]);
+        const n = Math.max(1, Math.ceil(seg / (this.cell / 2)));
+        for (let k = 0; k <= n; k++) {
+          const t = k / n;
+          this.segna(r[i - 1].x + (r[i].x - r[i - 1].x) * t, r[i - 1].y + (r[i].y - r[i - 1].y) * t);
+        }
+      }
+    }
+  }
+  private chiave(ix: number, iy: number): number { return (ix + 1048576) * 2097152 + (iy + 1048576); }
+  private segna(x: number, y: number): void {
+    const k = this.chiave(Math.floor(x / this.cell), Math.floor(y / this.cell));
+    const b = this.map.get(k);
+    if (b) b.push([x, y]); else this.map.set(k, [[x, y]]);
+  }
+  entro(p: Point, d: number): boolean {
+    const r = Math.ceil(d / this.cell);
+    const ix = Math.floor(p.x / this.cell), iy = Math.floor(p.y / this.cell);
+    const d2 = d * d;
+    for (let j = iy - r; j <= iy + r; j++) {
+      for (let i = ix - r; i <= ix + r; i++) {
+        const b = this.map.get(this.chiave(i, j));
+        if (!b) continue;
+        for (const [x, y] of b) if ((x - p.x) ** 2 + (y - p.y) ** 2 < d2) return true;
+      }
+    }
+    return false;
+  }
 }
 
 function allinea(field: DirectionField, p: Point, prev: Point): Point {
@@ -206,12 +274,13 @@ export function buildRailFill(
   region: Region, field: DirectionField, rotaia: Polyline, opts: RailFillOptions,
 ): RailFillResult {
   const passo = opts.spacingMm;
-  const vuoto: RailFillResult = { runs: [], cuneiPerGiro: [], semi: 0 };
+  const vuoto: RailFillResult = { runs: [], cuneiPerGiro: [], semi: 0, ombre: 0 };
   if (!(passo > 0) || rotaia.length < 2) return vuoto;
 
   const step = Math.min(opts.stepMm && opts.stepMm > 0 ? opts.stepMm : passo / 2, 0.5);
   const maxPassi = Math.max(10, Math.round(opts.maxStepsPerRun ?? 20000));
   const cuneoOltre = opts.cuneoOltre ?? passo * 1.8;
+  const sfalsa = Math.max(0, opts.sfalsaCunei ?? 0.35);
   const giriMassimi = Math.max(0, Math.round(opts.giriMassimi ?? 6));
   const maxStitch = opts.maxStitchMm && opts.maxStitchMm > 0 ? opts.maxStitchMm : 0;
   const maxSagitta = opts.maxSagittaMm ?? passo / 8;
@@ -246,11 +315,15 @@ export function buildRailFill(
       // la profondità si conta dalla ROTAIA: si comincia da dove tutt'e due esistono già
       const inizio = Math.max(a.da, b.da) + passo;
       const fine = Math.min(a.da + lunghezza(a.linea), b.da + lunghezza(b.linea));
+      // la soglia varia da coppia a coppia, così i cunei non nascono tutti alla stessa profondità
+      const soglia = sfalsa > 0
+        ? cuneoOltre * (1 + sfalsa * (disturbo(a.linea[0].x, a.linea[0].y) - 0.5))
+        : cuneoOltre;
       let apertura = -1;
       for (let d = inizio; d <= fine; d += passo / 2) {
         const pa = aDistanza(a.linea, d - a.da), pb = aDistanza(b.linea, d - b.da);
         if (!pa || !pb) break;
-        if (dist(pa, pb) > cuneoOltre) { apertura = d; break; }
+        if (dist(pa, pb) > soglia) { apertura = d; break; }
       }
       if (apertura < 0) continue;
       const pa = aDistanza(a.linea, apertura - a.da), pb = aDistanza(b.linea, apertura - b.da);
@@ -276,8 +349,35 @@ export function buildRailFill(
     punti = fusi;
   }
 
+  /*
+   * LE OMBRE. Dietro un foro non arriva niente: i punti che incontrano il vuoto si fermano, e
+   * dietro resta scoperto perché partono tutti dalla stessa rotaia. Misurato sulla banda col foro:
+   * celle a copertura zero, dove il metodo a distanza costante non ne lasciava.
+   *
+   * La risposta è che **anche il bordo del foro è una rotaia**. Si semina lungo il foro allo stesso
+   * passo, si marcia nelle due direzioni, e si tiene solo quello che entra in territorio scoperto —
+   * cioè esattamente l'ombra, e niente di più. Il resto si ferma appena tocca il filo già posato.
+   */
+  let ombre = 0;
+  if (region.holes.length && (opts.riempiOmbre ?? true)) {
+    const occupato = new Occupato(punti.map((x) => x.linea), Math.max(passo, 0.2));
+    const stop = passo * 0.7;
+    for (const foro of region.holes) {
+      for (const s of passiLungo([...foro, foro[0]], passo)) {
+        for (const senso of [1, -1] as const) {
+          const d = field.dirAt(s.p);
+          const v = { x: d.x * senso, y: d.y * senso };
+          const partenza = { x: s.p.x + v.x * passo * 0.5, y: s.p.y + v.y * passo * 0.5 };
+          if (!pointInRegion(partenza, region) || occupato.entro(partenza, stop)) continue;
+          const linea = attraversa(region, field, partenza, v, step, maxPassi, (q) => occupato.entro(q, stop));
+          if (lunghezza(linea) >= passo) { punti.push({ linea, da: 0 }); ombre++; }
+        }
+      }
+    }
+  }
+
   const finali = punti.map((x) => (maxStitch > 0 ? inPuntiAgo(x.linea, maxStitch, maxSagitta) : x.linea));
-  return { runs: finali, cuneiPerGiro, semi: semi.length };
+  return { runs: finali, cuneiPerGiro, semi: semi.length, ombre };
 }
 
 /** Il verso di marcia di una fila alla profondità `s`, per far proseguire il cuneo come i vicini. */

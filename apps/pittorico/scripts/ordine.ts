@@ -90,9 +90,14 @@ for (const prova of regioniDiProva()) {
   const rotaia: Polyline = region.outer.slice(0, meta);
 
   const curvo = buildCurvedFill(region, campo, { spacingMm: PASSO, maxStitchMm: PUNTO_MAX }).runs;
+  const railAllineato = buildRailFill(region, campo, rotaia, { spacingMm: PASSO, maxStitchMm: PUNTO_MAX, sfalsaCunei: 0 });
   const rail = buildRailFill(region, campo, rotaia, { spacingMm: PASSO, maxStitchMm: PUNTO_MAX });
 
-  for (const [nome, runs] of [['a distanza costante', curvo], ['dalla rotaia', rail.runs]] as Array<[string, Polyline[]]>) {
+  for (const [nome, runs] of [
+    ['a distanza costante', curvo],
+    ['dalla rotaia, cunei allineati', railAllineato.runs],
+    ['dalla rotaia, cunei sfalsati', rail.runs],
+  ] as Array<[string, Polyline[]]>) {
     const o = ordine(runs, region, 0.35);
     const cov = coverageStats(runs, region, PASSO);
     const sp = neighbourSpacing(runs, PASSO);
@@ -103,7 +108,12 @@ for (const prova of regioniDiProva()) {
     console.log(`   ${`${prova.id} · ${nome}`.padEnd(34)} ${String(o.corse).padStart(6)} ${pct(o.capiSulBordo).padStart(14)} ${`${n1(o.lungP10)}–${n1(o.lungP90)}`.padStart(15)} ${n2(o.filoM).padStart(7)} ${pct(cov.cv).padStart(8)} ${n2(sp.p95).padStart(10)} ${`celle vuote ${vuote} · p05 ${n2(cov1.p05 / (1 / PASSO))}`.padStart(28)}`);
     disegni.push({ nome: `${prova.id} · ${nome}`, region, runs });
   }
-  console.log(`   ${''.padEnd(34)} cunei infilati per giro: ${rail.cuneiPerGiro.join(', ') || 'nessuno'} (su ${rail.semi} semi sulla rotaia)`);
+  console.log(`   ${''.padEnd(34)} cunei per giro: allineati ${railAllineato.cuneiPerGiro.join('+')} · sfalsati ${rail.cuneiPerGiro.join('+')} (su ${rail.semi} semi)`);
+  // a che SCALA vive la variazione: un fronte di cunei allineati si vede da lontano, una grana no
+  for (const [nome, runs] of [['allineati', railAllineato.runs], ['sfalsati', rail.runs]] as Array<[string, Polyline[]]>) {
+    const cv = [1, 2, 4, 8].map((c) => pct(coverageStats(runs, region, PASSO, c).cv)).join(' / ');
+    console.log(`   ${''.padEnd(34)} CV a celle 1/2/4/8 mm, cunei ${nome.padEnd(10)} ${cv}`);
+  }
 }
 
 console.log('');

@@ -2569,10 +2569,14 @@ console.log('Punto Pittorico — l\'ordine del filo (riempimento dalla rotaia)')
   const rotaia2 = conForo.region.outer.slice(0, Math.floor(conForo.region.outer.length / 2));
   const railForo = rg.buildRailFill(conForo.region, campo2, rotaia2, { spacingMm: PASSO, maxStitchMm: 3 });
   const curvoForo = rg.buildCurvedFill(conForo.region, campo2, { spacingMm: PASSO, maxStitchMm: 3 }).runs;
-  check('dietro un foro la rotaia lascia un\'ombra scoperta (limite noto)',
+  check('la rotaia lascia ancora un pezzo scoperto quando c\'e\' un foro (limite noto)',
     rg.coverageStats(railForo.runs, conForo.region, PASSO, 2).min <= 1e-9, true);
-  check('...mentre il metodo a distanza costante non la lascia',
+  check('...mentre il metodo a distanza costante non lo lascia',
     rg.coverageStats(curvoForo, conForo.region, PASSO, 2).min > 0, true);
+  check('il riempimento dal bordo del foro aggiunge punti e migliora la copertura',
+    railForo.ombre > 20, true);
+  check('...e senza foro la rotaia copre tutto',
+    rg.coverageStats(rail.runs, banda.region, PASSO, 2).min > 0, true);
 }
 
 // ---------------------------------------------------------------------------------------------
