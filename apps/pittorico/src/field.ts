@@ -18,8 +18,8 @@
 // come punto di partenza per quella dopo, e così via. Stesso risultato, due ordini di grandezza in
 // meno di lavoro.
 
-import { type Point } from '@rg/core';
-import { type Region, regionRings, regionBounds, insideRegion, BoundaryIndex } from './region';
+import { type Point, pointInRegion } from '@rg/core';
+import { type Region, regionRings, regionBounds, BoundaryIndex } from './region';
 
 /** Tutto ciò che il riempimento chiede a un campo: che direzione tenere qui. Versore. */
 export interface DirectionField {
@@ -63,7 +63,7 @@ function buildGrid(region: Region, index: BoundaryIndex, cellMm: number, bandMm:
     for (let i = 0; i < nx; i++) {
       const p = { x: ox + i * cellMm, y: oy + j * cellMm };
       const k = j * nx + i;
-      const ins = insideRegion(p, region);
+      const ins = pointInRegion(p, region);
       const nb = index.nearest(p);
       const th = Math.atan2(nb.tangent.y, nb.tangent.x);
       g.a[k] = Math.cos(2 * th);
@@ -203,7 +203,7 @@ export function meanFieldAngleDeg(field: DirectionField, region: Region, stepMm 
   for (let y = bb.minY; y <= bb.maxY; y += stepMm) {
     for (let x = bb.minX; x <= bb.maxX; x += stepMm) {
       const p = { x, y };
-      if (!insideRegion(p, region)) continue;
+      if (!pointInRegion(p, region)) continue;
       const d = field.dirAt(p);
       const th = Math.atan2(d.y, d.x);
       sa += Math.cos(2 * th); sb += Math.sin(2 * th);

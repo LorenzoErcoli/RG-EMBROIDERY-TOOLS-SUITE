@@ -1,22 +1,18 @@
-// La REGIONE di lavoro del Punto Pittorico: un poligono coi suoi fori, in millimetri reali (R1).
+// Quello che il Punto Pittorico chiede a una REGIONE, oltre a ciò che il core sa già fare.
 //
-// La forma è la stessa di `apps/broccato/src/regions.ts` — di proposito: il punto 2 del piano
-// promuove `traceRegions` nel core, e quando succede questo file deve poterne consumare l'uscita
-// senza conversioni. Qui non si TRACCIA niente (quella è roba da immagine): si risponde soltanto
-// alle due domande che il riempimento curvo fa in continuazione — «questo punto è dentro?» e
-// «qual è il bordo più vicino, e come corre?».
+// Il tipo `Region` e la domanda «questo punto è dentro?» (`pointInRegion`) stanno nel **core** dal
+// 2026-09-04, promossi da `apps/broccato` insieme a `traceRegions`: qui non se ne tiene una copia,
+// che sarebbe la trappola di R28 — stessa domanda, due risposte, e nessun modo di accorgersene.
+//
+// Resta locale quello che serve al riempimento curvo e a nessun altro: costruire una regione da
+// poligoni sciolti, il suo ingombro, e soprattutto il **bordo indicizzato** — perché il campo
+// armonico chiede migliaia di volte «qual è il bordo più vicino, e come corre lì?».
 //
 // Nessun DOM: si prova in Node.
 
-import { type Point, type Polyline, type Bounds, bounds, polygonArea, pointInPolygon } from '@rg/core';
+import { type Point, type Polyline, type Bounds, type Region, bounds, polygonArea } from '@rg/core';
 
-/** Un'area da riempire: il contorno e i buchi che ha dentro, in millimetri reali (R1). */
-export interface Region {
-  outer: Polyline;
-  holes: Polyline[];
-  /** Area netta (contorno meno fori), in mm². */
-  areaMm2: number;
-}
+export type { Region };
 
 export function makeRegion(outer: Polyline, holes: Polyline[] = []): Region {
   const netti = holes.filter((h) => h && h.length >= 3);
@@ -28,13 +24,6 @@ export function makeRegion(outer: Polyline, holes: Polyline[] = []): Region {
 export const regionRings = (r: Region): Polyline[] => [r.outer, ...r.holes];
 
 export const regionBounds = (r: Region): Bounds => bounds(r.outer);
-
-/** Dentro il contorno e fuori da ogni foro. */
-export function insideRegion(p: Point, r: Region): boolean {
-  if (!pointInPolygon(p, r.outer)) return false;
-  for (const h of r.holes) if (pointInPolygon(p, h)) return false;
-  return true;
-}
 
 export interface NearestBoundary {
   distMm: number;

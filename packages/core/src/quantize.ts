@@ -112,8 +112,19 @@ export function nearestPaletteIndex(r: number, g: number, b: number, palette: Rg
 }
 
 /**
+ * L'indice che vuol dire **nessun colore** in una mappa di indici di palette.
+ *
+ * Sta qui, dove le mappe di indici nascono. Era scritto `0xff` a mano dentro `mapToPalette` e
+ * ridefinito come `NO_COLOR` in `apps/broccato/src/reduce.ts`: stesso concetto, due posti, e
+ * nessun modo di accorgersi se uno dei due fosse cambiato — la trappola di R28, in miniatura.
+ * Trovato promuovendo `traceRegions` nel core (ARCHITETTURA, regola di crescita 6: a ogni
+ * migrazione si confrontano le primitive).
+ */
+export const NO_COLOR = 0xff;
+
+/**
  * Assegna ogni pixel al colore di palette più vicino → una mappa di indici, un byte per pixel.
- * I pixel esclusi dalla `mask` (e quelli trasparenti, alpha < `alphaMin`) valgono `0xff` = nessuno.
+ * I pixel esclusi dalla `mask` (e quelli trasparenti, alpha < `alphaMin`) valgono `NO_COLOR`.
  */
 export function mapToPalette(
   rgba: Uint8ClampedArray | number[],
@@ -121,7 +132,7 @@ export function mapToPalette(
   opts: { mask?: Uint8Array | null; alphaMin?: number } = {},
 ): Uint8Array {
   const n = Math.floor(rgba.length / 4);
-  const out = new Uint8Array(n).fill(0xff);
+  const out = new Uint8Array(n).fill(NO_COLOR);
   if (!palette.length) return out;
   const { mask = null, alphaMin = 8 } = opts;
   for (let i = 0; i < n; i++) {

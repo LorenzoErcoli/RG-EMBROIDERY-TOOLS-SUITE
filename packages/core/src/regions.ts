@@ -1,17 +1,20 @@
-// Punto ③ — dalla mappa dei colori alle REGIONI: poligoni in millimetri, con i loro fori.
+// Dalla mappa dei colori alle REGIONI: poligoni in millimetri, con i loro fori.
 //
 // È il pezzo che nella suite non esisteva da nessuna parte: `apps/bitmap` va da raster a *punti*
-// senza mai costruire un'area. Qui serve perché il raso (R24, `buildParallelFill` nel core) vuole
-// un poligono, non una maschera — ed è la stessa forma che poi il routing deve aggirare.
+// senza mai costruire un'area. Serve perché il raso (R24, `buildParallelFill`) vuole un poligono,
+// non una maschera — ed è la stessa forma che poi il routing deve aggirare.
 //
-// Resta locale all'app (ARCHITETTURA, regola di crescita 2): si promuove nel core quando la
-// chiederà un secondo tool. I candidati ci sono già — bitmap, per fare riempimenti veri invece di
-// puntini, e interlace per le macchie per zona (C4) — ma finché non la chiedono davvero sta qui.
+// **Nato in `apps/broccato`, promosso qui il 2026-09-04** quando il secondo cliente si è
+// presentato: il Punto Pittorico, che da una regione ricava il campo di direzione e il riempimento
+// curvo. È la regola di crescita 1 — il core cresce per estrazione, non per anticipazione — e il
+// trasloco è a comportamento invariato, con il lucchetto scritto in `test/smoke.mjs` PRIMA di
+// muovere una riga.
 //
 // Nessun DOM: si prova in Node dallo smoke test.
 
-import { type Polyline, type Point, simplifyPolyline, polygonArea, pointInPolygon } from '@rg/core';
-import { NO_COLOR } from './reduce';
+import type { Polyline, Point } from './types';
+import { simplifyPolyline, polygonArea, pointInPolygon } from './geometry';
+import { NO_COLOR } from './quantize';
 
 /** Un'area di un colore: il suo contorno e i buchi che ha dentro, in millimetri reali (R1). */
 export interface Region {

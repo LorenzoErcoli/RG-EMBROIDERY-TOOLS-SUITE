@@ -18,11 +18,11 @@
 // Resta locale all'app (ARCHITETTURA, regola di crescita 2): si promuove nel core quando un secondo
 // tool la chiederà davvero. Nessun DOM: si prova in Node dallo smoke test.
 
-import { type Rgb, nearestPaletteIndex, medianCutPalette } from '@rg/core';
+import { type Rgb, nearestPaletteIndex, medianCutPalette, NO_COLOR } from '@rg/core';
 import type { PixelImage } from './engine';
 
-/** Nessun colore assegnato. */
-export const NO_COLOR = 0xff;
+/** Nessun colore assegnato. Vive nel core (`quantize.ts`), dove nascono le mappe di indici. */
+export { NO_COLOR };
 
 // ------------------------------------------------------------
 // 1. Pareggio della luce

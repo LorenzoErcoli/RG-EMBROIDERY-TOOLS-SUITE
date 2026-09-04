@@ -29,7 +29,7 @@ import {
   distance, resampleUniform, routeAlongBorder, pointInPolygon,
 } from '@rg/core';
 import { NO_COLOR } from './reduce';
-import { pointInRegion, type Region } from './regions';
+import { pointInRegion, type Region } from '@rg/core';
 import type { BroccatoColor } from './engine';
 
 // ------------------------------------------------------------

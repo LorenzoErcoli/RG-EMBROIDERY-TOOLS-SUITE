@@ -16,8 +16,8 @@
 // contorno contiene metà filo per ragioni geometriche, non di densità. Contarla misurerebbe la
 // forma, non il riempimento. Il bordo si giudica col contenimento, che è la domanda giusta per lui.
 
-import { type Point, type Polyline } from '@rg/core';
-import { type Region, regionRings, insideRegion, regionBounds, BoundaryIndex } from './region';
+import { type Point, type Polyline, pointInRegion } from '@rg/core';
+import { type Region, regionRings, regionBounds, BoundaryIndex } from './region';
 
 export interface CoverageStats {
   /** Celle interne considerate (le celle di bordo non entrano). */
@@ -56,7 +56,7 @@ export function coverageStats(
   for (let j = 0; j < ny; j++) {
     for (let i = 0; i < nx; i++) {
       const c = { x: bb.minX + (i + 0.5) * cellMm, y: bb.minY + (j + 0.5) * cellMm };
-      if (!insideRegion(c, region)) continue;
+      if (!pointInRegion(c, region)) continue;
       if (index.nearest(c).distMm < cellMm * 0.75) continue;
       buona[j * nx + i] = 1;
     }
@@ -229,7 +229,7 @@ export function containment(runs: Polyline[], region: Region, tolleranzaMm = 0.0
   for (const run of runs) {
     for (const p of run) {
       punti++;
-      if (insideRegion(p, region)) continue;
+      if (pointInRegion(p, region)) continue;
       const d = index.nearest(p).distMm;
       if (d > tolleranzaMm) fuori++;
       if (d > fuoriMaxMm) fuoriMaxMm = d;

@@ -23,7 +23,6 @@ export { buildNet } from ${JSON.stringify(posix('apps/net-45/src/net.ts'))};
 export { generateStriatura, layerThreadMm, defaultStriaturaParams } from ${JSON.stringify(posix('apps/striatura/src/engine.ts'))};
 export { paletteToColors, applyDensityToAll, colorsToPalette, clampColorCount, mmPerPixel, defaultBroccatoParams } from ${JSON.stringify(posix('apps/broccato/src/engine.ts'))};
 export { reduceStable, prepareImage, flattenLight, despeckle, refinePalette, removeSmallBlobs, NO_COLOR } from ${JSON.stringify(posix('apps/broccato/src/reduce.ts'))};
-export { traceRegions, pointInRegion, regionsAreaMm2 } from ${JSON.stringify(posix('apps/broccato/src/regions.ts'))};
 export { buildCoverGrid, routeColorRuns, CELL_COVERED, CELL_OWN, CELL_EDGE, CELL_BARE } from ${JSON.stringify(posix('apps/broccato/src/routing.ts'))};
 export { buildPlan } from ${JSON.stringify(posix('apps/broccato/src/pipeline.ts'))};
 export { sampleImage as sampleBroccatoImage } from ${JSON.stringify(posix('apps/broccato/src/sample.ts'))};
@@ -34,7 +33,7 @@ export { readPatternSvg, readEmbeddedConfig, measureConstruction, migrateLegacyN
 export { PATTERN_FIELD_NAMES, PATTERN_FIELD_KIND } from ${JSON.stringify(posix('apps/zone-pattern/src/fields.ts'))};
 export { parseSvgPolylines } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
 export { runPipeline as runStriaturaPipeline } from ${JSON.stringify(posix('apps/striatura/src/pipeline.ts'))};
-export { makeRegion, insideRegion, regionBounds, BoundaryIndex } from ${JSON.stringify(posix('apps/pittorico/src/region.ts'))};
+export { makeRegion, regionBounds, BoundaryIndex } from ${JSON.stringify(posix('apps/pittorico/src/region.ts'))};
 export { harmonicField, radialField, constantField, meanFieldAngleDeg } from ${JSON.stringify(posix('apps/pittorico/src/field.ts'))};
 export { buildCurvedFill, buildNaiveCurvedFill } from ${JSON.stringify(posix('apps/pittorico/src/curved-fill.ts'))};
 export { coverageStats, neighbourSpacing, containment } from ${JSON.stringify(posix('apps/pittorico/src/coverage.ts'))};
@@ -2355,6 +2354,62 @@ console.log('\noblique — routing + orchestratore (2d)');
   const dstZone = rg.dstFromExportLayers(piano.layers, { label: 'CANNAGE', metadata: { rgProject: 'zone-pattern' } });
   check('il DST esce coi due aghi e si riapre (R27/R31)',
     [String.fromCharCode(...dstZone.slice(0, 3)), rg.readDstMetadata(dstZone)?.rgProject], ['LA:', 'zone-pattern']);
+}
+
+// ---------------------------------------------------------------------------------------------
+// IL LUCCHETTO DI `traceRegions`, messo PRIMA di promuoverla nel core.
+//
+// La primitiva sta per spostarsi da `apps/broccato` a `@rg/core` (regola di crescita 1: il secondo
+// cliente adesso c'e', ed e' il Punto Pittorico). Uno spostamento a comportamento invariato si
+// dimostra, non si dichiara: queste asserzioni fissano cosa fa OGGI, su una maschera costruita
+// apposta per toccare i casi che contano — una macchia col foro, una macchia semplice, e due pixel
+// che si toccano solo per un angolo. Se dopo il trasloco un numero cambia, cambia qui.
+// ---------------------------------------------------------------------------------------------
+console.log('');
+console.log('traceRegions — il lucchetto prima della promozione nel core');
+const mascheraDiProva = () => {
+  const W = 40, H = 30, NO = 0xff;
+  const idx = new Uint8Array(W * H).fill(NO);
+  const riempi = (x0, y0, x1, y1, v) => {
+    for (let y = y0; y <= y1; y++) for (let x = x0; x <= x1; x++) idx[y * W + x] = v;
+  };
+  riempi(4, 4, 15, 15, 1);          // macchia grande
+  riempi(8, 8, 11, 11, NO);         // ...col suo foro
+  riempi(22, 4, 30, 10, 1);         // macchia semplice
+  idx[20 * W + 20] = 1;             // due pixel che si toccano SOLO per un angolo:
+  idx[21 * W + 21] = 1;             // a 4 vicini sono due macchie, e il filo li' non passa
+  riempi(4, 22, 10, 26, 2);         // un altro colore, che non deve entrarci
+  return { idx, W, H };
+};
+{
+  const { idx, W, H } = mascheraDiProva();
+  const regioni = rg.traceRegions(idx, W, H, 1, 0.5);
+  const aree = regioni.map((r) => Number(r.areaMm2.toFixed(4)));
+  check('le macchie del colore 1 sono quattro (i due pixel d\'angolo restano separati)', regioni.length, 4);
+  check('escono dalla piu\' grande alla piu\' piccola', aree, [32.5, 15.75, 0.25, 0.25]);
+  check('solo la prima ha un foro', regioni.map((r) => r.holes.length), [1, 0, 0, 0]);
+  check('l\'area totale non dipende dall\'ordine', Number(rg.regionsAreaMm2(regioni).toFixed(4)), 48.75);
+
+  // DIFETTO TROVATO SCRIVENDO IL LUCCHETTO, e per ora bloccato COM'E'.
+  // La macchia e' 12x12 px e il foro 4x4, cioe' 36 mm2 meno 4 = 32 netti. Ne escono 32,5: mezzo
+  // millimetro quadrato di foro sparito, il 12,5% del foro. La semplificazione di default
+  // (`mmPerPx * 1.2`, qui 0,6 mm) mangia un ANGOLO dell'anello — il foro passa da 6 punti a 5 e
+  // da 4,000 a 3,500 mm2; il contorno esterno, che e' grande, non ne risente (36,000 esatti).
+  // Colpisce quindi le FEATURE PICCOLE, e sui fori vuol dire ricamare dentro un vuoto (R5).
+  // Abbassando la tolleranza il foro torna quadrato: e' quello il numero da decidere, non il codice.
+  // Non si corregge qui: cambierebbe l'uscita di `broccato`, che e' live, e per R30 una divergenza
+  // numerica si decide col ricamo in mano. La strada giusta e' il punto 2b del Punto Pittorico —
+  // riconoscere la primitiva (qui: un quadrato) invece di semplificare la scalinata.
+  check('la semplificazione di default mangia un angolo del foro piccolo (32,5 invece di 32)', aree[0], 32.5);
+  check('...e a tolleranza fine il foro torna quadrato: e\' la tolleranza, non il tracciato',
+    Number(rg.traceRegions(idx, W, H, 1, 0.5, { simplifyMm: 0.2 })[0].areaMm2.toFixed(4)), 32);
+  check('un punto nel foro NON e\' nella regione (R5)', rg.pointInRegion({ x: 5, y: 5 }, regioni[0]), false);
+  check('...e uno nell\'anello si', rg.pointInRegion({ x: 3, y: 3 }, regioni[0]), true);
+  check('il colore 2 ha la sua macchia, e una sola', rg.traceRegions(idx, W, H, 2, 0.5).length, 1);
+  check('chiedere il NON-colore non produce regioni', rg.traceRegions(idx, W, H, 0xff, 0.5).length, 0);
+  check('l\'area minima butta via le schegge', rg.traceRegions(idx, W, H, 1, 0.5, { minAreaMm2: 1 }).length, 2);
+  check('e il risultato e\' deterministico',
+    JSON.stringify(rg.traceRegions(idx, W, H, 1, 0.5)) === JSON.stringify(regioni), true);
 }
 
 // ---------------------------------------------------------------------------------------------

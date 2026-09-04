@@ -3,7 +3,7 @@
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
 > Aggiornato: 2026-09-04 · Suite con **otto tool live** + il nono (`pittorico`) fermo al prototipo headless — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
-> Rete di sicurezza: `npm test` (535 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
+> Rete di sicurezza: `npm test` (547 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
 
 ---
 
@@ -30,7 +30,7 @@
 - **Conteggio punti nella statusbar.** Accanto alla dimensione (`W × H mm`) la barra di stato mostra il **numero di punti effettivamente cuciti** (`… · 1.234 punti`, formato italiano), aggiornato a ogni rigenerazione dell'anteprima. Il valore è `pointCount.exported` (= `final.points.length`) letto dai metadati già incorporati nell'SVG — nessuna doppia generazione, nessuna modifica al motore. Statusbar allineata all'esempio DS (`esito · conteggio` a sinistra, vista a destra), solo classi v1.6.0 (`rg-mono`).
 
 **Tool `pittorico` (Punto Pittorico) — PROTOTIPO HEADLESS, non ancora un tool:**
-- **Cos'è e a che punto è.** Il nono strumento (briefing: [`AVVIO-PUNTO-PITTORICO.md`](AVVIO-PUNTO-PITTORICO.md)). Del piano in cinque punti è fatto **il punto 1**: il riempimento curvo esiste, gira headless, e **la misura che decide c'è**. Non c'è interfaccia, non c'è `mount()`, non c'è card nella home (arrivano al punto 5): sono quattro moduli in `apps/pittorico/src` (`region`, `field`, `curved-fill`, `coverage`) più le regioni di prova, e due script in `apps/pittorico/scripts` (`misura`, `taratura`). Si eseguono con esbuild + node; il comando è scritto in testa a ciascuno.
+- **Cos'è e a che punto è.** Il nono strumento (briefing: [`AVVIO-PUNTO-PITTORICO.md`](AVVIO-PUNTO-PITTORICO.md)). Del piano in cinque punti è fatto **il punto 1** e **metà del 2** (la promozione di `traceRegions` nel core; resta il riconoscimento delle primitive). Il riempimento curvo esiste, gira headless, e **la misura che decide c'è**. Non c'è interfaccia, non c'è `mount()`, non c'è card nella home (arrivano al punto 5): sono quattro moduli in `apps/pittorico/src` (`region`, `field`, `curved-fill`, `coverage`) più le regioni di prova, e due script in `apps/pittorico/scripts` (`misura`, `taratura`). Si eseguono con esbuild + node; il comando è scritto in testa a ciascuno.
 - **La misura che decide, e come va.** Su tre regioni di prova, a passo 0,4 mm, si riempie tre volte e si confronta la **dispersione della copertura** (filo per mm² cella per cella, celle da 2 mm, bordi esclusi):
 
   | regione | A rettilineo (core) | B curvo ingenuo | C curvo a distanza costante |
@@ -46,6 +46,9 @@
 - **Un secondo difetto, dello stesso genere.** A `seedRatio` 1,0 il ventaglio **si svuota**: 13 file invece di 404, il 4% del filo. Il seme nasce a esattamente `d_sep` dalla fila madre e il confronto con la madre stessa lo rifiuta, quindi in un campo che diverge non nasce più niente — e il riempimento esce lo stesso, è solo vuoto. Bloccato da un test.
 - **Cosa c'è dentro.** Il campo di direzione automatico è **armonico** e lavora sull'angolo raddoppiato (cos2θ, sin2θ), perché è un campo di *direzioni* e non di vettori — 179° e −179° sono quasi la stessa direzione ma la loro media vettoriale è zero. La tangente è fissata sul bordo e dentro si risolve per il più liscio possibile, a cascata da una griglia grossolana a una fine (45 ms su una regione da 2.600 mm²; senza la cascata servirebbero decine di migliaia di passate). Il riempimento è Jobard & Lefer integrato con Runge-Kutta 4. I campi radiale/concentrico/costante ci sono come termine di paragone controllato.
 - **Il residuo, e a che scala vive.** La dispersione del curvo scende allargando la cella di misura — banda 17,4% (1 mm) → 10,3% (2) → 6,9% (4) → 5,0% (8): è **grana**, e il filo la nasconde. Il ventaglio no: 17,9 → 14,3 → 12,1 → **8,6%**, cioè una variazione che vive anche alla scala della macchia. Guardandolo si capisce perché: **anelli concentrici**, dove tutte le file nascono allo stesso raggio insieme. Provato a scucirli con un disturbo sulla soglia di arresto: i numeri miglioravano (14,3 → 12,4% a celle da 2 mm, 8,6 → 6,9% a celle da 8 mm) ma **guardandolo è peggio** — l'anello diventa una fascia frastagliata. La strada resta nel codice spenta (`jitterRatio`, default 0) con la sua misura accanto, perché la prossima volta che verrà in mente si sappia già com'è andata.
+- **Punto 2a — `traceRegions` è nel core** (`packages/core/src/regions.ts`), promossa da `apps/broccato` perché il secondo cliente si è presentato (regola di crescita 1). Fatto nell'ordine giusto: **prima il lucchetto**, poi il trasloco. Le 12 asserzioni nuove fissano il comportamento su una maschera costruita apposta — macchia col foro, macchia semplice, due pixel che si toccano solo per un angolo (a 4 vicini restano due macchie: il filo lì non passa) — e sono passate identiche prima e dopo. Anche il prototipo dà **gli stessi numeri al decimale** dopo lo spostamento. Nello stesso passo il Punto Pittorico ha smesso di tenersi una copia del tipo `Region` e della domanda «questo punto è dentro?»: ora usa `pointInRegion` del core (era R28 in attesa di succedere).
+- **Difetto trovato scrivendo il lucchetto, e bloccato com'è: la semplificazione si mangia un angolo dei fori piccoli.** Una macchia da 12×12 px con un foro da 4×4, a 0,5 mm/px, dovrebbe dare 36 − 4 = **32 mm²** netti. Ne dà **32,5**: mezzo mm² di foro sparito, il **12,5% del foro**. La tolleranza di default (`mmPerPx · 1,2`, qui 0,6 mm) toglie un vertice all'anello — il foro passa da 6 punti a 5 e da 4,000 a 3,500 mm²; il contorno esterno, che è grande, resta esatto (36,000). Colpisce quindi le **feature piccole**, e su un foro vuol dire ricamare dentro un vuoto (R5). Non l'ho corretto: cambierebbe l'uscita di `broccato`, che è live, e per R30 una divergenza numerica si decide col ricamo in mano. Abbassando la tolleranza a 0,2 il foro torna quadrato — **è la tolleranza, non il tracciato**. La strada giusta è il punto 2b: riconoscere la primitiva invece di semplificare la scalinata.
+- **Chiusa nel frattempo una divergenza R28 in miniatura:** `NO_COLOR = 0xff` era scritto a mano dentro `mapToPalette` (core) e ridefinito in `apps/broccato/src/reduce.ts` — stesso concetto, due posti, nessun modo di accorgersi se uno cambiava. Ora è una costante sola, nel core, dove le mappe di indici nascono. Trovata confrontando le primitive al momento della migrazione (regola di crescita 6).
 - **Da guardare** (si rigenerano con `misura.ts`, non sono committati): `apps/pittorico/scripts/out/*.svg` — i tre riempimenti a confronto per regione, e il solo curvo a parte.
 
 **Tool `zone-pattern` (Pattern a zone) — NUOVO, funzionante end-to-end:**
@@ -354,7 +357,7 @@
 ## 2. STATO
 
 **Sei tool in piedi, e adesso ognuno ha le sue invarianti scritte. Il settimo, `broccato`, è partito.**
-Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (535 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
+Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (547 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
 
 **La copertura dei test non era un adempimento: ha trovato cinque difetti veri**, ognuno dei quali violava una regola della Costituzione già scritta e mai verificata — i passaggi di net-45 che attraversavano i vuoti (R5), il punto minimo mai applicato in striatura (R3), `insetPolygon` che rientrava del 30% in meno, il punto massimo di pattern-grammar che lasciava passare segmenti quasi doppi (R4), l'importer che esplodeva sul file vero da 2MB. Tutti corretti, tutti bloccati da un test che fallisce se tornano.
 
@@ -415,7 +418,7 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 
 | # | Cosa | Stato |
 |---|---|---|
-| **N1** *(punto 1 di 5: **fatto**)* | **"Punto Pittorico", il nono tool** — da un'immagine, riempimenti pieni che seguono le curve del disegno: degradé col frastaglio dei bordi dove il colore sfuma, taglio secco dove stacca. Progettato con Lorenzo il 2026-09-04. | **Il prototipo headless sta in piedi ed è misurato** (blocco `pittorico` in §1): dispersione della copertura 9,7–14,3% contro il 3,9–5,1% del raso rettilineo e il 71–98% del metodo ingenuo. Tarato `d_test` a 0,55 (a 0,50 usciva il 6% di filo in più del chiesto) e trovato che **su una curva il punto massimo e la densità non sono indipendenti**. Restano il punto 2 (`traceRegions` nel core + primitive), 3 (campo e guide da SVG), 4 (bordi, frange, sovrapposizione 5 mm), 5 (pipeline, export, pannello). |
+| **N1** *(punto 1 fatto, punto 2 a meta')* | **"Punto Pittorico", il nono tool** — da un'immagine, riempimenti pieni che seguono le curve del disegno: degradé col frastaglio dei bordi dove il colore sfuma, taglio secco dove stacca. Progettato con Lorenzo il 2026-09-04. | **Il prototipo headless sta in piedi ed è misurato** (blocco `pittorico` in §1): dispersione della copertura 9,7–14,3% contro il 3,9–5,1% del raso rettilineo e il 71–98% del metodo ingenuo. Tarato `d_test` a 0,55 (a 0,50 usciva il 6% di filo in più del chiesto) e trovato che **su una curva il punto massimo e la densità non sono indipendenti**. `traceRegions` e' nel core (punto 2a, col lucchetto scritto prima del trasloco). Restano il **2b** (riconoscimento di cerchi, archi e segmenti sul contorno), il 3 (campo e guide da SVG), il 4 (bordi, frange, sovrapposizione 5 mm), il 5 (pipeline, export, pannello). |
 
 ### Fuori lista (fatto, o non nostro)
 
@@ -514,13 +517,17 @@ Il **satellite Python** `bitmap_to_stitch` (laboratorio DST/recipe/library con A
 
 ## 5. PROSSIMA SINGOLA MOSSA
 
-**→ Punto 2 del Punto Pittorico: `traceRegions` nel core, e le forme nette.** Il punto 1 ha risposto sì
-(§1, blocco `pittorico`), quindi il tool si può costruire. Il punto 2 promuove `traceRegions` da
-`apps/broccato` a `@rg/core` — il secondo cliente adesso c'è, è la regola di crescita 1, e va fatto a
-comportamento invariato con un test a lucchetto — e aggiunge il riconoscimento delle primitive
-(cerchio, arco, segmento) sul contorno tracciato. Serve a due cose insieme: un cerchio dell'immagine
-deve tornare un cerchio e non un poligono a gradini, e **se il bordo è un cerchio vero anche il campo
-di direzione diventa esatto** invece che ballerino.
+**→ Punto 2b del Punto Pittorico: le forme nette.** Il 2a è chiuso (`traceRegions` è nel core, col
+lucchetto scritto prima del trasloco). Resta il riconoscimento delle primitive — cerchio, arco,
+segmento — sul contorno tracciato, entro una tolleranza in mm. Serve a **tre** cose, non a una: un
+cerchio dell'immagine deve tornare un cerchio e non un poligono a gradini; se il bordo è un cerchio
+vero **anche il campo di direzione diventa esatto** invece che ballerino sui gradini dei pixel; ed è
+la risposta pulita al foro che perde un angolo (vedi il blocco `pittorico` in §1) — riconoscere la
+forma invece di semplificare la scalinata.
+
+*Serve un file di Lorenzo per tarare la tolleranza:* ha detto di avere l'**immagine raster**. Sulla
+sua scalinata vera il numero si misura; su forme sintetiche si indovinerebbe, che è ciò che R30
+vieta. Nel frattempo la taratura si può impostare su cerchi rasterizzati a verità nota.
 
 *Due cose imparate col punto 1 che vanno dette prima di scrivere altro codice:* (a) il punto massimo
 e la densità **non sono indipendenti su una curva** — è materiale da Costituzione, e nessuna regola

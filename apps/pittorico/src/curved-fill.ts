@@ -16,8 +16,8 @@
 // collega (è routing), non impone il punto minimo (R3, dopo il routing). Quello che aggiunge
 // rispetto al raso è che le corse non sono più righe di una griglia: sono linee di flusso.
 
-import { type Point, type Polyline, segmentPolygonIntersections } from '@rg/core';
-import { type Region, regionRings, insideRegion, regionBounds } from './region';
+import { type Point, type Polyline, segmentPolygonIntersections, pointInRegion } from '@rg/core';
+import { type Region, regionRings, regionBounds } from './region';
 import { type DirectionField } from './field';
 
 export interface CurvedFillOptions {
@@ -263,7 +263,7 @@ function march(
     // alla prima soglia alta capitata, e la densità media si sposterebbe
     const dStop = jitter > 0 ? dTest + jitter * (disturbo(next.x, next.y, jitter * 10) - 0.5) : dTest;
 
-    if (!insideRegion(next, region)) {
+    if (!pointInRegion(next, region)) {
       // Il capo si posa SUL bordo — ma anche il capo è filo, e va misurato come il resto.
       // Senza questo controllo due file possono finire a 0,004 mm l'una dall'altra: due punti nello
       // stesso buco, che è accumulo (R20) e si vede. Misurato prima del controllo: il 19-21% dei
@@ -298,11 +298,11 @@ const lunghezza = (line: Polyline): number => {
 function primoPuntoDentro(region: Region): Point | null {
   const bb = regionBounds(region);
   const cx = (bb.minX + bb.maxX) / 2, cy = (bb.minY + bb.maxY) / 2;
-  if (insideRegion({ x: cx, y: cy }, region)) return { x: cx, y: cy };
+  if (pointInRegion({ x: cx, y: cy }, region)) return { x: cx, y: cy };
   const passo = Math.max((bb.maxX - bb.minX), (bb.maxY - bb.minY)) / 200;
   for (let y = bb.minY; y <= bb.maxY; y += passo) {
     for (let x = bb.minX; x <= bb.maxX; x += passo) {
-      if (insideRegion({ x, y }, region)) return { x, y };
+      if (pointInRegion({ x, y }, region)) return { x, y };
     }
   }
   return null;
@@ -341,7 +341,7 @@ export function buildCurvedFill(
   while (coda.length && runs.length < maxRuns) {
     const seme = coda.shift() as Point;
     seedsTried++;
-    if (!insideRegion(seme, region)) continue;
+    if (!pointInRegion(seme, region)) continue;
     if (accepted.anyWithin(seme.x, seme.y, dTest)) continue;
 
     const current = new PointGrid(Math.max(dSep, 0.2));
@@ -366,7 +366,7 @@ export function buildCurvedFill(
       const nx = -(b.y - a.y) / seg, ny = (b.x - a.x) / seg;
       for (const lato of [1, -1]) {
         const c = { x: b.x + nx * dSep * lato, y: b.y + ny * dSep * lato };
-        if (!insideRegion(c, region)) continue;
+        if (!pointInRegion(c, region)) continue;
         if (accepted.anyWithin(c.x, c.y, dSep * seedRatio)) continue;
         coda.push(c);
       }
@@ -412,7 +412,7 @@ export function buildNaiveCurvedFill(
   for (let k = -passi; k <= passi; k++) {
     const seme = { x: centro.x + nx * dSep * k, y: centro.y + ny * dSep * k };
     seedsTried++;
-    if (!insideRegion(seme, region)) continue;
+    if (!pointInRegion(seme, region)) continue;
     const current = new PointGrid(Math.max(dSep, 0.2));
     const avanti = march(region, field, seme, 1, vuota, current, step, 0, 0, 0, maxSteps);
     const indietro = march(region, field, seme, -1, vuota, current, step, 0, 0, 0, maxSteps);
