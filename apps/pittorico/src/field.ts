@@ -7,10 +7,23 @@
 // si dimezza. È la rappresentazione standard dei line field, ed è ciò che permette al campo di
 // girare attorno a una forma senza ribaltarsi.
 //
-// Il campo AUTOMATICO è **armonico**: la direzione è fissata sul bordo (tangente al contorno) e
-// dentro si risolve per il campo più liscio possibile — cioè si media coi vicini finché non si
-// assesta. Fuori dalla regione il campo resta congelato sulla tangente del bordo più vicino, così
-// campionarlo mentre una fila esce dalla forma non produce salti.
+// Il campo AUTOMATICO è **armonico**: la direzione è fissata sul bordo e dentro si risolve per il
+// campo più liscio possibile — cioè si media coi vicini finché non si assesta. Fuori dalla regione
+// il campo resta congelato su quella del bordo più vicino, così campionarlo mentre una fila esce
+// dalla forma non produce salti.
+//
+// **Sul bordo si fissa la PERPENDICOLARE, non la tangente** — ed è la correzione di un errore mio,
+// segnalato da Lorenzo guardando l'anteprima: *«vorrei che fosse chiaro... l'effetto da ottenere è
+// con le trame che si muovono proprio come l'arco sfrangiato, io ora vedo delle linee orizzontali»*.
+// Aveva ragione, e il briefing lo diceva già: nelle sue fotografie di ricamo pittorico i punti sono
+// **perpendicolari al passaggio di colore**, a ventaglio lungo la curva, coi capi sfrangiati. Col
+// punto tangente al contorno il filo corre *lungo* la fascia; col punto perpendicolare la
+// attraversa come i denti di un pettine — e allora sono i capi delle file a fare la frangia, che è
+// il modo in cui il degradé nasce (decisione 1 di Lorenzo).
+//
+// In pratica costa niente: mettere la perpendicolare invece della tangente vuol dire negare (a,b)
+// sul bordo, e siccome il solutore è lineare la soluzione è **lo stesso campo ruotato di 90°**. Il
+// codice però dice la perpendicolare, perché è quello che si vuole.
 //
 // Perché a cascata dal grossolano al fine: mediare coi vicini propaga l'informazione di una cella
 // per passata, quindi su una griglia larga 200 celle servirebbero decine di migliaia di passate.
@@ -26,7 +39,18 @@ export interface DirectionField {
   dirAt(p: Point): Point;
 }
 
+/**
+ * Come si posa il punto sul bordo della regione.
+ * - `perpendicolare` — il punto **attraversa** il bordo. È il punto pittorico delle fotografie di
+ *   Lorenzo, ed è il default: i capi delle file cadono sul passaggio di colore e fanno la frangia.
+ * - `tangente` — il punto **costeggia** il bordo. È il riempimento a contorni concentrici (il
+ *   *contour fill* di Ink/Stitch), un'altra resa: serve dove il disegno va seguito, non attraversato.
+ */
+export type CondizioneAlBordo = 'perpendicolare' | 'tangente';
+
 export interface HarmonicFieldOptions {
+  /** Default `perpendicolare`: è la resa che Lorenzo ha chiesto. */
+  condizioneAlBordo?: CondizioneAlBordo;
   /** Lato della cella della griglia più fine, in mm. Default 1. */
   cellMm?: number;
   /** Quante griglie a cascata (la più grossolana ha cella `cellMm · 2^(levels-1)`). Default 4. */
@@ -48,7 +72,9 @@ export interface HarmonicField extends DirectionField {
   grid: Grid;
 }
 
-function buildGrid(region: Region, index: BoundaryIndex, cellMm: number, bandMm: number): Grid {
+function buildGrid(
+  region: Region, index: BoundaryIndex, cellMm: number, bandMm: number, condizione: CondizioneAlBordo,
+): Grid {
   const bb = regionBounds(region);
   const margin = cellMm * 2 + bandMm;
   const ox = bb.minX - margin, oy = bb.minY - margin;
@@ -65,9 +91,11 @@ function buildGrid(region: Region, index: BoundaryIndex, cellMm: number, bandMm:
       const k = j * nx + i;
       const ins = pointInRegion(p, region);
       const nb = index.nearest(p);
+      // la perpendicolare è la tangente più 90°, che sull'angolo raddoppiato è un segno meno
       const th = Math.atan2(nb.tangent.y, nb.tangent.x);
-      g.a[k] = Math.cos(2 * th);
-      g.b[k] = Math.sin(2 * th);
+      const verso = condizione === 'perpendicolare' ? -1 : 1;
+      g.a[k] = verso * Math.cos(2 * th);
+      g.b[k] = verso * Math.sin(2 * th);
       g.inside[k] = ins ? 1 : 0;
       // il bordo COMANDA: fuori, e in una fascia dentro, la direzione è quella del contorno
       g.fixed[k] = !ins || nb.distMm <= bandMm ? 1 : 0;
@@ -127,7 +155,7 @@ function relax(g: Grid, sweeps: number, tol: number): number {
 }
 
 /**
- * Il campo armonico della forma: tangente sul bordo, il più liscio possibile dentro.
+ * Il campo armonico della forma: perpendicolare al bordo, il più liscio possibile dentro.
  *
  * È il livello 1 dei tre di §4.1 — quello che «prova a capire da solo». I livelli 2 (gradiente
  * dell'immagine) e 3 (linee guida disegnate) si innestano qui cambiando le condizioni al bordo,
@@ -139,12 +167,14 @@ export function harmonicField(region: Region, opts: HarmonicFieldOptions = {}): 
   const sweeps = Math.max(1, Math.round(opts.sweeps ?? 300));
   const tol = opts.tol ?? 1e-5;
 
+  const condizione: CondizioneAlBordo = opts.condizioneAlBordo ?? 'perpendicolare';
+
   const index = new BoundaryIndex(regionRings(region), Math.max(2, cellMm * 4));
   const sweepsUsed: number[] = [];
   let grid: Grid | null = null;
   for (let l = levels - 1; l >= 0; l--) {
     const c = cellMm * Math.pow(2, l);
-    const g = buildGrid(region, index, c, c * 1.2);
+    const g = buildGrid(region, index, c, c * 1.2, condizione);
     if (grid) seedFromCoarse(g, grid);
     sweepsUsed.push(relax(g, sweeps, tol));
     grid = g;
@@ -156,7 +186,10 @@ export function harmonicField(region: Region, opts: HarmonicFieldOptions = {}): 
     grid: finale,
     dirAt(p: Point): Point {
       const [a, b] = sampleAB(finale, p);
-      if (Math.hypot(a, b) < 1e-9) return index.nearest(p).tangent;   // singolarità: si ripiega sul bordo
+      if (Math.hypot(a, b) < 1e-9) {
+        const t = index.nearest(p).tangent;                          // singolarità: si ripiega sul bordo
+        return condizione === 'perpendicolare' ? { x: -t.y, y: t.x } : t;
+      }
       const th = Math.atan2(b, a) / 2;
       return { x: Math.cos(th), y: Math.sin(th) };
     },

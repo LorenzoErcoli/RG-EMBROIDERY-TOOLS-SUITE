@@ -375,9 +375,14 @@ const pagina = `<title>Banco del Punto Pittorico</title>
     <span class="stato si">fatto e misurato</span>
     <h2>In che verso corre il punto, guardato prima di cucire</h2>
     <p>Il campo di direzione decide l'orientamento del punto in ogni millimetro del disegno: si fissa
-    sul bordo — dove il punto deve seguire il contorno — e si risolve verso l'interno cercando il verso
-    più liscio possibile. Qui sotto è il tuo disegno con le linee di flusso disegnate sopra: è quello
-    che l'ago farebbe, guardato prima che tocchi il tessuto.</p>
+    sul bordo e si risolve verso l'interno cercando il verso più liscio possibile. Qui sotto è il tuo
+    disegno con le linee di flusso disegnate sopra: è quello che l'ago farebbe, guardato prima che
+    tocchi il tessuto.</p>
+    <p><strong>Sul bordo il punto si posa perpendicolare, non parallelo</strong> — attraversa il
+    passaggio di colore come i denti di un pettine, a ventaglio lungo la curva. È la resa delle
+    fotografie di ricamo pittorico, ed è quella che fa la frangia: sono i capi delle file, non una
+    texture, a costruire il degradé. La prima versione aveva il punto tangente al contorno, quindi il
+    filo correva <em>lungo</em> la fascia invece che attraverso: sbagliato, e corretto.</p>
 
     <figure>
       <div class="lastra">${svgInline('cianotipia-campo.svg')}</div>
@@ -394,19 +399,18 @@ const pagina = `<title>Banco del Punto Pittorico</title>
     rotazione grande su tratto corto.</p>
     <div class="tabella">
       <table>
-        <thead><tr><th>com'è il contorno</th><th>punti</th><th>gira (metà dei casi)</th><th>nel 5% peggiore</th><th>scarto dal bordo</th></tr></thead>
+        <thead><tr><th>com'è il contorno</th><th>punti</th><th>gira (metà dei casi)</th><th>nel 5% peggiore</th><th>scarto dalla perpendicolare</th></tr></thead>
         <tbody>
-          <tr><td>scalinata, come letta dai pixel</td><td>2.420</td><td>2,02 °/mm</td><td>46,3</td><td>38,3°</td></tr>
-          <tr><td>semplificata</td><td>991</td><td>1,85 °/mm</td><td>41,8</td><td>23,7°</td></tr>
-          <tr class="chiave"><td>con le forme riconosciute</td><td>554</td><td>1,39 °/mm</td><td>26,3</td><td>14,9°</td></tr>
+          <tr><td>scalinata, come letta dai pixel</td><td>2.420</td><td>2,28 °/mm</td><td>21,1</td><td>38,3°</td></tr>
+          <tr><td>semplificata</td><td>991</td><td>2,26 °/mm</td><td>19,3</td><td>23,7°</td></tr>
+          <tr class="chiave"><td>con le forme riconosciute</td><td>554</td><td>2,02 °/mm</td><td>16,8</td><td>14,9°</td></tr>
         </tbody>
       </table>
     </div>
     <p class="nota">È la prova che il lavoro sulle forme nette serviva a qualcosa di più del bordo: il
-    campo <strong>nasce dalla tangente al contorno</strong>, e su una scalinata la tangente salta di 90°
-    a ogni gradino. Riconoscere le forme dimezza lo sfarfallio e taglia di due terzi lo scarto dal bordo.
-    Metà dei punti gira 1,4 °/mm, che è esattamente quanto gira il disegno; resta una coda del 5% che è
-    lavoro da fare.</p>
+    campo <strong>nasce dalla direzione del contorno</strong>, e su una scalinata quella direzione salta
+    di 90° a ogni gradino. Riconoscere le forme taglia lo sfarfallio di un quinto e lo scarto dalla
+    perpendicolare di due terzi. Resta una coda del 5% che è lavoro da fare.</p>
   </div>
 </section>
 
@@ -415,10 +419,10 @@ const pagina = `<title>Banco del Punto Pittorico</title>
   <div class="corpo">
     <span class="stato si">fatto e misurato</span>
     <h2>I bordi: il degradé dove il colore sfuma, il taglio secco dove stacca</h2>
-    <p>Qui sotto, un ritaglio da 70 mm del tuo disegno cucito davvero: passo 0,4 mm, 16 metri di filo
-    su 49 cm². I capi delle file <strong>si ritirano di quantità diverse e si intrecciano</strong> con
-    quelli della tinta accanto — è il degradé fatto col frastaglio del bordo, come avevi detto tu, e
-    non con una texture.</p>
+    <p>Qui sotto, un ritaglio da 70 mm del tuo disegno cucito davvero: passo 0,4 mm, 10 metri di filo
+    su 49 cm². I punti <strong>attraversano</strong> il passaggio di colore e i loro capi
+    <strong>si ritirano di quantità diverse e si intrecciano</strong> con quelli della tinta accanto —
+    è il degradé fatto col frastaglio del bordo, come avevi detto tu, e non con una texture.</p>
 
     <figure>
       <div class="lastra">${svgInline('cianotipia-degrade.svg')}</div>

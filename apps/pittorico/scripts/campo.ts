@@ -91,7 +91,7 @@ function curvatura(linee: Polyline[]): Curvatura {
 }
 
 /**
- * Quanto il campo si discosta dalla tangente del bordo, un passo DENTRO il bordo.
+ * Quanto il campo si discosta dalla PERPENDICOLARE al bordo, un passo dentro il bordo.
  *
  * Prima versione sbagliata, e vale la pena scriverlo: campionavo da tutt'e due i lati e poi
  * dividevo per due, cioè mescolavo punti dentro la regione con punti fuori — dove il campo è
@@ -112,7 +112,11 @@ function fedeltaAlBordo(region: Region, field: DirectionField, passoMm: number):
       if (!pointInRegion(p, region)) continue;
       const d = field.dirAt(p);
       const cos = Math.abs((d.x * t.x + d.y * t.y) / len);
-      somma += (Math.acos(Math.min(1, cos)) * 180) / Math.PI;
+      const dallaTangente = (Math.acos(Math.min(1, cos)) * 180) / Math.PI;
+      // il campo deve stare PERPENDICOLARE al bordo (è la resa chiesta da Lorenzo), quindi lo
+      // scarto si misura da 90° e non da 0. Misurarlo dalla tangente, dopo il cambio, dava numeri
+      // che sembravano un peggioramento e invece erano il contrario.
+      somma += Math.abs(90 - dallaTangente);
       n++;
     }
   }
@@ -198,8 +202,8 @@ console.log('   disegno, perché quello che eccede è sfarfallio del contorno ar
 
 console.log('');
 console.log('2. IL CONTORNO CONTA: scalinata, semplificato, riconosciuto');
-console.log('   il campo nasce dalla TANGENTE al bordo, e su una scalinata la tangente salta di 90°');
-console.log('   a ogni gradino. Stessa zona, tre contorni diversi, stesso solutore:');
+console.log('   il campo nasce dal BORDO — ci si posa perpendicolare — e su una scalinata la');
+console.log('   direzione del bordo salta di 90° a ogni gradino. Stessa zona, tre contorni:');
 console.log(`   ${'contorno'.padEnd(26)} ${'punti'.padStart(6)} ${'campo ms'.padStart(9)} ${'gira °/mm p50'.padStart(13)} ${'p95'.padStart(7)} ${'max'.padStart(7)} ${'bordo °'.padStart(8)}`);
 {
   const grande = zone[0];
