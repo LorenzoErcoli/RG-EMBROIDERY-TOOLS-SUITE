@@ -21,7 +21,7 @@ settori (sfumature morbide **e** tagli geometrici netti nella stessa immagine), 
 ricamo pittorico dove i punti sono **perpendicolari al passaggio di colore**, a ventaglio lungo la
 curva, coi capi sfrangiati.
 
-**Nome proposto:** *Punto Pittorico*, id `pittorico`. Da confermare con Lorenzo.
+**Nome:** *Punto Pittorico*, id `pittorico`. **Confermato da Lorenzo il 2026-09-04.**
 
 ---
 

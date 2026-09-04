@@ -15,3 +15,7 @@ test/.build/
 # preset ESPORTATI dall'utente (preset-<nome>.json): sono download, non sorgenti.
 # La libreria condivisa vera è presets.shared.json (tracciata), qui NON matchata.
 apps/pattern-grammar/src/preset-*.json
+apps/shell/cannage-zone.svg
+
+# artefatti delle misure del prototipo (gli .svg si rigenerano con lo script)
+apps/*/scripts/out/

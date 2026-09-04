@@ -1,9 +1,9 @@
 # STATO — RG Embroidery Tools Suite
 
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
-> Aggiornato: 2026-09-03 · Suite con **otto tool live** — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
+> Aggiornato: 2026-09-04 · Suite con **otto tool live** + il nono (`pittorico`) fermo al prototipo headless — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
-> Rete di sicurezza: `npm test` (372 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
+> Rete di sicurezza: `npm test` (535 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
 
 ---
 
@@ -28,6 +28,25 @@
 - **Import DXF/SVG** del contorno con modalità di scala (auto / Illustrator 72dpi / ViewBox=mm / dimensione custom) e scelta per colore/layer.
 - Stessa ergonomia di net-45: guscio `rg-workspace`, anteprima con pan/zoom, export SVG.
 - **Conteggio punti nella statusbar.** Accanto alla dimensione (`W × H mm`) la barra di stato mostra il **numero di punti effettivamente cuciti** (`… · 1.234 punti`, formato italiano), aggiornato a ogni rigenerazione dell'anteprima. Il valore è `pointCount.exported` (= `final.points.length`) letto dai metadati già incorporati nell'SVG — nessuna doppia generazione, nessuna modifica al motore. Statusbar allineata all'esempio DS (`esito · conteggio` a sinistra, vista a destra), solo classi v1.6.0 (`rg-mono`).
+
+**Tool `pittorico` (Punto Pittorico) — PROTOTIPO HEADLESS, non ancora un tool:**
+- **Cos'è e a che punto è.** Il nono strumento (briefing: [`AVVIO-PUNTO-PITTORICO.md`](AVVIO-PUNTO-PITTORICO.md)). Del piano in cinque punti è fatto **il punto 1**: il riempimento curvo esiste, gira headless, e **la misura che decide c'è**. Non c'è interfaccia, non c'è `mount()`, non c'è card nella home (arrivano al punto 5): sono quattro moduli in `apps/pittorico/src` (`region`, `field`, `curved-fill`, `coverage`) più le regioni di prova, e due script in `apps/pittorico/scripts` (`misura`, `taratura`). Si eseguono con esbuild + node; il comando è scritto in testa a ciascuno.
+- **La misura che decide, e come va.** Su tre regioni di prova, a passo 0,4 mm, si riempie tre volte e si confronta la **dispersione della copertura** (filo per mm² cella per cella, celle da 2 mm, bordi esclusi):
+
+  | regione | A rettilineo (core) | B curvo ingenuo | C curvo a distanza costante |
+  |---|---|---|---|
+  | banda curva | 5,1% | 79,1% | **10,3%** |
+  | banda curva col vuoto | 5,0% | 98,5% | **9,7%** |
+  | ventaglio (le file divergono di 3,9 volte) | 3,9% | 71,0% | **14,3%** |
+
+  Il rettilineo è il termine di paragone: lì il passo è costante *per costruzione*, quindi il suo 4-5% è il rumore di fondo dello strumento di misura, non un difetto. **Il metodo vale un fattore 5-20** contro il "seminare le file e lasciarle correre" — che è il `copy` di Ink/Stitch, e sul ventaglio dava una densità che va da 0 a 2,5 volte quella chiesta. La risposta al punto 1 è **sì, sta in piedi**, col numero scritto accanto: il curvo sta fra 2 e 3,7 volte il rettilineo, e sotto il 16%.
+- **Il metro è tarato, e si vede da un test:** sul raso rettilineo del core la distanza misurata fra file vicine dà **0,400–0,400** e zero punti fuori dalla regione. Ci sono voluti due tentativi: la prima versione misurava la distanza **punto a punto** e dava 0,40–0,90 anche sul raso perfetto, perché col punto massimo a 3 mm due file parallele a 0,4 mm hanno punti che distano fino a 1,5 mm *lungo* la fila. Si misura dal punto al **segmento**.
+- **`d_sep` non è il passo che esce, e l'ha detto la misura.** Jobard & Lefer fermano una fila quando si avvicina a `0,5 · d_sep` da un'altra — ma il loro problema era *guardare* un campo vettoriale. Qui quel numero **è la densità consegnata**: misurato, il filo per mm² rispetto a quello chiesto vale 1,22–1,27 a 0,40, **1,05–1,08 a 0,50** (cioè il 6% di filo in più del chiesto, sistematico, non rumore), 0,94–0,97 a 0,60, 0,80–0,82 a 0,80. Passa per 1,00 a **0,55**, e ci passa uguale in tutte e tre le regioni (0,99–1,03). È il default adesso, ed è un contratto: `densitySpacingMm` (R22) dice quanto filo esce.
+- **Il difetto vero trovato misurando: il punto-ago è una CORDA, e su una curva taglia dentro.** Senza suddividere in punti, la regola della distanza tiene esatta — passo minimo 0,44–0,55 volte quello chiesto, **zero** punti sotto mezzo passo. Applicando la sola R4 a 3 mm il minimo **crollava a 0,004 mm**: il punto si posava *sulla fila vicina*, cioè due punti nello stesso buco — accumulo (R20) e la densità appena garantita che salta. Non è un caso limite: a 1 mm ci finisce lo 0,07% dei punti, a 2 mm lo 0,84%, a 3 mm il 3,4%, a 5 mm il 10,3%. **Su un riempimento curvo il punto massimo e la densità non sono indipendenti**, e la Costituzione questo non lo dice ancora. Corretto con un tetto allo scostamento della corda dalla curva (`maxSagittaMm`, default `d_sep/8` scelto misurando): il minimo torna a 0,41 del passo e i punti sotto mezzo passo scendono all'1,7%, al prezzo del 3% di punti in più. Il ventaglio non se ne accorgeva — le sue file sono dritte: il difetto è **della curva**.
+- **Un secondo difetto, dello stesso genere.** A `seedRatio` 1,0 il ventaglio **si svuota**: 13 file invece di 404, il 4% del filo. Il seme nasce a esattamente `d_sep` dalla fila madre e il confronto con la madre stessa lo rifiuta, quindi in un campo che diverge non nasce più niente — e il riempimento esce lo stesso, è solo vuoto. Bloccato da un test.
+- **Cosa c'è dentro.** Il campo di direzione automatico è **armonico** e lavora sull'angolo raddoppiato (cos2θ, sin2θ), perché è un campo di *direzioni* e non di vettori — 179° e −179° sono quasi la stessa direzione ma la loro media vettoriale è zero. La tangente è fissata sul bordo e dentro si risolve per il più liscio possibile, a cascata da una griglia grossolana a una fine (45 ms su una regione da 2.600 mm²; senza la cascata servirebbero decine di migliaia di passate). Il riempimento è Jobard & Lefer integrato con Runge-Kutta 4. I campi radiale/concentrico/costante ci sono come termine di paragone controllato.
+- **Il residuo, e a che scala vive.** La dispersione del curvo scende allargando la cella di misura — banda 17,4% (1 mm) → 10,3% (2) → 6,9% (4) → 5,0% (8): è **grana**, e il filo la nasconde. Il ventaglio no: 17,9 → 14,3 → 12,1 → **8,6%**, cioè una variazione che vive anche alla scala della macchia. Guardandolo si capisce perché: **anelli concentrici**, dove tutte le file nascono allo stesso raggio insieme. Provato a scucirli con un disturbo sulla soglia di arresto: i numeri miglioravano (14,3 → 12,4% a celle da 2 mm, 8,6 → 6,9% a celle da 8 mm) ma **guardandolo è peggio** — l'anello diventa una fascia frastagliata. La strada resta nel codice spenta (`jitterRatio`, default 0) con la sua misura accanto, perché la prossima volta che verrà in mente si sappia già com'è andata.
+- **Da guardare** (si rigenerano con `misura.ts`, non sono committati): `apps/pittorico/scripts/out/*.svg` — i tre riempimenti a confronto per regione, e il solo curvo a parte.
 
 **Tool `zone-pattern` (Pattern a zone) — NUOVO, funzionante end-to-end:**
 - **Il problema.** Riempire di pattern le **zone colorate di un disegno**, una per una, con l'inclinazione giusta per ognuna. Il caso che l'ha fatto nascere è il **cannage Dior** di Lorenzo (`CANNAGE-PATTERN-AUTOGENERATE/SVG/Risorsa 1.svg`, committato come `test/fixtures/cannage-zone.svg`): 37 zone, 6 tinte, che **misurate** si rivelano essere **2 pattern × 3 famiglie di inclinazione** — rosa/viola a 45° (cannage regolare), rosso/arancio a 15° (striscia centrale), blu/verde a ~76° (banda sinistra); le tinte che Lorenzo accoppia cadono sullo **stesso reticolo** (entro 1°), cioè sono due pattern posati su tre griglie, non sei cose diverse.
@@ -335,7 +354,7 @@
 ## 2. STATO
 
 **Sei tool in piedi, e adesso ognuno ha le sue invarianti scritte. Il settimo, `broccato`, è partito.**
-Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (372 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
+Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (535 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
 
 **La copertura dei test non era un adempimento: ha trovato cinque difetti veri**, ognuno dei quali violava una regola della Costituzione già scritta e mai verificata — i passaggi di net-45 che attraversavano i vuoti (R5), il punto minimo mai applicato in striatura (R3), `insetPolygon` che rientrava del 30% in meno, il punto massimo di pattern-grammar che lasciava passare segmenti quasi doppi (R4), l'importer che esplodeva sul file vero da 2MB. Tutti corretti, tutti bloccati da un test che fallisce se tornano.
 
@@ -396,7 +415,7 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 
 | # | Cosa | Stato |
 |---|---|---|
-| **N1** | **"Punto Pittorico", il nono tool** — da un'immagine, riempimenti pieni che seguono le curve del disegno: degradé col frastaglio dei bordi dove il colore sfuma, taglio secco dove stacca. Progettato con Lorenzo il 2026-09-04. | **Briefing pronto**: [`AVVIO-PUNTO-PITTORICO.md`](AVVIO-PUNTO-PITTORICO.md). Decisioni prese (sovrapposizione 5mm col sotto più coperto, frastaglio a parametro, direzione automatica + guide da SVG, forme nette per riconoscimento primitive). Tre quarti dei pezzi esistono già (contorni dal broccato, palette e raso nel core); il nuovo è il riempimento a campo di direzione con le file a distanza costante (Jobard-Lefer). Si parte dal prototipo headless che misura la copertura in curva. |
+| **N1** *(punto 1 di 5: **fatto**)* | **"Punto Pittorico", il nono tool** — da un'immagine, riempimenti pieni che seguono le curve del disegno: degradé col frastaglio dei bordi dove il colore sfuma, taglio secco dove stacca. Progettato con Lorenzo il 2026-09-04. | **Il prototipo headless sta in piedi ed è misurato** (blocco `pittorico` in §1): dispersione della copertura 9,7–14,3% contro il 3,9–5,1% del raso rettilineo e il 71–98% del metodo ingenuo. Tarato `d_test` a 0,55 (a 0,50 usciva il 6% di filo in più del chiesto) e trovato che **su una curva il punto massimo e la densità non sono indipendenti**. Restano il punto 2 (`traceRegions` nel core + primitive), 3 (campo e guide da SVG), 4 (bordi, frange, sovrapposizione 5 mm), 5 (pipeline, export, pannello). |
 
 ### Fuori lista (fatto, o non nostro)
 
@@ -495,7 +514,21 @@ Il **satellite Python** `bitmap_to_stitch` (laboratorio DST/recipe/library con A
 
 ## 5. PROSSIMA SINGOLA MOSSA
 
-**→ Il seguito di C14: ingresso e uscita di ogni macchia, e la scomposizione.** Il passaggio ora costeggia e non si stacca mai, ma **sceglie male dove entrare e dove uscire**: e' per questo che il giro sul contorno costa tanto (21% del filo sulla demo, 42% su un'immagine tutta filamenti).
+**→ Punto 2 del Punto Pittorico: `traceRegions` nel core, e le forme nette.** Il punto 1 ha risposto sì
+(§1, blocco `pittorico`), quindi il tool si può costruire. Il punto 2 promuove `traceRegions` da
+`apps/broccato` a `@rg/core` — il secondo cliente adesso c'è, è la regola di crescita 1, e va fatto a
+comportamento invariato con un test a lucchetto — e aggiunge il riconoscimento delle primitive
+(cerchio, arco, segmento) sul contorno tracciato. Serve a due cose insieme: un cerchio dell'immagine
+deve tornare un cerchio e non un poligono a gradini, e **se il bordo è un cerchio vero anche il campo
+di direzione diventa esatto** invece che ballerino.
+
+*Due cose imparate col punto 1 che vanno dette prima di scrivere altro codice:* (a) il punto massimo
+e la densità **non sono indipendenti su una curva** — è materiale da Costituzione, e nessuna regola
+oggi lo dice; (b) il ventaglio mostra **anelli concentrici** che i numeri non gridano e l'occhio sì:
+prima o poi va guardato da Lorenzo su un ricamo vero, perché il rimedio ovvio (sfalsare le nascite)
+l'ho provato e a occhio peggiora.
+
+**→ E resta aperto, sull'altro binario, il seguito di C14: ingresso e uscita di ogni macchia, e la scomposizione.** Il passaggio ora costeggia e non si stacca mai, ma **sceglie male dove entrare e dove uscire**: e' per questo che il giro sul contorno costa tanto (21% del filo sulla demo, 42% su un'immagine tutta filamenti).
 
 Lorenzo l'ha descritta per intero, coi disegni: la macchia si spezza **all'altezza dell'uscita** — si scende fin li', un passaggio sul contorno porta in fondo, e si risale riempiendo fino a finire sull'uscita, cosi' in orizzontale il filo non passa mai due volte. Dove la forma ha una **rientranza** si divide ancora: prima un lobo, poi l'altro, e alla fine il pieno. Quella decomposizione **esiste gia'** (sono le camere del punto ③): mancano l'ordine e la scelta del verso.
 

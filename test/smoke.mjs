@@ -34,6 +34,11 @@ export { readPatternSvg, readEmbeddedConfig, measureConstruction, migrateLegacyN
 export { PATTERN_FIELD_NAMES, PATTERN_FIELD_KIND } from ${JSON.stringify(posix('apps/zone-pattern/src/fields.ts'))};
 export { parseSvgPolylines } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
 export { runPipeline as runStriaturaPipeline } from ${JSON.stringify(posix('apps/striatura/src/pipeline.ts'))};
+export { makeRegion, insideRegion, regionBounds, BoundaryIndex } from ${JSON.stringify(posix('apps/pittorico/src/region.ts'))};
+export { harmonicField, radialField, constantField, meanFieldAngleDeg } from ${JSON.stringify(posix('apps/pittorico/src/field.ts'))};
+export { buildCurvedFill, buildNaiveCurvedFill } from ${JSON.stringify(posix('apps/pittorico/src/curved-fill.ts'))};
+export { coverageStats, neighbourSpacing, containment } from ${JSON.stringify(posix('apps/pittorico/src/coverage.ts'))};
+export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
@@ -2350,6 +2355,121 @@ console.log('\noblique — routing + orchestratore (2d)');
   const dstZone = rg.dstFromExportLayers(piano.layers, { label: 'CANNAGE', metadata: { rgProject: 'zone-pattern' } });
   check('il DST esce coi due aghi e si riapre (R27/R31)',
     [String.fromCharCode(...dstZone.slice(0, 3)), rg.readDstMetadata(dstZone)?.rgProject], ['LA:', 'zone-pattern']);
+}
+
+// ---------------------------------------------------------------------------------------------
+// PUNTO PITTORICO — il riempimento curvo a distanza costante (punto 1 del piano).
+//
+// Queste non sono asserzioni di regressione su codice che funziona: sono LA MISURA che decide se
+// il metodo sta in piedi (ARCHITETTURA, regola di crescita 8). Il termine di paragone è il raso
+// rettilineo del core, dove il passo e' costante per costruzione: la sua dispersione e' il rumore
+// di fondo dello strumento di misura, non un difetto.
+// ---------------------------------------------------------------------------------------------
+console.log('');
+console.log('Punto Pittorico — riempimento curvo a distanza costante');
+{
+  const PASSO = 0.4, PUNTO_MAX = 3.0, NOM = 1 / PASSO;
+  const prove = rg.regioniDiProva();
+  const campoDi = (p) => (p.campo.tipo === 'radiale'
+    ? rg.radialField(p.campo.centro)
+    : rg.harmonicField(p.region, { cellMm: 1, levels: 4, sweeps: 300 }));
+
+  // Il metro e' tarato? Sul raso rettilineo la distanza fra file DEVE dare esattamente il passo.
+  {
+    const p = prove[0];
+    const rette = rg.buildParallelFill(p.region.outer, p.region.holes,
+      { angleDeg: 0, spacingMm: PASSO, maxStitchMm: PUNTO_MAX, mode: 'serpentine' });
+    const sp = rg.neighbourSpacing(rette, PASSO);
+    check("il metro e' tarato: sul raso del core il passo misurato e' quello chiesto",
+      Math.abs(sp.p05 - PASSO) < 1e-6 && Math.abs(sp.p95 - PASSO) < 1e-6, true);
+  }
+
+  for (const p of prove) {
+    const campo = campoDi(p);
+    const angolo = rg.meanFieldAngleDeg(campo, p.region);
+    const rette = rg.buildParallelFill(p.region.outer, p.region.holes,
+      { angleDeg: angolo, spacingMm: PASSO, maxStitchMm: PUNTO_MAX, mode: 'serpentine' });
+    const curvo = rg.buildCurvedFill(p.region, campo, { spacingMm: PASSO, maxStitchMm: PUNTO_MAX });
+    const ingenuo = rg.buildNaiveCurvedFill(p.region, campo, { spacingMm: PASSO, maxStitchMm: PUNTO_MAX });
+
+    const covA = rg.coverageStats(rette, p.region, PASSO);
+    const covC = rg.coverageStats(curvo.runs, p.region, PASSO);
+    const covB = rg.coverageStats(ingenuo.runs, p.region, PASSO);
+    const spC = rg.neighbourSpacing(curvo.runs, PASSO);
+    const conC = rg.containment(curvo.runs, p.region);
+
+    // 1. LA DENSITA' CHIESTA E' QUELLA CONSEGNATA. `densitySpacingMm` (R22) e' un contratto: se si
+    //    chiedono 0,4 mm di passo devono uscire 2,5 mm di filo per mm². E' il motivo per cui
+    //    `testRatio` sta a 0,55 e non allo 0,5 di Jobard-Lefer (con 0,5 usciva il 6% di filo in piu').
+    check(`${p.id}: la densita' consegnata e' quella chiesta (±5%)`,
+      Math.abs(covC.media / NOM - 1) <= 0.05, true);
+
+    // 2. LA COPERTURA NON SI SCOSTA PIU' DELLA SOGLIA DICHIARATA. Misurato su celle da 2 mm (cinque
+    //    file per cella): rettilineo 3,9-5,1%, curvo 10,2-14,4%. La soglia e' 16%, e vale il doppio
+    //    del rettilineo piu' un margine: se il curvo peggiora, si vuole saperlo.
+    check(`${p.id}: la dispersione della copertura resta sotto il 16%`, covC.cv < 0.16, true);
+    check(`${p.id}: ...e non piu' di 4 volte quella del raso rettilineo`, covC.cv < covA.cv * 4, true);
+
+    // 3. IL METODO SERVE A QUALCOSA. Seminare le file a passo costante e lasciarle correre (il
+    //    "copy" di Ink/Stitch) da' 71-98% di dispersione: la regola della distanza vale un fattore
+    //    5-20. Il minimo misurato e' 4,96 sul ventaglio, quindi la soglia e' 4.
+    check(`${p.id}: il curvo ingenuo e' almeno 4 volte peggio (il metodo non e' decorativo)`,
+      covB.cv > covC.cv * 4, true);
+
+    // 4. LA GEOMETRIA, PRIMA DEI PUNTI, E' PULITA. Senza suddividere in punti-ago la regola della
+    //    distanza tiene: il minimo misurato e' 0,44-0,55 volte il passo. E' l'invariante del
+    //    METODO, tenuta separata da cio' che poi le fa il punto-ago (vedi 5).
+    //    Non e' esattamente zero, e si sa perche': il controllo di vicinanza guarda i PUNTI di
+    //    integrazione, distanti 1/3 di passo l'uno dall'altro, mentre la misura guarda i SEGMENTI —
+    //    due file che si incrociano di striscio possono passare piu' vicine di quanto i loro punti
+    //    dicano, fino a mezzo passo di integrazione. Misurati: 2 punti su 48.083.
+    const geo = rg.buildCurvedFill(p.region, campo, { spacingMm: PASSO });
+    const spGeo = rg.neighbourSpacing(geo.runs, PASSO);
+    check(`${p.id}: la geometria pura tiene la distanza (minimo >= 0,43 del passo)`,
+      spGeo.min >= PASSO * 0.43, true);
+    check(`${p.id}: ...e sotto mezzo passo ci va meno di un punto su 10.000`,
+      spGeo.quotaSottoMezzoPasso < 1e-4, true);
+
+    // 5. IL PUNTO-AGO E' UNA CORDA, E SU UNA CURVA TAGLIA DENTRO. Trovato misurando: con la sola
+    //    R4 a 3 mm il passo minimo crollava da 0,21 a 0,004 mm — il punto si posava sulla fila
+    //    vicina. Ora la corda ha un tetto (`maxSagittaMm`, d_sep/8) e il minimo resta 0,41 del
+    //    passo. La soglia 0,375 e' quel tetto meno un margine.
+    check(`${p.id}: nessuna coppia di file piu' vicina di 0,375 volte il passo`,
+      spC.min >= PASSO * 0.375, true);
+    check(`${p.id}: al piu' il 6% dei punti sta sotto mezzo passo da un'altra fila`,
+      spC.quotaSottoMezzoPasso <= 0.06, true);
+    check(`${p.id}: il 95% delle file sta sotto 1,4 volte il passo`, spC.p95 <= PASSO * 1.4, true);
+    check(`${p.id}: e nessun vuoto oltre 3 volte il passo`, spC.max <= PASSO * 3, true);
+
+    // 6. NIENTE FUORI DALLA REGIONE, NIENTE NEI VUOTI (R5).
+    check(`${p.id}: niente filo fuori dalla regione`, [conC.fuori, conC.neiVuoti], [0, 0]);
+
+    // 7. PUNTO MASSIMO (R4). Il minimo no: si impone dopo il routing (R3).
+    let piuLungo = 0;
+    for (const r of curvo.runs) for (let i = 1; i < r.length; i++) {
+      piuLungo = Math.max(piuLungo, Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y));
+    }
+    check(`${p.id}: nessun punto oltre il massimo chiesto (R4)`, piuLungo <= PUNTO_MAX + 1e-6, true);
+
+    // 8. DETERMINISMO: stessi parametri, stesso ricamo.
+    const bis = rg.buildCurvedFill(p.region, campo, { spacingMm: PASSO, maxStitchMm: PUNTO_MAX });
+    check(`${p.id}: stessi parametri, stesso ricamo`,
+      JSON.stringify(bis.runs) === JSON.stringify(curvo.runs), true);
+  }
+
+  // 9. IL DIFETTO TROVATO MISURANDO: a `seedRatio` 1.0 il ventaglio si svuota. Il seme nasce a
+  //    esattamente `d_sep` dalla fila madre e il confronto con la madre stessa lo rifiuta, quindi in
+  //    un campo che diverge non nasce piu' niente. Il riempimento esce lo stesso: e' solo vuoto.
+  //    Il test guarda il default, che e' la cosa che deve restare vera.
+  {
+    const v = prove.find((p) => p.id === 'ventaglio');
+    const campo = rg.radialField(v.campo.centro);
+    const buono = rg.buildCurvedFill(v.region, campo, { spacingMm: PASSO, maxStitchMm: PUNTO_MAX });
+    const rotto = rg.buildCurvedFill(v.region, campo, { spacingMm: PASSO, maxStitchMm: PUNTO_MAX, seedRatio: 1 });
+    check('il ventaglio si riempie davvero (oltre 300 file)', buono.runs.length > 300, true);
+    check("...e con seedRatio 1 si svuoterebbe: il difetto e' noto e misurato",
+      rotto.runs.length < buono.runs.length / 10, true);
+  }
 }
 
 rmSync(outDir, { recursive: true, force: true });
