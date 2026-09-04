@@ -33,7 +33,7 @@ export { PATTERN_FIELD_NAMES, PATTERN_FIELD_KIND } from ${JSON.stringify(posix('
 export { parseSvgPolylines } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
 export { runPipeline as runStriaturaPipeline } from ${JSON.stringify(posix('apps/striatura/src/pipeline.ts'))};
 export { makeRegion, regionBounds, BoundaryIndex } from ${JSON.stringify(posix('apps/pittorico/src/region.ts'))};
-export { harmonicField, radialField, constantField, meanFieldAngleDeg } from ${JSON.stringify(posix('apps/pittorico/src/field.ts'))};
+export { harmonicField, radialField, concentricField, constantField, meanFieldAngleDeg } from ${JSON.stringify(posix('apps/pittorico/src/field.ts'))};
 export { buildCurvedFill, buildNaiveCurvedFill } from ${JSON.stringify(posix('apps/pittorico/src/curved-fill.ts'))};
 export { coverageStats, neighbourSpacing, containment } from ${JSON.stringify(posix('apps/pittorico/src/coverage.ts'))};
 export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('apps/pittorico/src/primitives.ts'))};
@@ -2724,6 +2724,37 @@ console.log('Punto Pittorico — riempimento curvo a distanza costante');
       piuLungo = Math.max(piuLungo, Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y));
     }
     check(`${p.id}: nessun punto oltre il massimo chiesto (R4)`, piuLungo <= PUNTO_MAX + 1e-6, true);
+
+      // 7-bis. QUANTO GIRA IL PUNTO, e il metro tarato sulla teoria.
+    //    Il campo di direzione si giudica da quanto il punto ruota per millimetro percorso: un campo
+    //    che sfarfalla da' punti che si combattono, tirano il tessuto in direzioni diverse e si
+    //    vedono. Ma il riferimento NON e' zero — un ricamo che segue una curva deve girare.
+    //    Su un cerchio di raggio R la rotazione vale esattamente 57,296/R gradi al mm, e il ventaglio
+    //    e' il caso dove questo si puo' verificare a mano: campo concentrico, raggi noti.
+    if (p.id === 'ventaglio' && p.campo.tipo === 'radiale') {
+      const centro = p.campo.centro;
+      const anelli = rg.buildCurvedFill(p.region, rg.concentricField(centro), { spacingMm: 2 }).runs;
+      let peggioScarto = 0, campioni = 0;
+      for (const linea of anelli) {
+        // via i due punti a ogni capo: li' la fila e' stata TAGLIATA sul bordo della regione, quindi
+        // l'ultimo segmento e' corto e irregolare e l'angolo diviso per la sua lunghezza esplode.
+        // Misurato: nel corpo della fila lo scarto dalla teoria e' 0,00%, ai capi arriva al 93%.
+        for (let i = 4; i < linea.length - 2; i++) {
+          const a = linea[i - 2], b = linea[i - 1], c = linea[i];
+          const u = { x: b.x - a.x, y: b.y - a.y }, v = { x: c.x - b.x, y: c.y - b.y };
+          const lu = Math.hypot(u.x, u.y), lv = Math.hypot(v.x, v.y);
+          if (lu < 1e-9 || lv < 1e-9) continue;
+          const cross = (u.x * v.y - u.y * v.x) / (lu * lv), dot = (u.x * v.x + u.y * v.y) / (lu * lv);
+          const gradiAlMm = Math.abs((Math.atan2(cross, dot) * 180) / Math.PI) / ((lu + lv) / 2);
+          const raggio = Math.hypot(b.x - centro.x, b.y - centro.y);
+          const atteso = 57.29578 / raggio;
+          peggioScarto = Math.max(peggioScarto, Math.abs(gradiAlMm - atteso) / atteso);
+          campioni++;
+        }
+      }
+      check('la misura della rotazione torna ESATTA con la teoria: 57,3/R gradi al mm',
+        [campioni > 2000, peggioScarto < 0.001], [true, true]);
+    }
 
     // 8. DETERMINISMO: stessi parametri, stesso ricamo.
     const bis = rg.buildCurvedFill(p.region, campo, { spacingMm: PASSO, maxStitchMm: PUNTO_MAX });

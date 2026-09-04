@@ -3,7 +3,7 @@
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
 > Aggiornato: 2026-09-04 · Suite con **otto tool live** + il nono (`pittorico`) fermo al prototipo headless — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
-> Rete di sicurezza: `npm test` (576 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
+> Rete di sicurezza: `npm test` (577 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
 
 ---
 
@@ -30,7 +30,7 @@
 - **Conteggio punti nella statusbar.** Accanto alla dimensione (`W × H mm`) la barra di stato mostra il **numero di punti effettivamente cuciti** (`… · 1.234 punti`, formato italiano), aggiornato a ogni rigenerazione dell'anteprima. Il valore è `pointCount.exported` (= `final.points.length`) letto dai metadati già incorporati nell'SVG — nessuna doppia generazione, nessuna modifica al motore. Statusbar allineata all'esempio DS (`esito · conteggio` a sinistra, vista a destra), solo classi v1.6.0 (`rg-mono`).
 
 **Tool `pittorico` (Punto Pittorico) — PROTOTIPO HEADLESS, non ancora un tool:**
-- **Cos'è e a che punto è.** Il nono strumento (briefing: [`AVVIO-PUNTO-PITTORICO.md`](AVVIO-PUNTO-PITTORICO.md)). Del piano in cinque punti sono fatti **il punto 1 e il punto 2**. Resta da tagliare la tolleranza del riconoscimento sull'immagine vera di Lorenzo, che non è ancora nel repo. Il riempimento curvo esiste, gira headless, e **la misura che decide c'è**. Non c'è interfaccia, non c'è `mount()`, non c'è card nella home (arrivano al punto 5): sono quattro moduli in `apps/pittorico/src` (`region`, `field`, `curved-fill`, `coverage`) più le regioni di prova, e due script in `apps/pittorico/scripts` (`misura`, `taratura`). Si eseguono con esbuild + node; il comando è scritto in testa a ciascuno.
+- **Cos'è e a che punto è.** Il nono strumento (briefing: [`AVVIO-PUNTO-PITTORICO.md`](AVVIO-PUNTO-PITTORICO.md)). Del piano in cinque punti sono fatti **1, 2 e 3**. C'è anche un **banco di prova** che raccoglie i risultati in una pagina sola e si rigenera dagli script (`scripts/banco.ts`). Il riempimento curvo esiste, gira headless, e **la misura che decide c'è**. Non c'è interfaccia, non c'è `mount()`, non c'è card nella home (arrivano al punto 5): sono quattro moduli in `apps/pittorico/src` (`region`, `field`, `curved-fill`, `coverage`) più le regioni di prova, e due script in `apps/pittorico/scripts` (`misura`, `taratura`). Si eseguono con esbuild + node; il comando è scritto in testa a ciascuno.
 - **La misura che decide, e come va.** Su tre regioni di prova, a passo 0,4 mm, si riempie tre volte e si confronta la **dispersione della copertura** (filo per mm² cella per cella, celle da 2 mm, bordi esclusi):
 
   | regione | A rettilineo (core) | B curvo ingenuo | C curvo a distanza costante |
@@ -67,6 +67,19 @@
 
   Due letture. La prima: `reduceStable` arriva a 10 fori **in un colpo** dove il voto di maggioranza ne serviva tre per fermarsi a 22. La seconda, che non mi aspettavo: **con quattro tinte la sfera esce meglio** (71,5% del giro contro 67), perché gli archi interni della sfera sono **veri scalini di tono** e ridurre a due tinte li butta via. Più tinte qui non vuol dire più rumore — i fori scendono a 9 mentre i pezzi salgono a 817: è struttura vera, non grana.
 - **Quanto è preciso il raggio della sfera, per ora: 76–77 mm, ±1%.** Lo scarto non viene dal fit del cerchio, viene da **come si riduce l'immagine**: 77,0 a due tinte col voto di maggioranza, 76,1 a quattro tinte. È l'incertezza vera di oggi, ed è onesto scriverla così invece di dare tre decimali a un numero che si sposta al primo cambio di parametro.
+- **Punto 3 — il campo di direzione gira sull'immagine vera, e si guarda** (`apps/pittorico/scripts/campo.ts` → `out/cianotipia-campo.svg`). Tutte e 27 le zone sopra i 400 mm², coi colori veri della riduzione a quattro tinte, con le linee di flusso disegnate sopra a passo 4 mm. **Le linee non vengono da un disegnatore a parte**: sono lo stesso `buildCurvedFill` del punto 1 chiesto a passo largo — scriverne uno apposta vorrebbe dire due risposte alla stessa domanda (R28), e l'anteprima mostrerebbe una cosa mentre l'ago ne cuce un'altra.
+- **La misura del campo è «quanto gira il punto per millimetro», e il riferimento non è zero.** Un ricamo che segue una curva *deve* girare: su un cerchio di raggio R esattamente 57,3/R gradi al mm. Quello che non ci deve essere è la rotazione grande su tratto corto. **Il riconoscimento delle forme (punto 2b) paga qui più che sul bordo**, perché il campo nasce dalla *tangente al contorno* e su una scalinata la tangente salta di 90° a ogni gradino:
+
+  | com'è il contorno | punti | gira (mediana) | 5% peggiore | scarto dal bordo |
+  |---|---|---|---|---|
+  | scalinata, come letta dai pixel | 2.420 | 2,02 °/mm | 46,3 | 38,3° |
+  | semplificata | 991 | 1,85 °/mm | 41,8 | 23,7° |
+  | **con le forme riconosciute** | 554 | **1,39 °/mm** | **26,3** | **14,9°** |
+
+  Metà dei punti gira 1,4 °/mm, che è quanto gira il disegno. Resta una **coda del 5%** — e un massimo di 215 °/mm — che sono le singolarità del campo nelle forme complicate: è lavoro da fare, ed è scritto qui perché non si perda.
+- **Due misure erano sbagliate, e le ha smascherate la teoria.** (a) La fedeltà al bordo campionava da tutt'e due i lati del contorno e poi divideva per due — cioè mescolava punti *dentro* con punti *fuori*, dove il campo è congelato sulla tangente per costruzione e risponde sempre bene: il numero non misurava niente. (b) La rotazione si misurava sui punti-ago già suddivisi, mescolando lo sfarfallio del campo con la corda del punto, che è un'altra cosa. Corrette entrambe, i numeri sono **peggiorati**: giusto così, prima erano falsamente buoni.
+- **E il metro adesso è tarato contro una risposta nota.** Sul ventaglio con campo concentrico la rotazione teorica è 57,3/R: misurata, lo scarto dalla teoria è **0,00%** nel corpo della fila. Ai capi arriva al **93%**, perché lì la fila è stata *tagliata* sul bordo della regione e l'ultimo segmento è corto e irregolare — quindi i capi si escludono, e senza quell'esclusione si misurava il taglio invece del campo. Bloccato in `test/smoke.mjs`.
+- **IL BANCO DI PROVA**, nato da una domanda di Lorenzo (*«come posso vedere visivamente gli avanzamenti?»*): `apps/pittorico/scripts/banco.ts` raccoglie gli SVG che gli altri script producono e li mette in **una pagina sola**, ogni disegno con la sua misura sulla stessa riga. Si rigenera: ogni passo avanti aggiunge un pannello invece di aggiungere un file da cercare. Non è l'interfaccia del tool (quella è il punto 5 e vivrà nella shell), è il banco su cui si guardano i pezzi mentre si costruiscono.
 - **DECISIONE DI LORENZO (2026-09-04): niente SVG, mai.** *«Non è mai esistito l'SVG. E il sistema deve reggere proprio senza SVG, perché se riusciamo a usare immagini per fare queste cose è figo.»* Questo **cancella §5.2 del briefing** (importare le geometrie esatte da vettore) e promuove il riconoscimento delle primitive da ripiego più automatico a **unica strada**. Cambia anche il §4.1 livello 3: le linee guida restano possibili — sono contorni disegnati *apposta*, non l'SVG della grafica — ma non arrivano più gratis insieme al disegno, quindi **l'automatico deve bastare quasi sempre**.
 - **E regge: la sfera è uscita dai soli pixel.** Non è una macchia di colore (è dello stesso blu del fondo e ci si attacca dove l'alone si interrompe), quindi il cerchio si cerca **fra gli archi** del contorno. **Quattro archi indipendenti**, separati dalle interruzioni, concordano su centro (893,1 · 461,4) px e raggio 218,3 px = **77,003 mm**, coprendo il **67,2% del giro** — diametro 154 mm. Che tratti indipendenti dicano lo stesso cerchio è la prova che il cerchio c'è, non che il fit ci è passato per caso. Bloccato in `test/smoke.mjs` con una fixture che è il **contorno tracciato** (`test/fixtures/cianotipia-contorno.json`, 11 anelli, 82 kB) e non il raster: Node non ha un decoder JPEG, e la forma vera entra nella rete di sicurezza mentre il pixel resta fuori.
 - **La scala vera, detta da Lorenzo: 419,45 mm di larghezza** — e i 72 dpi dichiarati dal file erano **giusti**, non una stima da correggere (1189 · 25,4 / 72 = 419,4514). Il ricamo misura **419,4 × 353,1 mm** e **un pixel vale 0,353 mm**. È il numero che riordina le priorità: il pixel è **largo quasi quanto il passo fra due file di filo** (0,4 mm), cioè la scalinata del raster è larga come un filo. Riconoscere la forma porta lo scostamento dal vero da 0,6 px a 0,02–0,1 px, cioè da *un filo* a *un ventesimo di filo*: non è un abbellimento del bordo, è ciò che rende il bordo cucibile.
@@ -381,7 +394,7 @@
 ## 2. STATO
 
 **Sei tool in piedi, e adesso ognuno ha le sue invarianti scritte. Il settimo, `broccato`, è partito.**
-Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (576 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
+Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (577 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
 
 **La copertura dei test non era un adempimento: ha trovato cinque difetti veri**, ognuno dei quali violava una regola della Costituzione già scritta e mai verificata — i passaggi di net-45 che attraversavano i vuoti (R5), il punto minimo mai applicato in striatura (R3), `insetPolygon` che rientrava del 30% in meno, il punto massimo di pattern-grammar che lasciava passare segmenti quasi doppi (R4), l'importer che esplodeva sul file vero da 2MB. Tutti corretti, tutti bloccati da un test che fallisce se tornano.
 
@@ -548,10 +561,18 @@ gli mancano: l'**anteprima delle linee di flusso** — si guarda *prima* di cuci
 reso possibile dal punto 2b: dove il bordo è un **cerchio riconosciuto**, la condizione al contorno
 può essere esatta (concentrica o radiale) invece che letta da una spezzata.
 
-**→ La riduzione è fatta** (`reduce` è nel core dal 2026-09-04, col suo lucchetto), e il punto 3 può
-partire su contorni puliti invece che sul rumore: 10 fori invece di 699, e la sfera riconosciuta al
-71,5% del giro. Il campo di direzione si costruisce sulla **tangente al bordo**, quindi farlo prima
-della riduzione avrebbe voluto dire misurare la grana della stampa invece della forma.
+**→ Punto 4: i bordi — dove il colore sfuma e dove stacca.** I punti 1, 2 e 3 sono chiusi. Il 4 è
+quello che fa il *degradé*, ed è arrivato con un regalo dentro: guardando l'anteprima del campo, i
+bordi delle zone sono **sfrangiati**, e non è un difetto da correggere. Dove il colore sfuma,
+tagliarlo in quattro tinte produce per forza un bordo frastagliato, perché non c'è un bordo — c'è un
+passaggio; dove il colore stacca netto (il taglio verticale della sfera) il bordo esce pulito.
+Quindi il tool **non deve misurare quanto è larga la sfumatura con un calcolo a parte**: la larghezza
+della frangia *è* quella misura. Da lì: frange dove è larga, taglio secco dove è stretta, e la
+sovrapposizione di 5 mm col sotto più coperto del sopra (decisione 2 del briefing).
+
+*Resta scoperto dal punto 3, e va detto:* la coda del 5% dello sfarfallio, con punte a 215 °/mm, sono
+**singolarità del campo** nelle forme complicate. Non tolgono il senso all'anteprima (metà dei punti
+gira quanto gira il disegno) ma su un ricamo vero si vedrebbero, e prima o poi vanno affrontate.
 
 *Le due cose che erano in mano a Lorenzo sono chiuse:* (1) la larghezza reale è **419,45 mm**, quindi un pixel vale **0,353 mm**; (2) *chiuse entrambe il 2026-09-04*: la larghezza è **419,45 mm** e l'SVG **non esiste e non deve servire** (vedi il blocco `pittorico` in §1).
 

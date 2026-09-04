@@ -253,7 +253,7 @@ const pagina = `<title>Banco del Punto Pittorico</title>
     <div class="fatto"><dt>Il disegno</dt><dd>419,45 × 353,1 mm</dd></div>
     <div class="fatto"><dt>Un pixel vale</dt><dd>0,353 mm</dd></div>
     <div class="fatto"><dt>Passo del filo</dt><dd>0,4 mm</dd></div>
-    <div class="fatto"><dt>Rete di sicurezza</dt><dd>576 controlli</dd></div>
+    <div class="fatto"><dt>Rete di sicurezza</dt><dd>577 controlli</dd></div>
   </dl>
 </header>
 
@@ -372,18 +372,61 @@ const pagina = `<title>Banco del Punto Pittorico</title>
 <section class="passo">
   <div class="numero">4</div>
   <div class="corpo">
-    <span class="stato no">il prossimo</span>
+    <span class="stato si">fatto e misurato</span>
     <h2>In che verso corre il punto, guardato prima di cucire</h2>
     <p>Il campo di direzione decide l'orientamento del punto in ogni millimetro del disegno: si fissa
-    sul bordo e si risolve verso l'interno cercando il verso più liscio possibile. Il motore c'è già ed
-    è quello che ha prodotto i riempimenti qui sopra. Quello che manca è <strong>l'anteprima</strong> —
-    le linee di flusso disegnate sul tuo disegno, da guardare prima che l'ago tocchi il tessuto.</p>
-    <p>Poi restano i bordi (frange dove il colore sfuma, taglio secco dove stacca, e la sovrapposizione
-    di 5 mm fra un colore e il successivo) e infine la pipeline con l'export e il pannello.</p>
+    sul bordo — dove il punto deve seguire il contorno — e si risolve verso l'interno cercando il verso
+    più liscio possibile. Qui sotto è il tuo disegno con le linee di flusso disegnate sopra: è quello
+    che l'ago farebbe, guardato prima che tocchi il tessuto.</p>
+
+    <figure>
+      <div class="lastra">${svgInline('cianotipia-campo.svg')}</div>
+      <figcaption>Tutte e 27 le zone sopra i 400 mm², coi colori veri della riduzione a quattro tinte.
+      Una linea ogni 4 mm: è un'anteprima, il ricamo vero ne ha una ogni 0,4. Le linee non vengono da un
+      disegnatore a parte — sono lo stesso riempimento del punto 1 chiesto a passo largo, altrimenti
+      l'anteprima mostrerebbe una cosa e l'ago ne cucirebbe un'altra.</figcaption>
+    </figure>
+
+    <h3>Quanto gira il punto, per millimetro</h3>
+    <p>Un campo che sfarfalla dà punti che si combattono, tirano il tessuto in direzioni diverse e si
+    vedono. Ma il riferimento non è zero: un ricamo che segue una curva <em>deve</em> girare — su un
+    cerchio di raggio R esattamente 57,3/R gradi al millimetro. Quello che non deve esserci è la
+    rotazione grande su tratto corto.</p>
+    <div class="tabella">
+      <table>
+        <thead><tr><th>com'è il contorno</th><th>punti</th><th>gira (metà dei casi)</th><th>nel 5% peggiore</th><th>scarto dal bordo</th></tr></thead>
+        <tbody>
+          <tr><td>scalinata, come letta dai pixel</td><td>2.420</td><td>2,02 °/mm</td><td>46,3</td><td>38,3°</td></tr>
+          <tr><td>semplificata</td><td>991</td><td>1,85 °/mm</td><td>41,8</td><td>23,7°</td></tr>
+          <tr class="chiave"><td>con le forme riconosciute</td><td>554</td><td>1,39 °/mm</td><td>26,3</td><td>14,9°</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">È la prova che il lavoro sulle forme nette serviva a qualcosa di più del bordo: il
+    campo <strong>nasce dalla tangente al contorno</strong>, e su una scalinata la tangente salta di 90°
+    a ogni gradino. Riconoscere le forme dimezza lo sfarfallio e taglia di due terzi lo scarto dal bordo.
+    Metà dei punti gira 1,4 °/mm, che è esattamente quanto gira il disegno; resta una coda del 5% che è
+    lavoro da fare.</p>
+  </div>
+</section>
+
+<section class="passo">
+  <div class="numero">5</div>
+  <div class="corpo">
+    <span class="stato no">il prossimo</span>
+    <h2>I bordi: dove il colore sfuma e dove stacca</h2>
+    <p>Guarda i bordi delle zone nell'anteprima qui sopra: sono <strong>sfrangiati</strong>. Non è un
+    difetto da correggere — è l'informazione che serviva. Dove il colore sfuma, tagliarlo in quattro
+    tinte produce per forza un bordo frastagliato, perché non c'è un bordo: c'è un passaggio. Dove
+    invece il colore stacca netto — il taglio verticale della sfera — il bordo esce pulito.</p>
+    <p>Quindi il tool non deve <em>misurare</em> quanto è larga la sfumatura con un calcolo a parte:
+    <strong>la larghezza della frangia è già quella misura</strong>. Dove è larga, i due riempimenti si
+    compenetrano con le frange e nasce il degradé; dove è stretta, il riempimento si ferma secco.
+    Con la sovrapposizione di 5 mm che avevi chiesto, e il sotto più coperto del sopra.</p>
 
     <h3>Due decisioni che aspettano te</h3>
-    <p class="nota">Quante tinte usare per la cianotipia: quattro danno una sfera migliore di due, ma è
-    una scelta di resa e va guardata sul ricamo. E il ventaglio mostra <strong>anelli concentrici</strong>
+    <p class="nota">Quante tinte per la cianotipia: quattro danno una sfera migliore di due, ma è una
+    scelta di resa e va guardata sul ricamo. E il ventaglio mostra <strong>anelli concentrici</strong>
     dove tutte le file nascono allo stesso raggio: i numeri li vedono appena, l'occhio sì. Il rimedio
     ovvio l'ho provato e peggiora — quindi resta lì, spento, finché non lo guardi tu.</p>
   </div>
