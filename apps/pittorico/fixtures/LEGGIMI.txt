@@ -1,0 +1,6 @@
+Immagini di riferimento del Punto Pittorico.
+
+Mettere qui la cianotipia (e i ritagli di prova). Il nome non conta: li trovo io.
+Servono per tarare la tolleranza del riconoscimento delle forme sulla scalinata
+VERA invece che su cerchi sintetici (R30), e per misurare quali bordi sfumano e
+quali staccano netti (punto 4 del piano).

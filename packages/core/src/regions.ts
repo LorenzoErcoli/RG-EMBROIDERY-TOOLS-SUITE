@@ -46,7 +46,19 @@ function traceLoops(inside: (i: number) => boolean, cells: number[], width: numb
     if (arr) arr.push(c); else cracks.set(k, [c]);
   };
   const pieno = new Set(cells);
-  const ok = (x: number, y: number): boolean => pieno.has(y * width + x) && inside(y * width + x);
+  /**
+   * Il vicino a (x, y) è pieno? Il controllo su `x` non è pignoleria: senza, `y * width + x` con
+   * `x = -1` **scavalca a capo** e finisce sull'ultimo pixel della riga precedente. Se quel pixel è
+   * dello stesso colore — e su un fondo che tocca il bordo lo è sempre — il lato sinistro non viene
+   * emesso, la catena dei lati si spezza e il contorno non si chiude.
+   *
+   * Trovato sull'immagine vera di Lorenzo: il fondo scuro, **944.137 pixel**, usciva come 865
+   * frammenti da una ventina di pixel quadrati l'uno. Su y non serve: una riga sopra la prima dà una
+   * chiave negativa e una sotto l'ultima una chiave oltre la fine, e in nessuno dei due casi la
+   * chiave sta nell'insieme.
+   */
+  const ok = (x: number, y: number): boolean =>
+    x >= 0 && x < width && pieno.has(y * width + x) && inside(y * width + x);
 
   for (const i of cells) {
     const x = i % width, y = (i / width) | 0;

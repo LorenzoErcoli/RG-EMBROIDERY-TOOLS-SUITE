@@ -2411,6 +2411,19 @@ const mascheraDiProva = () => {
   check('l\'area minima butta via le schegge', rg.traceRegions(idx, W, H, 1, 0.5, { minAreaMm2: 1 }).length, 2);
   check('e il risultato e\' deterministico',
     JSON.stringify(rg.traceRegions(idx, W, H, 1, 0.5)) === JSON.stringify(regioni), true);
+
+  // IL DIFETTO CHE IL LUCCHETTO NON AVEVA VISTO, perche' la fixture non toccava il bordo.
+  // Sull'immagine vera di Lorenzo il fondo scuro — 944.137 pixel — usciva come 865 frammenti da
+  // una ventina di pixel quadrati. Causa: `y * width + x` con `x = -1` scavalca a capo e finisce
+  // sull'ultimo pixel della riga precedente; se quello e' dello stesso colore, il lato sinistro non
+  // viene emesso e il contorno non si chiude. Su un fondo che tocca il bordo succede sempre.
+  // Il test e' scritto perche' quella lezione resti: una macchia che tocca i bordi verticali.
+  const W2 = 20, H2 = 12;
+  const bordo = new Uint8Array(W2 * H2).fill(0xff);
+  for (let y = 3; y <= 8; y++) for (let x = 0; x < W2; x++) bordo[y * W2 + x] = 1;   // da bordo a bordo
+  const attaccate = rg.traceRegions(bordo, W2, H2, 1, 1);
+  check('una macchia che tocca i bordi sinistro e destro resta UNA macchia', attaccate.length, 1);
+  check('...e la sua area e\' quella vera (20 x 6)', Number(attaccate[0]?.areaMm2.toFixed(4)), 120);
 }
 
 // ---------------------------------------------------------------------------------------------
