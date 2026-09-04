@@ -16,8 +16,11 @@ const LARGHEZZA_MM = Number(process.argv[3] ?? 419.45);
 const MM_PER_PX = LARGHEZZA_MM / intera.width;
 
 // un ritaglio: la catena intera sul disegno da 42 cm è un ricamo da centinaia di metri
-const LATO = Math.round(90 / MM_PER_PX);
-const x0 = Math.round(intera.width * 0.52), y0 = Math.round(intera.height * 0.18);
+// `RG_LATO_MM=0` prende il disegno intero: serve a confrontarsi col DST che è andato in macchina
+const LATO_MM = Number(process.env.RG_LATO_MM ?? 90);
+const LATO = LATO_MM > 0 ? Math.round(LATO_MM / MM_PER_PX) : Math.min(intera.width, intera.height);
+const x0 = LATO_MM > 0 ? Math.round(intera.width * 0.52) : 0;
+const y0 = LATO_MM > 0 ? Math.round(intera.height * 0.18) : 0;
 const rgba = new Uint8ClampedArray(LATO * LATO * 4);
 for (let y = 0; y < LATO; y++) {
   for (let x = 0; x < LATO; x++) {
@@ -29,7 +32,7 @@ for (let y = 0; y < LATO; y++) {
 const img = { rgba, width: LATO, height: LATO };
 
 console.log('');
-console.log('PUNTO PITTORICO — la catena intera, su un ritaglio di 90 mm');
+console.log(`PUNTO PITTORICO — la catena intera, su ${LATO_MM > 0 ? `un ritaglio di ${LATO_MM} mm` : 'tutto il disegno'}`);
 const t0 = Date.now();
 const plan = buildPittoricoPlan(img, { ...defaultPittoricoParams, realWidthMm: LATO * MM_PER_PX });
 const ms = Date.now() - t0;
@@ -39,6 +42,16 @@ console.log(`tinte ${plan.palette.length}, ordine di cucitura ${plan.ordine.join
 console.log(`bordi: ${plan.bordiSfumati} sfumati su ${plan.bordiTotali} (${((plan.bordiSfumati / plan.bordiTotali) * 100).toFixed(0)}%)`);
 console.log(`macchie ${plan.macchie.length} — dalla rotaia ${plan.macchie.filter((m) => m.metodo === 'rotaia').length}, a distanza costante ${plan.macchie.filter((m) => m.metodo === 'distanza').length}`);
 console.log(`filo ${(plan.filoMm / 1000).toFixed(1)} m · ${plan.punti} punti`);
+console.log(`salti ${plan.salti} · ${(plan.saltoMm / 1000).toFixed(2)} m in tutto (${((plan.saltoMm / plan.filoMm) * 100).toFixed(1)}% del filo) · il più lungo ${plan.saltoMassimoMm.toFixed(1)} mm`);
+console.log('');
+console.log('i passaggi, ago per ago (R16 — quanto filo per andare, e quanto se ne vede):');
+for (const a of plan.passaggiPerAgo) {
+  const q = a.passaggiMm > 0 ? (a.passaggiCopertiMm / a.passaggiMm) * 100 : 100;
+  console.log(`   tinta ${a.tinta}  ${String(a.corse).padStart(6)} corse · `
+    + `riempimento ${(a.riempimentoMm / 1000).toFixed(1)} m · passaggi ${(a.passaggiMm / 1000).toFixed(1)} m `
+    + `(${((a.passaggiMm / a.riempimentoMm) * 100).toFixed(0)}% del riempimento, ${q.toFixed(0)}% nascosti) · `
+    + `${a.stacchi} stacchi`);
+}
 
 const layers = pittoricoExportLayers(plan);
 console.log('');

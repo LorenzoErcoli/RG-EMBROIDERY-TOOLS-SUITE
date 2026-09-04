@@ -24,13 +24,36 @@
 //
 // Nessun DOM.
 
-import {
-  type Point, type Polyline,
-  distance, resampleUniform, routeAlongBorder, pointInPolygon,
-} from '@rg/core';
-import { NO_COLOR } from '@rg/core';
-import { pointInRegion, type Region } from '@rg/core';
-import type { BroccatoColor } from './engine';
+// **Promosso nel core il 2026-09-04** (voce C8 di STATO, «il grande assente»): il secondo cliente si
+// è presentato — il Punto Pittorico, il cui primo DST vero in macchina aveva **15.449 salti** e
+// **569 m di spostamenti a vuoto** contro 355 m di filo cucito, cioè novemila tagli. Lorenzo, in una
+// riga: «abbiamo un intero sistema che ti spiega cosa sia il raso e come si comporta». Ce l'aveva, e
+// questo file è quel sistema: R16 (nascondi se puoi, altrimenti paga un costo esplicito), R17 (il
+// passaggio nascosto ha requisiti diversi), R18 (sotto ≠ aggira), R26 (catena minima, l'uscita di
+// uno è l'ingresso del prossimo). Non andava riscritto: andava usato.
+
+import type { Point, Polyline } from './types';
+import type { Region } from './regions';
+import { distance, pointInPolygon } from './geometry';
+import { resampleUniform } from './stitch';
+import { routeAlongBorder } from './travel';
+import { NO_COLOR } from './quantize';
+import { pointInRegion } from './regions';
+
+/**
+ * Quel poco che serve sapere di un ago per costruire la mappa di copertura: se **copre tutto il
+ * foglio** (un fondo) e se **viene cucito** o è escluso. Basta questo — il resto (tinta, densità,
+ * modo del punto) è roba del tool, non del passaggio.
+ *
+ * Sostituisce il tipo `BroccatoColor` che questo file importava dall'app quando ci viveva dentro:
+ * era l'unica cosa che lo teneva legato a `apps/broccato`.
+ */
+export interface AgoInCopertura {
+  /** Vero se questo ago copre tutto il foglio: se ne viene uno dopo, il passaggio è sempre nascosto. */
+  base?: boolean;
+  /** Vero se questo ago non viene cucito: non copre niente. */
+  escluso?: boolean;
+}
 
 // ------------------------------------------------------------
 // La mappa di costo
@@ -88,7 +111,7 @@ export function buildCoverGrid(
   height: number,
   mmPerPx: number,
   colorIndex: number,
-  colors: BroccatoColor[],
+  colors: AgoInCopertura[],
   cellMm: number,
 ): CoverGrid {
   const cols = Math.max(1, Math.ceil((width * mmPerPx) / cellMm));
@@ -98,12 +121,12 @@ export function buildCoverGrid(
   // Un colore di BASE cucito dopo copre tutto il foglio: se ce n'è uno, il passaggio è sempre nascosto.
   let baseDopo = false;
   for (let j = colorIndex + 1; j < colors.length; j++) {
-    if (colors[j].role === 'base') baseDopo = true;
+    if (colors[j].base) baseDopo = true;
   }
   if (baseDopo) { kind.fill(CELL_COVERED); return { cols, rows, cellMm, kind }; }
 
   const dopo = new Uint8Array(256);
-  for (let j = colorIndex + 1; j < colors.length; j++) if (colors[j].role !== 'escluso') dopo[j] = 1;
+  for (let j = colorIndex + 1; j < colors.length; j++) if (!colors[j].escluso) dopo[j] = 1;
 
   const pxPerCell = cellMm / mmPerPx;
   for (let r = 0; r < rows; r++) {

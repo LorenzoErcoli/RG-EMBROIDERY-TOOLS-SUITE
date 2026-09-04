@@ -22,7 +22,6 @@ export { runBitmapPreview, runBitmapPipeline, PREVIEW_MAX_DOTS } from ${JSON.str
 export { buildNet } from ${JSON.stringify(posix('apps/net-45/src/net.ts'))};
 export { generateStriatura, layerThreadMm, defaultStriaturaParams } from ${JSON.stringify(posix('apps/striatura/src/engine.ts'))};
 export { paletteToColors, applyDensityToAll, colorsToPalette, clampColorCount, mmPerPixel, defaultBroccatoParams } from ${JSON.stringify(posix('apps/broccato/src/engine.ts'))};
-export { buildCoverGrid, routeColorRuns, CELL_COVERED, CELL_OWN, CELL_EDGE, CELL_BARE } from ${JSON.stringify(posix('apps/broccato/src/routing.ts'))};
 export { buildPlan } from ${JSON.stringify(posix('apps/broccato/src/pipeline.ts'))};
 export { sampleImage as sampleBroccatoImage } from ${JSON.stringify(posix('apps/broccato/src/sample.ts'))};
 export { readZones, resolveZoneAngles, orderZonesRaster, dominantAngleDeg, familyAngleDeg, boundsOfPoints as zoneBounds, rotatePoints, outerEdgeFlags, expandOuterEdges, cellElongation, familyAxisShiftDeg, STRIP_ELONGATION, zonesFromShapes, makeZone } from ${JSON.stringify(posix('apps/zone-pattern/src/engine.ts'))};
@@ -1611,10 +1610,10 @@ console.log('\noblique — routing + orchestratore (2d)');
   const mappaC = new Uint8Array(40 * 30).fill(0);
   for (let y = 0; y < 30; y++) for (let x = 0; x < 20; x++) mappaC[y * 40 + x] = 0;   // colore 0 a sinistra
   for (let y = 0; y < 30; y++) for (let x = 20; x < 40; x++) mappaC[y * 40 + x] = 1;  // colore 1 a destra
-  const tinte = [
-    { hex: '#111111', role: 'macchia', densitySpacingMm: 1, mode: 'pettine' },
-    { hex: '#222222', role: 'macchia', densitySpacingMm: 1, mode: 'pettine' },
-  ];
+  // Il core non sa cosa sia un «ruolo» di broccato: gli si dice solo chi copre tutto il foglio e chi
+  // non viene cucito. E' l'unica cosa che gli serve, ed e' quello che ha permesso di promuovere
+  // `routing` nel core togliendogli l'ultimo aggancio all'app (2026-09-04).
+  const tinte = [{}, {}];
   const g0 = rg.buildCoverGrid(mappaC, 40, 30, 0.5, 0, tinte, 1);
   const g1 = rg.buildCoverGrid(mappaC, 40, 30, 0.5, 1, tinte, 1);
   const conta = (g, k) => g.kind.reduce((s, v) => s + (v === k ? 1 : 0), 0);
@@ -1622,16 +1621,10 @@ console.log('\noblique — routing + orchestratore (2d)');
   check('...e la sua e\' roba propria', conta(g0, rg.CELL_OWN) > 0, true);
   check('per l\'ULTIMO ago non c\'e\' piu\' niente sopra: zero coperto', conta(g1, rg.CELL_COVERED), 0);
   check('e allora gli restano i bordi', conta(g1, rg.CELL_EDGE) > 0, true);
-  const tinteBase = [
-    { hex: '#111111', role: 'macchia', densitySpacingMm: 1, mode: 'pettine' },
-    { hex: '#222222', role: 'base', densitySpacingMm: 1, mode: 'pettine' },
-  ];
+  const tinteBase = [{}, { base: true }];
   check('una BASE cucita dopo copre tutto',
     rg.buildCoverGrid(mappaC, 40, 30, 0.5, 0, tinteBase, 1).kind.every((v) => v === rg.CELL_COVERED), true);
-  const tinteEsc = [
-    { hex: '#111111', role: 'macchia', densitySpacingMm: 1, mode: 'pettine' },
-    { hex: '#222222', role: 'escluso', densitySpacingMm: 1, mode: 'pettine' },
-  ];
+  const tinteEsc = [{}, { escluso: true }];
   check('un colore ESCLUSO non copre niente (non si ricama)',
     rg.buildCoverGrid(mappaC, 40, 30, 0.5, 0, tinteEsc, 1).kind.every((v) => v !== rg.CELL_COVERED), true);
 

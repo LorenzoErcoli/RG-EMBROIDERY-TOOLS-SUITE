@@ -12,7 +12,7 @@ import {
   type ExportLayer, type Polyline, type Bounds, type Point,
   THREAD_STROKE_MM, buildParallelFill, fillThreadMm, hexToRgb, enforceMinStitch, resampleUniform, distance,
 } from '@rg/core';
-import { buildCoverGrid, routeColorRuns, type RegionRuns, type RoutingOptions } from './routing';
+import { buildCoverGrid, routeColorRuns, type RegionRuns, type RoutingOptions } from '@rg/core';
 import type { BroccatoColor, BroccatoParams } from './engine';
 import { traceRegions, type Region } from '@rg/core';
 import type { ReduceResult } from '@rg/core';
@@ -182,7 +182,11 @@ export function buildPlan(
     // guardando cosa verra' cucito dopo questo ago.
     const grid = buildCoverGrid(
       reduced.index, reduced.prepared.width, reduced.prepared.height,
-      mmPerPx, i, params.colors, routing.cellMm ?? 1.5,
+      // il core non sa cosa sia un «ruolo» di broccato: gli si dice solo chi copre tutto e chi non
+      // viene cucito, che è l'unica cosa che gli serve per la mappa di copertura
+      mmPerPx, i,
+      params.colors.map((c) => ({ base: c.role === 'base', escluso: c.role === 'escluso' })),
+      routing.cellMm ?? 1.5,
     );
     const routed = routeColorRuns(groups, grid, { travelStitchMm: params.travelStitchMm, ...routing });
 

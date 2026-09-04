@@ -12,6 +12,7 @@ export * from './params';
 export * from './quantize';
 export * from './regions';
 export * from './reduce';
+export * from './routing';
 export * from './imports';
 export * from './export';
 export * from './dst';

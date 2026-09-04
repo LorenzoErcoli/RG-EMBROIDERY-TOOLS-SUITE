@@ -26,6 +26,61 @@ import { harmonicField, type CondizioneAlBordo } from './field';
 import { buildRailFill } from './rail-fill';
 import { buildCurvedFill } from './curved-fill';
 import { larghezzaTransizione, cresciVersoISuccessivi, frastaglia } from './borders';
+// I passaggi NON si riscrivono: sono R16-R21 e R26, e vivono nel core da quando `routing` è stato
+// promosso da broccato. Mappa di copertura, catena minima fra le macchie, e i tre casi in ordine —
+// dritto, nascosto con l'A*, staccato solo se non c'è strada.
+import {
+  buildCoverGrid, routeColorRuns, enforceMinStitch, resampleUniform, distance, type RegionRuns,
+} from '@rg/core';
+
+/**
+ * L'ORDINE DELLE CORSE dentro una macchia.
+ *
+ * `routeColorRuns` mette in fila le MACCHIE a catena minima, ma dentro una macchia cuce le corse
+ * nell'ordine in cui gliele si passa: è il patto giusto, perché quell'ordine lo sa solo chi ha
+ * generato il riempimento. Dalla rotaia le corse escono già in fila — è il senso di quel motore —
+ * ma il riempimento a distanza costante le semina dove servono alla distanza, non in sequenza, e
+ * consegnate così fanno pagare un passaggio lungo a ogni corsa.
+ *
+ * Qui si mettono in fila e basta: dal capo dov'è finito il filo all'estremo più vicino che resta,
+ * girando la corsa se conviene entrarci dall'altra parte. Non si cuce niente — quello è mestiere di
+ * `routeColorRuns` — si decide solo la sequenza, così i tratti che dovrà coprire sono i più corti.
+ */
+function inFila(runs: Polyline[]): Polyline[] {
+  if (runs.length < 2) return [...runs];
+  const restano = runs.map((r, i) => ({ r, i }));
+  const out: Polyline[] = [restano.shift()!.r];
+  while (restano.length) {
+    const coda = out[out.length - 1][out[out.length - 1].length - 1];
+    let best = 0, bestD = Infinity, gira = false;
+    for (let k = 0; k < restano.length; k++) {
+      const r = restano[k].r;
+      const dA = distance(coda, r[0]), dB = distance(coda, r[r.length - 1]);
+      if (dA < bestD) { bestD = dA; best = k; gira = false; }
+      if (dB < bestD) { bestD = dB; best = k; gira = true; }
+    }
+    const scelta = restano.splice(best, 1)[0].r;
+    out.push(gira ? [...scelta].reverse() : scelta);
+  }
+  return out;
+}
+
+/**
+ * R3 e R4 insieme, nell'ordine giusto — stesso passo 8 del broccato.
+ *
+ * `enforceMinStitch` tiene SEMPRE gli estremi, quindi non puo' togliere una coda corta in fondo: la
+ * si toglie arretrando il PENULTIMO punto, mai l'ultimo. Poi si rimette il tetto (R4), perche'
+ * togliere un punto in mezzo unisce due tratti e puo' allungare il punto oltre il massimo;
+ * `resampleUniform` **suddivide soltanto** (R4), quindi non sposta un millimetro di geometria.
+ */
+function minEMax(pl: Polyline, minMm: number, maxMm: number): Polyline {
+  const out = enforceMinStitch(pl, minMm);
+  while (out.length >= 3 && distance(out[out.length - 1], out[out.length - 2]) < minMm) {
+    out.splice(out.length - 2, 1);
+  }
+  while (out.length >= 2 && distance(out[out.length - 1], out[out.length - 2]) < 1e-9) out.pop();
+  return maxMm > 0 ? resampleUniform(out, maxMm) : out;
+}
 
 export interface PittoricoParams {
   /** Quante tinte: ogni tinta è un ago. */
@@ -50,6 +105,22 @@ export interface PittoricoParams {
   minAreaMm2: number;
   /** Larghezza reale del disegno in mm (R11): è la fonte di verità. */
   realWidthMm: number;
+  /** Punto minimo (R3): si impone DOPO il routing, mai prima. */
+  minStitchMm: number;
+  /** Passo dei punti di passaggio (§3.1 `travelStitchMm`). */
+  travelStitchMm: number;
+  /**
+   * Oltre questo tratto SCOPERTO il filo si stacca (R16, fallback graduato). Tenuto alto apposta:
+   * il giro sul contorno si paga, il taglio del filo no — ed è la regola che Lorenzo ha ribadito
+   * («solo l'ultimo livello, se non c'è soluzione, mettiamo rasafilo»).
+   */
+  maxVisibleTravelMm: number;
+  /**
+   * Lo stesso, ma per l'ULTIMO ago: sopra di lui non c'è niente, quindi ogni passaggio si vede.
+   * Tenuto sotto la soglia del rasafilo della macchina (5-10 mm): il tratto corto lo si cuce, il
+   * resto si taglia. È l'unico livello dove il taglio è la risposta giusta.
+   */
+  maxVisibleTravelUltimoMm: number;
 }
 
 export const defaultPittoricoParams: PittoricoParams = {
@@ -64,6 +135,10 @@ export const defaultPittoricoParams: PittoricoParams = {
   smoothMm: 1.5,
   minAreaMm2: 400,
   realWidthMm: 0,
+  minStitchMm: 1,
+  travelStitchMm: 2.5,
+  maxVisibleTravelMm: 400,
+  maxVisibleTravelUltimoMm: 5,
 };
 
 export interface MacchiaCucita {
@@ -87,6 +162,24 @@ export interface PittoricoPlan {
   bordiTotali: number;
   filoMm: number;
   punti: number;
+  /** Quanti salti restano dopo aver cucito i passaggi, e quanto sono lunghi in tutto. */
+  salti: number;
+  saltoMm: number;
+  saltoMassimoMm: number;
+  /** Come sono andati i passaggi, ago per ago: è la misura che dice se il routing sta reggendo. */
+  passaggiPerAgo: PassaggiAgo[];
+}
+
+/** Il conto dei passaggi di un ago (R16): quanto filo si spende per andare, e quanto se ne vede. */
+export interface PassaggiAgo {
+  tinta: number;
+  corse: number;
+  riempimentoMm: number;
+  passaggiMm: number;
+  /** Di quei passaggi, quanto corre sotto un colore che verrà: quello non si vede. */
+  passaggiCopertiMm: number;
+  /** Quante volte il filo si è dovuto staccare: sull'ultimo ago è un rasafilo vero. */
+  stacchi: number;
 }
 
 const luce = (c: readonly number[]): number => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
@@ -100,6 +193,7 @@ const luce = (c: readonly number[]): number => 0.2126 * c[0] + 0.7152 * c[1] + 0
 export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): PittoricoPlan {
   const larghezzaMm = p.realWidthMm > 0 ? p.realWidthMm : img.width;
   const mmPerPx = larghezzaMm / img.width;
+
 
   // 1. le tinte, stabili
   const res = reduceStable(img, {
@@ -213,11 +307,79 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
     }
   }
 
-  let filoMm = 0, punti = 0;
-  for (const m of macchie) {
-    for (const c of m.corse) {
-      punti += c.length;
-      for (let i = 1; i < c.length; i++) filoMm += Math.hypot(c[i].x - c[i - 1].x, c[i].y - c[i - 1].y);
+  /*
+   * I PASSAGGI (R16-R21, R26) — il pezzo che il primo DST vero non aveva, e che l'ha reso
+   * inutilizzabile: 15.449 salti e 569 m di spostamenti a vuoto contro 355 m di filo cucito.
+   *
+   * Non c'è niente di nuovo da scrivere: `routeColorRuns` del core fa esattamente questo. Per ogni
+   * ago costruisce la mappa di cosa gli verrà cucito SOPRA, visita le macchie a catena minima, e
+   * fra una corsa e l'altra sceglie fra tre cose in ordine — dritto se il salto è corto e resta
+   * dentro la macchia, altrimenti la strada meno visibile con l'A*, e solo se nemmeno quella regge
+   * il filo si stacca.
+   *
+   * La mappa vuole gli indici **in ordine di cucitura**, non quelli della palette: `ordine` è una
+   * permutazione, e passare gli indici grezzi vorrebbe dire dire al core che «dopo» è un altro.
+   */
+  const inOrdine = new Uint8Array(idx.length).fill(0xff);
+  for (let i = 0; i < idx.length; i++) {
+    const pos = ordine.indexOf(idx[i]);
+    if (pos >= 0) inOrdine[i] = pos;
+  }
+  const aghi = ordine.map(() => ({}));
+
+  let filoMm = 0, punti = 0, salti = 0, saltoMm = 0, saltoMassimoMm = 0;
+  const passaggiPerAgo: PassaggiAgo[] = [];
+  for (let k = 0; k < ordine.length; k++) {
+    const t = ordine[k];
+    const gruppi: RegionRuns[] = macchie
+      .filter((m) => m.tinta === t && m.corse.length)
+      .map((m) => ({ region: m.region, runs: inFila(m.corse) }));
+    if (!gruppi.length) continue;
+    const grid = buildCoverGrid(inOrdine, img.width, img.height, mmPerPx, k, aghi, 1.5);
+    /*
+     * Quanto passaggio SCOPERTO si accetta prima di staccare il filo (R16, fallback graduato).
+     *
+     * Non è un numero solo, perché non tutti gli aghi sono nella stessa condizione. Sotto un colore
+     * che verrà, un passaggio lungo sparisce: si può essere generosi, e conviene, perché un taglio
+     * costa una ripresa e un capo da fissare. Sull'ULTIMO ago non c'è niente che copra: lì un
+     * passaggio è filo che si vede sul davanti, e la regola di Lorenzo è quella — «solo l'ultimo
+     * livello, se non c'è soluzione, mettiamo rasafilo». Quindi lì si tiene la soglia sotto il
+     * rasafilo della macchina: il tratto corto passa, il resto si taglia.
+     */
+    const ultimo = k === ordine.length - 1;
+    const routed = routeColorRuns(gruppi, grid, {
+      travelStitchMm: p.travelStitchMm,
+      maxVisibleTravelMm: ultimo ? p.maxVisibleTravelUltimoMm : p.maxVisibleTravelMm,
+    });
+    // R3 DOPO il routing, mai prima: sono le giunzioni appena create a reintrodurre i micro-punti
+    const blocchi = routed.blocks
+      .map((b) => minEMax(b, p.minStitchMm, p.maxStitchMm))
+      .filter((b) => b.length >= 2);
+    // i blocchi cuciti stanno tutti sulla prima macchia dell'ago: da qui in poi contano gli AGHI
+    for (const m of macchie) if (m.tinta === t) m.corse = [];
+    const prima = macchie.find((m) => m.tinta === t);
+    if (prima) prima.corse = blocchi;
+
+    salti += routed.jumps;
+    saltoMm += routed.travelMm;
+    passaggiPerAgo.push({
+      tinta: t,
+      corse: gruppi.reduce((a, g) => a + g.runs.length, 0),
+      riempimentoMm: gruppi.reduce((a, g) => a + g.runs.reduce((b, r) => {
+        let m = 0; for (let i = 1; i < r.length; i++) m += distance(r[i], r[i - 1]); return b + m;
+      }, 0), 0),
+      passaggiMm: routed.travelMm,
+      passaggiCopertiMm: routed.travelCoveredMm,
+      stacchi: routed.jumps,
+    });
+    for (let i = 1; i < blocchi.length; i++) {
+      const d = Math.hypot(blocchi[i][0].x - blocchi[i - 1][blocchi[i - 1].length - 1].x,
+        blocchi[i][0].y - blocchi[i - 1][blocchi[i - 1].length - 1].y);
+      if (d > saltoMassimoMm) saltoMassimoMm = d;
+    }
+    for (const b of blocchi) {
+      punti += b.length;
+      for (let i = 1; i < b.length; i++) filoMm += Math.hypot(b[i].x - b[i - 1].x, b[i].y - b[i - 1].y);
     }
   }
 
@@ -225,6 +387,7 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
     palette: res.palette, ordine, macchie, mmPerPx,
     larghezzaMm, altezzaMm: img.height * mmPerPx,
     bordiSfumati, bordiTotali, filoMm, punti,
+    salti, saltoMm, saltoMassimoMm, passaggiPerAgo,
   };
 }
 
