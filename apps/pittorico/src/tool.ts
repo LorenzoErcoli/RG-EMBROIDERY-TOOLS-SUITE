@@ -6,15 +6,16 @@
 // classi del Design System. La **validazione della composizione** dal subagent `design-system` è
 // l'ultimo passo, insieme ai nomi dei parametri col processo di `REVISIONE-PARAMETRI.md`.
 //
-// Due cose che questo tool ancora non fa, e che si vedono nell'anteprima: il **punto minimo** (R3) e
-// i **passaggi** fra una macchia e l'altra (R16/R26). Le corse escono staccate; in macchina servono
-// i collegamenti nascosti sotto i colori successivi.
+// L'anteprima ha cinque VISTE, ed e' il modo per capire cosa sta facendo il sistema invece di
+// fidarsi: come divide l'immagine in colori, come quei colori diventano macchie cucibili, dov'e' il
+// ricamo e - la piu' importante - dove passa il filo di collegamento. Un difetto come la linea sul
+// bordo si misura, ma prima si guarda.
 
 import '@rg/ui/rg.css';
 import './pittorico.css';
 import {
   buildSvg, dstFromExportLayers, DST_FILE, readDstMetadata, readProjectMetadata,
-  bounds, rgbToHex, type PixelImage, type Point,
+  bounds, rgbToHex, type PixelImage,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
@@ -23,6 +24,16 @@ import {
   buildPittoricoPlan, pittoricoExportLayers, defaultPittoricoParams,
   type PittoricoParams, type PittoricoPlan,
 } from './pipeline';
+// Le viste NON stanno qui: le usano in due — questo guscio e lo script che ne fa una pagina da
+// guardare senza aprire l'app — e due copie divergono sempre.
+import { svgMacchie, svgRicamo, svgPassaggi, pixelDeiColori } from './viste';
+
+/**
+ * Le cinque viste dell'anteprima, in ordine di catena: l'immagine com'e' entrata, come viene divisa
+ * in tinte, come le tinte diventano macchie cucibili, il ricamo, e dove passa il filo fra una corsa
+ * e l'altra.
+ */
+type Vista = 'originale' | 'colori' | 'macchie' | 'ricamo' | 'passaggi';
 
 /** Sorgente pixel: rasterizzabile alla larghezza di lavoro. */
 interface Sorgente { name: string; pixelsAt: (maxWidthPx: number) => PixelImage; }
@@ -161,14 +172,38 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
 
     </aside>
 
-    <main class="rg-workspace__canvas" id="canvas">
-      <div class="rg-workspace__layer" id="layer"></div>
-      <div class="rg-statusbar">
+    <div class="rg-workspace__stage">
+      <header class="rg-workspace__stage-header">
+        <h2 class="rg-h3">Anteprima</h2>
+        <div class="rg-cluster">
+          <!-- ECCEZIONE DICHIARATA (regola 12). Il segmented del DS e' documentato per 2-4 opzioni
+               sorelle e qui ne porta 5. Sono le cinque tappe della catena, e fonderne due
+               nasconderebbe proprio il passo che si vuole guardare: fra Colori e Macchie sta la
+               tracciatura, ed e' li' che una linea netta si perde. Il controllo regge: il track e'
+               inline-flex, e sotto i 1300px il cluster manda a capo il blocco intero invece di
+               spezzarlo. Ambito: solo questo tool. Se un terzo tool chiedera' la stessa cosa,
+               l'eccezione va promossa a variante documentata del DS.
+               Il div attorno non e' decorativo: tiene il gruppo come UN solo item del cluster. -->
+          <div>
+            <div class="rg-segmented" role="group" aria-label="Cosa guardare">
+              <button type="button" class="rg-segmented__item" data-vista="originale" aria-pressed="false">Originale</button>
+              <button type="button" class="rg-segmented__item" data-vista="colori" aria-pressed="false">Colori</button>
+              <button type="button" class="rg-segmented__item" data-vista="macchie" aria-pressed="false">Macchie</button>
+              <button type="button" class="rg-segmented__item rg-segmented__item--active" data-vista="ricamo" aria-pressed="true">Ricamo</button>
+              <button type="button" class="rg-segmented__item" data-vista="passaggi" aria-pressed="false">Passaggi</button>
+            </div>
+          </div>
+          <button class="rg-button rg-button--ghost rg-button--small" id="fitBtn" type="button">Adatta</button>
+        </div>
+      </header>
+      <div class="rg-workspace__canvas" id="canvas">
+        <div class="rg-workspace__layer" id="layer"></div>
+      </div>
+      <footer class="rg-workspace__statusbar">
         <span id="status">Carica un'immagine, poi premi Genera</span>
         <span class="rg-mono" id="zoom">zoom 100%</span>
-        <button class="rg-button rg-button--ghost rg-button--small" id="fitBtn" type="button">Adatta</button>
-      </div>
-    </main>
+      </footer>
+    </div>
   </div>`;
 
   const $ = (id: string): HTMLElement => root.querySelector(`#${id}`) as HTMLElement;
@@ -176,6 +211,8 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
   let sorgente: Sorgente | null = null;
   let nomeFile = '';
   let piano: PittoricoPlan | null = null;
+  let immagine: HTMLImageElement | null = null;
+  let vista: Vista = 'ricamo';
 
   const pz = hookPanZoom($('canvas'), $('layer'), (z) => {
     $('zoom').textContent = `zoom ${Math.round(z * 100)}%`;
@@ -229,6 +266,9 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
       $('status').textContent = params.realWidthMm > 0
         ? 'Immagine caricata: premi Genera'
         : 'Immagine caricata. Metti la larghezza reale in mm, poi premi Genera';
+      immagine = el;
+      vista = 'originale';
+      segnaVista();
       mostraImmagine(el);
       pz.fit();
     };
@@ -257,11 +297,18 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
         // la larghezza reale vale per l'immagine INTERA: se qui è ridotta, il rapporto non cambia
         const p: PittoricoParams = { ...params, realWidthMm: params.realWidthMm > 0 ? params.realWidthMm : img.width };
         piano = buildPittoricoPlan(img, p);
-        disegna(piano);
+        // dall'immagine si passa da soli al ricamo: e' quello che si e' appena chiesto di calcolare
+        if (vista === 'originale') vista = 'ricamo';
+        segnaVista();
+        disegna();
         mostraAghi(piano);
         const ms = Math.round(performance.now() - t0);
+        const nasc = piano.saltoMm > 0
+          ? Math.round((100 * piano.passaggiPerAgo.reduce((s, a) => s + a.passaggiCopertiMm, 0)) / piano.saltoMm)
+          : 100;
         $('status').textContent = `${piano.macchie.length} macchie · ${piano.ordine.length} aghi · `
-          + `${(piano.filoMm / 1000).toFixed(1)} m di filo · ${piano.punti.toLocaleString('it-IT')} punti · ${ms} ms`;
+          + `${(piano.filoMm / 1000).toFixed(1)} m di filo · ${piano.punti.toLocaleString('it-IT')} punti · `
+          + `passaggi ${(piano.saltoMm / 1000).toFixed(1)} m (${nasc}% nascosti) · ${piano.salti} salti · ${ms} ms`;
         pz.fit();
       } catch (e) {
         $('status').textContent = `Non ce l'ho fatta: ${(e as Error).message}`;
@@ -269,19 +316,60 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
     }, 20);
   });
 
-  function disegna(pl: PittoricoPlan): void {
-    const layers = pittoricoExportLayers(pl);
-    const corpi = layers.map((l) => {
-      const d = l.polylines
-        .map((c) => `<polyline points="${c.map((p: Point) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')}" />`)
-        .join('');
-      return `<g fill="none" stroke="${l.color}" stroke-width="${l.strokeMm}" stroke-linejoin="round" stroke-linecap="round">${d}</g>`;
-    }).join('');
-    // il fondo è la tinta più scura: è quella che in macchina va giù per prima e fa da campo
-    const fondo = rgbToHex(pl.palette[pl.ordine[0]]);
-    $('layer').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${pl.larghezzaMm.toFixed(1)}mm" height="${pl.altezzaMm.toFixed(1)}mm" viewBox="0 0 ${pl.larghezzaMm.toFixed(1)} ${pl.altezzaMm.toFixed(1)}">`
-      + `<rect x="0" y="0" width="${pl.larghezzaMm.toFixed(1)}" height="${pl.altezzaMm.toFixed(1)}" fill="${fondo}" opacity="0.12" />`
-      + `${corpi}</svg>`;
+  // ---- le viste ---------------------------------------------------------------
+
+  /**
+   * Segna la vista corrente e spegne quelle che non hanno ancora niente da mostrare: prima di
+   * Genera, "Ricamo" e "Passaggi" darebbero un canvas vuoto, che non e' un'informazione — e' un
+   * dubbio. Classe e `aria-pressed` si aggiornano insieme su TUTTI gli item: il CSS del DS aggancia
+   * l'uno o l'altro, e tenerne solo uno lascerebbe due voci accese.
+   */
+  function segnaVista(): void {
+    for (const b of root.querySelectorAll<HTMLButtonElement>('[data-vista]')) {
+      const attiva = b.dataset.vista === vista;
+      b.classList.toggle('rg-segmented__item--active', attiva);
+      b.setAttribute('aria-pressed', String(attiva));
+      b.disabled = b.dataset.vista === 'originale' ? !immagine : !piano;
+    }
+  }
+
+  for (const b of root.querySelectorAll<HTMLButtonElement>('[data-vista]')) {
+    b.addEventListener('click', () => {
+      vista = b.dataset.vista as Vista;
+      segnaVista();
+      disegna();
+    });
+  }
+
+  /** La divisione in tinte e' una mappa di pixel: nel browser va in un canvas, non in un SVG. */
+  function vistaColori(pl: PittoricoPlan): void {
+    const cv = document.createElement('canvas');
+    cv.width = pl.larghezzaPx; cv.height = pl.altezzaPx;
+    cv.style.width = `${pl.larghezzaMm.toFixed(2)}mm`;
+    cv.style.height = `${pl.altezzaMm.toFixed(2)}mm`;
+    const dati = cv.getContext('2d')!.createImageData(pl.larghezzaPx, pl.altezzaPx);
+    dati.data.set(pixelDeiColori(pl));
+    cv.getContext('2d')!.putImageData(dati, 0, 0);
+    $('layer').innerHTML = '';
+    $('layer').appendChild(cv);
+  }
+
+  /**
+   * Cambiare vista ridisegna DENTRO il layer e non tocca pan e zoom: e' tutto il senso di avere
+   * cinque viste, perche' confrontarne due senza spostare l'inquadratura e' l'unico modo per vedere
+   * dove il filo di passaggio finisce rispetto al riempimento.
+   */
+  function disegna(): void {
+    if (vista === 'originale') {
+      if (immagine) mostraImmagine(immagine);
+      return;
+    }
+    if (!piano) { $('status').textContent = 'Per questa vista serve il ricamo: premi Genera'; return; }
+    if (vista === 'colori') { vistaColori(piano); return; }
+    const strati = vista === 'macchie' ? [] : pittoricoExportLayers(piano);
+    $('layer').innerHTML = vista === 'macchie' ? svgMacchie(piano)
+      : vista === 'passaggi' ? svgPassaggi(piano, strati)
+        : svgRicamo(piano, strati);
   }
 
   function mostraAghi(pl: PittoricoPlan): void {

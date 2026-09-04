@@ -314,6 +314,12 @@ export interface RoutedColor {
    */
   perCaso: { dritto: Caso; interno: Caso; contorno: Caso };
   /**
+   * **Ogni** tratto di collegamento, i passi dritti compresi — mentre `travels` tiene solo quelli
+   * instradati. Serve a VEDERLI: un difetto come la linea sul bordo si misura, ma prima di tutto si
+   * guarda, e per guardarlo bisogna poter disegnare il filo di passaggio separato dal riempimento.
+   */
+  allTravels: Polyline[];
+  /**
    * Il confronto onesto: sugli STESSI passaggi instradati, quanto sarebbe stato coperto andando
    * per la via piu' corta. Serve a sapere se la ricerca sta guadagnando qualcosa o se si sta solo
    * pagando del tempo — e non si puo' leggere dal totale, perche' i passaggi che diventano salti
@@ -387,8 +393,9 @@ export function routeColorRuns(
   const perCaso = { dritto: { volte: 0, mm: 0 }, interno: { volte: 0, mm: 0 }, contorno: { volte: 0, mm: 0 } };
   let routedMm = 0, routedCoveredMm = 0, straightCoveredMm = 0, routedHorizontalMm = 0;
   const travels: Polyline[] = [];
+  const allTravels: Polyline[] = [];
   const vivi = groups.filter((g) => g.runs.length);
-  if (!vivi.length) return { blocks, travelMm, travelCoveredMm, travelHorizontalMm, jumps, routedMm, routedCoveredMm, straightCoveredMm, routedHorizontalMm, travels, perCaso };
+  if (!vivi.length) return { blocks, travelMm, travelCoveredMm, travelHorizontalMm, jumps, routedMm, routedCoveredMm, straightCoveredMm, routedHorizontalMm, travels, perCaso, allTravels };
 
   // Catena minima fra le macchie (R26): si va sempre alla più vicina che resta.
   const restano = [...vivi];
@@ -416,6 +423,7 @@ export function routeColorRuns(
       if (Math.abs(via[k].y - via[k - 1].y) < Math.abs(via[k].x - via[k - 1].x) * 0.3) orizz += d;
     }
     travelMm += lung; travelCoveredMm += coperto; travelHorizontalMm += orizz;
+    allTravels.push(via);
     if (!dritto) {
       routedMm += lung; routedCoveredMm += coperto; routedHorizontalMm += orizz;
       straightCoveredMm += lung * coveredFraction(pen, meta, grid);
@@ -518,7 +526,7 @@ export function routeColorRuns(
     regCorrente = gruppo.region;
   }
   if (corrente.length) blocks.push(corrente);
-  return { blocks, travelMm, travelCoveredMm, travelHorizontalMm, jumps, routedMm, routedCoveredMm, straightCoveredMm, routedHorizontalMm, travels, perCaso };
+  return { blocks, travelMm, travelCoveredMm, travelHorizontalMm, jumps, routedMm, routedCoveredMm, straightCoveredMm, routedHorizontalMm, travels, perCaso, allTravels };
 }
 
 /** Il segmento resta dentro la macchia? (campionato: gli estremi non bastano) */

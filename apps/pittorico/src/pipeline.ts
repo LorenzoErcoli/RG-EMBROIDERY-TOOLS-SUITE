@@ -304,6 +304,13 @@ export interface PittoricoPlan {
   saltoMassimoMm: number;
   /** Come sono andati i passaggi, ago per ago: è la misura che dice se il routing sta reggendo. */
   passaggiPerAgo: PassaggiAgo[];
+  /**
+   * La mappa dei colori: per ogni pixel, la tinta che gli è toccata (`NO_COLOR` se nessuna). È
+   * quello che l'anteprima «Colori» disegna — come il sistema divide l'immagine prima di cucirla.
+   */
+  indice: Uint8Array;
+  larghezzaPx: number;
+  altezzaPx: number;
 }
 
 /** Il conto dei passaggi di un ago (R16): quanto filo si spende per andare, e quanto se ne vede. */
@@ -318,6 +325,8 @@ export interface PassaggiAgo {
   stacchi: number;
   /** Quale dei tre casi ha pagato quei millimetri: dritto, dentro il riempimento, sul contorno. */
   perCaso: { dritto: { volte: number; mm: number }; interno: { volte: number; mm: number }; contorno: { volte: number; mm: number } };
+  /** Il filo di collegamento, disegnabile: serve all'anteprima «Passaggi». */
+  vie: Polyline[];
 }
 
 const luce = (c: readonly number[]): number => 0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2];
@@ -515,6 +524,7 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
         tinta: t, corse: blocchi.length, stacchi: blocchi.length,
         riempimentoMm: 0, passaggiMm: 0, passaggiCopertiMm: 0,
         perCaso: { dritto: { volte: 0, mm: 0 }, interno: { volte: 0, mm: 0 }, contorno: { volte: 0, mm: 0 } },
+        vie: [],
       });
       for (const b of blocchi) {
         punti += b.length;
@@ -559,6 +569,7 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
       passaggiCopertiMm: routed.travelCoveredMm,
       stacchi: routed.jumps,
       perCaso: routed.perCaso,
+      vie: routed.allTravels,
     });
     for (let i = 1; i < blocchi.length; i++) {
       const d = Math.hypot(blocchi[i][0].x - blocchi[i - 1][blocchi[i - 1].length - 1].x,
@@ -576,6 +587,7 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
     larghezzaMm, altezzaMm: img.height * mmPerPx,
     bordiSfumati, bordiTotali, filoMm, punti,
     salti, saltoMm, saltoMassimoMm, passaggiPerAgo,
+    indice: idx, larghezzaPx: img.width, altezzaPx: img.height,
   };
 }
 
