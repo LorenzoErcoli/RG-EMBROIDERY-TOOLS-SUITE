@@ -82,21 +82,43 @@ const disegni: Array<{ nome: string; region: Region; runs: Polyline[] }> = [];
 for (const prova of regioniDiProva()) {
   if (prova.campo.tipo !== 'armonico') continue;      // la rotaia ha senso su una fascia
   const { region } = prova;
-  const campo = harmonicField(region, { cellMm: 1, levels: 4, sweeps: 300 });
 
   // La rotaia: metà del contorno di una banda è un fianco. Le regioni di prova sono costruite
   // come «lato sinistro + lato destro rovesciato», quindi la prima metà è una rotaia buona.
   const meta = Math.floor(region.outer.length / 2);
   const rotaia: Polyline = region.outer.slice(0, meta);
 
+  /*
+   * LE TESTATE. I due lati corti che uniscono i fianchi non sono bordi di colore: lì la fascia
+   * semplicemente finisce. Imporci la perpendicolare vuol dire dire al filo di girare di 90° proprio
+   * all'estremità, e infatti restava scoperto un quadrato di 24 mm nell'angolo largo.
+   */
+  const n = region.outer.length;
+  const testate: Array<[Point, Point]> = [
+    [region.outer[meta - 1], region.outer[meta]],
+    [region.outer[n - 1], region.outer[0]],
+  ];
+  const suTestata = (p: Point): boolean => testate.some(([a, b]) => {
+    const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+    let t = l2 > 0 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2 : 0;
+    t = t < 0 ? 0 : t > 1 ? 1 : t;
+    return Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t)) < 0.6;
+  });
+
+  const campo = harmonicField(region, {
+    cellMm: 1, levels: 4, sweeps: 300,
+    condizioneA: (p) => (suTestata(p) ? 'libera' : 'perpendicolare'),
+  });
+  const campoVecchio = harmonicField(region, { cellMm: 1, levels: 4, sweeps: 300 });
+
   const curvo = buildCurvedFill(region, campo, { spacingMm: PASSO, maxStitchMm: PUNTO_MAX }).runs;
-  const railAllineato = buildRailFill(region, campo, rotaia, { spacingMm: PASSO, maxStitchMm: PUNTO_MAX, sfalsaCunei: 0 });
+  const railVecchio = buildRailFill(region, campoVecchio, rotaia, { spacingMm: PASSO, maxStitchMm: PUNTO_MAX });
   const rail = buildRailFill(region, campo, rotaia, { spacingMm: PASSO, maxStitchMm: PUNTO_MAX });
 
   for (const [nome, runs] of [
     ['a distanza costante', curvo],
-    ['dalla rotaia, cunei allineati', railAllineato.runs],
-    ['dalla rotaia, cunei sfalsati', rail.runs],
+    ['rotaia, testate vincolate', railVecchio.runs],
+    ['rotaia, testate libere', rail.runs],
   ] as Array<[string, Polyline[]]>) {
     const o = ordine(runs, region, 0.35);
     const cov = coverageStats(runs, region, PASSO);
@@ -108,12 +130,7 @@ for (const prova of regioniDiProva()) {
     console.log(`   ${`${prova.id} · ${nome}`.padEnd(34)} ${String(o.corse).padStart(6)} ${pct(o.capiSulBordo).padStart(14)} ${`${n1(o.lungP10)}–${n1(o.lungP90)}`.padStart(15)} ${n2(o.filoM).padStart(7)} ${pct(cov.cv).padStart(8)} ${n2(sp.p95).padStart(10)} ${`celle vuote ${vuote} · p05 ${n2(cov1.p05 / (1 / PASSO))}`.padStart(28)}`);
     disegni.push({ nome: `${prova.id} · ${nome}`, region, runs });
   }
-  console.log(`   ${''.padEnd(34)} cunei per giro: allineati ${railAllineato.cuneiPerGiro.join('+')} · sfalsati ${rail.cuneiPerGiro.join('+')} (su ${rail.semi} semi)`);
-  // a che SCALA vive la variazione: un fronte di cunei allineati si vede da lontano, una grana no
-  for (const [nome, runs] of [['allineati', railAllineato.runs], ['sfalsati', rail.runs]] as Array<[string, Polyline[]]>) {
-    const cv = [1, 2, 4, 8].map((c) => pct(coverageStats(runs, region, PASSO, c).cv)).join(' / ');
-    console.log(`   ${''.padEnd(34)} CV a celle 1/2/4/8 mm, cunei ${nome.padEnd(10)} ${cv}`);
-  }
+  console.log(`   ${''.padEnd(34)} cunei per giro ${rail.cuneiPerGiro.join('+')} · ombre dal foro ${rail.ombre} (su ${rail.semi} semi)`);
 }
 
 console.log('');

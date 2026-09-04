@@ -19,6 +19,7 @@ import { larghezzaTransizione, cresciVersoISuccessivi, frastaglia } from '../src
 import { harmonicField } from '../src/field.ts';
 import { makeRegion } from '../src/region.ts';
 import { coverageStats, neighbourSpacing } from '../src/coverage.ts';
+import { buildRailFill } from '../src/rail-fill.ts';
 import { buildCurvedFill } from '../src/curved-fill.ts';
 
 const esaTinta = (c: readonly number[]): string =>
@@ -238,14 +239,72 @@ let dettaglio = '';
   for (const t of ordine) {
     const mask = cresciVersoISuccessivi(rit, lato, lato, t, ordine, MM_PER_PX, { crescitaMm: CRESCITA, sormontoMm: SORMONTO, sfuma: ritSfuma });
     for (const r of traceRegions(mask, lato, lato, 1, MM_PER_PX, { simplifyMm: MM_PER_PX * 1.5, minAreaMm2: 60 })) {
-      const campo = harmonicField(r, { cellMm: 1.2, levels: 4, sweeps: 220 });
-      const corse = buildCurvedFill(r, campo, { spacingMm: 0.4, maxStitchMm: 3 }).runs;
+      /*
+       * BORDO o TESTATA? Si guarda che tinta c'è appena fuori dal contorno: se è un'altra tinta è un
+       * **bordo** e il punto ci si posa perpendicolare; se non c'è niente (il ritaglio finisce) è una
+       * **testata** e il campo è libero. È la distinzione che ha tolto il quadrato scoperto dalla
+       * banda di prova e ha portato la dispersione dal 59% al 19%.
+       */
+      const tintaFuori = (p: Point): number => {
+        const x = Math.round(p.x / MM_PER_PX), y = Math.round(p.y / MM_PER_PX);
+        for (const [dx, dy] of [[2, 0], [-2, 0], [0, 2], [0, -2]] as Array<[number, number]>) {
+          const xx = x + dx, yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= lato || yy >= lato) continue;
+          const q = rit[yy * lato + xx];
+          if (q !== t) return q;
+        }
+        return -1;
+      };
+      const campo = harmonicField(r, {
+        cellMm: 1.2, levels: 4, sweeps: 220,
+        condizioneA: (p) => (tintaFuori(p) >= 0 ? 'perpendicolare' : 'libera'),
+      });
+
+      /*
+       * LA ROTAIA: il tratto di contorno più lungo che guarda un'ALTRA tinta. È da lì che i punti
+       * partono, tutti alla stessa distanza, ed è quello che dà l'ordine — invece di lasciarli
+       * nascere dove capita.
+       */
+      const mio = ordine.indexOf(t);
+      const tratto = (verso: 'prima' | 'dopo'): Polyline | null => {
+        const guarda = r.outer.map((p) => {
+          const q = tintaFuori(p);
+          if (q < 0) return false;
+          const suo = ordine.indexOf(q);
+          return verso === 'prima' ? suo >= 0 && suo < mio : suo > mio;
+        });
+        let inizio = 0, lungh = 0, corrente = 0, iniz = 0;
+        for (let i = 0; i < guarda.length * 2; i++) {
+          if (guarda[i % guarda.length]) {
+            if (corrente === 0) iniz = i;
+            corrente++;
+            if (corrente > lungh) { lungh = corrente; inizio = iniz; }
+          } else corrente = 0;
+        }
+        if (lungh < 6) return null;
+        return Array.from({ length: Math.min(lungh, guarda.length) }, (_, k) => r.outer[(inizio + k) % guarda.length]);
+      };
+      /*
+       * La rotaia è UN LATO, non tutto il contorno. Va presa dalla parte del colore **già cucito**:
+       * i punti attraversano da lì verso il colore che verrà. Se quella tinta è la prima (non ha
+       * nessuno prima di sé) si parte dal lato opposto, così il verso resta coerente.
+       *
+       * Prendere «il contorno che guarda un'altra tinta» sembrava equivalente e non lo è: su una
+       * regione interna è quasi tutto l'anello, e si finisce per seminare da ogni lato — misurato,
+       * 43 m di filo su 49 cm² invece di 15, col passo sceso a 0,04 mm.
+       */
+      const rotaia = tratto('prima') ?? tratto('dopo');
+      // se il contorno non ha un lato riconoscibile la forma non è una fascia: lì l'ordine non è
+      // definibile e si torna al riempimento a distanza costante, che su una macchia qualunque va bene
+      const corse = rotaia && rotaia.length < r.outer.length * 0.75
+        ? buildRailFill(r, campo, rotaia, { spacingMm: 0.3, maxStitchMm: 3 }).runs
+        : buildCurvedFill(r, campo, { spacingMm: 0.3, maxStitchMm: 3 }).runs;
       /**
        * Il capo si frastaglia SOLO dove il colore sfuma, e la frangia è lunga quanto il passaggio
        * misurato lì — non un numero fisso. Il parametro di pannello (decisione 3) fa da TETTO: si
        * prende il più corto fra quello che l'utente concede e quello che l'immagine chiede.
        */
-      const FRANGIA_MASSIMA = 5;
+      const FRANGIA_MASSIMA = 5;   // la scelta di Lorenzo sui provini
       const quiSfuma = (p: Point): boolean => {
         const x = Math.round(p.x / MM_PER_PX), y = Math.round(p.y / MM_PER_PX);
         return x >= 0 && y >= 0 && x < lato && y < lato && ritSfuma[y * lato + x] === 1;
@@ -266,7 +325,7 @@ let dettaglio = '';
       const t3 = res.palette[t];
       const chiara = 0.2126 * t3[0] + 0.7152 * t3[1] + 0.0722 * t3[2] > 170;
       const colore = esaTinta(chiara ? t3.map((v) => v * 0.62 + 20) : t3);
-      pezzi.push(`<g fill="none" stroke="${colore}" stroke-width="0.22" stroke-linecap="round">${
+      pezzi.push(`<g fill="none" stroke="${colore}" stroke-width="0.17" stroke-linecap="round">${
         frangiate.map((c) => `<polyline points="${c.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ')}" />`).join('')
       }</g>`);
     }
@@ -276,11 +335,11 @@ let dettaglio = '';
   // mangiava il riempimento è corretta; quello che resta è la variazione di densità del
   // posizionamento a distanza costante, e va detto con un numero perché si possa vedere se cala.
   {
-    const nom = 1 / 0.4;
-    const cov = coverageStats(tutteLeCorse, ritaglioRegion, 0.4, 2);
-    const sp = neighbourSpacing(tutteLeCorse, 0.4);
+    const nom = 1 / 0.3;
+    const cov = coverageStats(tutteLeCorse, ritaglioRegion, 0.3, 2);
+    const sp = neighbourSpacing(tutteLeCorse, 0.3);
     console.log(`   copertura: media ${n2(cov.media / nom)} del nominale · il 5% più rado sta a ${n2(cov.p05 / nom)} · dispersione ${(cov.cv * 100).toFixed(1)}%`);
-    console.log(`   distanza fra file: mediana ${n2(sp.p50)} mm · il 5% più largo ${n2(sp.p95)} · il vuoto peggiore ${n2(sp.max)} mm (chiesto 0,40)`);
+    console.log(`   distanza fra file: mediana ${n2(sp.p50)} mm · il 5% più largo ${n2(sp.p95)} · il vuoto peggiore ${n2(sp.max)} mm (chiesto 0,30)`);
   }
 
   const L = lato * MM_PER_PX;

@@ -253,7 +253,7 @@ const pagina = `<title>Banco del Punto Pittorico</title>
     <div class="fatto"><dt>Il disegno</dt><dd>419,45 × 353,1 mm</dd></div>
     <div class="fatto"><dt>Un pixel vale</dt><dd>0,353 mm</dd></div>
     <div class="fatto"><dt>Passo del filo</dt><dd>0,4 mm</dd></div>
-    <div class="fatto"><dt>Rete di sicurezza</dt><dd>600 controlli</dd></div>
+    <div class="fatto"><dt>Rete di sicurezza</dt><dd>614 controlli</dd></div>
   </dl>
 </header>
 
@@ -419,10 +419,15 @@ const pagina = `<title>Banco del Punto Pittorico</title>
   <div class="corpo">
     <span class="stato si">fatto e misurato</span>
     <h2>I bordi: il degradé dove il colore sfuma, il taglio secco dove stacca</h2>
-    <p>Qui sotto, un ritaglio da 70 mm del tuo disegno cucito davvero: passo 0,4 mm, 15 metri di filo
-    su 49 cm². I punti <strong>attraversano</strong> il passaggio di colore e le loro punte
-    <strong>sporgono di quantità diverse e si intrecciano</strong> con quelle della tinta accanto —
-    è il degradé fatto col frastaglio del bordo, come avevi detto tu, e non con una texture.</p>
+    <p>Qui sotto, un ritaglio da 70 mm del tuo disegno cucito davvero, ai numeri che hai scelto sui
+    provini: <strong>passo 0,3 mm, frangia 5 mm</strong>, 22 metri di filo su 49 cm². I punti
+    <strong>attraversano</strong> il passaggio di colore e le loro punte <strong>sporgono di quantità
+    diverse e si intrecciano</strong> con quelle della tinta accanto — è il degradé fatto col
+    frastaglio del bordo, come avevi detto tu, e non con una texture.</p>
+    <p>E sono <strong>ordinati</strong>: partono tutti da una stessa rotaia — il lato che guarda il
+    colore già cucito — e la attraversano paralleli. Dove la fascia si allarga si infila un
+    <strong>cuneo</strong>, un punto in più in un posto deciso. Prima le file nascevano dove capitava,
+    ed è quello che vedevi come disordine.</p>
     <p><strong>Sul bordo netto niente frangia</strong>, ma un <strong>sormonto di 1,5 mm</strong>: il
     colore che va sotto sborda di quel tanto, e quello sopra gli si appoggia definendo il bordo. Il
     taglio resta preciso perché a disegnarlo è il colore di sopra — e alla giunta non si vede la tela,
@@ -461,9 +466,33 @@ const pagina = `<title>Banco del Punto Pittorico</title>
     sopra ci si appoggia: niente buchi alle giunte. Verificato sul tuo disegno — nessuna tinta cresce
     all'indietro, nemmeno di un pixel, e l'ultima non cresce affatto.</p>
 
-    <h3>Densità e frastaglio: i due numeri da fissare</h3>
-    <p>Questi due cambiano la resa più di qualunque altra cosa, e non sono una scelta mia. Qui c'è lo
-    stesso ritaglio cucito nove volte: tre densità per tre ampiezze di frangia.</p>
+    <h3>L'ordine, misurato</h3>
+    <p>«Ordinato» sembra un giudizio e invece si misura: <strong>quanti capi di punto finiscono sul
+    bordo</strong> invece che a mezz'aria. In un pettine ogni punto va da un bordo all'altro; le file
+    che si fermano contro una vicina lasciano il capo in mezzo alla forma, ed è quello che si vede
+    come disordine.</p>
+    <div class="tabella">
+      <table>
+        <thead><tr><th>metodo</th><th>capi sul bordo</th><th>lunghezza dei punti</th><th>dispersione</th><th>zone scoperte</th></tr></thead>
+        <tbody>
+          <tr><td>a distanza costante (prima)</td><td>90%</td><td>4,7 – 24,5 mm</td><td>14%</td><td>nessuna</td></tr>
+          <tr><td>dalla rotaia, testate vincolate</td><td>95%</td><td>5,0 – 24,0 mm</td><td>59%</td><td><strong>un quadrato di 24 mm</strong></td></tr>
+          <tr class="chiave"><td>dalla rotaia, testate libere</td><td>95%</td><td>7,4 – 25,8 mm</td><td>19%</td><td>nessuna</td></tr>
+        </tbody>
+      </table>
+    </div>
+    <p class="nota">La riga di mezzo è un errore che ho fatto e corretto, e vale la pena raccontarlo:
+    imponevo al filo di posarsi perpendicolare su <em>tutto</em> il contorno, comprese le
+    <strong>testate</strong> — i lati corti dove la fascia semplicemente finisce. Ma lì la
+    perpendicolare alla testata è parallela alla fascia, quindi il campo girava di 90° proprio
+    all'estremità e i punti non arrivavano nell'angolo. Distinguere il <strong>bordo</strong> (dove il
+    colore cambia) dalla <strong>testata</strong> (dove la fascia finisce) toglie la zona scoperta e
+    porta la dispersione dal 59% al 19%. È una distinzione che un ricamatore fa senza pensarci.</p>
+
+    <h3>Densità e frastaglio: i due numeri, ora fissati</h3>
+    <p>Questi due cambiano la resa più di qualunque altra cosa, e non erano una scelta mia. Qui c'è lo
+    stesso ritaglio cucito nove volte: tre densità per tre ampiezze di frangia. <strong>Scelta di
+    Lorenzo: riga bassa a sinistra — passo 0,3 mm, frangia 5 mm.</strong></p>
 
     <figure>
       <div class="lastra">${svgInline('provini.svg')}</div>
@@ -472,12 +501,11 @@ const pagina = `<title>Banco del Punto Pittorico</title>
       doppio di tempo macchina fra l'angolo in basso a destra e quello in alto a sinistra.</figcaption>
     </figure>
 
-    <h3>Tre decisioni che aspettano te</h3>
-    <p class="nota"><strong>Quale provino.</strong> Poi quante tinte per la cianotipia: quattro danno
-    una sfera migliore di due, ma è una scelta di resa e va guardata sul ricamo. E il ventaglio mostra
-    <strong>anelli concentrici</strong> dove tutte le file nascono allo stesso raggio: i numeri li
-    vedono appena, l'occhio sì. Il rimedio ovvio l'ho provato e peggiora — quindi resta lì, spento,
-    finché non lo guardi tu.</p>
+    <h3>Una decisione che aspetta te</h3>
+    <p class="nota">Quante tinte per la cianotipia: quattro danno una sfera migliore di due, ma è una
+    scelta di resa e va guardata sul ricamo. <em>Le nascite sfalsate le hai già decise tu</em>: te le
+    avevo mostrate sul ventaglio dicendo che peggioravano, e avevi ragione tu — adesso sono accese
+    anche sui cunei, e la dispersione cala un po' su ogni scala.</p>
   </div>
 </section>
 

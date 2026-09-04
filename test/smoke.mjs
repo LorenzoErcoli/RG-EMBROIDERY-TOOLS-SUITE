@@ -2522,10 +2522,28 @@ console.log('Punto Pittorico — l\'ordine del filo (riempimento dalla rotaia)')
 {
   const PASSO = 0.3;
   const banda = rg.regioniDiProva().find((p) => p.id === 'banda-curva');
-  const campo = rg.harmonicField(banda.region, { cellMm: 1, levels: 4, sweeps: 300 });
   // la banda di prova e' costruita come «lato sinistro + lato destro rovesciato»: la prima meta'
   // del contorno e' un fianco, cioe' una rotaia
   const rotaia = banda.region.outer.slice(0, Math.floor(banda.region.outer.length / 2));
+
+  // LE TESTATE. I due lati corti che uniscono i fianchi non sono bordi di colore: li' la fascia
+  // semplicemente finisce, e il campo non deve prendere ordini da loro. E' la distinzione che un
+  // ricamatore fa senza pensarci — un conto e' il BORDO dove il colore cambia, un altro la TESTATA.
+  const testateDi = (region) => {
+    const meta = Math.floor(region.outer.length / 2), n = region.outer.length;
+    const seg = [[region.outer[meta - 1], region.outer[meta]], [region.outer[n - 1], region.outer[0]]];
+    return (p) => seg.some(([a, b]) => {
+      const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+      let t = l2 > 0 ? ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2 : 0;
+      t = t < 0 ? 0 : t > 1 ? 1 : t;
+      return Math.hypot(p.x - (a.x + dx * t), p.y - (a.y + dy * t)) < 0.6;
+    });
+  };
+  const campoCon = (region) => rg.harmonicField(region, {
+    cellMm: 1, levels: 4, sweeps: 300,
+    condizioneA: (p) => (testateDi(region)(p) ? 'libera' : 'perpendicolare'),
+  });
+  const campo = campoCon(banda.region);
 
   const rail = rg.buildRailFill(banda.region, campo, rotaia, { spacingMm: PASSO, maxStitchMm: 3 });
   const bordo = new rg.BoundaryIndex(rg.regionRings(banda.region), 4);
@@ -2538,7 +2556,18 @@ console.log('Punto Pittorico — l\'ordine del filo (riempimento dalla rotaia)')
     return capi ? dentro / capi : 0;
   };
   check('quasi tutti i capi finiscono sul bordo: e\' un pettine, non un\'erba',
-    capiSulBordo(rail.runs) > 0.9, true);
+    capiSulBordo(rail.runs) > 0.95, true);
+
+  // LIBERARE LE TESTATE CONTA, e si vede: con la perpendicolare imposta anche li', il campo gira di
+  // 90° proprio dove la fascia finisce, i punti della rotaia non arrivano nell'angolo e restano
+  // capi corti sparsi. Misurato: capi sul bordo dal 91% al 98%, e i cunei del primo giro da 53 a 18.
+  const railVincolato = rg.buildRailFill(banda.region,
+    rg.harmonicField(banda.region, { cellMm: 1, levels: 4, sweeps: 300 }),
+    rotaia, { spacingMm: PASSO, maxStitchMm: 3 });
+  check('...e liberare le testate migliora l\'ordine invece di peggiorarlo',
+    capiSulBordo(rail.runs) > capiSulBordo(railVincolato.runs), true);
+  check('...e chiede molti meno cunei',
+    rail.cuneiPerGiro[0] < railVincolato.cuneiPerGiro[0] / 2, true);
 
   // I CUNEI CONVERGONO. E' l'«accorgimento quando la densita' cambia»: un punto in piu' infilato
   // dove la fascia si allarga. Deve esaurirsi, non moltiplicarsi — e la prima versione si
@@ -2565,18 +2594,27 @@ console.log('Punto Pittorico — l\'ordine del filo (riempimento dalla rotaia)')
   // rotaia. Il posizionamento a distanza costante non ha questo problema (riempie da dentro).
   // Si risolve spezzando la regione attorno all'ostacolo — e' il prossimo lavoro, non un mistero.
   const conForo = rg.regioniDiProva().find((p) => p.id === 'banda-curva-con-foro');
-  const campo2 = rg.harmonicField(conForo.region, { cellMm: 1, levels: 4, sweeps: 300 });
   const rotaia2 = conForo.region.outer.slice(0, Math.floor(conForo.region.outer.length / 2));
-  const railForo = rg.buildRailFill(conForo.region, campo2, rotaia2, { spacingMm: PASSO, maxStitchMm: 3 });
-  const curvoForo = rg.buildCurvedFill(conForo.region, campo2, { spacingMm: PASSO, maxStitchMm: 3 }).runs;
-  check('la rotaia lascia ancora un pezzo scoperto quando c\'e\' un foro (limite noto)',
-    rg.coverageStats(railForo.runs, conForo.region, PASSO, 2).min <= 1e-9, true);
-  check('...mentre il metodo a distanza costante non lo lascia',
-    rg.coverageStats(curvoForo, conForo.region, PASSO, 2).min > 0, true);
-  check('il riempimento dal bordo del foro aggiunge punti e migliora la copertura',
-    railForo.ombre > 20, true);
-  check('...e senza foro la rotaia copre tutto',
+  const railForo = rg.buildRailFill(conForo.region, campoCon(conForo.region), rotaia2, { spacingMm: PASSO, maxStitchMm: 3 });
+  check('con le testate libere anche la banda col foro si copre tutta',
+    rg.coverageStats(railForo.runs, conForo.region, PASSO, 2).min > 0, true);
+  check('...e la dispersione sta sotto il 25%',
+    rg.coverageStats(railForo.runs, conForo.region, PASSO).cv < 0.25, true);
+  check('il bordo del foro fa da rotaia anche lui, e aggiunge punti', railForo.ombre > 20, true);
+  check('anche senza foro la rotaia copre tutto',
     rg.coverageStats(rail.runs, banda.region, PASSO, 2).min > 0, true);
+
+  // LA CONTROPROVA. Vincolando le testate il pezzo scoperto TORNA, e la dispersione risale al 59%.
+  // Serve a impedire che qualcuno «semplifichi» la condizione al bordo senza accorgersi di cosa
+  // costa: era un quadrato di 24 mm senza un punto, e non stava dietro il foro — stava
+  // all'estremita' larga della fascia, che e' tutta un'altra cosa.
+  const vincolato = rg.buildRailFill(conForo.region,
+    rg.harmonicField(conForo.region, { cellMm: 1, levels: 4, sweeps: 300 }),
+    rotaia2, { spacingMm: PASSO, maxStitchMm: 3 });
+  check('...e vincolando le testate il pezzo scoperto torna: e\' quella la causa',
+    rg.coverageStats(vincolato.runs, conForo.region, PASSO, 2).min <= 1e-9, true);
+  check('...con la dispersione che risale oltre il 40%',
+    rg.coverageStats(vincolato.runs, conForo.region, PASSO).cv > 0.4, true);
 }
 
 // ---------------------------------------------------------------------------------------------

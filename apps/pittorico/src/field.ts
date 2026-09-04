@@ -45,12 +45,26 @@ export interface DirectionField {
  *   Lorenzo, ed è il default: i capi delle file cadono sul passaggio di colore e fanno la frangia.
  * - `tangente` — il punto **costeggia** il bordo. È il riempimento a contorni concentrici (il
  *   *contour fill* di Ink/Stitch), un'altra resa: serve dove il disegno va seguito, non attraversato.
+ * - `libera` — il bordo **non dice niente**: il campo lì fa quello che gli conviene, deciso da come
+ *   sta messo tutt'intorno.
+ *
+ * Il terzo caso non è un dettaglio, ed è la distinzione che un ricamatore fa senza pensarci: un
+ * conto è il **bordo** dove il colore cambia, un altro è la **testata** dove la fascia semplicemente
+ * finisce. Imporre la perpendicolare anche sulle testate significa dire al filo di girare di 90°
+ * proprio dove la fascia finisce — e infatti sulla banda di prova restava scoperto un quadrato di
+ * 24 mm all'estremità larga, perché i punti seminati sulla rotaia non arrivavano nell'angolo.
  */
-export type CondizioneAlBordo = 'perpendicolare' | 'tangente';
+export type CondizioneAlBordo = 'perpendicolare' | 'tangente' | 'libera';
 
 export interface HarmonicFieldOptions {
   /** Default `perpendicolare`: è la resa che Lorenzo ha chiesto. */
   condizioneAlBordo?: CondizioneAlBordo;
+  /**
+   * Condizione decisa **punto per punto** sul contorno: riceve il punto del bordo più vicino e dice
+   * che condizione vale lì. Serve a distinguere il **bordo** (dove il colore cambia: perpendicolare)
+   * dalla **testata** (dove la fascia finisce: libera). Senza, vale `condizioneAlBordo` ovunque.
+   */
+  condizioneA?: (p: Point) => CondizioneAlBordo;
   /** Lato della cella della griglia più fine, in mm. Default 1. */
   cellMm?: number;
   /** Quante griglie a cascata (la più grossolana ha cella `cellMm · 2^(levels-1)`). Default 4. */
@@ -73,7 +87,8 @@ export interface HarmonicField extends DirectionField {
 }
 
 function buildGrid(
-  region: Region, index: BoundaryIndex, cellMm: number, bandMm: number, condizione: CondizioneAlBordo,
+  region: Region, index: BoundaryIndex, cellMm: number, bandMm: number,
+  condizioneA: (p: Point) => CondizioneAlBordo,
 ): Grid {
   const bb = regionBounds(region);
   const margin = cellMm * 2 + bandMm;
@@ -91,14 +106,19 @@ function buildGrid(
       const k = j * nx + i;
       const ins = pointInRegion(p, region);
       const nb = index.nearest(p);
+      const cond = condizioneA(nb.point);
       // la perpendicolare è la tangente più 90°, che sull'angolo raddoppiato è un segno meno
       const th = Math.atan2(nb.tangent.y, nb.tangent.x);
-      const verso = condizione === 'perpendicolare' ? -1 : 1;
+      const verso = cond === 'tangente' ? 1 : -1;
       g.a[k] = verso * Math.cos(2 * th);
       g.b[k] = verso * Math.sin(2 * th);
       g.inside[k] = ins ? 1 : 0;
-      // il bordo COMANDA: fuori, e in una fascia dentro, la direzione è quella del contorno
-      g.fixed[k] = !ins || nb.distMm <= bandMm ? 1 : 0;
+      // Il bordo comanda — ma solo dove ha qualcosa da dire. Su una testata (`libera`) il nodo
+      // resta libero, dentro e fuori, così il campo ci passa attraverso invece di girare.
+      // L'anello più esterno della griglia resta fisso comunque: senza un ancoraggio la soluzione
+      // non è determinata.
+      const suBordoGriglia = i === 0 || j === 0 || i === nx - 1 || j === ny - 1;
+      g.fixed[k] = suBordoGriglia || (cond !== 'libera' && (!ins || nb.distMm <= bandMm)) ? 1 : 0;
     }
   }
   return g;
@@ -167,14 +187,15 @@ export function harmonicField(region: Region, opts: HarmonicFieldOptions = {}): 
   const sweeps = Math.max(1, Math.round(opts.sweeps ?? 300));
   const tol = opts.tol ?? 1e-5;
 
-  const condizione: CondizioneAlBordo = opts.condizioneAlBordo ?? 'perpendicolare';
+  const predefinita: CondizioneAlBordo = opts.condizioneAlBordo ?? 'perpendicolare';
+  const condizioneA = opts.condizioneA ?? ((): CondizioneAlBordo => predefinita);
 
   const index = new BoundaryIndex(regionRings(region), Math.max(2, cellMm * 4));
   const sweepsUsed: number[] = [];
   let grid: Grid | null = null;
   for (let l = levels - 1; l >= 0; l--) {
     const c = cellMm * Math.pow(2, l);
-    const g = buildGrid(region, index, c, c * 1.2, condizione);
+    const g = buildGrid(region, index, c, c * 1.2, condizioneA);
     if (grid) seedFromCoarse(g, grid);
     sweepsUsed.push(relax(g, sweeps, tol));
     grid = g;
@@ -187,8 +208,9 @@ export function harmonicField(region: Region, opts: HarmonicFieldOptions = {}): 
     dirAt(p: Point): Point {
       const [a, b] = sampleAB(finale, p);
       if (Math.hypot(a, b) < 1e-9) {
-        const t = index.nearest(p).tangent;                          // singolarità: si ripiega sul bordo
-        return condizione === 'perpendicolare' ? { x: -t.y, y: t.x } : t;
+        const nb = index.nearest(p);                                 // singolarità: si ripiega sul bordo
+        const t = nb.tangent;
+        return condizioneA(nb.point) === 'tangente' ? t : { x: -t.y, y: t.x };
       }
       const th = Math.atan2(b, a) / 2;
       return { x: Math.cos(th), y: Math.sin(th) };
