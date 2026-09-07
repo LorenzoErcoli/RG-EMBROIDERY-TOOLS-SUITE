@@ -36,6 +36,12 @@ export interface InterlaceParams {
   /** Intensità degli agglomerati 0–100 (solo con `clusterMode`): quanto il colore dominante è più denso
    *  nella sua zona → 0 ≈ appena percettibile, 100 = zone di colore molto marcate. */
   clusterStrength: number;
+  /** DIVIETI DI TRANSITO, matrice filo × zona: `zoneBans[i][j] = true` → il colore `i` NON entra nella
+   *  zona del colore `j` (l’immagine/il campo dice a quale zona appartiene ogni punto). Lì quel filo non
+   *  cuce e non ci passa nemmeno di transito: la zona è un vuoto (R5) per quella passata sola. Vuoto o
+   *  tutto `false` = nessun divieto (comportamento storico). Vale solo con `clusterMode` (senza zone non
+   *  ci sono divieti); se TUTTI i fili sono vietati in una zona, quella resta nuda (tessuto a vista). */
+  zoneBans: boolean[][];
 }
 
 export const defaultInterlaceParams: InterlaceParams = {
@@ -50,6 +56,7 @@ export const defaultInterlaceParams: InterlaceParams = {
   colorDensities: [], // vuoto = tutti i colori usano densitySpacingMm
   clusterMode: false, // false = mélange uniforme; true = agglomerati a zone (sfumature nette)
   clusterStrength: 60, // intensità zone 0–100 (solo con clusterMode)
+  zoneBans: [], // vuoto = ogni filo passa ovunque
 };
 
 // --- Costanti interne (implementazione, non parametri utente): il "movimento" del filo.
@@ -60,6 +67,7 @@ const FLOW_FREQ = 0.02;     // scala del campo di flusso (nuvole più o meno gra
 const SWIRL = 2.2;          // intensità di rotazione del campo
 const CANDIDATES = 16;      // candidati valutati a ogni passo (si sceglie la zona meno riempita)
 const CLUMP_CAP = 3;        // tetto ai picchi: il filo non passa più di ~3× il target in una stessa cella
+const STALL_MOVES = 300;    // passi senza guadagnare una cella oltre i quali il filo si dichiara murato
 const MAX_POINTS = 200000;  // guardia anti-runaway
 const MAX_MASK_CELLS = 4_000_000; // tetto memoria maschera fine
 
@@ -255,7 +263,7 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
  * fasi (principale + controllo successivo che livella), rilocando a penna alzata tra le zone assegnate.
  * Questo permette il mélange: passate diverse ricevono celle diverse (dither), sparse su tutta l'area.
  */
-function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][] {
+function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null): Point[][] {
   const { bb, cell, gx, gy, ci, cj, cpx, cpy, minS, maxS, inRegion, segOk } = ctx;
   const cov = new Float32Array(gx * gy);
   const dead = new Uint8Array(gx * gy);
@@ -286,6 +294,19 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
     return bid < 0 ? null : { x: bx, y: by, id: bid };
   };
 
+  // DIVIETO DI TRANSITO: la cella d’arrivo non basta. Con punti fino a 15mm il filo scavalcherebbe una
+  // striscia vietata sottile senza accorgersene, quindi si campiona TUTTO il segmento (mezza cella per
+  // passo, la stessa risoluzione con cui si misura la copertura). Senza divieti costa zero (banArr null).
+  const crossesBan = (ax: number, ay: number, bx: number, by: number): boolean => {
+    if (!banArr) return false;
+    const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / (cell * 0.5)));
+    for (let k = 0; k <= n; k++) {
+      const t = k / n;
+      if (banArr[cj(ay + (by - ay) * t) * gx + ci(ax + (bx - ax) * t)]) return true;
+    }
+    return false;
+  };
+
   const rng = mulberry32(seed >>> 0 || 1);
   const flowAng = (x: number, y: number): number => vnoise(x * FLOW_FREQ, y * FLOW_FREQ) * Math.PI * 2 * SWIRL;
 
@@ -298,6 +319,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
   let cx = g0.x, cy = g0.y, dir = rng() * Math.PI * 2;
   let curId = g0.id;
   let runMoves = 0, totalPts = 1;
+  let sinceGain = 0; // passi consecutivi senza coprire una cella nuova (rileva il filo murato dai divieti)
 
   // `capMult` = tetto ai picchi in multipli del target: NON attraversare celle già a `capMult×target`
   // (Infinity = nessun tetto, ultima spiaggia). `hi` = lunghezza max del passo (di norma maxS; fino a
@@ -316,6 +338,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
       const tg = targetArr[destId];
       if (tg === 0) continue;
       if (cov[destId] >= capMult * tg) continue; // tetto ai picchi (vale anche ai tragitti)
+      if (crossesBan(cx, cy, nx, ny)) continue;  // zona vietata a questo colore: non ci si passa nemmeno
       let score = -cov[destId] + rng() * 0.25;
       if (destId === curCell) score -= 3;
       if (cov[destId] >= tg) score -= 6;
@@ -328,7 +351,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
       const nx = cx + Math.cos(a) * len, ny = cy + Math.sin(a) * len;
       if (!inRegion(nx, ny) || !segOk(cx, cy, nx, ny)) continue;
       const id = cj(ny) * gx + ci(nx);
-      if (targetArr[id] > 0 && cov[id] < capMult * targetArr[id]) return { x: nx, y: ny, ang: a };
+      if (targetArr[id] > 0 && cov[id] < capMult * targetArr[id] && !crossesBan(cx, cy, nx, ny)) return { x: nx, y: ny, ang: a };
     }
     return null;
   };
@@ -352,6 +375,18 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
   // Copertura piena (il bilancio tra colori lo dà già la densità-totale divisa). Il fine-corsa si ferma
   // quando non restano più vuoti raggiungibili (nearestGap null) o a soglia alta.
   while (coveredCells < need * 0.995 && totalPts < MAX_POINTS && iter++ < MAX_ITER) {
+    // Con i DIVIETI la zona percorribile da un colore può essere spezzata in ISOLE: il filo finisce la
+    // sua isola e poi gira a vuoto, perché i vuoti che vede sono dietro un muro che non può attraversare.
+    // Se per un po' non guadagna una cella si dichiara murato e riparte dal vuoto più vicino. È l'unico
+    // stacco in più che i divieti si portano dietro; senza divieti non si attiva mai (regola 1 intatta:
+    // il filo non stacca "di comodo").
+    if (banArr && sinceGain > STALL_MOVES) {
+      const g = nearestGap(cx, cy);
+      if (!g) break;
+      openRunAt(g.x, g.y, g.id);
+      sinceGain = 0;
+      continue;
+    }
     const cc = cj(cy) * gx + ci(cx);
     let head = dir, spread = TURN_SPREAD;
     const covered = targetArr[cc] === 0 || cov[cc] >= targetArr[cc];
@@ -379,7 +414,9 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array): Point[][
       openRunAt(g.x, g.y, g.id);
       continue;
     }
+    const gained = coveredCells;
     commit(nxt.x, nxt.y, nxt.ang);
+    sinceGain = coveredCells > gained ? 0 : sinceGain + 1;
   }
 
   if (run.length >= 2) runs.push(run);
@@ -427,6 +464,16 @@ function clusterTarget(x: number, y: number, pIdx: number, nColors: number, stre
   return dom > 0.02 ? COVER_TARGET + boost : dom > -0.05 ? COVER_TARGET : 1; // nucleo · confine · base
 }
 
+/**
+ * Indice della ZONA nel punto in modalità RUMORE: il campo più alto vince (stesso criterio con cui
+ * `clusterTarget` decide chi si addensa). Serve ai DIVIETI, che ragionano per zona e non per copertura.
+ */
+function noiseZoneAt(x: number, y: number, nFields: number, seed: number): number {
+  let win = 0, top = -1;
+  for (let k = 0; k < nFields; k++) { const w = clusterField(x, y, k, seed); if (w > top) { top = w; win = k; } }
+  return win;
+}
+
 /** Colore RGB [0..255] di un punto, o null (fuori immagine/trasparente). Passato dall'app (campiona un canvas). */
 export type ImageColorAt = (x: number, y: number) => [number, number, number] | null;
 
@@ -436,21 +483,29 @@ function hexToRgb(hex: string): [number, number, number] {
 }
 
 /**
- * Copertura obiettivo in modalità AGGLOMERATI GUIDATI DA IMMAGINE: invece del rumore, la zona di ogni
- * colore è DOVE l'immagine ha quel colore. Nel punto (x,y) si legge il pixel dell'immagine e si trova il
- * colore-filo più VICINO (cattura-colore): se è il mio colore mi addenso (nucleo), altrimenti resto alla
- * base minima (1) — così l'area resta continua/attraversabile ma il disegno RISPETTA l'immagine.
+ * Indice della ZONA nel punto in modalità IMMAGINE: si legge il pixel e si trova il colore-filo più
+ * VICINO in RGB (cattura-colore). -1 = fuori immagine/trasparente (nessuna zona). È la stessa lettura
+ * che serve sia alla copertura sia ai divieti, per questo sta da sola.
  */
-function imageClusterTarget(x: number, y: number, myColorIdx: number, palRgb: Array<[number, number, number]>, sample: ImageColorAt, strength: number): number {
+function imageZoneAt(x: number, y: number, palRgb: Array<[number, number, number]>, sample: ImageColorAt): number {
   const rgb = sample(x, y);
-  if (!rgb) return 1; // fuori immagine → base
+  if (!rgb) return -1;
   let best = -1, bestD = Infinity;
   for (let k = 0; k < palRgb.length; k++) {
     const dr = rgb[0] - palRgb[k][0], dg = rgb[1] - palRgb[k][1], db = rgb[2] - palRgb[k][2];
     const d = dr * dr + dg * dg + db * db;
     if (d < bestD) { bestD = d; best = k; }
   }
-  if (best !== myColorIdx) return 1; // qui l'immagine vuole un altro colore → base
+  return best;
+}
+
+/**
+ * Copertura obiettivo in modalità AGGLOMERATI GUIDATI DA IMMAGINE: la zona di ogni colore è DOVE
+ * l'immagine ha quel colore. Se la zona è la mia mi addenso (nucleo), altrimenti resto alla base
+ * minima (1) — così l'area resta continua/attraversabile ma il disegno RISPETTA l'immagine.
+ */
+function imageClusterTarget(zone: number, myColorIdx: number, strength: number): number {
+  if (zone !== myColorIdx) return 1; // fuori immagine, o qui l'immagine vuole un altro colore → base
   const boost = Math.round(Math.max(0, Math.min(100, strength)) / 100 * 8);
   return COVER_TARGET + boost;
 }
@@ -485,6 +540,10 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
   const base = (p.seed || 1) >>> 0;
   // Agglomerati guidati da immagine: palette in RGB, usata solo se c'è un campionatore immagine.
   const imgPal = imageColorAt && p.colors && p.colors.length ? p.colors.map(hexToRgb) : null;
+  // DIVIETI (matrice filo × zona). Le zone esistono solo con gli agglomerati — in mélange uniforme non
+  // c'è nulla da vietare. Righe e colonne sono indici di COLORE della palette, non di passata.
+  const nCol = Math.max(1, (p.colors && p.colors.length) || 1);
+  const bans = p.clusterMode && Array.isArray(p.zoneBans) ? p.zoneBans : [];
   // La densità PER-COLORE è la dimensione della cella → ogni densità ha una sua griglia. La maschera si
   // ricostruisce solo quando la cella cambia (cache per valore di cella): densità uguali → una sola build.
   const ctxByCell = new Map<number, FillCtx | null>();
@@ -495,22 +554,33 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
     if (ctx === undefined) { ctx = prepare(boundary, voids, minS, maxS, clear, cell); ctxByCell.set(cell, ctx); }
     if (!ctx) { passes.push([]); continue; }
     const targetArr = new Uint8Array(ctx.gx * ctx.gy);
+    // Riga della matrice per il colore di QUESTA passata: se ha almeno un divieto si marca una maschera
+    // di celle proibite — non solo escluse dal riempimento (target 0), ma nemmeno attraversabili.
+    const myColor = pIdx % nCol;
+    const banRow = bans[myColor] && bans[myColor].some(Boolean) ? bans[myColor] : null;
+    const banArr = banRow ? new Uint8Array(ctx.gx * ctx.gy) : null;
     if (p.clusterMode) {
       // Agglomerati: la copertura di ogni cella dipende dalla ZONA del colore — da IMMAGINE se caricata
       // (il colore va dove l'immagine ha quel colore), altrimenti dal campo di rumore per-colore/seed.
-      const myColor = imgPal ? pIdx % imgPal.length : 0;
       for (let id = 0; id < targetArr.length; id++) {
         if (!ctx.cfill[id]) continue;
         const gi = id % ctx.gx, gj = (id / ctx.gx) | 0;
         const x = ctx.cellX(gi), y = ctx.cellY(gj);
+        // Zona del punto: indice di colore-palette (immagine) oppure campo vincente (rumore), riportato
+        // sulla palette col modulo perché la matrice ragiona per COLORE anche con più cicli.
+        const zone = imgPal
+          ? imageZoneAt(x, y, imgPal, imageColorAt as ImageColorAt)
+          : noiseZoneAt(x, y, densities.length, base) % nCol;
+        // Vietato: la cella resta a target 0 (non la riempie) e finisce nella maschera (non la attraversa).
+        if (banRow && banArr && zone >= 0 && banRow[zone]) { banArr[id] = 1; continue; }
         targetArr[id] = imgPal
-          ? imageClusterTarget(x, y, myColor, imgPal, imageColorAt as ImageColorAt, p.clusterStrength)
+          ? imageClusterTarget(zone, myColor, p.clusterStrength)
           : clusterTarget(x, y, pIdx, densities.length, p.clusterStrength, base);
       }
     } else {
       for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = COVER_TARGET;
     }
-    passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr));
+    passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr, banArr));
   }
   return passes;
 }

@@ -73,6 +73,7 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
 2. **Colori e ruoli** — perimetro e aree vuote.
 3. **Colori del filo** — la palette multicolore: i colori si alternano negli stop di cucitura (ogni stop = un cambio-ago).
 4. **Riempimento** — densità, lunghezza dei passaggi (punto minimo/massimo), distacco dalle aree vuote.
+5. **Dove passa ogni filo** (solo con gli **agglomerati**) — una tabella: righe = i fili, colonne = le zone. Spegni una casella perché quel filo **non entri** in quella zona: es. i colori scuri fuori dalle zone chiare dell'immagine. Lì il filo non cuce e non ci passa nemmeno di transito, quindi può servirgli qualche **stacco** in più — i tratti sono contati nella barra in basso. Spegnendo un'**intera colonna** quella zona resta **nuda**: tessuto a vista.
 
 **Esportazione.** SVG o DST (un ago per stop → cambi-colore in sequenza per la macchina).
 

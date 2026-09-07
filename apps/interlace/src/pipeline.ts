@@ -19,6 +19,9 @@ export interface PipelineResult {
   stopCount: number;
   /** Lunghezza totale del filo generato (mm), per la statusbar. */
   threadMm: number;
+  /** Numero di TRATTI cuciti (polilinee): più tratti di stop = altrettanti stacchi del filo. È il prezzo
+   *  dei divieti di transito, per questo si mostra in statusbar. */
+  runCount: number;
 }
 
 const COLORS = {
@@ -91,12 +94,14 @@ export function runPipeline(
 
   const stops: { color: string; polylines: Polyline[] }[] = [];
   let threadMm = 0;
+  let runCount = 0;
   let idx = 0;
   for (const m of master) {
     const innerVoids = exclusions.filter((v) => v.length > 0 && pointInPolygon(v[0], m.points));
     for (const pass of generatePasses(m.points, innerVoids, params, densities, opts.imageColorAt)) {
       const pls = pass.filter((r) => r.length >= 2);
       for (const r of pls) threadMm += pathLength(r);
+      runCount += pls.length;
       stops.push({ color: palette[idx % palette.length], polylines: pls });
       idx++;
     }
@@ -124,5 +129,5 @@ export function runPipeline(
     if (s.polylines.length) exportLayers.push({ id: `stop-${String(i).padStart(4, '0')}`, color: toneColor(s.color, i), polylines: s.polylines, strokeMm: THREAD_STROKE_MM });
   });
 
-  return { layers, exportLayers, bounds: bnds, stopCount: stops.length, threadMm };
+  return { layers, exportLayers, bounds: bnds, stopCount: stops.length, threadMm, runCount };
 }

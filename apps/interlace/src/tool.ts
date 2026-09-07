@@ -131,6 +131,12 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="clusterStrength" type="number" min="0" max="100" step="5" value="60"><span>%</span></span>
             <small class="rg-field__help">quanto i colori si separano in zone: basso = appena accennate, alto = molto marcate</small>
           </label>
+          <div class="rg-field rg-param-grid__wide" id="zoneBanField" hidden>
+            <span class="rg-field__label">Dove passa ogni filo</span>
+            <div class="rg-table-wrap" id="zoneBanTable"></div>
+            <div class="rg-cluster"><button type="button" id="zoneBanResetBtn" class="rg-button rg-button--ghost rg-button--small">Consenti tutto</button></div>
+            <small class="rg-field__help">righe = fili, colonne = zone. Spegni una casella perché quel filo NON entri in quella zona: lì non cuce e non ci passa nemmeno di transito, quindi può costare qualche stacco in più (i tratti sono contati in basso). Spegnendo un’intera colonna quella zona resta nuda, tessuto a vista.</small>
+          </div>
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Variante</span>
             <div class="rg-cluster">
@@ -384,6 +390,11 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
         if (params.colors.length <= 1) return;
         params.colors.splice(i, 1);
         params.colorDensities.splice(i, 1);
+        // La matrice dei divieti è quadrata sulla palette: via la riga del colore E la sua colonna-zona.
+        if (Array.isArray(params.zoneBans)) {
+          params.zoneBans.splice(i, 1);
+          for (const row of params.zoneBans) if (Array.isArray(row)) row.splice(i, 1);
+        }
         buildPaletteUI();
         render();
       });
@@ -426,13 +437,107 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       host.appendChild(li);
     });
     ($('addColorBtn') as HTMLButtonElement).disabled = params.colors.length >= MAX_COLORS;
+    buildZoneBanUI(); // righe e colonne della matrice sono gli stessi colori: si rifà con la palette
+  }
+
+  /** Allinea la matrice dei divieti alla palette (righe = fili, colonne = zone, entrambe i colori),
+   *  riempiendo di `false` ciò che manca: aggiungere o togliere un colore non la lascia storta, e un
+   *  progetto riaperto con una matrice di misura diversa si rimette a posto invece di rompere. */
+  function normalizeBans() {
+    const n = params.colors.length;
+    if (!Array.isArray(params.zoneBans)) params.zoneBans = [];
+    params.zoneBans.length = n;
+    for (let i = 0; i < n; i++) {
+      const row = Array.isArray(params.zoneBans[i]) ? params.zoneBans[i] : [];
+      row.length = n;
+      for (let j = 0; j < n; j++) row[j] = row[j] === true;
+      params.zoneBans[i] = row;
+    }
+  }
+
+  /** Matrice "dove passa ogni filo": casella ACCESA = quel filo entra in quella zona (stato di partenza,
+   *  = comportamento storico); spenta = vietato. Solo classi DS esistenti: `rg-table` compatta, `rg-choice`
+   *  per le caselle, lo swatch di `rg-color-map` per i colori. Nessuna classe nuova. */
+  function buildZoneBanUI() {
+    const host = $('zoneBanTable');
+    normalizeBans();
+    host.innerHTML = '';
+    const cols = params.colors;
+    if (cols.length < 2) {
+      const msg = document.createElement('p');
+      msg.className = 'rg-field__help';
+      msg.textContent = 'Servono almeno due colori del filo perché ci siano zone da vietare.';
+      host.appendChild(msg);
+      return;
+    }
+    const swatch = (col: string) => {
+      const sw = document.createElement('span');
+      sw.className = 'rg-color-map__swatch';
+      sw.style.setProperty('--swatch', col);
+      return sw;
+    };
+    const table = document.createElement('table');
+    table.className = 'rg-table rg-table--compact';
+
+    const thead = document.createElement('thead');
+    const hrow = document.createElement('tr');
+    const corner = document.createElement('th');
+    corner.scope = 'col';
+    corner.textContent = 'filo / zona';
+    hrow.appendChild(corner);
+    for (const zc of cols) {
+      const th = document.createElement('th');
+      th.scope = 'col';
+      th.title = `Zona ${zc.toUpperCase()}`;
+      // Lo swatch del DS è uno <span>: dentro una <th> resterebbe inline e si schiaccerebbe a zero.
+      // Nella riga sta dentro un rg-cluster (flex) e si vede: qui si fa lo stesso, senza classi nuove.
+      const cell = document.createElement('span');
+      cell.className = 'rg-cluster';
+      cell.appendChild(swatch(zc));
+      th.appendChild(cell);
+      hrow.appendChild(th);
+    }
+    thead.appendChild(hrow);
+
+    const tbody = document.createElement('tbody');
+    cols.forEach((tc, i) => {
+      const tr = document.createElement('tr');
+      const head = document.createElement('td');
+      const cl = document.createElement('span');
+      cl.className = 'rg-cluster';
+      const code = document.createElement('span');
+      code.className = 'rg-color-map__code';
+      code.textContent = tc.toUpperCase();
+      cl.append(swatch(tc), code);
+      head.appendChild(cl);
+      tr.appendChild(head);
+      cols.forEach((zc, j) => {
+        const td = document.createElement('td');
+        const lab = document.createElement('label');
+        lab.className = 'rg-choice';
+        const cb = document.createElement('input');
+        cb.type = 'checkbox';
+        cb.checked = !params.zoneBans[i][j];
+        cb.setAttribute('aria-label', `Il filo ${tc.toUpperCase()} passa nelle zone ${zc.toUpperCase()}`);
+        cb.addEventListener('change', () => { params.zoneBans[i][j] = !cb.checked; render(); });
+        lab.appendChild(cb);
+        td.appendChild(lab);
+        tr.appendChild(td);
+      });
+      tbody.appendChild(tr);
+    });
+
+    table.append(thead, tbody);
+    host.appendChild(table);
   }
 
   function render() {
     try {
-      const { layers, bounds, threadMm } = runPipeline(currentContours(), roles, params, { imageColorAt: imageSampler() });
+      const { layers, bounds, threadMm, runCount } = runPipeline(currentContours(), roles, params, { imageColorAt: imageSampler() });
       $('layer').innerHTML = buildSvg(layers, { bounds, marginMm: 8 });
-      $('status').textContent = threadMm > 0 ? `Filo generato: ${(threadMm / 1000).toFixed(2)} m` : 'Assegna un colore all’area da ricamare';
+      $('status').textContent = threadMm > 0
+        ? `Filo generato: ${(threadMm / 1000).toFixed(2)} m · ${runCount} ${runCount === 1 ? 'tratto' : 'tratti'}`
+        : 'Assegna un colore all’area da ricamare';
     } catch (e) {
       $('status').textContent = 'Errore render: ' + (e as Error).message;
       console.error(e);
@@ -544,6 +649,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     });
     ($('clusterStrengthField') as HTMLElement).hidden = !params.clusterMode; // intensità solo se attivo
     ($('clusterImageField') as HTMLElement).hidden = !params.clusterMode; // immagine solo se attivo
+    ($('zoneBanField') as HTMLElement).hidden = !params.clusterMode; // senza zone non c'è nulla da vietare
   };
   clusterBtns.forEach((b) => b.addEventListener('click', () => {
     const want = b.dataset.cluster === 'on';
@@ -559,6 +665,12 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     const v = parseFloat(($('clusterStrength') as HTMLInputElement).value);
     params.clusterStrength = Number.isNaN(v) ? 60 : Math.max(0, Math.min(100, v));
     if (params.clusterMode) render();
+  });
+
+  $('zoneBanResetBtn').addEventListener('click', () => {
+    params.zoneBans = [];
+    buildZoneBanUI();
+    render();
   });
 
   // Variante = seed: pattern DIVERSO ma RIPRODUCIBILE (stesso seed → stesso identico risultato).
@@ -614,6 +726,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     if (!cols.length) { $('clusterImageStatus').textContent = 'Nessun colore catturato (immagine tutta sfondo?)'; return; }
     params.colors = cols;
     params.colorDensities = cols.map(() => 0);
+    params.zoneBans = []; // palette nuova = zone nuove: i divieti vecchi non vorrebbero dire niente
     buildPaletteUI();
     render();
   });
@@ -665,6 +778,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   $('clearPaletteBtn').addEventListener('click', () => {
     params.colors = [];
     params.colorDensities = [];
+    params.zoneBans = [];
     buildPaletteUI();
     render();
   });

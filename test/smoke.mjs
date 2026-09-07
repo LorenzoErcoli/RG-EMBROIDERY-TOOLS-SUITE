@@ -289,6 +289,46 @@ console.log('\ninterlace — agglomerati guidati da immagine (rispettano l’imm
 check('immagine: rosso più denso a SINISTRA (dov’è rosso)', redH.L > redH.R, true);
 check('immagine: blu più denso a DESTRA (dov’è blu)', bluH.R > bluH.L, true);
 
+// interlace — DIVIETI DI TRANSITO (matrice filo × zona, `zoneBans`): un filo vietato in una zona non ci
+// cuce E non ci passa nemmeno di transito. Sulla stessa immagine metà rossa (x<60) / metà blu (x>60):
+// vietare il rosso nella zona blu deve lasciare la metà destra SENZA un solo punto rosso.
+console.log('\ninterlace — divieti di transito (dove NON passa un filo)');
+const banParams = { ...imgParams, zoneBans: [[false, true], [false, false]] }; // rosso vietato in zona blu
+const banPasses = rg.generatePasses(imgSquare, [], banParams, [2, 2], (x) => imgSample(x));
+const rightPts = (pass) => { let n = 0; for (const r of pass) for (const p of r) if (p.x > 60.01) n++; return n; };
+const leftPts = (pass) => { let n = 0; for (const r of pass) for (const p of r) if (p.x < 59.99) n++; return n; };
+check('divieto: il rosso non mette un punto nella zona blu', rightPts(banPasses[0]), 0);
+check('divieto: il rosso continua a riempire la sua metà', leftPts(banPasses[0]) > 100, true);
+check('divieto: il blu, non vietato, resta ovunque', rightPts(banPasses[1]) > 100 && leftPts(banPasses[1]) > 100, true);
+
+// Colonna intera spenta = quella zona resta NUDA (tessuto a vista): nessun filo, di nessun colore.
+const bareParams = { ...imgParams, zoneBans: [[false, true], [false, true]] }; // tutti vietati in zona blu
+const barePasses = rg.generatePasses(imgSquare, [], bareParams, [2, 2], (x) => imgSample(x));
+check('divieto: colonna spenta = zona nuda per tutti i colori', barePasses.reduce((n, p) => n + rightPts(p), 0), 0);
+check('divieto: il resto della sagoma si riempie comunque', barePasses.reduce((n, p) => n + leftPts(p), 0) > 200, true);
+
+// I divieti vivono nelle ZONE: in mélange uniforme (senza agglomerati) non esistono zone e la matrice
+// NON deve cambiare una virgola del risultato.
+const sig = (passes) => { let n = 0, mm = 0; for (const pass of passes) for (const r of pass) { n += r.length; for (let i = 1; i < r.length; i++) mm += Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y); } return n + ':' + mm.toFixed(3); };
+const uniPlain = rg.generatePasses(imgSquare, [], { ...imgParams, clusterMode: false }, [2, 2], (x) => imgSample(x));
+const uniBanned = rg.generatePasses(imgSquare, [], { ...imgParams, clusterMode: false, zoneBans: [[false, true], [true, true]] }, [2, 2], (x) => imgSample(x));
+check('divieto: in mélange uniforme la matrice è inerte', sig(uniBanned), sig(uniPlain));
+
+// Il caso che smaschera il controllo fatto male: una STRISCIA vietata SOTTILE (4mm) in mezzo al campo.
+// Guardare solo la cella d'arrivo non basta — con punti fino a 15mm il filo la scavalcherebbe senza
+// accorgersene. Qui si campiona ogni segmento rosso: nessuno deve toccare la striscia blu.
+const stripeSample = (x) => (x >= 58 && x <= 62 ? [43, 108, 176] : [229, 36, 33]); // striscia blu di 4mm
+const stripeParams = { ...imgParams, minStitchMm: 6, maxStitchMm: 15, zoneBans: [[false, true], [false, false]] };
+const stripePasses = rg.generatePasses(imgSquare, [], stripeParams, [2, 2], (x) => stripeSample(x));
+let stripeCross = 0;
+for (const r of stripePasses[0]) for (let i = 1; i < r.length; i++) {
+  const n = Math.max(1, Math.ceil(Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y) / 0.5));
+  for (let k = 0; k <= n; k++) { const x = r[i - 1].x + (r[i].x - r[i - 1].x) * (k / n); if (x > 58.5 && x < 61.5) stripeCross++; }
+}
+const stripeL = leftPts(stripePasses[0]), stripeR = rightPts(stripePasses[0]);
+check('divieto: il rosso ricama su ENTRAMBI i lati della striscia', stripeL > 50 && stripeR > 50, true);
+check('divieto: ...ma nessun segmento rosso la attraversa (transito, non solo arrivo)', stripeCross, 0);
+
 // bitmap → stitch — selezione pixel, quantizzazione, punti dentro l'immagine, punto minimo (R3), seed.
 // Immagine sintetica 24×12: due blocchi di colore distinti su sfondo bianco (bianco NON selezionato).
 console.log('\nbitmap — selezione, colori, punto minimo, determinismo');
