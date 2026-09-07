@@ -133,3 +133,32 @@ le corse man mano: 74 s. Ancora sopra il minuto, ed e' il prossimo costo da abba
 Resta un difetto di RESA che i numeri non vedono: dove due pettini si incontrano (un fronte
 sintetico, o il capo di una spazzata) la fase cambia e a volte due corse si incrociano ad angolo
 stretto. Si vede negli zoom a 24 px/mm, non nella mappa di densita'.
+
+### Il riferimento a mano, letto (`riferimento-a-mano.dst`)
+
+Lorenzo ha tracciato lo stesso disegno a mano in Stilista, messo il raso sulle macchie e regolato
+gli orientamenti: «piu' o meno e' quello che mi aspetterei tu sia in grado di fare». Letto e
+misurato con `scripts/vedidst.ts`:
+
+```
+419,7 × 353,3 mm · 4 aghi · 42 BLOCCHI in tutto · 62 salti · 513 m
+punto: mediana 3,0 mm, p90 3,05 (tutto suddiviso a 3 mm)
+spaziatura equivalente 0,31 mm
+densita': p5 2,30 · mediana 3,25 · p95 4,93 · p95/p5 2,1× · celle sopra il 150%: 6%
+```
+
+Due cose che cambiano il quadro:
+
+1. **I numeri di densita' del riferimento sono quelli che il sistema gia' fa** — anzi il sistema
+   e' un po' meglio (1,8×, 3%). L'obiettivo 1,5× di `02` era piu' severo del ricamo fatto a mano.
+   Sulle curve un raso ha il ventaglio, e un professionista lo accetta.
+2. **Quello che differisce e' la STRUTTURA.** 42 blocchi per tutto il disegno: ogni fascia d'onda
+   e' UN raso solo, con i punti che vanno da un lato all'altro della fascia e l'orientamento che
+   ruota dolcemente lungo la fascia. Dove una forma e' troppo curva o troppo larga (la sfera a
+   strisce) e' tagliata a mano in SETTORI, con un taglio netto, e ogni settore ha il suo
+   orientamento. Nessuna cucitura dentro un blocco. Il fondo chiaro e' ricamato anche lui, a raso.
+
+Quindi la pista 3 va letta cosi': non «fasce» trasversali dentro il riempimento, ma la macchia
+spezzata in **colonne di raso** — ognuna con due lati lunghi e un asse — e ogni colonna cucita da
+parete a parete, perpendicolare all'asse. La decomposizione e' il lavoro vero; il raso in una
+colonna e' il problema classico e risolto.
