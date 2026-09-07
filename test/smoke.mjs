@@ -289,6 +289,41 @@ console.log('\ninterlace — agglomerati guidati da immagine (rispettano l’imm
 check('immagine: rosso più denso a SINISTRA (dov’è rosso)', redH.L > redH.R, true);
 check('immagine: blu più denso a DESTRA (dov’è blu)', bluH.R > bluH.L, true);
 
+// interlace — TETTO AI PUNTI (`maxStitchesPerMm2`): nessun millimetro quadro prende più di N buchi
+// d'ago, contando TUTTI i colori insieme. Serve alla macchina (filo che si spezza, ago, tessuto
+// perforato): il tetto interno per-colore è relativo al suo obiettivo, quindi con più colori e
+// agglomerati forti i picchi si SOMMANO. Deve tagliare la punta senza spostare la mediana — la
+// disomogeneità è l'effetto e non si tocca.
+console.log('\ninterlace — tetto ai punti (buchi d’ago per mm²)');
+const capSquare = [{ x: 0, y: 0 }, { x: 90, y: 0 }, { x: 90, y: 90 }, { x: 0, y: 90 }];
+const capSample = (x, y) => (Math.hypot(x - 45, y - 45) < 28 ? [2, 39, 80] : [244, 233, 213]);
+const capParams = { ...rg.defaultInterlaceParams, minStitchMm: 2, maxStitchMm: 5, densitySpacingMm: 1, voidClearanceMm: 0, colors: ['#022750', '#f4e9d5'], clusterMode: true, clusterStrength: 100, seed: 3 };
+/** Buchi d'ago per mm² su griglia da 1mm: mediana e massimo. */
+function aghi(passes) {
+  const g = new Uint16Array(92 * 92);
+  for (const pass of passes) for (const r of pass) for (const p of r) {
+    // Stesso incasellamento del motore (celle da 1mm ancorate a minX-1): con mezza cella di sfasamento
+    // un mm² del metro raccoglierebbe punti da due celle del motore e il tetto sembrerebbe sforato.
+    g[Math.min(91, Math.max(0, Math.floor(p.y) + 1)) * 92 + Math.min(91, Math.max(0, Math.floor(p.x) + 1))]++;
+  }
+  const v = [];
+  for (let j = 3; j < 88; j++) for (let i = 3; i < 88; i++) v.push(g[j * 92 + i]);
+  v.sort((a, b) => a - b);
+  return { med: v[Math.floor(v.length / 2)], max: v[v.length - 1] };
+}
+const filoDi = (passes) => { let L = 0; for (const pass of passes) for (const r of pass) for (let i = 1; i < r.length; i++) L += Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y); return L; };
+const capOff = rg.generatePasses(capSquare, [], { ...capParams, maxStitchesPerMm2: 0 }, [1, 1], capSample);
+const capAuto = rg.generatePasses(capSquare, [], capParams, [1, 1], capSample); // default = null = automatico
+const cap6 = rg.generatePasses(capSquare, [], { ...capParams, maxStitchesPerMm2: 6 }, [1, 1], capSample);
+const aOff = aghi(capOff), aAuto = aghi(capAuto), a6 = aghi(cap6);
+console.log(`   (senza tetto: mediana ${aOff.med}, picco ${aOff.max} · tetto 6: mediana ${a6.med}, picco ${a6.max})`);
+check('senza tetto il picco è almeno il doppio della mediana (c’è una punta da tagliare)', aOff.max >= aOff.med * 2, true);
+check('tetto esplicito 6: nessun mm² supera 6 buchi d’ago', a6.max <= 6, true);
+check('tetto automatico: non peggiora mai il picco', aAuto.max <= aOff.max, true);
+check('tetto automatico: resta comunque entro un limite sano', aAuto.max <= 14, true);
+check('il tetto taglia la punta, NON la mediana (la disomogeneità resta)', a6.med >= aOff.med - 1, true);
+check('tagliare la punta costa quasi nulla in filo (meno del 5%)', Math.abs(filoDi(cap6) / filoDi(capOff) - 1) < 0.05, true);
+
 // interlace — SORMONTO ai bordi delle zone (`zoneOverlapMm`). Due colori che non si mescolano si
 // fermano testa a testa e a ridosso del confine NESSUNO dei due riesce più a cucire: la densità crolla e
 // resta una fessura. Il sormonto fa posare a ciascuno una passata oltre il bordo, così i due si

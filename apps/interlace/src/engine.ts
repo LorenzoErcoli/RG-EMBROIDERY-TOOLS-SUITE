@@ -57,6 +57,15 @@ export interface InterlaceParams {
    *  giusta perché il difetto scala con la densità, non è una misura fissa. Un numero = quei mm. 0 =
    *  confine netto, come prima. */
   zoneOverlapMm: number | null;
+  /** TETTO ai buchi d'ago per mm²: quanti punti al massimo può prendere lo stesso millimetro quadro,
+   *  contando TUTTI i colori insieme. Il tetto interno `CLUMP_CAP` è per-colore e relativo al suo
+   *  obiettivo, quindi con molti colori e agglomerati forti i picchi si sommano (misurato su un lavoro
+   *  vero: 42 buchi d'ago in un mm², contro una mediana di 5) — è lì che il filo si spezza, l'ago soffre
+   *  e il tessuto si perfora. Questo tetto è ASSOLUTO e condiviso: taglia solo le punte, la
+   *  disomogeneità che dà movimento resta.
+   *  `null` = AUTOMATICO (3 × i punti che servono davvero a coprire: taglia l'1-2% più fitto e basta).
+   *  Un numero = quel tetto. 0 = nessun tetto (com'era). */
+  maxStitchesPerMm2: number | null;
 }
 
 export const defaultInterlaceParams: InterlaceParams = {
@@ -74,6 +83,7 @@ export const defaultInterlaceParams: InterlaceParams = {
   clusterStrength: 60, // intensità zone 0–100 (solo con clusterMode)
   zoneBans: [], // vuoto = ogni filo passa ovunque
   zoneOverlapMm: null, // null = automatico (0.6 × densità = una fila di celle); 0 = confine netto
+  maxStitchesPerMm2: null, // null = automatico (3 × i punti necessari); 0 = nessun tetto
 };
 
 // --- Costanti interne (implementazione, non parametri utente): il "movimento" del filo.
@@ -85,6 +95,7 @@ const SWIRL = 2.2;          // intensità di rotazione del campo
 const CANDIDATES = 16;      // candidati valutati a ogni passo (si sceglie la zona meno riempita)
 const CLUMP_CAP = 3;        // tetto ai picchi: il filo non passa più di ~3× il target in una stessa cella
 const STALL_MOVES = 300;    // passi senza guadagnare una cella oltre i quali il filo si dichiara murato
+const PEAK_FACTOR = 3;      // tetto automatico ai buchi d'ago = 3 × quelli che servono davvero a coprire
 const MAX_POINTS = 200000;  // guardia anti-runaway
 const MAX_MASK_CELLS = 4_000_000; // tetto memoria maschera fine
 
@@ -284,9 +295,28 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
  * fasi (principale + controllo successivo che livella), rilocando a penna alzata tra le zone assegnate.
  * Questo permette il mélange: passate diverse ricevono celle diverse (dither), sparse su tutta l'area.
  */
-function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null): Point[][] {
+/** Contatore dei buchi d'ago su griglia da 1mm, CONDIVISO fra tutte le passate: il tetto vale sul totale
+ *  dei colori, non colore per colore — è la somma che la macchina subisce. */
+interface PenGrid { arr: Uint16Array; gx: number; gy: number; x0: number; y0: number; cap: number; }
+
+function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null, pen: PenGrid | null = null): Point[][] {
   const { bb, cell, gx, gy, ci, cj, cpx, cpy, minS, maxS, inRegion, segOk } = ctx;
   const { mgw, mgh, mx0, my0, mres } = ctx;
+  /** Il mm² di un punto è già al tetto? Allora l'ago lì non ci scende più. */
+  const penFull = (x: number, y: number): boolean => {
+    if (!pen) return false;
+    let i = Math.floor(x - pen.x0), j = Math.floor(y - pen.y0);
+    if (i < 0) i = 0; else if (i > pen.gx - 1) i = pen.gx - 1;
+    if (j < 0) j = 0; else if (j > pen.gy - 1) j = pen.gy - 1;
+    return pen.arr[j * pen.gx + i] >= pen.cap;
+  };
+  const penAdd = (x: number, y: number): void => {
+    if (!pen) return;
+    let i = Math.floor(x - pen.x0), j = Math.floor(y - pen.y0);
+    if (i < 0) i = 0; else if (i > pen.gx - 1) i = pen.gx - 1;
+    if (j < 0) j = 0; else if (j > pen.gy - 1) j = pen.gy - 1;
+    pen.arr[j * pen.gx + i]++;
+  };
   const cov = new Float32Array(gx * gy);
   const dead = new Uint8Array(gx * gy);
   let need = 0;
@@ -306,14 +336,23 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
   };
   const nearestGap = (x: number, y: number): { x: number; y: number; id: number } | null => {
     const i0 = ci(x), j0 = cj(y);
-    let bestD = Infinity, bx = 0, by = 0, bid = -1;
-    for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++) {
-      const id = j * gx + i; const tg = targetArr[id];
-      if (tg === 0 || cov[id] >= tg || dead[id]) continue;
-      const d = (i - i0) * (i - i0) + (j - j0) * (j - j0);
-      if (d < bestD) { bestD = d; bx = cpx[id]; by = cpy[id]; bid = id; }
+    // Ciclo, non ricorsione: in un caso saturo le celle da scartare possono essere migliaia.
+    for (;;) {
+      let bestD = Infinity, bx = 0, by = 0, bid = -1;
+      for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++) {
+        const id = j * gx + i; const tg = targetArr[id];
+        if (tg === 0 || cov[id] >= tg || dead[id]) continue;
+        const d = (i - i0) * (i - i0) + (j - j0) * (j - j0);
+        if (d < bestD) { bestD = d; bx = cpx[id]; by = cpy[id]; bid = id; }
+      }
+      if (bid < 0) return null;
+      // Se il vuoto più vicino è già al TETTO dei buchi d’ago non si potrà mai coprire: si toglie dal
+      // conto (altrimenti la copertura non arriva a soglia e il motore gira fino al tetto di iterazioni)
+      // e si cerca il successivo. Il controllo sta qui, sul solo vincitore, e non dentro la scansione:
+      // farlo su ogni cella costava il 60% del tempo di generazione.
+      if (!penFull(bx, by)) return { x: bx, y: by, id: bid };
+      dead[bid] = 1; need--;
     }
-    return bid < 0 ? null : { x: bx, y: by, id: bid };
   };
 
   // DIVIETO DI TRANSITO: la cella d’arrivo non basta. Con punti fino a 15mm il filo scavalcherebbe una
@@ -342,6 +381,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
 
   const runs: Point[][] = [];
   let run: Point[] = [{ x: g0.x, y: g0.y }];
+  penAdd(g0.x, g0.y);
   let cx = g0.x, cy = g0.y, dir = rng() * Math.PI * 2;
   let curId = g0.id;
   let runMoves = 0, totalPts = 1;
@@ -365,6 +405,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
       if (tg === 0) continue;
       if (cov[destId] >= capMult * tg) continue; // tetto ai picchi (vale anche ai tragitti)
       if (crossesBan(cx, cy, nx, ny)) continue;  // zona vietata a questo colore: non ci si passa nemmeno
+      if (penFull(nx, ny)) continue;             // quel mm² ha già preso tutti i buchi d'ago che regge
       let score = -cov[destId] + rng() * 0.25;
       if (destId === curCell) score -= 3;
       if (cov[destId] >= tg) score -= 6;
@@ -377,7 +418,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
       const nx = cx + Math.cos(a) * len, ny = cy + Math.sin(a) * len;
       if (!inRegion(nx, ny) || !segOk(cx, cy, nx, ny)) continue;
       const id = cj(ny) * gx + ci(nx);
-      if (targetArr[id] > 0 && cov[id] < capMult * targetArr[id] && !crossesBan(cx, cy, nx, ny)) return { x: nx, y: ny, ang: a };
+      if (targetArr[id] > 0 && cov[id] < capMult * targetArr[id] && !crossesBan(cx, cy, nx, ny) && !penFull(nx, ny)) return { x: nx, y: ny, ang: a };
     }
     return null;
   };
@@ -385,10 +426,12 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
     stamp(cx, cy, nx, ny);
     run.push({ x: nx, y: ny });
     cx = nx; cy = ny; dir = ang; totalPts++; runMoves++;
+    penAdd(nx, ny);
   };
   const openRunAt = (x: number, y: number, id: number): void => {
     if (run.length >= 2) runs.push(run);
     run = [{ x, y }];
+    penAdd(x, y);
     cx = x; cy = y; dir = rng() * Math.PI * 2; curId = id; runMoves = 0;
   };
 
@@ -406,7 +449,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
     // Se per un po' non guadagna una cella si dichiara murato e riparte dal vuoto più vicino. È l'unico
     // stacco in più che i divieti si portano dietro; senza divieti non si attiva mai (regola 1 intatta:
     // il filo non stacca "di comodo").
-    if (banArr && sinceGain > STALL_MOVES) {
+    if ((banArr || pen) && sinceGain > STALL_MOVES) {
       const g = nearestGap(cx, cy);
       if (!g) break;
       openRunAt(g.x, g.y, g.id);
@@ -576,6 +619,33 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
   // Il sormonto è per-passata perché dipende dalla cella di densità di QUEL colore. `null` = automatico:
   // 0.6 × cella prende esattamente la prima fila di celle oltre il confine (il centro della seconda sta
   // a 1.5 celle) — una regola che vale a qualsiasi densità, mentre un valore fisso in mm no.
+  // TETTO AI BUCHI D'AGO, condiviso da tutte le passate su una griglia da 1mm. Automatico = PEAK_FACTOR ×
+  // i punti che servono DAVVERO a coprire: la copertura chiesta (crossings/mm², sommata su tutti i colori
+  // nel caso peggiore — uno padrone della zona, gli altri alla base) divisa per la lunghezza media del
+  // punto. Così il tetto si adatta da solo a densità, numero di colori e intensità degli agglomerati,
+  // invece di essere un numero fisso che a metà dei lavori è sbagliato.
+  const avgStitch = (minS + maxS) / 2;
+  const boostCells = p.clusterMode ? Math.round(Math.max(0, Math.min(100, p.clusterStrength)) / 100 * 8) : 0;
+  let needMax = 0;
+  for (let k = 0; k < densities.length; k++) {
+    let sum = (COVER_TARGET + boostCells) / cellForSpacing(densities[k], maxS);
+    for (let i = 0; i < densities.length; i++) {
+      if (i === k) continue;
+      sum += (p.clusterMode ? 1 : COVER_TARGET) / cellForSpacing(densities[i], maxS);
+    }
+    if (sum > needMax) needMax = sum;
+  }
+  const capWanted = p.maxStitchesPerMm2;
+  const cap = capWanted === 0 ? 0
+    : capWanted == null ? Math.max(4, Math.ceil(PEAK_FACTOR * needMax / avgStitch))
+    : Math.max(1, Math.round(capWanted));
+  let pen: PenGrid | null = null;
+  if (cap > 0) {
+    const pb = bounds(boundary);
+    const pgx = Math.ceil(pb.maxX - pb.minX) + 3, pgy = Math.ceil(pb.maxY - pb.minY) + 3;
+    if (pgx * pgy <= 16_000_000) pen = { arr: new Uint16Array(pgx * pgy), gx: pgx, gy: pgy, x0: pb.minX - 1, y0: pb.minY - 1, cap };
+  }
+
   const overlapFor = (cell: number): number => p.zoneOverlapMm == null ? 0.6 * cell : Math.max(0, p.zoneOverlapMm);
   // Mappa delle ZONE alla risoluzione FINE, calcolata UNA volta e riusata da tutte le passate: la griglia
   // fine dipende solo da sagoma e punto minimo, non dalla densità, quindi è la stessa per ogni colore.
@@ -662,7 +732,7 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
     } else {
       for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = COVER_TARGET;
     }
-    passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr, banArr));
+    passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr, banArr, pen));
   }
   return passes;
 }

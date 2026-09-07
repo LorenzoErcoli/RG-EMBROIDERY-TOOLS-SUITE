@@ -148,6 +148,11 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="zoneOverlap" type="number" min="0" step="0.1" placeholder="auto"><span>mm</span></span>
             <small class="rg-field__help">due colori che si fermano testa a testa lasciano una fessura: a ridosso del confine nessuno dei due riesce più a cucire. Qui ogni filo sconfina di tanto oltre il bordo vietato, posandoci una passata, e i due lati si accavallano. Vuoto = automatico (una fila di celle, cioè 0,6 × la densità: il difetto cresce con la densità, quindi un numero fisso non andrebbe bene a tutte). 0 = confine netto, come prima.</small>
           </label>
+          <label class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Tetto ai punti (buchi d’ago per mm²)</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="maxStitches" type="number" min="0" step="1" placeholder="auto"><span>pt/mm²</span></span>
+            <small class="rg-field__help">quanti punti al massimo può prendere lo stesso millimetro quadro, contando tutti i colori insieme: è lì che il filo si spezza e l’ago soffre. Taglia solo le punte, la disomogeneità che dà movimento resta. Vuoto = automatico (3 × i punti che servono davvero a coprire). 0 = nessun tetto.</small>
+          </label>
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Variante</span>
             <div class="rg-cluster">
@@ -711,6 +716,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     ($('seed') as HTMLInputElement).value = String(params.seed);
     ($('clusterStrength') as HTMLInputElement).value = String(params.clusterStrength);
     syncOverlap();
+    syncCap();
     syncCluster(); // switch agglomerati + visibilità intensità
     buildParamUI();
     buildPaletteUI();
@@ -800,6 +806,16 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     const v = parseFloat(($('clusterStrength') as HTMLInputElement).value);
     params.clusterStrength = Number.isNaN(v) ? 60 : Math.max(0, Math.min(100, v));
     if (params.clusterMode) render();
+  });
+
+  const capInput = $('maxStitches') as HTMLInputElement;
+  const syncCap = () => { capInput.value = params.maxStitchesPerMm2 == null ? '' : String(params.maxStitchesPerMm2); };
+  syncCap();
+  capInput.addEventListener('change', () => {
+    const v = parseFloat(capInput.value);
+    params.maxStitchesPerMm2 = capInput.value.trim() === '' || Number.isNaN(v) ? null : Math.max(0, Math.round(v));
+    syncCap();
+    render();
   });
 
   const overlapInput = $('zoneOverlap') as HTMLInputElement;
