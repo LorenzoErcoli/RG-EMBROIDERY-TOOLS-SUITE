@@ -13,7 +13,7 @@
 // così un cartamodello con 60 lettere costa quanto uno con 2.
 import {
   type Point, type Polyline,
-  bounds, distance,
+  bounds,
 } from '@rg/core';
 
 /** Parametri del riempimento. App-locali finché non si promuovono nel core. Nomi canonici §3 dove esistono. */
@@ -296,7 +296,11 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
  * Questo permette il mélange: passate diverse ricevono celle diverse (dither), sparse su tutta l'area.
  */
 /** Contatore dei buchi d'ago su griglia da 1mm, CONDIVISO fra tutte le passate: il tetto vale sul totale
- *  dei colori, non colore per colore — è la somma che la macchina subisce. */
+ *  dei colori, non colore per colore — è la somma che la macchina subisce.
+ *  *Limite noto:* il budget è primo-arrivato-primo-servito, quindi con un tetto STRETTO gli ultimi colori
+ *  della palette ne prendono meno (misurato a tetto 2: 35/50/33/32/32 m contro 36/39/39/37/36 col tetto
+ *  automatico). Si vede solo quando il tetto scende sotto il necessario — cioè nel caso in cui il
+ *  pannello avvisa già. */
 interface PenGrid { arr: Uint16Array; gx: number; gy: number; x0: number; y0: number; cap: number; }
 
 function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null, pen: PenGrid | null = null): Point[][] {
