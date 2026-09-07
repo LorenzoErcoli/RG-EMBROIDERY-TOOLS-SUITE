@@ -37,6 +37,8 @@ export { buildCurvedFill, buildNaiveCurvedFill } from ${JSON.stringify(posix('ap
 export { coverageStats, neighbourSpacing, containment } from ${JSON.stringify(posix('apps/pittorico/src/coverage.ts'))};
 export { buildPittoricoPlan, pittoricoExportLayers, defaultPittoricoParams } from ${JSON.stringify(posix('apps/pittorico/src/pipeline.ts'))};
 export { buildRailFill } from ${JSON.stringify(posix('apps/pittorico/src/rail-fill.ts'))};
+export { leggiRaso } from ${JSON.stringify(posix('apps/sfrangiatura/src/rasi.ts'))};
+export { sfrangia } from ${JSON.stringify(posix('apps/sfrangiatura/src/frange.ts'))};
 export { larghezzaTransizione, cresciVersoISuccessivi, frastaglia } from ${JSON.stringify(posix('apps/pittorico/src/borders.ts'))};
 export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('apps/pittorico/src/primitives.ts'))};
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
@@ -608,6 +610,99 @@ if (rvUguali) for (let i = 0; i < rv.blocks.length && rvUguali; i++) {
   for (let j = 0; j < a.length; j++) if (Math.abs(a[j][0] - b[j][0]) > 1e-9 || Math.abs(a[j][1] - b[j][1]) > 1e-9) { rvUguali = false; break; }
 }
 check('DST vero: riscritto e riletto, gli stessi punti al millesimo', rvUguali, true);
+
+// I CAPI DELLE FILE DI RASO dentro un blocco cucito (tool `sfrangiatura`). Misurato contro verita'
+// nota: un raso generato dal core, dove le file si sanno gia' quante sono e dove finiscono.
+console.log('NL_core — le file di raso dentro un blocco (leggiRaso)'.replace('NL_', String.fromCharCode(10)));
+const sfRett = [{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 12 }, { x: 0, y: 12 }];
+const sfRighe = rg.buildParallelFill(sfRett, [], { angleDeg: 0, spacingMm: 0.4, maxStitchMm: 3, mode: 'serpentine' });
+const sfPunti = [];
+for (const r of sfRighe) for (const p of r) sfPunti.push(p);
+const sfLetto = rg.leggiRaso(sfPunti);
+check('leggiRaso: 30 file → 60 capi', [sfRighe.length, sfLetto.capi.length], [30, 60]);
+check('leggiRaso: i capi si dividono in due lati uguali', [sfLetto.capi.filter((c) => c.lato === 0).length, sfLetto.capi.filter((c) => c.lato === 1).length], [30, 30]);
+// il capo sta sul BORDO della forma, non a caso dentro: e' la prova che sono i capi veri
+const sfX0 = sfLetto.capi.filter((c) => c.lato === 0).map((c) => c.punto.x);
+const sfX1 = sfLetto.capi.filter((c) => c.lato === 1).map((c) => c.punto.x);
+check('leggiRaso: un lato sul bordo x=0, l’altro su x=20', [Math.max(...sfX0), Math.min(...sfX1)], [0, 20]);
+// la direzione del capo e' quella con cui la fila ci arriva: allungare vuol dire proseguire di li'
+const sfOriz = sfLetto.capi.filter((c) => c.filaMm > 1).every((c) => Math.abs(c.direzione.y) < 1e-9);
+check('leggiRaso: la direzione del capo segue la fila', sfOriz, true);
+// e il riconoscimento sopravvive al giro in DST (decimi di mm)
+const sfDst = rg.readDst(rg.buildDst({ label: 'SF', coordinate_system: 'svg', paths: [{ needle: 1, points_mm: sfPunti.map((p) => [p.x, p.y]) }] }));
+const sfDopo = rg.leggiRaso(sfDst.blocks[0].points_mm.map(([x, y]) => ({ x, y })));
+check('leggiRaso: dopo il giro in DST, gli stessi capi', sfDopo.capi.length, sfLetto.capi.length);
+let sfScarto = 0;
+for (let i = 0; i < sfDopo.capi.length; i++) sfScarto = Math.max(sfScarto, Math.hypot(sfDopo.capi[i].punto.x - sfLetto.capi[i].punto.x, sfDopo.capi[i].punto.y - sfLetto.capi[i].punto.y));
+check('leggiRaso: e nelle stesse posizioni', sfScarto < 0.06, true);
+// un blocco che NON e' un raso (una fermatura da 2 punti) da' i suoi estremi e nessuna fila: giusto cosi'
+const sfFerm = rg.leggiRaso([{ x: 0, y: 0 }, { x: 11, y: 0 }]);
+check('leggiRaso: una fermatura da' + ' 2 punti da' + ' i suoi due capi e una fila sola', [sfFerm.capi.length, sfFerm.capi[0].filaMm, sfFerm.capi[1].filaMm], [2, 11, 11]);
+
+// ...e sul RICAMO VERO. La soglia dell'inversione non e' scelta a occhio: la svolta dei punti e'
+// bimodale con un deserto fra 50 e 130 gradi, quindi spostarla dentro il deserto non cambia nulla.
+const rvRasi = rv.blocks.filter((b) => b.points_mm.length >= 5).map((b) => b.points_mm.map(([x, y]) => ({ x, y })));
+const rvCapi = (soglia) => rvRasi.reduce((n, p) => n + rg.leggiRaso(p, soglia ? { sogliaInversioneDeg: soglia } : undefined).capi.length, 0);
+check('DST vero: 27.477 capi di raso nei 42 blocchi', rvCapi(), 27477);
+const rvA = rvCapi(60), rvB = rvCapi(135);
+check('DST vero: la soglia dell’inversione non conta (60° e 135° entro l’1%)', Math.abs(rvA - rvB) / rvA < 0.01, true);
+
+// LA SFRANGIATURA. La promessa del tool e' negativa prima che positiva: **fuori dalle zone marcate
+// non cambia niente**. Questi test la controllano sul ricamo vero, dove un effetto collaterale si
+// nasconderebbe fra 188.139 punti.
+console.log('NL_core — la sfrangiatura dei capi (sfrangia)'.replace('NL_', String.fromCharCode(10)));
+const sfBlocchi = [{ needle: 1, points_mm: sfPunti.map((p) => [p.x, p.y]) }];
+const sfPar = { minMm: 1, maxMm: 5, virataDeg: 8, seme: 1 };
+const sfDiversi = (a, b) => {
+  let n = 0;
+  for (let i = 0; i < a.length; i++) for (let j = 0; j < a[i].points_mm.length; j++)
+    if (a[i].points_mm[j][0] !== b[i].points_mm[j][0] || a[i].points_mm[j][1] !== b[i].points_mm[j][1]) n++;
+  return n;
+};
+// niente zone marcate = niente da fare: e' la garanzia che il tool non "sistema" nulla di suo
+const sfNulla = rg.sfrangia(sfBlocchi, [], sfPar);
+check('sfrangia: nessuna zona → nessun capo toccato', [sfNulla.allungati, sfDiversi(sfBlocchi, sfNulla.blocchi)], [0, 0]);
+// una zona che copre solo il bordo x=20: si allungano i capi di QUEL lato e nessun altro
+const sfZona = [[{ x: 19, y: -1 }, { x: 25, y: -1 }, { x: 25, y: 13 }, { x: 19, y: 13 }]];
+const sfUno = rg.sfrangia(sfBlocchi, sfZona, sfPar);
+check('sfrangia: si allungano i 30 capi del lato marcato, e nessun altro', [sfUno.allungati, sfDiversi(sfBlocchi, sfUno.blocchi)], [30, 30]);
+check('sfrangia: il numero di punti non cambia', sfUno.blocchi[0].points_mm.length, sfBlocchi[0].points_mm.length);
+// l'attacco e lo stacco del filo restano dove sono: li' il filo entra ed esce
+// l'attacco e lo stacco del filo restano dove sono anche marcando TUTTO: li' il filo entra ed esce
+const sfTutto = rg.sfrangia(sfBlocchi, [[{ x: -1, y: -1 }, { x: 25, y: -1 }, { x: 25, y: 13 }, { x: -1, y: 13 }]], sfPar);
+check('sfrangia: l’attacco e lo stacco non si toccano', sfTutto.saltati.attaccoOStacco, 2);
+// lo spostamento sta fra il minimo e il massimo chiesti, ed e' lungo la fila (qui orizzontale)
+let sfMin = Infinity, sfMax = 0, sfFuoriAsse = 0;
+for (let j = 0; j < sfBlocchi[0].points_mm.length; j++) {
+  const a = sfBlocchi[0].points_mm[j], b = sfUno.blocchi[0].points_mm[j];
+  if (a[0] === b[0] && a[1] === b[1]) continue;
+  const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+  if (d < sfMin) sfMin = d; if (d > sfMax) sfMax = d;
+  if (Math.abs(Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI) > 8.001) sfFuoriAsse++;
+}
+check('sfrangia: la frangia sta fra il minimo e il massimo chiesti', [sfMin >= 1 - 1e-9, sfMax <= 5 + 1e-9], [true, true]);
+check('sfrangia: e prosegue lungo la fila, entro la virata dichiarata', sfFuoriAsse, 0);
+// determinismo: e' cio' che rende un ricamo correggibile e rifattibile
+check('sfrangia: stesso seme, stesso ricamo', sfDiversi(sfUno.blocchi, rg.sfrangia(sfBlocchi, sfZona, sfPar).blocchi), 0);
+check('sfrangia: seme diverso, frange diverse', sfDiversi(sfUno.blocchi, rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, seme: 2 }).blocchi) > 0, true);
+// il limite della macchina non si sfora nemmeno chiedendo l'impossibile (il record DST arriva a 12,1 mm)
+const sfEnorme = rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, minMm: 30, maxMm: 40, puntoMassimoMm: 12 });
+let sfPiuLungo = 0;
+for (const b of sfEnorme.blocchi) for (let i = 1; i < b.points_mm.length; i++)
+  sfPiuLungo = Math.max(sfPiuLungo, Math.hypot(b.points_mm[i][0] - b.points_mm[i - 1][0], b.points_mm[i][1] - b.points_mm[i - 1][1]));
+check('sfrangia: nessun punto oltre il limite della macchina', sfPiuLungo <= 12 + 1e-6, true);
+check('sfrangia: e lo dichiara invece di farlo di nascosto', sfEnorme.limitate, sfEnorme.allungati);
+
+// sul RICAMO VERO: una striscia marcata cambia SOLO i suoi capi, e il resto del file resta identico
+const rvZona = [[{ x: -1000, y: 98.89 }, { x: 1000, y: 98.89 }, { x: 1000, y: 106.89 }, { x: -1000, y: 106.89 }]];
+const rvSfr = rg.sfrangia(rv.blocks, rvZona, sfPar);
+check('DST vero: 416 capi allungati nella striscia', rvSfr.allungati, 416);
+check('DST vero: e i punti cambiati sono esattamente quelli', sfDiversi(rv.blocks, rvSfr.blocchi), 416);
+check('DST vero: la frangia media sta dentro il chiesto', rvSfr.frangiaMediaMm > 1 && rvSfr.frangiaMediaMm < 5, true);
+// senza zone il file riscritto e' identico BYTE PER BYTE: la prova piu' forte che si possa scrivere
+const rvByteA = rg.buildDst(rg.dstProgramFromBlocks(rv.blocks, { label: rv.label }));
+const rvByteB = rg.buildDst(rg.dstProgramFromBlocks(rg.sfrangia(rv.blocks, [], sfPar).blocchi, { label: rv.label }));
+check('DST vero: senza zone marcate il file e’ identico byte per byte', Array.from(rvByteA).join(',') === Array.from(rvByteB).join(','), true);
 
 // La riapertura del .dst è dichiarata in STATO come CAPACITÀ GLOBALE, ma per mesi è stata vera
 // solo per bitmap e oblique: gli altri quattro tool scrivevano il DST senza parametri e nessuno

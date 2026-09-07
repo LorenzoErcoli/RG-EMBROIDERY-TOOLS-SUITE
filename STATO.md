@@ -3,7 +3,7 @@
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
 > Aggiornato: 2026-09-04 · Suite con **nove tool live**: `pittorico` è entrato nella home e gira in browser — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
-> Rete di sicurezza: `npm test` (641 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
+> Rete di sicurezza: `npm test` (664 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
 
 ---
 
@@ -424,7 +424,7 @@
 
 **Regole scritte:** `COSTITUZIONE-RICAMO.md` (31 regole R1–R31 + glossario + parametri canonici) e `ARCHITETTURA.md`. **`README.md`** alla radice è la porta d'ingresso per chi non è Lorenzo (cos'è, `avvia.bat`, i sei strumenti, i comandi, come si aggiunge un tool).
 
-**Tool `sfrangiatura` — IN COSTRUZIONE, punto 1 di 5 fatto.** Il decimo strumento, e il primo che non
+**Tool `sfrangiatura` — IN COSTRUZIONE, punti 1–3 di 5 fatti.** Il decimo strumento, e il primo che non
 genera ricamo: **rilavora un DST già fatto**. Lorenzo marca dove due macchie si affacciano e i capi
 delle file di raso si allungano a caso, gli uni dentro il territorio degli altri, fino a intrecciarsi
 — l'effetto delle foto di ricamo del dossier. Fuori dalle zone marcate il file non cambia di un punto.
@@ -447,9 +447,40 @@ delle file di raso si allungano a caso, gli uni dentro il territorio degli altri
   (che è lo stesso `BASE-BRAVENEWWORLD.dst` di Lorenzo, byte per byte). 4 aghi, 188.139 punti,
   419,7 × 353,3 mm, punto mediano 3,00 mm. Un file scritto da **un altro software** prova quello che
   una fixture nostra non può: che la lettura non dipende dal nostro writer.
-- **Restano i punti 2–5**: riconoscere le file di raso e i loro capi dentro un blocco, l'allungamento
-  casuale e deterministico (lunghezza **regolabile**, minimo e massimo in mm — chiesto da Lorenzo),
-  il pannello con la marcatura delle zone, export e registrazione nella suite.
+- **Punto 2 — le file di raso si riconoscono, e la soglia non è un'opinione.** Il DST non sa cosa sia
+  un raso, ma un raso da parete a parete lascia una firma: il filo attraversa, **inverte** sul bordo,
+  riattraversa. Misurata sui 42 rasi di Lorenzo, la svolta dei punti è **bimodale con un deserto in
+  mezzo** — il 79% gira meno di 10° (prosegue lungo la fila, che il punto massimo ha suddiviso), il
+  14% gira più di 150°, e **fra 50° e 130° non c'è quasi nulla**. Fra 60° e 135° il numero di capi
+  cambia meno dell'1% (27.528 → 27.276): la soglia si sceglie in mezzo al deserto, non a occhio.
+  Default 80° e non 90°, perché il collegamento fra due file è **proprio un angolo retto** e sulla
+  soglia esatta il riconoscimento dipenderebbe dall'arrotondamento.
+- **Provato contro verità nota**, non solo sul file vero: un raso generato dal core in un rettangolo
+  20×12 a passo 0,4 dà 30 file → `leggiRaso` trova **60 capi, 30 per lato, con la x esattamente sul
+  bordo** (0,00 e 20,00). Passando per un DST e tornando indietro: gli stessi capi, nelle stesse
+  posizioni.
+- **Il test ha trovato il secondo difetto: in una serpentina metà dei capi si raggiungono col
+  micro-collegamento fra due file** (0,4 mm, di traverso), non con la traversata. Prendendo il
+  segmento entrante, quelle frange partivano **lungo il bordo invece che fuori dalla macchia** — e a
+  occhio, su un ricamo denso, non si sarebbe visto. La direzione del capo è quella del **più lungo**
+  dei due segmenti, orientata verso l'esterno.
+- **Punto 3 — l'allungamento, e la promessa è negativa prima che positiva.** Sul ricamo vero, una
+  striscia marcata di 8 mm: **416 capi allungati e 416 punti cambiati su 188.139**, nient'altro.
+  Senza zone marcate il file riscritto è **identico byte per byte**. Frangia media 2,98 mm su un
+  minimo/massimo chiesti di 1 e 5, spostamenti fra 1,01 e 5,00 mm, tutti lungo la fila entro la
+  virata dichiarata. Il caso è **deterministico e posizionale**: il seme di un capo viene dal suo
+  posto nel file, quindi sfrangiare una zona non cambia le frange di un'altra e rimarcare in ordine
+  diverso dà lo stesso ricamo.
+- **Due vincoli che sono del filo, non parametri:** nessun punto può superare quello che la macchina
+  cuce (default 12 mm, il record DST arriva a 12,1) — se la frangia lo sforerebbe si accorcia **e lo
+  dichiara** invece di sballare il file; e l'**attacco e lo stacco** di ogni blocco non si toccano,
+  perché lì il filo entra ed esce e spostarli vorrebbe dire spostare un salto e la sua fermatura.
+- **Guardato, non solo misurato:** `apps/sfrangiatura/scripts/vedi.ts` disegna il ritaglio col ricamo
+  di partenza in grigio e **le sole frange nuove in rosso** — il raso a video ha già l'aria di un
+  pettine e un prima/dopo affiancato nasconde la differenza. La zona di confine se la cerca da solo:
+  la cella dove due aghi diversi hanno più punti tutti e due.
+- **Restano i punti 4–5**: il pannello con la marcatura a pennello sull'anteprima, l'export SVG/DST
+  riapribile, la registrazione nella suite (card, route, alias nei due file, `MANUALE.md`).
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 
@@ -458,7 +489,7 @@ delle file di raso si allungano a caso, gli uni dentro il territorio degli altri
 ## 2. STATO
 
 **Sei tool in piedi, e adesso ognuno ha le sue invarianti scritte. Il settimo, `broccato`, è partito.**
-Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (641 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
+Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (664 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
 
 **La copertura dei test non era un adempimento: ha trovato cinque difetti veri**, ognuno dei quali violava una regola della Costituzione già scritta e mai verificata — i passaggi di net-45 che attraversavano i vuoti (R5), il punto minimo mai applicato in striatura (R3), `insetPolygon` che rientrava del 30% in meno, il punto massimo di pattern-grammar che lasciava passare segmenti quasi doppi (R4), l'importer che esplodeva sul file vero da 2MB. Tutti corretti, tutti bloccati da un test che fallisce se tornano.
 
