@@ -12,6 +12,19 @@
 // così sfrangiare una zona non cambia le frange di un'altra, e rimarcare in un ordine diverso da'
 // lo stesso risultato.
 //
+// L'effetto voluto non e' un pettine ma un INTRECCIO: le frange devono incrociarsi fra loro e fare
+// delle X, come nelle foto di ricamo. Una virata a caso non basta - due frange vicine che virano
+// tutte e due a destra restano parallele e non si incontrano mai. Quello che le fa incrociare e' il
+// **segno opposto**: la virata alterna fra una frangia e la successiva, e l'ampiezza resta casuale.
+// Cosi' ogni coppia vicina si apre a X, e siccome l'ampiezza varia gli incroci cadono a altezze
+// diverse invece di allinearsi in una riga.
+//
+// «La successiva» va presa con cura, ed e' costato una misura per accorgersene: i capi consecutivi
+// nella CUCITURA stanno su lati opposti della colonna di raso, cioe' lontanissimi sul ricamo.
+// Alternare li' faceva incrociare solo il 30% delle coppie e il numero non saliva piu' nemmeno
+// aprendo l'angolo. L'alternanza va fatta fra capi **dello stesso lato**, che sono quelli davvero
+// vicini: e' l'unico posto dove una X si puo' formare.
+//
 // Due cose che il filo impone, e sono vincoli non parametri:
 // - un punto non puo' diventare piu' lungo di quello che la macchina cuce (`puntoMassimoMm`): se la
 //   frangia lo sforerebbe, si accorcia fino al limite invece di sballare il file;
@@ -26,8 +39,18 @@ export interface FrangiaParams extends LeggiRasoOptions {
   minMm: number;
   /** Lunghezza massima della frangia, in mm. */
   maxMm: number;
-  /** Virata casuale del capo, in gradi per lato: i fili non restano paralleli. Default 8. */
-  virataDeg?: number;
+  /**
+   * Apertura dell'incrocio, in gradi: di quanto la frangia si scosta dalla sua fila. Il segno
+   * ALTERNA fra capi vicini, quindi questo e' anche mezzo angolo della X che si forma fra due
+   * frange adiacenti. Default 25. A 0 le frange restano parallele e non si incrocia niente.
+   */
+  incrocioDeg?: number;
+  /**
+   * Quanto l'apertura puo' variare da una frangia all'altra, come frazione (0..1): con 0,6 l'angolo
+   * va dal 40% al 100% dell'apertura. Serve a far cadere gli incroci a altezze diverse invece che
+   * tutti sulla stessa riga. Default 0,6.
+   */
+  variazioneIncrocio?: number;
   /** Seme del caso. Stesso seme = stesso ricamo. Default 1. */
   seme?: number;
   /** Punto piu' lungo che la macchina cuce, in mm. Default 12 (il record DST arriva a 12,1). */
@@ -47,6 +70,17 @@ export interface EsitoSfrangiatura {
   limitate: number;
   /** Lunghezza media della frangia effettivamente cucita, in mm. */
   frangiaMediaMm: number;
+  /**
+   * Quante volte due frange si tagliano davvero: e' la misura dell'effetto voluto, non
+   * un'impressione. A apertura 0 (frange parallele) deve essere praticamente zero.
+   *
+   * Si guardano le VICINE, non solo la prima: con 25 gradi una frangia da 5 mm si sposta di traverso
+   * di 2 mm, cioe' scavalca parecchie file, e contare solo la coppia adiacente diceva 48% quando
+   * l'occhio ne vedeva molte di piu'.
+   */
+  incroci: number;
+  /** Incroci per frangia allungata: il numero che dice quanto e' fitto l'intreccio. */
+  incrociPerFrangia: number;
 }
 
 /** Generatore deterministico: da tre interi a un numero in [0,1). Nessuno stato, nessun ordine che conti. */
@@ -56,6 +90,13 @@ function caso(a: number, b: number, c: number): number {
   h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
   h = (h ^ (h >>> 16)) >>> 0;
   return h / 4294967296;
+}
+
+/** I due segmenti si tagliano? Serve a CONTARE le X, cosi' l'intreccio e' un numero e non un parere. */
+function siIncrociano(a1: Point, a2: Point, b1: Point, b2: Point): boolean {
+  const d = (p: Point, q: Point, r: Point): number => (q.x - p.x) * (r.y - p.y) - (q.y - p.y) * (r.x - p.x);
+  const d1 = d(b1, b2, a1), d2 = d(b1, b2, a2), d3 = d(a1, a2, b1), d4 = d(a1, a2, b2);
+  return ((d1 > 0 && d2 < 0) || (d1 < 0 && d2 > 0)) && ((d3 > 0 && d4 < 0) || (d3 < 0 && d4 > 0));
 }
 
 const dentro = (p: Point, zone: Point[][]): boolean => zone.some((z) => z.length >= 3 && pointInPolygon(p, z));
@@ -72,15 +113,19 @@ export function sfrangia(
 ): EsitoSfrangiatura {
   const minMm = Math.max(0, params.minMm);
   const maxMm = Math.max(minMm, params.maxMm);
-  const virata = ((params.virataDeg ?? 8) * Math.PI) / 180;
+  const incrocio = ((params.incrocioDeg ?? 25) * Math.PI) / 180;
+  const variaz = Math.min(1, Math.max(0, params.variazioneIncrocio ?? 0.6));
   const seme = params.seme ?? 1;
   const puntoMax = params.puntoMassimoMm ?? 12;
   const filaMin = params.filaMinimaSfrangiabileMm ?? 1;
 
+  // quante frange indietro si guardano per contare gli incroci: una frangia lunga ne scavalca
+  // diverse, e fermarsi alla prima sottostimava l'intreccio di molto.
+  const VICINE = 12;
   const esito: EsitoSfrangiatura = {
     blocchi: [], allungati: 0,
     saltati: { fuoriRaso: 0, attaccoOStacco: 0, filaCorta: 0 },
-    limitate: 0, frangiaMediaMm: 0,
+    limitate: 0, frangiaMediaMm: 0, incroci: 0, incrociPerFrangia: 0,
   };
   let sommaFrangia = 0;
 
@@ -92,6 +137,11 @@ export function sfrangia(
     const { capi } = leggiRaso(punti, params);
 
     let toccato = false;
+    // conta i capi allungati DENTRO questo blocco: e' l'indice su cui alterna il verso della virata,
+    // e va per capi consecutivi lungo la cucitura - cioe' fra frange che sul ricamo sono vicine.
+    // un contatore e le ultime frange PER LATO: le vicine sono quelle dello stesso bordo
+    const incrociati = [0, 0];
+    const precedenti: Array<Array<{ da: Point; a: Point }>> = [[], []];
     const nuovi = b.points_mm.slice() as Array<[number, number]>;
     for (const capo of capi) {
       if (!dentro(capo.punto, zone)) continue;
@@ -102,7 +152,10 @@ export function sfrangia(
       const r1 = caso(seme, ib, capo.indice);
       const r2 = caso(seme + 7919, ib, capo.indice);
       let lung = minMm + (maxMm - minMm) * r1;
-      const ang = (r2 * 2 - 1) * virata;
+      // il segno alterna (e' cio' che fa la X), l'ampiezza no: fra il (1-variazione) e il 100%
+      const verso = incrociati[capo.lato] % 2 === 0 ? 1 : -1;
+      const ang = verso * incrocio * (1 - variaz + variaz * r2);
+      incrociati[capo.lato]++;
       const cs = Math.cos(ang), sn = Math.sin(ang);
       const dx = capo.direzione.x * cs - capo.direzione.y * sn;
       const dy = capo.direzione.x * sn + capo.direzione.y * cs;
@@ -124,12 +177,19 @@ export function sfrangia(
       if (tetto <= 0) { esito.saltati.fuoriRaso++; continue; }
       if (lung > tetto) { lung = tetto; esito.limitate++; }
 
-      nuovi[capo.indice] = [capo.punto.x + dx * lung, capo.punto.y + dy * lung];
+      const punta: Point = { x: capo.punto.x + dx * lung, y: capo.punto.y + dy * lung };
+      nuovi[capo.indice] = [punta.x, punta.y];
       esito.allungati++; sommaFrangia += lung; toccato = true;
+      // la X si conta fra una frangia e la vicina, che sulla cucitura e' la precedente allungata
+      const vicine = precedenti[capo.lato];
+      for (const v of vicine) if (siIncrociano(v.da, v.a, capo.punto, punta)) esito.incroci++;
+      vicine.push({ da: capo.punto, a: punta });
+      if (vicine.length > VICINE) vicine.shift();
     }
     esito.blocchi.push(toccato ? { needle: b.needle, points_mm: nuovi } : b);
   });
 
   esito.frangiaMediaMm = esito.allungati ? sommaFrangia / esito.allungati : 0;
+  esito.incrociPerFrangia = esito.allungati ? esito.incroci / esito.allungati : 0;
   return esito;
 }

@@ -42,7 +42,9 @@ const zx = minX + cx * CELLA, zy = minY + cy * CELLA;
 console.log(`confine scelto: cella ${miglior} (${punteggio} punti del secondo ago) a ${zx.toFixed(1)},${zy.toFixed(1)} mm`);
 const zona: Point[][] = [[{ x: zx - CELLA, y: zy - CELLA }, { x: zx + 2 * CELLA, y: zy - CELLA }, { x: zx + 2 * CELLA, y: zy + 2 * CELLA }, { x: zx - CELLA, y: zy + 2 * CELLA }]];
 const y0 = zy - CELLA, y1 = zy + 2 * CELLA;
-const esito = sfrangia(letto.blocks, zona, { minMm: 1, maxMm: 5, virataDeg: 8, seme: 1 });
+const APERTURA = Number(process.argv[4] ?? 25);
+const LUNGA = Number(process.argv[5] ?? 6);
+const esito = sfrangia(letto.blocks, zona, { minMm: 2, maxMm: LUNGA, incrocioDeg: APERTURA, seme: 1 });
 
 const rx0 = zx - CELLA * 1.5, rw = CELLA * 5;
 const ry0 = zy - CELLA * 1.5, rh = CELLA * 5;
@@ -92,8 +94,9 @@ const confronto = (nome: string): void => {
   console.log(`→ ${dir}/${nome}.png  · ${n} capi allungati, in rosso`);
 };
 
+const nome = `a${APERTURA}-l${LUNGA}`;
 disegna(letto.blocks, 'prima', true);
-disegna(esito.blocchi, 'dopo', true);
-console.log(`capi allungati ${esito.allungati} · frangia media ${esito.frangiaMediaMm.toFixed(2)} mm`);
+disegna(esito.blocchi, `dopo-${nome}`, true);
+console.log(`apertura ${APERTURA}° · frangia 2–${LUNGA} mm · ${esito.allungati} capi · ${esito.incroci} incroci (${esito.incrociPerFrangia.toFixed(2)} per frangia)`);
 
-confronto('confronto');
+confronto(`confronto-${nome}`);

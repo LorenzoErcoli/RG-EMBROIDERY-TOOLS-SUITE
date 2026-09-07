@@ -652,7 +652,7 @@ check('DST vero: la soglia dell’inversione non conta (60° e 135° entro l’1
 // nasconderebbe fra 188.139 punti.
 console.log('NL_core — la sfrangiatura dei capi (sfrangia)'.replace('NL_', String.fromCharCode(10)));
 const sfBlocchi = [{ needle: 1, points_mm: sfPunti.map((p) => [p.x, p.y]) }];
-const sfPar = { minMm: 1, maxMm: 5, virataDeg: 8, seme: 1 };
+const sfPar = { minMm: 1, maxMm: 5, incrocioDeg: 25, seme: 1 };
 const sfDiversi = (a, b) => {
   let n = 0;
   for (let i = 0; i < a.length; i++) for (let j = 0; j < a[i].points_mm.length; j++)
@@ -678,10 +678,20 @@ for (let j = 0; j < sfBlocchi[0].points_mm.length; j++) {
   if (a[0] === b[0] && a[1] === b[1]) continue;
   const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
   if (d < sfMin) sfMin = d; if (d > sfMax) sfMax = d;
-  if (Math.abs(Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI) > 8.001) sfFuoriAsse++;
+  if (Math.abs(Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI) > 25.001) sfFuoriAsse++;
 }
 check('sfrangia: la frangia sta fra il minimo e il massimo chiesti', [sfMin >= 1 - 1e-9, sfMax <= 5 + 1e-9], [true, true]);
-check('sfrangia: e prosegue lungo la fila, entro la virata dichiarata', sfFuoriAsse, 0);
+check('sfrangia: e prosegue lungo la fila, entro l’apertura dichiarata', sfFuoriAsse, 0);
+// L'INTRECCIO: l'effetto voluto non e' un pettine di frange parallele ma delle X. Il verso della
+// virata alterna fra capi dello STESSO lato — i soli davvero vicini sul ricamo — ed e' cio' che le
+// fa tagliare. Ad apertura 0 restano parallele e non si incrocia niente: e' il controllo negativo.
+const sfDritte = rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, incrocioDeg: 0 });
+check('sfrangia: apertura 0 → frange parallele, nessuna X', sfDritte.incroci, 0);
+check('sfrangia: apertura 25° → le frange si tagliano', sfUno.incroci > 10, true);
+// e l'intreccio cresce con l'apertura, invece di fermarsi: e' la manopola che serve a Lorenzo
+const sfStretto = rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, incrocioDeg: 10 });
+const sfLargo = rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, incrocioDeg: 45 });
+check('sfrangia: piu’ apertura, piu’ incroci (10° < 25° < 45°)', sfStretto.incroci < sfUno.incroci && sfUno.incroci < sfLargo.incroci, true);
 // determinismo: e' cio' che rende un ricamo correggibile e rifattibile
 check('sfrangia: stesso seme, stesso ricamo', sfDiversi(sfUno.blocchi, rg.sfrangia(sfBlocchi, sfZona, sfPar).blocchi), 0);
 check('sfrangia: seme diverso, frange diverse', sfDiversi(sfUno.blocchi, rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, seme: 2 }).blocchi) > 0, true);
@@ -699,6 +709,7 @@ const rvSfr = rg.sfrangia(rv.blocks, rvZona, sfPar);
 check('DST vero: 416 capi allungati nella striscia', rvSfr.allungati, 416);
 check('DST vero: e i punti cambiati sono esattamente quelli', sfDiversi(rv.blocks, rvSfr.blocchi), 416);
 check('DST vero: la frangia media sta dentro il chiesto', rvSfr.frangiaMediaMm > 1 && rvSfr.frangiaMediaMm < 5, true);
+check('DST vero: e le frange si intrecciano (197 X)', rvSfr.incroci, 197);
 // senza zone il file riscritto e' identico BYTE PER BYTE: la prova piu' forte che si possa scrivere
 const rvByteA = rg.buildDst(rg.dstProgramFromBlocks(rv.blocks, { label: rv.label }));
 const rvByteB = rg.buildDst(rg.dstProgramFromBlocks(rg.sfrangia(rv.blocks, [], sfPar).blocchi, { label: rv.label }));

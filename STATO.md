@@ -3,7 +3,7 @@
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
 > Aggiornato: 2026-09-04 · Suite con **nove tool live**: `pittorico` è entrato nella home e gira in browser — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
-> Rete di sicurezza: `npm test` (664 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
+> Rete di sicurezza: `npm test` (668 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
 
 ---
 
@@ -475,6 +475,25 @@ delle file di raso si allungano a caso, gli uni dentro il territorio degli altri
   cuce (default 12 mm, il record DST arriva a 12,1) — se la frangia lo sforerebbe si accorcia **e lo
   dichiara** invece di sballare il file; e l'**attacco e lo stacco** di ogni blocco non si toccano,
   perché lì il filo entra ed esce e spostarli vorrebbe dire spostare un salto e la sua fermatura.
+- **L'effetto non e' un pettine, sono le X — e la leva e' il SEGNO della virata.** Guardando la prima
+  resa, Lorenzo: *«le frange dovrebbero incrociarsi sopra sotto, creare delle x, degli incroci
+  casuali piu' netti come nell'immagine di riferimento»*. Una virata a caso non basta: due frange
+  vicine che virano dalla stessa parte restano parallele per sempre. Il segno **alterna** (una di qua,
+  la successiva di la'), l'ampiezza resta casuale — cosi' ogni coppia si apre a X e gli incroci
+  cadono a altezze diverse invece di allinearsi. Parametro  (default 25°), *«apertura
+  dell'incrocio»*: nome da battezzare col processo .
+- **E l'intreccio e' un numero, non un parere:**  conta quante volte due frange si tagliano
+  davvero. Sul ricamo vero, a frangia 1–5 mm: **0,00 incroci per frangia a 0°** (controllo negativo:
+  parallele, non si tocca niente), 0,17 a 10°, 0,47 a 25°, 0,81 a 55°. Cresce e non si ferma, quindi
+  e' una manopola vera.
+- **La misura ha trovato il terzo difetto, e valeva un terzo dell'effetto.** L'alternanza la facevo
+  fra capi consecutivi nella CUCITURA — ma quelli stanno su **lati opposti** della colonna di raso,
+  cioe' lontanissimi sul ricamo, e alternare li' non produce nessuna X fra vicini: gli incroci si
+  fermavano al 30% delle coppie e non salivano nemmeno aprendo l'angolo. Alternando fra capi **dello
+  stesso lato** (i soli davvero vicini) si sale al 48%, che e' il tetto strutturale giusto: con
+  +,−,+,− ogni frangia fa una X con una vicina e diverge dall'altra — ed e' esattamente l'aspetto
+  delle foto. Contando anche le vicine oltre la prima (una frangia da 5 mm a 25° si sposta di
+  traverso di 2 mm e ne scavalca parecchie) la misura sale ancora e smette di saturare.
 - **Guardato, non solo misurato:** `apps/sfrangiatura/scripts/vedi.ts` disegna il ritaglio col ricamo
   di partenza in grigio e **le sole frange nuove in rosso** — il raso a video ha già l'aria di un
   pettine e un prima/dopo affiancato nasconde la differenza. La zona di confine se la cerca da solo:
@@ -489,7 +508,7 @@ delle file di raso si allungano a caso, gli uni dentro il territorio degli altri
 ## 2. STATO
 
 **Sei tool in piedi, e adesso ognuno ha le sue invarianti scritte. Il settimo, `broccato`, è partito.**
-Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (664 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
+Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (668 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
 
 **La copertura dei test non era un adempimento: ha trovato cinque difetti veri**, ognuno dei quali violava una regola della Costituzione già scritta e mai verificata — i passaggi di net-45 che attraversavano i vuoti (R5), il punto minimo mai applicato in striatura (R3), `insetPolygon` che rientrava del 30% in meno, il punto massimo di pattern-grammar che lasciava passare segmenti quasi doppi (R4), l'importer che esplodeva sul file vero da 2MB. Tutti corretti, tutti bloccati da un test che fallisce se tornano.
 

@@ -73,3 +73,18 @@ if (lung.length) {
   const q = (t: number): number => lung[Math.min(lung.length - 1, Math.round(t * (lung.length - 1)))];
   console.log(`\n  spostamento dei capi: minimo ${n2(lung[0])} · mediana ${n2(q(0.5))} · massimo ${n2(q(1))} mm`);
 }
+
+// --- 5. l'INTRECCIO: quante frange vicine si incrociano davvero, al variare dell'apertura
+console.log('\nINCROCI (le X) — apertura in gradi → coppie di frange vicine che si tagliano');
+for (const g of [0, 5, 10, 15, 25, 40, 55]) {
+  const e = sfrangia(letto.blocks, zona, { ...params, incrocioDeg: g });
+  console.log(`  ${String(g).padStart(3)}°  ${String(e.incroci).padStart(5)} incroci · ${n2(e.incrociPerFrangia)} per frangia · frangia media ${n2(e.frangiaMediaMm)} mm`);
+}
+
+// --- 6. e quanto costa la varieta' delle lunghezze? Due frange di lunghezza molto diversa non
+// arrivano a tagliarsi: e' un compromesso fra "irregolare" e "incrociato", e va misurato.
+console.log('\nLUNGHEZZA vs INCROCI (apertura 25°)');
+for (const [a, b] of [[1, 5], [2, 5], [3, 5], [4, 5], [5, 5], [1, 3], [3, 8]] as Array<[number, number]>) {
+  const e = sfrangia(letto.blocks, zona, { ...params, minMm: a, maxMm: b, incrocioDeg: 25 });
+  console.log(`  ${a}–${b} mm   ${String(e.incroci).padStart(5)} incroci · ${n2(e.incrociPerFrangia)} per frangia · media ${n2(e.frangiaMediaMm)} mm`);
+}
