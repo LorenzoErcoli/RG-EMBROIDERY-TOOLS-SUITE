@@ -25,6 +25,7 @@ import {
 import { lisciaRegione } from './region';
 import { serpentina } from './serpentina';
 import { buildIsoFill } from './iso-fill';
+import { buildBandFill } from './band-fill';
 import { harmonicField, type CondizioneAlBordo } from './field';
 import { buildRailFill } from './rail-fill';
 import { buildCurvedFill } from './curved-fill';
@@ -206,7 +207,15 @@ export interface PittoricoParams {
    * all'88-92% del chiesto, p5 da 2,25 a 1,17), e un buco e' peggio di un addensamento. Il perche' e'
    * scritto in testa a `iso-fill.ts`, ed e' un limite geometrico, non un difetto da sistemare.
    */
-  metodoRiempimento: 'iso' | 'tracciato';
+  metodoRiempimento: 'fasce' | 'iso' | 'tracciato';
+  /**
+   * Solo per `'fasce'`: la deriva massima ammessa dentro una fascia, |ln(spaziatura finale /
+   * iniziale)|. E' l'unico numero che decide quante fasce servono: la spaziatura resta entro
+   * e^(±deriva) per costruzione.
+   */
+  derivaMassima: number;
+  /** Solo per `'fasce'`: ogni quanti mm di cammino si risemina il fronte a spaziatura esatta. */
+  fasciaMm: number;
   /**
    * Dove passa il filo di collegamento quando non puo' andare dritto: `'interno'` taglia dentro il
    * riempimento, `'contorno'` costeggia il bordo. Qui il bordo e' la frangia, quindi il default e'
@@ -259,7 +268,23 @@ export const defaultPittoricoParams: PittoricoParams = {
    */
   maxInternalTravelMm: 50,
   riempimentoContinuo: true,
-  metodoRiempimento: 'tracciato',
+  /*
+   * A FRONTI, e non piu' tracciato: misurato sul ritaglio senza sovrapposizioni fra colori, cioe'
+   * sul solo riempimento, le celle sopra il 150% del chiesto scendono dal 10% al 2% e la
+   * dispersione p95/p5 da 2,5× a 2,0×; ago per ago da 2,6-3,1× a 1,7-2,2×. Con le
+   * sovrapposizioni accese il 98% di quello che resta sopra il 150% sta entro 3 mm da un bordo:
+   * e' la crescita di un colore sotto l'altro, che e' voluta, non un difetto del riempimento.
+   */
+  metodoRiempimento: 'fasce',
+  derivaMassima: 0.2,
+  /*
+   * 15 mm, e non per la densita' — che fra 2 e 15 mm non cambia (2% di celle sopra il 150% a
+   * qualunque Δ: la convergenza la ferma il territorio vergine, la divergenza la cura la
+   * risemina) — ma per la RESA: a 3 mm il riempimento era una maculatura di tratti corti che
+   * partivano ognuno con un angolo un po' diverso, a 15 e' un raso con la grana continua. Si e'
+   * visto, non misurato.
+   */
+  fasciaMm: 15,
   viaPassaggi: 'interno',
   margineDalBordoMm: 2,
   cuciPassaggi: true,
@@ -270,7 +295,7 @@ export interface MacchiaCucita {
   region: Region;
   corse: Polyline[];
   /** Come è stata riempita: dalla rotaia (ordinata) o a distanza costante (forma senza fianchi). */
-  metodo: 'iso' | 'rotaia' | 'distanza';
+  metodo: 'fasce' | 'iso' | 'rotaia' | 'distanza';
 }
 
 export interface PittoricoPlan {
@@ -415,6 +440,14 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
       /** Che tinta c'è appena fuori dal contorno, in questo punto. −1 = niente. */
       const fuori = (q: Point): number => {
         const x = Math.round(q.x / mmPerPx), y = Math.round(q.y / mmPerPx);
+        /*
+         * Un punto sul BORDO DELL'IMMAGINE non guarda nessun colore: li' il disegno finisce, non
+         * cambia. Senza questa riga il bordo veniva scambiato per un confine di colore — guardando
+         * lungo il bordo si trovava la tinta accanto — e diventava la rotaia: su tinta 0 del
+         * ritaglio la rotaia era il lato x=90 per 33 mm, il campo li' e' libero, e le corse ci
+         * correvano lungo e finivano subito (mediana 8 mm su una fascia da 87).
+         */
+        if (x <= 1 || y <= 1 || x >= img.width - 2 || y >= img.height - 2) return -1;
         for (const [dx, dy] of [[2, 0], [-2, 0], [0, 2], [0, -2]] as Array<[number, number]>) {
           const v = tintaIn(x + dx, y + dy);
           if (v >= 0 && v !== t) return v;
@@ -458,10 +491,30 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
         : null;
 
       // la rotaia: UN lato, quello che guarda il colore già cucito
-      const rotaia = trattoVerso(region.outer, fuori, ordine, mio, 'prima')
-        ?? trattoVerso(region.outer, fuori, ordine, mio, 'dopo');
+      const prima = trattoVerso(region.outer, fuori, ordine, mio, 'prima');
+      const dopo = trattoVerso(region.outer, fuori, ordine, mio, 'dopo');
+      const rotaia = prima ?? dopo;
       const daRotaia = !!rotaia && rotaia.length < region.outer.length * 0.75;
-      const corse = iso && iso.runs.length ? iso.runs : daRotaia
+
+      /*
+       * A FASCE: la contraddizione fra direzione e distanza si spezza in pezzi in cui la deriva
+       * L/R sta sotto soglia. Parte dalla rotaia e va verso il lato opposto; se un solo lato guarda
+       * un altro colore, la fascia finisce dove finisce la macchia.
+       */
+      const fasce = p.metodoRiempimento === 'fasce' && daRotaia
+        ? buildBandFill(region, campo, rotaia as Polyline, {
+          spacingMm: p.densitySpacingMm, maxStitchMm: p.maxStitchMm,
+          derivaMassima: p.derivaMassima,
+          fasciaMm: p.fasciaMm,
+        })
+        : null;
+      if (fasce && process.env.RG_DIAGFASCE) {
+        // eslint-disable-next-line no-console
+        console.log(`  tinta ${t}: ${fasce.fasce} fasce da ${fasce.fasciaMm.toFixed(1)} mm · deriva `
+          + `${fasce.derivaPerFascia.map((d) => d.toFixed(2)).join(' ')} · ${fasce.runs.length} corse, ${fasce.chiusure} di chiusura`);
+      }
+
+      const corse = fasce && fasce.runs.length ? fasce.runs : iso && iso.runs.length ? iso.runs : daRotaia
         ? buildRailFill(region, campo, rotaia as Polyline, {
           spacingMm: p.densitySpacingMm, maxStitchMm: p.maxStitchMm,
           /*
@@ -497,7 +550,7 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
 
       macchie.push({
         tinta: t, region, corse: frangiate,
-        metodo: iso && iso.runs.length ? 'iso' : daRotaia ? 'rotaia' : 'distanza',
+        metodo: fasce && fasce.runs.length ? 'fasce' : iso && iso.runs.length ? 'iso' : daRotaia ? 'rotaia' : 'distanza',
       });
     }
   }

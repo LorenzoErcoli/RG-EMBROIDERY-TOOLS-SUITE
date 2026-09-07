@@ -34,7 +34,12 @@ const img = { rgba, width: LATO, height: LATO };
 console.log('');
 console.log(`PUNTO PITTORICO — la catena intera, su ${LATO_MM > 0 ? `un ritaglio di ${LATO_MM} mm` : 'tutto il disegno'}`);
 const t0 = Date.now();
-const plan = buildPittoricoPlan(img, { ...defaultPittoricoParams, realWidthMm: LATO * MM_PER_PX });
+const plan = buildPittoricoPlan(img, {
+  ...defaultPittoricoParams,
+  realWidthMm: LATO * MM_PER_PX,
+  metodoRiempimento: (process.env.RG_METODO as 'fasce' | 'iso' | 'tracciato') ?? defaultPittoricoParams.metodoRiempimento,
+  frangiaMm: process.env.RG_FRANGIA !== undefined ? Number(process.env.RG_FRANGIA) : defaultPittoricoParams.frangiaMm,
+});
 const ms = Date.now() - t0;
 
 console.log(`${plan.larghezzaMm.toFixed(1)} x ${plan.altezzaMm.toFixed(1)} mm · ${ms} ms`);

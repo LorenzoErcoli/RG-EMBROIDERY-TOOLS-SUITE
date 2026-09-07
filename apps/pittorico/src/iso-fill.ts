@@ -123,8 +123,6 @@ export interface IsoFillResult {
   profonditaMm: number;
 }
 
-const FUORI = -1;
-
 /**
  * La macchia disegnata su griglia, con la regola pari-dispari: dentro il guscio e fuori dai fori.
  *
@@ -132,7 +130,7 @@ const FUORI = -1;
  * 35 cm le celle sono milioni, e una domanda per cella vorrebbe dire milioni di attraversamenti del
  * poligono. A scansione ogni riga costa un ordinamento di pochi incroci.
  */
-function rasterizza(region: Region, x0: number, y0: number, cols: number, rows: number, cella: number): Uint8Array {
+export function rasterizza(region: Region, x0: number, y0: number, cols: number, rows: number, cella: number): Uint8Array {
   const dentro = new Uint8Array(cols * rows);
   const anelli = [region.outer, ...region.holes];
   for (let r = 0; r < rows; r++) {
@@ -242,7 +240,7 @@ interface Segmento { a: Point; b: Point }
  * I quadrati con un angolo fuori dalla maschera si saltano: li' il fronte non e' definito, e la
  * curva deve fermarsi al bordo della macchia invece di inventarsi un pezzo.
  */
-function livello(D: Float32Array, dentro: Uint8Array, cols: number, rows: number,
+export function livello(D: Float32Array, dentro: Uint8Array, cols: number, rows: number,
   x0: number, y0: number, cella: number, val: number): Segmento[] {
   const out: Segmento[] = [];
   const px = (c: number): number => x0 + (c + 0.5) * cella;
@@ -288,7 +286,7 @@ function livello(D: Float32Array, dentro: Uint8Array, cols: number, rows: number
  * I segmenti sciolti rimessi in catene. Si indicizzano i capi su una griglia grossolana e si tira
  * il filo: da un capo si cerca il segmento che comincia li', e si prosegue.
  */
-function incatena(segs: Segmento[], tol: number): Polyline[] {
+export function incatena(segs: Segmento[], tol: number): Polyline[] {
   const chiave = (p: Point): string => `${Math.round(p.x / tol)},${Math.round(p.y / tol)}`;
   const per = new Map<string, number[]>();
   const usato = new Uint8Array(segs.length);

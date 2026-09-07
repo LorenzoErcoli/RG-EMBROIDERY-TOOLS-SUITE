@@ -111,7 +111,7 @@ export interface RailFillResult {
 const dist = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
 
 /** Disturbo in [0,1) deciso dalla posizione. Tutto a interi: identico su ogni motore (§7). */
-function disturbo(x: number, y: number): number {
+export function disturbo(x: number, y: number): number {
   const ix = Math.round(x * 4) | 0, iy = Math.round(y * 4) | 0;
   let a = Math.imul(ix, 374761393) ^ Math.imul(iy, 668265263);
   a = Math.imul(a ^ (a >>> 13), 1274126177);
@@ -125,7 +125,7 @@ const lunghezza = (l: Polyline): number => {
 };
 
 /** Punti a passo costante lungo una polilinea aperta, capi compresi. */
-function passiLungo(linea: Polyline, passoMm: number): Array<{ p: Point; t: Point }> {
+export function passiLungo(linea: Polyline, passoMm: number): Array<{ p: Point; t: Point }> {
   const out: Array<{ p: Point; t: Point }> = [];
   if (linea.length < 2 || !(passoMm > 0)) return out;
   let avanzo = 0;
@@ -145,7 +145,7 @@ function passiLungo(linea: Polyline, passoMm: number): Array<{ p: Point; t: Poin
 }
 
 /** La direzione del campo, girata verso l'interno della regione. */
-function versoDentro(field: DirectionField, p: Point, region: Region, provaMm: number): Point | null {
+export function versoDentro(field: DirectionField, p: Point, region: Region, provaMm: number): Point | null {
   const d = field.dirAt(p);
   if (pointInRegion({ x: p.x + d.x * provaMm, y: p.y + d.y * provaMm }, region)) return d;
   const r = { x: -d.x, y: -d.y };
@@ -168,7 +168,7 @@ function uscita(a: Point, b: Point, region: Region): Point | null {
  * Un punto: parte da `da`, segue il campo verso l'interno e si ferma sull'altro bordo.
  * Non guarda gli altri punti — l'ordine lo dà la rotaia, non la vicinanza.
  */
-function attraversa(
+export function attraversa(
   region: Region, field: DirectionField, da: Point, verso: Point, step: number, maxPassi: number,
   fermatiSe?: (p: Point) => boolean,
 ): Polyline {
@@ -198,7 +198,7 @@ function attraversa(
 }
 
 /** Griglia di occupazione: dice se in un punto c'è già del filo. */
-class Occupato {
+export class Occupato {
   private readonly cell: number;
   private readonly map = new Map<number, Array<[number, number]>>();
   constructor(runs: Polyline[], cellMm: number) {
@@ -427,24 +427,9 @@ export function buildRailFill(
    */
   let chiusure = 0;
   if (opts.chiudiVuoti ?? true) {
-    const bb = regionBounds(region);
-    const setaccio = passo;
-    const stop = cuneoOltre / 2;
-    const occupato = new Occupato(punti.map((x) => x.linea), Math.max(passo, 0.2));
-    for (let y = bb.minY; y <= bb.maxY; y += setaccio) {
-      for (let x = bb.minX; x <= bb.maxX; x += setaccio) {
-        const p = { x, y };
-        if (!pointInRegion(p, region) || occupato.entro(p, stop)) continue;
-        const d = field.dirAt(p);
-        const avanti = attraversa(region, field, p, d, step, maxPassi, (q) => occupato.entro(q, stop));
-        const indietro = attraversa(region, field, p, { x: -d.x, y: -d.y }, step, maxPassi, (q) => occupato.entro(q, stop));
-        const linea = [...indietro.slice(1).reverse(), ...avanti];
-        if (lunghezza(linea) < passo) continue;
-        punti.push({ linea, da: 0 });
-        occupato.aggiungi(linea);
-        chiusure++;
-      }
-    }
+    const nuove = chiudiVuoti(region, field, punti.map((x) => x.linea), passo, cuneoOltre / 2, step, maxPassi);
+    for (const linea of nuove) punti.push({ linea, da: 0 });
+    chiusure = nuove.length;
   }
 
   /*
@@ -507,6 +492,35 @@ export function buildRailFill(
 
   const finali = punti.map((x) => (maxStitch > 0 ? inPuntiAgo(x.linea, maxStitch, maxSagitta) : x.linea));
   return { runs: finali, cuneiPerGiro, semi: semi.length, ombre, chiusure, troncati, tolti };
+}
+
+/**
+ * La passata che chiude i vuoti, a setaccio sulla copertura: dove non c'e' filo entro `stop` si
+ * semina un punto che marcia nei due sensi e si ferma appena tocca il filo gia' posato. La usano
+ * il riempimento dalla rotaia e quello a fasce, per lo stesso motivo: sono le sole passate che
+ * vedono i vuoti «orfani», quelli che nessuna coppia di vicini puo' scoprire.
+ */
+export function chiudiVuoti(
+  region: Region, field: DirectionField, esistenti: Polyline[], passo: number, stop: number,
+  step: number, maxPassi: number,
+): Polyline[] {
+  const bb = regionBounds(region);
+  const occupato = new Occupato(esistenti, Math.max(passo, 0.2));
+  const out: Polyline[] = [];
+  for (let y = bb.minY; y <= bb.maxY; y += passo) {
+    for (let x = bb.minX; x <= bb.maxX; x += passo) {
+      const p = { x, y };
+      if (!pointInRegion(p, region) || occupato.entro(p, stop)) continue;
+      const d = field.dirAt(p);
+      const avanti = attraversa(region, field, p, d, step, maxPassi, (q) => occupato.entro(q, stop));
+      const indietro = attraversa(region, field, p, { x: -d.x, y: -d.y }, step, maxPassi, (q) => occupato.entro(q, stop));
+      const linea = [...indietro.slice(1).reverse(), ...avanti];
+      if (lunghezza(linea) < passo) continue;
+      out.push(linea);
+      occupato.aggiungi(linea);
+    }
+  }
+  return out;
 }
 
 /**

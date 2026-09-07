@@ -55,3 +55,52 @@ quattro. La decomposizione in fasce potrebbe:
 **Se, guardando il problema, la risposta giusta ti sembra un'altra, dilla.** La richiesta esplicita
 del committente è stata: che veda dove siamo, ma abbia *totale libertà di esprimersi e cambiare
 direzione*.
+
+---
+
+## Aggiornamento: la pista e' stata battuta, e regge
+
+Costruita in `apps/pittorico/src/band-fill.ts` («riempimento a fronti»). Tre tentativi prima di
+quello giusto, e ognuno ha lasciato un numero:
+
+1. **ψ come rapporto di distanze** dalla rotaia e dal lato opposto: satura sul bordo piu' vicino
+   — da alcuni semi arriva a 1 in 4 mm, da altri in 87. Non e' una coordinata di fascia.
+2. **ψ armonica** (Laplace, rotaia 0 / lato opposto 1 / derivata nulla altrove): coordinata
+   giusta, e con una proprieta' vera — per una funzione armonica la spaziatura fra due corse varia
+   come 1/|∇ψ| — ma la DIREZIONE che ne viene, su una macchia con un bordo di colore corto,
+   vortica dove il disegno non vortica. Il disegno l'ha bocciata prima dei numeri.
+3. **fronti lungo il campo armonico a linee**: si parte dalla rotaia, si segue il campo di sempre,
+   ogni Δ di cammino ci si ferma sul fronte fatto dai punti di tutte le corse e lo si risemina a
+   spaziatura esatta, sfalsato di mezzo passo. Piu' la regola del setaccio, estesa a tutte le
+   corse: **una corsa avanza solo in territorio vergine** e si ferma a mezzo passo dal filo gia'
+   posato. E' quella regola che ferma i fiumi di convergenza e fa morire i fronti (senza, il
+   fronte scivolava lungo i bordi liberi e girava in tondo: 400 fronti, 360 mm di cammino in un
+   ritaglio da 90).
+
+Misurato sul ritaglio, **senza sovrapposizioni fra colori** — cioe' sul solo riempimento:
+
+```
+                    p5    mediana   p95   p95/p5   celle sopra il 150%
+tracciato (prima)  2,25    101%    5,85    2,5×          10%
+a fronti           2,23     96%    4,47    2,0×           2%
+ago per ago        da 2,6-3,1× a 1,7-2,2×
+```
+
+L'obiettivo «≤ 2% di celle troppo dense» e' raggiunto. La dispersione p95/p5 e' a 2,0× contro
+l'obiettivo 1,5×: quello che resta sono le code corte, non piu' i fiumi.
+
+Con le sovrapposizioni accese il 18% delle celle sta ancora sopra il 150%, e il **98% di quelle
+sta entro 3 mm da un bordo**: e' la crescita di un colore sotto l'altro (5 mm dove sfuma, 1,5 dove
+stacca) cucita a densita' piena da tutti e due gli aghi. Non e' un difetto del riempimento — e' un
+parametro, ed e' la prossima decisione: il colore che sta sotto, nella zona di sormonto, va cucito
+a densita' ridotta, o la crescita va ridotta.
+
+Δ non conta per la densita' (2% a 2, 3, 5, 8 e 15 mm) ma conta per la resa: a 3 mm il ricamo era
+una maculatura di tratti corti, a 15 e' un raso con la grana continua. Default 15.
+
+Disegno intero: 38 s, 490 m di filo, passaggi 5,6% (era 3,1%: le corse sono piu' e piu' corte,
+e i fronti costano qualche salto in piu'), 55 rasafili.
+
+Il punto di metodo che ha sbloccato tutto non e' stato una misura: e' stato **vedere il ricamo**
+(`scripts/vedi.ts` scrive PNG senza librerie). Le due prime versioni avevano numeri ambigui e
+un'immagine che diceva subito cosa non andava.

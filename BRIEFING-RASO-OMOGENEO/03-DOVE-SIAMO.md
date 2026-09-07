@@ -29,7 +29,9 @@ ricamo:
 10. **punto minimo e massimo** — nell'ordine giusto: prima il minimo, poi si rimette il tetto
     suddividendo.
 
-Il pezzo che non regge è il **6**.
+Il pezzo che non reggeva era il **6**. Dal 2026-09-07 il motore di default è il **riempimento a
+fronti** (`band-fill.ts`): vedi la coda di `08-LA-PISTA-INDICATA.md` per cosa cambia e quanto.
+Quello che segue descrive i due motori precedenti, che restano selezionabili.
 
 ## I due motori di riempimento
 
