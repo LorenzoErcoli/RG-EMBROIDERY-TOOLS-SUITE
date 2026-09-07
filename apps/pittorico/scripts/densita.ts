@@ -47,7 +47,10 @@ for (let y = 0; y < LATO; y++) {
   }
 }
 const img = { width: LATO, height: LATO, rgba };
-const plan = buildPittoricoPlan(img, { ...defaultPittoricoParams, realWidthMm: LATO * MM_PER_PX });
+const plan = buildPittoricoPlan(img, {
+  ...defaultPittoricoParams, realWidthMm: LATO * MM_PER_PX,
+  lisciaBordiMm: Number(process.env.RG_LISCIA ?? defaultPittoricoParams.lisciaBordiMm),
+});
 const strati = pittoricoExportLayers(plan);
 
 /** Il filo di una polilinea spalmato sulle celle che attraversa, in mm per cella. */
@@ -161,6 +164,47 @@ console.log(`  celle oltre il 150% del chiesto: ${quante} su ${viveIdx.length} (
  * ma dove due aghi coprono la stessa striscia il filo e' doppio, e li' la densita' raddoppia per
  * costruzione. E' la differenza fra un difetto da correggere e un prezzo da tarare.
  */
+/*
+ * DOVE stanno le celle troppo dense: in mezzo alla macchia, o attaccate al bordo?
+ *
+ * E' la domanda che separa due colpevoli diversi. Se stanno al bordo, il di piu' viene da come le
+ * macchie si toccano e si sormontano — e allora si tara la crescita. Se stanno in mezzo, viene dal
+ * modo di riempire: i cunei che la rotaia infila dove la fascia si allarga, le ombre dietro i fori,
+ * la passata che chiude i vuoti. Sono due lavori diversi, e senza sapere quale non si sceglie.
+ */
+{
+  const anelli = plan.macchie.flatMap((m) => [m.region.outer, ...m.region.holes]);
+  const distDalBordo = (x: number, y: number): number => {
+    let min = Infinity;
+    for (const r of anelli) {
+      for (let i = 0; i < r.length; i++) {
+        const a = r[i], b = r[(i + 1) % r.length];
+        const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+        const t = l2 < 1e-12 ? 0 : Math.max(0, Math.min(1, ((x - a.x) * dx + (y - a.y) * dy) / l2));
+        const d = Math.hypot(x - (a.x + dx * t), y - (a.y + dy * t));
+        if (d < min) min = d;
+      }
+    }
+    return min;
+  };
+  const dense: number[] = [], normali: number[] = [];
+  for (const i of viveIdx) {
+    const v = (riempimento[i] + passaggi[i]) / areaCella;
+    const cx = ((i % cols) + 0.5) * CELLA, cy = (Math.floor(i / cols) + 0.5) * CELLA;
+    (v > chiesta * 1.5 ? dense : normali).push(distDalBordo(cx, cy));
+  }
+  const med = (v: number[]): number => {
+    if (!v.length) return 0;
+    const o = [...v].sort((a, b) => a - b);
+    return o[Math.floor(o.length / 2)];
+  };
+  console.log('');
+  console.log(`  le celle TROPPO DENSE stanno a ${n1(med(dense))} mm dal bordo (mediana), `
+    + `le altre a ${n1(med(normali))} mm`);
+  const vicine = dense.filter((d) => d < 3).length;
+  console.log(`  di quelle dense, ${vicine} su ${dense.length} (${((vicine / Math.max(1, dense.length)) * 100).toFixed(0)}%) stanno entro 3 mm dal bordo`);
+}
+
 console.log('');
 console.log('  ago per ago, ognuno da solo:');
 let sommaAghi = 0;

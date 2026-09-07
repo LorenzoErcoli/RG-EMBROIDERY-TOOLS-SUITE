@@ -23,6 +23,7 @@ import {
   reduceStable, prepareImage, traceRegions, rgbToHex,
 } from '@rg/core';
 import { lisciaRegione } from './region';
+import { serpentina } from './serpentina';
 import { harmonicField, type CondizioneAlBordo } from './field';
 import { buildRailFill } from './rail-fill';
 import { buildCurvedFill } from './curved-fill';
@@ -189,6 +190,11 @@ export interface PittoricoParams {
    */
   maxInternalTravelMm: number;
   /**
+   * Cucire ogni macchia con un filo solo, in serpentina, invece di lasciare le corse sciolte al
+   * routing. E' il raso come lo cuce un ricamatore: si arriva in fondo, si gira, si torna accanto.
+   */
+  riempimentoContinuo: boolean;
+  /**
    * Dove passa il filo di collegamento quando non puo' andare dritto: `'interno'` taglia dentro il
    * riempimento, `'contorno'` costeggia il bordo. Qui il bordo e' la frangia, quindi il default e'
    * `'interno'` — vedi il commento al punto d'uso.
@@ -239,6 +245,7 @@ export const defaultPittoricoParams: PittoricoParams = {
    * parte della sua preferenza senza lasciare passare i mostri.
    */
   maxInternalTravelMm: 50,
+  riempimentoContinuo: true,
   viaPassaggi: 'interno',
   margineDalBordoMm: 2,
   cuciPassaggi: true,
@@ -413,6 +420,17 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
       const corse = daRotaia
         ? buildRailFill(region, campo, rotaia as Polyline, {
           spacingMm: p.densitySpacingMm, maxStitchMm: p.maxStitchMm,
+          /*
+           * 0,75 e non un valore a caso: e' l'unico della curva misurata dove si stringono TUTT'E
+           * DUE le code. Sotto resta il troppo pieno, sopra si taglia cosi' tanto da riaprire i
+           * vuoti — e una misura sola non lo avrebbe visto (R30).
+           *
+           *   0      p5 2,15 · mediana 105% · p95 9,17 · 26% delle celle troppo dense
+           *   0,55   p5 2,14 · mediana 104% · p95 7,73 · 22%
+           *   0,75   p5 2,00 · mediana  98% · p95 6,94 · 17%   <-
+           *   0,90   p5 1,25 · mediana  91% · p95 6,02 · 13%, ma la coda BASSA si apre
+           */
+          troncaSotto: 0.75,
         }).runs
         : buildCurvedFill(region, campo, {
           spacingMm: p.densitySpacingMm, maxStitchMm: p.maxStitchMm,
@@ -477,7 +495,19 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
         const incatenate = inFila(nate);
         const scelte = costoDellOrdine(nate) <= costoDellOrdine(incatenate) ? nate : incatenate;
         // prima l'ordine, poi il giro: il giro dipende da CHI viene dopo, quindi va deciso dopo
-        return { region: m.region, runs: giroSullaFrangia(scelte, p.densitySpacingMm * 2) };
+        const girate = giroSullaFrangia(scelte, p.densitySpacingMm * 2);
+        if (!p.riempimentoContinuo) return { region: m.region, runs: girate };
+        /*
+         * IL FILO CONTINUO. Le corse non si consegnano piu' sciolte: si uniscono in serpentina
+         * PRIMA del routing, cosi' non c'e' niente da ricucire dopo.
+         *
+         * Il giro in fondo puo' essere lungo quanto la spaziatura — e' il normale giro del pettine —
+         * piu' il gioco che la frangia introduce accorciando le corse in modo diverso l'una
+         * dall'altra. Oltre, le due corse non si toccano davvero e la catena si spezza: attaccarle
+         * lo stesso vorrebbe dire tirare un filo attraverso il vuoto.
+         */
+        const maxGiro = Math.max(p.densitySpacingMm * 4, p.frangiaMm * 1.2);
+        return { region: m.region, runs: serpentina(girate, maxGiro).tracciati };
       });
     if (!gruppi.length) continue;
     const grid = buildCoverGrid(inOrdine, img.width, img.height, mmPerPx, k, aghi, 1.5);

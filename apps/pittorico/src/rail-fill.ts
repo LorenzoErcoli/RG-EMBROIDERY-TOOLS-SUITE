@@ -43,6 +43,21 @@ export interface RailFillOptions {
    * il doppio del passo, cioè visibile.
    */
   cuneoOltre?: number;
+  /**
+   * Sotto questa frazione del passo due punti vicini si stanno accavallando, e quello di troppo si
+   * TRONCA li'. Default 0,55.
+   *
+   * E' l'accorgimento simmetrico al cuneo, e mancava. I semi nascono a distanza costante **sulla
+   * rotaia**; ma una fascia non e' un nastro a larghezza fissa, e dove si stringe i punti che la
+   * attraversano convergono. Il cuneo copre il caso opposto — la fascia si allarga, si aggiunge —
+   * e senza il suo gemello la densita' saliva senza freno proprio dove il ricamo si chiude:
+   * misurato, il **71% delle celle troppo dense stava entro 3 mm dal bordo**, con una mediana di
+   * 1,4 mm, mentre le celle normali stavano a 3,5 mm.
+   *
+   * Un ricamatore fa esattamente questo: quando non c'e' piu' posto, il punto finisce. Non lo
+   * infila lo stesso.
+   */
+  troncaSotto?: number;
   /** Passo di integrazione lungo il punto. Default `spacingMm / 2`, con un tetto a 0.5 mm. */
   stepMm?: number;
   /**
@@ -88,6 +103,9 @@ export interface RailFillResult {
   ombre: number;
   /** Punti aggiunti dalla passata finale che chiude i vuoti rimasti. */
   chiusure: number;
+  /** Quanti punti sono stati accorciati perche' non c'era piu' posto, e quanti tolti del tutto. */
+  troncati: number;
+  tolti: number;
 }
 
 const dist = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
@@ -299,7 +317,7 @@ export function buildRailFill(
   region: Region, field: DirectionField, rotaia: Polyline, opts: RailFillOptions,
 ): RailFillResult {
   const passo = opts.spacingMm;
-  const vuoto: RailFillResult = { runs: [], cuneiPerGiro: [], semi: 0, ombre: 0, chiusure: 0 };
+  const vuoto: RailFillResult = { runs: [], cuneiPerGiro: [], semi: 0, ombre: 0, chiusure: 0, troncati: 0, tolti: 0 };
   if (!(passo > 0) || rotaia.length < 2) return vuoto;
 
   const step = Math.min(opts.stepMm && opts.stepMm > 0 ? opts.stepMm : passo / 2, 0.5);
@@ -429,8 +447,91 @@ export function buildRailFill(
     }
   }
 
+  /*
+   * DOVE NON C'E' PIU' POSTO, IL PUNTO FINISCE — l'accorgimento simmetrico al cuneo.
+   *
+   * I semi nascono a distanza costante sulla ROTAIA, e da li' attraversano. Ma dove la fascia si
+   * stringe due punti vicini convergono, e il filo si accavalla: e' il difetto classico del raso, e
+   * qui si vedeva nei numeri — il 71% delle celle troppo dense stava entro 3 mm dal bordo.
+   *
+   * Si scende in profondita' lungo ogni coppia di vicini e si cerca la prima quota in cui si sono
+   * avvicinati sotto la soglia. Da li' in giu' uno dei due e' di troppo, e lo si taglia. Quale: il
+   * nato DOPO, perche' e' un cuneo, cioe' un pezzo aggiunto per un vuoto che a quella profondita'
+   * si e' gia' richiuso; a pari nascita il piu' corto, che e' quello che serve meno.
+   *
+   * Va per ultima, dopo cunei, ombre e chiusure: quelle passate riempiono i vuoti, e se si tagliasse
+   * prima si rimetterebbe subito quello che si e' tolto. E si ripete finche' si assesta, perche'
+   * tagliare un punto cambia le distanze dei suoi vicini.
+   */
+  let troncati = 0, tolti = 0;
+  const sotto = (opts.troncaSotto ?? 0.55) * passo;
+  if (sotto > 0) {
+    for (let giro = 0; giro < 4; giro++) {
+      let cambiato = false;
+      for (let i = 0; i + 1 < punti.length; i++) {
+        const a = punti[i], b = punti[i + 1];
+        const la = lunghezza(a.linea), lb = lunghezza(b.linea);
+        const inizio = Math.max(a.da, b.da);
+        const fine = Math.min(a.da + la, b.da + lb);
+        let stretto = -1;
+        for (let d = inizio + passo; d <= fine; d += passo / 2) {
+          const pa = aDistanza(a.linea, d - a.da), pb = aDistanza(b.linea, d - b.da);
+          if (!pa || !pb) break;
+          if (dist(pa, pb) < sotto) { stretto = d; break; }
+        }
+        if (stretto < 0) continue;
+        // il nato dopo e' quello di troppo; a pari nascita, il piu' corto
+        const tagliaB = b.da > a.da || (b.da === a.da && lb <= la);
+        const x = tagliaB ? b : a;
+        /*
+         * Si taglia MEZZO PASSO PRIMA della quota in cui si sono stretti, non esattamente li'.
+         * Tagliando alla quota trovata il capo resta a quella distanza, la prossima passata la
+         * ritrova identica e taglia di nuovo alla stessa lunghezza: non e' un'imprecisione, e' un
+         * ciclo infinito — il primo tentativo si e' piantato proprio cosi'. Mezzo passo indietro
+         * garantisce che ogni taglio accorci davvero, quindi la passata finisce.
+         */
+        const resta = stretto - x.da - passo / 2;
+        if (resta < passo) {
+          punti.splice(tagliaB ? i + 1 : i, 1);
+          tolti++;
+          i--;                                 // l'elenco si e' accorciato qui
+        } else {
+          x.linea = finoA(x.linea, resta);
+          troncati++;
+        }
+        cambiato = true;
+      }
+      if (!cambiato) break;
+    }
+  }
+
   const finali = punti.map((x) => (maxStitch > 0 ? inPuntiAgo(x.linea, maxStitch, maxSagitta) : x.linea));
-  return { runs: finali, cuneiPerGiro, semi: semi.length, ombre, chiusure };
+  return { runs: finali, cuneiPerGiro, semi: semi.length, ombre, chiusure, troncati, tolti };
+}
+
+/**
+ * La linea tagliata alla lunghezza d'arco `s`. L'ultimo punto cade esattamente li', non al vertice
+ * piu' vicino: tagliare al vertice sposterebbe il capo fino a mezzo passo, e il capo di un punto e'
+ * proprio la cosa che si sta cercando di mettere al posto giusto.
+ */
+function finoA(linea: Polyline, s: number): Polyline {
+  if (s <= 0 || linea.length < 2) return linea.slice(0, 2);
+  const out: Point[] = [linea[0]];
+  let acc = 0;
+  for (let i = 1; i < linea.length; i++) {
+    const d = dist(linea[i - 1], linea[i]);
+    if (acc + d >= s) {
+      const t = d < 1e-12 ? 0 : (s - acc) / d;
+      out.push({
+        x: linea[i - 1].x + (linea[i].x - linea[i - 1].x) * t,
+        y: linea[i - 1].y + (linea[i].y - linea[i - 1].y) * t,
+      });
+      return out;
+    }
+    out.push(linea[i]);
+    acc += d;
+  }
+  return out;
 }
 
 /** Il verso di marcia di una fila alla profondità `s`, per far proseguire il cuneo come i vicini. */
