@@ -24,6 +24,7 @@ import {
 } from '@rg/core';
 import { lisciaRegione } from './region';
 import { serpentina } from './serpentina';
+import { buildIsoFill } from './iso-fill';
 import { harmonicField, type CondizioneAlBordo } from './field';
 import { buildRailFill } from './rail-fill';
 import { buildCurvedFill } from './curved-fill';
@@ -195,6 +196,18 @@ export interface PittoricoParams {
    */
   riempimentoContinuo: boolean;
   /**
+   * Come si riempie.
+   *
+   * `'tracciato'` (default) — rotaia o distanza costante: si tracciano le corse seguendo il campo,
+   * e la distanza si aggiusta con cunei e troncature.
+   *
+   * `'iso'` — curve di livello di una distanza anisotropa. **Misurato e non promosso**: sul disegno
+   * vero toglie il troppo pieno (celle sopra il 150% dal 24 al 14%) ma apre i buchi (mediana dal 104
+   * all'88-92% del chiesto, p5 da 2,25 a 1,17), e un buco e' peggio di un addensamento. Il perche' e'
+   * scritto in testa a `iso-fill.ts`, ed e' un limite geometrico, non un difetto da sistemare.
+   */
+  metodoRiempimento: 'iso' | 'tracciato';
+  /**
    * Dove passa il filo di collegamento quando non puo' andare dritto: `'interno'` taglia dentro il
    * riempimento, `'contorno'` costeggia il bordo. Qui il bordo e' la frangia, quindi il default e'
    * `'interno'` — vedi il commento al punto d'uso.
@@ -246,6 +259,7 @@ export const defaultPittoricoParams: PittoricoParams = {
    */
   maxInternalTravelMm: 50,
   riempimentoContinuo: true,
+  metodoRiempimento: 'tracciato',
   viaPassaggi: 'interno',
   margineDalBordoMm: 2,
   cuciPassaggi: true,
@@ -256,7 +270,7 @@ export interface MacchiaCucita {
   region: Region;
   corse: Polyline[];
   /** Come è stata riempita: dalla rotaia (ordinata) o a distanza costante (forma senza fianchi). */
-  metodo: 'rotaia' | 'distanza';
+  metodo: 'iso' | 'rotaia' | 'distanza';
 }
 
 export interface PittoricoPlan {
@@ -413,11 +427,41 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
         condizioneA: (q): CondizioneAlBordo => (fuori(q) >= 0 ? 'perpendicolare' : 'libera'),
       });
 
-      // 6. la rotaia: UN lato, quello che guarda il colore già cucito
+      /*
+       * 6. IL RIEMPIMENTO. Due motori, e il primo e' quello che si prova a far diventare l'unico.
+       *
+       * `iso` costruisce la distanza geodetica da una testata e prende le sue curve di livello: due
+       * livelli consecutivi distano la spaziatura OVUNQUE, per definizione di curva di livello di
+       * una distanza. E' l'unico dei tre che non puo' addensarsi ne' aprirsi — gli altri due
+       * tracciano le corse e sperano che restino distanti, e la distanza la perdono dove il campo
+       * converge o diverge.
+       *
+       * Serve una testata da cui partire. Dove non c'e' — una macchia chiusa da ogni lato di
+       * colore — si torna ai motori di prima.
+       */
+      /*
+       * Il seme: **un punto solo**, e sta al centro della macchia. Lungo il punto camminare non
+       * costa niente, quindi il fronte si allunga da solo per tutta la corsa che passa di li' e poi
+       * avanza di lato: da dove si parte cambia la numerazione dei livelli, non il ricamo.
+       */
+      const bbm = region.outer.reduce((a, q) => ({
+        x0: Math.min(a.x0, q.x), y0: Math.min(a.y0, q.y),
+        x1: Math.max(a.x1, q.x), y1: Math.max(a.y1, q.y),
+      }), { x0: Infinity, y0: Infinity, x1: -Infinity, y1: -Infinity });
+      const seme = { x: (bbm.x0 + bbm.x1) / 2, y: (bbm.y0 + bbm.y1) / 2 };
+      const daIso = p.metodoRiempimento === 'iso';
+      const iso = daIso
+        ? buildIsoFill(region, campo, seme, {
+          spacingMm: p.densitySpacingMm, maxStitchMm: p.maxStitchMm,
+          costoLungoIlPunto: 0.05,
+        })
+        : null;
+
+      // la rotaia: UN lato, quello che guarda il colore già cucito
       const rotaia = trattoVerso(region.outer, fuori, ordine, mio, 'prima')
         ?? trattoVerso(region.outer, fuori, ordine, mio, 'dopo');
       const daRotaia = !!rotaia && rotaia.length < region.outer.length * 0.75;
-      const corse = daRotaia
+      const corse = iso && iso.runs.length ? iso.runs : daRotaia
         ? buildRailFill(region, campo, rotaia as Polyline, {
           spacingMm: p.densitySpacingMm, maxStitchMm: p.maxStitchMm,
           /*
@@ -451,7 +495,10 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
         restaFuoriDa: corpo,
       });
 
-      macchie.push({ tinta: t, region, corse: frangiate, metodo: daRotaia ? 'rotaia' : 'distanza' });
+      macchie.push({
+        tinta: t, region, corse: frangiate,
+        metodo: iso && iso.runs.length ? 'iso' : daRotaia ? 'rotaia' : 'distanza',
+      });
     }
   }
 
@@ -605,6 +652,32 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
  * È la rotaia: un lato solo. Prendere tutto il contorno che guarda un'altra tinta sembra equivalente
  * e non lo è — su una regione interna è quasi tutto l'anello, e si finisce per seminare da ogni lato.
  */
+/**
+ * LE TESTATE: i tratti di contorno dove NON c'e' un altro colore.
+ *
+ * Sono i capi della fascia — dove il ricamo comincia e dove finisce — in contrapposizione ai lati
+ * lunghi, che confinano con un'altra tinta. Il riempimento per curve di livello parte da qui: il
+ * fronte entra da un capo, cammina lungo la fascia, e le sue curve di livello la attraversano. E'
+ * cosi' che il punto viene perpendicolare alla transizione di colore senza doverglielo chiedere.
+ *
+ * Si restituisce **una sola** testata, la piu' lunga. Seminandole tutte i fronti partirebbero dai
+ * due capi e si scontrerebbero a meta' fascia, spezzando ogni livello in due: il ricamo si
+ * spaccherebbe in mezzo invece di correre da un capo all'altro.
+ */
+function testataPiuLunga(anello: Polyline, fuori: (p: Point) => number): Polyline | null {
+  const libero = anello.map((p) => fuori(p) < 0);
+  let inizio = 0, lungh = 0, corrente = 0, iniz = 0;
+  for (let i = 0; i < libero.length * 2; i++) {
+    if (libero[i % libero.length]) {
+      if (corrente === 0) iniz = i;
+      corrente++;
+      if (corrente > lungh) { lungh = corrente; inizio = iniz; }
+    } else corrente = 0;
+  }
+  if (lungh < 3) return null;
+  return Array.from({ length: Math.min(lungh, libero.length) }, (_, k) => anello[(inizio + k) % libero.length]);
+}
+
 function trattoVerso(
   anello: Polyline, fuori: (p: Point) => number, ordine: number[], mio: number, verso: 'prima' | 'dopo',
 ): Polyline | null {

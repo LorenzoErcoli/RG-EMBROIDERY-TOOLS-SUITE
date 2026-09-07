@@ -50,7 +50,13 @@ const img = { width: LATO, height: LATO, rgba };
 const plan = buildPittoricoPlan(img, {
   ...defaultPittoricoParams, realWidthMm: LATO * MM_PER_PX,
   lisciaBordiMm: Number(process.env.RG_LISCIA ?? defaultPittoricoParams.lisciaBordiMm),
+  metodoRiempimento: (process.env.RG_METODO as 'iso' | 'tracciato')
+    ?? defaultPittoricoParams.metodoRiempimento,   // per confrontare i due motori
+  frangiaMm: process.env.RG_FRANGIA !== undefined
+    ? Number(process.env.RG_FRANGIA) : defaultPittoricoParams.frangiaMm,
 });
+console.log(`metodo: ${process.env.RG_METODO ?? defaultPittoricoParams.metodoRiempimento}`
+  + ` · macchie per metodo: ${['iso', 'rotaia', 'distanza'].map((m) => `${m} ${plan.macchie.filter((x) => x.metodo === m).length}`).join(' · ')}`);
 const strati = pittoricoExportLayers(plan);
 
 /** Il filo di una polilinea spalmato sulle celle che attraversa, in mm per cella. */
