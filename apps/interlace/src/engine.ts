@@ -30,6 +30,12 @@ export interface InterlaceParams {
   /** Densità PER-COLORE (spaziatura mm, parallela a `colors`): 0/assente = usa `densitySpacingMm`.
    *  Serve a controllare il filo quando si aggiungono colori (ognuno indipendente). */
   colorDensities: number[];
+  /** RAGGIO DI CATTURA per-colore (distanza RGB, parallelo a `colors`), come la tolleranza del contagocce
+   *  di bitmap: un punto dell'immagine appartiene alla ZONA di questo colore solo se gli sta entro
+   *  `colorTolerances[i]`. Vuoto/0 = nessun limite (vince il più vicino, comportamento storico). Serve con
+   *  due colori SIMILI per una sfumatura: stringendo i raggi ognuno tiene solo il suo nucleo e il passaggio
+   *  fra i due non è di nessuno → mélange neutro invece di un confine netto e arbitrario a metà strada. */
+  colorTolerances: number[];
   /** Agglomerati: ogni colore si addensa in ZONE diverse (campo a bassa frequenza) invece del mélange
    *  uniforme → sfumature di colore più nette. false = mélange uniforme (comportamento storico). */
   clusterMode: boolean;
@@ -54,6 +60,7 @@ export const defaultInterlaceParams: InterlaceParams = {
   colors: ['#1f3a5f', '#c0392b', '#e0a41f', '#3b7d4f'],
   paletteCycles: 1, // 4 colori = 4 strati già di loro; alza per farli ripetere
   colorDensities: [], // vuoto = tutti i colori usano densitySpacingMm
+  colorTolerances: [], // vuoto = nessun raggio di cattura: vince il colore più vicino
   clusterMode: false, // false = mélange uniforme; true = agglomerati a zone (sfumature nette)
   clusterStrength: 60, // intensità zone 0–100 (solo con clusterMode)
   zoneBans: [], // vuoto = ogni filo passa ovunque
@@ -487,16 +494,17 @@ function hexToRgb(hex: string): [number, number, number] {
  * VICINO in RGB (cattura-colore). -1 = fuori immagine/trasparente (nessuna zona). È la stessa lettura
  * che serve sia alla copertura sia ai divieti, per questo sta da sola.
  */
-function imageZoneAt(x: number, y: number, palRgb: Array<[number, number, number]>, sample: ImageColorAt): number {
+function imageZoneAt(x: number, y: number, palRgb: Array<[number, number, number]>, tol2: number[], sample: ImageColorAt): number {
   const rgb = sample(x, y);
   if (!rgb) return -1;
   let best = -1, bestD = Infinity;
   for (let k = 0; k < palRgb.length; k++) {
     const dr = rgb[0] - palRgb[k][0], dg = rgb[1] - palRgb[k][1], db = rgb[2] - palRgb[k][2];
     const d = dr * dr + dg * dg + db * db;
+    if (d > tol2[k]) continue; // fuori dal raggio di cattura di questo colore: non è roba sua
     if (d < bestD) { bestD = d; best = k; }
   }
-  return best;
+  return best; // -1 = fuori dai raggi di TUTTI: nessuna zona, qui i fili si mescolano alla base
 }
 
 /**
@@ -543,6 +551,9 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
   // DIVIETI (matrice filo × zona). Le zone esistono solo con gli agglomerati — in mélange uniforme non
   // c'è nulla da vietare. Righe e colonne sono indici di COLORE della palette, non di passata.
   const nCol = Math.max(1, (p.colors && p.colors.length) || 1);
+  // Raggi di cattura al quadrato (una volta sola): assente o 0 = nessun limite per quel colore, e con
+  // tutti illimitati il più vicino vince sempre — cioè esattamente il comportamento storico.
+  const tol2 = imgPal ? imgPal.map((_, k) => { const t = (p.colorTolerances || [])[k]; return t && t > 0 ? t * t : Infinity; }) : [];
   const bans = p.clusterMode && Array.isArray(p.zoneBans) ? p.zoneBans : [];
   // La densità PER-COLORE è la dimensione della cella → ogni densità ha una sua griglia. La maschera si
   // ricostruisce solo quando la cella cambia (cache per valore di cella): densità uguali → una sola build.
@@ -569,7 +580,7 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
         // Zona del punto: indice di colore-palette (immagine) oppure campo vincente (rumore), riportato
         // sulla palette col modulo perché la matrice ragiona per COLORE anche con più cicli.
         const zone = imgPal
-          ? imageZoneAt(x, y, imgPal, imageColorAt as ImageColorAt)
+          ? imageZoneAt(x, y, imgPal, tol2, imageColorAt as ImageColorAt)
           : noiseZoneAt(x, y, densities.length, base) % nCol;
         // Vietato: la cella resta a target 0 (non la riempie) e finisce nella maschera (non la attraversa).
         if (banRow && banArr && zone >= 0 && banRow[zone]) { banArr[id] = 1; continue; }

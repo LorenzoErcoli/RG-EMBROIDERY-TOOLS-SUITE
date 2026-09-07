@@ -289,6 +289,23 @@ console.log('\ninterlace — agglomerati guidati da immagine (rispettano l’imm
 check('immagine: rosso più denso a SINISTRA (dov’è rosso)', redH.L > redH.R, true);
 check('immagine: blu più denso a DESTRA (dov’è blu)', bluH.R > bluH.L, true);
 
+// interlace — RAGGIO DI CATTURA per-colore (`colorTolerances`): due tinte SIMILI per una sfumatura.
+// Tre bande: A chiara, M esattamente a metà strada, B chiara-diversa. Senza raggio vince il più vicino e
+// la banda di mezzo finisce tutta a uno dei due (confine netto e arbitrario); stringendo i raggi la banda
+// di mezzo non è di nessuno e i due fili ci restano alla stessa densità di base = passaggio morbido.
+console.log('\ninterlace — raggio di cattura (due colori simili, sfumatura)');
+const shA = [232, 217, 160], shM = [228, 213, 152], shB = [224, 208, 144]; // M = punto medio fra A e B
+const shSample = (x) => (x < 40 ? shA : x < 80 ? shM : shB);
+const shParams = { ...rg.defaultInterlaceParams, minStitchMm: 2, maxStitchMm: 5, densitySpacingMm: 2, voidClearanceMm: 0.3, colors: ['#e8d9a0', '#e0d090'], clusterMode: true, clusterStrength: 80 };
+const midMm = (pass) => { let L = 0; for (const r of pass) for (let i = 1; i < r.length; i++) { const mx = (r[i].x + r[i - 1].x) / 2; if (mx > 41 && mx < 79) L += Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y); } return L; };
+const shWide = rg.generatePasses(imgSquare, [], shParams, [2, 2], (x) => shSample(x));
+const shTight = rg.generatePasses(imgSquare, [], { ...shParams, colorTolerances: [6, 6] }, [2, 2], (x) => shSample(x));
+const wideA = midMm(shWide[0]), wideB = midMm(shWide[1]);
+const tightA = midMm(shTight[0]), tightB = midMm(shTight[1]);
+check('raggio illimitato (default): la banda di mezzo se la prende uno dei due', Math.max(wideA, wideB) > Math.min(wideA, wideB) * 1.5, true);
+check('raggio stretto: la banda di mezzo non è di nessuno, i due fili ci stanno alla pari', Math.max(tightA, tightB) < Math.min(tightA, tightB) * 1.35, true);
+check('raggio stretto: nessuno dei due sparisce dalla banda di mezzo', Math.min(tightA, tightB) > 100, true);
+
 // interlace — DIVIETI DI TRANSITO (matrice filo × zona, `zoneBans`): un filo vietato in una zona non ci
 // cuce E non ci passa nemmeno di transito. Sulla stessa immagine metà rossa (x<60) / metà blu (x>60):
 // vietare il rosso nella zona blu deve lasciare la metà destra SENZA un solo punto rosso.

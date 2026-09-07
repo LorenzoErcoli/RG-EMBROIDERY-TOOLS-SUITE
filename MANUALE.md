@@ -71,7 +71,7 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
 **Come si usa.**
 1. **Cartamodello** — la forma da riempire.
 2. **Colori e ruoli** — perimetro e aree vuote.
-3. **Colori del filo** — la palette multicolore: i colori si alternano negli stop di cucitura (ogni stop = un cambio-ago).
+3. **Colori del filo** — la palette multicolore: i colori si alternano negli stop di cucitura (ogni stop = un cambio-ago). Ogni riga ha il **contagocce** (prende il colore dall'immagine di riferimento con la lente sul pixel, come in Bitmap → Stitch), la **cattura ±** e la **densità**. La *cattura* è il raggio entro cui l'immagine è ancora "sua": vuota (**∞**) vince il colore più vicino, com'è sempre stato. Serve con **due tinte simili per una sfumatura**: stringila su entrambe e il passaggio fra le due non è di nessuno — i due fili ci si mescolano invece di spartirselo con un confine netto.
 4. **Riempimento** — densità, lunghezza dei passaggi (punto minimo/massimo), distacco dalle aree vuote.
 5. **Dove passa ogni filo** (solo con gli **agglomerati**) — una tabella: righe = i fili, colonne = le zone. Spegni una casella perché quel filo **non entri** in quella zona: es. i colori scuri fuori dalle zone chiare dell'immagine. Lì il filo non cuce e non ci passa nemmeno di transito, quindi può servirgli qualche **stacco** in più — i tratti sono contati nella barra in basso. Spegnendo un'**intera colonna** quella zona resta **nuda**: tessuto a vista.
 

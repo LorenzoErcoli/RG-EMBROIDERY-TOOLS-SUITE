@@ -12,3 +12,55 @@ body {
 
 /* L'anteprima riempie il layer; bordo e sfondo sono già sul __canvas del DS. */
 #layer svg { max-width: 100%; max-height: 100%; }
+
+/* Righe della palette: swatch · hex · raggio di cattura · contagocce · densità · [×]. Stanno strette,
+   quindi qui si accorcia il passo del cluster e si restringono i due campi numerici. */
+#paletteList .rg-cluster { gap: var(--rg-space-2); }
+/* La × chiude la riga a destra, come nella palette di bitmap. */
+#paletteList .rg-color-map__row > .rg-cluster:first-of-type .rg-icon-button--danger { margin-left: auto; }
+/* Senza questo il codice esadecimale, che il DS lascia spezzare ovunque, si impila una lettera per riga
+   quando la riga si stringe: meglio che vada a capo il gruppo, non la parola. */
+#paletteList .rg-color-map__code { white-space: nowrap; }
+.interlace-tol { display: inline-flex; align-items: center; gap: 4px; color: var(--rg-color-text-secondary, #666); }
+.interlace-tol__pre { font-size: 13px; }
+#paletteList .interlace-tol__input { width: 3rem; max-width: none; padding-left: 8px; padding-right: 4px; text-align: right; }
+.rg-icon-button svg { display: block; }
+
+/* Matrice "Dove passa ogni filo": le caselle stanno centrate sotto la loro colonna. */
+#zoneBanTable td .rg-choice { justify-content: center; width: 100%; }
+#zoneBanTable th, #zoneBanTable td { padding-left: var(--rg-space-2); padding-right: var(--rg-space-2); }
+
+/* Contagocce: overlay sopra l'anteprima con l'immagine di riferimento + lente sul pixel (come bitmap). */
+.interlace-pick {
+  position: absolute; inset: 0; z-index: 20;
+  display: flex; align-items: center; justify-content: center;
+  background: color-mix(in srgb, var(--rg-color-background) 82%, transparent);
+  cursor: crosshair;
+}
+.interlace-pick__img {
+  max-width: 100%; max-height: 100%;
+  image-rendering: pixelated;        /* pixel netti quando l'immagine è piccola/ingrandita */
+  box-shadow: 0 0 0 1px var(--rg-color-border, #ccc);
+}
+.interlace-pick__hint {
+  position: absolute; top: 8px; left: 50%; transform: translateX(-50%);
+  padding: 4px 10px; border-radius: 4px;
+  background: var(--rg-color-text-primary); color: var(--rg-color-background);
+  font-size: 12px; white-space: nowrap; pointer-events: none;
+}
+.interlace-pick__lens {
+  position: absolute; left: 0; top: 0; pointer-events: none;
+  border: 2px solid var(--rg-color-text-primary); border-radius: 6px;
+  background: #fff; box-shadow: 0 2px 8px rgba(0, 0, 0, .3);
+}
+.interlace-pick__tag {
+  position: absolute; left: 0; top: 0; pointer-events: none;
+  display: inline-flex; align-items: center; gap: 6px;
+  padding: 2px 6px; border-radius: 4px;
+  background: var(--rg-color-text-primary); color: var(--rg-color-background);
+  font-size: 12px; font-variant-numeric: tabular-nums;
+}
+.interlace-pick__tag::before {
+  content: ""; width: 12px; height: 12px; border-radius: 2px;
+  background: var(--c, #000); box-shadow: 0 0 0 1px rgba(255, 255, 255, .6);
+}

@@ -25,6 +25,12 @@ const PARAMS: Field[] = [
   { key: 'voidClearanceMm', label: 'Distanza di sicurezza da bordi e vuoti', unit: 'mm', step: 0.1 },
 ];
 
+// Icona contagocce (pipette, stile Lucide), la stessa del bottone "campiona" di bitmap.
+const EYEDROPPER_SVG =
+  '<svg viewBox="0 0 24 24" width="16" height="16" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">'
+  + '<path d="m2 22 1-1h3l9-9"/><path d="M3 21v-3l9-9"/>'
+  + '<path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>';
+
 // Questo tool usa solo due ruoli: l'area da ricamare e le aree vuote.
 const ROLE_OPTIONS: (Role | '')[] = ['', 'MASTER_OUTLINE', 'EXCLUSION'];
 
@@ -390,6 +396,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
         if (params.colors.length <= 1) return;
         params.colors.splice(i, 1);
         params.colorDensities.splice(i, 1);
+        params.colorTolerances.splice(i, 1);
         // La matrice dei divieti è quadrata sulla palette: via la riga del colore E la sua colonna-zona.
         if (Array.isArray(params.zoneBans)) {
           params.zoneBans.splice(i, 1);
@@ -402,9 +409,12 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       // Densità PER-COLORE (spaziatura file, mm): vuoto = usa la densità globale. Campo compatto con le
       // sole classi DS v1.6.0 (`rg-field-with-unit` + `rg-input--numeric`), stretto via il token DS
       // `--rg-input-numeric-width` (nessuna classe inventata). Vedi proposta DS `ds/color-map-aside` (§7).
+      const dpre = document.createElement('span');
+      dpre.className = 'interlace-tol__pre';
+      dpre.textContent = 'densità';
       const dwrap = document.createElement('span');
       dwrap.className = 'rg-field-with-unit';
-      dwrap.style.setProperty('--rg-input-numeric-width', '8ch');
+      dwrap.style.setProperty('--rg-input-numeric-width', '4ch');
       const dens = document.createElement('input');
       dens.type = 'number';
       dens.className = 'rg-input rg-input--numeric';
@@ -423,17 +433,57 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       const dunit = document.createElement('span');
       dunit.textContent = 'mm';
       dwrap.append(dens, dunit);
+
+      // RAGGIO DI CATTURA (distanza RGB), come la tolleranza del contagocce di bitmap: vuoto = nessun
+      // limite (vince il più vicino). Con due colori simili per una sfumatura, stringerlo su entrambi
+      // lascia neutro il passaggio fra i due invece di spaccarlo a metà.
+      if (!params.colorTolerances) params.colorTolerances = [];
+      const tolGroup = document.createElement('span');
+      tolGroup.className = 'interlace-tol';
+      const tolPre = document.createElement('span');
+      tolPre.className = 'interlace-tol__pre';
+      tolPre.textContent = 'cattura ±';
+      const tol = document.createElement('input');
+      tol.type = 'number'; tol.min = '0'; tol.step = '5';
+      tol.className = 'rg-input rg-input--numeric interlace-tol__input';
+      tol.placeholder = '∞';
+      const tv = params.colorTolerances[i];
+      tol.value = tv && tv > 0 ? String(tv) : '';
+      tol.setAttribute('aria-label', `Raggio di cattura di ${col.toUpperCase()} (distanza RGB; vuoto = nessun limite)`);
+      tol.title = 'Raggio di cattura: quanto lontano da questo colore l’immagine è ancora “sua”. Vuoto = nessun limite.';
+      tol.addEventListener('change', () => {
+        const v = parseFloat(tol.value);
+        if (tol.value.trim() === '' || Number.isNaN(v) || v <= 0) { params.colorTolerances[i] = 0; tol.value = ''; }
+        else { params.colorTolerances[i] = Math.max(0, v); tol.value = String(params.colorTolerances[i]); }
+        render();
+      });
+      tolGroup.append(tolPre, tol);
+
+      // Contagocce: prende il colore dall'immagine di riferimento con la lente sul pixel (come bitmap).
+      const pick = document.createElement('button');
+      pick.type = 'button';
+      pick.className = 'rg-icon-button';
+      pick.innerHTML = EYEDROPPER_SVG;
+      pick.disabled = !refImage;
+      pick.title = refImage ? 'Campiona dall’immagine di riferimento' : 'Carica un’immagine di riferimento per campionare';
+      pick.setAttribute('aria-label', `Campiona il colore ${i + 1} dall’immagine`);
+      pick.addEventListener('click', () => enterPickMode(i));
+
       picker.addEventListener('input', () => {
         params.colors[i] = picker.value;
         sw.style.setProperty('--swatch', picker.value);
         code.textContent = picker.value.toUpperCase();
         rm.setAttribute('aria-label', `Rimuovi colore ${i + 1} (${picker.value.toUpperCase()})`);
+        buildZoneBanUI(); // le pastiglie della matrice sono questi stessi colori: vanno riallineate
         render();
       });
 
       sw.appendChild(picker);
-      cluster.append(code, dwrap, rm);
-      li.append(sw, cluster);
+      cluster.append(code, pick, rm);
+      const knobs = document.createElement('span');
+      knobs.className = 'rg-cluster rg-color-map__target';
+      knobs.append(tolGroup, dpre, dwrap);
+      li.append(sw, cluster, knobs);
       host.appendChild(li);
     });
     ($('addColorBtn') as HTMLButtonElement).disabled = params.colors.length >= MAX_COLORS;
@@ -478,12 +528,15 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     };
     const table = document.createElement('table');
     table.className = 'rg-table rg-table--compact';
+    const cap = document.createElement('caption');
+    cap.textContent = 'Spunta = ci passa · togli la spunta = vietato';
+    table.appendChild(cap);
 
     const thead = document.createElement('thead');
     const hrow = document.createElement('tr');
     const corner = document.createElement('th');
     corner.scope = 'col';
-    corner.textContent = 'filo / zona';
+    corner.textContent = 'filo ↓ / zona →';
     hrow.appendChild(corner);
     for (const zc of cols) {
       const th = document.createElement('th');
@@ -519,6 +572,9 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
         cb.type = 'checkbox';
         cb.checked = !params.zoneBans[i][j];
         cb.setAttribute('aria-label', `Il filo ${tc.toUpperCase()} passa nelle zone ${zc.toUpperCase()}`);
+        lab.title = i === j
+          ? `Filo ${tc.toUpperCase()} nella SUA zona — spunta = ci passa`
+          : `Filo ${tc.toUpperCase()} nella zona ${zc.toUpperCase()} — spunta = ci passa`;
         cb.addEventListener('change', () => { params.zoneBans[i][j] = !cb.checked; render(); });
         lab.appendChild(cb);
         td.appendChild(lab);
@@ -529,6 +585,77 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
 
     table.append(thead, tbody);
     host.appendChild(table);
+  }
+
+  /**
+   * CONTAGOCCE con LENTE (lo stesso gesto di bitmap): mette l'immagine di riferimento sopra l'anteprima,
+   * ingrandisce il pixel sotto il puntatore mostrandone il codice, e col clic lo assegna al colore
+   * `index`. Serve per prendere due tinte SIMILI con precisione — a occhio, sulla miniatura del pannello,
+   * non si distinguono. Resta locale all'app: al terzo tool che lo chiede si promuove in @rg/ui (regola 1).
+   */
+  function enterPickMode(index: number) {
+    if (!refImage) return;
+    const W = refImage.w, H = refImage.h, SAMPLE = 15, HALF = 7, LENS = 132;
+    const img = document.createElement('canvas');
+    img.width = W; img.height = H;
+    img.className = 'interlace-pick__img';
+    img.getContext('2d')!.putImageData(new ImageData(new Uint8ClampedArray(refImage.data), W, H), 0, 0);
+
+    const overlay = document.createElement('div');
+    overlay.className = 'interlace-pick';
+    const hint = document.createElement('div');
+    hint.className = 'interlace-pick__hint';
+    hint.textContent = 'Muovi sul pixel, clicca per campionare il colore · Esc per annullare';
+    const lens = document.createElement('canvas');
+    lens.className = 'interlace-pick__lens';
+    lens.width = LENS; lens.height = LENS;
+    const lctx = lens.getContext('2d')!;
+    lctx.imageSmoothingEnabled = false;
+    const tag = document.createElement('div');
+    tag.className = 'interlace-pick__tag';
+    overlay.append(img, hint, lens, tag);
+    $('canvas').appendChild(overlay);
+
+    const colorAt = (sx: number, sy: number): string => {
+      const o = (sy * W + sx) * 4;
+      const h = (v: number) => v.toString(16).padStart(2, '0');
+      return `#${h(refImage!.data[o])}${h(refImage!.data[o + 1])}${h(refImage!.data[o + 2])}`.toUpperCase();
+    };
+    const pixelOf = (e: MouseEvent) => {
+      const rect = img.getBoundingClientRect();
+      const sx = Math.max(0, Math.min(W - 1, Math.floor((e.clientX - rect.left) / rect.width * W)));
+      const sy = Math.max(0, Math.min(H - 1, Math.floor((e.clientY - rect.top) / rect.height * H)));
+      return { sx, sy };
+    };
+    const onMove = (e: MouseEvent) => {
+      const { sx, sy } = pixelOf(e);
+      lctx.clearRect(0, 0, LENS, LENS);
+      lctx.drawImage(img, sx - HALF, sy - HALF, SAMPLE, SAMPLE, 0, 0, LENS, LENS);
+      const cell = LENS / SAMPLE;
+      lctx.strokeStyle = '#000'; lctx.lineWidth = 1; lctx.strokeRect(HALF * cell + 0.5, HALF * cell + 0.5, cell, cell);
+      lctx.strokeStyle = '#fff'; lctx.strokeRect(HALF * cell + 1.5, HALF * cell + 1.5, cell - 2, cell - 2);
+      const hex = colorAt(sx, sy);
+      tag.textContent = hex; tag.style.setProperty('--c', hex);
+      const orect = overlay.getBoundingClientRect();
+      const lx = Math.min(orect.width - LENS - 8, e.clientX - orect.left + 18);
+      const ly = Math.min(orect.height - LENS - 28, e.clientY - orect.top + 18);
+      lens.style.left = `${lx}px`; lens.style.top = `${ly}px`;
+      tag.style.left = `${lx}px`; tag.style.top = `${ly + LENS + 4}px`;
+    };
+    const exit = () => { overlay.remove(); document.removeEventListener('keydown', onKey); };
+    const onKey = (e: KeyboardEvent) => { if (e.key === 'Escape') exit(); };
+    img.addEventListener('mousemove', onMove);
+    img.addEventListener('click', (e) => {
+      const { sx, sy } = pixelOf(e);
+      params.colors[index] = colorAt(sx, sy);
+      exit(); buildPaletteUI(); render();
+    });
+    // Il canvas ha pan/zoom (pointerdown → setPointerCapture): senza fermarlo il clic non arriva
+    // all'immagine e il colore non si campiona. Stesso accorgimento di bitmap.
+    overlay.addEventListener('pointerdown', (e) => e.stopPropagation());
+    overlay.addEventListener('pointerup', (e) => e.stopPropagation());
+    overlay.addEventListener('wheel', (e) => { e.preventDefault(); e.stopPropagation(); }, { passive: false });
+    document.addEventListener('keydown', onKey);
   }
 
   function render() {
@@ -629,6 +756,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     if (params.colors.length >= MAX_COLORS) return;
     params.colors.push(NEW_COLORS[(params.colors.length - 1) % NEW_COLORS.length]);
     params.colorDensities.push(0); // 0 = eredita la densità globale finché non lo si imposta
+    params.colorTolerances.push(0); // 0 = nessun raggio di cattura finché non lo si stringe
     buildPaletteUI();
     render();
   });
@@ -726,6 +854,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     if (!cols.length) { $('clusterImageStatus').textContent = 'Nessun colore catturato (immagine tutta sfondo?)'; return; }
     params.colors = cols;
     params.colorDensities = cols.map(() => 0);
+    params.colorTolerances = cols.map(() => 0);
     params.zoneBans = []; // palette nuova = zone nuove: i divieti vecchi non vorrebbero dire niente
     buildPaletteUI();
     render();
@@ -772,12 +901,14 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     const hex = '#' + [refImage.data[i], refImage.data[i + 1], refImage.data[i + 2]].map((c) => c.toString(16).padStart(2, '0')).join('');
     params.colors.push(hex);
     params.colorDensities.push(0);
+    params.colorTolerances.push(0);
     buildPaletteUI();
     render();
   });
   $('clearPaletteBtn').addEventListener('click', () => {
     params.colors = [];
     params.colorDensities = [];
+    params.colorTolerances = [];
     params.zoneBans = [];
     buildPaletteUI();
     render();
