@@ -66,5 +66,5 @@ Una proposta è accettata se, sul caso di prova di `06`:
 2. né gli addensamenti né i buchi superano il 2% delle celle;
 3. i vincoli di `C` restano rispettati;
 4. e **si vede**: il ricamo disegnato a filo sottile deve reggere il confronto a occhio con le
-   fotografie di riferimento. I numeri verdi su un ricamo brutto non contano — è già successo, ed è
+   fotografie di riferimento in `foto-ricamo/`. I numeri verdi su un ricamo brutto non contano — è già successo, ed è
    il motivo per cui `06` produce anche i disegni e non solo le tabelle.

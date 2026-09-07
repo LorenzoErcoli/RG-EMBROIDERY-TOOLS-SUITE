@@ -4,6 +4,7 @@
 
 | file | cos'è |
 |---|---|
+| `foto-ricamo/` | **le fotografie di ricamo vero.** Sono la definizione dell'obiettivo: i numeri dicono quando è omogeneo, queste dicono che aspetto deve avere. Guardale per prime |
 | `cianotipia-originale.jpg` | l'immagine di riferimento vera, quella su cui si lavora |
 | `cianotipia.bmp` | la stessa, in BMP a 24 bit: è il formato che leggono gli strumenti di misura |
 | `misure-catena.html` | le cinque tappe della catena affiancate, sul ritaglio di prova. **Apri questa per prima**: fa capire il problema in dieci secondi |

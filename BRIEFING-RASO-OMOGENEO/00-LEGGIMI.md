@@ -22,6 +22,7 @@ Leggila in ordine. Ogni file risponde a una domanda:
 | `06-COME-MISURARE.md` | gli strumenti già scritti per verificare una proposta |
 | `07-MATERIALI.md` | dove stanno i file, il codice e le immagini di riferimento |
 | `08-LA-PISTA-INDICATA.md` | la direzione che il committente vuole esplorare. **Un'ipotesi, non la specifica** |
+| `foto-ricamo/` | le fotografie di ricamo vero: è lì che si vede dove si vuole arrivare |
 
 ## La cosa più importante
 

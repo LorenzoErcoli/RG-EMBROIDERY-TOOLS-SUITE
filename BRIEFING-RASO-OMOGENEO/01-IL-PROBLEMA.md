@@ -27,6 +27,13 @@ Due difetti opposti, tutti e due gravi:
 - **buco** — passa il tessuto. È il peggiore dei due: un addensamento si vede, un buco si vede *e*
   fa fallire il pezzo.
 
+## Come deve venire
+
+Prima di leggere il resto, guarda le fotografie in `foto-ricamo/`. Sono ricami pittorici veri, e
+sono la definizione dell'obiettivo: i numeri qui sotto dicono quando un riempimento è omogeneo,
+quelle dicono che aspetto deve avere. In questo lavoro è già successo di avere misure verdi su un
+ricamo brutto.
+
 ## Cosa vuol dire «che curva»
 
 Il punto deve seguire il disegno. In particolare, dove due colori si incontrano, **il punto deve
