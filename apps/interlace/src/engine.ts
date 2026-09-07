@@ -596,6 +596,39 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
   return runOneFill(ctx, p.seed || 1, targetArr);
 }
 
+/** Quanti punti al mm² chiede il lavoro, e quanto vale il tetto automatico. */
+export interface StitchBudget {
+  /** Buchi d'ago per mm² che la copertura chiesta implica: sotto questo numero un tetto NON può bastare
+   *  e restano zone scoperte. È il caso peggiore (un colore padrone della zona, gli altri alla base). */
+  needed: number;
+  /** Il tetto automatico: PEAK_FACTOR × `needed`, con un minimo di 4. Lascia respiro alla
+   *  disomogeneità (che è l'effetto) e taglia solo le punte. */
+  auto: number;
+}
+
+/**
+ * Il conto del tetto, funzione PURA così il pannello può dire i numeri all'utente invece di lasciarlo
+ * indovinare: la copertura chiesta in crossings/mm², sommata su tutti i colori nel caso peggiore, divisa
+ * per la lunghezza media del punto. Si adatta da solo a densità, numero di colori e intensità.
+ */
+export function stitchBudget(p: InterlaceParams, densities: number[]): StitchBudget {
+  const minS = Math.max(0.5, p.minStitchMm);
+  const maxS = Math.max(minS + 0.1, p.maxStitchMm);
+  const avgStitch = (minS + maxS) / 2;
+  const boostCells = p.clusterMode ? Math.round(Math.max(0, Math.min(100, p.clusterStrength)) / 100 * 8) : 0;
+  let needMax = 0;
+  for (let k = 0; k < densities.length; k++) {
+    let sum = (COVER_TARGET + boostCells) / cellForSpacing(densities[k], maxS);
+    for (let i = 0; i < densities.length; i++) {
+      if (i === k) continue;
+      sum += (p.clusterMode ? 1 : COVER_TARGET) / cellForSpacing(densities[i], maxS);
+    }
+    if (sum > needMax) needMax = sum;
+  }
+  const needed = Math.max(1, Math.ceil(needMax / avgStitch));
+  return { needed, auto: Math.max(4, Math.ceil(PEAK_FACTOR * needMax / avgStitch)) };
+}
+
 /**
  * PASSATE A COLORE: una passata per ciascuna densità in `densities`, ognuna un FILO CONTINUO che copre
  * tutta la superficie alla PROPRIA densità (`densities[i]` mm), con un seme diverso. Sovrapponendo le
@@ -619,26 +652,9 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
   // Il sormonto è per-passata perché dipende dalla cella di densità di QUEL colore. `null` = automatico:
   // 0.6 × cella prende esattamente la prima fila di celle oltre il confine (il centro della seconda sta
   // a 1.5 celle) — una regola che vale a qualsiasi densità, mentre un valore fisso in mm no.
-  // TETTO AI BUCHI D'AGO, condiviso da tutte le passate su una griglia da 1mm. Automatico = PEAK_FACTOR ×
-  // i punti che servono DAVVERO a coprire: la copertura chiesta (crossings/mm², sommata su tutti i colori
-  // nel caso peggiore — uno padrone della zona, gli altri alla base) divisa per la lunghezza media del
-  // punto. Così il tetto si adatta da solo a densità, numero di colori e intensità degli agglomerati,
-  // invece di essere un numero fisso che a metà dei lavori è sbagliato.
-  const avgStitch = (minS + maxS) / 2;
-  const boostCells = p.clusterMode ? Math.round(Math.max(0, Math.min(100, p.clusterStrength)) / 100 * 8) : 0;
-  let needMax = 0;
-  for (let k = 0; k < densities.length; k++) {
-    let sum = (COVER_TARGET + boostCells) / cellForSpacing(densities[k], maxS);
-    for (let i = 0; i < densities.length; i++) {
-      if (i === k) continue;
-      sum += (p.clusterMode ? 1 : COVER_TARGET) / cellForSpacing(densities[i], maxS);
-    }
-    if (sum > needMax) needMax = sum;
-  }
+  const { needed, auto: autoCap } = stitchBudget(p, densities);
   const capWanted = p.maxStitchesPerMm2;
-  const cap = capWanted === 0 ? 0
-    : capWanted == null ? Math.max(4, Math.ceil(PEAK_FACTOR * needMax / avgStitch))
-    : Math.max(1, Math.round(capWanted));
+  const cap = capWanted === 0 ? 0 : capWanted == null ? autoCap : Math.max(1, Math.round(capWanted));
   let pen: PenGrid | null = null;
   if (cap > 0) {
     const pb = bounds(boundary);

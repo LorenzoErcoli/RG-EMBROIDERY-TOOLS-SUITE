@@ -15,7 +15,7 @@ const posix = (p) => join(root, p).replace(/\\/g, '/');
 const entry = join(outDir, 'entry.ts');
 writeFileSync(entry, `
 export { parseImportedBoundarySource, generatePattern, parseSvgTransform } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
-export { generateFill, generatePasses, defaultInterlaceParams } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
+export { generateFill, generatePasses, stitchBudget, defaultInterlaceParams } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
 export { generateStitch, stitchSteps, reinsertPoints, analyzeBitmap, buildSelectionMask, buildPalette, groupByPalette, defaultBitmapParams } from ${JSON.stringify(posix('apps/bitmap/src/engine.ts'))};
 export { buildRawLevels, computeGridCounts, moduleFromPolylines, parseModuleSvg, defaultObliqueParams, resolveBoundaries, buildLaserExport, filterLevelByHoles, rectBoundaryOf, boundaryFromFormat, boundaryFromPoints, contourBoundary, simplifyLoop, isInside, applyModuleClipMode, cleanupPolylines, subtractExclusions, cleanupVoids, applyVoids, generateOblique, connectLayerContinuity, connectTechnicalDiagonals, enforceMinimumStitch, reconnectCutFragmentsOnBoundary } from ${JSON.stringify(posix('apps/oblique/src/engine.ts'))};
 export { runBitmapPreview, runBitmapPipeline, PREVIEW_MAX_DOTS } from ${JSON.stringify(posix('apps/bitmap/src/pipeline.ts'))};
@@ -323,6 +323,26 @@ check('tetto automatico: non peggiora mai il picco', aAuto.max <= aOff.max, true
 check('tetto automatico: resta comunque entro un limite sano', aAuto.max <= 14, true);
 check('il tetto taglia la punta, NON la mediana (la disomogeneità resta)', a6.med >= aOff.med - 1, true);
 check('tagliare la punta costa quasi nulla in filo (meno del 5%)', Math.abs(filoDi(cap6) / filoDi(capOff) - 1) < 0.05, true);
+
+// Il conto del tetto è una funzione PURA, così il pannello può DIRE i numeri invece di lasciarli
+// indovinare. Un tetto sotto `needed` affama la copertura: le celle si saturano prima di essere coperte
+// e restano zone scoperte. È successo davvero (tetto messo a 2 dove ne servivano 3) e si è scoperto
+// solo sul ricamo: il caso è bloccato qui.
+const bud = rg.stitchBudget(capParams, [1, 1]);
+check('il conto del tetto dice il minimo e l’automatico', bud.needed >= 1 && bud.auto >= bud.needed, true);
+check('l’automatico lascia respiro: almeno il doppio del minimo', bud.auto >= bud.needed * 2, true);
+const capStretto = rg.generatePasses(capSquare, [], { ...capParams, maxStitchesPerMm2: 1 }, [1, 1], capSample);
+const vuoteDi = (passes) => {
+  const g = new Uint8Array(92 * 92);
+  for (const pass of passes) for (const r of pass) for (let i = 1; i < r.length; i++) {
+    const a = r[i - 1], b = r[i], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) * 4));
+    for (let k = 0; k <= n; k++) { const t = k / n; g[Math.min(91, Math.max(0, Math.round(a.y + (b.y - a.y) * t))) * 92 + Math.min(91, Math.max(0, Math.round(a.x + (b.x - a.x) * t)))] = 1; }
+  }
+  let v = 0; for (let j = 8; j < 82; j++) for (let i = 8; i < 82; i++) if (!g[j * 92 + i]) v++;
+  return v;
+};
+console.log(`   (minimo ${bud.needed}, automatico ${bud.auto} · celle scoperte: automatico ${vuoteDi(capAuto)}, tetto 1 ${vuoteDi(capStretto)})`);
+check('un tetto SOTTO il minimo lascia davvero zone scoperte (per questo il pannello avvisa)', vuoteDi(capStretto) > vuoteDi(capAuto), true);
 
 // interlace — SORMONTO ai bordi delle zone (`zoneOverlapMm`). Due colori che non si mescolano si
 // fermano testa a testa e a ridosso del confine NESSUNO dei due riesce più a cucire: la densità crolla e

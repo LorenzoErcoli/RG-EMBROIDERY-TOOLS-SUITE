@@ -5,7 +5,7 @@ import {
   bounds as boundsOf, polygonArea, pointInPolygon, distance,
   THREAD_STROKE_MM, SHAPE_STROKE_MM,
 } from '@rg/core';
-import { generatePasses, type InterlaceParams, type ImageColorAt } from './engine';
+import { generatePasses, stitchBudget, type InterlaceParams, type ImageColorAt, type StitchBudget } from './engine';
 
 export type RoleAssignment = Record<string, Role | undefined>;
 
@@ -22,6 +22,9 @@ export interface PipelineResult {
   /** Numero di TRATTI cuciti (polilinee): più tratti di stop = altrettanti stacchi del filo. È il prezzo
    *  dei divieti di transito, per questo si mostra in statusbar. */
   runCount: number;
+  /** Punti al mm² che il lavoro chiede e tetto automatico: il pannello li mostra, così un tetto messo
+   *  troppo basso si vede PRIMA di trovarsi le zone scoperte sul ricamo. */
+  budget: StitchBudget;
 }
 
 const COLORS = {
@@ -129,5 +132,5 @@ export function runPipeline(
     if (s.polylines.length) exportLayers.push({ id: `stop-${String(i).padStart(4, '0')}`, color: toneColor(s.color, i), polylines: s.polylines, strokeMm: THREAD_STROKE_MM });
   });
 
-  return { layers, exportLayers, bounds: bnds, stopCount: stops.length, threadMm, runCount };
+  return { layers, exportLayers, bounds: bnds, stopCount: stops.length, threadMm, runCount, budget: stitchBudget(params, densities) };
 }

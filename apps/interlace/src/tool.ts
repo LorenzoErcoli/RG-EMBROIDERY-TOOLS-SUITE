@@ -151,7 +151,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
           <label class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Tetto ai punti (buchi d’ago per mm²)</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="maxStitches" type="number" min="0" step="1" placeholder="auto"><span>pt/mm²</span></span>
-            <small class="rg-field__help">quanti punti al massimo può prendere lo stesso millimetro quadro, contando tutti i colori insieme: è lì che il filo si spezza e l’ago soffre. Taglia solo le punte, la disomogeneità che dà movimento resta. Vuoto = automatico (3 × i punti che servono davvero a coprire). 0 = nessun tetto.</small>
+            <small class="rg-field__help" id="maxStitchesHelp">quanti punti al massimo può prendere lo stesso millimetro quadro, contando tutti i colori insieme: è lì che il filo si spezza e l’ago soffre. Vuoto = automatico. 0 = nessun tetto.</small>
           </label>
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Variante</span>
@@ -670,10 +670,23 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
 
   function render() {
     try {
-      const { layers, bounds, threadMm, runCount } = runPipeline(currentContours(), roles, params, { imageColorAt: imageSampler() });
+      const { layers, bounds, threadMm, runCount, budget } = runPipeline(currentContours(), roles, params, { imageColorAt: imageSampler() });
       $('layer').innerHTML = buildSvg(layers, { bounds, marginMm: 8 });
+      // Il tetto ai punti non deve poter affamare la copertura IN SILENZIO: con queste impostazioni
+      // servono almeno `needed` punti/mm² perché la copertura chiesta esista. Sotto quel numero le celle
+      // si saturano prima di essere coperte e restano zone scoperte — è un difetto che si scopre sul
+      // ricamo, quindi va detto qui, coi numeri.
+      const cap = params.maxStitchesPerMm2;
+      const avviso = cap == null || cap === 0 ? ''
+        : cap < budget.needed ? ` · attenzione: tetto ${cap} sotto il minimo ${budget.needed} — restano zone scoperte`
+        : cap < budget.auto ? ` · tetto ${cap} sotto l’automatico ${budget.auto} — qualche zona può restare scoperta`
+        : '';
+      $('maxStitchesHelp').textContent =
+        `quanti punti al massimo può prendere lo stesso millimetro quadro, contando tutti i colori insieme: è lì che il filo si spezza e l’ago soffre. `
+        + `Con queste impostazioni servono almeno ${budget.needed} pt/mm² perché la copertura esista, e l’automatico è ${budget.auto}. `
+        + `Sotto il minimo restano zone scoperte. Vuoto = automatico. 0 = nessun tetto.`;
       $('status').textContent = threadMm > 0
-        ? `Filo generato: ${(threadMm / 1000).toFixed(2)} m · ${runCount} ${runCount === 1 ? 'tratto' : 'tratti'}`
+        ? `Filo generato: ${(threadMm / 1000).toFixed(2)} m · ${runCount} ${runCount === 1 ? 'tratto' : 'tratti'}${avviso}`
         : 'Assegna un colore all’area da ricamare';
     } catch (e) {
       $('status').textContent = 'Errore render: ' + (e as Error).message;
