@@ -289,6 +289,43 @@ console.log('\ninterlace — agglomerati guidati da immagine (rispettano l’imm
 check('immagine: rosso più denso a SINISTRA (dov’è rosso)', redH.L > redH.R, true);
 check('immagine: blu più denso a DESTRA (dov’è blu)', bluH.R > bluH.L, true);
 
+// interlace — SORMONTO ai bordi delle zone (`zoneOverlapMm`). Due colori che non si mescolano si
+// fermano testa a testa e a ridosso del confine NESSUNO dei due riesce più a cucire: la densità crolla e
+// resta una fessura. Il sormonto fa posare a ciascuno una passata oltre il bordo, così i due si
+// accavallano. Misura su un confine CURVO (è lì che il divieto morde: un punto dritto fra due estremi
+// dello stesso lato taglia il confine dal lato concavo).
+console.log('\ninterlace — sormonto ai bordi delle zone (la fessura fra due colori)');
+const ovR = 60, ovCX = 100, ovCY = 100;
+const ovSquare = [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 200 }, { x: 0, y: 200 }];
+const ovSample = (x, y) => (Math.hypot(x - ovCX, y - ovCY) < ovR ? [2, 39, 80] : [244, 233, 213]);
+const ovParams = { ...rg.defaultInterlaceParams, minStitchMm: 2, maxStitchMm: 5, densitySpacingMm: 2, voidClearanceMm: 0, colors: ['#022750', '#f4e9d5'], clusterMode: true, clusterStrength: 100, seed: 1, zoneBans: [[false, true], [true, false]] };
+/** Densità di filo nell'anello a distanza `d`±0.5mm dal confine, normalizzata sull'area dell'anello. */
+function ringDensity(passes, d) {
+  let L = 0;
+  for (const pass of passes) for (const r of pass) for (let i = 1; i < r.length; i++) {
+    const ax = r[i - 1].x, ay = r[i - 1].y, bx = r[i].x, by = r[i].y;
+    const len = Math.hypot(bx - ax, by - ay), n = Math.max(1, Math.ceil(len / 0.15)), dL = len / n;
+    for (let k = 0; k < n; k++) {
+      const t = (k + 0.5) / n;
+      const rr = Math.hypot(ax + (bx - ax) * t - ovCX, ay + (by - ay) * t - ovCY) - ovR;
+      if (rr >= d - 0.5 && rr < d + 0.5) L += dL;
+    }
+  }
+  return L / (2 * Math.PI * (ovR + d));
+}
+const seamOf = (passes) => {
+  const rif = (ringDensity(passes, -8) + ringDensity(passes, 8)) / 2;
+  return Math.min(ringDensity(passes, -0.5), ringDensity(passes, 0.5)) / rif;
+};
+const ovNetto = rg.generatePasses(ovSquare, [], { ...ovParams, zoneOverlapMm: 0 }, [2, 2], ovSample);
+const ovAuto = rg.generatePasses(ovSquare, [], ovParams, [2, 2], ovSample); // zoneOverlapMm di default = null = automatico
+const fessuraNetto = seamOf(ovNetto), fessuraAuto = seamOf(ovAuto);
+check('confine netto: sul confine la densità cala sotto l\'80% (la fessura esiste)', fessuraNetto < 0.8, true);
+check('sormonto automatico: la fessura si chiude (densità sopra il 90%)', fessuraAuto > 0.9, true);
+const sconfino = (passes) => { let m = 0; for (const r of passes[0]) for (const p of r) { const d = Math.hypot(p.x - ovCX, p.y - ovCY) - ovR; if (d > m) m = d; } return m; };
+check('confine netto: il filo scuro non esce (meno di 0.3mm)', sconfino(ovNetto) < 0.3, true);
+check('sormonto automatico: sconfina di una fila di celle, non di più', sconfino(ovAuto) > 0.5 && sconfino(ovAuto) < 1.6, true);
+
 // interlace — RAGGIO DI CATTURA per-colore (`colorTolerances`): due tinte SIMILI per una sfumatura.
 // Tre bande: A chiara, M esattamente a metà strada, B chiara-diversa. Senza raggio vince il più vicino e
 // la banda di mezzo finisce tutta a uno dei due (confine netto e arbitrario); stringendo i raggi la banda
@@ -310,7 +347,7 @@ check('raggio stretto: nessuno dei due sparisce dalla banda di mezzo', Math.min(
 // cuce E non ci passa nemmeno di transito. Sulla stessa immagine metà rossa (x<60) / metà blu (x>60):
 // vietare il rosso nella zona blu deve lasciare la metà destra SENZA un solo punto rosso.
 console.log('\ninterlace — divieti di transito (dove NON passa un filo)');
-const banParams = { ...imgParams, zoneBans: [[false, true], [false, false]] }; // rosso vietato in zona blu
+const banParams = { ...imgParams, zoneBans: [[false, true], [false, false]], zoneOverlapMm: 0 }; // rosso vietato in zona blu, confine netto
 const banPasses = rg.generatePasses(imgSquare, [], banParams, [2, 2], (x) => imgSample(x));
 const rightPts = (pass) => { let n = 0; for (const r of pass) for (const p of r) if (p.x > 60.01) n++; return n; };
 const leftPts = (pass) => { let n = 0; for (const r of pass) for (const p of r) if (p.x < 59.99) n++; return n; };
@@ -319,7 +356,7 @@ check('divieto: il rosso continua a riempire la sua metà', leftPts(banPasses[0]
 check('divieto: il blu, non vietato, resta ovunque', rightPts(banPasses[1]) > 100 && leftPts(banPasses[1]) > 100, true);
 
 // Colonna intera spenta = quella zona resta NUDA (tessuto a vista): nessun filo, di nessun colore.
-const bareParams = { ...imgParams, zoneBans: [[false, true], [false, true]] }; // tutti vietati in zona blu
+const bareParams = { ...imgParams, zoneBans: [[false, true], [false, true]], zoneOverlapMm: 0 }; // tutti vietati in zona blu
 const barePasses = rg.generatePasses(imgSquare, [], bareParams, [2, 2], (x) => imgSample(x));
 check('divieto: colonna spenta = zona nuda per tutti i colori', barePasses.reduce((n, p) => n + rightPts(p), 0), 0);
 check('divieto: il resto della sagoma si riempie comunque', barePasses.reduce((n, p) => n + leftPts(p), 0) > 200, true);
@@ -328,14 +365,14 @@ check('divieto: il resto della sagoma si riempie comunque', barePasses.reduce((n
 // NON deve cambiare una virgola del risultato.
 const sig = (passes) => { let n = 0, mm = 0; for (const pass of passes) for (const r of pass) { n += r.length; for (let i = 1; i < r.length; i++) mm += Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y); } return n + ':' + mm.toFixed(3); };
 const uniPlain = rg.generatePasses(imgSquare, [], { ...imgParams, clusterMode: false }, [2, 2], (x) => imgSample(x));
-const uniBanned = rg.generatePasses(imgSquare, [], { ...imgParams, clusterMode: false, zoneBans: [[false, true], [true, true]] }, [2, 2], (x) => imgSample(x));
+const uniBanned = rg.generatePasses(imgSquare, [], { ...imgParams, clusterMode: false, zoneBans: [[false, true], [true, true]], zoneOverlapMm: 0 }, [2, 2], (x) => imgSample(x));
 check('divieto: in mélange uniforme la matrice è inerte', sig(uniBanned), sig(uniPlain));
 
 // Il caso che smaschera il controllo fatto male: una STRISCIA vietata SOTTILE (4mm) in mezzo al campo.
 // Guardare solo la cella d'arrivo non basta — con punti fino a 15mm il filo la scavalcherebbe senza
 // accorgersene. Qui si campiona ogni segmento rosso: nessuno deve toccare la striscia blu.
 const stripeSample = (x) => (x >= 58 && x <= 62 ? [43, 108, 176] : [229, 36, 33]); // striscia blu di 4mm
-const stripeParams = { ...imgParams, minStitchMm: 6, maxStitchMm: 15, zoneBans: [[false, true], [false, false]] };
+const stripeParams = { ...imgParams, minStitchMm: 6, maxStitchMm: 15, zoneBans: [[false, true], [false, false]], zoneOverlapMm: 0 };
 const stripePasses = rg.generatePasses(imgSquare, [], stripeParams, [2, 2], (x) => stripeSample(x));
 let stripeCross = 0;
 for (const r of stripePasses[0]) for (let i = 1; i < r.length; i++) {

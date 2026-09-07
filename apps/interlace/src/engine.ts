@@ -48,6 +48,15 @@ export interface InterlaceParams {
    *  tutto `false` = nessun divieto (comportamento storico). Vale solo con `clusterMode` (senza zone non
    *  ci sono divieti); se TUTTI i fili sono vietati in una zona, quella resta nuda (tessuto a vista). */
   zoneBans: boolean[][];
+  /** SORMONTO ai bordi delle zone (mm): di quanto un filo sconfina oltre il bordo di una zona che gli è
+   *  vietata, posandoci UNA passata. Serve perché due colori che si fermano testa a testa lasciano una
+   *  FESSURA: a ridosso del confine nessuno dei due riesce più a cucire e la densità crolla (misurata:
+   *  71% del normale a densità 2mm, 89% a densità 1mm). Sconfinando di una fila di celle i due lati si
+   *  accavallano e la fessura sparisce, senza che i colori si mescolino davvero.
+   *  `null` = AUTOMATICO (0.6 × la densità della passata = esattamente una fila di celle): è la scelta
+   *  giusta perché il difetto scala con la densità, non è una misura fissa. Un numero = quei mm. 0 =
+   *  confine netto, come prima. */
+  zoneOverlapMm: number | null;
 }
 
 export const defaultInterlaceParams: InterlaceParams = {
@@ -64,6 +73,7 @@ export const defaultInterlaceParams: InterlaceParams = {
   clusterMode: false, // false = mélange uniforme; true = agglomerati a zone (sfumature nette)
   clusterStrength: 60, // intensità zone 0–100 (solo con clusterMode)
   zoneBans: [], // vuoto = ogni filo passa ovunque
+  zoneOverlapMm: null, // null = automatico (0.6 × densità = una fila di celle); 0 = confine netto
 };
 
 // --- Costanti interne (implementazione, non parametri utente): il "movimento" del filo.
@@ -219,6 +229,9 @@ interface FillCtx {
   segOk: (ax: number, ay: number, bx: number, by: number) => boolean;
   /** Distanza con segno dal bordo/vuoto (mm), per capire quanto è stretto il canale e la sua direzione. */
   sdf: (x: number, y: number) => number;
+  /** Geometria della maschera FINE (la stessa dell'sdf): i divieti si disegnano qui, non sulla griglia
+   *  di copertura, perché la sovrapposizione ai bordi si misura in mm e non in celle di densità. */
+  mgw: number; mgh: number; mx0: number; my0: number; mres: number;
 }
 
 /**
@@ -260,7 +273,8 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
     if (!Number.isNaN(vx)) { const id = j * gx + i; cfill[id] = 1; cpx[id] = vx; cpy[id] = vy; fillableCount++; }
   }
   if (fillableCount === 0) return null;
-  return { bb, res: mask.res, cell, gx, gy, cellX, cellY, ci, cj, cfill, fillableCount, cpx, cpy, minS, maxS, inRegion, segOk, sdf: mask.sdf };
+  return { bb, res: mask.res, cell, gx, gy, cellX, cellY, ci, cj, cfill, fillableCount, cpx, cpy, minS, maxS, inRegion, segOk, sdf: mask.sdf,
+    mgw: mask.gw, mgh: mask.gh, mx0: mask.x0, my0: mask.y0, mres: mask.res };
 }
 
 /**
@@ -272,6 +286,7 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
  */
 function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null): Point[][] {
   const { bb, cell, gx, gy, ci, cj, cpx, cpy, minS, maxS, inRegion, segOk } = ctx;
+  const { mgw, mgh, mx0, my0, mres } = ctx;
   const cov = new Float32Array(gx * gy);
   const dead = new Uint8Array(gx * gy);
   let need = 0;
@@ -306,10 +321,14 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
   // passo, la stessa risoluzione con cui si misura la copertura). Senza divieti costa zero (banArr null).
   const crossesBan = (ax: number, ay: number, bx: number, by: number): boolean => {
     if (!banArr) return false;
-    const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / (cell * 0.5)));
+    const n = Math.max(1, Math.ceil(Math.hypot(bx - ax, by - ay) / mres));
     for (let k = 0; k <= n; k++) {
       const t = k / n;
-      if (banArr[cj(ay + (by - ay) * t) * gx + ci(ax + (bx - ax) * t)]) return true;
+      let i = Math.floor((ax + (bx - ax) * t - mx0) / mres);
+      let j = Math.floor((ay + (by - ay) * t - my0) / mres);
+      if (i < 0) i = 0; else if (i > mgw - 1) i = mgw - 1;
+      if (j < 0) j = 0; else if (j > mgh - 1) j = mgh - 1;
+      if (banArr[j * mgw + i]) return true;
     }
     return false;
   };
@@ -554,6 +573,48 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
   // Raggi di cattura al quadrato (una volta sola): assente o 0 = nessun limite per quel colore, e con
   // tutti illimitati il più vicino vince sempre — cioè esattamente il comportamento storico.
   const tol2 = imgPal ? imgPal.map((_, k) => { const t = (p.colorTolerances || [])[k]; return t && t > 0 ? t * t : Infinity; }) : [];
+  // Il sormonto è per-passata perché dipende dalla cella di densità di QUEL colore. `null` = automatico:
+  // 0.6 × cella prende esattamente la prima fila di celle oltre il confine (il centro della seconda sta
+  // a 1.5 celle) — una regola che vale a qualsiasi densità, mentre un valore fisso in mm no.
+  const overlapFor = (cell: number): number => p.zoneOverlapMm == null ? 0.6 * cell : Math.max(0, p.zoneOverlapMm);
+  // Mappa delle ZONE alla risoluzione FINE, calcolata UNA volta e riusata da tutte le passate: la griglia
+  // fine dipende solo da sagoma e punto minimo, non dalla densità, quindi è la stessa per ogni colore.
+  let zoneFine: Int8Array | null = null;
+  let zoneKey = '';
+  const zoneMapOf = (ctx: FillCtx): Int8Array => {
+    const key = `${ctx.mgw}x${ctx.mgh}x${ctx.mres}`;
+    if (zoneFine && zoneKey === key) return zoneFine;
+    const z = new Int8Array(ctx.mgw * ctx.mgh);
+    for (let j = 0; j < ctx.mgh; j++) for (let i = 0; i < ctx.mgw; i++) {
+      const x = ctx.mx0 + (i + 0.5) * ctx.mres, y = ctx.my0 + (j + 0.5) * ctx.mres;
+      z[j * ctx.mgw + i] = imgPal
+        ? imageZoneAt(x, y, imgPal, tol2, imageColorAt as ImageColorAt)
+        : noiseZoneAt(x, y, densities.length, base) % nCol;
+    }
+    zoneFine = z; zoneKey = key;
+    return z;
+  };
+  /**
+   * Maschera fine di NON-TRANSITO per un colore: le celle vietate, MENO un bordo spesso `overlap` mm
+   * lungo il confine con ciò che gli è permesso. Quel bordo è la sovrapposizione: il filo ci arriva
+   * dentro e i due colori si accavallano, invece di fermarsi testa a testa lasciando la fessura.
+   */
+  const banMaskOf = (ctx: FillCtx, banRow: boolean[]): Uint8Array => {
+    const overlap = overlapFor(ctx.cell);
+    const z = zoneMapOf(ctx);
+    const n = ctx.mgw * ctx.mgh;
+    const vietato = new Uint8Array(n), permesso = new Uint8Array(n);
+    for (let c = 0; c < n; c++) {
+      const zz = z[c];
+      const bad = zz >= 0 && banRow[zz] === true;
+      vietato[c] = bad ? 1 : 0;
+      permesso[c] = bad ? 0 : 1;
+    }
+    if (overlap <= 0) return vietato;
+    const dist = chamferDT(permesso, ctx.mgw, ctx.mgh, ctx.mres); // distanza dal permesso più vicino
+    for (let c = 0; c < n; c++) if (vietato[c] && dist[c] <= overlap) vietato[c] = 0; // il bordo si apre
+    return vietato;
+  };
   const bans = p.clusterMode && Array.isArray(p.zoneBans) ? p.zoneBans : [];
   // La densità PER-COLORE è la dimensione della cella → ogni densità ha una sua griglia. La maschera si
   // ricostruisce solo quando la cella cambia (cache per valore di cella): densità uguali → una sola build.
@@ -569,7 +630,7 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
     // di celle proibite — non solo escluse dal riempimento (target 0), ma nemmeno attraversabili.
     const myColor = pIdx % nCol;
     const banRow = bans[myColor] && bans[myColor].some(Boolean) ? bans[myColor] : null;
-    const banArr = banRow ? new Uint8Array(ctx.gx * ctx.gy) : null;
+    const banArr = banRow ? banMaskOf(ctx, banRow) : null;
     if (p.clusterMode) {
       // Agglomerati: la copertura di ogni cella dipende dalla ZONA del colore — da IMMAGINE se caricata
       // (il colore va dove l'immagine ha quel colore), altrimenti dal campo di rumore per-colore/seed.
@@ -582,8 +643,18 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
         const zone = imgPal
           ? imageZoneAt(x, y, imgPal, tol2, imageColorAt as ImageColorAt)
           : noiseZoneAt(x, y, densities.length, base) % nCol;
-        // Vietato: la cella resta a target 0 (non la riempie) e finisce nella maschera (non la attraversa).
-        if (banRow && banArr && zone >= 0 && banRow[zone]) { banArr[id] = 1; continue; }
+        // Oltre il confine: se la cella cade nell'ANELLO di sovrapposizione (vietata, ma entro
+        // `zoneOverlapMm` da ciò che è permesso) il filo ci posa UNA passata — il sormonto vero, quello
+        // che chiude la fessura. Poter solo attraversare non basta: un punto deve finire dentro una cella
+        // con un obiettivo, altrimenti il filo non ci arriva mai. Più in là, niente.
+        if (banRow && zone >= 0 && banRow[zone]) {
+          if (!banArr) continue;
+          let fi = Math.floor((x - ctx.mx0) / ctx.mres), fj = Math.floor((y - ctx.my0) / ctx.mres);
+          if (fi < 0) fi = 0; else if (fi > ctx.mgw - 1) fi = ctx.mgw - 1;
+          if (fj < 0) fj = 0; else if (fj > ctx.mgh - 1) fj = ctx.mgh - 1;
+          if (!banArr[fj * ctx.mgw + fi]) targetArr[id] = 1; // anello: una passata di sormonto
+          continue;
+        }
         targetArr[id] = imgPal
           ? imageClusterTarget(zone, myColor, p.clusterStrength)
           : clusterTarget(x, y, pIdx, densities.length, p.clusterStrength, base);

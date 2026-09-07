@@ -143,6 +143,11 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
             <div class="rg-cluster"><button type="button" id="zoneBanResetBtn" class="rg-button rg-button--ghost rg-button--small">Consenti tutto</button></div>
             <small class="rg-field__help">righe = fili, colonne = zone. Spegni una casella perché quel filo NON entri in quella zona: lì non cuce e non ci passa nemmeno di transito, quindi può costare qualche stacco in più (i tratti sono contati in basso). Spegnendo un’intera colonna quella zona resta nuda, tessuto a vista.</small>
           </div>
+          <label class="rg-field rg-param-grid__wide" id="zoneOverlapField" hidden>
+            <span class="rg-field__label">Sormonto ai bordi delle zone</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="zoneOverlap" type="number" min="0" step="0.1" placeholder="auto"><span>mm</span></span>
+            <small class="rg-field__help">due colori che si fermano testa a testa lasciano una fessura: a ridosso del confine nessuno dei due riesce più a cucire. Qui ogni filo sconfina di tanto oltre il bordo vietato, posandoci una passata, e i due lati si accavallano. Vuoto = automatico (una fila di celle, cioè 0,6 × la densità: il difetto cresce con la densità, quindi un numero fisso non andrebbe bene a tutte). 0 = confine netto, come prima.</small>
+          </label>
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Variante</span>
             <div class="rg-cluster">
@@ -705,6 +710,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     ($('paletteCycles') as HTMLInputElement).value = String(params.paletteCycles);
     ($('seed') as HTMLInputElement).value = String(params.seed);
     ($('clusterStrength') as HTMLInputElement).value = String(params.clusterStrength);
+    syncOverlap();
     syncCluster(); // switch agglomerati + visibilità intensità
     buildParamUI();
     buildPaletteUI();
@@ -778,6 +784,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     ($('clusterStrengthField') as HTMLElement).hidden = !params.clusterMode; // intensità solo se attivo
     ($('clusterImageField') as HTMLElement).hidden = !params.clusterMode; // immagine solo se attivo
     ($('zoneBanField') as HTMLElement).hidden = !params.clusterMode; // senza zone non c'è nulla da vietare
+    ($('zoneOverlapField') as HTMLElement).hidden = !params.clusterMode; // il sormonto è fra zone
   };
   clusterBtns.forEach((b) => b.addEventListener('click', () => {
     const want = b.dataset.cluster === 'on';
@@ -793,6 +800,16 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     const v = parseFloat(($('clusterStrength') as HTMLInputElement).value);
     params.clusterStrength = Number.isNaN(v) ? 60 : Math.max(0, Math.min(100, v));
     if (params.clusterMode) render();
+  });
+
+  const overlapInput = $('zoneOverlap') as HTMLInputElement;
+  const syncOverlap = () => { overlapInput.value = params.zoneOverlapMm == null ? '' : String(params.zoneOverlapMm); };
+  syncOverlap();
+  overlapInput.addEventListener('change', () => {
+    const v = parseFloat(overlapInput.value);
+    params.zoneOverlapMm = overlapInput.value.trim() === '' || Number.isNaN(v) ? null : Math.max(0, v);
+    syncOverlap();
+    render();
   });
 
   $('zoneBanResetBtn').addEventListener('click', () => {
