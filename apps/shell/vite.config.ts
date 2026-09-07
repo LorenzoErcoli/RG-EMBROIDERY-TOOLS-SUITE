@@ -17,6 +17,7 @@ export default defineConfig(({ command }) => ({
       '@app/striatura': fileURLToPath(new URL('../striatura/src/tool.ts', import.meta.url)),
       '@app/broccato': fileURLToPath(new URL('../broccato/src/tool.ts', import.meta.url)),
       '@app/pittorico': fileURLToPath(new URL('../pittorico/src/tool.ts', import.meta.url)),
+      '@app/sfrangiatura': fileURLToPath(new URL('../sfrangiatura/src/tool.ts', import.meta.url)),
       '@app/zone-pattern': fileURLToPath(new URL('../zone-pattern/src/tool.ts', import.meta.url)),
       '@rg/pattern-grammar': fileURLToPath(new URL('../../packages/pattern-grammar/src/index.ts', import.meta.url)),
     },

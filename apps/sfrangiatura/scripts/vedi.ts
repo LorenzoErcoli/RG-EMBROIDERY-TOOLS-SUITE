@@ -44,7 +44,7 @@ const zona: Point[][] = [[{ x: zx - CELLA, y: zy - CELLA }, { x: zx + 2 * CELLA,
 const y0 = zy - CELLA, y1 = zy + 2 * CELLA;
 const APERTURA = Number(process.argv[4] ?? 25);
 const LUNGA = Number(process.argv[5] ?? 6);
-const esito = sfrangia(letto.blocks, zona, { minMm: 2, maxMm: LUNGA, incrocioDeg: APERTURA, seme: 1 });
+const esito = sfrangia(letto.blocks, zona, { lunghezzaMinMm: 2, lunghezzaMaxMm: LUNGA, aperturaMinDeg: APERTURA * 0.4, aperturaMaxDeg: APERTURA, seme: 1, modo: 'sposta' as const });
 
 const rx0 = zx - CELLA * 1.5, rw = CELLA * 5;
 const ry0 = zy - CELLA * 1.5, rh = CELLA * 5;
@@ -97,6 +97,6 @@ const confronto = (nome: string): void => {
 const nome = `a${APERTURA}-l${LUNGA}`;
 disegna(letto.blocks, 'prima', true);
 disegna(esito.blocchi, `dopo-${nome}`, true);
-console.log(`apertura ${APERTURA}° · frangia 2–${LUNGA} mm · ${esito.allungati} capi · ${esito.incroci} incroci (${esito.incrociPerFrangia.toFixed(2)} per frangia)`);
+console.log(`apertura ${APERTURA}° · frangia 2–${LUNGA} mm · ${esito.frange} capi · ${esito.incroci} incroci (${esito.incrociPerFrangia.toFixed(2)} per frangia)`);
 
 confronto(`confronto-${nome}`);

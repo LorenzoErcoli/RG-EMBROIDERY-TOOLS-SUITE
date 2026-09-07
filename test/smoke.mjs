@@ -647,73 +647,88 @@ check('DST vero: 27.477 capi di raso nei 42 blocchi', rvCapi(), 27477);
 const rvA = rvCapi(60), rvB = rvCapi(135);
 check('DST vero: la soglia dell’inversione non conta (60° e 135° entro l’1%)', Math.abs(rvA - rvB) / rvA < 0.01, true);
 
-// LA SFRANGIATURA. La promessa del tool e' negativa prima che positiva: **fuori dalle zone marcate
-// non cambia niente**. Questi test la controllano sul ricamo vero, dove un effetto collaterale si
-// nasconderebbe fra 188.139 punti.
-console.log('NL_core — la sfrangiatura dei capi (sfrangia)'.replace('NL_', String.fromCharCode(10)));
+// LA SFRANGIATURA. La promessa del tool e' negativa prima che positiva: **il ricamo di partenza non
+// si tocca**. La frangia e' un andata e ritorno che si AGGIUNGE - dal capo si esce fino alla punta e
+// si rientra nello stesso buco - quindi togliendo i punti aggiunti si deve riottenere il file di
+// prima, punto per punto. Su 188.139 punti un effetto collaterale non si vedrebbe a occhio.
+console.log('NL_core - la sfrangiatura: le frange che si aggiungono (sfrangia)'.replace('NL_', String.fromCharCode(10)));
 const sfBlocchi = [{ needle: 1, points_mm: sfPunti.map((p) => [p.x, p.y]) }];
-const sfPar = { minMm: 1, maxMm: 5, incrocioDeg: 25, seme: 1 };
-const sfDiversi = (a, b) => {
-  let n = 0;
-  for (let i = 0; i < a.length; i++) for (let j = 0; j < a[i].points_mm.length; j++)
-    if (a[i].points_mm[j][0] !== b[i].points_mm[j][0] || a[i].points_mm[j][1] !== b[i].points_mm[j][1]) n++;
-  return n;
+const sfPar = { lunghezzaMinMm: 1, lunghezzaMaxMm: 5, aperturaMinDeg: 10, aperturaMaxDeg: 25, seme: 1 };
+/** Punti aggiunti se l'originale e' ancora tutto li' e in ordine, -1 se qualcosa e' stato toccato. */
+const sfAggiunti = (prima, dopo) => {
+  if (prima.length !== dopo.length) return -1;
+  let extra = 0;
+  for (let i = 0; i < prima.length; i++) {
+    const a = prima[i].points_mm, b = dopo[i].points_mm;
+    let k = 0;
+    for (let j = 0; j < a.length; j++) {
+      while (k < b.length && (b[k][0] !== a[j][0] || b[k][1] !== a[j][1])) { k++; extra++; }
+      if (k >= b.length) return -1;
+      k++;
+    }
+    extra += b.length - k;
+  }
+  return extra;
 };
+const sfIdentici = (a, b) => JSON.stringify(a.map((x) => x.points_mm)) === JSON.stringify(b.map((x) => x.points_mm));
 // niente zone marcate = niente da fare: e' la garanzia che il tool non "sistema" nulla di suo
 const sfNulla = rg.sfrangia(sfBlocchi, [], sfPar);
-check('sfrangia: nessuna zona → nessun capo toccato', [sfNulla.allungati, sfDiversi(sfBlocchi, sfNulla.blocchi)], [0, 0]);
-// una zona che copre solo il bordo x=20: si allungano i capi di QUEL lato e nessun altro
+check('sfrangia: nessuna zona -> nessuna frangia, e il file com\u2019era', [sfNulla.frange, sfAggiunti(sfBlocchi, sfNulla.blocchi)], [0, 0]);
+// una zona che copre solo il bordo x=20: si sfrangiano i capi di QUEL lato e nessun altro
 const sfZona = [[{ x: 19, y: -1 }, { x: 25, y: -1 }, { x: 25, y: 13 }, { x: 19, y: 13 }]];
 const sfUno = rg.sfrangia(sfBlocchi, sfZona, sfPar);
-check('sfrangia: si allungano i 30 capi del lato marcato, e nessun altro', [sfUno.allungati, sfDiversi(sfBlocchi, sfUno.blocchi)], [30, 30]);
-check('sfrangia: il numero di punti non cambia', sfUno.blocchi[0].points_mm.length, sfBlocchi[0].points_mm.length);
-// l'attacco e lo stacco del filo restano dove sono: li' il filo entra ed esce
+check('sfrangia: 30 frange sui capi del lato marcato', sfUno.frange, 30);
+// LA garanzia: due punti aggiunti per frangia (la punta e il rientro), e nemmeno uno spostato
+check('sfrangia: due punti aggiunti per frangia, e il raso intatto', sfAggiunti(sfBlocchi, sfUno.blocchi), 60);
 // l'attacco e lo stacco del filo restano dove sono anche marcando TUTTO: li' il filo entra ed esce
 const sfTutto = rg.sfrangia(sfBlocchi, [[{ x: -1, y: -1 }, { x: 25, y: -1 }, { x: 25, y: 13 }, { x: -1, y: 13 }]], sfPar);
-check('sfrangia: l’attacco e lo stacco non si toccano', sfTutto.saltati.attaccoOStacco, 2);
-// lo spostamento sta fra il minimo e il massimo chiesti, ed e' lungo la fila (qui orizzontale)
+check('sfrangia: l\u2019attacco e lo stacco non si toccano', sfTutto.saltati.attaccoOStacco, 2);
+// la punta sta fra il minimo e il massimo chiesti, e prosegue lungo la fila entro l'apertura
 let sfMin = Infinity, sfMax = 0, sfFuoriAsse = 0;
-for (let j = 0; j < sfBlocchi[0].points_mm.length; j++) {
-  const a = sfBlocchi[0].points_mm[j], b = sfUno.blocchi[0].points_mm[j];
-  if (a[0] === b[0] && a[1] === b[1]) continue;
-  const d = Math.hypot(b[0] - a[0], b[1] - a[1]);
+for (const b of sfUno.blocchi) for (let j = 1; j < b.points_mm.length - 1; j++) {
+  const a = b.points_mm[j - 1], p = b.points_mm[j], c = b.points_mm[j + 1];
+  if (a[0] !== c[0] || a[1] !== c[1]) continue;           // la punta e' il punto fra due gemelli
+  const d = Math.hypot(p[0] - a[0], p[1] - a[1]);
   if (d < sfMin) sfMin = d; if (d > sfMax) sfMax = d;
-  if (Math.abs(Math.atan2(b[1] - a[1], b[0] - a[0]) * 180 / Math.PI) > 25.001) sfFuoriAsse++;
+  if (Math.abs(Math.atan2(p[1] - a[1], p[0] - a[0]) * 180 / Math.PI) > 25.001) sfFuoriAsse++;
 }
 check('sfrangia: la frangia sta fra il minimo e il massimo chiesti', [sfMin >= 1 - 1e-9, sfMax <= 5 + 1e-9], [true, true]);
-check('sfrangia: e prosegue lungo la fila, entro l’apertura dichiarata', sfFuoriAsse, 0);
-// L'INTRECCIO: l'effetto voluto non e' un pettine di frange parallele ma delle X. Il verso della
-// virata alterna fra capi dello STESSO lato — i soli davvero vicini sul ricamo — ed e' cio' che le
-// fa tagliare. Ad apertura 0 restano parallele e non si incrocia niente: e' il controllo negativo.
-const sfDritte = rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, incrocioDeg: 0 });
-check('sfrangia: apertura 0 → frange parallele, nessuna X', sfDritte.incroci, 0);
-check('sfrangia: apertura 25° → le frange si tagliano', sfUno.incroci > 10, true);
-// e l'intreccio cresce con l'apertura, invece di fermarsi: e' la manopola che serve a Lorenzo
-const sfStretto = rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, incrocioDeg: 10 });
-const sfLargo = rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, incrocioDeg: 45 });
-check('sfrangia: piu’ apertura, piu’ incroci (10° < 25° < 45°)', sfStretto.incroci < sfUno.incroci && sfUno.incroci < sfLargo.incroci, true);
+check('sfrangia: e prosegue lungo la fila, entro l\u2019apertura dichiarata', sfFuoriAsse, 0);
+// il sormonto alza il pavimento e non il soffitto: nessuna frangia sotto (sormonto + minimo)
+const sfSorm = rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, sormontoMm: 3 });
+check('sfrangia: il sormonto alza il pavimento', sfSorm.frangiaMediaMm - sfUno.frangiaMediaMm > 2.9, true);
 // determinismo: e' cio' che rende un ricamo correggibile e rifattibile
-check('sfrangia: stesso seme, stesso ricamo', sfDiversi(sfUno.blocchi, rg.sfrangia(sfBlocchi, sfZona, sfPar).blocchi), 0);
-check('sfrangia: seme diverso, frange diverse', sfDiversi(sfUno.blocchi, rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, seme: 2 }).blocchi) > 0, true);
-// il limite della macchina non si sfora nemmeno chiedendo l'impossibile (il record DST arriva a 12,1 mm)
-const sfEnorme = rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, minMm: 30, maxMm: 40, puntoMassimoMm: 12 });
+check('sfrangia: stesso seme, stesso ricamo', sfIdentici(sfUno.blocchi, rg.sfrangia(sfBlocchi, sfZona, sfPar).blocchi), true);
+check('sfrangia: seme diverso, frange diverse', sfIdentici(sfUno.blocchi, rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, seme: 2 }).blocchi), false);
+// il limite della macchina non si sfora nemmeno chiedendo l'impossibile (il record DST arriva a 12,1)
+const sfEnorme = rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, lunghezzaMinMm: 30, lunghezzaMaxMm: 40, puntoMassimoMm: 12 });
 let sfPiuLungo = 0;
 for (const b of sfEnorme.blocchi) for (let i = 1; i < b.points_mm.length; i++)
   sfPiuLungo = Math.max(sfPiuLungo, Math.hypot(b.points_mm[i][0] - b.points_mm[i - 1][0], b.points_mm[i][1] - b.points_mm[i - 1][1]));
 check('sfrangia: nessun punto oltre il limite della macchina', sfPiuLungo <= 12 + 1e-6, true);
-check('sfrangia: e lo dichiara invece di farlo di nascosto', sfEnorme.limitate, sfEnorme.allungati);
+check('sfrangia: e lo dichiara invece di farlo di nascosto', sfEnorme.limitate, sfEnorme.frange);
+// un ago escluso non viene toccato
+check('sfrangia: un ago escluso resta com\u2019era', rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, aghiEsclusi: [1] }).frange, 0);
+// L'INTRECCIO: l'effetto voluto non e' un pettine di frange parallele ma delle X. Il verso della
+// virata alterna fra capi dello STESSO lato - i soli davvero vicini sul ricamo - ed e' cio' che le
+// fa tagliare. Ad apertura 0 restano parallele: e' il controllo negativo.
+check('sfrangia: apertura 0 -> frange parallele, nessuna X', rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, aperturaMinDeg: 0, aperturaMaxDeg: 0 }).incroci, 0);
+check('sfrangia: con l\u2019apertura le frange si tagliano', sfUno.incroci > 5, true);
+const sfStretto = rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, aperturaMinDeg: 2, aperturaMaxDeg: 6 });
+const sfLargo = rg.sfrangia(sfBlocchi, sfZona, { ...sfPar, aperturaMinDeg: 30, aperturaMaxDeg: 50 });
+check('sfrangia: piu\u2019 apertura, piu\u2019 incroci', sfStretto.incroci < sfUno.incroci && sfUno.incroci < sfLargo.incroci, true);
 
-// sul RICAMO VERO: una striscia marcata cambia SOLO i suoi capi, e il resto del file resta identico
+// sul RICAMO VERO: una striscia marcata aggiunge le sue frange e non tocca nient'altro
 const rvZona = [[{ x: -1000, y: 98.89 }, { x: 1000, y: 98.89 }, { x: 1000, y: 106.89 }, { x: -1000, y: 106.89 }]];
 const rvSfr = rg.sfrangia(rv.blocks, rvZona, sfPar);
-check('DST vero: 416 capi allungati nella striscia', rvSfr.allungati, 416);
-check('DST vero: e i punti cambiati sono esattamente quelli', sfDiversi(rv.blocks, rvSfr.blocchi), 416);
-check('DST vero: la frangia media sta dentro il chiesto', rvSfr.frangiaMediaMm > 1 && rvSfr.frangiaMediaMm < 5, true);
+check('DST vero: 416 frange nella striscia', rvSfr.frange, 416);
+check('DST vero: 832 punti aggiunti, e il ricamo di partenza intatto', sfAggiunti(rv.blocks, rvSfr.blocchi), 832);
 check('DST vero: e le frange si intrecciano (197 X)', rvSfr.incroci, 197);
+check('DST vero: il filo aggiunto e\u2019 2,5 m', rvSfr.filoAggiuntoM.toFixed(1), '2.5');
 // senza zone il file riscritto e' identico BYTE PER BYTE: la prova piu' forte che si possa scrivere
 const rvByteA = rg.buildDst(rg.dstProgramFromBlocks(rv.blocks, { label: rv.label }));
 const rvByteB = rg.buildDst(rg.dstProgramFromBlocks(rg.sfrangia(rv.blocks, [], sfPar).blocchi, { label: rv.label }));
-check('DST vero: senza zone marcate il file e’ identico byte per byte', Array.from(rvByteA).join(',') === Array.from(rvByteB).join(','), true);
+check('DST vero: senza zone marcate il file e\u2019 identico byte per byte', Array.from(rvByteA).join(',') === Array.from(rvByteB).join(','), true);
 
 // La riapertura del .dst è dichiarata in STATO come CAPACITÀ GLOBALE, ma per mesi è stata vera
 // solo per bitmap e oblique: gli altri quattro tool scrivevano il DST senza parametri e nessuno

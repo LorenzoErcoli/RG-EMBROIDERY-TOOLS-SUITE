@@ -1,0 +1,20 @@
+{
+  "name": "sfrangiatura",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Sfrangiatura: aggiunge frange che si intrecciano a X sui capi delle file di raso di un DST gia' cucito, solo dove marchi col pennello. Il ricamo di partenza non si tocca.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@rg/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}

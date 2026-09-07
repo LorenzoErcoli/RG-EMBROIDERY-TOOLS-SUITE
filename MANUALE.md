@@ -242,6 +242,46 @@ Non serve nessun file vettoriale: il cerchio, l'arco, il segmento vengono ricono
 
 ---
 
+## Sfrangiatura (`sfrangiatura`)
+
+**A cosa serve.** A prendere un ricamo **già fatto** e aggiungerci le frange dove due macchie si
+affacciano: i capi delle file di raso escono dal bordo, si incrociano a X con quelli vicini, e la
+giunta fra una macchia e l'altra smette di essere una linea netta. È l'unico strumento della suite
+che non genera ricamo — ne rilavora uno.
+
+**La promessa, prima di tutto il resto: il ricamo di partenza non si tocca.** Ogni punto che c'era
+resta dov'era, nello stesso ordine. Le frange si *aggiungono*: dal capo il filo esce fino alla punta
+e rientra nello stesso buco. Se non marchi niente, il file che esce è identico a quello che è
+entrato, byte per byte.
+
+**Come si lavora.**
+1. **Carica un DST.** Compaiono ingombro, aghi, blocchi e punti letti dal file.
+2. **Aghi** — spegni quelli su cui non vuoi intervenire. Il colore del campione è quello
+   dell'anteprima: un DST non porta i colori del filato, li sceglie l'operatore in macchina.
+3. **Zone da sfrangiare** — scegli *Marca* e passa il pennello sull'anteprima dove vuoi le frange.
+   Con *Sposta* il trascinamento torna a muovere la vista; con *Cancella* togli le zone già fatte.
+   La larghezza del pennello è il raggio d'azione: si sfrangia **solo** dove passi.
+4. **Frangia** — lunghezza minima e massima in mm: ogni frangia pesca a caso lì dentro, ed è la
+   varietà che fa l'effetto. Il **sormonto** alza il pavimento: con 3 mm nessuna frangia si ferma
+   prima di 3 mm oltre il capo, cioè entrano tutte nel territorio della macchia vicina.
+5. **Incrocio** — l'apertura è di quanto la frangia si scosta dalla sua fila. Il verso **alterna** fra
+   una frangia e la vicina: è questo che le fa tagliare a X invece di lasciarle parallele. Ad
+   apertura 0 non si incrocia niente. La **variante** è il seme del caso: la stessa variante rifà lo
+   stesso identico ricamo, cambiarla dà un'altra estrazione.
+6. **Esporta DST** (o SVG per guardarlo). Il DST esce coi parametri e le zone dentro: riaprendolo
+   qui, riprendi da dove avevi lasciato.
+
+**Cosa leggere nella barra di stato.** Quante frange sono state fatte, quanti **incroci** si formano
+davvero (non è un'impressione: si contano), la lunghezza media e il filo aggiunto in metri.
+
+**Due cose che il tool non fa, apposta.**
+- Non tocca l'**attacco e lo stacco** del filo di ogni blocco: lì il filo entra ed esce, e spostarli
+  vorrebbe dire spostare un salto e la sua fermatura.
+- Non fa mai un punto più lungo di quello che la macchina cuce (12 mm): se la frangia lo sforerebbe,
+  si accorcia — e nella barra di stato lo trovi scritto invece che nascosto.
+
+---
+
 ## Se qualcosa non torna
 
 - **"Non vedo niente in anteprima."** Controlla di aver assegnato i **ruoli** ai colori (spesso manca l'area da riempire), e prova **Adatta**.

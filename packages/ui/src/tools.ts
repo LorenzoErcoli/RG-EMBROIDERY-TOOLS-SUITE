@@ -16,6 +16,7 @@ export const TOOLS: ToolDef[] = [
   { id: 'striatura', name: 'Punto Striato', description: 'Striature verticali a spola che formano macchie maculate su base di riempimento parallelo.', status: 'live' },
   { id: 'zone-pattern', name: 'Pattern a zone', description: 'Riempie ogni zona colorata di un disegno col suo pattern, ruotato sulle perpendicolari della zona.', status: 'live' },
   { id: 'broccato', name: 'Broccato', description: 'Da immagine a ricamo: aree di colore riempite a raso rado orizzontale, a pettine o normale, coi passaggi nascosti sotto i colori successivi.', status: 'live' },
+  { id: 'sfrangiatura', name: 'Sfrangiatura', description: 'Aggiunge frange che si intrecciano a X sui capi dei rasi di un DST già cucito, solo dove marchi col pennello. Il ricamo di partenza non si tocca.', status: 'live' },
   { id: 'pittorico', name: 'Punto Pittorico', description: 'Da immagine a ricamo pittorico: il punto attraversa il passaggio di colore, degradé col frastaglio dei bordi dove il colore sfuma, taglio secco dove stacca.', status: 'live' },
 ];
 

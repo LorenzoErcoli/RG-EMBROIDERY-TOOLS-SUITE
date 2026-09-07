@@ -9,6 +9,7 @@ import { mountOblique } from '@app/oblique';
 import { mountStriatura } from '@app/striatura';
 import { mountBroccato } from '@app/broccato';
 import { mountPittorico } from '@app/pittorico';
+import { mountSfrangiatura } from '@app/sfrangiatura';
 import { mountZonePattern } from '@app/zone-pattern';
 
 const app = document.getElementById('app')!;
@@ -23,6 +24,7 @@ function route(): void {
   else if (hash === '#/striatura') mountStriatura(app, { backHref: '#/' });
   else if (hash === '#/broccato') mountBroccato(app, { backHref: '#/' });
   else if (hash === '#/pittorico') mountPittorico(app, { backHref: '#/' });
+  else if (hash === '#/sfrangiatura') mountSfrangiatura(app, { backHref: '#/' });
   else if (hash === '#/zone-pattern') mountZonePattern(app, { backHref: '#/' });
   else renderHome(app);
 }

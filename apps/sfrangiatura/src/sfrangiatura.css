@@ -1,0 +1,14 @@
+/* Solo quel poco che il DS non copre: il cursore del pennello e la riga di un ago.
+   Niente colori inventati — i valori vengono dai token del design system. */
+
+.sfr-workspace #layer svg { max-width: 100%; max-height: 100%; }
+
+/* col pennello acceso il puntatore dice che si sta marcando, non trascinando la vista */
+.rg-workspace__canvas.sfr-marcatura { cursor: crosshair; }
+.rg-workspace__canvas.sfr-marcatura.is-dragging { cursor: crosshair; }
+
+.sfr-ago { display: flex; align-items: center; gap: var(--rg-space-2); }
+.sfr-ago__tinta {
+  width: 0.9rem; height: 0.9rem; flex: none;
+  border: 1px solid var(--rg-color-border);
+}

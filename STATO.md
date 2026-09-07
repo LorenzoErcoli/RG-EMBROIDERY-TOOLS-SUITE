@@ -424,7 +424,7 @@
 
 **Regole scritte:** `COSTITUZIONE-RICAMO.md` (31 regole R1–R31 + glossario + parametri canonici) e `ARCHITETTURA.md`. **`README.md`** alla radice è la porta d'ingresso per chi non è Lorenzo (cos'è, `avvia.bat`, i sei strumenti, i comandi, come si aggiunge un tool).
 
-**Tool `sfrangiatura` — IN COSTRUZIONE, punti 1–3 di 5 fatti.** Il decimo strumento, e il primo che non
+**Tool `sfrangiatura` — LIVE, tutti e cinque i punti fatti.** Il decimo strumento, e il primo che non
 genera ricamo: **rilavora un DST già fatto**. Lorenzo marca dove due macchie si affacciano e i capi
 delle file di raso si allungano a caso, gli uni dentro il territorio degli altri, fino a intrecciarsi
 — l'effetto delle foto di ricamo del dossier. Fuori dalle zone marcate il file non cambia di un punto.
@@ -498,8 +498,42 @@ delle file di raso si allungano a caso, gli uni dentro il territorio degli altri
   di partenza in grigio e **le sole frange nuove in rosso** — il raso a video ha già l'aria di un
   pettine e un prima/dopo affiancato nasconde la differenza. La zona di confine se la cerca da solo:
   la cella dove due aghi diversi hanno più punti tutti e due.
-- **Restano i punti 4–5**: il pannello con la marcatura a pennello sull'anteprima, l'export SVG/DST
-  riapribile, la registrazione nella suite (card, route, alias nei due file, `MANUALE.md`).
+- **La frangia è un ANDATA E RITORNO, e il raso non si tocca più affatto.** Decisione di Lorenzo,
+  ed è più pulita di com'era: dal capo il filo esce fino alla punta e **rientra nello stesso buco**
+  (… p[i−1] → CAPO → punta → CAPO → p[i+1] …). Prima spostavo il capo, cioè deformavo l'ultima
+  fila del raso; ora i punti di partenza restano tutti dove sono e la frangia si **aggiunge**. La
+  garanzia cambia forma e diventa più forte: togliendo i punti aggiunti si riottiene il file di
+  prima, punto per punto. Sul ricamo vero: **416 frange, 832 punti aggiunti (2 per frangia), 2,5 m
+  di filo**, e il resto intatto.
+- **I parametri sono intervalli**, come chiesto: lunghezza min/max, apertura min/max, più il
+  **sormonto** — quanto ogni frangia entra *di sicuro* nella macchia vicina. Il sormonto alza il
+  pavimento, non il soffitto: è una quota fissa che si somma alla lunghezza estratta.
+- **Punti 4 e 5 — il tool si apre, si prova, esporta.** `apps/sfrangiatura` con `mount`, card nella
+  home, route nella shell, alias nei **due** file, sezione in `MANUALE.md`, e il progetto aggiunto a
+  `npm run typecheck` (che non lo copriva: è la trappola scritta in `AVVIO-NUOVO-TOOL.md`, ed è
+  scattata davvero). Marcatura col **pennello a mano libera**, `rg-segmented` a tre voci
+  Sposta/Marca/Cancella — perché pennello e pan si contendono lo stesso trascinamento e un tasto
+  modificatore in reparto non se lo ricorda nessuno. Export DST e SVG; il DST esce coi **parametri e
+  le zone dentro** (R9/R27), quindi riaprendolo si riprende da dove si era lasciato.
+- **Provato nel browser vero, sul DST di Lorenzo:** 62 blocchi e 188.139 punti aperti e disegnati,
+  una passata di pennello → **200 frange, 164 incroci, 4,1 mm di media, +1,63 m di filo, in 20 ms**.
+  L'anteprima ridisegna solo le frange e le zone: il ricamo di fondo si disegna una volta sola,
+  ed è la differenza fra un tool che scatta e uno che arranca.
+- **Il pannello viene dal subagent `design-system`,** che ha deciso tre cose e ne ha lasciate tre a
+  Lorenzo. Decise: è **Testa A al grado massimo** (il DST *è* il prodotto) ma coi titoli cambiati
+  — `01 Ricamo di partenza` e `02 Aghi`, perché «Sagoma» direbbe che il file serve da perimetro e
+  «Colori e ruoli» prometterebbe ruoli che su un DST non esistono; le **zone marcate stanno in
+  testa**, non fra i parametri, perché sono l'unica cosa che l'utente fa a mano e che il tool non sa
+  rigenerare; gli **export stanno nella barra dell'anteprima**, perché sono azioni e due bottoni non
+  fanno una sezione di coda.
+- **Aperte, e sono di Lorenzo:** (a) il terzo slot di testa **«Selezione»** è un'*estensione*
+  proposta della regola DS v1.7.0, non sancita — varrebbe per ogni futuro tool con pennello o
+  maschera; (b) i due titoli fuori canone; (c) l'inversione del primario DST/SVG rispetto a
+  striatura. Più due cose segnalate dal subagent: **non esiste un componente per la coppia min/max**
+  (né a v1.6.0 né a HEAD; qui ricorre due volte, si compone con due `rg-field` e
+  `--rg-input-numeric-width: 7ch`, candidato a un `rg-range-field`), e il **pin del submodule DS
+  è discordante** — `AVVIO-NUOVO-TOOL.md` dice v1.6.0, il pin committato è v1.12.0, il disco è a
+  v1.14.1. Il pannello è progettato sul pavimento v1.6.0, quindi regge su tutti e tre.
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 
