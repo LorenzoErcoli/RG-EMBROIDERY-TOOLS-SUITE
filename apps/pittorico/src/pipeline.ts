@@ -508,11 +508,6 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
           fasciaMm: p.fasciaMm,
         })
         : null;
-      if (fasce && process.env.RG_DIAGFASCE) {
-        // eslint-disable-next-line no-console
-        console.log(`  tinta ${t}: ${fasce.fasce} fasce da ${fasce.fasciaMm.toFixed(1)} mm · deriva `
-          + `${fasce.derivaPerFascia.map((d) => d.toFixed(2)).join(' ')} · ${fasce.runs.length} corse, ${fasce.chiusure} di chiusura`);
-      }
 
       const corse = fasce && fasce.runs.length ? fasce.runs : iso && iso.runs.length ? iso.runs : daRotaia
         ? buildRailFill(region, campo, rotaia as Polyline, {
