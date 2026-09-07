@@ -480,9 +480,9 @@ delle file di raso si allungano a caso, gli uni dentro il territorio degli altri
   casuali piu' netti come nell'immagine di riferimento»*. Una virata a caso non basta: due frange
   vicine che virano dalla stessa parte restano parallele per sempre. Il segno **alterna** (una di qua,
   la successiva di la'), l'ampiezza resta casuale — cosi' ogni coppia si apre a X e gli incroci
-  cadono a altezze diverse invece di allinearsi. Parametro  (default 25°), *«apertura
-  dell'incrocio»*: nome da battezzare col processo .
-- **E l'intreccio e' un numero, non un parere:**  conta quante volte due frange si tagliano
+  cadono a altezze diverse invece di allinearsi. Parametro `incrocioDeg` (default 25°), *«apertura
+  dell'incrocio»*: nome da battezzare col processo `REVISIONE-PARAMETRI`.
+- **E l'intreccio e' un numero, non un parere:** `incroci` conta quante volte due frange si tagliano
   davvero. Sul ricamo vero, a frangia 1–5 mm: **0,00 incroci per frangia a 0°** (controllo negativo:
   parallele, non si tocca niente), 0,17 a 10°, 0,47 a 25°, 0,81 a 55°. Cresce e non si ferma, quindi
   e' una manopola vera.
