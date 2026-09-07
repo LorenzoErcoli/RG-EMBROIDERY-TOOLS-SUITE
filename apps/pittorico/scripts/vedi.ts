@@ -42,29 +42,40 @@ const plan = buildPittoricoPlan(img, {
 });
 
 const PX_PER_MM = Number(process.env.RG_PX_PER_MM ?? 8);
+// una FINESTRA sul disegno, in mm: `RG_FINESTRA=x,y,lato`. Sul disegno intero a bassa
+// risoluzione il ricamo e' un blocco pieno e la tessitura non si vede; una finestra da 60 mm a
+// 8 px/mm e' quello che Lorenzo vede a schermo.
+const finestra = process.env.RG_FINESTRA ? process.env.RG_FINESTRA.split(',').map(Number) : null;
+const FX = finestra ? finestra[0] : 0, FY = finestra ? finestra[1] : 0;
+const FW = finestra ? finestra[2] : plan.larghezzaMm, FH = finestra ? finestra[2] : plan.altezzaMm;
+const sposta = (l: { x: number; y: number }[]): { x: number; y: number }[] =>
+  finestra ? l.map((q) => ({ x: q.x - FX, y: q.y - FY })) : l;
 const dir = new URL('./out/', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
 mkdirSync(dir, { recursive: true });
 const nome = process.env.RG_NOME ?? 'vedi';
 
 // tutto insieme, ogni tinta col suo colore vero
-const tutto = new Tela(plan.larghezzaMm, plan.altezzaMm, PX_PER_MM);
+const tutto = new Tela(FW, FH, PX_PER_MM);
 // e i contorni delle macchie, in grigio, sotto
 for (const m of plan.macchie) {
-  for (const anello of [m.region.outer, ...m.region.holes]) tutto.linea([...anello, anello[0]], 200, 200, 200);
+  for (const anello of [m.region.outer, ...m.region.holes]) tutto.linea(sposta([...anello, anello[0]]), 200, 200, 200);
 }
 for (const t of plan.ordine) {
   const [r, g, b] = plan.palette[t];
-  const sola = new Tela(plan.larghezzaMm, plan.altezzaMm, PX_PER_MM);
+  const sola = new Tela(FW, FH, PX_PER_MM);
   for (const m of plan.macchie) {
-    for (const anello of [m.region.outer, ...m.region.holes]) sola.linea([...anello, anello[0]], 210, 210, 210);
+    for (const anello of [m.region.outer, ...m.region.holes]) sola.linea(sposta([...anello, anello[0]]), 210, 210, 210);
   }
   for (const m of plan.macchie.filter((x) => x.tinta === t)) {
-    for (const c of m.corse) { sola.linea(c, 20, 40, 120); tutto.linea(c, r, g, b); }
+    for (const c of m.corse) { sola.linea(sposta(c), 20, 40, 120); tutto.linea(sposta(c), r, g, b); }
   }
   sola.salva(`${dir}${nome}-tinta-${t}.png`);
 }
 // il filo di passaggio, in rosso, sopra tutto
-for (const a of plan.passaggiPerAgo) for (const v of a.vie) tutto.linea(v, 224, 36, 94);
+for (const a of plan.passaggiPerAgo) for (const v of a.vie) tutto.linea(sposta(v), 224, 36, 94);
 tutto.salva(`${dir}${nome}.png`);
 console.log(`→ ${dir}${nome}.png e ${dir}${nome}-tinta-N.png  (${tutto.w}×${tutto.h} px, ${PX_PER_MM} px/mm)`);
+for (const m of plan.macchie) {
+  if (m.metodo === 'fasce') console.log(`  tinta ${m.tinta} · ${m.region.areaMm2.toFixed(0)} mm² · ${m.rotaie} rotaie, ${m.fasce} fronti · ${m.chiusure} corse dal setaccio`);
+}
 console.log(`  macchie per metodo: ${['fasce', 'iso', 'rotaia', 'distanza'].map((m) => `${m} ${plan.macchie.filter((x) => x.metodo === m).length}`).join(' · ')}`);

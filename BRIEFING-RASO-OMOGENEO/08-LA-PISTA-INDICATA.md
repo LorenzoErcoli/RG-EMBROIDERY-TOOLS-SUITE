@@ -104,3 +104,32 @@ e i fronti costano qualche salto in piu'), 55 rasafili.
 Il punto di metodo che ha sbloccato tutto non e' stato una misura: e' stato **vedere il ricamo**
 (`scripts/vedi.ts` scrive PNG senza librerie). Le due prime versioni avevano numeri ambigui e
 un'immagine che diceva subito cosa non andava.
+
+### Secondo giro: il disegno intero, e le «macchie interne»
+
+Lorenzo, provando l'app sul disegno intero: «il riempimento e' diviso a macchie internamente».
+Vero, e io non l'avevo visto perche' avevo guardato solo il ritaglio. Sul disegno intero la
+spazzata dalla rotaia muore dopo pochi fronti (7 su una macchia da 45.000 mm²) e il resto lo
+faceva il setaccio, seme per seme: 5.689 corse su tinta 0, e ognuna si ferma dove capita. Le
+«macchie interne» erano colonie di corse del setaccio con la fase del pettine diversa.
+
+Il rimedio ha avuto due tentativi:
+
+- il bordo dello scoperto come rotaia successiva: **non puo' funzionare**, ed e' geometria. Una
+  spazzata copre un tubo di linee di campo, quindi quello che resta confina col coperto lungo una
+  linea di campo — sempre un fianco, mai un fronte. Seminarci sopra da' corse parallele al filo
+  appena posato, che il territorio vergine ferma al primo passo;
+- un **fronte sintetico**: dal punto piu' profondo del vuoto si traccia la perpendicolare al campo
+  fin dove il vuoto finisce, e da li' si spazza nei due sensi. E' il setaccio con un seme che fa un
+  pettine intero invece di una corsa. Setaccio su tinta 0: 5.689 -> 2.708 corse (con tetto a 40
+  giri), e sul ritaglio da 1.307 a 267.
+
+Disegno intero, solo riempimento: **p95/p5 1,8×, mediana 103%, celle sopra il 150% 3%**.
+
+Il prezzo e' stato il tempo: ricalcolare la mappa dello scoperto cella per cella a ogni giro ha
+portato il disegno intero da 38 a 400 secondi. Con una griglia di copertura aggiornata stampando
+le corse man mano: 74 s. Ancora sopra il minuto, ed e' il prossimo costo da abbassare.
+
+Resta un difetto di RESA che i numeri non vedono: dove due pettini si incontrano (un fronte
+sintetico, o il capo di una spazzata) la fase cambia e a volte due corse si incrociano ad angolo
+stretto. Si vede negli zoom a 24 px/mm, non nella mappa di densita'.

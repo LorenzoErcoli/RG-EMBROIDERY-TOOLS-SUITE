@@ -296,6 +296,10 @@ export interface MacchiaCucita {
   corse: Polyline[];
   /** Come è stata riempita: dalla rotaia (ordinata) o a distanza costante (forma senza fianchi). */
   metodo: 'fasce' | 'iso' | 'rotaia' | 'distanza';
+  /** A fronti: quante corse ha dovuto aggiungere il setaccio. Se sono tante, la spazzata non ha retto. */
+  chiusure?: number;
+  fasce?: number;
+  rotaie?: number;
 }
 
 export interface PittoricoPlan {
@@ -546,6 +550,7 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
       macchie.push({
         tinta: t, region, corse: frangiate,
         metodo: fasce && fasce.runs.length ? 'fasce' : iso && iso.runs.length ? 'iso' : daRotaia ? 'rotaia' : 'distanza',
+        chiusure: fasce?.chiusure, fasce: fasce?.fasce, rotaie: fasce?.rotaie,
       });
     }
   }

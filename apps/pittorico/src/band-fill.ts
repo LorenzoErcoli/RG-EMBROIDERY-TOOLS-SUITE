@@ -35,6 +35,8 @@
 import { type Point, type Polyline, type Region, pointInRegion, resampleUniform } from '@rg/core';
 import type { DirectionField } from './field';
 import { attraversa, passiLungo, disturbo, chiudiVuoti, versoDentro, Occupato } from './rail-fill';
+import { regionBounds } from './region';
+import { rasterizza } from './iso-fill';
 
 export interface BandFillOptions {
   /** Passo fra due corse (R22 `densitySpacingMm`). */
@@ -68,6 +70,8 @@ export interface BandFillResult {
   derivaPerFascia: number[];
   /** Quante corse ha dovuto aggiungere la chiusura dei vuoti: se e' tanto, la rotaia era sbagliata. */
   chiusure: number;
+  /** Quante rotaie sono servite: la prima piu' quelle nate dal bordo dello scoperto. */
+  rotaie: number;
 }
 
 const dist = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
@@ -76,6 +80,42 @@ const lunghezza = (l: Polyline): number => {
   for (let i = 1; i < l.length; i++) m += dist(l[i - 1], l[i]);
   return m;
 };
+
+/**
+ * Distanza (isotropa, di chamfer) dalle celle a zero, dentro la maschera, a spazzate. Serve a
+ * trovare il punto piu' profondo di un vuoto: la precisione della cella basta.
+ */
+function chamfer(dentro: Uint8Array, D: Float32Array, cols: number, rows: number, cella: number): void {
+  const d1 = cella, d2 = cella * Math.SQRT2;
+  for (let giro = 0; giro < 32; giro++) {
+    let cambiato = false;
+    for (let dir = 0; dir < 2; dir++) {
+      const r0 = dir === 0 ? 0 : rows - 1, r1 = dir === 0 ? rows : -1, dr = dir === 0 ? 1 : -1;
+      const c0 = dir === 0 ? 0 : cols - 1, c1 = dir === 0 ? cols : -1, dc = dir === 0 ? 1 : -1;
+      for (let r = r0; r !== r1; r += dr) {
+        for (let c = c0; c !== c1; c += dc) {
+          const i = r * cols + c;
+          if (!dentro[i]) continue;
+          let v = D[i];
+          if (c > 0 && dentro[i - 1]) v = Math.min(v, D[i - 1] + d1);
+          if (c + 1 < cols && dentro[i + 1]) v = Math.min(v, D[i + 1] + d1);
+          if (r > 0) {
+            if (dentro[i - cols]) v = Math.min(v, D[i - cols] + d1);
+            if (c > 0 && dentro[i - cols - 1]) v = Math.min(v, D[i - cols - 1] + d2);
+            if (c + 1 < cols && dentro[i - cols + 1]) v = Math.min(v, D[i - cols + 1] + d2);
+          }
+          if (r + 1 < rows) {
+            if (dentro[i + cols]) v = Math.min(v, D[i + cols] + d1);
+            if (c > 0 && dentro[i + cols - 1]) v = Math.min(v, D[i + cols - 1] + d2);
+            if (c + 1 < cols && dentro[i + cols + 1]) v = Math.min(v, D[i + cols + 1] + d2);
+          }
+          if (v < D[i]) { D[i] = v; cambiato = true; }
+        }
+      }
+    }
+    if (!cambiato) break;
+  }
+}
 
 /** Il punto a lunghezza d'arco `s` lungo la linea, o null se e' piu' corta. */
 function aDistanza(l: Polyline, s: number): Point | null {
@@ -115,7 +155,7 @@ export function buildBandFill(
   region: Region, field: DirectionField, rotaia: Polyline, opts: BandFillOptions,
 ): BandFillResult {
   const passo = opts.spacingMm;
-  const vuoto: BandFillResult = { runs: [], fasce: 0, fasciaMm: 0, derivaPerFascia: [], chiusure: 0 };
+  const vuoto: BandFillResult = { runs: [], fasce: 0, fasciaMm: 0, derivaPerFascia: [], chiusure: 0, rotaie: 0 };
   if (!(passo > 0) || rotaia.length < 2) return vuoto;
   const theta = opts.derivaMassima ?? 0.2;
   const sconfina = opts.sconfinaMm ?? passo;
@@ -127,23 +167,68 @@ export function buildBandFill(
    * Una spazzata intera con cammino di fascia Δ. Restituisce le corse e la deriva per fascia; e' il
    * chiamante che decide se Δ va bene o se va accorciato.
    */
-  const spazza = (delta: number): { runs: Polyline[]; derive: number[] } => {
+  /*
+   * IL TERRITORIO VERGINE. Una corsa avanza solo dove non c'e' ancora filo: si ferma appena si
+   * avvicina a filo gia' posato sotto mezzo passo. Fa due cose insieme. Ferma i FIUMI — due corse
+   * che convergono si toccano, e una delle due finisce li' invece di raddoppiare la densita'. E fa
+   * MORIRE il fronte: senza, le corse scivolavano lungo i bordi liberi dove il campo e' tangente e
+   * il fronte girava in tondo — misurato: 400 fronti, 360 mm di cammino in un ritaglio da 90. E'
+   * la stessa regola del setaccio che chiude i vuoti, applicata a tutte le corse.
+   *
+   * E' condiviso fra tutte le spazzate: la seconda rotaia parte dal bordo di quello che la prima
+   * ha lasciato scoperto, e deve vedere il suo filo.
+   */
+  const occupato = new Occupato([], Math.max(passo, 0.2));
+  const troppoVicino = passo * 0.45;
+
+  /*
+   * LA MAPPA DELLA COPERTURA, tenuta aggiornata mentre si cuce. Serve al ciclo dei fronti
+   * sintetici per trovare il vuoto piu' profondo. La prima versione la ricalcolava a ogni giro
+   * chiedendo cella per cella «c'e' filo qui vicino?» — 125.000 celle per giro, per decine di
+   * giri, per venti macchie: il disegno intero e' passato da 38 a 400 secondi. Qui invece ogni
+   * corsa si STAMPA sulla griglia quando nasce, e il costo e' proporzionale al filo posato.
+   */
+  const cellaMappa = passo * 2;
+  const bb = regionBounds(region);
+  const x0 = bb.minX - cellaMappa * 2, y0 = bb.minY - cellaMappa * 2;
+  const cols = Math.ceil((bb.maxX - bb.minX) / cellaMappa) + 4, rows = Math.ceil((bb.maxY - bb.minY) / cellaMappa) + 4;
+  const dentro = cols * rows <= 40e6 ? rasterizza(region, x0, y0, cols, rows, cellaMappa) : null;
+  const copertura = new Uint8Array(cols * rows);
+  const stampa = (l: Polyline): void => {
+    for (let i = 1; i < l.length; i++) {
+      const a = l[i - 1], b = l[i];
+      const n = Math.max(1, Math.ceil(dist(a, b) / (cellaMappa * 0.5)));
+      for (let k = 0; k <= n; k++) {
+        const t = k / n;
+        const c = Math.floor((a.x + (b.x - a.x) * t - x0) / cellaMappa);
+        const r = Math.floor((a.y + (b.y - a.y) * t - y0) / cellaMappa);
+        // la cella e le quattro vicine: il filo copre quasi un passo per lato
+        for (const [dc, dr] of [[0, 0], [1, 0], [-1, 0], [0, 1], [0, -1]] as Array<[number, number]>) {
+          const cc = c + dc, rr = r + dr;
+          if (cc >= 0 && rr >= 0 && cc < cols && rr < rows) copertura[rr * cols + cc] = 1;
+        }
+      }
+    }
+  };
+
+  /** Il verso di marcia da un seme: quello del campo che entra in territorio vergine. */
+  const versoVergine = (p: Point): Point | null => {
+    const d = field.dirAt(p);
+    const prova = passo * 0.6;
+    for (const v of [d, { x: -d.x, y: -d.y }]) {
+      const q = { x: p.x + v.x * prova, y: p.y + v.y * prova };
+      if (pointInRegion(q, region) && !occupato.entro(q, troppoVicino)) return v;
+    }
+    return versoDentro(field, p, region, passo * 0.35);
+  };
+
+  const spazza = (rotaiaDi: Polyline, delta: number): { runs: Polyline[]; derive: number[] } => {
     const runs: Polyline[] = [];
     const derive: number[] = [];
-    /*
-     * IL TERRITORIO VERGINE. Una corsa avanza solo dove non c'e' ancora filo: si ferma appena si
-     * avvicina a filo gia' posato sotto mezzo passo. Fa due cose insieme. Ferma i FIUMI — due corse
-     * che convergono si toccano, e una delle due finisce li' invece di raddoppiare la densita'. E
-     * fa MORIRE il fronte: senza, le corse scivolavano lungo i bordi liberi dove il campo e'
-     * tangente e il fronte girava in tondo — misurato: 400 fronti, 360 mm di cammino in un ritaglio
-     * da 90. E' la stessa regola del setaccio che chiude i vuoti, applicata a tutte le corse.
-     */
-    const occupato = new Occupato([], Math.max(passo, 0.2));
-    const troppoVicino = passo * 0.45;
     // il fronte corrente: punti in ordine, col verso di marcia di ognuno
     let fronte: Array<{ p: Point; v: Point }> = [];
-    for (const s of passiLungo(rotaia, passo)) {
-      const v = versoDentro(field, s.p, region, passo * 0.35);
+    for (const s of passiLungo(rotaiaDi, passo)) {
+      const v = versoVergine(s.p);
       if (v) fronte.push({ p: pointInRegion(s.p, region) ? s.p : { x: s.p.x + v.x * 1e-3, y: s.p.y + v.y * 1e-3 }, v });
     }
     for (let k = 0; k < 400 && fronte.length >= 2; k++) {
@@ -166,6 +251,7 @@ export function buildBandFill(
         const corsa = lung > delta + extra ? finoA(linea, delta + extra) : linea;
         runs.push(corsa);
         occupato.aggiungi(corsa);
+        stampa(corsa);
         const aDelta = aDistanza(linea, delta);
         if (aDelta) {
           // il verso con cui prosegue: quello del tratto finale della corsa a Δ
@@ -227,12 +313,81 @@ export function buildBandFill(
    * risemina, e 3 mm — dieci passi — e' un compromesso da misurare, non da adattare al buio.
    */
   const delta = opts.fasciaMm ?? 3;
-  const esito = spazza(delta);
   void theta; void fasciaMinima;
+  const primo = spazza(rotaia, delta);
+  let runs = primo.runs;
+  const derive = [...primo.derive];
+  let fasce = primo.derive.length;
 
-  // ---- quello che la spazzata non ha raggiunto -----------------------------------------------
+  /*
+   * LE ROTAIE SUCCESSIVE — dove la spazzata muore, si tira un fronte sintetico nel vuoto.
+   *
+   * Su una macchia grande con un bordo di colore corto la prima spazzata copre quello che le
+   * linee di campo raggiungono dalla rotaia: sul disegno intero, tinta 0 faceva 7 fronti su
+   * 45.000 mm² e poi 5.689 corse venivano dal setaccio — seme per seme, in tutte e due le
+   * direzioni, fermandosi dove capitava. Erano le «macchie interne» con le linee dritte che
+   * Lorenzo ha visto per primo.
+   *
+   * Il primo rimedio — usare come rotaia il bordo dello scoperto — non poteva funzionare, ed e'
+   * geometria: una spazzata copre un TUBO di linee di campo, quindi quello che resta confina col
+   * coperto lungo una linea di campo. E' sempre un fianco, mai un fronte: seminarci sopra da'
+   * corse parallele al filo appena posato, che il territorio vergine ferma al primo passo.
+   *
+   * Quindi il fronte si COSTRUISCE. Si cerca il punto piu' profondo del vuoto — quello piu'
+   * lontano da qualunque filo — e da li' si traccia la PERPENDICOLARE al campo, nei due sensi,
+   * fin dove il vuoto finisce. Quella curva e' un fronte vero, e da li' parte una spazzata a
+   * fasce come dalla rotaia. E' quello che fa il setaccio con un seme solo, ma un seme fa un
+   * pettine intero invece di una corsa. Si ripete finche' il vuoto piu' profondo non e' una
+   * briciola; per quelle resta il setaccio.
+   */
+  const trasversale: DirectionField = {
+    dirAt: (q: Point): Point => { const d = field.dirAt(q); return { x: -d.y, y: d.x }; },
+  };
+  let rotaieDopo = 0;
+  if (dentro) {
+    for (let giro = 0; giro < 400; giro++) {
+      // la profondita' del vuoto: distanza dal filo, sulle celle scoperte
+      const prof = new Float32Array(cols * rows).fill(Infinity);
+      let scoperte = 0;
+      for (let i = 0; i < prof.length; i++) {
+        if (!dentro[i]) continue;
+        if (copertura[i]) prof[i] = 0; else scoperte++;
+      }
+      if (scoperte * cellaMappa * cellaMappa < passo * passo * 40) break;
+      chamfer(dentro, prof, cols, rows, cellaMappa);
+      let iMax = -1, pMax = 0;
+      for (let i = 0; i < prof.length; i++) if (dentro[i] && prof[i] < Infinity && prof[i] > pMax) { pMax = prof[i]; iMax = i; }
+      // un vuoto meno profondo di due passi e' una briciola: tocca al setaccio
+      if (iMax < 0 || pMax < passo * 2) break;
+      const seme = { x: x0 + ((iMax % cols) + 0.5) * cellaMappa, y: y0 + (Math.floor(iMax / cols) + 0.5) * cellaMappa };
+      // la perpendicolare al campo, nei due sensi, finche' si sta nel vuoto
+      const nelVuoto = (q: Point): boolean => occupato.entro(q, passo * 0.8);
+      const t0 = trasversale.dirAt(seme);
+      const avanti = attraversa(region, trasversale, seme, t0, step, maxPassi, nelVuoto);
+      const indietro = attraversa(region, trasversale, seme, { x: -t0.x, y: -t0.y }, step, maxPassi, nelVuoto);
+      const fronte = [...indietro.slice(1).reverse(), ...avanti];
+      if (lunghezza(fronte) < passo * 3) {
+        // un vuoto stretto di traverso: lo si segna come coperto per non ritrovarlo e si va avanti
+        occupato.aggiungi([seme, { x: seme.x + 1e-3, y: seme.y }]);
+        stampa([seme, { x: seme.x + 1e-3, y: seme.y }]);
+        continue;
+      }
+      // la spazzata, nei DUE sensi: il fronte sta in mezzo al vuoto, e il vuoto e' da tutt'e due le parti
+      const prima = spazza(fronte, delta);
+      const seconda = spazza(fronte, delta);
+      runs = [...runs, ...prima.runs, ...seconda.runs];
+      derive.push(...prima.derive, ...seconda.derive);
+      fasce += prima.derive.length + seconda.derive.length;
+      rotaieDopo++;
+      if (!prima.runs.length && !seconda.runs.length) {
+        occupato.aggiungi([seme, { x: seme.x + 1e-3, y: seme.y }]);
+        stampa([seme, { x: seme.x + 1e-3, y: seme.y }]);
+      }
+    }
+  }
+
+  // ---- quello che nemmeno le rotaie successive hanno raggiunto ------------------------------
   let chiusure = 0;
-  let runs = esito.runs;
   if (opts.chiudiVuoti ?? true) {
     const nuove = chiudiVuoti(region, field, runs, passo, passo * 0.9, step, maxPassi);
     chiusure = nuove.length;
@@ -241,5 +396,5 @@ export function buildBandFill(
 
   const maxStitch = opts.maxStitchMm && opts.maxStitchMm > 0 ? opts.maxStitchMm : 0;
   const finali = runs.map((r) => (maxStitch > 0 ? resampleUniform(r, maxStitch) : r));
-  return { runs: finali, fasce: esito.derive.length, fasciaMm: delta, derivaPerFascia: esito.derive, chiusure };
+  return { runs: finali, fasce, fasciaMm: delta, derivaPerFascia: derive, chiusure, rotaie: 1 + rotaieDopo };
 }
