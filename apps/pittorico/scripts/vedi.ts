@@ -34,7 +34,7 @@ const img = { width: LATO, height: LATO, rgba };
 const plan = buildPittoricoPlan(img, {
   ...defaultPittoricoParams,
   realWidthMm: LATO * MM_PER_PX,
-  metodoRiempimento: (process.env.RG_METODO as 'fasce' | 'iso' | 'tracciato') ?? defaultPittoricoParams.metodoRiempimento,
+  metodoRiempimento: (process.env.RG_METODO as 'colonne' | 'fasce' | 'iso' | 'tracciato') ?? defaultPittoricoParams.metodoRiempimento,
   derivaMassima: Number(process.env.RG_DERIVA ?? defaultPittoricoParams.derivaMassima),
   fasciaMm: Number(process.env.RG_FASCIA_MM ?? defaultPittoricoParams.fasciaMm),
   frangiaMm: process.env.RG_FRANGIA !== undefined ? Number(process.env.RG_FRANGIA) : defaultPittoricoParams.frangiaMm,
@@ -73,9 +73,17 @@ for (const t of plan.ordine) {
 }
 // il filo di passaggio, in rosso, sopra tutto
 for (const a of plan.passaggiPerAgo) for (const v of a.vie) tutto.linea(sposta(v), 224, 36, 94);
+// a colonne: gli assi in arancio e i tagli in rosso, sopra tutto, per vedere la decomposizione
+for (const m of plan.macchie) {
+  for (const asse of m.assi ?? []) tutto.linea(sposta(asse), 240, 140, 20);
+  for (const t of m.tagli ?? []) tutto.linea(sposta([{ x: t.p.x - t.t.x * 6, y: t.p.y - t.t.y * 6 }, { x: t.p.x + t.t.x * 6, y: t.p.y + t.t.y * 6 }]), 220, 30, 30);
+}
+for (const m of plan.macchie) {
+  if (m.metodo === 'colonne') console.log(`  tinta ${m.tinta} · ${m.region.areaMm2.toFixed(0)} mm² · ${m.assi?.length} colonne · ${m.tagli?.length} tagli (${m.tagli?.filter((t) => t.origine === 'rotazione').length} per rotazione)`);
+}
 tutto.salva(`${dir}${nome}.png`);
 console.log(`→ ${dir}${nome}.png e ${dir}${nome}-tinta-N.png  (${tutto.w}×${tutto.h} px, ${PX_PER_MM} px/mm)`);
 for (const m of plan.macchie) {
   if (m.metodo === 'fasce') console.log(`  tinta ${m.tinta} · ${m.region.areaMm2.toFixed(0)} mm² · ${m.rotaie} rotaie, ${m.fasce} fronti · ${m.chiusure} corse dal setaccio`);
 }
-console.log(`  macchie per metodo: ${['fasce', 'iso', 'rotaia', 'distanza'].map((m) => `${m} ${plan.macchie.filter((x) => x.metodo === m).length}`).join(' · ')}`);
+console.log(`  macchie per metodo: ${['colonne', 'fasce', 'iso', 'rotaia', 'distanza'].map((m) => `${m} ${plan.macchie.filter((x) => x.metodo === m).length}`).join(' · ')}`);

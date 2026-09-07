@@ -26,6 +26,7 @@ import { lisciaRegione } from './region';
 import { serpentina } from './serpentina';
 import { buildIsoFill } from './iso-fill';
 import { buildBandFill } from './band-fill';
+import { buildColonne, type Taglio } from './colonne';
 import { harmonicField, type CondizioneAlBordo } from './field';
 import { buildRailFill } from './rail-fill';
 import { buildCurvedFill } from './curved-fill';
@@ -207,7 +208,15 @@ export interface PittoricoParams {
    * all'88-92% del chiesto, p5 da 2,25 a 1,17), e un buco e' peggio di un addensamento. Il perche' e'
    * scritto in testa a `iso-fill.ts`, ed e' un limite geometrico, non un difetto da sistemare.
    */
-  metodoRiempimento: 'fasce' | 'iso' | 'tracciato';
+  metodoRiempimento: 'colonne' | 'fasce' | 'iso' | 'tracciato';
+  /** Solo per `'colonne'`: quanto puo' ruotare l'asse dentro una colonna prima di un taglio, in gradi. */
+  rotazioneMassimaGradi: number;
+  /** Solo per `'colonne'`: larghezza massima di una colonna; oltre, colonne parallele. */
+  larghezzaColonnaMm: number;
+  /** Tagli aggiunti a mano, per punto (mm): si proiettano sull'asse piu' vicino. Si salvano col progetto. */
+  tagliAggiunti: Point[];
+  /** Tagli automatici tolti a mano, per punto (mm): si toglie il piu' vicino entro 5 mm. */
+  tagliRimossi: Point[];
   /**
    * Solo per `'fasce'`: la deriva massima ammessa dentro una fascia, |ln(spaziatura finale /
    * iniziale)|. E' l'unico numero che decide quante fasce servono: la spaziatura resta entro
@@ -275,7 +284,16 @@ export const defaultPittoricoParams: PittoricoParams = {
    * sovrapposizioni accese il 98% di quello che resta sopra il 150% sta entro 3 mm da un bordo:
    * e' la crescita di un colore sotto l'altro, che e' voluta, non un difetto del riempimento.
    */
-  metodoRiempimento: 'fasce',
+  /*
+   * A COLONNE, come il ricamo fatto a mano da Lorenzo: la macchia spezzata in colonne di raso —
+   * un asse, due pareti — e ogni colonna cucita da parete a parete, perpendicolare all'asse. I
+   * motori precedenti restano selezionabili.
+   */
+  metodoRiempimento: 'colonne',
+  rotazioneMassimaGradi: 70,
+  larghezzaColonnaMm: 24,
+  tagliAggiunti: [],
+  tagliRimossi: [],
   derivaMassima: 0.2,
   /*
    * 15 mm, e non per la densita' — che fra 2 e 15 mm non cambia (2% di celle sopra il 150% a
@@ -295,11 +313,15 @@ export interface MacchiaCucita {
   region: Region;
   corse: Polyline[];
   /** Come è stata riempita: dalla rotaia (ordinata) o a distanza costante (forma senza fianchi). */
-  metodo: 'fasce' | 'iso' | 'rotaia' | 'distanza';
+  metodo: 'colonne' | 'fasce' | 'iso' | 'rotaia' | 'distanza';
   /** A fronti: quante corse ha dovuto aggiungere il setaccio. Se sono tante, la spazzata non ha retto. */
   chiusure?: number;
   fasce?: number;
   rotaie?: number;
+  /** A colonne: gli assi, i tagli (dati, correggibili) e lo scheletro grezzo, per l'anteprima. */
+  assi?: Polyline[];
+  tagli?: Taglio[];
+  scheletro?: Polyline[];
 }
 
 export interface PittoricoPlan {
@@ -505,6 +527,13 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
        * L/R sta sotto soglia. Parte dalla rotaia e va verso il lato opposto; se un solo lato guarda
        * un altro colore, la fascia finisce dove finisce la macchia.
        */
+      const colonne = p.metodoRiempimento === 'colonne'
+        ? buildColonne(region, {
+          spacingMm: p.densitySpacingMm, maxStitchMm: p.maxStitchMm,
+          rotazioneMassimaGradi: p.rotazioneMassimaGradi, larghezzaColonnaMm: p.larghezzaColonnaMm,
+          tagliAggiunti: p.tagliAggiunti, tagliRimossi: p.tagliRimossi,
+        })
+        : null;
       const fasce = p.metodoRiempimento === 'fasce' && daRotaia
         ? buildBandFill(region, campo, rotaia as Polyline, {
           spacingMm: p.densitySpacingMm, maxStitchMm: p.maxStitchMm,
@@ -513,7 +542,8 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
         })
         : null;
 
-      const corse = fasce && fasce.runs.length ? fasce.runs : iso && iso.runs.length ? iso.runs : daRotaia
+      const corse = colonne && colonne.colonne.length ? colonne.colonne.flatMap((c) => c.runs)
+        : fasce && fasce.runs.length ? fasce.runs : iso && iso.runs.length ? iso.runs : daRotaia
         ? buildRailFill(region, campo, rotaia as Polyline, {
           spacingMm: p.densitySpacingMm, maxStitchMm: p.maxStitchMm,
           /*
@@ -549,8 +579,10 @@ export function buildPittoricoPlan(img: PixelImage, p: PittoricoParams): Pittori
 
       macchie.push({
         tinta: t, region, corse: frangiate,
-        metodo: fasce && fasce.runs.length ? 'fasce' : iso && iso.runs.length ? 'iso' : daRotaia ? 'rotaia' : 'distanza',
+        metodo: colonne && colonne.colonne.length ? 'colonne'
+          : fasce && fasce.runs.length ? 'fasce' : iso && iso.runs.length ? 'iso' : daRotaia ? 'rotaia' : 'distanza',
         chiusure: fasce?.chiusure, fasce: fasce?.fasce, rotaie: fasce?.rotaie,
+        assi: colonne?.colonne.map((c) => c.asse), tagli: colonne?.tagli, scheletro: colonne?.scheletro,
       });
     }
   }
