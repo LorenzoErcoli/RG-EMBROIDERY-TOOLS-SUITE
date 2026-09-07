@@ -561,6 +561,54 @@ check('DST senza metadata → null', rg.readDstMetadata(dstNo), null);
 check('DST con metadata: la cucitura (fino a END) è invariata', Array.from(dstYes.slice(0, dstNo.length)).join(','), Array.from(dstNo).join(','));
 check('DST con metadata: END ancora presente e integro', [dstYes[dstNo.length - 3], dstYes[dstNo.length - 2], dstYes[dstNo.length - 1]], [0, 0, 0xF3]);
 
+// LETTURA della cucitura (readDst): l'inverso esatto di buildDst. Il test che conta e' l'andata e
+// ritorno — leggere e riscrivere deve ridare gli STESSI BYTE — perche' e' l'unica prova che le due
+// tabelle dei bit non hanno divergenze (R28), ed e' cio' che rende sicuro modificare un ricamo altrui.
+console.log('\ncore — lettura della cucitura dal .dst (readDst)');
+const rdProg = { label: 'RGTEST', coordinate_system: 'svg', paths: [
+  { needle: 1, points_mm: [[0, 0], [10, 0], [10, 10], [0, 10]] },
+  { needle: 2, points_mm: [[20, 20], [30, 20], [30, 30]] },
+] };
+const rdBytes = rg.buildDst(rdProg);
+const rd = rg.readDst(rdBytes);
+check('readDst: due blocchi', rd.blocks.length, 2);
+check('readDst: un cambio-colore → due aghi', [rd.colorChanges, rd.blocks[1].needle], [1, 2]);
+check('readDst: i punti del primo blocco, dal principio', JSON.stringify(rd.blocks[0].points_mm), JSON.stringify(rdProg.paths[0].points_mm));
+check('readDst: i punti del secondo blocco', JSON.stringify(rd.blocks[1].points_mm), JSON.stringify(rdProg.paths[1].points_mm));
+check('readDst: il salto fra i due blocchi e’ quello vero', JSON.stringify(rd.jumps[1]), JSON.stringify({ from: [0, 10], to: [20, 20] }));
+const rdRe = rg.buildDst(rg.dstProgramFromBlocks(rd.blocks, { label: rd.label }));
+check('readDst: andata e ritorno BYTE per BYTE', Array.from(rdRe).join(','), Array.from(rdBytes).join(','));
+// il primo punto di un blocco e' quello dove il salto porta l'ago: perderlo sposta tutto di un punto
+// e non se ne accorge nessuno finche' non si riscrive il file. Trovato cosi', bloccato qui.
+check('readDst: il blocco comincia dove finisce il salto', JSON.stringify(rd.blocks[0].points_mm[0]), JSON.stringify(rd.jumps[0].to));
+// un .dst della suite si rilegge coi suoi parametri
+check('readDst: i parametri di progetto tornano col resto', rg.readDst(dstYes).metadata?.rgProject, 'bitmap');
+
+// ...e sul RICAMO VERO fatto a mano in Stilista (la fixture del dossier). Un file scritto da un altro
+// software prova cio' che una fixture nostra non puo': che la lettura non dipende dal nostro writer.
+const dstVero = new Uint8Array(readFileSync(join(root, 'BRIEFING-RASO-OMOGENEO/riferimento-a-mano.dst')));
+const rv = rg.readDst(dstVero);
+check('DST vero: 4 aghi', rv.colorChanges + 1, 4);
+check('DST vero: 188.139 punti cuciti', rv.stitchCount, 188139);
+check('DST vero: 62 blocchi', rv.blocks.length, 62);
+// 42 rasi + 20 fermature da un punto solo (~11mm): il conteggio "42 blocchi" letto la prima volta
+// scartava proprio queste, perche' perdendo il punto iniziale restavano lunghe 1 e cadevano.
+check('DST vero: 42 rasi e 20 fermature da 2 punti', [rv.blocks.filter((b) => b.points_mm.length >= 5).length, rv.blocks.filter((b) => b.points_mm.length === 2).length], [42, 20]);
+let rvMinX = Infinity, rvMaxX = -Infinity, rvMinY = Infinity, rvMaxY = -Infinity;
+for (const b of rv.blocks) for (const [px, py] of b.points_mm) {
+  if (px < rvMinX) rvMinX = px; if (px > rvMaxX) rvMaxX = px;
+  if (py < rvMinY) rvMinY = py; if (py > rvMaxY) rvMaxY = py;
+}
+check('DST vero: ingombro 419,7 × 353,3 mm', [(rvMaxX - rvMinX).toFixed(1), (rvMaxY - rvMinY).toFixed(1)], ['419.7', '353.3']);
+const rvRe = rg.readDst(rg.buildDst(rg.dstProgramFromBlocks(rv.blocks, { label: rv.label })));
+let rvUguali = rvRe.blocks.length === rv.blocks.length;
+if (rvUguali) for (let i = 0; i < rv.blocks.length && rvUguali; i++) {
+  const a = rv.blocks[i].points_mm, b = rvRe.blocks[i].points_mm;
+  if (a.length !== b.length) { rvUguali = false; break; }
+  for (let j = 0; j < a.length; j++) if (Math.abs(a[j][0] - b[j][0]) > 1e-9 || Math.abs(a[j][1] - b[j][1]) > 1e-9) { rvUguali = false; break; }
+}
+check('DST vero: riscritto e riletto, gli stessi punti al millesimo', rvUguali, true);
+
 // La riapertura del .dst è dichiarata in STATO come CAPACITÀ GLOBALE, ma per mesi è stata vera
 // solo per bitmap e oblique: gli altri quattro tool scrivevano il DST senza parametri e nessuno
 // se ne accorgeva, perché la dichiarazione stava in un documento e non in un test.

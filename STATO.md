@@ -3,7 +3,7 @@
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
 > Aggiornato: 2026-09-04 · Suite con **nove tool live**: `pittorico` è entrato nella home e gira in browser — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
-> Rete di sicurezza: `npm test` (627 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
+> Rete di sicurezza: `npm test` (641 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
 
 ---
 
@@ -424,6 +424,33 @@
 
 **Regole scritte:** `COSTITUZIONE-RICAMO.md` (31 regole R1–R31 + glossario + parametri canonici) e `ARCHITETTURA.md`. **`README.md`** alla radice è la porta d'ingresso per chi non è Lorenzo (cos'è, `avvia.bat`, i sei strumenti, i comandi, come si aggiunge un tool).
 
+**Tool `sfrangiatura` — IN COSTRUZIONE, punto 1 di 5 fatto.** Il decimo strumento, e il primo che non
+genera ricamo: **rilavora un DST già fatto**. Lorenzo marca dove due macchie si affacciano e i capi
+delle file di raso si allungano a caso, gli uni dentro il territorio degli altri, fino a intrecciarsi
+— l'effetto delle foto di ricamo del dossier. Fuori dalle zone marcate il file non cambia di un punto.
+- **Punto 1 — la cucitura si legge, e l'andata e ritorno torna al byte.** `readDst` sta in
+  `@rg/core` accanto a `buildDst` (`packages/core/src/dst.ts`), e le sue tabelle dei bit sono
+  **derivate da quelle dell'encoder**: non sono una seconda copia che può divergere (R28). Dà blocchi,
+  aghi, salti e punti in mm; `dstProgramFromBlocks` chiude il giro apri → modifica → salva.
+- **Il test ha trovato subito un difetto che a occhio non si vedeva:** il **primo punto di ogni
+  blocco** — quello dove il salto porta l'ago — non veniva letto, perché `buildDst` ci arriva con un
+  jump e non con un record-punto. Un blocco riscritto cominciava un punto più avanti; su un ricamo
+  vero non se ne sarebbe accorto nessuno fino alla macchina. L'andata e ritorno byte-per-byte lo
+  dice al primo colpo, ed è il motivo per cui è la prima asserzione scritta.
+- **Tre copie del decoder erano già in giro** (`leggidst.ts`, `vedidst.ts` e ora il core): le due
+  degli script sono state tolte, ora chiamano il core. `leggidst` stampa **le stesse identiche
+  misure di prima** (188.139 punti, 4 aghi, 513,3 m, 62 salti). `vedidst` invece ora conta **62
+  blocchi e non 42**, e la differenza è spiegata: sono **20 fermature da un punto solo** (~11 mm,
+  quelle che Stilista mette prima del taglio) che prima cadevano proprio perché perdevano il punto
+  iniziale. I rasi veri restano 42.
+- **Il file di riferimento è una fixture del test**: `BRIEFING-RASO-OMOGENEO/riferimento-a-mano.dst`
+  (che è lo stesso `BASE-BRAVENEWWORLD.dst` di Lorenzo, byte per byte). 4 aghi, 188.139 punti,
+  419,7 × 353,3 mm, punto mediano 3,00 mm. Un file scritto da **un altro software** prova quello che
+  una fixture nostra non può: che la lettura non dipende dal nostro writer.
+- **Restano i punti 2–5**: riconoscere le file di raso e i loro capi dentro un blocco, l'allungamento
+  casuale e deterministico (lunghezza **regolabile**, minimo e massimo in mm — chiesto da Lorenzo),
+  il pannello con la marcatura delle zone, export e registrazione nella suite.
+
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 
 ---
@@ -431,7 +458,7 @@
 ## 2. STATO
 
 **Sei tool in piedi, e adesso ognuno ha le sue invarianti scritte. Il settimo, `broccato`, è partito.**
-Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (627 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
+Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri → anteprima → export SVG/DST), con lo stesso guscio, la stessa ergonomia e la stessa guida in-app; verificato aprendoli tutti e sei di fila nel dev server, senza un errore in console. `npm test` (641 asserzioni), `npm run typecheck` e `npm run build` sono **verdi e tutti e tre in CI**; `README.md` è alla radice.
 
 **La copertura dei test non era un adempimento: ha trovato cinque difetti veri**, ognuno dei quali violava una regola della Costituzione già scritta e mai verificata — i passaggi di net-45 che attraversavano i vuoti (R5), il punto minimo mai applicato in striatura (R3), `insetPolygon` che rientrava del 30% in meno, il punto massimo di pattern-grammar che lasciava passare segmenti quasi doppi (R4), l'importer che esplodeva sul file vero da 2MB. Tutti corretti, tutti bloccati da un test che fallisce se tornano.
 

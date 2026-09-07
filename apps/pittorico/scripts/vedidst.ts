@@ -6,8 +6,14 @@
 // diviso le aree, quante direzioni ha usato, che spaziatura, dove ha messo le cuciture fra un
 // blocco e l'altro.
 //
-// Si decodifica il DST (l'inverso di `buildDst`, come in `leggidst.ts`), si ricostruiscono i
-// blocchi cuciti — le sequenze di punti fra un salto e l'altro — e si misurano e si disegnano.
+// Si decodifica il DST con `readDst` di `@rg/core` (l'inverso di `buildDst`, bloccato da un test di
+// andata e ritorno), si prendono i blocchi cuciti — le sequenze di punti fra un salto e l'altro — e si
+// misurano e si disegnano. La copia locale delle tabelle dei bit è stata tolta: era la terza (R28).
+//
+// I blocchi qui sono 62 e non 42 come la prima volta: la decodifica di prima perdeva il punto da cui
+// parte ogni blocco — quello dove il salto porta l'ago — e così le venti FERMATURE da un punto solo
+// (~11 mm, quelle che Stilista mette prima del taglio) restavano lunghe 1 e cadevano. I rasi veri
+// sono sempre 42.
 //
 //   npx esbuild apps/pittorico/scripts/vedidst.ts --bundle --format=esm --platform=node \
 //     --alias:@rg/core=./packages/core/src/index.ts --outfile=apps/pittorico/scripts/vedidst.mjs
@@ -15,43 +21,16 @@
 
 import { readFileSync, mkdirSync } from 'node:fs';
 import { basename } from 'node:path';
-import type { Point, Polyline } from '@rg/core';
+import { readDst, type Point, type Polyline } from '@rg/core';
 import { Tela } from './png.ts';
-
-const BIT_X: Array<[number, number, number]> = [
-  [0, 0, 1], [0, 1, -1], [0, 2, 9], [0, 3, -9],
-  [1, 0, 3], [1, 1, -3], [1, 2, 27], [1, 3, -27], [2, 2, 81], [2, 3, -81],
-];
-const BIT_Y: Array<[number, number, number]> = [
-  [0, 7, 1], [0, 6, -1], [0, 5, 9], [0, 4, -9],
-  [1, 7, 3], [1, 6, -3], [1, 5, 27], [1, 4, -27], [2, 5, 81], [2, 4, -81],
-];
 
 interface Blocco { colore: number; punti: Point[] }
 
 /** Dal DST ai blocchi: una polilinea per ogni tratto cucito senza salti, col suo ago. */
 function decodifica(bytes: Uint8Array): { blocchi: Blocco[]; salti: number; cambi: number } {
-  const blocchi: Blocco[] = [];
-  let x = 0, y = 0, colore = 0, salti = 0, cambi = 0;
-  let corrente: Point[] = [];
-  let inSalto = false;
-  const chiudi = (): void => { if (corrente.length >= 2) blocchi.push({ colore, punti: corrente }); corrente = []; };
-  for (let i = 512; i + 2 < bytes.length; i += 3) {
-    const b0 = bytes[i], b1 = bytes[i + 1], b2 = bytes[i + 2];
-    if ((b2 & 0xf3) === 0xf3) break;
-    let dx = 0, dy = 0;
-    for (const [b, bit, peso] of BIT_X) if ([b0, b1, b2][b] & (1 << bit)) dx += peso;
-    for (const [b, bit, peso] of BIT_Y) if ([b0, b1, b2][b] & (1 << bit)) dy += peso;
-    x += dx; y -= dy;                                   // il DST ha la y verso l'alto
-    const cambio = (b2 & 0xc0) === 0xc0;
-    const salto = !cambio && (b2 & 0x80) !== 0;
-    if (cambio) { chiudi(); cambi++; colore++; inSalto = false; continue; }
-    if (salto) { if (!inSalto) { chiudi(); salti++; } inSalto = true; continue; }
-    if (inSalto) { inSalto = false; corrente = []; }
-    corrente.push({ x: x / 10, y: y / 10 });
-  }
-  chiudi();
-  return { blocchi, salti, cambi };
+  const letto = readDst(bytes);                          // coordinate 'svg': y verso il basso
+  const blocchi = letto.blocks.map((b) => ({ colore: b.needle - 1, punti: b.points_mm.map(([x, y]) => ({ x, y })) }));
+  return { blocchi, salti: letto.jumps.length, cambi: letto.colorChanges };
 }
 
 const percorso = process.argv[2];

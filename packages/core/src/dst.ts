@@ -228,3 +228,128 @@ export function dstFromExportLayers(layers: ExportLayer[], opts: DstFromLayersOp
   });
   return buildDst({ label: opts.label, coordinate_system: opts.coordinateSystem || 'svg', paths, metadata: opts.metadata });
 }
+
+// ------------------------------------------------------------
+// LETTURA della cucitura (l'inverso esatto di `buildDst`).
+//
+// Serve a chi parte da un ricamo GIÀ FATTO invece che da una geometria: si apre il .dst, si ritrovano i
+// blocchi cuciti e li si rilavora. Finora la decodifica viveva copiata in due script di `apps/pittorico`
+// (`leggidst.ts`, `vedidst.ts`): due risposte alla stessa domanda, che è ciò che R28 vieta. Qui è una
+// sola, e le tabelle dei bit sono **derivate da BIT_X/BIT_Y dell'encoder** — se cambia una cambia l'altra,
+// e il test di andata-e-ritorno se ne accorge subito.
+//
+// Convenzioni di lettura, dichiarate perché il formato non le dice:
+// - un **blocco** è una sequenza di record-punto consecutivi; un salto o un cambio-colore lo chiudono;
+// - i salti consecutivi sono UN solo spostamento a vuoto (è così che li scrive `buildDst` quando il
+//   movimento supera i 12,1 mm del record) e non generano punti;
+// - l'ago è progressivo (1, 2, 3…) e avanza a ogni cambio-colore: il DST non porta l'ago reale (R31).
+// ------------------------------------------------------------
+
+const DECODE_X: Array<[number, number, number]> = Object.entries(BIT_X).map(([w, [b, bit]]) => [b, bit, Number(w)]);
+const DECODE_Y: Array<[number, number, number]> = Object.entries(BIT_Y).map(([w, [b, bit]]) => [b, bit, Number(w)]);
+
+export interface DstBlock {
+  /** Ago progressivo (1 = primo), +1 a ogni cambio-colore. Non è l'ago reale in macchina. */
+  needle: number;
+  /** Punti cuciti in millimetri assoluti, nell'ordine di cucitura. */
+  points_mm: Array<[number, number]>;
+}
+
+export interface DstReadResult {
+  /** Etichetta letta dall'header (campo `LA:`), senza spazi di riempimento. */
+  label: string;
+  /** Blocchi cuciti, in ordine di macchina. */
+  blocks: DstBlock[];
+  /** Record-punto totali (confrontabile col campo `ST:` dell'header). */
+  stitchCount: number;
+  /** Record letti prima dell'END (punti + salti + cambi): la lunghezza vera del corpo. */
+  recordCount: number;
+  /** Numero di cambi-colore incontrati (aghi = colorChanges + 1). */
+  colorChanges: number;
+  /** Spostamenti a vuoto: da dove a dove, in mm. Uno per blocco raggiunto con un salto. */
+  jumps: Array<{ from: [number, number]; to: [number, number] }>;
+  /** Parametri di progetto se il file viene dalla suite (R9/R27), altrimenti null. */
+  metadata: Record<string, unknown> | null;
+}
+
+export interface DstReadOptions {
+  /** Sistema di coordinate dei punti restituiti (default 'svg' = Y verso il basso, come `buildDst`). */
+  coordinate_system?: 'svg' | 'cartesian';
+}
+
+/**
+ * Decodifica i byte di un .dst nella cucitura che contengono: blocchi, aghi, salti, punti in mm.
+ * È l'inverso di `buildDst`: `readDst(buildDst(p))` restituisce gli stessi punti, e ricostruendo il
+ * programma si riottengono gli stessi byte (bloccato da `test/smoke.mjs`).
+ * Legge anche i file scritti da altri software (Stilista, Wilcom…): l'header non viene interpretato
+ * oltre l'etichetta, perché la verità è nei record.
+ */
+export function readDst(bytes: Uint8Array, opts: DstReadOptions = {}): DstReadResult {
+  const coord = opts.coordinate_system || 'svg';
+  if (coord !== 'svg' && coord !== 'cartesian') throw new Error('coordinate_system deve essere "svg" o "cartesian".');
+  if (bytes.length < 512) throw new Error('File .dst troppo corto: manca l\u2019header da 512 byte.');
+
+  let label = '';
+  const head = bytes.subarray(0, 512);
+  if (head[0] === 0x4c && head[1] === 0x41 && head[2] === 0x3a) { // "LA:"
+    for (let i = 3; i < 512 && head[i] !== 0x0d && head[i] !== 0x1a; i++) label += String.fromCharCode(head[i]);
+    label = label.trim();
+  }
+
+  const blocks: DstBlock[] = [];
+  const jumps: Array<{ from: [number, number]; to: [number, number] }> = [];
+  // Posizione corrente in decimi di millimetro (l'unità dei record): interi, nessun errore di accumulo.
+  let x = 0, y = 0;
+  let needle = 1, colorChanges = 0, stitchCount = 0, recordCount = 0;
+  let current: Array<[number, number]> | null = null;
+  let jumpFrom: [number, number] | null = null;
+  const mm = (rx: number, ry: number): [number, number] => [rx / 10, coord === 'svg' ? -ry / 10 : ry / 10];
+
+  for (let i = 512; i + 2 < bytes.length; i += 3) {
+    const b0 = bytes[i], b1 = bytes[i + 1], b2 = bytes[i + 2];
+    if ((b2 & 0xf3) === 0xf3) break; // record di fine (END)
+    recordCount++;
+    const trio = [b0, b1, b2];
+    let dx = 0, dy = 0;
+    for (const [b, bit, w] of DECODE_X) if (trio[b] & (1 << bit)) dx += w;
+    for (const [b, bit, w] of DECODE_Y) if (trio[b] & (1 << bit)) dy += w;
+
+    const isChange = (b2 & 0xc0) === 0xc0;
+    const isJump = !isChange && (b2 & 0x80) !== 0;
+
+    if (isChange || isJump) {
+      if (current) { blocks.push({ needle, points_mm: current }); current = null; }
+      if (jumpFrom === null) jumpFrom = mm(x, y);
+      x += dx; y += dy;
+      if (isChange) { colorChanges++; needle++; }
+      continue;
+    }
+
+    // record-punto: l'ago scende qui. Il PRIMO punto di un blocco e' la posizione da cui parte la
+    // cucitura — quella dove il salto ha portato l'ago — e va messa in testa: senza, il blocco riscritto
+    // comincia un punto piu' avanti e l'andata-e-ritorno non torna (difetto trovato dal test, non a occhio).
+    if (!current) {
+      current = [mm(x, y)];
+      if (jumpFrom) { jumps.push({ from: jumpFrom, to: mm(x, y) }); jumpFrom = null; }
+    }
+    x += dx; y += dy;
+    stitchCount++;
+    current.push(mm(x, y));
+  }
+  if (current) blocks.push({ needle, points_mm: current });
+
+  return { label, blocks, stitchCount, recordCount, colorChanges, jumps, metadata: readDstMetadata(bytes) };
+}
+
+/**
+ * Riscrive la cucitura letta in un programma pronto per `buildDst`: il giro completo apri → modifica →
+ * salva. I blocchi con meno di 2 punti cadono (`buildDst` li rifiuta, e un punto solo non è una cucitura).
+ */
+export function dstProgramFromBlocks(blocks: DstBlock[], opts: { label?: string; coordinate_system?: 'svg' | 'cartesian'; metadata?: Record<string, unknown> } = {}): DstProgram {
+  return {
+    label: opts.label,
+    coordinate_system: opts.coordinate_system || 'svg',
+    paths: blocks.filter((b) => b.points_mm.length >= 2).map((b) => ({ needle: b.needle, points_mm: b.points_mm })),
+    metadata: opts.metadata,
+  };
+}
