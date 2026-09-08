@@ -42,7 +42,8 @@ const INCL = num(8, 40);
 const NETTO_MM = num(9, 2.5);           // sotto questa larghezza di passaggio il bordo è uno stacco
 const SORM_NETTO = num(10, 0.8);        // quanto una tinta entra sotto la successiva a un bordo netto
 const SORM_SFUMATO = num(11, 4);        // ...e a un bordo sfumato
-if (!foto) { console.error('uso: node immagine.mjs <foto.bmp> [tinte] [basi] [passo] [dMin] [dMax] [incl] [nettoMm] [sormNetto] [sormSfumato]'); process.exit(1); }
+const MACCHIA_MIN_MM2 = num(12, 60);    // sotto quest'area una macchia viene assorbita dalla riduzione
+if (!foto) { console.error('uso: node immagine.mjs <foto.bmp> [tinte] [basi] [passo] [dMin] [dMax] [incl] [nettoMm] [sormNetto] [sormSfumato] [macchiaMinMm2]'); process.exit(1); }
 
 function caso(a: number, b: number): number {
   let h = (a * 0x9e3779b1) ^ (b * 0x85ebca6b);
@@ -55,7 +56,8 @@ function caso(a: number, b: number): number {
 const img = leggiBmp(foto);
 const mmPerPx = LARGHEZZA_REALE_MM / img.width;
 const t0 = Date.now();
-const rid = reduceStable(img, { colorCount: TINTE, flattenLightMm: 40, smoothMm: 1.5, minBlobMm2: 400, mmPerPx });
+// la pulizia era a 400 mm² (2 × 2 cm): i settori della sfera sono più piccoli e sparivano
+const rid = reduceStable(img, { colorCount: TINTE, flattenLightMm: 40, smoothMm: 1.5, minBlobMm2: MACCHIA_MIN_MM2, mmPerPx });
 const W = img.width, H = img.height, N = W * H;
 const lum = (c: [number, number, number]): number => (0.2126 * c[0] + 0.7152 * c[1] + 0.0722 * c[2]) / 255;
 // l'ordine delle tinte è quello della luce, dal chiaro allo scuro; l'indice viene rimappato a quel rango
@@ -213,7 +215,13 @@ for (let t = 0; t < colori.length; t++) {
     const dentro = new Uint8Array(N);
     let maxD = 0;
     for (let i = 0; i < N; i++) if (areaDi[i] === a.id) { dentro[i] = 1; if (D[i] < INF && D[i] > maxD) maxD = D[i]; }
-    const segno = versoDentro ? 1 : -1;
+    // IL VERSO, corretto da Lorenzo: «il culo della linea serpente verso l'esterno, e così sfuma
+    // comodo verso l'interno». La base sta sul bordo verso il chiaro — ed è il contorno preciso — e
+    // il pelo va DENTRO l'area, via dai semi. Vale per tutte le tinte, la più chiara compresa. La
+    // compenetrazione la fa il sormonto: il chiaro cucito prima si allarga sotto lo scuro, e le sue
+    // ultime basi coi loro denti restano sotto la base netta dello scuro.
+    void versoDentro;
+    const segno = 1;
 
     for (let v = BASI_MM / 2; v < maxD; v += BASI_MM) {
       for (const linea of incatena(livello(D, dentro, W, H, 0, 0, CELLA, v), CELLA * 2)) {
