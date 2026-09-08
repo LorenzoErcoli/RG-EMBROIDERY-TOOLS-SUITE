@@ -13,12 +13,18 @@ const distanceSq = (a: Point, b: Point): number => {
   return dx * dx + dy * dy;
 };
 
+/** L'angolo in alto a sinistra del disegno. A ciclo: lo spread crolla sui disegni grandi
+ *  (stesso difetto di `pointBounds`, e questa è la strada che si percorre senza un formato). */
 function targetPoint(polylines: Point[][]): Point {
-  const points = polylines.flat();
-  return {
-    x: Math.min(...points.map((point) => point.x)),
-    y: Math.min(...points.map((point) => point.y))
-  };
+  let x = Infinity;
+  let y = Infinity;
+  for (const polyline of polylines) {
+    for (const point of polyline) {
+      if (point.x < x) x = point.x;
+      if (point.y < y) y = point.y;
+    }
+  }
+  return { x, y };
 }
 
 /**

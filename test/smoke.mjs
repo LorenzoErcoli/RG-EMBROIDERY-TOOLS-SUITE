@@ -14,7 +14,7 @@ mkdirSync(outDir, { recursive: true });
 const posix = (p) => join(root, p).replace(/\\/g, '/');
 const entry = join(outDir, 'entry.ts');
 writeFileSync(entry, `
-export { parseImportedBoundarySource, generatePattern, parseSvgTransform } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
+export { parseImportedBoundarySource, generatePattern, generateFinalPatternPoints, parseSvgTransform } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
 export { generateFill, generatePasses, stitchBudget, defaultInterlaceParams } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
 export { generateStitch, stitchSteps, reinsertPoints, analyzeBitmap, buildSelectionMask, buildPalette, groupByPalette, defaultBitmapParams } from ${JSON.stringify(posix('apps/bitmap/src/engine.ts'))};
 export { buildRawLevels, computeGridCounts, moduleFromPolylines, parseModuleSvg, defaultObliqueParams, resolveBoundaries, buildLaserExport, filterLevelByHoles, rectBoundaryOf, boundaryFromFormat, boundaryFromPoints, contourBoundary, simplifyLoop, isInside, applyModuleClipMode, cleanupPolylines, subtractExclusions, cleanupVoids, applyVoids, generateOblique, connectLayerContinuity, connectTechnicalDiagonals, enforceMinimumStitch, reconnectCutFragmentsOnBoundary, offsetPolygonBoundary, insetAnyBoundary, removeIsolatedSpikes } from ${JSON.stringify(posix('apps/oblique/src/engine.ts'))};
@@ -190,6 +190,32 @@ check('niente geometria oltre il bordo del pannello', maxX(s200) <= 200 + 0.05, 
 check('formato più grande della geometria → esatto, senza allargare oltre', dims(rg.generatePattern({ totalWidth: 400, totalHeight: 300 })).w, 400);
 
 // La GEOMETRIA del generatore pattern (finora si provavano solo formato e conversioni).
+// I FORMATI GRANDI. Lorenzo, prima di lanciare un 80x40cm: «mi controlli se ci sono limiti di
+// punti?». Il limite c'era e non era un tetto dichiarato: era un CRASH. `pointBounds` faceva
+// `Math.min(...xs)` — un argomento per punto — e oltre qualche decina di migliaia lo stack
+// finiva. Misurato col suo pattern più fitto (CANNAGE BASE — LEGGERO): 200x200mm passava con
+// 72.184 punti, 300x300 no. Un 80x40cm era irraggiungibile.
+// È il QUARTO punto dello stesso difetto nel repo (importer sul file da 2MB, header DST su
+// 100k+ punti, boundsOfPoints di zone-pattern): questo è l'ultimo rimasto scoperto.
+console.log('\npattern-grammar — i formati grandi non fanno saltare lo stack');
+const pgLeggero = {
+  horizontalZigzagWidth: 1.98, horizontalZigzagHeight: 1.74, horizontalZigzagInterline: 0.4,
+  horizontalZigzagOffsetX: 0.8, horizontalZigzagSpacing: 4.236, verticalZigzagWidth: 0.5,
+  verticalZigzagInterline: 0.4, verticalConnectorDiagonalOffsetY: 0.6, stepX: 1.83, offsetY: 1.922,
+  minStitchMm: 2, constructionStroke: 0.05,
+};
+const pgGrande = rg.generateFinalPatternPoints({ ...pgLeggero, totalWidth: 800, totalHeight: 400 });
+check('un 80x40cm col pattern più fitto si genera', pgGrande.points.length > 400000, true);
+check('...e misura davvero 800x400mm', [Math.round(pgGrande.width), Math.round(pgGrande.height)], [800, 400]);
+// Il tetto vero è quello del formato DST: il conteggio punti è un campo a 7 cifre, e `field()`
+// lo TRONCA con slice() invece di rifiutarlo — oltre quel numero l'header direbbe una bugia.
+check('e resta ben sotto il tetto del formato DST (9.999.999 punti)',
+  pgGrande.points.length < 9999999, true);
+// Anche senza formato dichiarato (dimensione naturale) si passa da un'altra funzione con lo
+// stesso difetto — `targetPoint`, che sceglie da dove attaccare il filo.
+check('anche senza formato, a dimensione naturale, non salta',
+  rg.generateFinalPatternPoints({ ...pgLeggero, columns: 220, rows: 100 }).points.length > 100000, true);
+
 console.log('\npattern-grammar — la geometria generata: dentro il formato, punto massimo, manopole');
 const pgLines = (svg) => {
   const out = [];
