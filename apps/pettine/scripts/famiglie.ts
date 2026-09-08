@@ -37,6 +37,9 @@ const fileSvg = process.argv[2];
 const BASI_MM = num(3, 4);
 const SORM_MM = num(4, 4);
 const LISCIA_MM = num(5, 1.5);
+// quanto la linea si addolcisce allontanandosi dal muro: mm di lisciatura per mm di distanza.
+// Vicino al muro la linea lo ricopia, lontano perde gli spigoli - come in una fusione vera.
+const ADDOLCISCI = num(6, 0.6);
 const RIFERIMENTO_DEG = -90;
 if (!fileSvg) { console.error('uso: node famiglie.mjs <file.svg> [basi] [sormonto] [lisciaMm]'); process.exit(1); }
 
@@ -219,6 +222,17 @@ famiglie.forEach((f, fi) => {
 
   for (let q = 0; q < quante; q++) {
     const distanza = (q + 0.5) * BASI_MM;
+    // prima la linea intera, poi la si addolcisce in proporzione alla distanza dal muro, e SOLO DOPO
+    // si colora e si spezza: cosi' gli spigoli del muro si perdono man mano invece di propagarsi
+    const grezza: Point[] = [];
+    for (let k = 0; k <= passiU; k++) {
+      const uu = k / passiU;
+      const pa = fA(uu), pb = fB(uu);
+      const w = Math.hypot(pb.x - pa.x, pb.y - pa.y) || 1;
+      grezza.push({ x: pa.x + ((pb.x - pa.x) / w) * distanza, y: pa.y + ((pb.y - pa.y) / w) * distanza });
+    }
+    const passoU = (() => { let t = 0; for (let k = 1; k < grezza.length; k++) t += Math.hypot(grezza[k].x - grezza[k - 1].x, grezza[k].y - grezza[k - 1].y); return Math.max(0.1, t / Math.max(1, grezza.length - 1)); })();
+    const morbida = liscia(grezza, Math.min(15, ADDOLCISCI * distanza), passoU);
     // la via di mezzo, spezzata dove esce dalla famiglia, e COLORATA dalla forma che ha sotto
     let cur: Point[] = [], curCol = -2;
     const chiudi = (): void => {
@@ -229,7 +243,7 @@ famiglie.forEach((f, fi) => {
       const uu = k / passiU;
       const pa = fA(uu), pb = fB(uu);
       const w = Math.hypot(pb.x - pa.x, pb.y - pa.y) || 1;
-      const p = { x: pa.x + ((pb.x - pa.x) / w) * distanza, y: pa.y + ((pb.y - pa.y) / w) * distanza };
+      const p = morbida[k];
       // oltre il muro opposto la linea non esiste: si ferma dove finisce il posto
       const col = distanza < w - BASI_MM * 0.25 && dentroFam(p) ? tintaIn(p) : -1;
       if (col !== curCol) { const ultimo = cur[cur.length - 1]; chiudi(); if (ultimo && col >= 0) cur.push(ultimo); curCol = col; }
