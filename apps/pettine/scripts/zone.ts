@@ -52,7 +52,7 @@ interface PettineOpts {
   seme: number;
 }
 
-function pettine(spina: Polyline, o: PettineOpts): Polyline {
+function pettine(spina: Polyline, direzioni: Point[], o: PettineOpts): Polyline {
   let tot = 0;
   const cum: number[] = [0];
   for (let i = 1; i < spina.length; i++) {
@@ -67,15 +67,20 @@ function pettine(spina: Polyline, o: PettineOpts): Polyline {
     const t = (d - cum[i - 1]) / Math.max(1e-9, cum[i] - cum[i - 1]);
     const a = spina[i - 1], b = spina[i];
     const p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-    const dx = b.x - a.x, dy = b.y - a.y;
-    const l = Math.hypot(dx, dy) || 1;
+    // LA DIREZIONE DEL DENTE NON VIENE DALLA BASE. Viene dalla traversa, cioe' da dove sta il bordo
+    // netto rispetto al bordo peloso: e' il difetto che ha visto Lorenzo. Prendendo la normale alla
+    // base, dove la base curva e si torce i denti ruotano con lei e nasce l'intrico; qui invece
+    // tutti i denti di una colonna puntano dalla stessa parte, e la curvatura si vede pulita.
+    const dA = direzioni[i - 1], dB = direzioni[i];
+    let ux = dA.x + (dB.x - dA.x) * t, uy = dA.y + (dB.y - dA.y) * t;
+    const lu = Math.hypot(ux, uy) || 1;
+    ux /= lu; uy /= lu;
     const r1 = caso(o.seme, k * 2), r2 = caso(o.seme, k * 2 + 1);
     const lung = o.denteMinMm + (o.denteMaxMm - o.denteMinMm) * r1;
     const ang = ((r2 * 2 - 1) * o.inclDeg * Math.PI) / 180;
-    const nx = (-dy / l) * o.verso, ny = (dx / l) * o.verso;
-    const ux = nx * Math.cos(ang) - ny * Math.sin(ang);
-    const uy = nx * Math.sin(ang) + ny * Math.cos(ang);
-    out.push(p, { x: p.x + ux * lung, y: p.y + uy * lung }, p);
+    const cs = Math.cos(ang), sn = Math.sin(ang);
+    const vx = ux * cs - uy * sn, vy = ux * sn + uy * cs;
+    out.push(p, { x: p.x + vx * lung, y: p.y + vy * lung }, p);
   }
   return out;
 }
@@ -85,16 +90,37 @@ function pettine(spina: Polyline, o: PettineOpts): Polyline {
  * t è la sequenza dei punti a frazione t di ogni traversa. Le traverse hanno lunghezze diverse — la
  * colonna si allarga e si stringe — ed è proprio questo che fa «adeguare» le linee in mezzo.
  */
-function spineDaTraverse(traverse: Polyline[], quante: number): Polyline[] {
+function spineDaTraverse(
+  traverse: Polyline[],
+  quante: number,
+  versoDeg: number,
+): Array<{ spina: Polyline; direzioni: Point[] }> {
   const buone = traverse.filter((r) => r.length >= 2);
   if (buone.length < 2) return [];
-  const out: Polyline[] = [];
+  const vx = Math.cos((versoDeg * Math.PI) / 180), vy = Math.sin((versoDeg * Math.PI) / 180);
+  // ogni traversa da' un verso; si sceglie quello che guarda dalla parte chiesta, cosi' il pelo di
+  // tutta la macchia e' pettinato uguale e il bordo opposto resta la linea netta.
+  const dir = buone.map((r) => {
+    const a = r[0], b = r[r.length - 1];
+    let dx = b.x - a.x, dy = b.y - a.y;
+    const l = Math.hypot(dx, dy) || 1;
+    dx /= l; dy /= l;
+    return dx * vx + dy * vy >= 0 ? { x: dx, y: dy } : { x: -dx, y: -dy };
+  });
+  const out: Array<{ spina: Polyline; direzioni: Point[] }> = [];
   for (let i = 0; i < quante; i++) {
     const t = quante === 1 ? 0.5 : i / (quante - 1);
-    out.push(buone.map((r) => {
-      const a = r[0], b = r[r.length - 1];
-      return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
-    }));
+    out.push({
+      spina: buone.map((r, k) => {
+        const a = r[0], b = r[r.length - 1];
+        // il verso della traversa decide anche da quale capo si misura la frazione: cosi' t=0 e'
+        // sempre il lato del bordo netto e t=1 sempre il lato peloso, in tutta la macchia.
+        const dritto = (b.x - a.x) * dir[k].x + (b.y - a.y) * dir[k].y >= 0;
+        const p0 = dritto ? a : b, p1 = dritto ? b : a;
+        return { x: p0.x + (p1.x - p0.x) * t, y: p0.y + (p1.y - p0.y) * t };
+      }),
+      direzioni: dir,
+    });
   }
   return out;
 }
@@ -169,6 +195,7 @@ const PASSO_MM = Math.max(1, num(4, 1.4));   // MAI sotto 1 mm: limite dato da L
 const DENTE_MIN = num(5, 3), DENTE_MAX = num(6, 9);
 const BASE_MM = num(7, 2.2);                 // distanza fra una linea di base e la vicina
 const INCL = num(8, 50);
+const VERSO_DEG = num(9, -90);   // dove punta il pelo: -90 = verso l'alto del disegno
 const SPINE_PER_MM = 1 / BASE_MM;
 
 const pezzi: string[] = [];
@@ -199,8 +226,8 @@ for (const colore of gruppi) {
     colonneTot += col.colonne.length;
     for (const c of col.colonne) {
       const quante = Math.max(1, Math.round(c.larghezzaMm * SPINE_PER_MM));
-      spineDaTraverse(c.runs, quante).forEach((spina, i) => {
-        const p = pettine(spina, {
+      spineDaTraverse(c.runs, quante, VERSO_DEG).forEach(({ spina, direzioni }, i) => {
+        const p = pettine(spina, direzioni, {
           passoMm: PASSO_MM, denteMinMm: DENTE_MIN, denteMaxMm: DENTE_MAX,
           inclDeg: INCL, verso: -1, seme: 1000 + c.id * 13 + i,
         });
