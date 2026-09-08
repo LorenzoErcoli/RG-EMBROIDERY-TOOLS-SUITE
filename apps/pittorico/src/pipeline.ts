@@ -289,7 +289,11 @@ export const defaultPittoricoParams: PittoricoParams = {
    * un asse, due pareti — e ogni colonna cucita da parete a parete, perpendicolare all'asse. I
    * motori precedenti restano selezionabili.
    */
-  metodoRiempimento: 'colonne',
+  // Tornato a `fasce` quando il progetto e' stato accantonato (2026-09-08): `colonne` ha la
+  // struttura del riferimento a mano ma le giunzioni lasciano buchi (p5 a zero sul disegno
+  // intero), `fasce` ha le macchie interne ma copre tutto. Per chi apre il tool oggi, il male
+  // minore e' quello senza buchi. Vedi `BRIEFING-RASO-OMOGENEO/00-LEGGIMI.md`.
+  metodoRiempimento: 'fasce',
   rotazioneMassimaGradi: 70,
   larghezzaColonnaMm: 24,
   tagliAggiunti: [],

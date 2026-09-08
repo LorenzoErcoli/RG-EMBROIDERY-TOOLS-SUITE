@@ -1,5 +1,27 @@
 # Raso curvo omogeneo — dossier di partenza
 
+> **ACCANTONATO il 2026-09-08**, per decisione di Lorenzo: «non ci siamo. Mettiamo da parte questo
+> progetto per ora, lo accantoniamo e lo lasciamo stare, per riprendere poi da un'altra parte una
+> nuova cosa». Il tool resta nella suite e funziona (carica, genera, esporta), ma il riempimento
+> non e' al livello del riferimento fatto a mano. Chi riprende parte da qui:
+>
+> - **dove siamo**: la coda di `08-LA-PISTA-INDICATA.md` — tre motori costruiti e misurati (fronti,
+>   curve di livello, colonne), il riferimento a mano letto (`riferimento-a-mano.dst`), e il
+>   verdetto: i NUMERI di densita' sono gia' quelli del riferimento (1,8× contro 2,1×), quello che
+>   manca e' la STRUTTURA — pochi blocchi grandi, ognuno un raso da parete a parete;
+> - **l'ultimo motore, `colonne.ts`**, ha la struttura giusta (scheletro, tagli come dati, colonne
+>   parallele ogni 24 mm, 12 s sul disegno intero) ma le giunzioni sono sporche: vuoti fra strisce
+>   vicine, ventagli dove un asse finisce, mediana al 116%. E' un lavoro delimitato, non fatto;
+> - **il default e' tornato a `fasce`**: ha le «macchie interne» ma non ha buchi, e per chi apre il
+>   tool oggi e' il male minore. `colonne` si sceglie con `metodoRiempimento`;
+> - **non fatto**: l'interfaccia per correggere i tagli (i dati ci sono, la vista no), i sormonti
+>   sulle colonne, la frangia sul nuovo riempimento.
+>
+> Tutto e' committato su `master` fino a `0450fda` piu' questo commit. Le misure si rifanno con
+> gli script di `06-COME-MISURARE.md`; `scripts/vedi.ts` disegna il ricamo in PNG ed e' lo
+> strumento che ha guidato ogni scelta degli ultimi due giorni: guardare prima di misurare.
+
+
 Questa cartella serve a **far entrare qualcuno nel problema senza fargli rifare la strada**, e senza
 legargli le mani.
 
