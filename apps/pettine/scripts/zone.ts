@@ -28,6 +28,7 @@ import { type Point, type Polyline, pointInPolygon, polygonArea } from '@rg/core
 import { parseSvgPolylines } from '../../../packages/pattern-grammar/src/index.ts';
 import { makeRegion } from '../../pittorico/src/region.ts';
 import { buildColonne } from '../../pittorico/src/colonne.ts';
+import { rasterizza } from '../../pittorico/src/iso-fill.ts';
 
 const LARGHEZZA_REALE_MM = 419.45;   // dichiarata da Lorenzo per questo disegno (Punto Pittorico)
 
@@ -198,6 +199,33 @@ const INCL = num(8, 50);
 const VERSO_DEG = num(9, -90);   // dove punta il pelo: -90 = verso l'alto del disegno
 const SPINE_PER_MM = 1 / BASE_MM;
 
+/**
+ * LA MAPPA DELLA LUCE. Serve a rispondere a una domanda sola: da che parte, uscendo dal bordo, si va
+ * verso il chiaro? Il pelo va di la' — decisione di Lorenzo — e il bordo opposto resta la linea netta.
+ *
+ * Si rasterizza ogni area una volta sola su una griglia da 1 mm e ci si scrive la luminosita' del suo
+ * colore. Il fondo (il tessuto, dove non c'e' ricamo) e' il piu' chiaro di tutti: e' giusto cosi',
+ * il pelo verso il vuoto e' quello che sfrangia il contorno.
+ */
+const CELLA_MM = 1;
+const COLS = Math.ceil(modello.widthMm / CELLA_MM) + 2;
+const ROWS = Math.ceil(modello.heightMm / CELLA_MM) + 2;
+const luce = new Float32Array(COLS * ROWS).fill(1);      // 1 = tessuto nudo, il piu' chiaro
+
+const luminosita = (hex: string): number => {
+  const m = /^#?([0-9a-f]{6})$/i.exec(hex.trim());
+  if (!m) return 1;
+  const n = parseInt(m[1], 16);
+  const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+  return (0.2126 * r + 0.7152 * g + 0.0722 * b) / 255;
+};
+
+const luceIn = (p: Point): number => {
+  const c = Math.round(p.x / CELLA_MM), r = Math.round(p.y / CELLA_MM);
+  if (c < 0 || r < 0 || c >= COLS || r >= ROWS) return 1;
+  return luce[r * COLS + c];
+};
+
 const pezzi: string[] = [];
 // un solo path per colore, con un decimale: 80.000 denti in path separati fanno un file da megabyte
 // che nessun programma apre volentieri, e la geometria e' identica.
@@ -209,7 +237,21 @@ const scuriscono = (c: string): string => c;
 let denti = 0, filoMm = 0, colonneTot = 0;
 const t0 = Date.now();
 
-const gruppi = soloGruppo ? [soloGruppo] : [...perColore.keys()];
+// si riempie la mappa della luce con TUTTE le aree, anche quelle che non si stanno disegnando:
+// il verso del pelo dipende da cosa c'e' di la' dal bordo, non da cosa si sta cucendo adesso.
+for (const [colore, lista] of perColore) {
+  const L = luminosita(colore);
+  for (const r of regioniDi(lista)) {
+    const dentro = rasterizza(makeRegion(r.outer, r.holes), 0, 0, COLS, ROWS, CELLA_MM);
+    for (let i = 0; i < dentro.length; i++) if (dentro[i]) luce[i] = L;
+  }
+}
+
+// L'ORDINE DI CUCITURA, deciso da Lorenzo: si parte dall'area piu' chiara e si va verso la piu'
+// scura, cosi' il pettine dello scuro finisce SOPRA il chiaro. Nel disegno l'ordine e' lo stesso:
+// chi viene dopo copre chi viene prima.
+const ordinati = [...perColore.keys()].sort((a, b) => luminosita(b) - luminosita(a));
+const gruppi = soloGruppo ? [soloGruppo] : ordinati;
 for (const colore of gruppi) {
   const lista = perColore.get(colore);
   if (!lista) continue;
@@ -226,7 +268,27 @@ for (const colore of gruppi) {
     colonneTot += col.colonne.length;
     for (const c of col.colonne) {
       const quante = Math.max(1, Math.round(c.larghezzaMm * SPINE_PER_MM));
-      spineDaTraverse(c.runs, quante, VERSO_DEG).forEach(({ spina, direzioni }, i) => {
+      // IL VERSO DEL PELO, per colonna e a maggioranza delle sue traverse: si guarda 3 mm oltre i due
+      // capi e si va verso il piu' chiaro. A maggioranza e non traversa per traversa, perche' il pelo
+      // di una colonna dev'essere pettinato uguale: due traverse che decidono diverso fanno una riga
+      // storta in mezzo al ricamo.
+      let voti = { x: 0, y: 0 };
+      for (const run of c.runs) {
+        if (run.length < 2) continue;
+        const a = run[0], b = run[run.length - 1];
+        let dx = b.x - a.x, dy = b.y - a.y;
+        const l = Math.hypot(dx, dy) || 1;
+        dx /= l; dy /= l;
+        const sondaB = luceIn({ x: b.x + dx * 3, y: b.y + dy * 3 });
+        const sondaA = luceIn({ x: a.x - dx * 3, y: a.y - dy * 3 });
+        const peso = Math.abs(sondaB - sondaA);
+        if (sondaB >= sondaA) { voti.x += dx * peso; voti.y += dy * peso; }
+        else { voti.x -= dx * peso; voti.y -= dy * peso; }
+      }
+      const versoColonna = Math.hypot(voti.x, voti.y) > 1e-6
+        ? (Math.atan2(voti.y, voti.x) * 180) / Math.PI
+        : VERSO_DEG;                                   // nessuna differenza di luce: si tiene il verso dichiarato
+      spineDaTraverse(c.runs, quante, versoColonna).forEach(({ spina, direzioni }, i) => {
         const p = pettine(spina, direzioni, {
           passoMm: PASSO_MM, denteMinMm: DENTE_MIN, denteMaxMm: DENTE_MAX,
           inclDeg: INCL, verso: -1, seme: 1000 + c.id * 13 + i,
@@ -242,7 +304,7 @@ for (const colore of gruppi) {
 }
 
 const W = modello.widthMm, H = modello.heightMm;
-for (const [c, d] of perColore2) pezzi.push(`<path d="${d.join('')}" fill="none" stroke="${scuriscono(c)}" stroke-width="0.1"/>`);
+for (const c of ordinati) { const d = perColore2.get(c); if (!d) continue; pezzi.push(`<path d="${d.join('')}" fill="none" stroke="${scuriscono(c)}" stroke-width="0.1"/>`); }
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${W.toFixed(1)} ${H.toFixed(1)}" width="${W.toFixed(1)}mm" height="${H.toFixed(1)}mm">
 <rect width="${W.toFixed(1)}" height="${H.toFixed(1)}" fill="#f7f6f3"/>
 ${pezzi.join('\n')}
