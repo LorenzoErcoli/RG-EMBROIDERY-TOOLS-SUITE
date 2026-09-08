@@ -8,6 +8,14 @@
       "port": 5301,
       "autoPort": false,
       "url": "http://127.0.0.1:5301"
+    },
+    {
+      "name": "oblique-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": ["run", "dev", "--workspace", "apps/oblique"],
+      "port": 5277,
+      "autoPort": false,
+      "url": "http://127.0.0.1:5277"
     }
   ]
 }
