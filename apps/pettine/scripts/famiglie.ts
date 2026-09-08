@@ -105,15 +105,21 @@ const tintaIn = (p: Point): number => { const i = cella(p); return i < 0 ? -1 : 
 
 // --- 3. geometria ---------------------------------------------------------------------------------------
 function ricampiona(l: Point[], passo: number): Point[] {
+  // Riscritta: la versione precedente, quando i punti in ingresso erano piu' vicini del passo,
+  // sbagliava il segno del resto e a ogni linea i punti crescevano del 50% - 3 milioni alla linea 39.
   const out: Point[] = [l[0]];
-  let resto = 0;
+  let acc = 0;                                  // strada fatta dall'ultimo punto emesso
   for (let i = 1; i < l.length; i++) {
     const a = l[i - 1], b = l[i];
     const d = Math.hypot(b.x - a.x, b.y - a.y);
     if (d < 1e-9) continue;
-    let s = passo - resto;
-    while (s <= d) { out.push({ x: a.x + ((b.x - a.x) * s) / d, y: a.y + ((b.y - a.y) * s) / d }); s += passo; }
-    resto = d - (s - passo);
+    let pos = 0;
+    while (acc + (d - pos) >= passo) {
+      pos += passo - acc;
+      out.push({ x: a.x + ((b.x - a.x) * pos) / d, y: a.y + ((b.y - a.y) * pos) / d });
+      acc = 0;
+    }
+    acc += d - pos;
   }
   return out;
 }
@@ -149,6 +155,7 @@ const via = (pt: Point[]): string => pt.map((p, i) => `${i ? 'L' : 'M'}${p.x.toF
 const perColore: string[][] = colori.map(() => []);
 const sotto: string[][] = colori.map(() => []);      // la sovrapposizione, per colore chiaro
 const muriA: string[] = [], muriB: string[] = [], frecce: string[] = [];
+const lineeFinali: Point[][] = [];   // per il metro: nudo e denso
 let famOk = 0, famSaltate = 0;
 
 famiglie.forEach((f, fi) => {
@@ -210,101 +217,155 @@ famiglie.forEach((f, fi) => {
   muriA.push(via(As)); muriB.push(via(Bs));
   famOk++;
 
-  // LA DISTANZA FRA LE LINEE E' FISSA, il numero no (Lorenzo: «se non ci sta, la linea si interrompe
-  // e arriva al bordo come arriva»). La fusione pura conservava il numero di linee lungo tutta la
-  // famiglia: dove si stringe le schiacciava, dove si allarga le apriva, e ai capi le ammucchiava.
-  // Qui la linea k sta a (k + 1/2) passi dal muro A, misurati lungo la direzione della fusione, e
-  // vive solo finche' sta dentro la famiglia: dove c'e' posto nasce, dove non ce n'e' finisce.
+  // OGNI LINEA NASCE DALLA PRECEDENTE, spostata di un passo lungo la sua NORMALE: cosi' la
+  // spaziatura e' perpendicolare per costruzione, e la lisciatura di ogni passo si accumula
+  // (l'addolcimento progressivo). E la regola di Lorenzo ha due facce: dove non c'e' posto la linea
+  // finisce, dove c'e' posto ne nasce una. Gli offset nascono solo dal muro da cui partono, quindi si
+  // propaga DUE volte - prima dal rosso verso il blu, poi dal blu verso il rosso - e la seconda
+  // passata vive solo nelle celle che la prima ha lasciato scoperte, e si ferma dove la incontra.
+  const Gc = 0.5;
+  const GWc = Math.ceil(WM / Gc) + 1, GHc = Math.ceil(HM / Gc) + 1;
+  const copertoFam = new Uint8Array(GWc * GHc);     // celle entro 3/4 di passo da una linea gia' tracciata
+  const rCop = Math.ceil((BASI_MM * 0.75) / Gc);
+  const segna = (linea: Point[]): void => {
+    for (const p of linea) {
+      const cx = Math.round(p.x / Gc), cy = Math.round(p.y / Gc);
+      for (let dy = -rCop; dy <= rCop; dy++) for (let dx = -rCop; dx <= rCop; dx++) {
+        if (dx * dx + dy * dy > rCop * rCop) continue;
+        const x = cx + dx, y = cy + dy;
+        if (x >= 0 && y >= 0 && x < GWc && y < GHc) copertoFam[y * GWc + x] = 1;
+      }
+    }
+  };
+  const scoperta = (p: Point): boolean => {
+    const x = Math.round(p.x / Gc), y = Math.round(p.y / Gc);
+    return x >= 0 && y >= 0 && x < GWc && y < GHc && !copertoFam[y * GWc + x];
+  };
+  const piuVicino = (l: Point[], pt: Point): Point => {
+    let best = 1e9, q = l[0];
+    for (let k = 0; k < l.length; k += 2) { const d = Math.hypot(l[k].x - pt.x, l[k].y - pt.y); if (d < best) { best = d; q = l[k]; } }
+    return q;
+  };
+  const vicinoAllaFam = (pt: Point): boolean => {
+    if (dentroFam(pt)) return true;
+    const r = BASI_MM / 2;
+    for (let a = 0; a < 8; a++) { const t = (a / 8) * Math.PI * 2; if (dentroFam({ x: pt.x + Math.cos(t) * r, y: pt.y + Math.sin(t) * r })) return true; }
+    return false;
+  };
+  /** Le normali di una linea, col segno deciso per continuita' da un seme: il punto centrale guarda `verso`. */
+  const normaliVerso = (linea: Point[], verso: Point[]): Point[] => {
+    const nrm: Point[] = linea.map((_, k) => {
+      const a = linea[Math.max(0, k - 1)], c = linea[Math.min(linea.length - 1, k + 1)];
+      const nx = c.y - a.y, ny = -(c.x - a.x);
+      const l = Math.hypot(nx, ny) || 1;
+      return { x: nx / l, y: ny / l };
+    });
+    const mid = linea.length >> 1;
+    const q = piuVicino(verso, linea[mid]);
+    const vx = q.x - linea[mid].x, vy = q.y - linea[mid].y;
+    if (nrm[mid].x * vx + nrm[mid].y * vy < 0) nrm[mid] = { x: -nrm[mid].x, y: -nrm[mid].y };
+    for (let k = mid + 1; k < nrm.length; k++) if (nrm[k].x * nrm[k - 1].x + nrm[k].y * nrm[k - 1].y < 0) nrm[k] = { x: -nrm[k].x, y: -nrm[k].y };
+    for (let k = mid - 1; k >= 0; k--) if (nrm[k].x * nrm[k + 1].x + nrm[k].y * nrm[k + 1].y < 0) nrm[k] = { x: -nrm[k].x, y: -nrm[k].y };
+    return nrm;
+  };
   let largMax = 0;
   for (let k = 0; k <= 48; k++) { const pa = fA(k / 48), pb = fB(k / 48); largMax = Math.max(largMax, Math.hypot(pb.x - pa.x, pb.y - pa.y)); }
-  const quante = Math.max(1, Math.ceil(largMax / BASI_MM));
-  const passiU = Math.max(16, Math.round((As.length + Bs.length) / 2));
+  const quante = Math.max(1, Math.ceil(largMax / BASI_MM) + 1);
 
-  for (let q = 0; q < quante; q++) {
-    const distanza = (q + 0.5) * BASI_MM;
-    // prima la linea intera, poi la si addolcisce in proporzione alla distanza dal muro, e SOLO DOPO
-    // si colora e si spezza: cosi' gli spigoli del muro si perdono man mano invece di propagarsi
-    const grezza: Point[] = [];
-    for (let k = 0; k <= passiU; k++) {
-      const uu = k / passiU;
-      const pa = fA(uu), pb = fB(uu);
-      const w = Math.hypot(pb.x - pa.x, pb.y - pa.y) || 1;
-      grezza.push({ x: pa.x + ((pb.x - pa.x) / w) * distanza, y: pa.y + ((pb.y - pa.y) / w) * distanza });
-    }
-    const passoU = (() => { let t = 0; for (let k = 1; k < grezza.length; k++) t += Math.hypot(grezza[k].x - grezza[k - 1].x, grezza[k].y - grezza[k - 1].y); return Math.max(0.1, t / Math.max(1, grezza.length - 1)); })();
-    const morbida = liscia(grezza, Math.min(15, ADDOLCISCI * distanza), passoU);
-    // la via di mezzo, spezzata dove esce dalla famiglia, e COLORATA dalla forma che ha sotto
-    let cur: Point[] = [], curCol = -2;
-    const chiudi = (): void => {
-      if (cur.length >= 2 && curCol >= 0) perColore[curCol].push(via(cur));
-      cur = []; curCol = -2;
-    };
-    for (let k = 0; k <= passiU; k++) {
-      const uu = k / passiU;
-      const pa = fA(uu), pb = fB(uu);
-      const w = Math.hypot(pb.x - pa.x, pb.y - pa.y) || 1;
-      const p = morbida[k];
-      // oltre il muro opposto la linea non esiste: si ferma dove finisce il posto
-      const col = distanza < w - BASI_MM * 0.25 && dentroFam(p) ? tintaIn(p) : -1;
-      if (col !== curCol) { const ultimo = cur[cur.length - 1]; chiudi(); if (ultimo && col >= 0) cur.push(ultimo); curCol = col; }
-      if (col >= 0) cur.push(p);
-      // la SOVRAPPOSIZIONE: se verso A (il chiaro), entro `sormonto`, c'è una forma più chiara di
-      // quella qui sotto, questo punto si cuce anche con quel colore chiaro — prima, e sotto
-      if (col >= 0) {
-        const dx = pa.x - pb.x, dy = pa.y - pb.y, l = Math.hypot(dx, dy) || 1;
-        const qq = { x: p.x + (dx / l) * SORM_MM, y: p.y + (dy / l) * SORM_MM };
-        const colLa = dentroFam(qq) ? tintaIn(qq) : -1;
-        if (colLa >= 0 && colLa < col) sotto[colLa].push(via([p, { x: p.x + (dx / l) * 0.6, y: p.y + (dy / l) * 0.6 }]));
+  /**
+   * Propaga dal muro `partenza` verso il muro `arrivo`. Le linee della seconda passata (`soloScoperte`)
+   * si disegnano solo dove la prima non e' arrivata. I denti vanno SEMPRE verso A (il chiaro).
+   */
+  const propaga = (partenza: Point[], arrivo: Point[], soloScoperte: boolean, passata: number): void => {
+    let corrente: Point[] = partenza.slice();
+    let vuote = 0;
+    for (let q = 0; q < quante; q++) {
+      const nrm = normaliVerso(corrente, arrivo);
+      const salto = q === 0 ? BASI_MM / 2 : BASI_MM;
+      const grezza: Point[] = corrente.map((pt, k) => ({ x: pt.x + nrm[k].x * salto, y: pt.y + nrm[k].y * salto }));
+      const tenuti: Point[] = [];
+      for (let k = 0; k < grezza.length; k++) {
+        const a0 = corrente[Math.max(0, k - 1)], c0 = corrente[Math.min(corrente.length - 1, k + 1)];
+        const a1 = grezza[Math.max(0, k - 1)], c1 = grezza[Math.min(grezza.length - 1, k + 1)];
+        if ((c0.x - a0.x) * (c1.x - a1.x) + (c0.y - a0.y) * (c1.y - a1.y) < 0) continue;   // ripiegamento
+        tenuti.push(grezza[k]);
       }
-      // le frecce del verso: ogni tanto, verso A
-      if (k % 30 === 15 && q % 2 === 0 && col >= 0) {
-        const dx = pa.x - pb.x, dy = pa.y - pb.y, l = Math.hypot(dx, dy) || 1;
-        const tip = { x: p.x + (dx / l) * 3, y: p.y + (dy / l) * 3 };
-        const px = -dy / l, py = dx / l;
-        frecce.push(via([p, tip]) + via([{ x: tip.x - (dx / l) * 1 + px * 0.8, y: tip.y - (dy / l) * 1 + py * 0.8 }, tip, { x: tip.x - (dx / l) * 1 - px * 0.8, y: tip.y - (dy / l) * 1 - py * 0.8 }]));
+      if (tenuti.length < 4) break;
+      const morbida = liscia(ricampiona(tenuti, 0.5), LISCIA_MM + ADDOLCISCI * BASI_MM, 0.5);
+      corrente = morbida.filter(vicinoAllaFam);
+      if (corrente.length < 4) break;
+      const versoA = normaliVerso(morbida, As);                     // i denti e il sormonto guardano A
+      let cur: Point[] = [], curCol = -2;
+      const chiudi = (): void => {
+        if (cur.length >= 2 && curCol >= 0) { perColore[curCol].push(via(cur)); lineeFinali.push(cur.slice()); segna(cur); }
+        cur = []; curCol = -2;
+      };
+      let vivi = 0;
+      for (let k = 0; k < morbida.length; k++) {
+        const p = morbida[k];
+        const ok = dentroFam(p) && (!soloScoperte || scoperta(p));
+        const col = ok ? tintaIn(p) : -1;
+        if (col >= 0) vivi++;
+        if (col !== curCol) { const ultimo = cur[cur.length - 1]; chiudi(); if (ultimo && col >= 0) cur.push(ultimo); curCol = col; }
+        if (col >= 0) cur.push(p);
+        if (col >= 0) {
+          const qq = { x: p.x + versoA[k].x * SORM_MM, y: p.y + versoA[k].y * SORM_MM };
+          const colLa = dentroFam(qq) ? tintaIn(qq) : -1;
+          if (colLa >= 0 && colLa < col) sotto[colLa].push(via([p, { x: p.x + versoA[k].x * 0.6, y: p.y + versoA[k].y * 0.6 }]));
+        }
+        if (k % 30 === 15 && q % 2 === 0 && col >= 0) {
+          const dx = versoA[k].x, dy = versoA[k].y;
+          const tip = { x: p.x + dx * 3, y: p.y + dy * 3 };
+          const px = -dy, py = dx;
+          frecce.push(via([p, tip]) + via([{ x: tip.x - dx * 1 + px * 0.8, y: tip.y - dy * 1 + py * 0.8 }, tip, { x: tip.x - dx * 1 - px * 0.8, y: tip.y - dy * 1 - py * 0.8 }]));
+        }
       }
+      chiudi();
+      // la seconda passata: quando due linee di fila non trovano piu' niente di scoperto, e' finita
+      if (vivi === 0) { vuote++; if (vuote >= 2 && q > 0) break; } else vuote = 0;
+      if (process.env.DIAG2 && q === quante - 1) console.log(`  DIAG2 fam ${fi} ${f.nome} passata ${passata}: tutte le ${quante} linee`);
     }
-    chiudi();
-  }
-
-  // L'ULTIMA LINEA, lungo il muro opposto. Le linee seguono il rosso e finiscono un passo prima del
-  // blu, o contro i lati: li' resta un vuoto che i denti non coprono, perche' puntano dall'altra
-  // parte (Lorenzo: «si sono creati dei buchi»). Una linea a mezzo passo dentro il blu, che esiste
-  // solo dove il vuoto fra l'ultima linea e il muro supera i tre quarti del passo: dove le linee
-  // arrivano gia' vicine, non c'e'.
-  {
-    const nB = ricampiona([...Bs], 0.5);
-    const grezza: Point[] = [];
-    const vuoto: boolean[] = [];
-    for (let i = 0; i < nB.length; i++) {
-      const a = nB[Math.max(0, i - 1)], c = nB[Math.min(nB.length - 1, i + 1)];
-      let nx = c.y - a.y, ny = -(c.x - a.x);
-      const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
-      const b = nB[i];
-      if (!dentroFam({ x: b.x + nx * 1, y: b.y + ny * 1 })) { nx = -nx; ny = -ny; }   // normale verso dentro
-      const p = { x: b.x + nx * (BASI_MM / 2), y: b.y + ny * (BASI_MM / 2) };
-      grezza.push(p);
-      // quanto e' lontana l'ultima linea da A? si misura la larghezza locale w e il resto oltre l'ultima
-      // linea intera: w mod passo. Se il resto supera 3/4 del passo, qui c'e' un vuoto da riempire.
-      let u = 0, best = 1e9;
-      for (let k = 0; k <= 60; k++) { const q = fB(k / 60); const d = Math.hypot(q.x - b.x, q.y - b.y); if (d < best) { best = d; u = k / 60; } }
-      const pa = fA(u), pb = fB(u);
-      const w = Math.hypot(pb.x - pa.x, pb.y - pa.y);
-      const resto = w - (Math.floor(w / BASI_MM - 0.25) + 0.5) * BASI_MM;   // distanza dall'ultima linea al muro B
-      vuoto.push(resto > BASI_MM * 0.75 && dentroFam(p));
-    }
-    const morbida = liscia(grezza, LISCIA_MM, 0.5);
-    let cur: Point[] = [], curCol = -2;
-    const chiudi = (): void => { if (cur.length >= 2 && curCol >= 0) perColore[curCol].push(via(cur)); cur = []; curCol = -2; };
-    for (let i = 0; i < morbida.length; i++) {
-      const p = morbida[i];
-      const col = vuoto[i] && dentroFam(p) ? tintaIn(p) : -1;
-      if (col !== curCol) { const ultimo = cur[cur.length - 1]; chiudi(); if (ultimo && col >= 0) cur.push(ultimo); curCol = col; }
-      if (col >= 0) cur.push(p);
-    }
-    chiudi();
-  }
+  };
+  propaga(As, Bs, false, 1);
+  propaga(Bs, As, true, 2);
 });
+
+// --- 4b. IL METRO: celle nude (nessuna linea entro 3/4 di passo) e celle dense (due linee a meno
+// di mezzo passo). Si rasterizza a mezzo millimetro; per la densita' si conta, per cella, il numero
+// di linee DISTINTE che passano entro mezzo passo.
+const G = 0.5;
+const GW = Math.ceil(WM / G) + 1, GH = Math.ceil(HM / G) + 1;
+const conteggio = new Uint8Array(GW * GH);          // quante linee distinte toccano la cella (raggio passo/2)
+const vicino = new Uint8Array(GW * GH);             // c'e' una linea entro 3/4 di passo?
+// densa = due linee entrambe entro 0,35 passi dalla cella, cioe' spaziate meno di 0,7 passi. A mezzo passo
+// esatto ogni cella a meta' strada fra due linee regolari risultava densa: il metro contava se stesso.
+const r1 = Math.round((BASI_MM * 0.35) / G), r2 = Math.ceil((BASI_MM * 0.75) / G);
+lineeFinali.forEach((linea, id) => {
+  const toccate = new Set<number>();
+  for (let i = 0; i < linea.length; i++) {
+    const p = linea[i];
+    const cx = Math.round(p.x / G), cy = Math.round(p.y / G);
+    for (let dy = -r2; dy <= r2; dy++) for (let dx = -r2; dx <= r2; dx++) {
+      const x = cx + dx, y = cy + dy;
+      if (x < 0 || y < 0 || x >= GW || y >= GH) continue;
+      const d2 = dx * dx + dy * dy;
+      if (d2 <= r2 * r2) vicino[y * GW + x] = 1;
+      if (d2 <= r1 * r1) toccate.add(y * GW + x);
+    }
+  }
+  for (const i of toccate) if (conteggio[i] < 255) conteggio[i]++;
+  void id;
+});
+let nude = 0, dense = 0, dentro = 0;
+const macchie: string[] = [];
+for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+  const i = y * GW + x;
+  if (tintaIn({ x: x * G, y: y * G }) < 0) continue;
+  dentro++;
+  if (!vicino[i]) { nude++; macchie.push(`<rect x="${(x * G).toFixed(1)}" y="${(y * G).toFixed(1)}" width="${G}" height="${G}" fill="#ff5fa2" opacity="0.55"/>`); }
+  else if (conteggio[i] >= 2) { dense++; macchie.push(`<rect x="${(x * G).toFixed(1)}" y="${(y * G).toFixed(1)}" width="${G}" height="${G}" fill="#2bc46a" opacity="0.55"/>`); }
+}
+console.log(`METRO (passo ${BASI_MM}): nudo ${((nude / dentro) * 100).toFixed(1)}% del pannello (oltre 3/4 di passo da ogni linea) · denso ${((dense / dentro) * 100).toFixed(1)}% (due linee spaziate meno di 0,7 passi)`);
 
 // --- 5. l'immagine per capirsi -------------------------------------------------------------------------
 const pezzi: string[] = [];
@@ -314,11 +375,12 @@ colori.forEach((c, t) => {
 // la sovrapposizione in arancio (tratti corti dal punto verso il chiaro), poi i muri, poi le frecce
 const sottoTutti = sotto.flat();
 if (sottoTutti.length) pezzi.push(`<path d="${sottoTutti.join('')}" fill="none" stroke="#f08a1a" stroke-width="0.35"/>`);
+pezzi.push(`<g>${macchie.join('')}</g>`);
 pezzi.push(`<path d="${muriA.join('')}" fill="none" stroke="#d21" stroke-width="0.8"/>`);
 pezzi.push(`<path d="${muriB.join('')}" fill="none" stroke="#27c" stroke-width="0.5"/>`);
 pezzi.push(`<path d="${frecce.join('')}" fill="none" stroke="#111" stroke-width="0.35"/>`);
 const legenda = colori.map((c, i) => `<rect x="${(8 + i * 22).toFixed(1)}" y="2" width="6" height="6" fill="${c}" stroke="#333" stroke-width="0.2"/><text x="${(15 + i * 22).toFixed(1)}" y="7" font-family="Helvetica,Arial,sans-serif" font-size="4" fill="#222">${i + 1}${i === 0 ? ' (grigio)' : ''}</text>`).join('');
-const nota = `<text x="8" y="14" font-family="Helvetica,Arial,sans-serif" font-size="3.6" fill="#222">ordine di cucitura 1→6 dal chiaro allo scuro · ROSSO muro di partenza (chiaro) · BLU muro opposto · FRECCE verso del pettine · ARANCIO la sovrapposizione del chiaro sotto lo scuro</text>`;
+const nota = `<text x="8" y="14" font-family="Helvetica,Arial,sans-serif" font-size="3.6" fill="#222">ordine di cucitura 1→6 dal chiaro allo scuro · ROSSO muro di partenza (chiaro) · BLU muro opposto · FRECCE verso del pettine · ARANCIO la sovrapposizione del chiaro sotto lo scuro · ROSA celle nude (oltre 3/4 di passo da ogni linea) · VERDE celle dense (due linee spaziate meno di 0,7 passi)</text>`;
 mkdirSync('apps/pettine/scripts/out', { recursive: true });
 writeFileSync('apps/pettine/scripts/out/verifica-famiglie.svg', `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -18 ${WM.toFixed(1)} ${(HM + 18).toFixed(1)}" width="${WM.toFixed(1)}mm" height="${(HM + 18).toFixed(1)}mm">
 <rect x="0" y="-18" width="${WM.toFixed(1)}" height="${(HM + 18).toFixed(1)}" fill="#faf9f7"/>
