@@ -588,6 +588,51 @@ delle file di raso si allungano a caso, gli uni dentro il territorio degli altri
   è discordante** — `AVVIO-NUOVO-TOOL.md` dice v1.6.0, il pin committato è v1.12.0, il disco è a
   v1.14.1. Il pannello è progettato sul pavimento v1.6.0, quindi regge su tutti e tre.
 
+**Studio `pettine` — il «punto pettine sfrangiato», ancora senza pannello** (`apps/pettine/scripts`,
+fixture in `apps/pettine/fixtures`). Nato il 2026-09-08 quando Lorenzo ha messo da parte la
+sfrangiatura da DST (*«il progetto con il dst lo nascondiamo per ora e lo riprendiamo in futuro»*) e
+ha ridefinito il bisogno: da un'immagine e da un vettoriale a **blocchi raggruppati da lui in
+Illustrator**, linee di base curve e lisce con sopra un pettine di denti — **una sola direzione per
+blocco, mai frecce che si incrociano, niente giunture**, denti **verso il chiaro**, sovrapposizione
+dal chiaro allo scuro (il chiaro si cuce prima e sta sotto), sei colori fedeli alla foto, distanza
+fra le linee il più possibile uguale e, dove non ci sta, la linea si interrompe e arriva al bordo
+come arriva. Il bianco si mostra in grigio. Il pannello va **ricamato tutto**, niente tessuto nudo.
+Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la sua misura.
+- **La costruzione che regge (`livelli.ts`):** dentro ogni famiglia (un livello del file di Lorenzo)
+  si sceglie il **muro di partenza** (il tratto di contorno più lungo che ha dentro il colore più
+  chiaro) e le basi sono le **curve di livello della distanza geodetica** da quel muro, una ogni
+  passo: non si incrociano, la spaziatura perpendicolare è esatta per definizione, il verso dei denti
+  è il gradiente. Basi ogni **2 mm** (Lorenzo: *«si devono sovrastare»*), denti **3–5 mm** uno ogni
+  **1,5 mm**, apertura ±40°, sormonto 4 mm. Prima si erano provate e scartate la fusione A→B a
+  frazione, gli offset a catena (si svuotano: 26% nudo) e il campo armonico (non converge:
+  `armonia.ts` resta come vicolo cieco).
+- **La copertura, misurata col metro del filo** (celle da 0,5 mm a più di 0,75 mm da qualunque
+  filo, basi e denti). Lorenzo: *«ci sono davvero tanti buchi sia nelle aree a gruppo che tra due
+  gruppi diversi»*. Era il **1,7 %** e non stava sulle giunte: il metro, diviso per dove cadono le
+  celle, diceva **4.000 sul bordo del pannello, 200 sulle giunte, 6.000 dentro le famiglie**. Quattro
+  cause, trovate una per una con una sonda su un punto nudo, e chiuse: (1) lo sconfinamento si
+  fermava al disegno — ora la griglia ha un **margine** e basi e denti escono oltre il bordo del
+  pannello; (2) la **lisciatura tirava indietro i capi** di ~0,4 σ (a 40 mm dal muro, 3 mm prima del
+  bordo) — la linea si prolunga per riflessione prima di lisciarla; (3) il chamfer è **a gradini**
+  e i suoi livelli uscivano **doppi**, due curve a 0,3 mm che la catena univa in una forcina da 40 mm
+  e la lisciatura schiacciava — la distanza si spiana e le forcine si spezzano; (4) **il bordo del
+  pannello non è un muro**: il tratto chiaro girava l'angolo lungo il taglio e da lì partiva un
+  secondo fronte, con una cresta diagonale di V nella famiglia grande — escluso. Più un tetto alla
+  lisciatura (8 mm: a 140 mm dal muro faceva 22 e tagliava gli angoli lasciandoli nudi). Risultato:
+  **1,7 % → 0,0 %** (140 celle su tutto il pannello), 79.142 denti, 632 m di filo nei denti, 115 m
+  di basi.
+- **Le basi si sono anche pulite:** ogni striscia di una cella al confine fra due tinte faceva un
+  tratto da due punti coi suoi denti — 2.800 tratti sotto 1,5 mm. Ora la tinta si stabilizza lungo
+  la base (una tinta che dura meno di 2 mm non spezza la linea) e nessun tratto è sotto 1,5 mm:
+  10.188 → **5.380 tratti**.
+- **Aperto:** (a) restano **1.728 tratti sotto i 5 mm**, quasi tutti attorno alla sfera e sulle
+  creste dove due fronti si incontrano — sono le «giunture» che Lorenzo non vuole, da guardare con
+  lui; (b) lo sconfinamento di 2,5 mm si vede come **peli** che attraversano le giunte; (c) il
+  «passa due volte» sui rami dello stesso livello che si toccano; (d) il tool vero — pannello,
+  parametri, DST — non è ancora richiesto: prima la resa. Strumenti di verifica nel file:
+  `MAPPA=1` (dove stanno le celle nude e i tratti corti), `PROBE=x,y` (cosa c'è attorno a un punto),
+  `CROP=x0,y0,x1,y1` (un ritaglio leggero da aprire nel browser, `SOLO_BASI=1` senza denti).
+
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 
 ---

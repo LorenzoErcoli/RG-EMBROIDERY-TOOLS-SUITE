@@ -17,6 +17,10 @@
 //   npx esbuild apps/pettine/scripts/livelli.ts --bundle --format=esm --platform=node \
 //     --alias:@rg/core=./packages/core/src/index.ts --outfile=apps/pettine/scripts/livelli.mjs
 //   node --max-old-space-size=4096 apps/pettine/scripts/livelli.mjs <file.svg> [basi] [sormonto] [addolcisci]
+//     [foto.bmp] [denteMin] [denteMax] [passo] [incl] [nettoMm] [sconfina] [lisciaMax]
+//   DENTI=1 mette il pettine; MOSTRA_NUDI=1 colora di rosa le celle nude; MAPPA=1 stampa dove stanno
+//   le celle nude e i tratti corti; PROBE=x,y sonda un punto; CROP=x0,y0,x1,y1 scrive un ritaglio
+//   leggero (out/ritaglio.svg), SOLO_BASI=1 senza denti.
 
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { type Point, type Polyline, polygonArea, traceRegions } from '@rg/core';
@@ -30,11 +34,16 @@ const LARGHEZZA_REALE_MM = 419.45;
 const CELLA = 0.5;
 const num = (i: number, d: number): number => (process.argv[i] !== undefined ? Number(process.argv[i]) : d);
 const fileSvg = process.argv[2];
-const BASI_MM = num(3, 4);
+const BASI_MM = num(3, 2);
 const SORM_MM = num(4, 4);
 const ADDOLCISCI = num(5, 0.3);       // mm di lisciatura per mm di distanza dal muro
 const LISCIA_MM = 1.5;                 // lisciatura di base (i muri sono gia' curve)
+const LISCIA_MAX = num(13, 8);         // tetto alla lisciatura, in mm
 const RIFERIMENTO_DEG = -90;
+// SCONFINAMENTO ai bordi fra famiglie: basi e denti vivono fino a tanto oltre il bordo della propria
+// famiglia. Lungo un bordo le basi finiscono contro il muro e i denti gli corrono paralleli: senza
+// questo restava una striscia nuda di ~1 mm su ogni giunta (misurato: 2,4% del pannello, tutto li').
+const SCONFINA_MM = num(12, num(3, 2) + 0.5);   // di default un passo e mezzo: cosi' oltre il muro opposto c'e' sempre un livello intero, e i suoi denti coprono la striscia fino al bordo
 // I DENTI (DENTI=1): lunghezza fra min e max, uno ogni PASSO lungo la base, apertura ±INCL, verso il chiaro.
 const DENTI = !!process.env.DENTI;
 const FOTO = process.argv[6] ?? 'BRIEFING-RASO-OMOGENEO/cianotipia.bmp';
@@ -83,18 +92,55 @@ const rango = new Map(colori.map((c, i) => [c, i]));
 console.log(`\n${fileSvg}\n${WM.toFixed(1)} × ${HM.toFixed(1)} mm · ${famiglie.length} famiglie · ${colori.join(' · ')}`);
 
 // --- 2. la griglia ---------------------------------------------------------------------------------------
-const COLS = Math.ceil(WM / CELLA) + 2, ROWS = Math.ceil(HM / CELLA) + 2;
+// IL MARGINE ATTORNO AL PANNELLO: la griglia comincia MARG mm prima del disegno, cosi' basi e denti
+// possono sconfinare anche oltre il bordo del pannello (il metro diceva: i buchi stanno quasi tutti
+// li', 4000 celle sul bordo contro 200 sulle giunte). Il pannello va ricamato fino al bordo e oltre.
+const MARG = SCONFINA_MM + 1;
+const ORIG = -MARG;
+const COLS = Math.ceil((WM + 2 * MARG) / CELLA) + 2, ROWS = Math.ceil((HM + 2 * MARG) / CELLA) + 2;
 const tinta = new Int8Array(COLS * ROWS).fill(-1);
 const famDi = new Int16Array(COLS * ROWS).fill(-1);
 famiglie.forEach((f, fi) => {
   for (const s of [...f.forme].sort((a, b) => b.area - a.area)) {
-    const dentro = rasterizza(makeRegion(s.punti, []), 0, 0, COLS, ROWS, CELLA);
+    const dentro = rasterizza(makeRegion(s.punti, []), ORIG, ORIG, COLS, ROWS, CELLA);
     const r = rango.get(s.colore)!;
     for (let i = 0; i < dentro.length; i++) if (dentro[i] && (famDi[i] !== fi || tinta[i] < r)) { tinta[i] = r; famDi[i] = fi; }
   }
 });
+// GLI SPAZI VUOTI FRA I GRUPPI. Fra una forma e l'altra del vettoriale restano fessure senza tinta,
+// che nessuna famiglia copre e che il metro non contava: erano i canali bianchi fra le famiglie.
+// Ogni cella vuota circondata dal disegno prende la famiglia (e la tinta) della vicina - chi viene
+// dopo copre, quindi vince la piu' scura fra le vicine. Si misura prima quanto erano.
+{
+  let vuote = 0, riempite = 0;
+  // «dentro il disegno» = entro 6 mm da una cella colorata (il bordo esterno della foto non conta)
+  const r = Math.round(6 / CELLA);
+  const vicinoAlDisegno = (i: number): boolean => {
+    const c = i % COLS, rr = Math.floor(i / COLS);
+    for (let dy = -r; dy <= r; dy += 2) for (let dx = -r; dx <= r; dx += 2) {
+      const x = c + dx, y = rr + dy;
+      if (x >= 0 && y >= 0 && x < COLS && y < ROWS && famDi[y * COLS + x] >= 0) return true;
+    }
+    return false;
+  };
+  // ...e dentro il rettangolo del pannello: il margine attorno resta senza tinta (e' fuori dal ricamo)
+  const nelPannello = (i: number): boolean => { const x = ORIG + (i % COLS) * CELLA, y = ORIG + Math.floor(i / COLS) * CELLA; return x >= 0 && y >= 0 && x <= WM && y <= HM; };
+  for (let i = 0; i < COLS * ROWS; i++) if (famDi[i] < 0 && nelPannello(i) && vicinoAlDisegno(i)) vuote++;
+  for (let passata = 0; passata < r; passata++) {
+    const nuovaFam = new Int16Array(famDi), nuovaTinta = new Int8Array(tinta);
+    for (let y = 1; y + 1 < ROWS; y++) for (let x = 1; x + 1 < COLS; x++) {
+      const i = y * COLS + x;
+      if (famDi[i] >= 0 || !nelPannello(i)) continue;
+      let best = -1;
+      for (const j of [i - 1, i + 1, i - COLS, i + COLS]) if (famDi[j] >= 0 && (best < 0 || tinta[j] > tinta[best])) best = j;
+      if (best >= 0) { nuovaFam[i] = famDi[best]; nuovaTinta[i] = tinta[best]; riempite++; }
+    }
+    famDi.set(nuovaFam); tinta.set(nuovaTinta);
+  }
+  console.log(`spazi vuoti fra i gruppi: ${(vuote * CELLA * CELLA).toFixed(0)} mm² (${((vuote * CELLA * CELLA) / (WM * HM) * 100).toFixed(1)}% del pannello) · riempiti ${(riempite * CELLA * CELLA).toFixed(0)} mm²`);
+}
 const cella = (p: Point): number => {
-  const c = Math.round(p.x / CELLA), r = Math.round(p.y / CELLA);
+  const c = Math.round((p.x - ORIG) / CELLA), r = Math.round((p.y - ORIG) / CELLA);
   return c < 0 || r < 0 || c >= COLS || r >= ROWS ? -1 : r * COLS + c;
 };
 const tintaIn = (p: Point): number => { const i = cella(p); return i < 0 ? -1 : tinta[i]; };
@@ -109,8 +155,47 @@ const sfumaQui = (p: Point, n: Point): boolean => {
 };
 const perColoreDenti: string[][] = [];
 let dentiTot = 0, filoMm = 0, fermati = 0, attraversano = 0;
+const cucito: Point[][] = [];   // tutto cio' che si cuce (basi e denti), per il metro del filo
 
 // --- 3. geometria ------------------------------------------------------------------------------------------
+/**
+ * LE FORCINE: dove una curva di livello gira attorno a una cresta della distanza (due fronti che si
+ * incontrano) i due bracci stanno a pochi decimi l'uno dall'altro, e la lisciatura li schiacciava in
+ * una base sola che passa due volte e non arriva al bordo. Qui la catena si spezza dove la direzione
+ * gira di piu' di 100 gradi nel giro di 2 mm: ogni braccio diventa una base sua, che finisce alla cresta.
+ */
+/** I COLORI SI STABILIZZANO lungo una base: una tinta che dura meno di `min` punti (2 mm) non spezza
+ *  la linea, prende il colore del tratto che la precede (o che la segue, in testa). Senza, ogni
+ *  striscia di una cella al confine fra due colori faceva un tratto di base da due punti: 2800
+ *  tratti sotto 1,5 mm, ognuno coi suoi denti. */
+function stabilizza(cols: number[], min: number): number[] {
+  const out = cols.slice();
+  let i = 0;
+  while (i < out.length) {
+    let j = i;
+    while (j < out.length && out[j] === out[i]) j++;
+    if (j - i < min) {
+      const prima = i > 0 ? out[i - 1] : j < out.length ? out[j] : out[i];
+      for (let k = i; k < j; k++) out[k] = prima;
+    }
+    i = j;
+  }
+  return out;
+}
+const lunghezza = (l: Point[]): number => { let t = 0; for (let i = 1; i < l.length; i++) t += Math.hypot(l[i].x - l[i - 1].x, l[i].y - l[i - 1].y); return t; };
+function spezzaAlleForcine(l: Point[], passo: number): Point[][] {
+  const w = Math.max(1, Math.round(2 / passo));
+  const out: Point[][] = [];
+  let da = 0;
+  for (let i = w; i + w < l.length; i++) {
+    const ax = l[i].x - l[i - w].x, ay = l[i].y - l[i - w].y, bx = l[i + w].x - l[i].x, by = l[i + w].y - l[i].y;
+    const la = Math.hypot(ax, ay), lb = Math.hypot(bx, by);
+    if (la < 1e-9 || lb < 1e-9) continue;
+    if ((ax * bx + ay * by) / (la * lb) < Math.cos((100 * Math.PI) / 180)) { out.push(l.slice(da, i + 1)); da = i; i += w; }
+  }
+  out.push(l.slice(da));
+  return out;
+}
 function ricampiona(l: Point[], passo: number): Point[] {
   const out: Point[] = [l[0]];
   let acc = 0;
@@ -129,11 +214,20 @@ function liscia(l: Point[], sigmaMm: number, passo: number): Point[] {
   const raggio = Math.ceil((sigmaMm * 3) / passo);
   const pesi: number[] = [];
   for (let k = -raggio; k <= raggio; k++) pesi.push(Math.exp(-((k * passo) ** 2) / (2 * sigmaMm * sigmaMm)));
+  // I CAPI: la linea si prolunga per riflessione (punto per punto attorno al capo) prima di lisciarla,
+  // cosi' il capo resta dov'e'. Con l'indice bloccato al capo la media lo tirava indietro di ~0,4 sigma:
+  // con sigma = 1,5 + 0,15·d, a 40 mm dal muro le basi finivano 3 mm prima del bordo (striscia nuda).
+  const n = l.length, p0 = l[0], pn = l[n - 1];
+  const est = (i: number): Point => {
+    if (i < 0) { const q = l[Math.min(n - 1, -i)]; return { x: 2 * p0.x - q.x, y: 2 * p0.y - q.y }; }
+    if (i >= n) { const q = l[Math.max(0, 2 * (n - 1) - i)]; return { x: 2 * pn.x - q.x, y: 2 * pn.y - q.y }; }
+    return l[i];
+  };
   return l.map((_, i) => {
     let sx = 0, sy = 0, sw = 0;
     for (let k = -raggio; k <= raggio; k++) {
-      const j = Math.min(l.length - 1, Math.max(0, i + k));
-      sx += l[j].x * pesi[k + raggio]; sy += l[j].y * pesi[k + raggio]; sw += pesi[k + raggio];
+      const q = est(i + k);
+      sx += q.x * pesi[k + raggio]; sy += q.y * pesi[k + raggio]; sw += pesi[k + raggio];
     }
     return { x: sx / sw, y: sy / sw };
   });
@@ -158,7 +252,10 @@ famiglie.forEach((f, fi) => {
   const unioni = traceRegions(maschera, COLS, ROWS, 1, CELLA, { minAreaMm2: 10, simplifyMm: 0.3 });
   if (!unioni.length) { famSaltate++; return; }
   const u = unioni.sort((a, b) => b.areaMm2 - a.areaMm2)[0];
-  const dentroFam = (p: Point): boolean => { const i = cella(p); return i >= 0 && famDi[i] === fi; };
+  u.outer = u.outer.map((p) => ({ x: p.x + ORIG, y: p.y + ORIG }));   // traceRegions conta dall'angolo della griglia
+  const dentroFamStretto = (p: Point): boolean => { const i = cella(p); return i >= 0 && famDi[i] === fi; };
+  // «dentro» con lo sconfinamento: la cella e' della famiglia, o lo e' una cella entro SCONFINA_MM
+  let dentroFam = (p: Point): boolean => dentroFamStretto(p);   // viene rimpiazzata dalla maschera allargata piu' sotto
 
   // i due muri, come prima
   const anello = ricampiona([...u.outer, u.outer[0]], 0.5);
@@ -171,7 +268,7 @@ famiglie.forEach((f, fi) => {
     let nx = c.y - a.y, ny = -(c.x - a.x);
     const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
     const p = anello[i];
-    if (dentroFam({ x: p.x + nx * 1, y: p.y + ny * 1 })) { nx = -nx; ny = -ny; }
+    if (dentroFamStretto({ x: p.x + nx * 1, y: p.y + ny * 1 })) { nx = -nx; ny = -ny; }   // stretto: il margine qui direbbe «dentro» da tutte e due le parti
     normali.push({ x: nx, y: ny });
     dentroCol[i] = tintaIn({ x: p.x - nx * 1.5, y: p.y - ny * 1.5 });
   }
@@ -192,7 +289,12 @@ famiglie.forEach((f, fi) => {
     return best;
   };
   const unaSolaTinta = new Set(Array.from(dentroCol).filter((v) => v >= 0)).size <= 1;
-  let tratto = unaSolaTinta ? null : cerca((i) => dentroCol[i] === chiaro);
+  // IL BORDO DEL PANNELLO NON E' UN MURO: il taglio del pannello non dice da dove viene la luce. Se il
+  // tratto chiaro girava l'angolo e correva lungo il bordo, da li' partiva un secondo fronte di
+  // livelli che incontrava il primo su una cresta diagonale: forcine, V, basi che passano due volte.
+  const sulBordoPannello = (q: Point): boolean => q.x < 1 || q.y < 1 || q.x > WM - 1 || q.y > HM - 1;
+  let tratto = unaSolaTinta ? null : cerca((i) => dentroCol[i] === chiaro && !sulBordoPannello(anello[i]));
+  if (!tratto || tratto[1] < 6) tratto = unaSolaTinta ? null : cerca((i) => dentroCol[i] === chiaro);
   if (!tratto || tratto[1] < 6 || tratto[1] > n - 6) {
     const rx = Math.cos((RIFERIMENTO_DEG * Math.PI) / 180), ry = Math.sin((RIFERIMENTO_DEG * Math.PI) / 180);
     tratto = cerca((i) => normali[i].x * rx + normali[i].y * ry >= 0);
@@ -208,16 +310,49 @@ famiglie.forEach((f, fi) => {
 
   // LA DISTANZA DAL MURO, dentro la famiglia: semi = le celle attraversate dal muro liscio (e le
   // celle di bordo della famiglia entro una cella da esso). Chamfer a 16 vicini, tre giri.
+  // LA MASCHERA ALLARGATA di SCONFINA_MM: la distanza e i livelli si calcolano qui, cosi' le linee
+  // sconfinano davvero (col margine applicato solo al taglio, le linee finivano comunque al bordo:
+  // il metro non si muoveva, 2,4% prima e dopo).
+  const largo = new Uint8Array(COLS * ROWS);
+  {
+    const rc = Math.max(0, Math.round(SCONFINA_MM / CELLA));
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const i = r * COLS + c;
+      if (!maschera[i]) continue;
+      largo[i] = 1;
+      if (!rc) continue;
+      const bordo = (c > 0 && !maschera[i - 1]) || (c + 1 < COLS && !maschera[i + 1]) || (r > 0 && !maschera[i - COLS]) || (r + 1 < ROWS && !maschera[i + COLS]);
+      if (!bordo) continue;
+      for (let dy = -rc; dy <= rc; dy++) for (let dx = -rc; dx <= rc; dx++) {
+        if (dx * dx + dy * dy > rc * rc) continue;
+        const x = c + dx, y = r + dy;
+        if (x >= 0 && y >= 0 && x < COLS && y < ROWS) largo[y * COLS + x] = 1;   // anche fuori dal disegno: oltre il bordo del pannello e nelle fessure
+      }
+    }
+  }
+  const nelLargo = (p: Point): boolean => { const i = cella(p); return i >= 0 && largo[i] === 1; };
+  dentroFam = nelLargo;
+  // la tinta della cella della famiglia piu' vicina, per chi sta nel margine
+  const tintaVicina = (p: Point): number => {
+    const c0 = Math.round((p.x - ORIG) / CELLA), r0 = Math.round((p.y - ORIG) / CELLA);
+    const rMax = Math.round(SCONFINA_MM / CELLA) + 2;
+    for (let rr = 1; rr <= rMax; rr++) for (let dy = -rr; dy <= rr; dy++) for (let dx = -rr; dx <= rr; dx++) {
+      if (Math.max(Math.abs(dx), Math.abs(dy)) !== rr) continue;
+      const c = c0 + dx, r = r0 + dy;
+      if (c >= 0 && r >= 0 && c < COLS && r < ROWS && famDi[r * COLS + c] === fi) return tinta[r * COLS + c];
+    }
+    return -1;
+  };
   const INF = 1e9;
   const D = new Float32Array(COLS * ROWS).fill(INF);
   for (const p of ricampiona(As, CELLA / 2)) { const i = cella(p); if (i >= 0) D[i] = 0; }
-  for (let i = 0; i < COLS * ROWS; i++) if (D[i] === 0 && famDi[i] !== fi) {
+  for (let i = 0; i < COLS * ROWS; i++) if (D[i] === 0 && !largo[i]) {
     // il muro sta sul bordo: si sposta il seme sulla cella della famiglia piu' vicina
-    for (const j of [i - 1, i + 1, i - COLS, i + COLS, i - COLS - 1, i - COLS + 1, i + COLS - 1, i + COLS + 1]) if (j >= 0 && j < COLS * ROWS && famDi[j] === fi) D[j] = 0;
+    for (const j of [i - 1, i + 1, i - COLS, i + COLS, i - COLS - 1, i - COLS + 1, i + COLS - 1, i + COLS + 1]) if (j >= 0 && j < COLS * ROWS && largo[j]) D[j] = 0;
     D[i] = INF;
   }
   const V: Array<[number, number, number]> = [[-1, 0, CELLA], [0, -1, CELLA], [-1, -1, CELLA * 1.4], [1, -1, CELLA * 1.4], [-2, -1, CELLA * 2.2], [-1, -2, CELLA * 2.2], [1, -2, CELLA * 2.2], [2, -1, CELLA * 2.2]];
-  const mio = (c: number, r: number): boolean => c >= 0 && r >= 0 && c < COLS && r < ROWS && famDi[r * COLS + c] === fi;
+  const mio = (c: number, r: number): boolean => c >= 0 && r >= 0 && c < COLS && r < ROWS && largo[r * COLS + c] === 1;
   for (let giro = 0; giro < 3; giro++) {
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
       const i = r * COLS + c;
@@ -234,12 +369,84 @@ famiglie.forEach((f, fi) => {
       D[i] = v;
     }
   }
+  // LA FASCIA DI SCONFINAMENTO NON E' UN CORRIDOIO. Il chamfer misurava la distanza anche nella
+  // fascia oltre il bordo, ma la fascia e' un vicolo cieco largo 2,5 mm: la si raggiunge solo dal
+  // bordo, quindi D vi risaliva e i livelli ci facevano una forcina (sondato al bordo sinistro:
+  // D=61,0 sul bordo, 61,5 a 2,5 mm fuori E a 2,5 mm dentro). La lisciatura, con sigma di 10 mm,
+  // schiacciava la forcina e la base finiva 3 mm prima del bordo. Qui, nella fascia, D si
+  // PROLUNGA LINEARMENTE dalla cella della famiglia piu' vicina col suo gradiente: la linea esce
+  // dritta, come arriva.
+  {
+    const src = new Int32Array(COLS * ROWS).fill(-1);
+    const coda: number[] = [];
+    const grad = (q: number): [number, number] => {
+      const c = q % COLS, r = Math.floor(q / COLS);
+      const st = (cc: number, rr: number): boolean => cc >= 0 && rr >= 0 && cc < COLS && rr < ROWS && maschera[rr * COLS + cc] === 1 && D[rr * COLS + cc] < INF;
+      let gx = 0, gy = 0;
+      if (st(c + 1, r) && st(c - 1, r)) gx = (D[q + 1] - D[q - 1]) / (2 * CELLA);
+      else if (st(c + 1, r)) gx = (D[q + 1] - D[q]) / CELLA;
+      else if (st(c - 1, r)) gx = (D[q] - D[q - 1]) / CELLA;
+      if (st(c, r + 1) && st(c, r - 1)) gy = (D[q + COLS] - D[q - COLS]) / (2 * CELLA);
+      else if (st(c, r + 1)) gy = (D[q + COLS] - D[q]) / CELLA;
+      else if (st(c, r - 1)) gy = (D[q] - D[q - COLS]) / CELLA;
+      return [gx, gy];
+    };
+    const gradienti = new Map<number, [number, number]>();
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const i = r * COLS + c;
+      if (!maschera[i] || D[i] >= INF) continue;
+      const fuori = (c > 0 && largo[i - 1] && !maschera[i - 1]) || (c + 1 < COLS && largo[i + 1] && !maschera[i + 1]) || (r > 0 && largo[i - COLS] && !maschera[i - COLS]) || (r + 1 < ROWS && largo[i + COLS] && !maschera[i + COLS]);
+      if (fuori) { src[i] = i; coda.push(i); gradienti.set(i, grad(i)); }
+    }
+    for (let k = 0; k < coda.length; k++) {
+      const cur = coda[k], q = src[cur];
+      const [gx, gy] = gradienti.get(q)!;
+      const qc = q % COLS, qr = Math.floor(q / COLS), cc = cur % COLS, cr = Math.floor(cur / COLS);
+      for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1], [-1, -1], [1, -1], [-1, 1], [1, 1]]) {
+        const x = cc + dx, y = cr + dy;
+        if (x < 0 || y < 0 || x >= COLS || y >= ROWS) continue;
+        const n = y * COLS + x;
+        if (!largo[n] || maschera[n] || src[n] >= 0) continue;
+        src[n] = q;
+        D[n] = Math.max(0, D[q] + gx * (x - qc) * CELLA + gy * (y - qr) * CELLA);
+        coda.push(n);
+      }
+    }
+  }
+  // D SI SPIANA (media 3x3, due giri, solo su celle della fascia larga): il chamfer e' a gradini
+  // (somme di 0,5/0,7/1,1) e i suoi livelli uscivano doppi - due curve a 0,3 mm che la catena
+  // univa in una forcina lunga 40 mm, poi schiacciata dalla lisciatura. Sondato al bordo sinistro.
+  for (let giro = 0; giro < 2; giro++) {
+    const E = new Float32Array(D);
+    for (let r = 1; r + 1 < ROWS; r++) for (let c = 1; c + 1 < COLS; c++) {
+      const i = r * COLS + c;
+      if (!largo[i] || D[i] >= INF) continue;
+      let sm = 0, nn = 0;
+      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const j = i + dy * COLS + dx; if (largo[j] && D[j] < INF) { sm += D[j]; nn++; } }
+      E[i] = sm / nn;
+    }
+    D.set(E);
+  }
   let dMax = 0;
-  for (let i = 0; i < COLS * ROWS; i++) if (famDi[i] === fi && D[i] < INF && D[i] > dMax) dMax = D[i];
+  for (let i = 0; i < COLS * ROWS; i++) if (largo[i] && D[i] < INF && D[i] > dMax) dMax = D[i];
+  if (process.env.PROBE) {
+    const [px, py] = process.env.PROBE.split(',').map(Number);
+    const ip = cella({ x: px, y: py });
+    if (ip >= 0 && famDi[ip] === fi) {
+      const riga: string[] = [];
+      for (let x = px - 4; x <= px + 5; x += CELLA) { const i = cella({ x, y: py }); riga.push(`x=${x.toFixed(1)}:${i < 0 ? '-' : `m${maschera[i]}l${largo[i]}f${famDi[i]}D${D[i] < INF ? D[i].toFixed(1) : 'inf'}`}`); }
+      console.log(`SONDA famiglia ${fi}: ${riga.join(' ')}`);
+      for (let y = py - 6; y <= py + 4; y += CELLA) {
+        const r: string[] = [];
+        for (let x = px - 2; x <= px + 8; x += CELLA) { const i = cella({ x, y }); r.push(i < 0 ? '   -  ' : !largo[i] ? '   .  ' : (D[i] < INF ? D[i].toFixed(1) : 'inf').padStart(5) + (maschera[i] ? ' ' : '*')); }
+        console.log(`  y=${y.toFixed(1).padStart(6)} ${r.join('')}`);
+      }
+    }
+  }
   const gradVersoA = (p: Point): Point => {
     const i = cella(p);
     if (i < 0) return { x: 0, y: 0 };
-    const g = (j: number): number => (j >= 0 && j < COLS * ROWS && famDi[j] === fi && D[j] < INF ? D[j] : D[i]);
+    const g = (j: number): number => (j >= 0 && j < COLS * ROWS && largo[j] && D[j] < INF ? D[j] : D[i]);
     let gx = (g(i + 1) - g(i - 1)) / (2 * CELLA), gy = (g(i + COLS) - g(i - COLS)) / (2 * CELLA);
     const l = Math.hypot(gx, gy) || 1;
     return { x: -gx / l, y: -gy / l };    // -gradiente = verso il muro = verso il chiaro
@@ -274,7 +481,7 @@ famiglie.forEach((f, fi) => {
       const ux = v.x * Math.cos(ang) - v.y * Math.sin(ang), uy = v.x * Math.sin(ang) + v.y * Math.cos(ang);
       for (let s = 0.5; s <= lung; s += 0.5) {
         const qq = { x: p.x + ux * s, y: p.y + uy * s };
-        if (famIn(qq) === famiglia) continue;
+        if (famIn(qq) === famiglia || dentroFam(qq)) continue;
         if (!sfumaQui(qq, { x: ux, y: uy })) { lung = Math.max(0.5, s - 0.25); fermati++; } else attraversano++;
         break;
       }
@@ -285,27 +492,48 @@ famiglie.forEach((f, fi) => {
       const colLa = famIn(qq) === famiglia ? tintaIn(qq) : -1;
       if (colLa >= 0 && colLa < col) { const l = puntiSotto.get(colLa) ?? []; l.push(p, punta, p); puntiSotto.set(colLa, l); }
     }
-    if (punti.length >= 3) perColoreDenti[col].push(via(punti));
+    if (punti.length >= 3) { perColoreDenti[col].push(via(punti)); cucito.push(punti); }
     for (const [c, l] of puntiSotto) if (l.length >= 3) perColoreDenti[c].push(via(l));
   };
 
   // I LIVELLI, uno ogni passo, ognuno addolcito in proporzione alla distanza
   for (let d = BASI_MM / 2; d < dMax; d += BASI_MM) {
     idLivello++;
-    for (const linea of incatena(livello(D, maschera, COLS, ROWS, 0, 0, CELLA, d), CELLA * 1.5)) {
+    // I SEGMENTI NULLI: dove D vale esattamente d su un angolo di cella (succede ogni 2,5 mm: il
+    // chamfer somma multipli di 0,5) il marching squares emette un segmento di lunghezza zero, e la
+    // catena si spezzava li'. Le basi finivano 3 mm prima del bordo: era questo, non la lisciatura.
+    // Il livello si estrae un pelo (0,0137 mm) sopra il valore tondo: i valori del chamfer sono
+    // somme di 0,5/0,7/1,1 e finivano ESATTAMENTE sui livelli, con tre o quattro segmenti che si
+    // toccavano in un angolo e la catena che sceglieva quello sbagliato.
+    const segmenti = livello(D, largo, COLS, ROWS, ORIG, ORIG, CELLA, d + 0.0137).filter((sg) => Math.hypot(sg.b.x - sg.a.x, sg.b.y - sg.a.y) > 1e-6);
+    for (const linea of incatena(segmenti, CELLA * 1.5)) {
       if (linea.length < 3) continue;
-      const morbida = liscia(ricampiona(linea, 0.5), LISCIA_MM + ADDOLCISCI * d, 0.5);
+      for (const pezzo of process.env.NO_FORCINE ? [ricampiona(linea, 0.5)] : spezzaAlleForcine(ricampiona(linea, 0.5), 0.5)) {
+      if (pezzo.length < 4) continue;
+      // il tetto alla lisciatura: a 140 mm dal muro sigma faceva 22 mm e un gomito dei livelli
+      // diventava un arco largo, che tagliava l'angolo lasciandolo nudo (sondato a (112,250))
+      const morbida = liscia(pezzo, Math.min(LISCIA_MAX, LISCIA_MM + ADDOLCISCI * d), 0.5);
       let cur: Point[] = [], curCol = -2;
       const chiudi = (): void => {
-        if (cur.length >= 2 && curCol >= 0) {
-          perColore[curCol].push(via(cur)); lineeFinali.push({ id: idLivello, punti: cur.slice() });
+        if (cur.length >= 2 && curCol >= 0 && lunghezza(cur) >= 1.5) {
+          perColore[curCol].push(via(cur)); const copia = cur.slice(); lineeFinali.push({ id: idLivello, punti: copia }); cucito.push(copia);
           if (DENTI) pettina(cur, curCol, fi, idLivello);
         }
         cur = []; curCol = -2;
       };
+      // il colore punto per punto, poi stabilizzato. Sconfinando, il colore resta quello della
+      // famiglia: si prende dalla cella piu' vicina che e' sua (un livello che corre tutto nel
+      // margine, oltre il bordo del pannello, non ne tocca nessuna).
+      const grezzi: number[] = [];
       for (let i = 0; i < morbida.length; i++) {
         const p = morbida[i];
-        const col = dentroFam(p) ? tintaIn(p) : -1;
+        const prec = grezzi.length ? grezzi[grezzi.length - 1] : -1;
+        grezzi.push(dentroFamStretto(p) ? tintaIn(p) : dentroFam(p) ? (prec >= 0 ? prec : tintaVicina(p)) : -1);
+      }
+      const colori = stabilizza(grezzi, 4);
+      for (let i = 0; i < morbida.length; i++) {
+        const p = morbida[i];
+        const col = colori[i];
         if (col !== curCol) { const ultimo = cur[cur.length - 1]; chiudi(); if (ultimo && col >= 0) cur.push(ultimo); curCol = col; }
         if (col >= 0) cur.push(p);
         if (col >= 0) {
@@ -321,10 +549,65 @@ famiglie.forEach((f, fi) => {
         }
       }
       chiudi();
+      }
     }
   }
+
+  // L'ULTIMA BASE LUNGO IL MURO BLU. I denti vanno verso il chiaro, cioe' via dal blu: la striscia
+  // fra l'ultimo livello e il blu non la copre nessun dente, e fra due famiglie il canale nudo si
+  // raddoppia (Lorenzo: «tanti buchi, anche tra due gruppi diversi»). Qui una base corre lungo il
+  // blu a mezzo passo dentro, SOLO dove la distanza dal muro rosso supera l'ultimo livello di piu'
+  // di 3/4 di passo, coi denti verso il chiaro come tutte le altre: nessuna seconda direzione.
+  {
+    idLivello++;
+    const nB = ricampiona([...B], 0.5);
+    const grezza: Point[] = [], tieni: boolean[] = [];
+    for (let i = 0; i < nB.length; i++) {
+      const a = nB[Math.max(0, i - 1)], c = nB[Math.min(nB.length - 1, i + 1)];
+      let nx = c.y - a.y, ny = -(c.x - a.x);
+      const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
+      const b = nB[i];
+      if (!dentroFamStretto({ x: b.x + nx * 1, y: b.y + ny * 1 })) { nx = -nx; ny = -ny; }
+      const p = { x: b.x + nx * (BASI_MM / 2), y: b.y + ny * (BASI_MM / 2) };
+      grezza.push(p);
+      const ci = cella(p);
+      const dist = ci >= 0 && famDi[ci] === fi ? D[ci] : INF;
+      const ultimoLivello = dist < INF ? (Math.floor(dist / BASI_MM - 0.5) + 0.5) * BASI_MM : 0;
+      tieni.push(dist < INF && dist - ultimoLivello > BASI_MM * 0.75);
+    }
+    const morbida = liscia(grezza, LISCIA_MM, 0.5);
+    let cur: Point[] = [], curCol = -2;
+    const chiudi = (): void => {
+      if (cur.length >= 2 && curCol >= 0 && lunghezza(cur) >= 1.5) { perColore[curCol].push(via(cur)); const copia = cur.slice(); lineeFinali.push({ id: idLivello, punti: copia }); cucito.push(copia); if (DENTI) pettina(cur, curCol, fi, idLivello); }
+      cur = []; curCol = -2;
+    };
+    // qui la base sta a mezzo passo dentro: ha sempre una tinta
+    const colori = stabilizza(morbida.map((p, i) => (tieni[i] && dentroFam(p) ? tintaIn(p) : -1)), 4);
+    for (let i = 0; i < morbida.length; i++) {
+      const p = morbida[i];
+      const col = colori[i];
+      if (col !== curCol) { const ultimo = cur[cur.length - 1]; chiudi(); if (ultimo && col >= 0) cur.push(ultimo); curCol = col; }
+      if (col >= 0) cur.push(p);
+    }
+    chiudi();
+  }
 });
-console.log(`${famOk} famiglie, ${famSaltate} saltate · ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+{
+  const lung = lineeFinali.map((l) => { let t = 0; for (let i = 1; i < l.punti.length; i++) t += Math.hypot(l.punti[i].x - l.punti[i - 1].x, l.punti[i].y - l.punti[i - 1].y); return t; });
+  const corte = lung.filter((v) => v < 5).length, tot = lung.reduce((a, b) => a + b, 0);
+  const cortissime = lung.filter((v) => v < 1.5).length;
+  console.log(`  tratti sotto 1,5 mm: ${cortissime}`);
+  if (process.env.MAPPA) {
+    // dove stanno i tratti corti (sotto 5 mm): una mappa a celle di 8 mm
+    const MW = Math.ceil(WM / 8), MH = Math.ceil(HM / 8);
+    const m = new Uint16Array(MW * MH);
+    lineeFinali.forEach((l, k) => { if (lung[k] < 5) { const q = l.punti[0]; const mx = Math.min(MW - 1, Math.max(0, Math.floor(q.x / 8))), my = Math.min(MH - 1, Math.max(0, Math.floor(q.y / 8))); m[my * MW + mx]++; } });
+    const righe: string[] = [];
+    for (let my = 0; my < MH; my++) { let r = ''; for (let mx = 0; mx < MW; mx++) { const v = m[my * MW + mx]; r += v === 0 ? '.' : v < 3 ? ':' : v < 8 ? 'o' : '#'; } righe.push(r); }
+    console.log('TRATTI CORTI (celle 8 mm):' + String.fromCharCode(10) + righe.join(String.fromCharCode(10)));
+  }
+  console.log(`${famOk} famiglie, ${famSaltate} saltate · ${lineeFinali.length} tratti di base (${corte} sotto i 5 mm) · ${(tot / 1000).toFixed(1)} m di basi · ${((Date.now() - t0) / 1000).toFixed(1)} s`);
+}
 
 // --- 5. il metro ------------------------------------------------------------------------------------------
 const G = 0.5;
@@ -357,6 +640,69 @@ for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
   if (!vicino[i]) { nude++; macchie.push(`<rect x="${(x * G).toFixed(1)}" y="${(y * G).toFixed(1)}" width="${G}" height="${G}" fill="#ff5fa2" opacity="0.55"/>`); }
   else if (conteggio[i] >= 2) { dense++; macchie.push(`<rect x="${(x * G).toFixed(1)}" y="${(y * G).toFixed(1)}" width="${G}" height="${G}" fill="#2bc46a" opacity="0.55"/>`); }
 }
+const nudiFilo: string[] = [];
+if (DENTI) {
+  // IL METRO DEL FILO: ogni segmento cucito (basi e denti) copre le celle entro 0,75 mm; cosa resta?
+  const cop = new Uint8Array(GW * GH);
+  const rf = Math.ceil(0.75 / G);
+  for (const seg of cucito) for (let i = 1; i < seg.length; i++) {
+    const a = seg[i - 1], b = seg[i];
+    const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / G));
+    for (let k = 0; k <= n; k++) {
+      const cx = Math.round((a.x + ((b.x - a.x) * k) / n) / G), cy = Math.round((a.y + ((b.y - a.y) * k) / n) / G);
+      for (let dy = -rf; dy <= rf; dy++) for (let dx = -rf; dx <= rf; dx++) { const x = cx + dx, y = cy + dy; if (x >= 0 && y >= 0 && x < GW && y < GH && dx * dx + dy * dy <= rf * rf) cop[y * GW + x] = 1; }
+    }
+  }
+  let nudoFilo = 0, tot = 0;
+  for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) { if (tintaIn({ x: x * G, y: y * G }) < 0) continue; tot++; if (!cop[y * GW + x]) { nudoFilo++; nudiFilo.push(`<rect x="${(x * G).toFixed(1)}" y="${(y * G).toFixed(1)}" width="${G}" height="${G}" fill="#ff2f8f" opacity="0.7"/>`); } }
+  console.log(`METRO DEL FILO: ${((nudoFilo / tot) * 100).toFixed(1)}% del pannello a piu' di 0,75 mm da qualunque filo`);
+  // DOVE STANNO le celle nude: sul bordo del pannello, su una giunta fra famiglie, o dentro una famiglia?
+  {
+    let bordoPan = 0, giunta = 0, interno = 0;
+    const R = Math.ceil(1.5 / G);
+    const MW = Math.ceil(WM / 4), MH = Math.ceil(HM / 4);
+    const mappa = new Uint16Array(MW * MH);
+    for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
+      const p = { x: x * G, y: y * G };
+      if (tintaIn(p) < 0 || cop[y * GW + x]) continue;
+      const fam = famIn(p);
+      let fuori = false, altra = false;
+      for (let dy = -R; dy <= R && !fuori; dy++) for (let dx = -R; dx <= R; dx++) {
+        const q = { x: (x + dx) * G, y: (y + dy) * G };
+        if (tintaIn(q) < 0) { fuori = true; break; }
+        if (famIn(q) !== fam) altra = true;
+      }
+      if (fuori) bordoPan++; else if (altra) giunta++; else interno++;
+      const mx = Math.min(MW - 1, Math.floor(p.x / 4)), my = Math.min(MH - 1, Math.floor(p.y / 4));
+      mappa[my * MW + mx]++;
+    }
+    console.log(`  nude: ${bordoPan} sul bordo del pannello · ${giunta} sulle giunte fra famiglie · ${interno} dentro una famiglia (celle da 0,5 mm)`);
+    if (process.env.MAPPA) {
+      const righe: string[] = [];
+      for (let my = 0; my < MH; my++) { let r = ''; for (let mx = 0; mx < MW; mx++) { const v = mappa[my * MW + mx]; r += v === 0 ? '.' : v < 8 ? ':' : v < 24 ? 'o' : '#'; } righe.push(r); }
+      console.log(righe.join(String.fromCharCode(10)));
+    }
+  }
+}
+// UN RITAGLIO per guardare da vicino: CROP=x0,y0,x1,y1 (mm) scrive solo cio' che ci cade dentro
+if (process.env.CROP) {
+  const [x0, y0, x1, y1] = process.env.CROP.split(',').map(Number);
+  const dentroCrop = (l: Point[]): boolean => l.some((p) => p.x >= x0 && p.x <= x1 && p.y >= y0 && p.y <= y1);
+  const basi = new Set(lineeFinali.map((l) => l.punti));
+  const pb: string[] = [], pd: string[] = [];
+  for (const l of cucito) if (dentroCrop(l)) (basi.has(l) ? pb : pd).push(via(l));
+  const nudi = nudiFilo.filter((r) => { const m = /x="([\d.]+)" y="([\d.]+)"/.exec(r)!; const x = +m[1], y = +m[2]; return x >= x0 && x <= x1 && y >= y0 && y <= y1; });
+  writeFileSync('apps/pettine/scripts/out/ritaglio.svg', `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" width="${(x1 - x0) * 8}" height="${(y1 - y0) * 8}">
+<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="#f7f6f3"/>
+<rect x="0" y="0" width="${WM.toFixed(1)}" height="${HM.toFixed(1)}" fill="none" stroke="#333" stroke-width="0.2" stroke-dasharray="1 0.5"/>
+<g>${nudi.join('')}</g>
+<path d="${process.env.SOLO_BASI ? '' : pd.join('')}" fill="none" stroke="#7a9" stroke-width="0.08"/>
+<path d="${pb.join('')}" fill="none" stroke="#000" stroke-width="0.2"/>
+<path d="${muriA.join('')}" fill="none" stroke="#d21" stroke-width="0.4"/>
+<path d="${muriB.join('')}" fill="none" stroke="#27c" stroke-width="0.3"/>
+</svg>`, 'utf8');
+  console.log('-> apps/pettine/scripts/out/ritaglio.svg');
+}
 console.log(`METRO (passo ${BASI_MM}): nudo ${((nude / dentro) * 100).toFixed(1)}% · denso ${((dense / dentro) * 100).toFixed(1)}%`);
 
 // --- 6. l'immagine ------------------------------------------------------------------------------------------
@@ -371,8 +717,9 @@ pezzi.push(`<path d="${frecce.join('')}" fill="none" stroke="#111" stroke-width=
 const legenda = colori.map((c, i) => `<rect x="${(8 + i * 22).toFixed(1)}" y="2" width="6" height="6" fill="${c}" stroke="#333" stroke-width="0.2"/><text x="${(15 + i * 22).toFixed(1)}" y="7" font-family="Helvetica,Arial,sans-serif" font-size="4" fill="#222">${i + 1}${i === 0 ? ' (grigio)' : ''}</text>`).join('');
 const nota = `<text x="8" y="14" font-family="Helvetica,Arial,sans-serif" font-size="3.6" fill="#222">livelli della distanza dal muro: ordine 1→6 dal chiaro allo scuro · ROSSO muro di partenza · BLU muro opposto · FRECCE verso del pettine · ARANCIO sovrapposizione · ROSA nudo · VERDE denso</text>`;
 mkdirSync('apps/pettine/scripts/out', { recursive: true });
-writeFileSync('apps/pettine/scripts/out/verifica-livelli.svg', `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 -18 ${WM.toFixed(1)} ${(HM + 18).toFixed(1)}" width="${WM.toFixed(1)}mm" height="${(HM + 18).toFixed(1)}mm">
-<rect x="0" y="-18" width="${WM.toFixed(1)}" height="${(HM + 18).toFixed(1)}" fill="#faf9f7"/>
+writeFileSync('apps/pettine/scripts/out/verifica-livelli.svg', `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-MARG} ${-18 - MARG} ${(WM + 2 * MARG).toFixed(1)} ${(HM + 18 + 2 * MARG).toFixed(1)}" width="${(WM + 2 * MARG).toFixed(1)}mm" height="${(HM + 18 + 2 * MARG).toFixed(1)}mm">
+<rect x="${-MARG}" y="${-18 - MARG}" width="${(WM + 2 * MARG).toFixed(1)}" height="${(HM + 18 + 2 * MARG).toFixed(1)}" fill="#faf9f7"/>
+<rect x="0" y="0" width="${WM.toFixed(1)}" height="${HM.toFixed(1)}" fill="none" stroke="#333" stroke-width="0.3" stroke-dasharray="2 1"/>
 <g transform="translate(0,-18)">${legenda}${nota}</g>
 ${pezzi.join('\n')}
 </svg>`, 'utf8');
@@ -384,11 +731,40 @@ if (DENTI) {
     if (perColore[t].length) pz.push(`<path d="${perColore[t].join('')}" fill="none" stroke="${tratto}" stroke-width="0.1"/>`);
     if (perColoreDenti[t].length) pz.push(`<path d="${perColoreDenti[t].join('')}" fill="none" stroke="${tratto}" stroke-width="0.1"/>`);
   });
+  if (process.env.MOSTRA_NUDI) pz.push(`<g>${nudiFilo.join('')}</g>`);
   const nome = `pettine-b${BASI_MM}-d${DENTE_MIN}_${DENTE_MAX}-p${PASSO_MM}-s${SORM_MM}`;
-  writeFileSync(`apps/pettine/scripts/out/${nome}.svg`, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${WM.toFixed(1)} ${HM.toFixed(1)}" width="${WM.toFixed(1)}mm" height="${HM.toFixed(1)}mm">
-<rect width="${WM.toFixed(1)}" height="${HM.toFixed(1)}" fill="#f7f6f3"/>
+  writeFileSync(`apps/pettine/scripts/out/${nome}.svg`, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-MARG} ${-MARG} ${(WM + 2 * MARG).toFixed(1)} ${(HM + 2 * MARG).toFixed(1)}" width="${(WM + 2 * MARG).toFixed(1)}mm" height="${(HM + 2 * MARG).toFixed(1)}mm">
+<rect x="${-MARG}" y="${-MARG}" width="${(WM + 2 * MARG).toFixed(1)}" height="${(HM + 2 * MARG).toFixed(1)}" fill="#f7f6f3"/>
+<rect x="0" y="0" width="${WM.toFixed(1)}" height="${HM.toFixed(1)}" fill="none" stroke="#333" stroke-width="0.3" stroke-dasharray="2 1"/>
 ${pz.join('\n')}
 </svg>`, 'utf8');
+  // UNA SONDA: PROBE=x,y stampa cosa c'e' attorno a un punto (per capire un buco)
+  if (process.env.PROBE) {
+    const [px, py] = process.env.PROBE.split(',').map(Number);
+    const i = cella({ x: px, y: py });
+    console.log(`SONDA (${px},${py}): famiglia ${i >= 0 ? famDi[i] : '?'} tinta ${i >= 0 ? tinta[i] : '?'}`);
+    const capi: string[] = [];
+    for (const { punti: l } of lineeFinali) for (const q of [l[0], l[l.length - 1]]) if (Math.hypot(q.x - px, q.y - py) < 5) capi.push(`(${q.x.toFixed(1)},${q.y.toFixed(1)})`);
+    console.log(`  capi di base entro 5 mm: ${capi.join(' ')}`);
+    for (const { id, punti: l } of lineeFinali) {
+      let b3 = 1e9;
+      for (const q of l) b3 = Math.min(b3, Math.hypot(q.x - px, q.y - py));
+      if (b3 < 6) console.log(`  base livello ${id}: ${l.length} punti, da (${l[0].x.toFixed(1)},${l[0].y.toFixed(1)}) a (${l[l.length - 1].x.toFixed(1)},${l[l.length - 1].y.toFixed(1)}), passa a ${b3.toFixed(1)} mm`);
+    }
+    let best = 1e9, bp: Point | null = null;
+    for (const l of cucito) for (const q of l) { const d = Math.hypot(q.x - px, q.y - py); if (d < best) { best = d; bp = q; } }
+    console.log(`  filo piu' vicino: ${best.toFixed(2)} mm a (${bp?.x.toFixed(1)},${bp?.y.toFixed(1)})`);
+    const nudeVicine = nudiFilo.map((r) => /x="(-?[\d.]+)" y="(-?[\d.]+)"/.exec(r)!).map((m) => ({ x: +m[1], y: +m[2] })).filter((q) => Math.hypot(q.x - px, q.y - py) < 12);
+    if (nudeVicine.length) {
+      const xs = nudeVicine.map((q) => q.x), ys = nudeVicine.map((q) => q.y);
+      console.log(`  celle nude entro 12 mm: ${nudeVicine.length}, fra x ${Math.min(...xs)}..${Math.max(...xs)} e y ${Math.min(...ys)}..${Math.max(...ys)}`);
+      const c = nudeVicine[Math.floor(nudeVicine.length / 2)];
+      let b2 = 1e9, bq: Point | null = null;
+      for (const l of cucito) for (const q of l) { const d = Math.hypot(q.x - c.x, q.y - c.y); if (d < b2) { b2 = d; bq = q; } }
+      const ic = cella(c);
+      console.log(`  una di esse (${c.x},${c.y}): famiglia ${ic >= 0 ? famDi[ic] : '?'} tinta ${ic >= 0 ? tinta[ic] : '?'} · filo piu' vicino ${b2.toFixed(2)} mm a (${bq?.x.toFixed(1)},${bq?.y.toFixed(1)})`);
+    }
+  }
   console.log(`DENTI: ${dentiTot} denti · ${(filoMm / 1000).toFixed(1)} m di filo nei denti · ${fermati} fermati a un bordo netto, ${attraversano} attraversano una sfumatura`);
   console.log(`-> apps/pettine/scripts/out/${nome}.svg`);
 }
