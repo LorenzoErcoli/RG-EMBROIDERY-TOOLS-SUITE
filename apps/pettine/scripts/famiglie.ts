@@ -266,6 +266,44 @@ famiglie.forEach((f, fi) => {
     }
     chiudi();
   }
+
+  // L'ULTIMA LINEA, lungo il muro opposto. Le linee seguono il rosso e finiscono un passo prima del
+  // blu, o contro i lati: li' resta un vuoto che i denti non coprono, perche' puntano dall'altra
+  // parte (Lorenzo: «si sono creati dei buchi»). Una linea a mezzo passo dentro il blu, che esiste
+  // solo dove il vuoto fra l'ultima linea e il muro supera i tre quarti del passo: dove le linee
+  // arrivano gia' vicine, non c'e'.
+  {
+    const nB = ricampiona([...Bs], 0.5);
+    const grezza: Point[] = [];
+    const vuoto: boolean[] = [];
+    for (let i = 0; i < nB.length; i++) {
+      const a = nB[Math.max(0, i - 1)], c = nB[Math.min(nB.length - 1, i + 1)];
+      let nx = c.y - a.y, ny = -(c.x - a.x);
+      const l = Math.hypot(nx, ny) || 1; nx /= l; ny /= l;
+      const b = nB[i];
+      if (!dentroFam({ x: b.x + nx * 1, y: b.y + ny * 1 })) { nx = -nx; ny = -ny; }   // normale verso dentro
+      const p = { x: b.x + nx * (BASI_MM / 2), y: b.y + ny * (BASI_MM / 2) };
+      grezza.push(p);
+      // quanto e' lontana l'ultima linea da A? si misura la larghezza locale w e il resto oltre l'ultima
+      // linea intera: w mod passo. Se il resto supera 3/4 del passo, qui c'e' un vuoto da riempire.
+      let u = 0, best = 1e9;
+      for (let k = 0; k <= 60; k++) { const q = fB(k / 60); const d = Math.hypot(q.x - b.x, q.y - b.y); if (d < best) { best = d; u = k / 60; } }
+      const pa = fA(u), pb = fB(u);
+      const w = Math.hypot(pb.x - pa.x, pb.y - pa.y);
+      const resto = w - (Math.floor(w / BASI_MM - 0.25) + 0.5) * BASI_MM;   // distanza dall'ultima linea al muro B
+      vuoto.push(resto > BASI_MM * 0.75 && dentroFam(p));
+    }
+    const morbida = liscia(grezza, LISCIA_MM, 0.5);
+    let cur: Point[] = [], curCol = -2;
+    const chiudi = (): void => { if (cur.length >= 2 && curCol >= 0) perColore[curCol].push(via(cur)); cur = []; curCol = -2; };
+    for (let i = 0; i < morbida.length; i++) {
+      const p = morbida[i];
+      const col = vuoto[i] && dentroFam(p) ? tintaIn(p) : -1;
+      if (col !== curCol) { const ultimo = cur[cur.length - 1]; chiudi(); if (ultimo && col >= 0) cur.push(ultimo); curCol = col; }
+      if (col >= 0) cur.push(p);
+    }
+    chiudi();
+  }
 });
 
 // --- 5. l'immagine per capirsi -------------------------------------------------------------------------
