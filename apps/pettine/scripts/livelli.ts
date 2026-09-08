@@ -23,6 +23,8 @@ import { type Point, type Polyline, polygonArea, traceRegions } from '@rg/core';
 import { parseSvgPolylines } from '../../../packages/pattern-grammar/src/index.ts';
 import { makeRegion } from '../../pittorico/src/region.ts';
 import { rasterizza, livello, incatena } from '../../pittorico/src/iso-fill.ts';
+import { larghezzaTransizione } from '../../pittorico/src/borders.ts';
+import { leggiBmp } from '../../pittorico/scripts/bmp.ts';
 
 const LARGHEZZA_REALE_MM = 419.45;
 const CELLA = 0.5;
@@ -33,6 +35,16 @@ const SORM_MM = num(4, 4);
 const ADDOLCISCI = num(5, 0.3);       // mm di lisciatura per mm di distanza dal muro
 const LISCIA_MM = 1.5;                 // lisciatura di base (i muri sono gia' curve)
 const RIFERIMENTO_DEG = -90;
+// I DENTI (DENTI=1): lunghezza fra min e max, uno ogni PASSO lungo la base, apertura ±INCL, verso il chiaro.
+const DENTI = !!process.env.DENTI;
+const FOTO = process.argv[6] ?? 'BRIEFING-RASO-OMOGENEO/cianotipia.bmp';
+const DENTE_MIN = num(7, 3), DENTE_MAX = num(8, 5), PASSO_MM = Math.max(1, num(9, 1.5)), INCL = num(10, 40), NETTO_MM = num(11, 2.5);
+function caso(a: number, b: number): number {
+  let h = (a * 0x9e3779b1) ^ (b * 0x85ebca6b);
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  h = Math.imul(h ^ (h >>> 16), 0x45d9f3b);
+  return ((h ^ (h >>> 16)) >>> 0) / 4294967296;
+}
 if (!fileSvg) { console.error('uso: node livelli.mjs <file.svg> [basi] [sormonto] [addolcisci]'); process.exit(1); }
 
 const luminosita = (hex: string): number => {
@@ -86,6 +98,17 @@ const cella = (p: Point): number => {
   return c < 0 || r < 0 || c >= COLS || r >= ROWS ? -1 : r * COLS + c;
 };
 const tintaIn = (p: Point): number => { const i = cella(p); return i < 0 ? -1 : tinta[i]; };
+const famIn = (p: Point): number => { const i = cella(p); return i < 0 ? -1 : famDi[i]; };
+// la foto, per dire dove un bordo fra famiglie stacca (il dente si ferma) e dove sfuma (attraversa)
+const img = DENTI ? leggiBmp(FOTO) : null;
+const mmPerPx = img ? LARGHEZZA_REALE_MM / img.width : 1;
+const sfumaQui = (p: Point, n: Point): boolean => {
+  if (!img) return true;
+  const tr = larghezzaTransizione(img, mmPerPx, p, n, { raggioMm: 6 });
+  return tr !== null && tr.larghezzaMm >= NETTO_MM;
+};
+const perColoreDenti: string[][] = [];
+let dentiTot = 0, filoMm = 0, fermati = 0, attraversano = 0;
 
 // --- 3. geometria ------------------------------------------------------------------------------------------
 function ricampiona(l: Point[], passo: number): Point[] {
@@ -119,6 +142,7 @@ const via = (pt: Point[]): string => pt.map((p, i) => `${i ? 'L' : 'M'}${p.x.toF
 
 // --- 4. famiglia per famiglia ---------------------------------------------------------------------------------
 const perColore: string[][] = colori.map(() => []);
+colori.forEach(() => perColoreDenti.push([]));
 const sotto: string[][] = colori.map(() => []);
 const muriA: string[] = [], muriB: string[] = [], frecce: string[] = [];
 const lineeFinali: Array<{ id: number; punti: Point[] }> = [];   // id = il livello: due tratti dello stesso livello non sono due linee
@@ -221,6 +245,50 @@ famiglie.forEach((f, fi) => {
     return { x: -gx / l, y: -gy / l };    // -gradiente = verso il muro = verso il chiaro
   };
 
+  /**
+   * IL PETTINE su un tratto di base: un dente ogni PASSO_MM, lungo fra min e max, aperto a caso entro
+   * ±INCL attorno al verso del chiaro (-gradiente della distanza), andata e ritorno nello stesso
+   * buco. Dove il dente esce dalla FAMIGLIA si guarda la foto: se il bordo stacca si ferma, se sfuma
+   * attraversa. Dentro la famiglia attraversa sempre: i cambi di colore li' sono un gradiente.
+   * Il SORMONTO: se verso il chiaro, entro SORM_MM, c'e' un colore piu' chiaro, il dente si cuce
+   * anche con quel colore - prima, e sotto.
+   */
+  const pettina = (base: Point[], col: number, famiglia: number, idLiv: number): void => {
+    let tot = 0;
+    const cum: number[] = [0];
+    for (let i = 1; i < base.length; i++) { tot += Math.hypot(base[i].x - base[i - 1].x, base[i].y - base[i - 1].y); cum.push(tot); }
+    const punti: Point[] = [];
+    const puntiSotto = new Map<number, Point[]>();
+    let k = 0;
+    for (let d = 0; d <= tot; d += PASSO_MM, k++) {
+      let i = 1;
+      while (i < cum.length - 1 && cum[i] < d) i++;
+      const tt = (d - cum[i - 1]) / Math.max(1e-9, cum[i] - cum[i - 1]);
+      const pa = base[i - 1], pb = base[i];
+      const p = { x: pa.x + (pb.x - pa.x) * tt, y: pa.y + (pb.y - pa.y) * tt };
+      const v = gradVersoA(p);
+      if (v.x === 0 && v.y === 0) continue;
+      const r1 = caso(famiglia * 7919 + idLiv, k * 2), r2 = caso(famiglia * 104729 + idLiv, k * 2 + 1);
+      let lung = DENTE_MIN + (DENTE_MAX - DENTE_MIN) * r1;
+      const ang = ((r2 * 2 - 1) * INCL * Math.PI) / 180;
+      const ux = v.x * Math.cos(ang) - v.y * Math.sin(ang), uy = v.x * Math.sin(ang) + v.y * Math.cos(ang);
+      for (let s = 0.5; s <= lung; s += 0.5) {
+        const qq = { x: p.x + ux * s, y: p.y + uy * s };
+        if (famIn(qq) === famiglia) continue;
+        if (!sfumaQui(qq, { x: ux, y: uy })) { lung = Math.max(0.5, s - 0.25); fermati++; } else attraversano++;
+        break;
+      }
+      const punta = { x: p.x + ux * lung, y: p.y + uy * lung };
+      punti.push(p, punta, p);
+      dentiTot++; filoMm += 2 * lung;
+      const qq = { x: p.x + v.x * SORM_MM, y: p.y + v.y * SORM_MM };
+      const colLa = famIn(qq) === famiglia ? tintaIn(qq) : -1;
+      if (colLa >= 0 && colLa < col) { const l = puntiSotto.get(colLa) ?? []; l.push(p, punta, p); puntiSotto.set(colLa, l); }
+    }
+    if (punti.length >= 3) perColoreDenti[col].push(via(punti));
+    for (const [c, l] of puntiSotto) if (l.length >= 3) perColoreDenti[c].push(via(l));
+  };
+
   // I LIVELLI, uno ogni passo, ognuno addolcito in proporzione alla distanza
   for (let d = BASI_MM / 2; d < dMax; d += BASI_MM) {
     idLivello++;
@@ -228,7 +296,13 @@ famiglie.forEach((f, fi) => {
       if (linea.length < 3) continue;
       const morbida = liscia(ricampiona(linea, 0.5), LISCIA_MM + ADDOLCISCI * d, 0.5);
       let cur: Point[] = [], curCol = -2;
-      const chiudi = (): void => { if (cur.length >= 2 && curCol >= 0) { perColore[curCol].push(via(cur)); lineeFinali.push({ id: idLivello, punti: cur.slice() }); } cur = []; curCol = -2; };
+      const chiudi = (): void => {
+        if (cur.length >= 2 && curCol >= 0) {
+          perColore[curCol].push(via(cur)); lineeFinali.push({ id: idLivello, punti: cur.slice() });
+          if (DENTI) pettina(cur, curCol, fi, idLivello);
+        }
+        cur = []; curCol = -2;
+      };
       for (let i = 0; i < morbida.length; i++) {
         const p = morbida[i];
         const col = dentroFam(p) ? tintaIn(p) : -1;
@@ -303,3 +377,18 @@ writeFileSync('apps/pettine/scripts/out/verifica-livelli.svg', `<svg xmlns="http
 ${pezzi.join('\n')}
 </svg>`, 'utf8');
 console.log('-> apps/pettine/scripts/out/verifica-livelli.svg');
+if (DENTI) {
+  const pz: string[] = [];
+  colori.forEach((c, t) => {
+    const tratto = t === 0 ? '#9a9a9a' : c;
+    if (perColore[t].length) pz.push(`<path d="${perColore[t].join('')}" fill="none" stroke="${tratto}" stroke-width="0.1"/>`);
+    if (perColoreDenti[t].length) pz.push(`<path d="${perColoreDenti[t].join('')}" fill="none" stroke="${tratto}" stroke-width="0.1"/>`);
+  });
+  const nome = `pettine-b${BASI_MM}-d${DENTE_MIN}_${DENTE_MAX}-p${PASSO_MM}-s${SORM_MM}`;
+  writeFileSync(`apps/pettine/scripts/out/${nome}.svg`, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${WM.toFixed(1)} ${HM.toFixed(1)}" width="${WM.toFixed(1)}mm" height="${HM.toFixed(1)}mm">
+<rect width="${WM.toFixed(1)}" height="${HM.toFixed(1)}" fill="#f7f6f3"/>
+${pz.join('\n')}
+</svg>`, 'utf8');
+  console.log(`DENTI: ${dentiTot} denti · ${(filoMm / 1000).toFixed(1)} m di filo nei denti · ${fermati} fermati a un bordo netto, ${attraversano} attraversano una sfumatura`);
+  console.log(`-> apps/pettine/scripts/out/${nome}.svg`);
+}
