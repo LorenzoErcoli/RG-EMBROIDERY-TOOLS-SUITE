@@ -44,6 +44,8 @@ const SORM_NETTO = num(10, 0.8);        // quanto una tinta entra sotto la succe
 const SORM_SFUMATO = num(11, 4);        // ...e a un bordo sfumato
 const MACCHIA_MIN_MM2 = num(12, 60);    // sotto quest'area una macchia viene assorbita dalla riduzione
 const SENZA_PELO_MM2 = num(13, 0);      // sotto quest'area un'area ha solo le basi, niente denti: i dettagli restano netti
+const VERSO = num(14, 1) >= 0 ? 1 : -1;   // +1 = il pelo va dallo scuro verso il chiaro (verso il muro di partenza); -1 = via da esso
+const RIFERIMENTO_DEG = num(15, -90);   // dove guarda il pelo quando la forma non lo dice (un'isola tutta circondata)
 if (!foto) { console.error('uso: node immagine.mjs <foto.bmp> [tinte] [basi] [passo] [dMin] [dMax] [incl] [nettoMm] [sormNetto] [sormSfumato] [macchiaMinMm2] [senzaPeloMm2]'); process.exit(1); }
 
 function caso(a: number, b: number): number {
@@ -115,6 +117,8 @@ const ordineRanghi = colori.map((_, r) => r);
 // --- 4. il pettine, tinta per tinta, area per area --------------------------------------------------
 const CELLA = mmPerPx;
 const perTinta: string[][] = colori.map(() => []);
+const CW = Math.ceil(W * mmPerPx) + 1, CH = Math.ceil(H * mmPerPx) + 1;
+const coperto = new Uint8Array(CW * CH);
 let denti = 0, filoMm = 0, basiTot = 0, fermati = 0, attraversano = 0, areeTot = 0;
 
 const cellaDi = (p: Point): number => {
@@ -162,29 +166,64 @@ for (let t = 0; t < colori.length; t++) {
         if (tinta[j] >= 0 && tinta[j] < t) chiaro[i] = 1;
       }
     }
-    let semi = bordo, versoDentro = true;
-    if (t > 0) {
-      const gruppo = new Int32Array(N).fill(-1);
-      let migliore = -1, peso = 0, ng = 0;
-      for (let s = 0; s < N; s++) {
-        if (!chiaro[s] || gruppo[s] !== -1) continue;
-        const coda = [s]; gruppo[s] = ng; let n = 0;
-        while (coda.length) {
-          const i = coda.pop()!; n++;
-          for (const j of [i - 1, i + 1, i - W, i + W, i - W - 1, i - W + 1, i + W - 1, i + W + 1]) {
-            if (j < 0 || j >= N || !chiaro[j] || gruppo[j] !== -1) continue;
-            gruppo[j] = ng; coda.push(j);
-          }
-        }
-        if (n > peso) { peso = n; migliore = ng; }
-        ng++;
-      }
-      if (migliore !== -1) {
-        semi = new Uint8Array(N);
-        for (let i = 0; i < N; i++) if (chiaro[i] && gruppo[i] === migliore) semi[i] = 1;
-        versoDentro = false;
-      }
+    // IL MURO DI PARTENZA: uno solo, mai tutto il giro. Con tutto il giro come seme le curve di
+    // livello sono ANELLI (Lorenzo: «le curve sono circolari, questo e' un errore»); con un muro solo
+    // seguono quel muro, attraversano la macchia e finiscono sul lato opposto — una direzione sola,
+    // e copertura totale per costruzione. Il muro e' il gruppo piu' lungo di bordo che tocca una
+    // tinta piu' chiara; se non c'e' (la tinta piu' chiara, un'isola), il gruppo piu' lungo verso una
+    // tinta piu' scura. E in ogni caso si tengono solo le celle del gruppo la cui normale guarda dalla
+    // parte del suo verso medio: cosi' un gruppo che gira attorno all'isola non richiude l'anello.
+    const candidati = new Uint8Array(N);
+    let versoChiaro = false;
+    for (let i = 0; i < N; i++) if (chiaro[i]) { candidati[i] = 1; versoChiaro = true; }
+    if (!versoChiaro) for (let y = 1; y + 1 < H; y++) for (let x = 1; x + 1 < W; x++) {
+      const i = y * W + x;
+      if (!bordo[i]) continue;
+      for (const j of [i - 1, i + 1, i - W, i + W]) if (areaDi[j] !== a.id && tinta[j] > t) { candidati[i] = 1; break; }
     }
+    // il gruppo connesso piu' grande
+    const gruppo = new Int32Array(N).fill(-1);
+    let migliore = -1, peso = 0, ng = 0;
+    for (let s0 = 0; s0 < N; s0++) {
+      if (!candidati[s0] || gruppo[s0] !== -1) continue;
+      const coda = [s0]; gruppo[s0] = ng; let n = 0;
+      while (coda.length) {
+        const i = coda.pop()!; n++;
+        for (const j of [i - 1, i + 1, i - W, i + W, i - W - 1, i - W + 1, i + W - 1, i + W + 1]) {
+          if (j < 0 || j >= N || !candidati[j] || gruppo[j] !== -1) continue;
+          gruppo[j] = ng; coda.push(j);
+        }
+      }
+      if (n > peso) { peso = n; migliore = ng; }
+      ng++;
+    }
+    // la normale esterna di ogni cella del gruppo (dalla cella verso il fuori), e il loro verso medio
+    let mx = 0, my = 0;
+    const normali = new Map<number, [number, number]>();
+    if (migliore !== -1) for (let i = 0; i < N; i++) {
+      if (gruppo[i] !== migliore) continue;
+      let nx = 0, ny = 0;
+      if (areaDi[i + 1] !== a.id) nx += 1;
+      if (areaDi[i - 1] !== a.id) nx -= 1;
+      if (areaDi[i + W] !== a.id) ny += 1;
+      if (areaDi[i - W] !== a.id) ny -= 1;
+      const l = Math.hypot(nx, ny) || 1;
+      normali.set(i, [nx / l, ny / l]); mx += nx / l; my += ny / l;
+    }
+    const ml = Math.hypot(mx, my);
+    // se il gruppo gira attorno (verso medio quasi nullo) si usa il riferimento dichiarato
+    let rx = Math.cos((RIFERIMENTO_DEG * Math.PI) / 180), ry = Math.sin((RIFERIMENTO_DEG * Math.PI) / 180);
+    if (ml > 0.3 * Math.max(1, normali.size)) { rx = mx / ml; ry = my / ml; }
+    const semi = new Uint8Array(N);
+    let nSemi = 0;
+    for (const [i, [nx, ny]] of normali) if (nx * rx + ny * ry >= 0) { semi[i] = 1; nSemi++; }
+    if (nSemi === 0) {
+      // nessun bordo utile (capita solo su macchie minuscole): si prende il bordo che guarda il riferimento
+      for (let i = 0; i < N; i++) if (bordo[i]) semi[i] = 1;
+    }
+    // il verso: dallo scuro verso il chiaro = verso il muro di partenza se il muro e' il lato chiaro,
+    // via dal muro se il muro e' il lato scuro. VERSO lo rovescia.
+    const versoDentro = !versoChiaro;
 
     // la distanza dai semi, dentro l'area sola
     const INF = 1e9;
@@ -221,8 +260,7 @@ for (let t = 0; t < colori.length; t++) {
     // il pelo va DENTRO l'area, via dai semi. Vale per tutte le tinte, la più chiara compresa. La
     // compenetrazione la fa il sormonto: il chiaro cucito prima si allarga sotto lo scuro, e le sue
     // ultime basi coi loro denti restano sotto la base netta dello scuro.
-    void versoDentro;
-    const segno = 1;
+    const segno = (versoDentro ? 1 : -1) * VERSO;
     // IL PETTINE HA SENSO SU UNA FASCIA, non su una macchia grande quanto i suoi denti: in un settore
     // della sfera largo 15 mm con denti da 5, il pelo arriva da tutti i lati e resta un intrico di X.
     // Sotto la soglia, l'area ha solo le sue basi - un raso a curve di livello - e resta leggibile.
@@ -272,6 +310,14 @@ for (let t = 0; t < colori.length; t++) {
         if (!soloBasi) denti += Math.floor(punti.length / 3);
         for (let i = 1; i < punti.length; i++) filoMm += Math.hypot(punti[i].x - punti[i - 1].x, punti[i].y - punti[i - 1].y);
         perTinta[t].push(punti.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(''));
+        for (let i = 1; i < punti.length; i++) {
+          const pa = punti[i - 1], pb = punti[i];
+          const n = Math.max(1, Math.ceil(Math.hypot(pb.x - pa.x, pb.y - pa.y)));
+          for (let k = 0; k <= n; k++) {
+            const x = Math.round(pa.x + ((pb.x - pa.x) * k) / n), y = Math.round(pa.y + ((pb.y - pa.y) * k) / n);
+            if (x >= 0 && y >= 0 && x < CW && y < CH) coperto[y * CW + x] = 1;
+          }
+        }
       }
     }
   }
@@ -289,8 +335,18 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${WM.toFixed(1
 ${pezzi.join('\n')}
 </svg>`;
 mkdirSync('apps/pettine/scripts/out', { recursive: true });
-const nome = `immagine-t${TINTE}-b${BASI_MM}-d${DENTE_MIN}_${DENTE_MAX}-s${SORM_NETTO}_${SORM_SFUMATO}${SENZA_PELO_MM2 ? `-np${SENZA_PELO_MM2}` : ''}`;
+const nome = `muro-t${TINTE}-b${BASI_MM}-d${DENTE_MIN}_${DENTE_MAX}-s${SORM_NETTO}_${SORM_SFUMATO}${SENZA_PELO_MM2 ? `-np${SENZA_PELO_MM2}` : ''}${VERSO < 0 ? '-inv' : ''}`;
 writeFileSync(`apps/pettine/scripts/out/${nome}.svg`, svg, 'utf8');
 console.log(`${areeTot} aree · ${basiTot} linee di base · ${denti} denti · ${(filoMm / 1000).toFixed(1)} m di filo · ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 console.log(`denti al bordo: ${fermati} fermati (netto) · ${attraversano} attraversano (sfumato)`);
+{
+  let dentro = 0, nudo = 0;
+  for (let y = 0; y < CH; y++) for (let x = 0; x < CW; x++) {
+    const px = Math.min(W - 1, Math.round(x / mmPerPx)), py = Math.min(H - 1, Math.round(y / mmPerPx));
+    if (tinta[py * W + px] < 0) continue;
+    dentro++;
+    if (!coperto[y * CW + x]) nudo++;
+  }
+  console.log(`COPERTURA VERA (griglia 1 mm): ${nudo} mm² nudi su ${dentro} = ${((nudo / dentro) * 100).toFixed(1)}% senza filo`);
+}
 console.log(`-> apps/pettine/scripts/out/${nome}.svg`);
