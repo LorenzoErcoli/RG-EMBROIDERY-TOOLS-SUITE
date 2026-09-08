@@ -207,14 +207,18 @@ famiglie.forEach((f, fi) => {
   muriA.push(via(As)); muriB.push(via(Bs));
   famOk++;
 
-  let larg = 0;
-  for (let k = 0; k <= 24; k++) { const pa = fA(k / 24), pb = fB(k / 24); larg += Math.hypot(pb.x - pa.x, pb.y - pa.y); }
-  larg /= 25;
-  const quante = Math.max(1, Math.round(larg / BASI_MM));
+  // LA DISTANZA FRA LE LINEE E' FISSA, il numero no (Lorenzo: «se non ci sta, la linea si interrompe
+  // e arriva al bordo come arriva»). La fusione pura conservava il numero di linee lungo tutta la
+  // famiglia: dove si stringe le schiacciava, dove si allarga le apriva, e ai capi le ammucchiava.
+  // Qui la linea k sta a (k + 1/2) passi dal muro A, misurati lungo la direzione della fusione, e
+  // vive solo finche' sta dentro la famiglia: dove c'e' posto nasce, dove non ce n'e' finisce.
+  let largMax = 0;
+  for (let k = 0; k <= 48; k++) { const pa = fA(k / 48), pb = fB(k / 48); largMax = Math.max(largMax, Math.hypot(pb.x - pa.x, pb.y - pa.y)); }
+  const quante = Math.max(1, Math.ceil(largMax / BASI_MM));
   const passiU = Math.max(16, Math.round((As.length + Bs.length) / 2));
 
   for (let q = 0; q < quante; q++) {
-    const fr = (q + 0.5) / quante;
+    const distanza = (q + 0.5) * BASI_MM;
     // la via di mezzo, spezzata dove esce dalla famiglia, e COLORATA dalla forma che ha sotto
     let cur: Point[] = [], curCol = -2;
     const chiudi = (): void => {
@@ -224,8 +228,10 @@ famiglie.forEach((f, fi) => {
     for (let k = 0; k <= passiU; k++) {
       const uu = k / passiU;
       const pa = fA(uu), pb = fB(uu);
-      const p = { x: pa.x + (pb.x - pa.x) * fr, y: pa.y + (pb.y - pa.y) * fr };
-      const col = dentroFam(p) ? tintaIn(p) : -1;
+      const w = Math.hypot(pb.x - pa.x, pb.y - pa.y) || 1;
+      const p = { x: pa.x + ((pb.x - pa.x) / w) * distanza, y: pa.y + ((pb.y - pa.y) / w) * distanza };
+      // oltre il muro opposto la linea non esiste: si ferma dove finisce il posto
+      const col = distanza < w - BASI_MM * 0.25 && dentroFam(p) ? tintaIn(p) : -1;
       if (col !== curCol) { const ultimo = cur[cur.length - 1]; chiudi(); if (ultimo && col >= 0) cur.push(ultimo); curCol = col; }
       if (col >= 0) cur.push(p);
       // la SOVRAPPOSIZIONE: se verso A (il chiaro), entro `sormonto`, c'è una forma più chiara di
