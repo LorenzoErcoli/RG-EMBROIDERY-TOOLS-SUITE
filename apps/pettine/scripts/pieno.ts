@@ -139,7 +139,7 @@ console.log(`${aree.length} aree`);
  * chiara di tutte non ha nessuno da raggiungere: i suoi semi sono tutto il suo bordo, e il pelo va
  * verso dentro.
  */
-function semiDi(a: Area): Uint8Array {
+function semiDi(a: Area): { semi: Uint8Array; versoDentro: boolean } {
   const bordo = new Uint8Array(N);
   const versoChiaro = new Uint8Array(N);
   for (let r = 1; r + 1 < ROWS; r++) for (let c = 1; c + 1 < COLS; c++) {
@@ -151,7 +151,10 @@ function semiDi(a: Area): Uint8Array {
       if (tintaDi[j] !== -1 && tintaDi[j] < a.tinta) versoChiaro[i] = 1;
     }
   }
-  if (a.tinta === 0) return bordo;                   // la più chiara: base su tutto il bordo
+  // la più chiara: base su tutto il bordo, e le PUNTE vanno verso dentro — verso la parte più chiara.
+  // Il segno conta: «verso i semi» per lei vorrebbe dire verso il bordo, cioè addosso al vicino, ed è
+  // il difetto che Lorenzo ha visto (bianco e celeste che si picchiano).
+  if (a.tinta === 0) return { semi: bordo, versoDentro: true };
   // gruppi connessi di celle «verso il chiaro»: si tiene il più grande
   const gruppo = new Int32Array(N).fill(-1);
   let migliore = -1, migliorePeso = 0, ng = 0;
@@ -169,10 +172,10 @@ function semiDi(a: Area): Uint8Array {
     if (peso > migliorePeso) { migliorePeso = peso; migliore = ng; }
     ng++;
   }
-  if (migliore === -1) return bordo;                 // nessun vicino più chiaro (isola nello scuro): tutto il bordo
+  if (migliore === -1) return { semi: bordo, versoDentro: true };   // isola senza vicini più chiari: come la più chiara
   const semi = new Uint8Array(N);
   for (let i = 0; i < N; i++) if (versoChiaro[i] && gruppo[i] === migliore) semi[i] = 1;
-  return semi;
+  return { semi, versoDentro: false };
 }
 
 /** Distanza dai semi, dentro l'area sola (chamfer in due passate ripetute finché si assesta). */
@@ -219,8 +222,9 @@ let denti = 0, filoMm = 0, basiTot = 0, netti = 0, sfumati = 0, dentroArea = 0;
 
 for (const a of aree) {
   if (a.celle < 40) continue;                           // sotto 10 mm² non c'è posto per un pettine
-  const semi = semiDi(a);
+  const { semi, versoDentro } = semiDi(a);
   const D = distanzaDa(a, semi);
+  const segno = versoDentro ? 1 : -1;                  // -1 = verso i semi (il lato chiaro); +1 = via dal bordo
   const dentro = new Uint8Array(N);
   let maxD = 0;
   for (let i = 0; i < N; i++) if (areaDi[i] === a.id) { dentro[i] = 1; if (D[i] < 1e8 && D[i] > maxD) maxD = D[i]; }
@@ -252,7 +256,7 @@ for (const a of aree) {
         const r1 = caso(a.id * 7919 + Math.round(v * 10), k * 2), r2 = caso(a.id * 104729 + Math.round(v * 10), k * 2 + 1);
         let lung = DENTE_MIN + (DENTE_MAX - DENTE_MIN) * r1;
         const ang = ((r2 * 2 - 1) * INCL * Math.PI) / 180;
-        const bx = -gx / gl, by = -gy / gl;
+        const bx = (segno * gx) / gl, by = (segno * gy) / gl;
         const ux = bx * Math.cos(ang) - by * Math.sin(ang), uy = bx * Math.sin(ang) + by * Math.cos(ang);
 
         // NETTO O SFUMATO. Si cammina lungo il dente fino a dove esce dall'area; lì si misura sulla
