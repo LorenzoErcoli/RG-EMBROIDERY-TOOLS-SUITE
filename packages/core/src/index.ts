@@ -17,5 +17,7 @@ export * from './imports';
 export * from './export';
 export * from './dst';
 export * from './io/normalize';
+export * from './io/transform';
 export { parseSvgToContours } from './io/svg';
+export type { SvgImportOptions } from './io/svg';
 export { parseDxfToContours } from './io/dxf';

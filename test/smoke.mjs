@@ -17,7 +17,7 @@ writeFileSync(entry, `
 export { parseImportedBoundarySource, generatePattern, parseSvgTransform } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
 export { generateFill, generatePasses, stitchBudget, defaultInterlaceParams } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
 export { generateStitch, stitchSteps, reinsertPoints, analyzeBitmap, buildSelectionMask, buildPalette, groupByPalette, defaultBitmapParams } from ${JSON.stringify(posix('apps/bitmap/src/engine.ts'))};
-export { buildRawLevels, computeGridCounts, moduleFromPolylines, parseModuleSvg, defaultObliqueParams, resolveBoundaries, buildLaserExport, filterLevelByHoles, rectBoundaryOf, boundaryFromFormat, boundaryFromPoints, contourBoundary, simplifyLoop, isInside, applyModuleClipMode, cleanupPolylines, subtractExclusions, cleanupVoids, applyVoids, generateOblique, connectLayerContinuity, connectTechnicalDiagonals, enforceMinimumStitch, reconnectCutFragmentsOnBoundary } from ${JSON.stringify(posix('apps/oblique/src/engine.ts'))};
+export { buildRawLevels, computeGridCounts, moduleFromPolylines, parseModuleSvg, defaultObliqueParams, resolveBoundaries, buildLaserExport, filterLevelByHoles, rectBoundaryOf, boundaryFromFormat, boundaryFromPoints, contourBoundary, simplifyLoop, isInside, applyModuleClipMode, cleanupPolylines, subtractExclusions, cleanupVoids, applyVoids, generateOblique, connectLayerContinuity, connectTechnicalDiagonals, enforceMinimumStitch, reconnectCutFragmentsOnBoundary, offsetPolygonBoundary, insetAnyBoundary, removeIsolatedSpikes } from ${JSON.stringify(posix('apps/oblique/src/engine.ts'))};
 export { runBitmapPreview, runBitmapPipeline, PREVIEW_MAX_DOTS } from ${JSON.stringify(posix('apps/bitmap/src/pipeline.ts'))};
 export { buildNet } from ${JSON.stringify(posix('apps/net-45/src/net.ts'))};
 export { generateStriatura, layerThreadMm, defaultStriaturaParams } from ${JSON.stringify(posix('apps/striatura/src/engine.ts'))};
@@ -1023,6 +1023,100 @@ console.log('\noblique — clip al perimetro + void (2c)');
   const hole = { layer: 'holes', diagonal: 0, index: 0, points: [{ x: 48, y: 48 }, { x: 52, y: 48 }, { x: 52, y: 52 }, { x: 48, y: 52 }, { x: 48, y: 48 }] };
   const le = rg.buildLaserExport([hole], b, b, 2, [voidBox]);
   check('void: il foro dentro il vuoto è soppresso', le.validCenters.length, 0);
+}
+
+// import DXF: un cartamodello CAD chiude quasi sempre le curve con CIRCLE/ARC. Prima venivano
+// saltate in silenzio — restava una sagoma incompleta, non un errore.
+console.log('\nimport DXF: cerchi e archi');
+{
+  const dxf = (entities) => ['0','SECTION','2','ENTITIES', ...entities, '0','ENDSEC','0','EOF'].join('\n');
+  const cerchio = rg.parseDxfToContours(dxf(['0','CIRCLE','10','50','20','50','40','25','62','1']));
+  check('DXF: il CIRCLE entra come contorno', cerchio.contours.length, 1);
+  check('DXF: ...ed è chiuso', cerchio.contours[0].closed, true);
+  const raggi = cerchio.contours[0].points.map((q) => Math.hypot(q.x - 50, q.y + 50));
+  check('DXF: ...col raggio giusto (25mm)', Math.abs(Math.max(...raggi) - 25) < 0.01 && Math.abs(Math.min(...raggi) - 25) < 0.01, true);
+  check('DXF: ...e col colore ACI dichiarato', cerchio.contours[0].color, '#ff0000');
+  const arco = rg.parseDxfToContours(dxf(['0','ARC','10','0','20','0','40','10','50','0','51','90']));
+  check('DXF: l ARC entra come contorno aperto', arco.contours.length === 1 && arco.contours[0].closed === false, true);
+  const a0 = arco.contours[0].points[0], a1 = arco.contours[0].points[arco.contours[0].points.length - 1];
+  check('DXF: ...da 0° (10,0) a 90° (0,10) con la Y del disegno rivolta in giù',
+    [Math.round(a0.x), Math.round(a0.y), Math.round(a1.x), Math.round(a1.y)], [10, 0, 0, -10]);
+}
+
+// oblique — i tre perimetri: sagoma, taglio pattern, passaggi. Difetti trovati usando il tool
+// (2026-09-08) e bloccati qui: il rientro squadrava la sagoma, e i passaggi costeggiavano il bordo
+// esterno invece del taglio pattern, uscendo dall'area in cui il ricamo esiste.
+console.log('\noblique — perimetri: sagoma, taglio pattern, passaggi');
+{
+  const ott = [];
+  for (let i = 0; i <= 8; i += 1) {
+    const a = (i / 8) * Math.PI * 2;
+    ott.push({ x: 50 + 50 * Math.cos(a), y: 50 + 50 * Math.sin(a) });
+  }
+  const master = rg.boundaryFromPoints(ott, 'master_outline');
+  check('sagoma: il cartamodello entra come poligono', master.type, 'polygon');
+
+  // Il rientro RESTRINGE la sagoma, non la squadra (offsetPolygonBoundary, non insetBoundary).
+  const conRientro = rg.resolveBoundaries({ ...rg.defaultObliqueParams(), patternBorderOffset: 5 }, undefined, { master });
+  check('taglio pattern: col rientro la sagoma resta una sagoma', conRientro.decorative.type, 'polygon');
+  check('taglio pattern: ...e ha gli stessi vertici della sagoma', conRientro.decorative.points.length, master.points.length);
+  check('taglio pattern: ...rientrata di 5mm su ogni lato',
+    Math.abs(conRientro.decorative.minX - 5) < 0.01 && Math.abs(conRientro.decorative.maxX - 95) < 0.01, true);
+  const senzaRientro = rg.resolveBoundaries({ ...rg.defaultObliqueParams(), patternBorderOffset: 0 }, undefined, { master });
+  check('taglio pattern: rientro 0 → il boundary è identico alla sagoma', senzaRientro.decorative.points.length, master.points.length);
+  check('insetAnyBoundary: su un rettangolo resta un rettangolo',
+    rg.insetAnyBoundary(rg.rectBoundaryOf(0, 0, 100, 100, 'r'), 5, 'x').type, 'rect');
+
+  // Fori e piazzamento seguono la SAGOMA, non il suo rettangolo (divergenza voluta dall'originale:
+  // misurato sul pannello ruotato di 20°, il fissaggio finiva 60mm fuori dalla stoffa).
+  const fori = rg.resolveBoundaries({ ...rg.defaultObliqueParams(), holesMargin: 0 }, undefined, { master });
+  check('fori: il ripiego segue la sagoma, non il rettangolo', fori.laser.type, 'polygon');
+  check('piazzamento: idem', fori.placement.type, 'polygon');
+  const foriRientro = rg.resolveBoundaries({ ...rg.defaultObliqueParams(), holesMargin: 8 }, undefined, { master });
+  check('fori: col rientro resta una sagoma, rientrata di 8mm',
+    foriRientro.laser.type === 'polygon' && Math.abs(foriRientro.laser.minX - 8) < 0.01, true);
+  check('fori: su un pannello rettangolare resta un rettangolo',
+    rg.resolveBoundaries({ ...rg.defaultObliqueParams(), holesMargin: 8 }, undefined, {}).laser.type, 'rect');
+
+  // Senza il ruolo "Pannello" assegnato si lavora comunque sulla SAGOMA, non sul suo rettangolo.
+  const soloContorno = rg.resolveBoundaries(rg.defaultObliqueParams(), undefined, {}, master);
+  check('sagoma: senza ruolo assegnato vale il contorno del cartamodello', soloContorno.pattern.type, 'polygon');
+
+  // I passaggi costeggiano il TAGLIO PATTERN quando il ruolo Pannello non c'è.
+  const p10 = { ...rg.defaultObliqueParams(), patternBorderOffset: 10, enableLevel0: false, enableHolesLayer: false };
+  const b10 = rg.resolveBoundaries(p10, undefined, {});
+  check('passaggi: senza ruolo Pannello il perimetro è il taglio pattern', b10.routing.minX, b10.decorative.minX);
+  check('passaggi: ...e NON il bordo esterno', b10.routing.minX === b10.pattern.minX, false);
+  check('passaggi: col ruolo Pannello il perimetro torna la sagoma',
+    rg.resolveBoundaries(p10, undefined, { master }).routing.points.length, master.points.length);
+
+  // Misura di fatto: i passaggi generati restano dentro il rettangolo di taglio.
+  const mod = (pts) => rg.moduleFromPolylines([pts]);
+  const l1 = mod([{ x: 0, y: 0 }, { x: 6, y: 0 }, { x: 6, y: 6 }, { x: 0, y: 6 }, { x: 0, y: 0 }]);
+  const l2 = mod([{ x: 0, y: 0 }, { x: 8, y: 2 }, { x: 4, y: 8 }]);
+  const gen = rg.generateOblique({ level1: l1, level2: l2 }, p10, {});
+  const cut = gen.boundaries.decorative;
+  const fuori = gen.travel
+    .filter((s) => s.connectorType === 'inter-diagonal-border-connector')
+    .flatMap((s) => s.points)
+    .filter((q) => q.x < cut.minX - 0.01 || q.x > cut.maxX + 0.01 || q.y < cut.minY - 0.01 || q.y > cut.maxY + 0.01);
+  check('passaggi: nessun passaggio fra diagonali esce dal taglio pattern', fuori.length, 0);
+
+  // removeIsolatedSpikes: l'andata-e-ritorno senza foro sparisce, la passata resta.
+  const passata = [];
+  for (let x = 0; x <= 60; x += 3) passata.push({ x, y: 0 });
+  const conBecuccio = passata.slice(0, 10).concat(
+    [{ x: 27, y: 5 }, { x: 27, y: 10 }, { x: 27, y: 5 }, { x: 27.2, y: 0.2 }],
+    passata.slice(10)
+  );
+  const conn = { polylines: [{ layer: 'level1', points: conBecuccio }] };
+  rg.removeIsolatedSpikes(conn, []);
+  const restaAlto = conn.polylines[0].points.some((q) => q.y > 4);
+  check('becucci: senza foro l escursione viene tolta', restaAlto, false);
+  check('becucci: ...e la passata resta tutta', conn.polylines[0].points.length >= passata.length - 1, true);
+  const connConForo = { polylines: [{ layer: 'level1', points: conBecuccio.map((q) => ({ ...q })) }] };
+  rg.removeIsolatedSpikes(connConForo, [{ x: 27, y: 10, id: '0:0', diagonal: 0, index: 0 }]);
+  check('becucci: col foro vicino l escursione resta', connConForo.polylines[0].points.some((q) => q.y > 4), true);
 }
 
 // oblique — routing continuo + min-stitch + lock + orchestratore (Fase A, sotto-step 2d).

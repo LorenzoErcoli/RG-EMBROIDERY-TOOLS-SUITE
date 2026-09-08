@@ -2,8 +2,8 @@ import '@rg/ui/rg.css';
 import './oblique.css';
 import {
   parseSvgToContours, parseDxfToContours, buildSvg, buildSvgInSourceFrame, readProjectMetadata, readDstMetadata,
-  dstFromExportLayers, DST_FILE, THREAD_STROKE_MM, SHAPE_STROKE_MM,
-  type ImportResult, type ExportLayer,
+  dstFromExportLayers, DST_FILE, THREAD_STROKE_MM, SHAPE_STROKE_MM, DPI_ILLUSTRATOR,
+  type ImportResult, type ExportLayer, type SvgImportOptions,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
@@ -31,12 +31,21 @@ const LAYER_COLOR: Record<string, string> = {
 
 const isIllustrator = (text: string): boolean => /Adobe Illustrator|Illustrator/i.test(text) || /id="Livello_/i.test(text);
 
+/**
+ * Scala d'import del cartamodello, come l'originale (inferUndeclaredSvgScale): se il file dichiara
+ * width/height comanda quella misura; se non la dichiara, un file Illustrator ha il viewBox in
+ * PUNTI, tutto il resto ce l'ha già in MILLIMETRI. Il vecchio ripiego a 96dpi faceva entrare un
+ * cartamodello senza misure al 26% della sua taglia — e nessuno vedeva un errore.
+ */
+const svgImportOptions = (text: string): SvgImportOptions =>
+  isIllustrator(text) ? { dpi: DPI_ILLUSTRATOR, scaleMode: 'illustrator-72' } : { scaleMode: 'viewbox-mm' };
+
 /** Parsa un modulo built-in leggendo i punti delle polyline VERBATIM (come app.js, no ri-sampling).
  *  Fallback al parser del core solo se il modulo non fosse polyline-only (es. contenesse path/curve). */
 function parseModule(svgText: string): ObliqueModule {
   const m = parseModuleSvg(svgText);
   if (m.elements.length) return m;
-  const res = parseSvgToContours(svgText, isIllustrator(svgText) ? 72 : 96);
+  const res = parseSvgToContours(svgText, svgImportOptions(svgText));
   return moduleFromPolylines(res.contours.map((c) => c.points));
 }
 
@@ -242,6 +251,16 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
     const pts = panel.contours.filter((c) => c.color === color).map((c) => c.points);
     return contourBoundary(pts, role.toLowerCase(), params.perimeterCloseTolerance) ?? undefined;
   }
+  /**
+   * Contorno più grande del cartamodello, ricavato da TUTTI i suoi tracciati (porting di
+   * sourceContourBoundary sul pannello intero). È il gradino di mezzo dell'originale: finché
+   * l'utente non assegna il colore "Pannello" si lavora comunque sulla sagoma vera, non sul
+   * rettangolo che la contiene.
+   */
+  function panelContour(): Boundary | undefined {
+    if (!panel) return undefined;
+    return contourBoundary(panel.contours.map((c) => c.points), 'pattern', params.perimeterCloseTolerance) ?? undefined;
+  }
   function buildRoles(): RoleBoundaries {
     return { master: roleBoundary('MASTER_OUTLINE'), pattern: roleBoundary('PATTERN_REFERENCE'), laser: roleBoundary('LASER_REFERENCE'), placement: roleBoundary('PLACEMENT_REFERENCE') };
   }
@@ -276,7 +295,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
     refreshRoleSelects();
     try {
       const placementFollows = colorOf('PLACEMENT_REFERENCE') !== null && colorOf('PLACEMENT_REFERENCE') === colorOf('PATTERN_REFERENCE');
-      const res = generateOblique(currentSources(), params, { roles: buildRoles(), placementFollowsPattern: placementFollows });
+      const res = generateOblique(currentSources(), params, { roles: buildRoles(), panelContour: panelContour(), placementFollowsPattern: placementFollows });
       lastResult = res;
       const layers: ExportLayer[] = [];
       if (panel && ui.showPanelShapeOverlay) layers.push({ id: 'panel-overlay', color: ui.panelShapeOverlayColor, strokeMm: SHAPE_STROKE_MM, shapeOnly: true, polylines: panel.contours.map((c) => c.points) });
@@ -319,7 +338,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
     file.text().then((text) => {
       const meta = readProjectMetadata(text);
       if (meta && meta.rgProject === 'oblique') restoreProject(meta);
-      const result = /\.dxf$/i.test(file.name) ? parseDxfToContours(text) : parseSvgToContours(text, isIllustrator(text) ? 72 : 96);
+      const result = /\.dxf$/i.test(file.name) ? parseDxfToContours(text) : parseSvgToContours(text, svgImportOptions(text));
       loadPanel(result, file.name);
     });
   });
@@ -343,7 +362,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
       if (text.indexOf('rgProject') === -1) { setStatus('SVG senza parametri di progetto: impossibile ripristinare.'); input.value = ''; return; }
       const meta = readProjectMetadata(text);
       if (meta && meta.rgProject === 'oblique') restoreProject(meta);
-      loadPanel(parseSvgToContours(text, isIllustrator(text) ? 72 : 96), file.name);
+      loadPanel(parseSvgToContours(text, svgImportOptions(text)), file.name);
       input.value = '';
     });
   });
@@ -351,7 +370,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
   // ---- Export ----
   async function doExportSvg(): Promise<void> {
     readParams();
-    const res = lastResult ?? generateOblique(currentSources(), params, { roles: buildRoles() });
+    const res = lastResult ?? generateOblique(currentSources(), params, { roles: buildRoles(), panelContour: panelContour() });
     const layers = exportLayersFor(res);
     const metadata = { rgProject: 'oblique', version: '0.1.0', params, roles: roleColor };
     let svg: string;
@@ -362,7 +381,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
   }
   async function doExportDst(): Promise<void> {
     readParams();
-    const res = lastResult ?? generateOblique(currentSources(), params, { roles: buildRoles() });
+    const res = lastResult ?? generateOblique(currentSources(), params, { roles: buildRoles(), panelContour: panelContour() });
     // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina lo ignora, noi lo
     // rileggiamo. Senza, il .dst era l'unico file della suite che non sapeva da dove veniva.
     const bytes = dstFromExportLayers(exportLayersFor(res), {

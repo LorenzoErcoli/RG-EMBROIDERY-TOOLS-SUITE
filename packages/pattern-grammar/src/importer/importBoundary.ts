@@ -1,7 +1,8 @@
 import type { BoundaryPath, ImportedBoundary, Point } from "../grammar/types.ts";
 // Chiusura, colori e lunghezze fisiche vengono dal core: sono le stesse domande
 // che si pone l'importer di net-45, e devono avere le stesse risposte (R28).
-import { closePolygon, isGeometricallyClosed, normalizeColor, svgPhysicalLengthToMm } from "@rg/core";
+import { closePolygon, isGeometricallyClosed, normalizeColor, svgPhysicalLengthToMm, applyMatrix, multiplyMatrix, parseSvgTransform, IDENTITY_MATRIX } from "@rg/core";
+import type { Matrix } from "@rg/core";
 
 export type BoundaryChoice = {
   id: string;
@@ -304,60 +305,10 @@ function extractSvgElements(
   return elements;
 }
 
-/** Matrice affine SVG `[a b c d e f]`: x' = a·x + c·y + e, y' = b·x + d·y + f. */
-export type Matrix = [number, number, number, number, number, number];
-const IDENTITY_MATRIX: Matrix = [1, 0, 0, 1, 0, 0];
-
-function multiplyMatrix(parent: Matrix, child: Matrix): Matrix {
-  const [a1, b1, c1, d1, e1, f1] = parent;
-  const [a2, b2, c2, d2, e2, f2] = child;
-  return [
-    a1 * a2 + c1 * b2,
-    b1 * a2 + d1 * b2,
-    a1 * c2 + c1 * d2,
-    b1 * c2 + d1 * d2,
-    a1 * e2 + c1 * f2 + e1,
-    b1 * e2 + d1 * f2 + f1
-  ];
-}
-
-function applyMatrix(matrix: Matrix, point: Point): Point {
-  const [a, b, c, d, e, f] = matrix;
-  return { x: a * point.x + c * point.y + e, y: b * point.x + d * point.y + f };
-}
-
-/** `transform="translate(…) rotate(…)"`: le funzioni si compongono da sinistra a destra. */
-export function parseSvgTransform(value?: string): Matrix {
-  if (!value) return IDENTITY_MATRIX;
-  let matrix = IDENTITY_MATRIX;
-  const functionRegex = /([a-zA-Z]+)\s*\(([^)]*)\)/g;
-  let match: RegExpExecArray | null;
-  while ((match = functionRegex.exec(value))) {
-    matrix = multiplyMatrix(matrix, transformFunctionMatrix(match[1].toLowerCase(), parseNumberList(match[2])));
-  }
-  return matrix;
-}
-
-function transformFunctionMatrix(name: string, args: number[]): Matrix {
-  const rad = (deg: number) => (deg * Math.PI) / 180;
-  if (name === "matrix" && args.length >= 6) return [args[0], args[1], args[2], args[3], args[4], args[5]];
-  if (name === "translate") return [1, 0, 0, 1, args[0] ?? 0, args[1] ?? 0];
-  if (name === "scale") return [args[0] ?? 1, 0, 0, args[1] ?? args[0] ?? 1, 0, 0];
-  if (name === "rotate") {
-    const cos = Math.cos(rad(args[0] ?? 0));
-    const sin = Math.sin(rad(args[0] ?? 0));
-    const rotation: Matrix = [cos, sin, -sin, cos, 0, 0];
-    if (args.length < 3) return rotation;
-    // rotate(a, cx, cy) = translate(cx,cy) · rotate(a) · translate(-cx,-cy)
-    return multiplyMatrix(
-      multiplyMatrix([1, 0, 0, 1, args[1], args[2]], rotation),
-      [1, 0, 0, 1, -args[1], -args[2]]
-    );
-  }
-  if (name === "skewx") return [1, 0, Math.tan(rad(args[0] ?? 0)), 1, 0, 0];
-  if (name === "skewy") return [1, Math.tan(rad(args[0] ?? 0)), 0, 1, 0, 0];
-  return IDENTITY_MATRIX;
-}
+// Matrici affini SVG: una sola implementazione, nel core (`@rg/core/io/transform`).
+// Qui resta solo il ri-export storico, così chi importava da qui non cambia una riga.
+export { parseSvgTransform };
+export type { Matrix };
 
 function svgElementPoints(tag: string, attrs: Record<string, string>): Point[] {
   if (tag === "polygon" || tag === "polyline") return parsePointList(attrs.points || "");

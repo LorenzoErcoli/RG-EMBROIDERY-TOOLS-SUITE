@@ -9,6 +9,9 @@ function geoClosed(pts: Point[]): boolean {
   return Math.hypot(a.x - b.x, a.y - b.y) < 1.0;
 }
 
+/** Passo di campionamento delle curve DXF (mm): come il resto della suite, ~0.6mm. */
+const ARC_STEP_MM = 0.6;
+
 const ACI: Record<number, string> = {
   1: '#ff0000', 2: '#ffff00', 3: '#00ff00', 4: '#00ffff',
   5: '#0000ff', 6: '#ff00ff', 7: '#000000', 8: '#808080', 9: '#c0c0c0',
@@ -80,6 +83,26 @@ export function parseDxfToContours(dxfText: string): ImportResult {
         const pts = e.vertices.map((v) => toPt(v.x, v.y));
         const closed = ((e.num[70] ?? 0) & 1 ? true : false) || geoClosed(pts);
         if (pts.length >= 2) contours.push({ points: pts, closed, color: colorOf(e) });
+        i = e.next; continue;
+      }
+      if (type === 'CIRCLE' || type === 'ARC') {
+        // Cerchi e archi: un cartamodello CAD chiude quasi sempre le curve così. Senza questo ramo
+        // sparivano in silenzio — restava la sagoma sbagliata, non un errore.
+        const e = readEntity(pairs, i + 1);
+        const cx = e.num[10], cy = e.num[20], r = e.num[40];
+        if (cx !== undefined && cy !== undefined && r !== undefined && r > 0) {
+          const start = type === 'ARC' ? (e.num[50] ?? 0) : 0;
+          const rawEnd = type === 'ARC' ? (e.num[51] ?? 360) : 360;
+          const sweep = type === 'ARC' ? ((rawEnd - start) + 360) % 360 || 360 : 360;
+          const arcMm = (Math.PI * 2 * r * unitScale) * (sweep / 360);
+          const steps = Math.max(8, Math.ceil(arcMm / ARC_STEP_MM));
+          const pts: Point[] = [];
+          for (let k = 0; k <= steps; k++) {
+            const a = ((start + (sweep * k) / steps) * Math.PI) / 180;
+            pts.push(toPt(cx + Math.cos(a) * r, cy + Math.sin(a) * r));
+          }
+          contours.push({ points: pts, closed: type === 'CIRCLE', color: colorOf(e) });
+        }
         i = e.next; continue;
       }
       if (type === 'POLYLINE') {

@@ -639,6 +639,37 @@ export function insetBoundary(b: Boundary, offsets: { top?: number; right?: numb
   return rectBoundaryOf(minX, minY, Math.max(1, maxX - minX), Math.max(1, maxY - minY), name);
 }
 
+/**
+ * Rientro di un boundary POLIGONALE: ogni punto si sposta verso il centro del bbox di `offset` mm,
+ * e la sagoma resta la sagoma (porting di offsetPolygonBoundary).
+ *
+ * Serve perché `insetBoundary` risponde solo per i rettangoli: applicarlo a un cartamodello
+ * sagomato non lo restringe, lo **squadra** — il ricamo finisce dentro un rettangolo che nessuno
+ * ha disegnato. Con rientro 0 il boundary torna identico (nessun arrotondamento inutile).
+ */
+export function offsetPolygonBoundary(b: Boundary, offset: number, name: string): Boundary {
+  if (!offset) return { ...b, name };
+  const cx = (b.minX + b.maxX) / 2;
+  const cy = (b.minY + b.maxY) / 2;
+  const points = b.points.map((point) => {
+    const dx = point.x - cx;
+    const dy = point.y - cy;
+    const len = Math.hypot(dx, dy) || 1;
+    return { x: point.x - (dx / len) * offset, y: point.y - (dy / len) * offset };
+  });
+  if (points.length && !samePt(points[0], points[points.length - 1])) points.push({ ...points[0] });
+  return boundaryFromPoints(points, name);
+}
+
+/** Rientro uniforme che rispetta la natura del boundary: rettangolo → inset, sagoma → restringimento. */
+export function insetAnyBoundary(b: Boundary, offset: number, name: string): Boundary {
+  const off = Math.max(0, offset || 0);
+  if (!off) return { ...b, name };
+  return b.type === 'rect'
+    ? insetBoundary(b, { top: off, right: off, bottom: off, left: off }, name)
+    : offsetPolygonBoundary(b, off, name);
+}
+
 /** Punto dentro il boundary con tolleranza (porting di isInside). */
 export function isInside(point: Pt, b: Boundary, tolerance = 0): boolean {
   if (b.type === 'polygon') return pointInPolygon(point, b.points) || distanceToBoundary(point, b.points) <= tolerance;
@@ -663,6 +694,8 @@ export interface ObliqueBoundaries {
   decorative: Boundary;
   laser: Boundary;
   placement: Boundary;
+  /** Perimetro su cui corrono i passaggi fra le diagonali (porting di routingPerimeterBoundary). */
+  routing: Boundary;
 }
 
 /**
@@ -670,14 +703,30 @@ export interface ObliqueBoundaries {
  * di inset dal formato. Nell'easy i rientri fori/piazzamento sono guidati dall'unico `holesMargin`
  * (uniforme sui 4 lati), il decorativo da `patternBorderOffset`.
  */
-export function resolveBoundaries(p: ObliqueParams, panelBounds?: RectBounds, roles: RoleBoundaries = {}): ObliqueBoundaries {
-  const pattern = roles.master ?? boundaryFromFormat(formatBounds(p, panelBounds), 'pattern');
-  const insetAll = (b: Boundary, off: number, name: string): Boundary =>
-    off > 0 ? insetBoundary(pattern, { top: off, right: off, bottom: off, left: off }, name) : { ...b, name };
-  const decorative = roles.pattern ?? insetAll(pattern, Math.max(0, p.patternBorderOffset || 0), 'decorative');
-  const laser = roles.laser ?? insetBoundary(pattern, { top: p.holesMargin, right: p.holesMargin, bottom: p.holesMargin, left: p.holesMargin }, 'laser_reference');
-  const placement = roles.placement ?? insetBoundary(pattern, { top: p.holesMargin, right: p.holesMargin, bottom: p.holesMargin, left: p.holesMargin }, 'placement_reference');
-  return { pattern, decorative, laser, placement };
+export function resolveBoundaries(
+  p: ObliqueParams,
+  panelBounds?: RectBounds,
+  roles: RoleBoundaries = {},
+  panelContour?: Boundary,
+): ObliqueBoundaries {
+  // Perimetro pattern (activePatternBoundary): ruolo Pannello → contorno più grande del
+  // cartamodello → rettangolo di formato. Il gradino di mezzo è quello che fa lavorare sulla
+  // SAGOMA anche quando l'utente non ha ancora assegnato il colore del pannello.
+  const pattern = roles.master ?? panelContour ?? boundaryFromFormat(formatBounds(p, panelBounds), 'pattern');
+  const decorative = roles.pattern ?? insetAnyBoundary(pattern, p.patternBorderOffset, 'decorative');
+  // DIVERGENZA VOLUTA dall'originale (misurata nel browser il 2026-09-08, bloccata da un test).
+  // app.js ripiega fori/piazzamento sul RETTANGOLO circoscritto (`insetBoundary`) anche quando il
+  // pannello è sagomato: su un cartamodello ruotato di 20° il fissaggio finiva **60mm fuori dalla
+  // stoffa**. È una svista dell'originale, non una scelta: le altre tre derivazioni della stessa
+  // famiglia (decorativo, pattern generato, cordonetto) restringono già la sagoma. Qui la regola è
+  // una sola per tutti: rettangolo → inset, sagoma → restringimento.
+  const laser = roles.laser ?? insetAnyBoundary(pattern, p.holesMargin, 'laser_reference');
+  const placement = roles.placement ?? insetAnyBoundary(pattern, p.holesMargin, 'placement_reference');
+  // Perimetro dei passaggi (routingPerimeterBoundary): il ruolo Pannello se assegnato, altrimenti
+  // il TAGLIO PATTERN — non il bordo esterno. Senza questo, col rientro pattern i passaggi
+  // costeggiavano un bordo che il ricamo non tocca, e uscivano dall'area di taglio.
+  const routing = roles.master ? { ...roles.master, name: 'routing_master_outline' } : decorative;
+  return { pattern, decorative, laser, placement, routing };
 }
 
 // ─────────────────────── Filtro fori (R7, R12) ───────────────────────
@@ -960,8 +1009,11 @@ export function cleanupPolyline(polyline: RawPolyline, bnd: Boundary, p: Oblique
     layer: polyline.layer, diagonal: polyline.diagonal, index: polyline.index, points: pts.map((pt) => ({ x: pt.x, y: pt.y })),
   });
   const cleanedPush = (pts: Poly): void => {
-    // R3: il min-stitch si applica DOPO il routing (pass finale enforceMinimumStitch), non qui —
-    // altrimenti col sampling fine del core (~0.6mm) i moduli sparirebbero nel clip. Qui solo dedup.
+    // DIVERGENZA VOLUTA dall'originale, bloccata da un test. app.js qui BUTTA i tratti sotto il
+    // minimo punto: sulle sue polilinee grezze non cambia nulla, ma cancella qualunque tracciato
+    // campionato fine (l'importer del core sta a ~0.6mm). Il pavimento R3 lo mette il pass finale
+    // `enforceMinimumStitch`, che ACCORPA i punti invece di cancellare geometria: stessa garanzia
+    // ("nessun punto sotto il minimo"), senza perdere il disegno. Qui solo dedup.
     const simplified = removeConsecutiveDuplicates(pts);
     if (simplified.length > 1) output.push({ ...cleanedFrom(simplified), splitFragment: output.length });
   };
@@ -986,7 +1038,7 @@ export function cleanupPolyline(polyline: RawPolyline, bnd: Boundary, p: Oblique
     }
     clippedSegments.forEach((clipped, segmentIndex) => {
       // Scarta solo i tratti a lunghezza zero (dal clip agli spigoli); la lunghezza minima
-      // vera la impone il pass finale enforceMinimumStitch DOPO il routing (R3).
+      // vera la impone il pass finale enforceMinimumStitch DOPO il routing (R3) — vedi sopra.
       if (distance(clipped.a, clipped.b) < 1e-4) return;
       if (segmentIndex > 0 || !current.length || !samePt(current[current.length - 1], clipped.a)) {
         if (current.length > 1) cleanedPush(current);
@@ -1645,6 +1697,65 @@ export function routeAroundVoids(connected: Connected, exclusions: Boundary[] | 
   }
 }
 
+/**
+ * Toglie le escursioni "andata e ritorno" isolate — i becucci d'ingresso che portavano a una
+ * rosetta che non c'è più (porting di removeIsolatedSpikes).
+ *
+ * Un tratto che parte da un punto, si allontana e torna entro `RETURN_TOL` senza mai passare
+ * vicino a un foro valido è filo sprecato: si taglia. Con `validCenters` vuoto (Livello 0.5,
+ * che i cerchi non li disegna proprio) sparisce OGNI becuccio e resta solo la passata.
+ */
+export function removeIsolatedSpikes(connected: Connected, validCenters: ValidCenter[], returnTolOverride?: number): void {
+  const polys = connected?.polylines;
+  if (!polys || !polys.length) return;
+  const centers = validCenters || [];
+  const RETURN_TOL = returnTolOverride || 3, PATH_MIN = 4, PATH_MAX = 45, MIN_REACH = 3, HOLE_GUARD = 12, HCELL = 12;
+  const hg = new Map<string, ValidCenter[]>();
+  const hk = (x: number, y: number): string => `${Math.round(x / HCELL)},${Math.round(y / HCELL)}`;
+  for (const h of centers) {
+    const k = hk(h.x, h.y);
+    if (!hg.has(k)) hg.set(k, []);
+    hg.get(k)!.push(h);
+  }
+  const nearHole = (pt: Pt): boolean => {
+    const gx = Math.round(pt.x / HCELL), gy = Math.round(pt.y / HCELL);
+    for (let dx = -1; dx <= 1; dx += 1) for (let dy = -1; dy <= 1; dy += 1) {
+      const arr = hg.get(`${gx + dx},${gy + dy}`);
+      if (arr) for (const h of arr) if (distance(pt, h) < HOLE_GUARD) return true;
+    }
+    return false;
+  };
+  for (const pl of polys) {
+    const P = pl.points;
+    if (P.length < 4) continue;
+    const cum = [0];
+    for (let k = 1; k < P.length; k += 1) cum[k] = cum[k - 1] + distance(P[k - 1], P[k]);
+    const keep = new Array<boolean>(P.length).fill(true);
+    let a = 0;
+    while (a < P.length) {
+      if (!keep[a]) { a += 1; continue; }
+      let jumped = false;
+      for (let b = a + 2; b < P.length; b += 1) {
+        const plen = cum[b] - cum[a];
+        if (plen < PATH_MIN) continue;
+        if (plen > PATH_MAX) break;
+        if (distance(P[a], P[b]) < RETURN_TOL) {
+          let reach = 0, anyNear = false;
+          for (let k = a; k <= b; k += 1) {
+            const d = distance(P[a], P[k]);
+            if (d > reach) reach = d;
+            if (nearHole(P[k])) anyNear = true;
+          }
+          if (reach < MIN_REACH) continue;
+          if (!anyNear) { for (let k = a + 1; k <= b; k += 1) keep[k] = false; a = b; jumped = true; break; }
+        }
+      }
+      if (!jumped) a += 1;
+    }
+    pl.points = P.filter((_, i) => keep[i]);
+  }
+}
+
 // ─── Pass finali: min-stitch (R3) e lock scarico filo (R8) ───
 
 /** Punto minimo endpoint-preserving (porting di enforceMinimumStitch). */
@@ -1710,6 +1821,8 @@ export function addStartEndLock(connected: Connected, boundary: Boundary, stitch
 
 export interface GenerateOptions {
   roles?: RoleBoundaries;
+  /** Contorno più grande del cartamodello: vale da perimetro quando il ruolo Pannello non è assegnato. */
+  panelContour?: Boundary;
   /** true se Piazzamento/Fissaggio hanno lo stesso colore del Pattern → seguono il perimetro (porting di shouldPlacementFollowPattern). */
   placementFollowsPattern?: boolean;
 }
@@ -1727,9 +1840,8 @@ export interface ObliqueResult {
 
 /** Compone l'intera pipeline oblique (griglia→filtro fori→clip→routing→min-stitch→lock), come render(). */
 export function generateOblique(sources: ObliqueSources, p: ObliqueParams, options: GenerateOptions = {}): ObliqueResult {
-  const bnds = resolveBoundaries(p, sources.panelBounds, options.roles || {});
-  const { pattern, decorative, laser, placement } = bnds;
-  const routingBounds = pattern; // routingPerimeterBoundary default MASTER_OUTLINE → pattern
+  const bnds = resolveBoundaries(p, sources.panelBounds, options.roles || {}, options.panelContour);
+  const { pattern, decorative, laser, placement, routing: routingBounds } = bnds;
   const placementFollows = !!options.placementFollowsPattern;
   const holesEnabled = p.enableHolesLayer && !!sources.holes;
 
@@ -1752,6 +1864,8 @@ export function generateOblique(sources: ObliqueSources, p: ObliqueParams, optio
       ? connectLayerContinuity(voided, routingBounds, layer, p, routeOptions)
       : connectTechnicalDiagonals(voided, layer, p);
     routeAroundVoids(connected, placement.exclusions, p.minimumTravelStitchLength || 3, p);
+    // Tolte le rosette senza foro restano i becucci che ci portavano: filo che non disegna niente.
+    if (holesEnabled && p.pruneFeaturesWithoutHoles) removeIsolatedSpikes(connected, laserExport.validCenters);
     return connected;
   };
 
@@ -1766,6 +1880,9 @@ export function generateOblique(sources: ObliqueSources, p: ObliqueParams, optio
     const voided = applyVoids(clipped, placement.exclusions, p);
     level05Connected = placementFollows ? connectLayerContinuity(voided, routingBounds, 'level1', p, routeOptions) : connectTechnicalDiagonals(voided, 'level1', p);
     routeAroundVoids(level05Connected, placement.exclusions, p.minimumTravelStitchLength || 3, p);
+    // Il Livello 0.5 non disegna cerchi: ogni escursione d'ingresso è inutile (lista fori vuota
+    // = nessuna guardia), resta solo la passata dell'impuntura.
+    removeIsolatedSpikes(level05Connected, []);
     const stitch05 = Math.max(1, p.level05StitchLength || 3);
     for (const pl of level05Connected.polylines) { pl.points = resampleUniform(pl.points, stitch05); pl.layer = 'level05'; }
   }
