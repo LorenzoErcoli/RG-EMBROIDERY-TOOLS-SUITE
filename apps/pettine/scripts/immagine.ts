@@ -117,6 +117,9 @@ const ordineRanghi = colori.map((_, r) => r);
 // --- 4. il pettine, tinta per tinta, area per area --------------------------------------------------
 const CELLA = mmPerPx;
 const perTinta: string[][] = colori.map(() => []);
+// SOLO_BASI=1: si disegnano solo le linee di base e, in rosso, il muro di partenza di ogni macchia
+const SOLO_BASI = !!process.env.SOLO_BASI;
+const muri: string[] = [];
 const CW = Math.ceil(W * mmPerPx) + 1, CH = Math.ceil(H * mmPerPx) + 1;
 const coperto = new Uint8Array(CW * CH);
 let denti = 0, filoMm = 0, basiTot = 0, fermati = 0, attraversano = 0, areeTot = 0;
@@ -224,31 +227,34 @@ for (let t = 0; t < colori.length; t++) {
     // il verso: dallo scuro verso il chiaro = verso il muro di partenza se il muro e' il lato chiaro,
     // via dal muro se il muro e' il lato scuro. VERSO lo rovescia.
     const versoDentro = !versoChiaro;
+    if (SOLO_BASI) for (let i = 0; i < N; i++) if (semi[i]) muri.push(`<rect x="${((i % W) * mmPerPx).toFixed(1)}" y="${(Math.floor(i / W) * mmPerPx).toFixed(1)}" width="${mmPerPx.toFixed(2)}" height="${mmPerPx.toFixed(2)}" fill="#d21"/>`);
 
-    // la distanza dai semi, dentro l'area sola
+    // LA DISTANZA DAL MURO, dentro l'area sola. Chamfer a 16 vicini (pesi 5-7-11, con le mosse del
+    // cavallo): con 8 vicini le curve di livello sono ottagoni, e lontano dal muro si vedevano gli
+    // spigoli a 45 gradi (Lorenzo: «mi fai vedere le linee di curva che crei e perche'?»). Con 16
+    // l'errore sulla distanza euclidea scende sotto il 2%: le curve tornano curve.
     const INF = 1e9;
     const D = new Float32Array(N).fill(INF);
     for (let i = 0; i < N; i++) if (semi[i]) D[i] = 0;
-    const a1 = CELLA, a2 = CELLA * Math.SQRT2;
+    const c5 = CELLA, c7 = CELLA * 1.4, c11 = CELLA * 2.2;
+    const V = [
+      [-1, 0, c5], [0, -1, c5], [-1, -1, c7], [1, -1, c7],
+      [-2, -1, c11], [-1, -2, c11], [1, -2, c11], [2, -1, c11],
+    ];
+    const mio = (x: number, y: number): boolean => x >= 0 && y >= 0 && x < W && y < H && areaDi[y * W + x] === a.id;
     for (let giro = 0; giro < 3; giro++) {
-      for (let y = 1; y + 1 < H; y++) for (let x = 1; x + 1 < W; x++) {
+      for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
         const i = y * W + x;
         if (areaDi[i] !== a.id) continue;
         let v = D[i];
-        if (areaDi[i - 1] === a.id) v = Math.min(v, D[i - 1] + a1);
-        if (areaDi[i - W] === a.id) v = Math.min(v, D[i - W] + a1);
-        if (areaDi[i - W - 1] === a.id) v = Math.min(v, D[i - W - 1] + a2);
-        if (areaDi[i - W + 1] === a.id) v = Math.min(v, D[i - W + 1] + a2);
+        for (const [dx, dy, w] of V) if (mio(x + dx, y + dy)) { const u = D[(y + dy) * W + (x + dx)] + w; if (u < v) v = u; }
         D[i] = v;
       }
-      for (let y = H - 2; y >= 1; y--) for (let x = W - 2; x >= 1; x--) {
+      for (let y = H - 1; y >= 0; y--) for (let x = W - 1; x >= 0; x--) {
         const i = y * W + x;
         if (areaDi[i] !== a.id) continue;
         let v = D[i];
-        if (areaDi[i + 1] === a.id) v = Math.min(v, D[i + 1] + a1);
-        if (areaDi[i + W] === a.id) v = Math.min(v, D[i + W] + a1);
-        if (areaDi[i + W + 1] === a.id) v = Math.min(v, D[i + W + 1] + a2);
-        if (areaDi[i + W - 1] === a.id) v = Math.min(v, D[i + W - 1] + a2);
+        for (const [dx, dy, w] of V) if (mio(x - dx, y - dy)) { const u = D[(y - dy) * W + (x - dx)] + w; if (u < v) v = u; }
         D[i] = v;
       }
     }
@@ -264,7 +270,7 @@ for (let t = 0; t < colori.length; t++) {
     // IL PETTINE HA SENSO SU UNA FASCIA, non su una macchia grande quanto i suoi denti: in un settore
     // della sfera largo 15 mm con denti da 5, il pelo arriva da tutti i lati e resta un intrico di X.
     // Sotto la soglia, l'area ha solo le sue basi - un raso a curve di livello - e resta leggibile.
-    const soloBasi = a.celle * CELLA * CELLA < SENZA_PELO_MM2;
+    const soloBasi = SOLO_BASI || a.celle * CELLA * CELLA < SENZA_PELO_MM2;
 
     for (let v = BASI_MM / 2; v < maxD; v += BASI_MM) {
       for (const linea of incatena(livello(D, dentro, W, H, 0, 0, CELLA, v), CELLA * 2)) {
@@ -328,14 +334,15 @@ const WM = W * mmPerPx, HM = H * mmPerPx;
 const pezzi: string[] = [];
 colori.forEach((c, t) => {
   if (!perTinta[t].length) return;
-  pezzi.push(`<path d="${perTinta[t].join('')}" fill="none" stroke="${t === 0 ? '#9a9a9a' : c}" stroke-width="0.1"/>`);
+  pezzi.push(`<path d="${perTinta[t].join('')}" fill="none" stroke="${t === 0 ? '#9a9a9a' : c}" stroke-width="${SOLO_BASI ? 0.3 : 0.1}"/>`);
 });
 const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${WM.toFixed(1)} ${HM.toFixed(1)}" width="${WM.toFixed(1)}mm" height="${HM.toFixed(1)}mm">
 <rect width="${WM.toFixed(1)}" height="${HM.toFixed(1)}" fill="#f7f6f3"/>
 ${pezzi.join('\n')}
+${SOLO_BASI ? muri.join('') : ''}
 </svg>`;
 mkdirSync('apps/pettine/scripts/out', { recursive: true });
-const nome = `muro-t${TINTE}-b${BASI_MM}-d${DENTE_MIN}_${DENTE_MAX}-s${SORM_NETTO}_${SORM_SFUMATO}${SENZA_PELO_MM2 ? `-np${SENZA_PELO_MM2}` : ''}${VERSO < 0 ? '-inv' : ''}`;
+const nome = `${SOLO_BASI ? 'basi-' : ''}muro-t${TINTE}-b${BASI_MM}-d${DENTE_MIN}_${DENTE_MAX}-s${SORM_NETTO}_${SORM_SFUMATO}${SENZA_PELO_MM2 ? `-np${SENZA_PELO_MM2}` : ''}${VERSO < 0 ? '-inv' : ''}`;
 writeFileSync(`apps/pettine/scripts/out/${nome}.svg`, svg, 'utf8');
 console.log(`${areeTot} aree · ${basiTot} linee di base · ${denti} denti · ${(filoMm / 1000).toFixed(1)} m di filo · ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 console.log(`denti al bordo: ${fermati} fermati (netto) · ${attraversano} attraversano (sfumato)`);
