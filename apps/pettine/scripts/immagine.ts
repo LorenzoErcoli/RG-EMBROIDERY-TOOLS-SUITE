@@ -43,7 +43,8 @@ const NETTO_MM = num(9, 2.5);           // sotto questa larghezza di passaggio i
 const SORM_NETTO = num(10, 0.8);        // quanto una tinta entra sotto la successiva a un bordo netto
 const SORM_SFUMATO = num(11, 4);        // ...e a un bordo sfumato
 const MACCHIA_MIN_MM2 = num(12, 60);    // sotto quest'area una macchia viene assorbita dalla riduzione
-if (!foto) { console.error('uso: node immagine.mjs <foto.bmp> [tinte] [basi] [passo] [dMin] [dMax] [incl] [nettoMm] [sormNetto] [sormSfumato] [macchiaMinMm2]'); process.exit(1); }
+const SENZA_PELO_MM2 = num(13, 0);      // sotto quest'area un'area ha solo le basi, niente denti: i dettagli restano netti
+if (!foto) { console.error('uso: node immagine.mjs <foto.bmp> [tinte] [basi] [passo] [dMin] [dMax] [incl] [nettoMm] [sormNetto] [sormSfumato] [macchiaMinMm2] [senzaPeloMm2]'); process.exit(1); }
 
 function caso(a: number, b: number): number {
   let h = (a * 0x9e3779b1) ^ (b * 0x85ebca6b);
@@ -222,6 +223,10 @@ for (let t = 0; t < colori.length; t++) {
     // ultime basi coi loro denti restano sotto la base netta dello scuro.
     void versoDentro;
     const segno = 1;
+    // IL PETTINE HA SENSO SU UNA FASCIA, non su una macchia grande quanto i suoi denti: in un settore
+    // della sfera largo 15 mm con denti da 5, il pelo arriva da tutti i lati e resta un intrico di X.
+    // Sotto la soglia, l'area ha solo le sue basi - un raso a curve di livello - e resta leggibile.
+    const soloBasi = a.celle * CELLA * CELLA < SENZA_PELO_MM2;
 
     for (let v = BASI_MM / 2; v < maxD; v += BASI_MM) {
       for (const linea of incatena(livello(D, dentro, W, H, 0, 0, CELLA, v), CELLA * 2)) {
@@ -234,8 +239,9 @@ for (let t = 0; t < colori.length; t++) {
           cum.push(tot);
         }
         const punti: Point[] = [];
+        if (soloBasi) { for (const p of linea) punti.push(p); }
         let k = 0;
-        for (let d = 0; d <= tot; d += PASSO_MM, k++) {
+        for (let d = 0; d <= tot && !soloBasi; d += PASSO_MM, k++) {
           let i = 1;
           while (i < cum.length - 1 && cum[i] < d) i++;
           const tt = (d - cum[i - 1]) / Math.max(1e-9, cum[i] - cum[i - 1]);
@@ -262,8 +268,8 @@ for (let t = 0; t < colori.length; t++) {
           }
           punti.push(p, { x: p.x + ux * lung, y: p.y + uy * lung }, p);
         }
-        if (punti.length < 3) continue;
-        denti += Math.floor(punti.length / 3);
+        if (punti.length < 2) continue;
+        if (!soloBasi) denti += Math.floor(punti.length / 3);
         for (let i = 1; i < punti.length; i++) filoMm += Math.hypot(punti[i].x - punti[i - 1].x, punti[i].y - punti[i - 1].y);
         perTinta[t].push(punti.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(''));
       }
@@ -283,7 +289,7 @@ const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${WM.toFixed(1
 ${pezzi.join('\n')}
 </svg>`;
 mkdirSync('apps/pettine/scripts/out', { recursive: true });
-const nome = `immagine-t${TINTE}-b${BASI_MM}-d${DENTE_MIN}_${DENTE_MAX}-s${SORM_NETTO}_${SORM_SFUMATO}`;
+const nome = `immagine-t${TINTE}-b${BASI_MM}-d${DENTE_MIN}_${DENTE_MAX}-s${SORM_NETTO}_${SORM_SFUMATO}${SENZA_PELO_MM2 ? `-np${SENZA_PELO_MM2}` : ''}`;
 writeFileSync(`apps/pettine/scripts/out/${nome}.svg`, svg, 'utf8');
 console.log(`${areeTot} aree · ${basiTot} linee di base · ${denti} denti · ${(filoMm / 1000).toFixed(1)} m di filo · ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 console.log(`denti al bordo: ${fermati} fermati (netto) · ${attraversano} attraversano (sfumato)`);
