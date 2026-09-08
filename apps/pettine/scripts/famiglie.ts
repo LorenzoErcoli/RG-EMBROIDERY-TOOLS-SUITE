@@ -40,6 +40,8 @@ const LISCIA_MM = num(5, 1.5);
 // quanto la linea si addolcisce allontanandosi dal muro: mm di lisciatura per mm di distanza.
 // Vicino al muro la linea lo ricopia, lontano perde gli spigoli - come in una fusione vera.
 const ADDOLCISCI = num(6, 0.6);
+const MARGINE = num(7, 3);          // passi di sopravvivenza fuori dalla famiglia
+const SECONDA = num(8, 0) > 0;      // la seconda passata dal blu: SPENTA, e' una seconda direzione
 const RIFERIMENTO_DEG = -90;
 if (!fileSvg) { console.error('uso: node famiglie.mjs <file.svg> [basi] [sormonto] [lisciaMm]'); process.exit(1); }
 
@@ -246,9 +248,11 @@ famiglie.forEach((f, fi) => {
     for (let k = 0; k < l.length; k += 2) { const d = Math.hypot(l[k].x - pt.x, l[k].y - pt.y); if (d < best) { best = d; q = l[k]; } }
     return q;
   };
+  // la linea sopravvive fino a MARGINE passi fuori dalla famiglia: cosi' ai capi non si svuota e puo'
+  // rientrare dove la famiglia si riallarga (con mezzo passo 12 famiglie su 19 si svuotavano)
   const vicinoAllaFam = (pt: Point): boolean => {
     if (dentroFam(pt)) return true;
-    const r = BASI_MM / 2;
+    const r = BASI_MM * MARGINE;
     for (let a = 0; a < 8; a++) { const t = (a / 8) * Math.PI * 2; if (dentroFam({ x: pt.x + Math.cos(t) * r, y: pt.y + Math.sin(t) * r })) return true; }
     return false;
   };
@@ -322,12 +326,12 @@ famiglie.forEach((f, fi) => {
       }
       chiudi();
       // la seconda passata: quando due linee di fila non trovano piu' niente di scoperto, e' finita
-      if (vivi === 0) { vuote++; if (vuote >= 2 && q > 0) break; } else vuote = 0;
+      if (vivi === 0) { vuote++; if (vuote >= 4 && q > 0) break; } else vuote = 0;
       if (process.env.DIAG2 && q === quante - 1) console.log(`  DIAG2 fam ${fi} ${f.nome} passata ${passata}: tutte le ${quante} linee`);
     }
   };
   propaga(As, Bs, false, 1);
-  propaga(Bs, As, true, 2);
+  if (SECONDA) propaga(Bs, As, true, 2);
 });
 
 // --- 4b. IL METRO: celle nude (nessuna linea entro 3/4 di passo) e celle dense (due linee a meno
