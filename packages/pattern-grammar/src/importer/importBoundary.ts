@@ -413,6 +413,10 @@ function parsePathPoints(d: string): Point[] {
   let command = "";
   let current = { x: 0, y: 0 };
   let start: Point | undefined;
+  // l'ultimo punto di controllo, per S/s e T/t: la "cubica liscia" di Illustrator riflette il
+  // controllo precedente attorno al punto corrente. Vale solo se il comando prima era C/S (o Q/T).
+  let lastCubicControl: Point | null = null;
+  let lastQuadControl: Point | null = null;
   const number = () => Number(tokens[index++]);
   const hasNumber = () => index < tokens.length && !/^[a-zA-Z]$/.test(tokens[index]);
   const push = (point: Point) => {
@@ -447,13 +451,37 @@ function parsePathPoints(d: string): Point[] {
         const c2 = relative ? add(current, { x: number(), y: number() }) : { x: number(), y: number() };
         const end = relative ? add(current, { x: number(), y: number() }) : { x: number(), y: number() };
         sampleCubic(current, c1, c2, end).forEach(push);
+        lastCubicControl = c2; lastQuadControl = null;
       }
+      continue;
+    } else if (op === "S") {
+      // S/s: il primo controllo è il riflesso del secondo controllo precedente attorno al punto
+      // corrente (o il punto corrente stesso, se prima non c'era una cubica). Senza questo ramo
+      // l'importer si fermava qui e il resto del tracciato spariva: forme mozze, e nessun errore.
+      while (hasNumber()) {
+        const c1 = lastCubicControl ? { x: 2 * current.x - lastCubicControl.x, y: 2 * current.y - lastCubicControl.y } : current;
+        const c2 = relative ? add(current, { x: number(), y: number() }) : { x: number(), y: number() };
+        const end = relative ? add(current, { x: number(), y: number() }) : { x: number(), y: number() };
+        sampleCubic(current, c1, c2, end).forEach(push);
+        lastCubicControl = c2; lastQuadControl = null;
+      }
+      continue;
     } else if (op === "Q") {
       while (hasNumber()) {
         const c = relative ? add(current, { x: number(), y: number() }) : { x: number(), y: number() };
         const end = relative ? add(current, { x: number(), y: number() }) : { x: number(), y: number() };
         sampleQuadratic(current, c, end).forEach(push);
+        lastQuadControl = c; lastCubicControl = null;
       }
+      continue;
+    } else if (op === "T") {
+      while (hasNumber()) {
+        const c = lastQuadControl ? { x: 2 * current.x - lastQuadControl.x, y: 2 * current.y - lastQuadControl.y } : current;
+        const end = relative ? add(current, { x: number(), y: number() }) : { x: number(), y: number() };
+        sampleQuadratic(current, c, end).forEach(push);
+        lastQuadControl = c; lastCubicControl = null;
+      }
+      continue;
     } else if (op === "A") {
       while (hasNumber()) {
         const rx = number(), ry = number(), rotation = number();
@@ -467,6 +495,7 @@ function parsePathPoints(d: string): Point[] {
     } else {
       break;
     }
+    lastCubicControl = null; lastQuadControl = null;
   }
   return points;
 }

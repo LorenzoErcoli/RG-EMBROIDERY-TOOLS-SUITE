@@ -905,6 +905,23 @@ const rvByteA = rg.buildDst(rg.dstProgramFromBlocks(rv.blocks, { label: rv.label
 const rvByteB = rg.buildDst(rg.dstProgramFromBlocks(rg.sfrangia(rv.blocks, [], sfPar).blocchi, { label: rv.label }));
 check('DST vero: senza zone marcate il file e\u2019 identico byte per byte', Array.from(rvByteA).join(',') === Array.from(rvByteB).join(','), true);
 
+// L'importer a stringhe e la CUBICA LISCIA (S/s) di Illustrator. Non la conosceva, e su un comando
+// ignoto si fermava: il resto del tracciato spariva, la forma usciva mozza, e nessun errore. Trovato
+// sul vettoriale a sei gruppi di Lorenzo, dove 19 forme su 90 erano mozze o vuote.
+console.log('NL_pattern-grammar — importer: la cubica liscia S/s'.replace('NL_', String.fromCharCode(10)));
+// Il test giusto non e' un'area a occhio: e' che S produca ESATTAMENTE la C equivalente. Per la
+// specifica SVG, dopo C33,0 66,0 100,0 il primo controllo di S e' il riflesso di (66,0) attorno a
+// (100,0), cioe' (134,0): quindi «S100,66 100,100» deve dare gli stessi punti di «C134,0 100,66 100,100».
+const conS = '<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 100 100"><path fill="#000" d="M0,0 C33,0 66,0 100,0 S100,66 100,100 s-66,0 -100,0 Z"/></svg>';
+const conC = '<svg xmlns="http://www.w3.org/2000/svg" width="100mm" height="100mm" viewBox="0 0 100 100"><path fill="#000" d="M0,0 C33,0 66,0 100,0 C134,0 100,66 100,100 C100,134 34,100 0,100 Z"/></svg>';
+const pS = rg.parseSvgPolylines(conS, {}).polylines[0] ?? [], pC = rg.parseSvgPolylines(conC, {}).polylines[0] ?? [];
+check('S/s: il tracciato arriva fino in fondo (stesso numero di punti della C esplicita)', pS.length, pC.length);
+let scartoS = 0;
+for (let k = 0; k < Math.min(pS.length, pC.length); k++) scartoS = Math.max(scartoS, Math.hypot(pS[k].x - pC[k].x, pS[k].y - pC[k].y));
+check('S/s: e sono gli stessi punti della C equivalente (riflesso del controllo)', scartoS < 1e-6, true);
+// e senza questo ramo la forma era mozza: l'area deve essere quella della C, non un frammento
+check('S/s: stessa area della C esplicita', Math.round(Math.abs(rg.polygonArea(pS))), Math.round(Math.abs(rg.polygonArea(pC))));
+
 // La riapertura del .dst è dichiarata in STATO come CAPACITÀ GLOBALE, ma per mesi è stata vera
 // solo per bitmap e oblique: gli altri quattro tool scrivevano il DST senza parametri e nessuno
 // se ne accorgeva, perché la dichiarazione stava in un documento e non in un test.
