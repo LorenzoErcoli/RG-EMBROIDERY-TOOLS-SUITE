@@ -39,6 +39,11 @@ jobs:
         run: npm run typecheck
       - name: Build della suite
         run: npm run build
+      - name: "Il laboratorio dei casi del pettine (pubblicato in /lab, con le risposte di RISPOSTE.md)"
+        run: |
+          npm run lab:pettine
+          mkdir -p apps/shell/dist/lab
+          cp -r apps/pettine/lab/. apps/shell/dist/lab/
       - name: Prepara Pages (abilita da solo se non lo è)
         uses: actions/configure-pages@v5
         with:

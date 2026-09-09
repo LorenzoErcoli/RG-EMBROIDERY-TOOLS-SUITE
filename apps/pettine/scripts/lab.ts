@@ -84,20 +84,22 @@ es.casi.forEach((k, n) => {
     <div class="testo">
       <p class="fatto"><b>Cosa ha fatto il sistema.</b> ${k.cosaHoFatto}</p>
       ${g ? `<p class="numeri">strada ${g.lung} mm per ${g.d} mm in linea d'aria · a vista ${g.aVista} mm · costo medio ${g.costoMedio}</p>` : ''}
-      <p class="risposta"><b>Come andrebbe fatto (Lorenzo).</b> ${risposta ? risposta.replace(/</g, '&lt;').replace(/\n/g, '<br>') : '<i>ancora da scrivere in RISPOSTE.md</i>'}</p>
+      <p class="risposta"><b>Come andrebbe fatto (Lorenzo).</b> ${risposta ? risposta.replace(/</g, '&lt;').replace(/\n/g, '<br>') : `<i>ancora da scrivere</i> · <a href="${EDIT}" target="_blank">scrivi la risposta per <code>${k.nome}</code></a>`}</p>
     </div>
   </div>
 </section>`);
 });
+const EDIT = 'https://github.com/LorenzoErcoli/RG-EMBROIDERY-TOOLS-SUITE/edit/master/apps/pettine/lab/RISPOSTE.md';
 const legenda = `<p class="legenda"><span style="background:#fff3c4">tinta dell'ago, libera</span> <span style="background:#7dd87d">dietro libero: base senza denti sopra</span> <span style="background:#7a7a7a;color:#fff">denti già cuciti</span> <span style="background:#bfbfbf">base cucita coperta</span> <span style="background:#c9d3e6">tinte dopo</span> <span style="background:#eeeeee">tinte prima</span> · <span style="color:#333">— riga cucita</span> <span style="color:#2a8fd8">— riga da fare</span> (tratteggio = sormonto) · <span style="color:#f08a1a">— strada</span> <span style="color:#e01b24">● a vista</span> · <span style="color:#2ecc40">● dove il filo è</span> <span style="color:#ff2d95">● dove deve andare</span></p>`;
 const html = `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>Laboratorio dei casi · pettine</title>
 <style>body{font-family:Helvetica,Arial,sans-serif;margin:24px;color:#222;background:#fff;max-width:1400px}h1{font-size:22px}h2{font-size:15px;margin:0 0 8px}code{background:#f3f3f3;padding:1px 4px}
 .caso{border:1px solid #ddd;padding:14px;margin:18px 0;border-radius:6px}.caso--taglio{border-left:6px solid #e01b24}.caso--passaggio{border-left:6px solid #f08a1a}.caso--innesto{border-left:6px solid #2a8fd8}
 .riga{display:flex;gap:18px;align-items:flex-start}.riga img{width:520px;max-width:45%;border:1px solid #ccc}.testo{flex:1;font-size:14px;line-height:1.45}.numeri{color:#555;font-size:13px}.risposta{background:#f7fbe9;padding:10px;border-radius:4px}
-.legenda span{padding:2px 6px;border-radius:3px;margin-right:4px;font-size:12px}.sommario{color:#444}</style></head><body>
+.legenda span{padding:2px 6px;border-radius:3px;margin-right:4px;font-size:12px}.sommario{color:#444}.come{background:#eef4ff;padding:10px 12px;border-radius:4px}a{color:#1b6fb0}</style></head><body>
 <h1>Laboratorio dei casi · punto pettine</h1>
 <p class="sommario">${FILE}${ritaglio ? ` · ritaglio ${process.env.RITAGLIO}` : ''} · ${st.salti} tagli · ${st.passaggi} passaggi cuciti · ${st.passaggiScopertiM.toFixed(2)} m a vista · ${es.casi.length} casi registrati (${CASI} per tipo)</p>
-<p>Ogni scheda è il momento di una decisione del filo: cosa c'era intorno, cosa ha fatto il sistema, e sotto lo spazio per come andrebbe fatto. Le risposte si scrivono in <code>apps/pettine/lab/RISPOSTE.md</code>, una sezione per caso; alla corsa dopo compaiono qui.</p>
+<p>Ogni scheda è il momento di una decisione del filo: cosa c'era intorno, cosa ha fatto il sistema, e sotto lo spazio per come andrebbe fatto.</p>
+<p class="come"><b>Come si risponde, da qualunque pc.</b> Apri <a href="${EDIT}" target="_blank">RISPOSTE.md su GitHub</a> (si apre già in modifica), cerca la sezione col nome del caso, scrivi sotto «Come andrebbe fatto» e premi <i>Commit changes</i>. Al commit il sito si rigenera da solo: dopo qualche minuto la tua risposta compare qui, accanto al disegno, e Claude la legge dal repo. Se un caso vuole un disegno, mettilo nella cartella <code>apps/pettine/lab/da-lorenzo/</code> e nominalo nella risposta.</p>
 ${legenda}
 ${schede.join('\n')}
 </body></html>`;
