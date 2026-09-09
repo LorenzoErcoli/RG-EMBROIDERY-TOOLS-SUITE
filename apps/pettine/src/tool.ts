@@ -252,6 +252,10 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
           <label class="rg-toggle rg-param-grid__wide">
             <input type="checkbox" id="mostraNudi"><span class="rg-toggle__track"></span><span>Segna in rosa quello che resta scoperto</span>
           </label>
+          <label class="rg-toggle rg-param-grid__wide">
+            <input type="checkbox" id="mostraPassaggi" checked><span class="rg-toggle__track"></span><span>Disegna i passaggi</span>
+          </label>
+          <p class="rg-field__help rg-param-grid__wide">I passaggi sono il filo che va da una riga all'altra invece di essere tagliato: nel disegno sono più sottili e trasparenti del ricamo, perché nel pannello finiscono sotto le righe che vengono dopo.</p>
         </div>
       </details>
 
@@ -339,7 +343,7 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
     input('realWidthMm').value = n1(larghezzaRealeMm);
     daRifare();
   });
-  for (const id of ['denti', 'mostraNudi'] as const) {
+  for (const id of ['denti', 'mostraNudi', 'mostraPassaggi'] as const) {
     const el = input(id);
     el.checked = Boolean(par[id]);
     el.addEventListener('change', () => { (par[id] as boolean) = el.checked; par.dst = par.denti; daRifare(); });
@@ -537,6 +541,7 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
     }
     if (sp && typeof sp.denti === 'boolean') { par.denti = sp.denti; input('denti').checked = sp.denti; }
     if (sp && typeof sp.mostraNudi === 'boolean') { par.mostraNudi = sp.mostraNudi; input('mostraNudi').checked = sp.mostraNudi; }
+    if (sp && typeof sp.mostraPassaggi === 'boolean') { par.mostraPassaggi = sp.mostraPassaggi; input('mostraPassaggi').checked = sp.mostraPassaggi; }
     if (typeof p.larghezzaRealeMm === 'number' && p.larghezzaRealeMm >= 10) { larghezzaRealeMm = p.larghezzaRealeMm; input('realWidthMm').value = n1(larghezzaRealeMm); }
     if (typeof p.blocchi === 'string' && p.blocchi.length > 20) {
       testoSvg = p.blocchi;

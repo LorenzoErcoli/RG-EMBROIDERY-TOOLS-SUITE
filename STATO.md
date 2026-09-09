@@ -673,6 +673,25 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   escono 14.563 punti contro 14.552, 81,1 m contro 81,2 e 4.703 denti contro 4.705. Dice anche una
   cosa che lui non ricordava: quello swatch è stato generato **senza fotografia** (nessun dente è
   accorciato a un bordo netto).
+- **I DENTI ERANO SPARITI DALL'ANTEPRIMA, e il difetto l'avevo messo io due commit prima.** Lorenzo:
+  *«non vedo niente dei pettini sul tool»*. Spezzando le corse di denti dove il filo salta avevo
+  usato come soglia il **passo** (due volte 1,5 mm), ma dentro una corsa il segmento più lungo che
+  il filo fa davvero è **il dente** (radice → punta, fino a 10 mm): ogni dente sopra i 4 mm veniva
+  staccato e non disegnato, e restavano le sole basi. Soglia corretta alla lunghezza massima del
+  dente. Il lucchetto che mancava — *il filo disegnato deve pesare quanto quello cucito* — è ora nel
+  test, e con la soglia sbagliata diventa rosso.
+- **I passaggi lunghi «passano sotto», per quanto si può.** Lorenzo: *«queste diagonali secondo me
+  sono passaggi lunghi, ma non c'è modo di provare a farli passare sotto in qualche modo?»*. Due
+  cose: (a) il costo della propria tinta non è più uno solo — una cella **più avanti** della riga in
+  corso costa 2 (lì devono ancora passare delle righe, e saranno loro a coprire il filo), la
+  striscia attorno alla riga costa 5, una zona **già cucita** costa 12; serviva la distanza dal muro
+  di tutto il pannello, non più solo dentro la famiglia. (b) Una cella dove **c'è già una base**
+  costa 1: ripassandoci sopra il filo si confonde con lei e sparisce, quindi i passaggi lunghi ora
+  camminano sulle righe già fatte invece di tagliare il campo. Sullo swatch di Lorenzo i salti
+  scendono da 51 a **18**; sul pannello i blocchi da 596 a **208**.
+- **Nell'anteprima i passaggi si distinguono dal ricamo** (più sottili e trasparenti) e si possono
+  spegnere: sono fatti di punti da 3 mm, quindi a occhio sembrano rette nette anche dove il ricamo
+  li coprirà — ed è per questo che sembravano un difetto.
 - **Da Lorenzo, primo dato di macchina:** distanza fra le linee 1,8 con interlinea 1,5 è **troppo
   fitta**. Altri provini in corso; i default restano 2 e 1,5 finché non lo dice lui.
 - **LA RIAPERTURA DEL PROGETTO, fatta (R9/R27).** Sia il DST sia l'SVG portano dentro parametri,

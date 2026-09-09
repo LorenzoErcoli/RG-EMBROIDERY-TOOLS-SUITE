@@ -3622,6 +3622,17 @@ console.log('Il punto pettine: il ricamo esce, e il progetto torna dentro il fil
     }
   }
   check('nel disegno non ci sono rette lunghe che il ricamo non ha', piuLungo < 12, true);
+  // ...ma il disegno deve anche esserci TUTTO: staccando i segmenti troppo lunghi si erano
+  // staccati anche i denti (la soglia era sul passo, che e' piu' corto del dente), e l'anteprima
+  // mostrava le sole basi. Il filo disegnato deve pesare quanto quello cucito.
+  let filoDisegnato = 0;
+  for (const m of es.svg.matchAll(/<path d="([^"]*)"/g)) {
+    for (const sub of m[1].split('M').slice(1)) {
+      const pts = [...sub.matchAll(/(-?[0-9.]+) (-?[0-9.]+)/g)].map((q) => [Number(q[1]), Number(q[2])]);
+      for (let i = 1; i < pts.length; i++) filoDisegnato += Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]);
+    }
+  }
+  check('il disegno contiene tutto il filo, denti compresi', filoDisegnato / 1000 > (st.basiM + st.filoDentiM) * 0.9, true);
 }
 console.log('');
 console.log('Il motore del pettine gira anche nel browser');

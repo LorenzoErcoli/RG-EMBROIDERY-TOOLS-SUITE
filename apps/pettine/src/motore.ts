@@ -80,6 +80,12 @@ export interface ParametriPettine {
   modo?: 'auto' | 'livelli';
   /** Colorare di rosa, nell'anteprima, le celle a più di 0,75 mm da qualunque filo. */
   mostraNudi?: boolean;
+  /**
+   * Disegnare i passaggi (il filo che va da una riga all'altra invece di essere tagliato). Sono filo
+   * vero e vanno guardati, ma nell'anteprima sembrano rette nette anche quando nel ricamo finiranno
+   * sotto qualcosa: si distinguono perché sono più sottili e trasparenti.
+   */
+  mostraPassaggi?: boolean;
   /** Costruire anche il DST (costa qualche secondo in più). */
   dst?: boolean;
 }
@@ -88,7 +94,7 @@ export const parametriPettineDefault: ParametriPettine = {
   basiMm: 2, sormontoMm: 4, addolcisciMm: 0.15, lisciaMaxMm: 8, spianaMm: 5, chiudiMm: 3,
   traslaMaxMm2: 9000, sconfinaMm: 2.5,
   denteMinMm: 3, denteMaxMm: 5, passoMm: 1.5, aperturaDeg: 40, nettoMm: 2.5,
-  denti: true, modo: 'auto', mostraNudi: false, dst: true,
+  denti: true, modo: 'auto', mostraNudi: false, mostraPassaggi: true, dst: true,
 };
 
 export interface StatistichePettine {
@@ -255,6 +261,25 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
     if (!img) return true;
     const tr = larghezzaTransizione(img, mmPerPx, p, n, { raggioMm: 6 });
     return tr !== null && tr.larghezzaMm >= NETTO_MM;
+  };
+  // LA DISTANZA DAL MURO DI TUTTO IL PANNELLO, cella per cella. Dentro una famiglia serve a
+  // costruire; qui fuori serve ai PASSAGGI: una cella con distanza maggiore di quella della riga
+  // che si sta cucendo non e' ancora stata ricamata, quindi il filo che ci passa sopra lo
+  // copriranno le righe che mancano. E' la differenza fra un passaggio che corre nella striscia
+  // fra due righe (invisibile) e uno che le attraversa in diagonale (a vista).
+  const distDaMuro = new Float32Array(COLS * ROWS).fill(-1);
+  // DOVE C'E' GIA' UNA BASE. Un filo di passaggio che ripassa sopra una base esistente si confonde
+  // con lei e sparisce: e' la strada buona per andare da un pezzo all'altro senza tagliare il campo.
+  const soprafilo = new Uint8Array(COLS * ROWS);
+  const stendi = (l: Point[]): void => {
+    for (let k = 1; k < l.length; k++) {
+      const a = l[k - 1], b = l[k];
+      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (CELLA / 2)));
+      for (let t = 0; t <= n; t++) {
+        const i = cella({ x: a.x + ((b.x - a.x) * t) / n, y: a.y + ((b.y - a.y) * t) / n });
+        if (i >= 0) soprafilo[i] = 1;
+      }
+    }
   };
   const perColoreDenti: string[][] = [];
   let dentiTot = 0, filoMm = 0, fermati = 0, attraversano = 0;
@@ -590,6 +615,7 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
       }
     }
     const D0 = new Float32Array(D);   // la distanza prima della spianatura: da qui parte la crescita
+    for (let i = 0; i < COLS * ROWS; i++) if (maschera[i] && D[i] < INF) distDaMuro[i] = D[i];
     // D SI SPIANA, solo sulle celle della fascia larga: media mobile separabile di raggio SPIANA_MM,
     // tre passate (quasi una gaussiana di sigma ~ raggio/1,2). Serve a due cose: il chamfer e' a
     // gradini (somme di 0,5/0,7/1,1) e i suoi livelli uscivano doppi; e le creste fra due fronti
@@ -672,10 +698,14 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
         const colLa = famIn(qq) === famiglia ? tintaIn(qq) : -1;
         if (colLa >= 0 && colLa < col) { const l = puntiSotto.get(colLa) ?? []; l.push(p, punta, p); puntiSotto.set(colLa, l); const ls = sottoOut.get(colLa) ?? []; ls.push([p, punta]); sottoOut.set(colLa, ls); }
       }
-      // la soglia: due denti vicini stanno a un passo, e il filo li unisce davvero; oltre il doppio
-      // del passo il filo o salta o fa un passaggio, e quello si disegna per conto suo
-      if (punti.length >= 3) { perColoreDenti[col].push(viaSpezzato(punti, PASSO_MM * 2 + 1)); cuci(punti); }
-      for (const [c, l] of puntiSotto) if (l.length >= 3) perColoreDenti[c].push(viaSpezzato(l, PASSO_MM * 2 + 1));
+      // LA SOGLIA: dentro una corsa di denti il segmento piu' lungo che il filo fa davvero e' il
+      // dente stesso (radice -> punta), non il passo. Con la soglia sul passo — due volte 1,5 mm —
+      // ogni dente sopra i 4 mm veniva staccato dal disegno: nell'anteprima sparivano i denti e
+      // restavano le sole basi. Il passo fra due radici e' sempre piu' corto del dente, quindi la
+      // soglia giusta e' la lunghezza massima del dente con un margine.
+      const SOGLIA_DISEGNO = Math.max(DENTE_MAX, PASSO_MM) + 1;
+      if (punti.length >= 3) { perColoreDenti[col].push(viaSpezzato(punti, SOGLIA_DISEGNO)); cuci(punti); }
+      for (const [c, l] of puntiSotto) if (l.length >= 3) perColoreDenti[c].push(viaSpezzato(l, SOGLIA_DISEGNO));
       return { denti: dentiOut, sotto: sottoOut };
     };
 
@@ -704,7 +734,7 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
         let cur: Point[] = [], curCol = -2;
         const chiudi = (): void => {
           if (cur.length >= 2 && curCol >= 0 && lunghezza(cur) >= 1.5) {
-            perColore[curCol].push(via(cur)); const copia = cur.slice(); lineeFinali.push({ id: idLivello, punti: copia }); cuci(copia);
+            perColore[curCol].push(via(cur)); const copia = cur.slice(); lineeFinali.push({ id: idLivello, punti: copia }); cuci(copia); stendi(copia);
             const t: Tratto = { col: curCol, fi, id: idLivello, d, base: copia, denti: [], sotto: new Map() };
             if (DENTI) { const r = pettina(cur, curCol, fi, idLivello); t.denti = r.denti; t.sotto = r.sotto; }
             trattiTutti.push(t);
@@ -1062,7 +1092,7 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
     const paths: DstPath[] = [];
     let corrente: Point | null = null;
     let punti = 0, filo = 0, passaggi = 0, filoPassaggi = 0, salti = 0, filoSalti = 0, corti = 0, dentiSaltati = 0;
-    let cortiSormonto = 0, filoScoperto = 0, passaggiInstradati = 0, inversioni = 0;
+    let cortiSormonto = 0, filoScoperto = 0, passaggiInstradati = 0, inversioni = 0, passaggiDiTraverso = 0;
     let saltiSerpentina = 0, saltiFamiglia = 0, saltiSormonto = 0, saltiLunghi = 0;
     let fase: 'basi' | 'sormonto' = 'basi';
     let ultimoTratto: Tratto | null = null, prossimoTratto: Tratto | null = null;
@@ -1082,7 +1112,8 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
       const d = dist(corrente, p);
       if (d < 0.05) return;
       let strada: Point[] | null = null;
-      if (d > CORTO_MM && d <= PASSAGGIO_MM) strada = instrada(corrente, p, ago - 1);
+      const dOra = fase === 'basi' && ultimoTratto ? ultimoTratto.d : Infinity;
+      if (d > CORTO_MM && d <= PASSAGGIO_MM) strada = instrada(corrente, p, ago - 1, dOra);
       if (d <= CORTO_MM || strada) {
         // i punti del passaggio: uno ogni 3 mm, e l'ultimo mai sotto il millimetro (R3) — l'arrivo e'
         // il capo della riga e deve essere esatto, quindi si toglie il penultimo invece di accorciare
@@ -1105,9 +1136,17 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
         let da = corrente;
         passaggiSvg[ago - 1].push(via([corrente, ...puliti]));
         for (const q of puliti) {
-          if (aVista({ x: (da.x + q.x) / 2, y: (da.y + q.y) / 2 }, ago - 1)) scoperti += dist(da, q);
+          if (aVista({ x: (da.x + q.x) / 2, y: (da.y + q.y) / 2 }, ago - 1, dOra)) scoperti += dist(da, q);
           cuciA(q, dist(da, q) >= MIN_MM);
           da = q;
+        }
+        // QUANTE RIGHE TAGLIA: un passaggio che corre nella striscia fra due righe non si vede, uno
+        // che le attraversa in diagonale si', ed e' quello che si vedeva nell'anteprima. Si misura
+        // dall'escursione della distanza dal muro lungo il cammino.
+        {
+          let dmin = Infinity, dmax = -Infinity;
+          for (const q of [corrente, ...puliti]) { const i = cella(q); const dd = i >= 0 ? distDaMuro[i] : -1; if (dd >= 0) { if (dd < dmin) dmin = dd; if (dd > dmax) dmax = dd; } }
+          if (dmax > dmin && dmax - dmin > BASI_MM * 3) passaggiDiTraverso++;
         }
         passaggi++; filoPassaggi += lunghezza(via2); filoScoperto += scoperti;
         if (strada) passaggiInstradati++;
@@ -1123,17 +1162,34 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
     // nessuno gli passa piu' sopra: i colori si cuciono dal chiaro allo scuro, quindi una cella di
     // tinta piu' scura di quella corrente sara' ricamata dopo e lo nascondera'; una piu' chiara e'
     // gia' fatta e lo lascerebbe scoperto; fuori dal disegno il filo si vedrebbe sul tessuto nudo.
-    const costoCella = (i: number, c: number): number => {
+    const costoCella = (i: number, c: number, dOra: number): number => {
       const t = i < 0 ? -1 : tinta[i];
       if (t < 0) return 30;      // tessuto nudo: mai
+      if (i >= 0 && soprafilo[i]) return 1;   // c'e' gia' una base: ripassandoci sopra il filo sparisce
       if (t > c) return 1;       // piu' scuro: si cuce dopo e ci passa sopra
-      if (t === c) return 4;     // stesso colore: forse lo coprono i denti della riga dopo, forse no
-      return 14;                 // piu' chiaro: gia' cucito, resterebbe a vista
+      if (t < c) return 14;      // piu' chiaro: gia' cucito, resterebbe a vista
+      // stessa tinta: dipende da DOVE. Piu' avanti della riga in corso vuol dire che li' devono
+      // ancora passare delle righe, e saranno loro a coprire il filo; indietro e' roba gia' fatta.
+      // Senza questa distinzione un passaggio tagliava dritto attraverso trenta righe gia' cucite,
+      // e restava a vista: sono le diagonali che Lorenzo ha visto nell'anteprima.
+      const d = distDaMuro[i];
+      if (d < 0) return 8;
+      if (d > dOra + BASI_MM * 0.5) return 2;
+      if (d > dOra - BASI_MM * 1.5) return 5;   // la striscia attorno alla riga in corso: la coprono i suoi denti
+      return 12;
     };
     // A VISTA = il filo di passaggio finisce dove nessuno ci passera' piu' sopra: una tinta piu'
     // chiara (gia' cucita) o il tessuto nudo. Dentro la propria tinta non conta: li' lo coprono i
     // denti della riga successiva, che e' esattamente il motivo per cui le righe vanno in ordine.
-    const aVista = (p: Point, c: number): boolean => { const i = cella(p); const t = i < 0 ? -1 : tinta[i]; return t < c; };
+    const aVista = (p: Point, c: number, dOra: number): boolean => {
+      const i = cella(p);
+      const t = i < 0 ? -1 : tinta[i];
+      if (i >= 0 && soprafilo[i]) return false;                 // sopra una base esistente: sparisce
+      if (t < c) return true;                                   // tinta gia' cucita, o tessuto nudo
+      if (t > c) return false;                                  // la coprira' un colore piu' scuro
+      const d = distDaMuro[i];                                  // stessa tinta: conta dove
+      return d >= 0 && d < dOra - BASI_MM * 1.5;                // indietro: le righe sono gia' passate
+    };
     /**
      * IL PASSAGGIO CHE SI NASCONDE (Lorenzo, 2026-09-10): «prevedi anche dei passaggi che passando per
      * i bordi delle figure poi vengono coperti dai ricami di colore successivo». Fra due capi si cerca
@@ -1142,7 +1198,7 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
      * dopo — cioe' lungo i bordi delle figure scure — invece di tagliare dritto nel chiaro gia' fatto.
      * Torna null se non trova niente di decente: allora si salta, e la macchina taglia.
      */
-    const instrada = (a: Point, b: Point, c: number): Point[] | null => {
+    const instrada = (a: Point, b: Point, c: number, dOra: number): Point[] | null => {
       const ia = cella(a), ib = cella(b);
       if (ia < 0 || ib < 0) return null;
       const marg = Math.round(20 / CELLA);   // quanto ci si puo' allargare per aggirare un ostacolo
@@ -1185,7 +1241,7 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
           const m = idx(x, y);
           if (chiuso[m]) continue;
           const passo = (dx && dy ? 1.414 : 1) * CELLA;
-          const g = G0[n] + passo * costoCella(y * COLS + x, c);
+          const g = G0[n] + passo * costoCella(y * COLS + x, c, dOra);
           if (g < G0[m]) { G0[m] = g; prev[m] = n; push(g + h(x, y), m); }
         }
       }
@@ -1330,7 +1386,7 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
     // l'origine del DST è l'angolo del riquadro: uno swatch parte da (0,0), non da dov'era nel pannello
     for (const pa of paths) for (const q of pa.points_mm) { q[0] -= X0; q[1] -= Y0; }
     dst = buildDst({ label: 'PETTINE', coordinate_system: 'svg', paths, metadata: ing.progetto ?? undefined });
-    console.log(`DST: ${punti} punti · ${(filo / 1000).toFixed(1)} m di filo · ${colori.length} aghi · ${paths.length} blocchi (${salti} salti, ${(filoSalti / 1000).toFixed(1)} m) · ${passaggi} passaggi cuciti (${(filoPassaggi / 1000).toFixed(1)} m, ${passaggiInstradati} instradati, ${(filoScoperto / 1000).toFixed(2)} m a vista) · ${corti} punti sotto ${MIN_MM} mm · ${inversioni} righe cucite fuori ordine · ${dentiSaltati} denti sotto il millimetro non cuciti`);
+    console.log(`DST: ${punti} punti · ${(filo / 1000).toFixed(1)} m di filo · ${colori.length} aghi · ${paths.length} blocchi (${salti} salti, ${(filoSalti / 1000).toFixed(1)} m) · ${passaggi} passaggi cuciti (${(filoPassaggi / 1000).toFixed(1)} m, ${passaggiInstradati} instradati, ${passaggiDiTraverso} di traverso alle righe, ${(filoScoperto / 1000).toFixed(2)} m a vista) · ${corti} punti sotto ${MIN_MM} mm · ${inversioni} righe cucite fuori ordine · ${dentiSaltati} denti sotto il millimetro non cuciti`);
     statDst = { punti, filoM: filo / 1000, blocchi: paths.length, salti, saltiM: filoSalti / 1000, passaggi, passaggiM: filoPassaggi / 1000, puntiCorti: corti, passaggiScopertiM: filoScoperto / 1000, righeFuoriOrdine: inversioni };
   }
 
@@ -1342,7 +1398,7 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
       const tratto = t === 0 ? '#9a9a9a' : c;
       if (perColore[t].length) pz.push(`<path d="${perColore[t].join('')}" fill="none" stroke="${tratto}" stroke-width="0.1"/>`);
       if (perColoreDenti[t].length) pz.push(`<path d="${perColoreDenti[t].join('')}" fill="none" stroke="${tratto}" stroke-width="0.1"/>`);
-      if (passaggiSvg[t].length) pz.push(`<path d="${passaggiSvg[t].join('')}" fill="none" stroke="${tratto}" stroke-width="0.1" opacity="0.8"/>`);
+      if (par.mostraPassaggi !== false && passaggiSvg[t].length) pz.push(`<path d="${passaggiSvg[t].join('')}" fill="none" stroke="${tratto}" stroke-width="0.06" opacity="0.45"/>`);
     });
     if (par.mostraNudi) pz.push(`<g>${nudiFilo.join('')}</g>`);
     svgPettine = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${(X0 - MARG).toFixed(1)} ${(Y0 - MARG).toFixed(1)} ${(RQ.larghezza + 2 * MARG).toFixed(1)} ${(RQ.altezza + 2 * MARG).toFixed(1)}" width="${(RQ.larghezza + 2 * MARG).toFixed(1)}mm" height="${(RQ.altezza + 2 * MARG).toFixed(1)}mm">` + NL +
