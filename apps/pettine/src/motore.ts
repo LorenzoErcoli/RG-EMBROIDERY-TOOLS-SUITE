@@ -1082,7 +1082,6 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
         if (strada) passaggiInstradati++;
       }
       else {
-        if (process.env.SALTI) console.log(`  salto ${d.toFixed(1)} mm, fase ${fase}, da tratto d=${ultimoTratto?.d.toFixed(1)} fam ${ultimoTratto?.fi} a d=${prossimoTratto?.d.toFixed(1)} fam ${prossimoTratto?.fi}`);
         apri(); pathPts.push([p.x, p.y]); corrente = p; salti++; filoSalti += d;
         if (fase === 'sormonto') saltiSormonto++;
         else if (ultimoTratto && prossimoTratto && ultimoTratto.fi === prossimoTratto.fi) { if (Math.abs(ultimoTratto.id - prossimoTratto.id) <= 1) saltiSerpentina++; else saltiFamiglia++; }

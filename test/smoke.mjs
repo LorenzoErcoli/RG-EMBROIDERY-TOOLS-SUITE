@@ -3587,6 +3587,22 @@ console.log('Punto Pittorico — riempimento curvo a distanza costante');
   }
 }
 
+console.log('');
+console.log('Il motore del pettine gira anche nel browser');
+{
+  // Il motore lo usano sia il tool nel browser sia lo script headless. Una riga di diagnostica con
+  // `process.env` ci si e' infilata ed e' arrivata a Lorenzo come «Non ci sono riuscito: process is
+  // not defined»: il tool moriva alla prima generazione. Qui si guarda il sorgente, perche' il
+  // difetto non e' geometrico e nessun test di geometria lo vedrebbe.
+  const motore = readFileSync(join(root, 'apps/pettine/src/motore.ts'), 'utf8');
+  const codice = motore.split(String.fromCharCode(10)).filter((r) => !/^\s*(\/\/|\*|\/\*)/.test(r)).join(String.fromCharCode(10));
+  check('il motore del pettine non tocca `process`', /(^|[^A-Za-z])process\s*\./.test(codice), false);
+  check('...ne importa niente da node', /from\s+['\"]node:/.test(codice), false);
+  check('...ne legge o scrive file', /(^|[^A-Za-z])(readFileSync|writeFileSync|mkdirSync)\s*\(/.test(codice), false);
+  const tool = readFileSync(join(root, 'apps/pettine/src/tool.ts'), 'utf8');
+  check('e il tool non importa dagli script headless', /from\s+['\"][^'\"]*scripts\//.test(tool), false);
+}
+
 rmSync(outDir, { recursive: true, force: true });
 console.log(failed ? `\n${failed} test falliti\n` : '\nTutti i test passati\n');
 process.exit(failed ? 1 : 0);

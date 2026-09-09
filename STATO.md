@@ -641,6 +641,15 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   Sul pannello: 2.372 passaggi cuciti per 12,4 m, **825 instradati**, e **1,8 m a vista** su 629 m
   di filo totale. La soglia oltre cui si salta è passata da 12 a 25 mm, perché adesso il passaggio
   lungo sa dove mettersi. I passaggi si vedono nell'anteprima: sono filo vero.
+- **Il tool si e' rotto in mano a Lorenzo, e la colpa era di una riga di diagnostica.** *«Non ci
+  sono riuscito: process is not defined»*: nel motore era rimasto un `if (process.env.SALTI)` messo
+  per contare i salti, invisibile in Node e fatale nel browser. Tolto, e messo un **lucchetto in
+  `test/smoke.mjs`**: il sorgente del motore non deve contenere `process.`, import da `node:` né
+  letture di file, e il tool non deve importare dagli script. Sono quattro asserzioni che guardano
+  il *testo* del file, perche' il difetto non e' geometrico e nessun test di geometria lo vedrebbe.
+  Il lucchetto e' stato provato rompendo apposta il motore: diventa rosso. **La prima versione del
+  test non lo faceva** — la regex, scritta da uno script Python in una stringa non-raw, era arrivata
+  sul disco con un carattere di controllo al posto di `` e non trovava niente: verde e cieca.
 - **Da Lorenzo, primo dato di macchina:** distanza fra le linee 1,8 con interlinea 1,5 è **troppo
   fitta**. Altri provini in corso; i default restano 2 e 1,5 finché non lo dice lui.
 - **Aperto:** la riapertura del progetto (R9/R27) non c'è ancora — un DST esportato non si riapre
