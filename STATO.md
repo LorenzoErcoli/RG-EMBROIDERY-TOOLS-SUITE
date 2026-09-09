@@ -668,7 +668,21 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   s'allargavano, nudo 0,1 % col metro del filo (145 rammendi, contro 22: la chiusura salta), 2.570
   tratti, 79,6 m di basi, 54.362 denti, 433 m. Le onde in alto: parallele, spaziatura esatta, senza
   cuciture. `MODO=livelli` per riavere la costruzione a livelli; parametro 15 `chiudi`.
-- **Aperto:** (a) restano **250 tratti sotto i 5 mm**, quasi tutti attorno alla sfera e sulle
+- **La prova a traslazione sulla sfera (quarta tornata del 2026-09-09).** Lorenzo, sulla v4: *«no,
+  abbiamo peggiorato. Ti chiedo di fare una prova: nella sfera non fare la fusione tra due muri,
+  prendi solo quello più chiaro o comunque uno dei due e fai lo spostamento senza alterare la forma
+  della curva ma solamente tagliandola dove finisce la forma»*. Fatto per le famiglie fino a
+  9.000 mm² (i blocchi della sfera; le fasce grandi restano a crescita a passo fisso): il muro
+  chiaro, prolungato dritto ai due capi, si **trasla** di un passo alla volta lungo la sua normale
+  media, copia identica, tagliata dove esce dal blocco; dove la curva corre quasi lungo lo
+  spostamento le copie si accavallerebbero (distanza = passo × sin dell'angolo) e si tiene una copia
+  ogni tante — toglierle e basta lasciava una colonna nuda. I denti vanno tutti contro lo
+  spostamento. Due cose trovate facendola: il tratto chiaro negli spicchi era **a L** (arco + lato
+  radiale) e la normale media andava a 45° — ora **il muro si spezza agli angoli netti** (>60° in
+  3 mm) e si tiene il tratto più lungo, per tutti i modi; e il prolungamento in coda era in ordine
+  inverso (linea doppia). Misurato: nudo 0,1 % (69 rammendi), 2.478 tratti, 82 m di basi, 55.799
+  denti, 444 m. Parametro 16 `traslaMax` (mm²), `MODO=livelli` per i livelli.
+- **Aperto:** (a) restano **232 tratti sotto i 5 mm**, quasi tutti attorno alla sfera e sulle
   creste dove due fronti si incontrano — sono le «giunture» che Lorenzo non vuole, da guardare con
   lui; (b) lo sconfinamento di 2,5 mm si vede come **peli** che attraversano le giunte; (c) il
   «passa due volte» sui rami dello stesso livello che si toccano; (d) il tool vero — pannello,

@@ -47,7 +47,9 @@ const LISCIA_MAX = num(13, 8);         // tetto alla lisciatura, in mm
 const SPIANA_MM = num(14, 5);
 // LA CHIUSURA delle insenature nella crescita a passo fisso (raggio in mm, cresce con ADDOLCISCI per mm
 // di distanza dal muro, tetto LISCIA_MAX).
-const CHIUDI_MM = num(15, 3);   // Lorenzo (2026-09-09, seconda tornata): «puoi spianarle ancora di piu'»
+const CHIUDI_MM = num(15, 3);
+// LE FAMIGLIE PICCOLE (fino a tanti mm²) vanno a traslazione del muro chiaro: prova sulla sfera
+const TRASLA_MAX_MM2 = num(16, 9000);   // Lorenzo (2026-09-09, seconda tornata): «puoi spianarle ancora di piu'»
 // L'ULTIMA BASE LUNGO IL MURO OPPOSTO: spenta di default (ULTIMA=1 per riaverla). Lorenzo: «la curva si
 // amplifica per rispettare il muro finale, quello lo eviterei, non e' necessario che diventi uguale al
 // muro finale». Con lo sconfinamento oltre il muro i suoi buchi non ci sono piu'.
@@ -336,6 +338,21 @@ famiglie.forEach((f, fi) => {
     tratto = cerca((i) => normali[i].x * rx + normali[i].y * ry >= 0);
     if (!tratto || tratto[1] < 6 || tratto[1] > n - 6) { famSaltate++; return; }
   }
+  // IL MURO SI SPEZZA AGLI ANGOLI NETTI e si tiene il tratto piu' lungo: negli spicchi della sfera il
+  // tratto chiaro era a L (arco + lato radiale), e uno spostamento lungo la sua normale media andava a
+  // 45 gradi. Un angolo e' netto se la direzione gira di piu' di 60 gradi nel giro di 3 mm (6 punti).
+  {
+    const [s0, sl] = tratto;
+    const w = 3;
+    let da = 0, best: [number, number] = [s0, sl];
+    let bestLen = 0;
+    const dir = (k: number): Point => { const a = anello[(s0 + Math.max(0, k - w)) % n], b = anello[(s0 + Math.min(sl - 1, k + w)) % n]; const l = Math.hypot(b.x - a.x, b.y - a.y) || 1; return { x: (b.x - a.x) / l, y: (b.y - a.y) / l }; };
+    const tagli: number[] = [];
+    for (let k = w; k + w < sl; k++) { const p1 = dir(k - w), p2 = dir(k + w); if (p1.x * p2.x + p1.y * p2.y < Math.cos(Math.PI / 3)) { tagli.push(k); k += w; } }
+    bestLen = 0;
+    for (const t of [...tagli, sl]) { if (t - da > bestLen) { bestLen = t - da; best = [(s0 + da) % n, t - da]; } da = t; }
+    if (tagli.length && bestLen >= 6) tratto = best;
+  }
   const [a0, la] = tratto;
   const A: Point[] = [], B: Point[] = [];
   for (let k = 0; k < la; k++) A.push(anello[(a0 + k) % n]);
@@ -511,7 +528,9 @@ famiglie.forEach((f, fi) => {
       }
     }
   }
+  let versoFisso: Point | null = null;   // nel modo a traslazione i denti vanno tutti contro il verso dello spostamento
   const gradVersoA = (p: Point): Point => {
+    if (versoFisso) return versoFisso;
     const i = cella(p);
     if (i < 0) return { x: 0, y: 0 };
     const g = (j: number): number => (j >= 0 && j < COLS * ROWS && largo[j] && D[j] < INF ? D[j] : D[i]);
@@ -576,7 +595,7 @@ famiglie.forEach((f, fi) => {
     const segmenti = livello(D, su, COLS, ROWS, ORIG, ORIG, CELLA, d + 0.0137).filter((sg) => Math.hypot(sg.b.x - sg.a.x, sg.b.y - sg.a.y) > 1e-6);
     tiraLinee(incatena(segmenti, CELLA * 1.5), d);
   };
-  const tiraLinee = (linee: Point[][], d: number): void => {
+  const tiraLinee = (linee: Point[][], d: number, sigma?: number): void => {
     idLivello++;
     for (const linea of linee) {
       if (linea.length < 3) continue;
@@ -584,7 +603,8 @@ famiglie.forEach((f, fi) => {
       if (pezzo.length < 4) continue;
       // il tetto alla lisciatura: a 140 mm dal muro sigma faceva 22 mm e un gomito dei livelli
       // diventava un arco largo, che tagliava l'angolo lasciandolo nudo (sondato a (112,250))
-      const morbida = liscia(pezzo, Math.min(LISCIA_MAX, LISCIA_MM + ADDOLCISCI * d), 0.5);
+      const sg = sigma ?? Math.min(LISCIA_MAX, LISCIA_MM + ADDOLCISCI * d);
+      const morbida = sg > 0 ? liscia(pezzo, sg, 0.5) : pezzo;
       let cur: Point[] = [], curCol = -2;
       const chiudi = (): void => {
         if (cur.length >= 2 && curCol >= 0 && lunghezza(cur) >= 1.5) {
@@ -624,7 +644,54 @@ famiglie.forEach((f, fi) => {
       }
     }
   };
-  if (process.env.MODO === 'livelli') {
+  // LA TRASLAZIONE (prova chiesta da Lorenzo, 2026-09-09, sulla sfera): «non fare la fusione tra due
+  // muri, prendi solo quello piu' chiaro e fai lo spostamento senza alterare la forma della curva,
+  // solamente tagliandola dove finisce la forma». Il muro chiaro, prolungato dritto ai due capi, si
+  // sposta di un passo alla volta lungo la sua normale media (verso l'interno): ogni copia e'
+  // identica, si taglia dove esce dal blocco (con lo sconfinamento) e dove corre a meno di 30 gradi
+  // dal verso dello spostamento (li' le copie si accavallerebbero). I denti vanno tutti contro lo
+  // spostamento, cioe' verso il muro chiaro. Vale per le famiglie fino a TRASLA_MAX_MM2 (i blocchi
+  // della sfera); le fasce grandi restano come prima.
+  if (u.areaMm2 <= TRASLA_MAX_MM2) {
+    const base = ricampiona(As, 0.5);
+    // la normale media, verso l'interno della famiglia
+    let ux = 0, uy = 0;
+    for (let i = 1; i + 1 < base.length; i++) {
+      const tx = base[i + 1].x - base[i - 1].x, ty = base[i + 1].y - base[i - 1].y;
+      const l = Math.hypot(tx, ty) || 1;
+      let nx = -ty / l, ny = tx / l;
+      if (!dentroFamStretto({ x: base[i].x + nx * 1.5, y: base[i].y + ny * 1.5 }) && dentroFamStretto({ x: base[i].x - nx * 1.5, y: base[i].y - ny * 1.5 })) { nx = -nx; ny = -ny; }
+      ux += nx; uy += ny;
+    }
+    const lu = Math.hypot(ux, uy) || 1; ux /= lu; uy /= lu;
+    versoFisso = { x: -ux, y: -uy };
+    // il muro prolungato dritto ai due capi
+    const est = (a: Point, b: Point, L: number): Point[] => { const l = Math.hypot(b.x - a.x, b.y - a.y) || 1; const out: Point[] = []; for (let t = L; t > 0; t -= 0.5) out.push({ x: b.x + ((b.x - a.x) / l) * t, y: b.y + ((b.y - a.y) / l) * t }); return out; };
+    const n = base.length, L = 300;
+    const lunga = [...est(base[Math.min(n - 1, 6)], base[0], L), ...base, ...est(base[Math.max(0, n - 7)], base[n - 1], L).reverse()];
+    // dove la curva corre quasi lungo lo spostamento le copie si accavallano (distanza fra due copie =
+    // passo × sin dell'angolo): li' si tiene una copia ogni tante, cosi' la distanza torna ~ un passo.
+    // Toglierle e basta lasciava una colonna nuda (visto nel blocco in alto a destra della sfera).
+    const ogni: number[] = lunga.map((_, i) => {
+      const a = lunga[Math.max(0, i - 2)], b = lunga[Math.min(lunga.length - 1, i + 2)];
+      const tx = b.x - a.x, ty = b.y - a.y, l = Math.hypot(tx, ty) || 1;
+      const sin = Math.sqrt(Math.max(0, 1 - ((tx * ux + ty * uy) / l) ** 2));
+      return sin >= 0.5 ? 1 : Math.min(10, Math.round(1 / Math.max(0.1, sin)));
+    });
+    for (let k = 0; k < 400; k++) {
+      const d = k * BASI_MM + BASI_MM / 2;
+      const linee: Point[][] = [];
+      let cur: Point[] = [], viva = false;
+      for (let i = 0; i < lunga.length; i++) {
+        const q = { x: lunga[i].x + ux * d, y: lunga[i].y + uy * d };
+        const ok = k % ogni[i] === 0 && nelLargo(q);
+        if (ok) { cur.push(q); viva = true; } else if (cur.length) { linee.push(cur); cur = []; }
+      }
+      if (cur.length) linee.push(cur);
+      if (!viva) { if (k > 2) break; else continue; }
+      tiraLinee(linee, d, 0);
+    }
+  } else if (process.env.MODO === 'livelli') {
     for (let d = BASI_MM / 2; d < dMax; d += BASI_MM) tiraLivello(d, largo);
   } else {
     // LA CRESCITA A PASSO FISSO. Lorenzo (2026-09-09): «nei punti in cui hai allentato la curva la
