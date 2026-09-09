@@ -588,8 +588,45 @@ delle file di raso si allungano a caso, gli uni dentro il territorio degli altri
   è discordante** — `AVVIO-NUOVO-TOOL.md` dice v1.6.0, il pin committato è v1.12.0, il disco è a
   v1.14.1. Il pannello è progettato sul pavimento v1.6.0, quindi regge su tutti e tre.
 
-**Studio `pettine` — il «punto pettine sfrangiato», ancora senza pannello** (`apps/pettine/scripts`,
-fixture in `apps/pettine/fixtures`). Nato il 2026-09-08 quando Lorenzo ha messo da parte la
+**Tool `pettine` — LIVE dal 2026-09-09: il «punto pettine sfrangiato», col ritaglio per gli swatch.**
+L'undicesimo strumento. Lorenzo, dopo aver preso il DST del pannello per provarlo in macchina: *«il
+tools è attivo? Puoi in caso attivarlo e permettermi di lavorare su densità, lunghezza punto e
+distanza tra le linee? In più devo chiederti un favore, di darmi la possibilità di croppare
+l'immagine originale così che posso provare a fare degli swatch più piccoli»*.
+- **La geometria è uscita dallo script ed è diventata un motore** (`apps/pettine/src/motore.ts`,
+  ~1.100 righe): puro, senza `node:fs`, senza DOM, senza `process`. Lo usano tanto il tool nel
+  browser quanto `scripts/livelli.ts`, che è rimasto come banco di prova ed è ora un guscio di 70
+  righe (R28: una domanda, una risposta sola). **Verificato che l'estrazione non ha cambiato una
+  virgola**: sullo stesso file e con gli stessi parametri escono gli stessi 2.478 tratti, 55.799
+  denti, 197.876 punti e 601.700 byte di DST di prima.
+- **Il ritaglio**, che è la richiesta del giorno: il motore lavora dentro un rettangolo in
+  millimetri, si scrive nei quattro campi o si tira col mouse sull'anteprima. Le coordinate restano
+  quelle del disegno (la foto continua a combaciare) e **il DST esce con l'origine nell'angolo del
+  ritaglio**, così lo swatch parte da (0,0). Uno swatch di 90 × 90 mm sulla sfera: 4.561 denti,
+  14.969 punti, 46,6 m di filo, **0,3 secondi** contro i 12 del pannello intero.
+- **Il pannello** l'ha composto il subagent `design-system`: Testa A a due sezioni (`01 Blocchi e
+  fotografia` — «Sagoma» sarebbe falso, i file sono due — e `02 Ritaglio`, in testa perché senza i
+  file quei millimetri non dicono niente ed è lui a decidere quanto costa «Genera»), corpo `03
+  Linee` · `04 Pettine` · `05 Sovrapposizione` · `06 Curve`, coda `07 Esito`. Nessuna classe nuova
+  nel DS, nessun componente inventato. Tre cose che ha imposto e che valgono per i prossimi tool:
+  gli **export stanno nella barra dell'anteprima** (sono azioni, non opzioni); **niente
+  `type="number"`** (DS 1.15.0 — scorrendo il pannello con la rotellina sopra un campo a fuoco il
+  valore cambiava da solo, e la virgola italiana veniva rifiutata: qui è `type="text"` +
+  `inputmode="decimal"` con la validazione nell'app); il **minimo sopra il massimo non si corregge
+  di nascosto**, si dice. Restano segnalati come mancanti nel DS un campo per la coppia min/max e
+  uno per un riquadro X/Y/L/A: si compongono con `rg-field`, e la soglia per un componente nuovo
+  (due prodotti) non è raggiunta.
+- **Due difetti trovati provandolo in browser, non a occhio:** scrivendo «da sinistra» il campo
+  «larghezza» tornava a zero (i quattro numeri si rileggevano dal ritaglio, che era ancora spento —
+  ora stanno in una struttura loro e il ritaglio è quello che ne esce); e il valore misurato a 7ch
+  mostrava «419,» invece di «419,45» (misurato sullo schermo: servono 10ch).
+- **Aperto:** la riapertura del progetto (R9/R27) non c'è ancora — un DST esportato non si riapre
+  coi suoi parametri e col suo ritaglio; e l'etichetta «Densità del pettine» nomina una misura
+  *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
+  `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione
+  è sua.
+
+**Lo studio che c'è dietro** (`apps/pettine/scripts`, fixture in `apps/pettine/fixtures`). Nato il 2026-09-08 quando Lorenzo ha messo da parte la
 sfrangiatura da DST (*«il progetto con il dst lo nascondiamo per ora e lo riprendiamo in futuro»*) e
 ha ridefinito il bisogno: da un'immagine e da un vettoriale a **blocchi raggruppati da lui in
 Illustrator**, linee di base curve e lisce con sopra un pettine di denti — **una sola direzione per

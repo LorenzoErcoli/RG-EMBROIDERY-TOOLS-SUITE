@@ -11,6 +11,7 @@ import { mountBroccato } from '@app/broccato';
 import { mountPittorico } from '@app/pittorico';
 import { mountSfrangiatura } from '@app/sfrangiatura';
 import { mountZonePattern } from '@app/zone-pattern';
+import { mountPettine } from '@app/pettine';
 
 const app = document.getElementById('app')!;
 
@@ -26,6 +27,7 @@ function route(): void {
   else if (hash === '#/pittorico') mountPittorico(app, { backHref: '#/' });
   else if (hash === '#/sfrangiatura') mountSfrangiatura(app, { backHref: '#/' });
   else if (hash === '#/zone-pattern') mountZonePattern(app, { backHref: '#/' });
+  else if (hash === '#/pettine') mountPettine(app, { backHref: '#/' });
   else renderHome(app);
 }
 

@@ -16,6 +16,7 @@
       "@app/broccato": ["../broccato/src/tool.ts"],
       "@app/pittorico": ["../pittorico/src/tool.ts"],
       "@app/sfrangiatura": ["../sfrangiatura/src/tool.ts"],
+      "@app/pettine": ["../pettine/src/tool.ts"],
       "@app/zone-pattern": ["../zone-pattern/src/tool.ts"],
       "@rg/pattern-grammar": ["../../packages/pattern-grammar/src/index.ts"]
     }

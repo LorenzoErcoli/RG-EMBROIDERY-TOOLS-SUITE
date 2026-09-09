@@ -1,0 +1,25 @@
+/* Stili locali del tool "Punto pettine sfrangiato".
+   Solo cio' che il design system non copre per dichiarazione: il sizing d'app, il contenimento
+   dell'anteprima e il cursore del ritaglio. Nessun colore inventato: tutto da token --rg-*. */
+
+/* 1. Altezza del guscio: il pattern workspace dice che l'altezza esterna la mette l'app. */
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--rg-color-background);
+  color: var(--rg-color-text-primary);
+  font-family: var(--rg-font-body);
+}
+#app { display: flex; flex-direction: column; height: 100vh; }
+.pettine-workspace { flex: 1 1 auto; min-height: 0; }
+
+/* 2. L'anteprima non sborda dalla tela (difetto gia' trovato in striatura). */
+.pettine-workspace #layer svg { max-width: 100%; max-height: 100%; }
+
+/* 3. Il valore misurato: 10ch, misurati sullo schermo e non a occhio — il piu' lungo del tool
+   e' "419,45" e sotto i 10ch si vedeva "419," (a 8ch 62px, a 9ch 69px, a 10ch 77px: serve tutto).
+   La colonna del pannello e' 316px, quindi ci sta comodo insieme alla pastiglia dell'unita'. */
+.pettine-workspace .rg-param-grid { --rg-input-numeric-width: 10ch; }
+
+/* 4. Col ritaglio acceso il puntatore dice che si sta tirando un rettangolo, non trascinando. */
+.rg-workspace__canvas.pettine-ritaglio,
+.rg-workspace__canvas.pettine-ritaglio.is-dragging { cursor: crosshair; }

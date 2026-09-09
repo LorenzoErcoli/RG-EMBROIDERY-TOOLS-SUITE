@@ -285,6 +285,51 @@ davvero (non è un'impressione: si contano), la lunghezza media e il filo aggiun
 
 ---
 
+## Punto pettine sfrangiato (`pettine`)
+
+**A cosa serve.** A ricamare un'immagine intera a **punto pettine**: linee di base curve, tutte alla
+stessa distanza, con sopra un pettine di denti che puntano verso la zona più chiara. È lo strumento
+per i pannelli grandi a sfumatura, dove il disegno è già diviso in gruppi di colore in Illustrator.
+
+**Cosa gli serve.** Due file. Il primo è un **SVG a gruppi**: un `<g id="...">` per ogni blocco che
+deve avere una direzione sola. Il secondo è la **fotografia** del soggetto, che serve a una cosa
+sola: decidere dove il bordo fra due blocchi **stacca** (e allora il dente si ferma) e dove
+**sfuma** (e allora lo attraversa). Senza fotografia i denti attraversano sempre.
+
+**Come si lavora.**
+1. **Blocchi e fotografia** — carica i due file e scrivi la **larghezza reale del pannello**: da
+   quella viene la scala di tutto, quindi va messa prima di guardare qualunque millimetro.
+2. **Ritaglio** — il rettangolo da generare, per provare uno **swatch** invece del pannello intero.
+   Si scrive nei quattro campi (gli stessi X e Y che leggi in Illustrator) oppure si sceglie
+   *Ritaglia* e lo si tira col mouse sull'anteprima. *Tutto il pannello* lo spegne. Il DST che esce
+   ha l'origine **nell'angolo del ritaglio**: lo swatch parte da (0,0) e si monta senza spostare
+   niente.
+3. **Linee** — la distanza fra una linea di base e la successiva, misurata di traverso. Le linee si
+   devono sovrastare: a 2 mm i denti di una coprono la vicina.
+4. **Pettine** — la **densità** è la distanza fra un dente e il successivo lungo la linea (mai sotto
+   1 mm: la macchina non ce la fa). La **lunghezza minima e massima** sono la misura del dente, che
+   si estrae a caso fra le due: è la varietà a fare l'effetto sfrangiato. L'**apertura** è di quanto
+   ogni dente si scosta dal verso del chiaro. Togliendo i denti restano le sole linee di base: si
+   guarda la struttura in un attimo, e non si costruisce il DST.
+5. **Sovrapposizione** — il sormonto: se entro tanto, verso il chiaro, c'è una tinta più chiara, il
+   dente si cuce **anche** con quella, prima e sotto. È così che alla giunta non si vede la tela.
+6. **Curve** — i gruppi più piccoli della soglia di *traslazione* si costruiscono spostando il muro
+   chiaro senza deformarlo, gli altri facendo crescere la macchia di un passo per volta.
+   *Spianatura* e *chiusura* smussano gli spigoli, l'*addolcimento* cresce con la distanza dal muro.
+7. **Genera**, poi **Salva SVG** o **Salva DST** dalla barra dell'anteprima. *Verifica* mostra le
+   sole linee di base coi muri e le frecce del verso: è la vista in cui si capisce cosa ha deciso il
+   tool.
+
+**Cosa leggere nell'esito.** «Scoperto» è la misura che conta: la percentuale di pannello a più di
+0,75 mm da qualunque filo, cioè dove si vedrebbe la tela. Sotto lo 0,5 % è un pannello pieno. Poi i
+numeri della cucitura: punti, filo, aghi, blocchi e salti. Col ritaglio acceso valgono per lo
+swatch, non per il pannello.
+
+**Come cuce.** Ogni linea di base coi suoi denti è un filo continuo: radice, punta, di nuovo la
+stessa radice, poi la radice dopo. Dentro un blocco le linee si cuciono in ordine, una all'andata e
+una al ritorno, e fra una e l'altra il filo passa cucendo se il salto è corto. I colori vanno dal
+chiaro allo scuro: il chiaro sta sotto.
+
 ## Se qualcosa non torna
 
 - **"Non vedo niente in anteprima."** Controlla di aver assegnato i **ruoli** ai colori (spesso manca l'area da riempire), e prova **Adatta**.
