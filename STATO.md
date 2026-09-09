@@ -787,6 +787,28 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   cambiarlo dopo un provino. **Provata e scartata** la versione alla lettera («nessun passaggio»):
   toglieva anche i collegamenti fra righe adiacenti, che i denti della riga dopo coprono benissimo,
   e faceva 614 salti.
+- **I passaggi lunghi andavano a prendere i FRAMMENTI, e ora c'è la manopola** (Lorenzo, 2026-09-10,
+  quarta tornata: *«mi stai tornando su blocchi che sono vicini… è da evitare di tornare sullo stesso
+  blocco due volte… i passaggi rischiano di vedersi»*). Guardando **da dove a dove** vanno i
+  passaggi sopra i 30 mm si è visto che quasi tutti finiscono su righe da **5-7 mm**: i pezzetti che
+  nascono quando una riga attraversa quattro tinte e si spezza in quattro, e che poi il filo di ogni
+  colore deve andarsi a prendere uno per uno da lontano. Due cose: (a) una tinta che dura meno di
+  **6 mm** lungo la riga non merita più un cambio di colore (`tintaMinimaMm`) — i tratti scendono da
+  1.624 a 1.442 e quelli sotto i 5 mm da 172 a **30**; (b) il passaggio più lungo che si prova a
+  cucire è ora una manopola (`passaggioMaxMm`, default **30 mm**), perché è un baratto che si decide
+  guardando il ricamo, non a tavolino:
+
+  | passaggio fino a | blocchi | salti | metri di salto | passaggi sopra 30 mm |
+  |---|---|---|---|---|
+  | 15 mm | 553 | 552 | 29,8 | 0 |
+  | **30 mm** | **378** | **377** | **26,0** | **0** |
+  | 60 mm | 227 | 223 | 19,3 | 154 |
+  | 200 mm | 137 | 132 | 9,6 | 245 |
+
+  Col default nuovo il filo di passaggio a vista scende a **1,5 m** su 555 (era 3,7), e nessun
+  passaggio attraversa più di 3 cm. **Provate e scartate, misurando:** raggruppare i tratti in zone e
+  finirne una prima di passare all'altra (già succedeva: 72 zone, 72 ingressi); e trattare le
+  «colonne» come zone, che ha peggiorato i passaggi lunghi e rotto l'ordine di copertura in 28 punti.
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione

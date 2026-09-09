@@ -41,6 +41,8 @@ const CAMPI: Campo[] = [
   { id: 'aperturaDeg', key: 'aperturaDeg', min: 0, max: 80 },
   { id: 'sormontoMm', key: 'sormontoMm', min: 0, max: 20 },
   { id: 'sconfinamentoMm', key: 'sconfinaMm', min: 0, max: 10 },
+  { id: 'passaggioMaxMm', key: 'passaggioMaxMm', min: 4, max: 250 },
+  { id: 'tintaMinimaMm', key: 'tintaMinimaMm', min: 0, max: 40 },
   { id: 'spianaturaMm', key: 'spianaMm', min: 0.5, max: 20 },
   { id: 'addolcimentoMmMm', key: 'addolcisciMm', min: 0, max: 1 },
   { id: 'chiusuraMm', key: 'chiudiMm', min: 0, max: 20 },
@@ -214,6 +216,16 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
             <span class="rg-field__label">Sconfinamento fra blocchi</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="sconfinamentoMm" type="text" inputmode="decimal" value="1"><span>mm</span></span>
             <span class="rg-field__help">Quanto le righe di un blocco entrano in quello accanto, perché la giunta non resti nuda. Alzandolo le righe dei due blocchi si affiancano e si vede una banda più fitta: a 2,5 mm sono il doppio che a 1.</span>
+          </label>
+          <label class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Passaggio più lungo</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="passaggioMaxMm" type="text" inputmode="decimal" value="30"><span>mm</span></span>
+            <span class="rg-field__help">Fin dove si prova a cucire invece di tagliare. Un passaggio corto sparisce fra le righe, uno lungo si vede: a 15 mm il filo non attraversa mai, ma i tagli sono 552; a 30 sono 377; a 200 scendono a 132 e restano 245 passaggi lunghi.</span>
+          </label>
+          <label class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Tinta più corta</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="tintaMinimaMm" type="text" inputmode="decimal" value="6"><span>mm</span></span>
+            <span class="rg-field__help">Quanto deve durare una tinta lungo una riga per meritare un cambio di colore. Sotto, la riga tiene il colore che aveva: senza, restano pezzetti da 5 mm che il loro colore deve andarsi a prendere da lontano.</span>
           </label>
         </div>
       </details>

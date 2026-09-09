@@ -99,6 +99,20 @@ export interface ParametriPettine {
    */
   mostraPassaggi?: boolean;
   /**
+   * Fin dove si prova a cucire un passaggio invece di tagliare (mm). Piu' e' alto, meno tagli e piu'
+   * filo teso in giro: un passaggio corto sparisce fra le righe, uno lungo si vede. Misurato sul
+   * pannello: a 15 mm 552 salti e nessun passaggio sopra i 3 cm; a 30 mm 377 salti; a 60 mm 223
+   * salti e 154 passaggi lunghi; a 200 mm 132 salti e 245 passaggi lunghi.
+   */
+  passaggioMaxMm?: number;
+  /**
+   * Quanto deve durare una tinta lungo una riga per meritare un cambio di colore (mm). Sotto questa
+   * misura la riga tiene il colore che aveva: senza, una riga che attraversa quattro tinte si spezza
+   * in quattro pezzi, e i pezzetti da 5 mm costringono il filo del loro colore ad andarseli a
+   * prendere uno per uno da lontano.
+   */
+  tintaMinimaMm?: number;
+  /**
    * Quanti ULTIMI colori non fanno passaggi liberi. Sotto di loro non viene più nessuno a coprire il
    * filo, quindi lì un passaggio si fa solo se resta corto (60 mm) e se il cammino è tutto in zona
    * ancora da ricamare, che i loro stessi denti copriranno. Lorenzo (2026-09-10): «negli ultimi 2
@@ -113,7 +127,8 @@ export const parametriPettineDefault: ParametriPettine = {
   basiMm: 2, sormontoMm: 4, addolcisciMm: 0.15, lisciaMaxMm: 8, spianaMm: 5, chiudiMm: 3,
   traslaMaxMm2: 9000, sconfinaMm: 1,
   denteMinMm: 3, denteMaxMm: 5, passoMm: 1.5, aperturaDeg: 40, nettoMm: 2.5,
-  denti: true, modo: 'auto', mostraNudi: false, mostraPassaggi: true, senzaPassaggiUltimiColori: 2, dst: true,
+  denti: true, modo: 'auto', mostraNudi: false, mostraPassaggi: true,
+  passaggioMaxMm: 30, tintaMinimaMm: 6, senzaPassaggiUltimiColori: 2, dst: true,
 };
 
 export interface StatistichePettine {
@@ -161,6 +176,8 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
   const LISCIA_MAX = par.lisciaMaxMm;
   const SPIANA_MM = par.spianaMm;
   const CHIUDI_MM = par.chiudiMm;
+  // quanto deve durare una tinta lungo una riga per meritare un cambio di colore
+  const TINTA_MINIMA_MM = Math.max(0, par.tintaMinimaMm ?? 6);
   const TRASLA_MAX_MM2 = par.traslaMaxMm2;
   const ULTIMA_BASE = false;
   const RIFERIMENTO_DEG = -90;
@@ -775,7 +792,12 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
           const prec = grezzi.length ? grezzi[grezzi.length - 1] : -1;
           grezzi.push(dentroFamStretto(p) ? tintaIn(p) : dentroFam(p) ? (prec >= 0 ? prec : tintaVicina(p)) : -1);
         }
-        const colori = stabilizza(grezzi, 4);
+        // MAI FRAMMENTI: una tinta che dura meno di TINTA_MINIMA_MM lungo la riga non merita un cambio
+      // di colore, e prende quello del tratto che la precede. Senza, una riga che attraversa quattro
+      // tinte si spezzava in quattro pezzi, e i pezzetti da 5 mm costringevano il filo del loro
+      // colore ad andare a prenderli uno per uno da lontano (Lorenzo, 2026-09-10: «mi stai tornando
+      // su blocchi che sono vicini... i passaggi rischiano di vedersi»).
+      const colori = stabilizza(grezzi, Math.max(2, Math.round(TINTA_MINIMA_MM / 0.5)));
         for (let i = 0; i < morbida.length; i++) {
           const p = morbida[i];
           const col = colori[i];
@@ -1079,7 +1101,7 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
         cur = []; curCol = -2;
       };
       // qui la base sta a mezzo passo dentro: ha sempre una tinta
-      const colori = stabilizza(morbida.map((p, i) => (tieni[i] && dentroFam(p) ? tintaIn(p) : -1)), 4);
+      const colori = stabilizza(morbida.map((p, i) => (tieni[i] && dentroFam(p) ? tintaIn(p) : -1)), Math.max(2, Math.round(TINTA_MINIMA_MM / 0.5)));
       for (let i = 0; i < morbida.length; i++) {
         const p = morbida[i];
         const col = colori[i];
@@ -1244,7 +1266,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     // Da 60 a 200 mm (2026-09-10, «fare i passaggi il piu' possibile»): i salti sul pannello passano
     // da 177 a 34, e il filo di passaggio che resta a vista sale solo da 4,5 a 5,6 m su 580 — le
     // strade coperte l'A* le trova quasi sempre, e quando non le trova salta come chiede Lorenzo.
-    const PASSAGGIO_MM = 200;  // fin qui si prova a cucire il passaggio; oltre, si salta
+    const PASSAGGIO_MM = Math.max(4, par.passaggioMaxMm ?? 30);  // fin qui si prova a cucire il passaggio; oltre, si salta
     const CORTO_MM = 4;        // fin qui si va dritti senza cercare strade
     const MIN_MM = 1;
     const dist = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
@@ -1253,6 +1275,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     let punti = 0, filo = 0, passaggi = 0, filoPassaggi = 0, salti = 0, filoSalti = 0, corti = 0, dentiSaltati = 0;
     let cortiSormonto = 0, filoScoperto = 0, passaggiInstradati = 0, inversioni = 0, passaggiDiTraverso = 0;
     let andateRitorno = 0, filoImpuntura = 0, filoScopertoUltimi = 0;
+    const lunghezzePassaggi: number[] = [];
     // fin qui una riga si puo' servire con andata e ritorno: piu' lunga, il filo nascosto costa piu' del salto
     const ANDATA_RITORNO_MAX = 70;
     // oltre questa distanza il pezzo dopo e' «lontano»: il passaggio, se pure si trova, sara' lungo
@@ -1325,6 +1348,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
           if (dmax > dmin && dmax - dmin > BASI_MM * 3) passaggiDiTraverso++;
         }
         passaggi++; filoPassaggi += lunghezza(via2); filoScoperto += scoperti;
+        lunghezzePassaggi.push(d);
         if (ultimi) filoScopertoUltimi += scoperti;
         if (strada) passaggiInstradati++;
       }
@@ -1611,6 +1635,11 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     // l'origine del DST è l'angolo del riquadro: uno swatch parte da (0,0), non da dov'era nel pannello
     for (const pa of paths) for (const q of pa.points_mm) { q[0] -= X0; q[1] -= Y0; }
     dst = buildDst({ label: 'PETTINE', coordinate_system: 'svg', paths, metadata: ing.progetto ?? undefined });
+    {
+      const v = [...lunghezzePassaggi].sort((a, b) => a - b);
+      const q = (f: number): string => (v.length ? v[Math.floor(v.length * f)].toFixed(0) : '0');
+      console.log(`PASSAGGI per lunghezza: mediana ${q(0.5)} mm · 90% sotto ${q(0.9)} · il piu' lungo ${v.length ? v[v.length - 1].toFixed(0) : 0} · oltre 30 mm ne sono ${v.filter((x) => x > 30).length}`);
+    }
     console.log(`ANDATA E RITORNO su ${andateRitorno} righe corte (${(filoImpuntura / 1000).toFixed(2)} m di impuntura nascosta sotto i denti)`);
     console.log(`SALTI per tipo: ${saltiSerpentina} fra righe vicine dello stesso gruppo · ${saltiFamiglia} fra righe lontane dello stesso gruppo · ${saltiSormonto} nel sormonto · il resto fra gruppi o colori diversi · di quelli dentro un gruppo, ${saltiVersoRigaCorta} vanno verso una riga corta (sotto 25 mm) e ${saltiVersoRigaLunga} verso una riga lunga`);
     console.log(`DST: ${punti} punti · ${(filo / 1000).toFixed(1)} m di filo · ${colori.length} aghi · ${paths.length} blocchi (${salti} salti, ${(filoSalti / 1000).toFixed(1)} m) · ${passaggi} passaggi cuciti (${(filoPassaggi / 1000).toFixed(1)} m, ${passaggiInstradati} instradati, ${passaggiDiTraverso} di traverso alle righe, ${(filoScoperto / 1000).toFixed(2)} m a vista di cui ${(filoScopertoUltimi / 1000).toFixed(2)} negli ultimi colori) · ${corti} punti sotto ${MIN_MM} mm · ${inversioni} righe cucite fuori ordine · ${dentiSaltati} denti sotto il millimetro non cuciti`);
