@@ -841,6 +841,28 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   prova ora **non si taglia mai** (5 blocchi → 4, 1 salto → 0), ed è il lucchetto nuovo.
   **Resta da guardare col ricamo in mano:** i passaggi «di traverso alle righe» raddoppiano (170 →
   338). Sono coperti, ma sono filo in più sotto la superficie.
+- **La riga grande si spezza per inglobare la piccola: 168 tagli → 149** (Lorenzo, 2026-09-10, sesta
+  tornata: *«scusa non hai risolto il fatto di inserire le macchie piccole dentro quelle grandi?
+  spezzando la linea grande inserendo la piccola e poi riprendendo la grande?»*). Aveva ragione: della
+  tecnica A avevo scritto solo la metà, l'andata e ritorno in impuntura, e non l'innesto.
+  **Come funziona:** una riga corta che altrimenti costerebbe un salto o un passaggio lungo si prende
+  la riga vicina più comoda e ci entra dentro. Si cuce la grande fino al dente giusto, si esce con un
+  ponte di impuntura (punti da 3 mm) verso la piccola, la si fa tutta con l'andata e ritorno — che
+  riporta il filo da dove è entrato — e si rientra nella grande al dente dopo. I due ponti sono filo
+  vero, quindi entrano nel disegno e il loro scoperto si conta.
+  **Il punto in cui si spezza lo decide la copertura, non la vicinanza,** ed è tutta la differenza.
+  Alla prima scrittura sceglievo il dente più vicino a un capo della piccola: su 253 righe candidate ne
+  passavano 66, e **173 venivano rifiutate dall'ordine di copertura** — il dente più vicino cade in
+  mezzo al tratto che le due si coprono a vicenda. Guardando invece quali denti della grande la piccola
+  tocca davvero, e innestando **dopo** l'ultimo se la piccola le va sopra, **prima** del primo se è la
+  grande a doverla coprire, ne passano **186 su 250**. Restano 7 righe senza nessuna vicina e 57 in cui
+  l'ordine non lo permette comunque.
+  **Misurato:** salti 168 → **149**, blocchi 173 → 153, passaggi cuciti 2069 → 1901, filo di passaggio
+  32,9 → 29,6 m, a vista 3,05 → **2,85 m**, filo totale invariato (541,3 → 542,6). I punti sotto il
+  millimetro erano schizzati a 84: era la giunta fra l'andata in impuntura e il ritorno col pettine,
+  dove l'ultimo punto dell'uno cade a un decimo dal primo dell'altro. Tolto quel punto: **12**, come
+  prima. **Provata e scartata:** inglobare ogni riga corta che non si attacca direttamente (303
+  inglobate) — peggiora tutto, salti 167 e filo a vista 3,50, perché rompe le catene che funzionavano.
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione

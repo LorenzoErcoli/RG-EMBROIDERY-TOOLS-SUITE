@@ -150,6 +150,8 @@ export interface StatistichePettine {
   passaggiScopertiM: number;
   /** Righe cucite fuori dall'ordine di copertura: deve essere zero. */
   righeFuoriOrdine: number;
+  /** Righe piccole cucite DENTRO una riga vicina, spezzandola, invece di raggiungerle da lontano. */
+  righeInglobate: number;
   secondi: number;
 }
 
@@ -1244,8 +1246,11 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
   // successivamente saranno il fondo del pettine successivo»)
   for (const t of trattiTutti) stendi(t.base);
   const passaggiSvg: string[][] = colori.map(() => []);
+  // i ponti in impuntura con cui una riga grande va a prendersi la piccola: e' filo vero, e il
+  // disegno deve contenerlo (se no l'anteprima mostrerebbe meno di quello che la macchina cuce)
+  const innestiSvg: string[][] = colori.map(() => []);
   let dst: Uint8Array | null = null;
-  let statDst = { punti: 0, filoM: 0, blocchi: 0, salti: 0, saltiM: 0, passaggi: 0, passaggiM: 0, puntiCorti: 0, passaggiScopertiM: 0, righeFuoriOrdine: 0 };
+  let statDst = { punti: 0, filoM: 0, blocchi: 0, salti: 0, saltiM: 0, passaggi: 0, passaggiM: 0, puntiCorti: 0, passaggiScopertiM: 0, righeFuoriOrdine: 0, righeInglobate: 0 };
   // --- 7. il DST ---------------------------------------------------------------------------------------------
   // Lorenzo (2026-09-09): «possiamo procedere per costruire il dst? e di conseguenza i passaggi?
   // ovviamente tutto si deve muovere a serpentina, in modo che sia tutto continuo».
@@ -1287,6 +1292,11 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     // fin qui si prova un passaggio anche oltre la manopola, ma solo se e' tutto nascosto sotto
     // cio' che verra' dopo: e' la seconda tecnica chiesta da Lorenzo, e vale solo nei primi colori
     const PASSAGGIO_NASCOSTO_MM = 250;
+    // una riga fino a questa lunghezza si puo' inglobare dentro una vicina, spezzandola; e il punto
+    // di innesto non puo' distare piu' di INNESTO_MM da un capo della riga da inglobare
+    const INNESTO_RIGA_MAX_MM = 60;
+    const INNESTO_MM = 12;
+    let righeInnestate = 0, candidateInnesto = 0, innestoSenzaVicina = 0, innestoNegatoDallOrdine = 0;
     // e di quel cammino non piu' di tanti millimetri possono restare scoperti: e' il vero controllo,
     // il costo medio non bastava (Lorenzo: «i passaggi rischiano di vedersi»)
     const SCOPERTO_MAX_MM = 3;
@@ -1546,10 +1556,55 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       const seq: Point[] = ricampiona(base, PUNTO_IMPUNTURA_MM);
       const fine = base[base.length - 1];
       if (!seq.length || dist(seq[seq.length - 1], fine) > MIN_MM) seq.push(fine);
-      for (const q of sequenza(t, !inverso)) seq.push(q);
+      // la giunta fra l'andata e il ritorno: l'ultimo punto dell'impuntura e il primo del pettine
+      // possono cadere a un decimo l'uno dall'altro, e sarebbe un punto sotto il millimetro (R3)
+      const ritorno = sequenza(t, !inverso);
+      while (seq.length > 1 && ritorno.length && dist(seq[seq.length - 1], ritorno[0]) < MIN_MM) seq.pop();
+      for (const q of ritorno) seq.push(q);
       return seq;
     };
-    const eDente = (t: Tratto, q: Point): boolean => t.denti.some(([r, tip]) => r === q || tip === q);
+    const eDente = (ts: Tratto[], q: Point): boolean => ts.some((t) => t.denti.some(([r, tip]) => r === q || tip === q));
+    // il ponte fra due punti, cucito in impuntura: punti da 3 mm, e l'arrivo esatto
+    const ponte = (a: Point, b: Point): Point[] => {
+      const l: Point[] = [];
+      const n = Math.max(1, Math.ceil(dist(a, b) / PUNTO_IMPUNTURA_MM));
+      for (let k = 1; k <= n; k++) l.push({ x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n });
+      return l;
+    };
+    /**
+     * LA SEQUENZA DI UNA RIGA SPEZZATA per farci entrare le righe piccole vicine. Si cuce la grande
+     * fino al dente indicato, si esce in impuntura verso la piccola, la si fa tutta con l'andata e
+     * ritorno (che riporta il filo da dove e' entrato) e si rientra sulla grande al dente dopo.
+     */
+    const sequenzaInnestata = (t: Tratto, inverso: boolean, dentro: Array<{ tr: Tratto; dente: number; inverso: boolean }>): Point[] => {
+      const seq: Point[] = [];
+      const denti = inverso ? [...t.denti].reverse() : t.denti;
+      const b0 = inverso ? t.base[t.base.length - 1] : t.base[0], b1 = inverso ? t.base[0] : t.base[t.base.length - 1];
+      seq.push(b0);
+      for (let n = 0; n < denti.length; n++) {
+        const [r, tip] = denti[n];
+        if (dist(r, tip) < MIN_MM) { dentiSaltati++; seq.push(r); } else seq.push(r, tip, r);
+        for (const ins of dentro) {
+          if (ins.dente !== n) continue;
+          const dentroSeq = sequenzaAndataRitorno(ins.tr, ins.inverso);
+          if (!dentroSeq.length) continue;
+          // i due ponti sono filo cucito dritto, non instradato: si conta quanto ne resta a vista,
+          // se no la misura «passaggi a vista» direbbe il falso proprio dove il rischio e' nuovo
+          const versoLa = [seq[seq.length - 1], dentroSeq[0]];
+          for (const q of ponte(versoLa[0], versoLa[1])) seq.push(q);
+          for (let i = 1; i < dentroSeq.length; i++) seq.push(dentroSeq[i]);
+          const versoQua = [seq[seq.length - 1], r];
+          for (const q of ponte(versoQua[0], versoQua[1])) seq.push(q);
+          innestiSvg[ago - 1].push(via(versoLa), via(versoQua));
+          filoScoperto += quantoAVista(versoLa, ago - 1, t.d) + quantoAVista(versoQua, ago - 1, t.d);
+          andateRitorno++; filoImpuntura += lunghezza(ins.tr.base);
+        }
+      }
+      seq.push(b1);
+      if (seq.length >= 3 && dist(seq[0], seq[1]) < MIN_MM) seq.shift();
+      if (seq.length >= 3 && dist(seq[seq.length - 1], seq[seq.length - 2]) < MIN_MM) seq.pop();
+      return seq;
+    };
     for (let c = 0; c < colori.length; c++) {
       ago = c + 1;
       apri();
@@ -1597,7 +1652,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
          */
         const fatti = new Uint8Array(tratti.length);
         let primo = 0;
-        const sequenzaRighe: number[] = [];
+        let sequenzaRighe: number[] = [];
         let rif: Point[] = corrente ? [corrente] : [];
         for (let n = 0; n < tratti.length; n++) {
           while (primo < tratti.length && fatti[primo]) primo++;
@@ -1633,15 +1688,13 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
           const ts = tratti[scelto];
           rif = [ts.base[0], ts.base[ts.base.length - 1]];
         }
-        // i quattro modi: 0 avanti · 1 indietro · 2 andata-e-ritorno entrando dal capo iniziale ·
-        // 3 andata-e-ritorno entrando dal capo finale. Nei modi 2 e 3 il filo esce da dove e' entrato.
-        const capi = sequenzaRighe.map((i) => [tratti[i].base[0], tratti[i].base[tratti[i].base.length - 1]] as [Point, Point]);
-        const lungRiga = sequenzaRighe.map((i) => lunghezza(tratti[i].base));
-        const modi = sequenzaRighe.map((i, k) => (tratti[i].denti.length && lungRiga[k] <= ANDATA_RITORNO_MAX ? [0, 1, 2, 3] : [0, 1]));
-        const entra = (k: number, m: number): Point => (m === 1 || m === 3 ? capi[k][1] : capi[k][0]);
-        const esce = (k: number, m: number): Point => (m === 0 || m === 3 ? capi[k][1] : capi[k][0]);
-        // quanto costa il modo: l'andata e ritorno paga la lunghezza della riga in filo nascosto
-        const costoModo = (k: number, m: number): number => (m >= 2 ? lungRiga[k] : 0);
+        // i quattro modi di percorrere una riga: 0 avanti - 1 indietro - 2 andata-e-ritorno entrando
+        // dal capo iniziale - 3 dal capo finale. Nei modi 2 e 3 il filo esce da dove e' entrato.
+        const capiT = tratti.map((t) => [t.base[0], t.base[t.base.length - 1]] as [Point, Point]);
+        const lungT = tratti.map((t) => lunghezza(t.base));
+        const modiT = tratti.map((t, i) => (t.denti.length && lungT[i] <= ANDATA_RITORNO_MAX ? [0, 1, 2, 3] : [0, 1]));
+        const entraT = (i: number, m: number): Point => (m === 1 || m === 3 ? capiT[i][1] : capiT[i][0]);
+        const esceT = (i: number, m: number): Point => (m === 0 || m === 3 ? capiT[i][1] : capiT[i][0]);
         // quanto costa il collegamento: la sua lunghezza, piu' il rasafilo se e' troppo lungo da cucire
         const costoTra = (x: Point, y: Point): number => {
           const d = dist(x, y);
@@ -1649,31 +1702,158 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
           if (d <= PASSAGGIO_NASCOSTO_MM) return d + RASAFILO_MM * 0.35;  // forse si nasconde, forse no
           return d + RASAFILO_MM;                                   // troppo: la macchina taglia
         };
-        const G: number[][] = [], daDove: number[][] = [];
-        for (let k = 0; k < sequenzaRighe.length; k++) { G.push([Infinity, Infinity, Infinity, Infinity]); daDove.push([-1, -1, -1, -1]); }
-        if (sequenzaRighe.length) {
-          for (const m of modi[0]) G[0][m] = costoModo(0, m) + (corrente ? costoTra(corrente, entra(0, m)) : 0);
-          for (let k = 1; k < sequenzaRighe.length; k++) for (const m of modi[k]) {
+        // i versi si scelgono TUTTI INSIEME: per ogni riga i suoi modi, e la catena che costa meno.
+        // `bloccati` fissa il modo di una riga (serve alle righe spezzate da un innesto).
+        const risolviVersi = (seq: number[], bloccati: Map<number, number>): { modo: number[]; attacco: number[] } => {
+          const n = seq.length;
+          if (!n) return { modo: [], attacco: [] };
+          const mo = (k: number): number[] => { const b = bloccati.get(seq[k]); return b === undefined ? modiT[seq[k]] : [b]; };
+          const G: number[][] = [], daDove: number[][] = [];
+          for (let k = 0; k < n; k++) { G.push([Infinity, Infinity, Infinity, Infinity]); daDove.push([-1, -1, -1, -1]); }
+          for (const m of mo(0)) G[0][m] = (m >= 2 ? lungT[seq[0]] : 0) + (corrente ? costoTra(corrente, entraT(seq[0], m)) : 0);
+          for (let k = 1; k < n; k++) for (const m of mo(k)) {
             let best = Infinity, bm = -1;
-            for (const pm of modi[k - 1]) { const v = G[k - 1][pm] + costoTra(esce(k - 1, pm), entra(k, m)); if (v < best) { best = v; bm = pm; } }
-            G[k][m] = best + costoModo(k, m); daDove[k][m] = bm;
+            for (const pm of mo(k - 1)) { const v = G[k - 1][pm] + costoTra(esceT(seq[k - 1], pm), entraT(seq[k], m)); if (v < best) { best = v; bm = pm; } }
+            G[k][m] = best + (m >= 2 ? lungT[seq[k]] : 0); daDove[k][m] = bm;
+          }
+          const modo = new Array<number>(n).fill(0);
+          let bm = mo(n - 1)[0], best = Infinity;
+          for (const m of mo(n - 1)) if (G[n - 1][m] < best) { best = G[n - 1][m]; bm = m; }
+          for (let k = n - 1; k >= 0; k--) { modo[k] = bm; if (k > 0) bm = daDove[k][bm]; }
+          // quanto e' lontano l'attacco di ogni riga da dove il filo esce dalla precedente
+          const attacco: number[] = [];
+          for (let k = 0; k < n; k++) attacco.push(k === 0 ? (corrente ? dist(corrente, entraT(seq[0], modo[0])) : 0) : dist(esceT(seq[k - 1], modo[k - 1]), entraT(seq[k], modo[k])));
+          return { modo, attacco };
+        };
+        let esito = risolviVersi(sequenzaRighe, new Map());
+        /**
+         * LA RIGA GRANDE SI SPEZZA PER INGLOBARE QUELLA PICCOLA. E' la prima tecnica che Lorenzo ha
+         * chiesto (2026-09-10): "se necessario puoi spezzare una linea di pettine se devi integrare
+         * una fila sotto isolata, e per integrarla puoi passare due volte sul dietro del punto
+         * pettine: un passaggio di impuntura per arrivare in fondo e quindi al punto di partenza, e
+         * poi tornare indietro per fare il punto pettine".
+         *
+         * Una riga corta che il filo non riesce a raggiungere senza tagliare si prende la riga vicina
+         * piu' comoda e ci entra DENTRO: si cuce quella grande fino al dente piu' vicino, si esce in
+         * impuntura verso la piccola, la si fa tutta con l'andata-e-ritorno (cosi' si torna da dove si
+         * e' entrati) e si riprende la grande dal dente dopo. Un solo filo, nessun rasafilo.
+         *
+         * L'ORDINE DI COPERTURA NON SI TOCCA, e qui va guardato in faccia. I denti vanno verso il muro,
+         * quindi una riga copre quella prima di lei. Se la piccola sta PIU' IN LA' della grande, i suoi
+         * denti cadono sulla grande: allora la parte di grande che le sta addosso dev'essere gia'
+         * cucita, cioe' l'innesto va DOPO di quella. Se invece la piccola sta PIU' VICINA al muro, e'
+         * la grande a doverla coprire, e l'innesto va PRIMA della parte che le sta addosso. Si guarda
+         * sui denti veri, non sulle scatole. E si guarda anche il resto del gruppo: nessuna riga che
+         * deve stare prima o dopo la piccola puo' finire dalla parte sbagliata dello spostamento.
+         */
+        const innesti = new Map<number, Array<{ tr: number; dente: number; inverso: boolean }>>();
+        const versoBloccato = new Map<number, number>();
+        if (sequenzaRighe.length > 1) {
+          const posizione = new Map<number, number>();
+          sequenzaRighe.forEach((i, k) => posizione.set(i, k));
+          const nuvole = new Map<number, Point[]>();
+          const nuvola = (i: number): Point[] => {
+            let v = nuvole.get(i);
+            if (!v) { v = ricampiona(tratti[i].base, 2); for (const [r, tip] of tratti[i].denti) v.push(r, tip); nuvole.set(i, v); }
+            return v;
+          };
+          const inseriti = new Set<number>();
+          for (let k = 0; k < sequenzaRighe.length; k++) {
+            const iP = sequenzaRighe[k];
+            const P = tratti[iP];
+            if (lungT[iP] > INNESTO_RIGA_MAX_MM || !P.base.length) continue;
+            // solo le righe che altrimenti costerebbero un taglio, da una parte o dall'altra
+            const uscita = k + 1 < sequenzaRighe.length ? esito.attacco[k + 1] : 0;
+            if (Math.max(esito.attacco[k], uscita) <= PASSAGGIO_MM) continue;
+            candidateInnesto++;
+            let sceltoT = -1, sceltoDente = -1, sceltoInv = false, sceltoD = INNESTO_MM, vicinaTrovata = false;
+            for (let j = 0; j < sequenzaRighe.length; j++) {
+              const iT = sequenzaRighe[j];
+              if (iT === iP || inseriti.has(iT) || (innesti.get(iT)?.length ?? 0) >= 3) continue;
+              const T = tratti[iT];
+              if (!T.denti.length) continue;
+              if (distBox(box[iT], box[iP]) > INNESTO_MM) continue;
+              // IL PUNTO DI INNESTO LO DECIDE LA COPERTURA, non la vicinanza. Prima si guarda quali
+              // denti di T la piccola tocca (e' li' che una delle due copre l'altra), poi:
+              //   * se P sta piu' in la' del muro, i suoi denti cadono su T: si entra DOPO l'ultimo
+              //     dente toccato, cosi' quella parte di T e' gia' cucita e P le va sopra;
+              //   * se P sta piu' vicina al muro, e' T a doverla coprire: si entra PRIMA del primo
+              //     dente toccato, e i denti che vengono dopo passano sopra P.
+              // Se non si toccano nessuno copre nessuno, e vale il dente piu' comodo.
+              const modoT = esito.modo[j];
+              const alRovescio = modoT === 1 || modoT === 3;
+              const nP = nuvola(iP);
+              const vicinoAP = (q: Point): boolean => {
+                for (const w of nP) if (Math.abs(q.x - w.x) < VICINE_MM && Math.abs(q.y - w.y) < VICINE_MM && dist(q, w) < VICINE_MM) return true;
+                return false;
+              };
+              const inNatura = (n: number): number => (alRovescio ? T.denti.length - 1 - n : n);
+              let primoTocco = -1, ultimoTocco = -1;
+              for (let n = 0; n < T.denti.length; n++) {
+                const d2 = T.denti[inNatura(n)];
+                if (vicinoAP(d2[0]) || vicinoAP(d2[1])) { if (primoTocco < 0) primoTocco = n; ultimoTocco = n; }
+              }
+              let denteCucito = -1;
+              if (primoTocco < 0) {
+                // non si toccano: si entra dal dente piu' vicino a un capo di P
+                let dd = Infinity;
+                for (let n = 0; n < T.denti.length; n++) {
+                  const r2 = T.denti[inNatura(n)][0];
+                  const v = Math.min(dist(r2, capiT[iP][0]), dist(r2, capiT[iP][1]));
+                  if (v < dd) { dd = v; denteCucito = n; }
+                }
+              } else if (P.d > T.d + 1e-6) denteCucito = ultimoTocco;
+              else if (P.d < T.d - 1e-6) denteCucito = primoTocco - 1;
+              else denteCucito = ultimoTocco;
+              if (denteCucito < 0) continue;      // la piccola sta addosso al primo dente: non c'e' posto prima
+              vicinaTrovata = true;
+              // da quel dente si deve poter arrivare a un capo della piccola in un passo breve
+              const rIn = T.denti[inNatura(denteCucito)][0];
+              const d0 = dist(rIn, capiT[iP][0]), d1 = dist(rIn, capiT[iP][1]);
+              const dd2 = Math.min(d0, d1);
+              if (dd2 >= sceltoD) continue;
+              const inv = d1 < d0;
+              // e il resto del gruppo: spostando P a fianco di T non si scavalca nessuno
+              let ok = true;
+              for (let q = 0; q < sequenzaRighe.length && ok; q++) {
+                const iR = sequenzaRighe[q];
+                if (iR === iP || iR === iT) continue;
+                if (distBox(box[iR], box[iP]) >= VICINE_MM) continue;
+                const R = tratti[iR];
+                if (R.d < P.d - 1e-6 && q > j) ok = false;   // R deve stare sotto P, ma verrebbe dopo
+                if (R.d > P.d + 1e-6 && q < j) ok = false;   // R deve coprire P, ma e' gia' passata
+              }
+              if (!ok) continue;
+              sceltoT = iT; sceltoDente = denteCucito; sceltoInv = inv; sceltoD = dd2;
+              if (dd2 < BASI_MM) break;
+            }
+            if (sceltoT < 0) { if (vicinaTrovata) innestoNegatoDallOrdine++; else innestoSenzaVicina++; continue; }
+            const l = innesti.get(sceltoT) ?? [];
+            l.push({ tr: iP, dente: sceltoDente, inverso: sceltoInv });
+            innesti.set(sceltoT, l);
+            const mT = esito.modo[posizione.get(sceltoT) ?? 0];
+            versoBloccato.set(sceltoT, mT === 1 || mT === 3 ? 1 : 0);
+            inseriti.add(iP);
+            righeInnestate++;
+          }
+          if (inseriti.size) {
+            sequenzaRighe = sequenzaRighe.filter((i) => !inseriti.has(i));
+            esito = risolviVersi(sequenzaRighe, versoBloccato);
           }
         }
-        const scelti = new Array<number>(sequenzaRighe.length).fill(0);
-        if (sequenzaRighe.length) {
-          const ult = sequenzaRighe.length - 1;
-          let bm = modi[ult][0], best = Infinity;
-          for (const m of modi[ult]) if (G[ult][m] < best) { best = G[ult][m]; bm = m; }
-          for (let k = ult; k >= 0; k--) { scelti[k] = bm; if (k > 0) bm = daDove[k][bm]; }
-        }
         for (let k = 0; k < sequenzaRighe.length; k++) {
-          const t = tratti[sequenzaRighe[k]];
-          const m = scelti[k];
+          const iT = sequenzaRighe[k];
+          const t = tratti[iT];
+          const m = esito.modo[k];
+          const dentro = innesti.get(iT);
           prossimoTratto = t;
-          const seq = m >= 2 ? sequenzaAndataRitorno(t, m === 3) : sequenza(t, m === 1);
-          if (m >= 2) { andateRitorno++; filoImpuntura += lungRiga[k]; }
+          const coinvolti = [t, ...(dentro ?? []).map((x) => tratti[x.tr])];
+          const seq = dentro && dentro.length
+            ? sequenzaInnestata(t, m === 1, dentro.map((x) => ({ tr: tratti[x.tr], dente: x.dente, inverso: x.inverso })))
+            : m >= 2 ? sequenzaAndataRitorno(t, m === 3) : sequenza(t, m === 1);
+          if (m >= 2 && !(dentro && dentro.length)) { andateRitorno++; filoImpuntura += lungT[iT]; }
           vaiA(seq[0]);
-          for (let i = 1; i < seq.length; i++) cuciA(seq[i], eDente(t, seq[i]));
+          for (let i = 1; i < seq.length; i++) cuciA(seq[i], eDente(coinvolti, seq[i]));
           ultimoTratto = t;
         }
       }
@@ -1707,11 +1887,12 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       const q = (f: number): string => (v.length ? v[Math.floor(v.length * f)].toFixed(0) : '0');
       console.log(`PASSAGGI per lunghezza: mediana ${q(0.5)} mm · 90% sotto ${q(0.9)} · il piu' lungo ${v.length ? v[v.length - 1].toFixed(0) : 0} · oltre 30 mm ne sono ${v.filter((x) => x > 30).length}`);
     }
+    console.log(`RIGHE INGLOBATE: ${righeInnestate} righe piccole cucite dentro una riga vicina, spezzandola (su ${candidateInnesto} che altrimenti costavano un passaggio lungo: ${innestoSenzaVicina} non hanno nessuna riga vicina in cui entrare, ${innestoNegatoDallOrdine} ce l'hanno ma l'ordine di copertura non lo permette)`);
     console.log(`ANDATA E RITORNO su ${andateRitorno} righe corte (${(filoImpuntura / 1000).toFixed(2)} m di impuntura nascosta sotto i denti)`);
     console.log(`PASSAGGI LUNGHI NASCOSTI: ${passaggiNascosti} (oltre la manopola, ma tutti sotto cio' che li coprira')`);
     console.log(`SALTI per tipo: ${saltiSerpentina} fra righe vicine dello stesso gruppo · ${saltiFamiglia} fra righe lontane dello stesso gruppo · ${saltiSormonto} nel sormonto · il resto fra gruppi o colori diversi · di quelli dentro un gruppo, ${saltiVersoRigaCorta} vanno verso una riga corta (sotto 25 mm) e ${saltiVersoRigaLunga} verso una riga lunga`);
     console.log(`DST: ${punti} punti · ${(filo / 1000).toFixed(1)} m di filo · ${colori.length} aghi · ${paths.length} blocchi (${salti} salti, ${(filoSalti / 1000).toFixed(1)} m) · ${passaggi} passaggi cuciti (${(filoPassaggi / 1000).toFixed(1)} m, ${passaggiInstradati} instradati, ${passaggiDiTraverso} di traverso alle righe, ${(filoScoperto / 1000).toFixed(2)} m a vista di cui ${(filoScopertoUltimi / 1000).toFixed(2)} negli ultimi colori) · ${corti} punti sotto ${MIN_MM} mm · ${inversioni} righe cucite fuori ordine · ${dentiSaltati} denti sotto il millimetro non cuciti`);
-    statDst = { punti, filoM: filo / 1000, blocchi: paths.length, salti, saltiM: filoSalti / 1000, passaggi, passaggiM: filoPassaggi / 1000, puntiCorti: corti, passaggiScopertiM: filoScoperto / 1000, righeFuoriOrdine: inversioni };
+    statDst = { punti, filoM: filo / 1000, blocchi: paths.length, salti, saltiM: filoSalti / 1000, passaggi, passaggiM: filoPassaggi / 1000, puntiCorti: corti, passaggiScopertiM: filoScoperto / 1000, righeFuoriOrdine: inversioni, righeInglobate: righeInnestate };
   }
 
   // L'ANTEPRIMA si costruisce dopo il DST perche' deve mostrare anche i PASSAGGI cuciti: sono filo
@@ -1722,6 +1903,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       const tratto = t === 0 ? '#9a9a9a' : c;
       if (perColore[t].length) pz.push(`<path d="${perColore[t].join('')}" fill="none" stroke="${tratto}" stroke-width="0.1"/>`);
       if (perColoreDenti[t].length) pz.push(`<path d="${perColoreDenti[t].join('')}" fill="none" stroke="${tratto}" stroke-width="0.1"/>`);
+      if (innestiSvg[t].length) pz.push(`<path d="${innestiSvg[t].join('')}" fill="none" stroke="${tratto}" stroke-width="0.1"/>`);
       if (par.mostraPassaggi !== false && passaggiSvg[t].length) pz.push(`<path d="${passaggiSvg[t].join('')}" fill="none" stroke="${tratto}" stroke-width="0.06" opacity="0.45"/>`);
     });
     if (par.mostraNudi) pz.push(`<g>${nudiFilo.join('')}</g>`);

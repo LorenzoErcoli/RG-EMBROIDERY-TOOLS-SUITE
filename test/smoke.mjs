@@ -3623,6 +3623,9 @@ console.log('Il punto pettine: il ricamo esce, e il progetto torna dentro il fil
   // resti nascosto sotto cio' che verra' dopo: su questo pannello il filo non si taglia mai piu'.
   // Sul pannello vero a sei tinte i tagli sono passati da 424 a 168.
   check('la macchina non taglia mai il filo su questo pannello', st.salti, 0);
+  // e proprio perche' non taglia, nessuna riga va spezzata per inglobarne un'altra: l'innesto costa
+  // filo di impuntura, e si paga solo dove serve a evitare un taglio o un passaggio lungo.
+  check('nessuna riga spezzata dove non serve', st.righeInglobate, 0);
   check('il filo di passaggio a vista e' + String.fromCharCode(39) + ' poco (sotto il 2% del filo)', st.passaggiScopertiM < st.filoM * 0.02, true);
   // R9/R27: il file si riapre. Il progetto sta nel DST dopo l'END e in un <metadata> dell'SVG.
   const riletto = rg.readDstMetadata(es.dst);

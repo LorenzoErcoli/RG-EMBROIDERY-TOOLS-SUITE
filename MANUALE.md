@@ -355,6 +355,14 @@ guardando l'intera catena invece di una riga alla volta. Una riga corta può anc
 tempi: si va fino in fondo in **impuntura** sulla linea stessa, poi si torna indietro cucendo il
 pettine, che la copre. Così il filo **esce da dove è entrato**, e non c'è bisogno di tagliare.
 
+**La riga grande si spezza per inglobare la piccola.** Quando una riga corta resterebbe isolata, e
+per raggiungerla il filo dovrebbe fare un salto o un passaggio lungo, non la si va a prendere da
+lontano: si entra dentro la riga vicina. Si cuce quella grande fino al dente giusto, si esce in
+impuntura verso la piccola, la si fa tutta con l'andata e ritorno e si rientra nella grande al dente
+dopo. Un solo filo, nessun taglio. Il punto in cui si spezza non lo decide la vicinanza ma la
+copertura: se la piccola va sopra la grande si entra dopo il tratto che le sta addosso, se invece
+è la grande a doverla coprire si entra prima. Nell'esito, «Righe inglobate» dice quante sono.
+
 **Il passaggio lungo che sparisce sotto.** «Passaggio più lungo» dice fin dove un passaggio si cuce
 comunque, anche a costo di vedersi un po'. Oltre quella misura il passaggio si fa lo stesso, ma
 soltanto se il cammino resta nascosto sotto ciò che verrà dopo — il bordo dei blocchi di colore

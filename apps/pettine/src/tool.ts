@@ -625,6 +625,7 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
           ['Salti', `${n0(s.salti)} · ${n1(s.saltiM)} m`],
           ['Passaggi cuciti', `${n0(s.passaggi)} · ${n1(s.passaggiM)} m`],
           ['Passaggi a vista', `${n1(s.passaggiScopertiM)} m`],
+          ['Righe inglobate', n0(s.righeInglobate)],
           ['Righe fuori ordine', n0(s.righeFuoriOrdine)],
         );
         righe.push(['Tempo', `${n1(s.secondi)} s`]);
