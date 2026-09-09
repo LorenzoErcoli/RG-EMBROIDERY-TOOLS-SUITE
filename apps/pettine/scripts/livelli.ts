@@ -44,7 +44,10 @@ const LISCIA_MAX = num(13, 8);         // tetto alla lisciatura, in mm
 // «evitiamo di creare angoli troppo estremi delle curve, anche se questo implica non rispettare i due
 // muri. Preferisco che la copertura sia piu' efficace». Spianata la distanza, la cresta diventa un dorso
 // e il livello ci gira attorno con un raggio invece di uno spigolo.
-const SPIANA_MM = num(14, 5);   // Lorenzo (2026-09-09, seconda tornata): «puoi spianarle ancora di piu'»
+const SPIANA_MM = num(14, 5);
+// LA CHIUSURA delle insenature nella crescita a passo fisso (raggio in mm, cresce con ADDOLCISCI per mm
+// di distanza dal muro, tetto LISCIA_MAX).
+const CHIUDI_MM = num(15, 3);   // Lorenzo (2026-09-09, seconda tornata): «puoi spianarle ancora di piu'»
 // L'ULTIMA BASE LUNGO IL MURO OPPOSTO: spenta di default (ULTIMA=1 per riaverla). Lorenzo: «la curva si
 // amplifica per rispettare il muro finale, quello lo eviterei, non e' necessario che diventi uguale al
 // muro finale». Con lo sconfinamento oltre il muro i suoi buchi non ci sono piu'.
@@ -465,6 +468,7 @@ famiglie.forEach((f, fi) => {
       }
     }
   }
+  const D0 = new Float32Array(D);   // la distanza prima della spianatura: da qui parte la crescita
   // D SI SPIANA, solo sulle celle della fascia larga: media mobile separabile di raggio SPIANA_MM,
   // tre passate (quasi una gaussiana di sigma ~ raggio/1,2). Serve a due cose: il chamfer e' a
   // gradini (somme di 0,5/0,7/1,1) e i suoi livelli uscivano doppi; e le creste fra due fronti
@@ -569,9 +573,12 @@ famiglie.forEach((f, fi) => {
   // somme di 0,5/0,7/1,1 e finivano ESATTAMENTE sui livelli, con tre o quattro segmenti che si
   // toccavano in un angolo e la catena che sceglieva quello sbagliato.
   const tiraLivello = (d: number, su: Uint8Array): void => {
-    idLivello++;
     const segmenti = livello(D, su, COLS, ROWS, ORIG, ORIG, CELLA, d + 0.0137).filter((sg) => Math.hypot(sg.b.x - sg.a.x, sg.b.y - sg.a.y) > 1e-6);
-    for (const linea of incatena(segmenti, CELLA * 1.5)) {
+    tiraLinee(incatena(segmenti, CELLA * 1.5), d);
+  };
+  const tiraLinee = (linee: Point[][], d: number): void => {
+    idLivello++;
+    for (const linea of linee) {
       if (linea.length < 3) continue;
       for (const pezzo of process.env.NO_FORCINE ? [ricampiona(linea, 0.5)] : spezzaAlleForcine(ricampiona(linea, 0.5), 0.5)) {
       if (pezzo.length < 4) continue;
@@ -617,7 +624,86 @@ famiglie.forEach((f, fi) => {
       }
     }
   };
-  for (let d = BASI_MM / 2; d < dMax; d += BASI_MM) tiraLivello(d, largo);
+  if (process.env.MODO === 'livelli') {
+    for (let d = BASI_MM / 2; d < dMax; d += BASI_MM) tiraLivello(d, largo);
+  } else {
+    // LA CRESCITA A PASSO FISSO. Lorenzo (2026-09-09): «nei punti in cui hai allentato la curva la
+    // densita' non e' omogenea e si allarga nella curvatura, li' non deve succedere. La densita' deve
+    // rimanere la stessa». Le curve di livello di una distanza spianata si allargano per forza dove
+    // la spianatura ha abbassato la pendenza. Qui invece la regione raggiunta cresce di UN PASSO
+    // esatto a ogni giro (dilatazione), e solo dopo si arrotondano le sue insenature (chiusura
+    // morfologica di raggio CHIUDI_MM): la linea nuova sta a un passo dalla precedente ovunque,
+    // tranne nell'insenatura riempita, che coprono i denti (verso il chiaro, cioe' verso di essa).
+    // La linea e' il bordo della regione verso le celle non ancora raggiunte.
+    const R = new Uint8Array(COLS * ROWS);
+    let dentroR = 0, tot = 0;
+    // (dalla distanza NON spianata: spianata, vicino al muro D sale sopra il mezzo passo e la regione
+    // di partenza restava vuota - 9 famiglie su 19 senza una linea)
+    for (let i = 0; i < COLS * ROWS; i++) if (largo[i]) { tot++; if (D0[i] < INF && D0[i] <= BASI_MM / 2) { R[i] = 1; dentroR++; } }
+    const raggioCelle = (mm: number): number => Math.max(1, Math.round(mm / CELLA));
+    const disco = (rc: number): Array<[number, number]> => { const out: Array<[number, number]> = []; for (let dy = -rc; dy <= rc; dy++) for (let dx = -rc; dx <= rc; dx++) if (dx * dx + dy * dy <= rc * rc + 0.25) out.push([dx, dy]); return out; };
+    // dilata `M` di rc celle, restando in `largo`; i semi sono le celle di M con un vicino fuori da M
+    const dilata = (M: Uint8Array, rc: number): Uint8Array => {
+      const out = new Uint8Array(M);
+      const dd = disco(rc);
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        const i = r * COLS + c;
+        if (!M[i]) continue;
+        if ((c > 0 && !M[i - 1] && largo[i - 1]) || (c + 1 < COLS && !M[i + 1] && largo[i + 1]) || (r > 0 && !M[i - COLS] && largo[i - COLS]) || (r + 1 < ROWS && !M[i + COLS] && largo[i + COLS])) {
+          for (const [dx, dy] of dd) { const x = c + dx, y = r + dy; if (x >= 0 && y >= 0 && x < COLS && y < ROWS && largo[y * COLS + x]) out[y * COLS + x] = 1; }
+        }
+      }
+      return out;
+    };
+    // erode `M` di rc celle: via le celle di M entro rc da una cella di largo fuori da M (fuori da largo non conta)
+    const erodi = (M: Uint8Array, rc: number): Uint8Array => {
+      const out = new Uint8Array(M);
+      const dd = disco(rc);
+      for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+        const i = r * COLS + c;
+        if (M[i] || !largo[i]) continue;
+        if ((c > 0 && M[i - 1]) || (c + 1 < COLS && M[i + 1]) || (r > 0 && M[i - COLS]) || (r + 1 < ROWS && M[i + COLS])) {
+          for (const [dx, dy] of dd) { const x = c + dx, y = r + dy; if (x >= 0 && y >= 0 && x < COLS && y < ROWS) out[y * COLS + x] = 0; }
+        }
+      }
+      return out;
+    };
+    const passoCelle = raggioCelle(BASI_MM);
+    let giro = 0;
+    let Rk = R;
+    while (dentroR < tot && giro < 400) {
+      giro++;
+      const d = (giro + 0.5) * BASI_MM;
+      let Rn = dilata(Rk, passoCelle);
+      const rChiudi = raggioCelle(Math.min(LISCIA_MAX, CHIUDI_MM + ADDOLCISCI * d));
+      if (rChiudi > 0) { const chiusa = erodi(dilata(Rn, rChiudi), rChiudi); for (let i = 0; i < COLS * ROWS; i++) if (chiusa[i]) Rn[i] = 1; }
+      // il fronte: i bordi della regione che guardano celle di largo non ancora raggiunte
+      const regioni = traceRegions(Rn, COLS, ROWS, 1, CELLA, { minAreaMm2: 0.5, simplifyMm: 0.3 });
+      const linee: Point[][] = [];
+      const guardaFuori = (p: Point): boolean => {
+        const c = Math.round((p.x - ORIG) / CELLA), r = Math.round((p.y - ORIG) / CELLA);
+        for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const x = c + dx, y = r + dy; if (x >= 0 && y >= 0 && x < COLS && y < ROWS) { const j = y * COLS + x; if (largo[j] && !Rn[j]) return true; } }
+        return false;
+      };
+      for (const reg of regioni) for (const anello of [reg.outer, ...reg.holes]) {
+        const pts = ricampiona([...anello, anello[0]].map((q) => ({ x: q.x + ORIG, y: q.y + ORIG })), 0.5);
+        // si taglia il giro in tratti che guardano fuori
+        let cur: Point[] = [];
+        const tratti: Point[][] = [];
+        for (const q of pts) { if (guardaFuori(q)) cur.push(q); else { if (cur.length >= 3) tratti.push(cur); cur = []; } }
+        if (cur.length >= 3) tratti.push(cur);
+        // se il giro e' tutto fronte, primo e ultimo tratto sono lo stesso: si uniscono
+        if (tratti.length >= 2 && guardaFuori(pts[0]) && guardaFuori(pts[pts.length - 1])) { const ultimo = tratti.pop()!; tratti[0] = [...ultimo, ...tratti[0]]; }
+        for (const t of tratti) linee.push(t);
+      }
+      tiraLinee(linee, d);
+      let n = 0;
+      for (let i = 0; i < COLS * ROWS; i++) if (Rn[i]) n++;
+      if (n === dentroR) break;   // non cresce piu' (regione chiusa da qualche parte): basta
+      dentroR = n; Rk = Rn;
+    }
+    if (process.env.FAMIGLIE) console.log(`  famiglia ${fi}: ${giro} giri, raggiunto ${((dentroR / tot) * 100).toFixed(1)}% di largo, dMax ${dMax.toFixed(0)}`);
+  }
 
   // IL RAMMENDO. Dopo i livelli (e i loro denti) si guarda cosa della famiglia e' rimasto a piu' di
   // 0,75 mm da qualunque filo: ogni macchia nuda di almeno 2 mm² riceve un livello in piu', quello

@@ -653,7 +653,22 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   608 → 399 m, e la densità fra il 10° e il 90° percentile delle celle passa da 3,3–8,1 a
   3,1–4,3 mm/mm². Spianatura portata a **5 mm** su sua richiesta (nudo 0,0 % coi rammendi, 22).
   Strumento nuovo: `ZONA=x0,y0,x1,y1;…` confronta basi e denti per mm² fra rettangoli.
-- **Aperto:** (a) restano **223 tratti sotto i 5 mm**, quasi tutti attorno alla sfera e sulle
+- **La crescita a passo fisso (terza tornata del 2026-09-09).** Lorenzo, sulla v3: *«nei punti in cui
+  hai allentato la curva la densità non è omogenea e si allarga nella curvatura, lì non deve
+  succedere. La densità deve rimanere la stessa e la curva piuttosto si taglia prima sul bordo»*.
+  Ha ragione per costruzione: le curve di livello di una distanza **spianata** si allargano dove la
+  spianatura ha abbassato la pendenza. Ora le basi non sono più livelli di una funzione: la regione
+  raggiunta **cresce di un passo esatto a ogni giro** (dilatazione morfologica dentro la fascia) e
+  solo dopo si arrotondano le sue insenature (chiusura di raggio 3 mm, che cresce con la distanza,
+  tetto 8) — la linea nuova sta a un passo dalla precedente ovunque, e l'insenatura riempita la
+  coprono i denti, che vanno verso di lei. Il fronte è il bordo della regione verso le celle non
+  raggiunte (`traceRegions`, tagliato dove guarda fuori). La regione di partenza si prende dalla
+  distanza **non** spianata (spianata, vicino al muro sale sopra il mezzo passo: 9 famiglie su 19
+  restavano senza linee). Misurato: basi 0,41–0,49 mm/mm² nelle zone della sfera dove prima
+  s'allargavano, nudo 0,1 % col metro del filo (145 rammendi, contro 22: la chiusura salta), 2.570
+  tratti, 79,6 m di basi, 54.362 denti, 433 m. Le onde in alto: parallele, spaziatura esatta, senza
+  cuciture. `MODO=livelli` per riavere la costruzione a livelli; parametro 15 `chiudi`.
+- **Aperto:** (a) restano **250 tratti sotto i 5 mm**, quasi tutti attorno alla sfera e sulle
   creste dove due fronti si incontrano — sono le «giunture» che Lorenzo non vuole, da guardare con
   lui; (b) lo sconfinamento di 2,5 mm si vede come **peli** che attraversano le giunte; (c) il
   «passa due volte» sui rami dello stesso livello che si toccano; (d) il tool vero — pannello,
