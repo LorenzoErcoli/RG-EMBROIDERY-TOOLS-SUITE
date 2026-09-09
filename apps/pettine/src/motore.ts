@@ -81,8 +81,15 @@ export interface ParametriPettine {
   nettoMm: number;
   /** Mettere i denti (senza, solo le basi: si guarda la struttura). */
   denti: boolean;
-  /** 'auto' = traslazione o crescita secondo l'area; 'livelli' = la vecchia costruzione a curve di livello. */
-  modo?: 'auto' | 'livelli';
+  /**
+   * Come si costruiscono le righe dentro un gruppo grande (i piccoli vanno sempre a traslazione):
+   *   * `auto` (uguale a `geodetica`): a ogni giro si rimisura la distanza dal fronte appena cucito.
+   *     Passo esatto e forma che si propaga: e' quella buona.
+   *   * `crescita`: la macchia si dilata di un passo per volta (tiene il passo ma smorza la forma).
+   *   * `livelli`: le curve di livello della distanza dal muro (tiene la forma ma cambia il passo).
+   * Le altre due restano per poter confrontare, e perche' ognuna dice qualcosa di vero sul disegno.
+   */
+  modo?: 'auto' | 'geodetica' | 'crescita' | 'livelli';
   /** Colorare di rosa, nell'anteprima, le celle a più di 0,75 mm da qualunque filo. */
   mostraNudi?: boolean;
   /**
@@ -826,6 +833,90 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
         if (cur.length) linee.push(cur);
         if (!viva) { if (k > 2) break; else continue; }
         tiraLinee(linee, d, 0);
+      }
+    } else if (par.modo === 'geodetica' || !par.modo || par.modo === 'auto') {
+      /**
+       * LA CRESCITA GEODETICA. Chiesta da Lorenzo il 2026-09-10, dopo aver misurato che il 4,9% dei
+       * punti di base aveva un'altra riga a meno di mezzo passo dentro lo stesso gruppo: nel ricamo
+       * sono bande piu' fitte, e a occhio sembrano «linee che tagliano».
+       *
+       * Le due costruzioni di prima sbagliavano ognuna per un verso opposto:
+       *   * i LIVELLI di una distanza spianata tengono la forma ma si allargano dove la spianatura
+       *     ha abbassato la pendenza (la densita' cambia: bocciato da Lorenzo il 2026-09-09);
+       *   * la CRESCITA MORFOLOGICA tiene il passo ma smorza la forma a ogni dilatazione, e lascia i
+       *     fianchi dei cunei come fronti.
+       * Qui il passo e' esatto PER COSTRUZIONE e la forma non si smorza: a ogni giro si ricalcola la
+       * distanza geodetica dal fronte appena cucito, dentro la sola parte non ancora raggiunta, e la
+       * riga nuova e' il suo livello a un passo. E' la stessa idea della distanza dal muro, ma
+       * rimisurata ogni volta: cosi' non si accumula ne' l'errore della spianatura ne' quello della
+       * dilatazione. Costa una propagazione per giro, ma solo su una banda larga un passo e mezzo.
+       */
+      const INFE = 1e9;
+      const E = new Float32Array(COLS * ROWS).fill(INFE);
+      const R = new Uint8Array(COLS * ROWS);
+      const banda = new Uint8Array(COLS * ROWS);
+      let raggiunte = 0, restanti = 0;
+      for (let i = 0; i < COLS * ROWS; i++) if (largo[i]) { restanti++; if (D0[i] < INF && D0[i] <= BASI_MM / 2) { R[i] = 1; raggiunte++; } }
+      // i 16 vicini del chamfer, come per la distanza dal muro: l'errore resta sotto l'1%
+      const VIC: Array<[number, number, number]> = [
+        [1, 0, CELLA], [-1, 0, CELLA], [0, 1, CELLA], [0, -1, CELLA],
+        [1, 1, CELLA * 1.4142], [1, -1, CELLA * 1.4142], [-1, 1, CELLA * 1.4142], [-1, -1, CELLA * 1.4142],
+        [2, 1, CELLA * 2.2361], [2, -1, CELLA * 2.2361], [-2, 1, CELLA * 2.2361], [-2, -1, CELLA * 2.2361],
+        [1, 2, CELLA * 2.2361], [1, -2, CELLA * 2.2361], [-1, 2, CELLA * 2.2361], [-1, -2, CELLA * 2.2361],
+      ];
+      const LIMITE = BASI_MM * 1.6;
+      for (let giro = 1; giro <= 400 && raggiunte < restanti; giro++) {
+        // 1. i semi: le celle gia' raggiunte che confinano con quelle che mancano. Da li' si misura.
+        const toccate: number[] = [];
+        let c0 = COLS, r0 = ROWS, c1 = 0, r1 = 0;
+        const heap: Array<[number, number]> = [];
+        const push = (v: number, n: number): void => {
+          heap.push([v, n]);
+          let i = heap.length - 1;
+          while (i > 0) { const q = (i - 1) >> 1; if (heap[q][0] <= heap[i][0]) break; [heap[q], heap[i]] = [heap[i], heap[q]]; i = q; }
+        };
+        const pop = (): [number, number] => {
+          const top = heap[0], last = heap.pop()!;
+          if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } }
+          return top;
+        };
+        const segna = (i: number, v: number): void => {
+          if (E[i] >= INFE) { toccate.push(i); banda[i] = 1; const c = i % COLS, r = (i - c) / COLS; if (c < c0) c0 = c; if (c > c1) c1 = c; if (r < r0) r0 = r; if (r > r1) r1 = r; }
+          E[i] = v;
+        };
+        for (let r = 1; r + 1 < ROWS; r++) for (let c = 1; c + 1 < COLS; c++) {
+          const i = r * COLS + c;
+          if (!R[i]) continue;
+          if ((largo[i - 1] && !R[i - 1]) || (largo[i + 1] && !R[i + 1]) || (largo[i - COLS] && !R[i - COLS]) || (largo[i + COLS] && !R[i + COLS])) {
+            segna(i, 0); push(0, i);
+          }
+        }
+        if (!heap.length) break;
+        // 2. la distanza dal fronte, dentro cio' che manca, fino a un passo e mezzo
+        while (heap.length) {
+          const [v, i] = pop();
+          if (v > E[i] + 1e-9) continue;
+          if (v > LIMITE) break;
+          const c = i % COLS, r = (i - c) / COLS;
+          for (const [dx, dy, w] of VIC) {
+            const x = c + dx, y = r + dy;
+            if (x < 1 || y < 1 || x + 1 >= COLS || y + 1 >= ROWS) continue;
+            const j = y * COLS + x;
+            if (!largo[j] || R[j]) continue;
+            const nv = v + w;
+            if (nv < E[j] - 1e-9 && nv <= LIMITE) { segna(j, nv); push(nv, j); }
+          }
+        }
+        // 3. la riga nuova e' il livello a un passo, tirato solo sulla banda
+        const segmenti = livello(E, banda, COLS, ROWS, ORIGX, ORIGY, CELLA, BASI_MM, [c0 - 1, r0 - 1, c1 + 1, r1 + 1])
+          .filter((sg) => Math.hypot(sg.b.x - sg.a.x, sg.b.y - sg.a.y) > 1e-6);
+        tiraLinee(incatena(segmenti, CELLA * 1.5), giro * BASI_MM);
+        // 4. quello che sta entro un passo e' raggiunto; il resto tornera' al giro dopo
+        let cresciute = 0;
+        for (const i of toccate) if (E[i] <= BASI_MM && !R[i]) { R[i] = 1; cresciute++; }
+        raggiunte += cresciute;
+        for (const i of toccate) { E[i] = INFE; banda[i] = 0; }
+        if (!cresciute) break;
       }
     } else if (par.modo === 'livelli') {
       for (let d = BASI_MM / 2; d < dMax; d += BASI_MM) tiraLivello(d, largo);

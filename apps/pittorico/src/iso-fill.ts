@@ -241,7 +241,15 @@ interface Segmento { a: Point; b: Point }
  * curva deve fermarsi al bordo della macchia invece di inventarsi un pezzo.
  */
 export function livello(D: Float32Array, dentro: Uint8Array, cols: number, rows: number,
-  x0: number, y0: number, cella: number, val: number): Segmento[] {
+  x0: number, y0: number, cella: number, val: number,
+  /**
+   * Solo dentro questo rettangolo di celle [c0, r0, c1, r1]. Serve a chi tira un livello per volta su
+   * una banda stretta (la crescita geodetica del punto pettine): senza, ogni giro costerebbe una
+   * passata su tutta la griglia, e i giri sono centinaia. Senza il parametro il comportamento non
+   * cambia: si guarda tutto.
+   */
+  bbox?: [number, number, number, number],
+): Segmento[] {
   const out: Segmento[] = [];
   const px = (c: number): number => x0 + (c + 0.5) * cella;
   const py = (r: number): number => y0 + (r + 0.5) * cella;
@@ -249,8 +257,10 @@ export function livello(D: Float32Array, dentro: Uint8Array, cols: number, rows:
     const t = Math.abs(vb - va) < 1e-12 ? 0.5 : (val - va) / (vb - va);
     return { x: xa + (xb - xa) * t, y: ya + (yb - ya) * t };
   };
-  for (let r = 0; r + 1 < rows; r++) {
-    for (let c = 0; c + 1 < cols; c++) {
+  const cA = bbox ? Math.max(0, bbox[0]) : 0, rA = bbox ? Math.max(0, bbox[1]) : 0;
+  const cB = bbox ? Math.min(cols - 2, bbox[2]) : cols - 2, rB = bbox ? Math.min(rows - 2, bbox[3]) : rows - 2;
+  for (let r = rA; r <= rB; r++) {
+    for (let c = cA; c <= cB; c++) {
       const i00 = r * cols + c, i10 = i00 + 1, i01 = i00 + cols, i11 = i01 + 1;
       if (!dentro[i00] || !dentro[i10] || !dentro[i01] || !dentro[i11]) continue;
       const v00 = D[i00], v10 = D[i10], v01 = D[i01], v11 = D[i11];

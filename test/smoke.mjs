@@ -3609,6 +3609,15 @@ console.log('Il punto pettine: il ricamo esce, e il progetto torna dentro il fil
   // sotto mezzo passo sono bande piu' fitte nel ricamo: dentro un gruppo devono restare poche.
   check('la spaziatura media vale il passo', Math.abs(st.spaziaturaMedianaMm - 2) < 0.4, true);
   check('poche righe addosso dentro un gruppo (sotto il 10%)', st.righeAddossoStessoGruppoPct < 10, true);
+  // la crescita geodetica rimisura la distanza dal fronte a ogni giro: dentro un gruppo due righe
+  // non si stringono mai sotto mezzo passo. E' la differenza fra questa e la crescita morfologica,
+  // che sullo stesso pannello ne lasciava il 4,9%.
+  {
+    const geo = rg.costruisciPettine({ testoSvg: svgPettine, larghezzaRealeMm: 60, foto: null }, { ...par, modo: 'geodetica' });
+    const cre = rg.costruisciPettine({ testoSvg: svgPettine, larghezzaRealeMm: 60, foto: null }, { ...par, modo: 'crescita' });
+    check('la geodetica non stringe le righe dentro un gruppo', geo.statistiche.righeAddossoStessoGruppoPct < 1, true);
+    check('...e sta larga almeno quanto la crescita morfologica', geo.statistiche.spaziaturaDecimoMm >= cre.statistiche.spaziaturaDecimoMm - 0.05, true);
+  }
   check('nessun punto sotto il millimetro (R3)', st.puntiCorti, 0);
   check('il filo di passaggio a vista e' + String.fromCharCode(39) + ' poco (sotto il 2% del filo)', st.passaggiScopertiM < st.filoM * 0.02, true);
   // R9/R27: il file si riapre. Il progetto sta nel DST dopo l'END e in un <metadata> dell'SVG.

@@ -714,6 +714,22 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   direzione di crescita (i «fianchi») non cambia le righe dritte e peggiora la copertura; spegnere i
   rammendi non tocca le diagonali (identiche, 15 per 1,9 m); abbassare chiusura e lisciatura non
   sposta il denso (5,6-5,9% in tutti i casi). Il colpevole non era nessuno dei tre.
+- **LA CRESCITA GEODETICA (2026-09-10): il passo esatto E la forma che si propaga.** Le due
+  costruzioni di prima sbagliavano ognuna per un verso: i **livelli** di una distanza spianata
+  tengono la forma ma si allargano dove la spianatura ha abbassato la pendenza (bocciati da Lorenzo:
+  *«la densità deve rimanere la stessa»*); la **crescita morfologica** tiene il passo ma smorza la
+  forma a ogni dilatazione e lascia i fianchi dei cunei come fronti. Ora, a ogni giro, si **rimisura
+  la distanza geodetica dal fronte appena cucito** dentro la sola parte non ancora raggiunta, e la
+  riga nuova è il suo livello a un passo: il passo è esatto per costruzione e non si accumula né
+  l'errore della spianatura né quello della dilatazione. Costa una propagazione per giro, ma su una
+  banda larga un passo e mezzo — e il pannello ci mette **meno** di prima (4,4 s contro 7,6).
+  Misurato sul pannello coi parametri di Lorenzo, contro la crescita morfologica a parità di tutto:
+  righe addosso dentro un gruppo **4,2 % → 0,3 %**, denso 2,7 → 1,5 %, decimo percentile della
+  spaziatura 1,88 → 2,29 mm, rammendi 179 → 41, scoperto 0,3 → 0,2 %. Le bande dense diagonali che
+  Lorenzo vedeva in basso **non ci sono più**, e le onde arrivano fino al bordo invece di
+  appiattirsi. `livello()` del Punto Pittorico ha preso un parametro facoltativo per lavorare su un
+  rettangolo di celle (senza, ogni giro costava una passata su tutta la griglia). Le altre due
+  costruzioni restano scegliendo `modo`: servono a confrontare, e ognuna dice qualcosa di vero.
 - **Da Lorenzo, primo dato di macchina:** distanza fra le linee 1,8 con interlinea 1,5 è **troppo
   fitta**. Altri provini in corso; i default restano 2 e 1,5 finché non lo dice lui.
 - **LA RIAPERTURA DEL PROGETTO, fatta (R9/R27).** Sia il DST sia l'SVG portano dentro parametri,
