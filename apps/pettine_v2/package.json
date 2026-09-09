@@ -1,0 +1,23 @@
+{
+  "name": "pettine_v2",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Punto pettine sfrangiato: da un SVG a gruppi e da una foto, linee di base a passo fisso con sopra un pettine di denti verso il chiaro. Ritaglio per gli swatch, export SVG e DST.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "test": "node scripts/test-v2.mjs",
+    "test:reale": "node scripts/test-v2.mjs --real",
+    "typecheck": "tsc -p tsconfig.json"
+  },
+  "dependencies": {
+    "@rg/core": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}

@@ -1,0 +1,37 @@
+{
+  "sha256": "6ebad54c46b123f18de069a6c14cf02da50599e816e9391251de4a03b1826f30",
+  "source": "src/riferimento-v1.ts",
+  "fixture": "fixtures/VETTORIALE-6-colori-v2-gruppo-blocchi.svg",
+  "foto": null,
+  "larghezzaMm": 419.45,
+  "ritaglio": {
+    "x": 120,
+    "y": 120,
+    "larghezza": 70,
+    "altezza": 70
+  },
+  "parametriReali": {
+    "basiMm": 2,
+    "sormontoMm": 4,
+    "addolcisciMm": 0.15,
+    "lisciaMaxMm": 8,
+    "spianaMm": 5,
+    "chiudiMm": 3,
+    "traslaMaxMm2": 9000,
+    "sconfinaMm": 1,
+    "denteMinMm": 3,
+    "denteMaxMm": 5,
+    "passoMm": 1.5,
+    "aperturaDeg": 40,
+    "nettoMm": 2.5,
+    "denti": true,
+    "modo": "auto",
+    "mostraNudi": false,
+    "mostraPassaggi": true,
+    "passaggioMaxMm": 30,
+    "tintaMinimaMm": 6,
+    "passaggioNascostoMm": 45,
+    "senzaPassaggiUltimiColori": 2,
+    "dst": true
+  }
+}

@@ -1,0 +1,120 @@
+{
+  "pannello": {
+    "file": "VETTORIALE-6-colori-v2-gruppo-blocchi.svg",
+    "larghezzaMm": 419.44999999999993,
+    "altezzaMm": 353.1282169890664
+  },
+  "verifica": {
+    "pezziMancanti": 0,
+    "pezziDuplicati": 0,
+    "precedenzeInvertite": 0,
+    "passaggioScopertoMm": 4.572920988425102,
+    "puntiSotto1Mm": 5111,
+    "prontoPerSwatch": false
+  },
+  "statistiche": {
+    "larghezzaMm": 419.44999999999993,
+    "altezzaMm": 353.1282169890664,
+    "riquadro": {
+      "x": 0,
+      "y": 0,
+      "larghezza": 419.44999999999993,
+      "altezza": 353.1282169890664
+    },
+    "colori": [
+      "#dddbd3",
+      "#a3d6d8",
+      "#699dd4",
+      "#1b3257",
+      "#132237",
+      "#0b131e"
+    ],
+    "famiglie": 19,
+    "famiglieSaltate": 0,
+    "tratti": 1771,
+    "trattiCorti": 134,
+    "basiM": 67.3170794282166,
+    "rammendi": 33,
+    "denti": 45682,
+    "filoDentiM": 366.19183503091335,
+    "dentiFermati": 0,
+    "dentiAttraversano": 1642,
+    "nudoPct": 12.476461335900318,
+    "densoPct": 0.6441628327654833,
+    "nudoFiloPct": 11.034892012954062,
+    "spaziaturaMedianaMm": 1.9921120633411398,
+    "spaziaturaDecimoMm": 1.635284217572574,
+    "righeAddossoPct": 3.1377522885188047,
+    "righeAddossoStessoGruppoPct": 0.23712363516047202,
+    "punti": 189261,
+    "filoM": 575.6718971200962,
+    "blocchi": 850,
+    "salti": 844,
+    "saltiM": 11.235057305485872,
+    "passaggi": 6700,
+    "passaggiM": 62.39595093835581,
+    "puntiCorti": 5111,
+    "passaggiScopertiM": 0.004572920988425102,
+    "righeFuoriOrdine": 0,
+    "righeInglobate": 2275,
+    "passaggioPiuLungoMm": 269.89643045054964,
+    "corridoiM": 17.424211537664736,
+    "secondi": 8.063
+  },
+  "aghi": [
+    {
+      "ago": 1,
+      "colore": "#dddbd3",
+      "tagli": 108,
+      "passaggi": 567,
+      "passaggiMm": 7395.280275198024,
+      "ricamoMm": 67443.71651244056,
+      "file": "ago-01.svg"
+    },
+    {
+      "ago": 2,
+      "colore": "#a3d6d8",
+      "tagli": 121,
+      "passaggi": 903,
+      "passaggiMm": 7434.10463844575,
+      "ricamoMm": 61950.27014680556,
+      "file": "ago-02.svg"
+    },
+    {
+      "ago": 3,
+      "colore": "#699dd4",
+      "tagli": 81,
+      "passaggi": 836,
+      "passaggiMm": 7312.086354360445,
+      "ricamoMm": 59423.53695966671,
+      "file": "ago-03.svg"
+    },
+    {
+      "ago": 4,
+      "colore": "#1b3257",
+      "tagli": 155,
+      "passaggi": 1787,
+      "passaggiMm": 14854.129895799308,
+      "ricamoMm": 124256.03538368396,
+      "file": "ago-04.svg"
+    },
+    {
+      "ago": 5,
+      "colore": "#132237",
+      "tagli": 193,
+      "passaggi": 1689,
+      "passaggiMm": 13560.92693221666,
+      "ricamoMm": 109018.85942335849,
+      "file": "ago-05.svg"
+    },
+    {
+      "ago": 6,
+      "colore": "#0b131e",
+      "tagli": 186,
+      "passaggi": 918,
+      "passaggiMm": 11839.4228423352,
+      "ricamoMm": 91172.46510144623,
+      "file": "ago-06.svg"
+    }
+  ]
+}
