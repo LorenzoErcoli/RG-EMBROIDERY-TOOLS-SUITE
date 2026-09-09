@@ -3625,7 +3625,10 @@ console.log('Il punto pettine: il ricamo esce, e il progetto torna dentro il fil
   check('la macchina non taglia mai il filo su questo pannello', st.salti, 0);
   // e proprio perche' non taglia, nessuna riga va spezzata per inglobarne un'altra: l'innesto costa
   // filo di impuntura, e si paga solo dove serve a evitare un taglio o un passaggio lungo.
-  check('nessuna riga spezzata dove non serve', st.righeInglobate, 0);
+  // l'unica che si spezza e' quella che ospita una corsa di sormonto: raggiungerla da lontano
+  // costerebbe un passaggio lungo, infilarla nella riga accanto no. Il lucchetto tiene il numero
+  // basso: l'innesto costa impuntura, e non si fa a raffica.
+  check('si spezza solo quello che serve', st.righeInglobate <= 1, true);
   // il tetto dei passaggi nascosti e' il baratto fra rasafili e linee lunghe, ed e' una manopola:
   // qualunque valore abbia, nessun passaggio lo puo' superare.
   check('nessun passaggio piu' + String.fromCharCode(39) + ' lungo del suo tetto', st.passaggioPiuLungoMm <= (par.passaggioNascostoMm ?? 90) + 0.5, true);

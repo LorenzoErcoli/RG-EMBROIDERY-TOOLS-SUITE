@@ -339,7 +339,7 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
   const perColoreDenti: string[][] = [];
   let dentiTot = 0, filoMm = 0, fermati = 0, attraversano = 0;
   // I TRATTI, strutturati, per il DST: base, denti (radice, punta) e denti di sormonto per colore piu' chiaro
-  interface Tratto { col: number; fi: number; id: number; d: number; base: Point[]; denti: Array<[Point, Point]>; sotto: Map<number, Array<[Point, Point]>> }
+  interface Tratto { col: number; fi: number; id: number; d: number; base: Point[]; denti: Array<[Point, Point]>; sotto: Map<number, Array<[Point, Point]>>; sorm?: boolean }
   const trattiTutti: Tratto[] = [];
   const cucito: Point[][] = [];   // tutto cio' che si cuce (basi e denti), per il metro del filo
   // LA COPERTURA, tenuta aggiornata mentre si cuce: celle da 0,5 mm entro 0,75 mm da un filo. Serve al
@@ -1256,6 +1256,51 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
   // finisce coperto quando lei si cuce (Lorenzo: «far coincidere i passaggi con le linee che
   // successivamente saranno il fondo del pettine successivo»)
   for (const t of trattiTutti) stendi(t.base);
+  /**
+   * IL SORMONTO DIVENTA UNA RIGA COME LE ALTRE. I denti che un tratto scuro fa cucire anche col
+   * colore chiaro erano una fase a se', in coda al colore: corse sparse per tutto il pannello, prese
+   * una per una, e su un pannello senza passaggi lunghi erano 164 tagli su 364 — il mucchio piu'
+   * grosso. Il primo tentativo (2026-09-10) fu di attaccarle alle righe del loro colore, e peggiorava:
+   * spezzava catene che gia' funzionavano. La risposta giusta e' un'altra: non attaccarle a niente,
+   * ma farne delle righe vere. Una corsa di denti lungo una base scura ha un suo percorso, due capi e
+   * una distanza dal muro, esattamente come una riga; se entra nell'elenco dei tratti, entra da sola
+   * nella sequenza, nel conto dei versi, negli innesti e nei corridoi, senza codice suo.
+   *
+   * La distanza dal muro e' quella vera delle sue radici, e viene grande: i denti di sormonto stanno
+   * oltre l'ultima riga del loro colore, e i loro denti vanno all'indietro a coprirla. Quindi l'ordine
+   * di copertura li mette dopo, che e' proprio quello che serve.
+   */
+  // (si fa qui, dopo le misure sulla spaziatura: una corsa di denti non e' una riga di base, e
+  // contata come tale direbbe che le righe si stringono)
+  {
+    let idSorm = 1000000;
+    const nuovi: Tratto[] = [];
+    for (const t of trattiTutti) {
+      for (const c of [...t.sotto.keys()]) {
+        const lista = t.sotto.get(c) ?? [];
+        t.sotto.delete(c);
+        let corsa: Array<[Point, Point]> = [];
+        const chiudiCorsa = (): void => {
+          if (!corsa.length) return;
+          const base = corsa.map((x) => x[0]);
+          let somma = 0, quanti = 0;
+          for (const q of base) { const i = cella(q); if (i >= 0 && distDaMuro[i] >= 0) { somma += distDaMuro[i]; quanti++; } }
+          // dove le righe non hanno una distanza vera (costruzione a livelli) l'ordine lo fa l'id,
+          // e l'id del sormonto e' piu' alto di qualunque livello: viene dopo, come deve
+          const dd = t.d >= 1e8 ? 1e9 : quanti ? somma / quanti : t.d;
+          nuovi.push({ col: c, fi: t.fi, id: idSorm++, d: dd, base: base.length >= 2 ? base : [base[0], base[0]], denti: corsa, sotto: new Map(), sorm: true });
+          corsa = [];
+        };
+        for (const dente of lista) {
+          if (corsa.length && Math.hypot(corsa[corsa.length - 1][0].x - dente[0].x, corsa[corsa.length - 1][0].y - dente[0].y) > 4) chiudiCorsa();
+          corsa.push(dente);
+        }
+        chiudiCorsa();
+      }
+    }
+    trattiTutti.push(...nuovi);
+    console.log(`SORMONTO: ${nuovi.length} corse diventate righe a tutti gli effetti (prima erano una fase a parte, in coda al colore)`);
+  }
   const passaggiSvg: string[][] = colori.map(() => []);
   /**
    * DOVE IL FILO E' GIA' PASSATO, dentro il colore in corso. Lorenzo (2026-09-10, settima tornata):
@@ -1297,7 +1342,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     const paths: DstPath[] = [];
     let corrente: Point | null = null;
     let punti = 0, filo = 0, passaggi = 0, filoPassaggi = 0, salti = 0, filoSalti = 0, corti = 0, dentiSaltati = 0;
-    let cortiSormonto = 0, filoScoperto = 0, passaggiInstradati = 0, inversioni = 0, passaggiDiTraverso = 0;
+    let filoScoperto = 0, passaggiInstradati = 0, inversioni = 0, passaggiDiTraverso = 0;
     let andateRitorno = 0, filoImpuntura = 0, filoScopertoUltimi = 0;
     const lunghezzePassaggi: number[] = [];
     // fin qui una riga si puo' servire con andata e ritorno: piu' lunga, il filo nascosto costa piu' del salto
@@ -1327,7 +1372,6 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     const SCOPERTO_MAX_MM = 3;
     let passaggiNascosti = 0;
     let saltiSerpentina = 0, saltiFamiglia = 0, saltiSormonto = 0, saltiLunghi = 0, saltiVersoRigaCorta = 0, saltiVersoRigaLunga = 0;
-    let fase: 'basi' | 'sormonto' = 'basi';
     let ultimoTratto: Tratto | null = null, prossimoTratto: Tratto | null = null;
     let pathPts: Array<[number, number]> = [];
     let ago = 1;
@@ -1335,7 +1379,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     // forza: radici e punte si cuciono sempre; un capo di base o un punto di passaggio sotto il
     // millimetro si lascia perdere (il punto dopo lo assorbe)
     const cuciA = (p: Point, forza = false): void => {
-      if (corrente) { const d = dist(corrente, p); if (d < 0.05) return; if (d < MIN_MM && !forza) return; filo += d; punti++; if (d < MIN_MM) { corti++; if (fase === 'sormonto') cortiSormonto++; } }
+      if (corrente) { const d = dist(corrente, p); if (d < 0.05) return; if (d < MIN_MM && !forza) return; filo += d; punti++; if (d < MIN_MM) corti++; }
       pathPts.push([p.x, p.y]); corrente = p;
     };
     const vaiA = (p: Point): void => {
@@ -1345,7 +1389,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       const d = dist(corrente, p);
       if (d < 0.05) return;
       let strada: Point[] | null = null;
-      const dOra = fase === 'basi' && ultimoTratto ? ultimoTratto.d : Infinity;
+      const dOra = ultimoTratto ? ultimoTratto.d : Infinity;
       // GLI ULTIMI COLORI NON FANNO PASSAGGI LUNGHI (Lorenzo, 2026-09-10: «negli ultimi 2 stop per
       // ora non fare passaggi perche' non riusciranno ad essere coperti»): sotto di loro non viene
       // piu' nessuno, quindi un filo teso resterebbe li' a vista. Restano i collegamenti corti fra
@@ -1425,7 +1469,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       }
       else {
         apri(); pathPts.push([p.x, p.y]); corrente = p; salti++; filoSalti += d;
-        if (fase === 'sormonto') saltiSormonto++;
+        if (prossimoTratto && prossimoTratto.sorm) saltiSormonto++;
         else if (ultimoTratto && prossimoTratto && ultimoTratto.fi === prossimoTratto.fi) {
           if (Math.abs(ultimoTratto.id - prossimoTratto.id) <= 1) saltiSerpentina++; else saltiFamiglia++;
           // quanto e' lunga la riga che si va a raggiungere: se e' corta, e' una fila isolata
@@ -1961,26 +2005,6 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
           ultimoTratto = t;
         }
       }
-      // il sormonto: i denti che i colori piu' scuri cuciono anche con questo colore, prima e sotto.
-      // Corrono lungo la base scura: radice-punta-radice, e fra due radici lontane si salta.
-      fase = 'sormonto';
-      // le corse di sormonto (una per tratto scuro) si prendono ognuna dalla piu' vicina al punto corrente
-      const corse: Array<Array<[Point, Point]>> = [];
-      for (const t of trattiTutti) { const l = t.sotto.get(c); if (l && l.length) corse.push(l); }
-      const fatteC = new Uint8Array(corse.length);
-      for (let n = 0; n < corse.length; n++) {
-        let scelta = -1, inverso = false, dBest = Infinity;
-        for (let i = 0; i < corse.length; i++) {
-          if (fatteC[i]) continue;
-          const l = corse[i];
-          const d0 = corrente ? dist(corrente, l[0][0]) : 0, d1 = corrente ? dist(corrente, l[l.length - 1][0]) : 1;
-          if (Math.min(d0, d1) < dBest) { dBest = Math.min(d0, d1); scelta = i; inverso = d1 < d0; }
-        }
-        fatteC[scelta] = 1;
-        const l = inverso ? [...corse[scelta]].reverse() : corse[scelta];
-        for (const [r, tip] of l) { if (dist(r, tip) < MIN_MM) { dentiSaltati++; continue; } if (!corrente || dist(corrente, r) > CORTO_MM) vaiA(r); else cuciA(r); cuciA(tip, true); cuciA(r, true); }
-      }
-      fase = 'basi';
       apri();
     }
     { let n = 0; for (let i = 0; i < battuto.length; i++) if (battuto[i]) n++; celleCorridoio += n; }
