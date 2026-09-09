@@ -40,6 +40,7 @@ const CAMPI: Campo[] = [
   { id: 'denteMaxMm', key: 'denteMaxMm', min: 0.5, max: 20 },
   { id: 'aperturaDeg', key: 'aperturaDeg', min: 0, max: 80 },
   { id: 'sormontoMm', key: 'sormontoMm', min: 0, max: 20 },
+  { id: 'sconfinamentoMm', key: 'sconfinaMm', min: 0, max: 10 },
   { id: 'spianaturaMm', key: 'spianaMm', min: 0.5, max: 20 },
   { id: 'addolcimentoMmMm', key: 'addolcisciMm', min: 0, max: 1 },
   { id: 'chiusuraMm', key: 'chiudiMm', min: 0, max: 20 },
@@ -207,7 +208,12 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
           <label class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Sormonto</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="sormontoMm" type="text" inputmode="decimal" value="4"><span>mm</span></span>
-            <span class="rg-field__help">Se entro tanto, verso il chiaro, c'è una tinta più chiara, il dente si cuce anche con quella: prima, e sotto. Alla giunta non si deve vedere la tela.</span>
+            <span class="rg-field__help">Se entro tanto, verso il chiaro, c'è una tinta più chiara, il dente si cuce anche con quella: prima, e sotto. È così che le tinte si mescolano dentro un gruppo.</span>
+          </label>
+          <label class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Sconfinamento fra blocchi</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="sconfinamentoMm" type="text" inputmode="decimal" value="1"><span>mm</span></span>
+            <span class="rg-field__help">Quanto le righe di un blocco entrano in quello accanto, perché la giunta non resti nuda. Alzandolo le righe dei due blocchi si affiancano e si vede una banda più fitta: a 2,5 mm sono il doppio che a 1.</span>
           </label>
         </div>
       </details>
