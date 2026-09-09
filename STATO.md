@@ -1054,6 +1054,32 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   colore giusto: non passa sopra niente, è filo giusto in un posto che resta nudo; oggi la regola lo
   vieta (tinta propria senza righe future = a vista). B è un pomeriggio, A due giorni. I restanti 82
   tagli sono cambi di gruppo e di colore: si riducono solo con l'ordine dei gruppi.
+- **Il dietro della riga sopra, e la fine dell'eccezione per gli ultimi colori: 172 tagli → 40**
+  (Lorenzo, 2026-09-10, quattordicesima tornata, davanti al disegno della fascia sottile: *«a me
+  verrebbe in mente di spostarmi sul dietro della riga pettine sopra, fare un passaggio e poi
+  discendere per poi proseguire»*). Più precisa della mia proposta B e senza toccare le righe.
+  **La regola:** una base del proprio colore è un corridoio finché non ha denti già cuciti sopra —
+  da fare o già cucita non importa. Per saperlo serve distinguere i denti dalle basi nella mappa del
+  cucito (`dentiCuciti`). Prima misura: 172 → 170, quasi niente. Disegnati i casi con la mappa a mezzo
+  millimetro: **le radici dei denti stanno sulla base**, e segnandole come denti il dietro di ogni riga
+  era un corridoio interrotto ogni 1,5 mm; il calcolo aggirava ogni radice nella striscia, e lì si
+  scopriva. Tolta la radice dalla mappa dei denti: **170 → 148**.
+  **Poi i numeri del giudizio sui casi rimasti** (costo medio, lunghezza, filo a vista): strade da 1,4
+  mm a vista rifiutate. Tutti e otto i casi erano dell'ago 5, e per gli ultimi due colori valeva ancora
+  «niente passaggi, nessuno li coprirà» (costo massimo 2,5, nessuna strada lunga). Era giusto quando la
+  mappa dava per coperto ciò che non lo era; con «davanti» e «dietro» decisi cella per cella vale per
+  ogni ago allo stesso modo. Default `senzaPassaggiUltimiColori` 2 → **0** (la manopola resta): **148 →
+  40 tagli**. Filo a vista 3,10 m su 562 (0,55%), 0 righe fuori ordine, 146 macchie incastrate, 11
+  senza corridoio. Dei 40: 7 fra righe consecutive, 11 fra righe lontane, 1 nel sormonto, 21 fra gruppi
+  o colori.
+
+  | oggi, in ordine | tagli |
+  |---|---|
+  | mattina | 191 |
+  | sormonto attraversabile, stesso livello prima, zone a 35 | 172 |
+  | il dietro della riga sopra, radici sulla base | 148 |
+  | niente eccezione per gli ultimi colori | **40** |
+
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione

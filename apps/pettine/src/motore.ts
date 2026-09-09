@@ -137,7 +137,7 @@ export const parametriPettineDefault: ParametriPettine = {
   traslaMaxMm2: 9000, sconfinaMm: 1,
   denteMinMm: 3, denteMaxMm: 5, passoMm: 1.5, aperturaDeg: 40, nettoMm: 2.5,
   denti: true, modo: 'auto', mostraNudi: false, mostraPassaggi: true,
-  passaggioMaxMm: 30, tintaMinimaMm: 6, passaggioNascostoMm: 400, senzaPassaggiUltimiColori: 2, dst: true,
+  passaggioMaxMm: 30, tintaMinimaMm: 6, passaggioNascostoMm: 400, senzaPassaggiUltimiColori: 0, dst: true,
 };
 
 export interface StatistichePettine {
@@ -1324,6 +1324,14 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
    */
   const pettineCucito = new Uint8Array(COLS * ROWS);
   /**
+   * DOVE CI SONO DENTI GIA' CUCITI, distinti dalle basi. Lorenzo (2026-09-10, quattordicesima
+   * tornata): «mi verrebbe in mente di spostarmi sul dietro della riga pettine sopra, fare un
+   * passaggio e poi discendere per poi proseguire». Il dietro di una riga gia' cucita e' un corridoio
+   * finche' nessun dente ci sta sopra: e nella gola di una fascia sottile, dove la riga esterna manca,
+   * il dietro della riga sopra e' scoperto di denti. Questa mappa serve a saperlo.
+   */
+  const dentiCuciti = new Uint8Array(COLS * ROWS);
+  /**
    * DAVANTI E DIETRO, cella per cella. Una cella e' «davanti» se entro un passo c'e' una base del
    * colore in corso NON ANCORA CUCITA: li' i denti di quella riga, quando verra', copriranno il filo.
    * E' un conteggio, non una distanza: prima si usava la distanza dal muro dell'ultima riga cucita
@@ -1395,7 +1403,11 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     // Alto apposta: Lorenzo (2026-09-10) «io devo avere pochi rasafilo e pochissimi passaggi».
     const RASAFILO_MM = 300;
     // quanti ULTIMI colori non fanno passaggi lunghi: sotto di loro non viene piu' nessuno a coprirli
-    const SENZA_PASSAGGI = Math.max(0, Math.round(par.senzaPassaggiUltimiColori ?? 2));
+    // Era 2 (Lorenzo, 2026-09-10: «negli ultimi 2 stop non fare passaggi, non verranno coperti»), ed
+    // era giusto quando la mappa dava per coperto cio' che non lo era. Da quando «coperto» si decide
+    // cella per cella — il dietro di una riga, la striscia davanti a una base da fare — vale per ogni
+    // colore allo stesso modo, e l'eccezione era il freno piu' grosso rimasto: 148 tagli -> 40.
+    const SENZA_PASSAGGI = Math.max(0, Math.round(par.senzaPassaggiUltimiColori ?? 0));
     // fin qui si prova un passaggio anche oltre la manopola, ma solo se e' tutto nascosto sotto
     // cio' che verra' dopo: e' la seconda tecnica chiesta da Lorenzo, e vale solo nei primi colori
     const PASSAGGIO_NASCOSTO_MM = Math.max(PASSAGGIO_MM, par.passaggioNascostoMm ?? 400);
@@ -1433,12 +1445,21 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     // l'orologio della cucitura: a ogni dente il momento in cui e' stato cucito, per la verifica finale
     let orologio = 0;
     const tempoDenti = new Map<Tratto, Float64Array>();
-    const cuciA = (p: Point, forza = false): void => {
+    const cuciA = (p: Point, forza = false, radice: Point | null = null): void => {
       if (corrente) {
         const d = dist(corrente, p); if (d < 0.05) return; if (d < MIN_MM && !forza) return; filo += d; punti++; if (d < MIN_MM) corti++;
-        // il punto appena cucito segna dove c'e' un pettine: i passaggi di chiunque ci girano attorno
+        // il punto appena cucito segna dove c'e' un pettine: i passaggi di chiunque ci girano attorno.
+        // Se e' un dente (`radice` e' la sua radice), lo segna anche fra i denti — sopra quelli non si
+        // passa mai — MA NON ATTORNO ALLA RADICE: la radice sta sulla base, e la base e' il dietro su cui
+        // si passa. Segnandola come dente il dietro di ogni riga era un corridoio interrotto ogni 1,5 mm.
         const n = Math.max(1, Math.ceil(d / (CELLA / 2)));
-        for (let k = 0; k <= n; k++) { const ic = cella({ x: corrente.x + ((p.x - corrente.x) * k) / n, y: corrente.y + ((p.y - corrente.y) * k) / n }); if (ic >= 0) pettineCucito[ic] = 1; }
+        for (let k = 0; k <= n; k++) {
+          const q = { x: corrente.x + ((p.x - corrente.x) * k) / n, y: corrente.y + ((p.y - corrente.y) * k) / n };
+          const ic = cella(q);
+          if (ic < 0) continue;
+          pettineCucito[ic] = 1;
+          if (radice && dist(q, radice) > CELLA * 1.2) dentiCuciti[ic] = 1;
+        }
       }
       pathPts.push([p.x, p.y]); corrente = p;
     };
@@ -1629,7 +1650,10 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     const sulDietro = (i: number, c: number, dOra: number): boolean => {
       void dOra;
       if (i < 0 || tinta[i] !== c) return false;
-      if (baseFutura[i] <= 0) return false;   // nessuna base da fare qui vicino: nessun dente verra' a coprire
+      // IL DIETRO DELLA RIGA SOPRA (Lorenzo): una base del nostro colore e' un corridoio finche' non ha
+      // denti gia' cuciti sopra — che sia ancora da fare (i denti della riga dopo la copriranno) o
+      // gia' cucita ma con la riga esterna mancante, come nella gola di una fascia sottile
+      if (dentiCuciti[i]) return false;
       const cc = i % COLS, rr = (i - cc) / COLS;
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
         const j = (rr + dy) * COLS + (cc + dx);
@@ -1826,6 +1850,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       return seq;
     };
     const eDente = (ts: Tratto[], q: Point): boolean => ts.some((t) => t.denti.some(([r, tip]) => r === q || tip === q));
+    const ePunta = (ts: Tratto[], q: Point): boolean => ts.some((t) => t.denti.some(([, tip]) => tip === q));
     for (let c = 0; c < colori.length; c++) {
       ago = c + 1;
       apri();
@@ -2176,7 +2201,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
             if (m >= 2) { andateRitorno++; filoImpuntura += lungT[iT]; }
             vaiA(seq[0], portata);
             // il primo punto dopo l'ingresso non si forza: `vaiA` puo' essersi fermato a un decimo dal capo
-            for (let i = 1; i < seq.length; i++) cuciA(seq[i], i > 1 && eDente([t], seq[i]));
+            for (let i = 1; i < seq.length; i++) cuciA(seq[i], i > 1 && eDente([t], seq[i]), ePunta([t], seq[i]) ? seq[i - 1] : ePunta([t], seq[i - 1]) ? seq[i] : null);
             ultimoTratto = t;
             segnaBaseFutura(t, -1);
             return;
@@ -2192,7 +2217,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
             // la prima radice non si forza: `vaiA` puo' essersi fermato a un decimo dal capo (un
             // passaggio sotto il millimetro non si cuce) e un punto forzato li' sarebbe sotto R3
             if (fuori) { prossimoTratto = t; vaiA(r, MACCHIA_CORRIDOIO_MM); fuori = false; } else cuciA(r, n > 0);
-            if (dist(r, tip) < MIN_MM) dentiSaltati++; else { cuciA(tip, true); cuciA(r, true); }
+            if (dist(r, tip) < MIN_MM) dentiSaltati++; else { cuciA(tip, true, r); cuciA(r, true, r); }
             for (const ins of dentro) {
               if (ins.dente !== n) continue;
               // il primo corridoio puo' essere lungo: e' quello promesso al momento di decidere

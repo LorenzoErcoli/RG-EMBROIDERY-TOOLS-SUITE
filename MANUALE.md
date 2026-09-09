@@ -388,7 +388,14 @@ dopo. I passaggi sono dritti, punti da 3 mm: lo zig zag è stato provato e tolto
 **Il passaggio lungo che sparisce sotto.** «Passaggio più lungo» dice fin dove un passaggio si cuce
 comunque, anche a costo di vedersi un po'. Oltre quella misura il passaggio si fa lo stesso, ma
 soltanto se il cammino è di quelli nascosti e se a vista ne rimangono meno di 3 mm; altrimenti si
-taglia. Negli **ultimi due colori** non si fanno: sotto di loro non viene più nessuno a coprire.
+taglia. Vale per tutti i colori allo stesso modo, ultimi compresi: cosa è coperto lo dice la mappa,
+cella per cella, non il numero dell'ago.
+
+**Il dietro della riga sopra.** Una base del proprio colore è un corridoio finché non ha denti già
+cuciti sopra: sia che la riga sia ancora da fare (i denti della riga dopo la copriranno), sia che sia
+già cucita ma con la riga esterna mancante, come nella gola di una fascia sottile. Lì il filo sale
+sul dietro della riga sopra, corre, e ridiscende. Le radici dei denti stanno sulla base e non la
+interrompono.
 
 **Fin dove arriva un passaggio nascosto.** «Passaggio nascosto più lungo» decide quanto si può
 andare lontano prima di arrendersi e tagliare. Da quando un passaggio si nasconde solo dove è
