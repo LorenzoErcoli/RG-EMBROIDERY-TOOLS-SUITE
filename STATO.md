@@ -758,6 +758,20 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   scuro, cuciti dopo, la coprono. Vale soprattutto per i primi colori, che hanno sotto di sé tutti
   gli altri. I salti del pannello, misurati e divisi per tipo: **89 dentro uno stesso gruppo** (49
   verso una riga corta), **55 nel sormonto**, **33 fra gruppi o colori diversi**.
+- **Le due tecniche, scritte (2026-09-10). I salti del pannello: 177 → 43.** Lorenzo ha confermato
+  lo schema («sì 3 mm va bene, ottimo i 2 mm»), e le due cose sono nel motore.
+  **A — l'andata in impuntura e il ritorno col pettine:** si entra da un capo, si corre fino
+  all'altro con punti da 3 mm sulla linea stessa della riga (nessun dente, il filo resta sotto), e si
+  torna indietro cucendo il pettine, che lo copre. Il filo **esce da dove è entrato**, e la riga dopo
+  quasi sempre sta da quella parte. Si usa solo sulle righe fino a 70 mm e solo quando il conto in
+  millimetri lo dice: o il giro per tornare costa più del filo dell'impuntura, o uscendo dall'altra
+  parte il pezzo dopo resta oltre i 60 mm. Nella serpentina normale **non scatta mai**, ed è giusto:
+  lì la riga dopo comincia dove finisce questa. Sul pannello: 16 righe servite così, 33 cm di
+  impuntura nascosta.
+  **B — i passaggi arrivano a 200 mm** invece di 60, perché ora sanno dove nascondersi (sotto i
+  colori che verranno, o sopra le basi già cucite). Misurato: salti **177 → 43**, blocchi 178 → 49,
+  metri di salto 21,3 → 6,6; il filo di passaggio che resta a vista sale da 4,5 a 5,6 m su 583, cioè
+  meno dell'1%. Quello che non si riesce a cucire resta un salto, come chiesto.
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione

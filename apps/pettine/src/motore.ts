@@ -1227,7 +1227,10 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     // bordi in caso di necessita'. Se invece non riesci lascia un salto lungo, quindi non inserire
     // niente, e vedro' che ci sono 2 blocchi separati». Quindi: si cerca lontano (60 mm invece di
     // 25) e si accetta anche una strada tortuosa, purche' passi dove qualcosa la coprira'.
-    const PASSAGGIO_MM = 60;   // fin qui si prova a cucire il passaggio; oltre, si salta
+    // Da 60 a 200 mm (2026-09-10, «fare i passaggi il piu' possibile»): i salti sul pannello passano
+    // da 177 a 34, e il filo di passaggio che resta a vista sale solo da 4,5 a 5,6 m su 580 — le
+    // strade coperte l'A* le trova quasi sempre, e quando non le trova salta come chiede Lorenzo.
+    const PASSAGGIO_MM = 200;  // fin qui si prova a cucire il passaggio; oltre, si salta
     const CORTO_MM = 4;        // fin qui si va dritti senza cercare strade
     const MIN_MM = 1;
     const dist = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
@@ -1235,6 +1238,11 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     let corrente: Point | null = null;
     let punti = 0, filo = 0, passaggi = 0, filoPassaggi = 0, salti = 0, filoSalti = 0, corti = 0, dentiSaltati = 0;
     let cortiSormonto = 0, filoScoperto = 0, passaggiInstradati = 0, inversioni = 0, passaggiDiTraverso = 0;
+    let andateRitorno = 0, filoImpuntura = 0;
+    // fin qui una riga si puo' servire con andata e ritorno: piu' lunga, il filo nascosto costa piu' del salto
+    const ANDATA_RITORNO_MAX = 70;
+    // oltre questa distanza il pezzo dopo e' «lontano»: il passaggio, se pure si trova, sara' lungo
+    const LONTANO_MM = 60;
     let saltiSerpentina = 0, saltiFamiglia = 0, saltiSormonto = 0, saltiLunghi = 0, saltiVersoRigaCorta = 0, saltiVersoRigaLunga = 0;
     let fase: 'basi' | 'sormonto' = 'basi';
     let ultimoTratto: Tratto | null = null, prossimoTratto: Tratto | null = null;
@@ -1416,7 +1424,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       // una strada che per un pezzo passa allo scoperto se il resto e' nascosto. Sopra, meglio saltare.
       const lung = lunghezza(via2);
       if (lung < 1e-6) return null;
-      if (G0[fine] / lung > 10) return null;
+      if (G0[fine] / lung > 8) return null;
       if (lung > 4 * Math.max(1, dist(a, b)) + 10) return null;
       return via2;
     };
@@ -1433,6 +1441,27 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       // radice sta a meno di un passo dal capo, e a rovescio faceva un punto da 0,8 mm (783 casi)
       if (seq.length >= 3 && dist(seq[0], seq[1]) < MIN_MM) seq.shift();
       if (seq.length >= 3 && dist(seq[seq.length - 1], seq[seq.length - 2]) < MIN_MM) seq.pop();
+      return seq;
+    };
+    /**
+     * L'ANDATA IN IMPUNTURA E IL RITORNO COL PETTINE (Lorenzo, 2026-09-10): «per integrarla, se
+     * questa e' una linea singola, puoi passare due volte sul dietro del punto pettine: un passaggio
+     * di impuntura per arrivare in fondo e quindi al punto di partenza, e poi tornare indietro per
+     * fare il punto pettine. Questa cosa la puoi usare per provare a non mettere rasafilo».
+     *
+     * Si entra da un capo, si corre fino all'altro con punti da 3 mm sulla linea stessa della riga —
+     * nessun dente, e il filo resta sotto — e si torna indietro cucendo il pettine, che lo copre.
+     * Il filo cosi' ESCE DA DOVE E' ENTRATO: e' questo che fa risparmiare il salto, perche' la riga
+     * dopo sta quasi sempre dalla parte da cui si e' arrivati. Costa la lunghezza della riga in filo
+     * nascosto, quindi si usa solo sulle righe corte e solo quando serve davvero.
+     */
+    const PUNTO_IMPUNTURA_MM = 3;
+    const sequenzaAndataRitorno = (t: Tratto, inverso: boolean): Point[] => {
+      const base = inverso ? [...t.base].reverse() : t.base;
+      const seq: Point[] = ricampiona(base, PUNTO_IMPUNTURA_MM);
+      const fine = base[base.length - 1];
+      if (!seq.length || dist(seq[seq.length - 1], fine) > MIN_MM) seq.push(fine);
+      for (const q of sequenza(t, !inverso)) seq.push(q);
       return seq;
     };
     const eDente = (t: Tratto, q: Point): boolean => t.denti.some(([r, tip]) => r === q || tip === q);
@@ -1501,10 +1530,33 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
           }
           fatti[scelto] = 1;
           prossimoTratto = tratti[scelto];
-          const seq = sequenza(tratti[scelto], inverso);
+          const t = tratti[scelto];
+          // conviene uscire da dove si entra? Si guarda dove sta il pezzo che verra' dopo.
+          const entrata = inverso ? t.base[t.base.length - 1] : t.base[0];
+          const uscita = inverso ? t.base[0] : t.base[t.base.length - 1];
+          let dopoEntrata = Infinity, dopoUscita = Infinity;
+          for (let i = 0; i < tratti.length; i++) {
+            if (fatti[i]) continue;
+            for (const q of [tratti[i].base[0], tratti[i].base[tratti[i].base.length - 1]]) {
+              dopoEntrata = Math.min(dopoEntrata, dist(entrata, q));
+              dopoUscita = Math.min(dopoUscita, dist(uscita, q));
+            }
+          }
+          const lungaRiga = lunghezza(t.base);
+          // Quando conviene: o il giro in piu' per tornare al capo di entrata costa piu' del filo
+          // dell'impuntura, oppure uscendo dall'altra parte il pezzo dopo resta cosi' lontano che
+          // quasi sicuramente si finirebbe per tagliare. Nella serpentina normale non scatta mai —
+          // li' la riga dopo comincia proprio dove finisce questa — ed e' giusto cosi'.
+          const andataRitorno = t.denti.length > 0
+            && lungaRiga <= ANDATA_RITORNO_MAX
+            && Number.isFinite(dopoUscita)
+            && (dopoUscita - dopoEntrata > lungaRiga
+              || (dopoUscita > LONTANO_MM && dopoEntrata < dopoUscita - CORTO_MM));
+          const seq = andataRitorno ? sequenzaAndataRitorno(t, inverso) : sequenza(t, inverso);
+          if (andataRitorno) { andateRitorno++; filoImpuntura += lungaRiga; }
           vaiA(seq[0]);
-          for (let i = 1; i < seq.length; i++) cuciA(seq[i], eDente(tratti[scelto], seq[i]));
-          ultimoTratto = tratti[scelto];
+          for (let i = 1; i < seq.length; i++) cuciA(seq[i], eDente(t, seq[i]));
+          ultimoTratto = t;
         }
       }
       // il sormonto: i denti che i colori piu' scuri cuciono anche con questo colore, prima e sotto.
@@ -1532,6 +1584,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     // l'origine del DST è l'angolo del riquadro: uno swatch parte da (0,0), non da dov'era nel pannello
     for (const pa of paths) for (const q of pa.points_mm) { q[0] -= X0; q[1] -= Y0; }
     dst = buildDst({ label: 'PETTINE', coordinate_system: 'svg', paths, metadata: ing.progetto ?? undefined });
+    console.log(`ANDATA E RITORNO su ${andateRitorno} righe corte (${(filoImpuntura / 1000).toFixed(2)} m di impuntura nascosta sotto i denti)`);
     console.log(`SALTI per tipo: ${saltiSerpentina} fra righe vicine dello stesso gruppo · ${saltiFamiglia} fra righe lontane dello stesso gruppo · ${saltiSormonto} nel sormonto · il resto fra gruppi o colori diversi · di quelli dentro un gruppo, ${saltiVersoRigaCorta} vanno verso una riga corta (sotto 25 mm) e ${saltiVersoRigaLunga} verso una riga lunga`);
     console.log(`DST: ${punti} punti · ${(filo / 1000).toFixed(1)} m di filo · ${colori.length} aghi · ${paths.length} blocchi (${salti} salti, ${(filoSalti / 1000).toFixed(1)} m) · ${passaggi} passaggi cuciti (${(filoPassaggi / 1000).toFixed(1)} m, ${passaggiInstradati} instradati, ${passaggiDiTraverso} di traverso alle righe, ${(filoScoperto / 1000).toFixed(2)} m a vista) · ${corti} punti sotto ${MIN_MM} mm · ${inversioni} righe cucite fuori ordine · ${dentiSaltati} denti sotto il millimetro non cuciti`);
     statDst = { punti, filoM: filo / 1000, blocchi: paths.length, salti, saltiM: filoSalti / 1000, passaggi, passaggiM: filoPassaggi / 1000, puntiCorti: corti, passaggiScopertiM: filoScoperto / 1000, righeFuoriOrdine: inversioni };
