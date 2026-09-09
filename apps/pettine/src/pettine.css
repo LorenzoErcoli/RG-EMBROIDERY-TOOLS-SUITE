@@ -26,7 +26,7 @@ body {
 
 /* IL SIMULATORE: tre tele sovrapposte dentro una cornice in millimetri (cosi' zoom e pan restano quelli
    dell'anteprima), e la barra dei controlli sotto la tela. */
-.sim-cornice { position: relative; display: block; }
+.sim-cornice { position: relative; display: block; flex: none; }   /* flex: none — il layer e' flessibile e la schiacciava in altezza */
 .sim-tela { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
 .sim-controlli { border-top: 1px solid var(--rg-color-border, #ddd); padding: 8px 12px; background: var(--rg-color-surface, #fff); }
 .sim-barra { display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px; }

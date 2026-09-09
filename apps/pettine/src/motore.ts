@@ -1377,7 +1377,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
    * dieci passaggi che percorrono lo stesso corridoio si vedono una volta sola. Quindi una cella gia'
    * battuta dal filo di questo colore costa quasi niente, e i cammini si accalcano invece di sparpagliarsi.
    */
-  const battuto = new Uint8Array(COLS * ROWS);
+  const battuto = new Uint8Array(COLS * ROWS);   // quante volte il filo di passaggio e' passato di li' (fino a 255)
   /**
    * DOVE C'E' GIA' UN PETTINE. Lorenzo (2026-09-10, undicesima tornata): «la linea non passa mai
    * sopra dei pettini creati ma solo sotto». Ogni punto cucito — basi e denti, di tutti i colori —
@@ -1491,7 +1491,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     const MACCHIA_CORRIDOIO_MM = 400;
     // di quanto si sfalsano, a destra e a sinistra, i punti di un passaggio: mosso, non dritto
     const MOSSO_MM = 0;   // lo zig zag: provato a 0,6 e 0,4, Lorenzo lo ha tolto (2026-09-10)
-    let celleCorridoio = 0;
+    let celleCorridoio = 0, celleAffollate = 0;   // celle di corridoio, e quelle dove il filo di passaggio e' passato tre o piu' volte
     let zoneTotali = 0, cambiZona = 0;
     let righeInnestate = 0, macchieInnestate = 0, macchieCandidate = 0, macchieSenzaVicina = 0, macchieNegateDallOrdine = 0, macchieSenzaCorridoio = 0;
     // e di quel cammino non piu' di tanti millimetri possono restare scoperti: e' il vero controllo,
@@ -1644,21 +1644,23 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
           for (const q of [corrente, ...puliti]) { const i = cella(q); const dd = i >= 0 ? distDaMuro[i] : -1; if (dd >= 0) { if (dd < dmin) dmin = dd; if (dd > dmax) dmax = dd; } }
           if (dmax > dmin && dmax - dmin > BASI_MM * 3) passaggiDiTraverso++;
         }
-        // il cammino appena cucito diventa corridoio: i prossimi passaggi di questo colore ci si
-        // infileranno sopra invece di aprirsene uno nuovo
+        // il cammino appena cucito diventa corridoio: ogni passaggio conta una volta per cella, anche
+        // se la sua strada ci gira attorno, e il conteggio dice dove il filo si ammucchia
+        const celleDiQuesto = new Set<number>();
         for (let i = 1; i < via2.length; i++) {
           const a2 = via2[i - 1], b2 = via2[i];
           const n = Math.max(1, Math.ceil(dist(a2, b2) / (CELLA / 2)));
           for (let k = 0; k <= n; k++) {
             const q = { x: a2.x + ((b2.x - a2.x) * k) / n, y: a2.y + ((b2.y - a2.y) * k) / n };
             const ic = cella(q);
-            if (ic >= 0) { battuto[ic] = 1; const cc2 = ic % COLS, rr2 = (ic - cc2) / COLS;
+            if (ic >= 0) { const cc2 = ic % COLS, rr2 = (ic - cc2) / COLS;
               for (let dy2 = -1; dy2 <= 1; dy2++) for (let dx2 = -1; dx2 <= 1; dx2++) {
                 const jc = (rr2 + dy2) * COLS + (cc2 + dx2);
-                if (jc >= 0 && jc < COLS * ROWS) battuto[jc] = 1;
+                if (jc >= 0 && jc < COLS * ROWS) celleDiQuesto.add(jc);
               } }
           }
         }
+        for (const jc of celleDiQuesto) if (battuto[jc] < 255) battuto[jc]++;
         passaggi++; filoPassaggi += lunghezza(via2); filoScoperto += scoperti;
         lunghezzePassaggi.push(d);
         if (ago > colori.length - SENZA_PASSAGGI) filoScopertoUltimi += scoperti;
@@ -1781,7 +1783,12 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     const costoCella = (i: number, c: number, dOra: number): number => {
       const t = i < 0 ? -1 : tinta[i];
       if (t < 0) return 30;                    // tessuto nudo: mai
-      if (battuto[i]) return 0.2;              // il corridoio: qui il filo di questo colore c'e' gia'
+      // IL CORRIDOIO NON ATTIRA PIU' (Lorenzo, 2026-09-10, sedicesima tornata: «tanti passaggi passano
+      // nella stessa linea a volte. Se si riuscisse a usare piu' linee di base dei punti pettine sarebbe
+      // meglio, per creare meno densita' di filo»). Ripassare dove il filo c'e' gia' non aggiunge niente
+      // da vedere, ma ammucchia: costa piu' di una base da fare (0,6) e meno della striscia (1,5), cosi'
+      // il passaggio nuovo preferisce una base sua e ricade sul corridoio solo se non ce ne sono.
+      if (battuto[i]) return 1.2;
       const inBanda = bordoDist[i] <= BANDA_CELLE, altra = bordoAltra[i];
       // SOPRA UN PETTINE GIA' CUCITO NON SI PASSA, di nessun colore: l'unica eccezione e' la linea di
       // base della riga in corso o di una futura del nostro colore (il dietro del pettine)
@@ -1804,7 +1811,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
         // linea, mezzo millimetro. L'area attorno resta a vista fra un dente e l'altro, e costa tanto
         // da non passare mai il giudizio: prima costava 8, quanto la soglia, e una riga dritta
         // attraverso l'interno passava — sono i passaggi «fuori dal tracciato» del primo ago.
-        if (dietro) return 0.8;
+        if (dietro) return 0.6;                // esattamente sulla linea del dietro: e' li' che si nasconde
         if (inBanda && altra > c) return 1.5;  // il nostro bordo verso lo scuro: sormonto nostro e denti suoi
         if (inBanda && altra >= 0) return 4;   // il nostro bordo verso il chiaro: i denti della riga di bordo ci arrivano
         // IL PIU' ESTERNO POSSIBILE (Lorenzo, quindicesima tornata: «non passare piu' dentro ma passa
@@ -1968,7 +1975,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     for (let c = 0; c < colori.length; c++) {
       ago = c + 1;
       apri();
-      { let n = 0; for (let i = 0; i < battuto.length; i++) if (battuto[i]) n++; celleCorridoio += n; }
+      { let n = 0; for (let i = 0; i < battuto.length; i++) if (battuto[i]) { n++; if (battuto[i] >= 3) celleAffollate++; } celleCorridoio += n; }
       battuto.fill(0);   // il corridoio vale dentro un colore: col cambio ago si ricomincia
       baseFutura.fill(0);
       for (const t of trattiTutti) if (t.col === c) segnaBaseFutura(t, 1);
@@ -2350,7 +2357,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       }
       apri();
     }
-    { let n = 0; for (let i = 0; i < battuto.length; i++) if (battuto[i]) n++; celleCorridoio += n; }
+    { let n = 0; for (let i = 0; i < battuto.length; i++) if (battuto[i]) { n++; if (battuto[i] >= 3) celleAffollate++; } celleCorridoio += n; }
     /**
      * LA VERIFICA CHE CONTA, sulla cucitura vera (Lorenzo, 2026-09-10: «se si rispetta la regola che
      * il pettine va sopra il dietro del pettine e mai il contrario»). Fin qui l'ordine era garantito
@@ -2426,7 +2433,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       // il pennello segna 3 celle di lato ogni mezzo millimetro: circa 6 celle per millimetro di filo
       const corridoiM = celleCorridoio / 6 / 1000;
       console.log(`ZONE: ${zoneTotali} pezzi staccati in tutto, e la cucitura ci entra ${cambiZona} volte (uguali = ogni zona fatta in un colpo solo)`);
-    console.log(`CORRIDOI: ${(filoPassaggi / 1000).toFixed(1)} m di passaggio corrono dentro ${corridoiM.toFixed(1)} m di corridoi distinti (piu' e' alto il rapporto, piu' i passaggi si ripassano sopra invece di aprire strade nuove)`);
+    console.log(`CORRIDOI: ${(filoPassaggi / 1000).toFixed(1)} m di passaggio corrono dentro ${corridoiM.toFixed(1)} m di corridoi distinti · ${(celleAffollate / 6 / 1000).toFixed(2)} m dove il filo di passaggio e' passato tre o piu' volte (l'affollamento che Lorenzo non vuole)`);
     }
     console.log(`PASSAGGI LUNGHI NASCOSTI: ${passaggiNascosti} (oltre la manopola, ma tutti sotto cio' che li coprira')`);
     console.log(`SALTI per tipo: ${saltiSerpentina} fra righe vicine dello stesso gruppo · ${saltiFamiglia} fra righe lontane dello stesso gruppo · ${saltiSormonto} nel sormonto · il resto fra gruppi o colori diversi · di quelli dentro un gruppo, ${saltiVersoRigaCorta} vanno verso una riga corta (sotto 25 mm) e ${saltiVersoRigaLunga} verso una riga lunga`);

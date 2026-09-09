@@ -421,11 +421,11 @@ per una macchia arriva a 300. Se vuoi meno filo e accetti più tagli, abbassalo.
 scuro sono righe a tutti gli effetti: entrano nella sequenza insieme alle altre, con il loro verso,
 i loro innesti e i loro corridoi. La distanza dal muro li mette dopo le righe che devono coprire.
 
-**I passaggi si accalcano invece di sparpagliarsi.** Dove il filo di un colore è già passato una
-volta, ripassarci costa quasi niente e non aggiunge niente da vedere: si vede una linea, non due.
-Così i passaggi dello stesso colore tendono a rifare la stessa strada. Nell'esito la voce
-«Corridoi» confronta i metri di passaggio con i metri di strada distinta: più il primo supera il
-secondo, più i passaggi si sovrappongono.
+**I passaggi si spargono sulle basi, non si accalcano.** Un passaggio corre esattamente sulla linea
+del dietro di una riga, dove il pettine lo nasconde, e preferisce una base che nessun passaggio ha
+ancora usato: ripassare dove il filo c'è già non aggiunge niente da vedere, ma ammucchia filo, e
+Lorenzo vuole meno densità. Il corridoio già battuto resta possibile, ma costa più di una base libera.
+Nell'esito la voce «Corridoi» confronta i metri di passaggio con i metri di strada distinta.
 
 **Si lavora per blocchi vicini.** Le righe di un colore dentro un gruppo possono stare in pezzi
 staccati. Il tool li raggruppa in zone e finisce una zona prima di cominciare la successiva, così i

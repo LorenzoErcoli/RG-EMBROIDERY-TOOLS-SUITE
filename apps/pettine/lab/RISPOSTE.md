@@ -190,3 +190,10 @@ _Cosa ha fatto il sistema:_ Nessuna strada nascosta accettabile: la macchina tag
 
 _Come andrebbe fatto:_
 
+
+## a2-100-1000027 — taglio, ago 2, da riga 100 a riga 1000027
+
+_Cosa ha fatto il sistema:_ Nessuna strada nascosta accettabile: la macchina taglia. Distanza 120 mm.
+
+_Come andrebbe fatto:_
+

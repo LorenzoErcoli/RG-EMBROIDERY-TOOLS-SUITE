@@ -1117,6 +1117,21 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   pannello intero si genera nel browser in 37 s, 185.346 punti, 42 blocchi; il cursore a 30.000 punti
   mostra il primo ago cucito e il secondo a metà. Un limite noto: l'animazione usa `requestAnimationFrame`
   e si ferma quando la scheda del browser è nascosta; i comandi manuali no.
+- **I passaggi si spargono sulle basi, e il simulatore torna in proporzione** (Lorenzo, 2026-09-10,
+  sedicesima tornata: *«tanti passaggi passano nella stessa linea a volte. Se si riuscisse a usare più
+  linee di base dei punti pettine sarebbe meglio per creare meno densità di filo. In più il filo deve
+  passare esattamente sopra o sotto la linea del retro punto tappeto… Per il simulatore, la viz non è a
+  misura e viene schiacciata»*).
+  **I passaggi.** Il corridoio già battuto costava 0,2 e attirava tutto sulla stessa linea; ora costa
+  1,2, la base da fare 0,6 (era 0,8) e la striscia davanti 1,5: un passaggio nuovo preferisce una base
+  sua, sulla linea esatta del dietro, e ricade sul corridoio solo se non ce ne sono. Il segno del
+  corridoio è diventato un conteggio (quante volte il filo di passaggio è passato di lì, una per
+  passaggio), e c'è la misura dell'affollamento: metri dove il filo di passaggio è passato tre o più
+  volte. Misurato: **3,54 → 2,25 m** di affollamento, corridoi distinti 31,7 → 34,3 m, tagli 41 → 40,
+  filo a vista 2,79 → 3,07 m (contato onestamente: il filo sparso su basi nuove prima si nascondeva nel
+  «corridoio non si vede due volte»).
+  **Il simulatore era schiacciato** perché la cornice in millimetri stava dentro un layer flessibile
+  che la restringeva in altezza: `flex: none`, e il rapporto torna 1,19 come il pannello.
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione
