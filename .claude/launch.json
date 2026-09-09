@@ -45,6 +45,21 @@
       "port": 5310,
       "autoPort": false,
       "url": "http://127.0.0.1:5310"
+    },
+    {
+      "name": "pettine-lab",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "http-server",
+        "apps/pettine/lab",
+        "-p",
+        "5311",
+        "-c-1",
+        "--silent"
+      ],
+      "port": 5311,
+      "autoPort": false,
+      "url": "http://127.0.0.1:5311"
     }
   ]
 }

@@ -122,6 +122,13 @@ export interface ParametriPettine {
    */
   passaggioNascostoMm?: number;
   /**
+   * IL LABORATORIO DEI CASI (Lorenzo, 2026-09-10): «creiamo un lab di studi in cui proviamo a vedere
+   * come hai risolto i passaggi e io ti dico come andrebbero fatti». Quanti casi registrare per ogni
+   * tipo (taglio, passaggio lungo, corridoio di una macchia), con tutto quello che c'era intorno nel
+   * momento della decisione. 0 = nessuno. Escono in `esito.casi`, e `scripts/lab.ts` li disegna.
+   */
+  casiStudio?: number;
+  /**
    * Quanti ULTIMI colori non fanno passaggi liberi. Sotto di loro non viene più nessuno a coprire il
    * filo, quindi lì un passaggio si fa solo se resta corto (60 mm) e se il cammino è tutto in zona
    * ancora da ricamare, che i loro stessi denti copriranno. Lorenzo (2026-09-10): «negli ultimi 2
@@ -170,6 +177,29 @@ export interface StatistichePettine {
   secondi: number;
 }
 
+/** Un caso del laboratorio: la situazione nel momento in cui il filo ha deciso, e cosa ha deciso. */
+export interface CasoStudio {
+  /** `taglio` = la macchina ha tagliato · `passaggio` = passaggio cucito oltre la manopola · `innesto` = corridoio verso o da una macchia */
+  tipo: 'taglio' | 'passaggio' | 'innesto';
+  /** un nome stabile fra una corsa e l'altra: ago, riga da cui si parte, riga dove si arriva */
+  nome: string;
+  ago: number;
+  da: [number, number]; a: [number, number];
+  daId: number; aId: number;
+  /** la finestra disegnata: centro e mezzo lato, in mm */
+  cx: number; cy: number; R: number;
+  /** le righe di questo colore nella finestra, com'erano in quel momento */
+  righe: Array<{ id: number; d: number; sorm: boolean; cucita: boolean; base: number[][] }>;
+  /** la strada: quella cucita, oppure la migliore trovata anche se bocciata */
+  strada: number[][] | null;
+  /** i punti della strada che restano a vista */
+  scoperte: number[][];
+  /** la mappa a mezzo millimetro: . fuori · c tinta dell'ago · s tinte dopo · l tinte prima · B dietro libero · D dente cucito · P base cucita coperta */
+  mappa: string[];
+  giudizio: { costoMedio: number; lung: number; aVista: number; d: number } | null;
+  cosaHoFatto: string;
+}
+
 export interface EsitoPettine {
   /** L'anteprima del ricamo: basi e denti, un colore per tinta. */
   svg: string;
@@ -178,11 +208,14 @@ export interface EsitoPettine {
   /** Il file per la macchina, con l'origine nell'angolo del ritaglio. */
   dst: Uint8Array | null;
   statistiche: StatistichePettine;
+  /** i casi del laboratorio, se `casiStudio` > 0 */
+  casi: CasoStudio[];
   note: string[];
 }
 
 export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = parametriPettineDefault): EsitoPettine {
   const note: string[] = [];
+  const casi: CasoStudio[] = [];
   const console = { log: (s: string): void => { note.push(s); } };
   const LARGHEZZA_REALE_MM = ing.larghezzaRealeMm;
   const CELLA = 0.5;
@@ -1442,6 +1475,49 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     // forza: radici e punte si cuciono sempre; un capo di base o un punto di passaggio sotto il
     // millimetro si lascia perdere (il punto dopo lo assorbe)
     let nienteFinestra = 0, nienteStrada = 0, nienteCosto = 0, nienteGiro = 0;
+    // IL LABORATORIO DEI CASI: si registra la situazione nel momento della decisione
+    const CASI_MAX = Math.max(0, Math.round(par.casiStudio ?? 0));
+    const casiPerTipo = { taglio: 0, passaggio: 0, innesto: 0 };
+    const registraCaso = (tipo: CasoStudio['tipo'], p: Point, d: number, strada: Point[] | null, dOra: number, cosaHoFatto: string): void => {
+      if (!corrente || !CASI_MAX || casiPerTipo[tipo] >= CASI_MAX || !ultimoTratto || !prossimoTratto) return;
+      casiPerTipo[tipo]++;
+      const c = ago - 1;
+      const cx = (corrente.x + p.x) / 2, cy = (corrente.y + p.y) / 2, R = Math.min(60, Math.max(30, d / 2 + 15));
+      const dentro = (q: Point): boolean => Math.abs(q.x - cx) <= R && Math.abs(q.y - cy) <= R;
+      const righe: CasoStudio['righe'] = [];
+      for (const t of trattiTutti) {
+        if (t.col !== c || !t.base.some(dentro)) continue;
+        righe.push({ id: t.id, d: +t.d.toFixed(1), sorm: !!t.sorm, cucita: tempoDenti.has(t) && t !== prossimoTratto, base: ricampiona(t.base, 1.5).map((q) => [+q.x.toFixed(1), +q.y.toFixed(1)]) });
+      }
+      const via3 = strada ?? instrada(corrente, p, c, dOra, 1e9);
+      const scoperte: number[][] = [];
+      if (via3) for (let i = 1; i < via3.length; i++) {
+        const a2 = via3[i - 1], b2 = via3[i];
+        const n = Math.max(1, Math.ceil(dist(a2, b2) / CELLA));
+        for (let k = 0; k < n; k++) { const q = { x: a2.x + ((b2.x - a2.x) * (k + 0.5)) / n, y: a2.y + ((b2.y - a2.y) * (k + 0.5)) / n }; if (aVista(q, c, dOra)) scoperte.push([+q.x.toFixed(1), +q.y.toFixed(1)]); }
+      }
+      const mappa: string[] = [];
+      for (let y = -R; y <= R; y += 0.5) {
+        let riga = '';
+        for (let x = -R; x <= R; x += 0.5) {
+          const ic = cella({ x: cx + x, y: cy + y });
+          if (ic < 0 || tinta[ic] < 0) { riga += '.'; continue; }
+          if (dentiCuciti[ic]) riga += 'D';
+          else if (sulDietro(ic, c, dOra)) riga += 'B';
+          else if (pettineCucito[ic]) riga += 'P';
+          else riga += tinta[ic] === c ? 'c' : tinta[ic] > c ? 's' : 'l';
+        }
+        mappa.push(riga);
+      }
+      casi.push({
+        tipo, nome: `a${ago}-${ultimoTratto.id}-${prossimoTratto.id}`, ago,
+        da: [+corrente.x.toFixed(1), +corrente.y.toFixed(1)], a: [+p.x.toFixed(1), +p.y.toFixed(1)],
+        daId: ultimoTratto.id, aId: prossimoTratto.id, cx, cy, R, righe,
+        strada: via3 ? via3.map((q) => [+q.x.toFixed(1), +q.y.toFixed(1)]) : null, scoperte, mappa,
+        giudizio: via3 ? { costoMedio: +costoMedio(via3, c, dOra).toFixed(2), lung: +lunghezza(via3).toFixed(1), aVista: +quantoAVista(via3, c, dOra).toFixed(1), d: +d.toFixed(1) } : null,
+        cosaHoFatto,
+      });
+    };
     // l'orologio della cucitura: a ogni dente il momento in cui e' stato cucito, per la verifica finale
     let orologio = 0;
     const tempoDenti = new Map<Tratto, Float64Array>();
@@ -1491,6 +1567,8 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       const dOra = ultimoTratto ? ultimoTratto.d : Infinity;
       const strada = trovaStrada(corrente, p, dOra, portata);
       if (strada && d > PASSAGGIO_MM) passaggiNascosti++;
+      if (strada && d > PASSAGGIO_MM) registraCaso(portata === MACCHIA_CORRIDOIO_MM ? 'innesto' : 'passaggio', p, d, strada, dOra, `Passaggio cucito: ${d.toFixed(0)} mm in linea d'aria, ${lunghezza(strada).toFixed(0)} mm di strada, ${quantoAVista(strada, ago - 1, dOra).toFixed(1)} mm a vista, costo medio ${costoMedio(strada, ago - 1, dOra).toFixed(1)}.`);
+      if (!strada) registraCaso('taglio', p, d, null, dOra, `Nessuna strada nascosta accettabile: la macchina taglia. Distanza ${d.toFixed(0)} mm.`);
       if (strada) {
         // i punti del passaggio: uno ogni 3 mm, e l'ultimo mai sotto il millimetro (R3) — l'arrivo e'
         // il capo della riga e deve essere esatto, quindi si toglie il penultimo invece di accorciare
@@ -2342,6 +2420,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       svg: svgPettine || svgVerifica,
       svgVerifica,
       dst,
+      casi,
       statistiche: {
         larghezzaMm: WM, altezzaMm: HM, riquadro: RQ, colori,
         famiglie: famOk, famiglieSaltate: famSaltate,
