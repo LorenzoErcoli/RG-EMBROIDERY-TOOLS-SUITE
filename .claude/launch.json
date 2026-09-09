@@ -4,7 +4,16 @@
     {
       "name": "shell-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--workspace", "apps/shell", "--", "--port", "5301", "--strictPort"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--workspace",
+        "apps/shell",
+        "--",
+        "--port",
+        "5301",
+        "--strictPort"
+      ],
       "port": 5301,
       "autoPort": false,
       "url": "http://127.0.0.1:5301"
@@ -12,10 +21,30 @@
     {
       "name": "oblique-dev",
       "runtimeExecutable": "npm",
-      "runtimeArgs": ["run", "dev", "--workspace", "apps/oblique"],
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--workspace",
+        "apps/oblique"
+      ],
       "port": 5277,
       "autoPort": false,
       "url": "http://127.0.0.1:5277"
+    },
+    {
+      "name": "pettine-out",
+      "runtimeExecutable": "npx",
+      "runtimeArgs": [
+        "http-server",
+        "apps/pettine/scripts/out",
+        "-p",
+        "5310",
+        "-c-1",
+        "--silent"
+      ],
+      "port": 5310,
+      "autoPort": false,
+      "url": "http://127.0.0.1:5310"
     }
   ]
 }

@@ -1371,7 +1371,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     // Lorenzo, «non ci interessa se questo necessita di piu' filo»
     const MACCHIA_CORRIDOIO_MM = 150;
     // di quanto si sfalsano, a destra e a sinistra, i punti di un passaggio: mosso, non dritto
-    const MOSSO_MM = 0.6;
+    const MOSSO_MM = 0.4;
     let celleCorridoio = 0;
     let zoneTotali = 0, cambiZona = 0;
     let righeInnestate = 0, macchieInnestate = 0, macchieCandidate = 0, macchieSenzaVicina = 0, macchieNegateDallOrdine = 0, macchieSenzaCorridoio = 0;
@@ -1405,7 +1405,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       const limite = ultimi ? Math.min(PASSAGGIO_MM, 60) : PASSAGGIO_MM;
       if (d <= limite) return instrada(da, a, ago - 1, dOra, ultimi ? 2.5 : 8);
       if (ultimi || d > portata) return null;
-      const v = instrada(da, a, ago - 1, dOra, 2);
+      const v = instrada(da, a, ago - 1, dOra, 3);
       return v && quantoAVista(v, ago - 1, dOra) <= SCOPERTO_MAX_MM ? v : null;
     };
     const vaiA = (p: Point, portata?: number): void => {
@@ -1581,18 +1581,24 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       if (battuto[i]) return 0.2;              // il corridoio: qui il filo di questo colore c'e' gia'
       const inBanda = bordoDist[i] <= BANDA_CELLE, altra = bordoAltra[i];
       if (t > c) {
-        if (inBanda) return 1;                 // la banda del bordo di un colore che viene dopo: sparisce
+        // la banda del bordo di un colore che viene dopo: sparisce, ma e' fuori dal tracciato del
+        // nostro colore, e Lorenzo preferisce il dietro dell'ultima riga nostra («magari l'ultimo,
+        // che poi sara' coperto dal colore dopo»): quindi costa piu' di quella, non meno
+        if (inBanda) return 2.5;
         return 8;                              // sotto il corpo di quel colore: il pettine e' rado, si vede fra i denti
       }
       if (t === c) {
         const d = distDaMuro[i];
-        // IL CORRIDOIO «DOVE POI ANDRA' IL FILO» (Lorenzo): sulla linea esatta di una base futura del
-        // nostro colore il passaggio finisce sotto quel filo e sotto i denti della riga dopo. Solo
-        // sulla linea, mezzo millimetro: l'area attorno resta a vista, fra un dente e l'altro.
-        if (soprafilo[i] && d >= 0 && d > dOra - BASI_MM * 0.5) return 1;
+        // IL DIETRO DEL PETTINE (Lorenzo, 2026-09-10, decima tornata: «perche' non passi sopra il
+        // dietro dei pettini?»): la linea di base della riga appena cucita, e di quelle che verranno,
+        // sta sotto i denti della riga dopo. E' l'unica strada dentro il proprio colore: solo sulla
+        // linea, mezzo millimetro. L'area attorno resta a vista fra un dente e l'altro, e costa tanto
+        // da non passare mai il giudizio: prima costava 8, quanto la soglia, e una riga dritta
+        // attraverso l'interno passava — sono i passaggi «fuori dal tracciato» del primo ago.
+        if (soprafilo[i] && d >= 0 && d > dOra - BASI_MM * 0.5) return 0.8;
         if (inBanda && altra > c) return 1.5;  // il nostro bordo verso lo scuro: sormonto nostro e denti suoi
         if (inBanda && altra >= 0) return 4;   // il nostro bordo verso il chiaro: i denti della riga di bordo ci arrivano
-        return d >= 0 && d < dOra - BASI_MM * 1.5 ? 12 : 8;   // dentro il nostro colore si vede, fatto o da fare
+        return 16;                             // dentro il nostro colore, fuori dalle righe: si vede
       }
       if (inBanda && altra === c) return 4;    // subito oltre il nostro bordo, sul chiaro: i nostri denti ci arrivano
       return 14;                               // sul chiaro gia' fatto: a vista

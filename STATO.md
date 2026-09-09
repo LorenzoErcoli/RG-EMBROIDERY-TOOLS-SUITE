@@ -962,6 +962,19 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   **Il lucchetto sul pannello di prova cambia con onestà:** da «mai un taglio» a «al massimo un
   taglio» — quel collegamento fra righe lontane non ha nessuna strada nascosta, e la regola dice di
   tagliare. In compenso la macchia del secondo pezzo si incastra intera (11 righe).
+- **Il dietro del pettine è la strada, non la banda dal lato scuro** (Lorenzo, 2026-09-10, decima
+  tornata, guardando le sei immagini per ago: *«il primo ago è il peggiore. Fai passaggi fuori dal
+  tracciato. Perché non passi sopra il dietro dei pettini? Magari l'ultimo che poi sarà coperto dal
+  colore dopo?»*). Visto nell'immagine: i passaggi del primo ago correvano sopra il bordo, dalla parte
+  del colore scuro — la banda di là costava 1, la linea di base propria 1 e la banda di qua 1,5, e a
+  parità di costo l'A* sceglie la strada più corta, che di là è più diritta. Tre cambi: la linea di base
+  propria (la riga appena cucita e quelle future) costa **0,8**, la banda dal lato scuro **2,5** (resta
+  nascosta, e il corridoio lungo la accetta fino a 3), l'interno del proprio colore fuori dalle righe
+  **16** invece di 8 — prima costava quanto la soglia, e una riga dritta attraverso l'interno passava.
+  L'ondulazione scende da 0,6 a 0,4 mm: a 0,6 sembrava una sega. Misurato: 217 tagli, 1,43 m a vista,
+  stessi numeri di prima; nell'immagine i passaggi del primo ago corrono dentro il suo tracciato, sul
+  dietro delle righe. Lo script `apps/pettine/scripts/per-colore.mjs` fa un'immagine per ago coi
+  passaggi in rosa, ed è il modo giusto di guardare questa cosa.
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione
