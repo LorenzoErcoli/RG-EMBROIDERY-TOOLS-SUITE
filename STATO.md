@@ -692,6 +692,28 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
 - **Nell'anteprima i passaggi si distinguono dal ricamo** (più sottili e trasparenti) e si possono
   spegnere: sono fatti di punti da 3 mm, quindi a occhio sembrano rette nette anche dove il ricamo
   li coprirà — ed è per questo che sembravano un difetto.
+- **«LE LINEE CHE TAGLIANO IL RICAMO» NON ERANO LINEE: erano righe che si stringono.** Lorenzo
+  (2026-09-10): *«in basso si creano delle linee orizzontali che non corrispondono a niente delle
+  curve… creano delle linee che tagliano strano il ricamo, e anche tu le evidenzi come verdi»*. Il
+  verde della verifica è il metro «denso», e cercando i colpevoli nell'SVG che aveva esportato non è
+  saltata fuori nessuna linea diagonale: le basi lì sono righe orizzontali normali, lunghe fino a
+  210 mm, con il verso a posto. **Il difetto è la spaziatura**, e per vederlo mancava la misura
+  giusta: il metro contava celle, non millimetri. Ora si misura, per ogni punto di base, quanto
+  dista la riga più vicina che non sia la sua. Coi parametri di Lorenzo (passo 3): mediana 2,90 mm,
+  ma il **10% sotto 1,09** e il **14,9% dei punti con una riga a meno di mezzo passo** — sono bande
+  più fitte e scure, ed è quello che si vede come «una linea che taglia».
+- **Due terzi di quegli avvicinamenti erano lo SCONFINAMENTO fra blocchi,** che valeva un passo e
+  mezzo (3,5 mm con passo 3): le righe di due gruppi confinanti si affiancavano per tutta la giunta.
+  Portato a **1 mm**, misurato che la copertura non ne soffre: righe addosso 14,9 → 8,1%, denso
+  5,8 → 2,7%, e il metro del filo resta 0,2%. Con passo 2: addosso 9,7 → 5,5%, denso 3,2 → 1,5%,
+  metro del filo 0,1% in tutti e due i casi. Lo sconfinamento è ora **un campo del pannello**, in
+  «Sovrapposizione»: è la manopola che Lorenzo aveva chiesto per limitare la sbavatura dove lo
+  stacco è secco. Resta il **4,9% dentro lo stesso gruppo**, che è il difetto vero e viene dalla
+  crescita: quello si affronta ripensando come il fronte avanza, ed è il prossimo passo.
+- **Provate e scartate, misurando:** tagliare dal fronte i tratti che corrono paralleli alla
+  direzione di crescita (i «fianchi») non cambia le righe dritte e peggiora la copertura; spegnere i
+  rammendi non tocca le diagonali (identiche, 15 per 1,9 m); abbassare chiusura e lisciatura non
+  sposta il denso (5,6-5,9% in tutti i casi). Il colpevole non era nessuno dei tre.
 - **Da Lorenzo, primo dato di macchina:** distanza fra le linee 1,8 con interlinea 1,5 è **troppo
   fitta**. Altri provini in corso; i default restano 2 e 1,5 finché non lo dice lui.
 - **LA RIAPERTURA DEL PROGETTO, fatta (R9/R27).** Sia il DST sia l'SVG portano dentro parametri,

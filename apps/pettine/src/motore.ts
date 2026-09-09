@@ -65,7 +65,12 @@ export interface ParametriPettine {
   chiudiMm: number;
   /** Fino a quest'area (mm²) un gruppo va a traslazione del muro chiaro. */
   traslaMaxMm2: number;
-  /** Sconfinamento oltre il bordo del gruppo (mm). */
+  /**
+   * Sconfinamento oltre il bordo del gruppo (mm): quanto le righe di un gruppo entrano in quello
+   * accanto, perche' la giunta non resti nuda. Misurato: a 2,5 mm il 9,7% dei punti di base ha
+   * un'altra riga a meno di mezzo passo — e sono bande piu' fitte e scure che si vedono nel ricamo;
+   * a 1 mm scendono al 5,5% e il pannello resta coperto lo stesso (metro del filo 0,1% in tutti e due).
+   */
   sconfinaMm: number;
   /** I denti: lunghezza minima e massima (mm), passo lungo la base (mm, mai sotto 1), apertura (gradi). */
   denteMinMm: number;
@@ -92,7 +97,7 @@ export interface ParametriPettine {
 
 export const parametriPettineDefault: ParametriPettine = {
   basiMm: 2, sormontoMm: 4, addolcisciMm: 0.15, lisciaMaxMm: 8, spianaMm: 5, chiudiMm: 3,
-  traslaMaxMm2: 9000, sconfinaMm: 2.5,
+  traslaMaxMm2: 9000, sconfinaMm: 1,
   denteMinMm: 3, denteMaxMm: 5, passoMm: 1.5, aperturaDeg: 40, nettoMm: 2.5,
   denti: true, modo: 'auto', mostraNudi: false, mostraPassaggi: true, dst: true,
 };
@@ -106,6 +111,9 @@ export interface StatistichePettine {
   rammendi: number;
   denti: number; filoDentiM: number; dentiFermati: number; dentiAttraversano: number;
   nudoPct: number; densoPct: number; nudoFiloPct: number;
+  /** La spaziatura vera fra le righe, in millimetri, e quanto spesso si stringono. */
+  spaziaturaMedianaMm: number; spaziaturaDecimoMm: number;
+  righeAddossoPct: number; righeAddossoStessoGruppoPct: number;
   /** Solo col DST. */
   punti: number; filoM: number; blocchi: number; salti: number; saltiM: number;
   passaggi: number; passaggiM: number; puntiCorti: number;
@@ -985,7 +993,50 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
   const basiM = lung.reduce((a, b) => a + b, 0) / 1000;
   console.log(`${famOk} gruppi, ${famSaltate} saltati · ${lineeFinali.length} tratti di base (${trattiCorti} sotto i 5 mm) · ${basiM.toFixed(1)} m di basi · ${rammendi} rammendi`);
 
-  // --- 5. il metro ------------------------------------------------------------------------------------------
+  // LA SPAZIATURA VERA, in millimetri. Il metro «denso» conta celle e dice poco; qui si misura, per
+// ogni punto di base, quanto dista la riga più vicina che non sia la sua. Se il passo è 3 mm e il 10°
+// percentile è 0,9, una riga su dieci sta addosso a un'altra: nel ricamo è una banda più fitta e
+// scura, ed è quello che Lorenzo vede come «linee che tagliano strano» (2026-09-10). Si separa
+// quello che succede DENTRO un gruppo — dove è un difetto — da quello che succede fra gruppi
+// diversi, dove le righe si sovrappongono apposta (lo sconfinamento serve a non lasciare la giunta
+// nuda) e quindi non è un difetto.
+const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoStessoGruppo: 0 };
+{
+  const C = 4;
+  const griglia = new Map<string, Array<[number, number, number, number]>>();   // x, y, id, famiglia
+  for (const t of trattiTutti) for (let i = 0; i < t.base.length; i += 4) {
+    const q = t.base[i];
+    const k = `${Math.floor(q.x / C)},${Math.floor(q.y / C)}`;
+    const l = griglia.get(k) ?? []; l.push([q.x, q.y, t.id, t.fi]); griglia.set(k, l);
+  }
+  const dist: number[] = [];
+  let vicini = 0, viciniStesso = 0, campioni = 0;
+  for (const t of trattiTutti) for (let i = 0; i < t.base.length; i += 8) {
+    const q = t.base[i];
+    let best = Infinity, bestFam = -1;
+    const cx = Math.floor(q.x / C), cy = Math.floor(q.y / C);
+    for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
+      for (const [px, py, id, fam] of griglia.get(`${cx + dx},${cy + dy}`) ?? []) {
+        if (id === t.id) continue;
+        const dd = Math.hypot(px - q.x, py - q.y);
+        if (dd < best) { best = dd; bestFam = fam; }
+      }
+    }
+    if (best > 12) continue;
+    campioni++; dist.push(best);
+    if (best < BASI_MM / 2) { vicini++; if (bestFam === t.fi) viciniStesso++; }
+  }
+  dist.sort((a, b) => a - b);
+  if (campioni) {
+    spaziatura.mediana = dist[Math.floor(campioni / 2)];
+    spaziatura.decimo = dist[Math.floor(campioni / 10)];
+    spaziatura.sottoMezzoPasso = (vicini / campioni) * 100;
+    spaziatura.sottoMezzoPassoStessoGruppo = (viciniStesso / campioni) * 100;
+    console.log(`SPAZIATURA fra le righe: mediana ${spaziatura.mediana.toFixed(2)} mm · 10° percentile ${spaziatura.decimo.toFixed(2)} · sotto mezzo passo ${spaziatura.sottoMezzoPasso.toFixed(1)}% (di cui ${spaziatura.sottoMezzoPassoStessoGruppo.toFixed(1)}% dentro lo stesso gruppo)`);
+  }
+}
+
+// --- 5. il metro ------------------------------------------------------------------------------------------
   // denso = due LIVELLI diversi entro 0,35 passi. Contare le polilinee contava due volte lo stesso
   // livello spezzato a un cambio di colore: il metro diceva 27% denso su linee a 4 mm esatti.
   const ultimoId = new Int32Array(GW * GH).fill(-1);
@@ -1421,6 +1472,10 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
         nudoPct: (nude / Math.max(1, dentro)) * 100,
         densoPct: (dense / Math.max(1, dentro)) * 100,
         nudoFiloPct: nudoFiloPct,
+        spaziaturaMedianaMm: spaziatura.mediana,
+        spaziaturaDecimoMm: spaziatura.decimo,
+        righeAddossoPct: spaziatura.sottoMezzoPasso,
+        righeAddossoStessoGruppoPct: spaziatura.sottoMezzoPassoStessoGruppo,
         ...statDst,
         secondi: (Date.now() - t0) / 1000,
       },

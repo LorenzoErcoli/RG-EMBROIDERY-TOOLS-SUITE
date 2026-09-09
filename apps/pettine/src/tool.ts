@@ -597,6 +597,8 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
         ];
         if (s.denti) righe.push(['Denti', `${n0(s.denti)} · ${n1(s.filoDentiM)} m`]);
         righe.push(['Scoperto', `${n1(s.nudoFiloPct)} %`]);
+        righe.push(['Spaziatura', `${n1(s.spaziaturaMedianaMm)} mm · il 10% sotto ${n1(s.spaziaturaDecimoMm)}`]);
+        righe.push(['Righe addosso', `${n1(s.righeAddossoPct)} % · in un gruppo ${n1(s.righeAddossoStessoGruppoPct)} %`]);
         if (s.punti) righe.push(
           ['Punti', n0(s.punti)],
           ['Filo', `${n1(s.filoM)} m`],
