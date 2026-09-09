@@ -863,6 +863,38 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   dove l'ultimo punto dell'uno cade a un decimo dal primo dell'altro. Tolto quel punto: **12**, come
   prima. **Provata e scartata:** inglobare ogni riga corta che non si attacca direttamente (303
   inglobate) — peggiora tutto, salti 167 e filo a vista 3,50, perché rompe le catene che funzionavano.
+- **I corridoi, e il tetto dei passaggi nascosti come manopola** (Lorenzo, 2026-09-10, settima
+  tornata, con lo screenshot del software di ricamo: *«i passaggi non sono troppo sensati. il problema
+  è che se passano così si vedono nei punti successivi… cercare di passare, a costo di passare più
+  volte, sullo stesso punto del passaggio successivo dello stesso colore, cercare di lavorare per
+  blocchi vicini e fare rasafilo solo in blocchi esterni»*).
+  **Il corridoio: quello che ha funzionato.** Dove il filo di un colore è già passato, ripassarci
+  costa 0,2 invece di 1, **e soprattutto non conta più come filo a vista**: si vede una linea, non
+  due. È stata questa seconda metà a cambiare tutto — da sola la prima non serviva a niente, perché
+  il giudizio «troppo scoperto» continuava a rifiutare le strade buone (su 245 passaggi lunghi
+  tentati, 93 respinti). Con la correzione i respinti diventano 13, i tagli scendono da 149 a **137**
+  e il filo a vista da 2,85 a 2,67 m.
+  **Provata e scartata, misurando: il passaggio che segue le righe invece di attraversarle.** Sembra
+  ovvio — un passaggio che corre nella striscia fra due righe sta sotto i denti, uno che le taglia di
+  traverso sta sopra le basi — e infatti le diagonali scendevano da 335 a 95. Ma i tagli salivano a
+  532: penalizzando l'attraversamento, l'A* trova cammini più lunghi e più esposti, e 89 strade su 245
+  vengono respinte perché restano troppo a vista. Provato a 6 e a 3, con il tetto dei giri allargato
+  da 4× a 6×, con la finestra di ricerca da 20 a 45 mm e con il budget di nodi da 80 a 300 mila:
+  nessuna delle tre era il collo di bottiglia. Tolto.
+  **Provate e confermate come già a posto: le zone.** «Lavorare per blocchi vicini» era già vero: i
+  pezzi staccati sono 85 e la cucitura ci entra 85 volte, una per zona. Il codice che lo garantisce
+  c'è lo stesso, perché ora è misurato e non solo sperato.
+  **Il baratto vero è una manopola, e la decisione è di Lorenzo** (R30): «Passaggio nascosto più
+  lungo», nuovo parametro `passaggioNascostoMm`, default **90 mm**.
+
+  | tetto | tagli | filo a vista | passaggio più lungo | di traverso alle righe |
+  |---|---|---|---|---|
+  | 250 mm | 144 | 2,79 m | 248 mm | 343 |
+  | **90 mm** | **197** | **2,05 m** | **89 mm** | **289** |
+
+  Il default sta in basso perché è quello che Lorenzo ha chiesto guardando il ricamo: rasafilo sui
+  blocchi esterni, niente linee lunghe che attraversano. Un lucchetto nei test dice che, qualunque
+  valore abbia la manopola, nessun passaggio la supera.
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione

@@ -3626,6 +3626,9 @@ console.log('Il punto pettine: il ricamo esce, e il progetto torna dentro il fil
   // e proprio perche' non taglia, nessuna riga va spezzata per inglobarne un'altra: l'innesto costa
   // filo di impuntura, e si paga solo dove serve a evitare un taglio o un passaggio lungo.
   check('nessuna riga spezzata dove non serve', st.righeInglobate, 0);
+  // il tetto dei passaggi nascosti e' il baratto fra rasafili e linee lunghe, ed e' una manopola:
+  // qualunque valore abbia, nessun passaggio lo puo' superare.
+  check('nessun passaggio piu' + String.fromCharCode(39) + ' lungo del suo tetto', st.passaggioPiuLungoMm <= (par.passaggioNascostoMm ?? 90) + 0.5, true);
   check('il filo di passaggio a vista e' + String.fromCharCode(39) + ' poco (sotto il 2% del filo)', st.passaggiScopertiM < st.filoM * 0.02, true);
   // R9/R27: il file si riapre. Il progetto sta nel DST dopo l'END e in un <metadata> dell'SVG.
   const riletto = rg.readDstMetadata(es.dst);

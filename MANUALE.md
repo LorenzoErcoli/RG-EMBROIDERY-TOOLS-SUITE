@@ -367,8 +367,23 @@ copertura: se la piccola va sopra la grande si entra dopo il tratto che le sta a
 comunque, anche a costo di vedersi un po'. Oltre quella misura il passaggio si fa lo stesso, ma
 soltanto se il cammino resta nascosto sotto ciò che verrà dopo — il bordo dei blocchi di colore
 successivi — e se a vista ne rimangono meno di 3 mm; altrimenti si taglia. Negli **ultimi due
-colori** non si fanno: sotto di loro non viene più nessuno a coprire. Su un pannello a sei tinte
-questo porta i tagli da 424 a 168, al prezzo di una ventina di metri di filo di passaggio in più.
+colori** non si fanno: sotto di loro non viene più nessuno a coprire.
+
+**Fin dove arriva un passaggio nascosto: è un baratto, e la manopola è tua.** «Passaggio nascosto
+più lungo» decide quanto si può andare lontano prima di arrendersi e tagliare. Alto, i rasafili
+sono pochi ma restano linee lunghe che attraversano il ricamo; basso, le linee spariscono e i tagli
+aumentano. Sul pannello a sei tinte: a 250 mm sono 144 tagli, con linee fino a 25 cm e 2,8 m di filo
+a vista; a 90 mm, che è il default, sono 197 tagli, niente più lungo di 9 cm e 2,05 m a vista.
+
+**I passaggi si accalcano invece di sparpagliarsi.** Dove il filo di un colore è già passato una
+volta, ripassarci costa quasi niente e non aggiunge niente da vedere: si vede una linea, non due.
+Così i passaggi dello stesso colore tendono a rifare la stessa strada. Nell'esito la voce
+«Corridoi» confronta i metri di passaggio con i metri di strada distinta: più il primo supera il
+secondo, più i passaggi si sovrappongono.
+
+**Si lavora per blocchi vicini.** Le righe di un colore dentro un gruppo possono stare in pezzi
+staccati. Il tool li raggruppa in zone e finisce una zona prima di cominciare la successiva, così i
+collegamenti restano corti e il taglio si paga solo per cambiare blocco.
 
 ## Se qualcosa non torna
 
