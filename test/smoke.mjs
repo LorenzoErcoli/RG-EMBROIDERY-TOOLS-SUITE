@@ -43,6 +43,7 @@ export { larghezzaTransizione, cresciVersoISuccessivi, frastaglia } from ${JSON.
 export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('apps/pittorico/src/primitives.ts'))};
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
+export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -3587,6 +3588,41 @@ console.log('Punto Pittorico — riempimento curvo a distanza costante');
   }
 }
 
+console.log('');
+console.log('Il punto pettine: il ricamo esce, e il progetto torna dentro il file (R9/R27)');
+{
+  // Un gruppo con dentro quattro tinte piu' un secondo gruppo sotto: piccolo apposta, ma passa per
+  // tutta la catena (gruppi, muri, righe, denti, sormonto, ordine di cucitura, passaggi, DST).
+  const svgPettine = readFileSync(join(here, 'fixtures/pettine-due-blocchi.svg'), 'utf8');
+  const progetto = { rgProject: 'pettine', versione: 1, nomeSvg: 'due-blocchi.svg', ritaglio: null };
+  const par = { ...rg.parametriPettineDefault, basiMm: 2, passoMm: 1.5, denteMinMm: 3, denteMaxMm: 5 };
+  const es = rg.costruisciPettine({ testoSvg: svgPettine, larghezzaRealeMm: 60, foto: null, progetto }, par);
+  const st = es.statistiche;
+  check('i due gruppi si riconoscono', st.famiglie, 2);
+  check('le righe di base ci sono', st.tratti > 10, true);
+  check('i denti pure', st.denti > 100, true);
+  check('il pannello resta coperto (meno dell'+String.fromCharCode(39)+'1% scoperto)', st.nudoFiloPct < 1, true);
+  // L'INVARIANTE DI MACCHINA: una riga cucita dopo una che le sta addosso e piu' avanti le
+  // rovinerebbe il dietro. Deve essere zero, sempre.
+  check('nessuna riga cucita fuori ordine', st.righeFuoriOrdine, 0);
+  check('nessun punto sotto il millimetro (R3)', st.puntiCorti, 0);
+  check('il filo di passaggio a vista e' + String.fromCharCode(39) + ' poco (sotto il 2% del filo)', st.passaggiScopertiM < st.filoM * 0.02, true);
+  // R9/R27: il file si riapre. Il progetto sta nel DST dopo l'END e in un <metadata> dell'SVG.
+  const riletto = rg.readDstMetadata(es.dst);
+  check('il progetto torna dal DST', riletto && riletto.rgProject, 'pettine');
+  check('...con dentro il nome del disegno', riletto && riletto.nomeSvg, 'due-blocchi.svg');
+  check('...e la cucitura resta leggibile', rg.readDst(es.dst).blocks.length, st.blocchi);
+  check('il progetto sta anche nell' + String.fromCharCode(39) + 'SVG', es.svg.includes('<metadata id="rg-progetto">'), true);
+  // il disegno non deve unire cio' che il filo non unisce: nessun segmento oltre i 12 mm
+  let piuLungo = 0;
+  for (const m of es.svg.matchAll(/<path d="([^"]*)"/g)) {
+    for (const sub of m[1].split('M').slice(1)) {
+      const pts = [...sub.matchAll(/(-?[0-9.]+) (-?[0-9.]+)/g)].map((q) => [Number(q[1]), Number(q[2])]);
+      for (let i = 1; i < pts.length; i++) piuLungo = Math.max(piuLungo, Math.hypot(pts[i][0] - pts[i - 1][0], pts[i][1] - pts[i - 1][1]));
+    }
+  }
+  check('nel disegno non ci sono rette lunghe che il ricamo non ha', piuLungo < 12, true);
+}
 console.log('');
 console.log('Il motore del pettine gira anche nel browser');
 {

@@ -299,6 +299,9 @@ sola: decidere dove il bordo fra due blocchi **stacca** (e allora il dente si fe
 **Come si lavora.**
 1. **Blocchi e fotografia** — carica i due file e scrivi la **larghezza reale del pannello**: da
    quella viene la scala di tutto, quindi va messa prima di guardare qualunque millimetro.
+   *Riapri un progetto* rimette tutto com'era partendo da un DST o da un SVG usciti da qui: dentro
+   ci sono i blocchi, il ritaglio e ogni parametro. La fotografia no — pesa troppo per stare dentro
+   ogni swatch — e va ricaricata; il pannello ti dice quale era.
 2. **Ritaglio** — il rettangolo da generare, per provare uno **swatch** invece del pannello intero.
    Si scrive nei quattro campi (gli stessi X e Y che leggi in Illustrator) oppure si sceglie
    *Ritaglia* e lo si tira col mouse sull'anteprima. *Tutto il pannello* lo spegne. Il DST che esce
@@ -324,6 +327,12 @@ sola: decidere dove il bordo fra due blocchi **stacca** (e allora il dente si fe
 0,75 mm da qualunque filo, cioè dove si vedrebbe la tela. Sotto lo 0,5 % è un pannello pieno. Poi i
 numeri della cucitura: punti, filo, aghi, blocchi e salti. Col ritaglio acceso valgono per lo
 swatch, non per il pannello.
+
+**Il file si riapre** (R9/R27). Sia il DST sia l'SVG portano dentro il progetto: nel DST sta dopo il
+comando di fine, dove la macchina non lo legge; nell'SVG in un `<metadata>`, che non si disegna.
+Quindi da uno swatch di due settimane fa si torna ai suoi numeri senza doverli ricordare — e se un
+file è uscito prima che esistesse questa cosa, i parametri si possono comunque **misurare dal filo**
+con `apps/pettine/scripts/misura-dst.ts`.
 
 **Come cuce, e perché in quest'ordine.** Ogni linea di base coi suoi denti è un filo continuo:
 radice, punta, di nuovo la stessa radice, poi la radice dopo. Dentro un blocco le linee si cuciono

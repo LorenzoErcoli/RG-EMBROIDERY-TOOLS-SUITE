@@ -675,8 +675,22 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   accorciato a un bordo netto).
 - **Da Lorenzo, primo dato di macchina:** distanza fra le linee 1,8 con interlinea 1,5 è **troppo
   fitta**. Altri provini in corso; i default restano 2 e 1,5 finché non lo dice lui.
-- **Aperto:** la riapertura del progetto (R9/R27) non c'è ancora — un DST esportato non si riapre
-  coi suoi parametri e col suo ritaglio; e l'etichetta «Densità del pettine» nomina una misura
+- **LA RIAPERTURA DEL PROGETTO, fatta (R9/R27).** Sia il DST sia l'SVG portano dentro parametri,
+  ritaglio, larghezza reale, nomi dei file e **l'SVG dei blocchi** (50 kB dentro un DST da 600: il
+  file si riapre da solo, come in zone-pattern). Nel DST sta nel footer dopo l'END, dove la macchina
+  non guarda; nell'SVG in un `<metadata>`, che non si disegna. La **fotografia no**: sarebbero altri
+  300 kB dentro ogni swatch, e il pannello dice quale ricaricare. Provato in browser: da un DST
+  tornano i 19 gruppi, il ritaglio 98 × 107 a 176/201 e tutti i campi; riaprendo l'SVG e premendo
+  «Genera» escono gli stessi 15.082 punti dello script.
+- **Il primo test end-to-end del pettine** (`test/fixtures/pettine-due-blocchi.svg`, un gruppo con
+  quattro tinte più un secondo gruppo sotto: 60 × 36 mm, gira in un attimo). Tredici asserzioni che
+  passano per tutta la catena — gruppi, righe, denti, copertura, **righe fuori ordine = 0**, punti
+  sotto il millimetro = 0, filo di passaggio a vista sotto il 2%, il progetto che torna dal DST e
+  dall'SVG, e nessuna retta oltre i 12 mm nel disegno. Ogni lucchetto è stato provato **rompendo
+  apposta** quello che sorveglia: la prima fixture non faceva scattare quello sulle rette lunghe
+  (il sormonto non si attivava, perché fra famiglie diverse non esiste) ed è stata rifatta finché
+  non è diventata rossa al momento giusto.
+- **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione
   è sua.

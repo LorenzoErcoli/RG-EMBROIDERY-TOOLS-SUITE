@@ -51,10 +51,23 @@ if (process.env.RITAGLIO) {
   ritaglio = { x, y, larghezza, altezza };
 }
 
+const testoSvg = readFileSync(fileSvg, 'utf8');
+// il progetto viaggia dentro le uscite (R9/R27): un file fatto qui si riapre nel tool
+const progetto = {
+  rgProject: 'pettine',
+  versione: 1,
+  salvato: new Date().toISOString().slice(0, 10),
+  par,
+  ritaglio,
+  larghezzaRealeMm: 419.45,
+  nomeSvg: fileSvg.split(/[\/]/).pop(),
+  nomeFoto: DENTI && FOTO !== 'no' ? FOTO.split(/[\/]/).pop() : '',
+  blocchi: testoSvg.length <= 400_000 ? testoSvg : null,
+};
 const esito = costruisciPettine(
   // FOTO=no per provare senza fotografia, come quando nel tool non se ne carica una: i denti non
   // si fermano piu' ai bordi netti, e nessun dente esce accorciato
-  { testoSvg: readFileSync(fileSvg, 'utf8'), larghezzaRealeMm: 419.45, foto: DENTI && FOTO !== 'no' ? leggiBmp(FOTO) : null, ritaglio },
+  { testoSvg, larghezzaRealeMm: 419.45, foto: DENTI && FOTO !== 'no' ? leggiBmp(FOTO) : null, ritaglio, progetto },
   par,
 );
 for (const riga of esito.note) console.log(riga);

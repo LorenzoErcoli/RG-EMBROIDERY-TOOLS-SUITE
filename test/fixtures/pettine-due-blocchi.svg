@@ -1,0 +1,17 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 60">
+  <!-- UN SOLO gruppo con dentro quattro tinte: e' il caso vero del pannello, dove una famiglia
+       contiene il gradiente. Le due macchie CHIARE in alto sono separate da quella media apposta:
+       cucendo la fascia scura, il sormonto col chiaro esiste solo sotto le due macchie e salta il
+       mezzo — ed e' li' che l'anteprima disegnava una retta lunga che il ricamo non ha.
+       Il secondo gruppo, sotto, serve a far esistere un confine fra famiglie. -->
+  <style>.st0{fill:#e8e6e0}.st1{fill:#7a99bb}.st2{fill:#123456}.st3{fill:#0b131e}</style>
+  <g id="Livello_1">
+    <polygon class="st0" points="0,0 30,0 30,30 0,30"/>
+    <polygon class="st1" points="30,0 70,0 70,30 30,30"/>
+    <polygon class="st0" points="70,0 100,0 100,30 70,30"/>
+    <polygon class="st2" points="0,30 100,30 100,50 0,50"/>
+  </g>
+  <g id="Livello_2">
+    <polygon class="st3" points="0,50 100,50 100,60 0,60"/>
+  </g>
+</svg>

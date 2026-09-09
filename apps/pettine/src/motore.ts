@@ -42,6 +42,12 @@ export interface IngressoPettine {
   foto?: PixelImage | null;
   /** Il ritaglio: senza, tutto il pannello. */
   ritaglio?: Riquadro | null;
+  /**
+   * Il PROGETTO da mettere dentro le uscite (R9/R27): finisce nel DST dopo il comando di fine — la
+   * macchina lo ignora, il tool lo rilegge — e in un `<metadata>` dell'SVG. Chi chiama decide cosa
+   * ci va: qui non si sa niente di nomi di file e di pannelli.
+   */
+  progetto?: Record<string, unknown> | null;
 }
 
 export interface ParametriPettine {
@@ -1023,8 +1029,10 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
   const legenda = colori.map((c, i) => `<rect x="${(8 + i * 22).toFixed(1)}" y="2" width="6" height="6" fill="${c}" stroke="#333" stroke-width="0.2"/><text x="${(15 + i * 22).toFixed(1)}" y="7" font-family="Helvetica,Arial,sans-serif" font-size="4" fill="#222">${i + 1}${i === 0 ? ' (grigio)' : ''}</text>`).join('');
   const nota = `<text x="8" y="14" font-family="Helvetica,Arial,sans-serif" font-size="3.6" fill="#222">livelli della distanza dal muro: ordine 1→6 dal chiaro allo scuro · ROSSO muro di partenza · BLU muro opposto · FRECCE verso del pettine · ARANCIO sovrapposizione · ROSA nudo · VERDE denso</text>`;
   const NL = String.fromCharCode(10);
+  // `<metadata>` non si disegna: e' il posto dove l'SVG tiene il progetto, come il footer nel DST
+  const progettoSvg = ing.progetto ? `<metadata id="rg-progetto">${JSON.stringify(ing.progetto).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string))}</metadata>` + String.fromCharCode(10) : '';
   const svgVerifica = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${(X0 - MARG).toFixed(1)} ${(Y0 - 18 - MARG).toFixed(1)} ${(RQ.larghezza + 2 * MARG).toFixed(1)} ${(RQ.altezza + 18 + 2 * MARG).toFixed(1)}" width="${(RQ.larghezza + 2 * MARG).toFixed(1)}mm" height="${(RQ.altezza + 18 + 2 * MARG).toFixed(1)}mm">` + NL +
-  `<rect x="${(X0 - MARG).toFixed(1)}" y="${(Y0 - 18 - MARG).toFixed(1)}" width="${(RQ.larghezza + 2 * MARG).toFixed(1)}" height="${(RQ.altezza + 18 + 2 * MARG).toFixed(1)}" fill="#faf9f7"/>` + NL +
+  progettoSvg + `<rect x="${(X0 - MARG).toFixed(1)}" y="${(Y0 - 18 - MARG).toFixed(1)}" width="${(RQ.larghezza + 2 * MARG).toFixed(1)}" height="${(RQ.altezza + 18 + 2 * MARG).toFixed(1)}" fill="#faf9f7"/>` + NL +
   `<rect x="${X0.toFixed(1)}" y="${Y0.toFixed(1)}" width="${RQ.larghezza.toFixed(1)}" height="${RQ.altezza.toFixed(1)}" fill="none" stroke="#333" stroke-width="0.3" stroke-dasharray="2 1"/>` + NL +
   `<g transform="translate(${X0.toFixed(1)},${(Y0 - 18).toFixed(1)})">${legenda}${nota}</g>` + NL + pezzi.join(NL) + NL + `</svg>`;
   const passaggiSvg: string[][] = colori.map(() => []);
@@ -1321,7 +1329,7 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
     }
     // l'origine del DST è l'angolo del riquadro: uno swatch parte da (0,0), non da dov'era nel pannello
     for (const pa of paths) for (const q of pa.points_mm) { q[0] -= X0; q[1] -= Y0; }
-    dst = buildDst({ label: 'PETTINE', coordinate_system: 'svg', paths });
+    dst = buildDst({ label: 'PETTINE', coordinate_system: 'svg', paths, metadata: ing.progetto ?? undefined });
     console.log(`DST: ${punti} punti · ${(filo / 1000).toFixed(1)} m di filo · ${colori.length} aghi · ${paths.length} blocchi (${salti} salti, ${(filoSalti / 1000).toFixed(1)} m) · ${passaggi} passaggi cuciti (${(filoPassaggi / 1000).toFixed(1)} m, ${passaggiInstradati} instradati, ${(filoScoperto / 1000).toFixed(2)} m a vista) · ${corti} punti sotto ${MIN_MM} mm · ${inversioni} righe cucite fuori ordine · ${dentiSaltati} denti sotto il millimetro non cuciti`);
     statDst = { punti, filoM: filo / 1000, blocchi: paths.length, salti, saltiM: filoSalti / 1000, passaggi, passaggiM: filoPassaggi / 1000, puntiCorti: corti, passaggiScopertiM: filoScoperto / 1000, righeFuoriOrdine: inversioni };
   }
@@ -1338,7 +1346,7 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
     });
     if (par.mostraNudi) pz.push(`<g>${nudiFilo.join('')}</g>`);
     svgPettine = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${(X0 - MARG).toFixed(1)} ${(Y0 - MARG).toFixed(1)} ${(RQ.larghezza + 2 * MARG).toFixed(1)} ${(RQ.altezza + 2 * MARG).toFixed(1)}" width="${(RQ.larghezza + 2 * MARG).toFixed(1)}mm" height="${(RQ.altezza + 2 * MARG).toFixed(1)}mm">` + NL +
-  `<rect x="${(X0 - MARG).toFixed(1)}" y="${(Y0 - MARG).toFixed(1)}" width="${(RQ.larghezza + 2 * MARG).toFixed(1)}" height="${(RQ.altezza + 2 * MARG).toFixed(1)}" fill="#f7f6f3"/>` + NL +
+  progettoSvg + `<rect x="${(X0 - MARG).toFixed(1)}" y="${(Y0 - MARG).toFixed(1)}" width="${(RQ.larghezza + 2 * MARG).toFixed(1)}" height="${(RQ.altezza + 2 * MARG).toFixed(1)}" fill="#f7f6f3"/>` + NL +
   `<rect x="${X0.toFixed(1)}" y="${Y0.toFixed(1)}" width="${RQ.larghezza.toFixed(1)}" height="${RQ.altezza.toFixed(1)}" fill="none" stroke="#333" stroke-width="0.3" stroke-dasharray="2 1"/>` + NL + pz.join(NL) + NL + `</svg>`;
     console.log(`DENTI: ${dentiTot} denti · ${(filoMm / 1000).toFixed(1)} m di filo nei denti · ${fermati} fermati a un bordo netto, ${attraversano} attraversano una sfumatura`);
   }

@@ -23,7 +23,7 @@
 
 import '@rg/ui/rg.css';
 import './pettine.css';
-import { DST_FILE, type PixelImage } from '@rg/core';
+import { DST_FILE, readDstMetadata, type PixelImage } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
@@ -101,6 +101,13 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
             <span class="rg-field__help">Comanda la scala di tutto: i millimetri del ritaglio e dei punti sono misurati su questa.</span>
           </label>
           <dl class="rg-key-value rg-param-grid__wide" id="infoBlocchi" hidden></dl>
+          <div class="rg-file-input rg-param-grid__wide">
+            <label class="rg-file-input__control">
+              <input type="file" id="fileProgetto" accept=".dst,.svg">
+              <span class="rg-button rg-button--ghost">Riapri un progetto…</span>
+            </label>
+            <p class="rg-file-input__status" id="statoProgetto" role="status">Un DST o un SVG usciti da qui riportano dentro i blocchi, il ritaglio e tutti i parametri. La fotografia no: va ricaricata.</p>
+          </div>
         </div>
       </section>
 
@@ -277,6 +284,7 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
   let testoSvg = '';
   let nomeSvg = '';
   let foto: PixelImage | null = null;
+  let nomeFoto = '';
   let larghezzaRealeMm = 419.45;
   let disegno = { larghezza: 0, altezza: 0 };
   // I QUATTRO NUMERI si tengono da parte, e `ritaglio` e' quello che ne esce (spento se larghezza o
@@ -446,6 +454,7 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
     if (!file) return;
     try {
       foto = await leggiImmagine(file);
+      nomeFoto = file.name;
       $('statoFoto').textContent = `${file.name} — ${foto.width} × ${foto.height} px`;
       $('statoFoto').parentElement?.classList.remove('rg-file-input--error');
     } catch {
@@ -496,6 +505,76 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
     $('status').textContent = 'Parametri cambiati: premi «Genera».';
   };
 
+  // ---- il progetto dentro il file (R9/R27) ------------------------------------
+  /**
+   * Cosa si porta dietro un file salvato. I BLOCCHI ci stanno dentro: l'SVG dei gruppi pesa 50 kB
+   * contro i 600 kB del DST, e senza di lui il file si riaprirebbe a meta'. La FOTOGRAFIA no —
+   * sarebbero altri 300 kB dentro ogni swatch — e va ricaricata a mano: lo dice il pannello.
+   */
+  const MAX_SVG_DENTRO = 400_000;
+  const progetto = (): Record<string, unknown> => ({
+    rgProject: 'pettine',
+    versione: 1,
+    salvato: new Date().toISOString().slice(0, 10),
+    par,
+    ritaglio,
+    larghezzaRealeMm,
+    nomeSvg,
+    nomeFoto,
+    blocchi: testoSvg.length <= MAX_SVG_DENTRO ? testoSvg : null,
+  });
+  const riapri = (p: Record<string, unknown> | null, da: string): void => {
+    if (!p || p.rgProject !== 'pettine') {
+      $('statoProgetto').textContent = `${da} non porta dentro un progetto del punto pettine.`;
+      $('statoProgetto').parentElement?.classList.add('rg-file-input--error');
+      return;
+    }
+    $('statoProgetto').parentElement?.classList.remove('rg-file-input--error');
+    const sp = p.par as Partial<ParametriPettine> | undefined;
+    if (sp) for (const c of CAMPI) {
+      const v = sp[c.key];
+      if (typeof v === 'number' && Number.isFinite(v)) { (par[c.key] as number) = Math.min(c.max, Math.max(c.min, v)); input(c.id).value = n1(par[c.key] as number); }
+    }
+    if (sp && typeof sp.denti === 'boolean') { par.denti = sp.denti; input('denti').checked = sp.denti; }
+    if (sp && typeof sp.mostraNudi === 'boolean') { par.mostraNudi = sp.mostraNudi; input('mostraNudi').checked = sp.mostraNudi; }
+    if (typeof p.larghezzaRealeMm === 'number' && p.larghezzaRealeMm >= 10) { larghezzaRealeMm = p.larghezzaRealeMm; input('realWidthMm').value = n1(larghezzaRealeMm); }
+    if (typeof p.blocchi === 'string' && p.blocchi.length > 20) {
+      testoSvg = p.blocchi;
+      nomeSvg = typeof p.nomeSvg === 'string' ? p.nomeSvg : 'blocchi.svg';
+      misuraDisegno();
+      const gruppi = (testoSvg.match(/<g\s+id="/g) ?? []).length;
+      $('statoBlocchi').textContent = `${nomeSvg} — ${gruppi} gruppi (dal progetto)`;
+      const info = $('infoBlocchi') as HTMLElement;
+      info.hidden = false;
+      info.innerHTML = `<dt>Misura</dt><dd>${n1(disegno.larghezza)} × ${n1(disegno.altezza)} mm</dd><dt>Gruppi</dt><dd>${gruppi}</dd>`;
+      ($('generaBtn') as HTMLButtonElement).disabled = false;
+    }
+    const r = p.ritaglio as Riquadro | null | undefined;
+    if (r && typeof r.larghezza === 'number') { rit.x = r.x; rit.y = r.y; rit.larghezza = r.larghezza; rit.altezza = r.altezza; }
+    else { rit.x = 0; rit.y = 0; rit.larghezza = 0; rit.altezza = 0; }
+    controllaDente();
+    mostraRitaglio();
+    mostraDisegno();
+    const senzaFoto = p.nomeFoto ? ` La fotografia («${String(p.nomeFoto)}») va ricaricata a mano.` : '';
+    $('statoProgetto').textContent = `Riaperto da ${da}${p.salvato ? `, salvato il ${String(p.salvato)}` : ''}.${senzaFoto}`;
+    $('status').textContent = 'Progetto riaperto: premi «Genera».';
+  };
+  $('fileProgetto').addEventListener('change', async (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    if (/\.dst$/i.test(file.name)) {
+      riapri(readDstMetadata(new Uint8Array(await file.arrayBuffer())), file.name);
+    } else {
+      const testo = await file.text();
+      const m = /<metadata id="rg-progetto">([\s\S]*?)<\/metadata>/.exec(testo);
+      let letto: Record<string, unknown> | null = null;
+      if (m) {
+        try { letto = JSON.parse(m[1].replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&amp;/g, '&')) as Record<string, unknown>; } catch { letto = null; }
+      }
+      riapri(letto, file.name);
+    }
+  });
+
   // ---- la generazione --------------------------------------------------------
   $('generaBtn').addEventListener('click', () => {
     if (!testoSvg) return;
@@ -505,7 +584,7 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
     // un giro di ridisegno prima di bloccare il thread col conto
     setTimeout(() => {
       try {
-        esito = costruisciPettine({ testoSvg, larghezzaRealeMm, foto, ritaglio }, { ...par, dst: par.denti });
+        esito = costruisciPettine({ testoSvg, larghezzaRealeMm, foto, ritaglio, progetto: progetto() }, { ...par, dst: par.denti });
         const s = esito.statistiche;
         const righe: Array<[string, string]> = [
           ['Gruppi', `${s.famiglie}${s.famiglieSaltate ? ` (${s.famiglieSaltate} saltati)` : ''}`],
