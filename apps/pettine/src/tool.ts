@@ -27,6 +27,9 @@ import { DST_FILE, readDstMetadata, type PixelImage } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
+import { montaSimulatore, type Simulatore } from './simulatore';
+// il pannello di esempio, per provare il tool senza cercare i file (e per il simulatore)
+const ESEMPIO_SVG = new URL('../fixtures/VETTORIALE-6-colori-v2-gruppo-blocchi.svg', import.meta.url).href;
 import {
   costruisciPettine, parametriPettineDefault,
   type ParametriPettine, type Riquadro, type EsitoPettine,
@@ -89,6 +92,7 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
               <span class="rg-button rg-button--outline">Carica i blocchi…</span>
             </label>
             <p class="rg-file-input__status" id="statoBlocchi" role="status">Nessun file caricato. Serve l'SVG con i gruppi di colore.</p>
+            <button type="button" id="esempioBtn" class="rg-button rg-button--ghost" title="Il pannello a sei tinte con cui si lavora, senza fotografia">Usa il pannello di esempio</button>
           </div>
           <div class="rg-file-input rg-param-grid__wide">
             <label class="rg-file-input__control">
@@ -299,12 +303,14 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
           <button type="button" id="salvaSvgBtn" class="rg-button rg-button--outline" disabled>Salva SVG</button>
           <button type="button" id="salvaDstBtn" class="rg-button rg-button--outline" disabled>Salva DST</button>
           <button type="button" id="vistaBtn" class="rg-button rg-button--ghost" aria-pressed="false" disabled>Verifica</button>
+          <button type="button" id="simulaBtn" class="rg-button rg-button--ghost" aria-pressed="false" disabled title="Il simulatore: il filo si cuce sullo schermo nell'ordine del DST">Simula</button>
           <button type="button" id="fitBtn" class="rg-button rg-button--ghost">Adatta</button>
         </div>
       </header>
       <div class="rg-workspace__canvas" id="canvas">
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
       </div>
+      <div id="simControlli" class="sim-controlli" hidden></div>
       <footer class="rg-workspace__statusbar">
         <span id="status">Carica i blocchi e la fotografia, poi premi «Genera».</span>
         <span class="rg-mono" id="zoom">zoom 100%</span>
@@ -329,7 +335,8 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
     rit.larghezza <= 0 || rit.altezza <= 0 ? null : { x: Math.max(0, rit.x), y: Math.max(0, rit.y), larghezza: Math.max(5, rit.larghezza), altezza: Math.max(5, rit.altezza) };
   let ritaglio: Riquadro | null = null;
   let esito: EsitoPettine | null = null;
-  let vista: 'pettine' | 'verifica' = 'pettine';
+  let vista: 'pettine' | 'verifica' | 'simulatore' = 'pettine';
+  let simulatore: Simulatore | null = null;
   let modo: 'sposta' | 'ritaglia' = 'sposta';
 
   const pz = hookPanZoom($('canvas'), $('layer'), (z) => { $('zoom').textContent = `zoom ${Math.round(z * 100)}%`; });
@@ -460,11 +467,11 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
     const k = larghezzaRealeMm / w;
     disegno = { larghezza: w * k, altezza: h * k };
   };
-  $('fileBlocchi').addEventListener('change', async (e) => {
-    const file = (e.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-    testoSvg = await file.text();
-    nomeSvg = file.name;
+  // i blocchi arrivano da un file o dal pannello di esempio: da qui in poi e' la stessa strada
+  const blocchiCaricati = (testo: string, nome: string): void => {
+    testoSvg = testo;
+    nomeSvg = nome;
+    const file = { name: nome };
     const gruppi = (testoSvg.match(/<g\s+id="/g) ?? []).length;
     misuraDisegno();
     rit.x = 0; rit.y = 0; rit.larghezza = 0; rit.altezza = 0;
@@ -482,6 +489,19 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
     $('status').textContent = 'Pronto: premi «Genera».';
     mostraRitaglio();
     mostraDisegno();
+  };
+  $('fileBlocchi').addEventListener('change', async (e) => {
+    const file = (e.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    blocchiCaricati(await file.text(), file.name);
+  });
+  $('esempioBtn').addEventListener('click', () => {
+    fetch(ESEMPIO_SVG).then((r) => r.text()).then((t) => {
+      larghezzaRealeMm = 419.45;
+      input('realWidthMm').value = '419,45';
+      blocchiCaricati(t, 'VETTORIALE-6-colori-v2-gruppo-blocchi.svg');
+      $('status').textContent = 'Pannello di esempio caricato, senza fotografia: premi «Genera».';
+    }).catch((err) => { $('status').textContent = `Non ho trovato il pannello di esempio: ${(err as Error).message}`; });
   });
   $('fileFoto').addEventListener('change', async (e) => {
     const file = (e.target as HTMLInputElement).files?.[0];
@@ -522,13 +542,27 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
   };
   const mostraEsito = (): void => {
     if (!esito) return;
-    $('layer').innerHTML = vista === 'verifica' ? esito.svgVerifica : esito.svg;
+    if (simulatore) { simulatore.distruggi(); simulatore = null; }
+    ($('simControlli') as HTMLElement).hidden = vista !== 'simulatore';
+    $('simulaBtn').setAttribute('aria-pressed', String(vista === 'simulatore'));
+    $('vistaBtn').setAttribute('aria-pressed', String(vista === 'verifica'));
+    $('vistaBtn').textContent = vista === 'verifica' ? 'Ricamo' : 'Verifica';
+    if (vista === 'simulatore' && esito.dst) {
+      // IL SIMULATORE (Lorenzo, 2026-09-10): il DST appena generato si cuce sullo schermo, punto
+      // per punto, nell'ordine in cui lo fara' la macchina; il filo e' grigio finche' l'ago non ci passa
+      const rq = esito.statistiche.riquadro;
+      simulatore = montaSimulatore($('layer'), $('simControlli'), esito.dst, esito.statistiche.colori, rq.larghezza, rq.altezza, (s) => { $('status').textContent = s; });
+    } else {
+      $('layer').innerHTML = vista === 'verifica' ? esito.svgVerifica : esito.svg;
+    }
     pz.fit();
   };
   $('vistaBtn').addEventListener('click', () => {
-    vista = vista === 'pettine' ? 'verifica' : 'pettine';
-    $('vistaBtn').setAttribute('aria-pressed', String(vista === 'verifica'));
-    $('vistaBtn').textContent = vista === 'verifica' ? 'Ricamo' : 'Verifica';
+    vista = vista === 'verifica' ? 'pettine' : 'verifica';
+    mostraEsito();
+  });
+  $('simulaBtn').addEventListener('click', () => {
+    vista = vista === 'simulatore' ? 'pettine' : 'simulatore';
     mostraEsito();
   });
 
@@ -653,6 +687,8 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
         ($('salvaSvgBtn') as HTMLButtonElement).disabled = false;
         ($('salvaDstBtn') as HTMLButtonElement).disabled = !esito.dst;
         ($('vistaBtn') as HTMLButtonElement).disabled = false;
+        ($('simulaBtn') as HTMLButtonElement).disabled = !esito.dst;
+        if (vista === 'simulatore' && !esito.dst) vista = 'pettine';
         $('status').textContent = s.punti
           ? `Fatto in ${n1(s.secondi)} s: ${n0(s.punti)} punti, ${n1(s.filoM)} m di filo, ${s.colori.length} aghi.`
           : `Fatto in ${n1(s.secondi)} s: ${n0(s.tratti)} linee di base, ${n1(s.basiM)} m.`;

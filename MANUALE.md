@@ -354,6 +354,16 @@ scuro sta più vicino al muro del chiaro: lì il chiaro, cucito prima, copre il 
 e la base scura gli passa sopra. Non dipende dalla sequenza ma dal gradiente della foto e dalla
 scelta del muro: è il punto in cui il ricamo fa la «linea diretta» vista al primo provino.
 
+**Il simulatore.** Il bottone «Simula» sopra l'anteprima cuce sullo schermo il DST appena generato,
+punto per punto, nell'ordine in cui lo farà la macchina. Tutto il filo parte grigio e prende il colore
+del suo ago man mano che l'ago ci passa; i rasafili restano tratteggiati in rosso. Sotto la tela ci
+sono i comandi: cuci e ferma, un punto avanti o indietro, un blocco avanti o indietro, all'inizio e
+alla fine, il cursore della posizione e quello della velocità (da 10 a 20.000 punti al secondo). La
+riga in fondo dice a che punto sei, con quale ago, in quale blocco, quanto filo è cucito e quanti
+rasafili sono passati. Zoom e trascinamento sono quelli dell'anteprima. «Usa il pannello di esempio»,
+nella sezione dei blocchi, carica il pannello a sei tinte senza fotografia: serve per provare il tool
+e il simulatore senza cercare i file.
+
 **Prima la sequenza, poi il verso.** L'ordine delle righe si fissa per primo, con la copertura come
 vincolo; solo dopo si sceglie da che capo entrare in ognuna, e si scelgono tutti i versi insieme
 guardando l'intera catena invece di una riga alla volta. Una riga corta può anche farsi in due

@@ -1102,6 +1102,21 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   a vista **2,70 m** su 563, 0 righe fuori ordine su 26.012 coppie, 134 macchie incastrate. Il
   laboratorio è online in `/lab` del sito, si rigenera a ogni push, e le risposte si scrivono in
   `lab/RISPOSTE.md` direttamente su GitHub.
+- **Il simulatore del ricamo, nel tool e online** (Lorenzo, 2026-09-10: *«un sequenzatore di punti, un
+  simulatore del ricamo che fa vedere come si muove l'ago e quindi si riempie il filo: da grigio rende
+  il filo colorato, con controlli su quanto andare avanti e velocità»*). `apps/pettine/src/simulatore.ts`
+  legge il DST appena generato con `readDst` — quindi mostra la sequenza vera, salti e cambi-ago
+  compresi — e lo cuce su tre tele sovrapposte: la base grigia disegnata una volta, il filo cucito che
+  si aggiunge un pezzo alla volta (avanzare costa solo i punti nuovi; tornare indietro ridisegna da capo,
+  mezzo secondo per duecentomila segmenti), e l'ago. I rasafili restano tratteggiati in rosso. Comandi:
+  cuci/ferma, ±1 punto, ±1 blocco, inizio/fine, posizione, velocità da 10 a 20.000 punti al secondo;
+  lettura di punto, ago, blocco, filo cucito e rasafili passati. La tela ha la misura in millimetri
+  della cornice, così zoom e trascinamento restano quelli dell'anteprima. Nella sezione dei blocchi un
+  bottone «Usa il pannello di esempio» carica il pannello a sei tinte senza foto (l'SVG entra nel
+  bundle come asset): serve a chiunque per provare, e a me per verificare dal browser. Provato: il
+  pannello intero si genera nel browser in 37 s, 185.346 punti, 42 blocchi; il cursore a 30.000 punti
+  mostra il primo ago cucito e il secondo a metà. Un limite noto: l'animazione usa `requestAnimationFrame`
+  e si ferma quando la scheda del browser è nascosta; i comandi manuali no.
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione
