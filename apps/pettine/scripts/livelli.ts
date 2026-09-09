@@ -44,7 +44,7 @@ const LISCIA_MAX = num(13, 8);         // tetto alla lisciatura, in mm
 // «evitiamo di creare angoli troppo estremi delle curve, anche se questo implica non rispettare i due
 // muri. Preferisco che la copertura sia piu' efficace». Spianata la distanza, la cresta diventa un dorso
 // e il livello ci gira attorno con un raggio invece di uno spigolo.
-const SPIANA_MM = num(14, 3);
+const SPIANA_MM = num(14, 5);   // Lorenzo (2026-09-09, seconda tornata): «puoi spianarle ancora di piu'»
 // L'ULTIMA BASE LUNGO IL MURO OPPOSTO: spenta di default (ULTIMA=1 per riaverla). Lorenzo: «la curva si
 // amplifica per rispettare il muro finale, quello lo eviterei, non e' necessario che diventi uguale al
 // muro finale». Con lo sconfinamento oltre il muro i suoi buchi non ci sono piu'.
@@ -105,7 +105,7 @@ console.log(`\n${fileSvg}\n${WM.toFixed(1)} × ${HM.toFixed(1)} mm · ${famiglie
 // IL MARGINE ATTORNO AL PANNELLO: la griglia comincia MARG mm prima del disegno, cosi' basi e denti
 // possono sconfinare anche oltre il bordo del pannello (il metro diceva: i buchi stanno quasi tutti
 // li', 4000 celle sul bordo contro 200 sulle giunte). Il pannello va ricamato fino al bordo e oltre.
-const MARG = SCONFINA_MM + num(14, 3) + 1;   // sconfinamento + raggio di spianatura + 1
+const MARG = SCONFINA_MM + num(14, 5) + 1;   // sconfinamento + raggio di spianatura + 1
 const ORIG = -MARG;
 const COLS = Math.ceil((WM + 2 * MARG) / CELLA) + 2, ROWS = Math.ceil((HM + 2 * MARG) / CELLA) + 2;
 const tinta = new Int8Array(COLS * ROWS).fill(-1);
@@ -754,6 +754,23 @@ if (DENTI) {
   let nudoFilo = 0, tot = 0;
   for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) { if (tintaIn({ x: x * G, y: y * G }) < 0) continue; tot++; if (!cop[y * GW + x]) { nudoFilo++; nudiFilo.push(`<rect x="${(x * G).toFixed(1)}" y="${(y * G).toFixed(1)}" width="${G}" height="${G}" fill="#ff2f8f" opacity="0.7"/>`); } }
   console.log(`METRO DEL FILO: ${((nudoFilo / tot) * 100).toFixed(1)}% del pannello a piu' di 0,75 mm da qualunque filo`);
+  if (process.env.MAPPA) {
+    // QUANTO FILO per cella di 8 mm (basi + denti), in mm/mm²: dove si accumula?
+    const MW = Math.ceil(WM / 8), MH = Math.ceil(HM / 8);
+    const filo = new Float64Array(MW * MH);
+    for (const seg of cucito) for (let i = 1; i < seg.length; i++) {
+      const a = seg[i - 1], b = seg[i];
+      const mx = Math.floor(((a.x + b.x) / 2) / 8), my = Math.floor(((a.y + b.y) / 2) / 8);
+      if (mx < 0 || my < 0 || mx >= MW || my >= MH) continue;   // il margine fuori dal pannello non si conta
+      filo[my * MW + mx] += Math.hypot(b.x - a.x, b.y - a.y);
+    }
+    const dens = Array.from(filo).map((v) => v / 64);
+    const ord = dens.filter((v) => v > 0).sort((a, b) => a - b);
+    const med = ord[Math.floor(ord.length / 2)], q90 = ord[Math.floor(ord.length * 0.9)], q10 = ord[Math.floor(ord.length * 0.1)];
+    const righe: string[] = [];
+    for (let my = 0; my < MH; my++) { let r = ''; for (let mx = 0; mx < MW; mx++) { const v = dens[my * MW + mx]; r += v === 0 ? ' ' : v < med * 0.7 ? '.' : v < med * 1.3 ? ':' : v < med * 1.7 ? 'o' : '#'; } righe.push(r); }
+    console.log(`FILO PER CELLA (8 mm): mediana ${med.toFixed(2)} mm/mm² · 10% ${q10.toFixed(2)} · 90% ${q90.toFixed(2)} · '.' sotto 0,7x · ':' attorno · 'o' 1,3-1,7x · '#' oltre 1,7x` + String.fromCharCode(10) + righe.join(String.fromCharCode(10)));
+  }
   // DOVE STANNO le celle nude: sul bordo del pannello, su una giunta fra famiglie, o dentro una famiglia?
   {
     let bordoPan = 0, giunta = 0, interno = 0;
@@ -836,6 +853,35 @@ if (DENTI) {
 <rect x="0" y="0" width="${WM.toFixed(1)}" height="${HM.toFixed(1)}" fill="none" stroke="#333" stroke-width="0.3" stroke-dasharray="2 1"/>
 ${pz.join('\n')}
 </svg>`, 'utf8');
+  // UNA ZONA: ZONA=x0,y0,x1,y1[;x0,y0,x1,y1...] confronta basi e denti dentro rettangoli diversi
+  if (process.env.ZONA) {
+    const basiSet = new Set(lineeFinali.map((l) => l.punti));
+    for (const z of process.env.ZONA.split(';')) {
+      const [x0, y0, x1, y1] = z.split(',').map(Number);
+      const area = (x1 - x0) * (y1 - y0);
+      const dentroZ = (q: Point): boolean => q.x >= x0 && q.x <= x1 && q.y >= y0 && q.y <= y1;
+      let mmBasi = 0, mmDenti = 0, nDenti = 0, nTratti = 0;
+      const ids = new Set<number>();
+      for (const l of cucito) {
+        let mm = 0, dentro = false;
+        for (let i = 1; i < l.length; i++) if (dentroZ(l[i - 1]) && dentroZ(l[i])) { mm += Math.hypot(l[i].x - l[i - 1].x, l[i].y - l[i - 1].y); dentro = true; }
+        if (!dentro) continue;
+        if (basiSet.has(l)) { mmBasi += mm; nTratti++; } else { mmDenti += mm; nDenti += Math.round(l.length / 3); }
+      }
+      for (const { id, punti } of lineeFinali) if (punti.some(dentroZ)) ids.add(id);
+      if (process.env.ZONA_DETTAGLIO) {
+        const perId = new Map<number, string[]>();
+        for (const { id, punti } of lineeFinali) {
+          const dentro = punti.filter(dentroZ);
+          if (!dentro.length) continue;
+          const ys = dentro.map((q) => q.y), xs = dentro.map((q) => q.x);
+          const l = perId.get(id) ?? []; l.push(`[x ${Math.min(...xs).toFixed(0)}-${Math.max(...xs).toFixed(0)} y ${Math.min(...ys).toFixed(1)}-${Math.max(...ys).toFixed(1)} · ${punti.length}p da (${punti[0].x.toFixed(0)},${punti[0].y.toFixed(0)}) a (${punti[punti.length - 1].x.toFixed(0)},${punti[punti.length - 1].y.toFixed(0)})]`); perId.set(id, l);
+        }
+        for (const [id, l] of [...perId.entries()].slice(0, 12)) console.log(`   livello ${id}: ${l.join(' ')}`);
+      }
+      console.log(`ZONA ${z}: basi ${(mmBasi / area).toFixed(3)} mm/mm² in ${nTratti} tratti (${ids.size} livelli) · denti ${(mmDenti / area).toFixed(2)} mm/mm², ${(nDenti / area * 100).toFixed(1)} denti/cm², lunghi in media ${(mmDenti / Math.max(1, nDenti) / 2).toFixed(2)} mm`);
+    }
+  }
   // UNA SONDA: PROBE=x,y stampa cosa c'e' attorno a un punto (per capire un buco)
   if (process.env.PROBE) {
     const [px, py] = process.env.PROBE.split(',').map(Number);

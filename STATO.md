@@ -641,7 +641,19 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   osservazione (fascia sinistra «spezzata a metà», linee «molto spezzate» nella luce della sfera)
   erano difetti del file **precedente** — la cresta diagonale e le forcine — già chiusi il giorno
   prima: i file nuovi vanno con un nome diverso (`*-v2-curve-morbide.svg`) per non confonderli.
-- **Aperto:** (a) restano **1.414 tratti sotto i 5 mm**, quasi tutti attorno alla sfera e sulle
+- **Le basi erano DOPPIE, e lo diceva il filo per cella, non l'occhio.** Lorenzo (seconda tornata del
+  2026-09-09): *«il lato a sinistra io vedo ancora una striscia con più agglomerati… ci sono zone in
+  cui sembra passarci più volte»*. La mappa del filo per cella di 8 mm dava la striscia sinistra e le
+  famiglie in alto e in basso a **0,98 mm/mm² di basi contro 0,49** nel resto, con lo stesso numero
+  di livelli: ogni livello era due tratti sovrapposti a un decimo di millimetro. La causa era in
+  `incatena` del Punto Pittorico: prendeva il **primo** segmento nell'intorno invece del **più
+  vicino**, saltava un segmento sì e uno no fino in fondo e poi tornava indietro sugli scartati.
+  Corretto lì (è la sua funzione, e i 668 test restano verdi). Sul pannello: basi **111 → 74 m**,
+  tratti **4.810 → 2.184** (sotto i 5 mm 1.414 → 223), denti 76.820 → 50.117, filo nei denti
+  608 → 399 m, e la densità fra il 10° e il 90° percentile delle celle passa da 3,3–8,1 a
+  3,1–4,3 mm/mm². Spianatura portata a **5 mm** su sua richiesta (nudo 0,0 % coi rammendi, 22).
+  Strumento nuovo: `ZONA=x0,y0,x1,y1;…` confronta basi e denti per mm² fra rettangoli.
+- **Aperto:** (a) restano **223 tratti sotto i 5 mm**, quasi tutti attorno alla sfera e sulle
   creste dove due fronti si incontrano — sono le «giunture» che Lorenzo non vuole, da guardare con
   lui; (b) lo sconfinamento di 2,5 mm si vede come **peli** che attraversano le giunte; (c) il
   «passa due volte» sui rami dello stesso livello che si toccano; (d) il tool vero — pannello,

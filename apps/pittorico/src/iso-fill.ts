@@ -297,16 +297,24 @@ export function incatena(segs: Segmento[], tol: number): Polyline[] {
       if (v) v.push(i); else per.set(k, [i]);
     }
   });
+  // IL PIU' VICINO, non il primo che capita: con segmenti da mezza cella e una tolleranza di una cella
+  // e mezza il primo trovato era spesso quello DOPO il prossimo; la catena saltava un segmento si' e
+  // uno no, arrivava in fondo e tornava indietro sugli scartati - una base doppia, a un decimo di
+  // millimetro dalla prima, che nel pettine raddoppiava filo e denti (misurato: 0,98 mm/mm² di basi
+  // contro 0,49 dove la catena era sana).
   const prendi = (p: Point, escluso: number): number => {
+    let best = -1, bestD = Infinity;
     for (const dx of [-1, 0, 1]) {
       for (const dy of [-1, 0, 1]) {
         const k = `${Math.round(p.x / tol) + dx},${Math.round(p.y / tol) + dy}`;
         for (const i of per.get(k) ?? []) {
-          if (i !== escluso && !usato[i]) return i;
+          if (i === escluso || usato[i]) continue;
+          const d = Math.min(Math.hypot(segs[i].a.x - p.x, segs[i].a.y - p.y), Math.hypot(segs[i].b.x - p.x, segs[i].b.y - p.y));
+          if (d < bestD) { bestD = d; best = i; }
         }
       }
     }
-    return -1;
+    return best;
   };
   const out: Polyline[] = [];
   for (let s = 0; s < segs.length; s++) {
