@@ -391,11 +391,16 @@ soltanto se il cammino è di quelli nascosti e se a vista ne rimangono meno di 3
 taglia. Vale per tutti i colori allo stesso modo, ultimi compresi: cosa è coperto lo dice la mappa,
 cella per cella, non il numero dell'ago.
 
-**Il dietro della riga sopra.** Una base del proprio colore è un corridoio finché non ha denti già
-cuciti sopra: sia che la riga sia ancora da fare (i denti della riga dopo la copriranno), sia che sia
-già cucita ma con la riga esterna mancante, come nella gola di una fascia sottile. Lì il filo sale
-sul dietro della riga sopra, corre, e ridiscende. Le radici dei denti stanno sulla base e non la
-interrompono.
+**Il dietro di una riga.** Sul dietro di una riga già cucita si passa, purché sopra non ci sia
+cucito altro: se i denti della riga dopo la coprono già, il filo passa sul dietro di quella dopo,
+che è l'ultima e non ha ancora niente sopra. Su una riga ancora da fare si passa sempre: sarà il
+suo pettine a coprire il filo. E quando un filo deve passare, passa il più esterno possibile, nella
+striscia oltre l'ultima riga dentata, quella che la riga dopo coprirà, mai dentro fra righe cucite.
+
+**La gola.** Una fascia sottile si restringe, e la riga più esterna per un tratto esce nella tinta
+più chiara accanto o si ritrova troppo addosso alla riga prima. Se il tratto è corto, fino a «Gola
+attraversata», la riga non si spezza: il pettine continua sopra e raggiunge l'altro pezzo, invece
+di lasciarlo orfano con un taglio. Nella gola la riga si stringe un po' verso quella prima.
 
 **Fin dove arriva un passaggio nascosto.** «Passaggio nascosto più lungo» decide quanto si può
 andare lontano prima di arrendersi e tagliare. Da quando un passaggio si nasconde solo dove è

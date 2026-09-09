@@ -44,6 +44,7 @@ const par = {
   passaggioMaxMm: process.env.PMAX !== undefined ? Number(process.env.PMAX) : 30,
   tintaMinimaMm: process.env.TINTA !== undefined ? Number(process.env.TINTA) : 6,
   passaggioNascostoMm: process.env.PNASC !== undefined ? Number(process.env.PNASC) : 400,
+  golaMm: process.env.GOLA !== undefined ? Number(process.env.GOLA) : 30,
   senzaPassaggiUltimiColori: process.env.SENZA !== undefined ? Number(process.env.SENZA) : 0,
   modo: (process.env.MODO ?? 'auto') as 'auto' | 'geodetica' | 'crescita' | 'livelli',
   mostraNudi: !!process.env.MOSTRA_NUDI,

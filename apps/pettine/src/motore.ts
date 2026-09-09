@@ -129,6 +129,12 @@ export interface ParametriPettine {
    */
   casiStudio?: number;
   /**
+   * Fin dove la riga piu' esterna di una fascia attraversa una gola senza spezzarsi (mm): un tratto di
+   * tinta piu' chiara, gia' cucita, o troppo addossato alla riga prima, incastrato fra due tratti della
+   * stessa tinta. Lorenzo (2026-09-10): «continui quella per raggiungere l'altra». 0 = mai.
+   */
+  golaMm?: number;
+  /**
    * Quanti ULTIMI colori non fanno passaggi liberi. Sotto di loro non viene più nessuno a coprire il
    * filo, quindi lì un passaggio si fa solo se resta corto (60 mm) e se il cammino è tutto in zona
    * ancora da ricamare, che i loro stessi denti copriranno. Lorenzo (2026-09-10): «negli ultimi 2
@@ -228,6 +234,8 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
   const CHIUDI_MM = par.chiudiMm;
   // quanto deve durare una tinta lungo una riga per meritare un cambio di colore
   const TINTA_MINIMA_MM = Math.max(0, par.tintaMinimaMm ?? 6);
+  // fin qui la riga dentata attraversa una gola (tinta piu' chiara, o troppo addosso) senza spezzarsi
+  const GOLA_MM = Math.max(0, par.golaMm ?? 30);
   const TRASLA_MAX_MM2 = par.traslaMaxMm2;
   const ULTIMA_BASE = false;
   const RIFERIMENTO_DEG = -90;
@@ -410,7 +418,7 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
    *  la linea, prende il colore del tratto che la precede (o che la segue, in testa). Senza, ogni
    *  striscia di una cella al confine fra due colori faceva un tratto di base da due punti: 2800
    *  tratti sotto 1,5 mm, ognuno coi suoi denti. */
-  function stabilizza(cols: number[], min: number): number[] {
+  function stabilizza(cols: number[], min: number, gola = 0): number[] {
     const out = cols.slice();
     let i = 0;
     while (i < out.length) {
@@ -421,6 +429,29 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
         for (let k = i; k < j; k++) out[k] = prima;
       }
       i = j;
+    }
+    /**
+     * LA RIGA DENTATA CONTINUA ATTRAVERSO LA GOLA (Lorenzo, 2026-09-10, quindicesima tornata: «se non
+     * che continui quella per raggiungere l'altra»). Una fascia sottile si restringe, e la riga piu'
+     * esterna per un tratto esce nella tinta piu' chiara accanto (gia' cucita) o si ritrova addosso
+     * alla riga precedente: prima si spezzava in due pezzi, e il pezzo di la' restava orfano, con un
+     * taglio per raggiungerlo. Ora, se il tratto e' corto (fino a `gola` punti) e da tutte e due le
+     * parti c'e' la stessa tinta, la riga lo attraversa intera: il pettine scuro passa sopra il chiaro,
+     * che e' comunque l'ordine giusto, e nella gola si stringe un po' verso la riga prima. Fuori dal
+     * gruppo (-2) non si va mai: quello e' territorio di un altro blocco di Lorenzo.
+     */
+    if (gola > 0) {
+      i = 0;
+      while (i < out.length) {
+        let j = i;
+        while (j < out.length && out[j] === out[i]) j++;
+        const v = out[i];
+        if (i > 0 && j < out.length && j - i <= gola && v !== -2) {
+          const t1 = out[i - 1], t2 = out[j];
+          if (t1 >= 0 && t1 === t2 && (v === -1 || v < t1)) for (let k = i; k < j; k++) out[k] = t1;
+        }
+        i = j;
+      }
     }
     return out;
   }
@@ -847,7 +878,7 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
       // tinte si spezzava in quattro pezzi, e i pezzetti da 5 mm costringevano il filo del loro
       // colore ad andare a prenderli uno per uno da lontano (Lorenzo, 2026-09-10: «mi stai tornando
       // su blocchi che sono vicini... i passaggi rischiano di vedersi»).
-      const colori = stabilizza(grezzi, Math.max(2, Math.round(TINTA_MINIMA_MM / 0.5)));
+      const colori = stabilizza(grezzi, Math.max(2, Math.round(TINTA_MINIMA_MM / 0.5)), Math.round(GOLA_MM / 0.5));
         for (let i = 0; i < morbida.length; i++) {
           const p = morbida[i];
           const col = colori[i];
@@ -1151,7 +1182,7 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
         cur = []; curCol = -2;
       };
       // qui la base sta a mezzo passo dentro: ha sempre una tinta
-      const colori = stabilizza(morbida.map((p, i) => (tieni[i] && dentroFam(p) ? tintaIn(p) : -1)), Math.max(2, Math.round(TINTA_MINIMA_MM / 0.5)));
+      const colori = stabilizza(morbida.map((p, i) => (!dentroFam(p) ? -2 : tieni[i] ? tintaIn(p) : -1)), Math.max(2, Math.round(TINTA_MINIMA_MM / 0.5)), Math.round(GOLA_MM / 0.5));
       for (let i = 0; i < morbida.length; i++) {
         const p = morbida[i];
         const col = colori[i];
@@ -1728,9 +1759,13 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     const sulDietro = (i: number, c: number, dOra: number): boolean => {
       void dOra;
       if (i < 0 || tinta[i] !== c) return false;
-      // IL DIETRO DELLA RIGA SOPRA (Lorenzo): una base del nostro colore e' un corridoio finche' non ha
-      // denti gia' cuciti sopra — che sia ancora da fare (i denti della riga dopo la copriranno) o
-      // gia' cucita ma con la riga esterna mancante, come nella gola di una fascia sottile
+      // IL DIETRO DI UNA RIGA E' UN CORRIDOIO FINCHE' SOPRA NON C'E' CUCITO ALTRO (Lorenzo, 2026-09-10,
+      // quindicesima tornata: «puoi passare sul retro di qualcosa gia' cucito, basta che non ci sia
+      // cucito altro sotto. A volte passi sul retro di una linea ma sotto ce n'e' una gia' cucita: e
+      // dovresti far passare il filo sul dietro di quella»). Una base del nostro colore va bene se
+      // ancora da fare (il pettine, quando verra', copre il filo) oppure gia' cucita ma senza i denti
+      // della riga dopo sopra — cioe' l'ultima. Su una base coperta dai denti della riga dopo, mai:
+      // li' il filo passerebbe sopra un pettine, e il posto giusto e' il dietro della riga dopo.
       if (dentiCuciti[i]) return false;
       const cc = i % COLS, rr = (i - cc) / COLS;
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
@@ -1772,11 +1807,12 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
         if (dietro) return 0.8;
         if (inBanda && altra > c) return 1.5;  // il nostro bordo verso lo scuro: sormonto nostro e denti suoi
         if (inBanda && altra >= 0) return 4;   // il nostro bordo verso il chiaro: i denti della riga di bordo ci arrivano
-        // DAVANTI AL FRONTE, fra una base e l'altra: la striscia che i denti della riga dopo
-        // copriranno. Serve per SALTARE da un dietro all'altro (2 mm), non per correrci lungo: costa
-        // cinque volte il dietro, cosi' l'A* ci passa solo di traverso. Senza, un corridoio che
-        // cambiava riga due volte veniva bocciato per 4 mm «a vista» che a vista non sono.
-        if (baseFutura[i] > 0) return 4;
+        // IL PIU' ESTERNO POSSIBILE (Lorenzo, quindicesima tornata: «non passare piu' dentro ma passa
+        // piu' esterno possibile, al limite con il dietro dell'ultima linea dentata che hai»): la
+        // striscia davanti all'ultima riga cucita, dove una base e' ancora da fare, e' il posto giusto
+        // per un passaggio — la riga che verra' lo copre col pettine. Costa poco piu' del dietro di
+        // una base da fare, e molto meno di qualunque cosa gia' cucita.
+        if (baseFutura[i] > 0) return 1.5;
         return 16;                             // niente basi da fare qui vicino: si vede
       }
       if (inBanda && altra === c) return 4;    // subito oltre il nostro bordo, sul chiaro: i nostri denti ci arrivano

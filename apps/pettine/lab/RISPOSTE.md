@@ -120,3 +120,73 @@ _Cosa ha fatto il sistema:_ Nessuna strada nascosta accettabile: la macchina tag
 
 _Come andrebbe fatto:_
 
+
+## a1-1000538-404 — innesto, ago 1, da riga 1000538 a riga 404
+
+_Cosa ha fatto il sistema:_ Passaggio cucito: 62 mm in linea d'aria, 72 mm di strada, 0.0 mm a vista, costo medio 1.2.
+
+_Come andrebbe fatto:_
+
+
+## a1-1000629-475 — passaggio, ago 1, da riga 1000629 a riga 475
+
+_Cosa ha fatto il sistema:_ Passaggio cucito: 35 mm in linea d'aria, 53 mm di strada, 0.8 mm a vista, costo medio 1.1.
+
+_Come andrebbe fatto:_
+
+
+## a1-263-1000330 — passaggio, ago 1, da riga 263 a riga 1000330
+
+_Cosa ha fatto il sistema:_ Passaggio cucito: 141 mm in linea d'aria, 150 mm di strada, 0.0 mm a vista, costo medio 0.2.
+
+_Come andrebbe fatto:_
+
+
+## a1-265-1000335 — passaggio, ago 1, da riga 265 a riga 1000335
+
+_Cosa ha fatto il sistema:_ Passaggio cucito: 62 mm in linea d'aria, 70 mm di strada, 0.0 mm a vista, costo medio 0.4.
+
+_Come andrebbe fatto:_
+
+
+## a2-1000373-218 — taglio, ago 2, da riga 1000373 a riga 218
+
+_Cosa ha fatto il sistema:_ Nessuna strada nascosta accettabile: la macchina taglia. Distanza 41 mm.
+
+_Come andrebbe fatto:_
+
+
+## a2-117-461 — taglio, ago 2, da riga 117 a riga 461
+
+_Cosa ha fatto il sistema:_ Nessuna strada nascosta accettabile: la macchina taglia. Distanza 128 mm.
+
+_Come andrebbe fatto:_
+
+
+## a2-1000634-3 — taglio, ago 2, da riga 1000634 a riga 3
+
+_Cosa ha fatto il sistema:_ Nessuna strada nascosta accettabile: la macchina taglia. Distanza 254 mm.
+
+_Come andrebbe fatto:_
+
+
+## a3-1000063-110 — taglio, ago 3, da riga 1000063 a riga 110
+
+_Cosa ha fatto il sistema:_ Nessuna strada nascosta accettabile: la macchina taglia. Distanza 49 mm.
+
+_Come andrebbe fatto:_
+
+
+## a3-1000273-364 — taglio, ago 3, da riga 1000273 a riga 364
+
+_Cosa ha fatto il sistema:_ Nessuna strada nascosta accettabile: la macchina taglia. Distanza 73 mm.
+
+_Come andrebbe fatto:_
+
+
+## a3-1000782-267 — taglio, ago 3, da riga 1000782 a riga 267
+
+_Cosa ha fatto il sistema:_ Nessuna strada nascosta accettabile: la macchina taglia. Distanza 177 mm.
+
+_Come andrebbe fatto:_
+

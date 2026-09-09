@@ -1080,6 +1080,28 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   | il dietro della riga sopra, radici sulla base | 148 |
   | niente eccezione per gli ultimi colori | **40** |
 
+- **Le tre regole di Lorenzo sui passaggi, e la riga che attraversa la gola: 40 tagli → 38, filo a
+  vista 3,10 → 2,70 m** (2026-09-10, quindicesima tornata, guardando il pannello: *«non ha senso che
+  fai una linea dentata a pettine e poi devi tornare indietro e fai un passaggio normale: ERRORE… passa
+  più esterno possibile, al limite con il dietro dell'ultima linea dentata che hai, e se non che
+  continui quella per raggiungere l'altra»*; poi la precisazione: *«puoi passare sul retro di qualcosa
+  già cucito basta che non ci sia cucito altro sotto… dovresti far passare il filo sul dietro di quella
+  sotto»*).
+  **(1) Sul dietro si passa finché sopra non c'è cucito altro.** Letta alla prima, la regola sembrava
+  «mai sopra una riga cucita», e misurata faceva 118 tagli. La precisazione dice un'altra cosa, ed è
+  la mappa dei denti cuciti che c'era già: una base va bene se da fare, o cucita ma senza i denti della
+  riga dopo sopra, cioè l'ultima. **(2) Il più esterno possibile:** la striscia davanti all'ultima riga
+  cucita, dove una base è ancora da fare, costa 1,5 (era 4): è il posto giusto per un passaggio, la
+  riga che verrà lo copre. **(3) La riga dentata continua attraverso la gola** (`golaMm`, default 30,
+  manopola «Gola attraversata»): in `stabilizza`, un tratto di tinta più chiara già cucita, o troppo
+  addossato alla riga prima, incastrato fra due tratti della stessa tinta e più corto della gola, non
+  spezza più la riga; fuori dal gruppo (-2) mai. È la proposta A del disegno, nella forma che ha detto
+  lui. Tratti di base 1771 → **1601**: 170 pezzi in meno, e i loro orfani con loro. Spaziatura
+  invariata (3,1% sotto mezzo passo, 0,2% in un gruppo).
+  **Misurato:** tagli 40 → **38** (16 dentro un gruppo, 2 nel sormonto, 20 fra gruppi o colori), filo
+  a vista **2,70 m** su 563, 0 righe fuori ordine su 26.012 coppie, 134 macchie incastrate. Il
+  laboratorio è online in `/lab` del sito, si rigenera a ogni push, e le risposte si scrivono in
+  `lab/RISPOSTE.md` direttamente su GitHub.
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione
