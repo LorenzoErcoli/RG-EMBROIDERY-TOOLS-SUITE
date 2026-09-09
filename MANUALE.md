@@ -347,7 +347,12 @@ farlo **dove qualcosa lo coprirà**: dentro la propria tinta lo nascondono i den
 successiva, e più in là lo nascondono i colori più scuri, che si cuciono dopo. Il tool cerca la
 strada più economica in questo senso — di solito lungo il bordo delle figure — e se non ne trova
 una decente taglia e salta. Nell'esito, «Passaggi a vista» sono i metri di filo di passaggio che
-nessuno coprirà: è la voce da tenere vicino a zero. «Righe fuori ordine» deve essere zero sempre.
+nessuno coprirà: è la voce da tenere vicino a zero. «Righe fuori ordine» deve essere zero sempre, ed
+è verificata **dente per dente sulla cucitura vera**, innesti compresi, non solo sulla sequenza
+decisa. «Scuro vicino al muro» conta le coppie di righe di colori diversi che si toccano dove lo
+scuro sta più vicino al muro del chiaro: lì il chiaro, cucito prima, copre il dietro dello scuro,
+e la base scura gli passa sopra. Non dipende dalla sequenza ma dal gradiente della foto e dalla
+scelta del muro: è il punto in cui il ricamo fa la «linea diretta» vista al primo provino.
 
 **Prima la sequenza, poi il verso.** L'ordine delle righe si fissa per primo, con la copertura come
 vincolo; solo dopo si sceglie da che capo entrare in ognuna, e si scelgono tutti i versi insieme
@@ -372,9 +377,10 @@ stesso colore un filo di passaggio si vede fra un dente e l'altro. Si nasconde s
 nella **banda di sovrapposizione** fra il colore in corso e uno più scuro accanto, larga 5 mm per
 lato lungo il bordo, dove i denti dell'uno rientrano nell'altro e la copertura è doppia; e sulla
 **linea esatta di una base futura** dello stesso colore, dove finisce sotto quel filo e sotto i denti
-della riga dopo. Tutto il resto è a vista, e se non c'è una strada di quel tipo si taglia. Il
-passaggio, quando c'è, è **mosso**: i punti si sfalsano di mezzo millimetro a destra e a sinistra
-perché il filo si confonda coi denti invece di leggersi come una riga.
+della riga dopo. Tutto il resto è a vista, e se non c'è una strada di quel tipo si taglia. E **sopra un pettine
+già cucito, di qualunque colore, un passaggio non corre mai**: l'unica eccezione è la linea di base
+della riga in corso o di una futura, il dietro del pettine, dove finisce sotto i denti della riga
+dopo. I passaggi sono dritti, punti da 3 mm: lo zig zag è stato provato e tolto.
 
 **Il passaggio lungo che sparisce sotto.** «Passaggio più lungo» dice fin dove un passaggio si cuce
 comunque, anche a costo di vedersi un po'. Oltre quella misura il passaggio si fa lo stesso, ma

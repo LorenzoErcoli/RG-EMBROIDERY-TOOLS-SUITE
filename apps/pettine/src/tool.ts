@@ -634,6 +634,7 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
           ['Corridoi', `${n1(s.corridoiM)} m di strada distinta · il più lungo ${n0(s.passaggioPiuLungoMm)} mm`],
           ['Righe inglobate', n0(s.righeInglobate)],
           ['Righe fuori ordine', n0(s.righeFuoriOrdine)],
+          ['Scuro vicino al muro', `${n0(s.copertureFraColori)} coppie di righe`],
         );
         righe.push(['Tempo', `${n1(s.secondi)} s`]);
         const dl = $('esito') as HTMLElement;

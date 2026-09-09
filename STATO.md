@@ -975,6 +975,30 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   stessi numeri di prima; nell'immagine i passaggi del primo ago corrono dentro il suo tracciato, sul
   dietro delle righe. Lo script `apps/pettine/scripts/per-colore.mjs` fa un'immagine per ago coi
   passaggi in rosa, ed è il modo giusto di guardare questa cosa.
+- **Le due regole, verificate da fuori** (Lorenzo, 2026-09-10, undicesima tornata: *«se si rispetta la
+  regola che il pettine va sopra il dietro del pettine e mai il contrario e che la linea non passa mai
+  sopra dei pettini creati ma solo sotto… se puoi eliminare lo zig zag ai passaggi ma renderli rari e
+  corrispondenti al dietro dei pettini»*).
+  **La verifica che conta.** Fin qui l'ordine di copertura era garantito da chi decide (la sequenza,
+  i controlli degli innesti). Ora lo si misura da fuori, dente per dente, con un **orologio** della
+  cucitura: per ogni coppia di righe della stessa famiglia che si toccano, quella più lontana dal muro
+  deve avere ogni dente cucito dopo ogni dente vicino dell'altra. Alla prima misura: 28 violazioni
+  nello stesso colore, **tutte** con una riga innestata. Il buco: il controllo «non si scavalca
+  nessuno» guardava solo le righe ancora in sequenza, e una macchia già innestata non c'era più — la
+  sua posizione vera è quella di chi la ospita, poi il dente, poi il posto nella macchia. Corretto con
+  una chiave ricorsiva; e una riga che ospita non si sposta più dentro un'altra macchia (faceva un
+  giro senza fine, visto). Dopo: **0 violazioni nello stesso colore** su 28.755 coppie.
+  **Quello che la verifica ha portato a galla e non si può sequenziare:** 1.326 coppie **fra colori
+  diversi**, tutte con lo scuro più vicino al muro del chiaro. I colori si cuciono dal chiaro allo
+  scuro, quindi dove il gradiente della foto va al contrario rispetto al muro il chiaro copre il dietro
+  dello scuro e poi la base scura gli passa sopra. È la «linea diretta» del primo provino, e la risposta
+  è il **doppio pettine** sull'ultima riga, che è nella lista da fare. Nell'esito è «Scuro vicino al
+  muro».
+  **Sopra un pettine cucito non si passa.** Ogni punto cucito segna la sua cella (`pettineCucito`), e da
+  lì un passaggio di qualunque colore non corre più, salvo sul dietro della riga in corso o di una
+  futura (con la tolleranza di una cella, come per la misura a vista). Costo: tagli 217 → **282**, filo
+  a vista 1,43 → **2,89 m** (la misura ora vede anche il filo che stava sopra i denti).
+  **Lo zig zag è tolto** (0,6 → 0,4 → 0): i passaggi sono dritti, punti da 3 mm sul dietro delle righe.
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione
