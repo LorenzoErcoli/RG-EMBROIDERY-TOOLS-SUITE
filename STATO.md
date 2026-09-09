@@ -999,6 +999,38 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   futura (con la tolleranza di una cella, come per la misura a vista). Costo: tagli 217 → **282**, filo
   a vista 1,43 → **2,89 m** (la misura ora vede anche il filo che stava sopra i denti).
   **Lo zig zag è tolto** (0,6 → 0,4 → 0): i passaggi sono dritti, punti da 3 mm sul dietro delle righe.
+- **«Gestione in creazione»: provata la scelta sulle strade, e la risposta vera era un'altra** (Lorenzo,
+  2026-09-10, dodicesima tornata: *«non è possibile avere questi rasafili… a partire dai punti la
+  creazione del filo va fatta tutta dopo, così che la gestione è in creazione e non a risolvere le
+  cose dopo»*).
+  **Prima misura.** Togliendo i limiti di portata (250 mm per i passaggi, 300 per le macchie, finestra
+  di ricerca da 45 a 90 mm, budget dell'A* da 150 a 600 mila celle): tagli 282 → 232, e **tutti** i 251
+  corridoi negati lo erano perché la strada passa allo scoperto, mai per limiti del calcolo. Il freno
+  era la regola di cosa è nascosto, non quanto lontano si cerca.
+  **Il salto fra due basi è nascosto.** Dal dietro della riga k al dietro della k+1 ci sono 2 mm di
+  striscia che i denti della k+1 copriranno; si contavano a vista, e due salti bastavano a bocciare un
+  corridoio. Da solo non cambiava niente (232), ma era giusto.
+  **Provata e scartata, misurando: la scelta della prossima riga sulle strade** (un Dijkstra a più
+  bersagli dal punto in cui è il filo: la prossima riga è la prima raggiunta nascosta, strada compresa;
+  le famiglie senza turno; il filo si cuce mentre si sceglie). Sembrava la traduzione letterale della
+  richiesta, e faceva **378 tagli**; con la scelta del capo d'uscita (andata-e-ritorno se dal capo
+  lontano nessuna riga è raggiungibile) **305**, in 15 minuti di calcolo. La sequenza precedente, con
+  le stesse mappe, ne fa 232: le sue tre cose in più — l'ordine per zone, i versi scelti tutti insieme
+  guardando avanti, le macchie incastrate — valgono più della vicinanza sulle strade. Il diff
+  dell'esperimento è in `scratchpad/esperimento-strade.diff` di questa sessione, non nel repo.
+  **Quello che ha funzionato: «davanti» e «dietro» sono un fatto locale.** Fin qui si misuravano dalla
+  distanza dal muro dell'ultima riga cucita (o dal fronte della famiglia, provato e peggio: 297) e
+  sbagliavano ogni volta che una famiglia aveva due zone a stadi diversi — la zona ancora da fare
+  risultava «dietro» perché l'altra era già salita. Ora una cella è davanti se entro un passo c'è una
+  base del colore in corso non ancora cucita (`baseFutura`, un conteggio che ogni riga alza all'inizio
+  del colore e abbassa quando viene cucita). Misurato: tagli **232 → 191**, filo a vista 3,36 → **2,52
+  m**, 0 righe fuori ordine su 28.755 coppie, 144 macchie incastrate. La manopola del passaggio nascosto
+  passa a **250 mm** di default: da quando nascosto vuol dire coperto davvero, la lunghezza è solo filo.
+  **Lettura per Lorenzo:** la «gestione in creazione» che rende è quella delle mappe — sapere, cella per
+  cella e nel momento giusto, cosa è coperto — non lo spostare la scelta della riga sulle strade. I 191
+  tagli che restano sono per il 50% fra righe consecutive dello stesso gruppo che non hanno strada
+  nascosta: quelle sono le righe spezzate da una tinta, con l'altro pezzo dall'altra parte del già
+  cucito, e lì la sequenza non può niente. La leva successiva è a monte: **dove si spezzano le righe**.
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione

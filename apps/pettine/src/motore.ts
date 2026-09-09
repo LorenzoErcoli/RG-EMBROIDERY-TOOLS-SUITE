@@ -137,7 +137,7 @@ export const parametriPettineDefault: ParametriPettine = {
   traslaMaxMm2: 9000, sconfinaMm: 1,
   denteMinMm: 3, denteMaxMm: 5, passoMm: 1.5, aperturaDeg: 40, nettoMm: 2.5,
   denti: true, modo: 'auto', mostraNudi: false, mostraPassaggi: true,
-  passaggioMaxMm: 30, tintaMinimaMm: 6, passaggioNascostoMm: 45, senzaPassaggiUltimiColori: 2, dst: true,
+  passaggioMaxMm: 30, tintaMinimaMm: 6, passaggioNascostoMm: 250, senzaPassaggiUltimiColori: 2, dst: true,
 };
 
 export interface StatistichePettine {
@@ -1323,6 +1323,36 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
    * dopo, che e' proprio dove Lorenzo lo vuole.
    */
   const pettineCucito = new Uint8Array(COLS * ROWS);
+  /**
+   * DAVANTI E DIETRO, cella per cella. Una cella e' «davanti» se entro un passo c'e' una base del
+   * colore in corso NON ANCORA CUCITA: li' i denti di quella riga, quando verra', copriranno il filo.
+   * E' un conteggio, non una distanza: prima si usava la distanza dal muro dell'ultima riga cucita
+   * (o il fronte della famiglia), e sbagliava ogni volta che una famiglia aveva due zone a stadi
+   * diversi — la zona ancora da fare risultava «dietro» perche' l'altra era gia' salita. Ogni riga
+   * del colore, all'inizio, somma 1 alle celle a un passo dalla sua base; quando viene cucita toglie 1.
+   */
+  const baseFutura = new Int16Array(COLS * ROWS);
+  const RAGGIO_FUTURA = Math.ceil((BASI_MM * 1.1) / CELLA);
+  const segnaBaseFutura = (t: Tratto, delta: number): void => {
+    const viste = new Set<number>();
+    for (let k = 1; k < t.base.length; k++) {
+      const a = t.base[k - 1], b = t.base[k];
+      const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (CELLA / 2)));
+      for (let u = 0; u <= n; u++) {
+        const ic = cella({ x: a.x + ((b.x - a.x) * u) / n, y: a.y + ((b.y - a.y) * u) / n });
+        if (ic < 0) continue;
+        const cc = ic % COLS, rr = (ic - cc) / COLS;
+        for (let dy = -RAGGIO_FUTURA; dy <= RAGGIO_FUTURA; dy++) for (let dx = -RAGGIO_FUTURA; dx <= RAGGIO_FUTURA; dx++) {
+          if (dx * dx + dy * dy > RAGGIO_FUTURA * RAGGIO_FUTURA) continue;
+          const x = cc + dx, y = rr + dy;
+          if (x < 0 || y < 0 || x >= COLS || y >= ROWS) continue;
+          viste.add(y * COLS + x);
+        }
+      }
+    }
+    if (t.base.length === 1) { const ic = cella(t.base[0]); if (ic >= 0) viste.add(ic); }
+    for (const j of viste) baseFutura[j] += delta;
+  };
 
   let dst: Uint8Array | null = null;
   let statDst = { punti: 0, filoM: 0, blocchi: 0, salti: 0, saltiM: 0, passaggi: 0, passaggiM: 0, puntiCorti: 0, passaggiScopertiM: 0, righeFuoriOrdine: 0, copertureFraColori: 0, righeInglobate: 0, passaggioPiuLungoMm: 0, corridoiM: 0 };
@@ -1368,7 +1398,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     const SENZA_PASSAGGI = Math.max(0, Math.round(par.senzaPassaggiUltimiColori ?? 2));
     // fin qui si prova un passaggio anche oltre la manopola, ma solo se e' tutto nascosto sotto
     // cio' che verra' dopo: e' la seconda tecnica chiesta da Lorenzo, e vale solo nei primi colori
-    const PASSAGGIO_NASCOSTO_MM = Math.max(PASSAGGIO_MM, par.passaggioNascostoMm ?? 45);
+    const PASSAGGIO_NASCOSTO_MM = Math.max(PASSAGGIO_MM, par.passaggioNascostoMm ?? 250);
     // quanto costa spostarsi di un millimetro in distanza dal muro, cioe' attraversare le righe
     // invece di correre lungo la striscia fra due di loro
     // due pezzi di uno stesso colore piu' vicini di cosi' sono la stessa zona di lavoro
@@ -1380,7 +1410,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     const MACCHIA_MM = 300;
     // e il corridoio per andare a prenderla puo' essere lungo cosi', purche' resti tutto nascosto:
     // Lorenzo, «non ci interessa se questo necessita di piu' filo»
-    const MACCHIA_CORRIDOIO_MM = 150;
+    const MACCHIA_CORRIDOIO_MM = 300;
     // di quanto si sfalsano, a destra e a sinistra, i punti di un passaggio: mosso, non dritto
     const MOSSO_MM = 0;   // lo zig zag: provato a 0,6 e 0,4, Lorenzo lo ha tolto (2026-09-10)
     let celleCorridoio = 0;
@@ -1595,9 +1625,9 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     // dopo. La tolleranza serve perche' un punto da 3 mm sta su una linea curva da mezzo millimetro
     // solo a meno di una cella, e senza il filo risultava «a vista» pur essendo sul dietro.
     const sulDietro = (i: number, c: number, dOra: number): boolean => {
+      void dOra;
       if (i < 0 || tinta[i] !== c) return false;
-      const d = distDaMuro[i];
-      if (d < 0 || d <= dOra - BASI_MM * 0.5) return false;
+      if (baseFutura[i] <= 0) return false;   // nessuna base da fare qui vicino: nessun dente verra' a coprire
       const cc = i % COLS, rr = (i - cc) / COLS;
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
         const j = (rr + dy) * COLS + (cc + dx);
@@ -1636,7 +1666,12 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
         if (dietro) return 0.8;
         if (inBanda && altra > c) return 1.5;  // il nostro bordo verso lo scuro: sormonto nostro e denti suoi
         if (inBanda && altra >= 0) return 4;   // il nostro bordo verso il chiaro: i denti della riga di bordo ci arrivano
-        return 16;                             // dentro il nostro colore, fuori dalle righe: si vede
+        // DAVANTI AL FRONTE, fra una base e l'altra: la striscia che i denti della riga dopo
+        // copriranno. Serve per SALTARE da un dietro all'altro (2 mm), non per correrci lungo: costa
+        // cinque volte il dietro, cosi' l'A* ci passa solo di traverso. Senza, un corridoio che
+        // cambiava riga due volte veniva bocciato per 4 mm «a vista» che a vista non sono.
+        if (baseFutura[i] > 0) return 4;
+        return 16;                             // niente basi da fare qui vicino: si vede
       }
       if (inBanda && altra === c) return 4;    // subito oltre il nostro bordo, sul chiaro: i nostri denti ci arrivano
       return 14;                               // sul chiaro gia' fatto: a vista
@@ -1654,7 +1689,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       const dietro = sulDietro(i, c, dOra);
       if (pettineCucito[i] && !dietro) return true;   // sopra un pettine cucito: a vista
       if (t > c) return !inBanda;
-      if (t === c) return !dietro && !(inBanda && altra > c);
+      if (t === c) return !dietro && !(inBanda && altra > c) && baseFutura[i] <= 0;
       return !(inBanda && altra === c);
     };
     /**
@@ -1671,12 +1706,12 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       // quanto ci si puo' allargare per aggirare un ostacolo. Un cammino che segue le righe invece di
       // tagliarle deve poter uscire parecchio dal rettangolo dei due capi: con 20 mm restava chiuso
       // dentro, e l'unica strada che trovava era quella dritta di traverso.
-      const marg = Math.round(45 / CELLA);
+      const marg = Math.round(90 / CELLA);
       const ca = ia % COLS, ra = Math.floor(ia / COLS), cb = ib % COLS, rb = Math.floor(ib / COLS);
       const c0 = Math.max(0, Math.min(ca, cb) - marg), c1 = Math.min(COLS - 1, Math.max(ca, cb) + marg);
       const r0 = Math.max(0, Math.min(ra, rb) - marg), r1 = Math.min(ROWS - 1, Math.max(ra, rb) + marg);
       const W = c1 - c0 + 1, H = r1 - r0 + 1;
-      if (W * H > 700000) { nienteFinestra++; return null; }
+      if (W * H > 2500000) { nienteFinestra++; return null; }
       const idx = (cc: number, rr: number): number => (rr - r0) * W + (cc - c0);
       const G0 = new Float32Array(W * H).fill(Infinity);
       const prev = new Int32Array(W * H).fill(-1);
@@ -1697,7 +1732,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       };
       G0[idx(ca, ra)] = 0; push(h(ca, ra), idx(ca, ra));
       let esplorati = 0;
-      while (heap.length && esplorati < 150000) {
+      while (heap.length && esplorati < 600000) {
         const top = pop()!;
         const n = top[1];
         if (chiuso[n]) continue;
@@ -1792,6 +1827,8 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       apri();
       { let n = 0; for (let i = 0; i < battuto.length; i++) if (battuto[i]) n++; celleCorridoio += n; }
       battuto.fill(0);   // il corridoio vale dentro un colore: col cambio ago si ricomincia
+      baseFutura.fill(0);
+      for (const t of trattiTutti) if (t.col === c) segnaBaseFutura(t, 1);
       const miei = trattiTutti.filter((t) => t.col === c);
       // per famiglia: la famiglia piu' vicina al punto corrente, poi i suoi livelli in ordine
       const perFam = new Map<number, Tratto[]>();
@@ -2127,6 +2164,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
             // il primo punto dopo l'ingresso non si forza: `vaiA` puo' essersi fermato a un decimo dal capo
             for (let i = 1; i < seq.length; i++) cuciA(seq[i], i > 1 && eDente([t], seq[i]));
             ultimoTratto = t;
+            segnaBaseFutura(t, -1);
             return;
           }
           const inverso = m === 1;
@@ -2153,6 +2191,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
           if (fuori) { prossimoTratto = t; vaiA(b1, MACCHIA_CORRIDOIO_MM); } else cuciA(b1);
           orologio++;
           ultimoTratto = t;
+          segnaBaseFutura(t, -1);
         };
         for (let k = 0; k < sequenzaRighe.length; k++) cuciRiga(sequenzaRighe[k], esito.modo[k]);
       }

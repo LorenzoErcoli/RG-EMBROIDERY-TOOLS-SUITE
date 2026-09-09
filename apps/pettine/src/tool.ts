@@ -225,7 +225,7 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
           </label>
           <label class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Passaggio nascosto più lungo</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="passaggioNascostoMm" type="text" inputmode="decimal" value="45"><span>mm</span></span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="passaggioNascostoMm" type="text" inputmode="decimal" value="250"><span>mm</span></span>
             <span class="rg-field__help">Fin dove si prova un passaggio che va oltre la misura qui sopra, e che quindi si fa solo se resta nascosto. Nascosto vuol dire: nella banda di sovrapposizione fra il colore in corso e uno più scuro accanto, o sulla linea esatta di una base futura dello stesso colore. Dentro il proprio colore un passaggio si vede fra un dente e l’altro, e allora si taglia. Le macchie piccole non contano qui: per incastrarle in una riga grande il corridoio può arrivare a 15 cm.</span>
           </label>
           <label class="rg-field rg-param-grid__wide">

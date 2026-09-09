@@ -373,7 +373,10 @@ macchia già incastrata può ospitarne un'altra. Nell'esito, «Righe inglobate»
 entrate così.
 
 **Dove un passaggio si nasconde, e dove no.** Il pettine è rado: sotto una riga futura dello
-stesso colore un filo di passaggio si vede fra un dente e l'altro. Si nasconde solo in due posti:
+stesso colore un filo di passaggio si vede fra un dente e l'altro. «Davanti» e «dietro» si decidono
+cella per cella: una cella è davanti se entro un passo c'è una base del colore in corso non ancora
+cucita, perché i denti di quella riga, quando verrà, copriranno il filo. Lì il filo può saltare da
+un dietro all'altro. Per il resto si nasconde solo in due posti:
 nella **banda di sovrapposizione** fra il colore in corso e uno più scuro accanto, larga 5 mm per
 lato lungo il bordo, dove i denti dell'uno rientrano nell'altro e la copertura è doppia; e sulla
 **linea esatta di una base futura** dello stesso colore, dove finisce sotto quel filo e sotto i denti
@@ -388,10 +391,9 @@ soltanto se il cammino è di quelli nascosti e se a vista ne rimangono meno di 3
 taglia. Negli **ultimi due colori** non si fanno: sotto di loro non viene più nessuno a coprire.
 
 **Fin dove arriva un passaggio nascosto.** «Passaggio nascosto più lungo» decide quanto si può
-andare lontano prima di arrendersi e tagliare. Il default è basso, 45 mm, perché un passaggio lungo
-non evita il taglio: ci si aggiunge, e alla fine hai tutti e due i difetti. Sul pannello a sei
-tinte: a 30 mm, cioè vietandoli del tutto, sono 269 tagli; a 45 sono 243, con 28 passaggi appena
-sopra i 3 cm; a 90 sono 185 tagli ma con 84 linee lunghe che attraversano il ricamo.
+andare lontano prima di arrendersi e tagliare. Da quando un passaggio si nasconde solo dove è
+davvero coperto, la lunghezza non è più un rischio ma solo filo: il default è 250 mm, e un corridoio
+per una macchia arriva a 300. Se vuoi meno filo e accetti più tagli, abbassalo.
 
 **Il sormonto non è una fase a parte.** I denti che un colore chiaro cuce sotto il bordo di uno
 scuro sono righe a tutti gli effetti: entrano nella sequenza insieme alle altre, con il loro verso,
