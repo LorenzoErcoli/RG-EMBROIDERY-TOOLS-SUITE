@@ -46,6 +46,15 @@ export type BoundaryPath = {
   closed: boolean;
   color?: string;
   layer?: string;
+  /**
+   * `true` = questo anello è un'AREA VUOTA (R5): dentro non si ricama.
+   *
+   * Quando nessun path lo dichiara vale la convenzione dei tracciati composti di Illustrator —
+   * il più grande è il perimetro, gli altri sono buchi. Dichiararlo serve quando i ruoli li
+   * assegna l'utente per colore: un vuoto può essere più grande del contorno che lo contiene
+   * (una cornice sottile), e l'area da sola darebbe la risposta rovesciata.
+   */
+  hole?: boolean;
 };
 
 export type ImportedBoundary = {

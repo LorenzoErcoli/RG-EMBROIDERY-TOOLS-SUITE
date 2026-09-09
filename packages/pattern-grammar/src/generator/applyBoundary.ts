@@ -1,4 +1,7 @@
 import type { BoundaryCleanupMode, GeneratedPoint, ImportedBoundary, Point, ShapeType } from "../grammar/types.ts";
+// Girare attorno a un'area vuota è una domanda già risolta nel core (R5, `avoidVoids`, usata da
+// net-45): si riusa, non si riscrive — sarebbe la seconda risposta alla stessa domanda (R28).
+import { avoidVoids, simplifyPolyline } from "@rg/core";
 
 export type BoundaryOptions = {
   width: number;
@@ -59,11 +62,7 @@ export function isInsideBoundary(point: Point, options: BoundaryOptions, toleran
     return point.x >= inset - tolerance && point.x <= options.width - inset + tolerance
       && point.y >= inset - tolerance && point.y <= options.height - inset + tolerance;
   }
-  if (options.shapeType === "imported") {
-    const polygon = importedBoundaryPolygon(options);
-    if (!polygon.length) return true;
-    return pointInPolygon(point, polygon) || nearestPointOnPolygonBoundary(point, polygon).distance <= tolerance;
-  }
+  if (options.shapeType === "imported") return insideImported(point, options, tolerance);
   const { cx, cy, rx, ry } = metrics(options);
   const nx = (point.x - cx) / rx;
   const ny = (point.y - cy) / ry;
@@ -540,7 +539,16 @@ function boundaryConnector(from: GeneratedPoint, to: GeneratedPoint, options: Bo
   if (samePoint(from, to)) return [connectorPoint(to, to)];
   if (options.shapeType === "circle") return circleBoundaryConnector(from, to, options);
   if (options.shapeType === "diamond") return diamondBoundaryConnector(from, to, options);
-  if (options.shapeType === "imported") return polygonBoundaryConnector(from, to, importedBoundaryPolygon(options), options);
+  if (options.shapeType === "imported") {
+    // Il raccordo cammina sul PERIMETRO, che però può passare sopra un'area vuota: il giro va
+    // deviato attorno ai buchi, altrimenti il filo attraversa il vuoto (misurato sulla cornice
+    // di Lorenzo: 490 punti di raccordo dentro lo specchio, fino a 26,1mm di profondità).
+    const { outer, holes } = importedBoundaryParts(options);
+    const way = polygonBoundaryConnector(from, to, outer, options);
+    if (!holes.length || way.length < 2) return way;
+    const around = avoidVoids([from, ...way], holes, options.inset ?? 0).slice(1);
+    return around.map((point) => connectorPoint(point, to));
+  }
   if (options.shapeType === "rectangle") return polygonBoundaryConnector(from, to, rectangleVertices(options), options);
   return [connectorPoint(to, to)];
 }
@@ -644,13 +652,79 @@ export function applyBoundary(points: GeneratedPoint[], options: BoundaryOptions
   return clipPathToBoundaryChunks(points, options).chunks.flatMap((chunk) => chunk.points);
 }
 
+/**
+ * I poligoni del contorno importato: **il più grande è il perimetro, gli altri sono BUCHI**.
+ *
+ * È la convenzione dei tracciati composti di Illustrator, ed è quella che serve per le AREE
+ * VUOTE (R5): una cornice è il suo rettangolo esterno meno l'apertura interna. Prima si teneva
+ * solo `closed[0]` e tutto il resto spariva in silenzio — un file con la cornice e la sua
+ * apertura veniva ricamato pieno, buco compreso.
+ */
+/**
+ * I poligoni si calcolano UNA VOLTA per contorno importato, non a ogni domanda.
+ *
+ * `isInsideBoundary` e `polygonSegmentInterval` chiamano questa funzione per OGNI punto e per
+ * OGNI segmento: rifare filtro, chiusura e ordinamento ogni volta costa quanto la geometria.
+ * Misurato sulla cornice di Lorenzo, dove l'anello dello specchio ha **20.825 vertici** perché
+ * Illustrator ha campionato le curve: senza cache la generazione non finiva in due minuti.
+ * Il costo c'era anche prima di gestire i buchi — solo, con un anello solo si notava meno.
+ */
+const boundaryCache = new WeakMap<ImportedBoundary, { outer: Point[]; holes: Point[][] }>();
+
+/** Sopra questo numero di vertici un anello si semplifica: la tolleranza è sotto il filo (R15). */
+const DENSE_RING_VERTICES = 2000;
+const RING_SIMPLIFY_MM = 0.05;
+
+function importedBoundaryParts(options: BoundaryOptions): { outer: Point[]; holes: Point[][] } {
+  const boundary = options.importedBoundary;
+  if (!boundary) return { outer: [], holes: [] };
+  const cached = boundaryCache.get(boundary);
+  if (cached) return cached;
+  const computed = computeBoundaryParts(options);
+  boundaryCache.set(boundary, computed);
+  return computed;
+}
+
+function computeBoundaryParts(options: BoundaryOptions): { outer: Point[]; holes: Point[][] } {
+  const closed = (options.importedBoundary?.paths ?? [])
+    .filter((path) => path.closed && path.points.length >= 3);
+  const byArea = (paths: typeof closed) => paths
+    .map((path) => closePolygon(
+      // Un anello con decine di migliaia di vertici va semplificato: la tolleranza è più fine
+      // del filo disegnato, quindi la forma non cambia, ma ogni test geometrico costa 30 volte
+      // meno. È `simplifyPolyline` del core, promossa da oblique — non se ne scrive un'altra.
+      path.points.length > DENSE_RING_VERTICES ? simplifyPolyline(path.points, RING_SIMPLIFY_MM) : path.points,
+    ))
+    .sort((a, b) => Math.abs(polygonArea(b)) - Math.abs(polygonArea(a)));
+
+  // Se qualcuno DICHIARA i vuoti, si crede a lui: un vuoto può essere più grande del contorno
+  // che lo contiene (una cornice sottile) e l'area darebbe la risposta rovesciata.
+  const declared = closed.filter((path) => path.hole === true);
+  if (declared.length) {
+    const perimeters = byArea(closed.filter((path) => path.hole !== true));
+    return { outer: perimeters[0] ?? [], holes: [...perimeters.slice(1), ...byArea(declared)] };
+  }
+  const all = byArea(closed);
+  return { outer: all[0] ?? [], holes: all.slice(1) };
+}
+
+/** Il solo perimetro. Resta per chi deve camminare SUL bordo esterno (i raccordi al confine). */
 function importedBoundaryPolygon(options: BoundaryOptions): Point[] {
-  const paths = options.importedBoundary?.paths ?? [];
-  const closed = paths
-    .filter((path) => path.closed && path.points.length >= 3)
-    .map((path) => closePolygon(path.points))
-    .sort((a, b) => polygonArea(b) - polygonArea(a));
-  return closed[0] ?? [];
+  return importedBoundaryParts(options).outer;
+}
+
+/** Dentro il perimetro E fuori da ogni buco. È la definizione di "area ricamabile" (R5). */
+function insideImported(point: Point, options: BoundaryOptions, tolerance: number): boolean {
+  const { outer, holes } = importedBoundaryParts(options);
+  if (!outer.length) return true;
+  const onOuter = pointInPolygon(point, outer)
+    || nearestPointOnPolygonBoundary(point, outer).distance <= tolerance;
+  if (!onOuter) return false;
+  for (const hole of holes) {
+    // Il bordo del buco è ricamabile (ci si appoggia), l'interno no.
+    if (pointInPolygon(point, hole) && nearestPointOnPolygonBoundary(point, hole).distance > tolerance) return false;
+  }
+  return true;
 }
 
 function closePolygon(points: Point[]): Point[] {
@@ -707,24 +781,31 @@ function cross(a: Point, b: Point): number {
 }
 
 function polygonSegmentInterval(a: Point, b: Point, options: BoundaryOptions): [number, number] | undefined {
-  const polygon = importedBoundaryPolygon(options);
-  if (polygon.length < 3) return [0, 1];
+  const { outer, holes } = importedBoundaryParts(options);
+  if (outer.length < 3) return [0, 1];
+  // I punti di taglio arrivano dal perimetro E dal bordo di ogni buco: senza gli incroci coi
+  // buchi un segmento che li attraversa resterebbe intero, e il vuoto verrebbe ricamato.
   const values = [0, 1];
-  for (let index = 0; index < polygon.length - 1; index++) {
-    const t = segmentIntersectionT(a, b, polygon[index], polygon[index + 1]);
-    if (t !== undefined) values.push(t);
+  for (const polygon of [outer, ...holes]) {
+    for (let index = 0; index < polygon.length - 1; index++) {
+      const t = segmentIntersectionT(a, b, polygon[index], polygon[index + 1]);
+      if (t !== undefined) values.push(t);
+    }
   }
   const sorted = [...new Set(values.map((value) => Number(value.toFixed(8))))].sort((left, right) => left - right);
+  // "Ricamabile" = dentro il perimetro e fuori da ogni buco. Si giudica sul PUNTO DI MEZZO di
+  // ogni tratto, che è il criterio che non dipende da come cadono i vertici.
+  const drawable = (point: Point) => pointInPolygon(point, outer)
+    && !holes.some((hole) => pointInPolygon(point, hole));
   const intervals: Array<[number, number]> = [];
   for (let index = 0; index < sorted.length - 1; index++) {
     const start = sorted[index];
     const end = sorted[index + 1];
     if (end - start <= EPSILON) continue;
-    const middle = (start + end) / 2;
-    if (pointInPolygon(pointOnSegment(a, b, middle), polygon)) intervals.push([start, end]);
+    if (drawable(pointOnSegment(a, b, (start + end) / 2))) intervals.push([start, end]);
   }
-  if (pointInPolygon(a, polygon)) intervals.unshift([0, sorted[1] ?? 1]);
-  if (pointInPolygon(b, polygon)) intervals.push([sorted.at(-2) ?? 0, 1]);
+  if (drawable(a)) intervals.unshift([0, sorted[1] ?? 1]);
+  if (drawable(b)) intervals.push([sorted.at(-2) ?? 0, 1]);
   const unique = intervals
     .map(([start, end]) => [Math.max(0, start), Math.min(1, end)] as [number, number])
     .filter(([start, end]) => end - start > EPSILON)

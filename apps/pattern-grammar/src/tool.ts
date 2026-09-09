@@ -13,6 +13,14 @@ import sharedPresetsRaw from './presets.shared.json?raw';
 
 const PRESET_KEY = 'pattern-grammar-engine-presets';
 
+/** Cosa può fare una tinta del cartamodello. «Area vuota» è R5: dentro non si ricama. */
+type BoundaryRole = '' | 'confine' | 'vuoto';
+const BOUNDARY_ROLES: [BoundaryRole, string][] = [
+  ['', '— (ignora)'],
+  ['confine', 'Confine di ritaglio'],
+  ['vuoto', 'Area vuota (non ricamare)'],
+];
+
 /** Preset CONDIVISI: committati in `presets.shared.json`, impacchettati nella build → li vede chiunque apra il sito.
  *  Per pubblicarne uno: "Esporta file" da un preset locale, poi committa l'entry in quel file. Sola lettura da UI. */
 const SHARED_PRESETS: Record<string, PatternConfig> = (() => {
@@ -54,6 +62,8 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
   const $ = (id: string) => root.querySelector<HTMLElement>('#' + id)!;
   const cfg = initialConfig() as Record<string, unknown>;
   let boundaryModel: ImportedBoundaryModel | null = null;
+  /** Ruolo di ogni tinta del cartamodello: perimetro, area vuota, o niente. */
+  const boundaryRoles: Record<string, BoundaryRole> = {};
   let boundarySource: { text: string; name: string } | null = null;
   let lastSvg = '';
 
@@ -188,7 +198,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       return;
     }
     choices.forEach((c, i) => {
-      const active = cfg.importedBoundary === c.boundary && cfg.shapeType === 'imported';
+      const ruolo = boundaryRoles[c.id] ?? '';
       const none = !c.color;
       const row = document.createElement('li');
       row.className = 'rg-color-map__row';
@@ -208,15 +218,15 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       const sel = document.createElement('select');
       sel.className = 'rg-select rg-color-map__target';
       sel.setAttribute('aria-label', `Ruolo per ${c.label}`);
-      for (const [v, l] of [['', '— (ignora)'], ['confine', 'Confine di ritaglio']] as [string, string][]) {
+      for (const [v, l] of BOUNDARY_ROLES) {
         const o = document.createElement('option');
         o.value = v; o.textContent = l;
-        if ((v === 'confine') === active) o.selected = true;
+        if (v === ruolo) o.selected = true;
         sel.appendChild(o);
       }
       sel.addEventListener('change', () => {
-        if (sel.value === 'confine') applyChoice(i);
-        else clearBoundary();
+        boundaryRoles[c.id] = sel.value as BoundaryRole;
+        rebuildBoundary();
         renderColorMap();
       });
 
@@ -289,18 +299,43 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
   function applyChoice(i: number) {
     const c = boundaryModel?.choices[i];
     if (!c) return;
-    cfg.importedBoundary = c.boundary;
+    boundaryRoles[c.id] = 'confine';
+    rebuildBoundary();
+  }
+
+  /**
+   * Ricostruisce la sagoma di ritaglio dai RUOLI assegnati per colore.
+   *
+   * Un tracciato marcato «Area vuota» entra nella stessa sagoma ma con `hole: true`: dentro non
+   * si ricama (R5). È il caso della cornice — il rettangolo esterno è il confine, l'apertura
+   * interna è il vuoto — che prima non si poteva esprimere: si sceglieva UN colore e basta, e
+   * gli altri sparivano.
+   */
+  function rebuildBoundary() {
+    const scelti = (boundaryModel?.choices ?? []).filter((c) => boundaryRoles[c.id]);
+    const perimetri = scelti.filter((c) => boundaryRoles[c.id] === 'confine');
+    if (!perimetri.length) {
+      cfg.importedBoundary = undefined;
+      if (cfg.shapeType === 'imported') cfg.shapeType = 'none';
+      const shapeSel = root.querySelector<HTMLSelectElement>('#f-shapeType');
+      if (shapeSel) shapeSel.value = 'none';
+      render();
+      return;
+    }
+    const paths = scelti.flatMap((c) => c.boundary.paths.map((path) => ({
+      ...path,
+      hole: boundaryRoles[c.id] === 'vuoto',
+    })));
+    const base = perimetri[0].boundary;
+    const xs = paths.flatMap((p) => p.points.map((q) => q.x));
+    const ys = paths.flatMap((p) => p.points.map((q) => q.y));
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    for (const x of xs) { if (x < minX) minX = x; if (x > maxX) maxX = x; }
+    for (const y of ys) { if (y < minY) minY = y; if (y > maxY) maxY = y; }
+    cfg.importedBoundary = { ...base, paths, bounds: { minX, minY, maxX, maxY } };
     cfg.shapeType = 'imported';
     const shapeSel = root.querySelector<HTMLSelectElement>('#f-shapeType');
     if (shapeSel) shapeSel.value = 'imported';
-    render();
-  }
-
-  function clearBoundary() {
-    cfg.importedBoundary = undefined;
-    if (cfg.shapeType === 'imported') cfg.shapeType = 'none';
-    const shapeSel = root.querySelector<HTMLSelectElement>('#f-shapeType');
-    if (shapeSel) shapeSel.value = 'none';
     render();
   }
 
