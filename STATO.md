@@ -923,6 +923,45 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   **Due lucchetti hanno reagito, e avevano ragione:** la misura della spaziatura contava le corse di
   denti come righe di base e diceva che le righe si stringono. La conversione si fa dopo le misure
   sulla geometria, e la spaziatura torna quella di sempre (3,1% sotto mezzo passo, 0,2% in un gruppo).
+- **Cambio di logica: prima cosa va con cosa, e un passaggio si nasconde solo dove si sovrappongono
+  due colori** (Lorenzo, 2026-09-10, nona tornata: *«nel ricamo la prima cosa che si fa è capire come
+  poter accorpare e ricamare blocchi dello stesso colore senza mai interrompere l'ago… il sistema deve
+  saper incastrare le varie macchie. non ci interessa se questo necessita di più filo. Purtroppo i
+  passaggi non si possono nascondere in quelli successivi a meno che non si passa nei punti di
+  sovrapposizione tra il colore che stai lavorando e uno adiacente, facendo un passaggio mosso e non
+  lineare… se non è possibile allora si taglia… non posso avere macchiette da 1cm isolate e non unite
+  al blocco sotto più grande»*).
+  **La mappa di prima mentiva.** Dava per coperto tutto ciò che stava davanti alla riga in corso
+  (costo 1,2 e 1,5): il pettine è rado, e lì un passaggio si vede fra un dente e l'altro. Ora un
+  passaggio si nasconde solo in due posti, misurati cella per cella: la **banda di sovrapposizione**
+  (5 mm per lato lungo un bordo con una tinta più scura: il 33% del pannello) e la **linea esatta di
+  una base futura** dello stesso colore — i «corridoi, dove poi andrà il filo» di Lorenzo. Tutto il
+  resto, compreso il corpo di un colore più scuro fuori dalla banda, è a vista. E i passaggi sono
+  **mossi**: mezzo millimetro a destra e a sinistra, un punto sì e uno no.
+  **Le macchie si incastrano.** Al posto dell'innesto riga per riga: nella sequenza si cercano i pezzi
+  chiusi fra due tagli e corti nell'insieme (fino a 300 mm di righe), e ognuno si incastra intero
+  dentro una riga grande — corridoio all'andata, la macchia riga per riga coi suoi versi (il conto dei
+  versi ora sa da dove parte e dove deve tornare), corridoio al ritorno. I corridoi possono arrivare a
+  150 mm e si cercano **prima** di decidere, con la stessa funzione che poi li cuce (`trovaStrada`,
+  una sola per chi pianifica e per chi cuce: R28). Il punto di innesto lo decide la copertura, come
+  prima, ma per tutte le righe della macchia insieme. Una macchia può ospitarne un'altra: la cucitura è
+  ricorsiva. La fase dei ponti dritti in impuntura è sparita: i corridoi sono passaggi veri, contati e
+  disegnati come tali.
+  **Misurato, in quest'ordine.** Con la sola regola della banda: 374 tagli (era 243 con la mappa che
+  mentiva), 226 macchie senza corridoio. Aggiungendo la base futura come corridoio: **215 tagli**, 162
+  macchie (699 righe) incastrate su 251, 81 senza corridoio, 8 negate dall'ordine, 0 senza una riga
+  grande vicina. Filo a vista **1,37 m** su 537 (era 1,69, misurato però con la mappa che mentiva).
+  Nessun passaggio lungo se non i corridoi delle macchie (124 sopra i 3 cm, il più lungo 148). I 242
+  corridoi negati lo sono tutti per il costo — la strada c'è ma passa allo scoperto — mai per limiti
+  del calcolo (finestra, budget, giro): verificato coi contatori.
+  **Due difetti trovati strada facendo.** (a) 69 punti sotto il millimetro: `vaiA` può fermarsi a un
+  decimo dal capo (un passaggio sotto il millimetro non si cuce) e la prima radice forzata faceva un
+  punto da 0,2 mm; la prima radice non si forza più, e i corti tornano a 1. (b) La misura del filo a
+  vista sulle basi future era troppo severa: un punto da 3 mm sta su una linea curva da mezzo
+  millimetro solo a meno di una cella. Con la tolleranza di una cella: 2,45 → 1,22 m.
+  **Il lucchetto sul pannello di prova cambia con onestà:** da «mai un taglio» a «al massimo un
+  taglio» — quel collegamento fra righe lontane non ha nessuna strada nascosta, e la regola dice di
+  tagliare. In compenso la macchia del secondo pezzo si incastra intera (11 righe).
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione

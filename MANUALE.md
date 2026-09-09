@@ -355,19 +355,31 @@ guardando l'intera catena invece di una riga alla volta. Una riga corta può anc
 tempi: si va fino in fondo in **impuntura** sulla linea stessa, poi si torna indietro cucendo il
 pettine, che la copre. Così il filo **esce da dove è entrato**, e non c'è bisogno di tagliare.
 
-**La riga grande si spezza per inglobare la piccola.** Quando una riga corta resterebbe isolata, e
-per raggiungerla il filo dovrebbe fare un salto o un passaggio lungo, non la si va a prendere da
-lontano: si entra dentro la riga vicina. Si cuce quella grande fino al dente giusto, si esce in
-impuntura verso la piccola, la si fa tutta con l'andata e ritorno e si rientra nella grande al dente
-dopo. Un solo filo, nessun taglio. Il punto in cui si spezza non lo decide la vicinanza ma la
-copertura: se la piccola va sopra la grande si entra dopo il tratto che le sta addosso, se invece
-è la grande a doverla coprire si entra prima. Nell'esito, «Righe inglobate» dice quante sono.
+**Le macchie si incastrano nelle righe grandi.** Prima si decide cosa va con cosa. Un pezzo di
+sequenza chiuso fra due tagli e corto nel suo insieme, fino a 30 cm di righe, è una **macchia**: non
+la si va a prendere da lontano, la si incastra. Si cuce la riga grande più comoda fino al dente
+giusto, si esce per un **corridoio** nascosto, si fa tutta la macchia riga per riga, e per un altro
+corridoio si torna al dente dopo e si riprende. Il corridoio per una macchia può arrivare a 15 cm,
+purché resti nascosto: costa filo, non tagli. I due corridoi si cercano **prima** di decidere, con la
+stessa regola che poi li cuce: se non ci sono, la macchia resta un taglio. Il punto in cui la riga
+grande si spezza lo decide la copertura, non la vicinanza: le righe della macchia che vanno sopra la
+grande entrano dopo il tratto che toccano, quelle che la grande deve coprire entrano prima. Una
+macchia già incastrata può ospitarne un'altra. Nell'esito, «Righe inglobate» dice quante righe sono
+entrate così.
+
+**Dove un passaggio si nasconde, e dove no.** Il pettine è rado: sotto una riga futura dello
+stesso colore un filo di passaggio si vede fra un dente e l'altro. Si nasconde solo in due posti:
+nella **banda di sovrapposizione** fra il colore in corso e uno più scuro accanto, larga 5 mm per
+lato lungo il bordo, dove i denti dell'uno rientrano nell'altro e la copertura è doppia; e sulla
+**linea esatta di una base futura** dello stesso colore, dove finisce sotto quel filo e sotto i denti
+della riga dopo. Tutto il resto è a vista, e se non c'è una strada di quel tipo si taglia. Il
+passaggio, quando c'è, è **mosso**: i punti si sfalsano di mezzo millimetro a destra e a sinistra
+perché il filo si confonda coi denti invece di leggersi come una riga.
 
 **Il passaggio lungo che sparisce sotto.** «Passaggio più lungo» dice fin dove un passaggio si cuce
 comunque, anche a costo di vedersi un po'. Oltre quella misura il passaggio si fa lo stesso, ma
-soltanto se il cammino resta nascosto sotto ciò che verrà dopo — il bordo dei blocchi di colore
-successivi — e se a vista ne rimangono meno di 3 mm; altrimenti si taglia. Negli **ultimi due
-colori** non si fanno: sotto di loro non viene più nessuno a coprire.
+soltanto se il cammino è di quelli nascosti e se a vista ne rimangono meno di 3 mm; altrimenti si
+taglia. Negli **ultimi due colori** non si fanno: sotto di loro non viene più nessuno a coprire.
 
 **Fin dove arriva un passaggio nascosto.** «Passaggio nascosto più lungo» decide quanto si può
 andare lontano prima di arrendersi e tagliare. Il default è basso, 45 mm, perché un passaggio lungo

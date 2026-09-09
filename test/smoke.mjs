@@ -3619,16 +3619,15 @@ console.log('Il punto pettine: il ricamo esce, e il progetto torna dentro il fil
     check('...e sta larga almeno quanto la crescita morfologica', geo.statistiche.spaziaturaDecimoMm >= cre.statistiche.spaziaturaDecimoMm - 0.05, true);
   }
   check('nessun punto sotto il millimetro (R3)', st.puntiCorti, 0);
-  // POCHI RASAFILI. Un passaggio piu' lungo della manopola si cuce lo stesso, purche' il cammino
-  // resti nascosto sotto cio' che verra' dopo: su questo pannello il filo non si taglia mai piu'.
-  // Sul pannello vero a sei tinte i tagli sono passati da 424 a 168.
-  check('la macchina non taglia mai il filo su questo pannello', st.salti, 0);
-  // e proprio perche' non taglia, nessuna riga va spezzata per inglobarne un'altra: l'innesto costa
-  // filo di impuntura, e si paga solo dove serve a evitare un taglio o un passaggio lungo.
-  // l'unica che si spezza e' quella che ospita una corsa di sormonto: raggiungerla da lontano
-  // costerebbe un passaggio lungo, infilarla nella riga accanto no. Il lucchetto tiene il numero
-  // basso: l'innesto costa impuntura, e non si fa a raffica.
-  check('si spezza solo quello che serve', st.righeInglobate <= 1, true);
+  // POCHI RASAFILI, MA ONESTI. Un passaggio si nasconde solo nella banda di sovrapposizione fra due
+  // colori o sulla linea esatta di una base futura del suo colore (Lorenzo, 2026-09-10: «se non e'
+  // possibile allora si taglia»). Su questo pannello resta UN taglio: un collegamento fra righe
+  // lontane dello stesso gruppo che non ha nessuna strada nascosta. Con la vecchia mappa, che dava
+  // per coperto tutto cio' che stava davanti alla riga in corso, era zero — ma mentiva.
+  check('al massimo un taglio su questo pannello', st.salti <= 1, true);
+  // LE MACCHIE SI INCASTRANO: il secondo pezzo del colore, chiuso fra due tagli, entra intero
+  // dentro una riga del primo per un corridoio nascosto, e ne esce per un altro.
+  check('la macchia isolata si incastra nella riga grande', st.righeInglobate > 0, true);
   // il tetto dei passaggi nascosti e' il baratto fra rasafili e linee lunghe, ed e' una manopola:
   // qualunque valore abbia, nessun passaggio lo puo' superare.
   check('nessun passaggio piu' + String.fromCharCode(39) + ' lungo del suo tetto', st.passaggioPiuLungoMm <= (par.passaggioNascostoMm ?? 90) + 0.5, true);
