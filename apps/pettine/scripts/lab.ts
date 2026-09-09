@@ -71,6 +71,8 @@ const disegna = (k: CasoStudio): string => {
 };
 
 // ---- la pagina -----------------------------------------------------------------------------------
+// dove si scrivono le risposte, da qualunque pc: il file su GitHub, gia' in modifica
+const EDIT = 'https://github.com/LorenzoErcoli/RG-EMBROIDERY-TOOLS-SUITE/edit/master/apps/pettine/lab/RISPOSTE.md';
 const schede: string[] = [];
 es.casi.forEach((k, n) => {
   const nome = `caso-${String(n + 1).padStart(2, '0')}-${k.nome}`;
@@ -89,7 +91,6 @@ es.casi.forEach((k, n) => {
   </div>
 </section>`);
 });
-const EDIT = 'https://github.com/LorenzoErcoli/RG-EMBROIDERY-TOOLS-SUITE/edit/master/apps/pettine/lab/RISPOSTE.md';
 const legenda = `<p class="legenda"><span style="background:#fff3c4">tinta dell'ago, libera</span> <span style="background:#7dd87d">dietro libero: base senza denti sopra</span> <span style="background:#7a7a7a;color:#fff">denti già cuciti</span> <span style="background:#bfbfbf">base cucita coperta</span> <span style="background:#c9d3e6">tinte dopo</span> <span style="background:#eeeeee">tinte prima</span> · <span style="color:#333">— riga cucita</span> <span style="color:#2a8fd8">— riga da fare</span> (tratteggio = sormonto) · <span style="color:#f08a1a">— strada</span> <span style="color:#e01b24">● a vista</span> · <span style="color:#2ecc40">● dove il filo è</span> <span style="color:#ff2d95">● dove deve andare</span></p>`;
 const html = `<!doctype html><html lang="it"><head><meta charset="utf-8"><title>Laboratorio dei casi · pettine</title>
 <style>body{font-family:Helvetica,Arial,sans-serif;margin:24px;color:#222;background:#fff;max-width:1400px}h1{font-size:22px}h2{font-size:15px;margin:0 0 8px}code{background:#f3f3f3;padding:1px 4px}
