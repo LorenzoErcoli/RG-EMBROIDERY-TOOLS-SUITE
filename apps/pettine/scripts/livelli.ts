@@ -23,7 +23,7 @@
 //   leggero (out/ritaglio.svg), SOLO_BASI=1 senza denti.
 
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
-import { type Point, type Polyline, polygonArea, traceRegions } from '@rg/core';
+import { type Point, type Polyline, polygonArea, traceRegions, buildDst, readDst, type DstPath } from '@rg/core';
 import { parseSvgPolylines } from '../../../packages/pattern-grammar/src/index.ts';
 import { makeRegion } from '../../pittorico/src/region.ts';
 import { rasterizza, livello, incatena } from '../../pittorico/src/iso-fill.ts';
@@ -170,6 +170,9 @@ const sfumaQui = (p: Point, n: Point): boolean => {
 };
 const perColoreDenti: string[][] = [];
 let dentiTot = 0, filoMm = 0, fermati = 0, attraversano = 0;
+// I TRATTI, strutturati, per il DST: base, denti (radice, punta) e denti di sormonto per colore piu' chiaro
+interface Tratto { col: number; fi: number; id: number; base: Point[]; denti: Array<[Point, Point]>; sotto: Map<number, Array<[Point, Point]>> }
+const trattiTutti: Tratto[] = [];
 const cucito: Point[][] = [];   // tutto cio' che si cuce (basi e denti), per il metro del filo
 // LA COPERTURA, tenuta aggiornata mentre si cuce: celle da 0,5 mm entro 0,75 mm da un filo. Serve al
 // metro finale e al rammendo per famiglia.
@@ -547,7 +550,9 @@ famiglie.forEach((f, fi) => {
    * Il SORMONTO: se verso il chiaro, entro SORM_MM, c'e' un colore piu' chiaro, il dente si cuce
    * anche con quel colore - prima, e sotto.
    */
-  const pettina = (base: Point[], col: number, famiglia: number, idLiv: number): void => {
+  const pettina = (base: Point[], col: number, famiglia: number, idLiv: number): { denti: Array<[Point, Point]>; sotto: Map<number, Array<[Point, Point]>> } => {
+    const dentiOut: Array<[Point, Point]> = [];
+    const sottoOut = new Map<number, Array<[Point, Point]>>();
     let tot = 0;
     const cum: number[] = [0];
     for (let i = 1; i < base.length; i++) { tot += Math.hypot(base[i].x - base[i - 1].x, base[i].y - base[i - 1].y); cum.push(tot); }
@@ -574,13 +579,15 @@ famiglie.forEach((f, fi) => {
       }
       const punta = { x: p.x + ux * lung, y: p.y + uy * lung };
       punti.push(p, punta, p);
+      dentiOut.push([p, punta]);
       dentiTot++; filoMm += 2 * lung;
       const qq = { x: p.x + v.x * SORM_MM, y: p.y + v.y * SORM_MM };
       const colLa = famIn(qq) === famiglia ? tintaIn(qq) : -1;
-      if (colLa >= 0 && colLa < col) { const l = puntiSotto.get(colLa) ?? []; l.push(p, punta, p); puntiSotto.set(colLa, l); }
+      if (colLa >= 0 && colLa < col) { const l = puntiSotto.get(colLa) ?? []; l.push(p, punta, p); puntiSotto.set(colLa, l); const ls = sottoOut.get(colLa) ?? []; ls.push([p, punta]); sottoOut.set(colLa, ls); }
     }
     if (punti.length >= 3) { perColoreDenti[col].push(via(punti)); cuci(punti); }
     for (const [c, l] of puntiSotto) if (l.length >= 3) perColoreDenti[c].push(via(l));
+    return { denti: dentiOut, sotto: sottoOut };
   };
 
   // I LIVELLI, uno ogni passo, ognuno addolcito in proporzione alla distanza
@@ -609,7 +616,9 @@ famiglie.forEach((f, fi) => {
       const chiudi = (): void => {
         if (cur.length >= 2 && curCol >= 0 && lunghezza(cur) >= 1.5) {
           perColore[curCol].push(via(cur)); const copia = cur.slice(); lineeFinali.push({ id: idLivello, punti: copia }); cuci(copia);
-          if (DENTI) pettina(cur, curCol, fi, idLivello);
+          const t: Tratto = { col: curCol, fi, id: idLivello, base: copia, denti: [], sotto: new Map() };
+          if (DENTI) { const r = pettina(cur, curCol, fi, idLivello); t.denti = r.denti; t.sotto = r.sotto; }
+          trattiTutti.push(t);
         }
         cur = []; curCol = -2;
       };
@@ -839,7 +848,7 @@ famiglie.forEach((f, fi) => {
     const morbida = liscia(grezza, LISCIA_MM, 0.5);
     let cur: Point[] = [], curCol = -2;
     const chiudi = (): void => {
-      if (cur.length >= 2 && curCol >= 0 && lunghezza(cur) >= 1.5) { perColore[curCol].push(via(cur)); const copia = cur.slice(); lineeFinali.push({ id: idLivello, punti: copia }); cuci(copia); if (DENTI) pettina(cur, curCol, fi, idLivello); }
+      if (cur.length >= 2 && curCol >= 0 && lunghezza(cur) >= 1.5) { perColore[curCol].push(via(cur)); const copia = cur.slice(); lineeFinali.push({ id: idLivello, punti: copia }); cuci(copia); const t: Tratto = { col: curCol, fi, id: idLivello, base: copia, denti: [], sotto: new Map() }; if (DENTI) { const r = pettina(cur, curCol, fi, idLivello); t.denti = r.denti; t.sotto = r.sotto; } trattiTutti.push(t); }
       cur = []; curCol = -2;
     };
     // qui la base sta a mezzo passo dentro: ha sempre una tinta
@@ -1064,4 +1073,165 @@ ${pz.join('\n')}
   }
   console.log(`DENTI: ${dentiTot} denti · ${(filoMm / 1000).toFixed(1)} m di filo nei denti · ${fermati} fermati a un bordo netto, ${attraversano} attraversano una sfumatura`);
   console.log(`-> apps/pettine/scripts/out/${nome}.svg`);
+}
+
+// --- 7. il DST ---------------------------------------------------------------------------------------------
+// Lorenzo (2026-09-09): «possiamo procedere per costruire il dst? e di conseguenza i passaggi?
+// ovviamente tutto si deve muovere a serpentina, in modo che sia tutto continuo».
+// Un tratto coi suoi denti E' gia' una linea continua: radice -> punta -> radice -> radice dopo. Le
+// basi di un blocco si cuciono in ordine di livello, una all'andata e una al ritorno (serpentina):
+// i capi di due livelli vicini stanno a un passo, e il collegamento e' un punto solo. Fra un pezzo e
+// l'altro: se il vuoto e' corto (fino a PASSAGGIO_MM) si attraversa con punti di passaggio, se e'
+// lungo si salta (la macchina taglia). I colori si cuciono dal chiaro allo scuro: il chiaro sta sotto.
+// Punto minimo 1 mm (R3): un dente tagliato sotto il millimetro non si cuce.
+if (DENTI) {
+  // fino a tanto si attraversa cucendo (punti da 3 mm al massimo): i capi di due livelli vicini dello
+  // stesso colore si spostano lungo il confine di colore, e con un confine obliquo lo scarto supera
+  // i 4 mm (misurato: 1.064 salti fra livelli vicini con 4 mm; il passaggio corre dentro il colore)
+  const PASSAGGIO_MM = num(17, 12);
+  const MIN_MM = 1;
+  const dist = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
+  const paths: DstPath[] = [];
+  let corrente: Point | null = null;
+  let punti = 0, filo = 0, passaggi = 0, filoPassaggi = 0, salti = 0, filoSalti = 0, corti = 0, dentiSaltati = 0;
+  let cortiSormonto = 0;
+  let saltiSerpentina = 0, saltiFamiglia = 0, saltiSormonto = 0, saltiLunghi = 0;
+  let fase: 'basi' | 'sormonto' = 'basi';
+  let ultimoTratto: Tratto | null = null, prossimoTratto: Tratto | null = null;
+  let pathPts: Array<[number, number]> = [];
+  let ago = 1;
+  const apri = (): void => { if (pathPts.length >= 2) paths.push({ needle: ago, points_mm: pathPts }); pathPts = []; };
+  // forza: radici e punte si cuciono sempre; un capo di base o un punto di passaggio sotto il
+  // millimetro si lascia perdere (il punto dopo lo assorbe)
+  const cuciA = (p: Point, forza = false): void => {
+    if (corrente) { const d = dist(corrente, p); if (d < 0.05) return; if (d < MIN_MM && !forza) return; filo += d; punti++; if (d < MIN_MM) { corti++; if (fase === 'sormonto') cortiSormonto++; if (corti <= 8 && process.env.DEBUG_CORTI) console.log(`  corto ${d.toFixed(2)} mm da (${corrente.x.toFixed(2)},${corrente.y.toFixed(2)}) a (${p.x.toFixed(2)},${p.y.toFixed(2)}) fase ${fase} tratto ${prossimoTratto?.id} denti ${prossimoTratto?.denti.length} base ${prossimoTratto?.base.length}p lunga ${prossimoTratto ? lunghezza(prossimoTratto.base).toFixed(1) : '?'}`); } }
+    pathPts.push([p.x, p.y]); corrente = p;
+  };
+  const vaiA = (p: Point): void => {
+    // il collegamento: punti di passaggio se vicino, salto se lontano
+    if (!corrente) { apri(); pathPts.push([p.x, p.y]); corrente = p; return; }
+    const d = dist(corrente, p);
+    if (d < 0.05) return;
+    if (d <= PASSAGGIO_MM) { const n = Math.ceil(d / 3); const da = corrente; for (let k = 1; k <= n; k++) cuciA({ x: da.x + ((p.x - da.x) * k) / n, y: da.y + ((p.y - da.y) * k) / n }); passaggi++; filoPassaggi += d; }
+    else {
+      apri(); pathPts.push([p.x, p.y]); corrente = p; salti++; filoSalti += d;
+      if (fase === 'sormonto') saltiSormonto++;
+      else if (ultimoTratto && prossimoTratto && ultimoTratto.fi === prossimoTratto.fi) { if (Math.abs(ultimoTratto.id - prossimoTratto.id) <= 1) saltiSerpentina++; else saltiFamiglia++; }
+      if (d > 20) saltiLunghi++;
+    }
+  };
+  // la sequenza di un tratto: base[0], poi radice-punta-radice per ogni dente, poi base[fine]
+  const sequenza = (t: Tratto, inverso: boolean): Point[] => {
+    const seq: Point[] = [];
+    const denti = inverso ? [...t.denti].reverse() : t.denti;
+    const b0 = inverso ? t.base[t.base.length - 1] : t.base[0], b1 = inverso ? t.base[0] : t.base[t.base.length - 1];
+    seq.push(b0);
+    if (!denti.length) { for (const q of ricampiona(inverso ? [...t.base].reverse() : t.base, 2)) seq.push(q); }
+    for (const [r, tip] of denti) { if (dist(r, tip) < MIN_MM) { dentiSaltati++; seq.push(r); continue; } seq.push(r, tip, r); }
+    seq.push(b1);
+    // un capo di base a meno di un millimetro dalla prima o ultima radice si lascia: l'ultima
+    // radice sta a meno di un passo dal capo, e a rovescio faceva un punto da 0,8 mm (783 casi)
+    if (seq.length >= 3 && dist(seq[0], seq[1]) < MIN_MM) seq.shift();
+    if (seq.length >= 3 && dist(seq[seq.length - 1], seq[seq.length - 2]) < MIN_MM) seq.pop();
+    return seq;
+  };
+  const eDente = (t: Tratto, q: Point): boolean => t.denti.some(([r, tip]) => r === q || tip === q);
+  for (let c = 0; c < colori.length; c++) {
+    ago = c + 1;
+    apri();
+    const miei = trattiTutti.filter((t) => t.col === c);
+    // per famiglia: la famiglia piu' vicina al punto corrente, poi i suoi livelli in ordine
+    const perFam = new Map<number, Tratto[]>();
+    for (const t of miei) { const l = perFam.get(t.fi) ?? []; l.push(t); perFam.set(t.fi, l); }
+    const famiglieRimaste = new Set(perFam.keys());
+    while (famiglieRimaste.size) {
+      let scelta = -1, best = Infinity;
+      for (const f of famiglieRimaste) { const t0 = perFam.get(f)![0]; const d = corrente ? Math.min(dist(corrente, t0.base[0]), dist(corrente, t0.base[t0.base.length - 1])) : 0; if (d < best) { best = d; scelta = f; } }
+      famiglieRimaste.delete(scelta);
+      const tratti = perFam.get(scelta)!.sort((a, b) => a.id - b.id);
+      const fatti = new Uint8Array(tratti.length);
+      for (let n = 0; n < tratti.length; n++) {
+        // il prossimo: il piu' vicino al punto corrente, con una preferenza per il livello subito dopo.
+        // (Per livelli stretti - tutto il livello k, poi tutto il k+1 - un livello spezzato in due
+        // tratti dello stesso colore faceva saltare avanti e indietro a ogni passo: 781 salti.)
+        let scelto = -1, inverso = false, dBest = Infinity;
+        const idPrec = ultimoTratto && ultimoTratto.fi === scelta ? ultimoTratto.id : -1;
+        for (let i = 0; i < tratti.length; i++) {
+          if (fatti[i]) continue;
+          const t = tratti[i];
+          const d0 = corrente ? dist(corrente, t.base[0]) : 0, d1 = corrente ? dist(corrente, t.base[t.base.length - 1]) : 1;
+          const costo = Math.min(d0, d1) + (idPrec >= 0 ? Math.abs(t.id - idPrec - 1) * 0.5 : 0);
+          if (costo < dBest) { dBest = costo; scelto = i; inverso = d1 < d0; }
+        }
+        fatti[scelto] = 1;
+        prossimoTratto = tratti[scelto];
+        const seq = sequenza(tratti[scelto], inverso);
+        vaiA(seq[0]);
+        for (let i = 1; i < seq.length; i++) cuciA(seq[i], eDente(tratti[scelto], seq[i]));
+        ultimoTratto = tratti[scelto];
+      }
+    }
+    // il sormonto: i denti che i colori piu' scuri cuciono anche con questo colore, prima e sotto.
+    // Corrono lungo la base scura: radice-punta-radice, e fra due radici lontane si salta.
+    fase = 'sormonto';
+    // le corse di sormonto (una per tratto scuro) si prendono ognuna dalla piu' vicina al punto corrente
+    const corse: Array<Array<[Point, Point]>> = [];
+    for (const t of trattiTutti) { const l = t.sotto.get(c); if (l && l.length) corse.push(l); }
+    const fatteC = new Uint8Array(corse.length);
+    for (let n = 0; n < corse.length; n++) {
+      let scelta = -1, inverso = false, dBest = Infinity;
+      for (let i = 0; i < corse.length; i++) {
+        if (fatteC[i]) continue;
+        const l = corse[i];
+        const d0 = corrente ? dist(corrente, l[0][0]) : 0, d1 = corrente ? dist(corrente, l[l.length - 1][0]) : 1;
+        if (Math.min(d0, d1) < dBest) { dBest = Math.min(d0, d1); scelta = i; inverso = d1 < d0; }
+      }
+      fatteC[scelta] = 1;
+      const l = inverso ? [...corse[scelta]].reverse() : corse[scelta];
+      for (const [r, tip] of l) { if (dist(r, tip) < MIN_MM) { dentiSaltati++; continue; } if (!corrente || dist(corrente, r) > 3) vaiA(r); else cuciA(r); cuciA(tip, true); cuciA(r, true); }
+    }
+    fase = 'basi';
+    apri();
+  }
+  const dst = buildDst({ label: 'PETTINE', coordinate_system: 'svg', paths });
+  mkdirSync('apps/pettine/scripts/out', { recursive: true });
+  writeFileSync('apps/pettine/scripts/out/pettine.dst', dst);
+  const letto = readDst(dst);
+  console.log(`DST: ${punti} punti · ${(filo / 1000).toFixed(1)} m di filo · ${colori.length} aghi · ${paths.length} blocchi (${salti} salti, ${(filoSalti / 1000).toFixed(1)} m) · ${passaggi} passaggi cuciti (${(filoPassaggi / 1000).toFixed(1)} m) · ${corti} punti sotto ${MIN_MM} mm (${cortiSormonto} nel sormonto) · salti: ${saltiSerpentina} fra livelli vicini, ${saltiFamiglia} dentro una famiglia, ${saltiSormonto} nel sormonto, ${saltiLunghi} oltre 20 mm · ${dentiSaltati} denti sotto il millimetro non cuciti · riletto: ${letto.blocks.length} blocchi, ${letto.recordCount} record, ${dst.length} byte`);
+  console.log('-> apps/pettine/scripts/out/pettine.dst');
+  // l'anteprima DAL DST (quello che la macchina vedra'), un colore per ago, i salti tratteggiati
+  const pz: string[] = [];
+  let prev: [number, number] | null = null;
+  const saltiSvg: string[] = [];
+  for (const b of letto.blocks) {
+    const col = colori[Math.min(colori.length - 1, b.needle - 1)];
+    pz.push(`<path d="${b.points_mm.map((q, i) => `${i ? 'L' : 'M'}${q[0].toFixed(1)} ${q[1].toFixed(1)}`).join('')}" fill="none" stroke="${b.needle === 1 ? '#9a9a9a' : col}" stroke-width="0.12"/>`);
+    if (prev) saltiSvg.push(`M${prev[0].toFixed(1)} ${prev[1].toFixed(1)}L${b.points_mm[0][0].toFixed(1)} ${b.points_mm[0][1].toFixed(1)}`);
+    prev = b.points_mm[b.points_mm.length - 1];
+  }
+  const NL = String.fromCharCode(10);
+  writeFileSync('apps/pettine/scripts/out/pettine-dal-dst.svg', `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${-MARG} ${-MARG} ${(WM + 2 * MARG).toFixed(1)} ${(HM + 2 * MARG).toFixed(1)}" width="${(WM + 2 * MARG).toFixed(1)}mm" height="${(HM + 2 * MARG).toFixed(1)}mm">` + NL +
+    `<rect x="${-MARG}" y="${-MARG}" width="${(WM + 2 * MARG).toFixed(1)}" height="${(HM + 2 * MARG).toFixed(1)}" fill="#f7f6f3"/>` + NL + pz.join(NL) + NL +
+    `<path d="${saltiSvg.join('')}" fill="none" stroke="#e0007f" stroke-width="0.3" stroke-dasharray="1 1"/>` + NL + `</svg>`, 'utf8');
+  console.log('-> apps/pettine/scripts/out/pettine-dal-dst.svg');
+  if (process.env.CROP) {
+    // il ritaglio DAL DST: la cucitura com'e' nel file, un colore per ago, i salti tratteggiati in rosa
+    const [x0, y0, x1, y1] = process.env.CROP.split(',').map(Number);
+    const dentroC = (q: [number, number]): boolean => q[0] >= x0 && q[0] <= x1 && q[1] >= y0 && q[1] <= y1;
+    const pc: string[] = [];
+    let precedente: [number, number] | null = null;
+    const saltiC: string[] = [];
+    for (const b of letto.blocks) {
+      const col = colori[Math.min(colori.length - 1, b.needle - 1)];
+      let d = '', pen = false;
+      for (let i = 1; i < b.points_mm.length; i++) { const a = b.points_mm[i - 1], q = b.points_mm[i]; if (dentroC(a) && dentroC(q)) { d += (pen ? 'L' : `M${a[0].toFixed(1)} ${a[1].toFixed(1)}L`) + `${q[0].toFixed(1)} ${q[1].toFixed(1)}`; pen = true; } else pen = false; }
+      if (d) pc.push(`<path d="${d}" fill="none" stroke="${b.needle === 1 ? '#9a9a9a' : col}" stroke-width="0.15"/>`);
+      if (precedente && (dentroC(precedente) || dentroC(b.points_mm[0]))) saltiC.push(`M${precedente[0].toFixed(1)} ${precedente[1].toFixed(1)}L${b.points_mm[0][0].toFixed(1)} ${b.points_mm[0][1].toFixed(1)}`);
+      precedente = b.points_mm[b.points_mm.length - 1];
+    }
+    writeFileSync('apps/pettine/scripts/out/ritaglio-dst.svg', `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" width="${(x1 - x0) * 8}" height="${(y1 - y0) * 8}">` + NL +
+      `<rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="#f7f6f3"/>` + NL + pc.join(NL) + NL +
+      `<path d="${saltiC.join('')}" fill="none" stroke="#e0007f" stroke-width="0.4" stroke-dasharray="1.5 1"/>` + NL + `</svg>`, 'utf8');
+    console.log('-> apps/pettine/scripts/out/ritaglio-dst.svg');
+  }
 }

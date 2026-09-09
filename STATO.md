@@ -682,6 +682,24 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   3 mm) e si tiene il tratto più lungo, per tutti i modi; e il prolungamento in coda era in ordine
   inverso (linea doppia). Misurato: nudo 0,1 % (69 rammendi), 2.478 tratti, 82 m di basi, 55.799
   denti, 444 m. Parametro 16 `traslaMax` (mm²), `MODO=livelli` per i livelli.
+- **IL DST, a serpentina (2026-09-09, quinta tornata).** Lorenzo, sulla v5: *«ok, per me meglio… ma
+  prima è il caso di testare cosa succede in macchina da ricamo. Possiamo procedere per costruire il
+  dst? e di conseguenza i passaggi? ovviamente tutto si deve muovere a serpentina, in modo che sia
+  tutto continuo»*. Un tratto coi suoi denti è già una linea continua (radice → punta → radice →
+  radice dopo); dentro un blocco i tratti dello stesso colore si cuciono in ordine di livello, uno
+  all'andata e uno al ritorno, e il prossimo è il più vicino al punto corrente con una preferenza
+  per il livello subito dopo (con l'ordine rigido per livello un livello spezzato in due tratti
+  faceva saltare avanti e indietro: 781 salti). Fra un tratto e l'altro: fino a 12 mm si attraversa
+  cucendo (punti da 3 mm al massimo, lungo il confine di colore), oltre si salta. Colori dal chiaro
+  allo scuro (il chiaro sta sotto); poi, per ogni colore, le corse di **sormonto** (i denti dei
+  colori più scuri cuciti prima col chiaro). Punto minimo 1 mm (R3): i denti tagliati sotto il
+  millimetro non si cuciono (216), e un capo di base a meno di un millimetro dalla radice si lascia
+  (a rovescio faceva 783 punti da 0,8 mm). Misurato sul pannello intero, 419 × 353 mm: **197.876
+  punti, 625 m di filo, 6 aghi, 572 blocchi** (568 salti per 28 m, 418 dei quali oltre 20 mm — fra
+  famiglie e nel sormonto), 2.559 passaggi cuciti (9,5 m), **0 punti sotto 1 mm**. Riletto con
+  `readDst`: 572 blocchi, 200.395 record, 601.700 byte. `pettine-dal-dst.svg` è l'anteprima letta
+  dal file (i salti tratteggiati in rosa); con `CROP` anche `ritaglio-dst.svg`. Parametro 17
+  `passaggio` (mm).
 - **Aperto:** (a) restano **232 tratti sotto i 5 mm**, quasi tutti attorno alla sfera e sulle
   creste dove due fronti si incontrano — sono le «giunture» che Lorenzo non vuole, da guardare con
   lui; (b) lo sconfinamento di 2,5 mm si vede come **peli** che attraversano le giunte; (c) il
