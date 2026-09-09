@@ -1031,6 +1031,29 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   tagli che restano sono per il 50% fra righe consecutive dello stesso gruppo che non hanno strada
   nascosta: quelle sono le righe spezzate da una tinta, con l'altro pezzo dall'altra parte del già
   cucito, e lì la sequenza non può niente. La leva successiva è a monte: **dove si spezzano le righe**.
+- **I tagli che restano hanno una forma sola: la fascia sottile con la riga di bordo spezzata** (Lorenzo,
+  2026-09-10, tredicesima tornata: *«Come ti muoveresti per risolvere quindi? Mostrami un disegno per
+  capire»*). Registrati i primi otto tagli fra righe consecutive con tutto quello che c'era intorno in
+  quel momento — chi era cucito e chi no, la strada migliore e dove si scopre — e disegnati uno per
+  uno. Sono tutti uguali: l'ago 5 è una fascia alta 10-15 mm; la riga più esterna si spezza dove la
+  fascia si restringe sotto il passo (una gola nel bordo); la sequenza fa il pezzo di qua, e quando
+  torna per il pezzo di là la gola non ha nessuna strada nascosta — sopra le righe già cucite, sotto
+  la tinta chiara già fatta, in mezzo nessuna riga futura. Rasafilo, e un orfano da 2-3 cm. Sono 90
+  tagli su 172.
+  **Quattro cose misurate strada facendo:** (a) sopra i propri denti di sormonto, nella banda dal lato
+  scuro, si può passare (lo scuro coprirà tutto): 191 → 180; (b) il pezzo dello stesso livello, se è
+  vicino (30 mm), si fa prima di salire — su tutta la zona invece era peggio (212): 180 → 176; (c) le
+  zone a 35 mm invece di 12, perché quel pezzo a 18 mm stava in un'altra zona e la regola non lo
+  vedeva: 176 → **172**; (d) il giudizio del corridoio lungo accetta la striscia «davanti» (costo medio
+  fino a 5, il vero giudice è il filo a vista), e la portata sale a 400 mm. Filo a vista **2,08 m**, 0
+  righe fuori ordine, sul pannello di prova 0 tagli e 0 righe spezzate.
+  **Le due strade, disegnate** (`apps/pettine/scripts/out/schema-fascia-sottile.svg`, decisione di
+  Lorenzo, R30): **A**, in creazione — la riga più esterna di una fascia non si spezza nella gola ma
+  segue il bordo a mezzo passo dentro, come una mano; costa densità per pochi mm, e va contro la scelta
+  fatta sulla sfera («si taglia sul bordo»). **B**, in cucitura — nella gola si passa in impuntura nel
+  colore giusto: non passa sopra niente, è filo giusto in un posto che resta nudo; oggi la regola lo
+  vieta (tinta propria senza righe future = a vista). B è un pomeriggio, A due giorni. I restanti 82
+  tagli sono cambi di gruppo e di colore: si riducono solo con l'ordine dei gruppi.
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione

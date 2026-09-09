@@ -3625,9 +3625,9 @@ console.log('Il punto pettine: il ricamo esce, e il progetto torna dentro il fil
   // lontane dello stesso gruppo che non ha nessuna strada nascosta. Con la vecchia mappa, che dava
   // per coperto tutto cio' che stava davanti alla riga in corso, era zero — ma mentiva.
   check('al massimo un taglio su questo pannello', st.salti <= 1, true);
-  // LE MACCHIE SI INCASTRANO: il secondo pezzo del colore, chiuso fra due tagli, entra intero
-  // dentro una riga del primo per un corridoio nascosto, e ne esce per un altro.
-  check('la macchia isolata si incastra nella riga grande', st.righeInglobate > 0, true);
+  // LE MACCHIE SI INCASTRANO solo se serve: se il filo non si taglia mai, nessuna riga va spezzata
+  // per ospitarne un'altra; se un taglio c'e', il pezzo isolato entra intero in una riga grande.
+  check('si spezza una riga solo se altrimenti si taglierebbe', st.salti === 0 ? st.righeInglobate === 0 : st.righeInglobate > 0, true);
   // il tetto dei passaggi nascosti e' il baratto fra rasafili e linee lunghe, ed e' una manopola:
   // qualunque valore abbia, nessun passaggio lo puo' superare.
   check('nessun passaggio piu' + String.fromCharCode(39) + ' lungo del suo tetto', st.passaggioPiuLungoMm <= (par.passaggioNascostoMm ?? 90) + 0.5, true);

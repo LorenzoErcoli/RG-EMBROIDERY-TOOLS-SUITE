@@ -137,7 +137,7 @@ export const parametriPettineDefault: ParametriPettine = {
   traslaMaxMm2: 9000, sconfinaMm: 1,
   denteMinMm: 3, denteMaxMm: 5, passoMm: 1.5, aperturaDeg: 40, nettoMm: 2.5,
   denti: true, modo: 'auto', mostraNudi: false, mostraPassaggi: true,
-  passaggioMaxMm: 30, tintaMinimaMm: 6, passaggioNascostoMm: 250, senzaPassaggiUltimiColori: 2, dst: true,
+  passaggioMaxMm: 30, tintaMinimaMm: 6, passaggioNascostoMm: 400, senzaPassaggiUltimiColori: 2, dst: true,
 };
 
 export interface StatistichePettine {
@@ -1398,11 +1398,13 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     const SENZA_PASSAGGI = Math.max(0, Math.round(par.senzaPassaggiUltimiColori ?? 2));
     // fin qui si prova un passaggio anche oltre la manopola, ma solo se e' tutto nascosto sotto
     // cio' che verra' dopo: e' la seconda tecnica chiesta da Lorenzo, e vale solo nei primi colori
-    const PASSAGGIO_NASCOSTO_MM = Math.max(PASSAGGIO_MM, par.passaggioNascostoMm ?? 250);
+    const PASSAGGIO_NASCOSTO_MM = Math.max(PASSAGGIO_MM, par.passaggioNascostoMm ?? 400);
     // quanto costa spostarsi di un millimetro in distanza dal muro, cioe' attraversare le righe
     // invece di correre lungo la striscia fra due di loro
     // due pezzi di uno stesso colore piu' vicini di cosi' sono la stessa zona di lavoro
-    const ZONA_MM = 12;
+    const ZONA_MM = 35;
+    // un pezzo dello stesso livello entro questa distanza si fa prima di salire al livello dopo
+    const STESSO_LIVELLO_MM = 30;
     // una riga fino a questa lunghezza si puo' inglobare dentro una vicina, spezzandola; e il punto
     // di innesto non puo' distare piu' di INNESTO_MM da un capo della riga da inglobare
     // una MACCHIA e' un pezzo di sequenza chiuso fra due tagli e lungo al massimo cosi': si incastra
@@ -1410,7 +1412,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     const MACCHIA_MM = 300;
     // e il corridoio per andare a prenderla puo' essere lungo cosi', purche' resti tutto nascosto:
     // Lorenzo, «non ci interessa se questo necessita di piu' filo»
-    const MACCHIA_CORRIDOIO_MM = 300;
+    const MACCHIA_CORRIDOIO_MM = 400;
     // di quanto si sfalsano, a destra e a sinistra, i punti di un passaggio: mosso, non dritto
     const MOSSO_MM = 0;   // lo zig zag: provato a 0,6 e 0,4, Lorenzo lo ha tolto (2026-09-10)
     let celleCorridoio = 0;
@@ -1454,7 +1456,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       const limite = ultimi ? Math.min(PASSAGGIO_MM, 60) : PASSAGGIO_MM;
       if (d <= limite) return instrada(da, a, ago - 1, dOra, ultimi ? 2.5 : 8);
       if (ultimi || d > portata) return null;
-      const v = instrada(da, a, ago - 1, dOra, 3);
+      const v = instrada(da, a, ago - 1, dOra, 5);
       return v && quantoAVista(v, ago - 1, dOra) <= SCOPERTO_MAX_MM ? v : null;
     };
     const vaiA = (p: Point, portata?: number): void => {
@@ -1647,7 +1649,9 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       // SOPRA UN PETTINE GIA' CUCITO NON SI PASSA, di nessun colore: l'unica eccezione e' la linea di
       // base della riga in corso o di una futura del nostro colore (il dietro del pettine)
       const dietro = sulDietro(i, c, dOra);
-      if (pettineCucito[i] && !dietro) return 16;
+      // PROVA: nella banda dal lato scuro i denti gia' cuciti sono il sormonto di questo colore, e il
+      // colore scuro coprira' tutto, passaggio compreso: li' sopra si puo' passare
+      if (pettineCucito[i] && !dietro && !(t > c && inBanda)) return 16;
       if (t > c) {
         // la banda del bordo di un colore che viene dopo: sparisce, ma e' fuori dal tracciato del
         // nostro colore, e Lorenzo preferisce il dietro dell'ultima riga nostra («magari l'ultimo,
@@ -1687,7 +1691,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       if (t < 0) return true;
       const inBanda = bordoDist[i] <= BANDA_CELLE, altra = bordoAltra[i];
       const dietro = sulDietro(i, c, dOra);
-      if (pettineCucito[i] && !dietro) return true;   // sopra un pettine cucito: a vista
+      if (pettineCucito[i] && !dietro && !(t > c && inBanda)) return true;   // sopra un pettine cucito: a vista
       if (t > c) return !inBanda;
       if (t === c) return !dietro && !(inBanda && altra > c) && baseFutura[i] <= 0;
       return !(inBanda && altra === c);
@@ -1920,7 +1924,17 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
             cambiZona++;
           }
           for (let i = 0; i < tratti.length; i++) if (!fatti[i] && zona[i] === zonaInCorso) ordine.push(i);
-          ordine.sort((a, b) => daRif(a) - daRif(b));
+          // PRIMA SI FINISCE IL LIVELLO, POI SI SALE (visto nei casi 6 e 7 del 2026-09-10): se il
+          // livello e' spezzato in due pezzi da un vuoto e si sale al livello dopo prima di fare il
+          // secondo pezzo, il vuoto si ritrova coperto dai denti gia' cuciti e non si puo' piu'
+          // attraversare: taglio. Facendo tutti i pezzi del livello prima di salire, il passaggio
+          // nel vuoto sta sotto i denti futuri del livello dopo, nascosto. Costa filo, non tagli.
+          // Ma solo se il pezzo e' VICINO (entro STESSO_LIVELLO_MM): finire il livello su tutta la
+          // zona prima di salire allungava troppi viaggi (misurato: 180 -> 212 tagli).
+          const livelloDi = (i: number): number => Math.round(tratti[i].d / BASI_MM);
+          const livelloUltimo = sequenzaRighe.length ? livelloDi(sequenzaRighe[sequenzaRighe.length - 1]) : -1;
+          const vicinoStessoLivello = (i: number): number => (livelloDi(i) === livelloUltimo && daRif(i) <= STESSO_LIVELLO_MM ? 0 : 1);
+          ordine.sort((a, b) => vicinoStessoLivello(a) - vicinoStessoLivello(b) || daRif(a) - daRif(b));
           let scelto = -1;
           for (const i of ordine) {
             let ok = true;
