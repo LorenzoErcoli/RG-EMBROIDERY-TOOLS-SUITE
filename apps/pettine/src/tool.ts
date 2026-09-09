@@ -220,7 +220,7 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
           <label class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Passaggio più lungo</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="passaggioMaxMm" type="text" inputmode="decimal" value="30"><span>mm</span></span>
-            <span class="rg-field__help">Fin dove si prova a cucire invece di tagliare. Un passaggio corto sparisce fra le righe, uno lungo si vede: a 15 mm il filo non attraversa mai, ma i tagli sono 552; a 30 sono 377; a 200 scendono a 132 e restano 245 passaggi lunghi.</span>
+            <span class="rg-field__help">Fin dove un passaggio si cuce comunque, anche se un pezzetto si vedrà. Oltre questa misura il passaggio si fa lo stesso, ma solo se il cammino resta nascosto sotto ciò che verrà dopo e a vista ne resta meno di 3 mm: sul pannello a sei tinte i tagli passano da 424 a 168. Negli ultimi due colori i passaggi lunghi non si fanno, perché lì non viene più nessuno a coprirli.</span>
           </label>
           <label class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Tinta più corta</span>

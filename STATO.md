@@ -809,6 +809,38 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   passaggio attraversa più di 3 cm. **Provate e scartate, misurando:** raggruppare i tratti in zone e
   finirne una prima di passare all'altra (già succedeva: 72 zone, 72 ingressi); e trattare le
   «colonne» come zone, che ha peggiorato i passaggi lunghi e rotto l'ordine di copertura in 28 punti.
+- **I 424 tagli sono 168: prima la sequenza, poi il verso, e i passaggi lunghi che spariscono sotto**
+  (Lorenzo, 2026-09-10, quinta tornata: *«io devo avere pochi rasafilo e pochissimi passaggi. è
+  importante prima avere una sequenza sensata e usare gli strumenti che abbiamo per costruirla. cosa
+  blocca e perché spezzetti così tanto e non rimetti insieme ai blocchi più grandi?»*).
+  **Cosa bloccava, misurato.** I 424 tagli del pannello a sei tinte erano 105 fra righe vicine dello
+  stesso gruppo, 106 fra righe lontane dello stesso gruppo, 161 nel sormonto, il resto fra gruppi o
+  colori. Guardando **le righe fra cui il filo si taglia**: mediana 24 e 28 mm, e in 136 casi su 190
+  almeno una delle due sta sotto i 25 mm. Non è il motore che «spezzetta»: sono le righe stesse a
+  essere corte, perché una curva di livello che attraversa più tinte diventa un pezzo per tinta, e
+  ogni colore deve poi andarseli a prendere. Con il passaggio fermo a 30 mm, **79 di quei salti erano
+  sotto i 45 mm**: vicini, ma non cucibili.
+  **Provata e scartata:** inglobare i denti di sormonto nella riga del loro colore più vicina (prima
+  uno a uno, poi a corse intere). Sembra la risposta giusta a *«inglobare i pezzi piccoli dentro
+  quelli grandi»*, e invece **peggiora**: 468 e 481 salti contro 424. Le corse di sormonto corrono
+  lungo la base scura e sono già una catena efficiente; attaccarle alle righe la spezza, e il filo
+  paga il viaggio di andata e quello di ritorno.
+  **Quello che ha funzionato, due cose.** (a) **Prima la sequenza, poi il verso.** Erano due
+  decisioni prese insieme, riga per riga: si sceglieva la più vicina e la si entrava dal capo più
+  vicino — giusto sul momento, sbagliato una riga dopo. Ora l'ordine si fissa per primo (col vincolo
+  di copertura intatto) e i versi si scelgono **tutti insieme** con una programmazione dinamica: per
+  ogni riga tre modi (avanti, indietro, l'andata-e-ritorno che esce da dove entra) e la catena che
+  costa meno, con un rasafilo che vale 300 mm di filo. Da sola: 424 → 413.
+  (b) **Il passaggio lungo che sparisce sotto** — la tecnica B di Lorenzo, finalmente usata «spesso».
+  «Passaggio più lungo» non è più un tetto: è fin dove un passaggio si cuce *comunque*. Oltre, si
+  prova lo stesso, ma solo se il cammino è tutto sotto ciò che verrà dopo **e a vista ne restano meno
+  di 3 mm** (il costo medio dell'A* non bastava: si misura il cammino millimetro per millimetro).
+  Negli ultimi due colori non si fa, che è la regola di prima. Insieme: **424 → 168 salti**, blocchi
+  427 → 173, metri di salto 29,7 → 13,1. Il prezzo: 20 m di filo di passaggio in più (12,2 → 32,9 su
+  541) e il filo a vista da 1,5 a 3,1 m, cioè lo 0,6% del totale. Nel test end-to-end il pannello di
+  prova ora **non si taglia mai** (5 blocchi → 4, 1 salto → 0), ed è il lucchetto nuovo.
+  **Resta da guardare col ricamo in mano:** i passaggi «di traverso alle righe» raddoppiano (170 →
+  338). Sono coperti, ma sono filo in più sotto la superficie.
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione

@@ -349,6 +349,19 @@ strada più economica in questo senso — di solito lungo il bordo delle figure 
 una decente taglia e salta. Nell'esito, «Passaggi a vista» sono i metri di filo di passaggio che
 nessuno coprirà: è la voce da tenere vicino a zero. «Righe fuori ordine» deve essere zero sempre.
 
+**Prima la sequenza, poi il verso.** L'ordine delle righe si fissa per primo, con la copertura come
+vincolo; solo dopo si sceglie da che capo entrare in ognuna, e si scelgono tutti i versi insieme
+guardando l'intera catena invece di una riga alla volta. Una riga corta può anche farsi in due
+tempi: si va fino in fondo in **impuntura** sulla linea stessa, poi si torna indietro cucendo il
+pettine, che la copre. Così il filo **esce da dove è entrato**, e non c'è bisogno di tagliare.
+
+**Il passaggio lungo che sparisce sotto.** «Passaggio più lungo» dice fin dove un passaggio si cuce
+comunque, anche a costo di vedersi un po'. Oltre quella misura il passaggio si fa lo stesso, ma
+soltanto se il cammino resta nascosto sotto ciò che verrà dopo — il bordo dei blocchi di colore
+successivi — e se a vista ne rimangono meno di 3 mm; altrimenti si taglia. Negli **ultimi due
+colori** non si fanno: sotto di loro non viene più nessuno a coprire. Su un pannello a sei tinte
+questo porta i tagli da 424 a 168, al prezzo di una ventina di metri di filo di passaggio in più.
+
 ## Se qualcosa non torna
 
 - **"Non vedo niente in anteprima."** Controlla di aver assegnato i **ruoli** ai colori (spesso manca l'area da riempire), e prova **Adatta**.

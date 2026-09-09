@@ -1278,10 +1278,19 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     const lunghezzePassaggi: number[] = [];
     // fin qui una riga si puo' servire con andata e ritorno: piu' lunga, il filo nascosto costa piu' del salto
     const ANDATA_RITORNO_MAX = 70;
-    // oltre questa distanza il pezzo dopo e' «lontano»: il passaggio, se pure si trova, sara' lungo
-    const LONTANO_MM = 60;
+    // quanto costa un rasafilo, misurato in millimetri di filo: e' la moneta con cui si confrontano
+    // un salto e i modi per evitarlo (fare un giro piu' lungo, o l'andata e ritorno in impuntura).
+    // Alto apposta: Lorenzo (2026-09-10) «io devo avere pochi rasafilo e pochissimi passaggi».
+    const RASAFILO_MM = 300;
     // quanti ULTIMI colori non fanno passaggi lunghi: sotto di loro non viene piu' nessuno a coprirli
     const SENZA_PASSAGGI = Math.max(0, Math.round(par.senzaPassaggiUltimiColori ?? 2));
+    // fin qui si prova un passaggio anche oltre la manopola, ma solo se e' tutto nascosto sotto
+    // cio' che verra' dopo: e' la seconda tecnica chiesta da Lorenzo, e vale solo nei primi colori
+    const PASSAGGIO_NASCOSTO_MM = 250;
+    // e di quel cammino non piu' di tanti millimetri possono restare scoperti: e' il vero controllo,
+    // il costo medio non bastava (Lorenzo: «i passaggi rischiano di vedersi»)
+    const SCOPERTO_MAX_MM = 3;
+    let passaggiNascosti = 0;
     let saltiSerpentina = 0, saltiFamiglia = 0, saltiSormonto = 0, saltiLunghi = 0, saltiVersoRigaCorta = 0, saltiVersoRigaLunga = 0;
     let fase: 'basi' | 'sormonto' = 'basi';
     let ultimoTratto: Tratto | null = null, prossimoTratto: Tratto | null = null;
@@ -1313,6 +1322,18 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       const ultimi = ago > colori.length - SENZA_PASSAGGI;
       const limite = ultimi ? Math.min(PASSAGGIO_MM, 60) : PASSAGGIO_MM;
       if (d > CORTO_MM && d <= limite) strada = instrada(corrente, p, ago - 1, dOra, ultimi ? 2.5 : 8);
+      // IL PASSAGGIO LUNGO CHE SPARISCE SOTTO (Lorenzo, 2026-09-10): «altra cosa che puoi inserire,
+      // soprattutto nei primi stop di colore, sono delle impunture che passano al bordo dei blocchi
+      // di colore successivi e che quindi verranno coperti. Questo potresti usarlo spesso».
+      // Oltre il limite della manopola si prova lo stesso, ma solo se la strada e' tutta coperta:
+      // costo medio sotto 2 vuol dire che ogni millimetro passa sotto una tinta piu' scura o sopra
+      // una base gia' cucita. Se una strada cosi' non c'e', si taglia come prima.
+      if (!strada && !ultimi && d > limite && d <= PASSAGGIO_NASCOSTO_MM) {
+        const via3 = instrada(corrente, p, ago - 1, dOra, 2);
+        // il costo medio non basta: qui si misura quanto di quel cammino resterebbe DAVVERO a vista,
+        // millimetro per millimetro. Se supera SCOPERTO_MAX_MM la strada non vale, e si taglia.
+        if (via3 && quantoAVista(via3, ago - 1, dOra) <= SCOPERTO_MAX_MM) { strada = via3; passaggiNascosti++; }
+      }
       if (d <= CORTO_MM || strada) {
         // i punti del passaggio: uno ogni 3 mm, e l'ultimo mai sotto il millimetro (R3) — l'arrivo e'
         // il capo della riga e deve essere esatto, quindi si toglie il penultimo invece di accorciare
@@ -1362,6 +1383,19 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
         }
         if (d > 20) saltiLunghi++;
       }
+    };
+    // quanto di un cammino resterebbe scoperto, misurato a passi di mezzo millimetro
+    const quantoAVista = (via2: Point[], c: number, dOra: number): number => {
+      let scoperto = 0;
+      for (let i = 1; i < via2.length; i++) {
+        const a = via2[i - 1], b = via2[i];
+        const n = Math.max(1, Math.ceil(dist(a, b) / 0.5));
+        for (let k = 0; k < n; k++) {
+          const q = { x: a.x + ((b.x - a.x) * (k + 0.5)) / n, y: a.y + ((b.y - a.y) * (k + 0.5)) / n };
+          if (aVista(q, c, dOra)) scoperto += dist(a, b) / n;
+        }
+      }
+      return scoperto;
     };
     // LA MAPPA DI CHI COPRE CHI, per instradare i passaggi. Un passaggio cucito resta a vista se
     // nessuno gli passa piu' sopra: i colori si cuciono dal chiaro allo scuro, quindi una cella di
@@ -1547,64 +1581,97 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
         const VICINE_MM = BASI_MM + 1;
         const distBox = (a: typeof box[0], b: typeof box[0]): number =>
           Math.hypot(Math.max(0, Math.max(a.x0 - b.x1, b.x0 - a.x1)), Math.max(0, Math.max(a.y0 - b.y1, b.y0 - a.y1)));
+        /**
+         * PRIMA LA SEQUENZA, POI IL VERSO (Lorenzo, 2026-09-10: «io devo avere pochi rasafilo e
+         * pochissimi passaggi. e' importante prima avere una sequenza sensata e usare gli strumenti
+         * che abbiamo per costruirla»).
+         *
+         * Erano due decisioni prese insieme, una riga per volta: si sceglieva la riga piu' vicina e
+         * la si entrava dal capo piu' vicino. Giusto sul momento, sbagliato una riga dopo — si usciva
+         * dalla parte opposta a dove bisognava andare, e la macchina tagliava. Qui l'ordine si fissa
+         * per primo (con il vincolo di copertura, che non si tocca), e poi i versi si scelgono TUTTI
+         * INSIEME con una programmazione dinamica: per ogni riga tre modi — avanti, indietro, oppure
+         * l'andata in impuntura e il ritorno col pettine, che fa uscire il filo da dove e' entrato —
+         * e si tiene la catena che costa meno, sapendo che un rasafilo costa quanto RASAFILO_MM di
+         * filo. E' l'unico punto in cui si puo' guardare avanti senza toccare l'ordine di copertura.
+         */
         const fatti = new Uint8Array(tratti.length);
         let primo = 0;
+        const sequenzaRighe: number[] = [];
+        let rif: Point[] = corrente ? [corrente] : [];
         for (let n = 0; n < tratti.length; n++) {
           while (primo < tratti.length && fatti[primo]) primo++;
-          // i candidati in ordine di vicinanza al punto corrente; si prende il primo AMMISSIBILE,
-          // cioe' quello che non scavalca una riga piu' vicina al muro che gli stia addosso
+          // i candidati in ordine di vicinanza a dove il filo si trovera'; si prende il primo
+          // AMMISSIBILE, cioe' quello che non scavalca una riga piu' vicina al muro che gli stia addosso
           const ordine: number[] = [];
           for (let i = 0; i < tratti.length; i++) if (!fatti[i]) ordine.push(i);
-          ordine.sort((a, b) => {
-            const da = corrente ? Math.min(dist(corrente, tratti[a].base[0]), dist(corrente, tratti[a].base[tratti[a].base.length - 1])) : tratti[a].d;
-            const db = corrente ? Math.min(dist(corrente, tratti[b].base[0]), dist(corrente, tratti[b].base[tratti[b].base.length - 1])) : tratti[b].d;
-            return da - db;
-          });
-          let scelto = -1, inverso = false;
+          const daRif = (i: number): number => {
+            const t2 = tratti[i];
+            if (!rif.length) return t2.d;
+            let m = Infinity;
+            for (const q of rif) m = Math.min(m, dist(q, t2.base[0]), dist(q, t2.base[t2.base.length - 1]));
+            return m;
+          };
+          ordine.sort((a, b) => daRif(a) - daRif(b));
+          let scelto = -1;
           for (const i of ordine) {
             let ok = true;
             for (let j = primo; j < tratti.length && tratti[j].d < tratti[i].d - 1e-6; j++) {
               if (fatti[j] || j === i) continue;
               if (distBox(box[i], box[j]) < VICINE_MM) { ok = false; break; }
             }
-            if (!ok) continue;
-            const t = tratti[i];
-            const d0 = corrente ? dist(corrente, t.base[0]) : 0, d1 = corrente ? dist(corrente, t.base[t.base.length - 1]) : 1;
-            scelto = i; inverso = d1 < d0;
-            break;
+            if (ok) { scelto = i; break; }
           }
-          if (scelto < 0) { scelto = ordine[0]; inverso = false; }
+          if (scelto < 0) scelto = ordine[0];
           // il controllo vero: la riga scelta non deve stare addosso a una piu' vicina al muro non ancora fatta
           for (let j = primo; j < tratti.length && tratti[j].d < tratti[scelto].d - 1e-6; j++) {
             if (fatti[j] || j === scelto) continue;
             if (distBox(box[scelto], box[j]) < VICINE_MM) { inversioni++; break; }
           }
           fatti[scelto] = 1;
-          prossimoTratto = tratti[scelto];
-          const t = tratti[scelto];
-          // conviene uscire da dove si entra? Si guarda dove sta il pezzo che verra' dopo.
-          const entrata = inverso ? t.base[t.base.length - 1] : t.base[0];
-          const uscita = inverso ? t.base[0] : t.base[t.base.length - 1];
-          let dopoEntrata = Infinity, dopoUscita = Infinity;
-          for (let i = 0; i < tratti.length; i++) {
-            if (fatti[i]) continue;
-            for (const q of [tratti[i].base[0], tratti[i].base[tratti[i].base.length - 1]]) {
-              dopoEntrata = Math.min(dopoEntrata, dist(entrata, q));
-              dopoUscita = Math.min(dopoUscita, dist(uscita, q));
-            }
+          sequenzaRighe.push(scelto);
+          const ts = tratti[scelto];
+          rif = [ts.base[0], ts.base[ts.base.length - 1]];
+        }
+        // i quattro modi: 0 avanti · 1 indietro · 2 andata-e-ritorno entrando dal capo iniziale ·
+        // 3 andata-e-ritorno entrando dal capo finale. Nei modi 2 e 3 il filo esce da dove e' entrato.
+        const capi = sequenzaRighe.map((i) => [tratti[i].base[0], tratti[i].base[tratti[i].base.length - 1]] as [Point, Point]);
+        const lungRiga = sequenzaRighe.map((i) => lunghezza(tratti[i].base));
+        const modi = sequenzaRighe.map((i, k) => (tratti[i].denti.length && lungRiga[k] <= ANDATA_RITORNO_MAX ? [0, 1, 2, 3] : [0, 1]));
+        const entra = (k: number, m: number): Point => (m === 1 || m === 3 ? capi[k][1] : capi[k][0]);
+        const esce = (k: number, m: number): Point => (m === 0 || m === 3 ? capi[k][1] : capi[k][0]);
+        // quanto costa il modo: l'andata e ritorno paga la lunghezza della riga in filo nascosto
+        const costoModo = (k: number, m: number): number => (m >= 2 ? lungRiga[k] : 0);
+        // quanto costa il collegamento: la sua lunghezza, piu' il rasafilo se e' troppo lungo da cucire
+        const costoTra = (x: Point, y: Point): number => {
+          const d = dist(x, y);
+          if (d <= PASSAGGIO_MM) return d;                          // il passaggio si cuce di sicuro
+          if (d <= PASSAGGIO_NASCOSTO_MM) return d + RASAFILO_MM * 0.35;  // forse si nasconde, forse no
+          return d + RASAFILO_MM;                                   // troppo: la macchina taglia
+        };
+        const G: number[][] = [], daDove: number[][] = [];
+        for (let k = 0; k < sequenzaRighe.length; k++) { G.push([Infinity, Infinity, Infinity, Infinity]); daDove.push([-1, -1, -1, -1]); }
+        if (sequenzaRighe.length) {
+          for (const m of modi[0]) G[0][m] = costoModo(0, m) + (corrente ? costoTra(corrente, entra(0, m)) : 0);
+          for (let k = 1; k < sequenzaRighe.length; k++) for (const m of modi[k]) {
+            let best = Infinity, bm = -1;
+            for (const pm of modi[k - 1]) { const v = G[k - 1][pm] + costoTra(esce(k - 1, pm), entra(k, m)); if (v < best) { best = v; bm = pm; } }
+            G[k][m] = best + costoModo(k, m); daDove[k][m] = bm;
           }
-          const lungaRiga = lunghezza(t.base);
-          // Quando conviene: o il giro in piu' per tornare al capo di entrata costa piu' del filo
-          // dell'impuntura, oppure uscendo dall'altra parte il pezzo dopo resta cosi' lontano che
-          // quasi sicuramente si finirebbe per tagliare. Nella serpentina normale non scatta mai —
-          // li' la riga dopo comincia proprio dove finisce questa — ed e' giusto cosi'.
-          const andataRitorno = t.denti.length > 0
-            && lungaRiga <= ANDATA_RITORNO_MAX
-            && Number.isFinite(dopoUscita)
-            && (dopoUscita - dopoEntrata > lungaRiga
-              || (dopoUscita > LONTANO_MM && dopoEntrata < dopoUscita - CORTO_MM));
-          const seq = andataRitorno ? sequenzaAndataRitorno(t, inverso) : sequenza(t, inverso);
-          if (andataRitorno) { andateRitorno++; filoImpuntura += lungaRiga; }
+        }
+        const scelti = new Array<number>(sequenzaRighe.length).fill(0);
+        if (sequenzaRighe.length) {
+          const ult = sequenzaRighe.length - 1;
+          let bm = modi[ult][0], best = Infinity;
+          for (const m of modi[ult]) if (G[ult][m] < best) { best = G[ult][m]; bm = m; }
+          for (let k = ult; k >= 0; k--) { scelti[k] = bm; if (k > 0) bm = daDove[k][bm]; }
+        }
+        for (let k = 0; k < sequenzaRighe.length; k++) {
+          const t = tratti[sequenzaRighe[k]];
+          const m = scelti[k];
+          prossimoTratto = t;
+          const seq = m >= 2 ? sequenzaAndataRitorno(t, m === 3) : sequenza(t, m === 1);
+          if (m >= 2) { andateRitorno++; filoImpuntura += lungRiga[k]; }
           vaiA(seq[0]);
           for (let i = 1; i < seq.length; i++) cuciA(seq[i], eDente(t, seq[i]));
           ultimoTratto = t;
@@ -1641,6 +1708,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       console.log(`PASSAGGI per lunghezza: mediana ${q(0.5)} mm · 90% sotto ${q(0.9)} · il piu' lungo ${v.length ? v[v.length - 1].toFixed(0) : 0} · oltre 30 mm ne sono ${v.filter((x) => x > 30).length}`);
     }
     console.log(`ANDATA E RITORNO su ${andateRitorno} righe corte (${(filoImpuntura / 1000).toFixed(2)} m di impuntura nascosta sotto i denti)`);
+    console.log(`PASSAGGI LUNGHI NASCOSTI: ${passaggiNascosti} (oltre la manopola, ma tutti sotto cio' che li coprira')`);
     console.log(`SALTI per tipo: ${saltiSerpentina} fra righe vicine dello stesso gruppo · ${saltiFamiglia} fra righe lontane dello stesso gruppo · ${saltiSormonto} nel sormonto · il resto fra gruppi o colori diversi · di quelli dentro un gruppo, ${saltiVersoRigaCorta} vanno verso una riga corta (sotto 25 mm) e ${saltiVersoRigaLunga} verso una riga lunga`);
     console.log(`DST: ${punti} punti · ${(filo / 1000).toFixed(1)} m di filo · ${colori.length} aghi · ${paths.length} blocchi (${salti} salti, ${(filoSalti / 1000).toFixed(1)} m) · ${passaggi} passaggi cuciti (${(filoPassaggi / 1000).toFixed(1)} m, ${passaggiInstradati} instradati, ${passaggiDiTraverso} di traverso alle righe, ${(filoScoperto / 1000).toFixed(2)} m a vista di cui ${(filoScopertoUltimi / 1000).toFixed(2)} negli ultimi colori) · ${corti} punti sotto ${MIN_MM} mm · ${inversioni} righe cucite fuori ordine · ${dentiSaltati} denti sotto il millimetro non cuciti`);
     statDst = { punti, filoM: filo / 1000, blocchi: paths.length, salti, saltiM: filoSalti / 1000, passaggi, passaggiM: filoPassaggi / 1000, puntiCorti: corti, passaggiScopertiM: filoScoperto / 1000, righeFuoriOrdine: inversioni };
