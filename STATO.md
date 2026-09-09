@@ -620,6 +620,29 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   «larghezza» tornava a zero (i quattro numeri si rileggevano dal ritaglio, che era ancora spento —
   ora stanno in una struttura loro e il ritaglio è quello che ne esce); e il valore misurato a 7ch
   mostrava «419,» invece di «419,45» (misurato sullo schermo: servono 10ch).
+- **L'ORDINE DI CUCITURA E' UN VINCOLO DI MACCHINA, non un'ottimizzazione** (Lorenzo, 2026-09-10,
+  dai primi provini veri: *«il dietro del punto pettine deve essere coperto dai pettini della riga
+  successiva, non deve mai succedere il contrario, altrimenti si rovina il ricamo»*). I denti vanno
+  verso il chiaro, cioè all'indietro: quindi le righe si cuciono **a distanza crescente dal muro**,
+  sempre. L'ordine di prima — il tratto più vicino, con una preferenza per il livello dopo — poteva
+  cucire una riga sopra i denti che avrebbero dovuto coprirla. Ora è vietato, e la violazione si
+  **misura**: `righe fuori ordine` deve stare a zero. L'ordine rigido però costava caro (salti da
+  568 a **927**, 28 → 72 m): la libertà è tornata osservando che **due righe lontane non si coprono
+  mai** — oltre la lunghezza massima del dente più un passo, l'ordine fra loro è irrilevante. Con
+  questa regola (bbox allargate dei denti, soglia un passo) i salti sono **592 per 33 m**, con zero
+  righe fuori ordine.
+- **I passaggi si nascondono sotto i colori che verranno** (stessa richiesta: *«prevedi anche dei
+  passaggi che passando per i bordi delle figure poi vengono coperti dai ricami di colore
+  successivo»*). Fra due capi si cerca il cammino più economico su una mappa di costo dove una cella
+  di tinta **più scura** costa 1 (si cuce dopo, coprirà), la **propria** tinta costa 4 (la coprono i
+  denti della riga dopo), una **più chiara** costa 14 (è già cucita: resterebbe a vista) e il
+  tessuto nudo 30. È un A* a 8 vicini sulla griglia da mezzo millimetro, dentro il rettangolo dei
+  due capi allargato di 12 mm; se il cammino migliore costa comunque troppo, si taglia e si salta.
+  Sul pannello: 2.372 passaggi cuciti per 12,4 m, **825 instradati**, e **1,8 m a vista** su 629 m
+  di filo totale. La soglia oltre cui si salta è passata da 12 a 25 mm, perché adesso il passaggio
+  lungo sa dove mettersi. I passaggi si vedono nell'anteprima: sono filo vero.
+- **Da Lorenzo, primo dato di macchina:** distanza fra le linee 1,8 con interlinea 1,5 è **troppo
+  fitta**. Altri provini in corso; i default restano 2 e 1,5 finché non lo dice lui.
 - **Aperto:** la riapertura del progetto (R9/R27) non c'è ancora — un DST esportato non si riapre
   coi suoi parametri e col suo ritaglio; e l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di

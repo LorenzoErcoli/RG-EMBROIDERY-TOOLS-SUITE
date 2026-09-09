@@ -325,10 +325,20 @@ sola: decidere dove il bordo fra due blocchi **stacca** (e allora il dente si fe
 numeri della cucitura: punti, filo, aghi, blocchi e salti. Col ritaglio acceso valgono per lo
 swatch, non per il pannello.
 
-**Come cuce.** Ogni linea di base coi suoi denti è un filo continuo: radice, punta, di nuovo la
-stessa radice, poi la radice dopo. Dentro un blocco le linee si cuciono in ordine, una all'andata e
-una al ritorno, e fra una e l'altra il filo passa cucendo se il salto è corto. I colori vanno dal
-chiaro allo scuro: il chiaro sta sotto.
+**Come cuce, e perché in quest'ordine.** Ogni linea di base coi suoi denti è un filo continuo:
+radice, punta, di nuovo la stessa radice, poi la radice dopo. Dentro un blocco le linee si cuciono
+**allontanandosi dal muro**, una all'andata e una al ritorno: i denti puntano verso il chiaro, cioè
+all'indietro, e così ogni riga copre il dietro della precedente. **Non deve mai succedere il
+contrario**, o il ricamo si rovina — per questo l'ordine non si ottimizza mai a scapito della
+copertura. Due righe lontane fra loro non si coprono, e solo lì l'ordine è libero: è quello che
+tiene bassi i salti. I colori vanno dal chiaro allo scuro: il chiaro sta sotto.
+
+**I passaggi.** Fra una riga e l'altra il filo, invece di essere tagliato, passa cucendo quando può
+farlo **dove qualcosa lo coprirà**: dentro la propria tinta lo nascondono i denti della riga
+successiva, e più in là lo nascondono i colori più scuri, che si cuciono dopo. Il tool cerca la
+strada più economica in questo senso — di solito lungo il bordo delle figure — e se non ne trova
+una decente taglia e salta. Nell'esito, «Passaggi a vista» sono i metri di filo di passaggio che
+nessuno coprirà: è la voce da tenere vicino a zero. «Righe fuori ordine» deve essere zero sempre.
 
 ## Se qualcosa non torna
 
