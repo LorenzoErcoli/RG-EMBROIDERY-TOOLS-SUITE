@@ -52,7 +52,9 @@ if (process.env.RITAGLIO) {
 }
 
 const esito = costruisciPettine(
-  { testoSvg: readFileSync(fileSvg, 'utf8'), larghezzaRealeMm: 419.45, foto: DENTI ? leggiBmp(FOTO) : null, ritaglio },
+  // FOTO=no per provare senza fotografia, come quando nel tool non se ne carica una: i denti non
+  // si fermano piu' ai bordi netti, e nessun dente esce accorciato
+  { testoSvg: readFileSync(fileSvg, 'utf8'), larghezzaRealeMm: 419.45, foto: DENTI && FOTO !== 'no' ? leggiBmp(FOTO) : null, ritaglio },
   par,
 );
 for (const riga of esito.note) console.log(riga);

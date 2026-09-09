@@ -650,6 +650,29 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   Il lucchetto e' stato provato rompendo apposta il motore: diventa rosso. **La prima versione del
   test non lo faceva** — la regex, scritta da uno script Python in una stringa non-raw, era arrivata
   sul disco con un carattere di controllo al posto di `` e non trovava niente: verde e cieca.
+- **I passaggi si fanno il più possibile, e il disegno smette di mentire** (Lorenzo, 2026-09-10,
+  generando swatch: *«i passaggi che tu metti per arrivare da un blocco ad un altro dello stesso
+  colore funzionano, ma vedo che li usi non sempre. Ti chiederei di fare i passaggi il più possibile
+  e di usare anche i bordi in caso di necessità. Se invece non riesci lascia un salto lungo»*).
+  La ricerca del cammino coperto ora arriva a **60 mm** invece di 25, si allarga di 20 mm per
+  aggirare un ostacolo, esplora fino a 80.000 celle e accetta anche una strada tortuosa (costo medio
+  fino a 10 invece di 6, lunghezza fino a 4× la diretta) purché passi dove qualcosa la coprirà. Sul
+  pannello i **salti scendono da 592 a 250** e da 33 a 22 m, i passaggi cuciti salgono a 2.714 per
+  26,6 m, il filo di passaggio a vista resta **2,7 m su 643** (0,4%). Sullo swatch di Lorenzo: 20
+  salti invece di 51. Il tempo non cambia (8 s sul pannello).
+- **Le «diagonali che attraversano le onde» erano un difetto del DISEGNO, non del ricamo.** Le corse
+  di denti sono elenchi **con dei buchi** — il sormonto esiste solo dove sotto passa una tinta più
+  chiara — e l'anteprima le univa con una retta: misurate, 4 rette fino a **62 mm** sullo swatch,
+  che nel DST non esistono (lì il filo salta). Ora la polilinea si spezza dove il salto supera due
+  interlinee: 0 segmenti sopra i 12 mm, il più lungo 4 mm. **Il DST era giusto, l'anteprima no.**
+- **`misura-dst.ts`: i parametri di un DST si rileggono dal filo.** Serviva subito, perché la
+  riapertura del progetto non c'è ancora e Lorenzo aveva in mano uno swatch senza sapere con che
+  numeri l'aveva fatto. I denti si riconoscono perché il filo torna dov'era (tre punti a-b-a), e da
+  lì escono lunghezza del punto, interlinea, distanza fra le righe e apertura; il ritaglio è
+  l'ingombro. Provato sul suo file: dice 2,0 / 2,0 / 5-10 mm / ~40°, e rigenerando con quei numeri
+  escono 14.563 punti contro 14.552, 81,1 m contro 81,2 e 4.703 denti contro 4.705. Dice anche una
+  cosa che lui non ricordava: quello swatch è stato generato **senza fotografia** (nessun dente è
+  accorciato a un bordo netto).
 - **Da Lorenzo, primo dato di macchina:** distanza fra le linee 1,8 con interlinea 1,5 è **troppo
   fitta**. Altri provini in corso; i default restano 2 e 1,5 finché non lo dice lui.
 - **Aperto:** la riapertura del progetto (R9/R27) non c'è ancora — un DST esportato non si riapre

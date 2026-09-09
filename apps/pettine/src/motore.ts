@@ -352,6 +352,23 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
     });
   }
   const via = (pt: Point[]): string => pt.map((p, i) => `${i ? 'L' : 'M'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join('');
+  /**
+   * IL DISEGNO NON DEVE UNIRE CIO' CHE IL FILO NON UNISCE (Lorenzo, 2026-09-10: «vedo quando genero
+   * una cosa strana in basso delle diagonali che attraversano le onde»). Le corse di denti sono
+   * elenchi con dei buchi — il sormonto c'e' solo dove sotto passa una tinta piu' chiara, quindi
+   * salta da una zona all'altra — e `via()` li univa con una retta lunga anche 50 mm, che nel
+   * ricamo non esiste: nel DST li' il filo salta. Qui la polilinea si spezza dove il salto supera
+   * la soglia, e l'anteprima torna a dire la verita'.
+   */
+  const viaSpezzato = (pt: Point[], sogliaMm: number): string => {
+    let d = '', staccato = true;
+    for (let i = 0; i < pt.length; i++) {
+      if (i && Math.hypot(pt[i].x - pt[i - 1].x, pt[i].y - pt[i - 1].y) > sogliaMm) staccato = true;
+      d += `${staccato ? 'M' : 'L'}${pt[i].x.toFixed(1)} ${pt[i].y.toFixed(1)}`;
+      staccato = false;
+    }
+    return d;
+  };
 
   // --- 4. famiglia per famiglia ---------------------------------------------------------------------------------
   const perColore: string[][] = colori.map(() => []);
@@ -649,8 +666,10 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
         const colLa = famIn(qq) === famiglia ? tintaIn(qq) : -1;
         if (colLa >= 0 && colLa < col) { const l = puntiSotto.get(colLa) ?? []; l.push(p, punta, p); puntiSotto.set(colLa, l); const ls = sottoOut.get(colLa) ?? []; ls.push([p, punta]); sottoOut.set(colLa, ls); }
       }
-      if (punti.length >= 3) { perColoreDenti[col].push(via(punti)); cuci(punti); }
-      for (const [c, l] of puntiSotto) if (l.length >= 3) perColoreDenti[c].push(via(l));
+      // la soglia: due denti vicini stanno a un passo, e il filo li unisce davvero; oltre il doppio
+      // del passo il filo o salta o fa un passaggio, e quello si disegna per conto suo
+      if (punti.length >= 3) { perColoreDenti[col].push(viaSpezzato(punti, PASSO_MM * 2 + 1)); cuci(punti); }
+      for (const [c, l] of puntiSotto) if (l.length >= 3) perColoreDenti[c].push(viaSpezzato(l, PASSO_MM * 2 + 1));
       return { denti: dentiOut, sotto: sottoOut };
     };
 
@@ -1024,7 +1043,11 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
     // fino a tanto si attraversa cucendo (punti da 3 mm al massimo): i capi di due livelli vicini dello
     // stesso colore si spostano lungo il confine di colore, e con un confine obliquo lo scarto supera
     // i 4 mm (misurato: 1.064 salti fra livelli vicini con 4 mm; il passaggio corre dentro il colore)
-    const PASSAGGIO_MM = 25;   // fin qui si prova a cucire il passaggio; oltre, si salta
+    // Lorenzo (2026-09-10): «ti chiederei di fare i passaggi il piu' possibile e di usare anche i
+    // bordi in caso di necessita'. Se invece non riesci lascia un salto lungo, quindi non inserire
+    // niente, e vedro' che ci sono 2 blocchi separati». Quindi: si cerca lontano (60 mm invece di
+    // 25) e si accetta anche una strada tortuosa, purche' passi dove qualcosa la coprira'.
+    const PASSAGGIO_MM = 60;   // fin qui si prova a cucire il passaggio; oltre, si salta
     const CORTO_MM = 4;        // fin qui si va dritti senza cercare strade
     const MIN_MM = 1;
     const dist = (a: Point, b: Point): number => Math.hypot(a.x - b.x, a.y - b.y);
@@ -1114,12 +1137,12 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
     const instrada = (a: Point, b: Point, c: number): Point[] | null => {
       const ia = cella(a), ib = cella(b);
       if (ia < 0 || ib < 0) return null;
-      const marg = Math.round(12 / CELLA);
+      const marg = Math.round(20 / CELLA);   // quanto ci si puo' allargare per aggirare un ostacolo
       const ca = ia % COLS, ra = Math.floor(ia / COLS), cb = ib % COLS, rb = Math.floor(ib / COLS);
       const c0 = Math.max(0, Math.min(ca, cb) - marg), c1 = Math.min(COLS - 1, Math.max(ca, cb) + marg);
       const r0 = Math.max(0, Math.min(ra, rb) - marg), r1 = Math.min(ROWS - 1, Math.max(ra, rb) + marg);
       const W = c1 - c0 + 1, H = r1 - r0 + 1;
-      if (W * H > 90000) return null;
+      if (W * H > 250000) return null;
       const idx = (cc: number, rr: number): number => (rr - r0) * W + (cc - c0);
       const G0 = new Float32Array(W * H).fill(Infinity);
       const prev = new Int32Array(W * H).fill(-1);
@@ -1140,7 +1163,7 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
       };
       G0[idx(ca, ra)] = 0; push(h(ca, ra), idx(ca, ra));
       let esplorati = 0;
-      while (heap.length && esplorati < 20000) {
+      while (heap.length && esplorati < 80000) {
         const top = pop()!;
         const n = top[1];
         if (chiuso[n]) continue;
@@ -1179,11 +1202,12 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
       }
       snello.push(via2[via2.length - 1]);
       via2.length = 0; via2.push(...snello);
-      // quanto costa in media: sopra 6 vuol dire che per meta' strada resterebbe a vista
+      // quanto costa in media: 10 e' la meta' fra «coperto» (1-4) e «a vista» (14), cioe' si accetta
+      // una strada che per un pezzo passa allo scoperto se il resto e' nascosto. Sopra, meglio saltare.
       const lung = lunghezza(via2);
       if (lung < 1e-6) return null;
-      if (G0[fine] / lung > 6) return null;
-      if (lung > 3 * Math.max(1, dist(a, b)) + 6) return null;
+      if (G0[fine] / lung > 10) return null;
+      if (lung > 4 * Math.max(1, dist(a, b)) + 10) return null;
       return via2;
     };
     // la sequenza di un tratto: base[0], poi radice-punta-radice per ogni dente, poi base[fine]
