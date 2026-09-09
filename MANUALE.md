@@ -369,11 +369,15 @@ soltanto se il cammino resta nascosto sotto ciò che verrà dopo — il bordo de
 successivi — e se a vista ne rimangono meno di 3 mm; altrimenti si taglia. Negli **ultimi due
 colori** non si fanno: sotto di loro non viene più nessuno a coprire.
 
-**Fin dove arriva un passaggio nascosto: è un baratto, e la manopola è tua.** «Passaggio nascosto
-più lungo» decide quanto si può andare lontano prima di arrendersi e tagliare. Alto, i rasafili
-sono pochi ma restano linee lunghe che attraversano il ricamo; basso, le linee spariscono e i tagli
-aumentano. Sul pannello a sei tinte: a 250 mm sono 144 tagli, con linee fino a 25 cm e 2,8 m di filo
-a vista; a 90 mm, che è il default, sono 197 tagli, niente più lungo di 9 cm e 2,05 m a vista.
+**Fin dove arriva un passaggio nascosto.** «Passaggio nascosto più lungo» decide quanto si può
+andare lontano prima di arrendersi e tagliare. Il default è basso, 45 mm, perché un passaggio lungo
+non evita il taglio: ci si aggiunge, e alla fine hai tutti e due i difetti. Sul pannello a sei
+tinte: a 30 mm, cioè vietandoli del tutto, sono 269 tagli; a 45 sono 243, con 28 passaggi appena
+sopra i 3 cm; a 90 sono 185 tagli ma con 84 linee lunghe che attraversano il ricamo.
+
+**Il sormonto non è una fase a parte.** I denti che un colore chiaro cuce sotto il bordo di uno
+scuro sono righe a tutti gli effetti: entrano nella sequenza insieme alle altre, con il loro verso,
+i loro innesti e i loro corridoi. La distanza dal muro li mette dopo le righe che devono coprire.
 
 **I passaggi si accalcano invece di sparpagliarsi.** Dove il filo di un colore è già passato una
 volta, ripassarci costa quasi niente e non aggiunge niente da vedere: si vede una linea, non due.

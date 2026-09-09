@@ -225,8 +225,8 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
           </label>
           <label class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Passaggio nascosto più lungo</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="passaggioNascostoMm" type="text" inputmode="decimal" value="90"><span>mm</span></span>
-            <span class="rg-field__help">Fin dove si prova un passaggio che va oltre la misura qui sopra, e che quindi si fa solo se resta nascosto. È il baratto fra i rasafili e le linee lunghe, e si decide col ricamo in mano: sul pannello a sei tinte, a 250 mm sono 137 tagli ma con linee fino a 21 cm; a 90 mm sono 197 tagli e niente più lungo di 9 cm.</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="passaggioNascostoMm" type="text" inputmode="decimal" value="45"><span>mm</span></span>
+            <span class="rg-field__help">Fin dove si prova un passaggio che va oltre la misura qui sopra, e che quindi si fa solo se resta nascosto. Un passaggio lungo non evita il taglio, ci si aggiunge: per questo il default sta basso. Sul pannello a sei tinte, a 30 mm (nessun passaggio oltre la manopola) sono 269 tagli; a 45 sono 243 con 28 passaggi appena sopra i 3 cm; a 90 sono 185 tagli ma con 84 linee lunghe.</span>
           </label>
           <label class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Tinta più corta</span>

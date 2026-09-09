@@ -115,8 +115,10 @@ export interface ParametriPettine {
   /**
    * Fin dove si prova un passaggio che va OLTRE `passaggioMaxMm`, e che quindi si fa solo se il
    * cammino resta nascosto sotto cio' che verra' dopo. E' il baratto fra i rasafili e le linee
-   * lunghe, e si decide col ricamo in mano: sul pannello a sei tinte, a 250 mm sono 137 tagli con
-   * linee fino a 21 cm; a 90 mm sono 197 tagli e niente piu' lungo di 9 cm.
+   * lunghe, e Lorenzo l'ha deciso guardando il ricamo (2026-09-10): «faceva i passaggi cosi' lunghi
+   * che metteva i raso a filo» — cioe' un passaggio lungo non evita il taglio, ci si aggiunge.
+   * Sul pannello a sei tinte: 30 mm (nessun passaggio oltre la manopola) 269 tagli · 45 mm 243 tagli
+   * con 28 passaggi appena sopra i 3 cm · 90 mm 185 tagli ma 84 linee lunghe.
    */
   passaggioNascostoMm?: number;
   /**
@@ -135,7 +137,7 @@ export const parametriPettineDefault: ParametriPettine = {
   traslaMaxMm2: 9000, sconfinaMm: 1,
   denteMinMm: 3, denteMaxMm: 5, passoMm: 1.5, aperturaDeg: 40, nettoMm: 2.5,
   denti: true, modo: 'auto', mostraNudi: false, mostraPassaggi: true,
-  passaggioMaxMm: 30, tintaMinimaMm: 6, passaggioNascostoMm: 90, senzaPassaggiUltimiColori: 2, dst: true,
+  passaggioMaxMm: 30, tintaMinimaMm: 6, passaggioNascostoMm: 45, senzaPassaggiUltimiColori: 2, dst: true,
 };
 
 export interface StatistichePettine {
@@ -1345,8 +1347,10 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     let filoScoperto = 0, passaggiInstradati = 0, inversioni = 0, passaggiDiTraverso = 0;
     let andateRitorno = 0, filoImpuntura = 0, filoScopertoUltimi = 0;
     const lunghezzePassaggi: number[] = [];
-    // fin qui una riga si puo' servire con andata e ritorno: piu' lunga, il filo nascosto costa piu' del salto
-    const ANDATA_RITORNO_MAX = 70;
+    // Fin qui una riga si puo' servire con andata e ritorno. Era 70 mm, per paura del filo di
+    // impuntura in piu'; misurato, conviene alzarlo quasi a togliere il limite: i tagli scendono da
+    // 300 a 269 e si pagano 8 metri di impuntura, che stanno sotto i denti e non si vedono.
+    const ANDATA_RITORNO_MAX = 200;
     // quanto costa un rasafilo, misurato in millimetri di filo: e' la moneta con cui si confrontano
     // un salto e i modi per evitarlo (fare un giro piu' lungo, o l'andata e ritorno in impuntura).
     // Alto apposta: Lorenzo (2026-09-10) «io devo avere pochi rasafilo e pochissimi passaggi».
@@ -1355,7 +1359,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     const SENZA_PASSAGGI = Math.max(0, Math.round(par.senzaPassaggiUltimiColori ?? 2));
     // fin qui si prova un passaggio anche oltre la manopola, ma solo se e' tutto nascosto sotto
     // cio' che verra' dopo: e' la seconda tecnica chiesta da Lorenzo, e vale solo nei primi colori
-    const PASSAGGIO_NASCOSTO_MM = Math.max(PASSAGGIO_MM, par.passaggioNascostoMm ?? 90);
+    const PASSAGGIO_NASCOSTO_MM = Math.max(PASSAGGIO_MM, par.passaggioNascostoMm ?? 45);
     // quanto costa spostarsi di un millimetro in distanza dal muro, cioe' attraversare le righe
     // invece di correre lungo la striscia fra due di loro
     // due pezzi di uno stesso colore piu' vicini di cosi' sono la stessa zona di lavoro

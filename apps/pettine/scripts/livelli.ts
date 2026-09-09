@@ -43,7 +43,7 @@ const par = {
   denti: DENTI,
   passaggioMaxMm: process.env.PMAX !== undefined ? Number(process.env.PMAX) : 30,
   tintaMinimaMm: process.env.TINTA !== undefined ? Number(process.env.TINTA) : 6,
-  passaggioNascostoMm: process.env.PNASC !== undefined ? Number(process.env.PNASC) : 90,
+  passaggioNascostoMm: process.env.PNASC !== undefined ? Number(process.env.PNASC) : 45,
   senzaPassaggiUltimiColori: process.env.SENZA !== undefined ? Number(process.env.SENZA) : 2,
   modo: (process.env.MODO ?? 'auto') as 'auto' | 'geodetica' | 'crescita' | 'livelli',
   mostraNudi: !!process.env.MOSTRA_NUDI,

@@ -895,6 +895,34 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   Il default sta in basso perché è quello che Lorenzo ha chiesto guardando il ricamo: rasafilo sui
   blocchi esterni, niente linee lunghe che attraversano. Un lucchetto nei test dice che, qualunque
   valore abbia la manopola, nessun passaggio la supera.
+- **Il sormonto diventa una riga come le altre, e l'andata-e-ritorno si toglie il guinzaglio: 364
+  tagli → 269** (Lorenzo, 2026-09-10, ottava tornata: *«non è vero non era meglio, faceva i passaggi
+  così lunghi che metteva i raso a filo»*). La lettura è netta: **un passaggio lungo non evita il
+  taglio, ci si aggiunge** — col tetto a 90 mm il pannello aveva insieme 197 tagli e 169 passaggi
+  sopra i 3 cm. Quindi si misura il regime che li vieta (tetto uguale alla manopola, 30 mm) e si
+  guarda dove sono i tagli: 364, di cui **164 nel sormonto**. Era quello il mucchio.
+  **Il sormonto smette di essere una fase.** Non «attaccarlo» alle righe — quello era il tentativo
+  fallito di ieri — ma farne delle righe vere: una corsa di denti lungo una base scura ha un
+  percorso, due capi e una distanza dal muro, esattamente come una riga. Messa nell'elenco dei
+  tratti, entra da sola nella sequenza, nel conto dei versi, negli innesti e nei corridoi, **senza
+  una riga di codice suo**, e la fase separata sparisce. La sua distanza dal muro viene grande, come
+  deve: i denti di sormonto stanno oltre l'ultima riga chiara e vanno all'indietro a coprirla. 843
+  corse diventate righe; i tagli del sormonto da 164 a 62.
+  **L'andata-e-ritorno senza guinzaglio.** Era limitata alle righe fino a 70 mm per paura del filo di
+  impuntura. Misurato, conviene quasi toglierlo (200 mm): tagli 300 → **269**, al prezzo di 8 metri
+  di impuntura che stanno sotto i denti e non si vedono.
+  **Provato e misurato irrilevante:** allargare la finestra dell'innesto (da 12 a 20 mm, righe fino a
+  110 invece di 60): 269 → 267 tagli. Rimesso com'era.
+
+  | tetto dei passaggi nascosti | tagli | passaggi sopra 3 cm | il più lungo | filo a vista |
+  |---|---|---|---|---|
+  | 30 mm (vietati) | 269 | 0 | 30 mm | 1,61 m |
+  | **45 mm (default nuovo)** | **243** | **28** | **44 mm** | **1,69 m** |
+  | 90 mm | 185 | 84 | 89 mm | 1,88 m |
+
+  **Due lucchetti hanno reagito, e avevano ragione:** la misura della spaziatura contava le corse di
+  denti come righe di base e diceva che le righe si stringono. La conversione si fa dopo le misure
+  sulla geometria, e la spaziatura torna quella di sempre (3,1% sotto mezzo passo, 0,2% in un gruppo).
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione
