@@ -772,6 +772,21 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   colori che verranno, o sopra le basi già cucite). Misurato: salti **177 → 43**, blocchi 178 → 49,
   metri di salto 21,3 → 6,6; il filo di passaggio che resta a vista sale da 4,5 a 5,6 m su 583, cioè
   meno dell'1%. Quello che non si riesce a cucire resta un salto, come chiesto.
+- **I passaggi coincidono con le righe che verranno, e gli ultimi colori non ne fanno** (Lorenzo,
+  2026-09-10, terza tornata). Due cose. (a) *«Se riesci a far coincidere i passaggi con le linee che
+  successivamente saranno il fondo del pettine successivo»*: le basi si segnano **tutte prima di
+  cucire**, non più mano a mano, quindi una cella dove *ci sarà* una base costa quanto una dove ce
+  n'è già una — il passaggio ci finisce **sotto**, e quando quella riga si cuce lo copre. (b)
+  *«Negli ultimi 2 stop per ora non fare passaggi perché non riusciranno ad essere coperti»*: sotto
+  gli ultimi colori non viene più nessuno, e l'unica copertura possibile sono i denti della loro
+  stessa riga successiva. Lì il passaggio si fa solo se resta corto (60 mm invece di 200) e se il
+  cammino è **tutto in zona ancora da ricamare** (costo medio sotto 2,5 invece di 8). Il numero di
+  colori è un parametro (`senzaPassaggiUltimiColori`, default 2). Misurato sul pannello: salti 43 →
+  **146**, filo di passaggio a vista 5,6 → **3,7 m**, di cui appena 1,1 negli ultimi due colori. È
+  un baratto — 103 tagli in più per 1,9 m di filo scoperto in meno — e la manopola resta lì per
+  cambiarlo dopo un provino. **Provata e scartata** la versione alla lettera («nessun passaggio»):
+  toglieva anche i collegamenti fra righe adiacenti, che i denti della riga dopo coprono benissimo,
+  e faceva 614 salti.
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione

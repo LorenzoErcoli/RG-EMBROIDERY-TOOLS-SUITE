@@ -41,6 +41,7 @@ const par = {
   chiudiMm: num(15, 3),
   traslaMaxMm2: num(16, 9000),
   denti: DENTI,
+  senzaPassaggiUltimiColori: process.env.SENZA !== undefined ? Number(process.env.SENZA) : 2,
   modo: (process.env.MODO ?? 'auto') as 'auto' | 'geodetica' | 'crescita' | 'livelli',
   mostraNudi: !!process.env.MOSTRA_NUDI,
   dst: DENTI,

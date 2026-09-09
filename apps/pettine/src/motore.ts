@@ -98,6 +98,13 @@ export interface ParametriPettine {
    * sotto qualcosa: si distinguono perché sono più sottili e trasparenti.
    */
   mostraPassaggi?: boolean;
+  /**
+   * Quanti ULTIMI colori non fanno passaggi liberi. Sotto di loro non viene più nessuno a coprire il
+   * filo, quindi lì un passaggio si fa solo se resta corto (60 mm) e se il cammino è tutto in zona
+   * ancora da ricamare, che i loro stessi denti copriranno. Lorenzo (2026-09-10): «negli ultimi 2
+   * stop per ora non fare passaggi perché non riusciranno ad essere coperti».
+   */
+  senzaPassaggiUltimiColori?: number;
   /** Costruire anche il DST (costa qualche secondo in più). */
   dst?: boolean;
 }
@@ -106,7 +113,7 @@ export const parametriPettineDefault: ParametriPettine = {
   basiMm: 2, sormontoMm: 4, addolcisciMm: 0.15, lisciaMaxMm: 8, spianaMm: 5, chiudiMm: 3,
   traslaMaxMm2: 9000, sconfinaMm: 1,
   denteMinMm: 3, denteMaxMm: 5, passoMm: 1.5, aperturaDeg: 40, nettoMm: 2.5,
-  denti: true, modo: 'auto', mostraNudi: false, mostraPassaggi: true, dst: true,
+  denti: true, modo: 'auto', mostraNudi: false, mostraPassaggi: true, senzaPassaggiUltimiColori: 2, dst: true,
 };
 
 export interface StatistichePettine {
@@ -283,8 +290,11 @@ export function costruisciPettine(ing: IngressoPettine, par: ParametriPettine = 
   // copriranno le righe che mancano. E' la differenza fra un passaggio che corre nella striscia
   // fra due righe (invisibile) e uno che le attraversa in diagonale (a vista).
   const distDaMuro = new Float32Array(COLS * ROWS).fill(-1);
-  // DOVE C'E' GIA' UNA BASE. Un filo di passaggio che ripassa sopra una base esistente si confonde
-  // con lei e sparisce: e' la strada buona per andare da un pezzo all'altro senza tagliare il campo.
+  // DOVE C'E', O CI SARA', UNA BASE. Un filo di passaggio che ripassa sopra una base si confonde
+  // con lei; se la base non e' ancora stata cucita, ci finisce addirittura SOTTO. Lorenzo
+  // (2026-09-10): «se riesci a far coincidere i passaggi con le linee che successivamente saranno
+  // il fondo del pettine successivo». Sono le strade buone per andare da un pezzo all'altro senza
+  // tagliare il campo, e si segnano tutte prima di cucire, non mano a mano.
   const soprafilo = new Uint8Array(COLS * ROWS);
   const stendi = (l: Point[]): void => {
     for (let k = 1; k < l.length; k++) {
@@ -1207,6 +1217,10 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
   progettoSvg + `<rect x="${(X0 - MARG).toFixed(1)}" y="${(Y0 - 18 - MARG).toFixed(1)}" width="${(RQ.larghezza + 2 * MARG).toFixed(1)}" height="${(RQ.altezza + 18 + 2 * MARG).toFixed(1)}" fill="#faf9f7"/>` + NL +
   `<rect x="${X0.toFixed(1)}" y="${Y0.toFixed(1)}" width="${RQ.larghezza.toFixed(1)}" height="${RQ.altezza.toFixed(1)}" fill="none" stroke="#333" stroke-width="0.3" stroke-dasharray="2 1"/>` + NL +
   `<g transform="translate(${X0.toFixed(1)},${(Y0 - 18).toFixed(1)})">${legenda}${nota}</g>` + NL + pezzi.join(NL) + NL + `</svg>`;
+  // tutte le basi, anche quelle che devono ancora essere cucite: sotto una di quelle il passaggio
+  // finisce coperto quando lei si cuce (Lorenzo: «far coincidere i passaggi con le linee che
+  // successivamente saranno il fondo del pettine successivo»)
+  for (const t of trattiTutti) stendi(t.base);
   const passaggiSvg: string[][] = colori.map(() => []);
   let dst: Uint8Array | null = null;
   let statDst = { punti: 0, filoM: 0, blocchi: 0, salti: 0, saltiM: 0, passaggi: 0, passaggiM: 0, puntiCorti: 0, passaggiScopertiM: 0, righeFuoriOrdine: 0 };
@@ -1238,11 +1252,13 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     let corrente: Point | null = null;
     let punti = 0, filo = 0, passaggi = 0, filoPassaggi = 0, salti = 0, filoSalti = 0, corti = 0, dentiSaltati = 0;
     let cortiSormonto = 0, filoScoperto = 0, passaggiInstradati = 0, inversioni = 0, passaggiDiTraverso = 0;
-    let andateRitorno = 0, filoImpuntura = 0;
+    let andateRitorno = 0, filoImpuntura = 0, filoScopertoUltimi = 0;
     // fin qui una riga si puo' servire con andata e ritorno: piu' lunga, il filo nascosto costa piu' del salto
     const ANDATA_RITORNO_MAX = 70;
     // oltre questa distanza il pezzo dopo e' «lontano»: il passaggio, se pure si trova, sara' lungo
     const LONTANO_MM = 60;
+    // quanti ULTIMI colori non fanno passaggi lunghi: sotto di loro non viene piu' nessuno a coprirli
+    const SENZA_PASSAGGI = Math.max(0, Math.round(par.senzaPassaggiUltimiColori ?? 2));
     let saltiSerpentina = 0, saltiFamiglia = 0, saltiSormonto = 0, saltiLunghi = 0, saltiVersoRigaCorta = 0, saltiVersoRigaLunga = 0;
     let fase: 'basi' | 'sormonto' = 'basi';
     let ultimoTratto: Tratto | null = null, prossimoTratto: Tratto | null = null;
@@ -1263,7 +1279,17 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       if (d < 0.05) return;
       let strada: Point[] | null = null;
       const dOra = fase === 'basi' && ultimoTratto ? ultimoTratto.d : Infinity;
-      if (d > CORTO_MM && d <= PASSAGGIO_MM) strada = instrada(corrente, p, ago - 1, dOra);
+      // GLI ULTIMI COLORI NON FANNO PASSAGGI LUNGHI (Lorenzo, 2026-09-10: «negli ultimi 2 stop per
+      // ora non fare passaggi perche' non riusciranno ad essere coperti»): sotto di loro non viene
+      // piu' nessuno, quindi un filo teso resterebbe li' a vista. Restano i collegamenti corti fra
+      // una riga e la successiva, che i denti della riga dopo coprono comunque.
+      // Sotto gli ultimi colori non viene piu' nessuno: l'unica cosa che puo' coprire un loro
+      // passaggio sono i denti della LORO riga successiva, che vanno all'indietro. Quindi li' il
+      // passaggio si fa solo se resta corto e se il cammino e' tutto in zona non ancora ricamata
+      // (costo 1-2), mai attraverso quello che e' gia' fatto.
+      const ultimi = ago > colori.length - SENZA_PASSAGGI;
+      const limite = ultimi ? Math.min(PASSAGGIO_MM, 60) : PASSAGGIO_MM;
+      if (d > CORTO_MM && d <= limite) strada = instrada(corrente, p, ago - 1, dOra, ultimi ? 2.5 : 8);
       if (d <= CORTO_MM || strada) {
         // i punti del passaggio: uno ogni 3 mm, e l'ultimo mai sotto il millimetro (R3) — l'arrivo e'
         // il capo della riga e deve essere esatto, quindi si toglie il penultimo invece di accorciare
@@ -1299,6 +1325,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
           if (dmax > dmin && dmax - dmin > BASI_MM * 3) passaggiDiTraverso++;
         }
         passaggi++; filoPassaggi += lunghezza(via2); filoScoperto += scoperti;
+        if (ultimi) filoScopertoUltimi += scoperti;
         if (strada) passaggiInstradati++;
       }
       else {
@@ -1352,7 +1379,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
      * dopo — cioe' lungo i bordi delle figure scure — invece di tagliare dritto nel chiaro gia' fatto.
      * Torna null se non trova niente di decente: allora si salta, e la macchina taglia.
      */
-    const instrada = (a: Point, b: Point, c: number, dOra: number): Point[] | null => {
+    const instrada = (a: Point, b: Point, c: number, dOra: number, costoMax = 8): Point[] | null => {
       const ia = cella(a), ib = cella(b);
       if (ia < 0 || ib < 0) return null;
       const marg = Math.round(20 / CELLA);   // quanto ci si puo' allargare per aggirare un ostacolo
@@ -1424,7 +1451,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       // una strada che per un pezzo passa allo scoperto se il resto e' nascosto. Sopra, meglio saltare.
       const lung = lunghezza(via2);
       if (lung < 1e-6) return null;
-      if (G0[fine] / lung > 8) return null;
+      if (G0[fine] / lung > costoMax) return null;
       if (lung > 4 * Math.max(1, dist(a, b)) + 10) return null;
       return via2;
     };
@@ -1586,7 +1613,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     dst = buildDst({ label: 'PETTINE', coordinate_system: 'svg', paths, metadata: ing.progetto ?? undefined });
     console.log(`ANDATA E RITORNO su ${andateRitorno} righe corte (${(filoImpuntura / 1000).toFixed(2)} m di impuntura nascosta sotto i denti)`);
     console.log(`SALTI per tipo: ${saltiSerpentina} fra righe vicine dello stesso gruppo · ${saltiFamiglia} fra righe lontane dello stesso gruppo · ${saltiSormonto} nel sormonto · il resto fra gruppi o colori diversi · di quelli dentro un gruppo, ${saltiVersoRigaCorta} vanno verso una riga corta (sotto 25 mm) e ${saltiVersoRigaLunga} verso una riga lunga`);
-    console.log(`DST: ${punti} punti · ${(filo / 1000).toFixed(1)} m di filo · ${colori.length} aghi · ${paths.length} blocchi (${salti} salti, ${(filoSalti / 1000).toFixed(1)} m) · ${passaggi} passaggi cuciti (${(filoPassaggi / 1000).toFixed(1)} m, ${passaggiInstradati} instradati, ${passaggiDiTraverso} di traverso alle righe, ${(filoScoperto / 1000).toFixed(2)} m a vista) · ${corti} punti sotto ${MIN_MM} mm · ${inversioni} righe cucite fuori ordine · ${dentiSaltati} denti sotto il millimetro non cuciti`);
+    console.log(`DST: ${punti} punti · ${(filo / 1000).toFixed(1)} m di filo · ${colori.length} aghi · ${paths.length} blocchi (${salti} salti, ${(filoSalti / 1000).toFixed(1)} m) · ${passaggi} passaggi cuciti (${(filoPassaggi / 1000).toFixed(1)} m, ${passaggiInstradati} instradati, ${passaggiDiTraverso} di traverso alle righe, ${(filoScoperto / 1000).toFixed(2)} m a vista di cui ${(filoScopertoUltimi / 1000).toFixed(2)} negli ultimi colori) · ${corti} punti sotto ${MIN_MM} mm · ${inversioni} righe cucite fuori ordine · ${dentiSaltati} denti sotto il millimetro non cuciti`);
     statDst = { punti, filoM: filo / 1000, blocchi: paths.length, salti, saltiM: filoSalti / 1000, passaggi, passaggiM: filoPassaggi / 1000, puntiCorti: corti, passaggiScopertiM: filoScoperto / 1000, righeFuoriOrdine: inversioni };
   }
 
