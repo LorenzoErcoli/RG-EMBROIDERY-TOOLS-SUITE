@@ -747,6 +747,17 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   apposta** quello che sorveglia: la prima fixture non faceva scattare quello sulle rette lunghe
   (il sormonto non si attivava, perché fra famiglie diverse non esiste) ed è stata rifatta finché
   non è diventata rossa al momento giusto.
+- **Le due tecniche per non tagliare il filo: prima lo schema, poi il codice** (Lorenzo, 2026-09-10:
+  *«per ognuno di questi prima prepariamo una visualizzazione per capire se hai capito come fare»*).
+  `scripts/schema-passaggi.ts` disegna quello che ho capito, su una geometria inventata perché si
+  legga. **A — la fila isolata:** ci si arriva cucendo un'**impuntura sul dietro del pettine** (punti
+  lunghi sulla linea della riga da fare, nessun dente) e si torna indietro facendo i denti sopra quel
+  filo; se la fila sta in mezzo, la riga in corso **si spezza**, si va a prenderla e poi si riprende.
+  **B — l'impuntura sotto il colore che viene dopo:** fra due macchie dello stesso chiaro il filo
+  scende nel blocco scuro, ci cammina dentro per 2-3 mm sotto il confine, e risale: i denti dello
+  scuro, cuciti dopo, la coprono. Vale soprattutto per i primi colori, che hanno sotto di sé tutti
+  gli altri. I salti del pannello, misurati e divisi per tipo: **89 dentro uno stesso gruppo** (49
+  verso una riga corta), **55 nel sormonto**, **33 fra gruppi o colori diversi**.
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione
