@@ -39,6 +39,16 @@ const SORM_MM = num(4, 4);
 const ADDOLCISCI = num(5, 0.3);       // mm di lisciatura per mm di distanza dal muro
 const LISCIA_MM = 1.5;                 // lisciatura di base (i muri sono gia' curve)
 const LISCIA_MAX = num(13, 8);         // tetto alla lisciatura, in mm
+// LA DISTANZA SI SPIANA (raggio in mm, tre passate di media mobile = quasi una gaussiana). Le creste
+// della distanza - dove due fronti si incontrano - facevano V e forcine nei livelli; Lorenzo (2026-09-09):
+// «evitiamo di creare angoli troppo estremi delle curve, anche se questo implica non rispettare i due
+// muri. Preferisco che la copertura sia piu' efficace». Spianata la distanza, la cresta diventa un dorso
+// e il livello ci gira attorno con un raggio invece di uno spigolo.
+const SPIANA_MM = num(14, 3);
+// L'ULTIMA BASE LUNGO IL MURO OPPOSTO: spenta di default (ULTIMA=1 per riaverla). Lorenzo: «la curva si
+// amplifica per rispettare il muro finale, quello lo eviterei, non e' necessario che diventi uguale al
+// muro finale». Con lo sconfinamento oltre il muro i suoi buchi non ci sono piu'.
+const ULTIMA_BASE = !!process.env.ULTIMA;
 const RIFERIMENTO_DEG = -90;
 // SCONFINAMENTO ai bordi fra famiglie: basi e denti vivono fino a tanto oltre il bordo della propria
 // famiglia. Lungo un bordo le basi finiscono contro il muro e i denti gli corrono paralleli: senza
@@ -95,7 +105,7 @@ console.log(`\n${fileSvg}\n${WM.toFixed(1)} × ${HM.toFixed(1)} mm · ${famiglie
 // IL MARGINE ATTORNO AL PANNELLO: la griglia comincia MARG mm prima del disegno, cosi' basi e denti
 // possono sconfinare anche oltre il bordo del pannello (il metro diceva: i buchi stanno quasi tutti
 // li', 4000 celle sul bordo contro 200 sulle giunte). Il pannello va ricamato fino al bordo e oltre.
-const MARG = SCONFINA_MM + 1;
+const MARG = SCONFINA_MM + num(14, 3) + 1;   // sconfinamento + raggio di spianatura + 1
 const ORIG = -MARG;
 const COLS = Math.ceil((WM + 2 * MARG) / CELLA) + 2, ROWS = Math.ceil((HM + 2 * MARG) / CELLA) + 2;
 const tinta = new Int8Array(COLS * ROWS).fill(-1);
@@ -156,6 +166,23 @@ const sfumaQui = (p: Point, n: Point): boolean => {
 const perColoreDenti: string[][] = [];
 let dentiTot = 0, filoMm = 0, fermati = 0, attraversano = 0;
 const cucito: Point[][] = [];   // tutto cio' che si cuce (basi e denti), per il metro del filo
+// LA COPERTURA, tenuta aggiornata mentre si cuce: celle da 0,5 mm entro 0,75 mm da un filo. Serve al
+// metro finale e al rammendo per famiglia.
+const G = 0.5;
+const GW = Math.ceil(WM / G) + 1, GH = Math.ceil(HM / G) + 1;
+const cop = new Uint8Array(GW * GH);
+const RF = Math.ceil(0.75 / G);
+const cuci = (seg: Point[]): void => {
+  cucito.push(seg);
+  for (let i = 1; i < seg.length; i++) {
+    const a = seg[i - 1], b = seg[i];
+    const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / G));
+    for (let k = 0; k <= n; k++) {
+      const cx = Math.round((a.x + ((b.x - a.x) * k) / n) / G), cy = Math.round((a.y + ((b.y - a.y) * k) / n) / G);
+      for (let dy = -RF; dy <= RF; dy++) for (let dx = -RF; dx <= RF; dx++) { const x = cx + dx, y = cy + dy; if (x >= 0 && y >= 0 && x < GW && y < GH && dx * dx + dy * dy <= RF * RF) cop[y * GW + x] = 1; }
+    }
+  }
+};
 
 // --- 3. geometria ------------------------------------------------------------------------------------------
 /**
@@ -241,6 +268,7 @@ const sotto: string[][] = colori.map(() => []);
 const muriA: string[] = [], muriB: string[] = [], frecce: string[] = [];
 const lineeFinali: Array<{ id: number; punti: Point[] }> = [];   // id = il livello: due tratti dello stesso livello non sono due linee
 let idLivello = 0;
+let rammendi = 0;
 let famOk = 0, famSaltate = 0;
 const t0 = Date.now();
 
@@ -252,6 +280,11 @@ famiglie.forEach((f, fi) => {
   const unioni = traceRegions(maschera, COLS, ROWS, 1, CELLA, { minAreaMm2: 10, simplifyMm: 0.3 });
   if (!unioni.length) { famSaltate++; return; }
   const u = unioni.sort((a, b) => b.areaMm2 - a.areaMm2)[0];
+  if (process.env.FAMIGLIE) {
+    const tot = unioni.reduce((a, r) => a + r.areaMm2, 0);
+    const xs = u.outer.map((q) => q.x + ORIG), ys = u.outer.map((q) => q.y + ORIG);
+    console.log(`  famiglia ${fi} ${f.nome}: ${unioni.length} pezzi, il maggiore ${u.areaMm2.toFixed(0)} mm² su ${tot.toFixed(0)} (${((u.areaMm2 / tot) * 100).toFixed(0)}%), bbox ${Math.min(...xs).toFixed(0)}..${Math.max(...xs).toFixed(0)} × ${Math.min(...ys).toFixed(0)}..${Math.max(...ys).toFixed(0)}, altri: ${unioni.slice(1, 6).map((r) => r.areaMm2.toFixed(0)).join(' ')}`);
+  }
   u.outer = u.outer.map((p) => ({ x: p.x + ORIG, y: p.y + ORIG }));   // traceRegions conta dall'angolo della griglia
   const dentroFamStretto = (p: Point): boolean => { const i = cella(p); return i >= 0 && famDi[i] === fi; };
   // «dentro» con lo sconfinamento: la cella e' della famiglia, o lo e' una cella entro SCONFINA_MM
@@ -330,6 +363,25 @@ famiglie.forEach((f, fi) => {
       }
     }
   }
+  // LA FASCIA ESTESA per spianare: la media mobile ai bordi di `largo` era storta (solo celle da
+  // una parte), i livelli nel margine si spostavano e il bordo del pannello tornava nudo. D si
+  // prolunga e si spiana su una fascia piu' larga del raggio di spianatura; i livelli restano su `largo`.
+  const esteso = new Uint8Array(COLS * ROWS);
+  {
+    const rc = Math.round(SPIANA_MM / CELLA) + 1;
+    for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
+      const i = r * COLS + c;
+      if (!largo[i]) continue;
+      esteso[i] = 1;
+      const bordo = (c > 0 && !largo[i - 1]) || (c + 1 < COLS && !largo[i + 1]) || (r > 0 && !largo[i - COLS]) || (r + 1 < ROWS && !largo[i + COLS]);
+      if (!bordo) continue;
+      for (let dy = -rc; dy <= rc; dy++) for (let dx = -rc; dx <= rc; dx++) {
+        if (dx * dx + dy * dy > rc * rc) continue;
+        const x = c + dx, y = r + dy;
+        if (x >= 0 && y >= 0 && x < COLS && y < ROWS) esteso[y * COLS + x] = 1;
+      }
+    }
+  }
   const nelLargo = (p: Point): boolean => { const i = cella(p); return i >= 0 && largo[i] === 1; };
   dentroFam = nelLargo;
   // la tinta della cella della famiglia piu' vicina, per chi sta nel margine
@@ -395,7 +447,7 @@ famiglie.forEach((f, fi) => {
     for (let r = 0; r < ROWS; r++) for (let c = 0; c < COLS; c++) {
       const i = r * COLS + c;
       if (!maschera[i] || D[i] >= INF) continue;
-      const fuori = (c > 0 && largo[i - 1] && !maschera[i - 1]) || (c + 1 < COLS && largo[i + 1] && !maschera[i + 1]) || (r > 0 && largo[i - COLS] && !maschera[i - COLS]) || (r + 1 < ROWS && largo[i + COLS] && !maschera[i + COLS]);
+      const fuori = (c > 0 && esteso[i - 1] && !maschera[i - 1]) || (c + 1 < COLS && esteso[i + 1] && !maschera[i + 1]) || (r > 0 && esteso[i - COLS] && !maschera[i - COLS]) || (r + 1 < ROWS && esteso[i + COLS] && !maschera[i + COLS]);
       if (fuori) { src[i] = i; coda.push(i); gradienti.set(i, grad(i)); }
     }
     for (let k = 0; k < coda.length; k++) {
@@ -406,26 +458,38 @@ famiglie.forEach((f, fi) => {
         const x = cc + dx, y = cr + dy;
         if (x < 0 || y < 0 || x >= COLS || y >= ROWS) continue;
         const n = y * COLS + x;
-        if (!largo[n] || maschera[n] || src[n] >= 0) continue;
+        if (!esteso[n] || maschera[n] || src[n] >= 0) continue;
         src[n] = q;
         D[n] = Math.max(0, D[q] + gx * (x - qc) * CELLA + gy * (y - qr) * CELLA);
         coda.push(n);
       }
     }
   }
-  // D SI SPIANA (media 3x3, due giri, solo su celle della fascia larga): il chamfer e' a gradini
-  // (somme di 0,5/0,7/1,1) e i suoi livelli uscivano doppi - due curve a 0,3 mm che la catena
-  // univa in una forcina lunga 40 mm, poi schiacciata dalla lisciatura. Sondato al bordo sinistro.
-  for (let giro = 0; giro < 2; giro++) {
-    const E = new Float32Array(D);
-    for (let r = 1; r + 1 < ROWS; r++) for (let c = 1; c + 1 < COLS; c++) {
-      const i = r * COLS + c;
-      if (!largo[i] || D[i] >= INF) continue;
-      let sm = 0, nn = 0;
-      for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) { const j = i + dy * COLS + dx; if (largo[j] && D[j] < INF) { sm += D[j]; nn++; } }
-      E[i] = sm / nn;
-    }
-    D.set(E);
+  // D SI SPIANA, solo sulle celle della fascia larga: media mobile separabile di raggio SPIANA_MM,
+  // tre passate (quasi una gaussiana di sigma ~ raggio/1,2). Serve a due cose: il chamfer e' a
+  // gradini (somme di 0,5/0,7/1,1) e i suoi livelli uscivano doppi; e le creste fra due fronti
+  // diventano dorsi tondi invece di spigoli. Le somme prefissate per riga/colonna lo rendono O(N).
+  {
+    const rc = Math.max(1, Math.round(SPIANA_MM / CELLA));
+    const S = new Float64Array(Math.max(COLS, ROWS) + 1), C = new Int32Array(Math.max(COLS, ROWS) + 1);
+    const E = new Float32Array(COLS * ROWS);
+    const passata = (lungoRighe: boolean): void => {
+      const n = lungoRighe ? COLS : ROWS, m = lungoRighe ? ROWS : COLS;
+      for (let k = 0; k < m; k++) {
+        const at = (t: number): number => (lungoRighe ? k * COLS + t : t * COLS + k);
+        S[0] = 0; C[0] = 0;
+        for (let t = 0; t < n; t++) { const i = at(t); const ok = esteso[i] && D[i] < INF; S[t + 1] = S[t] + (ok ? D[i] : 0); C[t + 1] = C[t] + (ok ? 1 : 0); }
+        for (let t = 0; t < n; t++) {
+          const i = at(t);
+          if (!esteso[i] || D[i] >= INF) { E[i] = D[i]; continue; }
+          const a = Math.max(0, t - rc), b = Math.min(n, t + rc + 1);
+          const cnt = C[b] - C[a];
+          E[i] = cnt ? (S[b] - S[a]) / cnt : D[i];
+        }
+      }
+      D.set(E);
+    };
+    for (let giro = 0; giro < 3; giro++) { passata(true); passata(false); }
   }
   let dMax = 0;
   for (let i = 0; i < COLS * ROWS; i++) if (largo[i] && D[i] < INF && D[i] > dMax) dMax = D[i];
@@ -492,20 +556,21 @@ famiglie.forEach((f, fi) => {
       const colLa = famIn(qq) === famiglia ? tintaIn(qq) : -1;
       if (colLa >= 0 && colLa < col) { const l = puntiSotto.get(colLa) ?? []; l.push(p, punta, p); puntiSotto.set(colLa, l); }
     }
-    if (punti.length >= 3) { perColoreDenti[col].push(via(punti)); cucito.push(punti); }
+    if (punti.length >= 3) { perColoreDenti[col].push(via(punti)); cuci(punti); }
     for (const [c, l] of puntiSotto) if (l.length >= 3) perColoreDenti[c].push(via(l));
   };
 
   // I LIVELLI, uno ogni passo, ognuno addolcito in proporzione alla distanza
-  for (let d = BASI_MM / 2; d < dMax; d += BASI_MM) {
+  // Un livello: si estrae su una maschera, si incatena, si spezza alle forcine, si liscia, si colora.
+  // I SEGMENTI NULLI: dove D vale esattamente d su un angolo di cella (succede ogni 2,5 mm: il
+  // chamfer somma multipli di 0,5) il marching squares emette un segmento di lunghezza zero, e la
+  // catena si spezzava li'. Le basi finivano 3 mm prima del bordo: era questo, non la lisciatura.
+  // Il livello si estrae un pelo (0,0137 mm) sopra il valore tondo: i valori del chamfer sono
+  // somme di 0,5/0,7/1,1 e finivano ESATTAMENTE sui livelli, con tre o quattro segmenti che si
+  // toccavano in un angolo e la catena che sceglieva quello sbagliato.
+  const tiraLivello = (d: number, su: Uint8Array): void => {
     idLivello++;
-    // I SEGMENTI NULLI: dove D vale esattamente d su un angolo di cella (succede ogni 2,5 mm: il
-    // chamfer somma multipli di 0,5) il marching squares emette un segmento di lunghezza zero, e la
-    // catena si spezzava li'. Le basi finivano 3 mm prima del bordo: era questo, non la lisciatura.
-    // Il livello si estrae un pelo (0,0137 mm) sopra il valore tondo: i valori del chamfer sono
-    // somme di 0,5/0,7/1,1 e finivano ESATTAMENTE sui livelli, con tre o quattro segmenti che si
-    // toccavano in un angolo e la catena che sceglieva quello sbagliato.
-    const segmenti = livello(D, largo, COLS, ROWS, ORIG, ORIG, CELLA, d + 0.0137).filter((sg) => Math.hypot(sg.b.x - sg.a.x, sg.b.y - sg.a.y) > 1e-6);
+    const segmenti = livello(D, su, COLS, ROWS, ORIG, ORIG, CELLA, d + 0.0137).filter((sg) => Math.hypot(sg.b.x - sg.a.x, sg.b.y - sg.a.y) > 1e-6);
     for (const linea of incatena(segmenti, CELLA * 1.5)) {
       if (linea.length < 3) continue;
       for (const pezzo of process.env.NO_FORCINE ? [ricampiona(linea, 0.5)] : spezzaAlleForcine(ricampiona(linea, 0.5), 0.5)) {
@@ -516,7 +581,7 @@ famiglie.forEach((f, fi) => {
       let cur: Point[] = [], curCol = -2;
       const chiudi = (): void => {
         if (cur.length >= 2 && curCol >= 0 && lunghezza(cur) >= 1.5) {
-          perColore[curCol].push(via(cur)); const copia = cur.slice(); lineeFinali.push({ id: idLivello, punti: copia }); cucito.push(copia);
+          perColore[curCol].push(via(cur)); const copia = cur.slice(); lineeFinali.push({ id: idLivello, punti: copia }); cuci(copia);
           if (DENTI) pettina(cur, curCol, fi, idLivello);
         }
         cur = []; curCol = -2;
@@ -551,14 +616,57 @@ famiglie.forEach((f, fi) => {
       chiudi();
       }
     }
+  };
+  for (let d = BASI_MM / 2; d < dMax; d += BASI_MM) tiraLivello(d, largo);
+
+  // IL RAMMENDO. Dopo i livelli (e i loro denti) si guarda cosa della famiglia e' rimasto a piu' di
+  // 0,75 mm da qualunque filo: ogni macchia nuda di almeno 2 mm² riceve un livello in piu', quello
+  // che passa per il suo centro (la mediana di D sulla macchia), limitato a un intorno della macchia.
+  // E' un livello come gli altri, coi denti verso il chiaro. Copre qualunque causa - gli apici delle U
+  // sui dorsi spianati, un gomito, un capo che arriva corto - senza dover indovinare quale.
+  if (DENTI) for (let giro = 0; giro < 2; giro++) {
+    const visto = new Uint8Array(GW * GH);
+    const toppa = new Uint8Array(COLS * ROWS);
+    for (let gy = 0; gy < GH; gy++) for (let gx = 0; gx < GW; gx++) {
+      const g0 = gy * GW + gx;
+      if (visto[g0] || cop[g0]) continue;
+      const p0 = { x: gx * G, y: gy * G };
+      if (famIn(p0) !== fi) continue;
+      // la macchia nuda, a 4 vicini, dentro la famiglia
+      const macchia: number[] = [g0];
+      visto[g0] = 1;
+      for (let h = 0; h < macchia.length; h++) {
+        const g = macchia[h], x = g % GW, y = Math.floor(g / GW);
+        for (const [dx, dy] of [[-1, 0], [1, 0], [0, -1], [0, 1]]) {
+          const xx = x + dx, yy = y + dy;
+          if (xx < 0 || yy < 0 || xx >= GW || yy >= GH) continue;
+          const gg = yy * GW + xx;
+          if (visto[gg] || cop[gg] || famIn({ x: xx * G, y: yy * G }) !== fi) continue;
+          visto[gg] = 1; macchia.push(gg);
+        }
+      }
+      if (macchia.length * G * G < 2) continue;
+      const valori: number[] = [];
+      const celle: number[] = [];
+      for (const g of macchia) { const i = cella({ x: (g % GW) * G, y: Math.floor(g / GW) * G }); if (i >= 0 && largo[i] && D[i] < INF) { valori.push(D[i]); celle.push(i); } }
+      if (!valori.length) continue;
+      valori.sort((a, b) => a - b);
+      const dMed = valori[Math.floor(valori.length / 2)];
+      const rt = Math.round(2 / CELLA);
+      const toccate: number[] = [];
+      for (const i of celle) { const c = i % COLS, r = Math.floor(i / COLS); for (let dy = -rt; dy <= rt; dy++) for (let dx = -rt; dx <= rt; dx++) { const x = c + dx, y = r + dy; if (x >= 0 && y >= 0 && x < COLS && y < ROWS && largo[y * COLS + x] && !toppa[y * COLS + x]) { toppa[y * COLS + x] = 1; toccate.push(y * COLS + x); } } }
+      tiraLivello(dMed, toppa);
+      rammendi++;
+      for (const i of toccate) toppa[i] = 0;
+    }
   }
 
-  // L'ULTIMA BASE LUNGO IL MURO BLU. I denti vanno verso il chiaro, cioe' via dal blu: la striscia
+  // L'ULTIMA BASE LUNGO IL MURO BLU (spenta di default, vedi ULTIMA_BASE). I denti vanno verso il chiaro, cioe' via dal blu: la striscia
   // fra l'ultimo livello e il blu non la copre nessun dente, e fra due famiglie il canale nudo si
   // raddoppia (Lorenzo: «tanti buchi, anche tra due gruppi diversi»). Qui una base corre lungo il
   // blu a mezzo passo dentro, SOLO dove la distanza dal muro rosso supera l'ultimo livello di piu'
   // di 3/4 di passo, coi denti verso il chiaro come tutte le altre: nessuna seconda direzione.
-  {
+  if (ULTIMA_BASE) {
     idLivello++;
     const nB = ricampiona([...B], 0.5);
     const grezza: Point[] = [], tieni: boolean[] = [];
@@ -578,7 +686,7 @@ famiglie.forEach((f, fi) => {
     const morbida = liscia(grezza, LISCIA_MM, 0.5);
     let cur: Point[] = [], curCol = -2;
     const chiudi = (): void => {
-      if (cur.length >= 2 && curCol >= 0 && lunghezza(cur) >= 1.5) { perColore[curCol].push(via(cur)); const copia = cur.slice(); lineeFinali.push({ id: idLivello, punti: copia }); cucito.push(copia); if (DENTI) pettina(cur, curCol, fi, idLivello); }
+      if (cur.length >= 2 && curCol >= 0 && lunghezza(cur) >= 1.5) { perColore[curCol].push(via(cur)); const copia = cur.slice(); lineeFinali.push({ id: idLivello, punti: copia }); cuci(copia); if (DENTI) pettina(cur, curCol, fi, idLivello); }
       cur = []; curCol = -2;
     };
     // qui la base sta a mezzo passo dentro: ha sempre una tinta
@@ -606,12 +714,11 @@ famiglie.forEach((f, fi) => {
     for (let my = 0; my < MH; my++) { let r = ''; for (let mx = 0; mx < MW; mx++) { const v = m[my * MW + mx]; r += v === 0 ? '.' : v < 3 ? ':' : v < 8 ? 'o' : '#'; } righe.push(r); }
     console.log('TRATTI CORTI (celle 8 mm):' + String.fromCharCode(10) + righe.join(String.fromCharCode(10)));
   }
+  console.log(`  rammendi: ${rammendi} livelli in piu' sulle macchie nude`);
   console.log(`${famOk} famiglie, ${famSaltate} saltate · ${lineeFinali.length} tratti di base (${corte} sotto i 5 mm) · ${(tot / 1000).toFixed(1)} m di basi · ${((Date.now() - t0) / 1000).toFixed(1)} s`);
 }
 
 // --- 5. il metro ------------------------------------------------------------------------------------------
-const G = 0.5;
-const GW = Math.ceil(WM / G) + 1, GH = Math.ceil(HM / G) + 1;
 // denso = due LIVELLI diversi entro 0,35 passi. Contare le polilinee contava due volte lo stesso
 // livello spezzato a un cambio di colore: il metro diceva 27% denso su linee a 4 mm esatti.
 const ultimoId = new Int32Array(GW * GH).fill(-1);
@@ -642,17 +749,8 @@ for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) {
 }
 const nudiFilo: string[] = [];
 if (DENTI) {
-  // IL METRO DEL FILO: ogni segmento cucito (basi e denti) copre le celle entro 0,75 mm; cosa resta?
-  const cop = new Uint8Array(GW * GH);
-  const rf = Math.ceil(0.75 / G);
-  for (const seg of cucito) for (let i = 1; i < seg.length; i++) {
-    const a = seg[i - 1], b = seg[i];
-    const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / G));
-    for (let k = 0; k <= n; k++) {
-      const cx = Math.round((a.x + ((b.x - a.x) * k) / n) / G), cy = Math.round((a.y + ((b.y - a.y) * k) / n) / G);
-      for (let dy = -rf; dy <= rf; dy++) for (let dx = -rf; dx <= rf; dx++) { const x = cx + dx, y = cy + dy; if (x >= 0 && y >= 0 && x < GW && y < GH && dx * dx + dy * dy <= rf * rf) cop[y * GW + x] = 1; }
-    }
-  }
+  // IL METRO DEL FILO: ogni segmento cucito (basi e denti) copre le celle entro 0,75 mm (`cop`,
+  // tenuta aggiornata da `cuci`); cosa resta?
   let nudoFilo = 0, tot = 0;
   for (let y = 0; y < GH; y++) for (let x = 0; x < GW; x++) { if (tintaIn({ x: x * G, y: y * G }) < 0) continue; tot++; if (!cop[y * GW + x]) { nudoFilo++; nudiFilo.push(`<rect x="${(x * G).toFixed(1)}" y="${(y * G).toFixed(1)}" width="${G}" height="${G}" fill="#ff2f8f" opacity="0.7"/>`); } }
   console.log(`METRO DEL FILO: ${((nudoFilo / tot) * 100).toFixed(1)}% del pannello a piu' di 0,75 mm da qualunque filo`);
@@ -692,7 +790,7 @@ if (process.env.CROP) {
   const pb: string[] = [], pd: string[] = [];
   for (const l of cucito) if (dentroCrop(l)) (basi.has(l) ? pb : pd).push(via(l));
   const nudi = nudiFilo.filter((r) => { const m = /x="([\d.]+)" y="([\d.]+)"/.exec(r)!; const x = +m[1], y = +m[2]; return x >= x0 && x <= x1 && y >= y0 && y <= y1; });
-  writeFileSync('apps/pettine/scripts/out/ritaglio.svg', `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" width="${(x1 - x0) * 8}" height="${(y1 - y0) * 8}">
+  writeFileSync(`apps/pettine/scripts/out/${process.env.CROP_NOME ?? 'ritaglio'}.svg`, `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${x0} ${y0} ${x1 - x0} ${y1 - y0}" width="${(x1 - x0) * 8}" height="${(y1 - y0) * 8}">
 <rect x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}" fill="#f7f6f3"/>
 <rect x="0" y="0" width="${WM.toFixed(1)}" height="${HM.toFixed(1)}" fill="none" stroke="#333" stroke-width="0.2" stroke-dasharray="1 0.5"/>
 <g>${nudi.join('')}</g>
@@ -701,7 +799,7 @@ if (process.env.CROP) {
 <path d="${muriA.join('')}" fill="none" stroke="#d21" stroke-width="0.4"/>
 <path d="${muriB.join('')}" fill="none" stroke="#27c" stroke-width="0.3"/>
 </svg>`, 'utf8');
-  console.log('-> apps/pettine/scripts/out/ritaglio.svg');
+  console.log(`-> apps/pettine/scripts/out/${process.env.CROP_NOME ?? 'ritaglio'}.svg`);
 }
 console.log(`METRO (passo ${BASI_MM}): nudo ${((nude / dentro) * 100).toFixed(1)}% · denso ${((dense / dentro) * 100).toFixed(1)}%`);
 

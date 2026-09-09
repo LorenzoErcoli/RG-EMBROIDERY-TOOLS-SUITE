@@ -625,7 +625,23 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   tratto da due punti coi suoi denti — 2.800 tratti sotto 1,5 mm. Ora la tinta si stabilizza lungo
   la base (una tinta che dura meno di 2 mm non spezza la linea) e nessun tratto è sotto 1,5 mm:
   10.188 → **5.380 tratti**.
-- **Aperto:** (a) restano **1.728 tratti sotto i 5 mm**, quasi tutti attorno alla sfera e sulle
+- **Curve morbide, per Lorenzo (2026-09-09, tag `pettine-copertura-ok` sul punto di ritorno):** *«ad un
+  certo punto la curva si amplifica per rispettare il muro finale, quello lo eviterei… preferisco un
+  susseguirsi di curve più morbide… evitiamo angoli troppo estremi, anche se questo implica non
+  rispettare i due muri. Preferisco che la copertura sia più efficace»*. Tre mosse: (1) la distanza
+  si **spiana** con una media mobile di raggio 3 mm (tre passate, O(N) con le somme prefissate) su
+  una fascia più larga dello sconfinamento, così le creste fra due fronti diventano dorsi tondi e i
+  livelli ci girano attorno con un raggio invece di una V — nella sfera e nelle onde in alto; (2)
+  **l'ultima base lungo il muro opposto è spenta** (era proprio la linea che «diventa uguale al muro
+  finale»); (3) il **rammendo**: dopo ogni famiglia si misura cosa è rimasto a più di 0,75 mm da un
+  filo e ogni macchia nuda da 2 mm² in su riceve un livello in più che passa per il suo centro (la
+  mediana della distanza sulla macchia) — 12 rammendi su tutto il pannello, e copre qualunque causa
+  senza indovinarla. Misurato: nudo **0,0 %** (110 celle dentro le famiglie, 12 sul bordo), tratti
+  4.810 (1.414 sotto i 5 mm, erano 1.728), denso 2,1 %. Le due zone della sua seconda e terza
+  osservazione (fascia sinistra «spezzata a metà», linee «molto spezzate» nella luce della sfera)
+  erano difetti del file **precedente** — la cresta diagonale e le forcine — già chiusi il giorno
+  prima: i file nuovi vanno con un nome diverso (`*-v2-curve-morbide.svg`) per non confonderli.
+- **Aperto:** (a) restano **1.414 tratti sotto i 5 mm**, quasi tutti attorno alla sfera e sulle
   creste dove due fronti si incontrano — sono le «giunture» che Lorenzo non vuole, da guardare con
   lui; (b) lo sconfinamento di 2,5 mm si vede come **peli** che attraversano le giunte; (c) il
   «passa due volte» sui rami dello stesso livello che si toccano; (d) il tool vero — pannello,
