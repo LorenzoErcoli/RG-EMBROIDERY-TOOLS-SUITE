@@ -1156,6 +1156,22 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   volta che la corda se ne allontana, corde da 6 mm al massimo): i punti cuciti finivano sulla linea
   uguale a prima e i tagli salivano a 50 (a 90 sui costi vecchi). Un costo più caro nella banda dello
   scuro fuori linea (6 invece di 3,5): 16% → 13%, ma affollamento 0,75 → 1,06 m e un taglio in più.
+- **Fuori dal blocco al massimo due linee** (Lorenzo, 2026-09-10, diciottesima tornata: *«lavora
+  molto meglio. Unica cosa: ora a volte il filo si sposta molto dal blocco originale del colore e
+  finisce sotto un pettine di un colore diverso successivo. Limitare l'allontanamento a massimo 2 linee
+  dalla fine del blocco colore originale, senza rompere niente»*). Misurato prima: **5,98 m** di filo
+  di passaggio a più di due linee dal blocco, nel colore scuro accanto. La banda di 5 mm era misurata
+  dal bordo più vicino con *qualunque* tinta, e una cella scura a 5 mm da un terzo colore risultava
+  «in banda» pur stando lontana dal nostro blocco. **Fatto.** Una mappa per ago, `dalBlocco`, misura
+  la distanza dal blocco del colore in corso; nel colore scuro si sta entro `LINEE_FUORI_BLOCCO` (2)
+  passi di base, sia per scegliere sia per giudicare. Preso alla lettera costava tagli (43 → 62: le
+  strade che attraversano il colore scuro per raggiungere un altro pezzo), quindi c'è un quarto
+  gradino nella ricerca a scalare: la regola larga di prima, solo quando altrimenti si taglia, contata
+  nel log («OLTRE LE DUE LINEE»). Risultato: **5,98 → 0,80 m** oltre le due linee (20 passaggi in
+  extremis), tagli 43 → 43, filo a vista 2,24 → 3,02 m (contato onestamente: il filo nella banda larga
+  che prima era «coperto» ora conta a vista). Provato e scartato: la condizione «stesso bordo» con
+  `bordoAltra` (72 tagli, perché quella mappa segna il bordo con la tinta più scura, non col nostro
+  colore) e tre linee secche (60 tagli).
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione

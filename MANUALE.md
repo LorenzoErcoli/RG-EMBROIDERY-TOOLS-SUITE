@@ -432,6 +432,13 @@ segna anche una fascia di 4 mm attorno a sé, così il passaggio dopo non si met
 fianco (che a occhio è la stessa strada) ma su una linea davvero diversa. Il corridoio già battuto
 resta possibile: dove non ci sono altre basi si ripassa di lì, e si vede una linea sola.
 
+**Fuori dal blocco al massimo due linee.** Nel colore scuro accanto il filo di passaggio può entrare
+per due passi di base oltre il bordo del proprio blocco, misurati dal blocco del colore in corso e
+non da un bordo qualsiasi: una cella scura vicina a un terzo colore ma lontana dal nostro blocco non
+è una strada. Solo quando altrimenti si taglierebbe vale la regola larga di prima (5 mm da qualunque
+bordo): un passaggio che si allontana è meglio di un rasafilo, ma solo se non c'è altro, e il log
+dice quanti sono e quanto filo ci finisce («Oltre le due linee»).
+
 **Scegliere una strada e giudicarla sono due conti diversi.** I costi che spingono il filo sulla
 linea esatta e lontano dai corridoi servono a scegliere; per decidere se cucire o tagliare valgono
 solo quanto il filo si vedrà. E la ricerca è a scalare: prima sulla mappa che sparge, poi senza

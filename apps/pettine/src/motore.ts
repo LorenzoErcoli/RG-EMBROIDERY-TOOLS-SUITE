@@ -1518,7 +1518,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     const apri = (): void => { if (pathPts.length >= 2) paths.push({ needle: ago, points_mm: pathPts }); pathPts = []; };
     // forza: radici e punte si cuciono sempre; un capo di base o un punto di passaggio sotto il
     // millimetro si lascia perdere (il punto dopo lo assorbe)
-    let nienteFinestra = 0, nienteStrada = 0, nienteCosto = 0, nienteGiro = 0, nienteVista = 0, ripiegatiSulCorridoio = 0;
+    let nienteFinestra = 0, nienteStrada = 0, nienteCosto = 0, nienteGiro = 0, nienteVista = 0, ripiegatiSulCorridoio = 0, ripiegatiOltreLeLinee = 0, filoOltreLeLinee = 0;
     // IL LABORATORIO DEI CASI: si registra la situazione nel momento della decisione
     const CASI_MAX = Math.max(0, Math.round(par.casiStudio ?? 0));
     const casiPerTipo = { taglio: 0, passaggio: 0, innesto: 0 };
@@ -1659,6 +1659,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
           if (d > 10) {
             const im = cella({ x: (da.x + q.x) / 2, y: (da.y + q.y) / 2 }), L = dist(da, q), tm = im < 0 ? -1 : tinta[im];
             const dn = dietroDi(im, ago - 1, dOra);
+            if (tm > ago - 1 && dalBlocco[im] > FUORI_CELLE) filoOltreLeLinee += L;
             if (tm < 0) dovePassa.nudo += L;
             else if (dn === 2) dovePassa.linea += L;
             else if (dn === 1) dovePassa.accanto += L;
@@ -1767,6 +1768,35 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
      */
     const BANDA_MM = 5;
     const BANDA_CELLE = Math.round(BANDA_MM / CELLA);
+    // FUORI DAL BLOCCO AL MASSIMO DUE LINEE (Lorenzo, 2026-09-10, diciottesima tornata: «a volte il
+    // filo si sposta molto dal blocco originale del colore e finisce sotto un pettine di un colore
+    // diverso successivo. Limitare l'allontanamento a massimo 2 linee dalla fine del blocco»). Nel
+    // colore scuro accanto il filo puo' entrare per due passi di base oltre il bordo — e solo dal
+    // lato del bordo col NOSTRO colore, non nella banda che quel colore ha con un altro.
+    const LINEE_FUORI_BLOCCO = 2;
+    const FUORI_CELLE = Math.round((LINEE_FUORI_BLOCCO * BASI_MM + CELLA) / CELLA);
+    // la distanza dal blocco del colore in corso, in celle, fino a FUORI_CELLE (oltre: 32767). Si
+    // ricalcola a ogni ago. Non si usa `bordoDist`, che misura dal bordo piu' vicino con QUALUNQUE
+    // tinta: una cella scura a 5 mm da un terzo colore risultava «in banda» pur stando lontana dal
+    // nostro blocco — ed e' proprio il filo che Lorenzo ha visto allontanarsi.
+    const dalBlocco = new Int16Array(COLS * ROWS);
+    const misuraDalBlocco = (c: number): void => {
+      dalBlocco.fill(32767);
+      let coda: number[] = [];
+      for (let i = 0; i < COLS * ROWS; i++) if (tinta[i] === c) { dalBlocco[i] = 0; coda.push(i); }
+      for (let passo = 1; passo <= FUORI_CELLE && coda.length; passo++) {
+        const prossima: number[] = [];
+        for (const i of coda) {
+          const c2 = i % COLS, r = (i - c2) / COLS;
+          if (c2 < 1 || r < 1 || c2 + 1 >= COLS || r + 1 >= ROWS) continue;
+          for (const j of [i - 1, i + 1, i - COLS, i + COLS]) {
+            if (tinta[j] < 0 || dalBlocco[j] <= passo) continue;
+            dalBlocco[j] = passo; prossima.push(j);
+          }
+        }
+        coda = prossima;
+      }
+    };
     const bordoDist = new Int16Array(COLS * ROWS).fill(32767);
     const bordoAltra = new Int8Array(COLS * ROWS).fill(-1);
     {
@@ -1833,6 +1863,12 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     // dopo e ci passera' sopra coi denti fitti del bordo) o, meno bene, sotto il corpo di quel colore.
     // Dentro la propria tinta si vede, fuori dal disegno si vede sul tessuto nudo.
     // `modo`: 0 = per scegliere, con l'affollamento; 1 = per scegliere, senza; 2 = per giudicare
+    // la striscia del colore scuro subito oltre il nostro bordo, dove un passaggio nostro puo' stare
+    // `bandaLarga`: l'ultimo gradino della ricerca, quando altrimenti si taglia. Vale la regola di
+    // prima (la banda di 5 mm da qualunque bordo): un passaggio che si allontana dal blocco e' meglio
+    // di un rasafilo, ma solo se non c'e' altro. Quanto filo ci finisce e' scritto nel log.
+    let bandaLarga = false;
+    const nelBordoScuro = (i: number, c: number): boolean => tinta[i] > c && (dalBlocco[i] <= FUORI_CELLE || (bandaLarga && bordoDist[i] <= BANDA_CELLE));
     const costoCella = (i: number, c: number, dOra: number, modo = 2): number => {
       const perGiudizio = modo === 2;
       const t = i < 0 ? -1 : tinta[i];
@@ -1861,7 +1897,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       const dietroN = dietroDi(i, c, dOra), dietro = dietroN > 0;
       // PROVA: nella banda dal lato scuro i denti gia' cuciti sono il sormonto di questo colore, e il
       // colore scuro coprira' tutto, passaggio compreso: li' sopra si puo' passare
-      if (pettineCucito[i] && !dietro && !(t > c && inBanda)) return 16;
+      if (pettineCucito[i] && !dietro && !nelBordoScuro(i, c)) return 16;
       if (t > c) {
         // la banda del bordo di un colore che viene dopo: sparisce, ma e' fuori dal tracciato del
         // nostro colore, e Lorenzo preferisce il dietro dell'ultima riga nostra («magari l'ultimo,
@@ -1869,8 +1905,8 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
         // ANCHE QUI SULLA LINEA: la banda del colore scuro e' coperta dalle sue righe di bordo, ma un
         // filo che ci corre a caso sta fra i denti; sulla linea di base di una SUA riga sta sotto i
         // denti della riga dopo. Le sue basi sono segnate (soprafilo) come le nostre.
-        if (inBanda) return (soprafilo[i] ? 1.2 : g ? 2.5 : 3.5) + piu;
-        return 8;                              // sotto il corpo di quel colore: il pettine e' rado, si vede fra i denti
+        if (nelBordoScuro(i, c)) return (soprafilo[i] ? 1.2 : g ? 2.5 : 3.5) + piu;
+        return 8 + (inBanda ? 0 : 8);          // oltre le due linee, o sotto il corpo di quel colore: si vede fra i denti
       }
       if (t === c) {
         const d = distDaMuro[i];
@@ -1911,8 +1947,8 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       if (t < 0) return true;
       const inBanda = bordoDist[i] <= BANDA_CELLE, altra = bordoAltra[i];
       const dietro = sulDietro(i, c, dOra);
-      if (pettineCucito[i] && !dietro && !(t > c && inBanda)) return true;   // sopra un pettine cucito: a vista
-      if (t > c) return !inBanda;
+      if (pettineCucito[i] && !dietro && !nelBordoScuro(i, c)) return true;   // sopra un pettine cucito: a vista
+      if (t > c) return !nelBordoScuro(i, c);
       if (t === c) return !dietro && !(inBanda && altra > c) && baseFutura[i] <= 0;
       return !(inBanda && altra === c);
     };
@@ -1934,11 +1970,14 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     // Senza la scala, spargere i passaggi costava tagli: 40 -> 64 sul pannello a sei tinte.
     const instrada = (a: Point, b: Point, c: number, dOra: number, costoMax = 8, livello = 0, vistaMax = Infinity): Point[] | null => {
       const ripiega = (): Point[] | null => {
-        if (livello >= 2) return null;
+        if (livello >= 3) return null;
         const v2 = instrada(a, b, c, dOra, costoMax, livello + 1, vistaMax);
+        bandaLarga = livello === 3;   // la banda larga vale solo dentro il suo gradino
         if (v2 && livello === 0) ripiegatiSulCorridoio++;
+        if (v2 && livello === 2) ripiegatiOltreLeLinee++;
         return v2;
       };
+      bandaLarga = livello === 3;
       const ia = cella(a), ib = cella(b);
       if (ia < 0 || ib < 0) return null;
       // quanto ci si puo' allargare per aggirare un ostacolo. Un cammino che segue le righe invece di
@@ -1984,7 +2023,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
           const m = idx(x, y);
           if (chiuso[m]) continue;
           const passo = (dx && dy ? 1.414 : 1) * CELLA;
-          const g = G0[n] + passo * costoCella(y * COLS + x, c, dOra, livello);
+          const g = G0[n] + passo * costoCella(y * COLS + x, c, dOra, Math.min(2, livello));
           if (g < G0[m]) { G0[m] = g; prev[m] = n; push(g + h(x, y), m); }
         }
       }
@@ -2071,6 +2110,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       apri();
       { let n = 0; for (let i = 0; i < battuto.length; i++) if (battuto[i]) { n++; if (battuto[i] >= 3) celleAffollate++; } celleCorridoio += n; }
       battuto.fill(0);   // il corridoio vale dentro un colore: col cambio ago si ricomincia
+      misuraDalBlocco(c);
       accanto.fill(0);
       baseFutura.fill(0);
       for (const t of trattiTutti) if (t.col === c) segnaBaseFutura(t, 1);
@@ -2531,6 +2571,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     {
       const tot = Object.values(dovePassa).reduce((s, v) => s + v, 0) || 1;
       const pc = (v: number): string => `${((v / tot) * 100).toFixed(0)}%`;
+      console.log(`OLTRE LE DUE LINEE: ${ripiegatiOltreLeLinee} passaggi cuciti con la banda larga perche' altrimenti si tagliava, ${(filoOltreLeLinee / 1000).toFixed(2)} m di filo a piu' di ${LINEE_FUORI_BLOCCO} linee dal blocco del colore (nel colore scuro accanto)`);
       console.log(`DOVE PASSA IL FILO (passaggi oltre 10 mm, ${(tot / 1000).toFixed(1)} m): sulla linea del dietro ${pc(dovePassa.linea)} · a una cella dalla linea ${pc(dovePassa.accanto)} · nella banda verso lo scuro ${pc(dovePassa.bandaScuro)} · nella banda verso il chiaro ${pc(dovePassa.bandaChiaro)} · nella striscia fra due righe ${pc(dovePassa.striscia)} · dentro il colore lontano dalle basi ${pc(dovePassa.dentro)} · sopra un pettine cucito ${pc(dovePassa.pettine)} · sulla base di un altro colore ${pc(dovePassa.altruiLinea)} · su un altro colore fuori linea ${pc(dovePassa.altrui)} · sul nudo ${pc(dovePassa.nudo)}`);
     }
     console.log(`CORRIDOI: ${(filoPassaggi / 1000).toFixed(1)} m di passaggio corrono dentro ${corridoiM.toFixed(1)} m di corridoi distinti · ${(celleAffollate / 6 / 1000).toFixed(2)} m dove il filo di passaggio e' passato tre o piu' volte (l'affollamento che Lorenzo non vuole) · ${ripiegatiSulCorridoio} passaggi tornati sul corridoio perche' la linea diversa non reggeva il giudizio`);
