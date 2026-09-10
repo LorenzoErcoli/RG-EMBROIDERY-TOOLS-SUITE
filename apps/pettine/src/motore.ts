@@ -26,9 +26,9 @@ import { parseSvgPolylines } from '@rg/pattern-grammar';
 // larga una transizione di colore nella foto. R28 vieta la seconda copia, quindi si importano da li'
 // invece di ricopiarle; sono candidate a salire in `@rg/core` (regola di crescita 1: e' il secondo
 // cliente) appena qualcuno le tocca sul serio.
-import { makeRegion } from '../../pittorico/src/region';
-import { rasterizza, livello, incatena } from '../../pittorico/src/iso-fill';
-import { larghezzaTransizione } from '../../pittorico/src/borders';
+import { makeRegion } from '@rg/core';
+import { rasterizza, livello, incatena } from '@rg/core';
+import { larghezzaTransizione } from '@rg/core';
 
 /** Il rettangolo di lavoro, in millimetri del disegno. */
 export interface Riquadro { x: number; y: number; larghezza: number; altezza: number }

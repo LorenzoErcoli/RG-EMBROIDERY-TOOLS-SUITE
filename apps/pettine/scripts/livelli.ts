@@ -16,7 +16,7 @@
 //   NOME=... cambia il nome dei file di uscita
 
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
-import { leggiBmp } from '../../pittorico/scripts/bmp.ts';
+import { leggiBmp } from '../../../packages/testkit/src/bmp.ts';
 import { costruisciPettine, parametriPettineDefault, type Riquadro } from '../src/motore.ts';
 
 const num = (i: number, d: number): number => (process.argv[i] !== undefined ? Number(process.argv[i]) : d);

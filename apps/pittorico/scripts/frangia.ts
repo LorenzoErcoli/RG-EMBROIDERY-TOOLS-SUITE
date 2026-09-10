@@ -21,9 +21,9 @@
 //     --alias:@rg/core=./packages/core/src/index.ts --outfile=apps/pittorico/scripts/frangia.mjs
 //   node --max-old-space-size=4096 apps/pittorico/scripts/frangia.mjs <cianotipia.bmp>
 
-import { leggiBmp } from './bmp.ts';
+import { leggiBmp } from '../../../packages/testkit/src/bmp.ts';
 import { buildPittoricoPlan, defaultPittoricoParams } from '../src/pipeline.ts';
-import { BoundaryIndex, regionRings } from '../src/region.ts';
+import { BoundaryIndex, regionRings } from '@rg/core';
 import { pointInRegion } from '@rg/core';
 
 const percorso = process.argv[2];

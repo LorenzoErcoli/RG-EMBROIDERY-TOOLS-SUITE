@@ -26,9 +26,12 @@
 //
 // Nessun DOM: si prova in Node.
 
-import { type Point, type Polyline, type Region, resampleUniform, simplifyPolyline } from '@rg/core';
-import { regionBounds } from './region';
-import { rasterizza, livello, incatena } from './iso-fill';
+import type { Point, Polyline } from './types';
+import type { Region } from './regions';
+import { simplifyPolyline } from './geometry';
+import { resampleUniform } from './stitch';
+import { regionBounds } from './regions';
+import { rasterizza, livello, incatena } from './isolines';
 
 export interface ColonneOptions {
   /** Passo fra due punti lungo l'asse (R22 `densitySpacingMm`). */

@@ -35,8 +35,8 @@
 import { type Point, type Polyline, type Region, pointInRegion, resampleUniform } from '@rg/core';
 import type { DirectionField } from './field';
 import { attraversa, passiLungo, disturbo, chiudiVuoti, versoDentro, Occupato } from './rail-fill';
-import { regionBounds } from './region';
-import { rasterizza } from './iso-fill';
+import { regionBounds } from '@rg/core';
+import { rasterizza } from '@rg/core';
 
 export interface BandFillOptions {
   /** Passo fra due corse (R22 `densitySpacingMm`). */

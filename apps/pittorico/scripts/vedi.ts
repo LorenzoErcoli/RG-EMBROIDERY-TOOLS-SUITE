@@ -9,8 +9,8 @@
 //   RG_METODO=fasce RG_FRANGIA=0 node --max-old-space-size=4096 apps/pittorico/scripts/vedi.mjs <bmp>
 
 import { mkdirSync } from 'node:fs';
-import { leggiBmp } from './bmp.ts';
-import { Tela } from './png.ts';
+import { leggiBmp } from '../../../packages/testkit/src/bmp.ts';
+import { Tela } from '../../../packages/testkit/src/png.ts';
 import { buildPittoricoPlan, defaultPittoricoParams } from '../src/pipeline.ts';
 
 const percorso = process.argv[2];

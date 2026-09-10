@@ -20,7 +20,7 @@
 //    posizione. Due riempimenti che si affacciano sullo stesso bordo si ritirano *ognuno per conto
 //    suo*, e nell'intreccio dei capi nasce il degradé.
 
-import { type Point, type Polyline, type PixelImage } from '@rg/core';
+import type { Point, Polyline, PixelImage } from './types';
 
 // ---------------------------------------------------------------------------------------------
 // 1. Quanto è largo il passaggio

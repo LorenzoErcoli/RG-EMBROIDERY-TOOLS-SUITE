@@ -13,7 +13,7 @@
 //   node --max-old-space-size=4096 apps/pittorico/scripts/catena.mjs <cianotipia.bmp> [larghezzaMm]
 
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { leggiBmp } from './bmp.ts';
+import { leggiBmp } from '../../../packages/testkit/src/bmp.ts';
 import { buildPittoricoPlan, pittoricoExportLayers, defaultPittoricoParams } from '../src/pipeline.ts';
 import { svgMacchie, svgRicamo, svgPassaggi, pixelDeiColori, foglio, COLORE_PASSAGGI } from '../src/viste.ts';
 

@@ -29,7 +29,7 @@
 //   node --max-old-space-size=4096 apps/pittorico/scripts/lisciatura.mjs <cianotipia.bmp>
 
 import { writeFileSync, mkdirSync } from 'node:fs';
-import { leggiBmp } from './bmp.ts';
+import { leggiBmp } from '../../../packages/testkit/src/bmp.ts';
 import { buildPittoricoPlan, pittoricoExportLayers, defaultPittoricoParams, type PittoricoPlan } from '../src/pipeline.ts';
 import { svgMacchie, svgRicamo, COLORE_PASSAGGI } from '../src/viste.ts';
 

@@ -10,7 +10,7 @@
 // Il nome di un caso e' stabile fra una corsa e l'altra (ago, riga da cui si parte, riga dove si
 // arriva): quando il motore cambia, lo stesso caso si ritrova con la sua risposta gia' scritta.
 import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
-import { leggiBmp } from '../../pittorico/scripts/bmp.ts';
+import { leggiBmp } from '../../../packages/testkit/src/bmp.ts';
 import { costruisciPettine, parametriPettineDefault, type CasoStudio, type Riquadro } from '../src/motore.ts';
 
 const FILE = process.argv[2] ?? 'apps/pettine/fixtures/VETTORIALE-6-colori-v2-gruppo-blocchi.svg';

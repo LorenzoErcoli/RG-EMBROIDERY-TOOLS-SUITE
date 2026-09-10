@@ -25,7 +25,7 @@
 
 import { type Point, type Polyline, pointInRegion, type Region } from '@rg/core';
 import { type DirectionField } from './field';
-import { regionRings, regionBounds } from './region';
+import { regionRings, regionBounds } from '@rg/core';
 import { segmentPolygonIntersections } from '@rg/core';
 
 export interface RailFillOptions {

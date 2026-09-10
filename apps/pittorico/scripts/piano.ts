@@ -6,7 +6,7 @@
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { buildSvg, dstFromExportLayers, readDstMetadata, bounds, type Point } from '@rg/core';
-import { leggiBmp } from './bmp.ts';
+import { leggiBmp } from '../../../packages/testkit/src/bmp.ts';
 import { buildPittoricoPlan, pittoricoExportLayers, defaultPittoricoParams } from '../src/pipeline.ts';
 
 const percorso = process.argv[2];

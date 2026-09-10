@@ -19,7 +19,7 @@ import { regioniDiProva } from '../src/sample.ts';
 import { harmonicField, radialField, meanFieldAngleDeg, type DirectionField } from '../src/field.ts';
 import { buildCurvedFill, buildNaiveCurvedFill } from '../src/curved-fill.ts';
 import { coverageStats, neighbourSpacing, containment } from '../src/coverage.ts';
-import { regionBounds, type Region } from '../src/region.ts';
+import { regionBounds, type Region } from '@rg/core';
 
 const SPACING_MM = 0.4;      // R22 `densitySpacingMm` — passo fra due file vicine
 const MAX_STITCH_MM = 3.0;   // R4

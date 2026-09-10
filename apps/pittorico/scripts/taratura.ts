@@ -21,7 +21,7 @@ import { regioniDiProva } from '../src/sample.ts';
 import { harmonicField, radialField, type DirectionField } from '../src/field.ts';
 import { buildCurvedFill, type CurvedFillOptions } from '../src/curved-fill.ts';
 import { coverageStats, neighbourSpacing } from '../src/coverage.ts';
-import { regionBounds, type Region } from '../src/region.ts';
+import { regionBounds, type Region } from '@rg/core';
 
 const SPACING_MM = 0.4;
 const MAX_STITCH_MM = 3.0;

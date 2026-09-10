@@ -26,9 +26,9 @@
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { type Point, type Polyline, pointInPolygon, polygonArea } from '@rg/core';
 import { parseSvgPolylines } from '../../../packages/pattern-grammar/src/index.ts';
-import { makeRegion } from '../../pittorico/src/region.ts';
-import { buildColonne } from '../../pittorico/src/colonne.ts';
-import { rasterizza } from '../../pittorico/src/iso-fill.ts';
+import { makeRegion } from '@rg/core';
+import { buildColonne } from '@rg/core';
+import { rasterizza } from '@rg/core';
 
 const LARGHEZZA_REALE_MM = 419.45;   // dichiarata da Lorenzo per questo disegno (Punto Pittorico)
 

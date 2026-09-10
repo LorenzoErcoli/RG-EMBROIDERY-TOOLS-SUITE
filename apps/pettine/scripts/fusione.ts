@@ -28,8 +28,8 @@
 
 import { mkdirSync, writeFileSync } from 'node:fs';
 import { type Point, reduceStable, rgbToHex, traceRegions } from '@rg/core';
-import { larghezzaTransizione, cresciVersoISuccessivi } from '../../pittorico/src/borders.ts';
-import { leggiBmp } from '../../pittorico/scripts/bmp.ts';
+import { larghezzaTransizione, cresciVersoISuccessivi } from '@rg/core';
+import { leggiBmp } from '../../../packages/testkit/src/bmp.ts';
 
 const LARGHEZZA_REALE_MM = 419.45;
 const num = (i: number, d: number): number => (process.argv[i] !== undefined ? Number(process.argv[i]) : d);

@@ -1,3 +1,14 @@
+// AIUTI PER GLI SCRIPT DI VERIFICA — non fanno ricamo, servono a GUARDARLO.
+//
+// Leggere un'immagine e scriverne una: quello che serve ai motori headless per rileggere i propri
+// risultati e produrre le prove da mostrare a Lorenzo. Stanno fuori da `@rg/core` apposta — il core
+// e' il ricamo, questo e' il banco di misura — e fuori dalle app perche' li usano gia' pettine,
+// pittorico e sfrangiatura: un'app non dipende da un'altra app.
+//
+// Nati in `apps/pittorico/scripts`, promossi qui il 2026-09-10. Si importano per percorso relativo
+// (`../../../packages/testkit/src/...`), come gia' si fa con `packages/pattern-grammar`: gli script
+// girano con esbuild, senza bisogno di un alias.
+
 // Lettura di un BMP a 24 bit, per le prove headless.
 //
 // Perché un BMP e non il JPG di Lorenzo: il decoder JPEG non ce l'ha né Node né il core, e va bene

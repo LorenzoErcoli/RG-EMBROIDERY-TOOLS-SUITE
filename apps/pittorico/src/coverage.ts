@@ -17,7 +17,7 @@
 // forma, non il riempimento. Il bordo si giudica col contenimento, che è la domanda giusta per lui.
 
 import { type Point, type Polyline, pointInRegion } from '@rg/core';
-import { type Region, regionRings, regionBounds, BoundaryIndex } from './region';
+import { type Region, regionRings, regionBounds, BoundaryIndex } from '@rg/core';
 
 export interface CoverageStats {
   /** Celle interne considerate (le celle di bordo non entrano). */

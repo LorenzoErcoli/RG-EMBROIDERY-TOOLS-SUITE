@@ -10,7 +10,7 @@
 // 70/18 = 3,9 volte. Un numero da confrontare con la misura: se non esce quello, sbaglia la misura.
 
 import { type Point, type Polyline } from '@rg/core';
-import { makeRegion, type Region } from './region';
+import { makeRegion, type Region } from '@rg/core';
 
 const gradi = (d: number): number => (d * Math.PI) / 180;
 

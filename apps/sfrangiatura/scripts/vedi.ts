@@ -8,7 +8,7 @@
 //   node apps/sfrangiatura/scripts/vedi.mjs <file.dst> [px/mm]
 import { readFileSync, mkdirSync } from 'node:fs';
 import { readDst, type Point } from '@rg/core';
-import { Tela } from '../../pittorico/scripts/png.ts';
+import { Tela } from '../../../packages/testkit/src/png.ts';
 import { sfrangia } from '../src/frange.ts';
 
 const percorso = process.argv[2];

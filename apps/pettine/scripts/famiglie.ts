@@ -27,8 +27,8 @@
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { type Point, type Polyline, pointInPolygon, polygonArea, traceRegions } from '@rg/core';
 import { parseSvgPolylines } from '../../../packages/pattern-grammar/src/index.ts';
-import { makeRegion } from '../../pittorico/src/region.ts';
-import { rasterizza } from '../../pittorico/src/iso-fill.ts';
+import { makeRegion } from '@rg/core';
+import { rasterizza } from '@rg/core';
 
 const LARGHEZZA_REALE_MM = 419.45;
 const CELLA = 0.5;

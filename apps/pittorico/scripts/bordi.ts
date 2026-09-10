@@ -14,10 +14,10 @@
 
 import { writeFileSync, mkdirSync } from 'node:fs';
 import { traceRegions, reduceStable, prepareImage, type Polyline, type Point } from '@rg/core';
-import { leggiBmp } from './bmp.ts';
-import { larghezzaTransizione, cresciVersoISuccessivi, frastaglia } from '../src/borders.ts';
+import { leggiBmp } from '../../../packages/testkit/src/bmp.ts';
+import { larghezzaTransizione, cresciVersoISuccessivi, frastaglia } from '@rg/core';
 import { harmonicField } from '../src/field.ts';
-import { makeRegion } from '../src/region.ts';
+import { makeRegion } from '@rg/core';
 import { coverageStats, neighbourSpacing } from '../src/coverage.ts';
 import { buildRailFill } from '../src/rail-fill.ts';
 import { buildCurvedFill } from '../src/curved-fill.ts';

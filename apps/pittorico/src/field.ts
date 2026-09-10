@@ -32,7 +32,7 @@
 // meno di lavoro.
 
 import { type Point, pointInRegion } from '@rg/core';
-import { type Region, regionRings, regionBounds, BoundaryIndex } from './region';
+import { type Region, regionRings, regionBounds, BoundaryIndex } from '@rg/core';
 
 /** Tutto ciò che il riempimento chiede a un campo: che direzione tenere qui. Versore. */
 export interface DirectionField {

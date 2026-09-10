@@ -22,15 +22,15 @@ import {
   type PixelImage, type Polyline, type Point, type Region, type ExportLayer, type Rgb,
   reduceStable, prepareImage, traceRegions, rgbToHex,
 } from '@rg/core';
-import { lisciaRegione } from './region';
+import { lisciaRegione } from '@rg/core';
 import { serpentina } from './serpentina';
 import { buildIsoFill } from './iso-fill';
 import { buildBandFill } from './band-fill';
-import { buildColonne, type Taglio } from './colonne';
+import { buildColonne, type Taglio } from '@rg/core';
 import { harmonicField, type CondizioneAlBordo } from './field';
 import { buildRailFill } from './rail-fill';
 import { buildCurvedFill } from './curved-fill';
-import { larghezzaTransizione, cresciVersoISuccessivi, frastaglia } from './borders';
+import { larghezzaTransizione, cresciVersoISuccessivi, frastaglia } from '@rg/core';
 // I passaggi NON si riscrivono: sono R16-R21 e R26, e vivono nel core da quando `routing` è stato
 // promosso da broccato. Mappa di copertura, catena minima fra le macchie, e i tre casi in ordine —
 // dritto, nascosto con l'A*, staccato solo se non c'è strada.

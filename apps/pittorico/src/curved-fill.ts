@@ -17,7 +17,7 @@
 // rispetto al raso è che le corse non sono più righe di una griglia: sono linee di flusso.
 
 import { type Point, type Polyline, segmentPolygonIntersections, pointInRegion } from '@rg/core';
-import { type Region, regionRings, regionBounds } from './region';
+import { type Region, regionRings, regionBounds } from '@rg/core';
 import { type DirectionField } from './field';
 
 export interface CurvedFillOptions {

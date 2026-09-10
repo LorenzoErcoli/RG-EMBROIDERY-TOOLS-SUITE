@@ -24,7 +24,7 @@ import { harmonicField } from '../src/field.ts';
 import { buildCurvedFill } from '../src/curved-fill.ts';
 import { buildRailFill } from '../src/rail-fill.ts';
 import { coverageStats, neighbourSpacing } from '../src/coverage.ts';
-import { BoundaryIndex, regionRings, type Region } from '../src/region.ts';
+import { BoundaryIndex, regionRings, type Region } from '@rg/core';
 
 const n1 = (v: number): string => v.toFixed(1);
 const n2 = (v: number): string => v.toFixed(2);

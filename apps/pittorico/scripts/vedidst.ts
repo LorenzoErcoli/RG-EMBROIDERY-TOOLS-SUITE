@@ -22,7 +22,7 @@
 import { readFileSync, mkdirSync } from 'node:fs';
 import { basename } from 'node:path';
 import { readDst, type Point, type Polyline } from '@rg/core';
-import { Tela } from './png.ts';
+import { Tela } from '../../../packages/testkit/src/png.ts';
 
 interface Blocco { colore: number; punti: Point[] }
 

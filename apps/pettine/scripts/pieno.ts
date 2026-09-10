@@ -34,10 +34,10 @@
 import { mkdirSync, writeFileSync, readFileSync } from 'node:fs';
 import { type Point, type Polyline, pointInPolygon, polygonArea } from '@rg/core';
 import { parseSvgPolylines } from '../../../packages/pattern-grammar/src/index.ts';
-import { makeRegion } from '../../pittorico/src/region.ts';
-import { rasterizza, livello, incatena } from '../../pittorico/src/iso-fill.ts';
-import { larghezzaTransizione } from '../../pittorico/src/borders.ts';
-import { leggiBmp } from '../../pittorico/scripts/bmp.ts';
+import { makeRegion } from '@rg/core';
+import { rasterizza, livello, incatena } from '@rg/core';
+import { larghezzaTransizione } from '@rg/core';
+import { leggiBmp } from '../../../packages/testkit/src/bmp.ts';
 
 const LARGHEZZA_REALE_MM = 419.45;
 const CELLA = 0.5;

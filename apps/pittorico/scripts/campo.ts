@@ -22,7 +22,7 @@ import {
 } from '@rg/core';
 import { harmonicField, type DirectionField } from '../src/field.ts';
 import { buildCurvedFill } from '../src/curved-fill.ts';
-import { makeRegion } from '../src/region.ts';
+import { makeRegion } from '@rg/core';
 import { regolarizzaAnello } from '../src/primitives.ts';
 
 const n1 = (v: number): string => v.toFixed(1);

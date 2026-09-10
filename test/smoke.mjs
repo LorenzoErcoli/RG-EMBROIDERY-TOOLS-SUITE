@@ -31,7 +31,6 @@ export { readPatternSvg, readEmbeddedConfig, measureConstruction, migrateLegacyN
 export { PATTERN_FIELD_NAMES, PATTERN_FIELD_KIND } from ${JSON.stringify(posix('apps/zone-pattern/src/fields.ts'))};
 export { parseSvgPolylines } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
 export { runPipeline as runStriaturaPipeline } from ${JSON.stringify(posix('apps/striatura/src/pipeline.ts'))};
-export { makeRegion, regionBounds, regionRings, BoundaryIndex } from ${JSON.stringify(posix('apps/pittorico/src/region.ts'))};
 export { harmonicField, radialField, concentricField, constantField, meanFieldAngleDeg } from ${JSON.stringify(posix('apps/pittorico/src/field.ts'))};
 export { buildCurvedFill, buildNaiveCurvedFill } from ${JSON.stringify(posix('apps/pittorico/src/curved-fill.ts'))};
 export { coverageStats, neighbourSpacing, containment } from ${JSON.stringify(posix('apps/pittorico/src/coverage.ts'))};
@@ -39,7 +38,6 @@ export { buildPittoricoPlan, pittoricoExportLayers, defaultPittoricoParams } fro
 export { buildRailFill } from ${JSON.stringify(posix('apps/pittorico/src/rail-fill.ts'))};
 export { leggiRaso } from ${JSON.stringify(posix('apps/sfrangiatura/src/rasi.ts'))};
 export { sfrangia } from ${JSON.stringify(posix('apps/sfrangiatura/src/frange.ts'))};
-export { larghezzaTransizione, cresciVersoISuccessivi, frastaglia } from ${JSON.stringify(posix('apps/pittorico/src/borders.ts'))};
 export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('apps/pittorico/src/primitives.ts'))};
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
