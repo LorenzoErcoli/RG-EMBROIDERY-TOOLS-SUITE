@@ -422,10 +422,22 @@ scuro sono righe a tutti gli effetti: entrano nella sequenza insieme alle altre,
 i loro innesti e i loro corridoi. La distanza dal muro li mette dopo le righe che devono coprire.
 
 **I passaggi si spargono sulle basi, non si accalcano.** Un passaggio corre esattamente sulla linea
-del dietro di una riga, dove il pettine lo nasconde, e preferisce una base che nessun passaggio ha
-ancora usato: ripassare dove il filo c'è già non aggiunge niente da vedere, ma ammucchia filo, e
-Lorenzo vuole meno densità. Il corridoio già battuto resta possibile, ma costa più di una base libera.
-Nell'esito la voce «Corridoi» confronta i metri di passaggio con i metri di strada distinta.
+del dietro di una riga, dove il pettine lo nasconde: la cella della linea costa poco, quella di
+fianco costa quattro volte tanto (serve per i passi in diagonale, non per correre a mezzo millimetro
+dalla linea), e la striscia fra due righe serve solo ad attraversare da una base all'altra. Nella
+banda di un colore più scuro vale lo stesso: sulle sue linee di base, non a caso fra i denti. E
+preferisce una base che nessun passaggio ha ancora usato: ripassare dove il filo c'è già non
+aggiunge niente da vedere, ma ammucchia filo, e Lorenzo vuole meno densità. Il filo di passaggio
+segna anche una fascia di 4 mm attorno a sé, così il passaggio dopo non si mette sulla base di
+fianco (che a occhio è la stessa strada) ma su una linea davvero diversa. Il corridoio già battuto
+resta possibile: dove non ci sono altre basi si ripassa di lì, e si vede una linea sola.
+
+**Scegliere una strada e giudicarla sono due conti diversi.** I costi che spingono il filo sulla
+linea esatta e lontano dai corridoi servono a scegliere; per decidere se cucire o tagliare valgono
+solo quanto il filo si vedrà. E la ricerca è a scalare: prima sulla mappa che sparge, poi senza
+l'affollamento, poi sui costi nudi del giudizio; si taglia solo se falliscono tutte e tre. Senza
+questa scala, spargere i passaggi costava tagli, e Lorenzo i tagli non li vuole. Nell'esito la voce
+«Corridoi» confronta i metri di passaggio con i metri di strada distinta.
 
 **Si lavora per blocchi vicini.** Le righe di un colore dentro un gruppo possono stare in pezzi
 staccati. Il tool li raggruppa in zone e finisce una zona prima di cominciare la successiva, così i

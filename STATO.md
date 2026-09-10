@@ -1132,6 +1132,30 @@ l'immagine originale così che posso provare a fare degli swatch più piccoli»*
   «corridoio non si vede due volte»).
   **Il simulatore era schiacciato** perché la cornice in millimetri stava dentro un layer flessibile
   che la restringeva in altezza: `flex: none`, e il rapporto torna 1,19 come il pannello.
+- **Sulla linea esatta, e su linee davvero diverse** (Lorenzo, 2026-09-10, diciassettesima tornata:
+  *«ancora ci sono passaggi che non passano esattamente sopra la linea di base della dentatura e poi
+  mi sembra passi sempre dallo stesso punto, non c'è quello che dicevamo di passare su linee diverse»*).
+  Misurato prima di toccare: dei passaggi sopra i 10 mm solo il 29% stava a meno di 0,35 mm da una
+  base, il 45% fra 0,35 e 1 mm — la cella sulla linea e quella di fianco costavano uguale (il «dietro»
+  era una fascia di tre celle) e la striscia fra due righe costava 1,5 come la banda, così il cammino
+  correva a mezzo millimetro dalla linea o a metà fra due basi. E il corridoio a 1,2 spostava il
+  passaggio dopo sulla base *accanto*, a 2 mm: tre righe affiancate, che a occhio sono la stessa.
+  **Fatto.** Cella sulla linea 0,5, cella di fianco 2, striscia 5 (per scegliere; per giudicare
+  restano 0,6 e 1,5, quanto si vedono); nella banda dello scuro sulle sue basi 1,2, fuori 3,5. Il filo
+  di passaggio segna una fascia di 4 mm attorno a sé (`accanto`), e ogni passata in più sul corridoio
+  aggiunge 1,5. Il giudizio (cucire o tagliare) non conta l'affollamento, e la ricerca è a scalare:
+  con l'affollamento, senza, sui costi nudi — perché i costi che spingono sulla linea cambiavano
+  anche i conti fra «attraverso un pettine cucito» e «giro dalla striscia», e il cammino attraversava
+  mezzo millimetro a vista alla volta fin sopra i 3 mm: i tagli erano saliti da 40 a 64. Il
+  campionamento del giudizio sta sui vertici (a metà di un passo in diagonale c'è l'angolo fra
+  quattro celle, e finiva in una cella fuori dal cammino). Nuova riga nel log, *DOVE PASSA IL FILO*,
+  contata sulle mappe del motore ai punti cuciti: sulla linea del dietro 32%, a una cella 14%, sulla
+  base di un altro colore 30%, su un altro colore fuori linea 16%, nella banda 6%, striscia 0%.
+  Affollamento **2,25 → 0,75 m**, tagli 40 → 43, filo a vista 3,07 → 2,24 m.
+  **Provato e scartato:** tenere il cammino a un quarto di millimetro dalle sue celle (un vertice ogni
+  volta che la corda se ne allontana, corde da 6 mm al massimo): i punti cuciti finivano sulla linea
+  uguale a prima e i tagli salivano a 50 (a 90 sui costi vecchi). Un costo più caro nella banda dello
+  scuro fuori linea (6 invece di 3,5): 16% → 13%, ma affollamento 0,75 → 1,06 m e un taglio in più.
 - **Aperto:** l'etichetta «Densità del pettine» nomina una misura
   *longitudinale* con la parola che R30 riserva a quella trasversale (la decisione ③ di
   `REVISIONE-PARAMETRI.md` direbbe «Interlinea del pettine»): è la parola di Lorenzo, e la decisione

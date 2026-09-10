@@ -1379,6 +1379,16 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
    */
   const battuto = new Uint8Array(COLS * ROWS);   // quante volte il filo di passaggio e' passato di li' (fino a 255)
   /**
+   * IL VICINATO DEL CORRIDOIO. Lorenzo (2026-09-10, diciassettesima tornata): «mi sembra passi sempre
+   * dallo stesso punto, non c'e' quello che dicevamo di passare su linee diverse». Col solo corridoio
+   * a costare di piu', il passaggio dopo si spostava sulla base ACCANTO, a due millimetri: tre righe
+   * di passaggio affiancate, che a occhio sono la stessa strada. Quindi il filo di passaggio segna
+   * anche una fascia attorno a se' (ACCANTO_MM per lato), e li' una base costa di piu' di una base
+   * lontana: il passaggio dopo cerca una linea davvero diversa, non quella di fianco.
+   */
+  const accanto = new Uint8Array(COLS * ROWS);
+  const ACCANTO_MM = 4;
+  /**
    * DOVE C'E' GIA' UN PETTINE. Lorenzo (2026-09-10, undicesima tornata): «la linea non passa mai
    * sopra dei pettini creati ma solo sotto». Ogni punto cucito — basi e denti, di tutti i colori —
    * segna qui la sua cella, e da quel momento un passaggio non ci puo' piu' correre: passerebbe SOPRA
@@ -1456,6 +1466,9 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     let corrente: Point | null = null;
     let punti = 0, filo = 0, passaggi = 0, filoPassaggi = 0, salti = 0, filoSalti = 0, corti = 0, dentiSaltati = 0;
     let filoScoperto = 0, passaggiInstradati = 0, inversioni = 0, passaggiDiTraverso = 0;
+    // DOVE PASSA IL FILO DI PASSAGGIO, millimetri per categoria, contati sulle mappe del motore
+    // (solo i passaggi oltre i 10 mm: i saltini fra due righe consecutive attraversano per forza)
+    const dovePassa = { linea: 0, accanto: 0, bandaScuro: 0, bandaChiaro: 0, striscia: 0, dentro: 0, altrui: 0, altruiLinea: 0, nudo: 0, pettine: 0 };
     let andateRitorno = 0, filoImpuntura = 0, filoScopertoUltimi = 0;
     const lunghezzePassaggi: number[] = [];
     // Fin qui una riga si puo' servire con andata e ritorno. Era 70 mm, per paura del filo di
@@ -1505,7 +1518,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     const apri = (): void => { if (pathPts.length >= 2) paths.push({ needle: ago, points_mm: pathPts }); pathPts = []; };
     // forza: radici e punte si cuciono sempre; un capo di base o un punto di passaggio sotto il
     // millimetro si lascia perdere (il punto dopo lo assorbe)
-    let nienteFinestra = 0, nienteStrada = 0, nienteCosto = 0, nienteGiro = 0;
+    let nienteFinestra = 0, nienteStrada = 0, nienteCosto = 0, nienteGiro = 0, nienteVista = 0, ripiegatiSulCorridoio = 0;
     // IL LABORATORIO DEI CASI: si registra la situazione nel momento della decisione
     const CASI_MAX = Math.max(0, Math.round(par.casiStudio ?? 0));
     const casiPerTipo = { taglio: 0, passaggio: 0, innesto: 0 };
@@ -1584,8 +1597,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       const limite = ultimi ? Math.min(PASSAGGIO_MM, 60) : PASSAGGIO_MM;
       if (d <= limite) return instrada(da, a, ago - 1, dOra, ultimi ? 2.5 : 8);
       if (ultimi || d > portata) return null;
-      const v = instrada(da, a, ago - 1, dOra, 5);
-      return v && quantoAVista(v, ago - 1, dOra) <= SCOPERTO_MAX_MM ? v : null;
+      return instrada(da, a, ago - 1, dOra, 5, 0, SCOPERTO_MAX_MM);
     };
     const vaiA = (p: Point, portata?: number): void => {
       // il collegamento. Corto: dritto, che tanto lo coprono i denti della riga dopo. Lungo: si cerca
@@ -1604,11 +1616,23 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
         // i punti del passaggio: uno ogni 3 mm, e l'ultimo mai sotto il millimetro (R3) — l'arrivo e'
         // il capo della riga e deve essere esatto, quindi si toglie il penultimo invece di accorciare
         const via2 = strada;
+        // un punto ogni 3 mm LUNGO LA SPEZZATA, non un punto per segmento: la strada e' fatta di
+        // pezzi corti (celle da mezzo millimetro tenute dove la linea curva) e un punto per pezzo
+        // sarebbe un punto ogni millimetro. Il passo si accorcia un poco perche' l'ultimo cada esatto.
         const passi: Point[] = [];
-        for (let i = 1; i < via2.length; i++) {
-          const a = via2[i - 1], b = via2[i];
-          const n = Math.max(1, Math.ceil(dist(a, b) / 3));
-          for (let k = 1; k <= n; k++) passi.push({ x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n });
+        {
+          const Ltot = lunghezza(via2), nP = Math.max(1, Math.ceil(Ltot / 3)), passo = Ltot / nP;
+          let prossimo = passo, fatto = 0;
+          for (let i = 1; i < via2.length && passi.length < nP - 1; i++) {
+            const a = via2[i - 1], b = via2[i], L = dist(a, b);
+            while (prossimo <= fatto + L + 1e-9 && passi.length < nP - 1) {
+              const u = L > 0 ? (prossimo - fatto) / L : 0;
+              passi.push({ x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u });
+              prossimo += passo;
+            }
+            fatto += L;
+          }
+          passi.push(via2[via2.length - 1]);
         }
         // niente punti sotto il minimo, e l'arrivo esatto: si scartano i punti troppo vicini al
         // precedente tenuto, poi si tolgono gli ultimi finche' l'arrivo non e' a distanza buona
@@ -1632,6 +1656,19 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
         let da = corrente;
         passaggiSvg[ago - 1].push(via([corrente, ...puliti]));
         for (const q of puliti) {
+          if (d > 10) {
+            const im = cella({ x: (da.x + q.x) / 2, y: (da.y + q.y) / 2 }), L = dist(da, q), tm = im < 0 ? -1 : tinta[im];
+            const dn = dietroDi(im, ago - 1, dOra);
+            if (tm < 0) dovePassa.nudo += L;
+            else if (dn === 2) dovePassa.linea += L;
+            else if (dn === 1) dovePassa.accanto += L;
+            else if (pettineCucito[im] && !(tm > ago - 1 && bordoDist[im] <= BANDA_CELLE)) dovePassa.pettine += L;
+            else if (tm !== ago - 1) { if (soprafilo[im]) dovePassa.altruiLinea += L; else dovePassa.altrui += L; }
+            else if (bordoDist[im] <= BANDA_CELLE && bordoAltra[im] > tm) dovePassa.bandaScuro += L;
+            else if (bordoDist[im] <= BANDA_CELLE) dovePassa.bandaChiaro += L;
+            else if (baseFutura[im] > 0) dovePassa.striscia += L;
+            else dovePassa.dentro += L;
+          }
           if (aVista({ x: (da.x + q.x) / 2, y: (da.y + q.y) / 2 }, ago - 1, dOra)) scoperti += dist(da, q);
           cuciA(q, dist(da, q) >= MIN_MM);
           da = q;
@@ -1661,6 +1698,18 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
           }
         }
         for (const jc of celleDiQuesto) if (battuto[jc] < 255) battuto[jc]++;
+        {
+          const R = Math.round(ACCANTO_MM / CELLA), R2 = R * R, viste = new Set<number>();
+          for (const jc of celleDiQuesto) {
+            const cc3 = jc % COLS, rr3 = (jc - cc3) / COLS;
+            for (let dy3 = -R; dy3 <= R; dy3++) for (let dx3 = -R; dx3 <= R; dx3++) {
+              if (dx3 * dx3 + dy3 * dy3 > R2) continue;
+              const x3 = cc3 + dx3, y3 = rr3 + dy3;
+              if (x3 >= 0 && y3 >= 0 && x3 < COLS && y3 < ROWS) viste.add(y3 * COLS + x3);
+            }
+          }
+          for (const jc of viste) if (accanto[jc] < 255) accanto[jc]++;
+        }
         passaggi++; filoPassaggi += lunghezza(via2); filoScoperto += scoperti;
         lunghezzePassaggi.push(d);
         if (ago > colori.length - SENZA_PASSAGGI) filoScopertoUltimi += scoperti;
@@ -1680,30 +1729,29 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     // quanto costa in media un cammino, sulla mappa di chi copre chi. Serve a GIUDICARE una strada,
     // e va tenuto separato da quello che serve a TROVARLA: la penalita' per l'attraversamento delle
     // righe guida l'A*, ma non dice niente su quanto quel filo si vedra'.
+    // I CAMPIONI STANNO SUI VERTICI, NON A META' DEI PEZZI. Il cammino ora passa per i centri delle
+    // celle (pezzi da mezzo millimetro): il punto di mezzo di un passo in diagonale e' l'angolo fra
+    // quattro celle, e `cella()` lo assegnava a una cella FUORI dal cammino — spesso cara (16). Il
+    // giudizio bocciava strade buone: 40 -> 90 tagli. Ogni pezzo si campiona dal suo vertice di
+    // partenza, un campione ogni cella: per un passo fra due celle e' la cella stessa, esatta.
+    const campioni = (via2: Point[]): Array<[Point, number]> => {
+      const out: Array<[Point, number]> = [];
+      for (let i = 1; i < via2.length; i++) {
+        const a = via2[i - 1], b = via2[i], L = dist(a, b);
+        const n = Math.max(1, Math.round(L / CELLA));
+        for (let k = 0; k < n; k++) out.push([{ x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n }, L / n]);
+      }
+      return out;
+    };
     const costoMedio = (via2: Point[], c: number, dOra: number): number => {
       let costo = 0, lung = 0;
-      for (let i = 1; i < via2.length; i++) {
-        const a = via2[i - 1], b = via2[i];
-        const n = Math.max(1, Math.ceil(dist(a, b) / CELLA));
-        for (let k = 0; k < n; k++) {
-          const q = { x: a.x + ((b.x - a.x) * (k + 0.5)) / n, y: a.y + ((b.y - a.y) * (k + 0.5)) / n };
-          costo += costoCella(cella(q), c, dOra) * (dist(a, b) / n);
-          lung += dist(a, b) / n;
-        }
-      }
+      for (const [q, L] of campioni(via2)) { costo += costoCella(cella(q), c, dOra, 2) * L; lung += L; }
       return lung > 1e-6 ? costo / lung : 0;
     };
     // quanto di un cammino resterebbe scoperto, misurato a passi di mezzo millimetro
     const quantoAVista = (via2: Point[], c: number, dOra: number): number => {
       let scoperto = 0;
-      for (let i = 1; i < via2.length; i++) {
-        const a = via2[i - 1], b = via2[i];
-        const n = Math.max(1, Math.ceil(dist(a, b) / 0.5));
-        for (let k = 0; k < n; k++) {
-          const q = { x: a.x + ((b.x - a.x) * (k + 0.5)) / n, y: a.y + ((b.y - a.y) * (k + 0.5)) / n };
-          if (aVista(q, c, dOra)) scoperto += dist(a, b) / n;
-        }
-      }
+      for (const [q, L] of campioni(via2)) if (aVista(q, c, dOra)) scoperto += L;
       return scoperto;
     };
     /**
@@ -1758,9 +1806,12 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     // colore c che e' quella in corso o una futura. Li' un passaggio finisce sotto i denti della riga
     // dopo. La tolleranza serve perche' un punto da 3 mm sta su una linea curva da mezzo millimetro
     // solo a meno di una cella, e senza il filo risultava «a vista» pur essendo sul dietro.
-    const sulDietro = (i: number, c: number, dOra: number): boolean => {
+    const sulDietro = (i: number, c: number, dOra: number): boolean => dietroDi(i, c, dOra) > 0;
+    // 2 = esattamente sulla cella della linea di base, 1 = a una cella (serve ai passi in diagonale del
+    // cammino, non a correre di fianco alla linea), 0 = no
+    const dietroDi = (i: number, c: number, dOra: number): number => {
       void dOra;
-      if (i < 0 || tinta[i] !== c) return false;
+      if (i < 0 || tinta[i] !== c) return 0;
       // IL DIETRO DI UNA RIGA E' UN CORRIDOIO FINCHE' SOPRA NON C'E' CUCITO ALTRO (Lorenzo, 2026-09-10,
       // quindicesima tornata: «puoi passare sul retro di qualcosa gia' cucito, basta che non ci sia
       // cucito altro sotto. A volte passi sul retro di una linea ma sotto ce n'e' una gia' cucita: e
@@ -1768,31 +1819,46 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       // ancora da fare (il pettine, quando verra', copre il filo) oppure gia' cucita ma senza i denti
       // della riga dopo sopra — cioe' l'ultima. Su una base coperta dai denti della riga dopo, mai:
       // li' il filo passerebbe sopra un pettine, e il posto giusto e' il dietro della riga dopo.
-      if (dentiCuciti[i]) return false;
+      if (dentiCuciti[i]) return 0;
+      if (soprafilo[i]) return 2;
       const cc = i % COLS, rr = (i - cc) / COLS;
       for (let dy = -1; dy <= 1; dy++) for (let dx = -1; dx <= 1; dx++) {
         const j = (rr + dy) * COLS + (cc + dx);
-        if (j >= 0 && j < COLS * ROWS && soprafilo[j] && tinta[j] === c) return true;
+        if (j >= 0 && j < COLS * ROWS && soprafilo[j] && tinta[j] === c) return 1;
       }
-      return false;
+      return 0;
     };
     // LA MAPPA DI CHI COPRE CHI, per instradare i passaggi. I colori si cuciono dal chiaro allo scuro.
     // Un passaggio sparisce solo nella banda di sovrapposizione con un colore piu' scuro (che verra'
     // dopo e ci passera' sopra coi denti fitti del bordo) o, meno bene, sotto il corpo di quel colore.
     // Dentro la propria tinta si vede, fuori dal disegno si vede sul tessuto nudo.
-    const costoCella = (i: number, c: number, dOra: number): number => {
+    // `modo`: 0 = per scegliere, con l'affollamento; 1 = per scegliere, senza; 2 = per giudicare
+    const costoCella = (i: number, c: number, dOra: number, modo = 2): number => {
+      const perGiudizio = modo === 2;
       const t = i < 0 ? -1 : tinta[i];
       if (t < 0) return 30;                    // tessuto nudo: mai
       // IL CORRIDOIO NON ATTIRA PIU' (Lorenzo, 2026-09-10, sedicesima tornata: «tanti passaggi passano
       // nella stessa linea a volte. Se si riuscisse a usare piu' linee di base dei punti pettine sarebbe
       // meglio, per creare meno densita' di filo»). Ripassare dove il filo c'e' gia' non aggiunge niente
-      // da vedere, ma ammucchia: costa piu' di una base da fare (0,6) e meno della striscia (1,5), cosi'
-      // il passaggio nuovo preferisce una base sua e ricade sul corridoio solo se non ce ne sono.
-      if (battuto[i]) return 1.2;
+      // da vedere, ma ammucchia: ogni passaggio gia' fatto di li' aggiunge al costo della cella, e la
+      // fascia attorno al corridoio (ACCANTO_MM) costa anch'essa, cosi' il passaggio dopo non si mette
+      // sulla base di fianco ma su una linea davvero diversa. Il corridoio resta possibile: dove non
+      // ci sono altre basi (una gola, un collo) si ripassa di li', e si vede una linea sola.
+      // L'AFFOLLAMENTO GUIDA LA SCELTA, NON IL GIUDIZIO: una strada che ripassa in una gola dove
+      // sono gia' passati tre fili non si vede di piu' per questo. Contarlo anche nel giudizio
+      // faceva bocciare strade buone (28 negate per il costo invece di 12) e tagliare di piu'.
+      const piu = modo === 0 ? 1.5 * battuto[i] + (accanto[i] ? 0.8 : 0) : 0;
+      // DUE COSTI, UNO PER SCEGLIERE E UNO PER GIUDICARE. Per scegliere, la cella di fianco alla linea,
+      // la striscia fra due righe e la banda dello scuro fuori dalle sue basi costano care: cosi' il
+      // cammino si mette sulla linea esatta. Per giudicare (cucire o tagliare) valgono quanto si vedono
+      // davvero — poco: li' sopra passano i denti della riga dopo o del colore dopo. Con un costo solo,
+      // i cammini misti che prima passavano (un pezzo sulla striscia, un pezzo di traverso) venivano
+      // bocciati, e i tagli salivano da 40 a 64: Lorenzo non li vuole.
+      const g = perGiudizio;
       const inBanda = bordoDist[i] <= BANDA_CELLE, altra = bordoAltra[i];
       // SOPRA UN PETTINE GIA' CUCITO NON SI PASSA, di nessun colore: l'unica eccezione e' la linea di
       // base della riga in corso o di una futura del nostro colore (il dietro del pettine)
-      const dietro = sulDietro(i, c, dOra);
+      const dietroN = dietroDi(i, c, dOra), dietro = dietroN > 0;
       // PROVA: nella banda dal lato scuro i denti gia' cuciti sono il sormonto di questo colore, e il
       // colore scuro coprira' tutto, passaggio compreso: li' sopra si puo' passare
       if (pettineCucito[i] && !dietro && !(t > c && inBanda)) return 16;
@@ -1800,7 +1866,10 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
         // la banda del bordo di un colore che viene dopo: sparisce, ma e' fuori dal tracciato del
         // nostro colore, e Lorenzo preferisce il dietro dell'ultima riga nostra («magari l'ultimo,
         // che poi sara' coperto dal colore dopo»): quindi costa piu' di quella, non meno
-        if (inBanda) return 2.5;
+        // ANCHE QUI SULLA LINEA: la banda del colore scuro e' coperta dalle sue righe di bordo, ma un
+        // filo che ci corre a caso sta fra i denti; sulla linea di base di una SUA riga sta sotto i
+        // denti della riga dopo. Le sue basi sono segnate (soprafilo) come le nostre.
+        if (inBanda) return (soprafilo[i] ? 1.2 : g ? 2.5 : 3.5) + piu;
         return 8;                              // sotto il corpo di quel colore: il pettine e' rado, si vede fra i denti
       }
       if (t === c) {
@@ -1811,15 +1880,21 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
         // linea, mezzo millimetro. L'area attorno resta a vista fra un dente e l'altro, e costa tanto
         // da non passare mai il giudizio: prima costava 8, quanto la soglia, e una riga dritta
         // attraverso l'interno passava — sono i passaggi «fuori dal tracciato» del primo ago.
-        if (dietro) return 0.6;                // esattamente sulla linea del dietro: e' li' che si nasconde
-        if (inBanda && altra > c) return 1.5;  // il nostro bordo verso lo scuro: sormonto nostro e denti suoi
+        // ESATTAMENTE SULLA LINEA (Lorenzo, diciassettesima tornata: «ci sono passaggi che non passano
+        // esattamente sopra la linea di base della dentatura»). Prima la cella sulla linea e quella di
+        // fianco costavano uguale, e il cammino correva a mezzo millimetro dalla base per tutta la sua
+        // lunghezza — a occhio, fuori dalla linea. Ora la cella di fianco costa quattro volte la cella
+        // sulla linea: serve ancora, per i passi in diagonale e gli angoli, ma non per correrci sopra.
+        if (dietroN === 2) return 0.5 + piu;   // sulla cella della linea del dietro: e' li' che si nasconde
+        if (dietroN === 1) return (g ? 0.6 : 2) + piu;   // a una cella dalla linea: un passo, non una strada
+        if (inBanda && altra > c) return 1.5 + piu;  // il nostro bordo verso lo scuro: sormonto nostro e denti suoi
         if (inBanda && altra >= 0) return 4;   // il nostro bordo verso il chiaro: i denti della riga di bordo ci arrivano
-        // IL PIU' ESTERNO POSSIBILE (Lorenzo, quindicesima tornata: «non passare piu' dentro ma passa
-        // piu' esterno possibile, al limite con il dietro dell'ultima linea dentata che hai»): la
-        // striscia davanti all'ultima riga cucita, dove una base e' ancora da fare, e' il posto giusto
-        // per un passaggio — la riga che verra' lo copre col pettine. Costa poco piu' del dietro di
-        // una base da fare, e molto meno di qualunque cosa gia' cucita.
-        if (baseFutura[i] > 0) return 1.5;
+        // LA STRISCIA FRA DUE RIGHE NON E' UNA STRADA. Prima (quindicesima tornata, «il piu' esterno
+        // possibile») la striscia davanti all'ultima riga cucita costava 1,5, quanto la banda, e i
+        // passaggi ci correvano dentro a meta' fra due basi: coperti dai denti della riga dopo, si', ma
+        // non sulla linea, e Lorenzo li vede. Il posto giusto e' la base che verra', che e' gia'
+        // segnata (soprafilo) e costa 0,5: la striscia serve solo ad attraversare da una base all'altra.
+        if (baseFutura[i] > 0) return g ? 1.5 : 5;
         return 16;                             // niente basi da fare qui vicino: si vede
       }
       if (inBanda && altra === c) return 4;    // subito oltre il nostro bordo, sul chiaro: i nostri denti ci arrivano
@@ -1849,7 +1924,21 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
      * dopo — cioe' lungo i bordi delle figure scure — invece di tagliare dritto nel chiaro gia' fatto.
      * Torna null se non trova niente di decente: allora si salta, e la macchina taglia.
      */
-    const instrada = (a: Point, b: Point, c: number, dOra: number, costoMax = 8): Point[] | null => {
+    // TRE RICERCHE A SCALARE, e il taglio solo se falliscono tutte. La prima cerca sulla mappa che
+    // sparge (linea esatta, affollamento): e' la strada che vogliamo. Ma spargere sposta il cammino
+    // su una linea diversa, e a volte quella non regge il giudizio (troppo a vista) mentre il
+    // corridoio gia' battuto lo reggeva; e i costi che spingono sulla linea esatta cambiano anche i
+    // conti fra «attraverso un pettine cucito» e «giro dalla striscia», e il cammino attraversa —
+    // mezzo millimetro a vista alla volta, fin sopra i 3 mm. Allora si riprova senza affollamento,
+    // e poi sui costi nudi del giudizio (la ricerca di prima): quello che passava prima passa ancora.
+    // Senza la scala, spargere i passaggi costava tagli: 40 -> 64 sul pannello a sei tinte.
+    const instrada = (a: Point, b: Point, c: number, dOra: number, costoMax = 8, livello = 0, vistaMax = Infinity): Point[] | null => {
+      const ripiega = (): Point[] | null => {
+        if (livello >= 2) return null;
+        const v2 = instrada(a, b, c, dOra, costoMax, livello + 1, vistaMax);
+        if (v2 && livello === 0) ripiegatiSulCorridoio++;
+        return v2;
+      };
       const ia = cella(a), ib = cella(b);
       if (ia < 0 || ib < 0) return null;
       // quanto ci si puo' allargare per aggirare un ostacolo. Un cammino che segue le righe invece di
@@ -1895,7 +1984,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
           const m = idx(x, y);
           if (chiuso[m]) continue;
           const passo = (dx && dy ? 1.414 : 1) * CELLA;
-          const g = G0[n] + passo * costoCella(y * COLS + x, c, dOra);
+          const g = G0[n] + passo * costoCella(y * COLS + x, c, dOra, livello);
           if (g < G0[m]) { G0[m] = g; prev[m] = n; push(g + h(x, y), m); }
         }
       }
@@ -1910,7 +1999,11 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       via2.reverse();
       if (via2.length < 2) return null;
       // via i punti allineati: il cammino esce a mezzo millimetro per cella, e cucirlo cosi' sarebbe
-      // un punto ogni mezzo millimetro (sotto il minimo di R3)
+      // un punto ogni mezzo millimetro (sotto il minimo di R3). Si tengono solo i punti dove la
+      // direzione cambia. PROVATO E SCARTATO (diciassettesima tornata): tenere un punto ogni volta che
+      // le celle si allontanano piu' di un quarto di millimetro dalla corda, per stare esatti sulla
+      // linea — i punti del passaggio finivano sulla linea uguale a prima (32% esatti, 13% a una
+      // cella, misurato ai punti cuciti) e i tagli salivano da 43 a 50, e a 90 sui costi vecchi.
       const snello: Point[] = [via2[0]];
       for (let i = 1; i + 1 < via2.length; i++) {
         const a2 = snello[snello.length - 1], b2 = via2[i], c2 = via2[i + 1];
@@ -1924,10 +2017,11 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       // una strada che per un pezzo passa allo scoperto se il resto e' nascosto. Sopra, meglio saltare.
       const lung = lunghezza(via2);
       if (lung < 1e-6) return null;
-      if (costoMedio(via2, c, dOra) > costoMax) { nienteCosto++; return null; }
+      if (costoMedio(via2, c, dOra) > costoMax) { const v2 = ripiega(); if (!v2) nienteCosto++; return v2; }
+      if (quantoAVista(via2, c, dOra) > vistaMax) { const v2 = ripiega(); if (!v2) nienteVista++; return v2; }
       // un cammino che segue le righe e' per forza piu' lungo della linea d'aria: gira invece di
       // tagliare, ed e' quello che vogliamo. Il tetto serve solo a scartare i giri assurdi.
-      if (lung > 6 * Math.max(1, dist(a, b)) + 20) { nienteGiro++; return null; }
+      if (lung > 6 * Math.max(1, dist(a, b)) + 20) { const v2 = ripiega(); if (!v2) nienteGiro++; return v2; }
       return via2;
     };
     // la sequenza di un tratto: base[0], poi radice-punta-radice per ogni dente, poi base[fine]
@@ -1977,6 +2071,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       apri();
       { let n = 0; for (let i = 0; i < battuto.length; i++) if (battuto[i]) { n++; if (battuto[i] >= 3) celleAffollate++; } celleCorridoio += n; }
       battuto.fill(0);   // il corridoio vale dentro un colore: col cambio ago si ricomincia
+      accanto.fill(0);
       baseFutura.fill(0);
       for (const t of trattiTutti) if (t.col === c) segnaBaseFutura(t, 1);
       const miei = trattiTutti.filter((t) => t.col === c);
@@ -2426,14 +2521,19 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       const q = (f: number): string => (v.length ? v[Math.floor(v.length * f)].toFixed(0) : '0');
       console.log(`PASSAGGI per lunghezza: mediana ${q(0.5)} mm · 90% sotto ${q(0.9)} · il piu' lungo ${v.length ? v[v.length - 1].toFixed(0) : 0} · oltre 30 mm ne sono ${v.filter((x) => x > 30).length}`);
     }
-    console.log(`CORRIDOI NEGATI: ${nienteCosto} per il costo (la strada c'e' ma passa allo scoperto) · ${nienteStrada} senza strada · ${nienteGiro} per il giro troppo lungo · ${nienteFinestra} per la finestra di ricerca`);
+    console.log(`CORRIDOI NEGATI: ${nienteVista} per il filo a vista · ${nienteCosto} per il costo (la strada c'e' ma passa allo scoperto) · ${nienteStrada} senza strada · ${nienteGiro} per il giro troppo lungo · ${nienteFinestra} per la finestra di ricerca`);
     console.log(`MACCHIE: ${macchieInnestate} macchie (${righeInnestate} righe) incastrate dentro una riga grande, su ${macchieCandidate} chiuse fra due tagli · ${macchieSenzaVicina} senza nessuna riga grande vicina · ${macchieNegateDallOrdine} negate dall'ordine di copertura · ${macchieSenzaCorridoio} senza un corridoio nascosto`);
     console.log(`ANDATA E RITORNO su ${andateRitorno} righe corte (${(filoImpuntura / 1000).toFixed(2)} m di impuntura nascosta sotto i denti)`);
     {
       // il pennello segna 3 celle di lato ogni mezzo millimetro: circa 6 celle per millimetro di filo
       const corridoiM = celleCorridoio / 6 / 1000;
       console.log(`ZONE: ${zoneTotali} pezzi staccati in tutto, e la cucitura ci entra ${cambiZona} volte (uguali = ogni zona fatta in un colpo solo)`);
-    console.log(`CORRIDOI: ${(filoPassaggi / 1000).toFixed(1)} m di passaggio corrono dentro ${corridoiM.toFixed(1)} m di corridoi distinti · ${(celleAffollate / 6 / 1000).toFixed(2)} m dove il filo di passaggio e' passato tre o piu' volte (l'affollamento che Lorenzo non vuole)`);
+    {
+      const tot = Object.values(dovePassa).reduce((s, v) => s + v, 0) || 1;
+      const pc = (v: number): string => `${((v / tot) * 100).toFixed(0)}%`;
+      console.log(`DOVE PASSA IL FILO (passaggi oltre 10 mm, ${(tot / 1000).toFixed(1)} m): sulla linea del dietro ${pc(dovePassa.linea)} · a una cella dalla linea ${pc(dovePassa.accanto)} · nella banda verso lo scuro ${pc(dovePassa.bandaScuro)} · nella banda verso il chiaro ${pc(dovePassa.bandaChiaro)} · nella striscia fra due righe ${pc(dovePassa.striscia)} · dentro il colore lontano dalle basi ${pc(dovePassa.dentro)} · sopra un pettine cucito ${pc(dovePassa.pettine)} · sulla base di un altro colore ${pc(dovePassa.altruiLinea)} · su un altro colore fuori linea ${pc(dovePassa.altrui)} · sul nudo ${pc(dovePassa.nudo)}`);
+    }
+    console.log(`CORRIDOI: ${(filoPassaggi / 1000).toFixed(1)} m di passaggio corrono dentro ${corridoiM.toFixed(1)} m di corridoi distinti · ${(celleAffollate / 6 / 1000).toFixed(2)} m dove il filo di passaggio e' passato tre o piu' volte (l'affollamento che Lorenzo non vuole) · ${ripiegatiSulCorridoio} passaggi tornati sul corridoio perche' la linea diversa non reggeva il giudizio`);
     }
     console.log(`PASSAGGI LUNGHI NASCOSTI: ${passaggiNascosti} (oltre la manopola, ma tutti sotto cio' che li coprira')`);
     console.log(`SALTI per tipo: ${saltiSerpentina} fra righe vicine dello stesso gruppo · ${saltiFamiglia} fra righe lontane dello stesso gruppo · ${saltiSormonto} nel sormonto · il resto fra gruppi o colori diversi · di quelli dentro un gruppo, ${saltiVersoRigaCorta} vanno verso una riga corta (sotto 25 mm) e ${saltiVersoRigaLunga} verso una riga lunga`);
