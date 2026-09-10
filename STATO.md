@@ -1360,6 +1360,23 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 | **C15** | **broccato — passata del subagent `design-system`** sul pannello, e etichette dal processo REVISIONE-PARAMETRI (parte di A5). | L'**accordion e il contagocce sono fatti** (pannello allineato agli altri tool); resta la validazione del subagent e i nomi dei parametri. |
 | **C10** | **bitmap — overlay/maschera nella preview** (l'originale mostrava 3 viste, oggi c'è la vista punti, che è la più utile). | Piccolo. Da valutare se serve davvero. |
 
+### P — Propagazione: portare a tutti quello che è nato in un tool solo
+
+> Ricognizione fatta nella chat globale il **2026-09-10**, su richiesta di Lorenzo: *«ho fatto un
+> sacco di avanzamenti su dei progetti e alcuni vorrei fossero inseriti anche sugli altri tools»*.
+> L'interconnessione fra i tool **esiste già e si è formata da sola** — 66 import da un'app all'altra —
+> ma passa da percorsi relativi invece che dai pacchetti. Queste voci la rimettono in ordine.
+
+| # | Cosa | Stato |
+|---|---|---|
+| **P0** | ~~**`pettine_v2` fuori dalla suite**~~ | ✅ **Fatto il 2026-09-10.** Era un'isola: fuori dal registro, senza route nella shell, fuori dal typecheck. Via 60 file e 8.768 righe, fra cui due copie dello stesso motore (`motore.ts` 1.388 + `riferimento-v1.ts` 2.159): contando pettine, dello stesso motore circolavano **tre copie**. Import app→app da 66 a **33**. |
+| **P1** | **Il simulatore a tutta la suite.** Undici tool su dodici producono un DST e **solo pettine può vederlo cucire**. 158 righe che si spostano in `@rg/ui`. | **Briefing pronto:** [`AVVIO-SIMULATORE-CONDIVISO.md`](AVVIO-SIMULATORE-CONDIVISO.md). Deciso da Lorenzo: *«lo vorrei ovunque»*. |
+| **P2** | **Le primitive del Pittorico salgono nel core.** 33 import da `apps/pettine` e `apps/sfrangiatura` dentro `apps/pittorico`: 10 funzioni in 6 moduli (`iso-fill`, `region`, `borders`, `colonne`, più `bmp`/`png` per gli script). Il rischio grosso non c'è: `Region` sta già nel core e pittorico ci costruisce sopra. | **Briefing pronto:** [`AVVIO-PRIMITIVE-NEL-CORE.md`](AVVIO-PRIMITIVE-NEL-CORE.md). **Urgente perché Lorenzo torna a lavorare sul Pittorico**: finché le primitive stanno nell'app, ogni modifica al tool tocca gli altri due senza dirlo. |
+| **P3** | **Le regole sui passaggi nel core.** Il lavoro del 9–10 settembre su pettine (corridoi, sormonto trattato come una riga, passaggi sparsi sulle basi, tinta minima, tetto come manopola: **da 424 a 40 rasafili**) è conoscenza di dominio, non di pettine. Parte è già in `core/routing.ts` (mappa di copertura, costeggia il contorno, spingi dentro). | Da fare. Vale per broccato, striatura, interlace, pittorico. |
+| **P4** | **Il laboratorio dei casi come metodo condiviso.** Il motore registra le decisioni del filo, una pagina le mostra, le risposte di Lorenzo stanno accanto, si rigenera a ogni push. Oggi vive in `apps/pettine/scripts`. | Da fare. Serve uguale a striatura (macchie), interlace (agglomerati), pittorico (copertura). |
+| **P5** | **Due importer SVG, e tre clienti fuori casa.** `parseSvgPolylines` di `@rg/pattern-grammar` è usato da pettine e zone-pattern oltre che dal suo tool; il core ha il suo importer a DOM. Il vecchio "restano due" adesso costa di più. | Da decidere. |
+| **P6** | **Igiene.** `BRIEFING-RASO-OMOGENEO.zip` (3 MB) sta in radice non tracciato; `test/smoke.mjs` è un file solo da 3.680 righe con 718 asserzioni. | Da fare quando dà fastidio. |
+
 ### In progettazione
 
 | # | Cosa | Stato |
