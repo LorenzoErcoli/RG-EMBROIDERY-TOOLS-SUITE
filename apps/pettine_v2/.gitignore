@@ -1,9 +1,0 @@
-dist/
-validation/*.mjs
-validation/*.log
-validation/*-reale.json
-validation/*-reale.svg
-validation/*-reale.dst
-scripts/out/
-scripts/*.mjs
-!scripts/test-v2.mjs
