@@ -1,0 +1,14 @@
+{
+  "name": "cannage-rafia",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Cannage rafia: il programma completo di una borsa in cannage (basi, linee, cornice) da un SVG a zone. Output DST.",
+  "dependencies": {
+    "@rg/core": "*",
+    "@rg/pattern-grammar": "*"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

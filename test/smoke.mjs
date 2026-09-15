@@ -42,6 +42,8 @@ export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
+export { generaLinee, programmaLinee, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
+export { reticoloDaZone, contornoDaZone } from ${JSON.stringify(posix('apps/cannage-rafia/src/reticolo.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -3835,6 +3837,158 @@ console.log('Il motore del pettine gira anche nel browser');
   check('...ne legge o scrive file', /(^|[^A-Za-z])(readFileSync|writeFileSync|mkdirSync)\s*\(/.test(codice), false);
   const tool = readFileSync(join(root, 'apps/pettine/src/tool.ts'), 'utf8');
   check('e il tool non importa dagli script headless', /from\s+['\"][^'\"]*scripts\//.test(tool), false);
+}
+
+// ---------------------------------------------------------------------------
+// cannage-rafia — FASE 3, le linee orizzontali e verticali. Decifrate dal DST M1404 davanti
+// (Lorenzo, 15/09): il generatore deve rifare quel DST, non somigliargli.
+console.log('');
+console.log('cannage-rafia — le linee rifanno il DST vero del davanti M1404');
+{
+  // Un DST si confronta per ELEMENTI: cordoncino (tratto ripassato), fermo (barretta corta), pezzo
+  // verticale (scalette, meandri, barre). Punto per punto non serve: l'ordine delle passate dentro un
+  // cordoncino non cambia il ricamo.
+  const tratti = (P) => {
+    const out = []; let cur = null;
+    for (let i = 1; i < P.length; i++) {
+      const a = P[i - 1], b = P[i];
+      if (Math.hypot(b[0] - a[0], b[1] - a[1]) < 0.05) continue;
+      const ang = Math.atan2(b[1] - a[1], b[0] - a[0]);
+      if (cur) {
+        let dd = Math.abs(ang - cur.ang); if (dd > Math.PI) dd = 2 * Math.PI - dd;
+        if (dd < 0.21 && Math.hypot(a[0] - cur.b[0], a[1] - cur.b[1]) < 0.01) { cur.b = b; continue; }
+        out.push(cur);
+      }
+      cur = { a, b, ang };
+    }
+    if (cur) out.push(cur);
+    return out;
+  };
+  const asse = (s) => {
+    const dx = Math.abs(s.b[0] - s.a[0]), dy = Math.abs(s.b[1] - s.a[1]);
+    return dy <= Math.max(0.3, dx * 0.12) ? 'H' : dx <= Math.max(0.35, dy * 0.15) ? 'V' : 'D';
+  };
+  const elementi = (S) => {
+    const out = []; let i = 0;
+    while (i < S.length) {
+      const ax = asse(S[i]); let j = i;
+      if (ax !== 'D') while (j + 1 < S.length && asse(S[j + 1]) === ax && Math.hypot(S[j + 1].b[0] - S[j].a[0], S[j + 1].b[1] - S[j].a[1]) < 0.7) j++;
+      if (j - i + 1 >= 3) {
+        const k = ax === 'H' ? 0 : 1, o = 1 - k, seg = S.slice(i, j + 1);
+        const v = seg.flatMap((t) => [t.a[k], t.b[k]]), w = seg.flatMap((t) => [t.a[o], t.b[o]]);
+        out.push({ ax, lo: Math.min(...v), hi: Math.max(...v), c: (Math.min(...w) + Math.max(...w)) / 2 });
+        i = j + 1;
+      } else i++;
+    }
+    return out;
+  };
+  const tipo = (e) => (e.ax === 'H' ? 'cordoncino' : e.hi - e.lo < 3.2 ? 'fermo' : 'verticale');
+  const scarto = (e, pool) => {
+    let best = Infinity;
+    for (const f of pool) {
+      if (f.ax !== e.ax || tipo(f) !== tipo(e) || Math.abs(f.c - e.c) >= 0.9) continue;
+      best = Math.min(best, Math.max(Math.abs(f.lo - e.lo), Math.abs(f.hi - e.hi)));
+    }
+    return best;
+  };
+
+  const riferimento = rg.readDst(new Uint8Array(readFileSync(join(here, 'fixtures/m1404-dav-fase3.dst'))));
+  const bordo = riferimento.blocks.filter((b) => b.needle === 1).flatMap((b) => b.points_mm);
+  let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
+  for (const [x, y] of bordo) { bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x); by0 = Math.min(by0, y); by1 = Math.max(by1, y); }
+  const contorno = [{ x: bx0, y: by0 }, { x: bx1, y: by0 }, { x: bx1, y: by1 }, { x: bx0, y: by1 }];
+  const reticolo = { cx: -92.8, cy: -58.35, a: 31.7, b: 30.3 };
+  const gen = rg.generaLinee(reticolo, contorno, rg.PARAMETRI_DAVANTI);
+  const riletto = rg.readDst(rg.buildDst(rg.programmaLinee(gen)));
+  const veri = riferimento.blocks.filter((b) => b.needle === 2).flatMap((b) => elementi(tratti(b.points_mm)));
+  const fatti = riletto.blocks.flatMap((b) => elementi(tratti(b.points_mm)));
+  // Solo i gruppi interi: in alto e in fondo il DST vero ha tolto parti PER IL MONTAGGIO (Lorenzo),
+  // e il generatore invece fa tutto il reticolo — le parti tolte si scelgono dopo, a mano.
+  const righe = [-58.35, 2.25, 62.85];
+  const dentro = (e) => {
+    const x = e.ax === 'H' ? (e.lo + e.hi) / 2 : e.c, y = e.ax === 'H' ? e.c : (e.lo + e.hi) / 2;
+    return righe.some((r) => Math.abs(y - r) < 26) && x > bx0 + 34 && x < bx1 - 34;
+  };
+  for (const [nome, A, B] of [['elementi del DST vero ritrovati nel generato', veri, fatti], ['elementi generati che stanno nel DST vero', fatti, veri]]) {
+    const W = A.filter(dentro);
+    const perTipo = {};
+    for (const e of W) { const t = tipo(e); perTipo[t] = perTipo[t] || [0, 0]; perTipo[t][1]++; if (scarto(e, B) <= 0.7) perTipo[t][0]++; }
+    check(`${nome}, entro 0,7 mm (cordoncini, fermi, pezzi verticali)`,
+      ['cordoncino', 'fermo', 'verticale'].map((t) => perTipo[t] && perTipo[t][0] === perTipo[t][1] && perTipo[t][1] > 250), [true, true, true]);
+  }
+
+  // Le PUNTE di scalette e meandri: fin dove sale e scende il filo su ogni corsia, PASSAGGI COMPRESI.
+  // Il confronto per elementi non le vede — un passaggio non è un cordoncino — ed è proprio lì che la
+  // prima versione sbagliava: dalla cima della corsia centrale il filo saliva sulla sinistra fino in
+  // cima, e la punta della scaletta cambiava (Lorenzo, 15/09).
+  const corsie = new Map();
+  const punte = (blocchi, sorgente) => {
+    for (const P of blocchi) for (let k = 1; k < P.length; k++) {
+      const [x0, y0] = P[k - 1], [x1, y1] = P[k];
+      if (Math.abs(x1 - x0) > 0.05 || Math.abs(y1 - y0) < 0.3) continue;
+      const x = (x0 + x1) / 2, ym = (y0 + y1) / 2;
+      const r = righe.findIndex((rr) => Math.abs(ym - rr) < 26);
+      if (r < 0 || x < bx0 + 34 || x > bx1 - 34) continue;
+      // solo le corsie di scalette e meandri (a ±8 dal centro del rombo, corsie a ±1,6): fermi e barre
+      // hanno la loro misura nel confronto per elementi
+      let xloc = (((x - reticolo.cx) % 63.4) + 63.4) % 63.4; if (xloc > 31.7) xloc -= 63.4;
+      if (Math.abs(Math.abs(xloc) - 8) > 2.5) continue;
+      const zona = ym < righe[r] - 6.2 ? 'su' : ym > righe[r] + 6.2 ? 'giu' : 'meandro';
+      // le corsie del generato fanno da riferimento; quelle del DST vero ci si agganciano entro 0,6 mm
+      let lane = null;
+      for (const [key, v] of corsie) if (v.r === r && v.zona === zona && Math.abs(v.x - x) < 0.6) lane = key;
+      if (!lane) {
+        if (sorgente === 'vero') continue;
+        lane = `${r}|${zona}|${x.toFixed(2)}`;
+        corsie.set(lane, { r, zona, x, gen: [Infinity, -Infinity], vero: [Infinity, -Infinity] });
+      }
+      const v = corsie.get(lane)[sorgente];
+      v[0] = Math.min(v[0], y0, y1); v[1] = Math.max(v[1], y0, y1);
+    }
+  };
+  punte(riletto.blocks.map((b) => b.points_mm), 'gen');
+  punte(riferimento.blocks.filter((b) => b.needle === 2).map((b) => b.points_mm), 'vero');
+  const verticali = [...corsie.values()].filter((v) => v.zona !== 'meandro' || v.gen[1] - v.gen[0] > 3);
+  // 0,6 mm: in un gruppo del DST vero un meandro sta 0,5 mm più in basso di tutti gli altri (la
+  // digitazione a mano non è perfetta); il generato è uguale agli altri meandri, ed è giusto così.
+  const storte = verticali.filter((v) => !(Math.abs(v.gen[0] - v.vero[0]) <= 0.6 && Math.abs(v.gen[1] - v.vero[1]) <= 0.6));
+  check(`le punte di scalette e meandri come nel DST vero, corsia per corsia (${verticali.length} corsie)`, [verticali.length > 100, storte.length], [true, 0]);
+
+  // Il reticolo si legge dall'SVG a zone: i rombi interi di una tinta danno centro e mezze diagonali.
+  const modello = rg.parseImportedBoundarySource(readFileSync(join(here, 'fixtures/cannage-rafia-m3641-zone.svg'), 'utf8'), 'm3641.svg', { scaleMode: 'illustrator-72dpi', paintPriority: 'fill' });
+  const zoneM = modello.choices.flatMap((c) => c.boundary.paths.filter((p) => p.closed).map((p) => ({ color: p.color ?? c.color, points: p.points })));
+  const rosso = rg.reticoloDaZone(zoneM, '#e42320'), blu = rg.reticoloDaZone(zoneM, '#2a4e9c');
+  for (const [nome, l] of [['rosso', rosso], ['blu', blu]]) {
+    check(`M3641, reticolo dal ${nome}: rombi 42 × 42 mm, tutti sul reticolo`,
+      [l.reticolo.a.toFixed(1), l.reticolo.b.toFixed(1), l.rombiInteri > 4, l.fuoriReticolo], ['21.0', '21.0', true, 0]);
+  }
+  const mezzo = (v, p) => Math.abs((((v % p) + p) % p) - p / 2) < 0.1;
+  check('...e le due tinte sono sfalsate di mezzo rombo, come un cannage', [mezzo(blu.reticolo.cx - rosso.reticolo.cx, 42), mezzo(blu.reticolo.cy - rosso.reticolo.cy, 42)], [true, true]);
+
+  // Misure proporzionali al rombo, ma oltre una certa crescita aumentano gli oggetti (Lorenzo, 15/09).
+  const conta = (s) => rg.generaLinee({ cx: 0, cy: 0, a: 31.7 * s, b: 30.3 * s },
+    [{ x: -190.2 * s, y: -90.9 * s }, { x: 190.2 * s, y: -90.9 * s }, { x: 190.2 * s, y: 90.9 * s }, { x: -190.2 * s, y: 90.9 * s }]).conteggi;
+  const c1 = conta(1), c12 = conta(1.2), c2 = conta(2);
+  check('rombo più grande del 20%: tutto scala, gli oggetti restano quelli', [c12.cordoncini, c12.fermi, c12.scalette, c12.meandri], [c1.cordoncini, c1.fermi, c1.scalette, c1.meandri]);
+  check('rombo doppio: aumentano gli oggetti (più pezzi di cordoncino, più fermi)', [c2.cordoncini > c1.cordoncini * 1.3, c2.fermi > c1.fermi * 1.3], [true, true]);
+
+  // Le regole della macchina e del pezzo.
+  let lmin = Infinity, lmax = 0, fuori = 0;
+  for (const b of gen.blocchi) for (let k = 0; k < b.length; k++) {
+    const p = b[k];
+    if (p.x < bx0 - 1.01 || p.x > bx1 || p.y < by0 - 1.3 || p.y > by1 + 1.3) fuori++;
+    if (k) { const l = Math.hypot(p.x - b[k - 1].x, p.y - b[k - 1].y); lmin = Math.min(lmin, l); lmax = Math.max(lmax, l); }
+  }
+  check('nessun punto oltre il record DST (12 mm) né nello stesso buco', [lmax <= 12.01, lmin >= 0.05], [true, true]);
+  check('il filo sta nel pezzo: fuori solo il passaggio sul bordo sinistro (1 mm)', fuori, 0);
+  const lato = rg.generaLinee(reticolo, contorno, rg.PARAMETRI_LATO);
+  let orizzMax = 0;
+  for (const b of lato.blocchi) for (let k = 1; k < b.length; k++) if (Math.abs(b[k].y - b[k - 1].y) < 0.05) orizzMax = Math.max(orizzMax, Math.abs(b[k].x - b[k - 1].x));
+  check("l'alternativa del lato: sulle linee nessun punto oltre 3,5 mm", orizzMax <= 3.51, true);
+  const conTermo = rg.generaLinee(reticolo, contorno, { ...rg.PARAMETRI_DAVANTI, termogarze: true });
+  const primo = conTermo.blocchi[0];
+  check('termogarze: il contorno è il primo tratto, e c\'è solo se lo chiedi',
+    [conTermo.blocchi.length, Math.min(...primo.map((p) => p.x)).toFixed(2), Math.max(...primo.map((p) => p.y)).toFixed(2)], [gen.blocchi.length + 1, bx0.toFixed(2), by1.toFixed(2)]);
 }
 
 rmSync(outDir, { recursive: true, force: true });
