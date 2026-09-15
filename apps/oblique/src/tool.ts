@@ -2,8 +2,8 @@ import '@rg/ui/rg.css';
 import './oblique.css';
 import {
   parseSvgToContours, parseDxfToContours, buildSvg, buildSvgInSourceFrame, readProjectMetadata, readDstMetadata,
-  dstFromExportLayers, DST_FILE, THREAD_STROKE_MM, SHAPE_STROKE_MM, DPI_ILLUSTRATOR,
-  type ImportResult, type ExportLayer, type SvgImportOptions,
+  dstFromExportLayers, DST_FILE, THREAD_STROKE_MM, SHAPE_STROKE_MM, DPI_ILLUSTRATOR, applyRealWidth,
+  type ImportResult, type ExportLayer, type SvgImportOptions, type Contour,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
@@ -60,6 +60,10 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
 
   // Stato del cartamodello utente, delle assegnazioni ruolo→colore, della UI (preview-only) e visibilità.
   let panel: ImportResult | null = null;
+  // I contorni del cartamodello alla misura VERA: `realWidthMm` è la fonte di verità (R11).
+  // Un SVG che non dichiara width/height non dice in che unità è il suo viewBox — punti, mm o px
+  // danno tre misure diverse dello stesso disegno — e indovinarlo in silenzio è peggio di chiedere.
+  let panelScaled: Contour[] = [];
   let panelName = '';
   const roleColor: Partial<Record<ObliqueRole, string>> = {};
   const ui = { showPanelShapeOverlay: false, panelShapeOverlayColor: '#e52421', nudgeStep: 1 };
@@ -92,6 +96,9 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
             </label>
             <p class="rg-file-input__status" id="panelStatus" role="status">Nessun cartamodello: uso il formato ${params.formatWidth}×${params.formatHeight} mm.</p>
           </div>
+          <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Larghezza reale del cartamodello</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" type="number" min="0" step="any" data-param="realWidthMm" value="${params.realWidthMm}"><span>mm</span></span></label>
+          <p class="rg-field__help rg-param-grid__wide">0 = usa la misura letta dal file. Se l'SVG non dichiara <code>width</code>/<code>height</code> la misura è una stima (lo dice la riga qui sopra): scrivi qui la larghezza vera e comanda quella.</p>
           <div class="rg-cluster rg-param-grid__wide">
             <label class="rg-choice"><input type="checkbox" data-param="showPanelShapeOverlay"> Mostra cartamodello</label>
             <input type="color" data-param="panelShapeOverlayColor" value="#e52421" aria-label="Colore anteprima cartamodello">
@@ -224,12 +231,36 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
     const ov = qp('showPanelShapeOverlay'); if (ov) ui.showPanelShapeOverlay = ov.checked;
     const oc = qp('panelShapeOverlayColor'); if (oc) ui.panelShapeOverlayColor = oc.value;
     const ns = root.querySelector<HTMLInputElement>('[data-ui="nudgeStep"]'); if (ns) ui.nudgeStep = Number(ns.value) || 1;
+    refreshPanelScale();
   }
 
   // ---- Colori → ruoli: popola i 4 select coi colori unici del cartamodello + aggiorna gli swatch ----
+  /** Quanto va scalato il file per arrivare alla misura vera (1 = si usa la misura letta). */
+  function realWidthFactor(): number {
+    return panel && params.realWidthMm > 0 && panel.widthMm > 0 ? params.realWidthMm / panel.widthMm : 1;
+  }
+  /** Ricalcola i contorni alla misura vera. Da chiamare dopo ogni import e ogni lettura parametri. */
+  function refreshPanelScale(): void {
+    panelScaled = panel ? applyRealWidth(panel, params.realWidthMm) : [];
+  }
+  /**
+   * Dice COME è stata misurata la sagoma, non solo quanto misura: `declared` = il file dichiara la
+   * sua dimensione fisica, `stima` = non la dichiara e l'abbiamo dedotta dal viewBox. La stima può
+   * sbagliare di 2,8× (un viewBox in punti letto come mm) e senza questa riga non si vede.
+   */
+  function updatePanelStatus(): void {
+    if (!panel) { $('panelStatus').textContent = `Nessun cartamodello: uso il formato ${params.formatWidth}×${params.formatHeight} mm.`; return; }
+    const f = realWidthFactor();
+    const letta = `${round1(panel.widthMm)}×${round1(panel.heightMm)} mm`;
+    const come = panel.method === 'declared' ? 'misura dichiarata nel file' : 'stima dal viewBox — controllala';
+    const reale = f !== 1 ? ` → reale ${round1(panel.widthMm * f)}×${round1(panel.heightMm * f)} mm` : '';
+    $('panelStatus').textContent = `${panelName} · ${panel.contours.length} contorni · ${letta} (${come})${reale}`;
+  }
+  const round1 = (v: number): number => Math.round(v * 10) / 10;
+
   function uniqueColors(): string[] {
     if (!panel) return [];
-    return Array.from(new Set(panel.contours.map((c) => c.color))).filter((c) => c !== 'none');
+    return Array.from(new Set(panelScaled.map((c) => c.color))).filter((c) => c !== 'none');
   }
   function refreshRoleSelects(): void {
     const colors = uniqueColors();
@@ -248,7 +279,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
     if (!panel) return undefined;
     const color = colorOf(role);
     if (!color) return undefined;
-    const pts = panel.contours.filter((c) => c.color === color).map((c) => c.points);
+    const pts = panelScaled.filter((c) => c.color === color).map((c) => c.points);
     return contourBoundary(pts, role.toLowerCase(), params.perimeterCloseTolerance) ?? undefined;
   }
   /**
@@ -259,7 +290,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
    */
   function panelContour(): Boundary | undefined {
     if (!panel) return undefined;
-    return contourBoundary(panel.contours.map((c) => c.points), 'pattern', params.perimeterCloseTolerance) ?? undefined;
+    return contourBoundary(panelScaled.map((c) => c.points), 'pattern', params.perimeterCloseTolerance) ?? undefined;
   }
   function buildRoles(): RoleBoundaries {
     return { master: roleBoundary('MASTER_OUTLINE'), pattern: roleBoundary('PATTERN_REFERENCE'), laser: roleBoundary('LASER_REFERENCE'), placement: roleBoundary('PLACEMENT_REFERENCE') };
@@ -267,7 +298,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
   function panelBounds(): ObliqueSources['panelBounds'] {
     if (!panel) return undefined;
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const c of panel.contours) for (const p of c.points) {
+    for (const c of panelScaled) for (const p of c.points) {
       if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
     }
     return Number.isFinite(minX) ? rectBounds(minX, minY, maxX - minX, maxY - minY) : undefined;
@@ -293,12 +324,13 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
   function render(): void {
     readParams();
     refreshRoleSelects();
+    updatePanelStatus();
     try {
       const placementFollows = colorOf('PLACEMENT_REFERENCE') !== null && colorOf('PLACEMENT_REFERENCE') === colorOf('PATTERN_REFERENCE');
       const res = generateOblique(currentSources(), params, { roles: buildRoles(), panelContour: panelContour(), placementFollowsPattern: placementFollows });
       lastResult = res;
       const layers: ExportLayer[] = [];
-      if (panel && ui.showPanelShapeOverlay) layers.push({ id: 'panel-overlay', color: ui.panelShapeOverlayColor, strokeMm: SHAPE_STROKE_MM, shapeOnly: true, polylines: panel.contours.map((c) => c.points) });
+      if (panel && ui.showPanelShapeOverlay) layers.push({ id: 'panel-overlay', color: ui.panelShapeOverlayColor, strokeMm: SHAPE_STROKE_MM, shapeOnly: true, polylines: panelScaled.map((c) => c.points) });
       if (layerVisible.boundary) layers.push({ id: 'boundary', color: LAYER_COLOR.boundary, strokeMm: SHAPE_STROKE_MM, shapeOnly: true, polylines: [res.boundaries.pattern.points, res.boundaries.laser.points, res.boundaries.placement.points] });
       if (layerVisible.level0 && res.level0.length) layers.push(strokesToLayer('level0', res.level0));
       if (layerVisible.level05 && res.level05.length) layers.push(strokesToLayer('level05', res.level05));
@@ -318,9 +350,10 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
   function loadPanel(result: ImportResult, name: string): void {
     panel = result;
     panelName = name;
+    refreshPanelScale();
     const colors = uniqueColors();
     if (colors.length === 1 && !colorOf('MASTER_OUTLINE')) roleColor.MASTER_OUTLINE = colors[0];
-    $('panelStatus').textContent = `${name} · ${result.contours.length} contorni · ${Math.round(result.widthMm)}×${Math.round(result.heightMm)} mm`;
+    updatePanelStatus();
     refreshRoleSelects();
     render();
   }
@@ -330,6 +363,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
     const r = meta.roles as Partial<Record<ObliqueRole, string>> | undefined;
     if (r) { for (const k of ROLE_ORDER) delete roleColor[k]; Object.assign(roleColor, r); }
     applyParamsToControls();
+    refreshPanelScale();
   }
 
   $('panelInput').addEventListener('change', (ev) => {
@@ -374,7 +408,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
     const layers = exportLayersFor(res);
     const metadata = { rgProject: 'oblique', version: '0.1.0', params, roles: roleColor };
     let svg: string;
-    if (panel?.frame) svg = buildSvgInSourceFrame(layers, { frame: panel.frame, realWidthFactor: 1, metadata });
+    if (panel?.frame) svg = buildSvgInSourceFrame(layers, { frame: panel.frame, realWidthFactor: realWidthFactor(), metadata });
     else { const b = res.boundaries.pattern; svg = buildSvg(layers, { bounds: { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY }, marginMm: 10, metadata }); }
     const base = (panelName ? panelName.replace(/\.[^.]+$/, '') : 'oblique') + '-oblique.svg';
     setStatus(saveOutcomeMessage(await saveTextFile(svg, { suggestedName: base, description: 'Immagine SVG' }), base));
