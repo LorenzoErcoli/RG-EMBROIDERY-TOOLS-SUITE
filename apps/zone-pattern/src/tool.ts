@@ -9,27 +9,29 @@ import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { readZones, resolveZoneAngles, zonesFromShapes, boundsOfPoints, type Zone, type ZoneShape } from './engine';
-import { buildZonePlan, exportSequenceLayers, threadMetres, travelMetres, PATTERN_INK, PATTERN_KEYS, type PatternKey, type ZonePlan, type ZoneRole } from './pipeline';
+import {
+  buildZonePlan, exportSequenceLayers, threadMetres, travelMetres, inkFor, normalizeRole,
+  patternChoices, patternKeysInUse, RELIEF_ROLE, type PatternKey, type ZonePlan, type ZoneRole,
+} from './pipeline';
 import { readPatternSvg, migrateLegacyNames } from './analyze';
 import { generateFinalPatternPoints } from '@rg/pattern-grammar';
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';
-import zonePresetsRaw from './presets.zone.json?raw';
-import { CORPO, ROLE_OPTIONS, SCALE_MODES, type Field, type Group } from './fields';
+import { PATTERN_FIELDS, ZONE_GROUP, patternGroup, SCALE_MODES, type Field, type Group } from './fields';
 
 type Flat = Record<string, number | string | boolean>;
 
-/** Config iniziale = i valori di default dichiarati nello schema dei campi (chiavi `A.x` / `B.x` / `x`). */
+/** Config iniziale = i soli campi delle zone. I campi di un pattern nascono con la sua lettera. */
 function initialConfig(): Flat {
   const cfg: Flat = {};
-  for (const group of CORPO) for (const field of group.fields) cfg[field.name] = field.value;
+  for (const field of ZONE_GROUP.fields) cfg[field.name] = field.value;
   return cfg;
 }
 
-/** Estrae il `PatternConfig` di un ago dalle chiavi prefissate (`A.x` → `x`), saltando i campi non-grammatica. */
+/** Estrae il `PatternConfig` di un ago dalle chiavi prefissate (`C.stepX` → `stepX`). */
 function patternOf(cfg: Flat, key: PatternKey): PatternConfig {
   const out: Record<string, unknown> = {};
   for (const [name, value] of Object.entries(cfg)) {
-    if (name.startsWith(`${key}.`)) out[name.slice(2)] = value;
+    if (name.startsWith(`${key}.`)) out[name.slice(key.length + 1)] = value;
   }
   return out as PatternConfig;
 }
@@ -47,13 +49,6 @@ const IGNORABLE = new Set([
 ]);
 
 /**
- * I pattern pronti. Due sorgenti:
- *  - `presets.zone.json` — i DUE CANNAGE DI RIFERIMENTO di Lorenzo (LEGGERO e PIENA), presi dai
- *    parametri dei suoi SVG originali: sono i default di questo tool, non c'è da caricare niente;
- *  - la libreria condivisa del Generatore pattern, letta dal suo file: quello che pubblichi lì
- *    compare anche qui, senza un doppione da mantenere.
- */
-/**
  * Quanto può pesare il cartamodello incorporato nel file, in kB.
  *
  * Misurato sui disegni veri del repo: il cannage di Lorenzo costa 10.7 kB, i cartamodelli di
@@ -64,11 +59,14 @@ const IGNORABLE = new Set([
  */
 const MAX_DRAWING_KB = 256;
 
+/**
+ * I pattern pronti: la libreria condivisa del Generatore pattern, letta dal suo file. Dentro ci
+ * sono anche i DUE CANNAGE DI RIFERIMENTO di Lorenzo (LEGGERO e PIENA), presi dai parametri dei
+ * suoi SVG originali. Stavano in una copia locale a questo tool; dal 15/09 stanno solo lì, così
+ * li vede anche il Generatore e non c'è un doppione da tenere allineato.
+ */
 const PRESETS: Record<string, Record<string, unknown>> = (() => {
-  const parse = (raw: string) => {
-    try { return JSON.parse(raw) as Record<string, Record<string, unknown>>; } catch { return {}; }
-  };
-  return { ...parse(zonePresetsRaw), ...parse(sharedPresetsRaw) };
+  try { return JSON.parse(sharedPresetsRaw) as Record<string, Record<string, unknown>>; } catch { return {}; }
 })();
 
 /** Monta il tool "Pattern a zone" dentro `root`. `backHref` = ritorno alla home suite. */
@@ -105,17 +103,32 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
   let zones: Zone[] = [];
   /** La geometria grezza del cartamodello: UNICA fonte delle zone, sia che venga da un file
    *  importato sia che venga da un progetto riaperto. Le zone si ricalcolano da qui ogni
-   *  volta che cambia una manopola di lettura (libertà d'angolo, area minima). */
+   *  volta che cambia una manopola di lettura (area minima). */
   let shapes: ZoneShape[] = [];
   let plan: ZonePlan | null = null;
   /** Da dove vengono i valori di ciascun ago: si mostra in chiaro, non si nasconde. */
-  const patternOrigin: Record<PatternKey, string> = { A: '', B: '' };
+  const patternOrigin: Record<PatternKey, string> = {};
   /** Cosa dice la riga di stato del disegno. Vive fuori dal DOM perché il pannello si RICOSTRUISCE
    *  (caricando un preset, per esempio) e una riga ricostruita da zero direbbe "nessun disegno"
    *  con il disegno caricato: una bugia, piccola ma bugia. */
   let zoneStatusText = 'Nessun disegno caricato.';
+  /** Quali gruppi erano aperti. Il pannello si ricostruisce a ogni pattern nuovo, e non deve
+   *  richiudere quello su cui stai lavorando né riportarti in cima. */
+  const openPatterns = new Set<PatternKey>();
+  let zoneGroupOpen = false;
 
   const pz = hookPanZoom($('canvas'), $('layer'), (z) => { $('zoom').textContent = `zoom ${Math.round(z * 100)}%`; });
+
+  /**
+   * Un pattern appena nato parte dai valori di default dello schema. Se la lettera era già stata
+   * usata e poi lasciata libera, ritrova i suoi valori: cambiare idea su una tinta non deve
+   * cancellare il lavoro fatto su un pattern.
+   */
+  function ensurePattern(key: PatternKey) {
+    for (const f of PATTERN_FIELDS) {
+      if (!(`${key}.${f.name}` in cfg)) cfg[`${key}.${f.name}`] = f.value;
+    }
+  }
 
   // ---- un campo, reso coi componenti DS; il valore mostrato è SEMPRE quello della config corrente ----
   function fieldEl(f: Field): HTMLElement {
@@ -195,7 +208,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
   }
 
   /** Sezione del corpo o della coda: accordion (aperto se `open`). */
-  function accordionSection(index: string, title: string, body: HTMLElement, open: boolean): HTMLElement {
+  function accordionSection(index: string, title: string, body: HTMLElement, open: boolean): HTMLDetailsElement {
     const det = document.createElement('details');
     det.className = 'rg-param-section rg-disclosure';
     det.open = open;
@@ -236,7 +249,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     return box;
   }
 
-  // ---- 02 Colori e ruoli: una riga per tinta → pattern + correzione d'angolo ----
+  // ---- 02 Colori e ruoli: una riga per tinta → quale pattern, e a che angolo ----
   function colorMap(): HTMLElement {
     const ul = document.createElement('ul');
     ul.className = 'rg-color-map';
@@ -256,7 +269,11 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     for (const zone of zones) byColor.set(zone.color, [...(byColor.get(zone.color) ?? []), zone]);
 
     for (const [color, group] of byColor) {
+      const role = roles[color] ?? { pattern: 'off', angleDeg: 0 };
+      // L'angolo misurato sulla zona non entra più nel ricamo: resta come SUGGERIMENTO, perché
+      // su un disegno deformato è il numero da scrivere nel campo.
       const angles = group.map((z) => z.angleDeg).sort((a, b) => a - b);
+      const suggested = angles[Math.floor(angles.length / 2)];
       const row = document.createElement('li');
       row.className = 'rg-color-map__row';
 
@@ -269,34 +286,66 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
       code.textContent = color.toUpperCase() + ' ';
       const meta = document.createElement('span');
       meta.className = 'rg-color-map__meta';
-      meta.textContent = `${group.length} zone · ${angles[Math.floor(angles.length / 2)].toFixed(1)}°`;
+      meta.textContent = `${group.length} zone · suggerito ${suggested.toFixed(1)}°`;
       code.appendChild(meta);
 
+      // Il bersaglio: le lettere già in uso, più una nuova (vedi `patternChoices`).
       const sel = document.createElement('select');
       sel.className = 'rg-select rg-color-map__target';
-      sel.setAttribute('aria-label', `Pattern per ${color}`);
-      for (const [v, l] of ROLE_OPTIONS) {
+      sel.setAttribute('aria-label', `Pattern per ${color.toUpperCase()}`);
+      const none = document.createElement('option');
+      none.value = 'off';
+      none.textContent = '— (non ricamare)';
+      none.selected = role.pattern === 'off';
+      sel.appendChild(none);
+      for (const { key, isNew } of patternChoices(roles)) {
         const o = document.createElement('option');
-        o.value = v; o.textContent = l;
-        if (v === (roles[color]?.pattern ?? 'off')) o.selected = true;
+        o.value = key;
+        o.textContent = isNew ? `Pattern ${key} (nuovo)` : `Pattern ${key}`;
+        o.selected = key === role.pattern;
         sel.appendChild(o);
       }
+      // In coda, perché non è un pattern: i contorni di questa tinta dicono dove scaricare i punti.
+      const relief = document.createElement('option');
+      relief.value = RELIEF_ROLE;
+      relief.textContent = 'Area di scarico (meno passate)';
+      relief.selected = role.pattern === RELIEF_ROLE;
+      sel.appendChild(relief);
       sel.addEventListener('change', () => {
-        roles[color] = { pattern: sel.value as ZoneRole['pattern'], angleOffsetDeg: roles[color]?.angleOffsetDeg ?? 0 };
+        const before = patternKeysInUse(roles);
+        roles[color] = { ...(roles[color] ?? role), pattern: sel.value };
+        // Una lettera appena nata apre il suo gruppo: è lì che si decide che pattern è.
+        if (sel.value !== 'off' && sel.value !== RELIEF_ROLE && !before.includes(sel.value)) openPatterns.add(sel.value);
+        buildPanel();
+        drawZones();
       });
 
-      const offset = document.createElement('input');
-      offset.type = 'number';
-      offset.className = 'rg-input rg-input--numeric';
-      offset.step = '1';
-      offset.value = String(roles[color]?.angleOffsetDeg ?? 0);
-      offset.setAttribute('aria-label', `Correzione d'angolo per ${color}, in gradi`);
-      offset.addEventListener('change', () => {
-        const v = parseFloat(offset.value);
-        roles[color] = { pattern: roles[color]?.pattern ?? 'off', angleOffsetDeg: Number.isNaN(v) ? 0 : v };
+      // L'angolo per tinta, nello slot accessorio del DS (1.8.0): è un campo che appartiene a
+      // quel colore, e prima era un input appeso a mano in coda alla riga.
+      const aside = document.createElement('span');
+      aside.className = 'rg-color-map__aside rg-cluster';
+      const unitWrap = document.createElement('span');
+      unitWrap.className = 'rg-field-with-unit rg-field-with-unit--compact';
+      const angle = document.createElement('input');
+      angle.type = 'number';
+      angle.className = 'rg-input rg-input--numeric';
+      angle.inputMode = 'decimal';
+      angle.step = '1';
+      angle.placeholder = '0';
+      angle.value = String(role.angleDeg);
+      angle.setAttribute('aria-label', `Angolo del pattern per ${color.toUpperCase()}, in gradi (vuoto: 0, diritto)`);
+      // Un'area di scarico non ha un pattern suo, quindi nemmeno un angolo.
+      angle.disabled = role.pattern === RELIEF_ROLE;
+      angle.addEventListener('change', () => {
+        const v = parseFloat(angle.value);
+        roles[color] = { ...(roles[color] ?? role), angleDeg: Number.isFinite(v) ? v : 0 };
       });
+      const deg = document.createElement('span');
+      deg.textContent = '°';
+      unitWrap.append(angle, deg);
+      aside.appendChild(unitWrap);
 
-      row.append(sw, code, sel, offset);
+      row.append(sw, code, sel, aside);
       ul.appendChild(row);
     }
   }
@@ -309,6 +358,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
    * minimo e il bordo puliti, invece che a pezzi staccati.
    */
   function applyValues(key: PatternKey, values: PatternConfig, origin: string) {
+    ensurePattern(key);
     const migrated = migrateLegacyNames(values as Record<string, unknown>);
     const applied: string[] = [];
     const ignored: string[] = [];
@@ -327,6 +377,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     }
     patternOrigin[key] = `${origin} · ${applied.length} valori nei campi`
       + (ignored.length ? ` · non usati qui: ${ignored.join(', ')}` : '');
+    openPatterns.add(key);
     buildPanel();
   }
 
@@ -353,9 +404,8 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
         },
         totalWidth: sideMm, totalHeight: sideMm, columns: undefined, rows: undefined,
       });
-      const d = (pl: { x: number; y: number }[]) => pl.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
       const lines = final.visualPolylines
-        .map((pl) => `<polyline points="${d(pl)}" fill="none" stroke="${PATTERN_INK[key]}" stroke-width="0.12"/>`)
+        .map((pl) => `<polyline points="${d(pl)}" fill="none" stroke="${inkFor(key)}" stroke-width="0.12"/>`)
         .join('');
       const points = final.visualPolylines.reduce((sum, pl) => sum + pl.length, 0);
       box.innerHTML = `<svg viewBox="0 0 ${sideMm} ${sideMm}" role="img" aria-label="Anteprima del pattern ${key}">`
@@ -381,7 +431,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
           <input type="file" id="svg-${key}" accept=".svg" />
           <span class="rg-button rg-button--outline">…oppure leggi i valori da un SVG</span>
         </label>
-        <p class="rg-file-input__status" id="svgStatus-${key}" role="status">${patternOrigin[key] || 'Valori del pannello.'}</p>
+        <p class="rg-file-input__status" id="svgStatus-${key}" role="status">${patternOrigin[key] || 'Pattern nuovo: valori di partenza del pannello.'}</p>
       </div>`;
 
     box.querySelector<HTMLSelectElement>(`#preset-${key}`)!.addEventListener('change', (ev) => {
@@ -421,8 +471,19 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     return box;
   }
 
+  /**
+   * Il pannello. Il corpo NON è più fisso: ha un gruppo per ogni lettera che una tinta ha scelto
+   * — nell'ordine degli aghi — e in coda le zone. Si ricostruisce ogni volta che nasce o sparisce
+   * un pattern, ricordando cosa era aperto e dove eri arrivato con lo scorrimento.
+   */
   function buildPanel() {
     const panel = $('panel');
+    for (const det of panel.querySelectorAll<HTMLDetailsElement>('details[data-pattern]')) {
+      if (det.open) openPatterns.add(det.dataset.pattern!); else openPatterns.delete(det.dataset.pattern!);
+    }
+    const oldZoneGroup = panel.querySelector<HTMLDetailsElement>('details[data-group="zone"]');
+    if (oldZoneGroup) zoneGroupOpen = oldZoneGroup.open;
+    const scroll = panel.scrollTop;
     panel.innerHTML = '';
     const n = (i: number) => String(i).padStart(2, '0');
 
@@ -434,16 +495,24 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     colori.appendChild(colorMap());
     panel.appendChild(colori);
 
-    CORPO.forEach((g, k) => {
-      const body = gridOf(g);
-      // I due gruppi-pattern hanno in cima il caricatore del modulo SVG.
-      const key = (['A', 'B'] as PatternKey[])[k];
-      if (key) { body.prepend(patternPicker(key)); body.appendChild(swatch(key)); }
-      panel.appendChild(accordionSection(n(3 + k), g.title, body, !!g.open));
+    const keys = patternKeysInUse(roles);
+    keys.forEach((key, k) => {
+      ensurePattern(key);
+      const body = gridOf(patternGroup(key));
+      body.prepend(patternPicker(key));
+      body.appendChild(swatch(key));
+      const det = accordionSection(n(3 + k), `Pattern ${key} — ago ${k + 1}`, body, openPatterns.has(key));
+      det.dataset.pattern = key;
+      panel.appendChild(det);
     });
+
+    const zoneDet = accordionSection(n(3 + keys.length), ZONE_GROUP.title, gridOf(ZONE_GROUP), zoneGroupOpen);
+    zoneDet.dataset.group = 'zone';
+    panel.appendChild(zoneDet);
 
     wirePanel();
     renderColorMap();
+    panel.scrollTop = scroll;
   }
 
   // ---- import ----
@@ -470,17 +539,22 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
       : 'Nessuna zona chiusa trovata: prova a cambiare "La zona è definita da".';
   }
 
-  /** Rilegge le zone dalla geometria grezza applicando le manopole di lettura correnti. */
+  /**
+   * Rilegge le zone dalla geometria grezza. L'angolo misurato serve solo al suggerimento nella
+   * mappa colori, quindi la tolleranza è fissa: non c'è più una manopola che lo fa entrare nel
+   * ricamo.
+   */
   function refreshZones() {
     if (!shapes.length) return;
-    zones = resolveZoneAngles(zonesFromShapes(shapes, Number(cfg.minAreaMm2) || 0), Number(cfg.angleToleranceDeg));
-    for (const zone of zones) roles[zone.color] ??= { pattern: 'off', angleOffsetDeg: 0 };
+    zones = resolveZoneAngles(zonesFromShapes(shapes, Number(cfg.minAreaMm2) || 0), 20);
+    for (const zone of zones) roles[zone.color] ??= { pattern: 'off', angleDeg: 0 };
   }
 
   // ---- generazione ----
   function generate() {
     if (!zones.length) { $('status').textContent = 'Carica prima un disegno.'; return; }
-    if (!Object.values(roles).some((r) => r.pattern !== 'off')) {
+    const keys = patternKeysInUse(roles);
+    if (!keys.length) {
       $('status').textContent = 'Assegna un pattern ad almeno una tinta (02 Colori e ruoli).';
       return;
     }
@@ -488,7 +562,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     try {
       plan = buildZonePlan(zones, {
         roles,
-        patterns: { A: patternOf(cfg, 'A'), B: patternOf(cfg, 'B') },
+        patterns: Object.fromEntries(keys.map((key) => [key, patternOf(cfg, key)])),
         marginMm: Number(cfg.marginMm),
         rowHeightMm: Number(cfg.rowHeightMm),
         travelMode: cfg.travelMode === 'none' ? 'none' : 'edges',
@@ -503,17 +577,18 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     }
     draw();
     const points = plan.stitches.reduce((sum, s) => sum + s.pointCount, 0);
-    const filo = PATTERN_KEYS
+    const filo = keys
       .filter((k) => plan!.stitches.some((s) => s.pattern === k))
       .map((k) => `${k} ${threadMetres(plan!, k).toFixed(1)}m`)
       .join(' · ');
     const passaggi = plan.travels.length
-      ? ` · ${plan.travels.length} passaggi (${PATTERN_KEYS.map((k) => travelMetres(plan!, k))
+      ? ` · ${plan.travels.length} passaggi (${keys.map((k) => travelMetres(plan!, k))
         .reduce((a, b) => a + b, 0).toFixed(1)}m)`
       : ' · nessun passaggio';
     const pulizia = plan.cleanedPoints ? ` · pulizia -${plan.cleanedPoints.toLocaleString('it-IT')} punti` : '';
+    const scarico = plan.relievedZones ? ` · scarico su ${plan.relievedZones} zone` : '';
     $('status').textContent = `${plan.stitches.length} zone · ${plan.layers.length} aghi · filo ${filo}`
-      + passaggi + pulizia + (plan.warnings.length ? ` · ${plan.warnings[0]}` : '');
+      + passaggi + pulizia + scarico + (plan.warnings.length ? ` · ${plan.warnings[0]}` : '');
     $('points').textContent = ` · ${points.toLocaleString('it-IT')} punti`;
   }
 
@@ -521,9 +596,16 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
   const d = (pl: { x: number; y: number }[]) => pl.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
 
   /** Le zone così come sono arrivate dal file: è il CARTAMODELLO, il disegno d'ingresso. */
-  const zonesSvg = (fillOpacity: number) => zones
-    .map((z) => `<polygon points="${d(z.points)}" fill="${z.color}" fill-opacity="${fillOpacity}" stroke="${z.color}" stroke-width="0.3"/>`)
-    .join('');
+  const zonesSvg = (fillOpacity: number) => {
+    const isRelief = (z: Zone) => roles[z.color]?.pattern === RELIEF_ROLE;
+    // Le aree di scarico si disegnano SOPRA, solo col contorno tratteggiato: coprono zone
+    // ricamate, e un riempimento nasconderebbe proprio il ricamo che vanno a scaricare.
+    const solid = zones.filter((z) => !isRelief(z))
+      .map((z) => `<polygon points="${d(z.points)}" fill="${z.color}" fill-opacity="${fillOpacity}" stroke="${z.color}" stroke-width="0.3"/>`);
+    const relief = zones.filter(isRelief)
+      .map((z) => `<polygon points="${d(z.points)}" fill="none" stroke="${z.color}" stroke-width="0.6" stroke-dasharray="3 1.5"/>`);
+    return [...solid, ...relief].join('');
+  };
 
   /** L'SVG che avvolge il disegno, in mm reali attorno all'ingombro delle zone. */
   function frame(body: string): string {
@@ -550,12 +632,12 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
   function draw() {
     if (!plan) return;
     const stitch = plan.stitches
-      .map((s) => s.polylines.map((pl) => `<polyline points="${d(pl)}" fill="none" stroke="${PATTERN_INK[s.pattern]}" stroke-width="0.2"/>`).join(''))
+      .map((s) => s.polylines.map((pl) => `<polyline points="${d(pl)}" fill="none" stroke="${inkFor(s.pattern)}" stroke-width="0.2"/>`).join(''))
       .join('');
     // I passaggi si vedono a parte, tratteggiati: sono filo anche loro, ma vanno riconosciuti
     // a colpo d'occhio — è tutto il senso di "prevedere i passaggi".
     const travel = plan.travels
-      .map((t) => `<polyline points="${d(t.points)}" fill="none" stroke="${PATTERN_INK[t.pattern]}"`
+      .map((t) => `<polyline points="${d(t.points)}" fill="none" stroke="${inkFor(t.pattern)}"`
         + ` stroke-width="0.35" stroke-dasharray="1.2 0.8" opacity="0.75"/>`)
       .join('');
     $('layer').innerHTML = frame(zonesSvg(0.10) + stitch + travel);
@@ -599,14 +681,16 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
   /**
    * Rimette in piedi un progetto salvato: parametri, ruoli e — se c'è — il cartamodello.
    * Vale sia per un `.svg` che per un `.dst` usciti da qui: i metadati sono gli stessi.
+   * I ruoli salvati prima del 14/09 passano da `normalizeRole`: la vecchia correzione d'angolo
+   * diventa l'angolo intero.
    */
   function restore(metadata: Record<string, unknown> | null): boolean {
     const params = metadata?.params as Flat | undefined;
-    const saved = metadata?.roles as Record<string, ZoneRole> | undefined;
+    const saved = metadata?.roles as Record<string, unknown> | undefined;
     const drawing = metadata?.drawing as { name?: string; zones?: ZoneShape[] } | undefined;
     if (!params && !saved && !drawing?.zones?.length) return false;
     if (params) Object.assign(cfg, params);
-    if (saved) Object.assign(roles, saved);
+    if (saved) for (const [color, role] of Object.entries(saved)) roles[color] = normalizeRole(role);
     if (drawing?.zones?.length) {
       model = null;                       // il disegno non viene più da un import: viene dal file
       source = { text: '', name: drawing.name || 'progetto' };
@@ -687,8 +771,8 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     const base = source?.name.replace(/\.[^.]+$/, '') ?? 'zone';
     const b = boundsOfPoints(zones.flatMap((z) => z.points));
     // Nell'SVG un gruppo per PEZZO, in ordine di cucitura: i blocchi e i passaggi restano
-    // separati e riconoscibili, quindi riordinabili a valle. Nel DST invece i layer sono due
-    // (uno per ago): lì un gruppo per pezzo diventerebbe un cambio-colore per pezzo.
+    // separati e riconoscibili, quindi riordinabili a valle. Nel DST invece un layer per ago:
+    // lì un gruppo per pezzo diventerebbe un cambio-colore per pezzo.
     const svg = buildSvg(exportSequenceLayers(plan), {
       bounds: { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY },
       marginMm: 5,

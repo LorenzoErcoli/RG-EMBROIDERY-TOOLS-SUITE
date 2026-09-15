@@ -2,7 +2,7 @@
 // Struttura canonica DS (patterns/workspace.md, Testa A "sorgente-guidata"): la misura del
 // prodotto NASCE DAL DISEGNO, quindi niente gruppo Formato —
 //   TESTA sempre aperta → 01 Disegno · 02 Colori e ruoli (le costruisce tool.ts).
-//   CORPO in accordion → Pattern A · Pattern B · Zone e sequenza.
+//   CORPO in accordion → un gruppo per ogni pattern in uso (A, B, C…) · Zone e sequenza.
 //   CODA in accordion → Preset.
 // Etichette e unità come in REVISIONE-PARAMETRI.md: unità sempre nello slot, mai nel testo.
 export type NumField = { kind: 'num'; name: string; label: string; unit?: string; min?: number; step: number; value: number; help?: string };
@@ -48,6 +48,11 @@ export const PATTERN_FIELDS: Field[] = [
     kind: 'num', name: 'maxBoundaryAdjustment', label: 'Spostamento massimo verso il bordo', unit: 'mm', min: 0, step: 0.01, value: 0,
     help: 'quanto un punto può essere tirato sul bordo prima di essere eliminato; 0 = usa il punto minimo',
   },
+  // Lo SCARICO: stesso nome, stessa etichetta e stessa unità del Generatore pattern (R28).
+  {
+    kind: 'num', name: 'reliefPercent', label: 'Scarico nelle aree', unit: '%', min: 0, step: 5, value: 50,
+    help: 'dentro le tinte marcate «Area di scarico» i zig-zag verticali e orizzontali hanno meno passate: 50 = metà; 0 = niente',
+  },
 ];
 
 /**
@@ -65,10 +70,8 @@ export const PATTERN_FIELD_KIND: Record<string, Field['kind']> =
 
 /** Come le zone diventano sequenza: gli unici parametri che non sono "pattern". */
 export const ZONE_FIELDS: Field[] = [
-  {
-    kind: 'num', name: 'angleToleranceDeg', label: "Libertà d'angolo per zona", unit: '°', min: 0, step: 1, value: 20,
-    help: '0 = tutte le zone di una tinta sullo stesso angolo (tre blocchi secchi); alzandola ogni zona segue la propria deformazione',
-  },
+  // Niente più «libertà d'angolo»: dal 14/09 l'angolo è scritto a mano per tinta e non si misura
+  // più sulla zona, quindi non c'è nessuna deformazione da seguire.
   { kind: 'num', name: 'marginMm', label: 'Aria attorno alla zona', unit: 'mm', min: 0, step: 0.5, value: 2 },
   {
     kind: 'num', name: 'rowHeightMm', label: 'Altezza della riga', unit: 'mm', min: 0, step: 1, value: 0,
@@ -90,16 +93,17 @@ export const ZONE_FIELDS: Field[] = [
   },
 ];
 
-const patternGroup = (key: string, title: string, open: boolean): Group => ({
-  title, collapsible: true, open,
+/**
+ * I campi di UN pattern, col nome prefissato dalla sua lettera (`C.stepX`). I gruppi non sono più
+ * scritti qui uno per uno: nascono dal pannello per ogni lettera che una tinta ha scelto.
+ */
+export const patternGroup = (key: string): Group => ({
+  title: `Pattern ${key}`, collapsible: true, open: false,
   fields: PATTERN_FIELDS.map((f) => ({ ...f, name: `${key}.${f.name}` })),
 });
 
-export const CORPO: Group[] = [
-  patternGroup('A', 'Pattern A — primo ago', true),
-  patternGroup('B', 'Pattern B — secondo ago', false),
-  { title: 'Zone e sequenza', collapsible: true, open: false, fields: ZONE_FIELDS },
-];
+/** Il gruppo in coda al corpo: come le zone diventano sequenza. */
+export const ZONE_GROUP: Group = { title: 'Zone e sequenza', collapsible: true, open: false, fields: ZONE_FIELDS };
 
 /** Le stesse modalità di scala del Generatore pattern (è lo stesso importer). */
 export const SCALE_MODES: [string, string][] = [
@@ -107,11 +111,4 @@ export const SCALE_MODES: [string, string][] = [
   ['auto', 'Auto: unità fisiche, altrimenti ViewBox = mm'],
   ['viewbox-mm', 'ViewBox = mm'],
   ['custom-size', 'Dimensione reale custom'],
-];
-
-/** Cosa può fare una tinta del disegno. */
-export const ROLE_OPTIONS: [string, string][] = [
-  ['off', '— (non ricamare)'],
-  ['A', 'Pattern A'],
-  ['B', 'Pattern B'],
 ];

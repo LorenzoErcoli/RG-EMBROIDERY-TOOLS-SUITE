@@ -57,6 +57,7 @@ export const CORPO: Group[] = [
       { kind: 'num', name: 'constructionStroke', label: 'Spessore di costruzione', unit: 'mm', min: 0.05, step: 0.05, value: 0.3, help: 'regola rientri, margini e raccordi — non è il filo disegnato' },
       { kind: 'select', name: 'boundaryCleanupMode', label: 'Punti fuori dal contorno', value: 'adjust-then-delete', options: [['adjust-then-delete', 'Avvicina al bordo, poi elimina'], ['delete', 'Elimina']] },
       { kind: 'num', name: 'maxBoundaryAdjustment', label: 'Spostamento massimo verso il bordo', unit: 'mm', min: 0, step: 0.01, value: 0 },
+      { kind: 'num', name: 'reliefPercent', label: 'Scarico nelle aree', unit: '%', min: 0, step: 5, value: 50, help: 'dentro le tinte marcate «Area di scarico» i zig-zag verticali e orizzontali hanno meno passate: 50 = metà; 0 = niente' },
       { kind: 'select', name: 'exportCompatibilityMode', label: 'Compatibilità export', value: 'illustrator-safe', options: [['normal', 'Normale'], ['illustrator-safe', 'Sicuro per Illustrator']] },
       { kind: 'select', name: 'shapeType', label: 'Sagoma di ritaglio', value: 'none', options: [['none', 'Nessuna'], ['rectangle', 'Rettangolo'], ['circle', 'Cerchio'], ['diamond', 'Rombo'], ['imported', 'Importata DXF/SVG']] },
     ],

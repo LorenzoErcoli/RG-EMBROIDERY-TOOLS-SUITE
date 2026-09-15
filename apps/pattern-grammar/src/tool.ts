@@ -13,12 +13,16 @@ import sharedPresetsRaw from './presets.shared.json?raw';
 
 const PRESET_KEY = 'pattern-grammar-engine-presets';
 
-/** Cosa può fare una tinta del cartamodello. «Area vuota» è R5: dentro non si ricama. */
-type BoundaryRole = '' | 'confine' | 'vuoto';
+/**
+ * Cosa può fare una tinta del cartamodello. «Area vuota» è R5: dentro non si ricama.
+ * «Area di scarico»: dentro si ricama con meno passate (di solito per il montaggio); non ritaglia.
+ */
+type BoundaryRole = '' | 'confine' | 'vuoto' | 'scarico';
 const BOUNDARY_ROLES: [BoundaryRole, string][] = [
   ['', '— (ignora)'],
   ['confine', 'Confine di ritaglio'],
   ['vuoto', 'Area vuota (non ricamare)'],
+  ['scarico', 'Area di scarico (meno passate)'],
 ];
 
 /** Preset CONDIVISI: committati in `presets.shared.json`, impacchettati nella build → li vede chiunque apra il sito.
@@ -312,7 +316,13 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
    * gli altri sparivano.
    */
   function rebuildBoundary() {
-    const scelti = (boundaryModel?.choices ?? []).filter((c) => boundaryRoles[c.id]);
+    // Le AREE DI SCARICO non entrano nella sagoma: non ritagliano niente, dicono solo dove i
+    // zig-zag hanno meno passate. Viaggiano a parte, e valgono anche senza un confine.
+    const anelli = (boundaryModel?.choices ?? [])
+      .filter((c) => boundaryRoles[c.id] === 'scarico')
+      .flatMap((c) => c.boundary.paths.filter((p) => p.points.length >= 3).map((p) => p.points));
+    cfg.reliefAreas = anelli.length ? anelli : undefined;
+    const scelti = (boundaryModel?.choices ?? []).filter((c) => boundaryRoles[c.id] && boundaryRoles[c.id] !== 'scarico');
     const perimetri = scelti.filter((c) => boundaryRoles[c.id] === 'confine');
     if (!perimetri.length) {
       cfg.importedBoundary = undefined;
@@ -539,7 +549,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge
       // fino all'END e lo ignora, noi lo rileggiamo. Il contorno importato NON ci va: è
       // l'unico pezzo pesante, e il tool lo tratta comunque come un file a parte.
-      const { importedBoundary, sourceAnalysis, ...saved } = cfg as Record<string, unknown>;
+      const { importedBoundary, sourceAnalysis, reliefAreas, ...saved } = cfg as Record<string, unknown>;
       bytes = dstFromExportLayers([layer], {
         label: (base || 'PATTERN').toUpperCase().slice(0, 16),
         metadata: { rgProject: 'pattern-grammar', version: '0.1.0', params: saved },

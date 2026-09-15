@@ -25,7 +25,7 @@ export { paletteToColors, applyDensityToAll, colorsToPalette, clampColorCount, m
 export { buildPlan } from ${JSON.stringify(posix('apps/broccato/src/pipeline.ts'))};
 export { sampleImage as sampleBroccatoImage } from ${JSON.stringify(posix('apps/broccato/src/sample.ts'))};
 export { readZones, resolveZoneAngles, orderZonesRaster, dominantAngleDeg, familyAngleDeg, boundsOfPoints as zoneBounds, rotatePoints, outerEdgeFlags, expandOuterEdges, cellElongation, familyAxisShiftDeg, STRIP_ELONGATION, zonesFromShapes, makeZone } from ${JSON.stringify(posix('apps/zone-pattern/src/engine.ts'))};
-export { buildZonePlan, fillZone, threadMetres, travelMetres, exportSequenceLayers, PATTERN_INK } from ${JSON.stringify(posix('apps/zone-pattern/src/pipeline.ts'))};
+export { buildZonePlan, fillZone, threadMetres, travelMetres, exportSequenceLayers, PATTERN_INKS, inkFor, patternLetter, patternKeysInUse, patternChoices, normalizeRole } from ${JSON.stringify(posix('apps/zone-pattern/src/pipeline.ts'))};
 export { buildEdgeGraph, travelAlongEdges } from ${JSON.stringify(posix('apps/zone-pattern/src/travel.ts'))};
 export { readPatternSvg, readEmbeddedConfig, measureConstruction, migrateLegacyNames, periodOf, peakSpacing, modeOf } from ${JSON.stringify(posix('apps/zone-pattern/src/analyze.ts'))};
 export { PATTERN_FIELD_NAMES, PATTERN_FIELD_KIND } from ${JSON.stringify(posix('apps/zone-pattern/src/fields.ts'))};
@@ -2294,6 +2294,111 @@ console.log('\noblique — routing + orchestratore (2d)');
 }
 
 // ---------------------------------------------------------------------------
+// I PRESET CONDIVISI — Lorenzo, 15/09: «il punto minimo deve essere 1 nei preset, in tutti».
+// Prima erano 0 o 2, a seconda di quando e da dove era nato il preset. E i due cannage di
+// riferimento vivono qui, non più in una copia dentro zone-pattern.
+{
+  console.log('\npreset condivisi — una libreria sola, punto minimo 1 mm');
+  const condivisi = JSON.parse(readFileSync(join(root, 'apps/pattern-grammar/src/presets.shared.json'), 'utf8'));
+  check('i due cannage di riferimento sono nella libreria condivisa',
+    ['CANNAGE BASE — LEGGERO', 'CANNAGE BASE — PIENA'].every((nome) => nome in condivisi), true);
+  check('ogni preset condiviso ha punto minimo 1 mm',
+    Object.entries(condivisi).filter(([, p]) => p.minStitchMm !== 1).map(([nome]) => nome), []);
+}
+
+// ---------------------------------------------------------------------------
+// LO SCARICO — Lorenzo, 14/09: «mi chiedono sempre più spesso di scaricare i punti in determinate
+// aree», di solito per il montaggio. Dentro le aree i zig-zag hanno meno passate; il reticolo non
+// si sposta; il cambio cade netto sul contorno. Vale nel Generatore e in Pattern a zone (R28).
+{
+  const dentroAnello = (p, anello) => {
+    let dentro = false;
+    for (let i = 0, j = anello.length - 1; i < anello.length; j = i++) {
+      const a = anello[i], b = anello[j];
+      if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) dentro = !dentro;
+    }
+    return dentro;
+  };
+  const chiave = (p) => `${p.x.toFixed(4)},${p.y.toFixed(4)}`;
+
+  console.log('\npattern-grammar — lo scarico: meno passate dentro le aree, niente si sposta');
+  const base = { columns: 6, rows: 6, horizontalZigzagInterline: 0.25, verticalZigzagInterline: 0.25 };
+  const pieno = rg.generateFinalPatternPoints(base);
+  const y0 = pieno.height * 0.4 + 0.123;
+  const y1 = pieno.height * 0.6 + 0.123;
+  const fascia = [{ x: -10, y: y0 }, { x: pieno.width + 10, y: y0 }, { x: pieno.width + 10, y: y1 }, { x: -10, y: y1 }];
+  const lontana = fascia.map((p) => ({ x: p.x + 1000, y: p.y }));
+  const scaricato = rg.generateFinalPatternPoints({ ...base, reliefAreas: [fascia], reliefPercent: 50 });
+  const stesso = (a, b) => JSON.stringify(a.visualPolylines) === JSON.stringify(b.visualPolylines);
+  check('scarico a 0% = il pattern di prima, al millesimo',
+    stesso(rg.generateFinalPatternPoints({ ...base, reliefAreas: [fascia], reliefPercent: 0 }), pieno), true);
+  check('un\'area che non tocca il disegno non cambia un punto',
+    stesso(rg.generateFinalPatternPoints({ ...base, reliefAreas: [lontana], reliefPercent: 50 }), pieno), true);
+  const inFascia = (final) => final.visualPolylines.flat().filter((p) => p.y > y0 && p.y < y1).length;
+  check('dentro la fascia i punti calano (50% = circa metà)',
+    inFascia(scaricato) < inFascia(pieno) * 0.75, true);
+  // Lontano dalla fascia più di un modulo il ricamo non cambia: lo scarico non SPOSTA il reticolo.
+  const modulo = pieno.grammar.moduleHeight;
+  const lontani = (final) => final.visualPolylines.flat().filter((p) => p.y < y0 - modulo || p.y > y1 + modulo).map(chiave);
+  // Si confrontano le POSIZIONI (un insieme: nel tracciato lo stesso punto torna più volte, sui
+  // raccordi) e, a parte, quanti punti ci sono in tutto.
+  const lontaniPieni = new Set(lontani(pieno));
+  const lontaniScaricati = new Set(lontani(scaricato));
+  check('lontano dalla fascia ogni punto è dov\'era, e non ne compare nessuno nuovo',
+    [...lontaniPieni].every((k) => lontaniScaricati.has(k)) && lontaniPieni.size === lontaniScaricati.size
+      && lontani(pieno).length === lontani(scaricato).length, true);
+  // Il taglio è NETTO: i zig-zag verticali si spezzano proprio sul contorno, non a fine modulo.
+  const sulContorno = (final) => final.visualPolylines.flat().filter((p) => Math.abs(p.y - y0) < 1e-6 || Math.abs(p.y - y1) < 1e-6).length;
+  check('il cambio di densità cade sulla linea del contorno', [sulContorno(pieno), sulContorno(scaricato) > 0], [0, true]);
+  check('scaricare al 100% lascia comunque una passata (un zig-zag senza passate è un buco)',
+    rg.generateFinalPatternPoints({ ...base, reliefAreas: [fascia], reliefPercent: 100 }).visualPolylines.flat().some((p) => p.y > y0 + 1 && p.y < y1 - 1), true);
+  for (const file of ['apps/pattern-grammar/src/fields.ts', 'apps/zone-pattern/src/fields.ts']) {
+    check(`${file}: lo scarico ha lo stesso nome ed etichetta nei due tool (R28)`,
+      readFileSync(join(root, file), 'utf8').includes("name: 'reliefPercent', label: 'Scarico nelle aree', unit: '%'"), true);
+  }
+
+  console.log('\nzone-pattern — le aree di scarico sul davanti di Lorenzo');
+  const modello = rg.parseImportedBoundarySource(
+    readFileSync(join(here, 'fixtures/scarico-davanti.svg'), 'utf8'), 'scarico-davanti.svg',
+    { scaleMode: 'illustrator-72dpi', paintPriority: 'fill' });
+  const zoneD = rg.resolveZoneAngles(rg.readZones(modello), 20);
+  const GIALLO = '#f3e600';
+  check('le tinte: rosso, lilla e il contorno delle aree (solo tratto, niente riempimento)',
+    [...new Set(zoneD.map((z) => z.color))].sort(), ['#7d8bc5', '#e52421', GIALLO]);
+  check('le aree di scarico sono 3', zoneD.filter((z) => z.color === GIALLO).length, 3);
+  const ruoliD = {
+    '#e52421': { pattern: 'A', angleDeg: 0 }, '#7d8bc5': { pattern: 'B', angleDeg: 0 }, [GIALLO]: { pattern: 'scarico', angleDeg: 0 },
+  };
+  check('un\'area di scarico non è un pattern: la lettera nuova resta la C', rg.patternChoices(ruoliD).map((c) => c.key), ['A', 'B', 'C']);
+  // Solo la parte bassa del davanti, dove stanno le aree: il resto non dice niente di più e costa tempo.
+  const basso = zoneD.filter((z) => z.centroid.y > 190);
+  const cfgD = { minStitchMm: 0.4, horizontalZigzagInterline: 0.45, verticalZigzagInterline: 0.45 };
+  const pianoD = (percento) => rg.buildZonePlan(basso, {
+    roles: ruoliD, patterns: { A: { ...cfgD, reliefPercent: percento }, B: { ...cfgD, reliefPercent: percento } },
+    marginMm: 2, rowHeightMm: 0, travelMode: 'edges', travelStitchMm: 3, cleanupMinStitchMm: 0, outerMarginMm: 0,
+  });
+  const senza = pianoD(0);
+  const con = pianoD(50);
+  check('le aree di scarico non sono un ago', con.layers.map((l) => l.id), ['pattern-A', 'pattern-B']);
+  check('...e non si ricamano', con.stitches.some((s) => s.zone.color === GIALLO), false);
+  check('lo scarico a 0% non tocca nessuna zona', senza.relievedZones, 0);
+  check('lo scarico al 50% arriva alle zone sotto le aree', con.relievedZones > 0, true);
+  const anelli = basso.filter((z) => z.color === GIALLO).map((z) => z.points);
+  const puntiDentro = (piano) => piano.stitches.flatMap((s) => s.polylines.flat())
+    .filter((p) => anelli.some((a) => dentroAnello(p, a))).length;
+  check('dentro le aree i punti calano', puntiDentro(con) < puntiDentro(senza) * 0.75, true);
+  const lontanaDalleAree = (s) => {
+    const b = rg.zoneBounds(s.zone.points);
+    return anelli.every((a) => {
+      const r = rg.zoneBounds(a);
+      return b.maxX < r.minX || r.maxX < b.minX || b.maxY < r.minY || r.maxY < b.minY;
+    });
+  };
+  const fuori = (piano) => JSON.stringify(piano.stitches.filter(lontanaDalleAree).map((s) => s.polylines));
+  check('le zone lontane dalle aree escono identiche', fuori(con) === fuori(senza), true);
+}
+
+// ---------------------------------------------------------------------------
 // zone-pattern — il pattern a zone, misurato sul cannage vero di Lorenzo.
 // Il tool non ha un motore di pattern suo: usa quello di @rg/pattern-grammar ruotando
 // il PIANO invece del modulo. Le invarianti servono a difendere proprio quel giro.
@@ -2397,7 +2502,7 @@ console.log('\noblique — routing + orchestratore (2d)');
   console.log('\nzone-pattern — il piano: dentro le zone, da sinistra, un ago per pattern');
   const ruoli = {};
   for (const [c, p] of Object.entries({ '#ff2eaf': 'A', '#f40000': 'A', '#0018f9': 'A',
-    '#cd00ff': 'B', '#f29b27': 'B', '#00f700': 'B' })) ruoli[c] = { pattern: p, angleOffsetDeg: 0 };
+    '#cd00ff': 'B', '#f29b27': 'B', '#00f700': 'B' })) ruoli[c] = { pattern: p, angleDeg: 0 };
   const piano = rg.buildZonePlan(zone, {
     roles: ruoli,
     patterns: { A: config, B: { ...config, horizontalZigzagSpacing: 9, stepX: 9 } },
@@ -2406,6 +2511,65 @@ console.log('\noblique — routing + orchestratore (2d)');
   check('tutte le 37 zone vengono riempite', [piano.stitches.length, piano.skipped], [37, 0]);
   check('due pattern = DUE aghi (Lorenzo: "quando cambi pattern cambi ago")',
     piano.layers.map((l) => l.id), ['pattern-A', 'pattern-B']);
+
+  // ---- PIÙ DI DUE PATTERN (Lorenzo, 14/09: «i pattern non sono solo 2») ----
+  // La mappa colori offre a ogni tinta le lettere già in uso più UNA nuova: il primo colore vede
+  // A, il secondo A e B, il terzo A, B e C. `*` = offerta come nuova.
+  console.log('\nzone-pattern — i pattern sono quanti servono, una lettera nuova alla volta');
+  const scelte = (roles) => rg.patternChoices(roles).map((c) => `${c.key}${c.isNew ? '*' : ''}`);
+  const presa = (pattern) => ({ pattern, angleDeg: 0 });
+  check('senza ruoli si offre solo la A, come nuova', scelte({}), ['A*']);
+  check('con la A presa si offrono A e la B nuova', scelte({ x: presa('A') }), ['A', 'B*']);
+  check('con A e B prese compare la C', scelte({ x: presa('A'), y: presa('B') }), ['A', 'B', 'C*']);
+  check('una lettera lasciata libera torna nuova, al suo posto nell\'ordine',
+    scelte({ x: presa('A'), y: presa('C') }), ['A', 'B*', 'C']);
+  check('"non ricamare" non conta come pattern', scelte({ x: presa('off'), y: presa('A') }), ['A', 'B*']);
+  check('oltre la Z non c\'è un tetto', [rg.patternLetter(0), rg.patternLetter(25), rg.patternLetter(26)], ['A', 'Z', 'P27']);
+
+  const seiTinte = [...new Set(zone.map((z) => z.color))];
+  const seiRuoli = Object.fromEntries(seiTinte.map((c, i) => [c, presa(rg.patternLetter(i))]));
+  const seiPattern = Object.fromEntries(seiTinte.map((_, i) => [rg.patternLetter(i), { ...config, stepX: 5 + i }]));
+  const pianoSei = rg.buildZonePlan(zone, {
+    roles: seiRuoli, patterns: seiPattern,
+    marginMm: 2, rowHeightMm: 0, travelMode: 'edges', travelStitchMm: 3, cleanupMinStitchMm: 0, outerMarginMm: 0,
+  });
+  check('sei tinte con sei pattern = SEI aghi, in ordine di lettera',
+    pianoSei.layers.map((l) => l.id), seiTinte.map((_, i) => `pattern-${rg.patternLetter(i)}`));
+  check('...ognuno col suo colore', new Set(pianoSei.layers.map((l) => l.color)).size, 6);
+  check('i passaggi non saltano mai da un pattern all\'altro (uno in meno delle zone, per ago)',
+    pianoSei.travels.length, pianoSei.stitches.length - 6);
+
+  // I colori degli aghi sono la palette categoriale del DS risolta in esadecimale: se il DS la
+  // cambia, questo test lo deve dire invece di lasciar divergere l'anteprima dal sistema.
+  const tokensDs = readFileSync(join(root, 'packages/design-system/tokens.css'), 'utf8');
+  const risolvi = (nome, giri = 0) => {
+    const m = new RegExp(`${nome}:\\s*([^;]+);`).exec(tokensDs);
+    if (!m) return undefined;
+    const valore = m[1].trim();
+    const rimando = /^var\((--[a-z0-9-]+)\)$/.exec(valore);
+    return rimando && giri < 5 ? risolvi(rimando[1], giri + 1) : valore.toLowerCase();
+  };
+  check('i colori degli aghi sono la palette categoriale del DS (1.14.1)',
+    rg.PATTERN_INKS, [1, 2, 3, 4, 5, 6, 7].map((i) => risolvi(`--rg-color-category-${i}`)));
+  check('oltre il settimo si ricomincia (il DS: un segno in più, non un colore in più)',
+    rg.inkFor('H'), rg.inkFor('A'));
+
+  // ---- L'ANGOLO È A MANO E PARTE DA 0° (Lorenzo, 14/09) ----
+  // Il contrario del 03/09: l'inclinazione misurata non entra più nel ricamo.
+  console.log('\nzone-pattern — l\'angolo si scrive a mano, per tinta, e parte da 0°');
+  check('senza angolo scritto ogni zona si ricama a 0°, qualunque cosa misuri',
+    piano.stitches.every((s) => s.angleDeg === 0), true);
+  const pianoAngolo = rg.buildZonePlan(zone, {
+    roles: { ...ruoli, '#ff2eaf': { pattern: 'A', angleDeg: 30 } },
+    patterns: { A: config, B: config },
+    marginMm: 2, rowHeightMm: 0, travelMode: 'none', travelStitchMm: 3, cleanupMinStitchMm: 0, outerMarginMm: 0,
+  });
+  check('l\'angolo scritto vale per quella tinta, e solo per lei',
+    [pianoAngolo.stitches.filter((s) => s.zone.color === '#ff2eaf').every((s) => s.angleDeg === 30),
+      pianoAngolo.stitches.filter((s) => s.zone.color !== '#ff2eaf').every((s) => s.angleDeg === 0)], [true, true]);
+  check('un progetto salvato prima si riapre: la vecchia correzione diventa l\'angolo',
+    rg.normalizeRole({ pattern: 'B', angleOffsetDeg: 15 }), { pattern: 'B', angleDeg: 15 });
+  check('...e un ruolo sporco non rompe niente', rg.normalizeRole(null), { pattern: 'off', angleDeg: 0 });
 
   // R5-simile: il ricamo di una zona NON deve uscire dalla zona. È il vincolo che rende
   // sensato tutto il tool — un rombo che sborda si vede subito sul capo.
@@ -2522,7 +2686,7 @@ console.log('\noblique — routing + orchestratore (2d)');
   // I passaggi tengono il colore del LORO ago: sono lo stesso filo, e una tinta diversa
   // direbbe al software a valle che è un altro ago.
   check('un passaggio ha il colore del suo ago, non un colore suo',
-    gruppi.filter((g) => g.id.endsWith('passaggio')).every((g) => g.color === rg.PATTERN_INK[g.id.includes('agoA') ? 'A' : 'B']), true);
+    gruppi.filter((g) => g.id.endsWith('passaggio')).every((g) => g.color === rg.inkFor(g.id.includes('agoA') ? 'A' : 'B')), true);
   check('nessun punto si perde per strada rispetto ai layer del DST',
     gruppi.reduce((sum, g) => sum + g.polylines.flat().length, 0),
     piano.layers.reduce((sum, l) => sum + l.polylines.flat().length, 0));

@@ -1,4 +1,4 @@
-import type { BoundaryCleanupMode, ExportCompatibilityMode, ImportedBoundary, PatternAnalysis, PatternConfig, ShapeType } from "./types.ts";
+import type { BoundaryCleanupMode, ExportCompatibilityMode, ImportedBoundary, PatternAnalysis, PatternConfig, Point, ShapeType } from "./types.ts";
 
 export type ResolvedPatternGrammar = {
   columns: number;
@@ -39,6 +39,8 @@ export type ResolvedPatternGrammar = {
   importedBoundary?: ImportedBoundary;
   boundaryCleanupMode: BoundaryCleanupMode;
   maxBoundaryAdjustment: number;
+  reliefAreas?: Point[][];
+  reliefPercent: number;
   exportCompatibilityMode: ExportCompatibilityMode;
 };
 
@@ -136,6 +138,8 @@ export function resolvePatternGrammar(config: PatternConfig): ResolvedPatternGra
     maxBoundaryAdjustment: config.maxBoundaryAdjustment !== undefined && config.maxBoundaryAdjustment > 0
       ? Math.max(0, config.maxBoundaryAdjustment)
       : minPointDistance,
+    reliefAreas: config.reliefAreas,
+    reliefPercent: Number.isFinite(config.reliefPercent) ? Math.min(100, Math.max(0, config.reliefPercent!)) : 0,
     exportCompatibilityMode: config.exportCompatibilityMode ?? "normal"
   };
 }

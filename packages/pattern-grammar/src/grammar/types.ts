@@ -142,6 +142,14 @@ export type PatternConfig = {
   importedBoundary?: ImportedBoundary;
   boundaryCleanupMode?: BoundaryCleanupMode;
   maxBoundaryAdjustment?: number;
+  /**
+   * Aree di SCARICO (anelli chiusi, mm, nelle coordinate finali — le stesse della sagoma
+   * importata): dentro, i zig-zag verticali e orizzontali hanno meno passate. Il reticolo non
+   * si sposta: cambia solo quanto filo c'è in ogni zig-zag. Non ritagliano niente.
+   */
+  reliefAreas?: Point[][];
+  /** Quanto scaricare dentro le aree, in %: 50 = metà delle passate. 0 = niente. */
+  reliefPercent?: number;
   exportCompatibilityMode?: ExportCompatibilityMode;
   sourceAnalysis?: PatternAnalysis;
 };

@@ -12,6 +12,7 @@ import { splitTravelJumps } from "./splitTravelJumps.ts";
 import { adjustVerticalConnectorDiagonals } from "./adjustVerticalConnectors.ts";
 import { subdivideLongSegments } from "./subdivideLongSegments.ts";
 import { orientPolylinesFromTopLeft, type StartOrientation } from "./orientStartPoint.ts";
+import { insideRelief, reliefIntervalsAlongVertical, relievedPasses, usableReliefRings } from "./relief.ts";
 
 const translate = (points: GeneratedPoint[], x: number, y: number): GeneratedPoint[] =>
   points.map((point) => ({ ...point, x: point.x + x, y: point.y + y }));
@@ -57,7 +58,6 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
   const grammar = resolvePatternGrammar(config);
   const marginX = grammar.moduleWidth * 1.6;
   const marginY = grammar.constructionStroke * 3;
-  const path: GeneratedPoint[] = [];
   const baseShape = {
     horizontalZigzagWidth: grammar.horizontalZigzagWidth,
     horizontalZigzagHeight: grammar.horizontalZigzagHeight,
@@ -73,21 +73,88 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
       * (grammar.alternateHorizontalAngle && column % 2 === 0 ? -1 : 1)
   });
 
+  // ---- LO SCARICO. Le passate ridotte valgono per entrambi i zig-zag. Se la percentuale è così
+  //      bassa che nessun conteggio cambia, lo scarico non c'è: si esce dalla strada normale
+  //      identici al millesimo.
+  const reliefRings = grammar.reliefPercent > 0 ? usableReliefRings(grammar.reliefAreas) : [];
+  const relievedHorizontal = relievedPasses(grammar.horizontalZigzagPasses, grammar.reliefPercent);
+  const relievedVertical = relievedPasses(grammar.verticalZigzagPasses, grammar.reliefPercent);
+  const reliefActive = reliefRings.length > 0
+    && (relievedHorizontal !== grammar.horizontalZigzagPasses || relievedVertical !== grammar.verticalZigzagPasses);
+
+  /** Dove sta nel disegno FINALE un punto del piano di costruzione. `null` = non si sa ancora. */
+  let toFinal: ((x: number, y: number) => Point) | null = null;
+  let toLayoutY: ((y: number) => number) | null = null;
+
+  const buildPath = (): GeneratedPoint[] => {
+  const path: GeneratedPoint[] = [];
+  const relief = reliefActive && toFinal && toLayoutY ? { toFinal, toLayoutY } : null;
+
   const appendOrderedPoints = (points: GeneratedPoint[]) => {
     const ordered = points.slice();
     if (path.length && ordered.length && path.at(-1)!.x === ordered[0].x && path.at(-1)!.y === ordered[0].y) ordered.shift();
     path.push(...ordered);
   };
 
+  /**
+   * Un blocco del reticolo, con lo scarico applicato se serve.
+   *
+   * - Il zig-zag ORIZZONTALE è un fascio unico e piccolo (4,3 mm nel cannage): si scarica intero
+   *   se il suo centro cade in un'area. Spezzarlo a metà darebbe un fascio con due fitte diverse.
+   * - Il blocco VERTICALE è alto un modulo intero: si TAGLIA dove la sua verticale incontra il
+   *   contorno, e ogni pezzo prende la sua densità. Così il cambio cade sulla linea disegnata
+   *   (Lorenzo: netto sul contorno). I pezzi si attaccano come due blocchi consecutivi: il primo
+   *   finisce in basso a destra, il successivo riparte in alto a sinistra — lo stesso raccordo
+   *   che il motore fa già fra un modulo e l'altro.
+   */
+  const blockPoints = (column: number, phase: ModulePhase, x: number, y: number): GeneratedPoint[] => {
+    const shape = shapeForColumn(column);
+    const plain = () => translate(generateModule(grammar.moduleWidth, grammar.moduleHeight, phase, 1, shape).points, x, y);
+    if (!relief) return plain();
+    const relievedShape = { ...shape, horizontalZigzagPasses: relievedHorizontal, verticalZigzagPasses: relievedVertical };
+
+    if (phase === "horizontal") {
+      const center = relief.toFinal(
+        x + grammar.moduleWidth / 2 - grammar.horizontalZigzagOffsetX - grammar.horizontalZigzagWidth / 2,
+        y + grammar.moduleHeight / 2
+      );
+      return insideRelief(center, reliefRings)
+        ? translate(generateModule(grammar.moduleWidth, grammar.moduleHeight, phase, 1, relievedShape).points, x, y)
+        : plain();
+    }
+
+    const top = y;
+    const bottom = y + grammar.moduleHeight;
+    const lineX = relief.toFinal(x + grammar.moduleWidth / 2, (top + bottom) / 2).x;
+    // I tagli, nel piano di costruzione. Un pezzo più corto di mezzo millimetro (o del punto
+    // minimo) non si fa: sarebbe un grumo di punti nello stesso buco.
+    const minPiece = Math.max(0.5, grammar.minPointDistance) / (grammar.scale || 1);
+    const cuts: number[] = [top];
+    for (const [from, to] of reliefIntervalsAlongVertical(lineX, reliefRings)) {
+      for (const edge of [relief.toLayoutY(from), relief.toLayoutY(to)]) {
+        if (edge - cuts.at(-1)! >= minPiece && bottom - edge >= minPiece) cuts.push(edge);
+      }
+    }
+    cuts.push(bottom);
+    const pieces = cuts.slice(0, -1).map((start, k) => {
+      const end = cuts[k + 1];
+      const inside = insideRelief(relief.toFinal(x + grammar.moduleWidth / 2, (start + end) / 2), reliefRings);
+      return { start, end, inside };
+    });
+    if (pieces.length === 1 && !pieces[0].inside) return plain();
+    return pieces.flatMap((piece) => translate(
+      generateModule(grammar.moduleWidth, piece.end - piece.start, "vertical", 1, piece.inside ? relievedShape : shape).points,
+      x,
+      piece.start
+    ));
+  };
+
   const phaseBlocks = (column: number, phase: ModulePhase): GeneratedPoint[][] => {
     const x = marginX + column * grammar.stepX;
     const offset = column % 2 === 0 ? 0 : grammar.offsetY;
     const blocks = Array.from({ length: grammar.rows }, (_, row) =>
-      translate(
-        generateModule(grammar.moduleWidth, grammar.moduleHeight, phase, 1, shapeForColumn(column)).points,
-        x,
-        marginY + row * grammar.stepY + offset
-      ).map((point) => ({ ...point, columnIndex: column, blockIndex: row }))
+      blockPoints(column, phase, x, marginY + row * grammar.stepY + offset)
+        .map((point) => ({ ...point, columnIndex: column, blockIndex: row }))
     );
     return phase === "vertical"
       ? adjustVerticalConnectorDiagonals(blocks, grammar.verticalConnectorDiagonalOffsetY)
@@ -151,16 +218,34 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
 
   if (grammar.repeatBack) generateBoustrophedonHorizontalColumns();
   else generateNormalTraversal();
+  return path;
+  };
 
-  const sequencedPath = path.map((point, sequenceIndex) => ({ ...point, sequenceIndex }));
-  const deformed = grammar.columnWaveAmplitude === 0 ? sequencedPath : sequencedPath.map((point) => ({
+  const waveX = (x: number, y: number) => grammar.columnWaveAmplitude === 0
+    ? x
+    : x + Math.sin(y * grammar.columnWaveFrequency + grammar.columnWavePhase) * grammar.columnWaveAmplitude;
+  const toRawScaled = (path: GeneratedPoint[]) => path.map((point, sequenceIndex) => ({
     ...point,
-    x: point.x + Math.sin(point.y * grammar.columnWaveFrequency + grammar.columnWavePhase) * grammar.columnWaveAmplitude,
-    y: point.y
+    sequenceIndex,
+    x: waveX(point.x, point.y) * grammar.scale,
+    y: point.y * grammar.scale
   }));
-  const rawScaled = deformed.map((point) => ({ ...point, x: point.x * grammar.scale, y: point.y * grammar.scale }));
+
+  let rawScaled = toRawScaled(buildPath());
   const rawBounds = pointBounds(rawScaled);
   const inset = grammar.constructionStroke * grammar.scale;
+  if (reliefActive) {
+    // Le aree di scarico sono nelle coordinate FINALI, ma dove finisce un punto lo si sa solo a
+    // disegno costruito (l'ingombro decide la traslazione). Quindi: si costruisce una volta a piena
+    // densità per fissare l'ingombro, poi si ricostruisce con lo scarico e si posa con QUELLA
+    // traslazione. Il reticolo resta dov'era al millesimo: scaricare non sposta niente.
+    toFinal = (x, y) => ({
+      x: waveX(x, y) * grammar.scale - rawBounds.minX + inset,
+      y: y * grammar.scale - rawBounds.minY + inset
+    });
+    toLayoutY = (y) => (y - inset + rawBounds.minY) / (grammar.scale || 1);
+    rawScaled = toRawScaled(buildPath());
+  }
   const scaled = rawScaled.map((point) => ({
     ...point,
     x: point.x - rawBounds.minX + inset,
