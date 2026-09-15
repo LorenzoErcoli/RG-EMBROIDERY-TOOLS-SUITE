@@ -18,8 +18,10 @@
 // Misure PROPORZIONALI al rombo (Lorenzo, 15/09): le posizioni scalano con le mezze diagonali. Ma «ad un
 // certo punto non si allungano solo i punti, aumentano anche gli oggetti»: un pezzo di cordoncino o un
 // mattoncino di scaletta che, scalato, supera la sua lunghezza di riferimento di più della soglia si
-// divide in più pezzi — con un fermo in più su ogni giunto nuovo. Fermi, barre e distanza fra le corsie
-// dipendono dal filo, non dal rombo: restano fissi.
+// divide in più pezzi — con un fermo in più su ogni giunto nuovo. Barre e distanza fra le corsie
+// dipendono dal filo, non dal rombo: restano fisse. I FERMI invece su un rombo più piccolo del riferimento
+// rimpiccioliscono con lui (Lorenzo, 16/09): grandi uguali, sull'M3641 (rombo 42 mm) non lasciavano posto
+// agli uncini della cornice vicino al vertice. Sui rombi più grandi restano quelli del DST.
 import type { DstProgram } from '@rg/core';
 
 export type Punto = { x: number; y: number };
@@ -51,8 +53,12 @@ export type ParametriLinee = {
   sogliaOggetti: number;
   /** Di quanto la linea parte fuori dal bordo sinistro, mm. */
   sporgenzaSinistra: number;
-  /** Quanto prima del bordo destro deve chiudersi la linea, al più: si ferma sull'ultimo giunto dentro. */
-  rientroDestro: number;
+  /**
+   * Di quanto la linea finisce fuori dal bordo destro, mm: come a sinistra, e l'ultimo pezzo si taglia
+   * lì. Nei DST M1404 la linea si chiudeva sull'ultimo giunto dentro, fino a 10 mm prima del bordo;
+   * Lorenzo la vuole fino in fondo (15/09).
+   */
+  sporgenzaDestra: number;
   /** Distanza minima dal bordo del pezzo, in alto e in basso, per scalette, meandri e barre, mm. */
   margineVerticale: number;
   /** Punto dei passaggi sul bordo sinistro, mm. */
@@ -61,6 +67,12 @@ export type ParametriLinee = {
   termogarze: boolean;
   /** Punto del contorno per le termogarze, mm. */
   puntoTermogarze: number;
+  /**
+   * Di quanto si allarga per parte la FINESTRA dove la linea attraversa il lato del rombo, mm sul rombo di
+   * riferimento: i due fermi si allontanano e gli uncini della cornice ci stanno in mezzo invece di
+   * passarci sopra (Lorenzo, 16/09). 0 = le finestre del DST M1404.
+   */
+  allargamentoFinestre: number;
 };
 
 /** Il riferimento reale (Lorenzo): le passate del davanti M1404. */
@@ -73,11 +85,12 @@ export const PARAMETRI_DAVANTI: ParametriLinee = {
   lunghezzaMattoncino: 7.5,
   sogliaOggetti: 0.5,
   sporgenzaSinistra: 1,
-  rientroDestro: 2,
+  sporgenzaDestra: 1,
   margineVerticale: 3,
   puntoPassaggioBordo: 2.5,
   termogarze: false,
   puntoTermogarze: 4,
+  allargamentoFinestre: 1,
 };
 
 /** L'alternativa usata in alcuni modelli (il lato M1404): più passate a punto corto. */
@@ -134,8 +147,11 @@ const MODULO = {
   ] as VoceVerticale[],
   /** Dal meandro si torna sulla linea passando dalla corsia centrale a questa altezza. */
   uscitaMeandro: 1.6,
-  barraSopra: [-7.6, -1.1] as const,
-  barraSotto: [1.5, 8.0] as const,
+  /**
+   * Le barre ai vertici: il capo verso la diagonale (verso la barra dall'altra parte) è quello del DST.
+   * Il capo verso fuori NON ha una misura propria: arriva pari ai fermi della linea esterna (vedi generaLinee).
+   */
+  barraVersoDiagonale: { sopra: -1.1, sotto: 1.5 },
 };
 /** Distanza fra le corsie di scalette e meandri, mm (dipende dal filo: non scala). */
 const CORSIA = 1.6;
@@ -149,16 +165,23 @@ const VUOTO_MATTONCINO = 1;
 /** Il record DST non va oltre 12,1 mm: nessun punto lo supera. */
 const PUNTO_DST_MAX = 12;
 
+export type Ingombro = { tipo: 'fermo' | 'barra'; x0: number; y0: number; x1: number; y1: number };
+
 export type RisultatoLinee = {
   /** Tratti continui di cucitura, nell'ordine; fra un tratto e il successivo c'è un salto. */
   blocchi: Punto[][];
+  /**
+   * Dove stanno fermi e barre, come rettangoli (mm): la cornice, cucita dopo, non ci deve passare
+   * sopra (Lorenzo, 16/09: «altrimenti sbatte contro»).
+   */
+  ingombri: Ingombro[];
   conteggi: { gruppi: number; linee: number; cordoncini: number; fermi: number; scalette: number; meandri: number; barre: number; punti: number };
 };
 
 // ---------------------------------------------------------------------------------------------------
-// Il percorso: un solo filo che avanza.
+// Il percorso: un solo filo che avanza (lo usa anche la cornice).
 
-class Percorso {
+export class Percorso {
   readonly blocchi: Punto[][] = [];
   private cur: Punto[] | null = null;
 
@@ -235,7 +258,9 @@ type Tipo = 'esterna' | 'interna';
 
 /** I pezzi di una linea in un periodo (da vertice a vertice), in coordinate locali già scalate. */
 function pezziPeriodo(tipo: Tipo, a: number, sx: number, par: ParametriLinee): Pezzo[] {
-  const [w0, w1] = (tipo === 'esterna' ? MODULO.finestraEsterna : MODULO.finestraInterna).map((v) => v * sx);
+  const [f0, f1] = tipo === 'esterna' ? MODULO.finestraEsterna : MODULO.finestraInterna;
+  const allarga = Math.max(0, par.allargamentoFinestre ?? 0);
+  const w0 = (f0 - allarga) * sx, w1 = (f1 + allarga) * sx;
   const giunti = (tipo === 'esterna' ? MODULO.giuntiEsterni : MODULO.giuntiInterni).map((v) => v * sx);
   const confini = [...new Set([-a, -w1, -w0, ...giunti.flatMap((g) => (g === 0 ? [0] : [-g, g])), w0, w1, a]
     .map((v) => Math.round(v * 1e6) / 1e6))].sort((p, q) => p - q);
@@ -308,12 +333,12 @@ function cuciVerticali(perc: Percorso, pezzi: PezzoV[], par: ParametriLinee, usc
  * che scendono — non sette tratti tutti obliqui, che era la prima versione. Si entra dal basso a destra
  * e si esce dall'alto a sinistra tornando giù sulla linea.
  */
-function fermo(perc: Percorso, x: number, y: number): void {
-  const h = FERMO_ALTO / 2, w = FERMO_LARGO / 2;
+function fermo(perc: Percorso, x: number, y: number, alto = FERMO_ALTO, largo = FERMO_LARGO): void {
+  const h = alto / 2, w = largo / 2;
   const tratti = (PASSATE_FERMO + 1) / 2; // 7 passate = 4 salite + 3 discese
   perc.vai({ x: x + w, y: y + h });
   for (let k = 0; k < tratti; k++) {
-    const xk = x + w - (FERMO_LARGO * k) / (tratti - 1);
+    const xk = x + w - (largo * k) / (tratti - 1);
     if (k > 0) perc.vai({ x: xk, y: y + h });
     perc.vai({ x: xk, y: y - h });
   }
@@ -341,8 +366,11 @@ export function generaLinee(ret: Reticolo, contorno: Punto[], par: ParametriLine
   if (!(ret.a > 0 && ret.b > 0)) throw new Error('Reticolo non valido: le mezze diagonali devono essere positive.');
   if (contorno.length < 3) throw new Error('Serve il contorno del pezzo (almeno tre punti).');
   const sx = ret.a / ROMBO_RIFERIMENTO.a, sy = ret.b / ROMBO_RIFERIMENTO.b;
+  // i fermi rimpiccioliscono coi rombi più piccoli del riferimento, non crescono con quelli più grandi
+  const fermoAlto = FERMO_ALTO * Math.min(1, sy), fermoLargo = FERMO_LARGO * Math.min(1, sx);
   const P = 2 * ret.a;
   const conteggi = { gruppi: 0, linee: 0, cordoncini: 0, fermi: 0, scalette: 0, meandri: 0, barre: 0, punti: 0 };
+  const ingombri: Ingombro[] = [];
   const perc = new Percorso();
 
   let ymin = Infinity, ymax = -Infinity;
@@ -384,7 +412,7 @@ export function generaLinee(ret: Reticolo, contorno: Punto[], par: ParametriLine
       const ext = estensioneX(contorno, L.y);
       if (!ext) continue;
       const xStart = ext[0] - par.sporgenzaSinistra;
-      const limite = ext[1] - par.rientroDestro;
+      const limite = ext[1] + par.sporgenzaDestra;
       const base = pezziPeriodo(L.tipo, ret.a, sx, par);
       const pezzi: Pezzo[] = [];
       const k0 = Math.floor((xStart - ret.cx) / P) - 1, k1 = Math.ceil((limite - ret.cx) / P) + 1;
@@ -392,8 +420,9 @@ export function generaLinee(ret: Reticolo, contorno: Punto[], par: ParametriLine
         const xc = ret.cx + k * P;
         for (const p of base) {
           const x0 = xc + p.x0, x1 = xc + p.x1;
-          if (x1 <= xStart + 1e-6 || x1 > limite + 1e-6) continue;
-          pezzi.push({ x0: Math.max(x0, xStart), x1, finestra: p.finestra });
+          // i pezzi si tagliano ai due capi: la linea va da un bordo all'altro, fuori di poco da tutte e due le parti
+          if (x1 <= xStart + 1e-6 || x0 >= limite - 1e-6) continue;
+          pezzi.push({ x0: Math.max(x0, xStart), x1: Math.min(x1, limite), finestra: p.finestra });
         }
       }
       const pz = pezzi.filter((p) => p.x1 - p.x0 > 0.05);
@@ -433,17 +462,32 @@ export function generaLinee(ret: Reticolo, contorno: Punto[], par: ParametriLine
       for (let k = 1; k < pz.length; k++) {
         const x = pz[k].x0;
         if (eVertice(x) || vicinoAMeandro(x) || x <= xStart + 0.3) continue;
-        eventi.push({ x, fai: () => { fermo(perc, x, L.y); conteggi.fermi++; } });
+        eventi.push({ x, fai: () => {
+          fermo(perc, x, L.y, fermoAlto, fermoLargo);
+          conteggi.fermi++;
+          ingombri.push({ tipo: 'fermo', x0: x - fermoLargo / 2, y0: L.y - fermoAlto / 2, x1: x + fermoLargo / 2, y1: L.y + fermoAlto / 2 });
+        } });
       }
       if (L.tipo === 'interna') {
-        const [b0, b1] = L.nome === 'B' ? MODULO.barraSopra : MODULO.barraSotto;
+        // La barra al vertice arriva IN TESTA pari ai fermi della linea esterna (Lorenzo, 15/09): nel DST
+        // M1404 si fermava 0,3 mm prima (−7,6 invece di −7,9). Il capo verso la diagonale — verso la
+        // barra dall'altra parte — resta invece quello del DST: accorciarlo era sbagliato, lo ha visto
+        // Lorenzo. La testa si ricava dalla linea esterna, così resta pari anche se il rombo cambia.
+        const hf = fermoAlto / 2;
+        const [b0, b1] = L.nome === 'B'
+          ? [riga - e - hf, riga + MODULO.barraVersoDiagonale.sopra * sy]
+          : [riga + MODULO.barraVersoDiagonale.sotto * sy, riga + e + hf];
         for (const xv of posizioni(xStart, xEnd, [ret.a])) {
           const ext2 = estensioneY(contorno, xv);
           if (!ext2) continue;
-          const lo = Math.max(riga + b0 * sy, ext2[0] + par.margineVerticale);
-          const hi = Math.min(riga + b1 * sy, ext2[1] - par.margineVerticale);
+          const lo = Math.max(b0, ext2[0] + par.margineVerticale);
+          const hi = Math.min(b1, ext2[1] - par.margineVerticale);
           if (hi - lo < 1) continue;
-          eventi.push({ x: xv, fai: () => { barra(perc, xv, L.y, riga, lo, hi); conteggi.barre++; } });
+          eventi.push({ x: xv, fai: () => {
+            barra(perc, xv, L.y, riga, lo, hi);
+            conteggi.barre++;
+            ingombri.push({ tipo: 'barra', x0: xv - LARGO_BARRA / 2, y0: lo, x1: xv + LARGO_BARRA / 2, y1: hi });
+          } });
         }
       }
       for (const xm of meandri) {
@@ -467,7 +511,7 @@ export function generaLinee(ret: Reticolo, contorno: Punto[], par: ParametriLine
   }
   perc.chiudi();
   conteggi.punti = perc.blocchi.reduce((s, b) => s + b.length - 1, 0);
-  return { blocchi: perc.blocchi, conteggi };
+  return { blocchi: perc.blocchi, ingombri, conteggi };
 }
 
 /** Il programma DST della fase: un ago, un tratto per blocco (fra i blocchi un salto). */

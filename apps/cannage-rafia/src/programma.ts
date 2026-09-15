@@ -1,0 +1,83 @@
+// Cannage rafia — il programma completo, stop per stop, come esce in DST (Lorenzo, 15/09):
+//   1. contorno a impunture
+//   2. griglia che blocca i materiali, col suo contorno
+//   3. base del pattern 1
+//   4. base del pattern 2
+//   5. linee orizzontali e verticali
+//   6. cornice nei rombi
+// Le basi le fa il motore delle zone di @rg/pattern-grammar (lo stesso di Pattern a zone), con angolo 0:
+// nel cannage rafia i rombi sono dritti e le colonne del pattern verticali.
+import { buildZonePlan, makeZone, PATTERN_INKS, RELIEF_ROLE, type PatternConfig, type ZoneRole } from '@rg/pattern-grammar';
+import type { ExportLayer } from '@rg/core';
+import { generaLinee, type Ingombro, type ParametriLinee, type Punto, type Reticolo, type RisultatoLinee } from './linee';
+import { contornoImpunture, grigliaBloccaggio, type ParametriStop } from './stop';
+import { generaCornice, type ParametriCornice, type RisultatoCornice } from './cornice';
+import type { Zona } from './reticolo';
+
+export type Stop = { numero: number; nome: string; blocchi: Punto[][]; punti: number };
+
+const conta = (blocchi: Punto[][]) => blocchi.reduce((s, b) => s + Math.max(0, b.length - 1), 0);
+
+export function stopContorno(contorno: Punto[], par: ParametriStop): Stop {
+  const b = contornoImpunture(contorno, par.puntoContorno);
+  return { numero: 1, nome: 'Contorno a impunture', blocchi: [b], punti: conta([b]) };
+}
+
+export function stopGriglia(ret: Reticolo, contorno: Punto[], par: ParametriStop): Stop & { linee: number } {
+  const g = grigliaBloccaggio(ret, contorno, par);
+  const blocchi = [g.contorno, g.griglia].filter((b) => b.length > 1);
+  return { numero: 2, nome: 'Griglia che blocca i materiali', blocchi, punti: conta(blocchi), linee: g.linee };
+}
+
+/** Le aree di scarico: le tinte che le segnano e quanto alleggerire (50 = metà delle passate). */
+export type Scarico = { colori: string[]; percento: number };
+
+/**
+ * Una base: le zone di una tinta riempite col suo pattern, a righe da sinistra, coi passaggi sui bordi
+ * dei rombi — esattamente come Pattern a zone con quella tinta su un ago solo. Con le AREE DI SCARICO
+ * (Lorenzo, 15/09: «come in Pattern a zone») dentro i loro contorni i zig-zag hanno meno passate: è lo
+ * stesso ruolo e lo stesso motore, non una copia.
+ */
+export function stopBase(numero: 3 | 4, zone: Zona[], colore: string, config: PatternConfig, scarico?: Scarico): Stop & { zone: number } {
+  const nome = numero === 3 ? 'Base pattern 1' : 'Base pattern 2';
+  if (!colore) return { numero, nome, blocchi: [], punti: 0, zone: 0 };
+  const zz = zone.map((z, i) => makeZone({ id: `z${i}`, color: z.color ?? '', points: z.points }));
+  const roles: Record<string, ZoneRole> = { [colore]: { pattern: 'A', angleDeg: 0 } };
+  const alleggerisci = scarico && scarico.percento > 0 && scarico.colori.length > 0;
+  if (alleggerisci) for (const c of scarico.colori) if (c !== colore) roles[c] = { pattern: RELIEF_ROLE, angleDeg: 0 };
+  const piano = buildZonePlan(zz, {
+    roles,
+    patterns: { A: alleggerisci ? { ...config, reliefPercent: scarico.percento } : config },
+    marginMm: 2,
+    rowHeightMm: 0,
+    travelMode: 'edges',
+    travelStitchMm: 3,
+    cleanupMinStitchMm: 0,
+    outerMarginMm: 0,
+  });
+  const blocchi = (piano.layers[0]?.polylines ?? []).map((pl) => pl.map((p) => ({ x: p.x, y: p.y })));
+  return { numero, nome, blocchi, punti: conta(blocchi), zone: piano.stitches.length };
+}
+
+export function stopLinee(ret: Reticolo, contorno: Punto[], par: ParametriLinee): Stop & { risultato: RisultatoLinee } {
+  const risultato = generaLinee(ret, contorno, par);
+  return { numero: 5, nome: 'Linee orizzontali e verticali', blocchi: risultato.blocchi, punti: risultato.conteggi.punti, risultato };
+}
+
+/** Lo stop 6. `ingombri` sono fermi e barre dello stop 5: la cornice non ci passa sopra. */
+export function stopCornice(ret: Reticolo, contorno: Punto[], par: ParametriCornice, ingombri: Ingombro[] = []): Stop & { risultato: RisultatoCornice } {
+  const risultato = generaCornice(ret, contorno, par, ingombri);
+  return { numero: 6, nome: 'Cornice nei rombi', blocchi: risultato.blocchi, punti: risultato.conteggi.punti, risultato };
+}
+
+/** Colore d'anteprima e d'export dello stop: la palette categoriale del DS, uno per stop. */
+export const coloreStop = (numero: number) => PATTERN_INKS[(numero - 1) % PATTERN_INKS.length];
+
+/** Gli stop in ordine, uno strato per stop: in DST ogni strato è un cambio-colore (R31). */
+export function stratiProgramma(stop: Stop[]): ExportLayer[] {
+  return stop
+    .slice()
+    .sort((a, b) => a.numero - b.numero)
+    .filter((s) => s.blocchi.some((b) => b.length > 1))
+    .map((s) => ({ id: `stop-${s.numero}`, color: coloreStop(s.numero), polylines: s.blocchi }));
+}

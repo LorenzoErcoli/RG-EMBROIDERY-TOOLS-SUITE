@@ -6,7 +6,8 @@
 // arancio/verde sono l'altro. Il tool non conosce quei colori: conosce "ogni zona ha
 // una tinta, ogni tinta ha un pattern e una correzione d'angolo" — il cannage è solo
 // il primo caso.
-import type { ImportedBoundaryModel, Point } from '@rg/pattern-grammar';
+import type { ImportedBoundaryModel } from '../importer/importBoundary.ts';
+import type { Point } from '../grammar/types.ts';
 
 /** Una zona = un poligono chiuso del disegno, con la sua tinta e la sua inclinazione. */
 export type Zone = {

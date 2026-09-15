@@ -1,7 +1,22 @@
 // Il reticolo dei rombi letto da un SVG a zone: da dove la fase 3 prende tutte le sue misure.
+import type { ImportedBoundaryModel } from '@rg/pattern-grammar';
 import type { Punto, Reticolo } from './linee';
 
 export type Zona = { color?: string; points: Punto[] };
+
+/**
+ * Le zone di un file importato: ogni tracciato chiuso di una tinta vera. I tracciati senza colore
+ * (Illustrator li mette doppi, `fill: none`) non sono zone e restano fuori.
+ */
+export function zoneDaModello(model: ImportedBoundaryModel): Zona[] {
+  const out: Zona[] = [];
+  for (const c of model.choices) for (const p of c.boundary.paths) {
+    const color = (p.color ?? c.color ?? '').toLowerCase();
+    if (!p.closed || p.points.length < 4 || !/^#[0-9a-f]{6}$/.test(color)) continue;
+    out.push({ color, points: p.points.map((q) => ({ x: q.x, y: q.y })) });
+  }
+  return out;
+}
 
 export type LetturaReticolo = {
   reticolo: Reticolo;

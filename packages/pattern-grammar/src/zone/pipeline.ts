@@ -6,10 +6,11 @@
 // cannage regolare), e si ruotano indietro i punti di +θ. Il motore non sa niente di
 // tutto questo e resta intatto: ritaglio al bordo, punto minimo (R3) e punto massimo (R4)
 // continuano a valere come sempre. È il "prendo il pattern e ruoto tutto il blocco".
-import { generateFinalPatternPoints, type GeneratedPoint, type ImportedBoundary, type PatternConfig, type Point } from '@rg/pattern-grammar';
+import { generateFinalPatternPoints } from '../generator/generatePattern.ts';
+import type { GeneratedPoint, ImportedBoundary, PatternConfig, Point } from '../grammar/types.ts';
 import { enforceMinStitch, type ExportLayer } from '@rg/core';
-import { boundsOfPoints, expandOuterEdges, orderZonesRaster, outerEdgeFlags, rotatePoints, type Zone } from './engine';
-import { buildEdgeGraph, travelAlongEdges } from './travel';
+import { boundsOfPoints, expandOuterEdges, orderZonesRaster, outerEdgeFlags, rotatePoints, type Zone } from './engine.ts';
+import { buildEdgeGraph, travelAlongEdges } from './travel.ts';
 
 /**
  * Un pattern = un ago, e i pattern sono QUANTI SERVONO. Lorenzo, 14/09: «i pattern non sono solo

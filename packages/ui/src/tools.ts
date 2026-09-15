@@ -15,6 +15,7 @@ export const TOOLS: ToolDef[] = [
   { id: 'bitmap', name: 'Bitmap → Stitch', description: 'Da immagine raster a tracciato di ricamo: selezione pixel, colori e punti ordinati in SVG.', status: 'live' },
   { id: 'striatura', name: 'Punto Striato', description: 'Striature verticali a spola che formano macchie maculate su base di riempimento parallelo.', status: 'live' },
   { id: 'zone-pattern', name: 'Pattern a zone', description: 'Riempie ogni zona colorata di un disegno col suo pattern, ruotato sulle perpendicolari della zona.', status: 'live' },
+  { id: 'cannage-rafia', name: 'Cannage rafia', description: 'Il programma di una borsa in cannage rafia da un SVG a zone. Per ora le linee orizzontali e verticali, agganciate ai rombi del pattern 1: cordoncini, fermi, scalette e meandri come nel DST di riferimento.', status: 'live' },
   { id: 'broccato', name: 'Broccato', description: 'Da immagine a ricamo: aree di colore riempite a raso rado orizzontale, a pettine o normale, coi passaggi nascosti sotto i colori successivi.', status: 'live' },
   { id: 'sfrangiatura', name: 'Sfrangiatura', description: 'Aggiunge frange che si intrecciano a X sui capi dei rasi di un DST già cucito, solo dove marchi col pennello. Il ricamo di partenza non si tocca.', status: 'live' },
   { id: 'pettine', name: 'Punto pettine sfrangiato', description: 'Da un SVG a gruppi e da una fotografia: linee di base a passo fisso con sopra un pettine di denti rivolti verso il chiaro, col ritaglio per provare uno swatch prima del pannello.', status: 'live' },

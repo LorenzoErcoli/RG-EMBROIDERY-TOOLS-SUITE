@@ -9,8 +9,8 @@
 // i bordi di tutte le zone formano una RETE, e si cerca la strada più corta dentro quella rete.
 // È un problema di grafo, non di poligono: sta qui in locale finché non lo chiede un secondo
 // tool (regola di crescita 2), e allora si promuove nel core.
-import type { Point } from '@rg/pattern-grammar';
-import type { Zone } from './engine';
+import type { Point } from '../grammar/types.ts';
+import type { Zone } from './engine.ts';
 
 // La "pulizia punti" NON si riscrive qui: `enforceMinStitch` sta nel core e risponde già a
 // questa domanda (R28 — stessa domanda, stessa risposta). Riscriverla avrebbe creato la

@@ -8,11 +8,12 @@ import { buildSvg, dstFromExportLayers, DST_FILE, readProjectMetadata, readDstMe
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { readZones, resolveZoneAngles, zonesFromShapes, boundsOfPoints, type Zone, type ZoneShape } from './engine';
+// Il motore delle zone vive in @rg/pattern-grammar: lo usa anche Cannage rafia per le basi.
 import {
+  readZones, resolveZoneAngles, zonesFromShapes, boundsOfPoints, type Zone, type ZoneShape,
   buildZonePlan, exportSequenceLayers, threadMetres, travelMetres, inkFor, normalizeRole,
   patternChoices, patternKeysInUse, RELIEF_ROLE, type PatternKey, type ZonePlan, type ZoneRole,
-} from './pipeline';
+} from '@rg/pattern-grammar';
 import { readPatternSvg, migrateLegacyNames } from './analyze';
 import { generateFinalPatternPoints } from '@rg/pattern-grammar';
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';

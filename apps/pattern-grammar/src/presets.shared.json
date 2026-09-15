@@ -22,7 +22,7 @@
     "minStitchMm": 1,
     "maxStitchMm": 0,
     "constructionStroke": 0.3,
-    "boundaryCleanupMode": "adjust-then-delete",
+    "boundaryCleanupMode": "delete",
     "maxBoundaryAdjustment": 0,
     "exportCompatibilityMode": "illustrator-safe",
     "shapeType": "none"
@@ -103,7 +103,8 @@
     "repeatBack": false,
     "useConnectors": true,
     "minStitchMm": 1,
-    "constructionStroke": 0.05
+    "constructionStroke": 0.05,
+    "boundaryCleanupMode": "delete"
   },
   "CANNAGE BASE — PIENA": {
     "parameterScalePercent": 100,
@@ -125,6 +126,7 @@
     "repeatBack": false,
     "useConnectors": true,
     "minStitchMm": 1,
-    "constructionStroke": 0.05
+    "constructionStroke": 0.05,
+    "boundaryCleanupMode": "delete"
   }
 }

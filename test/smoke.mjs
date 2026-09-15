@@ -24,9 +24,9 @@ export { generateStriatura, layerThreadMm, defaultStriaturaParams } from ${JSON.
 export { paletteToColors, applyDensityToAll, colorsToPalette, clampColorCount, mmPerPixel, defaultBroccatoParams } from ${JSON.stringify(posix('apps/broccato/src/engine.ts'))};
 export { buildPlan } from ${JSON.stringify(posix('apps/broccato/src/pipeline.ts'))};
 export { sampleImage as sampleBroccatoImage } from ${JSON.stringify(posix('apps/broccato/src/sample.ts'))};
-export { readZones, resolveZoneAngles, orderZonesRaster, dominantAngleDeg, familyAngleDeg, boundsOfPoints as zoneBounds, rotatePoints, outerEdgeFlags, expandOuterEdges, cellElongation, familyAxisShiftDeg, STRIP_ELONGATION, zonesFromShapes, makeZone } from ${JSON.stringify(posix('apps/zone-pattern/src/engine.ts'))};
-export { buildZonePlan, fillZone, threadMetres, travelMetres, exportSequenceLayers, PATTERN_INKS, inkFor, patternLetter, patternKeysInUse, patternChoices, normalizeRole } from ${JSON.stringify(posix('apps/zone-pattern/src/pipeline.ts'))};
-export { buildEdgeGraph, travelAlongEdges } from ${JSON.stringify(posix('apps/zone-pattern/src/travel.ts'))};
+export { readZones, resolveZoneAngles, orderZonesRaster, dominantAngleDeg, familyAngleDeg, boundsOfPoints as zoneBounds, rotatePoints, outerEdgeFlags, expandOuterEdges, cellElongation, familyAxisShiftDeg, STRIP_ELONGATION, zonesFromShapes, makeZone } from ${JSON.stringify(posix('packages/pattern-grammar/src/zone/engine.ts'))};
+export { buildZonePlan, fillZone, threadMetres, travelMetres, exportSequenceLayers, PATTERN_INKS, inkFor, patternLetter, patternKeysInUse, patternChoices, normalizeRole } from ${JSON.stringify(posix('packages/pattern-grammar/src/zone/pipeline.ts'))};
+export { buildEdgeGraph, travelAlongEdges } from ${JSON.stringify(posix('packages/pattern-grammar/src/zone/travel.ts'))};
 export { readPatternSvg, readEmbeddedConfig, measureConstruction, migrateLegacyNames, periodOf, peakSpacing, modeOf } from ${JSON.stringify(posix('apps/zone-pattern/src/analyze.ts'))};
 export { PATTERN_FIELD_NAMES, PATTERN_FIELD_KIND } from ${JSON.stringify(posix('apps/zone-pattern/src/fields.ts'))};
 export { parseSvgPolylines } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
@@ -43,7 +43,10 @@ export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
-export { reticoloDaZone, contornoDaZone } from ${JSON.stringify(posix('apps/cannage-rafia/src/reticolo.ts'))};
+export { reticoloDaZone, contornoDaZone, zoneDaModello } from ${JSON.stringify(posix('apps/cannage-rafia/src/reticolo.ts'))};
+export { PARAMETRI_STOP } from ${JSON.stringify(posix('apps/cannage-rafia/src/stop.ts'))};
+export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stratiProgramma } from ${JSON.stringify(posix('apps/cannage-rafia/src/programma.ts'))};
+export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -931,7 +934,7 @@ check('S/s: stessa area della C esplicita', Math.round(Math.abs(rg.polygonArea(p
 console.log('\nsuite — ogni tool scrive i parametri nel .dst e li sa rileggere (R27)');
 for (const [tool, id] of [['net-45', 'net-45'], ['pattern-grammar', 'pattern-grammar'],
   ['interlace', 'interlace'], ['striatura', 'striatura'], ['oblique', 'oblique'],
-  ['bitmap', 'bitmap'], ['zone-pattern', 'zone-pattern']]) {
+  ['bitmap', 'bitmap'], ['zone-pattern', 'zone-pattern'], ['cannage-rafia', 'cannage-rafia']]) {
   const src = readFileSync(join(root, `apps/${tool}/src/tool.ts`), 'utf8');
   const call = src.indexOf('dstFromExportLayers(');
   const blocco = call >= 0 ? src.slice(call, call + 600) : '';
@@ -2306,6 +2309,11 @@ console.log('\noblique — routing + orchestratore (2d)');
     ['CANNAGE BASE — LEGGERO', 'CANNAGE BASE — PIENA'].every((nome) => nome in condivisi), true);
   check('ogni preset condiviso ha punto minimo 1 mm',
     Object.entries(condivisi).filter(([, p]) => p.minStitchMm !== 1).map(([nome]) => nome), []);
+  // Lorenzo, 15/09: nei preset la pulizia del bordo è «Elimina». Scritta ESPLICITA in ogni preset:
+  // un preset che non la dice prende il default del motore (avvicina, poi elimina), ed è proprio così
+  // che i due cannage la sbagliavano senza che nessun file lo mostrasse.
+  check('ogni preset condiviso pulisce il bordo eliminando i punti',
+    Object.entries(condivisi).filter(([, p]) => p.boundaryCleanupMode !== 'delete').map(([nome]) => nome), []);
 }
 
 // ---------------------------------------------------------------------------
@@ -2354,7 +2362,7 @@ console.log('\noblique — routing + orchestratore (2d)');
   check('il cambio di densità cade sulla linea del contorno', [sulContorno(pieno), sulContorno(scaricato) > 0], [0, true]);
   check('scaricare al 100% lascia comunque una passata (un zig-zag senza passate è un buco)',
     rg.generateFinalPatternPoints({ ...base, reliefAreas: [fascia], reliefPercent: 100 }).visualPolylines.flat().some((p) => p.y > y0 + 1 && p.y < y1 - 1), true);
-  for (const file of ['apps/pattern-grammar/src/fields.ts', 'apps/zone-pattern/src/fields.ts']) {
+  for (const file of ['apps/pattern-grammar/src/fields.ts', 'apps/zone-pattern/src/fields.ts', 'apps/cannage-rafia/src/fields.ts']) {
     check(`${file}: lo scarico ha lo stesso nome ed etichetta nei due tool (R28)`,
       readFileSync(join(root, file), 'utf8').includes("name: 'reliefPercent', label: 'Scarico nelle aree', unit: '%'"), true);
   }
@@ -3892,22 +3900,31 @@ console.log('cannage-rafia — le linee rifanno il DST vero del davanti M1404');
     return best;
   };
 
-  const riferimento = rg.readDst(new Uint8Array(readFileSync(join(here, 'fixtures/m1404-dav-fase3.dst'))));
-  const bordo = riferimento.blocks.filter((b) => b.needle === 1).flatMap((b) => b.points_mm);
+  // Il riferimento: dal DST M1404 davanti, ago 1 = contorno a impunture, ago 2 = griglia col contorno,
+  // ago 3 = le linee (nel DST vero sono l'ago 5).
+  const riferimento = rg.readDst(new Uint8Array(readFileSync(join(here, 'fixtures/m1404-dav-stop.dst'))));
+  const bordo = riferimento.blocks.filter((b) => b.needle === 1).flatMap((b) => b.points_mm).slice(1);
   let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
   for (const [x, y] of bordo) { bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x); by0 = Math.min(by0, y); by1 = Math.max(by1, y); }
   const contorno = [{ x: bx0, y: by0 }, { x: bx1, y: by0 }, { x: bx1, y: by1 }, { x: bx0, y: by1 }];
   const reticolo = { cx: -92.8, cy: -58.35, a: 31.7, b: 30.3 };
-  const gen = rg.generaLinee(reticolo, contorno, rg.PARAMETRI_DAVANTI);
+  // Col DST si confronta con le finestre del DST: l'allargamento (Lorenzo, 16/09, per la cornice) è voluto.
+  const gen = rg.generaLinee(reticolo, contorno, { ...rg.PARAMETRI_DAVANTI, allargamentoFinestre: 0 });
   const riletto = rg.readDst(rg.buildDst(rg.programmaLinee(gen)));
-  const veri = riferimento.blocks.filter((b) => b.needle === 2).flatMap((b) => elementi(tratti(b.points_mm)));
+  const veri = riferimento.blocks.filter((b) => b.needle === 3).flatMap((b) => elementi(tratti(b.points_mm)));
   const fatti = riletto.blocks.flatMap((b) => elementi(tratti(b.points_mm)));
   // Solo i gruppi interi: in alto e in fondo il DST vero ha tolto parti PER IL MONTAGGIO (Lorenzo),
   // e il generatore invece fa tutto il reticolo — le parti tolte si scelgono dopo, a mano.
   const righe = [-58.35, 2.25, 62.85];
+  // Le BARRE AI VERTICI non si confrontano col DST: Lorenzo le ha volute alte quanto le due file di
+  // fermi (15/09), e nel DST non lo erano. Hanno il loro controllo più sotto.
+  const sulVertice = (x) => {
+    let l = (((x - reticolo.cx) % 63.4) + 63.4) % 63.4; if (l > 31.7) l -= 63.4;
+    return Math.abs(Math.abs(l) - 31.7) < 1.2;
+  };
   const dentro = (e) => {
     const x = e.ax === 'H' ? (e.lo + e.hi) / 2 : e.c, y = e.ax === 'H' ? e.c : (e.lo + e.hi) / 2;
-    return righe.some((r) => Math.abs(y - r) < 26) && x > bx0 + 34 && x < bx1 - 34;
+    return righe.some((r) => Math.abs(y - r) < 26) && x > bx0 + 34 && x < bx1 - 34 && !(tipo(e) === 'verticale' && sulVertice(x));
   };
   for (const [nome, A, B] of [['elementi del DST vero ritrovati nel generato', veri, fatti], ['elementi generati che stanno nel DST vero', fatti, veri]]) {
     const W = A.filter(dentro);
@@ -3947,12 +3964,25 @@ console.log('cannage-rafia — le linee rifanno il DST vero del davanti M1404');
     }
   };
   punte(riletto.blocks.map((b) => b.points_mm), 'gen');
-  punte(riferimento.blocks.filter((b) => b.needle === 2).map((b) => b.points_mm), 'vero');
+  punte(riferimento.blocks.filter((b) => b.needle === 3).map((b) => b.points_mm), 'vero');
   const verticali = [...corsie.values()].filter((v) => v.zona !== 'meandro' || v.gen[1] - v.gen[0] > 3);
   // 0,6 mm: in un gruppo del DST vero un meandro sta 0,5 mm più in basso di tutti gli altri (la
   // digitazione a mano non è perfetta); il generato è uguale agli altri meandri, ed è giusto così.
   const storte = verticali.filter((v) => !(Math.abs(v.gen[0] - v.vero[0]) <= 0.6 && Math.abs(v.gen[1] - v.vero[1]) <= 0.6));
   check(`le punte di scalette e meandri come nel DST vero, corsia per corsia (${verticali.length} corsie)`, [verticali.length > 100, storte.length], [true, 0]);
+
+  // Le barre ai vertici: in testa pari ai fermi della linea esterna (±6,7 ± 1,2); verso la diagonale il
+  // capo del DST (−1,1 sopra, +1,5 sotto), che NON va accorciato. Tolleranza 0,35: lo zig-zag della
+  // barra si sposta di lato e il DST arrotonda al decimo.
+  const barre = fatti.filter((e) => tipo(e) === 'verticale' && sulVertice(e.c) && e.c > bx0 + 34 && e.c < bx1 - 34
+    && righe.some((r) => Math.abs((e.lo + e.hi) / 2 - r) < 12));
+  const storteBarre = barre.filter((e) => {
+    const r = righe.reduce((best, rr) => (Math.abs((e.lo + e.hi) / 2 - rr) < Math.abs((e.lo + e.hi) / 2 - best) ? rr : best));
+    const [atteso0, atteso1] = (e.lo + e.hi) / 2 < r ? [r - 6.7 - 1.2, r - 1.1] : [r + 1.5, r + 6.7 + 1.2];
+    return Math.abs(e.lo - atteso0) > 0.35 || Math.abs(e.hi - atteso1) > 0.35;
+  });
+  // nella finestra controllata: 3 vertici × 3 gruppi × sopra e sotto = 18 barre
+  check('le barre ai vertici: in testa pari ai fermi della linea esterna, verso la diagonale come nel DST', [barre.length, storteBarre.length], [18, 0]);
 
   // Il reticolo si legge dall'SVG a zone: i rombi interi di una tinta danno centro e mezze diagonali.
   const modello = rg.parseImportedBoundarySource(readFileSync(join(here, 'fixtures/cannage-rafia-m3641-zone.svg'), 'utf8'), 'm3641.svg', { scaleMode: 'illustrator-72dpi', paintPriority: 'fill' });
@@ -3976,11 +4006,16 @@ console.log('cannage-rafia — le linee rifanno il DST vero del davanti M1404');
   let lmin = Infinity, lmax = 0, fuori = 0;
   for (const b of gen.blocchi) for (let k = 0; k < b.length; k++) {
     const p = b[k];
-    if (p.x < bx0 - 1.01 || p.x > bx1 || p.y < by0 - 1.3 || p.y > by1 + 1.3) fuori++;
+    if (p.x < bx0 - 1.01 || p.x > bx1 + 1.01 || p.y < by0 - 1.3 || p.y > by1 + 1.3) fuori++;
     if (k) { const l = Math.hypot(p.x - b[k - 1].x, p.y - b[k - 1].y); lmin = Math.min(lmin, l); lmax = Math.max(lmax, l); }
   }
   check('nessun punto oltre il record DST (12 mm) né nello stesso buco', [lmax <= 12.01, lmin >= 0.05], [true, true]);
-  check('il filo sta nel pezzo: fuori solo il passaggio sul bordo sinistro (1 mm)', fuori, 0);
+  check('il filo sta nel pezzo: fuori solo di 1 mm, a sinistra e a destra', fuori, 0);
+  // Le linee arrivano fino in fondo a destra (Lorenzo, 15/09): nei DST M1404 si chiudevano sull'ultimo
+  // giunto dentro, fino a 10 mm prima del bordo.
+  let destraMax = -Infinity, sinistraMin = Infinity;
+  for (const b of gen.blocchi) for (const p of b) { destraMax = Math.max(destraMax, p.x); sinistraMin = Math.min(sinistraMin, p.x); }
+  check('le linee vanno da un bordo all\'altro, 1 mm fuori da tutte e due le parti', [(sinistraMin - bx0).toFixed(1), (destraMax - bx1).toFixed(1)], ['-1.0', '1.0']);
   const lato = rg.generaLinee(reticolo, contorno, rg.PARAMETRI_LATO);
   let orizzMax = 0;
   for (const b of lato.blocchi) for (let k = 1; k < b.length; k++) if (Math.abs(b[k].y - b[k - 1].y) < 0.05) orizzMax = Math.max(orizzMax, Math.abs(b[k].x - b[k - 1].x));
@@ -3989,6 +4024,296 @@ console.log('cannage-rafia — le linee rifanno il DST vero del davanti M1404');
   const primo = conTermo.blocchi[0];
   check('termogarze: il contorno è il primo tratto, e c\'è solo se lo chiedi',
     [conTermo.blocchi.length, Math.min(...primo.map((p) => p.x)).toFixed(2), Math.max(...primo.map((p) => p.y)).toFixed(2)], [gen.blocchi.length + 1, bx0.toFixed(2), by1.toFixed(2)]);
+}
+
+// ---------------------------------------------------------------------------
+// cannage-rafia — il programma a STOP (Lorenzo, 15/09): 1 contorno a impunture, 2 griglia che
+// blocca i materiali col suo contorno, 3 e 4 le basi dei due pattern, 5 le linee.
+console.log('');
+console.log('cannage-rafia — gli stop del programma: contorno, griglia, basi, linee');
+{
+  const distPL = (p, P) => {
+    let best = Infinity;
+    for (let i = 1; i < P.length; i++) {
+      const a = P[i - 1], b = P[i], dx = b[0] - a[0], dy = b[1] - a[1], l2 = dx * dx + dy * dy || 1;
+      const t = Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / l2));
+      best = Math.min(best, Math.hypot(a[0] + dx * t - p[0], a[1] + dy * t - p[1]));
+    }
+    return best;
+  };
+  const riferimento = rg.readDst(new Uint8Array(readFileSync(join(here, 'fixtures/m1404-dav-stop.dst'))));
+  const perAgo = (n) => riferimento.blocks.filter((b) => b.needle === n);
+  const bordoVero = perAgo(1).flatMap((b) => b.points_mm).slice(1); // il primo punto del DST è l'entrata
+  let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity;
+  for (const [x, y] of bordoVero) { x0 = Math.min(x0, x); x1 = Math.max(x1, x); y0 = Math.min(y0, y); y1 = Math.max(y1, y); }
+  const contorno = [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+  const reticolo = { cx: -92.8, cy: -58.35, a: 31.7, b: 30.3 };
+
+  const s1 = rg.stopContorno(contorno, rg.PARAMETRI_STOP);
+  const g1 = s1.blocchi[0].map((p) => [p.x, p.y]);
+  let d1 = 0, d2 = 0;
+  for (const p of bordoVero) d1 = Math.max(d1, distPL(p, g1));
+  for (const p of g1) d2 = Math.max(d2, distPL(p, bordoVero));
+  check('stop 1, contorno a impunture: gli stessi punti del DST vero, dall\'alto a sinistra in senso orario',
+    [g1.length, d1 <= 0.3, d2 <= 0.3, g1[1][0] > g1[0][0]], [bordoVero.length, true, true, true]);
+
+  // La griglia si confronta LONTANO dal contorno rientrato: le linee devono essere quelle, mentre il
+  // tratto di bordo che il filo percorre fra una linea e l'altra può girare da un'altra parte.
+  const s2 = rg.stopGriglia(reticolo, contorno, rg.PARAMETRI_STOP);
+  const grigliaVera = perAgo(2)[1].points_mm.slice(1);
+  const grigliaGen = s2.blocchi[1].map((p) => [p.x, p.y]);
+  let gx0 = Infinity, gx1 = -Infinity, gy0 = Infinity, gy1 = -Infinity;
+  for (const [x, y] of grigliaGen) { gx0 = Math.min(gx0, x); gx1 = Math.max(gx1, x); gy0 = Math.min(gy0, y); gy1 = Math.max(gy1, y); }
+  const lontano = ([x, y]) => Math.min(x - gx0, gx1 - x, y - gy0, gy1 - y) > 4;
+  // Scarto ammesso: mediana 0,3 mm, massimo 1,5. Nel DST la griglia corre a 43,9°, il reticolo letto
+  // dalle linee (quello che le linee rifanno al decimo) a 43,7°: sulle linee lunghe 300 mm quei due
+  // decimi di grado diventano ~1,4 mm alle estremità. È la stessa linea, un filo ruotata.
+  const mediana = (v) => v.slice().sort((a, b) => a - b)[Math.floor(v.length / 2)];
+  const sc1 = grigliaVera.filter(lontano).map((p) => distPL(p, grigliaGen));
+  const sc2 = grigliaGen.filter(lontano).map((p) => distPL(p, grigliaVera));
+  check('stop 2: il contorno e poi la griglia, con le stesse 16 linee del DST vero (i lati dei rombi)',
+    [s2.blocchi.length, s2.linee, mediana(sc1) <= 0.3, mediana(sc2) <= 0.3, Math.max(...sc1) <= 1.5, Math.max(...sc2) <= 1.5],
+    [2, 16, true, true, true, true]);
+
+  // Le basi sull'M3641: il motore di Pattern a zone, una tinta per stop.
+  const modello = rg.parseImportedBoundarySource(readFileSync(join(here, 'fixtures/cannage-rafia-m3641-zone.svg'), 'utf8'), 'm3641.svg', { scaleMode: 'illustrator-72dpi', paintPriority: 'fill' });
+  const zone = rg.zoneDaModello(modello);
+  const condivisi = JSON.parse(readFileSync(join(root, 'apps/pattern-grammar/src/presets.shared.json'), 'utf8'));
+  const dentroAnello = (p, anello) => {
+    let dentro = false;
+    for (let i = 0, j = anello.length - 1; i < anello.length; j = i++) {
+      const a = anello[i], b = anello[j];
+      if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) dentro = !dentro;
+    }
+    return dentro;
+  };
+  const sulBordo = (p, anello) => distPL([p.x, p.y], [...anello, anello[0]].map((q) => [q.x, q.y])) <= 0.6;
+  const contM = rg.contornoDaZone(zone);
+  // i passaggi fra una zona e l'altra possono camminare sul contorno del pezzo: lo fa anche il DST vero
+  const sulContorno = (p) => Math.min(p.x - contM[0].x, contM[1].x - p.x, p.y - contM[0].y, contM[2].y - p.y) <= 0.6;
+  const fuoriTinta = (s, colore) => {
+    const mie = zone.filter((z) => z.color === colore);
+    let fuori = 0;
+    s.blocchi.forEach((b) => b.forEach((p, k) => { if (k % 5 === 0 && !sulContorno(p) && !mie.some((z) => dentroAnello(p, z.points) || sulBordo(p, z.points))) fuori++; }));
+    return fuori;
+  };
+  const s3 = rg.stopBase(3, zone, '#e42320', condivisi['CANNAGE BASE — LEGGERO']);
+  const s4 = rg.stopBase(4, zone, '#2a4e9c', condivisi['CANNAGE BASE — PIENA']);
+  check('stop 3: la base del pattern 1 riempie le sue 25 zone, e fuori solo sul contorno del pezzo', [s3.zone, s3.punti > 1000, fuoriTinta(s3, '#e42320')], [25, true, 0]);
+  check('stop 4: la base del pattern 2 riempie le sue 24 zone, e fuori solo sul contorno del pezzo', [s4.zone, s4.punti > 1000, fuoriTinta(s4, '#2a4e9c')], [24, true, 0]);
+
+  // Le AREE DI SCARICO nelle basi, come in Pattern a zone (Lorenzo, 15/09): sul davanti-v2, che ha i
+  // contorni gialli di solo tratto sopra le zone. Solo la parte bassa, dove stanno le aree.
+  const davanti = rg.parseImportedBoundarySource(readFileSync(join(here, 'fixtures/scarico-davanti.svg'), 'utf8'), 'davanti.svg', { scaleMode: 'illustrator-72dpi', paintPriority: 'fill' });
+  const mediaY = (z) => z.points.reduce((t, p) => t + p.y, 0) / z.points.length;
+  const zoneD = rg.zoneDaModello(davanti).filter((z) => z.color === '#f3e600' || mediaY(z) > 190);
+  const aree = zoneD.filter((z) => z.color === '#f3e600');
+  const senzaScarico = rg.stopBase(3, zoneD, '#e52421', condivisi['CANNAGE BASE — LEGGERO']);
+  const conScarico = rg.stopBase(3, zoneD, '#e52421', condivisi['CANNAGE BASE — LEGGERO'], { colori: ['#f3e600'], percento: 50 });
+  const nelleAree = (s) => s.blocchi.flat().filter((p) => aree.some((a) => dentroAnello(p, a.points))).length;
+  const fuoriAree = (s) => s.blocchi.flat().length - nelleAree(s);
+  check('basi con le aree di scarico: dentro le aree meno punti, fuori quasi uguale, le aree non si ricamano',
+    [aree.length, nelleAree(conScarico) < nelleAree(senzaScarico) * 0.8, Math.abs(fuoriAree(conScarico) / fuoriAree(senzaScarico) - 1) < 0.03, conScarico.zone === senzaScarico.zone],
+    [3, true, true, true]);
+
+  const retM = rg.reticoloDaZone(zone, '#e42320').reticolo;
+  // gli stop si passano in disordine apposta: l'ordine lo decide il programma, non chi chiama
+  const strati = rg.stratiProgramma([rg.stopCornice(retM, contM, rg.PARAMETRI_CORNICE), rg.stopLinee(retM, contM, rg.PARAMETRI_DAVANTI), s4, rg.stopGriglia(retM, contM, rg.PARAMETRI_STOP), s3, rg.stopContorno(contM, rg.PARAMETRI_STOP)]);
+  const dstM = rg.readDst(rg.dstFromExportLayers(strati, { label: 'M3641 CANNAGE' }));
+  check('il DST esce coi 6 stop in ordine (contorno, griglia, base 1, base 2, linee, cornice), uno per ago',
+    [strati.map((s) => s.id), dstM.colorChanges], [['stop-1', 'stop-2', 'stop-3', 'stop-4', 'stop-5', 'stop-6'], 5]);
+}
+
+// ---------------------------------------------------------------------------
+// cannage-rafia — STOP 6, la cornice nei rombi. Letta dall'ago 6 del DST M1404 davanti (nel fixture è
+// l'ago 4) e RIGENERATA dai valori, non copiata (Lorenzo, 15/09): uncini regolari, irregolarità
+// minime, il centro dell'orizzontale sempre sul lato del rombo, un rientro unico dal bordo.
+console.log('');
+console.log('cannage-rafia — la cornice nei rombi: uncini rigenerati sul DST vero del davanti M1404');
+{
+  const riferimento = rg.readDst(new Uint8Array(readFileSync(join(here, 'fixtures/m1404-dav-stop.dst'))));
+  const bordo = riferimento.blocks.filter((b) => b.needle === 1).flatMap((b) => b.points_mm).slice(1);
+  let bx0 = Infinity, bx1 = -Infinity, by0 = Infinity, by1 = -Infinity;
+  for (const [x, y] of bordo) { bx0 = Math.min(bx0, x); bx1 = Math.max(bx1, x); by0 = Math.min(by0, y); by1 = Math.max(by1, y); }
+  const contorno = [{ x: bx0, y: by0 }, { x: bx1, y: by0 }, { x: bx1, y: by1 }, { x: bx0, y: by1 }];
+  const reticolo = { cx: -92.8, cy: -58.35, a: 31.7, b: 30.3 };
+  const gen = rg.generaCornice(reticolo, contorno, rg.PARAMETRI_CORNICE);
+
+  // Gli elementi del DST vero: tratti ripassati avanti e indietro fra due punti (almeno 3 passate).
+  const P = riferimento.blocks.filter((b) => b.needle === 4).flatMap((b) => b.points_mm);
+  const uguale = (p, q) => Math.hypot(p[0] - q[0], p[1] - q[1]) < 0.35;
+  const veri = [];
+  for (let i = 0; i < P.length - 1;) {
+    let j = i + 1;
+    if (Math.hypot(P[j][0] - P[i][0], P[j][1] - P[i][1]) > 0.6) while (j + 1 < P.length && uguale(P[j + 1], P[j - 1])) j++;
+    if (j - i >= 3) { veri.push({ tipo: Math.abs(P[i + 1][1] - P[i][1]) < Math.abs(P[i + 1][0] - P[i][0]) ? 'H' : 'V', a: P[i], b: P[i + 1] }); i = j; } else i++;
+  }
+  const fatti = gen.elementi.map((e) => ({ tipo: e.tipo, a: [e.a.x, e.a.y], b: [e.b.x, e.b.y] }));
+  // Si confronta lontano dal bordo: lì il DST vero ha tolto a mano, a distanze diverse per lato.
+  const lontano = (e) => Math.min(...[e.a, e.b].flatMap(([x, y]) => [x - bx0, bx1 - x, y - by0, by1 - y])) > 15;
+  // Stesso elemento: stessa riga (o colonna) entro 1,3 mm, centro entro 1,6, lunghezza entro 2,5. Il
+  // generato è regolare, il DST fatto a mano: a metà lato le sue file di uncini stanno fino a 1,1 mm
+  // fuori dal passo di b/15 (agli angoli no), le orizzontali cadono fino a 0,5 mm fuori dal lato e le
+  // lunghezze vanno da 3,6 a 7,4 mm. Con 0,9 e 1,2 restava fuori un elemento su otto, sempre per la quota.
+  const combacia = (e, f) => {
+    if (e.tipo !== f.tipo) return false;
+    const k = e.tipo === 'H' ? 0 : 1, o = 1 - k;
+    const lo = (s) => Math.min(s.a[k], s.b[k]), hi = (s) => Math.max(s.a[k], s.b[k]);
+    return Math.abs(e.a[o] - f.a[o]) <= 1.3 && Math.abs((lo(e) + hi(e)) / 2 - (lo(f) + hi(f)) / 2) <= 1.6 && Math.abs((hi(e) - lo(e)) - (hi(f) - lo(f))) <= 2.5;
+  };
+  const quota = (A, B) => { const W = A.filter(lontano); return { n: W.length, ok: W.filter((e) => B.some((f) => combacia(e, f))).length }; };
+  const q1 = quota(veri, fatti), q2 = quota(fatti, veri);
+  console.log(`   (cornice: DST vero ritrovato ${q1.ok}/${q1.n}, generato nel DST ${q2.ok}/${q2.n})`);
+  check('gli uncini del DST vero ci sono nel generato, e viceversa (almeno il 95%, lontano dal bordo)',
+    [q1.n > 900, q1.ok >= q1.n * 0.95, q2.ok >= q2.n * 0.95], [true, true, true]);
+
+  // Il CENTRO di ogni orizzontale sta sul lato del rombo (Lorenzo: «così che venga tutto preciso»).
+  const locale = (x, y) => {
+    const I = Math.round((x - reticolo.cx - reticolo.a) / (2 * reticolo.a)), J = Math.round((y - reticolo.cy - reticolo.b) / (2 * reticolo.b));
+    return [x - (reticolo.cx + reticolo.a + 2 * reticolo.a * I), y - (reticolo.cy + reticolo.b + 2 * reticolo.b * J), `${I},${J}`];
+  };
+  let fuoriLato = 0, sulLato = 0;
+  for (const e of gen.elementi.filter((e) => e.tipo === 'H')) {
+    const [lx, ly] = locale((e.a.x + e.b.x) / 2, e.a.y);
+    if (Math.abs(ly) < 1.5 || Math.abs(ly) > 28) continue; // i pezzi dei vertici, centrati sul vertice
+    sulLato++;
+    if (Math.abs(Math.abs(lx) - reticolo.a * (1 - Math.abs(ly) / reticolo.b)) > 0.001) fuoriLato++;
+  }
+  check('il centro di ogni orizzontale sta sul lato del rombo', [sulLato > 1000, fuoriLato], [true, 0]);
+
+  // Il giro intero, lontano dal bordo: come nel DST, 97 tratti (13 orizzontali per lato, 9 o 11
+  // verticali, 5 pezzi ai vertici).
+  const lontanoGiro = gen.giri.filter((g) => Math.min(g.centro.x - bx0, bx1 - g.centro.x, g.centro.y - by0, by1 - g.centro.y) > 34);
+  check('un giro intero ha 97 tratti, come il modulo del DST', [lontanoGiro.length > 4, [...new Set(lontanoGiro.map((g) => g.elementi))]], [true, [97]]);
+
+  // Irregolarità minime: le orizzontali sul lato cambiano al massimo di quanto chiesto, e con 0 sono uguali.
+  const lunghezze = (r) => r.elementi.filter((e) => e.tipo === 'H').filter((e) => { const [, ly] = locale(e.a.x, e.a.y); return Math.abs(ly) > 1.5 && Math.abs(ly) < 26; }).map((e) => Math.abs(e.b.x - e.a.x));
+  const Lg = lunghezze(gen);
+  const regolare = lunghezze(rg.generaCornice(reticolo, contorno, { ...rg.PARAMETRI_CORNICE, irregolarita: 0 }));
+  check('irregolarità: ±0,3 mm sulle orizzontali, e con 0 tutte uguali',
+    [Math.max(...Lg.map((l) => Math.abs(l - 5.4))) <= 0.3001, Math.max(...Lg) - Math.min(...Lg) > 0.2, Math.max(...regolare) - Math.min(...regolare) < 1e-9], [true, true, true]);
+
+  // Il bordo: nessun pezzo più vicino al contorno del rientro...
+  const dalBordo = (p) => Math.min(p.x - bx0, bx1 - p.x, p.y - by0, by1 - p.y);
+  let vicinoBordo = Infinity;
+  for (const e of gen.elementi) for (const p of [e.a, e.b]) vicinoBordo = Math.min(vicinoBordo, dalBordo(p));
+  check(`nessun pezzo più vicino al bordo del rientro (${rg.PARAMETRI_CORNICE.rientro} mm)`, vicinoBordo >= rg.PARAMETRI_CORNICE.rientro - 0.001, true);
+  // ...ma tutto quello che ci sta c'è (Lorenzo, 16/09: «tu tagli troppo presto» — la prima versione
+  // toglieva l'uncino intero se anche solo la verticale non ci stava). Il riferimento è la cornice
+  // senza bordo; senza irregolarità le orizzontali sono uguali nelle righe dritte e in quelle a specchio.
+  const piatti = { ...rg.PARAMETRI_CORNICE, irregolarita: 0 };
+  const senzaBordo = rg.generaCornice(reticolo, contorno, { ...piatti, rientro: -1000 });
+  const conBordo = rg.generaCornice(reticolo, contorno, piatti);
+  const chiaveH = (e) => { const [p, q] = [e.a, e.b].sort((u, w) => u.x - w.x); return `${p.x.toFixed(4)},${p.y.toFixed(4)},${q.x.toFixed(4)}`; };
+  const fatteH = new Set(conBordo.elementi.filter((e) => e.tipo === 'H').map(chiaveH));
+  const ciStanno = senzaBordo.elementi.filter((e) => e.tipo === 'H' && dalBordo(e.a) >= piatti.rientro && dalBordo(e.b) >= piatti.rientro);
+  const accorciate = conBordo.elementi.filter((e) => e.tipo === 'V' && Math.abs(e.b.y - e.a.y) < 4.2).length;
+  console.log(`   (bordo: ${ciStanno.length} orizzontali ci stanno, ${accorciate} verticali accorciate)`);
+  check('sul bordo ogni orizzontale che ci sta c\'è, e le verticali che non ci stanno si accorciano',
+    [ciStanno.length > 1000, ciStanno.filter((e) => !fatteH.has(chiaveH(e))).length, accorciate > 0], [true, 0, true]);
+
+  // I PASSAGGI (Lorenzo, 16/09: «si deve sempre passare dentro»). La prima versione ripartiva ogni riga
+  // da sinistra e girava sul contorno. Ora: righe a serpentina, un filo solo, e il filo cammina sui
+  // lati dei rombi dentro il pezzo — possibilmente su lati ancora da cucire, così il passaggio resta
+  // sotto gli uncini. Il filo si rilegge nell'ordine: ogni orizzontale cucita segna il suo lato come
+  // «cucito», e ogni passaggio che corre su un lato già cucito è filo SOPRA.
+  const leggiPassaggi = (r, ret, dentroPezzo) => {
+    const P = r.blocchi.flat();
+    const f = ret.b / rg.divisioniCornice(ret.b, rg.PARAMETRI_CORNICE.sogliaUncini) / (30.3 / 15);
+    const uguale = (p, q) => Math.abs(p.x - q.x) < 1e-9 && Math.abs(p.y - q.y) < 1e-9;
+    const retta = (p) => { const u = (p.x - ret.cx) / ret.a, v = (p.y - ret.cy) / ret.b; return [u + v, u - v]; };
+    const dispari = (z) => Math.abs(z - (2 * Math.round((z - 1) / 2) + 1)) < 1e-3;
+    const cuciti = new Set();
+    // un salto fuori dai lati si misura INTERO (i punti che lo compongono sono corti anche quando lui è lungo)
+    let k = 0, suLati = 0, sopra = 0, lunghiFuoriLato = 0, fuori = 0, salto = 0;
+    const chiudiSalto = () => { if (salto > 10 * f + 1e-6) lunghiFuoriLato++; salto = 0; };
+    for (let i = 0; i < P.length - 1;) {
+      const e = r.elementi[k];
+      if (e && uguale(P[i], e.a) && uguale(P[i + 1], e.b)) {
+        chiudiSalto();
+        const m = { x: (e.a.x + e.b.x) / 2, y: e.a.y };
+        const u = (m.x - ret.cx) / ret.a, v = (m.y - ret.cy) / ret.b;
+        const lontanoVertice = Math.hypot((u - Math.round(u)) * ret.a, (v - Math.round(v)) * ret.b) > 2;
+        const lato = e.tipo === 'H' && lontanoVertice ? rg.latoDelReticolo(ret, m, 1e-3) : null;
+        if (lato) cuciti.add(lato);
+        i += e.passate; k++;
+        continue;
+      }
+      const a = P[i], b = P[i + 1], l = Math.hypot(b.x - a.x, b.y - a.y);
+      if (dentroPezzo(a) < 0.25 || dentroPezzo(b) < 0.25) fuori++;
+      const [sa, da] = retta(a), [sb, db] = retta(b);
+      const suS = dispari(sa) && Math.abs(sa - sb) < 1e-3, suD = dispari(da) && Math.abs(da - db) < 1e-3;
+      if (suS || suD) {
+        chiudiSalto();
+        suLati += l;
+        const lato = rg.latoDelReticolo(ret, { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }, 1e-3);
+        if (cuciti.has(lato)) sopra += l;
+      } else salto += l;
+      i++;
+    }
+    chiudiSalto();
+    return { elementiLetti: k, blocchi: r.blocchi.length, suLati, sopra, lunghiFuoriLato, fuori };
+  };
+  const pDav = leggiPassaggi(gen, reticolo, dalBordo);
+  const modelloM = rg.parseImportedBoundarySource(readFileSync(join(here, 'fixtures/cannage-rafia-m3641-zone.svg'), 'utf8'), 'm3641.svg', { scaleMode: 'illustrator-72dpi', paintPriority: 'fill' });
+  const zoneM = rg.zoneDaModello(modelloM), contM = rg.contornoDaZone(zoneM), retM = rg.reticoloDaZone(zoneM, '#e42320').reticolo;
+  const genM = rg.generaCornice(retM, contM, rg.PARAMETRI_CORNICE);
+  const pM = leggiPassaggi(genM, retM, (p) => Math.min(p.x - contM[0].x, contM[1].x - p.x, p.y - contM[0].y, contM[2].y - p.y));
+  console.log(`   (passaggi davanti: ${pDav.suLati.toFixed(0)} mm sui lati, ${pDav.sopra.toFixed(0)} sopra lati cuciti · M3641: ${pM.suLati.toFixed(0)} mm, ${pM.sopra.toFixed(0)} sopra)`);
+  for (const [nome, p, r] of [['davanti M1404', pDav, gen], ['M3641', pM, genM]]) {
+    check(`passaggi, ${nome}: un filo solo, tutti dentro il pezzo, sui lati dei rombi (fuori dai lati solo salti corti), quasi mai sopra lati già cuciti`,
+      [p.blocchi, p.elementiLetti === r.elementi.length, p.fuori, p.lunghiFuoriLato, p.sopra <= p.suLati * 0.01], [1, true, 0, 0, true]);
+  }
+
+  let lmin = Infinity, lmax = 0, fuori = 0;
+  for (const b of gen.blocchi) for (let k = 0; k < b.length; k++) {
+    const p = b[k];
+    if (p.x < bx0 || p.x > bx1 || p.y < by0 || p.y > by1) fuori++;
+    if (k) { const l = Math.hypot(p.x - b[k - 1].x, p.y - b[k - 1].y); lmin = Math.min(lmin, l); lmax = Math.max(lmax, l); }
+  }
+  check('cornice: nessun punto oltre il record DST né nello stesso buco, e niente fuori dal pezzo', [lmax <= 12.01, lmin >= 0.05, fuori], [true, true, 0]);
+
+  // Proporzionale al rombo, ma oltre la soglia aumentano gli uncini. Il rientro scala col pezzo, se no
+  // sul bordo cambia quali uncini restano e il conto non dice più niente.
+  const conta = (s) => rg.generaCornice({ cx: 0, cy: 0, a: 31.7 * s, b: 30.3 * s },
+    [{ x: -190.2 * s, y: -90.9 * s }, { x: 190.2 * s, y: -90.9 * s }, { x: 190.2 * s, y: 90.9 * s }, { x: -190.2 * s, y: 90.9 * s }],
+    { ...rg.PARAMETRI_CORNICE, rientro: 3 * s, irregolarita: 0 }).conteggi;
+  const c1 = conta(1), c12 = conta(1.2), c2 = conta(2);
+  check('cornice: rombo più grande del 20% stessi uncini, rombo doppio più uncini',
+    [c12.giri === c1.giri, c12.uncini === c1.uncini, c2.giri === c1.giri, c2.uncini > c1.uncini * 1.5, rg.divisioniCornice(30.3 * 2, 0.5)], [true, true, true, true, 30]);
+
+  // La cornice non passa sopra fermi e barre delle linee (Lorenzo, 16/09: «altrimenti sbatte contro»):
+  // gli uncini stanno DENTRO la finestra, fra i due fermi. Le linee allargano la finestra di 1 mm per
+  // parte e la cornice accorcia quello che ancora non ci sta. Le orizzontali centrate sul vertice
+  // incrociano la barra del vertice anche nel DST: quelle restano.
+  const urti = (lin, cor, margine) => {
+    let n = 0;
+    for (const e of cor.elementi) {
+      const x0 = Math.min(e.a.x, e.b.x), x1 = Math.max(e.a.x, e.b.x), y0 = Math.min(e.a.y, e.b.y), y1 = Math.max(e.a.y, e.b.y);
+      for (const r of lin.ingombri) {
+        const alVertice = e.tipo === 'H' && Math.abs((x0 + x1) / 2 - (r.x0 + r.x1) / 2) < 1e-6;
+        if (r.tipo === 'barra' && alVertice) continue;
+        if (x1 >= r.x0 - margine && x0 <= r.x1 + margine && y1 >= r.y0 - margine && y0 <= r.y1 + margine) n++;
+      }
+    }
+    return n;
+  };
+  const liscia = (ret, cont) => rg.generaCornice(ret, cont, rg.PARAMETRI_CORNICE);
+  for (const [nome, ret, cont] of [['davanti M1404', reticolo, contorno], ['M3641', retM, contM]]) {
+    const linDst = rg.generaLinee(ret, cont, { ...rg.PARAMETRI_DAVANTI, allargamentoFinestre: 0 });
+    const lin = rg.generaLinee(ret, cont, rg.PARAMETRI_DAVANTI);
+    const conDst = urti(linDst, liscia(ret, cont), 0), allargate = urti(lin, liscia(ret, cont), 0);
+    const cor = rg.generaCornice(ret, cont, rg.PARAMETRI_CORNICE, lin.ingombri);
+    // il gioco (0,3 mm sul rombo di riferimento) rimpicciolisce coi rombi più piccoli, come i fermi
+    const gioco = 0.3 * Math.min(1, ret.b / 30.3);
+    const orizzontali = (r) => r.elementi.filter((e) => e.tipo === 'H').length;
+    console.log(`   (${nome}: uncini sopra fermi e barre con le finestre del DST ${conDst}, allargate di 1 mm ${allargate}; pezzi accorciati per stare a ${gioco.toFixed(2)} mm ${cor.conteggi.accorciati})`);
+    // Lorenzo, 16/09: il risultato giusto è quello del davanti — gli uncini fra i fermi, e nessuno che sparisce
+    check(`${nome}: con le finestre del DST la cornice ci passerebbe sopra; ora nessun pezzo tocca fermi e barre e nessuna orizzontale sparisce`,
+      [conDst > 100, allargate < conDst, urti(lin, cor, gioco - 0.001), orizzontali(cor) === orizzontali(liscia(ret, cont))], [true, true, 0, true]);
+  }
+  // sul davanti l'allargamento da solo basta già a staccare gli uncini dai fermi; la cornice aggiunge solo il gioco
+  check('davanti: allargando le finestre di 1 mm nessun uncino tocca più un fermo', urti(rg.generaLinee(reticolo, contorno, rg.PARAMETRI_DAVANTI), liscia(reticolo, contorno), 0), 0);
 }
 
 rmSync(outDir, { recursive: true, force: true });
