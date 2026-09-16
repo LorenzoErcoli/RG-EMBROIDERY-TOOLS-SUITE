@@ -46,7 +46,7 @@ export { generaLinee, programmaLinee, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_R
 export { reticoloDaZone, contornoDaZone, zoneDaModello } from ${JSON.stringify(posix('apps/cannage-rafia/src/reticolo.ts'))};
 export { PARAMETRI_STOP } from ${JSON.stringify(posix('apps/cannage-rafia/src/stop.ts'))};
 export { sagomaDaZone, sagomaDaAnello, sagomaDaAnelli } from ${JSON.stringify(posix('apps/cannage-rafia/src/sagoma.ts'))};
-export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stratiProgramma, conPuntoMinimo } from ${JSON.stringify(posix('apps/cannage-rafia/src/programma.ts'))};
+export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stratiProgramma, conPuntoMinimo, unisciTratti } from ${JSON.stringify(posix('apps/cannage-rafia/src/programma.ts'))};
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
@@ -4369,7 +4369,7 @@ console.log('cannage-rafia — linee e cornice si fermano dove finisce il cannag
     rg.stopBase(4, zone, '#e42320', presetsC['CANNAGE BASE — PIENA']),
     rg.stopLinee(reticolo, sagoma, { ...rg.PARAMETRI_DAVANTI, termogarze: true }),
     corS,
-  ].map((st) => rg.conPuntoMinimo(st, 0.5));
+  ].map((st) => rg.conPuntoMinimo(rg.unisciTratti(st), 0.5));
   const saltoMassimo = (st) => {
     let m = 0;
     for (let i = 1; i < st.blocchi.length; i++) { const a = st.blocchi[i - 1].at(-1), b = st.blocchi[i][0]; m = Math.max(m, Math.hypot(b.x - a.x, b.y - a.y)); }
@@ -4380,9 +4380,14 @@ console.log('cannage-rafia — linee e cornice si fermano dove finisce il cannag
     for (const b of st.blocchi) for (let i = 1; i < b.length - 1; i++) if (Math.hypot(b[i].x - b[i - 1].x, b[i].y - b[i - 1].y) < 0.5 - 1e-9) n++;
     return n;
   };
-  check("in tutto il programma nessun salto e nessun punto sotto 0,5 mm (tranne l'ultimo di ogni tratto)",
-    [programma.map((st) => saltoMassimo(st) < 0.01), programma.map(puntiCorti)],
-    [[true, true, true, true, true, true], [0, 0, 0, 0, 0, 0]]);
+  // I salti si contano NEL DST: il motore delle basi consegna pezzi che si toccano (0 mm fra l'uno e
+  // l'altro) e il DST ne faceva comunque un salto ciascuno — 315 sul dietro M3641 di Lorenzo, che la
+  // misura sulla distanza fra i pezzi non vedeva. Ora ogni stop è un tratto solo, e nel DST restano
+  // soltanto i salti dei cambi di stop (più l'entrata alla prima impuntura).
+  const dstProg = rg.readDst(rg.dstFromExportLayers(rg.stratiProgramma(programma), { label: 'DAVANTI' }));
+  check("in tutto il programma nessun salto dentro gli stop e nessun punto sotto 0,5 mm (tranne l'ultimo di ogni tratto)",
+    [programma.map((st) => st.blocchi.length), programma.map((st) => saltoMassimo(st) < 0.01), programma.map(puntiCorti), dstProg.jumps.length <= dstProg.colorChanges + 1],
+    [[1, 1, 1, 1, 1, 1], [true, true, true, true, true, true], [0, 0, 0, 0, 0, 0], true]);
 
   // Lorenzo, 16/09: «in basso e in alto mi togli anche i blocchi verticali, perché si sviluppano dalla
   // riga che non c'è più». L'ultima riga in basso ha la linea C fuori dal pezzo, ma i suoi meandri ci

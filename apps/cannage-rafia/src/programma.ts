@@ -95,6 +95,23 @@ export function conPuntoMinimo(s: Stop, minimoMm: number): Stop {
   return { ...s, blocchi, punti: conta(blocchi) };
 }
 
+/**
+ * I tratti che si toccano diventano un tratto solo. Le basi escono dal motore delle zone a pezzi (una zona,
+ * un passaggio), attaccati capo a capo; ma nel DST ogni pezzo nuovo è un SALTO, anche se lungo 0 mm: sul
+ * dietro M3641 erano 315 salti fra base 1 e base 2 (Lorenzo, 16/09: «fa ancora tanti salti»).
+ */
+export function unisciTratti(s: Stop, tolleranzaMm = 0.05): Stop {
+  const blocchi: Punto[][] = [];
+  for (const b of s.blocchi) {
+    if (b.length < 2) continue;
+    const prima = blocchi[blocchi.length - 1];
+    const fine = prima?.[prima.length - 1];
+    if (prima && Math.hypot(b[0].x - fine.x, b[0].y - fine.y) <= tolleranzaMm) prima.push(...b.slice(1));
+    else blocchi.push(b.slice());
+  }
+  return { ...s, blocchi, punti: conta(blocchi) };
+}
+
 /** Colore d'anteprima e d'export dello stop: la palette categoriale del DS, uno per stop. */
 export const coloreStop = (numero: number) => PATTERN_INKS[(numero - 1) % PATTERN_INKS.length];
 

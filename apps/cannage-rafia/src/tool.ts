@@ -11,7 +11,7 @@ import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw'
 import { PARAMETRI_DAVANTI, type Ingombro, type Punto } from './linee';
 import { PARAMETRI_STOP } from './stop';
 import { PARAMETRI_CORNICE } from './cornice';
-import { coloreStop, conPuntoMinimo, stopBase, stopContorno, stopCornice, stopGriglia, stopLinee, stratiProgramma, type Stop } from './programma';
+import { coloreStop, conPuntoMinimo, unisciTratti, stopBase, stopContorno, stopCornice, stopGriglia, stopLinee, stratiProgramma, type Stop } from './programma';
 import { reticoloDaZone, contornoDaZone, zoneDaModello, type LetturaReticolo, type Zona } from './reticolo';
 import { sagomaDaAnelli, sagomaDaZone, type Sagoma } from './sagoma';
 import {
@@ -498,9 +498,9 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
         try { stop.push(stopCornice(lettura.reticolo, sagoma, parametriCorniceDa(cfgCornice), ingombri, scarico)); } catch (e) { avviso = (e as Error).message; }
       }
     }
-    // il punto minimo vale per tutti gli stop, basi comprese
+    // i tratti che si toccano diventano uno (niente salti da 0 mm nel DST), poi il punto minimo per tutti
     const minimo = Number(cfgProgramma.puntoMinimo) || 0;
-    stop = stop.map((s) => conPuntoMinimo(s, minimo));
+    stop = stop.map((s) => conPuntoMinimo(unisciTratti(s), minimo));
     scriviReticolo();
     scriviStop();
     disegna(adatta);
