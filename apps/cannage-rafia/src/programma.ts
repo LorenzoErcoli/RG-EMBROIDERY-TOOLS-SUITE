@@ -8,24 +8,33 @@
 // Le basi le fa il motore delle zone di @rg/pattern-grammar (lo stesso di Pattern a zone), con angolo 0:
 // nel cannage rafia i rombi sono dritti e le colonne del pattern verticali.
 import { buildZonePlan, makeZone, PATTERN_INKS, RELIEF_ROLE, type PatternConfig, type ZoneRole } from '@rg/pattern-grammar';
-import type { ExportLayer } from '@rg/core';
+import { enforceMinStitch, type ExportLayer } from '@rg/core';
 import { generaLinee, type Ingombro, type ParametriLinee, type Punto, type Reticolo, type RisultatoLinee } from './linee';
 import { contornoImpunture, grigliaBloccaggio, type ParametriStop } from './stop';
 import { generaCornice, type ParametriCornice, type RisultatoCornice } from './cornice';
+import type { Sagoma } from './sagoma';
 import type { Zona } from './reticolo';
 
 export type Stop = { numero: number; nome: string; blocchi: Punto[][]; punti: number };
 
 const conta = (blocchi: Punto[][]) => blocchi.reduce((s, b) => s + Math.max(0, b.length - 1), 0);
 
-export function stopContorno(contorno: Punto[], par: ParametriStop): Stop {
-  const b = contornoImpunture(contorno, par.puntoContorno);
-  return { numero: 1, nome: 'Contorno a impunture', blocchi: [b], punti: conta([b]) };
+export function stopContorno(contorno: Punto[] | Sagoma, par: ParametriStop): Stop {
+  const blocchi = contornoImpunture(contorno, par.puntoContorno);
+  return { numero: 1, nome: 'Contorno a impunture', blocchi, punti: conta(blocchi) };
 }
 
-export function stopGriglia(ret: Reticolo, contorno: Punto[], par: ParametriStop): Stop & { linee: number } {
+export function stopGriglia(ret: Reticolo, contorno: Punto[] | Sagoma, par: ParametriStop): Stop & { linee: number } {
   const g = grigliaBloccaggio(ret, contorno, par);
-  const blocchi = [g.contorno, g.griglia].filter((b) => b.length > 1);
+  const blocchi = [...g.contorno, g.griglia].filter((b) => b.length > 1);
+  // dal contorno alla griglia il filo non si stacca: pochi millimetri di impuntura sul bordo
+  if (g.contorno.length === 1 && g.griglia.length > 1 && blocchi.length === 2) {
+    const [bordo, griglia] = blocchi;
+    const da = bordo[bordo.length - 1], a = griglia[0];
+    const n = Math.max(1, Math.ceil(Math.hypot(a.x - da.x, a.y - da.y) / par.puntoGriglia));
+    const passaggio = Array.from({ length: n }, (_, i) => ({ x: da.x + ((a.x - da.x) * (i + 1)) / n, y: da.y + ((a.y - da.y) * (i + 1)) / n }));
+    blocchi.splice(0, 2, [...bordo, ...passaggio.slice(0, -1), ...griglia]);
+  }
   return { numero: 2, nome: 'Griglia che blocca i materiali', blocchi, punti: conta(blocchi), linee: g.linee };
 }
 
@@ -59,15 +68,31 @@ export function stopBase(numero: 3 | 4, zone: Zona[], colore: string, config: Pa
   return { numero, nome, blocchi, punti: conta(blocchi), zone: piano.stitches.length };
 }
 
-export function stopLinee(ret: Reticolo, contorno: Punto[], par: ParametriLinee): Stop & { risultato: RisultatoLinee } {
-  const risultato = generaLinee(ret, contorno, par);
+export function stopLinee(
+  ret: Reticolo, contorno: Punto[] | Sagoma, par: ParametriLinee,
+  scarico: Punto[][] = [], contornoTermogarze: Punto[][] = [],
+): Stop & { risultato: RisultatoLinee } {
+  const risultato = generaLinee(ret, contorno, par, scarico, contornoTermogarze);
   return { numero: 5, nome: 'Linee orizzontali e verticali', blocchi: risultato.blocchi, punti: risultato.conteggi.punti, risultato };
 }
 
 /** Lo stop 6. `ingombri` sono fermi e barre dello stop 5: la cornice non ci passa sopra. */
-export function stopCornice(ret: Reticolo, contorno: Punto[], par: ParametriCornice, ingombri: Ingombro[] = []): Stop & { risultato: RisultatoCornice } {
-  const risultato = generaCornice(ret, contorno, par, ingombri);
+export function stopCornice(
+  ret: Reticolo, contorno: Punto[] | Sagoma, par: ParametriCornice, ingombri: Ingombro[] = [], scarico: Punto[][] = [],
+): Stop & { risultato: RisultatoCornice } {
+  const risultato = generaCornice(ret, contorno, par, ingombri, scarico);
   return { numero: 6, nome: 'Cornice nei rombi', blocchi: risultato.blocchi, punti: risultato.conteggi.punti, risultato };
+}
+
+/**
+ * Il PUNTO MINIMO di tutto il programma (Lorenzo, 16/09: «un vincolo globale che evita i passaggi sotto
+ * un tot di millimetri, di default 0,5»): nessun punto più corto, in nessuno stop. È la pulizia del core
+ * (R3), la stessa degli altri tool: il primo e l'ultimo punto di ogni tratto restano.
+ */
+export function conPuntoMinimo(s: Stop, minimoMm: number): Stop {
+  if (!(minimoMm > 0)) return s;
+  const blocchi = s.blocchi.map((b) => enforceMinStitch(b, minimoMm) as Punto[]);
+  return { ...s, blocchi, punti: conta(blocchi) };
 }
 
 /** Colore d'anteprima e d'export dello stop: la palette categoriale del DS, uno per stop. */

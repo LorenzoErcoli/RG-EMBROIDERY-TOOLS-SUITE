@@ -30,8 +30,17 @@ export const LINEE_FIELDS: Field[] = [
   { kind: 'num', name: 'allargamentoFinestre', label: 'Allargamento delle finestre', unit: 'mm', min: 0, step: 0.5, help: 'dove la cornice attraversa la linea la finestra si allarga di tanto per parte: i fermi si allontanano e gli uncini ci stanno in mezzo; 0 = come nel DST M1404' },
   { kind: 'num', name: 'margineVerticale', label: 'Margine in alto e in basso', unit: 'mm', min: 0, step: 0.5, help: 'scalette, meandri e barre si fermano a questa distanza dal bordo' },
   { kind: 'num', name: 'puntoPassaggioBordo', label: 'Punto dei passaggi sul bordo', unit: 'mm', min: 0.5, step: 0.5 },
+  { kind: 'num', name: 'passateScarico', label: 'Passate nelle aree di scarico', min: 0, step: 1, help: 'dentro le tinte marcate «Area di scarico» cordoncini, scalette, meandri e zig-zag (fermi e barre) si cuciono con queste passate invece di quelle sopra; 0 = come sopra' },
   { kind: 'check', name: 'termogarze', label: 'Contorno per le termogarze' },
   { kind: 'num', name: 'puntoTermogarze', label: 'Punto del contorno termogarze', unit: 'mm', min: 0.5, step: 0.5 },
+];
+
+/**
+ * Il vincolo di tutto il programma (Lorenzo, 16/09): nessun punto sotto questa misura, in nessuno stop.
+ * Stesso nome ed etichetta dei preset del Generatore pattern: è la stessa domanda.
+ */
+export const PROGRAMMA_FIELDS: Field[] = [
+  { kind: 'num', name: 'puntoMinimo', label: 'Punto minimo', unit: 'mm', min: 0, step: 0.1, help: 'vale per tutti gli stop: i punti più corti di così si tolgono; 0 = niente' },
 ];
 
 /** I parametri degli stop 1 (contorno a impunture) e 2 (griglia che blocca i materiali). */
@@ -63,6 +72,7 @@ export const CORNICE_FIELDS: Field[] = [
   { kind: 'num', name: 'rientro', label: 'Rientro dal bordo', unit: 'mm', min: 0, step: 0.5, help: 'distanza minima dal bordo del pezzo: un’orizzontale che ci arriva più vicino non si cuce, una verticale si accorcia' },
   { kind: 'num', name: 'sogliaUncini', label: 'Soglia per aggiungere uncini', unit: '%', min: 0, step: 5, help: 'di quanto il passo può allungarsi col rombo prima che gli uncini aumentino' },
   { kind: 'num', name: 'puntoPassaggio', label: 'Punto dei passaggi', unit: 'mm', min: 0.5, step: 0.5 },
+  { kind: 'num', name: 'passateScarico', label: 'Passate nelle aree di scarico', min: 0, step: 1, help: 'dentro le tinte marcate «Area di scarico» gli uncini si cuciono con queste passate invece di quelle sopra; 0 = come sopra' },
 ];
 
 export function valoriCorniceDa(par: ParametriCornice): Valori {

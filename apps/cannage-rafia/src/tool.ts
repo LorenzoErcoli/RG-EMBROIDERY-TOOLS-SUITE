@@ -11,23 +11,26 @@ import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw'
 import { PARAMETRI_DAVANTI, type Ingombro, type Punto } from './linee';
 import { PARAMETRI_STOP } from './stop';
 import { PARAMETRI_CORNICE } from './cornice';
-import { coloreStop, stopBase, stopContorno, stopCornice, stopGriglia, stopLinee, stratiProgramma, type Stop } from './programma';
+import { coloreStop, conPuntoMinimo, stopBase, stopContorno, stopCornice, stopGriglia, stopLinee, stratiProgramma, type Stop } from './programma';
 import { reticoloDaZone, contornoDaZone, zoneDaModello, type LetturaReticolo, type Zona } from './reticolo';
+import { sagomaDaAnelli, sagomaDaZone, type Sagoma } from './sagoma';
 import {
-  BASI_FIELDS, BASI_PREDEFINITE, CORNICE_FIELDS, LINEE_FIELDS, PRESET_LINEE, SCALE_MODES, STOP_FIELDS,
+  BASI_FIELDS, BASI_PREDEFINITE, CORNICE_FIELDS, LINEE_FIELDS, PRESET_LINEE, PROGRAMMA_FIELDS, SCALE_MODES, STOP_FIELDS,
   parametriCorniceDa, parametriDa, parametriStopDa, valoriCorniceDa, valoriDa, type Field, type Valori,
 } from './fields';
 
 /**
  * Cosa fa una tinta del disegno: il pattern 1 comanda griglia e linee e fa lo stop 3, il pattern 2 lo
- * stop 4; le aree di scarico (anche più di una tinta) alleggeriscono le basi dentro i loro contorni.
+ * stop 4; le aree di scarico (anche più di una tinta) alleggeriscono basi, linee e cornice dentro i loro
+ * contorni; il contorno del pezzo è la linea che seguono bordo, griglia e termogarze.
  */
-type Ruolo = '' | 'pattern1' | 'pattern2' | 'scarico';
+type Ruolo = '' | 'pattern1' | 'pattern2' | 'scarico' | 'contorno';
 const RUOLI: [Ruolo, string][] = [
   ['', '— (ignora)'],
   ['pattern1', 'Pattern 1 — griglia e linee seguono questi rombi'],
   ['pattern2', 'Pattern 2'],
-  ['scarico', 'Area di scarico (meno passate nelle basi)'],
+  ['scarico', 'Area di scarico (meno passate)'],
+  ['contorno', 'Contorno del pezzo (bordo, griglia e termogarze)'],
 ];
 
 const NOMI_STOP: Record<number, string> = {
@@ -76,6 +79,8 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
   const cfgStop: Valori = { ...PARAMETRI_STOP };
   const cfgBasi: Valori = { reliefPercent: 50 };
   const cfgCornice: Valori = valoriCorniceDa(PARAMETRI_CORNICE);
+  /** Il vincolo globale: il punto minimo di tutto il programma (Lorenzo, 16/09). */
+  const cfgProgramma: Valori = { puntoMinimo: 0.5 };
   const primoPreset = Object.keys(PRESETS)[0] ?? '';
   const basi = {
     p1: BASI_PREDEFINITE.p1 in PRESETS ? BASI_PREDEFINITE.p1 : primoPreset,
@@ -96,6 +101,11 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
    * cambiano disegno, tinta, pattern o scarico — non quando si tocca un parametro delle linee.
    */
   const cacheBasi = new Map<string, Stop>();
+  /**
+   * La sagoma del pezzo: l'unione delle zone, non il rettangolo. Linee e cornice si fermano dove finisce
+   * il cannage (Lorenzo, 16/09). Si ricava una volta per disegno, non a ogni ridisegno.
+   */
+  let cacheSagoma: { chiave: string; sagoma: Sagoma } | null = null;
   let versioneZone = 0;
   let zoneStatusText = 'Nessun disegno caricato.';
   let drawingNote = '';
@@ -104,15 +114,33 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
   const fmt = (v: number) => v.toLocaleString('it-IT', { maximumFractionDigits: 1 });
   const conRuolo = (r: Ruolo) => Object.keys(ruoli).find((c) => ruoli[c] === r) ?? '';
   const areeScarico = () => Object.keys(ruoli).filter((c) => ruoli[c] === 'scarico').sort();
+  /** I contorni delle aree di scarico, per alleggerire linee e cornice dentro di loro. */
+  const poligoniScarico = () => zone.filter((z) => ruoli[(z.color ?? '')] === 'scarico').map((z) => z.points);
+  /** La linea di contorno scelta nel disegno: la seguono bordo, griglia e termogarze. */
+  const anelliContorno = () => zone.filter((z) => ruoli[(z.color ?? '')] === 'contorno').map((z) => z.points);
+  const sagomaBordo = () => {
+    const anelli = anelliContorno();
+    return anelli.length ? sagomaDaAnelli(anelli) : sagomaPezzo();
+  };
+  const sagomaPezzo = () => {
+    // il pezzo è il cannage: le zone dei due pattern. Finché non sono scelti tutti e due, tutte le zone
+    // tranne le aree di scarico (che sono contorni sopra il disegno, non pezzo).
+    const pattern = [conRuolo('pattern1'), conRuolo('pattern2')].filter(Boolean);
+    const fuoriPezzo = Object.keys(ruoli).filter((c) => ruoli[c] === 'scarico' || ruoli[c] === 'contorno').sort();
+    const escludi = pattern.length === 2 ? tinte.map((t) => t.color).filter((c) => !pattern.includes(c)) : fuoriPezzo;
+    const chiave = `${versioneZone}|${escludi.join(',')}`;
+    if (cacheSagoma?.chiave !== chiave) cacheSagoma = { chiave, sagoma: sagomaDaZone(zone, escludi) };
+    return cacheSagoma.sagoma;
+  };
 
   // ---- un campo, reso coi componenti DS; il valore mostrato è SEMPRE quello della config corrente ----
-  function fieldEl(f: Field, store: Valori, onChange: () => void): HTMLElement {
+  function fieldEl(f: Field, store: Valori, onChange: () => void, prefisso = ''): HTMLElement {
     if (f.kind === 'check') {
       const lab = document.createElement('label');
       lab.className = 'rg-choice rg-param-grid__wide';
       const inp = document.createElement('input');
       inp.type = 'checkbox';
-      inp.id = 'f-' + f.name;
+      inp.id = 'f-' + prefisso + f.name;
       inp.checked = Boolean(store[f.name]);
       inp.addEventListener('change', () => { store[f.name] = inp.checked; onChange(); });
       lab.append(inp, document.createTextNode(' ' + f.label));
@@ -128,7 +156,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     const inp = document.createElement('input');
     inp.type = 'number';
     inp.className = 'rg-input rg-input--numeric';
-    inp.id = 'f-' + f.name;
+    inp.id = 'f-' + prefisso + f.name;
     inp.step = String(f.step);
     if (f.min !== undefined) inp.min = String(f.min);
     inp.value = String(store[f.name]);
@@ -257,10 +285,13 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
 
   // ---- 03 Programma: gli stop, coi punti, e cosa si vede in anteprima ----
   function programmaGrid(): HTMLElement {
+    const wrap = document.createElement('div');
+    wrap.appendChild(gridOf(PROGRAMMA_FIELDS, cfgProgramma, 'programma-'));
     const box = document.createElement('div');
     box.className = 'rg-param-grid';
     box.id = 'stopList';
-    return box;
+    wrap.appendChild(box);
+    return wrap;
   }
 
   function scriviStop() {
@@ -325,10 +356,11 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     return grid;
   }
 
-  function gridOf(fields: Field[], store: Valori): HTMLElement {
+  /** Il prefisso tiene gli id distinti quando due sezioni hanno un campo con lo stesso nome (lo scarico). */
+  function gridOf(fields: Field[], store: Valori, prefisso = ''): HTMLElement {
     const grid = document.createElement('div');
     grid.className = 'rg-param-grid';
-    for (const f of fields) grid.appendChild(fieldEl(f, store, () => aggiorna()));
+    for (const f of fields) grid.appendChild(fieldEl(f, store, () => aggiorna(), prefisso));
     return grid;
   }
 
@@ -357,7 +389,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     panel.appendChild(accordionSection('04', 'Stop 1 e 2 — contorno e griglia', gridOf(STOP_FIELDS, cfgStop), aperte.get('stop12') ?? false, 'stop12'));
     panel.appendChild(accordionSection('05', 'Stop 3 e 4 — basi', basiGrid(), aperte.get('basi') ?? false, 'basi'));
     panel.appendChild(accordionSection('06', 'Stop 5 — linee orizzontali e verticali', lineeGrid(), aperte.get('linee') ?? false, 'linee'));
-    panel.appendChild(accordionSection('07', 'Stop 6 — cornice nei rombi', gridOf(CORNICE_FIELDS, cfgCornice), aperte.get('cornice') ?? false, 'cornice'));
+    panel.appendChild(accordionSection('07', 'Stop 6 — cornice nei rombi', gridOf(CORNICE_FIELDS, cfgCornice, 'cornice-'), aperte.get('cornice') ?? false, 'cornice'));
     wirePanel();
     renderColorMap();
     segnaPreset();
@@ -439,14 +471,15 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     if (zone.length) {
       const contorno = contornoDaZone(zone);
       const parStop = parametriStopDa(cfgStop);
-      stop.push(stopContorno(contorno, parStop));
+      // contorno e griglia seguono la sagoma vera del pezzo, non il rettangolo (Lorenzo, 16/09)
+      stop.push(stopContorno(sagomaBordo(), parStop));
       const p1 = conRuolo('pattern1');
       if (!p1) avviso = 'Scegli la tinta del pattern 1: griglia e linee seguono i suoi rombi.';
       else {
         try {
           lettura = reticoloDaZone(zone, p1);
           if (lettura.fuoriReticolo) avviso = `${lettura.fuoriReticolo} rombi non stanno sul reticolo: controlla il disegno.`;
-          stop.push(stopGriglia(lettura.reticolo, contorno, parStop));
+          stop.push(stopGriglia(lettura.reticolo, sagomaBordo(), parStop));
         } catch (e) {
           avviso = (e as Error).message;
         }
@@ -455,10 +488,19 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
       if (lettura) {
         // la cornice non passa sopra fermi e barre delle linee: glieli passa lo stop 5
         let ingombri: Ingombro[] = [];
-        try { const s5 = stopLinee(lettura.reticolo, contorno, parametriDa(cfg)); ingombri = s5.risultato.ingombri; stop.push(s5); } catch (e) { avviso = (e as Error).message; }
-        try { stop.push(stopCornice(lettura.reticolo, contorno, parametriCorniceDa(cfgCornice), ingombri)); } catch (e) { avviso = (e as Error).message; }
+        const sagoma = sagomaPezzo();
+        const scarico = poligoniScarico();
+        try {
+          const s5 = stopLinee(lettura.reticolo, sagoma, parametriDa(cfg), scarico, anelliContorno());
+          ingombri = s5.risultato.ingombri;
+          stop.push(s5);
+        } catch (e) { avviso = (e as Error).message; }
+        try { stop.push(stopCornice(lettura.reticolo, sagoma, parametriCorniceDa(cfgCornice), ingombri, scarico)); } catch (e) { avviso = (e as Error).message; }
       }
     }
+    // il punto minimo vale per tutti gli stop, basi comprese
+    const minimo = Number(cfgProgramma.puntoMinimo) || 0;
+    stop = stop.map((s) => conPuntoMinimo(s, minimo));
     scriviReticolo();
     scriviStop();
     disegna(adatta);
@@ -501,7 +543,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
 
   // ---- progetto riapribile (R9/R27/R31): parametri, pattern delle basi, ruoli e — se ci sta — il disegno ----
   function progetto(): Record<string, unknown> {
-    const base = { rgProject: 'cannage-rafia', params: cfg, stop: cfgStop, basi, basiParams: cfgBasi, cornice: cfgCornice, ruoli };
+    const base = { rgProject: 'cannage-rafia', params: cfg, stop: cfgStop, basi, basiParams: cfgBasi, cornice: cfgCornice, programma: cfgProgramma, ruoli };
     const drawing = {
       name: source?.name ?? '',
       zones: zone.map((z) => ({ color: z.color, points: z.points.map((p) => ({ x: Number(p.x.toFixed(3)), y: Number(p.y.toFixed(3)) })) })),
@@ -520,6 +562,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     const parStop = metadata?.stop as Valori | undefined;
     const parBasi = metadata?.basiParams as Valori | undefined;
     const parCornice = metadata?.cornice as Valori | undefined;
+    const parProgramma = metadata?.programma as Valori | undefined;
     const salvateBasi = metadata?.basi as { p1?: string; p2?: string } | undefined;
     const salvati = metadata?.ruoli as Record<string, Ruolo> | undefined;
     const drawing = metadata?.drawing as { name?: string; zones?: Zona[] } | undefined;
@@ -528,6 +571,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     if (parStop) for (const f of STOP_FIELDS) if (f.name in parStop) cfgStop[f.name] = parStop[f.name];
     if (parBasi) for (const f of BASI_FIELDS) if (f.name in parBasi) cfgBasi[f.name] = parBasi[f.name];
     if (parCornice) for (const f of CORNICE_FIELDS) if (f.name in parCornice) cfgCornice[f.name] = parCornice[f.name];
+    if (parProgramma) for (const f of PROGRAMMA_FIELDS) if (f.name in parProgramma) cfgProgramma[f.name] = parProgramma[f.name];
     if (salvateBasi?.p1 && salvateBasi.p1 in PRESETS) basi.p1 = salvateBasi.p1;
     if (salvateBasi?.p2 && salvateBasi.p2 in PRESETS) basi.p2 = salvateBasi.p2;
     if (salvati) Object.assign(ruoli, salvati);

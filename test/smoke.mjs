@@ -45,7 +45,8 @@ export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posi
 export { generaLinee, programmaLinee, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
 export { reticoloDaZone, contornoDaZone, zoneDaModello } from ${JSON.stringify(posix('apps/cannage-rafia/src/reticolo.ts'))};
 export { PARAMETRI_STOP } from ${JSON.stringify(posix('apps/cannage-rafia/src/stop.ts'))};
-export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stratiProgramma } from ${JSON.stringify(posix('apps/cannage-rafia/src/programma.ts'))};
+export { sagomaDaZone, sagomaDaAnello, sagomaDaAnelli } from ${JSON.stringify(posix('apps/cannage-rafia/src/sagoma.ts'))};
+export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stratiProgramma, conPuntoMinimo } from ${JSON.stringify(posix('apps/cannage-rafia/src/programma.ts'))};
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
@@ -4021,9 +4022,14 @@ console.log('cannage-rafia — le linee rifanno il DST vero del davanti M1404');
   for (const b of lato.blocchi) for (let k = 1; k < b.length; k++) if (Math.abs(b[k].y - b[k - 1].y) < 0.05) orizzMax = Math.max(orizzMax, Math.abs(b[k].x - b[k - 1].x));
   check("l'alternativa del lato: sulle linee nessun punto oltre 3,5 mm", orizzMax <= 3.51, true);
   const conTermo = rg.generaLinee(reticolo, contorno, { ...rg.PARAMETRI_DAVANTI, termogarze: true });
+  // il contorno delle termogarze apre il filo delle linee senza staccarsi (Lorenzo, 16/09: niente salti)
   const primo = conTermo.blocchi[0];
-  check('termogarze: il contorno è il primo tratto, e c\'è solo se lo chiedi',
-    [conTermo.blocchi.length, Math.min(...primo.map((p) => p.x)).toFixed(2), Math.max(...primo.map((p) => p.y)).toFixed(2)], [gen.blocchi.length + 1, bx0.toFixed(2), by1.toFixed(2)]);
+  const chiusura = primo.findIndex((p, k) => k > 4 && Math.hypot(p.x - primo[0].x, p.y - primo[0].y) < 1e-6);
+  const sulRettangolo = (p) => Math.min(Math.abs(p.x - bx0), Math.abs(p.x - bx1), Math.abs(p.y - by0), Math.abs(p.y - by1)) < 0.01;
+  const senzaTermo = rg.generaLinee(reticolo, contorno, rg.PARAMETRI_DAVANTI);
+  check("termogarze: il contorno apre il filo delle linee senza staccarsi, e c'è solo se lo chiedi",
+    [conTermo.blocchi.length, chiusura > 4, primo.slice(0, chiusura + 1).every(sulRettangolo), conTermo.conteggi.punti > senzaTermo.conteggi.punti],
+    [1, true, true, true]);
 }
 
 // ---------------------------------------------------------------------------
@@ -4061,7 +4067,9 @@ console.log('cannage-rafia — gli stop del programma: contorno, griglia, basi, 
   // tratto di bordo che il filo percorre fra una linea e l'altra può girare da un'altra parte.
   const s2 = rg.stopGriglia(reticolo, contorno, rg.PARAMETRI_STOP);
   const grigliaVera = perAgo(2)[1].points_mm.slice(1);
-  const grigliaGen = s2.blocchi[1].map((p) => [p.x, p.y]);
+  // Il contorno e la griglia sono un filo solo (Lorenzo, 16/09: niente salti): la griglia è la parte che
+  // sta dentro il contorno rientrato — si tolgono il contorno e i pochi millimetri di passaggio nell'angolo.
+  const grigliaGen = s2.blocchi[0].filter((p) => Math.min(p.x - x0, x1 - p.x, p.y - y0, y1 - p.y) > 5).map((p) => [p.x, p.y]);
   let gx0 = Infinity, gx1 = -Infinity, gy0 = Infinity, gy1 = -Infinity;
   for (const [x, y] of grigliaGen) { gx0 = Math.min(gx0, x); gx1 = Math.max(gx1, x); gy0 = Math.min(gy0, y); gy1 = Math.max(gy1, y); }
   const lontano = ([x, y]) => Math.min(x - gx0, gx1 - x, y - gy0, gy1 - y) > 4;
@@ -4071,9 +4079,9 @@ console.log('cannage-rafia — gli stop del programma: contorno, griglia, basi, 
   const mediana = (v) => v.slice().sort((a, b) => a - b)[Math.floor(v.length / 2)];
   const sc1 = grigliaVera.filter(lontano).map((p) => distPL(p, grigliaGen));
   const sc2 = grigliaGen.filter(lontano).map((p) => distPL(p, grigliaVera));
-  check('stop 2: il contorno e poi la griglia, con le stesse 16 linee del DST vero (i lati dei rombi)',
+  check('stop 2: il contorno e poi la griglia senza staccare il filo, con le stesse 16 linee del DST vero (i lati dei rombi)',
     [s2.blocchi.length, s2.linee, mediana(sc1) <= 0.3, mediana(sc2) <= 0.3, Math.max(...sc1) <= 1.5, Math.max(...sc2) <= 1.5],
-    [2, 16, true, true, true, true]);
+    [1, 16, true, true, true, true]);
 
   // Le basi sull'M3641: il motore di Pattern a zone, una tinta per stop.
   const modello = rg.parseImportedBoundarySource(readFileSync(join(here, 'fixtures/cannage-rafia-m3641-zone.svg'), 'utf8'), 'm3641.svg', { scaleMode: 'illustrator-72dpi', paintPriority: 'fill' });
@@ -4314,6 +4322,155 @@ console.log('cannage-rafia — la cornice nei rombi: uncini rigenerati sul DST v
   }
   // sul davanti l'allargamento da solo basta già a staccare gli uncini dai fermi; la cornice aggiunge solo il gioco
   check('davanti: allargando le finestre di 1 mm nessun uncino tocca più un fermo', urti(rg.generaLinee(reticolo, contorno, rg.PARAMETRI_DAVANTI), liscia(reticolo, contorno), 0), 0);
+}
+
+// ---------------------------------------------------------------------------
+// cannage-rafia — il pezzo non è un rettangolo (Lorenzo, 16/09: «se il rombo non è completo anche le
+// linee e le cornici non lo devono essere»). Il davanti dell'M3641 ha il bordo alto curvo e un incavo in
+// basso: la sagoma vera è l'unione delle zone, e il ricamo si ferma lì.
+console.log('');
+console.log('cannage-rafia — linee e cornice si fermano dove finisce il cannage');
+{
+  const modello = rg.parseImportedBoundarySource(readFileSync(join(here, 'fixtures/cannage-rafia-m3641-davanti.svg'), 'utf8'), 'davanti.svg', { scaleMode: 'illustrator-72dpi', paintPriority: 'fill' });
+  const zone = rg.zoneDaModello(modello);
+  // pattern 1 = il blu, come sceglie il tool (la prima tinta con rombi interi)
+  const reticolo = rg.reticoloDaZone(zone, '#2a4e9c').reticolo;
+  // il giallo sono le aree di scarico: contorni sopra il disegno, non fanno pezzo
+  const sagoma = rg.sagomaDaZone(zone, ['#f3e600']);
+  const rettangolo = rg.contornoDaZone(zone);
+  check('la sagoma vede l\'incavo: là sotto la riga entra ed esce due volte, più in alto una sola',
+    [sagoma.estensioniX(241).length, sagoma.estensioniX(120).length, sagoma.lati.length > 300], [2, 1, true]);
+
+  const linS = rg.generaLinee(reticolo, sagoma, rg.PARAMETRI_DAVANTI);
+  const linR = rg.generaLinee(reticolo, rettangolo, rg.PARAMETRI_DAVANTI);
+  const corS = rg.generaCornice(reticolo, sagoma, rg.PARAMETRI_CORNICE, linS.ingombri);
+  const corR = rg.generaCornice(reticolo, rettangolo, rg.PARAMETRI_CORNICE, linR.ingombri);
+  const fuori = (r, quanto) => { let n = 0; for (const b of r.blocchi) for (const p of b) if (sagoma.distanza(p) < -quanto) n++; return n; };
+  const nellIncavo = (r) => { let n = 0; for (const b of r.blocchi) for (const p of b) if (p.x > 120 && p.x < 320 && p.y > 248) n++; return n; };
+  console.log(`   (davanti M3641: punti fuori dal cannage — col rettangolo linee ${fuori(linR, 1.2)} e cornice ${fuori(corR, 1.2)}, con la sagoma ${fuori(linS, 1.2)} e ${fuori(corS, 1.2)})`);
+  // la sporgenza di 1 mm delle linee resta: è voluta (per questo si guarda oltre 1,2 mm). Per la cornice
+  // si lascia margine fino a 2 mm: un salto corto può tagliare un angolo rientrante del bordo.
+  check('col rettangolo il ricamo esce dal cannage, con la sagoma no',
+    [fuori(linR, 1.2) > 1000, fuori(corR, 1.2) > 1000, fuori(linS, 1.2), fuori(corS, 2)], [true, true, 0, 0]);
+  check('nell\'incavo non passa filo, né di linee né di cornice',
+    [nellIncavo(linR) > 500, nellIncavo(corR) > 500, nellIncavo(linS), nellIncavo(corS)], [true, true, 0, 0]);
+  // dove il pezzo è tagliato il filo delle linee non si stacca (prima: salti fino a 360 mm) e non attraversa
+  // il vuoto: cammina sul bordo, a impunture (Lorenzo, 16/09). Il «niente fuori» e il «niente nell'incavo»
+  // qui sopra dicono che quel cammino sta sul bordo e non in mezzo.
+  check('dove il pezzo è tagliato il filo delle linee cammina sul bordo invece di staccarsi',
+    [linR.blocchi.length, linS.blocchi.length], [1, 1]);
+
+  // NESSUN SALTO e NESSUN PUNTO SOTTO IL MINIMO in tutto il programma (Lorenzo, 16/09: «un vincolo globale
+  // che evita i passaggi sotto un tot di millimetri, di default 0,5» e «stare attento ai salti lunghi»).
+  const presetsC = JSON.parse(readFileSync(join(root, 'apps/pattern-grammar/src/presets.shared.json'), 'utf8'));
+  const programma = [
+    rg.stopContorno(sagoma, rg.PARAMETRI_STOP), rg.stopGriglia(reticolo, sagoma, rg.PARAMETRI_STOP),
+    rg.stopBase(3, zone, '#2a4e9c', presetsC['CANNAGE BASE — LEGGERO']),
+    rg.stopBase(4, zone, '#e42320', presetsC['CANNAGE BASE — PIENA']),
+    rg.stopLinee(reticolo, sagoma, { ...rg.PARAMETRI_DAVANTI, termogarze: true }),
+    corS,
+  ].map((st) => rg.conPuntoMinimo(st, 0.5));
+  const saltoMassimo = (st) => {
+    let m = 0;
+    for (let i = 1; i < st.blocchi.length; i++) { const a = st.blocchi[i - 1].at(-1), b = st.blocchi[i][0]; m = Math.max(m, Math.hypot(b.x - a.x, b.y - a.y)); }
+    return m;
+  };
+  const puntiCorti = (st) => {
+    let n = 0;
+    for (const b of st.blocchi) for (let i = 1; i < b.length - 1; i++) if (Math.hypot(b[i].x - b[i - 1].x, b[i].y - b[i - 1].y) < 0.5 - 1e-9) n++;
+    return n;
+  };
+  check("in tutto il programma nessun salto e nessun punto sotto 0,5 mm (tranne l'ultimo di ogni tratto)",
+    [programma.map((st) => saltoMassimo(st) < 0.01), programma.map(puntiCorti)],
+    [[true, true, true, true, true, true], [0, 0, 0, 0, 0, 0]]);
+
+  // Lorenzo, 16/09: «in basso e in alto mi togli anche i blocchi verticali, perché si sviluppano dalla
+  // riga che non c'è più». L'ultima riga in basso ha la linea C fuori dal pezzo, ma i suoi meandri ci
+  // stanno: li cuce la linea della stessa riga che passa più vicino.
+  const sy = reticolo.b / 30.3, sx = reticolo.a / 31.7;
+  const riga = reticolo.cy + 2 * reticolo.b * 3;
+  const colonne = [];
+  for (let k = -2; k < 14; k++) for (const o of [-8 * sx, 8 * sx]) {
+    const x = reticolo.cx + k * 2 * reticolo.a + o;
+    if (x < sagoma.ingombro.x0 || x > sagoma.ingombro.x1) continue;
+    if (sagoma.estensioniY(x).some(([a, b]) => riga > a && riga < b)) colonne.push(x);
+  }
+  const puntiSullaColonna = (r, x) => {
+    let n = 0;
+    for (const b of r.blocchi) for (const p of b) if (Math.abs(p.x - x) < 2.5 && p.y > riga - 7 * sy && p.y < riga + 6 * sy) n++;
+    return n;
+  };
+  // Anche contorno a impunture e griglia (stop 1 e 2) seguono il pezzo vero, non il rettangolo.
+  const s1 = rg.stopContorno(sagoma, rg.PARAMETRI_STOP), s2 = rg.stopGriglia(reticolo, sagoma, rg.PARAMETRI_STOP);
+  const s1R = rg.stopContorno(rettangolo, rg.PARAMETRI_STOP), s2R = rg.stopGriglia(reticolo, rettangolo, rg.PARAMETRI_STOP);
+  const nelVuoto = (s) => { let n = 0; for (const b of s.blocchi) for (const p of b) if (p.x > 120 && p.x < 320 && p.y > 248) n++; return n; };
+  const lontanoDalBordo = (s) => { let n = 0; for (const b of s.blocchi) for (const p of b) if (sagoma.distanza(p) < -0.8) n++; return n; };
+  console.log(`   (stop 1 e 2: punti nell'incavo col rettangolo ${nelVuoto(s1R)} e ${nelVuoto(s2R)}, con la sagoma ${nelVuoto(s1)} e ${nelVuoto(s2)})`);
+  check("contorno a impunture e griglia seguono il pezzo vero: niente nell'incavo, e il contorno sta sul bordo",
+    [nelVuoto(s1R) > 0, nelVuoto(s2R) > 0, nelVuoto(s1), nelVuoto(s2), lontanoDalBordo(s1), lontanoDalBordo(s2)],
+    [true, true, 0, 0, 0, 0]);
+
+  // LE AREE DI SCARICO valgono anche per linee e cornice (Lorenzo, 16/09): dentro i loro contorni si cuce
+  // con le passate del parametro invece di quelle sopra. Il davanti ha tre rettangoli gialli di scarico.
+  const aree = zone.filter((z) => z.color === "#f3e600").map((z) => z.points);
+  const dentroArea = (p) => aree.some((a) => {
+    let c = false;
+    for (let i = 0, j = a.length - 1; i < a.length; j = i++) {
+      const u = a[i], w = a[j];
+      if ((u.y > p.y) !== (w.y > p.y) && p.x < ((w.x - u.x) * (p.y - u.y)) / (w.y - u.y) + u.x) c = !c;
+    }
+    return c;
+  });
+  const dentroFuori = (r) => {
+    let dentro = 0, fuori = 0;
+    for (const b of r.blocchi) for (const p of b) (dentroArea(p) ? dentro++ : fuori++);
+    return { dentro, fuori };
+  };
+  const linSc = rg.generaLinee(reticolo, sagoma, rg.PARAMETRI_DAVANTI, aree);
+  const corSc = rg.generaCornice(reticolo, sagoma, rg.PARAMETRI_CORNICE, linSc.ingombri, aree);
+  const linPieno = dentroFuori(linS), linScarico = dentroFuori(linSc);
+  const corPieno = dentroFuori(corS), corScarico = dentroFuori(corSc);
+  console.log(`   (scarico: linee dentro le aree ${linPieno.dentro} → ${linScarico.dentro} punti, cornice ${corPieno.dentro} → ${corScarico.dentro})`);
+  // anche gli ZIG-ZAG (fermi e barre) si scaricano (Lorenzo, 16/09): un fermo dentro l'area ha meno tratti
+  const zigzagDentro = (r) => {
+    let n = 0;
+    for (const b of r.blocchi) for (let i = 1; i < b.length; i++) {
+      const a = b[i - 1], c = b[i];
+      // i tratti verticali corti e stretti del fermo
+      if (Math.abs(c.x - a.x) < 0.35 && Math.abs(c.y - a.y) > 1 && Math.abs(c.y - a.y) < 3.2 && dentroArea(a)) n++;
+    }
+    return n;
+  };
+  console.log(`   (scarico: tratti di zig-zag dentro le aree ${zigzagDentro(linS)} → ${zigzagDentro(linSc)})`);
+  const senzaScarico = rg.generaLinee(reticolo, sagoma, { ...rg.PARAMETRI_DAVANTI, passateScarico: 0 }, aree);
+  check("le aree di scarico valgono anche per linee e cornice: dentro meno punti (zig-zag compresi), fuori quasi uguali, e a 0 non cambia niente",
+    [aree.length, linScarico.dentro < linPieno.dentro * 0.75, corScarico.dentro < corPieno.dentro * 0.75,
+      zigzagDentro(linSc) < zigzagDentro(linS) * 0.8, zigzagDentro(linS) > 50,
+      Math.abs(linScarico.fuori / linPieno.fuori - 1) < 0.02, senzaScarico.conteggi.punti === linS.conteggi.punti],
+    [3, true, true, true, true, true, true]);
+
+  // LA LINEA DI CONTORNO scelta nel disegno (Lorenzo, 16/09): la seguono bordo, griglia e termogarze.
+  const linea = [{ x: 60, y: 40 }, { x: 380, y: 40 }, { x: 380, y: 200 }, { x: 60, y: 200 }];
+  const bordoScelto = rg.sagomaDaAnelli([linea]);
+  const s1L = rg.stopContorno(bordoScelto, rg.PARAMETRI_STOP);
+  const s2L = rg.stopGriglia(reticolo, bordoScelto, rg.PARAMETRI_STOP);
+  const sulRettangolo = (p) => Math.min(
+    Math.abs(p.x - 60) + (p.y < 39.9 || p.y > 200.1 ? 99 : 0), Math.abs(p.x - 380) + (p.y < 39.9 || p.y > 200.1 ? 99 : 0),
+    Math.abs(p.y - 40) + (p.x < 59.9 || p.x > 380.1 ? 99 : 0), Math.abs(p.y - 200) + (p.x < 59.9 || p.x > 380.1 ? 99 : 0),
+  ) < 0.01;
+  const dentroRettangolo = (p) => p.x > 59.9 && p.x < 380.1 && p.y > 39.9 && p.y < 200.1;
+  const conTermo = rg.generaLinee(reticolo, sagoma, { ...rg.PARAMETRI_DAVANTI, termogarze: true }, [], [linea]);
+  // le termogarze aprono il filo delle linee: il giro sulla linea scelta è la prima parte del tratto
+  const filo = conTermo.blocchi[0];
+  const giroChiuso = filo.findIndex((p, k) => k > 4 && Math.hypot(p.x - filo[0].x, p.y - filo[0].y) < 1e-6);
+  check("bordo, griglia e termogarze seguono la linea di contorno scelta",
+    [s1L.blocchi.length, s1L.blocchi[0].every(sulRettangolo), s2L.blocchi.flat().every(dentroRettangolo),
+      giroChiuso > 4, filo.slice(0, giroChiuso + 1).every(sulRettangolo), conTermo.blocchi.length],
+    [1, true, true, true, true, 1]);
+
+  check('i blocchi verticali di una riga tagliata dal bordo si cuciono lo stesso, dalla linea più vicina',
+    [sagoma.estensioniX(riga + 4.75 * sy).length, colonne.length, colonne.filter((x) => puntiSullaColonna(linS, x) < 20).length],
+    [0, 4, 0]);
 }
 
 rmSync(outDir, { recursive: true, force: true });

@@ -23,6 +23,8 @@
 // rimpiccioliscono con lui (Lorenzo, 16/09): grandi uguali, sull'M3641 (rombo 42 mm) non lasciavano posto
 // agli uncini della cornice vicino al vertice. Sui rombi più grandi restano quelli del DST.
 import type { DstProgram } from '@rg/core';
+import { sagomaDaAnello, type Sagoma } from './sagoma';
+import { camminoSulBordo } from './stop';
 
 export type Punto = { x: number; y: number };
 
@@ -63,6 +65,12 @@ export type ParametriLinee = {
   margineVerticale: number;
   /** Punto dei passaggi sul bordo sinistro, mm. */
   puntoPassaggioBordo: number;
+  /**
+   * Quante passate fare dentro le AREE DI SCARICO invece di quelle qui sopra (Lorenzo, 16/09): vale per i
+   * cordoncini, per scalette e meandri e anche per gli ZIG-ZAG, cioè fermi e barre («si deve scaricare
+   * anche lo zig zag delle linee», 16/09). 0 = non scaricare niente.
+   */
+  passateScarico: number;
   /** Il contorno ripassato a inizio fase, per le termogarze: può esserci o no. */
   termogarze: boolean;
   /** Punto del contorno per le termogarze, mm. */
@@ -91,6 +99,7 @@ export const PARAMETRI_DAVANTI: ParametriLinee = {
   termogarze: false,
   puntoTermogarze: 4,
   allargamentoFinestre: 1,
+  passateScarico: 5,
 };
 
 /** L'alternativa usata in alcuni modelli (il lato M1404): più passate a punto corto. */
@@ -225,24 +234,20 @@ export class Percorso {
 // ---------------------------------------------------------------------------------------------------
 // Geometria del pezzo.
 
-/** Dove una retta orizzontale sta dentro il contorno: [x sinistra, x destra], o null. */
-function estensioneX(contorno: Punto[], y: number): [number, number] | null {
-  const xs: number[] = [];
-  for (let i = 0; i < contorno.length; i++) {
-    const p = contorno[i], q = contorno[(i + 1) % contorno.length];
-    if ((p.y <= y && y < q.y) || (q.y <= y && y < p.y)) xs.push(p.x + ((y - p.y) * (q.x - p.x)) / (q.y - p.y));
-  }
-  return xs.length >= 2 ? [Math.min(...xs), Math.max(...xs)] : null;
+/** Fra i tratti di una retta dentro il pezzo, quello che contiene una quota (o null). */
+function tratto(tratti: [number, number][], q: number): [number, number] | null {
+  for (const t of tratti) if (q >= t[0] - 1e-6 && q <= t[1] + 1e-6) return t;
+  return null;
 }
 
-/** Dove una retta verticale sta dentro il contorno: [y alto, y basso], o null. */
-function estensioneY(contorno: Punto[], x: number): [number, number] | null {
-  const ys: number[] = [];
-  for (let i = 0; i < contorno.length; i++) {
-    const p = contorno[i], q = contorno[(i + 1) % contorno.length];
-    if ((p.x <= x && x < q.x) || (q.x <= x && x < p.x)) ys.push(p.y + ((x - p.x) * (q.y - p.y)) / (q.x - p.x));
+/** Fra i tratti, quello che copre di più l'intervallo dato (o null se non ne copre nessuno). */
+function copreDiPiu(tratti: [number, number][], q0: number, q1: number): [number, number] | null {
+  let best: [number, number] | null = null, meglio = 0;
+  for (const t of tratti) {
+    const q = Math.min(t[1], q1) - Math.max(t[0], q0);
+    if (q > meglio) { meglio = q; best = t; }
   }
-  return ys.length >= 2 ? [Math.min(...ys), Math.max(...ys)] : null;
+  return best;
 }
 
 /** I confini di un tratto, divisi in più oggetti se il tratto è troppo lungo per restarne uno. */
@@ -285,14 +290,16 @@ type PezzoV = { x: number; y0: number; y1: number; torna: boolean };
  */
 function pezziVerticali(
   xBase: number, voci: VoceVerticale[], aY: (d: number) => number,
-  contorno: Punto[], par: ParametriLinee,
+  sagoma: Sagoma, par: ParametriLinee, rifY: number,
 ): PezzoV[] {
   const out: PezzoV[] = [];
   for (const v of voci) {
     const x = xBase + v.corsia * CORSIA;
-    const ext = estensioneY(contorno, x);
-    if (!ext) continue;
     const yDa = aY(v.da), yA = aY(v.a);
+    // il tratto di pezzo dove sta la linea: se il pezzo è tagliato, gli altri non c'entrano. Se la riga
+    // stessa è fuori (blocco orfano, vedi generaLinee) vale il tratto che copre di più il blocco.
+    const ext = tratto(sagoma.estensioniY(x), rifY) ?? copreDiPiu(sagoma.estensioniY(x), Math.min(yDa, yA), Math.max(yDa, yA));
+    if (!ext) continue;
     const lo = Math.max(Math.min(yDa, yA), ext[0] + par.margineVerticale);
     const hi = Math.min(Math.max(yDa, yA), ext[1] - par.margineVerticale);
     if (hi - lo < 1) continue;
@@ -317,12 +324,12 @@ function pezziVerticali(
  * l'altro si fa il passo di corsia all'altezza dove si è arrivati e si scorre sulla corsia nuova fino al
  * capo di partenza. Alla fine si passa per i punti di `uscita`.
  */
-function cuciVerticali(perc: Percorso, pezzi: PezzoV[], par: ParametriLinee, uscita: Punto[]): void {
+function cuciVerticali(perc: Percorso, pezzi: PezzoV[], par: ParametriLinee, uscita: Punto[], passate: (x: number, y: number) => number): void {
   pezzi.forEach((pz, n) => {
     const u = perc.ultimo!;
     if (n > 0 && Math.abs(u.x - pz.x) > 0.05) perc.vai({ x: pz.x, y: u.y }, par.puntoMaxCorsa);
     perc.vai({ x: pz.x, y: pz.y0 }, par.puntoMaxCorsa);
-    perc.cordoncino({ x: pz.x, y: pz.y0 }, { x: pz.x, y: pz.y1 }, par.passateVerticali, 0, pz.torna);
+    perc.cordoncino({ x: pz.x, y: pz.y0 }, { x: pz.x, y: pz.y1 }, passate(pz.x, (pz.y0 + pz.y1) / 2), 0, pz.torna);
   });
   for (const p of uscita) perc.vai(p, par.puntoMaxCorsa);
 }
@@ -333,9 +340,9 @@ function cuciVerticali(perc: Percorso, pezzi: PezzoV[], par: ParametriLinee, usc
  * che scendono — non sette tratti tutti obliqui, che era la prima versione. Si entra dal basso a destra
  * e si esce dall'alto a sinistra tornando giù sulla linea.
  */
-function fermo(perc: Percorso, x: number, y: number, alto = FERMO_ALTO, largo = FERMO_LARGO): void {
+function fermo(perc: Percorso, x: number, y: number, alto = FERMO_ALTO, largo = FERMO_LARGO, passate = PASSATE_FERMO): void {
   const h = alto / 2, w = largo / 2;
-  const tratti = (PASSATE_FERMO + 1) / 2; // 7 passate = 4 salite + 3 discese
+  const tratti = Math.max(2, Math.round((passate + 1) / 2)); // 7 passate = 4 salite + 3 discese
   perc.vai({ x: x + w, y: y + h });
   for (let k = 0; k < tratti; k++) {
     const xk = x + w - (largo * k) / (tratti - 1);
@@ -346,13 +353,14 @@ function fermo(perc: Percorso, x: number, y: number, alto = FERMO_ALTO, largo = 
 }
 
 /** La barra al vertice: parte dal capo verso la diagonale, zig-zag fino all'altro, torna sulla linea. */
-function barra(perc: Percorso, x: number, yLinea: number, riga: number, lo: number, hi: number): void {
+function barra(perc: Percorso, x: number, yLinea: number, riga: number, lo: number, hi: number, passate = PASSATE_BARRA): void {
   const vicino = Math.abs(lo - riga) < Math.abs(hi - riga) ? lo : hi;
   const lontano = vicino === lo ? hi : lo;
   const w = LARGO_BARRA / 2;
+  const n = Math.max(2, Math.round(passate));
   perc.vai({ x: x + w, y: vicino });
   const passo = Math.abs(hi - lo) / 2 + 0.01; // due punti per passata, come nel riferimento
-  for (let k = 1; k <= PASSATE_BARRA; k++) perc.vai({ x: x + w - (LARGO_BARRA * k) / PASSATE_BARRA, y: k % 2 ? lontano : vicino }, passo);
+  for (let k = 1; k <= n; k++) perc.vai({ x: x + w - (LARGO_BARRA * k) / n, y: k % 2 ? lontano : vicino }, passo);
   perc.vai({ x: x - w, y: yLinea }, passo);
 }
 
@@ -362,9 +370,13 @@ function barra(perc: Percorso, x: number, yLinea: number, riga: number, lo: numb
  * Genera la fase 3 su un pezzo: il reticolo dei rombi del pattern 1 e il contorno del pezzo (anello
  * chiuso, mm). Tutto il reticolo, senza togliere niente: le parti tolte per il montaggio si decidono dopo.
  */
-export function generaLinee(ret: Reticolo, contorno: Punto[], par: ParametriLinee = PARAMETRI_DAVANTI): RisultatoLinee {
+export function generaLinee(
+  ret: Reticolo, pezzo: Punto[] | Sagoma, par: ParametriLinee = PARAMETRI_DAVANTI,
+  scarico: Punto[][] = [], contornoTermogarze: Punto[][] = [],
+): RisultatoLinee {
   if (!(ret.a > 0 && ret.b > 0)) throw new Error('Reticolo non valido: le mezze diagonali devono essere positive.');
-  if (contorno.length < 3) throw new Error('Serve il contorno del pezzo (almeno tre punti).');
+  if (Array.isArray(pezzo) && pezzo.length < 3) throw new Error('Serve il contorno del pezzo (almeno tre punti).');
+  const sagoma = Array.isArray(pezzo) ? sagomaDaAnello(pezzo) : pezzo;
   const sx = ret.a / ROMBO_RIFERIMENTO.a, sy = ret.b / ROMBO_RIFERIMENTO.b;
   // i fermi rimpiccioliscono coi rombi più piccoli del riferimento, non crescono con quelli più grandi
   const fermoAlto = FERMO_ALTO * Math.min(1, sy), fermoLargo = FERMO_LARGO * Math.min(1, sx);
@@ -372,14 +384,36 @@ export function generaLinee(ret: Reticolo, contorno: Punto[], par: ParametriLine
   const conteggi = { gruppi: 0, linee: 0, cordoncini: 0, fermi: 0, scalette: 0, meandri: 0, barre: 0, punti: 0 };
   const ingombri: Ingombro[] = [];
   const perc = new Percorso();
+  // le aree di scarico: dentro i loro contorni cordoncini, scalette e meandri hanno meno passate
+  const alleggerisci = par.passateScarico > 0 && scarico.length > 0;
+  const nelloScarico = (x: number, y: number) => {
+    if (!alleggerisci) return false;
+    for (const area of scarico) {
+      let dentro = false;
+      for (let i = 0, j = area.length - 1; i < area.length; j = i++) {
+        const a = area[i], b = area[j];
+        if ((a.y > y) !== (b.y > y) && x < ((b.x - a.x) * (y - a.y)) / (b.y - a.y) + a.x) dentro = !dentro;
+      }
+      if (dentro) return true;
+    }
+    return false;
+  };
+  const passate = (base: number, x: number, y: number) => (nelloScarico(x, y) ? par.passateScarico : base);
 
-  let ymin = Infinity, ymax = -Infinity;
-  for (const p of contorno) { ymin = Math.min(ymin, p.y); ymax = Math.max(ymax, p.y); }
+  const ymin = sagoma.ingombro.y0, ymax = sagoma.ingombro.y1;
 
   if (par.termogarze) {
-    perc.salta(contorno[0]);
-    for (const p of [...contorno.slice(1), contorno[0]]) perc.vai(p, par.puntoTermogarze);
-    perc.chiudi();
+    const g = sagoma.ingombro;
+    // il contorno delle termogarze: la linea scelta nel disegno, se no il bordo del pezzo
+    const anelli = contornoTermogarze.length ? contornoTermogarze
+      : sagoma.anelli.length ? sagoma.anelli
+      : [[{ x: g.x0, y: g.y0 }, { x: g.x1, y: g.y0 }, { x: g.x1, y: g.y1 }, { x: g.x0, y: g.y1 }]];
+    anelli.forEach((contorno, n) => {
+      perc.salta(contorno[0]);
+      for (const p of [...contorno.slice(1), contorno[0]]) perc.vai(p, par.puntoTermogarze);
+      // dall'ultimo contorno il filo non si stacca: la prima linea ci arriva camminando sul bordo
+      if (n < anelli.length - 1) perc.chiudi();
+    });
   }
 
   const eVertice = (x: number) => {
@@ -398,21 +432,53 @@ export function generaLinee(ret: Reticolo, contorno: Punto[], par: ParametriLine
   const xVert = MODULO.xVerticali * sx;
 
   const e = MODULO.rigaEsterna * sy, i = MODULO.rigaInterna * sy;
+  let precedente: { xa: number; xb: number } | null = null;
   const j0 = Math.floor((ymin - e - ret.cy) / (2 * ret.b)), j1 = Math.ceil((ymax + e - ret.cy) / (2 * ret.b));
   for (let j = j0; j <= j1; j++) {
     const riga = ret.cy + 2 * j * ret.b;
-    const linee: { y: number; tipo: Tipo; segno: -1 | 1; nome: 'A' | 'B' | 'C' | 'D' }[] = [
+    const linee: { y: number; tipo: Tipo; segno: -1 | 1; nome: 'A' | 'B' | 'C' | 'D'; idx: number }[] = ([
       { y: riga - e, tipo: 'esterna', segno: -1, nome: 'A' },
       { y: riga - i, tipo: 'interna', segno: -1, nome: 'B' },
       { y: riga + e, tipo: 'esterna', segno: 1, nome: 'D' },
       { y: riga + i, tipo: 'interna', segno: 1, nome: 'C' },
-    ];
-    let cucite = 0;
+    ] as { y: number; tipo: Tipo; segno: -1 | 1; nome: 'A' | 'B' | 'C' | 'D' }[]).map((L, idx) => ({ ...L, idx }));
+
+    // I BLOCCHI VERTICALI ORFANI (Lorenzo, 16/09: «in basso e in alto mi togli anche i blocchi verticali,
+    // perché si sviluppano dalla riga che non c'è più»). Scalette e meandri nascono da una linea: se il
+    // bordo taglia via quella linea ma il blocco starebbe dentro il pezzo, lo cuce un'altra linea della
+    // stessa riga — quella che a quella x c'è e passa più vicino.
+    const copre = (y: number, x: number) => sagoma.estensioniX(y).some(([a, b]) => x > a + 0.5 && x < b - 0.5);
+    const orfani: { x: number; voci: VoceVerticale[]; aY: (d: number) => number; scaletta: boolean; linea: number }[] = [];
     for (const L of linee) {
-      const ext = estensioneX(contorno, L.y);
-      if (!ext) continue;
-      const xStart = ext[0] - par.sporgenzaSinistra;
-      const limite = ext[1] + par.sporgenzaDestra;
+      const suoi = L.tipo === 'esterna'
+        ? { voci: MODULO.scaletta, aY: (d: number) => riga + L.segno * (MODULO.baseScaletta + d) * sy, scaletta: true }
+        : L.nome === 'C' ? { voci: MODULO.meandro, aY: (d: number) => riga + d * sy, scaletta: false } : null;
+      if (!suoi) continue;
+      for (const x of posizioni(sagoma.ingombro.x0 - 1, sagoma.ingombro.x1 + 1, [-xVert, xVert])) {
+        if (copre(L.y, x)) continue; // la sua linea c'è: ci pensa lei
+        if (!pezziVerticali(x, suoi.voci, suoi.aY, sagoma, par, riga).length) continue; // e non ci starebbe
+        let linea = -1, vicino = Infinity;
+        for (const M of linee) { if (!copre(M.y, x)) continue; const d = Math.abs(M.y - L.y); if (d < vicino) { vicino = d; linea = M.idx; } }
+        if (linea >= 0) orfani.push({ x, voci: suoi.voci, aY: suoi.aY, scaletta: suoi.scaletta, linea });
+      }
+    }
+    let cucite = 0;
+    // Il pezzo può essere tagliato — il davanti dell'M3641 ha il bordo alto curvo e un incavo in basso —
+    // e allora su una riga ci sono più tratti: la linea si ferma dove finisce il cannage (Lorenzo, 16/09:
+    // «se il rombo non è completo anche le linee non lo devono essere») e fra un tratto e l'altro il filo
+    // si stacca invece di attraversare il vuoto.
+    const tratti = linee.flatMap((L) => sagoma.estensioniX(L.y).map(([xa, xb]) => ({ ...L, xa, xb })));
+    for (const L of tratti) {
+      const xStart = L.xa - par.sporgenzaSinistra;
+      const limite = L.xb + par.sporgenzaDestra;
+      // il passaggio da una linea all'altra cammina sul bordo sinistro: va bene finché i due tratti si
+      // sovrappongono. Se no attraverserebbe il vuoto (l'incavo del davanti): prima il filo si staccava,
+      // con salti fino a 360 mm; ora cammina sul BORDO del pezzo, a impunture (Lorenzo, 16/09)
+      const ultimo = perc.ultimo;
+      if (precedente && ultimo && (L.xb < precedente.xa || L.xa > precedente.xb) && sagoma.anelli.length) {
+        for (const p of camminoSulBordo(sagoma.anelli[0], ultimo, { x: xStart, y: L.y })) perc.vai(p, par.puntoPassaggioBordo);
+      }
+      precedente = { xa: L.xa, xb: L.xb };
       const base = pezziPeriodo(L.tipo, ret.a, sx, par);
       const pezzi: Pezzo[] = [];
       const k0 = Math.floor((xStart - ret.cx) / P) - 1, k1 = Math.ceil((limite - ret.cx) / P) + 1;
@@ -446,12 +512,12 @@ export function generaLinee(ret: Reticolo, contorno: Punto[], par: ParametriLine
       for (const p of pz) {
         if (p.finestra) { perc.vai({ x: p.x1, y: L.y }, par.puntoMaxCorsa); continue; }
         for (const xs of scalette.filter((x) => x >= p.x0 - 1e-6 && x < p.x1 - 1e-6)) {
-          const pezziV = pezziVerticali(xs, MODULO.scaletta, (d) => riga + L.segno * (MODULO.baseScaletta + d) * sy, contorno, par);
+          const pezziV = pezziVerticali(xs, MODULO.scaletta, (d) => riga + L.segno * (MODULO.baseScaletta + d) * sy, sagoma, par, riga);
           if (!pezziV.length) continue;
-          cuciVerticali(perc, pezziV, par, [{ x: pezziV[pezziV.length - 1].x, y: yBase }]);
+          cuciVerticali(perc, pezziV, par, [{ x: pezziV[pezziV.length - 1].x, y: yBase }], (x, y) => passate(par.passateVerticali, x, y));
           conteggi.scalette++;
         }
-        perc.cordoncino({ x: p.x0, y: L.y }, { x: p.x1, y: L.y }, par.passateCordoncino, par.puntoMaxCordoncino);
+        perc.cordoncino({ x: p.x0, y: L.y }, { x: p.x1, y: L.y }, passate(par.passateCordoncino, (p.x0 + p.x1) / 2, L.y), par.puntoMaxCordoncino);
         conteggi.cordoncini++;
       }
 
@@ -463,7 +529,7 @@ export function generaLinee(ret: Reticolo, contorno: Punto[], par: ParametriLine
         const x = pz[k].x0;
         if (eVertice(x) || vicinoAMeandro(x) || x <= xStart + 0.3) continue;
         eventi.push({ x, fai: () => {
-          fermo(perc, x, L.y, fermoAlto, fermoLargo);
+          fermo(perc, x, L.y, fermoAlto, fermoLargo, passate(PASSATE_FERMO, x, L.y));
           conteggi.fermi++;
           ingombri.push({ tipo: 'fermo', x0: x - fermoLargo / 2, y0: L.y - fermoAlto / 2, x1: x + fermoLargo / 2, y1: L.y + fermoAlto / 2 });
         } });
@@ -478,25 +544,33 @@ export function generaLinee(ret: Reticolo, contorno: Punto[], par: ParametriLine
           ? [riga - e - hf, riga + MODULO.barraVersoDiagonale.sopra * sy]
           : [riga + MODULO.barraVersoDiagonale.sotto * sy, riga + e + hf];
         for (const xv of posizioni(xStart, xEnd, [ret.a])) {
-          const ext2 = estensioneY(contorno, xv);
+          const ext2 = tratto(sagoma.estensioniY(xv), riga);
           if (!ext2) continue;
           const lo = Math.max(b0, ext2[0] + par.margineVerticale);
           const hi = Math.min(b1, ext2[1] - par.margineVerticale);
           if (hi - lo < 1) continue;
           eventi.push({ x: xv, fai: () => {
-            barra(perc, xv, L.y, riga, lo, hi);
+            barra(perc, xv, L.y, riga, lo, hi, passate(PASSATE_BARRA, xv, (lo + hi) / 2));
             conteggi.barre++;
             ingombri.push({ tipo: 'barra', x0: xv - LARGO_BARRA / 2, y0: lo, x1: xv + LARGO_BARRA / 2, y1: hi });
           } });
         }
       }
+      for (const o of orfani.filter((o) => o.linea === L.idx && o.x > xStart + 0.5 && o.x < limite - 0.5)) {
+        eventi.push({ x: o.x, fai: () => {
+          const pezziV = pezziVerticali(o.x, o.voci, o.aY, sagoma, par, riga);
+          if (!pezziV.length) return;
+          cuciVerticali(perc, pezziV, par, [{ x: o.x, y: L.y }], (x, y) => passate(par.passateVerticali, x, y));
+          if (o.scaletta) conteggi.scalette++; else conteggi.meandri++;
+        } });
+      }
       for (const xm of meandri) {
         eventi.push({
           x: xm,
           fai: () => {
-            const pezziV = pezziVerticali(xm, MODULO.meandro, (d) => riga + d * sy, contorno, par);
+            const pezziV = pezziVerticali(xm, MODULO.meandro, (d) => riga + d * sy, sagoma, par, riga);
             if (!pezziV.length) return;
-            cuciVerticali(perc, pezziV, par, [{ x: xm, y: riga + MODULO.uscitaMeandro * sy }, { x: xm, y: L.y }]);
+            cuciVerticali(perc, pezziV, par, [{ x: xm, y: riga + MODULO.uscitaMeandro * sy }, { x: xm, y: L.y }], (x, y) => passate(par.passateVerticali, x, y));
             conteggi.meandri++;
           },
         });

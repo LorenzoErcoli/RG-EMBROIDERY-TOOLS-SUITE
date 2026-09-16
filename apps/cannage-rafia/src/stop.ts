@@ -9,6 +9,7 @@
 //   successiva il filo cammina su quel contorno rientrato.
 import { insetPolygon } from '@rg/core';
 import type { Punto, Reticolo } from './linee';
+import { sagomaDaAnello, type Sagoma } from './sagoma';
 
 export type ParametriStop = {
   /** Punto del contorno a impunture (stop 1 e inizio stop 2), mm. */
@@ -55,12 +56,24 @@ function tratto(a: Punto, b: Punto, punto: number, out: Punto[]): void {
   for (let i = 1; i <= n; i++) out.push({ x: a.x + ((b.x - a.x) * i) / n, y: a.y + ((b.y - a.y) * i) / n });
 }
 
-/** STOP 1 (e l'inizio dello stop 2): il contorno a impunture, chiuso. */
-export function contornoImpunture(contorno: Punto[], punto: number): Punto[] {
-  const anello = anelloOrario(contorno);
-  const out: Punto[] = [anello[0]];
-  for (let i = 1; i <= anello.length; i++) tratto(anello[i - 1], anello[i % anello.length], punto, out);
-  return out;
+/** Gli anelli del pezzo: da una sagoma quelli veri, da un contorno quello che è. */
+export function anelliDi(pezzo: Punto[] | Sagoma): Punto[][] {
+  const sagoma = Array.isArray(pezzo) ? sagomaDaAnello(pezzo) : pezzo;
+  return sagoma.anelli.length ? sagoma.anelli : [];
+}
+
+/**
+ * STOP 1 (e l'inizio dello stop 2): il contorno a impunture, chiuso. Un tratto per anello: il pezzo può
+ * avere più di un contorno (un buco in mezzo), e dal 16/09 il contorno è quello vero del cannage, non il
+ * rettangolo d'ingombro.
+ */
+export function contornoImpunture(pezzo: Punto[] | Sagoma, punto: number): Punto[][] {
+  return anelliDi(pezzo).map((r) => {
+    const anello = anelloOrario(r);
+    const out: Punto[] = [anello[0]];
+    for (let i = 1; i <= anello.length; i++) tratto(anello[i - 1], anello[i % anello.length], punto, out);
+    return out;
+  });
 }
 
 /** Posizione lungo l'anello (in mm dall'inizio) del punto dell'anello più vicino a `p`. */
@@ -120,7 +133,22 @@ export function anelloRientrato(contorno: Punto[], rientro: number): Anello | nu
   return { punti, cum, L };
 }
 
-export type Griglia = { contorno: Punto[]; griglia: Punto[]; linee: number };
+/**
+ * Da un punto all'altro camminando sul bordo del pezzo, per la via più corta: il punto d'entrata sul bordo,
+ * i vertici del bordo da passare, il punto d'uscita. Serve a non fare salti lunghi (Lorenzo, 16/09:
+ * «piuttosto usare il bordo per fare impunture… non al centro in vista, ma sul bordo sì»).
+ */
+export function camminoSulBordo(anello: Punto[], da: Punto, a: Punto): Punto[] {
+  const r = anelloOrario(anello);
+  if (r.length < 3) return [a];
+  const cum: number[] = [0];
+  for (let i = 1; i < r.length; i++) cum.push(cum[i - 1] + Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y));
+  const L = cum[cum.length - 1] + Math.hypot(r[0].x - r[r.length - 1].x, r[0].y - r[r.length - 1].y);
+  const u0 = ascissa(r, cum, da), u1 = ascissa(r, cum, a);
+  return [puntoAd(r, cum, L, u0), ...camminaAnello(r, cum, L, u0, u1), puntoAd(r, cum, L, u1), a];
+}
+
+export type Griglia = { contorno: Punto[][]; griglia: Punto[]; linee: number };
 
 /**
  * STOP 2: il contorno a impunture e poi la griglia. Le linee sono i lati dei rombi del reticolo
@@ -128,9 +156,10 @@ export type Griglia = { contorno: Punto[]; griglia: Punto[]; linee: number };
  * L'ordine: si parte dal capo più in alto a sinistra e, finita una linea, si va lungo il contorno
  * rientrato al capo libero più vicino. Ogni linea si cuce una volta sola.
  */
-export function grigliaBloccaggio(ret: Reticolo, contorno: Punto[], par: ParametriStop): Griglia {
-  const bordo = contornoImpunture(contorno, par.puntoContorno);
-  const rientrato = anelloRientrato(contorno, par.rientroGriglia);
+export function grigliaBloccaggio(ret: Reticolo, pezzo: Punto[] | Sagoma, par: ParametriStop): Griglia {
+  const bordo = contornoImpunture(pezzo, par.puntoContorno);
+  const esterno = anelliDi(pezzo)[0] ?? [];
+  const rientrato = esterno.length >= 3 ? anelloRientrato(esterno, par.rientroGriglia) : null;
   if (!rientrato) return { contorno: bordo, griglia: [], linee: 0 };
   const { punti: anello, cum, L } = rientrato;
 

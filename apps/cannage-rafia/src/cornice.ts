@@ -40,6 +40,7 @@
 // verticale si sposta con lei; una verticale si accorcia dal capo lontano. Quello che neanche così ci sta
 // non si cuce. Le orizzontali dei vertici incrociano la barra del vertice anche nel DST: lì non si tocca.
 import { Percorso, ROMBO_RIFERIMENTO, type Ingombro, type Punto, type Reticolo } from './linee';
+import { sagomaDaAnello, type Sagoma } from './sagoma';
 
 export type ParametriCornice = {
   /** Passate di ogni orizzontale (dispari: finisce dall'altra parte). */
@@ -61,6 +62,11 @@ export type ParametriCornice = {
   sogliaUncini: number;
   /** Punto dei passaggi, mm. */
   puntoPassaggio: number;
+  /**
+   * Quante passate fare dentro le AREE DI SCARICO invece di quelle qui sopra (Lorenzo, 16/09), sia per
+   * l'orizzontale sia per la verticale. 0 = non scaricare niente.
+   */
+  passateScarico: number;
 };
 
 /** Il davanti M1404, riportato a uncini regolari: le misure sono le mediane del DST. */
@@ -73,6 +79,7 @@ export const PARAMETRI_CORNICE: ParametriCornice = {
   rientro: 1,
   sogliaUncini: 0.5,
   puntoPassaggio: 4,
+  passateScarico: 5,
 };
 
 /** Divisioni del lato sul rombo di riferimento: il passo degli uncini è b/15 (2,02 mm). */
@@ -234,27 +241,6 @@ function specchia(m: Modulo): Modulo {
   return { voci: m.voci.map(sp), extra: m.extra.map(sp), inizi: m.inizi };
 }
 
-function dentroAnello(p: Punto, poly: Punto[]): boolean {
-  let c = false;
-  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
-    const a = poly[i], b = poly[j];
-    if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) c = !c;
-  }
-  return c;
-}
-
-/** Distanza dal contorno, positiva dentro il pezzo. */
-function distanzaInterna(p: Punto, poly: Punto[]): number {
-  let best = Infinity;
-  for (let i = 0; i < poly.length; i++) {
-    const a = poly[i], b = poly[(i + 1) % poly.length];
-    const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy || 1;
-    const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
-    best = Math.min(best, Math.hypot(a.x + dx * t - p.x, a.y + dy * t - p.y));
-  }
-  return dentroAnello(p, poly) ? best : -best;
-}
-
 /** Il punto del segmento da `buono` (dentro) a `cattivo` (fuori) dove si smette di stare dentro. */
 function confine(buono: Punto, cattivo: Punto, dentro: (p: Punto) => boolean): Punto {
   let lo = 0, hi = 1;
@@ -289,12 +275,11 @@ class Rete {
   private readonly vicini: number[][] = [];
   private readonly perChiave = new Map<string, number>();
 
-  constructor(private readonly ret: Reticolo, contorno: Punto[], private readonly salto: number) {
-    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-    for (const p of contorno) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
-    const u0 = Math.floor((minX - ret.cx) / ret.a) - 1, u1 = Math.ceil((maxX - ret.cx) / ret.a) + 1;
-    const v0 = Math.floor((minY - ret.cy) / ret.b) - 1, v1 = Math.ceil((maxY - ret.cy) / ret.b) + 1;
-    const dentro = (p: Punto) => distanzaInterna(p, contorno) >= MARGINE_PASSAGGI;
+  constructor(private readonly ret: Reticolo, sagoma: Sagoma, private readonly salto: number) {
+    const g = sagoma.ingombro;
+    const u0 = Math.floor((g.x0 - ret.cx) / ret.a) - 1, u1 = Math.ceil((g.x1 - ret.cx) / ret.a) + 1;
+    const v0 = Math.floor((g.y0 - ret.cy) / ret.b) - 1, v1 = Math.ceil((g.y1 - ret.cy) / ret.b) + 1;
+    const dentro = (p: Punto) => sagoma.distanza(p) >= MARGINE_PASSAGGI;
     const idVertice = new Map<string, number>();
     const nodo = (p: Punto, chiave?: string) => {
       if (chiave !== undefined) { const k = idVertice.get(chiave); if (k !== undefined) return k; }
@@ -307,18 +292,23 @@ class Rete {
       if (Math.abs((u + v) % 2) !== 1) continue;
       for (const [dv, fam, k] of [[-1, 's', u + v], [1, 'd', u - v]] as [number, string, number][]) {
         const p0 = P(u, v), p1 = P(u + 1, v + dv);
-        const ok0 = dentro(p0), ok1 = dentro(p1);
+        // il lato si assaggia in più punti: con un pezzo tagliato può entrare e uscire in mezzo
+        // (l'incavo del davanti M3641), e guardare solo i capi non basta
+        const ASSAGGI = 8;
+        const buoni = Array.from({ length: ASSAGGI + 1 }, (_, t) => dentro(lerp(p0, p1, t / ASSAGGI)));
+        const ok0 = buoni[0], ok1 = buoni[ASSAGGI];
         if (!ok0 && !ok1) continue;
+        const primoFuori = buoni.indexOf(false), ultimoFuori = buoni.lastIndexOf(false);
         let q0 = p0, q1 = p1, n0: number, n1: number;
-        if (ok0 && ok1) {
-          if (!dentro(lerp(p0, p1, 0.5))) continue;
+        if (ok0 && ok1 && primoFuori < 0) {
           n0 = nodo(p0, `${u},${v}`); n1 = nodo(p1, `${u + 1},${v + dv}`);
         } else if (ok0) {
-          q1 = confine(p0, p1, dentro);
+          // si cammina dal capo buono fino a dove si esce
+          q1 = confine(lerp(p0, p1, (primoFuori - 1) / ASSAGGI), lerp(p0, p1, primoFuori / ASSAGGI), dentro);
           if (dist(q0, q1) < 0.5) continue;
           n0 = nodo(p0, `${u},${v}`); n1 = nodo(q1);
         } else {
-          q0 = confine(p1, p0, dentro);
+          q0 = confine(lerp(p0, p1, (ultimoFuori + 1) / ASSAGGI), lerp(p0, p1, ultimoFuori / ASSAGGI), dentro);
           if (dist(q0, q1) < 0.5) continue;
           n0 = nodo(q0); n1 = nodo(p1, `${u + 1},${v + dv}`);
         }
@@ -445,17 +435,20 @@ const fineDi = (v: Voce) => (v.torna ? v.a : v.b);
  * pezzo. I rombi del pattern 2 stanno in mezzo: centro (cx + a + 2a·I, cy + b + 2b·J). `ingombri` sono
  * fermi e barre delle linee (stop 5), da non coprire.
  */
-export function generaCornice(ret: Reticolo, contorno: Punto[], par: ParametriCornice = PARAMETRI_CORNICE, ingombri: Ingombro[] = []): RisultatoCornice {
+export function generaCornice(
+  ret: Reticolo, pezzo: Punto[] | Sagoma, par: ParametriCornice = PARAMETRI_CORNICE,
+  ingombri: Ingombro[] = [], scarico: Punto[][] = [],
+): RisultatoCornice {
   if (!(ret.a > 0 && ret.b > 0)) throw new Error('Reticolo non valido: le mezze diagonali devono essere positive.');
-  if (contorno.length < 3) throw new Error('Serve il contorno del pezzo (almeno tre punti).');
+  if (Array.isArray(pezzo) && pezzo.length < 3) throw new Error('Serve il contorno del pezzo (almeno tre punti).');
+  const sagoma = Array.isArray(pezzo) ? sagomaDaAnello(pezzo) : pezzo;
   const normale = moduloGiro(ret.a, ret.b, par), specchio = specchia(normale);
   const f = ret.b / divisioniCornice(ret.b, par.sogliaUncini) / PASSO_RIFERIMENTO;
   const salto = MODULO.saltoDiretto * f;
-  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
-  for (const p of contorno) { minX = Math.min(minX, p.x); maxX = Math.max(maxX, p.x); minY = Math.min(minY, p.y); maxY = Math.max(maxY, p.y); }
-  const I0 = Math.floor((minX - ret.cx - ret.a) / (2 * ret.a)) - 1, I1 = Math.ceil((maxX - ret.cx - ret.a) / (2 * ret.a)) + 1;
-  const J0 = Math.floor((minY - ret.cy - ret.b) / (2 * ret.b)) - 1, J1 = Math.ceil((maxY - ret.cy - ret.b) / (2 * ret.b)) + 1;
-  const dentro = (p: Punto) => distanzaInterna(p, contorno) >= par.rientro - 1e-9;
+  const g = sagoma.ingombro;
+  const I0 = Math.floor((g.x0 - ret.cx - ret.a) / (2 * ret.a)) - 1, I1 = Math.ceil((g.x1 - ret.cx - ret.a) / (2 * ret.a)) + 1;
+  const J0 = Math.floor((g.y0 - ret.cy - ret.b) / (2 * ret.b)) - 1, J1 = Math.ceil((g.y1 - ret.cy - ret.b) / (2 * ret.b)) + 1;
+  const dentro = (p: Punto) => sagoma.distanza(p) >= par.rientro - 1e-9;
 
   /**
    * Quello che resta di un giro sul bordo, pezzo per pezzo: l'orizzontale se ci sta tutta (e con lei
@@ -560,7 +553,7 @@ export function generaCornice(ret: Reticolo, contorno: Punto[], par: ParametriCo
     verso = -verso;
   }
 
-  const rete = new Rete(ret, contorno, salto);
+  const rete = new Rete(ret, sagoma, salto);
   const coperti = new Set<string>();
   for (const g of giri) for (const k of g.lati) coperti.add(k);
   const pesoCon = (cuciti: Set<string>) => (k: string) => (cuciti.has(k) ? PESO_SOPRA : coperti.has(k) ? 1 : PESO_SCOPERTO);
@@ -717,6 +710,20 @@ export function generaCornice(ret: Reticolo, contorno: Punto[], par: ParametriCo
   // ---- si cuce
   const cuciti = new Set<string>();
   const peso = pesoCon(cuciti);
+  // le aree di scarico: dentro i loro contorni gli uncini hanno meno passate
+  const alleggerisci = par.passateScarico > 0 && scarico.length > 0;
+  const nelloScarico = (p: Punto) => {
+    if (!alleggerisci) return false;
+    for (const area of scarico) {
+      let dentro = false;
+      for (let i = 0, j = area.length - 1; i < area.length; j = i++) {
+        const a = area[i], b = area[j];
+        if ((a.y > p.y) !== (b.y > p.y) && p.x < ((b.x - a.x) * (p.y - a.y)) / (b.y - a.y) + a.x) dentro = !dentro;
+      }
+      if (dentro) return true;
+    }
+    return false;
+  };
   const perc = new Percorso();
   const elementi: ElementoCornice[] = [];
   const riassunto: RisultatoCornice['giri'] = [];
@@ -734,8 +741,9 @@ export function generaCornice(ret: Reticolo, contorno: Punto[], par: ParametriCo
     for (const passo of pl.passi) {
       for (const v of passo) {
         vaiA(v.a);
-        perc.cordoncino(v.a, v.b, v.passate, 0, v.torna);
-        elementi.push({ tipo: v.tipo, a: v.a, b: v.b, passate: v.passate });
+        const quante = nelloScarico(lerp(v.a, v.b, 0.5)) ? par.passateScarico + (v.torna ? 1 : 0) : v.passate;
+        perc.cordoncino(v.a, v.b, quante, 0, v.torna);
+        elementi.push({ tipo: v.tipo, a: v.a, b: v.b, passate: quante });
         if (v.tipo === 'H') conteggi.orizzontali++; else conteggi.verticali++;
         if (v.accorciato) conteggi.accorciati++;
       }
