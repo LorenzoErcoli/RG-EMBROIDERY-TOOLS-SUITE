@@ -13,7 +13,8 @@ body {
   max-width: var(--rg-layout-content-max); width: 100%; box-sizing: border-box;
   margin: 0 auto; padding: var(--rg-space-12) var(--rg-space-6);
 }
-.suite-home__sub { margin-top: var(--rg-space-2); margin-bottom: var(--rg-space-8); }
+.suite-home__tabs { margin-top: var(--rg-space-6); }
+.suite-home__sub { margin-top: var(--rg-space-4); margin-bottom: var(--rg-space-8); }
 .suite-grid { gap: var(--rg-layout-grid-gap); }
 .suite-card {
   display: flex; flex-direction: column; gap: var(--rg-space-2);
@@ -22,3 +23,12 @@ body {
 .suite-card__desc { flex: 1; color: var(--rg-color-text-secondary); margin: 0; }
 a.suite-card:hover { border-color: var(--rg-color-border-strong); }
 .suite-card--soon { opacity: 0.55; }
+
+/* L'icona del tool: tratto nel colore del testo, allineata al titolo. Nessun colore suo — come il
+   resto della suite resta nera/bianca, e nella card disabilitata si spegne con l'opacità. */
+.suite-card__icon { width: 32px; height: 32px; flex: none; color: var(--rg-color-text-primary); margin-bottom: var(--rg-space-2); }
+
+/* Il badge resta della sua misura: la card è una colonna flex e senza questo lo stirava per tutta
+   la larghezza. Il contatore delle tab si stacca dall'etichetta. */
+.suite-card .rg-badge { align-self: flex-start; }
+.suite-home__tabs .rg-tab .rg-u-muted { margin-left: var(--rg-space-2); }

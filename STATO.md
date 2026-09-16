@@ -1392,6 +1392,12 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 | **C15** | **broccato — passata del subagent `design-system`** sul pannello, e etichette dal processo REVISIONE-PARAMETRI (parte di A5). | L'**accordion e il contagocce sono fatti** (pannello allineato agli altri tool); resta la validazione del subagent e i nomi dei parametri. |
 | **C10** | **bitmap — overlay/maschera nella preview** (l'originale mostrava 3 viste, oggi c'è la vista punti, che è la più utile). | Piccolo. Da valutare se serve davvero. |
 
+### H — La home della suite
+
+| # | Cosa | Stato |
+|---|---|---|
+| **H1** | ~~**Un'icona per tool, e i progetti non finiti in una pagina a parte**~~ | ✅ **Fatto il 2026-09-16** su richiesta di Lorenzo. Ogni card ha un **pittogramma che disegna la struttura del punto** del suo tool (rombi della rete, zig-zag della grammatica, striature verticali, denti del pettine, croci del cross-stitch…): geometrici, a tratto, nel colore del testo, sempre accanto al nome — la regola del DS. Stanno in `packages/ui/src/tool-icons.ts`. La home ha ora **due pagine** collegate dalle `rg-tabs` del DS: **Strumenti** (`#/`, 9 tool) e **In sviluppo** (`#/sviluppo`, 4). In sviluppo: **broccato, sfrangiatura, Punto Pittorico, cross-stitch** — si aprono e si usano, ma col badge *In sviluppo* invece di *Disponibile*. Il registro dice dove sta ogni tool (`section` in `packages/ui/src/tools.ts`): spostarne uno è cambiare una parola. **Cross-stitch è attivo ma è ancora l'app React separata** (ThreadRoute Grid Lab, repo `cross-stitch-grid-embroidery-tool`): la card apre la versione pubblicata su GitHub Pages in una scheda nuova, col badge *App esterna*. Portarlo dentro la suite è una migrazione vera (motore in TS puro, pannello DS), da fare in una chat operativa. |
+
 ### P — Propagazione: portare a tutti quello che è nato in un tool solo
 
 > Ricognizione fatta nella chat globale il **2026-09-10**, su richiesta di Lorenzo: *«ho fatto un

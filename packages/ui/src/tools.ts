@@ -4,22 +4,30 @@ export interface ToolDef {
   name: string;
   description: string;
   status: 'live' | 'soon';
+  /**
+   * In quale pagina sta il tool. `suite` = la home, gli strumenti pronti per il lavoro.
+   * `sviluppo` = la pagina a parte coi progetti non finiti: si aprono e si usano, ma non sono
+   * ancora strumenti su cui contare (decisione di Lorenzo, 2026-09-16).
+   */
+  section: 'suite' | 'sviluppo';
+  /** Link esterno: il tool vive fuori dalla suite (non ancora migrato) e si apre in una scheda nuova. */
+  href?: string;
 }
 
 export const TOOLS: ToolDef[] = [
-  { id: 'net-45', name: 'Rete 45°', description: 'Genera la rete di cordoncini a 45° su una sagoma DXF/SVG.', status: 'live' },
-  { id: 'pattern-grammar', name: 'Generatore pattern', description: 'Genera pattern e basi ricamo da grammatica, con sagoma importabile.', status: 'live' },
-  { id: 'interlace', name: 'Interlace', description: 'Riempimento a intreccio multicolore: passaggi brevi che si intrecciano, con aree vuote.', status: 'live' },
-  { id: 'oblique', name: 'Oblique Pattern', description: 'Pattern obliqui a più livelli (Broderie Anglaise) con fori laser.', status: 'live' },
-  { id: 'cross-stitch', name: 'Cross-Stitch', description: 'Griglia a punto croce con routing ottimizzato.', status: 'soon' },
-  { id: 'bitmap', name: 'Bitmap → Stitch', description: 'Da immagine raster a tracciato di ricamo: selezione pixel, colori e punti ordinati in SVG.', status: 'live' },
-  { id: 'striatura', name: 'Punto Striato', description: 'Striature verticali a spola che formano macchie maculate su base di riempimento parallelo.', status: 'live' },
-  { id: 'zone-pattern', name: 'Pattern a zone', description: 'Riempie ogni zona colorata di un disegno col suo pattern, ruotato sulle perpendicolari della zona.', status: 'live' },
-  { id: 'cannage-rafia', name: 'Cannage rafia', description: 'Il programma di una borsa in cannage rafia da un SVG a zone. Per ora le linee orizzontali e verticali, agganciate ai rombi del pattern 1: cordoncini, fermi, scalette e meandri come nel DST di riferimento.', status: 'live' },
-  { id: 'broccato', name: 'Broccato', description: 'Da immagine a ricamo: aree di colore riempite a raso rado orizzontale, a pettine o normale, coi passaggi nascosti sotto i colori successivi.', status: 'live' },
-  { id: 'sfrangiatura', name: 'Sfrangiatura', description: 'Aggiunge frange che si intrecciano a X sui capi dei rasi di un DST già cucito, solo dove marchi col pennello. Il ricamo di partenza non si tocca.', status: 'live' },
-  { id: 'pettine', name: 'Punto pettine sfrangiato', description: 'Da un SVG a gruppi e da una fotografia: linee di base a passo fisso con sopra un pettine di denti rivolti verso il chiaro, col ritaglio per provare uno swatch prima del pannello.', status: 'live' },
-  { id: 'pittorico', name: 'Punto Pittorico', description: 'Da immagine a ricamo pittorico: il punto attraversa il passaggio di colore, degradé col frastaglio dei bordi dove il colore sfuma, taglio secco dove stacca.', status: 'live' },
+  { id: 'net-45', name: 'Rete 45°', description: 'Genera la rete di cordoncini a 45° su una sagoma DXF/SVG.', status: 'live', section: 'suite' },
+  { id: 'pattern-grammar', name: 'Generatore pattern', description: 'Genera pattern e basi ricamo da grammatica, con sagoma importabile.', status: 'live', section: 'suite' },
+  { id: 'interlace', name: 'Interlace', description: 'Riempimento a intreccio multicolore: passaggi brevi che si intrecciano, con aree vuote.', status: 'live', section: 'suite' },
+  { id: 'oblique', name: 'Oblique Pattern', description: 'Pattern obliqui a più livelli (Broderie Anglaise) con fori laser.', status: 'live', section: 'suite' },
+  { id: 'cross-stitch', name: 'Cross-Stitch', description: 'Griglia a punto croce con routing ottimizzato. È ancora l’app separata (ThreadRoute Grid Lab): si apre in una scheda nuova, finché non viene migrata nella suite.', status: 'live', section: 'sviluppo', href: 'https://lorenzoercoli.github.io/cross-stitch-grid-embroidery-tool/' },
+  { id: 'bitmap', name: 'Bitmap → Stitch', description: 'Da immagine raster a tracciato di ricamo: selezione pixel, colori e punti ordinati in SVG.', status: 'live', section: 'suite' },
+  { id: 'striatura', name: 'Punto Striato', description: 'Striature verticali a spola che formano macchie maculate su base di riempimento parallelo.', status: 'live', section: 'suite' },
+  { id: 'zone-pattern', name: 'Pattern a zone', description: 'Riempie ogni zona colorata di un disegno col suo pattern, ruotato sulle perpendicolari della zona.', status: 'live', section: 'suite' },
+  { id: 'cannage-rafia', name: 'Cannage rafia', description: 'Il programma di una borsa in cannage rafia da un SVG a zone. Per ora le linee orizzontali e verticali, agganciate ai rombi del pattern 1: cordoncini, fermi, scalette e meandri come nel DST di riferimento.', status: 'live', section: 'suite' },
+  { id: 'broccato', name: 'Broccato', description: 'Da immagine a ricamo: aree di colore riempite a raso rado orizzontale, a pettine o normale, coi passaggi nascosti sotto i colori successivi.', status: 'live', section: 'sviluppo' },
+  { id: 'sfrangiatura', name: 'Sfrangiatura', description: 'Aggiunge frange che si intrecciano a X sui capi dei rasi di un DST già cucito, solo dove marchi col pennello. Il ricamo di partenza non si tocca.', status: 'live', section: 'sviluppo' },
+  { id: 'pettine', name: 'Punto pettine sfrangiato', description: 'Da un SVG a gruppi e da una fotografia: linee di base a passo fisso con sopra un pettine di denti rivolti verso il chiaro, col ritaglio per provare uno swatch prima del pannello.', status: 'live', section: 'suite' },
+  { id: 'pittorico', name: 'Punto Pittorico', description: 'Da immagine a ricamo pittorico: il punto attraversa il passaggio di colore, degradé col frastaglio dei bordi dove il colore sfuma, taglio secco dove stacca.', status: 'live', section: 'sviluppo' },
 ];
 
 /**

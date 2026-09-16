@@ -30,6 +30,7 @@ function route(): void {
   else if (hash === '#/zone-pattern') mountZonePattern(app, { backHref: '#/' });
   else if (hash === '#/pettine') mountPettine(app, { backHref: '#/' });
   else if (hash === '#/cannage-rafia') mountCannageRafia(app, { backHref: '#/' });
+  else if (hash === '#/sviluppo') renderHome(app, 'sviluppo');
   else renderHome(app);
 }
 
