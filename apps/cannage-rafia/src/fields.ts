@@ -1,11 +1,12 @@
 // Schema del pannello di "Cannage rafia".
 // Struttura canonica DS (patterns/workspace.md, Testa A "sorgente-guidata"): la misura nasce dal disegno.
 //   TESTA sempre aperta → 01 Disegno · 02 Colori e ruoli (le costruisce tool.ts).
-//   CORPO in accordion → 03 Programma · 04 Stop 1 e 2 · 05 Stop 3 e 4 · 06 Stop 5 · 07 Stop 6.
+//   CORPO in accordion → 03 Programma · 04 Stop 1 e 2 · 05 Stop 3 e 4 · 06 Stop 5 · 07 Stop 6 · 08 Stop 7-10.
 // Etichette e unità come in REVISIONE-PARAMETRI.md: unità sempre nello slot, mai nel testo.
 import { PARAMETRI_DAVANTI, PARAMETRI_LATO, type ParametriLinee } from './linee';
 import { PARAMETRI_STOP, type ParametriStop } from './stop';
 import { PARAMETRI_CORNICE, type ParametriCornice } from './cornice';
+import { PARAMETRI_BORDATURA, type ParametriBordatura } from './bordatura';
 
 export type NumField = { kind: 'num'; name: string; label: string; unit?: string; min?: number; step: number; help?: string };
 export type CheckField = { kind: 'check'; name: string; label: string };
@@ -74,6 +75,36 @@ export const CORNICE_FIELDS: Field[] = [
   { kind: 'num', name: 'puntoPassaggio', label: 'Punto dei passaggi', unit: 'mm', min: 0.5, step: 0.5 },
   { kind: 'num', name: 'passateScarico', label: 'Passate nelle aree di scarico', min: 0, step: 1, help: 'dentro le tinte marcate «Area di scarico» gli uncini si cuciono con queste passate invece di quelle sopra; 0 = come sopra' },
 ];
+
+/**
+ * La bordatura, stop 7-10 (Lorenzo, 16/09). I valori sono quelli del DST M1424 (doppio passaggio). Singola o
+ * doppia non è qui: si sceglie linea per linea, col ruolo nel disegno o col clic in anteprima.
+ */
+export const BORDATURA_FIELDS: Field[] = [
+  { kind: 'num', name: 'uscita', label: 'Uscita oltre la linea', unit: 'mm', min: 0, step: 0.1, help: 'la linea disegnata o scelta è il lato esterno: la bordatura esce di tanto verso fuori e cresce verso dentro' },
+  { kind: 'num', name: 'sporgenzaEstremi', label: 'Sporgenza ai capi', unit: 'mm', min: 0, step: 0.5, help: 'di quanto va oltre i capi di una linea aperta' },
+  { kind: 'num', name: 'passoObliquo', label: 'Passo del raso obliquo', unit: 'mm', min: 0.2, step: 0.1, help: 'distanza fra due punti sullo stesso lato: densità bassa' },
+  { kind: 'num', name: 'angoloObliquo', label: 'Inclinazione del raso obliquo', unit: '°', min: 10, step: 5 },
+  { kind: 'num', name: 'sbordoDritto', label: 'Sbordo del raso dritto', unit: 'mm', min: 0, step: 0.1, help: 'di quanto il raso dritto esce oltre l’obliquo, verso fuori' },
+  { kind: 'num', name: 'passoDritto', label: 'Passo del raso dritto', unit: 'mm', min: 0.2, step: 0.05 },
+  { kind: 'num', name: 'altezzaCordoncino', label: 'Altezza del cordoncino', unit: 'mm', min: 0.3, step: 0.1, help: 'a liscio sul bordo esterno' },
+  { kind: 'num', name: 'passoCordoncino', label: 'Passo del cordoncino', unit: 'mm', min: 0.2, step: 0.05 },
+  { kind: 'num', name: 'primaLinea', label: 'Prima linea dal bordo esterno', unit: 'mm', min: 0, step: 0.1 },
+  { kind: 'num', name: 'distanzaLinee', label: 'Distanza fra le due linee', unit: 'mm', min: 0.5, step: 0.1, help: 'solo nella doppia: i fermi della seconda sono a metà passo' },
+  { kind: 'num', name: 'passoFermi', label: 'Passo dei fermi', unit: 'mm', min: 0, step: 0.5, help: '0 = il pezzo più lungo delle linee orizzontali (stop 5); più alto per allargarli' },
+  { kind: 'num', name: 'passateLinea', label: 'Passate delle linee', min: 1, step: 2 },
+  { kind: 'num', name: 'altezzaFermo', label: 'Altezza dei fermi', unit: 'mm', min: 0.5, step: 0.1 },
+];
+
+export function parametriBordaturaDa(v: Valori): ParametriBordatura {
+  const p: Record<string, unknown> = { ...PARAMETRI_BORDATURA };
+  for (const f of BORDATURA_FIELDS) {
+    const x = v[f.name];
+    if (f.kind === 'check') { if (typeof x === 'boolean') p[f.name] = x; }
+    else if (typeof x === 'number' && Number.isFinite(x)) p[f.name] = x;
+  }
+  return p as ParametriBordatura;
+}
 
 export function valoriCorniceDa(par: ParametriCornice): Valori {
   const src = par as unknown as Record<string, number>;

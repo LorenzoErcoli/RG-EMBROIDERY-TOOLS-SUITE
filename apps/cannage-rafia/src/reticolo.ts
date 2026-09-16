@@ -18,6 +18,23 @@ export function zoneDaModello(model: ImportedBoundaryModel): Zona[] {
   return out;
 }
 
+/** Un tracciato APERTO di una tinta: le linee che Lorenzo disegna per dire dove bordare (16/09). */
+export type LineaAperta = { color: string; points: Punto[] };
+
+/**
+ * I tracciati aperti del file, per tinta. L'importer li tiene solo per le tinte che non hanno anche
+ * tracciati chiusi: una linea di bordatura va disegnata con una tinta sua.
+ */
+export function lineeDaModello(model: ImportedBoundaryModel): LineaAperta[] {
+  const out: LineaAperta[] = [];
+  for (const c of model.choices) for (const p of c.boundary.paths) {
+    const color = (p.color ?? c.color ?? '').toLowerCase();
+    if (p.closed || p.points.length < 2 || !/^#[0-9a-f]{6}$/.test(color)) continue;
+    out.push({ color, points: p.points.map((q) => ({ x: q.x, y: q.y })) });
+  }
+  return out;
+}
+
 export type LetturaReticolo = {
   reticolo: Reticolo;
   /** Rombi interi del colore scelto usati per la misura. */

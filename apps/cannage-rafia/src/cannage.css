@@ -24,3 +24,6 @@ body {
   background: var(--ink);
   vertical-align: middle;
 }
+
+/* Mentre si scelgono i lati da bordare il clic sull'anteprima prende un lato: il cursore lo dice. */
+.cannage-scegli-lati { cursor: crosshair; }

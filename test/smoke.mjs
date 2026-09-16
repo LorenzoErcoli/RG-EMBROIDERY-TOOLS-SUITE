@@ -42,12 +42,13 @@ export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
-export { generaLinee, programmaLinee, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
-export { reticoloDaZone, contornoDaZone, zoneDaModello } from ${JSON.stringify(posix('apps/cannage-rafia/src/reticolo.ts'))};
+export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
+export { reticoloDaZone, contornoDaZone, zoneDaModello, lineeDaModello } from ${JSON.stringify(posix('apps/cannage-rafia/src/reticolo.ts'))};
 export { PARAMETRI_STOP } from ${JSON.stringify(posix('apps/cannage-rafia/src/stop.ts'))};
 export { sagomaDaZone, sagomaDaAnello, sagomaDaAnelli } from ${JSON.stringify(posix('apps/cannage-rafia/src/sagoma.ts'))};
-export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stratiProgramma, conPuntoMinimo, unisciTratti } from ${JSON.stringify(posix('apps/cannage-rafia/src/programma.ts'))};
+export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordatura, stratiProgramma, conPuntoMinimo, unisciTratti } from ${JSON.stringify(posix('apps/cannage-rafia/src/programma.ts'))};
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
+export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -4476,6 +4477,132 @@ console.log('cannage-rafia — linee e cornice si fermano dove finisce il cannag
   check('i blocchi verticali di una riga tagliata dal bordo si cuciono lo stesso, dalla linea più vicina',
     [sagoma.estensioniX(riga + 4.75 * sy).length, colonne.length, colonne.filter((x) => puntiSullaColonna(linS, x) < 20).length],
     [0, 4, 0]);
+}
+
+// cannage-rafia — la BORDATURA (Lorenzo, 16/09). Il riferimento è il DST M1424 ORLATURA E MEDAGLIONE: lo
+// stop 1 è la linea, gli stop 2-5 la bordatura doppia da 4 mm (raso obliquo, raso dritto, cordoncino, linee).
+// Nel DST la bordatura è centrata sulla linea (esce di 1,92 mm): la rigeneriamo con quell'uscita e
+// misuriamo ogni punto rispetto alla linea, lungo (s) e verso dentro (n).
+console.log('');
+console.log('cannage-rafia — la bordatura rifà il DST vero M1424');
+{
+  const riferimento = rg.readDst(new Uint8Array(readFileSync(join(here, 'fixtures/m1424-orlatura.dst'))));
+  const contorno = riferimento.blocks[0].points_mm.map(([x, y]) => ({ x, y }));
+  const sagoma = rg.sagomaDaAnello(contorno);
+  const lato = contorno.filter((p) => p.y < -95).sort((a, b) => a.x - b.x);
+  const S = [0];
+  for (let i = 1; i < lato.length; i++) S.push(S[i - 1] + Math.hypot(lato[i].x - lato[i - 1].x, lato[i].y - lato[i - 1].y));
+  const proietta = ({ x, y }) => {
+    let best = null;
+    for (let i = 1; i < lato.length; i++) {
+      const a = lato[i - 1], b = lato[i], vx = b.x - a.x, vy = b.y - a.y, l2 = vx * vx + vy * vy || 1e-9;
+      const t = Math.max(0, Math.min(1, ((x - a.x) * vx + (y - a.y) * vy) / l2));
+      const d = Math.hypot(x - a.x - t * vx, y - a.y - t * vy);
+      if (!best || d < best.d) best = { d, s: S[i - 1] + t * Math.sqrt(l2), n: (vx * (y - a.y) - vy * (x - a.x)) / Math.sqrt(l2) };
+    }
+    return best;
+  };
+  // n positivo = verso il pezzo (in basso): il bordo è in alto
+  const fascia = (punti) => {
+    const q = punti.map(proietta).filter((p) => p.s > 200 && p.s < 300);
+    const n = q.map((p) => p.n).sort((a, b) => a - b);
+    return { lo: n[Math.floor(n.length * 0.02)], hi: n[Math.floor(n.length * 0.98)], punti: q.length };
+  };
+  const bord = rg.generaBordatura([{ punti: lato, chiusa: false, passaggio: 'doppia' }], { ...rg.PARAMETRI_BORDATURA, uscita: 1.92 }, sagoma);
+  const nostri = [bord.obliquo, bord.dritto, bord.cordoncino, bord.linee];
+  const confronti = nostri.map((b, k) => {
+    const dst = fascia(riferimento.blocks[k + 1].points_mm.map(([x, y]) => ({ x, y })));
+    const mio = fascia(b.flat());
+    return [Math.abs(dst.lo - mio.lo) < 0.45 && Math.abs(dst.hi - mio.hi) < 0.45, Math.abs(mio.punti / dst.punti - 1) < 0.08];
+  });
+  check('i quattro stop hanno le altezze del DST (entro 0,45 mm) e la stessa densità (entro l\'8%)', confronti, [[true, true], [true, true], [true, true], [true, true]]);
+  check('ogni stop è un filo solo', nostri.map((b) => b.length), [1, 1, 1, 1]);
+
+  // le linee: dove stanno e dove stanno i fermi. Un fermo = i suoi 4 tratti dritti a cavallo della linea
+  // (quelli che vanno verso fuori: le diagonali tornano dentro).
+  const fermi = (b) => {
+    const out = [];
+    for (let i = 1; i < b.length; i++) {
+      const a = proietta(b[i - 1]), c = proietta(b[i]);
+      if (Math.abs(a.s - c.s) < 0.2 && a.n - c.n > 2) out.push({ s: a.s, n: (a.n + c.n) / 2 });
+    }
+    const gruppi = [];
+    for (const f of out) {
+      const g = gruppi.find((x) => Math.abs(x.s - f.s) < 1.2 && Math.abs(x.n - f.n) < 0.8);
+      if (g) g.k++; else gruppi.push({ ...f, k: 1 });
+    }
+    return gruppi;
+  };
+  const fr = fermi(bord.linee[0]);
+  const sopra = fr.filter((f) => f.n < 0.5).map((f) => f.s).sort((a, b) => a - b);
+  const sotto = fr.filter((f) => f.n >= 0.5).map((f) => f.s).sort((a, b) => a - b);
+  const passo = sopra[2] - sopra[1];
+  const meta = sotto.filter((x) => x > sopra[5] && x < sopra[6])[0] - sopra[5];
+  check('doppio: due linee a 2 mm (come nel DST: -0,5 e +1,5 dalla linea), fermi a 9,5 mm e sfasati di mezzo passo',
+    [Math.round(fr.filter((f) => f.n < 0.5)[3].n * 10) / 10, Math.round(fr.filter((f) => f.n >= 0.5)[3].n * 10) / 10,
+      // lontano dai capi (oltre la linea la proiezione si schiaccia sul capo) e dove il contorno non piega
+      // (lì i tratti dentro si stringono e la misura li confonde): quasi tutti coi loro 4 tratti
+      Math.abs(passo - 9.5) < 0.1, Math.abs(meta / passo - 0.5) < 0.02,
+      (() => { const mezzo = fr.filter((f) => f.s > 20 && f.s < S.at(-1) - 20); return mezzo.filter((f) => f.k === 4).length >= mezzo.length * 0.95; })()],
+    [-0.5, 1.5, true, true, true]);
+
+  // L'uscita di Lorenzo: 0,5 mm oltre la linea, tutto il resto verso dentro. Singolo = 2 mm e una linea.
+  const singolo = rg.generaBordatura([{ punti: lato, chiusa: false, passaggio: 'singola' }], rg.PARAMETRI_BORDATURA, sagoma);
+  const doppio = rg.generaBordatura([{ punti: lato, chiusa: false, passaggio: 'doppia' }], rg.PARAMETRI_BORDATURA, sagoma);
+  const tonda = (v) => Math.round(v * 10) / 10;
+  const fs = fascia(singolo.dritto.flat()), fd = fascia(doppio.dritto.flat());
+  const lineeSingolo = [...new Set(fermi(singolo.linee[0]).map((f) => tonda(f.n)))];
+  check('uscita 0,5 mm: il raso dritto va da -0,5 a +1,5 nel singolo e a +3,5 nel doppio; il singolo ha una linea sola',
+    [tonda(fs.lo), tonda(fs.hi), tonda(fd.lo), tonda(fd.hi), lineeSingolo.length], [-0.5, 1.5, -0.5, 3.5, 1]);
+  // il dentro si trova dal pezzo, qualunque sia il verso in cui la linea è disegnata
+  const alRovescio = rg.generaBordatura([{ punti: lato.slice().reverse(), chiusa: false, passaggio: 'doppia' }], rg.PARAMETRI_BORDATURA, sagoma);
+  check('una linea disegnata al contrario borda dalla stessa parte', tonda(fascia(alRovescio.dritto.flat()).hi), 3.5);
+  const conMinimo = rg.conPuntoMinimo({ numero: 9, nome: '', blocchi: doppio.cordoncino, punti: 0 }, 0.5);
+  check('il punto minimo di 0,5 mm non mangia il cordoncino (i suoi punti vanno di traverso)', conMinimo.blocchi[0].length === doppio.cordoncino[0].length, true);
+
+  // I LATI DA SCEGLIERE IN ANTEPRIMA, sul davanti M3641: il bordo alto curvo è un lato solo, gli scalini fra
+  // i rombi in basso non fanno lati.
+  const modello = rg.parseImportedBoundarySource(readFileSync(join(here, 'fixtures/cannage-rafia-m3641-davanti.svg'), 'utf8'), 'davanti.svg', { scaleMode: 'illustrator-72dpi', paintPriority: 'fill' });
+  const zone = rg.zoneDaModello(modello);
+  const pezzo = rg.sagomaDaZone(zone, ['#f3e600']);
+  const lati = rg.latiDelContorno(pezzo.anelli);
+  const alto = lati.filter((l) => Math.max(...l.punti.map((p) => p.y)) < 12);
+  check('M3641 davanti: 9 lati, e il bordo alto curvo è uno solo', [lati.length, alto.length, alto[0]?.punti.length > 20], [9, 1, true]);
+  const vicino = (l) => l.indice === (alto[0].indice + 1) % lati.length;
+  const unite = rg.lineeDaLati(lati, (l) => (l === alto[0] || vicino(l) ? 'doppia' : null));
+  const tutte = rg.lineeDaLati(lati, () => 'singola');
+  check('due lati vicini diventano una linea sola; tutti i lati, un anello chiuso', [unite.length, unite[0].chiusa, tutte.length, tutte[0].chiusa, tutte[0].passaggio], [1, false, 1, true, 'singola']);
+  // NELLO STESSO PROGRAMMA doppie e singole (Lorenzo, 16/09): due lati vicini di passaggio diverso restano due
+  // linee, e negli stessi stop la doppia ha due linee e la singola una.
+  const miste = rg.lineeDaLati(lati, (l) => (l === alto[0] ? 'doppia' : vicino(l) ? 'singola' : null));
+  const bordMiste = rg.generaBordatura(miste, rg.PARAMETRI_BORDATURA, pezzo);
+  const altezza = (bl) => Math.max(...bl.flat().map((p) => rg.sagomaDaAnelli(pezzo.anelli).distanza(p)));
+  check('doppie e singole insieme: due linee coi loro passaggi, negli stessi quattro stop, fasce da 4 e da 2 mm',
+    // i fili dello stop sono nell'ordine delle linee: ogni linea col suo
+    [miste.map((l) => l.passaggio).sort(), bordMiste.dritto.length,
+      Object.fromEntries(miste.map((l, i) => [l.passaggio, Math.round(altezza([bordMiste.dritto[i]]) * 10) / 10]).sort())],
+    [['doppia', 'singola'], 2, { doppia: 3.5, singola: 1.5 }]);
+  check('un lato scelto si ritrova dal suo punto di mezzo', lati.filter((l) => rg.stessoLato(l, alto[0].chiave)).length, 1);
+  const retM = rg.reticoloDaZone(zone, '#2a4e9c').reticolo;
+  const sulDavanti = rg.stopBordatura(rg.lineeDaLati(lati, (l) => (l === alto[0] ? 'doppia' : null)), rg.PARAMETRI_BORDATURA, pezzo, rg.pezzoPiuLungo(retM));
+  // fuori si misura dall'anello del contorno, la linea che si borda: il bordo delle zone ha gli scalini dei rombi
+  const anello = rg.sagomaDaAnelli(pezzo.anelli);
+  const dentroPezzo = sulDavanti.stop.flatMap((st) => st.blocchi.flat()).filter((p) => p.x > 5 && p.x < 435);
+  check('sul davanti: stop 7-10, un filo ciascuno, e fuori dal pezzo al massimo l\'uscita',
+    [sulDavanti.stop.map((st) => st.numero), sulDavanti.stop.map((st) => st.blocchi.length), dentroPezzo.every((p) => anello.distanza(p) > -0.51)],
+    [[7, 8, 9, 10], [1, 1, 1, 1], true]);
+  check('il passo dei fermi parte dal pezzo più lungo delle linee orizzontali', Math.abs(sulDavanti.risultato.conteggi.passoFermi - rg.pezzoPiuLungo(retM)) < 1e-9 && rg.pezzoPiuLungo(retM) > 5, true);
+
+  // LA LINEA NEL DISEGNO: un tracciato aperto (anche una <line> di Illustrator) con una tinta sua.
+  const svgLinea = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 100" width="200mm" height="100mm">
+    <rect x="10" y="10" width="180" height="80" fill="#2a4e9c"/>
+    <line x1="10" y1="10" x2="190" y2="10" stroke="#ff00ff" fill="none"/>
+    <path d="M10 90 C 60 95, 140 95, 190 90" stroke="#00aa00" fill="none"/>
+  </svg>`;
+  const mLinea = rg.parseImportedBoundarySource(svgLinea, 'linea.svg', { scaleMode: 'viewbox-mm', paintPriority: 'fill' });
+  const aperte = rg.lineeDaModello(mLinea);
+  check('le linee aperte del disegno si leggono con la loro tinta, anche <line>, e non diventano zone',
+    [aperte.map((l) => l.color).sort(), rg.zoneDaModello(mLinea).length], [['#00aa00', '#ff00ff'], 1]);
 }
 
 rmSync(outDir, { recursive: true, force: true });

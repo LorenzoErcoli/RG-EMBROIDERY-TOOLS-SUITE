@@ -5,6 +5,7 @@
 //   4. base del pattern 2
 //   5. linee orizzontali e verticali
 //   6. cornice nei rombi
+//   7-10. la bordatura, sui lati scelti (Lorenzo, 16/09): raso obliquo, raso dritto, cordoncino, linee
 // Le basi le fa il motore delle zone di @rg/pattern-grammar (lo stesso di Pattern a zone), con angolo 0:
 // nel cannage rafia i rombi sono dritti e le colonne del pattern verticali.
 import { buildZonePlan, makeZone, PATTERN_INKS, RELIEF_ROLE, type PatternConfig, type ZoneRole } from '@rg/pattern-grammar';
@@ -12,6 +13,7 @@ import { enforceMinStitch, type ExportLayer } from '@rg/core';
 import { generaLinee, type Ingombro, type ParametriLinee, type Punto, type Reticolo, type RisultatoLinee } from './linee';
 import { contornoImpunture, grigliaBloccaggio, type ParametriStop } from './stop';
 import { generaCornice, type ParametriCornice, type RisultatoCornice } from './cornice';
+import { generaBordatura, type LineaBordo, type ParametriBordatura, type RisultatoBordatura } from './bordatura';
 import type { Sagoma } from './sagoma';
 import type { Zona } from './reticolo';
 
@@ -82,6 +84,27 @@ export function stopCornice(
 ): Stop & { risultato: RisultatoCornice } {
   const risultato = generaCornice(ret, contorno, par, ingombri, scarico);
   return { numero: 6, nome: 'Cornice nei rombi', blocchi: risultato.blocchi, punti: risultato.conteggi.punti, risultato };
+}
+
+/** I nomi degli stop della bordatura, nell'ordine in cui si cuciono. */
+export const NOMI_BORDATURA: Record<number, string> = {
+  7: 'Bordatura — raso obliquo',
+  8: 'Bordatura — raso dritto',
+  9: 'Bordatura — cordoncino',
+  10: 'Bordatura — linee',
+};
+
+/**
+ * Gli stop 7-10, la bordatura sulle linee date. `sagoma` dice da che parte è il pezzo; `passoFermiStop5` è
+ * il pezzo di cordoncino più lungo delle linee orizzontali, da cui partono i fermi.
+ */
+export function stopBordatura(
+  linee: LineaBordo[], par: ParametriBordatura, sagoma?: Sagoma, passoFermiStop5?: number,
+): { stop: Stop[]; risultato: RisultatoBordatura } {
+  const risultato = generaBordatura(linee, par, sagoma, passoFermiStop5);
+  const parti = [risultato.obliquo, risultato.dritto, risultato.cordoncino, risultato.linee];
+  const stop = parti.map((blocchi, i) => ({ numero: 7 + i, nome: NOMI_BORDATURA[7 + i], blocchi, punti: conta(blocchi) }));
+  return { stop, risultato };
 }
 
 /**

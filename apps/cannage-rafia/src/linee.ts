@@ -280,6 +280,20 @@ function pezziPeriodo(tipo: Tipo, a: number, sx: number, par: ParametriLinee): P
   return out;
 }
 
+/**
+ * Il pezzo di cordoncino più lungo delle linee orizzontali su questo reticolo, mm (finestre escluse). È il
+ * passo di partenza dei fermi della bordatura (Lorenzo, 16/09: «la distanza massima che hanno i punti nello
+ * stop orizzontale»).
+ */
+export function pezzoPiuLungo(ret: Reticolo, par: ParametriLinee = PARAMETRI_DAVANTI): number {
+  const sx = ret.a / ROMBO_RIFERIMENTO.a;
+  let max = 0;
+  for (const tipo of ['esterna', 'interna'] as Tipo[]) {
+    for (const p of pezziPeriodo(tipo, ret.a, sx, par)) if (!p.finestra) max = Math.max(max, p.x1 - p.x0);
+  }
+  return max;
+}
+
 /** Un pezzo verticale pronto da cucire: il cordoncino parte da `y0` e va verso `y1`. */
 type PezzoV = { x: number; y0: number; y1: number; torna: boolean };
 

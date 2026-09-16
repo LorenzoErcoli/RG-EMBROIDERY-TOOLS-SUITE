@@ -272,7 +272,7 @@ function extractSvgElements(
 ): SvgElement[] {
   const elements: SvgElement[] = [];
   const stack: Matrix[] = [IDENTITY_MATRIX];
-  const tokenRegex = /<(g|path|polyline|polygon|rect)\b([^>]*?)(\/?)>|<\/g\s*>/gi;
+  const tokenRegex = /<(g|path|polyline|polygon|rect|line)\b([^>]*?)(\/?)>|<\/g\s*>/gi;
   let match: RegExpExecArray | null;
   while ((match = tokenRegex.exec(text))) {
     if (match[1] === undefined) {            // </g>
@@ -313,6 +313,11 @@ export type { Matrix };
 function svgElementPoints(tag: string, attrs: Record<string, string>): Point[] {
   if (tag === "polygon" || tag === "polyline") return parsePointList(attrs.points || "");
   if (tag === "path") return parsePathPoints(attrs.d || "");
+  // una retta sola (Illustrator scrive così un tratto dritto a due punti): è un tracciato aperto
+  if (tag === "line") return [
+    { x: parseSvgCoordinate(attrs.x1), y: parseSvgCoordinate(attrs.y1) },
+    { x: parseSvgCoordinate(attrs.x2), y: parseSvgCoordinate(attrs.y2) }
+  ];
   if (tag === "rect") {
     const x = parseSvgCoordinate(attrs.x);
     const y = parseSvgCoordinate(attrs.y);

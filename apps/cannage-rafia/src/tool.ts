@@ -8,30 +8,37 @@ import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 // La libreria dei pattern è quella del Generatore pattern, letta dal suo file (come fa Pattern a zone):
 // un preset pubblicato lì è subito disponibile per le basi, senza un doppione da tenere allineato.
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';
-import { PARAMETRI_DAVANTI, type Ingombro, type Punto } from './linee';
+import { PARAMETRI_DAVANTI, pezzoPiuLungo, type Ingombro, type Punto } from './linee';
 import { PARAMETRI_STOP } from './stop';
 import { PARAMETRI_CORNICE } from './cornice';
-import { coloreStop, conPuntoMinimo, unisciTratti, stopBase, stopContorno, stopCornice, stopGriglia, stopLinee, stratiProgramma, type Stop } from './programma';
-import { reticoloDaZone, contornoDaZone, zoneDaModello, type LetturaReticolo, type Zona } from './reticolo';
+import { PARAMETRI_BORDATURA, latiDelContorno, lineeDaLati, stessoLato, type LatoContorno, type LineaBordo, type Passaggio } from './bordatura';
+import { coloreStop, conPuntoMinimo, unisciTratti, stopBase, stopBordatura, stopContorno, stopCornice, stopGriglia, stopLinee, stratiProgramma, NOMI_BORDATURA, type Stop } from './programma';
+import { reticoloDaZone, contornoDaZone, lineeDaModello, zoneDaModello, type LetturaReticolo, type LineaAperta, type Zona } from './reticolo';
 import { sagomaDaAnelli, sagomaDaZone, type Sagoma } from './sagoma';
 import {
-  BASI_FIELDS, BASI_PREDEFINITE, CORNICE_FIELDS, LINEE_FIELDS, PRESET_LINEE, PROGRAMMA_FIELDS, SCALE_MODES, STOP_FIELDS,
-  parametriCorniceDa, parametriDa, parametriStopDa, valoriCorniceDa, valoriDa, type Field, type Valori,
+  BASI_FIELDS, BASI_PREDEFINITE, BORDATURA_FIELDS, CORNICE_FIELDS, LINEE_FIELDS, PRESET_LINEE, PROGRAMMA_FIELDS, SCALE_MODES, STOP_FIELDS,
+  parametriBordaturaDa, parametriCorniceDa, parametriDa, parametriStopDa, valoriCorniceDa, valoriDa, type Field, type Valori,
 } from './fields';
 
 /**
  * Cosa fa una tinta del disegno: il pattern 1 comanda griglia e linee e fa lo stop 3, il pattern 2 lo
  * stop 4; le aree di scarico (anche più di una tinta) alleggeriscono basi, linee e cornice dentro i loro
- * contorni; il contorno del pezzo è la linea che seguono bordo, griglia e termogarze.
+ * contorni; il contorno del pezzo è la linea che seguono bordo, griglia e termogarze; le due bordature sono
+ * il lato esterno da bordare (una linea aperta o chiusa), doppia o singola.
  */
-type Ruolo = '' | 'pattern1' | 'pattern2' | 'scarico' | 'contorno';
+type Ruolo = '' | 'pattern1' | 'pattern2' | 'scarico' | 'contorno' | 'bordaturaDoppia' | 'bordaturaSingola';
 const RUOLI: [Ruolo, string][] = [
   ['', '— (ignora)'],
   ['pattern1', 'Pattern 1 — griglia e linee seguono questi rombi'],
   ['pattern2', 'Pattern 2'],
   ['scarico', 'Area di scarico (meno passate)'],
   ['contorno', 'Contorno del pezzo (bordo, griglia e termogarze)'],
+  ['bordaturaDoppia', 'Bordatura doppia — la linea è il lato esterno'],
+  ['bordaturaSingola', 'Bordatura singola — la linea è il lato esterno'],
 ];
+
+/** Il passaggio di una tinta di bordatura, o null se la tinta non borda. */
+const passaggioDi = (r: Ruolo | undefined): Passaggio | null => (r === 'bordaturaDoppia' ? 'doppia' : r === 'bordaturaSingola' ? 'singola' : null);
 
 const NOMI_STOP: Record<number, string> = {
   1: 'Contorno a impunture',
@@ -40,6 +47,7 @@ const NOMI_STOP: Record<number, string> = {
   4: 'Base pattern 2',
   5: 'Linee orizzontali e verticali',
   6: 'Cornice nei rombi',
+  ...NOMI_BORDATURA,
 };
 
 const PRESETS: Record<string, PatternConfig> = (() => {
@@ -81,18 +89,29 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
   const cfgCornice: Valori = valoriCorniceDa(PARAMETRI_CORNICE);
   /** Il vincolo globale: il punto minimo di tutto il programma (Lorenzo, 16/09). */
   const cfgProgramma: Valori = { puntoMinimo: 0.5 };
+  /** La bordatura, stop 7-10 (Lorenzo, 16/09): i valori del DST M1424. */
+  const cfgBordatura: Valori = { ...PARAMETRI_BORDATURA };
+  /**
+   * I lati da bordare scelti in anteprima, per il loro punto di mezzo (così si ritrovano anche quando il
+   * contorno si ricalcola), ognuno col suo passaggio. `scegliLati` = il clic sull'anteprima prende un lato.
+   */
+  let latiScelti: (Punto & { passaggio: Passaggio })[] = [];
+  let scegliLati = false;
+  let cacheLati: { chiave: string; lati: LatoContorno[] } | null = null;
   const primoPreset = Object.keys(PRESETS)[0] ?? '';
   const basi = {
     p1: BASI_PREDEFINITE.p1 in PRESETS ? BASI_PREDEFINITE.p1 : primoPreset,
     p2: BASI_PREDEFINITE.p2 in PRESETS ? BASI_PREDEFINITE.p2 : primoPreset,
   };
   const ruoli: Record<string, Ruolo> = {};
-  const visibili: Record<number, boolean> = { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true };
+  const visibili: Record<number, boolean> = { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true, 9: true, 10: true };
   const importa = { scaleMode: 'illustrator-72dpi', paintPriority: 'fill', customW: 100, customH: 100 };
   let source: { text: string; name: string } | null = null;
   let zone: Zona[] = [];
+  /** I tracciati aperti del disegno: servono solo alla bordatura. */
+  let linee: LineaAperta[] = [];
   /** Rombi interi per tinta: si misurano una volta al caricamento, non a ogni ridisegno della mappa. */
-  let tinte: { color: string; zone: number; rombi: number }[] = [];
+  let tinte: { color: string; zone: number; linee: number; rombi: number }[] = [];
   let lettura: LetturaReticolo | null = null;
   let avviso = '';
   let stop: Stop[] = [];
@@ -126,12 +145,25 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     // il pezzo è il cannage: le zone dei due pattern. Finché non sono scelti tutti e due, tutte le zone
     // tranne le aree di scarico (che sono contorni sopra il disegno, non pezzo).
     const pattern = [conRuolo('pattern1'), conRuolo('pattern2')].filter(Boolean);
-    const fuoriPezzo = Object.keys(ruoli).filter((c) => ruoli[c] === 'scarico' || ruoli[c] === 'contorno').sort();
+    const fuoriPezzo = Object.keys(ruoli).filter((c) => ruoli[c] === 'scarico' || ruoli[c] === 'contorno' || passaggioDi(ruoli[c]) !== null).sort();
     const escludi = pattern.length === 2 ? tinte.map((t) => t.color).filter((c) => !pattern.includes(c)) : fuoriPezzo;
     const chiave = `${versioneZone}|${escludi.join(',')}`;
     if (cacheSagoma?.chiave !== chiave) cacheSagoma = { chiave, sagoma: sagomaDaZone(zone, escludi) };
     return cacheSagoma.sagoma;
   };
+  /** I lati del contorno che si possono scegliere in anteprima: quelli della linea che segue il bordo. */
+  const latiContorno = (): LatoContorno[] => {
+    const chiave = `${versioneZone}|${JSON.stringify(ruoli)}`;
+    if (cacheLati?.chiave !== chiave) cacheLati = { chiave, lati: zone.length ? latiDelContorno(sagomaBordo().anelli) : [] };
+    return cacheLati.lati;
+  };
+  const sceltaDi = (l: LatoContorno): Passaggio | null => latiScelti.find((k) => stessoLato(l, k))?.passaggio ?? null;
+  /** Le linee da bordare: quelle col ruolo nel disegno e i lati scelti in anteprima. */
+  const lineeBordatura = (): LineaBordo[] => [
+    ...linee.filter((l) => passaggioDi(ruoli[l.color])).map((l) => ({ punti: l.points, chiusa: false, passaggio: passaggioDi(ruoli[l.color])! })),
+    ...zone.filter((z) => passaggioDi(ruoli[z.color ?? ''])).map((z) => ({ punti: z.points, chiusa: true, passaggio: passaggioDi(ruoli[z.color ?? ''])! })),
+    ...(latiScelti.length ? lineeDaLati(latiContorno(), sceltaDi) : []),
+  ];
 
   // ---- un campo, reso coi componenti DS; il valore mostrato è SEMPRE quello della config corrente ----
   function fieldEl(f: Field, store: Valori, onChange: () => void, prefisso = ''): HTMLElement {
@@ -258,7 +290,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
       code.textContent = t.color.toUpperCase() + ' ';
       const meta = document.createElement('span');
       meta.className = 'rg-color-map__meta';
-      meta.textContent = `${t.zone} zone · ${t.rombi} rombi interi`;
+      meta.textContent = t.linee && !t.zone ? `${t.linee} linee aperte` : `${t.zone} zone · ${t.rombi} rombi interi`;
       code.appendChild(meta);
       const sel = document.createElement('select');
       sel.className = 'rg-select rg-color-map__target';
@@ -298,7 +330,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     const box = root.querySelector<HTMLElement>('#stopList');
     if (!box) return;
     box.innerHTML = '';
-    for (const n of [1, 2, 3, 4, 5, 6]) {
+    for (const n of [1, 2, 3, 4, 5, 6, 7, 8, 9, 10]) {
       const s = stop.find((x) => x.numero === n);
       const lab = document.createElement('label');
       lab.className = 'rg-choice rg-param-grid__wide';
@@ -312,7 +344,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
       ink.style.setProperty('--ink', coloreStop(n));
       const testo = s && s.punti
         ? ` Stop ${n} — ${NOMI_STOP[n]} · ${s.punti.toLocaleString('it-IT')} punti`
-        : ` Stop ${n} — ${NOMI_STOP[n]} · ${zone.length ? 'niente da cucire (controlla i ruoli)' : 'in attesa del disegno'}`;
+        : ` Stop ${n} — ${NOMI_STOP[n]} · ${!zone.length ? 'in attesa del disegno' : n > 6 ? 'niente da cucire (scegli i lati da bordare)' : 'niente da cucire (controlla i ruoli)'}`;
       lab.append(inp, ink, document.createTextNode(testo));
       box.appendChild(lab);
     }
@@ -356,6 +388,34 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     return grid;
   }
 
+  // ---- 08 Stop 7-10: la bordatura ----
+  function bordaturaGrid(): HTMLElement {
+    const wrap = document.createElement('div');
+    const box = document.createElement('div');
+    box.className = 'rg-param-grid';
+    box.innerHTML = `
+      <div class="rg-cluster rg-param-grid__wide">
+        <button type="button" id="scegliLati" class="rg-button rg-button--outline rg-button--small" aria-pressed="${scegliLati}">${scegliLati ? 'Fine scelta dei lati' : 'Scegli i lati in anteprima'}</button>
+        <button type="button" id="togliLati" class="rg-button rg-button--ghost rg-button--small">Togli i lati scelti</button>
+      </div>
+      <p class="rg-field__help rg-param-grid__wide" id="latiStatus" role="status"></p>`;
+    wrap.append(box, gridOf(BORDATURA_FIELDS, cfgBordatura, 'bordatura-'));
+    return wrap;
+  }
+
+  function scriviLati() {
+    const st = root.querySelector('#latiStatus');
+    if (!st) return;
+    const daSvg = linee.filter((l) => passaggioDi(ruoli[l.color])).length + zone.filter((z) => passaggioDi(ruoli[z.color ?? ''])).length;
+    const scelte = latiContorno().map(sceltaDi);
+    const parti = [
+      scegliLati ? 'Clicca un lato: il primo clic lo fa doppio (rosso), il secondo singolo (arancio), il terzo lo toglie' : '',
+      `in anteprima ${scelte.filter((t) => t === 'doppia').length} lati doppi e ${scelte.filter((t) => t === 'singola').length} singoli`,
+      `${daSvg} linee con un ruolo di bordatura nel disegno`,
+    ].filter(Boolean);
+    st.textContent = parti.join(' · ') + '. La linea è sempre il lato esterno: la bordatura esce di poco e cresce verso dentro.';
+  }
+
   /** Il prefisso tiene gli id distinti quando due sezioni hanno un campo con lo stesso nome (lo scarico). */
   function gridOf(fields: Field[], store: Valori, prefisso = ''): HTMLElement {
     const grid = document.createElement('div');
@@ -390,21 +450,25 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     panel.appendChild(accordionSection('05', 'Stop 3 e 4 — basi', basiGrid(), aperte.get('basi') ?? false, 'basi'));
     panel.appendChild(accordionSection('06', 'Stop 5 — linee orizzontali e verticali', lineeGrid(), aperte.get('linee') ?? false, 'linee'));
     panel.appendChild(accordionSection('07', 'Stop 6 — cornice nei rombi', gridOf(CORNICE_FIELDS, cfgCornice, 'cornice-'), aperte.get('cornice') ?? false, 'cornice'));
+    panel.appendChild(accordionSection('08', 'Stop 7-10 — bordatura', bordaturaGrid(), aperte.get('bordatura') ?? false, 'bordatura'));
     wirePanel();
     renderColorMap();
     segnaPreset();
     scriviReticolo();
     scriviStop();
+    scriviLati();
   }
 
   // ---- import ----
   function misuraTinte() {
     const conte = new Map<string, number>();
     for (const z of zone) conte.set(z.color ?? '', (conte.get(z.color ?? '') ?? 0) + 1);
-    tinte = [...conte].map(([color, n]) => {
+    const aperte = new Map<string, number>();
+    for (const l of linee) aperte.set(l.color, (aperte.get(l.color) ?? 0) + 1);
+    tinte = [...new Set([...conte.keys(), ...aperte.keys()])].map((color) => {
       let rombi = 0;
-      try { rombi = reticoloDaZone(zone, color).rombiInteri; } catch { /* nessun rombo intero di questa tinta */ }
-      return { color, zone: n, rombi };
+      if (conte.has(color)) try { rombi = reticoloDaZone(zone, color).rombiInteri; } catch { /* nessun rombo intero di questa tinta */ }
+      return { color, zone: conte.get(color) ?? 0, linee: aperte.get(color) ?? 0, rombi };
     });
     // al primo caricamento: le prime due tinte che hanno rombi interi diventano pattern 1 e pattern 2
     for (const t of tinte) {
@@ -425,6 +489,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
       customHeightMm: importa.customH,
     });
     zone = zoneDaModello(model);
+    linee = lineeDaModello(model);
     misuraTinte();
     const b = model.source?.finalBoundsMm;
     const misura = b ? ` · ${fmt(b.maxX - b.minX)} × ${fmt(b.maxY - b.minY)} mm` : '';
@@ -497,12 +562,21 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
         } catch (e) { avviso = (e as Error).message; }
         try { stop.push(stopCornice(lettura.reticolo, sagoma, parametriCorniceDa(cfgCornice), ingombri, scarico)); } catch (e) { avviso = (e as Error).message; }
       }
+      // la bordatura, sui lati scelti: il passo dei fermi parte dal pezzo più lungo delle linee (stop 5)
+      const daBordare = lineeBordatura();
+      if (daBordare.length) {
+        try {
+          const passo = lettura ? pezzoPiuLungo(lettura.reticolo, parametriDa(cfg)) : undefined;
+          stop.push(...stopBordatura(daBordare, parametriBordaturaDa(cfgBordatura), sagomaBordo(), passo).stop);
+        } catch (e) { avviso = `Bordatura: ${(e as Error).message}`; }
+      }
     }
     // i tratti che si toccano diventano uno (niente salti da 0 mm nel DST), poi il punto minimo per tutti
     const minimo = Number(cfgProgramma.puntoMinimo) || 0;
     stop = stop.map((s) => conPuntoMinimo(unisciTratti(s), minimo));
     scriviReticolo();
     scriviStop();
+    scriviLati();
     disegna(adatta);
     scriviStato();
   }
@@ -516,7 +590,8 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     const pieni = stop.filter((s) => s.punti > 0);
     const totale = pieni.reduce((t, s) => t + s.punti, 0);
     const aree = zone.filter((z) => ruoli[z.color ?? ''] === 'scarico').length;
-    $('status').textContent = `${pieni.length} stop su 6` + (aree ? ` · ${aree} aree di scarico` : '') + (avviso ? ` · ${avviso}` : '');
+    const previsti = pieni.some((s) => s.numero > 6) ? 10 : 6;
+    $('status').textContent = `${pieni.length} stop su ${previsti}` + (aree ? ` · ${aree} aree di scarico` : '') + (avviso ? ` · ${avviso}` : '');
     $('points').textContent = ` · ${totale.toLocaleString('it-IT')} punti`;
   }
 
@@ -537,16 +612,27 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
       .join('');
     // le aree di scarico stanno SOPRA le zone: col riempimento nasconderebbero proprio il ricamo che alleggeriscono
     const aree = zone.filter(scarico).map((z) => `<polygon points="${d(z.points)}" fill="none" stroke="${z.color}" stroke-width="0.6" stroke-dasharray="3 1.5"/>`).join('');
-    $('layer').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${w.toFixed(2)}mm" height="${h.toFixed(2)}mm" viewBox="${x0.toFixed(2)} ${y0.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)}">${zs}${fili}${aree}</svg>`;
+    // i lati del contorno: quelli scelti sempre, gli altri solo mentre si sceglie
+    const lati = latiScelti.length || scegliLati
+      ? latiContorno().map((l) => sceltaDi(l)
+        ? `<polyline points="${d(l.punti)}" fill="none" stroke="${sceltaDi(l) === 'doppia' ? '#c0392b' : '#d68910'}" stroke-opacity="0.5" stroke-width="${sceltaDi(l) === 'doppia' ? 1.6 : 1}" stroke-linejoin="round"/>`
+        : scegliLati ? `<polyline points="${d(l.punti)}" fill="none" stroke="#5a6b7a" stroke-opacity="0.5" stroke-width="0.8" stroke-dasharray="2 1"/>` : '').join('')
+      : '';
+    $('layer').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${w.toFixed(2)}mm" height="${h.toFixed(2)}mm" viewBox="${x0.toFixed(2)} ${y0.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)}">${zs}${lati}${fili}${aree}</svg>`;
     if (adatta) pz.fit();
   }
 
   // ---- progetto riapribile (R9/R27/R31): parametri, pattern delle basi, ruoli e — se ci sta — il disegno ----
   function progetto(): Record<string, unknown> {
-    const base = { rgProject: 'cannage-rafia', params: cfg, stop: cfgStop, basi, basiParams: cfgBasi, cornice: cfgCornice, programma: cfgProgramma, ruoli };
+    const base = {
+      rgProject: 'cannage-rafia', params: cfg, stop: cfgStop, basi, basiParams: cfgBasi, cornice: cfgCornice, programma: cfgProgramma,
+      bordatura: cfgBordatura, latiBordatura: latiScelti, ruoli,
+    };
+    const arrotonda = (pl: Punto[]) => pl.map((p) => ({ x: Number(p.x.toFixed(3)), y: Number(p.y.toFixed(3)) }));
     const drawing = {
       name: source?.name ?? '',
-      zones: zone.map((z) => ({ color: z.color, points: z.points.map((p) => ({ x: Number(p.x.toFixed(3)), y: Number(p.y.toFixed(3)) })) })),
+      zones: zone.map((z) => ({ color: z.color, points: arrotonda(z.points) })),
+      lines: linee.map((l) => ({ color: l.color, points: arrotonda(l.points) })),
     };
     const kb = JSON.stringify(drawing).length / 1024;
     if (kb > MAX_DRAWING_KB) {
@@ -563,21 +649,33 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     const parBasi = metadata?.basiParams as Valori | undefined;
     const parCornice = metadata?.cornice as Valori | undefined;
     const parProgramma = metadata?.programma as Valori | undefined;
+    const parBordatura = metadata?.bordatura as Valori | undefined;
+    const lati = metadata?.latiBordatura as (Punto & { passaggio?: Passaggio })[] | undefined;
     const salvateBasi = metadata?.basi as { p1?: string; p2?: string } | undefined;
     const salvati = metadata?.ruoli as Record<string, Ruolo> | undefined;
-    const drawing = metadata?.drawing as { name?: string; zones?: Zona[] } | undefined;
+    const drawing = metadata?.drawing as { name?: string; zones?: Zona[]; lines?: LineaAperta[] } | undefined;
     if (!params && !salvati && !drawing?.zones?.length) return false;
     if (params) for (const f of LINEE_FIELDS) if (f.name in params) cfg[f.name] = params[f.name];
     if (parStop) for (const f of STOP_FIELDS) if (f.name in parStop) cfgStop[f.name] = parStop[f.name];
     if (parBasi) for (const f of BASI_FIELDS) if (f.name in parBasi) cfgBasi[f.name] = parBasi[f.name];
     if (parCornice) for (const f of CORNICE_FIELDS) if (f.name in parCornice) cfgCornice[f.name] = parCornice[f.name];
     if (parProgramma) for (const f of PROGRAMMA_FIELDS) if (f.name in parProgramma) cfgProgramma[f.name] = parProgramma[f.name];
+    if (parBordatura) for (const f of BORDATURA_FIELDS) if (f.name in parBordatura) cfgBordatura[f.name] = parBordatura[f.name];
+    if (Array.isArray(lati)) {
+      latiScelti = lati
+        .filter((p) => Number.isFinite(p?.x) && Number.isFinite(p?.y))
+        .map((p) => ({ x: p.x, y: p.y, passaggio: p.passaggio === 'singola' ? 'singola' : 'doppia' }));
+    }
     if (salvateBasi?.p1 && salvateBasi.p1 in PRESETS) basi.p1 = salvateBasi.p1;
     if (salvateBasi?.p2 && salvateBasi.p2 in PRESETS) basi.p2 = salvateBasi.p2;
-    if (salvati) Object.assign(ruoli, salvati);
+    if (salvati) {
+      // il primo giorno la bordatura era un ruolo solo, sempre doppia
+      for (const [c, r] of Object.entries(salvati)) ruoli[c] = (r as string) === 'bordatura' ? 'bordaturaDoppia' : r;
+    }
     if (drawing?.zones?.length) {
       source = { text: '', name: drawing.name || 'progetto' };
       zone = drawing.zones;
+      linee = drawing.lines ?? [];
       misuraTinte();
       zoneStatusText = `${source.name} (riaperto): ${zone.length} zone, ${tinte.length} tinte`;
     }
@@ -644,6 +742,16 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
       if (isDst) reader.readAsArrayBuffer(file); else reader.readAsText(file);
     });
 
+    $('scegliLati').addEventListener('click', () => {
+      scegliLati = !scegliLati;
+      $('canvas').classList.toggle('cannage-scegli-lati', scegliLati);
+      const b = $('scegliLati');
+      b.setAttribute('aria-pressed', String(scegliLati));
+      b.textContent = scegliLati ? 'Fine scelta dei lati' : 'Scegli i lati in anteprima';
+      scriviLati();
+      disegna();
+    });
+    $('togliLati').addEventListener('click', () => { latiScelti = []; aggiorna(); });
     $('baseP1').addEventListener('change', (ev) => { basi.p1 = (ev.target as HTMLSelectElement).value; aggiorna(); });
     $('baseP2').addEventListener('change', (ev) => { basi.p2 = (ev.target as HTMLSelectElement).value; aggiorna(); });
     $('presetLinee').addEventListener('change', (ev) => {
@@ -656,6 +764,38 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
   }
 
   $('fitBtn').addEventListener('click', () => pz.fit());
+
+  // Scegliere un lato: un clic (non un trascinamento) sull'anteprima prende il lato più vicino. Il clic si
+  // legge sulla tela e si riporta in mm, perché il pan cattura il puntatore e il bersaglio non è il lato.
+  let premuto: { x: number; y: number } | null = null;
+  $('canvas').addEventListener('pointerdown', (e) => { premuto = { x: e.clientX, y: e.clientY }; });
+  $('canvas').addEventListener('click', (e) => {
+    const da = premuto;
+    premuto = null;
+    if (!scegliLati || !da || Math.hypot(e.clientX - da.x, e.clientY - da.y) > 5) return;
+    const svg = $('layer').querySelector('svg');
+    const ctm = svg?.getScreenCTM();
+    if (!svg || !ctm) return;
+    const p = new DOMPoint(e.clientX, e.clientY).matrixTransform(ctm.inverse());
+    const tolleranza = Math.max(1, 10 / Math.hypot(ctm.a, ctm.b));
+    let meglio: LatoContorno | null = null, dist = tolleranza;
+    for (const l of latiContorno()) {
+      for (let i = 1; i < l.punti.length; i++) {
+        const a = l.punti[i - 1], b = l.punti[i];
+        const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy || 1;
+        const t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2));
+        const q = Math.hypot(a.x + dx * t - p.x, a.y + dy * t - p.y);
+        if (q < dist) { dist = q; meglio = l; }
+      }
+    }
+    if (!meglio) return;
+    const lato = meglio;
+    // il clic fa il giro: doppia, singola, tolto
+    const prima = sceltaDi(lato);
+    latiScelti = latiScelti.filter((k) => !stessoLato(lato, k));
+    if (prima !== 'singola') latiScelti.push({ ...lato.chiave, passaggio: prima === 'doppia' ? 'singola' : 'doppia' });
+    aggiorna();
+  });
 
   $('exportBtn').addEventListener('click', async () => {
     const strati = stratiProgramma(stop);
@@ -676,7 +816,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     if (!strati.length) { $('status').textContent = 'Niente da esportare: carica il disegno e scegli i pattern.'; return; }
     let bytes: Uint8Array;
     try {
-      // Uno stop per ago, in ordine: contorno, griglia, base 1, base 2, linee, cornice (R31).
+      // Uno stop per ago, in ordine: contorno, griglia, base 1, base 2, linee, cornice, bordatura (R31).
       bytes = dstFromExportLayers(strati, { label: nomeBase().toUpperCase().slice(0, 16), metadata: progetto() });
     } catch (e) {
       $('status').textContent = (e as Error).message;
