@@ -1512,6 +1512,53 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   file (verticali sui fori, una fermatura spostata di 1 mm: tutti e due rossi), e ha trovato due
   difetti veri del generatore: un salto da **12,12 mm** (l'arrotondamento al decimo sforava il limite)
   e la fila G spostata di 0,1 mm dalla centratura.
+- **L'interfaccia «non va» su un cartamodello vero, e la cucitura incrementale non convergeva
+  (2026-09-17).** Lorenzo ha caricato `CARTAMODELLO_QUA DT.dst` (export Oblique, 364 × 186 mm, 56.481
+  punti, 4 aghi). Quattro problemi, in ordine di scoperta:
+  (1) **lenta in modo quadratico**: il rilassamento «locale» allocava e sommava array grandi quanto
+  tutto il ritaglio a ogni iterazione — su 1.538 punti ~1 ora per le 6 varianti. Ora lavora
+  sull'intorno (stessi numeri **al bit** su A, H, E), le coppie lontane più della somma dei semiassi
+  larghi si scartano prima dell'ellisse (di nuovo al bit), e **le 6 varianti girano in parallelo**
+  (un processo ciascuna, stessi numeri; `--processi 1` per la sequenza): H da 31 a 6 s;
+  (2) **nessun segnale di vita**: l'avanzamento era per variante, e la prima durava minuti. Ora
+  punto per punto, con il tempo che manca; una simulazione nuova annulla quella in corso (prima si
+  mettevano in coda: il «in coda» di stamattina era proprio questo — due simulazioni, la sua e la mia),
+  il bottone diventa *Annulla*; si può scegliere la cucitura rigida (veloce); la pianta si ingrandisce
+  con la rotella (*Vista intera*, *Sul ritaglio*: su 364 mm il ritaglio da 22 era un puntino);
+  (3) **risultati assurdi sul raso fitto**: 38 punti zig-zag da 2 mm in 3,6 mm (uno ogni 0,1 mm) si
+  impilavano a scala, 0,1 mm a punto, fino a 14 mm; arco medio 1,7–2,7 mm contro 0,47 della rigida;
+  (4) la causa di (3): **con 25 iterazioni fisse la cucitura non arrivava all'equilibrio** e il
+  risultato dipendeva dal conteggio (media sul ritaglio: 3,5 mm a 25, 2,6 a 50, 0,83 a 200, 0,52 a 400;
+  fermature di A: 0,29 → 0,17 → 0,12). Il rilassamento mediato scende di pochi µm a iterazione dove i
+  contatti sono tanti. **Ora ogni punto itera finché nessun nodo si muove più di 1 µm**
+  (`TOLLERANZA_LOCALE_MM`), almeno `ITER_LOCALI` (25, il valore di Lorenzo, ora minimo) e al più
+  `ITER_LOCALI_MAX` 400; contro un riferimento a 3.000 iterazioni sta entro ~10 % sulle zone di
+  calibrazione (G 0,200 = 0,200; A media 0,122 / 0,118; H 0,096 / 0,092). Provati e **scartati**:
+  sovra-rilassamento 1,5 e 1,8 (più punti fermati dal tetto) e media parziale delle correzioni
+  (sposta il risultato di +20–30 %); anche la regola «un punto vecchio non sale mai» (nessun effetto)
+  e la spinta dell'ago (non era lei). Le metriche riportano iterazioni per punto e punti non convergenti.
+  **I numeri della cucitura incrementale scritti sopra (tabella delle 8 zone) sono superati.**
+  Cotone 30, **rigida → incrementale a 25 iterazioni → incrementale che converge** (fermature · arco medio):
+
+  | zona | 0 strati | 2 strati | spost. laterale (2 strati) | infilzati (0 / 2) | punti al tetto (2 strati) |
+  |---|---|---|---|---|---|
+  | centro | — · 0,097 → 0,173 → 0,148 | — · 0,445 → 0,315 → 0,253 | 0,137 | 0 / 0 | 236 di 350 |
+  | A satin 2 | 0,34 → 0,17 → 0,15 · 0,21 → 0,17 → 0,09 | 0,48 → 0,29 → 0,27 · 0,45 → 0,34 → 0,26 | 0,108 | 0 / 0 | 4 di 45 |
+  | B satin 6 | 0,33 → 0,17 → 0,16 · 0,22 → 0,18 → 0,24 | 0,47 → 0,25 → 0,27 · 0,78 → 0,39 → 0,29 | 0,100 | 1 / 1 | 36 di 45 |
+  | C tatami | 0,33 → 0,21 → 0,19 · 0,02 → 0,10 → 0,09 | 0,45 → 0,30 → 0,26 · 0,41 → 0,35 → 0,32 | 0,095 | 1 / 1 | 116 di 142 |
+  | D passaggi doppi | 0,33 → 0,18 → 0,14 · 0,15 → 0,18 → 0,15 | 0,44 → 0,26 → 0,23 · 0,49 → 0,34 → 0,26 | 0,132 | 1 / 1 | 63 di 95 |
+  | E sovrapposizione | 0,35 → 0,23 → 0,15 · 0,06 → 0,12 → 0,11 | 0,48 → 0,28 → 0,27 · 0,42 → 0,36 → 0,32 | 0,113 | 8 / 7 | 183 di 214 |
+  | G fermature | 0,29 → 0,13 → 0,12 · 0,15 → 0,06 → 0,06 | 0,42 → 0,25 → 0,24 · 0,31 → 0,20 → 0,20 | 0 | 0 / 0 | 0 di 20 |
+  | H incroci | 0,31 → 0,16 → 0,15 · 0,18 → 0,12 → 0,10 | 0,45 → 0,26 → 0,26 · 0,40 → 0,28 → 0,22 | 0,160 | 74 / 41 | 87 di 264 |
+
+  Le fermature restano 40–45 % sotto la rigida; l'arco scende ancora (a 2 strati 15–45 % sotto la
+  rigida); lo spostamento laterale sale a 0,10–0,16 mm; gli infilzati ora dipendono dalla garza (H: 74
+  senza, 41 con 2 strati) perché dipendono da dove sta il filo quando arriva l'ago. Coperture quasi
+  invariate (+1–4 punti). **Aperto:** (a) nelle zone fitte molti punti arrivano ancora al tetto (centro
+  236 su 350, E 183 su 214): entro ~10 % dove l'ho misurato, non dappertutto; (b) velocità: 2 min 40 s
+  per il centro e 2 min 20 s per E in parallelo, ~11 min per il ritaglio da 22 mm del cartamodello —
+  la strada è un risolutore compilato (Gauss-Seidel, per esempio con numba: dipendenza nuova, da decidere
+  con Lorenzo); (c) G a 2 strati chiude ancora col filo +11 % più lungo dell'obiettivo.
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 

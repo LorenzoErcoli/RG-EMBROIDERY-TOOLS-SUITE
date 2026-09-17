@@ -32,7 +32,7 @@ l'anteprima della calibrazione). Il lettore DST è interno.
 |---|---|---|---|
 | filato | `FILATI` (tex, materiale) · `DENSITA_APPARENTE_COTONE` | 1000/30, 1000/40 cotone · 0,90 g/cm³ | densità DA_MISURARE |
 | garza | `SPESSORE_GARZA_STRATO` · `COMPRESSIONE_GARZA` | 0,25 mm · 0,60 | DA_MISURARE |
-| cucitura | `RAGGIO_LOCALE` · `ITER_LOCALI` | 2,5 mm · 25 | numerici |
+| cucitura | `RAGGIO_LOCALE` · `ITER_LOCALI` (minime) · `ITER_LOCALI_MAX` · `TOLLERANZA_LOCALE_MM` | 2,5 mm · 25 · 400 · 0,001 mm | numerici |
 | tensione | `TENSIONE_CN` | 90 cN | DA_MISURARE (tensiometro) |
 | rigidità assiale | `MODULO_SPECIFICO_CN_TEX` (EA = modulo × tex) | cotone 270, poliestere filamento 600 cN/tex | DA_MISURARE |
 | contatto | `COMPATTAZIONE_MIN` · `CARICO_COMPATTAZIONE` | 0,45 · 100 cN/mm | DA_MISURARE |
@@ -53,8 +53,9 @@ p90, altezza a 0,4 mm dal foro, copertura durante/dopo, errore di lunghezza e, n
 delle fermature** (media sulle fermature del massimo di ciascuna; fermatura = almeno 3 punti
 consecutivi collegati da 0,7 mm al più), **spostamento laterale medio dei fili sovrapposti** (quanto si
 è mosso di traverso, a fine cucitura, un nodo toccato da un punto successivo, rispetto a dove era a fine
-posa), **fili infilzati** (quanti punti l'ago ha preso, evento per evento). Le ultime due solo con la
-cucitura incrementale.
+posa), **fili infilzati** (quanti punti l'ago ha preso, evento per evento), **iterazioni per punto**
+(media e massimo) e **punti non arrivati all'equilibrio** (fermati dal tetto). Le ultime quattro solo
+con la cucitura incrementale.
 
 ## Nella suite
 Strumento di sviluppo, **non** un tool della home: sta fuori dai workspace npm (`apps/*`),
@@ -75,9 +76,12 @@ del Code c'è la configurazione `ricamo-3d` in `.claude/launch.json` (porta 5312
     python server.py ["file.dst"]           # oppure: npm run sviluppo:ricamo-3d:app
 
 Apre `http://127.0.0.1:5313/` (solo su questo computer). Carichi un DST (bottone o trascinandolo sulla
-pagina), sulla pianta clicchi o trascini per scegliere il quadrato da simulare, ne scegli il lato
-(6–60 mm) e premi *Simula*: le 6 varianti girano sul server, con l'avanzamento, e alla fine il
-visualizzatore mostra il risultato. Oltre ~1.500 punti nel ritaglio la simulazione è lenta.
+pagina), sulla pianta clicchi o trascini per scegliere il quadrato da simulare (rotella per ingrandire,
+*Vista intera* / *Sul ritaglio*), ne scegli il lato (6–60 mm), scegli la cucitura (incrementale o
+rigida, veloce) e premi *Simula*: le 6 varianti girano in parallelo sul server, la barra avanza punto
+per punto con il tempo che manca, e alla fine il visualizzatore mostra il risultato. Mentre lavora il
+bottone diventa *Annulla*; una simulazione nuova annulla quella in corso (il server è uno solo: due
+finestre aperte si annullano a vicenda).
 **Colore del filo**: uno per ago (i cambi colore del DST), dal selettore o dai campioni; cambia il 3D
 e la pianta al volo, senza ricalcolare, e resta ricordato nel browser. I colori ci sono anche negli
 HTML statici di `esegui.py`. Con un file sulla riga di comando la pagina si apre già caricata; la
@@ -148,8 +152,19 @@ della zona e l'HTML si chiama `rg-ricamo-3d-zona-<id>.html`.
 - Nella posa un filo sale su un altro solo se i centri si sovrappongono col semiasse stretto: i vicini
   allargati dallo schiacciamento li sposta il contatto di lato (senza questa regola il satin si
   impilava di 0,1 mm a punto).
-- È circa 8 volte più lenta della rigida: 79 s per le 6 varianti del ritaglio centrale di
-  `pattern (1).dst` (350 punti), contro 10 s.
+- **Convergenza.** Il rilassamento locale mediato (Jacobi) arriva all'equilibrio lentamente dove i
+  contatti sono tanti: con 25 iterazioni fisse il raso fitto non si assestava e il risultato dipendeva
+  dal conteggio (sul raso zig-zag di un cartamodello Oblique la pila arrivava a 3,5 mm di media invece
+  di ~0,5). Ora ogni punto itera finché nessun nodo si muove più di `TOLLERANZA_LOCALE_MM`, con
+  `ITER_LOCALI` come minimo e `ITER_LOCALI_MAX` come tetto; le metriche riportano le iterazioni usate e
+  i punti rimasti sopra la tolleranza. Misurato contro un riferimento a 3.000 iterazioni, il tetto di
+  400 resta entro ~10 % sulle zone di calibrazione. Sovra-rilassamento e media parziale delle
+  correzioni sono stati provati e scartati (non accelerano e spostano il risultato).
+- **Velocità.** Le 6 varianti girano in parallelo (un processo ciascuna; `--processi 1` per una sola
+  alla volta, stessi numeri). Il rilassamento lavora solo sull'intorno del punto. Nelle zone fitte però
+  servono ~350 iterazioni per punto: il ritaglio da 22 mm di quel cartamodello (687 punti) chiede
+  ~11 minuti anche in parallelo. Il passo successivo è un risolutore compilato (Gauss-Seidel), che
+  converge in molte meno iterazioni.
 
 ## Prossimi passi
 1. Campioni 0/1/2 strati, stesso disegno e filo: macrofoto e sezione tagliata.

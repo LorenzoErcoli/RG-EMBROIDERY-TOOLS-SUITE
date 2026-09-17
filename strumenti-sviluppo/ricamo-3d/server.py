@@ -11,8 +11,9 @@ API (JSON):
   GET  /api/iniziale           -> il DST passato sulla riga di comando (come /api/leggi), o {}
   POST /api/leggi              corpo = byte del DST, intestazione X-Nome = nome file (URL-encoded)
                                -> id, nome, punti, aghi, riquadro, segmenti (Int16 in decimi, base64)
-  POST /api/simula             {id, cx, cy, lato}  -> {lavoro}
-  GET  /api/lavoro/<lavoro>    -> {fatto, totale, riga, errore, dati (quando finito)}
+  POST /api/simula             {id, cx, cy, lato, cucitura}  -> {lavoro}; annulla la simulazione in corso
+  POST /api/annulla            annulla la simulazione in corso
+  GET  /api/lavoro/<lavoro>    -> {fatto, totale, punti_fatti, punti_totali, trascorsi_s, riga, errore, dati}
 """
 import argparse
 import base64
@@ -20,6 +21,7 @@ import json
 import os
 import tempfile
 import threading
+import time
 import uuid
 import webbrowser
 from pathlib import Path
@@ -37,6 +39,7 @@ file_caricati = {}      # id -> {"nome", "segs5"}
 lavori = {}             # id -> stato del lavoro
 iniziale = None         # risposta di leggi_dst per il file passato sulla riga di comando
 turno = threading.Lock()  # una simulazione alla volta: sono tutte a piena CPU
+fermi_attivi = []         # stop delle simulazioni non ancora finite: una nuova le annulla
 
 
 def leggi_dst(dati, nome):
@@ -66,6 +69,9 @@ def avvia_simulazione(richiesta):
     if f is None:
         raise ValueError("file non trovato: ricaricalo")
     cx, cy, lato = float(richiesta["cx"]), float(richiesta["cy"]), float(richiesta["lato"])
+    cucitura = richiesta.get("cucitura", "incrementale")
+    if cucitura not in ("incrementale", "rigida"):
+        raise ValueError("cucitura: 'incrementale' o 'rigida'")
     if not LATO_MIN <= lato <= LATO_MAX:
         raise ValueError(f"il lato del ritaglio va da {LATO_MIN:g} a {LATO_MAX:g} mm")
     mezzo = lato / 2
@@ -73,24 +79,54 @@ def avvia_simulazione(richiesta):
     if len(segs) == 0:
         raise ValueError("nessun punto interamente dentro il ritaglio: spostalo o allargalo")
     id_ = uuid.uuid4().hex[:12]
-    stato = {"fatto": 0, "totale": 6, "riga": "in coda", "errore": None, "dati": None}
+    n_var = len(E.VARIANTI)
+    stato = {"fatto": 0, "totale": n_var, "punti_fatti": 0, "punti_totali": n_var * int(len(segs)),
+             "trascorsi_s": None, "riga": "in attesa che si fermi la simulazione precedente", "errore": None, "dati": None}
     lavori[id_] = stato
-    descrizione = (f"Ritaglio {lato:g} × {lato:g} mm di {f['nome']}, centrato in ({cx:.1f}, {cy:.1f}) mm. "
+    nome_cucitura = "cucitura incrementale" if cucitura == "incrementale" else "cucitura rigida"
+    descrizione = (f"Ritaglio {lato:g} × {lato:g} mm di {f['nome']}, centrato in ({cx:.1f}, {cy:.1f}) mm, {nome_cucitura}. "
                    "Parametri fisici di partenza, non ancora calibrati.")
+    stop = threading.Event()
+    for vecchio in fermi_attivi:        # una simulazione nuova annulla quelle in corso o in attesa
+        vecchio.set()
+    fermi_attivi.clear()
+    fermi_attivi.append(stop)
+    avanzamento = {}
 
     def avviso(riga):
         stato["riga"] = riga
         if "|" in riga:
             stato["fatto"] += 1
 
+    def passo(variante, k, n):
+        avanzamento[variante] = k
+        stato["punti_fatti"] = sum(avanzamento.values())
+
     def lavoro():
         with turno:
+            if stop.is_set():
+                stato["errore"] = "annullata: è partita un'altra simulazione"
+                return
+            inizio = time.time()
+            stato["trascorsi_s"] = 0.0
+
+            def orologio():
+                while stato["dati"] is None and stato["errore"] is None:
+                    stato["trascorsi_s"] = round(time.time() - inizio, 1)
+                    time.sleep(0.5)
+            threading.Thread(target=orologio, daemon=True).start()
             try:
                 stato["riga"] = f"{len(segs)} punti nel ritaglio, simulazione in corso"
                 stato["dati"] = E.simula_varianti(segs, mezzo, lato_copertura=max(mezzo - 1.5, 0.5),
-                                                  descrizione=descrizione, avviso=avviso)
+                                                  descrizione=descrizione, avviso=avviso, cucitura=cucitura,
+                                                  passo=passo, stop=stop)
+            except E.Annullata:
+                stato["errore"] = "annullata: è partita un'altra simulazione"
             except Exception as e:  # noqa: BLE001 — l'errore va mostrato nella pagina
                 stato["errore"] = f"{type(e).__name__}: {e}"
+            finally:
+                if stop in fermi_attivi:
+                    fermi_attivi.remove(stop)
 
     threading.Thread(target=lavoro, daemon=True).start()
     return {"lavoro": id_, "punti": int(len(segs))}
@@ -137,6 +173,10 @@ class Gestore(BaseHTTPRequestHandler):
                 return self.rispondi(200, leggi_dst(corpo, nome))
             if self.path == "/api/simula":
                 return self.rispondi(200, avvia_simulazione(json.loads(corpo)))
+            if self.path == "/api/annulla":
+                for stop in fermi_attivi:
+                    stop.set()
+                return self.rispondi(200, {"annullate": len(fermi_attivi)})
         except (ValueError, KeyError, json.JSONDecodeError) as e:
             return self.rispondi(400, {"errore": str(e)})
         self.rispondi(404, {"errore": "non trovato"})

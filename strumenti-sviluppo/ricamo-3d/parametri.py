@@ -42,7 +42,11 @@ SEME = 7
 # I fili già posati sono nodi fisici: ogni punto, in ordine macchina, fa entrare l'ago, posa il filo
 # teso e rilassa solo l'intorno. La cucitura rigida (heightfield) resta con --cucitura rigida.
 RAGGIO_LOCALE = 2.5              # mm attorno al nuovo punto in cui i fili esistenti si muovono
-ITER_LOCALI = 25                 # iterazioni di rilassamento locale per punto
+ITER_LOCALI = 25                 # iterazioni minime di rilassamento locale per punto
+# Il rilassamento locale continua finché nessun nodo si muove più di TOLLERANZA_LOCALE_MM in un'iterazione
+# (con 25 iterazioni fisse il raso fitto non arrivava all'equilibrio e il risultato dipendeva dal conteggio).
+ITER_LOCALI_MAX = 400            # tetto: sulle zone di calibrazione resta entro ~10 % dell'equilibrio (misurato a 3000)
+TOLLERANZA_LOCALE_MM = 0.001     # 1 µm
 TENSIONE_CN = 90                 # tensione del filo in cucitura, cN  DA_MISURARE (tensiometro)
 # Rigidità assiale EA = modulo specifico x tex (cN). Allungamento sotto tensione = TENSIONE_CN / EA:
 # il filo in cucitura ha lunghezza di riposo più corta di quella posata di questa frazione.

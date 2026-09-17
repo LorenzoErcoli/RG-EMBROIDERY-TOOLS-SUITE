@@ -4,9 +4,13 @@
     python esegui.py --zona C [--zone file.json]   una zona di calibrazione_zone.json (DST preso dal JSON)
     python esegui.py ... --cucitura rigida         la cucitura vecchia (heightfield), per confronto
 
-`simula_varianti` è usata anche da server.py (l'interfaccia per caricare i DST).
+`simula_varianti` è usata anche da server.py (l'interfaccia per caricare i DST). Le 6 varianti sono
+indipendenti e girano in parallelo, un processo ciascuna (con --processi 1 una dopo l'altra): i numeri
+non cambiano.
 """
-import argparse, json, base64, time
+import argparse, json, base64, os, time
+import concurrent.futures as cf
+import multiprocessing as mp
 from pathlib import Path
 import numpy as np
 import modello as M
@@ -22,11 +26,61 @@ def pack(p):
     return base64.b64encode(q.tobytes()).decode()
 
 
+class Annullata(Exception):
+    """La simulazione è stata annullata (per esempio perché ne è partita un'altra)."""
+
+
+VARIANTI = [(filato, strati) for filato in P.FILATI for strati in (0, 1, 2)]
+
+
+def _una_variante(segs, offs, filato, strati, mezzo_lato, lato_copertura, rett_copertura, cucitura, coda=None, stop=None):
+    """Simula e misura una variante. Gira anche in un processo a parte: avanzamento su `coda`, annullo con `stop`."""
+    key = f"{filato}|{strati}"
+
+    def progresso(k, n):
+        if stop is not None and stop.is_set():
+            raise Annullata()
+        if coda is not None and (k % 10 == 0 or k == n):
+            coda.put((key, k, n))
+
+    t0 = time.time()
+    R = M.simula(segs, offs, filato, strati, mezzo_lato, cucitura=cucitura, progresso=progresso)
+    r = R["d"] / 2
+    met = {
+        "diametro_mm": round(R["d"], 3),
+        "garza_compressa_mm": round(R["h_garza"], 3),
+        "eccesso_filo_pct": round(R["eccesso_medio_pct"], 1),
+        "copertura_cucito_pct": round(100 * M.copertura(R["cucito"], offs, R["d"], lato_copertura, rett=rett_copertura), 1),
+        "copertura_rilasciato_pct": round(100 * M.copertura(R["rilasciato"], offs, R["d"], lato_copertura, rett=rett_copertura), 1),
+        "arco_medio_mm": round(M.altezza_media(R["rilasciato"], offs, r)[0], 3),
+        "errore_lunghezza_pct": round(R["err_lunghezza_pct"], 2),
+        "arco_p90_mm": round(M.altezza_media(R["rilasciato"], offs, r)[1], 3),
+    }
+    bordo = M.altezza_bordo(R["rilasciato"], offs, segs, r)
+    met["bordo_04_mm"] = None if bordo is None else round(bordo, 3)   # punti > 3,5 mm, a 0,4 mm dal foro
+    ferm = M.altezza_fermature(R["rilasciato"], offs, segs, r)
+    met["fermature_altezza_mm"] = None if ferm is None else round(ferm, 3)
+    spost = R["spostamento_laterale_mm"]
+    met["spostamento_laterale_mm"] = None if spost is None else round(spost, 3)
+    met["fili_infilzati"] = R["infilzati"]
+    it = R["iterazioni"]
+    met["iterazioni_media"] = None if it is None or len(it) == 0 else round(float(np.mean(it)), 1)
+    met["iterazioni_max"] = None if it is None or len(it) == 0 else int(np.max(it))
+    met["punti_non_convergenti"] = R["punti_non_convergenti"]
+    voce = {"metriche": met, "cucito": pack(R["cucito"]), "rilasciato": pack(R["rilasciato"])}
+    if R["compattazione"] is not None:   # sezione ellittica: 255 = tonda
+        c8 = np.round(np.clip(R["compattazione"], 0, 1) * 255).astype(np.uint8)
+        voce["compattazione"] = base64.b64encode(c8.tobytes()).decode()
+    return key, voce, time.time() - t0
+
+
 def simula_varianti(segs5, mezzo_lato, lato_copertura=None, rett_copertura=None, descrizione=None, avviso=print,
-                    cucitura="incrementale"):
+                    cucitura="incrementale", passo=None, stop=None, processi=None):
     """Tutte le varianti filato x strati di un insieme di segmenti già centrati.
 
-    `segs5`: colonne ax, ay, bx, by, ago. `avviso(testo)` riceve le stesse righe che stampa la riga di comando.
+    `segs5`: colonne ax, ay, bx, by, ago. `avviso(testo)` riceve le stesse righe che stampa la riga di comando;
+    `passo(variante, k, n)` l'avanzamento punto per punto; `stop` (threading.Event) annulla: solleva Annullata.
+    `processi`: quante varianti in parallelo (predefinito: tutte, se ci sono abbastanza core).
     Restituisce il dizionario che il visualizzatore legge come DATI.
     """
     segs = np.ascontiguousarray(segs5[:, :4])
@@ -40,34 +94,49 @@ def simula_varianti(segs5, mezzo_lato, lato_copertura=None, rett_copertura=None,
            "varianti": {}}
     if descrizione:
         out["descrizione"] = descrizione
-    for filato in P.FILATI:
-        for strati in (0, 1, 2):
-            t0 = time.time()
-            R = M.simula(segs, offs, filato, strati, mezzo_lato, cucitura=cucitura)
-            r = R["d"] / 2
-            met = {
-                "diametro_mm": round(R["d"], 3),
-                "garza_compressa_mm": round(R["h_garza"], 3),
-                "eccesso_filo_pct": round(R["eccesso_medio_pct"], 1),
-                "copertura_cucito_pct": round(100 * M.copertura(R["cucito"], offs, R["d"], lato_copertura, rett=rett_copertura), 1),
-                "copertura_rilasciato_pct": round(100 * M.copertura(R["rilasciato"], offs, R["d"], lato_copertura, rett=rett_copertura), 1),
-                "arco_medio_mm": round(M.altezza_media(R["rilasciato"], offs, r)[0], 3),
-                "errore_lunghezza_pct": round(R["err_lunghezza_pct"], 2),
-                "arco_p90_mm": round(M.altezza_media(R["rilasciato"], offs, r)[1], 3),
-            }
-            bordo = M.altezza_bordo(R["rilasciato"], offs, segs, r)
-            met["bordo_04_mm"] = None if bordo is None else round(bordo, 3)   # punti > 3,5 mm, a 0,4 mm dal foro
-            ferm = M.altezza_fermature(R["rilasciato"], offs, segs, r)
-            met["fermature_altezza_mm"] = None if ferm is None else round(ferm, 3)
-            spost = R["spostamento_laterale_mm"]
-            met["spostamento_laterale_mm"] = None if spost is None else round(spost, 3)
-            met["fili_infilzati"] = R["infilzati"]
-            key = f"{filato}|{strati}"
-            out["varianti"][key] = {"metriche": met, "cucito": pack(R["cucito"]), "rilasciato": pack(R["rilasciato"])}
-            if R["compattazione"] is not None:   # sezione ellittica: 255 = tonda
-                c8 = np.round(np.clip(R["compattazione"], 0, 1) * 255).astype(np.uint8)
-                out["varianti"][key]["compattazione"] = base64.b64encode(c8.tobytes()).decode()
-            avviso(f"{key} {met} {time.time()-t0:.1f}s")
+    if processi is None:
+        processi = max(1, min(len(VARIANTI), (os.cpu_count() or 2) // 2))
+    fatte = {}
+    argomenti = (segs, offs)
+
+    if processi <= 1:
+        class _Coda:
+            def put(self, v):
+                if passo is not None:
+                    passo(*v)
+        for filato, strati in VARIANTI:
+            key, voce, dt = _una_variante(*argomenti, filato, strati, mezzo_lato, lato_copertura, rett_copertura,
+                                          cucitura, coda=_Coda(), stop=stop)
+            fatte[key] = voce
+            avviso(f"{key} {voce['metriche']} {dt:.1f}s")
+    else:
+        # un processo per variante; ogni processo usa un solo thread BLAS, se no si pestano i piedi
+        for var in ("OMP_NUM_THREADS", "OPENBLAS_NUM_THREADS", "MKL_NUM_THREADS"):
+            os.environ.setdefault(var, "1")
+        with mp.Manager() as gestore, cf.ProcessPoolExecutor(max_workers=processi, mp_context=mp.get_context("spawn")) as pool:
+            coda, fermo = gestore.Queue(), gestore.Event()
+            futuri = [pool.submit(_una_variante, *argomenti, filato, strati, mezzo_lato, lato_copertura, rett_copertura,
+                                  cucitura, coda, fermo) for filato, strati in VARIANTI]
+            aperti = set(futuri)
+            try:
+                while aperti:
+                    finiti, aperti = cf.wait(aperti, timeout=0.3, return_when=cf.FIRST_COMPLETED)
+                    while not coda.empty():
+                        v = coda.get()
+                        if passo is not None:
+                            passo(*v)
+                    if stop is not None and stop.is_set():
+                        raise Annullata()
+                    for f in finiti:
+                        key, voce, dt = f.result()          # un errore nel processo riemerge qui
+                        fatte[key] = voce
+                        avviso(f"{key} {voce['metriche']} {dt:.1f}s")
+            except BaseException:
+                fermo.set()                                 # gli altri processi si fermano al punto dopo
+                for f in aperti:
+                    f.cancel()
+                raise
+    out["varianti"] = {f"{filato}|{strati}": fatte[f"{filato}|{strati}"] for filato, strati in VARIANTI}
     return out
 
 
@@ -82,6 +151,7 @@ def main():
     ap.add_argument("--zona", help="id della zona da simulare al posto del ritaglio centrale (es. A, B, C)")
     ap.add_argument("--zone", default=str(qui / "calibrazione" / "calibrazione_zone.json"),
                     help="JSON delle zone (default: calibrazione/calibrazione_zone.json)")
+    ap.add_argument("--processi", type=int, default=None, help="varianti in parallelo (1 = una dopo l'altra)")
     ap.add_argument("--cucitura", choices=("incrementale", "rigida"), default="incrementale",
                     help="incrementale (nodi fisici, ago, attrito: predefinita) o rigida (heightfield, per confronto)")
     args = ap.parse_args()
@@ -121,7 +191,8 @@ def main():
     if args.cucitura == "rigida":
         uscita = uscita.replace(".html", "-rigida.html")
         descrizione = (descrizione or "Ritaglio 22 × 22 mm al centro del disegno.") + " Cucitura rigida (heightfield)."
-    out = simula_varianti(segs, mezzo_lato, lato_copertura, rett_copertura, descrizione, cucitura=args.cucitura)
+    out = simula_varianti(segs, mezzo_lato, lato_copertura, rett_copertura, descrizione, cucitura=args.cucitura,
+                          processi=args.processi)
     (qui / uscita).write_text(html_visualizzatore(out), encoding="utf-8")
     print("scritto", uscita)
 

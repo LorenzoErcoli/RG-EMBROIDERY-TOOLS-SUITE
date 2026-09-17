@@ -102,7 +102,8 @@ class Heightfield:
                     np.maximum.at(self.H, (jx, jy), ztop)
 
 
-def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale"):
+def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", progresso=None):
+    """Una variante. `progresso(k, n)` viene chiamata dopo ogni punto cucito e può sollevare un'eccezione per annullare."""
     if cucitura not in ("incrementale", "rigida"):
         raise ValueError("cucitura: 'incrementale' o 'rigida'")
     rng = np.random.default_rng(P.SEME)
@@ -123,7 +124,8 @@ def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale"):
         nloc[a:b] = b - a
 
     # --- 2. cucitura ---------------------------------------------------------
-    extra = {"compattazione": None, "infilzati": None, "spostamento_laterale_mm": None}
+    extra = {"compattazione": None, "infilzati": None, "spostamento_laterale_mm": None,
+             "iterazioni": None, "punti_non_convergenti": None}
     legato = np.zeros(N, bool)
     foro_legato = np.zeros((N, 2))
     if cucitura == "rigida":
@@ -145,13 +147,16 @@ def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale"):
             cucito[a:b] = np.c_[x, y, z]
             hf.timbra(x[1:-1], y[1:-1], z[1:-1] - r + 2 * r_st, r_st)
             L_cucita[k] = np.linalg.norm(np.diff(cucito[a:b], axis=0), axis=1).sum()
+            if progresso is not None:
+                progresso(k + 1, len(segs))
     else:
         import cucitura as C
-        R_c = C.cuci(segs, offs, seg_id, loc, nloc, r, h_garza, filato, involucro_superiore)
+        R_c = C.cuci(segs, offs, seg_id, loc, nloc, r, h_garza, filato, involucro_superiore, progresso=progresso)
         cucito, L_cucita = R_c["pos"], R_c["L_cucita"]
         legato, foro_legato = R_c["legato"], R_c["foro_legato"]
         extra = {"compattazione": R_c["comp"], "infilzati": R_c["infilzati"],
-                 "spostamento_laterale_mm": R_c["spostamento_laterale_mm"]}
+                 "spostamento_laterale_mm": R_c["spostamento_laterale_mm"],
+                 "iterazioni": R_c["iterazioni"], "punti_non_convergenti": R_c["punti_non_convergenti"]}
 
     # --- 3. rimozione garza: forma iniziale con eccesso di filo ------------
     L_obiettivo = L_cucita * (1 - P.ALLUNGAMENTO_RECUPERATO)
