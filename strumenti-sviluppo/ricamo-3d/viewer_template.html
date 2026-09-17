@@ -241,6 +241,7 @@ function tabella(m){
     ['Filo in più rispetto al punto teso', m.eccesso_filo_pct.toFixed(1)+' %'],
     ['Altezza media dell\'arco', m.arco_medio_mm.toFixed(2)+' mm'],
     ['Altezza arco, 9 punti su 10 sotto', m.arco_p90_mm.toFixed(2)+' mm'],
+    ['Altezza del filo a 0,4 mm dal foro, punti oltre 3,5 mm', m.bordo_04_mm==null ? 'nessun punto così lungo' : m.bordo_04_mm.toFixed(2)+' mm'],
     ['Copertura vista dall\'alto, durante', m.copertura_cucito_pct.toFixed(1)+' %'],
     ['Copertura vista dall\'alto, dopo', m.copertura_rilasciato_pct.toFixed(1)+' %'],
     ['Errore sulla lunghezza del filo', m.errore_lunghezza_pct.toFixed(1)+' %'],

@@ -78,6 +78,8 @@ for filato in P.FILATI:
             "errore_lunghezza_pct": round(R["err_lunghezza_pct"], 2),
             "arco_p90_mm": round(M.altezza_media(R["rilasciato"], offs, r)[1], 3),
         }
+        bordo = M.altezza_bordo(R["rilasciato"], offs, segs, r)
+        met["bordo_04_mm"] = None if bordo is None else round(bordo, 3)   # punti > 3,5 mm, a 0,4 mm dal foro
         key = f"{filato}|{strati}"
         out["varianti"][key] = {"metriche": met, "cucito": pack(R["cucito"]), "rilasciato": pack(R["rilasciato"])}
         print(key, met, f"{time.time()-t0:.1f}s")

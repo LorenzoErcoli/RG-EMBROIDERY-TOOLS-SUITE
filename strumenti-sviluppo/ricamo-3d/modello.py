@@ -4,10 +4,11 @@ Pipeline:
   1. DST -> sequenza fori (punti ago)
   2. cucitura: ogni punto passa sopra termogarza compressa + fili già posati
      (heightfield aggiornato in ordine di macchina) -> lunghezza cucita
-  3. rimozione garza: lunghezza cucita (meno recupero elastico) su fori fissi
-     -> eccesso di filo che diventa arco in alto e apertura laterale
+  3. rimozione garza: lunghezza cucita (meno recupero elastico) su fori fissi, meno la parte
+     di eccesso che rientra nel foro (RIENTRO_FORO) -> arco in alto e apertura laterale
   4. rilassamento quasi-statico (position based): lunghezza, flessione,
-     contatto filo-filo, appoggio sul tessuto, leggera gravità
+     contatto filo-filo, appoggio sul tessuto rialzato dal collare ai fori
+     (gravità a 0: a questa scala domina la rigidità del filo)
 Non è ancora calibrato: vedi parametri.py (DA_MISURARE).
 """
 import math
@@ -132,6 +133,9 @@ def simula(segs, offs, filato, strati, mezzo_lato):
 
     # --- 3. rimozione garza: forma iniziale con eccesso di filo ------------
     L_obiettivo = L_cucita * (1 - P.ALLUNGAMENTO_RECUPERATO)
+    # rientro nel foro: una parte dell'eccesso scivola via dal punto (semplificazione dello scorrimento vero)
+    corde = np.hypot(segs[:, 2] - segs[:, 0], segs[:, 3] - segs[:, 1])
+    L_obiettivo = corde + np.maximum(0.0, L_obiettivo - corde) * (1 - P.RIENTRO_FORO)
     pos = np.zeros((N, 3))
     riposo = np.zeros(len(segs))
     for k, (ax, ay, bx, by) in enumerate(segs):
@@ -159,8 +163,12 @@ def simula(segs, offs, filato, strati, mezzo_lato):
     i_mid = np.where(libero)[0]
     # nodi vicini ai fori esclusi dal contatto (i fori sono condivisi)
     passo = riposo[seg_id]
-    vicino_foro = np.minimum(loc, nloc - 1 - loc) * passo < 1.2 * d
+    vicino_foro = np.minimum(loc, nloc - 1 - loc) * passo < 0.6 * d
     attivo = np.where(~vicino_foro)[0]
+    # collare di sostegno: i due fori di ogni nodo, per misurarne la distanza in pianta
+    foro_a = segs[seg_id][:, 0:2]
+    foro_b = segs[seg_id][:, 2:4]
+    collare = P.COLLARE_FRAZ * h_garza
 
     # --- 4. rilassamento -----------------------------------------------------
     for it in range(P.ITERAZIONI):
@@ -202,8 +210,14 @@ def simula(segs, offs, filato, strati, mezzo_lato):
             np.add.at(cnt, i_edge, 1)
             np.add.at(cnt, i_edge + 1, 1)
             pos += dp / np.maximum(cnt, 1)[:, None]
-        # appoggio sul tessuto, ancore
-        pos[:, 2] = np.maximum(pos[:, 2], r)
+        # appoggio sul tessuto (rialzato dal collare vicino ai fori), ancore
+        if collare > 0:
+            dist_foro = np.minimum(np.hypot(pos[:, 0] - foro_a[:, 0], pos[:, 1] - foro_a[:, 1]),
+                                   np.hypot(pos[:, 0] - foro_b[:, 0], pos[:, 1] - foro_b[:, 1]))
+            pavimento = r + collare * np.maximum(0.0, 1 - dist_foro / P.COLLARE_RAGGIO)
+        else:
+            pavimento = r
+        pos[:, 2] = np.maximum(pos[:, 2], pavimento)
         pos[~libero] = ancore
 
     return {
@@ -242,3 +256,20 @@ def copertura(pos, offs, d, lato_interno, cella=0.02, rett=None):
 def altezza_media(pos, offs, r):
     h = [pos[a:b, 2].max() - r for a, b in zip(offs[:-1], offs[1:])]
     return float(np.mean(h)), float(np.percentile(h, 90))
+
+
+def altezza_bordo(pos, offs, segs, r, distanza=0.4, corda_min=3.5):
+    """Altezza media del filo (sopra l'appoggio r) a `distanza` mm in pianta da ciascuno dei due fori,
+    sui soli punti con corda più lunga di `corda_min`. None se la zona non ha punti così lunghi."""
+    corde = np.hypot(segs[:, 2] - segs[:, 0], segs[:, 3] - segs[:, 1])
+    h = []
+    for k in np.where(corde > corda_min + 1e-9)[0]:
+        p = pos[offs[k]:offs[k + 1]]
+        for q in (p, p[::-1]):                      # dal foro di partenza e da quello di arrivo
+            dist = np.hypot(q[:, 0] - q[0, 0], q[:, 1] - q[0, 1])
+            j = int(np.argmax(dist >= distanza))
+            if j == 0:
+                continue
+            f = (distanza - dist[j - 1]) / max(dist[j] - dist[j - 1], 1e-12)
+            h.append(q[j - 1, 2] + f * (q[j, 2] - q[j - 1, 2]) - r)
+    return float(np.mean(h)) if h else None

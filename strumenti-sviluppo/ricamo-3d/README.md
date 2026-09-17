@@ -50,9 +50,19 @@ della zona e l'HTML si chiama `rg-ricamo-3d-zona-<id>.html`.
 ## Limiti noti v0
 - La lunghezza di filo è bloccata per singolo punto: il filo non scorre ancora nei fori
   verso i punti vicini o verso la spola.
+- **Il rientro nel foro è una semplificazione.** Una frazione fissa dell'eccesso di ogni punto
+  (`RIENTRO_FORO`) sparisce e non fa arco: non va da nessuna parte, non allunga i punti vicini, è
+  uguale per tutti i punti. **Il passo successivo è lo scorrimento vero del filo continuo tra punti
+  vicini attraverso i fori.**
+- Il collare ai fori è un pavimento fisso (lineare fino a `COLLARE_RAGGIO`), misurato solo sui due
+  fori del punto stesso, non su quelli dei punti vicini.
+- La gravità è a 0 (`GRAVITA_PER_ITER` resta solo per le prove): a questa scala domina la rigidità.
+- Con 2 strati, collare e rientro insieme lasciano al filo meno lunghezza di quella che serve a
+  scavalcare il collare: il rilassamento finisce con il filo **più lungo** dell'obiettivo, fino a
+  +7 % (senza collare −1,4 %). A 0 e 1 strato l'errore resta sotto l'1 %.
+- "Filo in più" è la media per punto: le fermature da 0,5 mm la gonfiano.
 - Sezione del filo circolare, nessuna torsione reale dei capi.
 - Nessun parametro è calibrato su campioni reali.
-- Errore residuo di lunghezza del rilassamento circa 3%.
 
 ## Prossimi passi
 1. Campioni 0/1/2 strati, stesso disegno e filo: macrofoto e sezione tagliata.

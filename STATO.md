@@ -1398,6 +1398,43 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   copertura resta sotto il 50 % perché il filo del modello è tondo da 0,22 mm su un passo di 0,40: il
   campione vero dirà quanto si allarga; (c) sulla zona A l'errore di lunghezza arriva a −4,3 %, oltre
   il −3 % dichiarato.
+- **Correzioni di Lorenzo dopo la verifica visiva (2026-09-17)** — *il filo crollava ai lati del foro
+  e faceva troppa gobba al centro.* (1) `GRAVITA_PER_ITER = 0.0`, il parametro resta per le prove;
+  (2) **collare ai fori**: il pavimento di un nodo libero è `r + COLLARE_FRAZ · h_garza · max(0, 1 −
+  distanza/COLLARE_RAGGIO)` (0,6 e 0,45 mm, DA_MISURARE; distanza in pianta dal più vicino dei due fori
+  del punto, ricalcolata a ogni iterazione), esclusione dal contatto vicino ai fori da 1,2·d a 0,6·d;
+  (3) **rientro nel foro**: lunghezza obiettivo = `corda + max(0, L_obiettivo − corda) · (1 −
+  RIENTRO_FORO)` (0,4, DA_MISURARE, il più importante) — semplificazione, annotata nel README: il
+  passo vero è lo scorrimento del filo continuo tra punti vicini; (4) nuova metrica nel visualizzatore,
+  **altezza del filo a 0,4 mm dal foro** sopra l'appoggio, media sui due capi dei punti con corda
+  oltre 3,5 mm («nessun punto così lungo» se la zona non ne ha, come la A). Il «filo in più» ora si
+  misura dopo il rientro, quindi scende e non va più sotto zero.
+  **Prima → dopo, ritaglio centrale di `pattern (1).dst`** (il «prima» ha già la metrica nuova,
+  calcolata col modello vecchio):
+
+  | variante | arco medio | bordo a 0,4 mm | copertura durante | copertura dopo | err. lunghezza |
+  |---|---|---|---|---|---|
+  | cotone 30 · 0 | 0,058 → 0,097 | 0,018 → 0,094 | 25,6 → 25,6 % | 33,4 → 31,1 % | +0,7 → +0,5 % |
+  | cotone 30 · 1 | 0,207 → 0,300 | 0,044 → 0,184 | 25,6 → 25,6 % | 34,9 → 34,1 % | −3,1 → +0,6 % |
+  | cotone 30 · 2 | 0,445 → 0,445 | 0,071 → 0,279 | 25,6 → 25,6 % | 36,0 → 35,5 % | −2,8 → **+6,9 %** |
+  | cotone 40 · 0 | 0,041 → 0,083 | 0,008 → 0,081 | 21,1 → 21,1 % | 28,1 → 25,9 % | +0,7 → +0,4 % |
+  | cotone 40 · 1 | 0,194 → 0,290 | 0,033 → 0,177 | 21,1 → 21,1 % | 29,3 → 28,7 % | −3,1 → +0,5 % |
+  | cotone 40 · 2 | 0,435 → 0,453 | 0,061 → 0,271 | 21,1 → 21,1 % | 30,0 → 29,8 % | −2,8 → **+5,7 %** |
+
+  Zone di calibrazione, cotone 30 a 2 strati: A arco 0,49 → 0,45 mm, copertura dopo 48,6 → 48,9 %;
+  B arco 0,81 → 0,78, bordo 0,05 → 0,26, copertura 44,7 → 46,9 %; C arco 0,38 → 0,41, bordo 0,00 →
+  0,23 (solo i punti di bordo da 3,8 mm superano 3,5), copertura 45,5 → 47,0 %. La copertura *durante*
+  non cambia per costruzione (la cucitura non è toccata).
+  **Chi fa cosa** — le quattro modifiche accese una alla volta (cotone 30, 2 strati, ritaglio
+  centrale): gravità a 0 → arco 0,445 → 0,646, bordo 0,071 → 0,277 (è lei che toglie il crollo);
+  + collare → arco 0,607, bordo 0,327, errore **+3,4 %**; + contatto a 0,6·d → quasi niente;
+  + rientro 0,4 → arco 0,445, bordo 0,279, errore **+6,9 %**. Senza collare ma col rientro: arco
+  0,489, bordo 0,224, errore −1,4 %.
+  **Da decidere con i campioni:** a 2 strati collare e rientro insieme chiedono al filo più lunghezza
+  di quella che gli resta (0,18 mm di collare da scavalcare ai due capi con il 40 % di eccesso in
+  meno): il rilassamento chiude con il filo più lungo dell'obiettivo fino al 7 %, quindi a 2 strati
+  arco e bordo sono decisi dai vincoli e non dalla lunghezza. A 0 e 1 strato l'errore resta sotto l'1 %.
+  Nessun valore è stato ritoccato: `COLLARE_FRAZ` e `RIENTRO_FORO` sono esattamente quelli indicati.
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 

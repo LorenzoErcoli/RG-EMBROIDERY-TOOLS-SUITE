@@ -22,8 +22,18 @@ COMPRESSIONE_GARZA = 0.60        # spessore sotto ago e tensione / nominale  DA_
 # --- Rilassamento dopo la rimozione -----------------------------------------
 APERTURA_MAX_GRADI = 40          # quanto l'eccesso di filo può andare di lato invece che in alto
 RIGIDEZZA_FLESSIONE = 0.08       # 0 = filo morbidissimo, 1 = rigido
-GRAVITA_PER_ITER = 0.0015        # mm di spinta verso il tessuto per iterazione
+GRAVITA_PER_ITER = 0.0           # mm di spinta verso il tessuto per iterazione. Solo per test:
+                                 # a questa scala la rigidità del filo domina sul peso (con 0.0015 il filo crollava ai fori)
 ITERAZIONI = 160
+
+# --- Fori: sostegno e rientro del filo ----------------------------------------
+# Collare: attorno al foro la garza strappata e il filo compresso tengono il filo sollevato.
+# Pavimento di un nodo libero = r + COLLARE_FRAZ * h_garza * max(0, 1 - distanza_dal_foro / COLLARE_RAGGIO)
+COLLARE_FRAZ = 0.6               # frazione dello spessore di garza compressa che resta sotto il filo al foro  DA_MISURARE
+COLLARE_RAGGIO = 0.45            # mm in pianta oltre i quali il collare non sostiene più  DA_MISURARE
+# Rientro: parte dell'eccesso di filo scivola nel foro (verso il rovescio / i punti vicini) e non fa arco.
+# Lunghezza obiettivo = corda + max(0, L_obiettivo - corda) * (1 - RIENTRO_FORO)
+RIENTRO_FORO = 0.4               # frazione dell'eccesso che rientra nel foro  DA_MISURARE (il più importante)
 PASSI_LUNGHEZZA = 4
 PASSO_NODI_FRAZ_DIAMETRO = 0.5   # distanza tra nodi = frazione del diametro filo
 SEME = 7
