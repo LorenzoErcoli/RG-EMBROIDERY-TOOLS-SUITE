@@ -22,6 +22,18 @@ Poi, con l'ambiente attivo (`.venv\Scripts\activate`):
 L'HTML esce accanto a `esegui.py` ed è ignorato da git, come `.venv/`. Per guardarlo nel browser
 del Code c'è la configurazione `ricamo-3d` in `.claude/launch.json` (porta 5312).
 
+## Interfaccia: caricare un DST
+    python server.py ["file.dst"]           # oppure: npm run sviluppo:ricamo-3d:app
+
+Apre `http://127.0.0.1:5313/` (solo su questo computer). Carichi un DST (bottone o trascinandolo sulla
+pagina), sulla pianta clicchi o trascini per scegliere il quadrato da simulare, ne scegli il lato
+(6–60 mm) e premi *Simula*: le 6 varianti girano sul server, con l'avanzamento, e alla fine il
+visualizzatore mostra il risultato. Oltre ~1.500 punti nel ritaglio la simulazione è lenta.
+**Colore del filo**: uno per ago (i cambi colore del DST), dal selettore o dai campioni; cambia il 3D
+e la pianta al volo, senza ricalcolare, e resta ricordato nel browser. I colori ci sono anche negli
+HTML statici di `esegui.py`. Con un file sulla riga di comando la pagina si apre già caricata; la
+configurazione `ricamo-3d-app` di `.claude/launch.json` apre `calibrazione.dst`.
+
 ## Calibrazione
 Un DST di campioni da ricamare davvero (cotone 30 e 40, 0/1/2 strati) e confrontare con la simulazione.
 
@@ -44,7 +56,8 @@ della zona e l'HTML si chiama `rg-ricamo-3d-zona-<id>.html`.
 - `modello.py` — cucitura (filo teso sopra garza compressa e fili già posati, in ordine macchina),
   rimozione garza, rilassamento con lunghezza, flessione, contatto filo-filo, appoggio sul tessuto.
 - `esegui.py` — ritaglio centrale (o una zona con `--zona`), varianti, metriche, visualizzatore.
-- `viewer_template.html` — visualizzatore three.js.
+- `viewer_template.html` — visualizzatore three.js: pagina statica con i dati dentro, o interfaccia se aperto da `server.py`.
+- `server.py` — interfaccia locale per caricare un DST, scegliere il ritaglio e simulare.
 - `calibrazione.py`, `verifica_calibrazione.py`, `calibrazione/` — DST di calibrazione, sua verifica, file generati.
 
 ## Limiti noti v0

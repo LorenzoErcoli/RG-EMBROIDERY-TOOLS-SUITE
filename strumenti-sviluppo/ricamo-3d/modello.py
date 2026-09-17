@@ -18,21 +18,26 @@ from dst_reader import read_dst
 import parametri as P
 
 
-def fori_da_dst(path):
+def fori_da_dst(path, con_ago=False):
+    """Segmenti (ax, ay, bx, by). Con `con_ago` una quinta colonna: l'ago (1, 2, …, +1 a ogni cambio colore)."""
     _, recs = read_dst(path)
-    segs = []  # (ax, ay, bx, by)
+    segs = []  # (ax, ay, bx, by[, ago])
     prev = None
+    ago = 1
     for x, y, t in recs:
         if t == "stitch":
             if prev is not None:
-                segs.append((prev[0], prev[1], x, y))
+                segs.append((prev[0], prev[1], x, y, ago) if con_ago else (prev[0], prev[1], x, y))
             prev = (x, y)
         elif t in ("jump", "color"):
             prev = (x, y) if t == "jump" else None
-    return np.array(segs, float)
+            if t == "color":
+                ago += 1
+    return np.array(segs, float).reshape(-1, 5 if con_ago else 4)
 
 
 def ritaglio(segs, cx, cy, mezzo_lato):
+    """Segmenti interamente dentro il quadrato, centrati; le colonne oltre la quarta (es. l'ago) passano intatte."""
     m = ((np.abs(segs[:, 0] - cx) <= mezzo_lato) & (np.abs(segs[:, 1] - cy) <= mezzo_lato) &
          (np.abs(segs[:, 2] - cx) <= mezzo_lato) & (np.abs(segs[:, 3] - cy) <= mezzo_lato))
     s = segs[m].copy()

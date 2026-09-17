@@ -77,6 +77,7 @@ npm test             # smoke test delle primitive condivise e dei motori
 npm run typecheck    # controllo dei tipi (la build non lo fa: vite usa esbuild)
 npm run build        # sito statico in apps/shell/dist
 npm run sviluppo:ricamo-3d -- "file.dst"  # modello 3D su termogarza (Python: vedi strumenti-sviluppo/ricamo-3d/README.md)
+npm run sviluppo:ricamo-3d:app           # la stessa cosa con un'interfaccia: carichi il DST, scegli ritaglio e colori
 ```
 
 `npm test` e `npm run typecheck` girano anche in CI a ogni push, insieme alla build e alla

@@ -9,33 +9,35 @@
 <style>
 :root{
   --vista:#3a4148; --pannello:#e6e8e3; --inchiostro:#1e2328; --tenue:#5d656c;
-  --linea:#c5c9c3; --attivo:#2f6f73; --attivo-testo:#f4f7f6; --campo:#f3f4f1;
+  --linea:#c5c9c3; --attivo:#2f6f73; --attivo-testo:#f4f7f6; --campo:#f3f4f1; --errore:#a33b2f;
 }
 @media (prefers-color-scheme: dark){
   :root:not([data-theme="light"]){
-    --pannello:#23292e; --inchiostro:#e4e7e5; --tenue:#9aa3a9; --linea:#3a4349; --campo:#2b3238; --attivo:#4c9a9e;
+    --pannello:#23292e; --inchiostro:#e4e7e5; --tenue:#9aa3a9; --linea:#3a4349; --campo:#2b3238; --attivo:#4c9a9e; --errore:#e07a6c;
   }
 }
 :root[data-theme="dark"]{
-  --pannello:#23292e; --inchiostro:#e4e7e5; --tenue:#9aa3a9; --linea:#3a4349; --campo:#2b3238; --attivo:#4c9a9e;
+  --pannello:#23292e; --inchiostro:#e4e7e5; --tenue:#9aa3a9; --linea:#3a4349; --campo:#2b3238; --attivo:#4c9a9e; --errore:#e07a6c;
 }
 *{box-sizing:border-box}
 html,body{margin:0;height:100%}
 body{background:var(--pannello);color:var(--inchiostro);font-family:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:15px;line-height:1.45}
-.app{display:grid;grid-template-columns:minmax(0,1fr) 320px;height:100vh}
+[hidden]{display:none!important}
+.app{display:grid;grid-template-columns:minmax(0,1fr) 340px;height:100vh}
 #vista{position:relative;background:var(--vista);min-height:0}
 #vista canvas{display:block;width:100%;height:100%}
 .nota-vista{position:absolute;left:14px;bottom:12px;color:#c9d0d4;font-size:13px;pointer-events:none}
 .errore{position:absolute;inset:0;display:none;align-items:center;justify-content:center;color:#e9eef0;padding:24px;text-align:center}
+.vuoto{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#c9d0d4;padding:24px;text-align:center;font-size:17px;pointer-events:none}
 aside{padding:22px 22px 28px;overflow-y:auto;border-left:1px solid var(--linea)}
 h1{font-family:"Barlow Semi Condensed","Barlow",sans-serif;font-weight:600;font-size:24px;line-height:1.15;margin:0 0 6px;letter-spacing:-.005em}
 .intro{color:var(--tenue);margin:0 0 22px;font-size:14px}
-fieldset{border:0;padding:0;margin:0 0 18px}
+fieldset{border:0;padding:0;margin:0 0 18px;min-width:0}
 legend{font-weight:600;font-size:14px;margin-bottom:7px;padding:0}
 .scelta{display:flex;background:var(--campo);border:1px solid var(--linea);border-radius:7px;padding:3px;gap:3px}
 .scelta button{flex:1;border:0;background:transparent;color:var(--inchiostro);font:inherit;font-size:14px;padding:7px 6px;border-radius:5px;cursor:pointer}
 .scelta button[aria-pressed="true"]{background:var(--attivo);color:var(--attivo-testo);font-weight:500}
-.scelta button:focus-visible,.azioni button:focus-visible{outline:2px solid var(--attivo);outline-offset:2px}
+.scelta button:focus-visible,.azioni button:focus-visible,.bottone:focus-visible,.campione:focus-visible{outline:2px solid var(--attivo);outline-offset:2px}
 .fase{margin:4px 0 22px}
 .fase .scelta button{padding:10px 6px}
 table{width:100%;border-collapse:collapse;font-size:14px;font-variant-numeric:tabular-nums}
@@ -45,6 +47,30 @@ td:last-child{text-align:right;white-space:nowrap;padding-left:10px}
 .azioni{display:flex;gap:8px;margin:18px 0 0}
 .azioni button{flex:1;font:inherit;font-size:14px;padding:8px;border-radius:6px;border:1px solid var(--linea);background:var(--campo);color:var(--inchiostro);cursor:pointer}
 .avviso{margin-top:22px;font-size:13px;color:var(--tenue);border-left:3px solid var(--attivo);padding-left:10px}
+
+/* caricamento */
+.carica{margin:0 0 22px;padding:0 0 18px;border-bottom:1px solid var(--linea)}
+.file{display:flex;align-items:center;justify-content:center;gap:8px;border:1.5px dashed var(--linea);border-radius:8px;background:var(--campo);padding:14px 10px;cursor:pointer;text-align:center;font-size:14px}
+.file:hover,.file.sopra{border-color:var(--attivo)}
+.file input{position:absolute;width:1px;height:1px;opacity:0}
+.file:focus-within{outline:2px solid var(--attivo);outline-offset:2px}
+.info{font-size:13px;color:var(--tenue);margin:8px 0 0}
+#pianta{display:block;width:100%;aspect-ratio:1;margin:12px 0 4px;border:1px solid var(--linea);border-radius:6px;background:#7d837f;cursor:crosshair;touch-action:none}
+.riga{display:flex;align-items:center;justify-content:space-between;gap:10px;font-size:14px;margin-top:10px}
+.riga input[type=range]{flex:1;accent-color:var(--attivo)}
+.riga output{font-variant-numeric:tabular-nums;min-width:52px;text-align:right}
+.bottone{width:100%;margin-top:12px;font:inherit;font-size:15px;font-weight:500;padding:10px;border-radius:6px;border:0;background:var(--attivo);color:var(--attivo-testo);cursor:pointer}
+.bottone:disabled{opacity:.5;cursor:default}
+progress{width:100%;height:6px;margin-top:10px;accent-color:var(--attivo)}
+.stato-errore{color:var(--errore)}
+
+/* colori del filo */
+.colore-riga{display:grid;grid-template-columns:44px 34px 1fr;align-items:center;gap:7px;margin-bottom:8px;font-size:14px}
+.colore-riga input[type=color]{width:34px;height:30px;padding:0;border:1px solid var(--linea);border-radius:5px;background:var(--campo);cursor:pointer}
+.campioni{display:flex;gap:4px;flex-wrap:wrap}
+.campione{width:20px;height:20px;border-radius:50%;border:1px solid var(--linea);cursor:pointer;padding:0}
+.campione[aria-pressed="true"]{box-shadow:0 0 0 2px var(--pannello),0 0 0 4px var(--attivo)}
+
 @media (max-width:760px){
   .app{grid-template-columns:1fr;grid-template-rows:62vh auto;height:auto}
   aside{border-left:0;border-top:1px solid var(--linea)}
@@ -55,47 +81,80 @@ td:last-child{text-align:right;white-space:nowrap;padding-left:10px}
 <div class="app">
   <div id="vista">
     <div class="nota-vista">Trascina per ruotare, rotella o pizzico per ingrandire</div>
+    <div class="vuoto" id="vuoto" hidden>Carica un file DST e scegli il ritaglio da simulare</div>
     <div class="errore" id="errore">Il visualizzatore 3D non si è caricato. Ricarica la pagina; se persiste, il browser non supporta WebGL.</div>
   </div>
   <aside>
     <h1>Ricamo su termogarza, modello 3D</h1>
     <p class="intro" id="intro">Ritaglio 22 × 22 mm al centro di pattern (1).dst, cotone naturale. Parametri fisici di partenza, non ancora calibrati.</p>
 
-    <div class="fase">
+    <section class="carica" id="carica" hidden>
       <fieldset>
-        <legend>Fase</legend>
-        <div class="scelta" data-gruppo="fase">
-          <button type="button" data-v="0" aria-pressed="false">Durante il ricamo</button>
-          <button type="button" data-v="1" aria-pressed="true">Garza rimossa</button>
+        <legend>Disegno</legend>
+        <label class="file" id="zonaFile">
+          <input type="file" id="file" accept=".dst,.DST">
+          <span id="etichettaFile">Scegli un file DST o trascinalo qui</span>
+        </label>
+        <p class="info" id="infoFile" hidden></p>
+        <canvas id="pianta" hidden aria-label="Pianta del disegno: clicca o trascina per spostare il ritaglio"></canvas>
+        <div id="sceltaRitaglio" hidden>
+          <div class="riga">
+            <label for="lato" style="white-space:nowrap">Lato</label>
+            <input type="range" id="lato" min="6" max="60" step="1" value="22">
+            <output id="latoValore" for="lato">22 mm</output>
+          </div>
+          <p class="info" id="conteggio"></p>
+          <button type="button" class="bottone" id="simula">Simula il ritaglio</button>
+          <progress id="avanzamento" max="6" value="0" hidden></progress>
+          <p class="info" id="statoLavoro" role="status"></p>
+        </div>
+      </fieldset>
+    </section>
+
+    <div id="controlli" hidden>
+      <div class="fase">
+        <fieldset>
+          <legend>Fase</legend>
+          <div class="scelta" data-gruppo="fase">
+            <button type="button" data-v="0" aria-pressed="false">Durante il ricamo</button>
+            <button type="button" data-v="1" aria-pressed="true">Garza rimossa</button>
+          </div>
+        </fieldset>
+      </div>
+
+      <fieldset>
+        <legend>Filato</legend>
+        <div class="scelta" data-gruppo="filato">
+          <button type="button" data-v="cotone_30" aria-pressed="true">Cotone 30</button>
+          <button type="button" data-v="cotone_40" aria-pressed="false">Cotone 40</button>
+        </div>
+      </fieldset>
+
+      <fieldset>
+        <legend>Strati di termogarza</legend>
+        <div class="scelta" data-gruppo="strati">
+          <button type="button" data-v="0" aria-pressed="false">Nessuno</button>
+          <button type="button" data-v="1" aria-pressed="false">1 strato</button>
+          <button type="button" data-v="2" aria-pressed="true">2 strati</button>
         </div>
       </fieldset>
     </div>
 
-    <fieldset>
-      <legend>Filato</legend>
-      <div class="scelta" data-gruppo="filato">
-        <button type="button" data-v="cotone_30" aria-pressed="true">Cotone 30</button>
-        <button type="button" data-v="cotone_40" aria-pressed="false">Cotone 40</button>
-      </div>
+    <fieldset id="sezioneColori" hidden>
+      <legend>Colore del filo</legend>
+      <div id="colori"></div>
     </fieldset>
 
-    <fieldset>
-      <legend>Strati di termogarza</legend>
-      <div class="scelta" data-gruppo="strati">
-        <button type="button" data-v="0" aria-pressed="false">Nessuno</button>
-        <button type="button" data-v="1" aria-pressed="false">1 strato</button>
-        <button type="button" data-v="2" aria-pressed="true">2 strati</button>
+    <div id="risultati" hidden>
+      <table>
+        <caption>Risultati di questa variante</caption>
+        <tbody id="metriche"></tbody>
+      </table>
+
+      <div class="azioni">
+        <button type="button" id="vistaRadente">Luce radente</button>
+        <button type="button" id="vistaAlto">Vista dall'alto</button>
       </div>
-    </fieldset>
-
-    <table>
-      <caption>Risultati di questa variante</caption>
-      <tbody id="metriche"></tbody>
-    </table>
-
-    <div class="azioni">
-      <button type="button" id="vistaRadente">Luce radente</button>
-      <button type="button" id="vistaAlto">Vista dall'alto</button>
     </div>
 
     <p class="avviso">Spessore garza, compressione, schiacciamento e recupero elastico del filo sono ipotesi. Vanno sostituiti con le misure sui campioni a 0, 1 e 2 strati.</p>
@@ -107,20 +166,46 @@ td:last-child{text-align:right;white-space:nowrap;padding-left:10px}
 <script id="dati" type="application/json">__DATI__</script>
 <script>
 (function(){
-if(!window.THREE){document.getElementById('errore').style.display='flex';return;}
-const DATI = JSON.parse(document.getElementById('dati').textContent);
-const Q = DATI.quant, ML = DATI.mezzo_lato;
-if (DATI.descrizione) document.getElementById('intro').textContent = DATI.descrizione;
+const $ = (id)=>document.getElementById(id);
+const DATI_INIZIALI = JSON.parse($('dati').textContent);
+const APP = DATI_INIZIALI === null;        // aperto da server.py: si carica il DST dalla pagina
+if(!window.THREE){$('errore').style.display='flex';return;}
 function b64(s, T){const bin=atob(s);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new T(u.buffer);}
-const OFFS = b64(DATI.offs, Uint32Array);
 
 const stato = {fase:1, filato:'cotone_30', strati:'2'};
 try{ const s=JSON.parse(localStorage.getItem('rg3d_stato')||'null'); if(s) Object.assign(stato,s);}catch(e){}
 
+// ---------- colori del filo (uno per ago) ----------
+const NATURALE = '#ede6d3';
+const CAMPIONI = [['Naturale',NATURALE],['Bianco','#f5f4ef'],['Nero','#27272b'],['Rosso','#a3302b'],['Blu','#2c4677'],['Verde','#3f6b4a'],['Oro','#c49a45']];
+let colori = [];
+try{ const c=JSON.parse(localStorage.getItem('rg3d_colori')||'null'); if(Array.isArray(c)) colori=c; }catch(e){}
+const coloreAgo = (ago)=> colori[ago-1] || NATURALE;
+function salvaColori(){ try{ localStorage.setItem('rg3d_colori', JSON.stringify(colori)); }catch(e){} }
+function preparaColori(nAghi){
+  const box = $('colori'); box.innerHTML = '';
+  for(let ago=1; ago<=nAghi; ago++){
+    const riga = document.createElement('div'); riga.className = 'colore-riga';
+    const nome = document.createElement('span'); nome.textContent = nAghi===1 ? 'Filo' : 'Ago '+ago;
+    const scegli = document.createElement('input'); scegli.type='color'; scegli.value=coloreAgo(ago);
+    scegli.setAttribute('aria-label', 'Colore '+(nAghi===1?'del filo':'dell\'ago '+ago));
+    const campioni = document.createElement('div'); campioni.className='campioni';
+    const imposta = (hex)=>{ colori[ago-1]=hex; scegli.value=hex; salvaColori(); segna(); applicaColori(); disegnaPianta(); };
+    const segna = ()=> campioni.querySelectorAll('button').forEach(b=>b.setAttribute('aria-pressed', String(b.dataset.c===coloreAgo(ago).toLowerCase())));
+    for(const [n,hex] of CAMPIONI){
+      const b=document.createElement('button'); b.type='button'; b.className='campione'; b.style.background=hex; b.dataset.c=hex;
+      b.title=n; b.setAttribute('aria-label', n); b.onclick=()=>imposta(hex); campioni.append(b);
+    }
+    scegli.addEventListener('input', ()=>imposta(scegli.value.toLowerCase()));
+    riga.append(nome, scegli, campioni); box.append(riga); segna();
+  }
+  $('sezioneColori').hidden = false;
+}
+
 // ---------- scena ----------
-const vista = document.getElementById('vista');
+const vista = $('vista');
 let renderer;
-try{ renderer = new THREE.WebGLRenderer({antialias:true}); }catch(e){document.getElementById('errore').style.display='flex';return;}
+try{ renderer = new THREE.WebGLRenderer({antialias:true}); }catch(e){$('errore').style.display='flex';return;}
 renderer.setPixelRatio(Math.min(window.devicePixelRatio,2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -136,7 +221,6 @@ scena.add(new THREE.HemisphereLight(0xdfe7ec, 0x4a4238, 0.55));
 const sole = new THREE.DirectionalLight(0xfff4e2, 1.25);
 sole.castShadow = true;
 sole.shadow.mapSize.set(2048,2048);
-const sc = sole.shadow.camera; sc.left=-ML-1; sc.right=ML+1; sc.top=ML+1; sc.bottom=-ML-1; sc.near=1; sc.far=80;
 sole.shadow.bias = -0.0004; sole.shadow.normalBias = 0.02;
 scena.add(sole); scena.add(sole.target);
 function luce(radente){ const a=radente?0.32:1.1; sole.position.set(Math.cos(0.6)*30*Math.cos(a), 30*Math.sin(a), Math.sin(0.6)*30*Math.cos(a)); }
@@ -156,15 +240,44 @@ function texTela(){
   const c=document.createElement('canvas'); c.width=128; c.height=128; const g=c.getContext('2d');
   g.fillStyle='#6d7470'; g.fillRect(0,0,128,128);
   for(let y=0;y<128;y+=4) for(let x=0;x<128;x+=4){ const alt=((x+y)/4)%2; g.fillStyle= alt?'#7c837f':'#646b67'; g.fillRect(x,y,4,4); }
-  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(ML*2/0.8, ML*2/0.8); return t;
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; return t;
 }
 const tc = texCotone();
-const matFilo = new THREE.MeshStandardMaterial({color:0xede6d3, map:tc, bumpMap:tc, bumpScale:0.012, roughness:0.88, metalness:0, morphTargets:true, morphNormals:true});
-const tela = new THREE.Mesh(new THREE.PlaneGeometry(ML*2+6, ML*2+6), new THREE.MeshStandardMaterial({map:texTela(), roughness:1, color:0xb8bdb9}));
+// il colore sta nei vertici (un colore per ago); il materiale resta bianco
+const matFilo = new THREE.MeshStandardMaterial({color:0xffffff, vertexColors:true, map:tc, bumpMap:tc, bumpScale:0.012, roughness:0.88, metalness:0, morphTargets:true, morphNormals:true});
+const texT = texTela();
+const tela = new THREE.Mesh(new THREE.PlaneGeometry(1, 1), new THREE.MeshStandardMaterial({map:texT, roughness:1, color:0xb8bdb9}));
 tela.rotation.x = -Math.PI/2; tela.receiveShadow = true; scena.add(tela);
 const matGarza = new THREE.MeshStandardMaterial({color:0xdfe9e6, roughness:1, transparent:true, opacity:0.5, depthWrite:false});
-const garza = new THREE.Mesh(new THREE.BoxGeometry(ML*2+1, 1, ML*2+1), matGarza);
+const garza = new THREE.Mesh(new THREE.BoxGeometry(1, 1, 1), matGarza);
 garza.receiveShadow = true; scena.add(garza);
+garza.visible = false; tela.visible = false;
+
+// ---------- dati correnti ----------
+let DATI=null, Q=0, ML=11, OFFS=null, AGHI=null;
+let mesh=null, cacheIndici=null, agoVertici=null;
+
+function adattaScena(){
+  tela.scale.set(ML*2+6, ML*2+6, 1); texT.repeat.set(ML*2/0.8, ML*2/0.8); tela.visible = true;
+  garza.scale.x = ML*2+1; garza.scale.z = ML*2+1;
+  const sc = sole.shadow.camera; sc.left=-ML-1; sc.right=ML+1; sc.top=ML+1; sc.bottom=-ML-1; sc.near=1; sc.far=80; sc.updateProjectionMatrix();
+  ctrl.maxDistance = Math.max(90, ML*8);
+}
+
+function carica(d){
+  DATI = d; Q = d.quant; ML = d.mezzo_lato;
+  OFFS = b64(d.offs, Uint32Array);
+  const nSeg = OFFS.length-1;
+  AGHI = d.aghi ? b64(d.aghi, Uint8Array) : new Uint8Array(nSeg).fill(1);
+  let nAghi = 1; for(let k=0;k<nSeg;k++) if(AGHI[k]>nAghi) nAghi=AGHI[k];
+  if(d.descrizione) $('intro').textContent = d.descrizione;
+  cacheIndici = null; agoVertici = null;
+  adattaScena();
+  preparaColori(nAghi);
+  $('controlli').hidden = false; $('risultati').hidden = false; $('vuoto').hidden = true;
+  costruisci();
+  camRadente();
+}
 
 // ---------- geometria dei fili ----------
 const PASSO = 2, LATI = 8;
@@ -209,18 +322,39 @@ function indici(idxNodi){
   }
   return I;
 }
-let mesh=null, cacheIndici=null;
+function aghiDeiVertici(idxNodi){
+  let tot=0; for(const ids of idxNodi) tot+=ids.length*LATI;
+  const A=new Uint8Array(tot); let w=0;
+  idxNodi.forEach((ids,k)=>{ A.fill(AGHI[k], w, w+ids.length*LATI); w+=ids.length*LATI; });
+  return A;
+}
+function riempiColori(C){
+  const lin = {};
+  for(let i=0;i<agoVertici.length;i++){
+    const ago=agoVertici[i];
+    let c = lin[ago]; if(!c){ c = new THREE.Color(coloreAgo(ago)).convertSRGBToLinear(); lin[ago]=c; }
+    C[i*3]=c.r; C[i*3+1]=c.g; C[i*3+2]=c.b;
+  }
+}
+function applicaColori(){
+  if(!mesh) return;
+  const attr = mesh.geometry.getAttribute('color');
+  riempiColori(attr.array); attr.needsUpdate = true;
+}
 function costruisci(){
+  if(!DATI) return;
   const v = DATI.varianti[stato.filato+'|'+stato.strati];
   const r = v.metriche.diametro_mm/2;
   const cuc = b64(v.cucito, Int16Array), ril = b64(v.rilasciato, Int16Array);
   const f = (a)=>{const o=new Float32Array(a.length); for(let i=0;i<a.length;i++) o[i]=a[i]*Q; return o;};
   const A = anelli(f(cuc), r), B = anelli(f(ril), r);
-  if(!cacheIndici) cacheIndici = indici(A.idxNodi);
+  if(!cacheIndici){ cacheIndici = indici(A.idxNodi); agoVertici = aghiDeiVertici(A.idxNodi); }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(A.V,3));
   g.setAttribute('normal', new THREE.BufferAttribute(A.N,3));
   g.setAttribute('uv', new THREE.BufferAttribute(A.U,2));
+  const C = new Float32Array(A.V.length); riempiColori(C);
+  g.setAttribute('color', new THREE.BufferAttribute(C,3));
   g.morphAttributes.position = [new THREE.BufferAttribute(B.V,3)];
   g.morphAttributes.normal = [new THREE.BufferAttribute(B.N,3)];
   g.setIndex(cacheIndici);
@@ -246,7 +380,7 @@ function tabella(m){
     ['Copertura vista dall\'alto, dopo', m.copertura_rilasciato_pct.toFixed(1)+' %'],
     ['Errore sulla lunghezza del filo', m.errore_lunghezza_pct.toFixed(1)+' %'],
   ];
-  document.getElementById('metriche').innerHTML = righe.map(r=>'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>').join('');
+  $('metriche').innerHTML = righe.map(r=>'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>').join('');
 }
 
 // ---------- controlli ----------
@@ -266,15 +400,152 @@ document.querySelectorAll('.scelta').forEach(gr=>{
     });
   });
 });
-function camRadente(){ cam.position.set(5.5, 3.2, 7.5); ctrl.target.set(0.5,0.1,-0.5); luce(true); }
-function camAlto(){ cam.position.set(0.001, 30, 0.01); ctrl.target.set(0,0,0); luce(false); }
-document.getElementById('vistaRadente').onclick = camRadente;
-document.getElementById('vistaAlto').onclick = camAlto;
+// le inquadrature seguono la grandezza del ritaglio (22 mm = quella di sempre)
+function camRadente(){ const k=ML/11; cam.position.set(5.5*k, 3.2*k, 7.5*k); ctrl.target.set(0.5*k,0.1*k,-0.5*k); luce(true); }
+function camAlto(){ const k=Math.max(ML/11,0.5); cam.position.set(0.001, 30*k, 0.01); ctrl.target.set(0,0,0); luce(false); }
+$('vistaRadente').onclick = camRadente;
+$('vistaAlto').onclick = camAlto;
 camRadente();
 
-function ridimensiona(){ const w=vista.clientWidth, h=vista.clientHeight; renderer.setSize(w,h,false); cam.aspect=w/h; cam.updateProjectionMatrix(); }
+function ridimensiona(){ const w=vista.clientWidth, h=vista.clientHeight; renderer.setSize(w,h,false); cam.aspect=w/h; cam.updateProjectionMatrix(); disegnaPianta(); }
 window.addEventListener('resize', ridimensiona);
-costruisci(); ridimensiona();
+
+// ---------- caricamento del DST (solo con server.py) ----------
+let disegno = null;                      // {id, nome, riquadro, seg Int16 decimi, segAghi}
+const ritaglio = {cx:0, cy:0, lato:22};
+let lavoroInCorso = false;
+
+async function leggiFile(file){
+  if(!file) return;
+  $('etichettaFile').textContent = 'Lettura di '+file.name+'…';
+  $('infoFile').hidden = true;
+  try{
+    const r = await fetch('/api/leggi', {method:'POST', headers:{'X-Nome': encodeURIComponent(file.name)}, body: await file.arrayBuffer()});
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.errore || 'lettura non riuscita');
+    mostraDisegno(j);
+  }catch(e){
+    $('etichettaFile').textContent = 'Scegli un file DST o trascinalo qui';
+    $('infoFile').textContent = e.message; $('infoFile').hidden = false;
+  }
+}
+function mostraDisegno(j){
+  const [x0,y0,x1,y1] = j.riquadro;
+  disegno = {id:j.id, nome:j.nome, riquadro:j.riquadro, aghi:j.aghi, seg:b64(j.segmenti, Int16Array), segAghi:b64(j.segmenti_aghi, Uint8Array)};
+  const dentro = x0<=0 && 0<=x1 && y0<=0 && 0<=y1;
+  ritaglio.cx = dentro ? 0 : Math.round((x0+x1)/2*10)/10;
+  ritaglio.cy = dentro ? 0 : Math.round((y0+y1)/2*10)/10;
+  ritaglio.lato = Math.min(22, Math.max(6, Math.ceil(Math.max(x1-x0, y1-y0))));
+  $('lato').value = ritaglio.lato;
+  $('etichettaFile').textContent = j.nome + ' · cambia file';
+  $('infoFile').textContent = `${j.punti.toLocaleString('it-IT')} punti · ${j.aghi} ${j.aghi===1?'ago':'aghi'} · ${(x1-x0).toFixed(1)} × ${(y1-y0).toFixed(1)} mm`;
+  $('infoFile').hidden = false; $('pianta').hidden = false; $('sceltaRitaglio').hidden = false;
+  $('statoLavoro').textContent = ''; $('statoLavoro').classList.remove('stato-errore');
+  if(!DATI) preparaColori(j.aghi);
+  aggiornaRitaglio();
+}
+
+let vistaFissa = null;                   // durante il trascinamento la vista non segue il ritaglio
+function vistaPianta(){
+  if(vistaFissa) return vistaFissa;
+  const cv = $('pianta'); const W = cv.clientWidth; if(!W) return null;
+  const [x0,y0,x1,y1] = disegno.riquadro; const m = ritaglio.lato/2;
+  const a0=Math.min(x0, ritaglio.cx-m), b0=Math.min(y0, ritaglio.cy-m), a1=Math.max(x1, ritaglio.cx+m), b1=Math.max(y1, ritaglio.cy+m);
+  const s = (W-16)/Math.max(a1-a0, b1-b0, 1);
+  const ox = W/2 - (a0+a1)/2*s, oy = W/2 + (b0+b1)/2*s;
+  return {W, s, px:(x)=>ox+x*s, py:(y)=>oy-y*s, mx:(X)=>(X-ox)/s, my:(Y)=>(oy-Y)/s};
+}
+function disegnaPianta(){
+  if(!disegno || $('pianta').hidden) return;
+  const cv = $('pianta'); const v = vistaPianta(); if(!v) return;
+  const dpr = Math.min(window.devicePixelRatio||1, 2);
+  cv.width = Math.round(v.W*dpr); cv.height = Math.round(v.W*dpr);
+  const g = cv.getContext('2d'); g.setTransform(dpr,0,0,dpr,0,0); g.clearRect(0,0,v.W,v.W);
+  const S = disegno.seg, n = S.length/4;
+  g.lineWidth = 1;
+  for(let ago=1; ago<=disegno.aghi; ago++){
+    g.strokeStyle = coloreAgo(ago); g.beginPath();
+    for(let k=0;k<n;k++){ if(disegno.segAghi[k]!==ago) continue;
+      g.moveTo(v.px(S[k*4]/10), v.py(S[k*4+1]/10)); g.lineTo(v.px(S[k*4+2]/10), v.py(S[k*4+3]/10)); }
+    g.stroke();
+  }
+  // ritaglio: fuori un velo, dentro il bordo
+  const m = ritaglio.lato/2, rx=v.px(ritaglio.cx-m), ry=v.py(ritaglio.cy+m), rl=ritaglio.lato*v.s;
+  g.fillStyle = 'rgba(30,35,40,.45)'; g.beginPath(); g.rect(0,0,v.W,v.W); g.rect(rx,ry,rl,rl); g.fill('evenodd');
+  g.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--attivo').trim() || '#2f6f73';
+  g.lineWidth = 2; g.strokeRect(rx,ry,rl,rl);
+}
+function puntiNelRitaglio(){
+  const S = disegno.seg, n=S.length/4, m=ritaglio.lato/2*10+1e-6, cx=ritaglio.cx*10, cy=ritaglio.cy*10;
+  let c=0;
+  for(let k=0;k<n;k++){
+    const ax=S[k*4], ay=S[k*4+1], bx=S[k*4+2], by=S[k*4+3];
+    if(Math.abs(ax-cx)<=m && Math.abs(ay-cy)<=m && Math.abs(bx-cx)<=m && Math.abs(by-cy)<=m && Math.hypot(bx-ax,by-ay)>1.5) c++;
+  }
+  return c;
+}
+function aggiornaRitaglio(){
+  $('latoValore').textContent = ritaglio.lato+' mm';
+  const c = puntiNelRitaglio();
+  const lento = c>1500 ? ' · sarà lenta' : '';
+  $('conteggio').textContent = `${c.toLocaleString('it-IT')} punti nel ritaglio, centro (${ritaglio.cx.toFixed(1)}, ${ritaglio.cy.toFixed(1)}) mm${lento}. Clicca o trascina sulla pianta per spostarlo.`;
+  $('simula').disabled = lavoroInCorso || c===0;
+  disegnaPianta();
+}
+
+if(APP){
+  $('carica').hidden = false; $('vuoto').hidden = false;
+  $('intro').textContent = 'Carica un DST, scegli il quadrato da simulare e guarda come si posa il filo con 0, 1 e 2 strati di termogarza.';
+  $('file').addEventListener('change', (e)=>leggiFile(e.target.files[0]));
+  const zona = $('zonaFile');
+  ['dragenter','dragover'].forEach(t=>document.addEventListener(t, (e)=>{ e.preventDefault(); zona.classList.add('sopra'); }));
+  ['dragleave','drop'].forEach(t=>document.addEventListener(t, (e)=>{ e.preventDefault(); if(t==='drop' || !e.relatedTarget) zona.classList.remove('sopra'); }));
+  document.addEventListener('drop', (e)=>{ const f=e.dataTransfer && e.dataTransfer.files[0]; if(f) leggiFile(f); });
+  $('lato').addEventListener('input', (e)=>{ ritaglio.lato = Number(e.target.value); aggiornaRitaglio(); });
+  const cv = $('pianta'); let trascina = false;
+  const sposta = (e)=>{ const v=vistaPianta(); if(!v) return; const b=cv.getBoundingClientRect();
+    ritaglio.cx = Math.round(v.mx(e.clientX-b.left)*10)/10; ritaglio.cy = Math.round(v.my(e.clientY-b.top)*10)/10; aggiornaRitaglio(); };
+  cv.addEventListener('pointerdown', (e)=>{ trascina=true; vistaFissa=null; vistaFissa=vistaPianta(); cv.setPointerCapture(e.pointerId); sposta(e); });
+  cv.addEventListener('pointermove', (e)=>{ if(trascina) sposta(e); });
+  const rilascia = ()=>{ if(!trascina) return; trascina=false; vistaFissa=null; disegnaPianta(); };
+  cv.addEventListener('pointerup', rilascia); cv.addEventListener('pointercancel', rilascia);
+  $('simula').addEventListener('click', simula);
+  fetch('/api/iniziale').then(r=>r.json()).then(j=>{ if(j && j.id && !disegno) mostraDisegno(j); }).catch(()=>{});
+}
+
+const NOMI = {cotone_30:'cotone 30', cotone_40:'cotone 40'};
+function rigaLeggibile(riga){
+  const m = /^(cotone_\d+)\|(\d)/.exec(riga||'');
+  if(m) return `Fatto: ${NOMI[m[1]]||m[1]}, ${m[2]==='0'?'senza garza':m[2]==='1'?'1 strato':'2 strati'}`;
+  return riga || '';
+}
+async function simula(){
+  if(!disegno || lavoroInCorso) return;
+  lavoroInCorso = true; $('simula').disabled = true;
+  const st = $('statoLavoro'); st.classList.remove('stato-errore'); st.textContent = 'Avvio…';
+  const pr = $('avanzamento'); pr.hidden = false; pr.value = 0;
+  const t0 = performance.now();
+  try{
+    const r = await fetch('/api/simula', {method:'POST', headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({id:disegno.id, cx:ritaglio.cx, cy:ritaglio.cy, lato:ritaglio.lato})});
+    const j = await r.json();
+    if(!r.ok) throw new Error(j.errore || 'simulazione non avviata');
+    for(;;){
+      await new Promise(ok=>setTimeout(ok, 600));
+      const s = await (await fetch('/api/lavoro/'+j.lavoro)).json();
+      if(s.errore) throw new Error(s.errore);
+      pr.value = s.fatto; st.textContent = `${s.fatto} di ${s.totale} varianti · ${rigaLeggibile(s.riga)}`;
+      if(s.dati){ carica(s.dati); st.textContent = `Simulate 6 varianti in ${Math.round((performance.now()-t0)/1000)} s.`; break; }
+    }
+  }catch(e){
+    st.textContent = e.message; st.classList.add('stato-errore');
+  }finally{
+    lavoroInCorso = false; pr.hidden = true; aggiornaRitaglio();
+  }
+}
+
+if(!APP) carica(DATI_INIZIALI);
+ridimensiona();
 (function ciclo(){
   requestAnimationFrame(ciclo);
   if(Math.abs(mix-obiettivo)>1e-3){ mix += (obiettivo-mix)*0.08; } else mix = obiettivo;

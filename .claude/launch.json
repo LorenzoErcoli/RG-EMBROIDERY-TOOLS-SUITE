@@ -75,6 +75,20 @@
       "port": 5312,
       "autoPort": false,
       "url": "http://127.0.0.1:5312"
+    },
+    {
+      "name": "ricamo-3d-app",
+      "runtimeExecutable": "strumenti-sviluppo/ricamo-3d/.venv/Scripts/python.exe",
+      "runtimeArgs": [
+        "strumenti-sviluppo/ricamo-3d/server.py",
+        "strumenti-sviluppo/ricamo-3d/calibrazione/calibrazione.dst",
+        "--porta",
+        "5313",
+        "--senza-browser"
+      ],
+      "port": 5313,
+      "autoPort": false,
+      "url": "http://127.0.0.1:5313"
     }
   ]
 }

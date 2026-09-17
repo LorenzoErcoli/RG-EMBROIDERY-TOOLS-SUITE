@@ -1435,6 +1435,28 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   meno): il rilassamento chiude con il filo più lungo dell'obiettivo fino al 7 %, quindi a 2 strati
   arco e bordo sono decisi dai vincoli e non dalla lunghezza. A 0 e 1 strato l'errore resta sotto l'1 %.
   Nessun valore è stato ritoccato: `COLLARE_FRAZ` e `RIENTRO_FORO` sono esattamente quelli indicati.
+- **Interfaccia per caricare i DST (2026-09-17)** — chiesta da Lorenzo: *«un'interfaccia in cui posso
+  caricare dei dst? e magari selezionare anche il colore del filo»*. `server.py` (solo libreria
+  standard, ascolta solo su 127.0.0.1:5313; `npm run sviluppo:ricamo-3d:app`, oppure la configurazione
+  `ricamo-3d-app` che apre già `calibrazione.dst`) serve lo **stesso** `viewer_template.html`, aperto
+  senza dati: allora la pagina mostra la parte *Disegno* — file DST (bottone o trascinato), pianta 2D
+  del disegno coi colori degli aghi, clic o trascinamento per spostare il ritaglio, lato 6–60 mm, conteggio
+  dei punti dentro (avviso oltre 1.500), *Simula* con barra delle 6 varianti. Le varianti le calcola
+  `esegui.simula_varianti`, estratta da `esegui.py` perché riga di comando e server non si sdoppino
+  (riconfrontato: centro, A, B e C danno gli stessi numeri di prima, riga per riga). **Colore del filo
+  per ago**: `fori_da_dst(con_ago=True)` porta l'ago (+1 a ogni cambio colore) come quinta colonna, che
+  `ritaglio` lascia passare; nel visualizzatore il colore sta nei vertici, quindi cambiarlo non ricostruisce
+  la geometria; 7 campioni più il selettore libero, ricordati nel browser. Vale anche per gli HTML
+  statici di `esegui.py` (che ora portano gli aghi). Le inquadrature scalano con il lato del ritaglio
+  (a 22 mm restano quelle di prima). I colori scelti passano da sRGB a lineare prima di arrivare al
+  materiale: in ombra e con la trama del cotone il filo esce più scuro del campione.
+  **Verificato nel browser:** `calibrazione.dst` precaricato, ritaglio 18 mm sulla zona E (214 punti,
+  i 2 aghi), simulazione in 13 s, ago 2 rosso e poi ago 1 blu cambiati al volo in 3D e in pianta,
+  vista dall'alto; errori del server mostrati nella pagina (file senza punti, ritaglio vuoto, lato
+  fuori misura); pagina statica della zona E senza la parte *Disegno* e con i due colori. **Una volta
+  sola**, nel primo processo del server, una simulazione è rimasta «in coda» senza partire (e con lei
+  quella dopo); riavviato il server non si è più ripresentata, neanche rifacendo la stessa richiesta.
+  Causa non trovata: se ricapita, riavviare il server e annotare cosa si stava facendo.
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 
