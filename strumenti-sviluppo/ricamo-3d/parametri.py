@@ -47,6 +47,13 @@ ITER_LOCALI = 25                 # iterazioni minime di rilassamento locale per 
 # (con 25 iterazioni fisse il raso fitto non arrivava all'equilibrio e il risultato dipendeva dal conteggio).
 ITER_LOCALI_MAX = 400            # tetto: sulle zone di calibrazione resta entro ~10 % dell'equilibrio (misurato a 3000)
 TOLLERANZA_LOCALE_MM = 0.001     # 1 µm
+# Come si risolvono i vincoli del rilassamento locale: "gauss-seidel" (uno alla volta, compilato con numba,
+# ~4 volte più veloce a parità di iterazioni) o "jacobi" (correzioni mediate, numpy: il risolutore di prima,
+# che misura la convergenza sulla singola iterazione).
+SOLUTORE = "gauss-seidel"
+# Con Gauss-Seidel lo spostamento si misura come media sulle ultime FINESTRA_CONVERGENZA iterazioni: un avanti
+# e indietro fra contatti (attrito) si annulla, una deriva vera no. Con 1 le zone di calibrazione non si fermavano.
+FINESTRA_CONVERGENZA = 10
 TENSIONE_CN = 90                 # tensione del filo in cucitura, cN  DA_MISURARE (tensiometro)
 # Rigidità assiale EA = modulo specifico x tex (cN). Allungamento sotto tensione = TENSIONE_CN / EA:
 # il filo in cucitura ha lunghezza di riposo più corta di quella posata di questa frazione.

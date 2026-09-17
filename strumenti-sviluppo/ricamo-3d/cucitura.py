@@ -69,7 +69,12 @@ def _distanza_da_segmento(xy, a, b):
     return np.hypot(*(xy - (a + t[:, None] * ab)).T)
 
 
-def cuci(segs, offs, seg_id, loc, nloc, r, h_garza, filato, involucro_superiore, progresso=None):
+def cuci(segs, offs, seg_id, loc, nloc, r, h_garza, filato, involucro_superiore, progresso=None, solutore=None):
+    """`solutore`: "gauss-seidel" (compilato con numba, predefinito) o "jacobi" (mediato, in numpy)."""
+    solutore = solutore or P.SOLUTORE
+    gauss_seidel = solutore == "gauss-seidel"
+    if gauss_seidel:
+        import solutore as S
     F = P.FILATI[filato]
     materiale = F.get("materiale", "cotone")
     T = float(P.TENSIONE_CN)
@@ -220,7 +225,15 @@ def cuci(segs, offs, seg_id, loc, nloc, r, h_garza, filato, involucro_superiore,
         sov_l = np.zeros(L, bool)
         mobili = np.where(mobile_l)[0]
         iterazioni = 0
-        while True:
+        if gauss_seidel:
+            iterazioni, spost_max = S.rilassa(
+                Q, Cl, riposo_l, sov_l, w, prec.astype(np.int64), succ.astype(np.int64), seg_l.astype(np.int64),
+                lati_l.astype(np.int64), flessi.astype(np.int64), na, nb, float(corde[k]), RITIRO_PER_PASSATA,
+                ci.astype(np.int64), cj.astype(np.int64), carico_idx.astype(np.int64), mob_legati.astype(np.int64),
+                np.ascontiguousarray(fori_l, dtype=np.float64), T, r, h_garza, mu_s, mu_k, P.RIGIDEZZA_FLESSIONE,
+                P.COMPATTAZIONE_MIN, P.CARICO_COMPATTAZIONE, P.PASSI_LUNGHEZZA, P.ITER_LOCALI, P.ITER_LOCALI_MAX,
+                P.TOLLERANZA_LOCALE_MM, P.FINESTRA_CONVERGENZA)
+        while not gauss_seidel:
             iterazioni += 1
             prima = Q.copy()
             # flessione

@@ -6,8 +6,8 @@ Visualizzazione 3D fisica di ricami su termogarza: cucitura, rimozione della gar
     python esegui.py "percorso/file.dst"                     # cucitura incrementale (predefinita)
     python esegui.py "percorso/file.dst" --cucitura rigida   # la cucitura vecchia, per confronto
 Genera `rg-ricamo-3d-termogarza.html` (con `--cucitura rigida`: `…-rigida.html`, apribile nel browser) e
-stampa le metriche per cotone 30/40 × 0/1/2 strati. Dipendenze: numpy, scipy (Pillow solo per
-l'anteprima della calibrazione). Il lettore DST è interno.
+stampa le metriche per cotone 30/40 × 0/1/2 strati. Dipendenze: numpy, scipy, numba (Pillow solo
+per l'anteprima della calibrazione). Il lettore DST è interno.
 
 ## Il modello, in quattro fasi
 1. **DST → fori** (`fori_da_dst`).
@@ -32,7 +32,7 @@ l'anteprima della calibrazione). Il lettore DST è interno.
 |---|---|---|---|
 | filato | `FILATI` (tex, materiale) · `DENSITA_APPARENTE_COTONE` | 1000/30, 1000/40 cotone · 0,90 g/cm³ | densità DA_MISURARE |
 | garza | `SPESSORE_GARZA_STRATO` · `COMPRESSIONE_GARZA` | 0,25 mm · 0,60 | DA_MISURARE |
-| cucitura | `RAGGIO_LOCALE` · `ITER_LOCALI` (minime) · `ITER_LOCALI_MAX` · `TOLLERANZA_LOCALE_MM` | 2,5 mm · 25 · 400 · 0,001 mm | numerici |
+| cucitura | `RAGGIO_LOCALE` · `ITER_LOCALI` (minime) · `ITER_LOCALI_MAX` · `TOLLERANZA_LOCALE_MM` · `SOLUTORE` · `FINESTRA_CONVERGENZA` | 2,5 mm · 25 · 400 · 0,001 mm · gauss-seidel · 10 | numerici |
 | tensione | `TENSIONE_CN` | 90 cN | DA_MISURARE (tensiometro) |
 | rigidità assiale | `MODULO_SPECIFICO_CN_TEX` (EA = modulo × tex) | cotone 270, poliestere filamento 600 cN/tex | DA_MISURARE |
 | contatto | `COMPATTAZIONE_MIN` · `CARICO_COMPATTAZIONE` | 0,45 · 100 cN/mm | DA_MISURARE |
@@ -152,19 +152,30 @@ della zona e l'HTML si chiama `rg-ricamo-3d-zona-<id>.html`.
 - Nella posa un filo sale su un altro solo se i centri si sovrappongono col semiasse stretto: i vicini
   allargati dallo schiacciamento li sposta il contatto di lato (senza questa regola il satin si
   impilava di 0,1 mm a punto).
-- **Convergenza.** Il rilassamento locale mediato (Jacobi) arriva all'equilibrio lentamente dove i
-  contatti sono tanti: con 25 iterazioni fisse il raso fitto non si assestava e il risultato dipendeva
-  dal conteggio (sul raso zig-zag di un cartamodello Oblique la pila arrivava a 3,5 mm di media invece
-  di ~0,5). Ora ogni punto itera finché nessun nodo si muove più di `TOLLERANZA_LOCALE_MM`, con
-  `ITER_LOCALI` come minimo e `ITER_LOCALI_MAX` come tetto; le metriche riportano le iterazioni usate e
-  i punti rimasti sopra la tolleranza. Misurato contro un riferimento a 3.000 iterazioni, il tetto di
-  400 resta entro ~10 % sulle zone di calibrazione. Sovra-rilassamento e media parziale delle
-  correzioni sono stati provati e scartati (non accelerano e spostano il risultato).
+- **Risolutore.** Il rilassamento locale gira compilato con numba (`solutore.py`) e applica i vincoli uno
+  alla volta (Gauss-Seidel): a parità di iterazioni è circa 4 volte più veloce del risolutore mediato
+  in numpy (Jacobi), che resta disponibile con `SOLUTORE = "jacobi"`. **I due non arrivano allo stesso
+  stato**: attrito e compattazione plastica dipendono dalla storia, quindi l'ordine con cui si
+  applicano i vincoli conta (fermature della zona A: 0,16 contro 0,12 mm). Quale sia più vicino al
+  ricamo vero lo diranno i campioni.
+- **Convergenza.** Con 25 iterazioni fisse il raso fitto non si assestava e il risultato dipendeva dal
+  conteggio (sul raso zig-zag di un cartamodello Oblique la pila arrivava a 3,5 mm di media). Ora ogni
+  punto itera finché nessun nodo si sposta più di `TOLLERANZA_LOCALE_MM` per iterazione, misurato in
+  media sulle ultime `FINESTRA_CONVERGENZA` iterazioni (un avanti e indietro fra contatti con attrito si
+  annulla, una deriva no), almeno `ITER_LOCALI` e al più `ITER_LOCALI_MAX`; le metriche riportano le
+  iterazioni usate e i punti fermati dal tetto. Sulle zone di calibrazione quasi tutti i punti si
+  fermano da soli. **Nel raso molto fitto no**: lì resta uno scivolamento lento vero, e fra tetto 400 e
+  tetto 3.000 l'altezza media cambia ancora di circa il 18 % (0,41 → 0,34 mm sul ritaglio da 22 mm del
+  cartamodello).
+- **Provato e scartato**, per chi riprende: sovra-rilassamento 1,5 e 1,8 e media parziale delle correzioni
+  (non accelerano, spostano il risultato); blocco del tendifilo quando il punto smette di accorciarsi
+  (il filo si congela lasco, le pile risalgono); attrito proporzionale anche alla compattazione (più
+  punti fermi al tetto); un punto vecchio che non può mai salire e la spinta dell'ago (nessun effetto).
 - **Velocità.** Le 6 varianti girano in parallelo (un processo ciascuna; `--processi 1` per una sola
-  alla volta, stessi numeri). Il rilassamento lavora solo sull'intorno del punto. Nelle zone fitte però
-  servono ~350 iterazioni per punto: il ritaglio da 22 mm di quel cartamodello (687 punti) chiede
-  ~11 minuti anche in parallelo. Il passo successivo è un risolutore compilato (Gauss-Seidel), che
-  converge in molte meno iterazioni.
+  alla volta, stessi numeri) e il rilassamento lavora solo sull'intorno del punto. Tempi per le 6
+  varianti: zone di calibrazione 4–13 s, centro di `pattern (1).dst` (350 punti) 11 s, ritaglio da 22 mm
+  del cartamodello (687 punti, raso fitto) 1 min 54 s; col risolutore mediato erano 3 s–2 min 40 s e
+  ~11 min. Numba compila al primo avvio (qualche secondo) e tiene la compilazione in `__pycache__`.
 
 ## Prossimi passi
 1. Campioni 0/1/2 strati, stesso disegno e filo: macrofoto e sezione tagliata.

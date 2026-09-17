@@ -1559,6 +1559,43 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   per il centro e 2 min 20 s per E in parallelo, ~11 min per il ritaglio da 22 mm del cartamodello —
   la strada è un risolutore compilato (Gauss-Seidel, per esempio con numba: dipendenza nuova, da decidere
   con Lorenzo); (c) G a 2 strati chiude ancora col filo +11 % più lungo dell'obiettivo.
+- **Risolutore compilato con numba (2026-09-17, Lorenzo: «sì, fai numba»).** `solutore.py`: il
+  rilassamento locale di un punto applica i vincoli uno alla volta (Gauss-Seidel), compilato; stessi
+  vincoli di prima. Il risolutore mediato resta con `SOLUTORE = "jacobi"`. Nuova dipendenza `numba` in
+  `requirements.txt` (0.67 sul Python 3.14 dell'ambiente). **Tempi per le 6 varianti:** zone di
+  calibrazione 4–13 s (prima 3 s–2 min 23 s), centro di `pattern (1).dst` 11 s (prima 2 min 40 s),
+  ritaglio da 22 mm del cartamodello **1 min 54 s** (prima ~11 min).
+  **Quello che non si è risolto, e perché:** anche col Gauss-Seidel molti punti non si fermavano mai.
+  Cercato a strati: senza infilzati restavano (non erano loro); **senza attrito quasi tutti si fermavano**
+  (H: da 75 a 7 punti al tetto a 3.000 iterazioni). L'attrito di questo metodo è proporzionale alla
+  compenetrazione dell'iterazione, che sparisce avvicinandosi all'equilibrio: più contatti dello stesso
+  nodo si rimpallano qualche µm. Rimedi provati: (a) **misurare lo spostamento in media su 10 iterazioni**
+  (`FINESTRA_CONVERGENZA`) — **adottato**: sulle zone di calibrazione quasi tutti i punti si fermano da
+  soli (A: 0 al tetto a 3.000, H: 3); (b) bloccare il tendifilo quando il punto smette di accorciarsi —
+  **scartato**, il filo si congela lasco e le pile risalgono (ritaglio 0,40 → 0,72 mm); (c) attrito
+  proporzionale anche alla compattazione — **scartato**, più punti al tetto. **Nel raso molto fitto
+  resta una deriva vera**: fra tetto 400 e 3.000 l'altezza media del ritaglio del cartamodello passa
+  da 0,41 a 0,34 mm (−18 %), con metà dei punti ancora in movimento.
+  **Gauss-Seidel e Jacobi non arrivano allo stesso stato** (attrito e compattazione plastica dipendono
+  dalla storia): in cucitura le fermature della zona A sono 0,16 contro 0,12 mm; sui valori finali, dopo
+  la rimozione della garza, restano per lo più entro il 10–20 %. Cotone 30, **rigida → Jacobi che converge
+  → Gauss-Seidel** (fermature · arco medio, mm):
+
+  | zona | 0 strati | 2 strati | spost. laterale (2 strati) | infilzati (0 / 2) | punti al tetto (2 strati) |
+  |---|---|---|---|---|---|
+  | centro | — · 0,097 → 0,148 → 0,125 | — · 0,445 → 0,253 → 0,239 | 0,156 | 0 / 0 | 108 di 350 |
+  | A satin 2 | 0,34 → 0,15 → 0,11 · 0,21 → 0,09 → 0,11 | 0,48 → 0,27 → 0,24 · 0,45 → 0,26 → 0,21 | 0,137 | 0 / 0 | 8 di 45 |
+  | B satin 6 | 0,33 → 0,16 → 0,17 · 0,22 → 0,24 → 0,23 | 0,47 → 0,27 → 0,27 · 0,78 → 0,29 → 0,27 | 0,132 | 2 / 1 | 36 di 45 |
+  | C tatami | 0,33 → 0,19 → 0,17 · 0,02 → 0,09 → 0,07 | 0,45 → 0,26 → 0,26 · 0,41 → 0,32 → 0,27 | 0,124 | 1 / 2 | 80 di 142 |
+  | D passaggi doppi | 0,33 → 0,14 → 0,16 · 0,15 → 0,15 → 0,13 | 0,44 → 0,23 → 0,26 · 0,49 → 0,26 → 0,23 | 0,181 | 2 / 0 | 25 di 95 |
+  | E sovrapposizione | 0,35 → 0,15 → 0,14 · 0,06 → 0,11 → 0,12 | 0,48 → 0,27 → 0,25 · 0,42 → 0,32 → 0,27 | 0,148 | 12 / 13 | 128 di 214 |
+  | G fermature | 0,29 → 0,12 → 0,11 · 0,15 → 0,06 → 0,05 | 0,42 → 0,24 → 0,23 · 0,31 → 0,20 → 0,19 | 0 | 0 / 0 | 0 di 20 |
+  | H incroci | 0,31 → 0,15 → 0,14 · 0,18 → 0,10 → 0,09 | 0,45 → 0,26 → 0,26 · 0,40 → 0,22 → 0,21 | 0,165 | 62 / 68 | 51 di 264 |
+
+  Ritaglio da 22 mm del cartamodello, Gauss-Seidel: arco medio 0,37 mm senza garza e 0,39 con 2 strati,
+  copertura 61–63 %, spostamento laterale 0,31–0,38 mm, 183 infilzati, 513–532 punti su 687 al tetto.
+  **Aperto:** la deriva nel raso molto fitto (i numeri lì dipendono ancora dal tetto) e quale dei due
+  risolutori somiglia di più al ricamo vero — da decidere con i campioni.
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 
