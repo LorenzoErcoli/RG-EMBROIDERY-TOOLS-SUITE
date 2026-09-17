@@ -402,6 +402,9 @@ function tabella(m){
     ['Fili infilzati dall\'ago', m.fili_infilzati==null ? 'non calcolato (cucitura rigida)' : String(m.fili_infilzati)],
     ['Iterazioni per punto (media / massimo)', m.iterazioni_media==null ? '—' : m.iterazioni_media.toFixed(0)+' / '+m.iterazioni_max],
     ['Punti non arrivati all\'equilibrio', m.punti_non_convergenti==null ? '—' : String(m.punti_non_convergenti)],
+    ['Fasci da 4 o più passaggi sugli stessi fori', m.fasci_n==null ? '—' : String(m.fasci_n)],
+    ['Fasci: larghezza massima', m.fasci_larghezza_max_mm==null ? '—' : m.fasci_larghezza_max_mm.toFixed(2)+' mm'],
+    ['Fasci: altezza massima', m.fasci_altezza_max_mm==null ? '—' : m.fasci_altezza_max_mm.toFixed(2)+' mm'],
   ];
   $('metriche').innerHTML = righe.map(r=>'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>').join('');
 }

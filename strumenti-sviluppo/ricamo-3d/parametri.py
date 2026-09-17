@@ -38,6 +38,24 @@ PASSI_LUNGHEZZA = 4
 PASSO_NODI_FRAZ_DIAMETRO = 0.5   # distanza tra nodi = frazione del diametro filo
 SEME = 7
 
+# --- Ventaglio (cucitura rigida) --------------------------------------------------
+# I passaggi ripetuti sugli stessi fori non si impilano in verticale ("castelli"): si aprono a ventaglio.
+# Per ogni punto si provano SCOSTAMENTI_N scostamenti laterali fra -max e +max, con forma sin(pi t) (nulli ai
+# fori, massimi al centro), max = min(VENTAGLIO_MAX_MM, VENTAGLIO_FRAZ * corda). Costo di un candidato:
+# altezza media d'appoggio nella parte centrale (escluso VENTAGLIO_BORDO_FRAZ vicino a ogni foro)
+# + K_VENTAGLIO * (lunghezza in pianta - corda). Vince il costo minimo; a parità lo scostamento più piccolo.
+# SCOSTAMENTI_N = 1: nessun ventaglio (la cucitura rigida di prima).
+SCOSTAMENTI_N = 25
+VENTAGLIO_MAX_MM = 1.2
+VENTAGLIO_FRAZ = 0.35
+VENTAGLIO_BORDO_FRAZ = 0.10
+K_VENTAGLIO = 1.0                # mm di altezza che valgono 1 mm di filo in più  DA_MISURARE
+# Fasci (metrica): punti con entrambi i capi entro TOLLERANZA_FORI_FASCIO mm da quelli di un altro (in
+# qualunque verso) sono passaggi sugli stessi fori; un fascio conta se ne ha almeno FASCIO_MIN_PASSAGGI.
+# Nei DST veri i fori ripetuti non coincidono al decimo: 0,25 mm è circa un diametro di filo.
+TOLLERANZA_FORI_FASCIO = 0.25
+FASCIO_MIN_PASSAGGI = 4
+
 # --- Cucitura incrementale (cucitura.py) -----------------------------------------
 # I fili già posati sono nodi fisici: ogni punto, in ordine macchina, fa entrare l'ago, posa il filo
 # teso e rilassa solo l'intorno. La cucitura rigida (heightfield) resta con --cucitura rigida.

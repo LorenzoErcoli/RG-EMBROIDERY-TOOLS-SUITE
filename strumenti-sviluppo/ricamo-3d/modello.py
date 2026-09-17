@@ -57,6 +57,26 @@ def costruisci_nodi(segs, passo):
     return np.array(offs)
 
 
+def _ventaglio(hf, ax, ay, bx, by, t, corda, r_st, n_scost):
+    """Sceglie lo scostamento laterale del punto (forma sin(pi t)) fra n_scost candidati, tutti valutati insieme.
+
+    Restituisce x, y del percorso scelto, l'appoggio letto sull'heightfield e la lunghezza in pianta cumulata.
+    """
+    v_max = min(P.VENTAGLIO_MAX_MM, P.VENTAGLIO_FRAZ * corda)
+    scost = np.linspace(-v_max, v_max, n_scost)
+    scost = scost[np.lexsort((scost, np.abs(scost)))]          # dal più piccolo: a parità vince il primo
+    ux, uy = (bx - ax) / corda, (by - ay) / corda
+    forma = np.sin(math.pi * t)
+    X = (ax + (bx - ax) * t)[None, :] - uy * scost[:, None] * forma[None, :]
+    Y = (ay + (by - ay) * t)[None, :] + ux * scost[:, None] * forma[None, :]
+    app = hf.leggi(X.ravel(), Y.ravel(), r_st).reshape(X.shape)
+    centro = (t >= P.VENTAGLIO_BORDO_FRAZ) & (t <= 1 - P.VENTAGLIO_BORDO_FRAZ)
+    passi = np.hypot(np.diff(X, axis=1), np.diff(Y, axis=1))
+    costo = app[:, centro].mean(axis=1) + P.K_VENTAGLIO * (passi.sum(axis=1) - corda)
+    j = int(np.flatnonzero(costo <= costo.min() + 1e-9)[0])
+    return X[j], Y[j], app[j], np.r_[0.0, np.cumsum(passi[j])]
+
+
 def involucro_superiore(s, z):
     """Inviluppo convesso superiore del profilo: forma di un filo teso sopra gli ostacoli."""
     hull = []
@@ -102,8 +122,10 @@ class Heightfield:
                     np.maximum.at(self.H, (jx, jy), ztop)
 
 
-def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", progresso=None):
-    """Una variante. `progresso(k, n)` viene chiamata dopo ogni punto cucito e può sollevare un'eccezione per annullare."""
+def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", progresso=None, ventaglio=True):
+    """Una variante. `progresso(k, n)` viene chiamata dopo ogni punto cucito e può sollevare un'eccezione per annullare.
+    `ventaglio=False` spegne il ventaglio della cucitura rigida (la cucitura rigida di prima)."""
+    n_scost = P.SCOSTAMENTI_N if (ventaglio and cucitura == "rigida") else 1
     if cucitura not in ("incrementale", "rigida"):
         raise ValueError("cucitura: 'incrementale' o 'rigida'")
     rng = np.random.default_rng(P.SEME)
@@ -139,12 +161,16 @@ def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", prog
             x = ax + (bx - ax) * t
             y = ay + (by - ay) * t
             corda = math.hypot(bx - ax, by - ay)
-            appoggio = hf.leggi(x, y, r_st)
-            s_ = t * corda
+            if n_scost > 1:
+                x, y, appoggio, s_ = _ventaglio(hf, ax, ay, bx, by, t, corda, r_st, n_scost)
+            else:
+                appoggio = hf.leggi(x, y, r_st)
+                s_ = t * corda
             prof = appoggio + r
             prof[0] = prof[-1] = r                      # il filo entra nel foro
             z = involucro_superiore(s_, prof)          # filo in tensione = teso sopra gli ostacoli
             cucito[a:b] = np.c_[x, y, z]
+            # timbro: il filo aggiunge lo spessore schiacciato (2 * r * SCHIACCIAMENTO_FILO) sopra il suo appoggio
             hf.timbra(x[1:-1], y[1:-1], z[1:-1] - r + 2 * r_st, r_st)
             L_cucita[k] = np.linalg.norm(np.diff(cucito[a:b], axis=0), axis=1).sum()
             if progresso is not None:
@@ -177,7 +203,7 @@ def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", prog
         t = np.linspace(0, 1, n)
         bump = np.sin(math.pi * t)
         sopra_garza = np.clip(cucito[a:b, 2] - (h_garza + r), 0, None)  # conserva l'ordine di sovrapposizione
-        if cucitura == "rigida":
+        if cucitura == "rigida" and n_scost <= 1:
             A = (2 * corda / math.pi) * math.sqrt(max(L / corda - 1, 0))
             pos[a:b, 0] = ax + (bx - ax) * t + px * A * math.sin(th) * bump
             pos[a:b, 1] = ay + (by - ay) * t + py * A * math.sin(th) * bump
@@ -337,3 +363,48 @@ def altezza_fermature(pos, offs, segs, r):
     """Media, sulle fermature, dell'altezza massima del filo (sopra l'appoggio r). None se non ce ne sono."""
     h = [max(pos[offs[k]:offs[k + 1], 2].max() for k in g) - r for g in gruppi_fermature(segs)]
     return float(np.mean(h)) if h else None
+
+
+def gruppi_fasci(segs, tolleranza=None, minimo=None):
+    """Fasci: gruppi di punti con entrambi i capi entro `tolleranza` mm (in qualunque verso), almeno `minimo`."""
+    from scipy.spatial import cKDTree
+    tolleranza = P.TOLLERANZA_FORI_FASCIO if tolleranza is None else tolleranza
+    minimo = P.FASCIO_MIN_PASSAGGI if minimo is None else minimo
+    if len(segs) == 0:
+        return []
+    capi = np.r_[segs[:, 0:4], segs[:, [2, 3, 0, 1]]]
+    quale = np.r_[np.arange(len(segs)), np.arange(len(segs))]
+    padre = np.arange(len(segs))
+
+    def radice(i):
+        while padre[i] != i:
+            padre[i] = padre[padre[i]]
+            i = padre[i]
+        return i
+    for a, b in cKDTree(capi).query_pairs(tolleranza, p=np.inf, output_type="ndarray"):
+        ra, rb = radice(quale[a]), radice(quale[b])
+        if ra != rb:
+            padre[ra] = rb
+    gruppi = {}
+    for k in range(len(segs)):
+        gruppi.setdefault(radice(k), []).append(k)
+    return [g for g in gruppi.values() if len(g) >= minimo]
+
+
+def misura_fasci(pos, offs, segs, r):
+    """Numero di fasci, larghezza massima (ingombro in pianta di traverso al fascio, filo compreso) e altezza
+    massima (del filo sopra l'appoggio r) fra i fasci. (0, None, None) se non ce ne sono."""
+    gruppi = gruppi_fasci(segs)
+    if not gruppi:
+        return 0, None, None
+    larghezze, altezze = [], []
+    for g in gruppi:
+        ax, ay, bx, by = segs[g[0]]
+        corda = math.hypot(bx - ax, by - ay) or 1.0
+        px, py = -(by - ay) / corda, (bx - ax) / corda
+        nodi = np.concatenate([pos[offs[k]:offs[k + 1]] for k in g])
+        lat = nodi[:, 0] * px + nodi[:, 1] * py
+        larghezze.append(float(lat.max() - lat.min()) + 2 * r)
+        altezze.append(float(nodi[:, 2].max()) - r)
+    return len(gruppi), max(larghezze), max(altezze)
+

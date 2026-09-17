@@ -1596,6 +1596,36 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   copertura 61–63 %, spostamento laterale 0,31–0,38 mm, 183 infilzati, 513–532 punti su 687 al tetto.
   **Aperto:** la deriva nel raso molto fitto (i numeri lì dipendono ancora dal tetto) e quale dei due
   risolutori somiglia di più al ricamo vero — da decidere con i campioni.
+- **Ventaglio nella cucitura rigida (2026-09-17)** — correzione di Lorenzo: *i passaggi ripetuti sugli
+  stessi fori si impilano in verticale ("castelli"), nella realtà si aprono a ventaglio*. Per ogni punto
+  25 scostamenti laterali a forma sin(πt), fino a min(1,2 mm, 0,35 × corda), valutati tutti insieme in
+  numpy; costo = altezza media d'appoggio nella parte centrale (escluso il 10 % ai fori) + `K_VENTAGLIO`
+  (1,0, DA_MISURARE) × (lunghezza in pianta − corda); a parità il più piccolo. La rimozione della garza
+  parte dalla posizione cucita (se no il ventaglio si perdeva). `--senza-ventaglio` è la cucitura
+  rigida di prima **numero per numero** (riconfrontati centro, A, H). Stessi tempi (7,3 → 7,6 s per 6
+  varianti su 624 punti). Il timbro usava già lo spessore schiacciato (2 r × `SCHIACCIAMENTO_FILO`): scritto
+  nel codice e nel README, non cambiato. Nuovo `esegui.py --centro X Y --lato L --senza-ventaglio
+  --uscita`, nuovo `immagini.py` (tavola PNG dall'alto e radente, prima e dopo, stessa scala).
+  **Tre cose da sapere.** (1) Il prototipo `prototipo_ventaglio.py` non era nella cartella: ho seguito la
+  specifica; «altezza media» è letta come altezza d'appoggio sull'heightfield lungo il candidato — da
+  riallineare col prototipo quando c'è. (2) **In nessuno dei due DST i fori ripetuti coincidono al
+  decimo**: `pattern (1).dst` al massimo 2 passaggi per coppia di fori (il dente andata e ritorno, a
+  qualunque tolleranza), il cartamodello 3. La metrica dei fasci conta quindi «stessi fori» entro
+  `TOLLERANZA_FORI_FASCIO` = 0,25 mm (circa un diametro di filo; da confermare): sul cartamodello intero
+  327 fasci da 4+, fino a 8 passaggi. (3) Le foto arrivate oggi mostrano un cannage a rombi con fasce a
+  spiga; il centro del cartamodello è fatto di anelli e fasce a raso, e `pattern (1).dst` non ha fasci:
+  **le foto potrebbero essere di un terzo DST** — da chiedere.
+  **Confronto** sul cartamodello, 2 strati di garza, garza rimossa, rigida senza → con ventaglio:
+
+  | ritaglio 40 mm | fasci | larghezza max fascio | altezza max fascio | arco medio | arco p90 | copertura |
+  |---|---|---|---|---|---|---|
+  | bordo, (164, −68), cotone 30 | 34 | 1,21 → 1,81 mm | **2,03 → 1,27 mm** | 1,17 → 0,66 mm | 1,91 → 0,96 mm | 6,6 → 7,6 % |
+  | bordo, cotone 40 | 34 | 1,15 → 1,73 mm | 1,85 → 1,07 mm | 1,09 → 0,63 mm | 1,75 → 0,86 mm | 6,0 → 6,9 % |
+  | centro, (0, 0), cotone 30 | 4 | 1,31 → 1,17 mm | **1,40 → 1,00 mm** | 0,75 → 0,61 mm | 1,14 → 0,84 mm | 45,7 → 46,3 % |
+
+  Il ritaglio del bordo è quello con più fasci del disegno (cordoncino e anello); lì i fasci si allargano
+  di metà e si abbassano di un terzo. Al centro i 4 fasci si abbassano ma la larghezza massima scende
+  (1,31 → 1,17 mm) invece di salire: causa non verificata, da guardare nel visualizzatore.
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 

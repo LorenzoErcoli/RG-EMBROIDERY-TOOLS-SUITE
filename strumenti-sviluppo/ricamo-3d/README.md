@@ -4,7 +4,9 @@ Visualizzazione 3D fisica di ricami su termogarza: cucitura, rimozione della gar
 
 ## Uso
     python esegui.py "percorso/file.dst"                     # cucitura incrementale (predefinita)
-    python esegui.py "percorso/file.dst" --cucitura rigida   # la cucitura vecchia, per confronto
+    python esegui.py "percorso/file.dst" --cucitura rigida   # cucitura rigida (con ventaglio)
+    python esegui.py "file.dst" --centro X Y --lato 40 --cucitura rigida --senza-ventaglio
+    python immagini.py "file.dst" --centro X Y --lato 40     # tavola PNG: rigida senza e con ventaglio
 Genera `rg-ricamo-3d-termogarza.html` (con `--cucitura rigida`: `…-rigida.html`, apribile nel browser) e
 stampa le metriche per cotone 30/40 × 0/1/2 strati. Dipendenze: numpy, scipy, numba (Pillow solo
 per l'anteprima della calibrazione). Il lettore DST è interno.
@@ -21,7 +23,13 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
    appoggio sulla garza. Fuori dal raggio i fili restano fermi. Finché il punto è in cucitura il filo
    si tende verso la corda (il tendifilo lo fa scorrere nei fori); chiuso il punto, la sua lunghezza di
    riposo è quella tesa meno `TENSIONE_CN` / EA ed è bloccata. *Rigida* (`--cucitura rigida`): ogni
-   punto passa sopra un heightfield di garza + fili posati, che non si spostano.
+   punto passa sopra un heightfield di garza + fili posati, che non si spostano, e **si apre a ventaglio**:
+   fra `SCOSTAMENTI_N` scostamenti laterali a forma sin(πt) (nulli ai fori, massimi al centro, fino a
+   min(`VENTAGLIO_MAX_MM`, `VENTAGLIO_FRAZ` × corda)) sceglie quello di costo minimo, altezza media
+   d'appoggio nella parte centrale + `K_VENTAGLIO` × (lunghezza in pianta − corda); a parità il più
+   piccolo. Così i passaggi ripetuti sugli stessi fori non si impilano a torre. Con `--senza-ventaglio`
+   (o `SCOSTAMENTI_N = 1`) è la cucitura rigida di prima, numero per numero. Il timbro sull'heightfield
+   aggiunge lo spessore schiacciato del filo (2 r × `SCHIACCIAMENTO_FILO`), come già prima.
 3. **Rimozione della garza**: si parte dallo stato della cucitura (spostamenti laterali e fili
    infilzati compresi), lunghezza meno `ALLUNGAMENTO_RECUPERATO` e meno la parte di eccesso che
    rientra nel foro (`RIENTRO_FORO`).
@@ -41,6 +49,8 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
 | rimozione | `ALLUNGAMENTO_RECUPERATO` · `RIENTRO_FORO` | 0,010 · 0,4 | DA_MISURARE |
 | rilassamento | `COLLARE_FRAZ` · `COLLARE_RAGGIO` · `RIGIDEZZA_FLESSIONE` · `ITERAZIONI` · `GRAVITA_PER_ITER` | 0,6 · 0,45 mm · 0,08 · 160 · 0 | collare DA_MISURARE |
 | sola cucitura rigida | `SCHIACCIAMENTO_FILO` (anche distanza di contatto del rilassamento finale) | 0,60 | DA_MISURARE |
+| ventaglio (rigida) | `SCOSTAMENTI_N` · `VENTAGLIO_MAX_MM` · `VENTAGLIO_FRAZ` · `VENTAGLIO_BORDO_FRAZ` · `K_VENTAGLIO` | 25 · 1,2 mm · 0,35 · 0,10 · 1,0 | K DA_MISURARE |
+| fasci (metrica) | `TOLLERANZA_FORI_FASCIO` · `FASCIO_MIN_PASSAGGI` | 0,25 mm · 4 | tolleranza da confermare |
 
 **Legge di compattazione.** c = `COMPATTAZIONE_MIN` + (1 − `COMPATTAZIONE_MIN`) · exp(−carico /
 `CARICO_COMPATTAZIONE`), con carico = tensione × angolo di curvatura del filo per mm (cN/mm): più il
@@ -54,8 +64,11 @@ delle fermature** (media sulle fermature del massimo di ciascuna; fermatura = al
 consecutivi collegati da 0,7 mm al più), **spostamento laterale medio dei fili sovrapposti** (quanto si
 è mosso di traverso, a fine cucitura, un nodo toccato da un punto successivo, rispetto a dove era a fine
 posa), **fili infilzati** (quanti punti l'ago ha preso, evento per evento), **iterazioni per punto**
-(media e massimo) e **punti non arrivati all'equilibrio** (fermati dal tetto). Le ultime quattro solo
-con la cucitura incrementale.
+(media e massimo) e **punti non arrivati all'equilibrio** (fermati dal tetto) — questi quattro solo con
+la cucitura incrementale — e i **fasci**: gruppi di almeno `FASCIO_MIN_PASSAGGI` punti con entrambi i capi
+entro `TOLLERANZA_FORI_FASCIO` da quelli di un altro, con numero, larghezza massima (ingombro di traverso,
+filo compreso) e altezza massima del filo. Nei DST veri i fori ripetuti non coincidono al decimo: con
+tolleranza zero né `pattern (1).dst` né il cartamodello hanno un fascio da 4.
 
 ## Nella suite
 Strumento di sviluppo, **non** un tool della home: sta fuori dai workspace npm (`apps/*`),
@@ -115,6 +128,7 @@ della zona e l'HTML si chiama `rg-ricamo-3d-zona-<id>.html`.
 - `cucitura.py` — cucitura incrementale: ago, posa, rilassamento locale con contatto comprimibile e attrito.
 - `esegui.py` — ritaglio centrale (o una zona con `--zona`), varianti, metriche, visualizzatore.
 - `viewer_template.html` — visualizzatore three.js: pagina statica con i dati dentro, o interfaccia se aperto da `server.py`.
+- `immagini.py` — tavola di confronto della cucitura rigida senza e con ventaglio, dall'alto e radente (Pillow).
 - `server.py` — interfaccia locale per caricare un DST, scegliere il ritaglio e simulare.
 - `calibrazione.py`, `verifica_calibrazione.py`, `calibrazione/` — DST di calibrazione, sua verifica, file generati.
 

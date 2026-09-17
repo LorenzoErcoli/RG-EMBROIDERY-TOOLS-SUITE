@@ -33,7 +33,8 @@ class Annullata(Exception):
 VARIANTI = [(filato, strati) for filato in P.FILATI for strati in (0, 1, 2)]
 
 
-def _una_variante(segs, offs, filato, strati, mezzo_lato, lato_copertura, rett_copertura, cucitura, coda=None, stop=None):
+def _una_variante(segs, offs, filato, strati, mezzo_lato, lato_copertura, rett_copertura, cucitura, coda=None, stop=None,
+                  ventaglio=True):
     """Simula e misura una variante. Gira anche in un processo a parte: avanzamento su `coda`, annullo con `stop`."""
     key = f"{filato}|{strati}"
 
@@ -44,7 +45,7 @@ def _una_variante(segs, offs, filato, strati, mezzo_lato, lato_copertura, rett_c
             coda.put((key, k, n))
 
     t0 = time.time()
-    R = M.simula(segs, offs, filato, strati, mezzo_lato, cucitura=cucitura, progresso=progresso)
+    R = M.simula(segs, offs, filato, strati, mezzo_lato, cucitura=cucitura, progresso=progresso, ventaglio=ventaglio)
     r = R["d"] / 2
     met = {
         "diametro_mm": round(R["d"], 3),
@@ -67,6 +68,10 @@ def _una_variante(segs, offs, filato, strati, mezzo_lato, lato_copertura, rett_c
     met["iterazioni_media"] = None if it is None or len(it) == 0 else round(float(np.mean(it)), 1)
     met["iterazioni_max"] = None if it is None or len(it) == 0 else int(np.max(it))
     met["punti_non_convergenti"] = R["punti_non_convergenti"]
+    n_fasci, larg, alt = M.misura_fasci(R["rilasciato"], offs, segs, r)
+    met["fasci_n"] = n_fasci
+    met["fasci_larghezza_max_mm"] = None if larg is None else round(larg, 3)
+    met["fasci_altezza_max_mm"] = None if alt is None else round(alt, 3)
     voce = {"metriche": met, "cucito": pack(R["cucito"]), "rilasciato": pack(R["rilasciato"])}
     if R["compattazione"] is not None:   # sezione ellittica: 255 = tonda
         c8 = np.round(np.clip(R["compattazione"], 0, 1) * 255).astype(np.uint8)
@@ -75,7 +80,7 @@ def _una_variante(segs, offs, filato, strati, mezzo_lato, lato_copertura, rett_c
 
 
 def simula_varianti(segs5, mezzo_lato, lato_copertura=None, rett_copertura=None, descrizione=None, avviso=print,
-                    cucitura="incrementale", passo=None, stop=None, processi=None):
+                    cucitura="incrementale", passo=None, stop=None, processi=None, ventaglio=True):
     """Tutte le varianti filato x strati di un insieme di segmenti già centrati.
 
     `segs5`: colonne ax, ay, bx, by, ago. `avviso(testo)` riceve le stesse righe che stampa la riga di comando;
@@ -91,6 +96,7 @@ def simula_varianti(segs5, mezzo_lato, lato_copertura=None, rett_copertura=None,
 
     out = {"quant": QUANT, "offs": base64.b64encode(offs.astype(np.uint32).tobytes()).decode(),
            "mezzo_lato": mezzo_lato, "aghi": base64.b64encode(aghi.tobytes()).decode(), "cucitura": cucitura,
+           "ventaglio": bool(ventaglio and cucitura == "rigida"),
            "varianti": {}}
     if descrizione:
         out["descrizione"] = descrizione
@@ -106,7 +112,7 @@ def simula_varianti(segs5, mezzo_lato, lato_copertura=None, rett_copertura=None,
                     passo(*v)
         for filato, strati in VARIANTI:
             key, voce, dt = _una_variante(*argomenti, filato, strati, mezzo_lato, lato_copertura, rett_copertura,
-                                          cucitura, coda=_Coda(), stop=stop)
+                                          cucitura, coda=_Coda(), stop=stop, ventaglio=ventaglio)
             fatte[key] = voce
             avviso(f"{key} {voce['metriche']} {dt:.1f}s")
     else:
@@ -116,7 +122,7 @@ def simula_varianti(segs5, mezzo_lato, lato_copertura=None, rett_copertura=None,
         with mp.Manager() as gestore, cf.ProcessPoolExecutor(max_workers=processi, mp_context=mp.get_context("spawn")) as pool:
             coda, fermo = gestore.Queue(), gestore.Event()
             futuri = [pool.submit(_una_variante, *argomenti, filato, strati, mezzo_lato, lato_copertura, rett_copertura,
-                                  cucitura, coda, fermo) for filato, strati in VARIANTI]
+                                  cucitura, coda, fermo, ventaglio) for filato, strati in VARIANTI]
             aperti = set(futuri)
             try:
                 while aperti:
@@ -152,18 +158,23 @@ def main():
     ap.add_argument("--zone", default=str(qui / "calibrazione" / "calibrazione_zone.json"),
                     help="JSON delle zone (default: calibrazione/calibrazione_zone.json)")
     ap.add_argument("--processi", type=int, default=None, help="varianti in parallelo (1 = una dopo l'altra)")
+    ap.add_argument("--centro", type=float, nargs=2, metavar=("X", "Y"), default=(0.0, 0.0), help="centro del ritaglio, mm")
+    ap.add_argument("--lato", type=float, default=22.0, help="lato del ritaglio, mm (predefinito 22)")
+    ap.add_argument("--senza-ventaglio", action="store_true", help="cucitura rigida senza ventaglio (quella di prima)")
+    ap.add_argument("--uscita", help="nome dell'HTML (predefinito rg-ricamo-3d-termogarza.html)")
     ap.add_argument("--cucitura", choices=("incrementale", "rigida"), default="incrementale",
                     help="incrementale (nodi fisici, ago, attrito: predefinita) o rigida (heightfield, per confronto)")
     args = ap.parse_args()
 
     if args.zona is None:
-        mezzo_lato = 11.0     # ritaglio 22 x 22 mm al centro
+        mezzo_lato = args.lato / 2    # ritaglio (predefinito 22 x 22 mm al centro)
         dst = args.dst or "pattern (1).dst"
-        segs = M.ritaglio(M.fori_da_dst(dst, con_ago=True), 0.0, 0.0, mezzo_lato)
+        segs = M.ritaglio(M.fori_da_dst(dst, con_ago=True), args.centro[0], args.centro[1], mezzo_lato)
         rett_copertura = None
         lato_copertura = mezzo_lato - 1.5
         uscita = "rg-ricamo-3d-termogarza.html"
-        descrizione = None
+        descrizione = (f"Ritaglio {args.lato:g} × {args.lato:g} mm centrato in ({args.centro[0]:g}, {args.centro[1]:g}) mm di "
+                       f"{Path(dst).name}, cotone naturale. Parametri fisici di partenza, non ancora calibrati.")
     else:
         percorso_json = Path(args.zone)
         desc = json.loads(percorso_json.read_text(encoding="utf-8"))
@@ -188,11 +199,15 @@ def main():
                        f"{x1 - x0:.1f} × {y1 - y0:.1f} mm, cotone naturale. Parametri fisici di partenza, non ancora calibrati.")
         print(f"zona {zona['id']} ({zona['nome']}), riquadro {zona['riquadro_mm']}, {zona['punti']} punti nel JSON")
 
-    if args.cucitura == "rigida":
-        uscita = uscita.replace(".html", "-rigida.html")
+    if args.uscita:
+        uscita = args.uscita
+    elif args.cucitura == "rigida":
+        uscita = uscita.replace(".html", "-rigida.html" if not args.senza_ventaglio else "-rigida-senza-ventaglio.html")
+    if args.cucitura == "rigida" and args.senza_ventaglio:
+        descrizione = (descrizione or "") + " Senza ventaglio."
         descrizione = (descrizione or "Ritaglio 22 × 22 mm al centro del disegno.") + " Cucitura rigida (heightfield)."
     out = simula_varianti(segs, mezzo_lato, lato_copertura, rett_copertura, descrizione, cucitura=args.cucitura,
-                          processi=args.processi)
+                          processi=args.processi, ventaglio=not args.senza_ventaglio)
     (qui / uscita).write_text(html_visualizzatore(out), encoding="utf-8")
     print("scritto", uscita)
 
