@@ -295,8 +295,8 @@ function carica(d){
 const PASSO = 2, LATI = 8;
 function anelli(pos, r, comp){
   // pos: Float32Array xyz (dati: x,y piano, z alto) -> vertici e normali three (y alto)
-  // comp (facoltativo): compattazione per nodo, 0..1. Sezione ellittica ad area costante:
-  // semiasse orizzontale r/c (lato), verticale r*c (binormale).
+  // comp (facoltativo): compattazione per nodo, 0..1. Sezione ellittica: semiasse verticale r*c (binormale),
+  // orizzontale r/c ma al più 1,25 r (lato): il filo schiacciato si abbassa più di quanto si allarghi.
   const nSeg = OFFS.length-1;
   let tot=0; const idxNodi=[];
   for(let k=0;k<nSeg;k++){ const a=OFFS[k], b=OFFS[k+1]; const ids=[]; for(let i=a;i<b-1;i+=PASSO) ids.push(i); ids.push(b-1); idxNodi.push(ids); tot+=ids.length; }
@@ -312,7 +312,7 @@ function anelli(pos, r, comp){
       // lato orizzontale = up x t
       let sx=tz, sy=0, sz=-tx; let sl=Math.hypot(sx,sz); if(sl<1e-4){sx=1;sz=0;sl=1;} sx/=sl; sz/=sl;
       const bx=ty*sz-tz*sy, by=tz*sx-tx*sz, bz=tx*sy-ty*sx;
-      const c = comp ? Math.max(comp[ids[j]], 0.2) : 1, ra = r/c, rb = r*c;
+      const c = comp ? Math.max(comp[ids[j]], 0.2) : 1, ra = r*Math.min(1/c, 1.25), rb = r*c;   // schiacciato: basso, poco più largo
       for(let l=0;l<LATI;l++){
         const a=l/LATI*Math.PI*2, ca=Math.cos(a), sa=Math.sin(a);
         // punto sull'ellisse e normale (gradiente dell'ellisse: cos/ra, sin/rb)
@@ -364,8 +364,9 @@ function costruisci(){
   const r = v.metriche.diametro_mm/2;
   const cuc = b64(v.cucito, Int16Array), ril = b64(v.rilasciato, Int16Array);
   const f = (a)=>{const o=new Float32Array(a.length); for(let i=0;i<a.length;i++) o[i]=a[i]*Q; return o;};
-  const comp = v.compattazione ? Float32Array.from(b64(v.compattazione, Uint8Array), x=>x/255) : null;
-  const A = anelli(f(cuc), r, comp), B = anelli(f(ril), r, comp);
+  const leggiComp = (x)=> x ? Float32Array.from(b64(x, Uint8Array), c=>c/255) : null;
+  const comp = leggiComp(v.compattazione), compRiposo = leggiComp(v.compattazione_riposo) || comp;
+  const A = anelli(f(cuc), r, comp), B = anelli(f(ril), r, compRiposo);   // garza rimossa: sezioni della cucitura a 0 strati
   if(!cacheIndici){ cacheIndici = indici(A.idxNodi); agoVertici = aghiDeiVertici(A.idxNodi); }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(A.V,3));

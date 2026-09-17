@@ -1708,6 +1708,24 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   **Misurato** (centro cartamodello 40 mm, cotone 30): compenetrazioni 0 %; altezza media 0,37 mm a 0 garze
   e 0,56 con 2 (prima 0,40 e 0,59); zona H con 2 garze filo più alto 0,53 → 0,42 mm. Test verdi. Da fare:
   stop con garze aggiunte fra uno e l'altro.
+- **Niente vette ai punti d'ingresso: il filo si fa spazio (2026-09-17, Lorenzo, con uno screenshot di pile
+  alte ai fori: «ora i punti di ingresso dove c'è più filo sono troppo alti, nella realtà non è così, il
+  dislivello è poco … considera sempre che il filo si fa spazio quindi si attacca verso il basso e spinge
+  verso il basso, non si formano queste punte di vetta»).** Il tiro «solo se sotto non c'è troppo» lasciava
+  crescere le pile dove convergono tanti punti. La rigida ora ha tre tempi: (a) posa tonda che decide solo
+  pianta e ordine sopra/sotto; (b) compattazione: ogni nodo resta alto d · c con c che scende col numero di
+  fili che gli passano sopra (`COMPATTAZIONE_PILA_MIN` 0,45, `CARICO_PILA_STRATI` 1), garza compressa allo
+  stesso modo, posa rifatta nello stesso ordine con curve (`RAGGIO_CURVA_MM` 0,25); (c) imbuto: vicino a
+  ogni foro la cima non passa r + `IMBUTO_PENDENZA` (0,5) × distanza, e la pila si abbassa tutta insieme
+  scalando quote e altezze (fino a `IMBUTO_ALTEZZA_MIN` 0,25), così un filo non entra nell'altro; il tetto
+  vale anche dopo la rimozione. Tutti DA_MISURARE. Tolti tiro a triangolo e filo teso sui punti premuti.
+  **Primo giro sbagliato:** il tetto tagliava solo il filo nuovo e lasciava alti quelli sotto, 44 % di
+  incroci compenetrati a 0 garze. Il visualizzatore allarga il filo schiacciato al più 1,25 volte e
+  disegna la forma rilasciata con le sezioni della cucitura a 0 strati (prima usava quelle con la garza).
+  **Misurato** (centro cartamodello 40 mm, cotone 30): 0 garze media 0,18 mm, max 0,69, max entro 0,5 mm dai
+  fori 0,32 (prima 0,36 · 1,50 · 1,50); 2 garze rilasciato 0,25 · 0,87 · 0,36 (prima 0,53 · 1,93 · 1,93).
+  Compenetrazioni oltre 0,2 mm dai fori 0–2,6 % in cucitura, fino a 7,5 % dopo la rimozione; entro 0,2 mm
+  ~30 % (fili nello stesso foro, come prima). 11–12 s a variante. Test verdi.
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 

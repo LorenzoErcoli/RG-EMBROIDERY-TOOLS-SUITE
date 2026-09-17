@@ -12,7 +12,7 @@ FILATI = {
     "cotone_40": {"tex": 1000 / 40, "colore": "#e9e4d6", "materiale": "cotone"},
 }
 DENSITA_APPARENTE_COTONE = 0.90  # g/cm3 = fibra ~1.5 x compattezza ~0.6  DA_MISURARE
-SCHIACCIAMENTO_FILO = 0.60        # non più usato: il filo della cucitura rigida è tondo (vedi TIRO_INCROCIO_FRAZ)
+SCHIACCIAMENTO_FILO = 0.60        # non più usato: nella rigida lo schiacciamento viene dal carico (vedi COMPATTAZIONE_PILA_MIN)
 ALLUNGAMENTO_RECUPERATO = 0.010  # frazione di lunghezza persa al rilascio della tensione  DA_MISURARE
                                  # (non entra più nella rimozione: varrebbe uguale nelle due cuciture, vedi sotto)
 
@@ -58,19 +58,19 @@ SEME = 7
 # + K_VENTAGLIO * (lunghezza in pianta - corda). Vince il costo minimo; a parità lo scostamento più piccolo.
 # SCOSTAMENTI_N = 1: nessun ventaglio (la cucitura rigida di prima).
 SCOSTAMENTI_N = 25
-# Incroci nella cucitura rigida (filo tondo). La bobina tira giù il filo nuovo: dove passa sopra un filo
-# che incrocia lo preme verso la superficie e lo schiaccia un po', così tutto si appiattisce.
-# - il filo sotto scende verso il suo appoggio (garza compressa fino a GARZA_FORO, fili più vecchi) di
-#   TIRO_INCROCIO_FRAZ della distanza, nel punto d'incrocio, e a triangolo fino ai suoi fori;
-# - sotto il filo nuovo resta alto d * (1 - SCHIACCIAMENTO_INCROCIO) (in mezzo all'incrocio, meno ai lati);
-# - tutti e due pieni se il filo sotto sta sulla superficie, via via meno se sotto ha già dei fili, niente
-#   da una pila di PILA_SENZA_TIRO_D diametri in su.
-# Un filo quasi parallelo (entro PARALLELI_ANGOLO_GRADI) non sale su quello vicino e non lo tira: gli sta di
-# fianco, e ci sale solo se i centri distano meno di r (passaggi sugli stessi fori).
+# Cucitura rigida: il filo si fa spazio. Ogni filo spinge giù quello che copre (lo tira giù la bobina), quindi
+# un nodo con U fili sopra resta alto d * c, c = COMPATTAZIONE_PILA_MIN + (1 - COMPATTAZIONE_PILA_MIN) *
+# exp(-U / CARICO_PILA_STRATI), e la garza sotto si comprime allo stesso modo fino a GARZA_FORO: una pila di
+# tanti fili cresce sempre meno. Vicino a ogni foro la bobina tira tutto verso il basso: il centro del filo sta
+# la cima della pila sta al più r + IMBUTO_PENDENZA mm sopra la garza per ogni mm di distanza dal foro (niente
+# vette ai punti d'ingresso): la pila si abbassa tutta insieme, fili schiacciati, fino a IMBUTO_ALTEZZA_MIN.
+# Un filo quasi parallelo (entro PARALLELI_ANGOLO_GRADI) non sale su quello vicino: gli sta di fianco, e ci sale
+# solo se i centri distano meno di r (passaggi sugli stessi fori).
 # Il filo teso non piega più stretto di RAGGIO_CURVA_MM: dove sale su un filo fa una curva, non uno spigolo.
-TIRO_INCROCIO_FRAZ = 1.0         # DA_MISURARE (sezione tagliata di un incrocio)
-SCHIACCIAMENTO_INCROCIO = 0.20   # DA_MISURARE (sezione tagliata di un incrocio)
-PILA_SENZA_TIRO_D = 2.0          # DA_MISURARE
+COMPATTAZIONE_PILA_MIN = 0.45    # DA_MISURARE (sezione tagliata di una pila)
+CARICO_PILA_STRATI = 1.0         # fili sopra a cui lo schiacciamento è a 1/e  DA_MISURARE
+IMBUTO_PENDENZA = 0.5            # mm di salita per mm di distanza dal foro  DA_MISURARE (macro di profilo)
+IMBUTO_ALTEZZA_MIN = 0.25        # la pila vicino al foro si abbassa al più fino a questa frazione, poi resta sopra il tetto
 RAGGIO_CURVA_MM = 0.25           # DA_MISURARE (macro di profilo); circa un diametro: di più alza molto le pile
 PARALLELI_ANGOLO_GRADI = 20.0    # DA_MISURARE (macro di un satin denso)
 VENTAGLIO_MAX_MM = 0.8           # DA_MISURARE (macro con righello)

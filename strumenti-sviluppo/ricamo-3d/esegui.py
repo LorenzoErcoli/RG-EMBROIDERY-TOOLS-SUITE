@@ -73,9 +73,10 @@ def _una_variante(segs, offs, filato, strati, mezzo_lato, lato_copertura, rett_c
     met["fasci_larghezza_max_mm"] = None if larg is None else round(larg, 3)
     met["fasci_altezza_max_mm"] = None if alt is None else round(alt, 3)
     voce = {"metriche": met, "cucito": pack(R["cucito"]), "rilasciato": pack(R["rilasciato"])}
-    if R["compattazione"] is not None:   # sezione ellittica: 255 = tonda
-        c8 = np.round(np.clip(R["compattazione"], 0, 1) * 255).astype(np.uint8)
-        voce["compattazione"] = base64.b64encode(c8.tobytes()).decode()
+    for chiave in ("compattazione", "compattazione_riposo"):   # sezione ellittica: 255 = tonda
+        if R.get(chiave) is not None:
+            c8 = np.round(np.clip(R[chiave], 0, 1) * 255).astype(np.uint8)
+            voce[chiave] = base64.b64encode(c8.tobytes()).decode()
     return key, voce, time.time() - t0
 
 

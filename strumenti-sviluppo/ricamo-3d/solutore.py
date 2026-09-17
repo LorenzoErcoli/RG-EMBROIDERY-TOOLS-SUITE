@@ -189,13 +189,6 @@ def _foro_comune(x, y, fa, px, py, fo, raggio_ago, stesso_foro):
 
 
 @njit(cache=True)
-def _separazione(C, k, rho2, r, d2):
-    """Distanza verticale minima fra il centro di un filo tondo che passa sopra e il nodo k (schiacciato:
-    semiasse verticale r * C[k]), a distanza in pianta rho."""
-    return (r + r * C[k]) * math.sqrt(1.0 - rho2 / d2)
-
-
-@njit(cache=True)
 def _sale_su(X, Y, ux, uy, fori_nuovo, P, seg_di, fori, dirs, k, rho2, coseno_paralleli, rp2, raggio_ago, stesso_foro):
     """Vero se un filo nuovo (direzione ux, uy) in X, Y deve passare sopra il nodo vecchio k invece di
     stargli di fianco o scendere con lui nel foro."""
@@ -206,13 +199,13 @@ def _sale_su(X, Y, ux, uy, fori_nuovo, P, seg_di, fori, dirs, k, rho2, coseno_pa
 
 
 @njit(cache=True)
-def quota_fili(X, Y, ux, uy, fori_nuovo, P, C, seg_di, fori, dirs, succ, testa, origine, cella, limite,
+def quota_fili(X, Y, cq, ux, uy, fori_nuovo, P, C, seg_di, fori, dirs, succ, testa, origine, cella, limite,
                d, coseno_paralleli, raggio_paralleli, raggio_ago, stesso_foro):
-    """Cucitura rigida, filo tondo: quota minima del centro di un filo di direzione (ux, uy) nei punti X, Y
-    perché non compenetri i nodi già posati con indice < limite (-1e9 se non ne tocca nessuno).
+    """Cucitura rigida: quota minima del centro di un filo di direzione (ux, uy) nei punti X, Y perché non
+    compenetri i nodi già posati con indice < limite (-1e9 se non ne tocca nessuno).
 
-    Un nodo vecchio a distanza in pianta rho < d impone z >= z_vecchio + (r + r * C) * sqrt(1 - rho²/d²)
-    (C: quanto il nodo è rimasto alto dopo lo schiacciamento, 1 = tondo). Un filo quasi parallelo
+    Sezioni alte d * C (C = 1 tondo, meno se schiacciato; cq per i punti nuovi): un nodo vecchio a distanza
+    in pianta rho < d impone z >= z_vecchio + (r * cq + r * C) * sqrt(1 - rho²/d²). Un filo quasi parallelo
     (|cos| > coseno_paralleli) ci sale solo se rho < raggio_paralleli, altrimenti gli sta di fianco; dentro
     un foro in comune i fili non si impilano (scendono insieme nel foro).
     Griglia: celle di lato `cella` >= d, liste concatenate testa/succ.
@@ -235,7 +228,7 @@ def quota_fili(X, Y, ux, uy, fori_nuovo, P, C, seg_di, fori, dirs, succ, testa, 
                         rho2 = dx * dx + dy * dy
                         if rho2 < d2 and _sale_su(X[q], Y[q], ux, uy, fori_nuovo, P, seg_di, fori, dirs, k, rho2,
                                                   coseno_paralleli, rp2, raggio_ago, stesso_foro):
-                            h = P[k, 2] + _separazione(C, k, rho2, r, d2)
+                            h = P[k, 2] + (r * cq[q] + r * C[k]) * math.sqrt(1.0 - rho2 / d2)
                             if h > out[q]:
                                 out[q] = h
                     k = succ[k]
@@ -253,24 +246,72 @@ def inserisci_griglia(P, a, b, succ, testa, origine, cella):
 
 
 @njit(cache=True)
-def _inviluppo(s, z, i0, i1, out):
-    """Inviluppo convesso superiore dei punti i0..i1 (inclusi), interpolato in out[i0..i1]."""
-    hull = np.empty(i1 - i0 + 1, np.int64)
-    m = 0
-    for i in range(i0, i1 + 1):
-        while m >= 2:
-            p0 = hull[m - 2]; p1 = hull[m - 1]
-            if (s[p1] - s[p0]) * (z[i] - z[p0]) - (z[p1] - z[p0]) * (s[i] - s[p0]) >= 0:
-                m -= 1
-            else:
-                break
-        hull[m] = i
-        m += 1
-    for h in range(m - 1):
-        p0 = hull[h]; p1 = hull[h + 1]
-        for i in range(p0, p1 + 1):
-            t = 0.0 if s[p1] <= s[p0] else (s[i] - s[p0]) / (s[p1] - s[p0])
-            out[i] = z[p0] + t * (z[p1] - z[p0])
+def carico_sopra(P, seg_di, offs, fori, dirs, succ, testa, origine, cella, d, coseno_paralleli, raggio_paralleli,
+                 raggio_ago, stesso_foro):
+    """Per ogni nodo, quanti fili gli passano sopra (cuciti dopo, che gli salgono sopra): ogni punto conta
+    una volta, col peso w = sqrt(1 - rho²/d²) del suo nodo più vicino (1 se passa proprio sopra)."""
+    N = P.shape[0]
+    S = len(offs) - 1
+    U = np.zeros(N)
+    wmax = np.zeros(N)
+    toccati = np.empty(N, np.int64)
+    n = testa.shape[0]
+    d2 = d * d
+    rp2 = raggio_paralleli * raggio_paralleli
+    for sg in range(S):
+        a = offs[sg]; b = offs[sg + 1]
+        nt = 0
+        for q in range(a + 1, b - 1):
+            gx = int((P[q, 0] - origine) / cella)
+            gy = int((P[q, 1] - origine) / cella)
+            for i in range(max(gx - 1, 0), min(gx + 2, n)):
+                for j in range(max(gy - 1, 0), min(gy + 2, n)):
+                    k = testa[i, j]
+                    while k >= 0:
+                        if k < a:
+                            dx = P[k, 0] - P[q, 0]
+                            dy = P[k, 1] - P[q, 1]
+                            rho2 = dx * dx + dy * dy
+                            if rho2 < d2 and _sale_su(P[q, 0], P[q, 1], dirs[sg, 0], dirs[sg, 1], fori[sg], P, seg_di,
+                                                      fori, dirs, k, rho2, coseno_paralleli, rp2, raggio_ago,
+                                                      stesso_foro):
+                                w = math.sqrt(1.0 - rho2 / d2)
+                                if wmax[k] == 0.0:
+                                    toccati[nt] = k
+                                    nt += 1
+                                if w > wmax[k]:
+                                    wmax[k] = w
+                        k = succ[k]
+        for t in range(nt):
+            k = toccati[t]
+            U[k] += wmax[k]
+            wmax[k] = 0.0
+    return U
+
+
+@njit(cache=True)
+def cima_locale(P, C, succ, testa, origine, cella, r, raggio):
+    """Per ogni nodo, la quota più alta raggiunta da un filo (centro + r * C) entro `raggio` in pianta:
+    nodi della griglia e il nodo stesso."""
+    N = P.shape[0]
+    n = testa.shape[0]
+    out = P[:, 2] + r * C
+    r2 = raggio * raggio
+    for q in range(N):
+        gx = int((P[q, 0] - origine) / cella)
+        gy = int((P[q, 1] - origine) / cella)
+        for i in range(max(gx - 1, 0), min(gx + 2, n)):
+            for j in range(max(gy - 1, 0), min(gy + 2, n)):
+                k = testa[i, j]
+                while k >= 0:
+                    dx = P[k, 0] - P[q, 0]
+                    dy = P[k, 1] - P[q, 1]
+                    if dx * dx + dy * dy < r2:
+                        h = P[k, 2] + r * C[k]
+                        if h > out[q]:
+                            out[q] = h
+                    k = succ[k]
+    return out
 
 
 @njit(cache=True)
@@ -295,154 +336,6 @@ def curva(s, z, raggio):
                 out[i] = v
             j += 1
     return out
-
-
-@njit(cache=True)
-def filo_teso(s, sotto, sopra):
-    """Forma di un filo teso fra i capi (fissi: sotto[0] = sopra[0], sotto[-1] = sopra[-1]) che deve stare
-    sopra `sotto` (gli appoggi) e sotto `sopra` (dove un filo che incrocia lo preme giù).
-
-    Il filo più corto nel corridoio: l'inviluppo superiore degli appoggi; dove passa sopra un limite, il nodo
-    più sforante viene fissato al limite e si rifà l'inviluppo nei due tratti. Fra due punti premuti il filo
-    resta dritto, non torna su.
-    """
-    n = len(s)
-    z = np.empty(n)
-    fisso = np.zeros(n, np.bool_)
-    fisso[0] = True
-    fisso[n - 1] = True
-    lb = sotto.copy()
-    for _ in range(n):
-        i0 = 0
-        for i in range(1, n):
-            if fisso[i]:
-                _inviluppo(s, lb, i0, i, z)
-                i0 = i
-        peggio = -1
-        sfora = 1e-9
-        for i in range(n):
-            if not fisso[i] and z[i] - sopra[i] > sfora:
-                sfora = z[i] - sopra[i]
-                peggio = i
-        if peggio < 0:
-            break
-        fisso[peggio] = True
-        lb[peggio] = sopra[peggio]
-    return z
-
-
-@njit(cache=True)
-def tira_giu(x, y, z, ux, uy, fori_nuovo, P, C, seg_di, offs, fori, dirs, succ, testa, origine, cella, limite,
-             d, coseno_paralleli, raggio_paralleli, raggio_ago, stesso_foro,
-             tiro, schiacciamento, pila_max, h_garza, garza_foro, raggio_curva):
-    """La bobina tira giù il filo nuovo: dove passa sopra un filo che incrocia lo preme verso la superficie
-    e lo schiaccia un po'.
-
-    Per ogni nodo vecchio toccato (sta sotto a meno della separazione), peso w = sqrt(1 - rho²/d²):
-    - schiacciamento: C del nodo scende a 1 - schiacciamento * w * f;
-    - tiro: il fondo del nodo scende verso il suo appoggio premuto di tiro * w * f della distanza.
-    f = 1 - (fili sotto il nodo) / pila_max, fra 0 e 1: pieno se il filo sta sulla superficie, niente se sotto
-    ha già una pila alta pila_max. Appoggio premuto = fili più vecchi sotto il nodo, o la garza compressa del
-    tutto (h_garza * garza_foro); senza premere la garza resta intera. La garza cede a triangolo dai nodi
-    premuti fino ai fori del punto. Il punto vecchio prende la forma di un filo teso (filo_teso) fra i suoi
-    fori, sopra quegli appoggi e sotto i nodi premuti, con gli spigoli arrotondati (curva); non sale mai
-    sopra dov'era. Il centro schiacciato sta a r * C sopra il fondo.
-    Restituisce quanti punti vecchi sono stati toccati.
-    """
-    S = len(offs) - 1
-    N = P.shape[0]
-    toccato = np.zeros(S, np.bool_)
-    peso = np.zeros(N)                  # w massimo per nodo vecchio toccato
-    n = testa.shape[0]
-    d2 = d * d
-    r = d / 2.0
-    rp2 = raggio_paralleli * raggio_paralleli
-    for q in range(1, len(x) - 1):
-        gx = int((x[q] - origine) / cella)
-        gy = int((y[q] - origine) / cella)
-        for i in range(max(gx - 1, 0), min(gx + 2, n)):
-            for j in range(max(gy - 1, 0), min(gy + 2, n)):
-                k = testa[i, j]
-                while k >= 0:
-                    if k < limite:
-                        dx = P[k, 0] - x[q]
-                        dy = P[k, 1] - y[q]
-                        rho2 = dx * dx + dy * dy
-                        if rho2 < d2 and _sale_su(x[q], y[q], ux, uy, fori_nuovo, P, seg_di, fori, dirs, k, rho2,
-                                                  coseno_paralleli, rp2, raggio_ago, stesso_foro):
-                            if z[q] - P[k, 2] <= _separazione(C, k, rho2, r, d2) + 1e-6:
-                                w = math.sqrt(1.0 - rho2 / d2)
-                                if w > peso[k]:
-                                    peso[k] = w
-                                toccato[seg_di[k]] = True
-                    k = succ[k]
-    quanti = 0
-    X1 = np.zeros(1)
-    Y1 = np.zeros(1)
-    pav_garza = h_garza * garza_foro
-    for sg in range(S):
-        if not toccato[sg]:
-            continue
-        a = offs[sg]; b = offs[sg + 1]; m = b - a
-        fs = fori[sg]
-        s_ = np.zeros(m)
-        for i in range(1, m):
-            s_[i] = s_[i - 1] + math.sqrt((P[a + i, 0] - P[a + i - 1, 0]) ** 2 + (P[a + i, 1] - P[a + i - 1, 1]) ** 2)
-        alto = np.empty(m)          # fondo più basso senza premere: fili sotto o garza intera
-        basso = np.empty(m)         # fondo più basso premendo: fili sotto o garza compressa del tutto
-        voluto = np.full(m, -1.0)   # fondo voluto nei nodi premuti (-1: non premuto)
-        c_nuovo = np.empty(m)
-        for i in range(m):
-            k = a + i
-            c_nuovo[i] = C[k]
-            fondo = P[k, 2] - r * C[k]
-            if i == 0 or i == m - 1:
-                alto[i] = fondo; basso[i] = fondo
-                continue
-            X1[0] = P[k, 0]; Y1[0] = P[k, 1]
-            fondo_fili = quota_fili(X1, Y1, dirs[sg, 0], dirs[sg, 1], fs, P, C, seg_di, fori, dirs, succ, testa,
-                                    origine, cella, a, d, coseno_paralleli, raggio_paralleli, raggio_ago,
-                                    stesso_foro)[0] - r
-            dist = min(math.sqrt((P[k, 0] - fs[0]) ** 2 + (P[k, 1] - fs[1]) ** 2),
-                       math.sqrt((P[k, 0] - fs[2]) ** 2 + (P[k, 1] - fs[3]) ** 2))
-            rampa = min(max((dist - raggio_ago) / raggio_ago, 0.0), 1.0)
-            superficie = h_garza * (garza_foro + (1.0 - garza_foro) * rampa)
-            alto[i] = min(max(fondo_fili, superficie), fondo)        # un filo già più giù non risale
-            basso[i] = min(max(fondo_fili, pav_garza), alto[i])
-            f = min(max(1.0 - max(fondo_fili - superficie, 0.0) / pila_max, 0.0), 1.0)
-            if peso[k] > 0.0 and f > 0.0:
-                c_nuovo[i] = min(C[k], 1.0 - schiacciamento * peso[k] * f)
-                voluto[i] = fondo - tiro * peso[k] * f * (fondo - basso[i])
-        # la garza cede solo attorno a dove si preme: a triangolo da ogni nodo premuto fino ai fori del punto
-        cede = np.zeros(m)
-        for p_ in range(1, m - 1):
-            if voluto[p_] < 0.0:
-                continue
-            for i in range(1, m - 1):
-                t = i / p_ if i <= p_ else (m - 1 - i) / (m - 1 - p_)
-                if t > cede[i]:
-                    cede[i] = t
-        if cede.max() <= 0.0:
-            continue
-        quanti += 1
-        sotto = np.empty(m)
-        sopra = np.empty(m)
-        for i in range(m):
-            k = a + i
-            if i == 0 or i == m - 1:
-                sotto[i] = P[k, 2]; sopra[i] = P[k, 2]
-                continue
-            sotto[i] = alto[i] - (alto[i] - basso[i]) * cede[i] + r * c_nuovo[i]
-            sopra[i] = voluto[i] + r * c_nuovo[i] if voluto[i] >= 0.0 else 1e9
-            if sotto[i] > sopra[i]:
-                sotto[i] = sopra[i]
-        zz = curva(s_, filo_teso(s_, sotto, sopra), raggio_curva)
-        for i in range(1, m - 1):
-            k = a + i
-            if zz[i] < P[k, 2]:
-                P[k, 2] = zz[i]
-            C[k] = c_nuovo[i]
-    return quanti
 
 
 @njit(cache=True)
