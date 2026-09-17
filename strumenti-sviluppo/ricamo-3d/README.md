@@ -6,7 +6,8 @@ Visualizzazione 3D fisica di ricami su termogarza: cucitura, rimozione della gar
     python esegui.py "percorso/file.dst"                     # cucitura incrementale (predefinita)
     python esegui.py "percorso/file.dst" --cucitura rigida   # cucitura rigida (con ventaglio)
     python esegui.py "file.dst" --centro X Y --lato 40 --cucitura rigida --senza-ventaglio
-    python immagini.py "file.dst" --centro X Y --lato 40     # tavola PNG: rigida senza e con ventaglio
+    python immagini.py "file.dst" --centro X Y --lato 40     # dall'alto e radenti con 0, 1, 2 garze (cartella immagini/)
+    python test_rimozione.py                                 # con 0 strati la rimozione non deve muovere niente
 Genera `rg-ricamo-3d-termogarza.html` (con `--cucitura rigida`: `…-rigida.html`, apribile nel browser) e
 stampa le metriche per cotone 30/40 × 0/1/2 strati. Dipendenze: numpy, scipy, numba (Pillow solo
 per l'anteprima della calibrazione). Il lettore DST è interno.
@@ -27,13 +28,23 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
    fra `SCOSTAMENTI_N` scostamenti laterali a forma sin(πt) (nulli ai fori, massimi al centro, fino a
    min(`VENTAGLIO_MAX_MM`, `VENTAGLIO_FRAZ` × corda)) sceglie quello di costo minimo, altezza media
    d'appoggio nella parte centrale + `K_VENTAGLIO` × (lunghezza in pianta − corda); a parità il più
-   piccolo. Così i passaggi ripetuti sugli stessi fori non si impilano a torre. Con `--senza-ventaglio`
-   (o `SCOSTAMENTI_N = 1`) è la cucitura rigida di prima, numero per numero. Il timbro sull'heightfield
-   aggiunge lo spessore schiacciato del filo (2 r × `SCHIACCIAMENTO_FILO`), come già prima.
-3. **Rimozione della garza**: si parte dallo stato della cucitura (spostamenti laterali e fili
-   infilzati compresi), lunghezza meno `ALLUNGAMENTO_RECUPERATO` e meno la parte di eccesso che
-   rientra nel foro (`RIENTRO_FORO`).
-4. **Rilassamento finale**: lunghezza, flessione, contatto, collare ai fori; gli infilzati restano sul foro.
+   piccolo. Così i passaggi ripetuti sugli stessi fori non si impilano a torre (`--senza-ventaglio` lo
+   spegne). **Ai fori** l'ago schiaccia di più: entro `RAGGIO_AGO` il timbro sull'heightfield è d ×
+   `SCHIACCIAMENTO_FORO` e sotto resta `GARZA_FORO` della garza; fra `RAGGIO_AGO` e 2 × `RAGGIO_AGO` si
+   passa linearmente ai valori normali (d × `SCHIACCIAMENTO_FILO`, garza piena).
+3. **Rimozione della garza**. La cucitura si esegue **due volte con la stessa logica** (ventaglio
+   compreso): con gli strati scelti e con 0 strati. La cucitura a 0 strati è lo **stato di riposo**:
+   lunghezze di riposo per lato e curvature di riposo vengono da lì, non dal filo dritto. Il **filo in
+   eccesso** di ogni punto è la lunghezza cucita con la garza meno quella a 0 strati, meno la parte che
+   rientra nel foro (`RIENTRO_FORO`); si aggiunge alle lunghezze di riposo. La forma di partenza è la
+   cucitura a 0 strati con l'eccesso come arco, aperto di lato (verso cui il punto si è aperto a
+   ventaglio) di un angolo proporzionale all'eccesso fino a `APERTURA_MAX_GRADI` (pieno a
+   `APERTURA_ECCESSO_PIENO`). Niente forma casuale. **Con 0 strati non si muove niente**: lo verifica
+   `test_rimozione.py`.
+4. **Rilassamento finale**: lunghezza e flessione verso lo stato di riposo, contatto alla distanza dello
+   spessore schiacciato usato in cucitura (rigida: lo spessore del timbro, che dipende dalla distanza dal
+   foro; incrementale: d × la compattazione del nodo), mai sotto la distanza che la coppia aveva nella
+   cucitura a 0 strati; collare attorno ai fori; gli infilzati restano sul foro.
 
 ## Parametri (`parametri.py`)
 | gruppo | parametro | valore | stato |
@@ -46,10 +57,12 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
 | contatto | `COMPATTAZIONE_MIN` · `CARICO_COMPATTAZIONE` | 0,45 · 100 cN/mm | DA_MISURARE |
 | attrito | `ATTRITO` (statico) · `ATTRITO_DINAMICO_FRAZ` | cotone 0,5, filamento 0,25 · 0,8 | DA_MISURARE |
 | ago | `DIAMETRO_AGO` · `SOGLIA_INFILZATO` | 0,75 mm · cotone 0,6, filamento 0,3 | soglia DA_MISURARE |
-| rimozione | `ALLUNGAMENTO_RECUPERATO` · `RIENTRO_FORO` | 0,010 · 0,4 | DA_MISURARE |
-| rilassamento | `COLLARE_FRAZ` · `COLLARE_RAGGIO` · `RIGIDEZZA_FLESSIONE` · `ITERAZIONI` · `GRAVITA_PER_ITER` | 0,6 · 0,45 mm · 0,08 · 160 · 0 | collare DA_MISURARE |
+| fori | `RAGGIO_AGO` · `SCHIACCIAMENTO_FORO` · `GARZA_FORO` | 0,375 mm · 0,30 · 0,35 | DA_MISURARE (tranne il raggio) |
+| rimozione | `RIENTRO_FORO` · `APERTURA_MAX_GRADI` · `APERTURA_ECCESSO_PIENO` | 0,4 · 40° · 0,25 | DA_MISURARE |
+| rilassamento | `COLLARE_FRAZ` · `COLLARE_RAGGIO` · `RIGIDEZZA_FLESSIONE` · `ITERAZIONI` · `GRAVITA_PER_ITER` | 0,6 · 1,0 mm · 0,08 · 160 · 0 | collare DA_MISURARE |
+| non più nella rimozione | `ALLUNGAMENTO_RECUPERATO` | 0,010 | varrebbe uguale nelle due cuciture: nell'eccesso si annulla |
 | sola cucitura rigida | `SCHIACCIAMENTO_FILO` (anche distanza di contatto del rilassamento finale) | 0,60 | DA_MISURARE |
-| ventaglio (rigida) | `SCOSTAMENTI_N` · `VENTAGLIO_MAX_MM` · `VENTAGLIO_FRAZ` · `VENTAGLIO_BORDO_FRAZ` · `K_VENTAGLIO` | 25 · 1,2 mm · 0,35 · 0,10 · 1,0 | K DA_MISURARE |
+| ventaglio (rigida) | `SCOSTAMENTI_N` · `VENTAGLIO_MAX_MM` · `VENTAGLIO_FRAZ` · `VENTAGLIO_BORDO_FRAZ` · `K_VENTAGLIO` | 25 · 0,8 mm · 0,22 · 0,10 · 2,5 | max, frazione e K DA_MISURARE (macro con righello) |
 | fasci (metrica) | `TOLLERANZA_FORI_FASCIO` · `FASCIO_MIN_PASSAGGI` | 0,25 mm · 4 | tolleranza da confermare |
 
 **Legge di compattazione.** c = `COMPATTAZIONE_MIN` + (1 − `COMPATTAZIONE_MIN`) · exp(−carico /
@@ -128,7 +141,8 @@ della zona e l'HTML si chiama `rg-ricamo-3d-zona-<id>.html`.
 - `cucitura.py` — cucitura incrementale: ago, posa, rilassamento locale con contatto comprimibile e attrito.
 - `esegui.py` — ritaglio centrale (o una zona con `--zona`), varianti, metriche, visualizzatore.
 - `viewer_template.html` — visualizzatore three.js: pagina statica con i dati dentro, o interfaccia se aperto da `server.py`.
-- `immagini.py` — tavola di confronto della cucitura rigida senza e con ventaglio, dall'alto e radente (Pillow).
+- `immagini.py` — tavola e singole immagini dall'alto e radenti, una riga per numero di garze (o senza/con ventaglio), Pillow. Le immagini vanno in `immagini/`, ignorata da git.
+- `test_rimozione.py` — con 0 strati lo spostamento di ogni nodo dopo la rimozione deve stare sotto 0,02 mm (rigida e incrementale, zone A, D, G, H e `pattern (1).dst`).
 - `server.py` — interfaccia locale per caricare un DST, scegliere il ritaglio e simulare.
 - `calibrazione.py`, `verifica_calibrazione.py`, `calibrazione/` — DST di calibrazione, sua verifica, file generati.
 
@@ -139,12 +153,13 @@ della zona e l'HTML si chiama `rg-ricamo-3d-zona-<id>.html`.
   (`RIENTRO_FORO`) sparisce e non fa arco: non va da nessuna parte, non allunga i punti vicini, è
   uguale per tutti i punti. **Il passo successivo è lo scorrimento vero del filo continuo tra punti
   vicini attraverso i fori.**
-- Il collare ai fori è un pavimento fisso (lineare fino a `COLLARE_RAGGIO`), misurato solo sui due
-  fori del punto stesso, non su quelli dei punti vicini.
+- Collare, schiacciamento e garza ridotta ai fori si misurano solo sui due fori del punto stesso, non su
+  quelli dei punti vicini.
 - La gravità è a 0 (`GRAVITA_PER_ITER` resta solo per le prove): a questa scala domina la rigidità.
-- Con 2 strati, collare e rientro insieme lasciano al filo meno lunghezza di quella che serve a
-  scavalcare il collare: il rilassamento finisce con il filo **più lungo** dell'obiettivo (cucitura
-  rigida fino a +7 %; incrementale fino a +7,5 % nei riempimenti e **+10 % sulle fermature isolate**).
+- **Contatto «a riposo».** Nel rilassamento una coppia di nodi non viene separata oltre la distanza che
+  aveva nella cucitura a 0 strati. Senza questa regola la cucitura incrementale, che lascia piccole
+  compenetrazioni dove non converge del tutto, spostava i fili fino a 0,13 mm anche senza garza.
+- La cucitura si esegue due volte: il tempo di una variante con garza raddoppia (a 0 strati no).
 - "Filo in più" è la media per punto: le fermature da 0,5 mm la gonfiano.
 - Nessuna torsione reale dei capi.
 - Nessun parametro è calibrato su campioni reali.
@@ -155,8 +170,8 @@ della zona e l'HTML si chiama `rg-ricamo-3d-zona-<id>.html`.
   chiuso (`TENSIONE_CN` / EA), non in un vero bilancio di forze fra filo teso e pila di fili. Il filo in
   cucitura si tende verso la corda con un passo numerico (`RITIRO_PER_PASSATA`, 5 % per passata):
   cambiandolo cambia la velocità, non dove si ferma.
-- La compattazione è **plastica e per nodo**: non torna indietro togliendo la garza, e il
-  rilassamento finale usa ancora la distanza di contatto tonda di `SCHIACCIAMENTO_FILO` (resta com'era).
+- La compattazione è **plastica e per nodo**: non torna indietro togliendo la garza; nel rilassamento
+  finale la distanza di contatto di un nodo è d × la sua compattazione nella cucitura a 0 strati.
 - L'ago è un cilindro verticale che agisce solo al momento del foro: non trascina il filo verso il
   basso, non buca la garza. Un nodo è infilzato se l'asse dell'ago cade entro `SOGLIA_INFILZATO` × r
   dal suo centro: il risultato dipende da come cadono i nodi (uno ogni 0,09 mm). Le **fermature

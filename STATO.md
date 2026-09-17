@@ -1626,6 +1626,47 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   Il ritaglio del bordo è quello con più fasci del disegno (cordoncino e anello); lì i fasci si allargano
   di metà e si abbassano di un terzo. Al centro i 4 fasci si abbassano ma la larghezza massima scende
   (1,31 → 1,17 mm) invece di salire: causa non verificata, da guardare nel visualizzatore.
+- **Tre correzioni dopo il confronto col ricamo vero (2026-09-17, Lorenzo).** **A. Ventaglio meno
+  aperto:** `K_VENTAGLIO` 1,0 → 2,5, max = min(0,8 mm, 0,22 × punto) (era 1,2 e 0,35); tutti DA_MISURARE
+  su una macro con righello. **B. Schiacciamento ai fori** (cucitura rigida): entro `RAGGIO_AGO` 0,375 mm
+  dal foro il timbro è d × `SCHIACCIAMENTO_FORO` 0,30 e sotto resta `GARZA_FORO` 0,35 della garza, con
+  passaggio lineare fino a 2 × `RAGGIO_AGO` (anche i candidati del ventaglio leggono la garza ridotta);
+  collare dopo la rimozione nullo entro `RAGGIO_AGO`, massimo a 2 × `RAGGIO_AGO`, a zero a
+  `COLLARE_RAGGIO` portato a 1,0 mm. **C. Con 0 strati la rimozione non muove niente:** cucitura eseguita
+  due volte (con gli strati e a 0 strati, stessa logica e ventaglio), riposo = cucitura a 0 strati
+  (lunghezze per lato e curvature di flessione), eccesso = lunghezza con garza − a 0 strati, poi
+  `RIENTRO_FORO`; partenza dalla cucitura a 0 strati con l'eccesso come arco, aperto di lato
+  proporzionalmente all'eccesso (`APERTURA_ECCESSO_PIENO` 0,25, **nuovo e mio**, DA_MISURARE); niente
+  forma casuale. `ALLUNGAMENTO_RECUPERATO` esce dalla rimozione (varrebbe uguale nelle due cuciture).
+  Vale per entrambe le cuciture; la B solo per la rigida (l'incrementale ha già ago e infilzati).
+  **Test** `test_rimozione.py` (rigida e incrementale, cotone 30 e 40, zone A, D, G, H e `pattern (1).dst`):
+  con 0 strati spostamento massimo 0,00000 mm ovunque, limite 0,02. **Al primo giro non passava**: la
+  rigida sì (≤ 0,005 mm), l'incrementale no (fino a 0,029 mm in D e H, poi 0,13 mm usando lo spessore
+  d × compattazione, che per i fili tondi vale d). La cucitura incrementale lascia piccole compenetrazioni
+  dove non converge; il rilassamento le «riparava» spostando i fili. Regola aggiunta: **una coppia non si
+  separa oltre la distanza che aveva nella cucitura a 0 strati** (a riposo niente spinte). Con quella,
+  tutti i casi a zero. La versione di prima, a 0 strati, spostava i fili **fino a 1,16 mm** (bordo del
+  cartamodello), 0,79 (centro), 0,10 (`pattern (1).dst`).
+  **Rigenerato** (cucitura rigida, cotone 30, garza rimossa; prima = commit 90dcd4c, stesso disegnatore):
+
+  | ritaglio | garze | fascio: larghezza max | fascio: altezza max | arco medio | arco p90 | errore lunghezza |
+  |---|---|---|---|---|---|---|
+  | bordo cartamodello, 40 mm (164, −68) | 0 | 1,50 → 1,13 | 1,17 → 1,12 | 0,45 → 0,46 | 0,89 → 0,89 | −0,6 → 0,0 % |
+  | | 1 | 1,63 → 1,15 | 1,22 → **1,44** | 0,53 → **0,74** | 0,93 → 1,26 | −1,3 → +0,8 % |
+  | | 2 | 1,81 → 1,36 | 1,27 → **1,55** | 0,66 → **0,87** | 0,96 → 1,42 | +2,4 → +0,7 % |
+  | centro cartamodello, 40 mm (0, 0) | 0 | 1,17 → 1,13 | 0,64 → 0,54 | 0,26 → 0,23 | 0,45 → 0,42 | +0,1 → 0,0 % |
+  | | 1 | 1,18 → 1,13 | 0,66 → 0,77 | 0,39 → 0,40 | 0,54 → 0,65 | −0,4 → +0,9 % |
+  | | 2 | 1,18 → 1,13 | 1,00 → 0,90 | 0,61 → 0,53 | 0,84 → 0,82 | +5,1 → +1,1 % |
+  | `pattern (1).dst`, 22 mm (0, 0) | 0 | — | — | 0,03 → 0,03 | 0,13 → 0,13 | +0,1 → 0,0 % |
+  | | 1 | — | — | 0,25 → 0,18 | 0,45 → 0,44 | −0,0 → −0,3 % |
+  | | 2 | — | — | 0,42 → 0,30 | 0,73 → 0,62 | +6,4 → −1,0 % |
+
+  Immagini (tavole e singole, dall'alto e radenti, 0/1/2 garze, prima e dopo) in
+  `strumenti-sviluppo/ricamo-3d/immagini/{prima,dopo}/`, ignorate da git: le rigenera `immagini.py`.
+  **Da guardare:** sul **bordo** del cartamodello (cordoncino) con la garza fasci e archi sono **più
+  alti** di prima (+21–33 %): il ventaglio più stretto apre di meno e l'eccesso ora sale come arco invece
+  di disperdersi nella forma casuale; al centro e su `pattern (1).dst` invece scendono. L'errore di
+  lunghezza resta entro ±1,1 % ovunque (prima fino a +6,4 %).
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 

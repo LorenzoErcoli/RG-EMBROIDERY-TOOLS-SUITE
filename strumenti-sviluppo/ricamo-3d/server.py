@@ -92,6 +92,7 @@ def avvia_simulazione(richiesta):
     fermi_attivi.clear()
     fermi_attivi.append(stop)
     avanzamento = {}
+    totali = {}
 
     def avviso(riga):
         stato["riga"] = riga
@@ -101,6 +102,9 @@ def avvia_simulazione(richiesta):
     def passo(variante, k, n):
         avanzamento[variante] = k
         stato["punti_fatti"] = sum(avanzamento.values())
+        # n comprende le cuciture della variante (con la garza e a 0 strati: una sola se gli strati sono 0)
+        totali[variante] = n
+        stato["punti_totali"] = sum(totali.values()) + (n_var - len(totali)) * max(totali.values())
 
     def lavoro():
         with turno:

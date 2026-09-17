@@ -24,3 +24,4 @@ apps/*/scripts/out/
 strumenti-sviluppo/*/.venv/
 strumenti-sviluppo/**/__pycache__/
 strumenti-sviluppo/ricamo-3d/rg-ricamo-3d-*.html
+strumenti-sviluppo/ricamo-3d/immagini/

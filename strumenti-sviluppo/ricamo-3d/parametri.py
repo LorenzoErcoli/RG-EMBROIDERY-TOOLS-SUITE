@@ -14,6 +14,15 @@ FILATI = {
 DENSITA_APPARENTE_COTONE = 0.90  # g/cm3 = fibra ~1.5 x compattezza ~0.6  DA_MISURARE
 SCHIACCIAMENTO_FILO = 0.60        # spessore che un filo aggiunge sotto tensione / diametro  DA_MISURARE
 ALLUNGAMENTO_RECUPERATO = 0.010  # frazione di lunghezza persa al rilascio della tensione  DA_MISURARE
+                                 # (non entra più nella rimozione: varrebbe uguale nelle due cuciture, vedi sotto)
+
+# --- Schiacciamento ai fori (cucitura rigida e rilassamento) ------------------------
+# Entro RAGGIO_AGO dal foro l'ago e la tensione schiacciano di più: ogni filo aggiunge d * SCHIACCIAMENTO_FORO
+# (non d * SCHIACCIAMENTO_FILO) e sotto resta solo GARZA_FORO della garza compressa. Fra RAGGIO_AGO e
+# 2 * RAGGIO_AGO si passa linearmente ai valori normali. Distanza = in pianta, dal più vicino dei due fori del punto.
+RAGGIO_AGO = 0.375               # mm
+SCHIACCIAMENTO_FORO = 0.30       # DA_MISURARE
+GARZA_FORO = 0.35                # frazione di garza compressa rimasta sotto l'ago  DA_MISURARE
 
 # --- Termogarza -------------------------------------------------------------
 SPESSORE_GARZA_STRATO = 0.25     # mm nominali per strato  DA_MISURARE (calibro sul rotolo)
@@ -21,18 +30,21 @@ COMPRESSIONE_GARZA = 0.60        # spessore sotto ago e tensione / nominale  DA_
 
 # --- Rilassamento dopo la rimozione -----------------------------------------
 APERTURA_MAX_GRADI = 40          # quanto l'eccesso di filo può andare di lato invece che in alto
+APERTURA_ECCESSO_PIENO = 0.25    # eccesso relativo (filo in più / lunghezza a 0 strati) a cui l'apertura è piena  DA_MISURARE
 RIGIDEZZA_FLESSIONE = 0.08       # 0 = filo morbidissimo, 1 = rigido
 GRAVITA_PER_ITER = 0.0           # mm di spinta verso il tessuto per iterazione. Solo per test:
                                  # a questa scala la rigidità del filo domina sul peso (con 0.0015 il filo crollava ai fori)
 ITERAZIONI = 160
 
 # --- Fori: sostegno e rientro del filo ----------------------------------------
-# Collare: attorno al foro la garza strappata e il filo compresso tengono il filo sollevato.
-# Pavimento di un nodo libero = r + COLLARE_FRAZ * h_garza * max(0, 1 - distanza_dal_foro / COLLARE_RAGGIO)
+# Collare: attorno al foro la garza strappata e il filo compresso tengono il filo sollevato. Dentro il foro
+# l'ago l'ha tolta: pavimento = r + COLLARE_FRAZ * h_garza * forma, con forma 0 entro RAGGIO_AGO, 1 a
+# 2 * RAGGIO_AGO, poi a scendere fino a 0 a COLLARE_RAGGIO.
 COLLARE_FRAZ = 0.6               # frazione dello spessore di garza compressa che resta sotto il filo al foro  DA_MISURARE
-COLLARE_RAGGIO = 0.45            # mm in pianta oltre i quali il collare non sostiene più  DA_MISURARE
-# Rientro: parte dell'eccesso di filo scivola nel foro (verso il rovescio / i punti vicini) e non fa arco.
-# Lunghezza obiettivo = corda + max(0, L_obiettivo - corda) * (1 - RIENTRO_FORO)
+COLLARE_RAGGIO = 1.0             # mm in pianta oltre i quali il collare non sostiene più  DA_MISURARE
+# Rimozione: lo stato di riposo è la cucitura a 0 strati (stessa logica, ventaglio compreso). Filo in eccesso
+# di un punto = lunghezza cucita con la garza - lunghezza cucita a 0 strati; parte rientra nel foro (verso il
+# rovescio / i punti vicini) e non fa arco: lunghezza obiettivo = lunghezza a 0 strati + eccesso * (1 - RIENTRO_FORO).
 RIENTRO_FORO = 0.4               # frazione dell'eccesso che rientra nel foro  DA_MISURARE (il più importante)
 PASSI_LUNGHEZZA = 4
 PASSO_NODI_FRAZ_DIAMETRO = 0.5   # distanza tra nodi = frazione del diametro filo
@@ -46,10 +58,10 @@ SEME = 7
 # + K_VENTAGLIO * (lunghezza in pianta - corda). Vince il costo minimo; a parità lo scostamento più piccolo.
 # SCOSTAMENTI_N = 1: nessun ventaglio (la cucitura rigida di prima).
 SCOSTAMENTI_N = 25
-VENTAGLIO_MAX_MM = 1.2
-VENTAGLIO_FRAZ = 0.35
+VENTAGLIO_MAX_MM = 0.8           # DA_MISURARE (macro con righello)
+VENTAGLIO_FRAZ = 0.22            # DA_MISURARE
 VENTAGLIO_BORDO_FRAZ = 0.10
-K_VENTAGLIO = 1.0                # mm di altezza che valgono 1 mm di filo in più  DA_MISURARE
+K_VENTAGLIO = 2.5                # mm di altezza che valgono 1 mm di filo in più  DA_MISURARE (macro con righello)
 # Fasci (metrica): punti con entrambi i capi entro TOLLERANZA_FORI_FASCIO mm da quelli di un altro (in
 # qualunque verso) sono passaggi sugli stessi fori; un fascio conta se ne ha almeno FASCIO_MIN_PASSAGGI.
 # Nei DST veri i fori ripetuti non coincidono al decimo: 0,25 mm è circa un diametro di filo.
