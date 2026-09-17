@@ -1,7 +1,7 @@
 # STATO — RG Embroidery Tools Suite
 
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
-> Aggiornato: 2026-09-17 · entra il primo **strumento di sviluppo**, `strumenti-sviluppo/ricamo-3d` (modello 3D del ricamo su termogarza, Python v0), col suo **DST di calibrazione** e la simulazione per zona · Suite con **nove tool live**: `pittorico` è entrato nella home e gira in browser — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
+> Aggiornato: 2026-09-17 · entra il primo **strumento di sviluppo**, `strumenti-sviluppo/ricamo-3d` (modello 3D del ricamo su termogarza, Python v0), col suo **DST di calibrazione** (45 × 62 mm, zone A–H), la simulazione per zona e la **cucitura incrementale** (ago, attrito, fili che si schiacciano) · Suite con **nove tool live**: `pittorico` è entrato nella home e gira in browser — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
 > Rete di sicurezza: `npm test` (749 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
 
@@ -1457,6 +1457,61 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   sola**, nel primo processo del server, una simulazione è rimasta «in coda» senza partire (e con lei
   quella dopo); riavviato il server non si è più ripresentata, neanche rifacendo la stessa richiesta.
   Causa non trovata: se ricapita, riavviare il server e annotare cosa si stava facendo.
+- **Cucitura incrementale (2026-09-17)** — riscrittura chiesta da Lorenzo: *fermature meno alte, fili
+  sotto che si spostano quando vengono sovrapposti, ago che sposta o infilza i fili esistenti*. Nuovo
+  `cucitura.py`, predefinita; la vecchia resta con `--cucitura rigida` e dà **gli stessi numeri di
+  prima, riga per riga** (riconfrontati centro, A, B, C). Per ogni punto in ordine macchina: evento ago
+  (cilindro da `DIAMETRO_AGO` 0,75 mm: spinge fuori o infilza, `SOGLIA_INFILZATO` cotone 0,6 · filamento
+  0,3), posa del filo teso, rilassamento locale (`RAGGIO_LOCALE` 2,5 mm, `ITER_LOCALI` 25) con contatto
+  comprimibile a sezione ellittica ad area costante (`COMPATTAZIONE_MIN` 0,45), attrito coulombiano
+  statico e dinamico (`ATTRITO` cotone 0,5 · filamento 0,25). Rimozione e rilassamento finale partono
+  dallo stato cucito, infilzati compresi. Parametri nuovi **aggiunti da me, da confermare**:
+  `MODULO_SPECIFICO_CN_TEX` (cotone 270: a `TENSIONE_CN` 90 il cotone 30 si allunga dell'1 %, come
+  `ALLUNGAMENTO_RECUPERATO`), `CARICO_COMPATTAZIONE` 100 cN/mm (la legge di compattazione ha bisogno di
+  un carico di riferimento; carico = tensione × curvatura), `ATTRITO_DINAMICO_FRAZ` 0,8. Metriche nuove
+  in tabella: altezza massima delle fermature, spostamento laterale dei fili sovrapposti, fili infilzati;
+  il visualizzatore disegna la sezione ellittica.
+  **Tre difetti trovati costruendola, tutti misurati:** (1) con la lunghezza di riposo fissata alla posa
+  (1 % sotto quella posata) il filo non poteva accorciarsi e le fermature venivano **più alte** della
+  rigida (1,07 contro 0,77 mm): in cucitura il filo ora si tende verso la corda (il tendifilo lo fa
+  scorrere) e il riposo −T/EA vale dal punto chiuso in poi; (2) la posa scavalcava i vicini allargati
+  dallo schiacciamento e **il satin si impilava di 0,1 mm a punto** (3 mm dopo 40 punti): ora un filo
+  sale su un altro solo se i centri si sovrappongono col semiasse stretto; (3) la sezione ellittica
+  letta sulla direzione piena fra due nodi faceva **stare staccati di 0,2 mm due strati paralleli** (i
+  nodi sfalsati lungo il filo «vedevano» la larghezza del nastro): ora si legge nel piano della sezione.
+  Fermatura di 4 punti da sola: da 0,67 a 0,38 mm, strati da 0,1 mm.
+  **Rigida → incrementale, cotone 30 a 2 strati** (DST di calibrazione nuovo; centro = `pattern (1).dst`):
+
+  | zona | fermature (altezza max) | arco medio | copertura dopo | err. lunghezza | spost. laterale | infilzati |
+  |---|---|---|---|---|---|---|
+  | centro | — | 0,445 → 0,315 | 35,5 → 32,6 % | +6,9 → +4,6 % | 0,080 | 0 |
+  | A satin 2 | 0,483 → 0,289 | 0,447 → 0,341 | 48,9 → 52,5 % | +5,1 → +3,6 % | 0,085 | 1 |
+  | B satin 6 | 0,467 → 0,250 | 0,781 → 0,387 | 46,9 → 49,3 % | +3,8 → +1,7 % | 0,111 | 1 |
+  | C tatami | 0,449 → 0,301 | 0,405 → 0,354 | 47,0 → 47,7 % | +6,4 → +5,9 % | 0,045 | 1 |
+  | D passaggi doppi | 0,435 → 0,257 | 0,488 → 0,335 | 32,4 → 28,4 % | +6,4 → +3,9 % | 0,075 | 1 |
+  | E sovrapposizione | 0,477 → 0,282 | 0,423 → 0,361 | 40,9 → 42,1 % | +6,3 → +4,9 % | 0,062 | 17 |
+  | G fermature | 0,417 → 0,249 | 0,309 → 0,201 | 6,8 → 5,8 % | +2,3 → **+10,3 %** | 0 | 0 |
+  | H incroci | 0,451 → 0,257 | 0,403 → 0,279 | 21,6 → 21,5 % | +3,4 → +4,6 % | 0,068 | 80 |
+
+  Le fermature scendono del 35–45 % in tutte le zone e in tutte le varianti (senza garza, G: 0,294 →
+  0,133). **Da guardare:** (a) senza garza l'arco *sale* dove prima era quasi piatto (centro 0,097 →
+  0,173, C 0,017 → 0,095): il filo che si sposta di lato e si schiaccia non torna più giù del tutto;
+  (b) sulle fermature isolate (G) il rilassamento finale chiude col filo **+10 % più lungo**
+  dell'obiettivo; (c) gli infilzati di A–D sono la fermatura d'uscita che buca l'ultimo punto appena
+  posato, e H = 64 incroci + 16 fermature delle orizzontali; sul centro 0, perché i denti tornano negli
+  stessi fori; (d) la tensione non è risolta come forza (vincoli di posizione): entra nel carico che
+  schiaccia e nel riposo del punto chiuso; (e) circa 8 volte più lenta: 79 s per le 6 varianti del
+  centro, contro 10; il server dell'interfaccia usa la nuova. Limiti completi nel README del modulo.
+- **DST di calibrazione con G e H (2026-09-17).** **G**: 5 fermature isolate a 5 mm (la stessa
+  fermatura del file: il DST non può comandare quelle automatiche della macchina — da confermare con
+  Lorenzo). **H**: 8 orizzontali in punto corsa da 2 mm a 2 mm, poi 8 verticali sopra coi fori sulle
+  orizzontali **a metà fra i loro fori** (l'ago prende il filo, non il foro), prolungate di un punto
+  perché le fermature stiano fuori dagli incroci. Non ci stavano in 45 × 45: l'area è ora **45 × 62 mm**,
+  centrata, croci ai nuovi angoli, le altre zone spostate tutte di 8,5 mm in y; ordine F, A, B, C, D,
+  G, H, E. 889 punti. `verifica_calibrazione.py` ha i controlli di G e H, **provati rompendo apposta** il
+  file (verticali sui fori, una fermatura spostata di 1 mm: tutti e due rossi), e ha trovato due
+  difetti veri del generatore: un salto da **12,12 mm** (l'arrotondamento al decimo sforava il limite)
+  e la fila G spostata di 0,1 mm dalla centratura.
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 

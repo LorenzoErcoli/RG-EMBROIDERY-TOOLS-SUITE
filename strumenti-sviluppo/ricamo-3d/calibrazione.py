@@ -16,13 +16,15 @@ from pathlib import Path
 QUI = Path(__file__).parent
 USCITA = QUI / "calibrazione"
 
-AREA_MM = 45.0
+AREA_LARGHEZZA_MM = 45.0         # l'altezza segue le zone: con G e H l'area è 45 x 62 mm
 MAX_RECORD = 121                  # 12,1 mm: nessun record (punto o salto) più lungo, in norma euclidea
 FERMATURA = {"punti": 4, "lunghezza_mm": 0.5,
              "come": "avanti e indietro lungo il primo punto (inizio) e lungo l'ultimo (fine)"}
 SATIN = {"passo_mm": 0.40, "lunghezza_mm": 15.0}
 TATAMI = {"passo_righe_mm": 0.45, "lunghezza_punto_mm": 3.5, "sfalsamento": 1 / 3,
           "punto_minimo_bordo_mm": 1.0}
+FERMATURE_G = {"fermature": 5, "passo_mm": 5.0}
+INCROCI_H = {"linee": 8, "punto_mm": 2.0, "passo_linee_mm": 2.0}
 RETICOLO = {"passo_colonne_mm": 2.2, "punto_colonna_mm": 1.1, "dente_mm": 4.0,
             "denti_ogni_punti_colonna": 2, "sfasamento_colonne_mm": 1.1, "direzione_denti": "-x"}
 
@@ -86,6 +88,29 @@ def reticolo(lato_mm):
     return punti, n_col
 
 
+def fermatura_isolata():
+    """La fermatura del file (FERMATURA) da sola: avanti e indietro lungo +x, sempre negli stessi due fori."""
+    q = dm(FERMATURA["lunghezza_mm"])
+    return [(0, 0), (q, 0)] * (FERMATURA["punti"] // 2) + [(0, 0)]
+
+
+def incroci():
+    """8 linee orizzontali in punto corsa, poi 8 verticali sopra. I fori delle verticali cadono sulle linee
+    orizzontali (y ogni 2 mm) ma a metà fra i loro fori (x dispari): l'ago prende il filo, non il foro.
+    Le verticali sono prolungate di un punto sopra e sotto, così le loro fermature stanno fuori dagli incroci."""
+    passo, punto, n = dm(INCROCI_H["passo_linee_mm"]), dm(INCROCI_H["punto_mm"]), INCROCI_H["linee"]
+    lato_x = (n) * punto                                   # 0..16 mm: le orizzontali sporgono dalle verticali
+    orizzontali, verticali = [], []
+    for j in range(n):
+        riga = [(i * punto, j * passo) for i in range(lato_x // punto + 1)]
+        orizzontali.append(riga if j % 2 == 0 else riga[::-1])
+    for i in range(n):
+        x = punto // 2 + i * passo
+        col = [(x, y) for y in range(-punto, (n - 1) * passo + punto + 1, punto)]
+        verticali.append(col if i % 2 == 0 else col[::-1])
+    return orizzontali, verticali
+
+
 def croce(braccio_mm=1.5):
     """Punto corsa, ogni braccio andata e ritorno: stessa quantità di filo sui quattro bracci."""
     b = dm(braccio_mm)
@@ -125,31 +150,35 @@ def mm(v):
 
 
 def costruisci():
-    """Zone nell'ordine di macchina: F (4 croci), A, B, C, D, E1 | cambio colore | E2."""
+    """Zone nell'ordine di macchina: F (4 croci), A, B, C, D, G, H, E1 | cambio colore | E2."""
     zone = []
 
     def zona(id_, nome, tipo, nominale, blocchi, parametri, aghi):
         zone.append({"id": id_, "nome": nome, "tipo": tipo, "riquadro_nominale_mm": nominale,
                      "blocchi_grezzi": blocchi, "aghi": aghi, "parametri": parametri})
 
-    # Riquadri nominali [x0, y0, x1, y1] mm. Riga alta y 2,5..17,5; riga bassa y -17,5..-5,5;
-    # croci centrate a ±21 mm (area 45 x 45). Distanza minima fra riquadri: 4 mm (verificata).
+    # Riquadri nominali [x0, y0, x1, y1] mm, prima della centratura finale. Riga alta y 2,5..17,5;
+    # fila di fermature G a y -1,5; riga bassa y -17,5..-5,5; incroci H y -39,5..-21,5; croci agli angoli.
+    # Distanza minima fra riquadri: 4 mm (verificata). Alla fine tutto si sposta per centrare l'area.
     nomA = [-15.5, 2.5, -13.5, 17.5]
     nomB = [-9.5, 2.5, -3.5, 17.5]
     nomE = [0.5, 2.5, 15.5, 17.5]
     nomC = [-15.5, -17.5, -3.5, -5.5]
     nomD = [3.5, -17.5, 15.5, -5.5]
+    nomG = [-10.0, -1.5, 10.5, -1.5]
+    nomH = [-8.0, -39.5, 8.0, -21.5]
+    centri_croci = [(-21, 21), (21, 21), (21, -38), (-21, -38)]
 
     def centro(n):
         return ((n[0] + n[2]) / 2, (n[1] + n[3]) / 2)
 
     croci = []
-    for cx, cy in [(-21, 21), (21, 21), (21, -21), (-21, -21)]:
+    for cx, cy in centri_croci:
         croci += centra([croce()], (cx, cy))
-    zona("F", "Riferimenti", "croci_corsa", [-22.5, -22.5, 22.5, 22.5], croci,
+    zona("F", "Riferimenti", "croci_corsa", [-22.5, -39.5, 22.5, 22.5], croci,
          {"croci": 4, "lato_mm": 3.0, "braccio_mm": 1.5, "lunghezza_punto_mm": 1.5,
           "percorso": "centro -> braccio -> centro, per i quattro bracci (ogni braccio cucito due volte)",
-          "centri_mm": [[-21, 21], [21, 21], [21, -21], [-21, -21]]}, [1])
+          "centri_mm": [list(c) for c in centri_croci]}, [1])
 
     zona("A", "Satin stretto", "satin", nomA, centra([satin(2.0)], centro(nomA)),
          {"larghezza_mm": 2.0, "lunghezza_nominale_mm": 15.0, "passo_mm": 0.40, "orientamento": "colonna lungo y, punti lungo x",
@@ -169,6 +198,26 @@ def costruisci():
          dict(RETICOLO, lato_nominale_mm=[12, 12], colonne=colD,
               origine="reticolo di pattern (1).dst", sottopunto=None), [1])
 
+    ferm = []
+    for i in range(FERMATURE_G["fermature"]):   # posizionate a mano: centrare arrotonderebbe di un decimo
+        ox, oy = dm(nomG[0] + i * FERMATURE_G["passo_mm"]), dm(nomG[1])
+        ferm.append([(x + ox, y + oy) for x, y in fermatura_isolata()])
+    zona("G", "Fermature", "fermature_isolate", nomG, ferm,
+         {"fermature": FERMATURE_G["fermature"], "passo_mm": FERMATURE_G["passo_mm"], "punti_per_fermatura": FERMATURA["punti"],
+          "lunghezza_punto_mm": FERMATURA["lunghezza_mm"], "direzione": "+x, avanti e indietro negli stessi due fori",
+          "definizione": "la stessa fermatura usata all'inizio e alla fine di ogni blocco del file (FERMATURA): il DST "
+                         "non può comandare le fermature automatiche della macchina",
+          "sottopunto": None}, [1])
+    oriz, vert = incroci()
+    blocchi_h = centra(oriz + vert, ((nomH[0] + nomH[2]) / 2, (nomH[1] + nomH[3]) / 2))
+    zona("H", "Incroci", "incroci_corsa", nomH, blocchi_h,
+         {"linee_orizzontali": INCROCI_H["linee"], "linee_verticali": INCROCI_H["linee"], "punto_mm": INCROCI_H["punto_mm"],
+          "passo_linee_mm": INCROCI_H["passo_linee_mm"], "ordine": "prima le 8 orizzontali, poi le 8 verticali sopra",
+          "orizzontali": "lunghe 16 mm, fori ogni 2 mm",
+          "verticali": "a metà fra i fori delle orizzontali (1 mm), fori sulle linee orizzontali; prolungate di un punto "
+                       "sopra e sotto perché le fermature stiano fuori dagli incroci",
+          "incroci": INCROCI_H["linee"] * INCROCI_H["linee"], "sottopunto": None}, [1] * (2 * INCROCI_H["linee"]))
+
     pE1, righeE1 = tatami(10, 10, 0)
     pE2, righeE2 = tatami(10, 10, 90)
     pE2 = [(x + dm(5), y + dm(5)) for x, y in pE2]
@@ -181,9 +230,21 @@ def costruisci():
           "passo_righe_mm": 0.45, "lunghezza_punto_mm": 3.5, "sfalsamento": "1/3", "punto_minimo_bordo_mm": TATAMI["punto_minimo_bordo_mm"],
           "nota_quantizzazione": "come la zona C; ogni strato copre 10 x 9,9 mm (23 righe), quindi la sovrapposizione è 5 x 4,9 mm", "sottopunto": None}, [1, 2])
 
-    # fermatura su ogni blocco (le croci sono blocchi separati da salti: ognuna ha la sua)
+    # fermatura su ogni blocco (le croci sono blocchi separati da salti: ognuna ha la sua);
+    # le fermature di G sono già il blocco intero
     for z in zone:
-        z["blocchi"] = [con_fermatura(b) for b in z.pop("blocchi_grezzi")]
+        grezzi = z.pop("blocchi_grezzi")
+        z["blocchi"] = grezzi if z["id"] == "G" else [con_fermatura(b) for b in grezzi]
+    # centratura dell'area: tutto si sposta di un numero intero di decimi
+    tutti = [p for z in zone for b in z["blocchi"] for p in b]
+    x0, y0, x1, y1 = riquadro(tutti)
+    dx, dy = -(x0 + x1) // 2, -(y0 + y1) // 2
+    for z in zone:
+        z["blocchi"] = [[(x + dx, y + dy) for x, y in b] for b in z["blocchi"]]
+        n = z["riquadro_nominale_mm"]
+        z["riquadro_nominale_mm"] = [round(n[0] + dx / 10, 1), round(n[1] + dy / 10, 1), round(n[2] + dx / 10, 1), round(n[3] + dy / 10, 1)]
+        if z["id"] == "F":
+            z["parametri"]["centri_mm"] = [[round(cx + dx / 10, 1), round(cy + dy / 10, 1)] for cx, cy in z["parametri"]["centri_mm"]]
     return zone
 
 
@@ -213,12 +274,12 @@ def record(dx, dy, tipo):
 def spezza(dx, dy):
     """Divide un movimento in passi uguali, ognuno lungo al massimo 12,1 mm in norma euclidea."""
     n = max(1, math.ceil(math.hypot(dx, dy) / MAX_RECORD))
-    fatti, out = (0, 0), []
-    for k in range(1, n + 1):
-        tx, ty = round(dx * k / n), round(dy * k / n)
-        out.append((tx - fatti[0], ty - fatti[1]))
-        fatti = (tx, ty)
-    return out
+    while True:   # arrotondando al decimo un passo può superare il limite: se succede, un passo in più
+        passi = [(round(dx * k / n) - round(dx * (k - 1) / n), round(dy * k / n) - round(dy * (k - 1) / n)) for k in range(1, n + 1)]
+        if all(math.hypot(*s) <= MAX_RECORD for s in passi):
+            break
+        n += 1
+    return passi
 
 
 def scrivi_dst(zone, etichetta="CALIBRAZ 3D"):
@@ -292,7 +353,7 @@ def descrizione_json(zone, n_punti, n_cambi):
         "descrizione": "Campioni di calibrazione per ricamo-3d: stesso file per cotone 30 e cotone 40, su 0/1/2 strati di termogarza.",
         "unita_dst_mm": 0.1,
         "coordinate": "cartesiane, mm, y verso l'alto, origine al centro dell'area (come le legge dst_reader.py)",
-        "area_nominale_mm": [AREA_MM, AREA_MM],
+        "area_nominale_mm": [mm(x1 - x0), mm(y1 - y0)],
         "riquadro_totale_mm": [mm(x0), mm(y0), mm(x1), mm(y1)],
         "punti_totali": n_punti,
         "cambi_colore": n_cambi,
@@ -309,13 +370,13 @@ def descrizione_json(zone, n_punti, n_cambi):
 
 def anteprima(zone, percorso, px_mm=28, margine_mm=7):
     from PIL import Image, ImageDraw, ImageFont
-    lato = int((AREA_MM + 2 * margine_mm) * px_mm)
-    alto = lato + 60
-    img = Image.new("RGB", (lato, alto), (250, 249, 246))
+    ax0, ay0, ax1, ay1 = [v / 10 for v in riquadro([p for z in zone for b in z["blocchi"] for p in b])]
+    AW, AH = ax1 - ax0, ay1 - ay0
+    img = Image.new("RGB", (int((AW + 2 * margine_mm) * px_mm), int((AH + 2 * margine_mm) * px_mm) + 60), (250, 249, 246))
     g = ImageDraw.Draw(img)
 
     def P(p):   # decimi -> pixel (y verso il basso)
-        return ((p[0] / 10 + AREA_MM / 2 + margine_mm) * px_mm, (AREA_MM / 2 + margine_mm - p[1] / 10) * px_mm + 60)
+        return ((p[0] / 10 - ax0 + margine_mm) * px_mm, (ay1 + margine_mm - p[1] / 10) * px_mm + 60)
 
     def Pmm(x, y):
         return P((x * 10, y * 10))
@@ -323,7 +384,7 @@ def anteprima(zone, percorso, px_mm=28, margine_mm=7):
     font = lambda s: ImageFont.load_default(size=s)
     colori = {1: (38, 70, 120), 2: (196, 98, 30)}
     # area totale
-    g.rectangle([Pmm(-AREA_MM / 2, AREA_MM / 2), Pmm(AREA_MM / 2, -AREA_MM / 2)], outline=(200, 200, 195), width=1)
+    g.rectangle([Pmm(ax0, ay1), Pmm(ax1, ay0)], outline=(200, 200, 195), width=1)
     # salti
     cur = (0, 0)
     for z in zone:
@@ -356,7 +417,11 @@ def anteprima(zone, percorso, px_mm=28, margine_mm=7):
                 g.text((cx, cy + 6), "F", fill=(60, 60, 60), font=font(20), anchor="mt")
             continue
         d = f"{mm(x1 - x0):g} x {mm(y1 - y0):g} mm"
-        if z["id"] in ("C", "D"):
+        if z["id"] == "G":
+            px, py = P((x1, y0))
+            g.text((px + 14, py), "G · fermature", fill=(30, 30, 30), font=font(19), anchor="lm")
+            continue
+        if z["id"] in ("C", "D", "H"):
             px, py = P(((x0 + x1) / 2, y0))
             g.text((px, py + 8), f"{z['id']} · {z['nome']}", fill=(30, 30, 30), font=font(19), anchor="mt")
             g.text((px, py + 32), d, fill=(110, 110, 110), font=font(15), anchor="mt")
@@ -365,11 +430,11 @@ def anteprima(zone, percorso, px_mm=28, margine_mm=7):
             g.text((px, py - 30), z["id"], fill=(30, 30, 30), font=font(24), anchor="mb")
             g.text((px, py - 8), d, fill=(110, 110, 110), font=font(14), anchor="mb")
     # nomi A, B, E in legenda (le colonne sono strette per il testo)
-    g.text((16, 14), "Calibrazione ricamo-3d · 45 x 45 mm · nessun sottopunto · un punto = un foro", fill=(30, 30, 30), font=font(22))
-    g.text((16, 42), "A satin 2 mm · B satin 6 mm · C tatami 0° · D passaggi doppi · E tatami 0° + 90° (ago 2 in arancio) · F croci",
-           fill=(90, 90, 90), font=font(14))
+    g.text((16, 14), f"Calibrazione ricamo-3d · {AW:g} x {AH:g} mm · nessun sottopunto · un punto = un foro", fill=(30, 30, 30), font=font(22))
+    g.text((16, 42), "A satin 2 mm · B satin 6 mm · C tatami 0° · D passaggi doppi · E tatami 0° + 90° (ago 2 in arancio) · "
+                     "F croci · G 5 fermature · H incroci", fill=(90, 90, 90), font=font(14))
     # barra 10 mm
-    bx, by = Pmm(-AREA_MM / 2, -AREA_MM / 2 - 5)
+    bx, by = Pmm(ax0, ay0 - 4)
     g.line([(bx, by), (bx + 10 * px_mm, by)], fill=(30, 30, 30), width=3)
     g.text((bx + 5 * px_mm, by + 6), "10 mm", fill=(30, 30, 30), font=font(14), anchor="mt")
     img.save(percorso)

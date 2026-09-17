@@ -281,8 +281,10 @@ function carica(d){
 
 // ---------- geometria dei fili ----------
 const PASSO = 2, LATI = 8;
-function anelli(pos, r){
+function anelli(pos, r, comp){
   // pos: Float32Array xyz (dati: x,y piano, z alto) -> vertici e normali three (y alto)
+  // comp (facoltativo): compattazione per nodo, 0..1. Sezione ellittica ad area costante:
+  // semiasse orizzontale r/c (lato), verticale r*c (binormale).
   const nSeg = OFFS.length-1;
   let tot=0; const idxNodi=[];
   for(let k=0;k<nSeg;k++){ const a=OFFS[k], b=OFFS[k+1]; const ids=[]; for(let i=a;i<b-1;i+=PASSO) ids.push(i); ids.push(b-1); idxNodi.push(ids); tot+=ids.length; }
@@ -298,11 +300,14 @@ function anelli(pos, r){
       // lato orizzontale = up x t
       let sx=tz, sy=0, sz=-tx; let sl=Math.hypot(sx,sz); if(sl<1e-4){sx=1;sz=0;sl=1;} sx/=sl; sz/=sl;
       const bx=ty*sz-tz*sy, by=tz*sx-tx*sz, bz=tx*sy-ty*sx;
+      const c = comp ? Math.max(comp[ids[j]], 0.2) : 1, ra = r/c, rb = r*c;
       for(let l=0;l<LATI;l++){
         const a=l/LATI*Math.PI*2, ca=Math.cos(a), sa=Math.sin(a);
-        const nx=ca*sx+sa*bx, ny=ca*sy+sa*by, nz=ca*sz+sa*bz;
+        // punto sull'ellisse e normale (gradiente dell'ellisse: cos/ra, sin/rb)
+        let nx=ca/ra*sx+sa/rb*bx, ny=ca/ra*sy+sa/rb*by, nz=ca/ra*sz+sa/rb*bz;
+        const nl=Math.hypot(nx,ny,nz)||1; nx/=nl; ny/=nl; nz/=nl;
         const o=w*3;
-        V[o]=p[0]+r*nx; V[o+1]=p[1]+r*ny; V[o+2]=p[2]+r*nz;
+        V[o]=p[0]+ra*ca*sx+rb*sa*bx; V[o+1]=p[1]+ra*ca*sy+rb*sa*by; V[o+2]=p[2]+ra*ca*sz+rb*sa*bz;
         N[o]=nx; N[o+1]=ny; N[o+2]=nz;
         U[w*2]=s/0.55; U[w*2+1]=l/LATI;
         w++;
@@ -347,7 +352,8 @@ function costruisci(){
   const r = v.metriche.diametro_mm/2;
   const cuc = b64(v.cucito, Int16Array), ril = b64(v.rilasciato, Int16Array);
   const f = (a)=>{const o=new Float32Array(a.length); for(let i=0;i<a.length;i++) o[i]=a[i]*Q; return o;};
-  const A = anelli(f(cuc), r), B = anelli(f(ril), r);
+  const comp = v.compattazione ? Float32Array.from(b64(v.compattazione, Uint8Array), x=>x/255) : null;
+  const A = anelli(f(cuc), r, comp), B = anelli(f(ril), r, comp);
   if(!cacheIndici){ cacheIndici = indici(A.idxNodi); agoVertici = aghiDeiVertici(A.idxNodi); }
   const g = new THREE.BufferGeometry();
   g.setAttribute('position', new THREE.BufferAttribute(A.V,3));
@@ -379,6 +385,9 @@ function tabella(m){
     ['Copertura vista dall\'alto, durante', m.copertura_cucito_pct.toFixed(1)+' %'],
     ['Copertura vista dall\'alto, dopo', m.copertura_rilasciato_pct.toFixed(1)+' %'],
     ['Errore sulla lunghezza del filo', m.errore_lunghezza_pct.toFixed(1)+' %'],
+    ['Altezza massima delle fermature (media)', m.fermature_altezza_mm==null ? 'nessuna fermatura' : m.fermature_altezza_mm.toFixed(2)+' mm'],
+    ['Spostamento laterale medio dei fili sovrapposti', m.spostamento_laterale_mm==null ? (DATI.cucitura==='rigida' ? 'non calcolato (cucitura rigida)' : 'nessun filo sovrapposto') : m.spostamento_laterale_mm.toFixed(3)+' mm'],
+    ['Fili infilzati dall\'ago', m.fili_infilzati==null ? 'non calcolato (cucitura rigida)' : String(m.fili_infilzati)],
   ];
   $('metriche').innerHTML = righe.map(r=>'<tr><td>'+r[0]+'</td><td>'+r[1]+'</td></tr>').join('');
 }

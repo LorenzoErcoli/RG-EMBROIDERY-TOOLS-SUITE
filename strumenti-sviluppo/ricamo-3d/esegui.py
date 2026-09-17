@@ -2,6 +2,7 @@
 
     python esegui.py [file.dst]                    ritaglio 22 x 22 mm al centro del disegno
     python esegui.py --zona C [--zone file.json]   una zona di calibrazione_zone.json (DST preso dal JSON)
+    python esegui.py ... --cucitura rigida         la cucitura vecchia (heightfield), per confronto
 
 `simula_varianti` è usata anche da server.py (l'interfaccia per caricare i DST).
 """
@@ -21,7 +22,8 @@ def pack(p):
     return base64.b64encode(q.tobytes()).decode()
 
 
-def simula_varianti(segs5, mezzo_lato, lato_copertura=None, rett_copertura=None, descrizione=None, avviso=print):
+def simula_varianti(segs5, mezzo_lato, lato_copertura=None, rett_copertura=None, descrizione=None, avviso=print,
+                    cucitura="incrementale"):
     """Tutte le varianti filato x strati di un insieme di segmenti già centrati.
 
     `segs5`: colonne ax, ay, bx, by, ago. `avviso(testo)` riceve le stesse righe che stampa la riga di comando.
@@ -34,13 +36,14 @@ def simula_varianti(segs5, mezzo_lato, lato_copertura=None, rett_copertura=None,
     avviso(f"segmenti {len(segs)} nodi {offs[-1]}")
 
     out = {"quant": QUANT, "offs": base64.b64encode(offs.astype(np.uint32).tobytes()).decode(),
-           "mezzo_lato": mezzo_lato, "aghi": base64.b64encode(aghi.tobytes()).decode(), "varianti": {}}
+           "mezzo_lato": mezzo_lato, "aghi": base64.b64encode(aghi.tobytes()).decode(), "cucitura": cucitura,
+           "varianti": {}}
     if descrizione:
         out["descrizione"] = descrizione
     for filato in P.FILATI:
         for strati in (0, 1, 2):
             t0 = time.time()
-            R = M.simula(segs, offs, filato, strati, mezzo_lato)
+            R = M.simula(segs, offs, filato, strati, mezzo_lato, cucitura=cucitura)
             r = R["d"] / 2
             met = {
                 "diametro_mm": round(R["d"], 3),
@@ -54,8 +57,16 @@ def simula_varianti(segs5, mezzo_lato, lato_copertura=None, rett_copertura=None,
             }
             bordo = M.altezza_bordo(R["rilasciato"], offs, segs, r)
             met["bordo_04_mm"] = None if bordo is None else round(bordo, 3)   # punti > 3,5 mm, a 0,4 mm dal foro
+            ferm = M.altezza_fermature(R["rilasciato"], offs, segs, r)
+            met["fermature_altezza_mm"] = None if ferm is None else round(ferm, 3)
+            spost = R["spostamento_laterale_mm"]
+            met["spostamento_laterale_mm"] = None if spost is None else round(spost, 3)
+            met["fili_infilzati"] = R["infilzati"]
             key = f"{filato}|{strati}"
             out["varianti"][key] = {"metriche": met, "cucito": pack(R["cucito"]), "rilasciato": pack(R["rilasciato"])}
+            if R["compattazione"] is not None:   # sezione ellittica: 255 = tonda
+                c8 = np.round(np.clip(R["compattazione"], 0, 1) * 255).astype(np.uint8)
+                out["varianti"][key]["compattazione"] = base64.b64encode(c8.tobytes()).decode()
             avviso(f"{key} {met} {time.time()-t0:.1f}s")
     return out
 
@@ -71,6 +82,8 @@ def main():
     ap.add_argument("--zona", help="id della zona da simulare al posto del ritaglio centrale (es. A, B, C)")
     ap.add_argument("--zone", default=str(qui / "calibrazione" / "calibrazione_zone.json"),
                     help="JSON delle zone (default: calibrazione/calibrazione_zone.json)")
+    ap.add_argument("--cucitura", choices=("incrementale", "rigida"), default="incrementale",
+                    help="incrementale (nodi fisici, ago, attrito: predefinita) o rigida (heightfield, per confronto)")
     args = ap.parse_args()
 
     if args.zona is None:
@@ -96,14 +109,19 @@ def main():
                   (np.minimum(segs_all[:, 1], segs_all[:, 3]) >= y0 - tol) & (np.maximum(segs_all[:, 1], segs_all[:, 3]) <= y1 + tol))
         mezzo_lato = max(x1 - x0, y1 - y0) / 2 + MARGINE_ZONA
         segs = M.ritaglio(segs_all[dentro], cx, cy, mezzo_lato)   # centra sulla zona (il quadrato non taglia nulla)
-        rett_copertura = (x0 - cx, y0 - cy, x1 - cx, y1 - cy)      # copertura sul riquadro della zona, bordo compreso
+        # copertura sul riquadro della zona, bordo compreso (almeno 1 mm per lato: la zona G è una fila di fermature)
+        mx, my = max((x1 - x0) / 2, 0.5), max((y1 - y0) / 2, 0.5)
+        rett_copertura = (-mx, -my, mx, my)
         lato_copertura = None
         uscita = f"rg-ricamo-3d-zona-{zona['id']}.html"
         descrizione = (f"Zona {zona['id']} di {Path(dst).name}: {zona['nome'].lower()}, "
                        f"{x1 - x0:.1f} × {y1 - y0:.1f} mm, cotone naturale. Parametri fisici di partenza, non ancora calibrati.")
         print(f"zona {zona['id']} ({zona['nome']}), riquadro {zona['riquadro_mm']}, {zona['punti']} punti nel JSON")
 
-    out = simula_varianti(segs, mezzo_lato, lato_copertura, rett_copertura, descrizione)
+    if args.cucitura == "rigida":
+        uscita = uscita.replace(".html", "-rigida.html")
+        descrizione = (descrizione or "Ritaglio 22 × 22 mm al centro del disegno.") + " Cucitura rigida (heightfield)."
+    out = simula_varianti(segs, mezzo_lato, lato_copertura, rett_copertura, descrizione, cucitura=args.cucitura)
     (qui / uscita).write_text(html_visualizzatore(out), encoding="utf-8")
     print("scritto", uscita)
 

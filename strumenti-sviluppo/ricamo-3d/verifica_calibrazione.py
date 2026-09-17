@@ -70,7 +70,9 @@ controlla(int(campi["ST"]) == n_punti == desc["punti_totali"], f"punti: header {
 controlla(int(campi["CO"]) == cambi == desc["cambi_colore"], f"cambi colore: header {campi['CO']}, letti {cambi}, JSON {desc['cambi_colore']}")
 rt = riquadro(tutti)
 controlla(uguale(rt, desc["riquadro_totale_mm"]), f"riquadro totale letto {rt} = JSON {desc['riquadro_totale_mm']}")
-controlla(abs(rt[2] - rt[0] - 45) < 0.05 and abs(rt[3] - rt[1] - 45) < 0.05, f"area {rt[2]-rt[0]:.1f} x {rt[3]-rt[1]:.1f} mm")
+area = desc["area_nominale_mm"]
+controlla(abs(rt[2] - rt[0] - area[0]) < 0.05 and abs(rt[3] - rt[1] - area[1]) < 0.05 and abs(rt[0] + rt[2]) < 0.15 and abs(rt[1] + rt[3]) < 0.15,
+          f"area {rt[2]-rt[0]:.1f} x {rt[3]-rt[1]:.1f} mm = JSON {area}, centrata sull'origine")
 controlla([int(campi[k]) / 10 for k in ("+X", "-X", "+Y", "-Y")] == [rt[2], -rt[0], rt[3], -rt[1]], "estensioni +X -X +Y -Y dell'header")
 lmax = max(l for _, l in lunghezze_record)
 lmax_punto = max(l for t, l in lunghezze_record if t == "stitch")
@@ -153,6 +155,34 @@ passo_col = Counter(round(colonne[i + 1] - colonne[i], 2) for i in range(len(col
 spina = Counter(round(abs(p[i + 1][1] - p[i][1]), 2) for i in range(len(p) - 1) if p[i + 1][0] == p[i][0] and p[i + 1][1] != p[i][1])
 controlla(set(direz) == {(-4.0, 0.0)} and set(passo_col) == {2.2} and set(spina) == {1.1},
           f"D reticolo: {len(denti)} denti andata e ritorno {dict(direz)}, colonne {colonne} passo {dict(passo_col)}, punto colonna {dict(spina)}")
+
+# G: 5 fermature isolate, 4 punti da 0,5 mm negli stessi due fori, a 5 mm l'una dall'altra
+g = next(z for z in desc["zone"] if z["id"] == "G")
+fg = per_zona["G"]
+inizi = [b["punti"][0] for b in fg]
+passi_g = Counter(round(inizi[i + 1][0] - inizi[i][0], 2) for i in range(len(inizi) - 1))
+fori_g = [sorted({q for q in b["punti"]}) for b in fg]
+controlla(len(fg) == g["parametri"]["fermature"] and all(b["n"] == g["parametri"]["punti_per_fermatura"] for b in fg)
+          and set(passi_g) == {g["parametri"]["passo_mm"]} and all(len(f) == 2 and abs(math.dist(*f) - 0.5) < 0.01 for f in fori_g)
+          and len({q[1] for q in inizi}) == 1,
+          f"G fermature: {len(fg)} da {[b['n'] for b in fg]} punti, 2 fori a 0,5 mm ciascuna, passo {dict(passi_g)}")
+
+# H: 8 orizzontali, poi 8 verticali; punto 2 mm; fori delle verticali sulle linee orizzontali, fra i loro fori
+hb = per_zona["H"]
+oriz, vert = [corpo(b) for b in hb[:8]], [corpo(b) for b in hb[8:]]
+y_linee = sorted({q[1] for l in oriz for q in l})
+x_fori_o = {q[0] for l in oriz for q in l}
+punti_h = Counter(round(math.dist(l[i], l[i + 1]), 2) for l in oriz + vert for i in range(len(l) - 1))
+tutte_o = all(len({q[1] for q in l}) == 1 for l in oriz) and all(len({q[0] for q in l}) == 1 for l in vert)
+fori_v_interni = [q for l in vert for q in l if y_linee[0] - 0.05 <= q[1] <= y_linee[-1] + 0.05]
+sulle_linee = all(any(abs(q[1] - y) < 0.05 for y in y_linee) for q in fori_v_interni)
+fra_i_fori = all(all(abs(q[0] - x) > 0.95 for x in x_fori_o) for q in fori_v_interni)
+fuori = all(not (y_linee[0] - 0.05 <= l[0][1] <= y_linee[-1] + 0.05) and not (y_linee[0] - 0.05 <= l[-1][1] <= y_linee[-1] + 0.05) for l in vert)
+controlla(len(oriz) == 8 and len(vert) == 8 and tutte_o and set(punti_h) == {2.0} and len(y_linee) == 8
+          and set(Counter(round(y_linee[i + 1] - y_linee[i], 2) for i in range(7))) == {2.0}
+          and sulle_linee and fra_i_fori and fuori,
+          f"H incroci: 8 orizzontali poi 8 verticali, punto {dict(punti_h)}, {len(fori_v_interni)} fori verticali "
+          f"sulle linee ({sulle_linee}) e a 1 mm dai fori orizzontali ({fra_i_fori}), fermature fuori dagli incroci ({fuori})")
 
 for i, b in enumerate(per_zona["F"]):
     r = riquadro(b["punti"])

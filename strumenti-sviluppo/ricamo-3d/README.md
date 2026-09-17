@@ -3,9 +3,58 @@
 Visualizzazione 3D fisica di ricami su termogarza: cucitura, rimozione della garza, assestamento dei fili.
 
 ## Uso
-    python esegui.py "percorso/file.dst"
-Genera `rg-ricamo-3d-termogarza.html` (apribile nel browser) e stampa le metriche per
-cotone 30/40 × 0/1/2 strati. Dipendenze: numpy, scipy. Il lettore DST è interno.
+    python esegui.py "percorso/file.dst"                     # cucitura incrementale (predefinita)
+    python esegui.py "percorso/file.dst" --cucitura rigida   # la cucitura vecchia, per confronto
+Genera `rg-ricamo-3d-termogarza.html` (con `--cucitura rigida`: `…-rigida.html`, apribile nel browser) e
+stampa le metriche per cotone 30/40 × 0/1/2 strati. Dipendenze: numpy, scipy (Pillow solo per
+l'anteprima della calibrazione). Il lettore DST è interno.
+
+## Il modello, in quattro fasi
+1. **DST → fori** (`fori_da_dst`).
+2. **Cucitura**, in ordine macchina. *Incrementale* (`cucitura.py`, predefinita): i fili già posati sono
+   nodi fisici. Per ogni punto: (a) **l'ago** entra nel foro, un cilindro da `DIAMETRO_AGO`: i nodi di
+   filo esistenti che tocca vengono spinti fuori radialmente, oppure, se l'asse li prende entro
+   `SOGLIA_INFILZATO` × r dal centro, **infilzati** e legati al foro (i fili che hanno già un capo in
+   quel foro ci stanno dentro e l'ago non li tocca); (b) **posa** del filo teso tra i due fori, sopra
+   garza e fili esistenti; (c) **rilassamento locale** entro `RAGGIO_LOCALE` per `ITER_LOCALI`
+   iterazioni: lunghezza, flessione, contatto comprimibile a sezione ellittica, attrito coulombiano,
+   appoggio sulla garza. Fuori dal raggio i fili restano fermi. Finché il punto è in cucitura il filo
+   si tende verso la corda (il tendifilo lo fa scorrere nei fori); chiuso il punto, la sua lunghezza di
+   riposo è quella tesa meno `TENSIONE_CN` / EA ed è bloccata. *Rigida* (`--cucitura rigida`): ogni
+   punto passa sopra un heightfield di garza + fili posati, che non si spostano.
+3. **Rimozione della garza**: si parte dallo stato della cucitura (spostamenti laterali e fili
+   infilzati compresi), lunghezza meno `ALLUNGAMENTO_RECUPERATO` e meno la parte di eccesso che
+   rientra nel foro (`RIENTRO_FORO`).
+4. **Rilassamento finale**: lunghezza, flessione, contatto, collare ai fori; gli infilzati restano sul foro.
+
+## Parametri (`parametri.py`)
+| gruppo | parametro | valore | stato |
+|---|---|---|---|
+| filato | `FILATI` (tex, materiale) · `DENSITA_APPARENTE_COTONE` | 1000/30, 1000/40 cotone · 0,90 g/cm³ | densità DA_MISURARE |
+| garza | `SPESSORE_GARZA_STRATO` · `COMPRESSIONE_GARZA` | 0,25 mm · 0,60 | DA_MISURARE |
+| cucitura | `RAGGIO_LOCALE` · `ITER_LOCALI` | 2,5 mm · 25 | numerici |
+| tensione | `TENSIONE_CN` | 90 cN | DA_MISURARE (tensiometro) |
+| rigidità assiale | `MODULO_SPECIFICO_CN_TEX` (EA = modulo × tex) | cotone 270, poliestere filamento 600 cN/tex | DA_MISURARE |
+| contatto | `COMPATTAZIONE_MIN` · `CARICO_COMPATTAZIONE` | 0,45 · 100 cN/mm | DA_MISURARE |
+| attrito | `ATTRITO` (statico) · `ATTRITO_DINAMICO_FRAZ` | cotone 0,5, filamento 0,25 · 0,8 | DA_MISURARE |
+| ago | `DIAMETRO_AGO` · `SOGLIA_INFILZATO` | 0,75 mm · cotone 0,6, filamento 0,3 | soglia DA_MISURARE |
+| rimozione | `ALLUNGAMENTO_RECUPERATO` · `RIENTRO_FORO` | 0,010 · 0,4 | DA_MISURARE |
+| rilassamento | `COLLARE_FRAZ` · `COLLARE_RAGGIO` · `RIGIDEZZA_FLESSIONE` · `ITERAZIONI` · `GRAVITA_PER_ITER` | 0,6 · 0,45 mm · 0,08 · 160 · 0 | collare DA_MISURARE |
+| sola cucitura rigida | `SCHIACCIAMENTO_FILO` (anche distanza di contatto del rilassamento finale) | 0,60 | DA_MISURARE |
+
+**Legge di compattazione.** c = `COMPATTAZIONE_MIN` + (1 − `COMPATTAZIONE_MIN`) · exp(−carico /
+`CARICO_COMPATTAZIONE`), con carico = tensione × angolo di curvatura del filo per mm (cN/mm): più il
+filo gira attorno a un ostacolo, più lo schiaccia; la curva si irrigidisce verso il limite. La
+compattazione è plastica (non torna indietro). La sezione è un'ellisse ad area costante: semiasse
+verticale r·c, orizzontale r/c; la distanza di contatto fra due nodi si legge nel piano della sezione.
+
+**Metriche** (per variante, nel visualizzatore): diametro, garza compressa, filo in più, arco medio e
+p90, altezza a 0,4 mm dal foro, copertura durante/dopo, errore di lunghezza e, nuove: **altezza massima
+delle fermature** (media sulle fermature del massimo di ciascuna; fermatura = almeno 3 punti
+consecutivi collegati da 0,7 mm al più), **spostamento laterale medio dei fili sovrapposti** (quanto si
+è mosso di traverso, a fine cucitura, un nodo toccato da un punto successivo, rispetto a dove era a fine
+posa), **fili infilzati** (quanti punti l'ago ha preso, evento per evento). Le ultime due solo con la
+cucitura incrementale.
 
 ## Nella suite
 Strumento di sviluppo, **non** un tool della home: sta fuori dai workspace npm (`apps/*`),
@@ -41,11 +90,16 @@ Un DST di campioni da ricamare davvero (cotone 30 e 40, 0/1/2 strati) e confront
     python verifica_calibrazione.py     # rilegge il DST con dst_reader.py e lo confronta col JSON
     python esegui.py --zona C           # simula una zona del JSON invece del ritaglio centrale
 
-Area 45 × 45 mm, nessun sottopunto, fermatura di 4 punti da 0,5 mm all'inizio e alla fine di ogni
+Area 45 × 62 mm, nessun sottopunto, fermatura di 4 punti da 0,5 mm all'inizio e alla fine di ogni
 blocco, salti fra le zone (nessun record oltre 12,1 mm). Zone: **A** satin 2 × 15 mm, **B** satin
 6 × 15 mm (passo 0,40), **C** tatami 12 × 12 mm a 0° (righe 0,45, punto 3,5, sfalsamento 1/3),
 **D** passaggi doppi come il reticolo di `pattern (1).dst`, **E** tatami 10 × 10 a 0°, cambio
-colore, 10 × 10 a 90° spostato di 5/5 mm, **F** quattro croci da 3 mm agli angoli.
+colore, 10 × 10 a 90° spostato di 5/5 mm, **F** quattro croci da 3 mm agli angoli, **G** cinque
+fermature isolate a 5 mm (la stessa fermatura del resto del file: il DST non può comandare quelle
+automatiche della macchina), **H** incroci: 8 linee orizzontali in punto corsa da 2 mm a 2 mm l'una
+dall'altra, poi 8 verticali sopra, coi fori sulle linee orizzontali ma a metà fra i loro fori (l'ago
+prende il filo, non il foro) e prolungate di un punto perché le fermature stiano fuori dagli incroci.
+Ordine di macchina F, A, B, C, D, G, H, E (il cambio colore di E resta l'ultimo).
 Il JSON descrive i punti **come vanno in macchina** (già sulla griglia da 0,1 mm): riquadri reali,
 riquadri nominali, punti per blocco, parametri. Con `--zona` la copertura si misura sul riquadro
 della zona e l'HTML si chiama `rg-ricamo-3d-zona-<id>.html`.
@@ -53,8 +107,8 @@ della zona e l'HTML si chiama `rg-ricamo-3d-zona-<id>.html`.
 ## File
 - `dst_reader.py` — decodifica DST Tajima (0,1 mm).
 - `parametri.py` — tutti i numeri fisici. Quelli marcati DA_MISURARE sono ipotesi.
-- `modello.py` — cucitura (filo teso sopra garza compressa e fili già posati, in ordine macchina),
-  rimozione garza, rilassamento con lunghezza, flessione, contatto filo-filo, appoggio sul tessuto.
+- `modello.py` — lettura dei fori, cucitura rigida, rimozione garza, rilassamento finale, metriche.
+- `cucitura.py` — cucitura incrementale: ago, posa, rilassamento locale con contatto comprimibile e attrito.
 - `esegui.py` — ritaglio centrale (o una zona con `--zona`), varianti, metriche, visualizzatore.
 - `viewer_template.html` — visualizzatore three.js: pagina statica con i dati dentro, o interfaccia se aperto da `server.py`.
 - `server.py` — interfaccia locale per caricare un DST, scegliere il ritaglio e simulare.
@@ -71,11 +125,31 @@ della zona e l'HTML si chiama `rg-ricamo-3d-zona-<id>.html`.
   fori del punto stesso, non su quelli dei punti vicini.
 - La gravità è a 0 (`GRAVITA_PER_ITER` resta solo per le prove): a questa scala domina la rigidità.
 - Con 2 strati, collare e rientro insieme lasciano al filo meno lunghezza di quella che serve a
-  scavalcare il collare: il rilassamento finisce con il filo **più lungo** dell'obiettivo, fino a
-  +7 % (senza collare −1,4 %). A 0 e 1 strato l'errore resta sotto l'1 %.
+  scavalcare il collare: il rilassamento finisce con il filo **più lungo** dell'obiettivo (cucitura
+  rigida fino a +7 %; incrementale fino a +7,5 % nei riempimenti e **+10 % sulle fermature isolate**).
 - "Filo in più" è la media per punto: le fermature da 0,5 mm la gonfiano.
-- Sezione del filo circolare, nessuna torsione reale dei capi.
+- Nessuna torsione reale dei capi.
 - Nessun parametro è calibrato su campioni reali.
+
+**Cucitura incrementale** (`cucitura.py`):
+- **La tensione non è risolta come forza.** Il contatto e la lunghezza sono vincoli di posizione (PBD):
+  la tensione entra nel carico che schiaccia i fili (tensione × curvatura) e nel riposo del punto
+  chiuso (`TENSIONE_CN` / EA), non in un vero bilancio di forze fra filo teso e pila di fili. Il filo in
+  cucitura si tende verso la corda con un passo numerico (`RITIRO_PER_PASSATA`, 5 % per passata):
+  cambiandolo cambia la velocità, non dove si ferma.
+- La compattazione è **plastica e per nodo**: non torna indietro togliendo la garza, e il
+  rilassamento finale usa ancora la distanza di contatto tonda di `SCHIACCIAMENTO_FILO` (resta com'era).
+- L'ago è un cilindro verticale che agisce solo al momento del foro: non trascina il filo verso il
+  basso, non buca la garza. Un nodo è infilzato se l'asse dell'ago cade entro `SOGLIA_INFILZATO` × r
+  dal suo centro: il risultato dipende da come cadono i nodi (uno ogni 0,09 mm). Le **fermature
+  d'uscita bucano l'ultimo punto appena posato** (tornano indietro di 0,5 mm sulla sua linea): per
+  questo le zone A–D contano sempre 1 infilzato, e H 80 = 64 incroci + 16 fermature delle orizzontali.
+- I fili con un capo nello stesso foro dell'ago non vengono né spinti né infilzati (sono già dentro).
+- Nella posa un filo sale su un altro solo se i centri si sovrappongono col semiasse stretto: i vicini
+  allargati dallo schiacciamento li sposta il contatto di lato (senza questa regola il satin si
+  impilava di 0,1 mm a punto).
+- È circa 8 volte più lenta della rigida: 79 s per le 6 varianti del ritaglio centrale di
+  `pattern (1).dst` (350 punti), contro 10 s.
 
 ## Prossimi passi
 1. Campioni 0/1/2 strati, stesso disegno e filo: macrofoto e sezione tagliata.
