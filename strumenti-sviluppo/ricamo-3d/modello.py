@@ -214,23 +214,27 @@ def simula(segs, offs, filato, strati, mezzo_lato):
     }
 
 
-def copertura(pos, offs, d, lato_interno, cella=0.02):
-    """Frazione dell'area (vista dall'alto) coperta dal filo, bordo escluso."""
-    n = int(2 * lato_interno / cella)
-    g = np.zeros((n, n), bool)
+def copertura(pos, offs, d, lato_interno, cella=0.02, rett=None):
+    """Frazione dell'area (vista dall'alto) coperta dal filo, bordo escluso.
+
+    `rett` = (x0, y0, x1, y1) misura su un rettangolo invece che sul quadrato di mezzo lato `lato_interno`.
+    """
+    x0, y0, x1, y1 = rett if rett is not None else (-lato_interno, -lato_interno, lato_interno, lato_interno)
+    nx, ny = int((x1 - x0) / cella), int((y1 - y0) / cella)
+    g = np.zeros((nx, ny), bool)
     k = max(1, int(d / 2 / cella))
     for a, b in zip(offs[:-1], offs[1:]):
         p = pos[a:b]
         tt = np.linspace(0, 1, max(2, int(np.linalg.norm(p[-1, :2] - p[0, :2]) / cella * 1.5)))
         xs = np.interp(tt * (len(p) - 1), np.arange(len(p)), p[:, 0])
         ys = np.interp(tt * (len(p) - 1), np.arange(len(p)), p[:, 1])
-        ix = ((xs + lato_interno) / cella).astype(int)
-        iy = ((ys + lato_interno) / cella).astype(int)
+        ix = ((xs - x0) / cella).astype(int)
+        iy = ((ys - y0) / cella).astype(int)
         for dx in range(-k, k + 1):
             for dy in range(-k, k + 1):
                 if dx * dx + dy * dy <= k * k:
                     jx, jy = ix + dx, iy + dy
-                    m = (jx >= 0) & (jx < n) & (jy >= 0) & (jy < n)
+                    m = (jx >= 0) & (jx < nx) & (jy >= 0) & (jy < ny)
                     g[jx[m], jy[m]] = True
     return float(g.mean())
 

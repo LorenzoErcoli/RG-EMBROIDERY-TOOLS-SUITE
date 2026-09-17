@@ -1,7 +1,7 @@
 # STATO — RG Embroidery Tools Suite
 
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
-> Aggiornato: 2026-09-17 · entra il primo **strumento di sviluppo**, `strumenti-sviluppo/ricamo-3d` (modello 3D del ricamo su termogarza, Python v0) · Suite con **nove tool live**: `pittorico` è entrato nella home e gira in browser — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
+> Aggiornato: 2026-09-17 · entra il primo **strumento di sviluppo**, `strumenti-sviluppo/ricamo-3d` (modello 3D del ricamo su termogarza, Python v0), col suo **DST di calibrazione** e la simulazione per zona · Suite con **nove tool live**: `pittorico` è entrato nella home e gira in browser — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
 > Rete di sicurezza: `npm test` (749 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
 
@@ -1358,6 +1358,46 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   di 8 punti dopo il rilascio, con filo in più negativo: il rilassamento allarga il filo anche senza
   eccesso. L'errore di lunghezza sta sul −3 % dichiarato dal README. Tutti i `DA_MISURARE` di
   `parametri.py` restano ipotesi fino ai campioni a 0/1/2 strati.
+- **DST di calibrazione (2026-09-17).** `calibrazione.py` scrive in `ricamo-3d/calibrazione/` il file
+  da ricamare (`calibrazione.dst`, 605 punti, 1 cambio colore, 45 × 45 mm, stesso file per cotone 30 e
+  40), la descrizione delle zone per l'analisi delle foto (`calibrazione_zone.json`: riquadro reale e
+  nominale, punti per blocco, parametri) e `calibrazione_anteprima.png`. Nessun sottopunto; fermatura
+  di 4 punti da 0,5 mm su ogni blocco; salti fra le zone spezzati perché **nessun record superi
+  12,1 mm in lunghezza** (il `buildDst` del core spezza per asse: un salto in diagonale può arrivare a
+  17 mm — per questo il file non esce byte per byte uguale da `buildDst`, 3 record in più).
+  Zone, in ordine di macchina: F croci da 3 mm a ±21 mm · A satin 2 × 14,8 · B satin 6 × 14,8 (passo
+  0,40) · C tatami 12 × 11,7 a 0° (27 righe) · D reticolo di `pattern (1).dst` (colonne a 2,2 mm,
+  punto colonna 1,1, denti da 4 mm verso −x andata e ritorno, colonne vicine sfasate di 1,1; 4 colonne
+  e 22 denti, 10,6 × 11,0 mm) · E tatami 10 × 9,9 a 0°, cambio colore, 10 × 9,9 a 90° spostato di 5/5
+  (sovrapposizione 5,0 × 4,9 mm). Distanza minima fra zone 4,0 mm (A–B).
+  **Quello che il DST a 0,1 mm impone:** le lunghezze nominali si arrotondano al passo (15 / 0,40 → 37
+  passate, 14,8 mm; 12 / 0,45 → 27 righe, 11,7 mm); le righe del tatami distano 0,4 e 0,5 mm alternati
+  (media 0,450 esatta); lo sfalsamento 1/3 cade a 0 / 1,2 / 2,3 mm; al bordo delle righe i punti vanno
+  da 1,2 a 3,8 mm (un foro a meno di 1 mm dal bordo si toglie, R3).
+  **Verifica** (`verifica_calibrazione.py`, esce con 1 se qualcosa non torna): riletto con
+  `dst_reader.py`, tornano con il JSON punti totali e per blocco, cambi colore, primo e ultimo foro,
+  riquadri di blocchi e zone, estensioni dell'header; record più lungo 11,71 mm; passo satin 0,40 su
+  tutte le 37 passate; tatami a media 0,450; 22 denti tutti da 4 mm in −x; croci 3 × 3 centrate. Riletto
+  anche con `readDst` della suite: stessi blocchi, punti e aghi.
+- **`esegui.py --zona <id>`** simula una zona del JSON invece del ritaglio centrale (DST preso dal
+  JSON, segmenti dentro il riquadro, copertura misurata sul riquadro della zona, HTML
+  `rg-ricamo-3d-zona-<id>.html` con la zona scritta nel pannello). Per farlo `modello.copertura` ha
+  preso un argomento `rett` facoltativo e il visualizzatore legge `descrizione` dai dati. Senza
+  `--zona` il risultato è **identico** a prima (riconfrontato riga per riga su `pattern (1).dst`).
+  `parametri.py` non è toccato. Cotone 30, 0 → 2 strati:
+
+  | zona | filo in più | arco medio | copertura dopo | err. lunghezza |
+  |---|---|---|---|---|
+  | A satin 2 mm | 17,4 → 56,5 % | 0,07 → 0,49 mm | 48,3 → 48,6 % | −2,1 → −3,8 % |
+  | B satin 6 mm | 14,5 → 41,2 % | 0,06 → 0,81 mm | 48,8 → 44,7 % | −0,1 → −1,6 % |
+  | C tatami | 3,6 → 41,3 % | 0,02 → 0,38 mm | 49,2 → 45,5 % | +0,9 → −3,4 % |
+
+  **Da guardare prima di confrontare coi campioni:** (a) *filo in più* è la media per segmento e le
+  8 fermature da 0,5 mm la gonfiano: sulla zona A a 2 strati è 56,5 % con le fermature e 26,7 % senza
+  (B 41,2 → 8,3 %, C 41,3 → 32,3 %) — va deciso se escluderle dalle metriche; (b) sul satin la
+  copertura resta sotto il 50 % perché il filo del modello è tondo da 0,22 mm su un passo di 0,40: il
+  campione vero dirà quanto si allarga; (c) sulla zona A l'errore di lunghezza arriva a −4,3 %, oltre
+  il −3 % dichiarato.
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 

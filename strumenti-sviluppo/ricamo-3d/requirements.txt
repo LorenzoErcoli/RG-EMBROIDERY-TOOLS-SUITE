@@ -1,2 +1,3 @@
 numpy>=2.0
 scipy>=1.13
+pillow>=10.1   # solo per calibrazione.py (anteprima PNG)
