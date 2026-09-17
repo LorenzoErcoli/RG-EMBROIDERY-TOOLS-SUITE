@@ -290,31 +290,6 @@ def carico_sopra(P, seg_di, offs, fori, dirs, succ, testa, origine, cella, d, co
 
 
 @njit(cache=True)
-def cima_locale(P, C, succ, testa, origine, cella, r, raggio):
-    """Per ogni nodo, la quota più alta raggiunta da un filo (centro + r * C) entro `raggio` in pianta:
-    nodi della griglia e il nodo stesso."""
-    N = P.shape[0]
-    n = testa.shape[0]
-    out = P[:, 2] + r * C
-    r2 = raggio * raggio
-    for q in range(N):
-        gx = int((P[q, 0] - origine) / cella)
-        gy = int((P[q, 1] - origine) / cella)
-        for i in range(max(gx - 1, 0), min(gx + 2, n)):
-            for j in range(max(gy - 1, 0), min(gy + 2, n)):
-                k = testa[i, j]
-                while k >= 0:
-                    dx = P[k, 0] - P[q, 0]
-                    dy = P[k, 1] - P[q, 1]
-                    if dx * dx + dy * dy < r2:
-                        h = P[k, 2] + r * C[k]
-                        if h > out[q]:
-                            out[q] = h
-                    k = succ[k]
-    return out
-
-
-@njit(cache=True)
 def curva(s, z, raggio):
     """Arrotonda gli spigoli del filo: il profilo non piega più stretto di `raggio` (rigidità del filo).
     Profilo percorso dal bordo alto di un cerchio di quel raggio fatto scorrere lungo il filo: resta sopra

@@ -1726,6 +1726,16 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   fori 0,32 (prima 0,36 · 1,50 · 1,50); 2 garze rilasciato 0,25 · 0,87 · 0,36 (prima 0,53 · 1,93 · 1,93).
   Compenetrazioni oltre 0,2 mm dai fori 0–2,6 % in cucitura, fino a 7,5 % dopo la rimozione; entro 0,2 mm
   ~30 % (fili nello stesso foro, come prima). 11–12 s a variante. Test verdi.
+- **Niente onde: teso, giù solo al suo foro (2026-09-17, Lorenzo: «quello che vedo sono tante onde che non mi
+  piacciono. Il filo deve rimanere teso nel movimento e abbassarsi nel punto in cui entra»).** Le onde le
+  faceva l'imbuto su *tutti* i fori: abbassava ogni filo passando vicino ai fori degli altri punti. Misurato:
+  97 % dei punti con almeno un'onda a 0 garze, filo in media 0,10 mm sotto il suo teso. Ora ogni filo è
+  l'inviluppo teso dei suoi appoggi (compattati dal carico) e scende solo verso i suoi due fori, dove non sta
+  più su di appoggio + `IMBUTO_PENDENZA` × distanza. Tolti la scala della pila, `IMBUTO_ALTEZZA_MIN` e il
+  tetto nel rilassamento. **Misurato:** onde 0 % in cucitura, 5 % dopo la rimozione con 2 garze (l'arco);
+  altezza 0 garze media 0,28 mm, max 0,74, max entro 0,5 mm dai fori 0,72; 2 garze rilasciato 0,45 · 1,16 ·
+  1,15. Compenetrazioni: chi entra nel suo foro passa dentro la pila attorno (entro 0,4 mm dai fori 17–62 %),
+  oltre 0,8 mm 0 %. Test verdi.
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 

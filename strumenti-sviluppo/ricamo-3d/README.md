@@ -39,16 +39,15 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
    sopra (pesati da quanto sono centrati) resta alto d · c, c = `COMPATTAZIONE_PILA_MIN` + (1 −
    `COMPATTAZIONE_PILA_MIN`) · exp(−U / `CARICO_PILA_STRATI`), e la garza sotto si comprime allo stesso modo
    fino a `GARZA_FORO`. Si rifà la posa nello stesso ordine con quelle sezioni: una pila di tanti fili
-   cresce sempre meno. Profilo teso e **senza spigoli** (raggio minimo `RAGGIO_CURVA_MM`: il bordo alto di
-   un cerchio fatto scorrere sul filo).
-   (c) *Imbuto.* Vicino a ogni foro, di qualunque punto, la bobina tira giù tutta la pila: la cima non
-   passa garza + r + `IMBUTO_PENDENZA` · distanza dal foro. Quote e altezze dei fili sopra la garza si
-   scalano dello stesso fattore (non meno di `IMBUTO_ALTEZZA_MIN`), uguale per i fili impilati: l'ordine
-   resta e un filo non entra nell'altro. Il tetto vale anche nel rilassamento dopo la rimozione.
+   cresce sempre meno.
+   (c) *Teso, giù solo al suo foro.* Ogni filo è l'inviluppo teso dei suoi appoggi: dritto fra l'uno e
+   l'altro, **nessuna onda**. Scende solo entrando nei suoi due fori, dove la bobina lo tira giù: lì non
+   sta più su dell'appoggio + `IMBUTO_PENDENZA` · distanza dal foro. **Senza spigoli**: raggio minimo
+   `RAGGIO_CURVA_MM` (il bordo alto di un cerchio fatto scorrere sul filo).
    Il visualizzatore disegna il filo schiacciato basso e al più 1,25 volte più largo. I **fori** hanno
    la garza schiacciata dall'ago: entro `RAGGIO_AGO` ne resta `GARZA_FORO`, fino a 2 × `RAGGIO_AGO` si
    torna alla garza piena. Nodi in griglia (celle di lato d), ricerche compilate con numba
-   (`solutore.quota_fili`, `carico_sopra`, `cima_locale`, `curva`).
+   (`solutore.quota_fili`, `carico_sopra`, `curva`).
 3. **Rimozione della garza**. La cucitura si esegue **due volte con la stessa logica** (ventaglio
    compreso): con gli strati scelti e con 0 strati. La cucitura a 0 strati è lo **stato di riposo**:
    lunghezze di riposo per lato e curvature di riposo vengono da lì, non dal filo dritto. Il **filo in
@@ -62,7 +61,7 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
    della cucitura a 0 strati (rigida: tonde, distanza d; incrementale: ellittiche, dalla compattazione
    del nodo), mai più stretto della distanza che la coppia aveva
    a riposo, **con la direzione di spinta fissata dallo stato di riposo**: chi a 0 strati stava sopra
-   resta sopra anche se l'arco di quello sotto sale; collare attorno ai fori; tetto dell'imbuto (rigida);
+   resta sopra anche se l'arco di quello sotto sale; collare attorno ai fori;
    gli infilzati restano sul foro. La forma rilasciata si disegna con le sezioni della cucitura a 0 strati.
 
 ## Parametri (`parametri.py`)
@@ -80,7 +79,7 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
 | rimozione | `RIENTRO_FORO` · `APERTURA_MAX_GRADI` · `APERTURA_ECCESSO_PIENO` | 0,4 · 40° · 0,25 | DA_MISURARE |
 | rilassamento | `COLLARE_FRAZ` · `COLLARE_RAGGIO` · `RIGIDEZZA_FLESSIONE` · `ITERAZIONI` · `GRAVITA_PER_ITER` | 0,6 · 1,0 mm · 0,08 · 160 · 0 | collare DA_MISURARE |
 | non più nella rimozione | `ALLUNGAMENTO_RECUPERATO` | 0,010 | varrebbe uguale nelle due cuciture: nell'eccesso si annulla |
-| pile e fori (rigida) | `COMPATTAZIONE_PILA_MIN` · `CARICO_PILA_STRATI` · `IMBUTO_PENDENZA` · `IMBUTO_ALTEZZA_MIN` · `PARALLELI_ANGOLO_GRADI` · `RAGGIO_CURVA_MM` | 0,45 · 1 filo · 0,5 · 0,25 · 20° · 0,25 mm | DA_MISURARE (sezione tagliata di una pila, macro di profilo e di un satin) |
+| pile e fori (rigida) | `COMPATTAZIONE_PILA_MIN` · `CARICO_PILA_STRATI` · `IMBUTO_PENDENZA` · `PARALLELI_ANGOLO_GRADI` · `RAGGIO_CURVA_MM` | 0,45 · 1 filo · 0,5 · 20° · 0,25 mm | DA_MISURARE (sezione tagliata di una pila, macro di profilo e di un satin) |
 | non più usati | `SCHIACCIAMENTO_FILO` · `SCHIACCIAMENTO_FORO` | 0,60 · 0,30 | il filo della rigida è tondo |
 | ventaglio (rigida) | `SCOSTAMENTI_N` · `VENTAGLIO_MAX_MM` · `VENTAGLIO_FRAZ` · `VENTAGLIO_BORDO_FRAZ` · `K_VENTAGLIO` | 25 · 0,8 mm · 0,22 · 0,10 · 2,5 | max, frazione e K DA_MISURARE (macro con righello) |
 | fasci (metrica) | `TOLLERANZA_FORI_FASCIO` · `FASCIO_MIN_PASSAGGI` | 0,25 mm · 4 | tolleranza da confermare |
@@ -183,19 +182,19 @@ della zona e l'HTML si chiama `rg-ricamo-3d-zona-<id>.html`.
 - "Filo in più" è la media per punto: le fermature da 0,5 mm la gonfiano.
 - Nessuna torsione reale dei capi.
 - Nessun parametro è calibrato su campioni reali.
-- **Altezze e vette.** Sul ritaglio da 40 mm del cartamodello (cotone 30), altezza del centro filo:
+- **Altezze, vette, onde.** Sul ritaglio da 40 mm del cartamodello (cotone 30), altezza del centro filo
+  (media · massimo · massimo entro 0,5 mm dai fori) e punti con almeno un'onda (scende e risale di 0,03 mm):
 
-  | | 0 garze media · max · max entro 0,5 mm dai fori | 2 garze, rilasciato |
-  |---|---|---|
-  | filo tondo che sale sugli incroci (af440a9) | 0,36 · 1,50 · 1,50 | 0,53 · 1,93 · 1,93 |
-  | il filo si fa spazio (ora) | 0,18 · 0,69 · 0,32 | 0,25 · 0,87 · 0,36 |
+  | | 0 garze | 2 garze, rilasciato | onde 0 garze · 2 garze rilasciato |
+  |---|---|---|---|
+  | filo tondo che sale sugli incroci (af440a9) | 0,36 · 1,50 · 1,50 | 0,53 · 1,93 · 1,93 | — |
+  | imbuto su tutti i fori (90a5ee8) | 0,18 · 0,69 · 0,32 | 0,25 · 0,87 · 0,36 | 97 % · 84 % |
+  | teso, giù solo al suo foro (ora) | 0,28 · 0,74 · 0,72 | 0,45 · 1,16 · 1,15 | 0 % · 5 % |
 
-  Senza l'imbuto (solo compattazione) la cima vicino ai fori arriva a 1,08 mm. Compenetrazioni, incroci
-  in cui un filo entra nell'altro per più del 40 %: entro 0,2 mm da un foro circa il 30 % (i fili che
-  scendono insieme nello stesso foro, c'erano anche prima), fra 0,2 e 0,4 mm 2,6 %, più lontano 0–0,2 %;
-  dopo la rimozione con 2 garze 7,5 %, 3 % e 1 %, perché il tetto dell'imbuto e l'arco lavorano insieme.
-- **Sezioni molto schiacciate ai fori.** Compattazione e imbuto si moltiplicano: vicino a un foro affollato
-  il filo può restare alto 0,11 d. È un nastro basso, non un tubo.
+  L'imbuto su tutti i fori abbassava ogni filo vicino ai fori degli altri punti: più basso, ma pieno di
+  onde. **Compenetrazioni** (un filo dentro l'altro per più del 40 %): chi entra nel suo foro passa dentro
+  la pila che c'è attorno. Entro 0,2 mm da un foro 62 %, fra 0,2 e 0,4 mm 25 %, fra 0,4 e 0,8 mm 7 %,
+  più lontano 0 % (0 garze); con 2 garze 55 %, 17 %, 1 %, 0 %.
 - Stop diversi con strati di garza aggiunti fra uno e l'altro non ci sono ancora: cambiano tutto.
 
 **Cucitura incrementale** (`cucitura.py`):

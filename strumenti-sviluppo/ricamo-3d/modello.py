@@ -166,11 +166,10 @@ def _cuci_rigida(segs, offs, r, d, h_garza, n_scost, mezzo_lato, progresso=None)
        decide la pianta e l'ordine sopra/sotto.
     2. **Il filo si fa spazio.** Ogni filo spinge giù quello che copre: un nodo con U fili sopra resta alto
        d * c, c = COMPATTAZIONE_PILA_MIN + (1 - COMPATTAZIONE_PILA_MIN) * exp(-U / CARICO_PILA_STRATI), e la
-       garza sotto è compressa allo stesso modo (fino a GARZA_FORO). Vicino a ogni foro (di qualunque punto)
-       la bobina tira giù tutta la pila: la cima non passa garza + r + IMBUTO_PENDENZA * distanza dal foro;
-       quote e altezze dei fili sopra la garza si scalano dello stesso fattore (non meno di
-       IMBUTO_ALTEZZA_MIN), così la pila si abbassa senza che un filo entri in un altro. La posa si rifà
-       nello stesso ordine con le sezioni schiacciate, teso e con gli spigoli arrotondati (solutore.curva).
+       garza sotto è compressa allo stesso modo (fino a GARZA_FORO). La posa si rifà nello stesso ordine con
+       le sezioni schiacciate: ogni filo resta teso (dritto fra gli appoggi, niente onde) e scende solo
+       entrando nei suoi due fori, dove la bobina lo tira giù (al più IMBUTO_PENDENZA mm sopra l'appoggio
+       per mm di distanza dal foro). Spigoli arrotondati (solutore.curva).
     Restituisce posizioni, lunghezze cucite e altezza del filo / d per nodo.
     """
     uno = Fili(segs, offs, d, mezzo_lato)
@@ -194,37 +193,26 @@ def _cuci_rigida(segs, offs, r, d, h_garza, n_scost, mezzo_lato, progresso=None)
     # --- 2. compattazione: stesse piante, stesso ordine, sezioni schiacciate dal carico
     U = uno.carico()
     c = P.COMPATTAZIONE_PILA_MIN + (1 - P.COMPATTAZIONE_PILA_MIN) * np.exp(-U / P.CARICO_PILA_STRATI)
-    fori = np.r_[segs[:, 0:2], segs[:, 2:4]]
-    dist_foro = cKDTree(fori).query(uno.P[:, :2])[0] if len(fori) else np.full(len(U), 1e9)
     due = Fili(segs, offs, d, mezzo_lato)
     due.C = c
     pav = h_garza * P.GARZA_FORO
-    garza = np.zeros(len(U))
     for k, (ax, ay, bx, by) in enumerate(segs):
         a, b = offs[k], offs[k + 1]
         x, y, s_ = uno.P[a:b, 0], uno.P[a:b, 1], percorsi[k]
         ck = c[a:b]
-        garza[a:b] = pav + (garza_locale(_dist_fori(x, y, ax, ay, bx, by), h_garza) - pav) * np.exp(-U[a:b] / P.CARICO_PILA_STRATI)
-        prof = np.maximum(due.quota(x, y, k, a, ck), garza[a:b] + r * ck)
+        dist_fori = _dist_fori(x, y, ax, ay, bx, by)
+        garza = pav + (garza_locale(dist_fori, h_garza) - pav) * np.exp(-U[a:b] / P.CARICO_PILA_STRATI)
+        fondo = garza + r * ck
+        prof = np.maximum(due.quota(x, y, k, a, ck), fondo)
+        # entrando nel suo foro la bobina lo tira giù: vicino ai suoi due fori non sta più su dell'imbuto
+        prof = np.maximum(np.minimum(prof, fondo + P.IMBUTO_PENDENZA * dist_fori), fondo)
         prof[0], prof[-1] = r * ck[0], r * ck[-1]      # il filo entra nel foro
-        z = involucro_superiore(s_, prof)              # teso sopra gli ostacoli
+        z = involucro_superiore(s_, prof)              # teso: dritto fra gli appoggi, niente onde
         z = S.curva(s_, z, P.RAGGIO_CURVA_MM)          # niente spigoli: il filo ha una sua rigidità
         z[0], z[-1] = r * ck[0], r * ck[-1]
         due.posa(k, x, y, z)
         if progresso is not None:
             progresso(n_seg + k + 1, 2 * n_seg)
-
-    # --- 3. imbuto: vicino ai fori la bobina tira giù tutta la pila. Sopra la garza le quote e le altezze dei
-    # fili si scalano dello stesso fattore, uguale per i fili che stanno uno sopra l'altro: l'ordine e i
-    # contatti restano, la cima non passa il tetto.
-    cima = S.cima_locale(due.P, due.C, due.succ, due.testa, due.origine, due.cella, r, d)
-    tetto = garza + r + P.IMBUTO_PENDENZA * dist_foro
-    scala = np.clip((tetto - garza) / np.maximum(cima - garza, 1e-9), P.IMBUTO_ALTEZZA_MIN, 1.0)
-    interno = np.ones(len(U), bool)
-    interno[offs[:-1]] = False
-    interno[offs[1:] - 1] = False
-    due.P[interno, 2] = garza[interno] + (due.P[interno, 2] - garza[interno]) * scala[interno]
-    c = np.where(interno, c * scala, c)
     cucito = due.P
     L_cucita = np.array([np.linalg.norm(np.diff(cucito[a:b], axis=0), axis=1).sum() for a, b in zip(offs[:-1], offs[1:])])
     return cucito, L_cucita, c
@@ -338,9 +326,6 @@ def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", prog
     raggio_ricerca = (float((d * larghezza[attivo]).max()) + 0.1) if len(attivo) else 0.0
     collare = P.COLLARE_FRAZ * h_garza
     pavimento_base = np.minimum(r, riposo_geo[:, 2])   # un filo compattato può stare più basso di r: è il suo riposo
-    # imbuto (cucitura rigida): anche senza garza vicino ai fori la bobina tiene giù il filo; mai sotto il riposo
-    albero_fori = cKDTree(np.r_[segs[:, 0:2], segs[:, 2:4]]) if cucitura == "rigida" and len(segs) else None
-    tetto = np.full(N, np.inf)
 
     # --- 4. rilassamento -----------------------------------------------------
     for it in range(P.ITERAZIONI):
@@ -349,8 +334,6 @@ def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", prog
         lap = (pos[i_mid - 1] + pos[i_mid + 1]) / 2 - pos[i_mid] - lap_riposo
         pos[i_mid] += P.RIGIDEZZA_FLESSIONE * lap
         # contatto filo-filo: chi a riposo sta sopra resta sopra
-        if it % 10 == 0 and albero_fori is not None:
-            tetto = np.maximum(r + P.IMBUTO_PENDENZA * albero_fori.query(pos[:, :2])[0], riposo_geo[:, 2])
         if it % 10 == 0:
             tree = cKDTree(pos[attivo])
             pr = tree.query_pairs(raggio_ricerca, output_type="ndarray")
@@ -391,7 +374,7 @@ def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", prog
             pavimento = pavimento_base + collare * forma_collare(dist_foro)
         else:
             pavimento = pavimento_base
-        pos[:, 2] = np.where(libero, np.maximum(np.minimum(pos[:, 2], tetto), pavimento), pos[:, 2])
+        pos[:, 2] = np.where(libero, np.maximum(pos[:, 2], pavimento), pos[:, 2])
         pos[~libero] = ancore
         if len(i_legati):
             pos[i_legati, :2] = foro_legato[i_legati]

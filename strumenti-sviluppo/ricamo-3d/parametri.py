@@ -62,15 +62,14 @@ SCOSTAMENTI_N = 25
 # un nodo con U fili sopra resta alto d * c, c = COMPATTAZIONE_PILA_MIN + (1 - COMPATTAZIONE_PILA_MIN) *
 # exp(-U / CARICO_PILA_STRATI), e la garza sotto si comprime allo stesso modo fino a GARZA_FORO: una pila di
 # tanti fili cresce sempre meno. Vicino a ogni foro la bobina tira tutto verso il basso: il centro del filo sta
-# la cima della pila sta al più r + IMBUTO_PENDENZA mm sopra la garza per ogni mm di distanza dal foro (niente
-# vette ai punti d'ingresso): la pila si abbassa tutta insieme, fili schiacciati, fino a IMBUTO_ALTEZZA_MIN.
+# Ogni filo resta teso (dritto fra gli appoggi, niente onde) e scende solo entrando nei suoi due fori: lì la
+# bobina lo tira giù e non sta più su di IMBUTO_PENDENZA mm sopra l'appoggio per mm di distanza dal foro.
 # Un filo quasi parallelo (entro PARALLELI_ANGOLO_GRADI) non sale su quello vicino: gli sta di fianco, e ci sale
 # solo se i centri distano meno di r (passaggi sugli stessi fori).
 # Il filo teso non piega più stretto di RAGGIO_CURVA_MM: dove sale su un filo fa una curva, non uno spigolo.
 COMPATTAZIONE_PILA_MIN = 0.45    # DA_MISURARE (sezione tagliata di una pila)
 CARICO_PILA_STRATI = 1.0         # fili sopra a cui lo schiacciamento è a 1/e  DA_MISURARE
 IMBUTO_PENDENZA = 0.5            # mm di salita per mm di distanza dal foro  DA_MISURARE (macro di profilo)
-IMBUTO_ALTEZZA_MIN = 0.25        # la pila vicino al foro si abbassa al più fino a questa frazione, poi resta sopra il tetto
 RAGGIO_CURVA_MM = 0.25           # DA_MISURARE (macro di profilo); circa un diametro: di più alza molto le pile
 PARALLELI_ANGOLO_GRADI = 20.0    # DA_MISURARE (macro di un satin denso)
 VENTAGLIO_MAX_MM = 0.8           # DA_MISURARE (macro con righello)
