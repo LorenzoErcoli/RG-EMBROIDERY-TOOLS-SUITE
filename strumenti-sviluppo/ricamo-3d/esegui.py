@@ -163,7 +163,7 @@ def main():
     ap.add_argument("--senza-ventaglio", action="store_true", help="cucitura rigida senza ventaglio (quella di prima)")
     ap.add_argument("--uscita", help="nome dell'HTML (predefinito rg-ricamo-3d-termogarza.html)")
     ap.add_argument("--cucitura", choices=("rigida", "incrementale"), default="rigida",
-                    help="rigida (heightfield con sezione schiacciata: predefinita) o incrementale (nodi fisici, ago, attrito: lenta, solo pezzetti di pochi mm)")
+                    help="rigida (filo tondo sopra i fili posati: predefinita) o incrementale (nodi fisici, ago, attrito: lenta, solo pezzetti di pochi mm)")
     args = ap.parse_args()
 
     if args.zona is None:

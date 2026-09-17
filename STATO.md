@@ -1667,24 +1667,28 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   alti** di prima (+21–33 %): il ventaglio più stretto apre di meno e l'eccesso ora sale come arco invece
   di disperdersi nella forma casuale; al centro e su `pattern (1).dst` invece scendono. L'errore di
   lunghezza resta entro ±1,1 % ovunque (prima fino a +6,4 %).
-- **Fili che «escono», incrementale solo a pezzetti (2026-09-17, Lorenzo: «la cucitura incrementale non
-  funziona … la rigida è una buona qualità, l'unica cosa è che deve tener conto dei fili sotto e sopra
-  perché a volte escono a caso. E anche le elevazioni mi sembrano troppo eccessive»).**
-  **Causa misurata.** La rigida leggeva l'heightfield in un disco di una cella (0,04 mm) e impilava i fili
-  a 0,6 d, ma il visualizzatore li disegnava tondi di diametro d: sul centro del cartamodello (40 mm) il
-  **28–36 % degli incroci** aveva il filo sotto dentro quello sopra per oltre il 40 % dello spessore.
-  **Rimedio.** Sezione ellittica schiacciata ad area costante (alta d × `SCHIACCIAMENTO_FILO`, più bassa ai
-  fori ma non più larga), timbro = somma delle due ellissi (numba, `solutore.timbra_sezione`), stessa
-  sezione nel visualizzatore. Con la sezione piena anche fra fili quasi paralleli i satin salivano a ogni
-  passata (28 mm): chi è entro `PARALLELI_ANGOLO_GRADI` = 20° scivola di fianco e sale solo entro
-  `PARALLELI_LARGHEZZA_FRAZ` = 0,5 della larghezza (entrambi DA_MISURARE). Nel rilassamento dopo la
-  rimozione il contatto usa la stessa sezione e **la spinta ha la direzione dello stato di riposo**: chi
-  stava sopra resta sopra. **Risultato:** compenetrazioni 0 % in cucitura, 0,6 % dopo la rimozione con
-  2 garze (l'arco sposta i fili di lato); altezza media del centro filo invariata (0,27 mm a 0 garze,
-  0,50 con 2; prima 0,27 e 0,52). `test_rimozione.py` tutto a 0.
-  **Altezze: non ho cambiato valori.** Metà dell'altezza con 2 garze è la pila, metà l'arco della rimozione.
-  Leve misurate: `RIENTRO_FORO` 0,4 → 0,7 porta la media con 2 garze da 0,50 a 0,44 mm (p95 0,97 → 0,84);
-  `PARALLELI_LARGHEZZA_FRAZ` 0,5 → 0,3 a 0,22 e 0,45 mm. Da scegliere con Lorenzo.
+- **Fili che «escono», filo tondo, incrementale solo a pezzetti (2026-09-17, Lorenzo: «la cucitura
+  incrementale non funziona … la rigida è una buona qualità, l'unica cosa è che deve tener conto dei fili
+  sotto e sopra perché a volte escono a caso. E anche le elevazioni mi sembrano troppo eccessive»).**
+  **Causa misurata.** La rigida impilava i fili a 0,6 d leggendo l'heightfield in un disco di una cella, ma
+  il visualizzatore li disegnava tondi: sul centro del cartamodello (40 mm) il **28–36 % degli incroci**
+  aveva il filo sotto dentro quello sopra per oltre il 40 % dello spessore.
+  **Primo tentativo, scartato da Lorenzo** (commit d11a6e5): sezione schiacciata ellittica ad area costante.
+  *«La sezione schiacciata è un errore, non è così il filo … fisicamente se il filo si trova sullo stesso
+  livello quello sopra passa sopra e tende a tirarlo un po' verso il basso. Questa cosa che il filo si apre
+  alla fine dove c'è il buco dell'ago rende tutto poco preciso»* (il visualizzatore allargava la sezione
+  fino a 3 d ai fori, dove era più schiacciata).
+  **Ora: filo tondo.** Chi incrocia passa a un diametro pieno dal filo sotto e **lo tira giù** di
+  `TIRO_INCROCIO_FRAZ` = 0,5 dello scostamento (DA_MISURARE), a triangolo fino ai fori del punto sotto,
+  finché sotto c'è posto (garza che si comprime fino a `GARZA_FORO`, vuoti); poi si riposa sopra. I quasi
+  paralleli (entro 20°) stanno di fianco; nei fori in comune i fili non si impilano. Nodi in griglia,
+  numba. `SCHIACCIAMENTO_FILO` e `SCHIACCIAMENTO_FORO` non si usano più. Nel rilassamento dopo la rimozione
+  la spinta di contatto ha la direzione dello stato di riposo: chi stava sopra resta sopra.
+  **Misurato** (centro cartamodello 40 mm, cotone 30): compenetrazioni 0 % in cucitura e dopo la rimozione;
+  altezza media del centro filo **0,40 mm a 0 garze e 0,59 con 2** (schiacciata 0,27 e 0,50): più alte,
+  perché ogni incrocio vale un diametro intero e senza garza il pavimento non cede. Zona H con 2 garze: il
+  filo sotto all'incrocio scende da 0,29 a 0,21 mm, quello sopra da 0,61 a 0,50. 11 s a variante.
+  `test_rimozione.py` e `verifica_calibrazione.py` verdi.
   **Incrementale:** anche un ritaglio da 8 mm del cartamodello supera i 10 minuti; da 6 mm fa le 6 varianti
   in 17 s (con molti punti al tetto di iterazioni). La **rigida è la predefinita** (interfaccia, `esegui.py`);
   l'incrementale nell'interfaccia simula solo un quadrato da 6 mm e il server rifiuta lati più grandi.

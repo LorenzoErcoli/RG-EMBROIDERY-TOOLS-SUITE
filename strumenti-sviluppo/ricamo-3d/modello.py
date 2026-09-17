@@ -63,12 +63,6 @@ def _rampa_foro(dist):
     return np.clip((dist - P.RAGGIO_AGO) / P.RAGGIO_AGO, 0.0, 1.0)
 
 
-def spessore_filo(dist, d):
-    """Spessore che un filo aggiunge (timbro in cucitura, distanza di contatto nel rilassamento):
-    d * SCHIACCIAMENTO_FORO vicino al foro, d * SCHIACCIAMENTO_FILO lontano."""
-    return d * (P.SCHIACCIAMENTO_FORO + (P.SCHIACCIAMENTO_FILO - P.SCHIACCIAMENTO_FORO) * _rampa_foro(dist))
-
-
 def garza_locale(dist, h_garza):
     """Garza compressa sotto il filo: h_garza * GARZA_FORO sotto l'ago, h_garza lontano."""
     return h_garza * (P.GARZA_FORO + (1.0 - P.GARZA_FORO) * _rampa_foro(dist))
@@ -85,18 +79,53 @@ def _dist_fori(x, y, ax, ay, bx, by):
     return np.minimum(np.hypot(x - ax, y - ay), np.hypot(x - bx, y - by))
 
 
-def sezione(dist, d):
-    """Semiassi (orizzontale, verticale) della sezione schiacciata: alta spessore_filo, larga quanto serve a
-    tenere l'area del filo tondo. Vicino ai fori il filo è più basso ma non più largo: entra nel foro."""
-    c = spessore_filo(dist, d) / d
-    return d / 2 / np.maximum(c, P.SCHIACCIAMENTO_FILO), d / 2 * c
+class Fili:
+    """Nodi già posati dalla cucitura rigida, con una griglia per cercare i vicini (celle di lato d)."""
+
+    def __init__(self, segs, offs, d, mezzo_lato):
+        self.segs, self.offs, self.d = segs, offs, d
+        self.P = np.zeros((offs[-1], 3))
+        self.seg_di = np.repeat(np.arange(len(segs)), np.diff(offs))
+        corde = np.maximum(np.hypot(segs[:, 2] - segs[:, 0], segs[:, 3] - segs[:, 1]), 1e-9)
+        self.dirs = np.c_[(segs[:, 2] - segs[:, 0]) / corde, (segs[:, 3] - segs[:, 1]) / corde]
+        self.fori = np.ascontiguousarray(segs[:, :4], dtype=float)
+        self.origine = -(mezzo_lato + 2.0)
+        self.cella = d
+        n = int(math.ceil(2 * (mezzo_lato + 2.0) / d)) + 1
+        self.testa = np.full((n, n), -1)
+        self.succ = np.full(offs[-1], -1)
+        self.cos_par = math.cos(math.radians(P.PARALLELI_ANGOLO_GRADI))
+        self.r_par = d / 2
+
+    def quota(self, X, Y, k, limite):
+        """Quota minima del centro del punto k in X, Y sopra i nodi con indice < limite."""
+        return S.quota_fili(X, Y, self.dirs[k, 0], self.dirs[k, 1], self.fori[k], self.P, self.seg_di, self.fori,
+                            self.dirs, self.succ, self.testa, self.origine, self.cella, limite, self.d,
+                            self.cos_par, self.r_par, P.RAGGIO_AGO, STESSO_FORO_MM)
+
+    def tira_giu(self, x, y, z, k, pavimento):
+        return S.tira_giu(x, y, z, self.dirs[k, 0], self.dirs[k, 1], self.fori[k], self.P, self.seg_di, self.offs,
+                          self.fori, self.dirs, self.succ, self.testa, self.origine, self.cella, self.offs[k], self.d,
+                          self.cos_par, self.r_par, P.RAGGIO_AGO, STESSO_FORO_MM, P.TIRO_INCROCIO_FRAZ, pavimento)
+
+    def posa(self, k, x, y, z):
+        a, b = self.offs[k], self.offs[k + 1]
+        self.P[a:b] = np.c_[x, y, z]
+        S.inserisci_griglia(self.P, a + 1, b - 1, self.succ, self.testa, self.origine, self.cella)
 
 
-def _ventaglio(hf, ax, ay, bx, by, t, corda, n_scost, h_garza):
+STESSO_FORO_MM = 0.2    # due fori più vicini di così sono lo stesso foro
+
+
+def _appoggio(fili, k, X, Y, ax, ay, bx, by, r, h_garza):
+    """Quota minima del centro del filo: sopra i fili posati o sopra la garza (che cala ai fori)."""
+    return np.maximum(fili.quota(X, Y, k, fili.offs[k]), garza_locale(_dist_fori(X, Y, ax, ay, bx, by), h_garza) + r)
+
+
+def _ventaglio(fili, k, ax, ay, bx, by, t, corda, n_scost, r, h_garza):
     """Sceglie lo scostamento laterale del punto (forma sin(pi t)) fra n_scost candidati, tutti valutati insieme.
 
-    Restituisce x, y del percorso scelto, l'appoggio del fondo del filo (fili sull'heightfield o garza, il
-    più alto) e la lunghezza in pianta cumulata.
+    Restituisce x, y del percorso scelto e la lunghezza in pianta cumulata.
     """
     v_max = min(P.VENTAGLIO_MAX_MM, P.VENTAGLIO_FRAZ * corda)
     scost = np.linspace(-v_max, v_max, n_scost)
@@ -105,13 +134,12 @@ def _ventaglio(hf, ax, ay, bx, by, t, corda, n_scost, h_garza):
     forma = np.sin(math.pi * t)
     X = (ax + (bx - ax) * t)[None, :] - uy * scost[:, None] * forma[None, :]
     Y = (ay + (by - ay) * t)[None, :] + ux * scost[:, None] * forma[None, :]
-    app = np.maximum(hf.leggi(X.ravel(), Y.ravel(), ux, uy).reshape(X.shape),
-                     garza_locale(_dist_fori(X, Y, ax, ay, bx, by), h_garza))
+    app = _appoggio(fili, k, X.ravel(), Y.ravel(), ax, ay, bx, by, r, h_garza).reshape(X.shape)
     centro = (t >= P.VENTAGLIO_BORDO_FRAZ) & (t <= 1 - P.VENTAGLIO_BORDO_FRAZ)
     passi = np.hypot(np.diff(X, axis=1), np.diff(Y, axis=1))
     costo = app[:, centro].mean(axis=1) + P.K_VENTAGLIO * (passi.sum(axis=1) - corda)
     j = int(np.flatnonzero(costo <= costo.min() + 1e-9)[0])
-    return X[j], Y[j], app[j], np.r_[0.0, np.cumsum(passi[j])]
+    return X[j], Y[j], np.r_[0.0, np.cumsum(passi[j])]
 
 
 def involucro_superiore(s, z):
@@ -128,66 +156,38 @@ def involucro_superiore(s, z):
     return np.interp(s, s[hull], z[hull])
 
 
-class Heightfield:
-    def __init__(self, lato, cella, base):
-        self.c = cella
-        self.o = -lato
-        self.n = int(2 * lato / cella) + 1
-        self.H = np.full((self.n, self.n), base, float)
-        self.Hp = np.full((self.n, self.n), base, float)     # per i fili quasi paralleli (vedi solutore.timbra_sezione)
-        self.D = np.zeros((self.n, self.n, 2))
-
-    def idx(self, x, y):
-        return (np.clip(((x - self.o) / self.c).astype(int), 0, self.n - 1),
-                np.clip(((y - self.o) / self.c).astype(int), 0, self.n - 1))
-
-    def leggi(self, x, y, ux, uy):
-        """Quota minima del fondo di un filo di riferimento di direzione (ux, uy) in (x, y)."""
-        return S.leggi_sezione(self.H, self.Hp, self.D, self.o, self.c, x, y, ux, uy,
-                               math.cos(math.radians(P.PARALLELI_ANGOLO_GRADI)))
-
-    def timbra(self, x, y, z, ra, rb, ra_rif, rb_rif, ux, uy):
-        S.timbra_sezione(self.H, self.Hp, self.D, self.o, self.c, x, y, z, ra, rb, ra_rif, rb_rif, ux, uy,
-                         P.PARALLELI_LARGHEZZA_FRAZ)
-
-
 def _cuci_rigida(segs, offs, r, d, h_garza, n_scost, mezzo_lato, progresso=None):
-    """Cucitura rigida: ogni punto (a ventaglio) passa sopra un heightfield di fili posati e sopra la garza.
-
-    Ogni filo ha sezione ellittica schiacciata (sezione()): l'heightfield registra dove può stare il fondo di
-    un filo nuovo senza compenetrare quelli già posati, sia sopra sia di fianco. Restituisce anche la
-    compattazione per nodo (semiasse verticale / r) per disegnare la stessa sezione.
-    """
-    ra_rif, rb_rif = sezione(np.float64(1e9), d)       # filo lontano dai fori
-    hf = Heightfield(mezzo_lato + 1, 0.03, 0.0)        # solo i fili; la garza si legge a parte (cala ai fori)
-    N = offs[-1]
-    cucito = np.zeros((N, 3))
-    comp = np.ones(N)
+    """Cucitura rigida, filo tondo: ogni punto (a ventaglio) passa teso sopra la garza e i fili già posati,
+    a un diametro pieno dal centro di quelli che incrocia, e li tira un po' verso il basso dove sotto c'è
+    posto (garza che si comprime, vuoti sotto un filo teso). Poi si riposa sopra di loro."""
+    fili = Fili(segs, offs, d, mezzo_lato)
+    pavimento = h_garza * P.GARZA_FORO + r           # più giù di così un filo tirato non va: garza tutta compressa
     L_cucita = np.zeros(len(segs))
     for k, (ax, ay, bx, by) in enumerate(segs):
         a, b = offs[k], offs[k + 1]
         n = b - a
         t = np.linspace(0, 1, n)
         corda = math.hypot(bx - ax, by - ay)
-        if n_scost > 1:
-            x, y, appoggio, s_ = _ventaglio(hf, ax, ay, bx, by, t, corda, n_scost, h_garza)
+        if n_scost > 1 and corda > 1e-9:
+            x, y, s_ = _ventaglio(fili, k, ax, ay, bx, by, t, corda, n_scost, r, h_garza)
         else:
-            x = ax + (bx - ax) * t
-            y = ay + (by - ay) * t
-            appoggio = np.maximum(hf.leggi(x, y, (bx - ax) / max(corda, 1e-9), (by - ay) / max(corda, 1e-9)), garza_locale(_dist_fori(x, y, ax, ay, bx, by), h_garza))
-            s_ = t * corda
-        ra, rb = sezione(_dist_fori(x, y, ax, ay, bx, by), d)   # più schiacciato vicino ai fori
-        prof = appoggio + rb
-        prof[0], prof[-1] = rb[0], rb[-1]          # il filo entra nel foro
-        z = involucro_superiore(s_, prof)          # filo in tensione = teso sopra gli ostacoli
-        cucito[a:b] = np.c_[x, y, z]
-        comp[a:b] = rb / r
-        hf.timbra(x[1:-1], y[1:-1], z[1:-1], ra[1:-1], rb[1:-1], ra_rif, rb_rif,
-                  (bx - ax) / max(corda, 1e-9), (by - ay) / max(corda, 1e-9))
-        L_cucita[k] = np.linalg.norm(np.diff(cucito[a:b], axis=0), axis=1).sum()
+            x, y, s_ = ax + (bx - ax) * t, ay + (by - ay) * t, t * corda
+
+        def profilo():
+            prof = _appoggio(fili, k, x, y, ax, ay, bx, by, r, h_garza)
+            prof[0] = prof[-1] = r                     # il filo entra nel foro
+            return involucro_superiore(s_, prof)       # filo in tensione = teso sopra gli ostacoli
+        z = profilo()
+        if fili.tira_giu(x, y, z, k, pavimento):
+            z = profilo()
+        fili.posa(k, x, y, z)
         if progresso is not None:
             progresso(k + 1, len(segs))
-    return cucito, L_cucita, comp
+    cucito = fili.P
+    for k in range(len(segs)):                         # lunghezze alla fine: i punti tirati giù si allungano
+        a, b = offs[k], offs[k + 1]
+        L_cucita[k] = np.linalg.norm(np.diff(cucito[a:b], axis=0), axis=1).sum()
+    return cucito, L_cucita
 
 
 def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", progresso=None, ventaglio=True):
@@ -229,16 +229,14 @@ def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", prog
 
     def cuci(h, base):
         if cucitura == "rigida":
-            c, L, comp = _cuci_rigida(segs, offs, r, d, h, n_scost, mezzo_lato, avanzamento(base))
-            return c, L, {"comp": comp}
+            c, L = _cuci_rigida(segs, offs, r, d, h, n_scost, mezzo_lato, avanzamento(base))
+            return c, L, {"comp": np.ones(len(c))}         # filo tondo
         import cucitura as C
         R_c = C.cuci(segs, offs, seg_id, loc, nloc, r, h, filato, involucro_superiore, progresso=avanzamento(base))
         return R_c["pos"], R_c["L_cucita"], R_c
 
     cucito, L_cucita, R_c = cuci(h_garza, 0)
-    if cucitura == "rigida":
-        extra["compattazione"] = R_c["comp"]
-    else:
+    if cucitura == "incrementale":
         legato, foro_legato = R_c["legato"], R_c["foro_legato"]
         extra = {"compattazione": R_c["comp"], "infilzati": R_c["infilzati"],
                  "spostamento_laterale_mm": R_c["spostamento_laterale_mm"],
@@ -290,10 +288,10 @@ def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", prog
     passo = (L_obiettivo / np.maximum(np.diff(offs) - 1, 1))[seg_id]
     vicino_foro = np.minimum(loc, nloc - 1 - loc) * passo < 0.6 * d
     attivo = np.where(~vicino_foro)[0]
-    # sezione di contatto = sezione schiacciata della cucitura a 0 strati (compattazione c: semiassi r/c e r*c)
+    # sezione di contatto: rigida tonda; incrementale quella schiacciata della cucitura a 0 strati (semiassi r/c e r*c)
     c_nodo = np.clip(R_zero["comp"], 0.2, 1.0)
     spessore_nodo = d * c_nodo
-    # coppie che a riposo si toccano o quasi: più larghe dello spessore, perché le sezioni sono larghe r/c
+    # coppie che si toccano o quasi: le sezioni schiacciate sono larghe r/c
     raggio_ricerca = (float((d / c_nodo[attivo]).max()) + 0.1) if len(attivo) else 0.0
     collare = P.COLLARE_FRAZ * h_garza
     pavimento_base = np.minimum(r, riposo_geo[:, 2])   # un filo compattato può stare più basso di r: è il suo riposo
@@ -304,7 +302,7 @@ def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", prog
         # flessione verso la curvatura di riposo
         lap = (pos[i_mid - 1] + pos[i_mid + 1]) / 2 - pos[i_mid] - lap_riposo
         pos[i_mid] += P.RIGIDEZZA_FLESSIONE * lap
-        # contatto filo-filo: sezioni ellittiche, chi a riposo sta sopra resta sopra
+        # contatto filo-filo: chi a riposo sta sopra resta sopra
         if it % 10 == 0:
             tree = cKDTree(pos[attivo])
             pr = tree.query_pairs(raggio_ricerca, output_type="ndarray")

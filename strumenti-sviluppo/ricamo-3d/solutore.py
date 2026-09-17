@@ -174,55 +174,127 @@ def rilassa(Q, Cl, riposo, sov, w, prec, succ, seg, lati, flessi, na, nb, corda,
 
 
 @njit(cache=True)
-def timbra_sezione(H, Hp, D, origine, cella, x, y, z, ra, rb, ra_rif, rb_rif, ux, uy, frazione_paralleli):
-    """Cucitura rigida: timbra sull'heightfield dove può appoggiarsi il fondo di un filo di riferimento.
-
-    Il nodo (x, y, z) ha sezione ellittica di semiassi ra (orizzontale) e rb (verticale). Un filo nuovo di
-    semiassi ra_rif, rb_rif non lo compenetra se il suo centro sta fuori dall'ellisse di semiassi
-    A = ra + ra_rif, B = rb + rb_rif: nella cella a distanza rho il fondo del filo nuovo sta ad almeno
-    z + B * sqrt(1 - rho² / A²) - rb_rif.  H: per chi incrocia (larghezza piena), con in D la direzione
-    (ux, uy) del filo che ha dato il valore; Hp: per chi è quasi parallelo (larghezza A * frazione_paralleli).
-    """
-    n = H.shape[0]
-    for q in range(len(x)):
-        A = ra[q] + ra_rif
-        Ap = A * frazione_paralleli
-        B = rb[q] + rb_rif
-        k = int(A / cella) + 1
-        i0 = int((x[q] - origine) / cella)
-        j0 = int((y[q] - origine) / cella)
-        for i in range(max(i0 - k, 0), min(i0 + k + 1, n)):
-            dx = origine + (i + 0.5) * cella - x[q]
-            for j in range(max(j0 - k, 0), min(j0 + k + 1, n)):
-                dy = origine + (j + 0.5) * cella - y[q]
-                rho2 = dx * dx + dy * dy
-                u = rho2 / (A * A)
-                if u < 1.0:
-                    t = z[q] + B * math.sqrt(1.0 - u) - rb_rif
-                    if t > H[i, j]:
-                        H[i, j] = t
-                        D[i, j, 0] = ux
-                        D[i, j, 1] = uy
-                    up = rho2 / (Ap * Ap)
-                    if up < 1.0:
-                        t = z[q] + B * math.sqrt(1.0 - up) - rb_rif
-                        if t > Hp[i, j]:
-                            Hp[i, j] = t
+def _foro_comune(x, y, fa, px, py, fo, raggio_ago, stesso_foro):
+    """Vero se il punto nuovo (x, y) e il nodo vecchio (px, py) stanno tutti e due dentro un foro che i loro
+    punti condividono (fa: fori del punto nuovo, fo: del vecchio): lì i fili scendono insieme nel foro."""
+    for h in range(2):
+        hx = fa[2 * h]; hy = fa[2 * h + 1]
+        if (x - hx) ** 2 + (y - hy) ** 2 >= raggio_ago * raggio_ago:
+            continue
+        for g in range(2):
+            gx = fo[2 * g]; gy = fo[2 * g + 1]
+            if (hx - gx) ** 2 + (hy - gy) ** 2 < stesso_foro * stesso_foro and                     (px - gx) ** 2 + (py - gy) ** 2 < raggio_ago * raggio_ago:
+                return True
+    return False
 
 
 @njit(cache=True)
-def leggi_sezione(H, Hp, D, origine, cella, X, Y, ux, uy, coseno_paralleli):
-    """Quota minima del fondo di un filo di direzione (ux, uy) nei punti X, Y (vedi timbra_sezione)."""
-    n = H.shape[0]
-    out = np.empty(len(X))
+def quota_fili(X, Y, ux, uy, fori_nuovo, P, seg_di, fori, dirs, succ, testa, origine, cella, limite,
+               d, coseno_paralleli, raggio_paralleli, raggio_ago, stesso_foro):
+    """Cucitura rigida, filo tondo: quota minima del centro di un filo di direzione (ux, uy) nei punti X, Y
+    perché non compenetri i nodi già posati con indice < limite (-1e9 se non ne tocca nessuno).
+
+    Un nodo vecchio a distanza in pianta rho < d impone z >= z_vecchio + sqrt(d² - rho²). Un filo quasi
+    parallelo (|cos| > coseno_paralleli) ci sale solo se rho < raggio_paralleli, altrimenti gli sta di
+    fianco; dentro un foro in comune i fili non si impilano (scendono insieme nel foro).
+    Griglia: celle di lato `cella` >= d, liste concatenate testa/succ.
+    """
+    n = testa.shape[0]
+    out = np.full(len(X), -1e9)
+    d2 = d * d
+    rp2 = raggio_paralleli * raggio_paralleli
     for q in range(len(X)):
-        i = min(max(int((X[q] - origine) / cella), 0), n - 1)
-        j = min(max(int((Y[q] - origine) / cella), 0), n - 1)
-        if abs(D[i, j, 0] * ux + D[i, j, 1] * uy) > coseno_paralleli:
-            out[q] = Hp[i, j]
-        else:
-            out[q] = H[i, j]
+        gx = int((X[q] - origine) / cella)
+        gy = int((Y[q] - origine) / cella)
+        for i in range(max(gx - 1, 0), min(gx + 2, n)):
+            for j in range(max(gy - 1, 0), min(gy + 2, n)):
+                k = testa[i, j]
+                while k >= 0:
+                    if k < limite:
+                        dx = P[k, 0] - X[q]
+                        dy = P[k, 1] - Y[q]
+                        rho2 = dx * dx + dy * dy
+                        if rho2 < d2:
+                            s = seg_di[k]
+                            parallelo = abs(dirs[s, 0] * ux + dirs[s, 1] * uy) > coseno_paralleli
+                            if not (parallelo and rho2 >= rp2) and                                     not _foro_comune(X[q], Y[q], fori_nuovo, P[k, 0], P[k, 1], fori[s], raggio_ago, stesso_foro):
+                                h = P[k, 2] + math.sqrt(d2 - rho2)
+                                if h > out[q]:
+                                    out[q] = h
+                    k = succ[k]
     return out
+
+
+@njit(cache=True)
+def inserisci_griglia(P, a, b, succ, testa, origine, cella):
+    n = testa.shape[0]
+    for k in range(a, b):
+        i = min(max(int((P[k, 0] - origine) / cella), 0), n - 1)
+        j = min(max(int((P[k, 1] - origine) / cella), 0), n - 1)
+        succ[k] = testa[i, j]
+        testa[i, j] = k
+
+
+@njit(cache=True)
+def tira_giu(x, y, z, ux, uy, fori_nuovo, P, seg_di, offs, fori, dirs, succ, testa, origine, cella, limite,
+             d, coseno_paralleli, raggio_paralleli, raggio_ago, stesso_foro, frazione, pavimento):
+    """Il filo nuovo, dove passa sopra un filo che incrocia, lo tira verso il basso.
+
+    Per ogni punto vecchio incrociato: abbassamento voluto = frazione * sqrt(d² - rho²) nel nodo di contatto
+    (il più profondo), che si propaga lungo il punto vecchio a triangolo fino ai suoi fori (filo teso con un
+    carico concentrato). Ogni nodo scende al più fino al suo appoggio: i fili posati prima di lui, o il
+    pavimento (la garza compressa del tutto, centro del filo). Solo i punti vecchi, non i paralleli.
+    Restituisce quanti punti sono stati abbassati.
+    """
+    S = len(offs) - 1
+    voluto = np.zeros(S)
+    nodo = np.full(S, -1)
+    n = testa.shape[0]
+    d2 = d * d
+    for q in range(1, len(x) - 1):
+        gx = int((x[q] - origine) / cella)
+        gy = int((y[q] - origine) / cella)
+        for i in range(max(gx - 1, 0), min(gx + 2, n)):
+            for j in range(max(gy - 1, 0), min(gy + 2, n)):
+                k = testa[i, j]
+                while k >= 0:
+                    if k < limite:
+                        dx = P[k, 0] - x[q]
+                        dy = P[k, 1] - y[q]
+                        rho2 = dx * dx + dy * dy
+                        s = seg_di[k]
+                        if rho2 < d2 and abs(dirs[s, 0] * ux + dirs[s, 1] * uy) <= coseno_paralleli and                                 not _foro_comune(x[q], y[q], fori_nuovo, P[k, 0], P[k, 1], fori[s], raggio_ago, stesso_foro):
+                            sep = math.sqrt(d2 - rho2)
+                            if z[q] - P[k, 2] <= sep + 1e-6:            # lo tocca: ci sta appoggiato sopra
+                                v = frazione * sep
+                                if v > voluto[s]:
+                                    voluto[s] = v
+                                    nodo[s] = k
+                    k = succ[k]
+    abbassati = 0
+    uno = np.zeros(1)
+    for s in range(S):
+        if nodo[s] < 0:
+            continue
+        a = offs[s]; b = offs[s + 1]; c = nodo[s]
+        if c <= a or c >= b - 1:
+            continue
+        abbassati += 1
+        fs = fori[s]
+        for k in range(a + 1, b - 1):
+            prof = (k - a) / (c - a) if k <= c else (b - 1 - k) / (b - 1 - c)
+            v = voluto[s] * prof
+            if v <= 0.0:
+                continue
+            uno[0] = P[k, 0]
+            yy = np.array([P[k, 1]])
+            sotto = quota_fili(uno, yy, dirs[s, 0], dirs[s, 1], fs, P, seg_di, fori, dirs, succ, testa, origine, cella,
+                               a, d, coseno_paralleli, raggio_paralleli, raggio_ago, stesso_foro)[0]
+            appoggio = max(sotto, pavimento)
+            giu = min(v, P[k, 2] - appoggio)
+            if giu > 0.0:
+                P[k, 2] -= giu
+    return abbassati
 
 
 @njit(cache=True)

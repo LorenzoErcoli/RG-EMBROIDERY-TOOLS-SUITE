@@ -12,16 +12,16 @@ FILATI = {
     "cotone_40": {"tex": 1000 / 40, "colore": "#e9e4d6", "materiale": "cotone"},
 }
 DENSITA_APPARENTE_COTONE = 0.90  # g/cm3 = fibra ~1.5 x compattezza ~0.6  DA_MISURARE
-SCHIACCIAMENTO_FILO = 0.60        # spessore che un filo aggiunge sotto tensione / diametro  DA_MISURARE
+SCHIACCIAMENTO_FILO = 0.60        # non più usato: il filo della cucitura rigida è tondo (vedi TIRO_INCROCIO_FRAZ)
 ALLUNGAMENTO_RECUPERATO = 0.010  # frazione di lunghezza persa al rilascio della tensione  DA_MISURARE
                                  # (non entra più nella rimozione: varrebbe uguale nelle due cuciture, vedi sotto)
 
-# --- Schiacciamento ai fori (cucitura rigida e rilassamento) ------------------------
-# Entro RAGGIO_AGO dal foro l'ago e la tensione schiacciano di più: ogni filo aggiunge d * SCHIACCIAMENTO_FORO
-# (non d * SCHIACCIAMENTO_FILO) e sotto resta solo GARZA_FORO della garza compressa. Fra RAGGIO_AGO e
-# 2 * RAGGIO_AGO si passa linearmente ai valori normali. Distanza = in pianta, dal più vicino dei due fori del punto.
+# --- Fori (cucitura rigida e rilassamento) ------------------------------------------
+# Entro RAGGIO_AGO dal foro l'ago schiaccia la garza: sotto il filo ne resta solo GARZA_FORO. Fra RAGGIO_AGO e
+# 2 * RAGGIO_AGO si passa linearmente alla garza piena. Distanza = in pianta, dal più vicino dei due fori del
+# punto. Dentro RAGGIO_AGO da un foro in comune i fili non si impilano: scendono insieme nel foro.
 RAGGIO_AGO = 0.375               # mm
-SCHIACCIAMENTO_FORO = 0.30       # DA_MISURARE
+SCHIACCIAMENTO_FORO = 0.30       # non più usato (filo tondo)
 GARZA_FORO = 0.35                # frazione di garza compressa rimasta sotto l'ago  DA_MISURARE
 
 # --- Termogarza -------------------------------------------------------------
@@ -58,13 +58,13 @@ SEME = 7
 # + K_VENTAGLIO * (lunghezza in pianta - corda). Vince il costo minimo; a parità lo scostamento più piccolo.
 # SCOSTAMENTI_N = 1: nessun ventaglio (la cucitura rigida di prima).
 SCOSTAMENTI_N = 25
-# Sezione nella cucitura rigida: ellisse schiacciata ad area costante (alta d * SCHIACCIAMENTO_FILO, più
-# bassa ai fori, larga in proporzione). Un filo che incrocia uno già posato gli passa sopra appoggiando
-# tutta la sezione; uno quasi parallelo (entro PARALLELI_ANGOLO_GRADI) scivola di fianco e ci sale solo se
-# i centri distano meno di PARALLELI_LARGHEZZA_FRAZ della larghezza piena. Senza questa distinzione i punti
-# di un satin, che condividono i fori, salirebbero uno sull'altro a ogni passata.
+# Incroci nella cucitura rigida (filo tondo). Un filo che passa sopra uno già posato ne sta a un diametro
+# pieno e lo tira verso il basso di TIRO_INCROCIO_FRAZ del loro scostamento verticale, se sotto c'è posto
+# (garza che si comprime fino a GARZA_FORO, vuoti sotto un filo teso): a triangolo lungo il punto sotto,
+# fino ai suoi fori. Un filo quasi parallelo (entro PARALLELI_ANGOLO_GRADI) non sale su quello vicino e
+# non lo tira: gli sta di fianco, e ci sale solo se i centri distano meno di r (passaggi sugli stessi fori).
+TIRO_INCROCIO_FRAZ = 0.5         # DA_MISURARE (sezione tagliata di un incrocio)
 PARALLELI_ANGOLO_GRADI = 20.0    # DA_MISURARE (macro di un satin denso)
-PARALLELI_LARGHEZZA_FRAZ = 0.5   # DA_MISURARE (macro di un satin denso)
 VENTAGLIO_MAX_MM = 0.8           # DA_MISURARE (macro con righello)
 VENTAGLIO_FRAZ = 0.22            # DA_MISURARE
 VENTAGLIO_BORDO_FRAZ = 0.10
