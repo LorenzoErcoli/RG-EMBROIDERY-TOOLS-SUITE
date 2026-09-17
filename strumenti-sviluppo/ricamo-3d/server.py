@@ -34,6 +34,7 @@ import esegui as E
 import modello as M
 
 LATO_MIN, LATO_MAX = 6.0, 60.0
+LATO_MAX_INCREMENTALE = 6.0   # oltre, la cucitura incrementale ci mette minuti e non converge
 MAX_BYTE = 20 * 1024 * 1024
 file_caricati = {}      # id -> {"nome", "segs5"}
 lavori = {}             # id -> stato del lavoro
@@ -69,11 +70,13 @@ def avvia_simulazione(richiesta):
     if f is None:
         raise ValueError("file non trovato: ricaricalo")
     cx, cy, lato = float(richiesta["cx"]), float(richiesta["cy"]), float(richiesta["lato"])
-    cucitura = richiesta.get("cucitura", "incrementale")
+    cucitura = richiesta.get("cucitura", "rigida")
     if cucitura not in ("incrementale", "rigida"):
         raise ValueError("cucitura: 'incrementale' o 'rigida'")
     if not LATO_MIN <= lato <= LATO_MAX:
         raise ValueError(f"il lato del ritaglio va da {LATO_MIN:g} a {LATO_MAX:g} mm")
+    if cucitura == "incrementale" and lato > LATO_MAX_INCREMENTALE:
+        raise ValueError(f"la cucitura incrementale si simula solo su un pezzetto fino a {LATO_MAX_INCREMENTALE:g} mm")
     mezzo = lato / 2
     segs = M.ritaglio(f["segs5"], cx, cy, mezzo)
     if len(segs) == 0:

@@ -171,3 +171,83 @@ def rilassa(Q, Cl, riposo, sov, w, prec, succ, seg, lati, flessi, na, nb, corda,
         if iterazioni >= iter_min and (spost_max < tolleranza or iterazioni >= iter_max):
             break
     return iterazioni, spost_max
+
+
+@njit(cache=True)
+def timbra_sezione(H, Hp, D, origine, cella, x, y, z, ra, rb, ra_rif, rb_rif, ux, uy, frazione_paralleli):
+    """Cucitura rigida: timbra sull'heightfield dove può appoggiarsi il fondo di un filo di riferimento.
+
+    Il nodo (x, y, z) ha sezione ellittica di semiassi ra (orizzontale) e rb (verticale). Un filo nuovo di
+    semiassi ra_rif, rb_rif non lo compenetra se il suo centro sta fuori dall'ellisse di semiassi
+    A = ra + ra_rif, B = rb + rb_rif: nella cella a distanza rho il fondo del filo nuovo sta ad almeno
+    z + B * sqrt(1 - rho² / A²) - rb_rif.  H: per chi incrocia (larghezza piena), con in D la direzione
+    (ux, uy) del filo che ha dato il valore; Hp: per chi è quasi parallelo (larghezza A * frazione_paralleli).
+    """
+    n = H.shape[0]
+    for q in range(len(x)):
+        A = ra[q] + ra_rif
+        Ap = A * frazione_paralleli
+        B = rb[q] + rb_rif
+        k = int(A / cella) + 1
+        i0 = int((x[q] - origine) / cella)
+        j0 = int((y[q] - origine) / cella)
+        for i in range(max(i0 - k, 0), min(i0 + k + 1, n)):
+            dx = origine + (i + 0.5) * cella - x[q]
+            for j in range(max(j0 - k, 0), min(j0 + k + 1, n)):
+                dy = origine + (j + 0.5) * cella - y[q]
+                rho2 = dx * dx + dy * dy
+                u = rho2 / (A * A)
+                if u < 1.0:
+                    t = z[q] + B * math.sqrt(1.0 - u) - rb_rif
+                    if t > H[i, j]:
+                        H[i, j] = t
+                        D[i, j, 0] = ux
+                        D[i, j, 1] = uy
+                    up = rho2 / (Ap * Ap)
+                    if up < 1.0:
+                        t = z[q] + B * math.sqrt(1.0 - up) - rb_rif
+                        if t > Hp[i, j]:
+                            Hp[i, j] = t
+
+
+@njit(cache=True)
+def leggi_sezione(H, Hp, D, origine, cella, X, Y, ux, uy, coseno_paralleli):
+    """Quota minima del fondo di un filo di direzione (ux, uy) nei punti X, Y (vedi timbra_sezione)."""
+    n = H.shape[0]
+    out = np.empty(len(X))
+    for q in range(len(X)):
+        i = min(max(int((X[q] - origine) / cella), 0), n - 1)
+        j = min(max(int((Y[q] - origine) / cella), 0), n - 1)
+        if abs(D[i, j, 0] * ux + D[i, j, 1] * uy) > coseno_paralleli:
+            out[q] = Hp[i, j]
+        else:
+            out[q] = H[i, j]
+    return out
+
+
+@njit(cache=True)
+def contatto_ordinato(pos, ci, cj, n0, dc, s, inv_m, dp, cnt):
+    """Rilassamento dopo la rimozione: contatto fra sezioni ellittiche che non cambia l'ordine sopra/sotto.
+
+    Distanze misurate con x e y moltiplicati per s (rapporto fra semiasse verticale e orizzontale): la
+    sezione diventa un cerchio di diametro dc. La normale n0 (in quello spazio) è fissata dallo stato di
+    riposo, quindi un filo che a riposo stava sopra resta sopra anche se l'arco dell'altro sale. Correzioni
+    mediate sul numero di contatti del nodo (Jacobi), come il resto del rilassamento.
+    """
+    for q in range(len(ci)):
+        i = ci[q]; j = cj[q]
+        vx = (pos[j, 0] - pos[i, 0]) * s[q]
+        vy = (pos[j, 1] - pos[i, 1]) * s[q]
+        vz = pos[j, 2] - pos[i, 2]
+        proj = vx * n0[q, 0] + vy * n0[q, 1] + vz * n0[q, 2]
+        pen = dc[q] - proj
+        if pen <= 0.0:
+            continue
+        px = vx - proj * n0[q, 0]; py = vy - proj * n0[q, 1]; pz = vz - proj * n0[q, 2]
+        if px * px + py * py + pz * pz >= dc[q] * dc[q]:
+            continue                                   # di lato, fuori dalla sezione: non si toccano
+        m = pen / 2.0
+        ex = n0[q, 0] * m / s[q]; ey = n0[q, 1] * m / s[q]; ez = n0[q, 2] * m
+        dp[i, 0] -= ex; dp[i, 1] -= ey; dp[i, 2] -= ez
+        dp[j, 0] += ex; dp[j, 1] += ey; dp[j, 2] += ez
+        cnt[i] += 1.0; cnt[j] += 1.0

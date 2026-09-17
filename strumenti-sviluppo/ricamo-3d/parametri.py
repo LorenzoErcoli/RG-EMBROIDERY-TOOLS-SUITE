@@ -58,6 +58,13 @@ SEME = 7
 # + K_VENTAGLIO * (lunghezza in pianta - corda). Vince il costo minimo; a parità lo scostamento più piccolo.
 # SCOSTAMENTI_N = 1: nessun ventaglio (la cucitura rigida di prima).
 SCOSTAMENTI_N = 25
+# Sezione nella cucitura rigida: ellisse schiacciata ad area costante (alta d * SCHIACCIAMENTO_FILO, più
+# bassa ai fori, larga in proporzione). Un filo che incrocia uno già posato gli passa sopra appoggiando
+# tutta la sezione; uno quasi parallelo (entro PARALLELI_ANGOLO_GRADI) scivola di fianco e ci sale solo se
+# i centri distano meno di PARALLELI_LARGHEZZA_FRAZ della larghezza piena. Senza questa distinzione i punti
+# di un satin, che condividono i fori, salirebbero uno sull'altro a ogni passata.
+PARALLELI_ANGOLO_GRADI = 20.0    # DA_MISURARE (macro di un satin denso)
+PARALLELI_LARGHEZZA_FRAZ = 0.5   # DA_MISURARE (macro di un satin denso)
 VENTAGLIO_MAX_MM = 0.8           # DA_MISURARE (macro con righello)
 VENTAGLIO_FRAZ = 0.22            # DA_MISURARE
 VENTAGLIO_BORDO_FRAZ = 0.10

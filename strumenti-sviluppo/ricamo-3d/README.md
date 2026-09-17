@@ -3,18 +3,18 @@
 Visualizzazione 3D fisica di ricami su termogarza: cucitura, rimozione della garza, assestamento dei fili.
 
 ## Uso
-    python esegui.py "percorso/file.dst"                     # cucitura incrementale (predefinita)
-    python esegui.py "percorso/file.dst" --cucitura rigida   # cucitura rigida (con ventaglio)
-    python esegui.py "file.dst" --centro X Y --lato 40 --cucitura rigida --senza-ventaglio
+    python esegui.py "percorso/file.dst"                     # cucitura rigida (predefinita, con ventaglio)
+    python esegui.py "file.dst" --lato 6 --cucitura incrementale   # incrementale: solo pezzetti di pochi mm
+    python esegui.py "file.dst" --centro X Y --lato 40 --senza-ventaglio
     python immagini.py "file.dst" --centro X Y --lato 40     # dall'alto e radenti con 0, 1, 2 garze (cartella immagini/)
     python test_rimozione.py                                 # con 0 strati la rimozione non deve muovere niente
-Genera `rg-ricamo-3d-termogarza.html` (con `--cucitura rigida`: `…-rigida.html`, apribile nel browser) e
+Genera `rg-ricamo-3d-termogarza-rigida.html` (con `--cucitura incrementale`: `…-termogarza.html`, apribile nel browser) e
 stampa le metriche per cotone 30/40 × 0/1/2 strati. Dipendenze: numpy, scipy, numba (Pillow solo
 per l'anteprima della calibrazione). Il lettore DST è interno.
 
 ## Il modello, in quattro fasi
 1. **DST → fori** (`fori_da_dst`).
-2. **Cucitura**, in ordine macchina. *Incrementale* (`cucitura.py`, predefinita): i fili già posati sono
+2. **Cucitura**, in ordine macchina. *Incrementale* (`cucitura.py`): i fili già posati sono
    nodi fisici. Per ogni punto: (a) **l'ago** entra nel foro, un cilindro da `DIAMETRO_AGO`: i nodi di
    filo esistenti che tocca vengono spinti fuori radialmente, oppure, se l'asse li prende entro
    `SOGLIA_INFILZATO` × r dal centro, **infilzati** e legati al foro (i fili che hanno già un capo in
@@ -23,7 +23,7 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
    iterazioni: lunghezza, flessione, contatto comprimibile a sezione ellittica, attrito coulombiano,
    appoggio sulla garza. Fuori dal raggio i fili restano fermi. Finché il punto è in cucitura il filo
    si tende verso la corda (il tendifilo lo fa scorrere nei fori); chiuso il punto, la sua lunghezza di
-   riposo è quella tesa meno `TENSIONE_CN` / EA ed è bloccata. *Rigida* (`--cucitura rigida`): ogni
+   riposo è quella tesa meno `TENSIONE_CN` / EA ed è bloccata. *Rigida* (predefinita): ogni
    punto passa sopra un heightfield di garza + fili posati, che non si spostano, e **si apre a ventaglio**:
    fra `SCOSTAMENTI_N` scostamenti laterali a forma sin(πt) (nulli ai fori, massimi al centro, fino a
    min(`VENTAGLIO_MAX_MM`, `VENTAGLIO_FRAZ` × corda)) sceglie quello di costo minimo, altezza media
@@ -32,6 +32,13 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
    spegne). **Ai fori** l'ago schiaccia di più: entro `RAGGIO_AGO` il timbro sull'heightfield è d ×
    `SCHIACCIAMENTO_FORO` e sotto resta `GARZA_FORO` della garza; fra `RAGGIO_AGO` e 2 × `RAGGIO_AGO` si
    passa linearmente ai valori normali (d × `SCHIACCIAMENTO_FILO`, garza piena).
+   **Sezione.** Il filo ha sezione ellittica: alta lo spessore schiacciato, larga quanto serve a tenere
+   l'area del filo tondo (vicino ai fori più bassa ma non più larga). L'heightfield registra dove può
+   stare il fondo di un filo nuovo senza compenetrare quelli posati, sopra e di fianco (somma delle due
+   ellissi). Un filo che **incrocia** sale su tutta la larghezza; uno **quasi parallelo** (entro
+   `PARALLELI_ANGOLO_GRADI`) scivola di fianco e sale solo se i centri distano meno di
+   `PARALLELI_LARGHEZZA_FRAZ` della larghezza piena, altrimenti i punti di un satin, che condividono i
+   fori, salgono uno sull'altro a ogni passata. Il visualizzatore disegna la stessa sezione.
 3. **Rimozione della garza**. La cucitura si esegue **due volte con la stessa logica** (ventaglio
    compreso): con gli strati scelti e con 0 strati. La cucitura a 0 strati è lo **stato di riposo**:
    lunghezze di riposo per lato e curvature di riposo vengono da lì, non dal filo dritto. Il **filo in
@@ -41,10 +48,11 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
    ventaglio) di un angolo proporzionale all'eccesso fino a `APERTURA_MAX_GRADI` (pieno a
    `APERTURA_ECCESSO_PIENO`). Niente forma casuale. **Con 0 strati non si muove niente**: lo verifica
    `test_rimozione.py`.
-4. **Rilassamento finale**: lunghezza e flessione verso lo stato di riposo, contatto alla distanza dello
-   spessore schiacciato usato in cucitura (rigida: lo spessore del timbro, che dipende dalla distanza dal
-   foro; incrementale: d × la compattazione del nodo), mai sotto la distanza che la coppia aveva nella
-   cucitura a 0 strati; collare attorno ai fori; gli infilzati restano sul foro.
+4. **Rilassamento finale**: lunghezza e flessione verso lo stato di riposo; contatto fra le sezioni
+   ellittiche della cucitura a 0 strati (rigida: quella del timbro, che dipende dalla distanza dal foro;
+   incrementale: quella della compattazione del nodo), mai più stretto della distanza che la coppia aveva
+   a riposo, **con la direzione di spinta fissata dallo stato di riposo**: chi a 0 strati stava sopra
+   resta sopra anche se l'arco di quello sotto sale; collare attorno ai fori; gli infilzati restano sul foro.
 
 ## Parametri (`parametri.py`)
 | gruppo | parametro | valore | stato |
@@ -61,7 +69,8 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
 | rimozione | `RIENTRO_FORO` · `APERTURA_MAX_GRADI` · `APERTURA_ECCESSO_PIENO` | 0,4 · 40° · 0,25 | DA_MISURARE |
 | rilassamento | `COLLARE_FRAZ` · `COLLARE_RAGGIO` · `RIGIDEZZA_FLESSIONE` · `ITERAZIONI` · `GRAVITA_PER_ITER` | 0,6 · 1,0 mm · 0,08 · 160 · 0 | collare DA_MISURARE |
 | non più nella rimozione | `ALLUNGAMENTO_RECUPERATO` | 0,010 | varrebbe uguale nelle due cuciture: nell'eccesso si annulla |
-| sola cucitura rigida | `SCHIACCIAMENTO_FILO` (anche distanza di contatto del rilassamento finale) | 0,60 | DA_MISURARE |
+| sola cucitura rigida | `SCHIACCIAMENTO_FILO` (altezza della sezione, anche nel rilassamento finale) | 0,60 | DA_MISURARE |
+| sezione (rigida) | `PARALLELI_ANGOLO_GRADI` · `PARALLELI_LARGHEZZA_FRAZ` | 20° · 0,5 | DA_MISURARE (macro di un satin denso) |
 | ventaglio (rigida) | `SCOSTAMENTI_N` · `VENTAGLIO_MAX_MM` · `VENTAGLIO_FRAZ` · `VENTAGLIO_BORDO_FRAZ` · `K_VENTAGLIO` | 25 · 0,8 mm · 0,22 · 0,10 · 2,5 | max, frazione e K DA_MISURARE (macro con righello) |
 | fasci (metrica) | `TOLLERANZA_FORI_FASCIO` · `FASCIO_MIN_PASSAGGI` | 0,25 mm · 4 | tolleranza da confermare |
 
@@ -163,8 +172,19 @@ della zona e l'HTML si chiama `rg-ricamo-3d-zona-<id>.html`.
 - "Filo in più" è la media per punto: le fermature da 0,5 mm la gonfiano.
 - Nessuna torsione reale dei capi.
 - Nessun parametro è calibrato su campioni reali.
+- **Altezze.** Sul ritaglio da 40 mm del cartamodello (cotone 30) la cucitura rigida sta a 0,27 mm di
+  altezza media del centro filo a 0 strati e 0,50 mm con 2 garze: la pila di fili fa circa metà, l'arco
+  della rimozione l'altra metà. Le leve sono tutte DA_MISURARE: `RIENTRO_FORO` (l'arco cresce con la
+  radice dell'eccesso: da 0,4 a 0,7 l'altezza media con 2 garze scende di circa 0,06 mm),
+  `PARALLELI_LARGHEZZA_FRAZ` (0,3: 0,22 e 0,45 mm), `SCHIACCIAMENTO_FILO`.
+- **Compenetrazioni.** Prima della sezione ellittica il 28–36 % degli incroci fra punti aveva il filo
+  sotto dentro quello sopra per più del 40 % dello spessore (nel visualizzatore «usciva»); ora 0 % in
+  cucitura e 0,6 % dopo la rimozione con 2 garze, dove l'arco sposta i fili di lato.
 
 **Cucitura incrementale** (`cucitura.py`):
+- **Solo su pezzetti.** Su ritagli oltre pochi millimetri di un disegno fitto ci mette minuti e molti punti
+  si fermano al tetto di iterazioni (ritaglio da 6 mm del cartamodello: 17 s per le 6 varianti, ma da 8 mm
+  oltre 10 minuti). L'interfaccia la offre solo su un quadrato da 6 mm, per confrontarla con la rigida.
 - **La tensione non è risolta come forza.** Il contatto e la lunghezza sono vincoli di posizione (PBD):
   la tensione entra nel carico che schiaccia i fili (tensione × curvatura) e nel riposo del punto
   chiuso (`TENSIONE_CN` / EA), non in un vero bilancio di forze fra filo teso e pila di fili. Il filo in

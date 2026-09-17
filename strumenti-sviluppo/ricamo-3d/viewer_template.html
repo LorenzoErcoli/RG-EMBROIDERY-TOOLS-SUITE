@@ -113,8 +113,8 @@ progress{width:100%;height:6px;margin-top:10px;accent-color:var(--attivo)}
           </div>
           <p class="info" id="conteggio"></p>
           <div class="scelta" data-gruppo="cucitura" style="margin-top:10px">
-            <button type="button" data-v="incrementale" aria-pressed="true">Cucitura incrementale</button>
-            <button type="button" data-v="rigida" aria-pressed="false">Rigida (veloce)</button>
+            <button type="button" data-v="rigida" aria-pressed="true">Cucitura rigida</button>
+            <button type="button" data-v="incrementale" aria-pressed="false">Incrementale (pezzetto 6 mm)</button>
           </div>
           <button type="button" class="bottone" id="simula">Simula il ritaglio</button>
           <progress id="avanzamento" max="1000" value="0" hidden></progress>
@@ -184,8 +184,8 @@ const APP = DATI_INIZIALI === null;        // aperto da server.py: si carica il 
 if(!window.THREE){$('errore').style.display='flex';return;}
 function b64(s, T){const bin=atob(s);const u=new Uint8Array(bin.length);for(let i=0;i<bin.length;i++)u[i]=bin.charCodeAt(i);return new T(u.buffer);}
 
-const stato = {fase:1, filato:'cotone_30', strati:'2', cucitura:'incrementale'};
-try{ const s=JSON.parse(localStorage.getItem('rg3d_stato')||'null'); if(s) Object.assign(stato,s);}catch(e){}
+const stato = {fase:1, filato:'cotone_30', strati:'2', cucitura:'rigida'};
+try{ const s=JSON.parse(localStorage.getItem('rg3d_stato2')||'null'); if(s) Object.assign(stato,s);}catch(e){}
 
 // ---------- colori del filo (uno per ago) ----------
 const NATURALE = '#ede6d3';
@@ -420,7 +420,7 @@ document.querySelectorAll('.scelta').forEach(gr=>{
       gr.querySelectorAll('button').forEach(x=>x.setAttribute('aria-pressed','false'));
       b.setAttribute('aria-pressed','true');
       stato[k] = k==='fase' ? Number(b.dataset.v) : b.dataset.v;
-      try{ localStorage.setItem('rg3d_stato', JSON.stringify(stato)); }catch(e){}
+      try{ localStorage.setItem('rg3d_stato2', JSON.stringify(stato)); }catch(e){}
       if(k==='fase'){ obiettivo = stato.fase; if(riduci) mix=obiettivo; }
       else if(k==='cucitura'){ aggiornaRitaglio(); }
       else costruisci();
@@ -440,6 +440,9 @@ window.addEventListener('resize', ridimensiona);
 // ---------- caricamento del DST (solo con server.py) ----------
 let disegno = null;                      // {id, nome, riquadro, seg Int16 decimi, segAghi}
 const ritaglio = {cx:0, cy:0, lato:22};
+// la cucitura incrementale è lenta e su ritagli grandi non arriva in fondo: solo un pezzetto, per confrontare
+const LATO_INCREMENTALE = 6;
+const latoRitaglio = ()=> stato.cucitura==='incrementale' ? LATO_INCREMENTALE : ritaglio.lato;
 let lavoroInCorso = false;
 
 async function leggiFile(file){
@@ -477,7 +480,7 @@ const zoomPianta = {k:1, cx:null, cy:null};  // ingrandimento e centro (mm); nul
 function vistaPianta(){
   if(vistaFissa) return vistaFissa;
   const cv = $('pianta'); const W = cv.clientWidth; if(!W) return null;
-  const [x0,y0,x1,y1] = disegno.riquadro; const m = ritaglio.lato/2;
+  const [x0,y0,x1,y1] = disegno.riquadro; const m = latoRitaglio()/2;
   const a0=Math.min(x0, ritaglio.cx-m), b0=Math.min(y0, ritaglio.cy-m), a1=Math.max(x1, ritaglio.cx+m), b1=Math.max(y1, ritaglio.cy+m);
   const s = (W-16)/Math.max(a1-a0, b1-b0, 1) * zoomPianta.k;
   const ccx = zoomPianta.cx ?? (a0+a1)/2, ccy = zoomPianta.cy ?? (b0+b1)/2;
@@ -504,13 +507,13 @@ function disegnaPianta(){
     g.stroke();
   }
   // ritaglio: fuori un velo, dentro il bordo
-  const m = ritaglio.lato/2, rx=v.px(ritaglio.cx-m), ry=v.py(ritaglio.cy+m), rl=ritaglio.lato*v.s;
+  const m = latoRitaglio()/2, rx=v.px(ritaglio.cx-m), ry=v.py(ritaglio.cy+m), rl=latoRitaglio()*v.s;
   g.fillStyle = 'rgba(30,35,40,.45)'; g.beginPath(); g.rect(0,0,v.W,v.W); g.rect(rx,ry,rl,rl); g.fill('evenodd');
   g.strokeStyle = getComputedStyle(document.documentElement).getPropertyValue('--attivo').trim() || '#2f6f73';
   g.lineWidth = 2; g.strokeRect(rx,ry,rl,rl);
 }
 function puntiNelRitaglio(){
-  const S = disegno.seg, n=S.length/4, m=ritaglio.lato/2*10+1e-6, cx=ritaglio.cx*10, cy=ritaglio.cy*10;
+  const S = disegno.seg, n=S.length/4, m=latoRitaglio()/2*10+1e-6, cx=ritaglio.cx*10, cy=ritaglio.cy*10;
   let c=0;
   for(let k=0;k<n;k++){
     const ax=S[k*4], ay=S[k*4+1], bx=S[k*4+2], by=S[k*4+3];
@@ -519,9 +522,11 @@ function puntiNelRitaglio(){
   return c;
 }
 function aggiornaRitaglio(){
-  $('latoValore').textContent = ritaglio.lato+' mm';
+  const inc = stato.cucitura==='incrementale';
+  $('lato').disabled = inc; $('lato').value = latoRitaglio();
+  $('latoValore').textContent = latoRitaglio()+' mm';
   const c = puntiNelRitaglio();
-  const lento = stato.cucitura==='incrementale' && c>1500 ? ' · con la cucitura incrementale sarà lenta' : '';
+  const lento = inc ? ' · incrementale: solo un pezzetto da '+LATO_INCREMENTALE+' mm, per vedere la differenza con la rigida' : '';
   $('conteggio').textContent = `${c.toLocaleString('it-IT')} punti nel ritaglio, centro (${ritaglio.cx.toFixed(1)}, ${ritaglio.cy.toFixed(1)}) mm${lento}. Clicca o trascina sulla pianta per spostarlo.`;
   $('simula').disabled = !lavoroInCorso && c===0;
   disegnaPianta();
@@ -561,7 +566,7 @@ if(APP){
   $('vistaIntera').onclick = ()=>{ zoomPianta.k = 1; zoomPianta.cx = zoomPianta.cy = null; disegnaPianta(); };
   $('vistaRitaglio').onclick = ()=>{
     const base = vistaBase(); if(!base) return;
-    zoomPianta.k = Math.max(1, (base.W/3) / (ritaglio.lato * base.s));   // il ritaglio occupa un terzo della pianta
+    zoomPianta.k = Math.max(1, (base.W/3) / (latoRitaglio() * base.s));   // il ritaglio occupa un terzo della pianta
     zoomPianta.cx = ritaglio.cx; zoomPianta.cy = ritaglio.cy; disegnaPianta();
   };
   fetch('/api/iniziale').then(r=>r.json()).then(j=>{ if(j && j.id && !disegno) mostraDisegno(j); }).catch(()=>{});
@@ -585,7 +590,7 @@ async function simula(){
   const pr = $('avanzamento'); pr.hidden = false; pr.value = 0;
   try{
     const r = await fetch('/api/simula', {method:'POST', headers:{'Content-Type':'application/json'},
-      body: JSON.stringify({id:disegno.id, cx:ritaglio.cx, cy:ritaglio.cy, lato:ritaglio.lato, cucitura:stato.cucitura})});
+      body: JSON.stringify({id:disegno.id, cx:ritaglio.cx, cy:ritaglio.cy, lato:latoRitaglio(), cucitura:stato.cucitura})});
     const j = await r.json();
     if(!r.ok) throw new Error(j.errore || 'simulazione non avviata');
     for(;;){

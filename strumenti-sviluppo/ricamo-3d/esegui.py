@@ -2,7 +2,7 @@
 
     python esegui.py [file.dst]                    ritaglio 22 x 22 mm al centro del disegno
     python esegui.py --zona C [--zone file.json]   una zona di calibrazione_zone.json (DST preso dal JSON)
-    python esegui.py ... --cucitura rigida         la cucitura vecchia (heightfield), per confronto
+    python esegui.py ... --cucitura incrementale   nodi fisici con ago e attrito: lenta, solo su pezzetti di pochi mm
 
 `simula_varianti` è usata anche da server.py (l'interfaccia per caricare i DST). Le 6 varianti sono
 indipendenti e girano in parallelo, un processo ciascuna (con --processi 1 una dopo l'altra): i numeri
@@ -80,7 +80,7 @@ def _una_variante(segs, offs, filato, strati, mezzo_lato, lato_copertura, rett_c
 
 
 def simula_varianti(segs5, mezzo_lato, lato_copertura=None, rett_copertura=None, descrizione=None, avviso=print,
-                    cucitura="incrementale", passo=None, stop=None, processi=None, ventaglio=True):
+                    cucitura="rigida", passo=None, stop=None, processi=None, ventaglio=True):
     """Tutte le varianti filato x strati di un insieme di segmenti già centrati.
 
     `segs5`: colonne ax, ay, bx, by, ago. `avviso(testo)` riceve le stesse righe che stampa la riga di comando;
@@ -162,8 +162,8 @@ def main():
     ap.add_argument("--lato", type=float, default=22.0, help="lato del ritaglio, mm (predefinito 22)")
     ap.add_argument("--senza-ventaglio", action="store_true", help="cucitura rigida senza ventaglio (quella di prima)")
     ap.add_argument("--uscita", help="nome dell'HTML (predefinito rg-ricamo-3d-termogarza.html)")
-    ap.add_argument("--cucitura", choices=("incrementale", "rigida"), default="incrementale",
-                    help="incrementale (nodi fisici, ago, attrito: predefinita) o rigida (heightfield, per confronto)")
+    ap.add_argument("--cucitura", choices=("rigida", "incrementale"), default="rigida",
+                    help="rigida (heightfield con sezione schiacciata: predefinita) o incrementale (nodi fisici, ago, attrito: lenta, solo pezzetti di pochi mm)")
     args = ap.parse_args()
 
     if args.zona is None:
