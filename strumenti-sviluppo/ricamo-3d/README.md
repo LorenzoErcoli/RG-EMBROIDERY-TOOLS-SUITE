@@ -29,17 +29,25 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
    min(`VENTAGLIO_MAX_MM`, `VENTAGLIO_FRAZ` × corda)) sceglie quello di costo minimo, altezza media
    d'appoggio nella parte centrale + `K_VENTAGLIO` × (lunghezza in pianta − corda); a parità il più
    piccolo. Così i passaggi ripetuti sugli stessi fori non si impilano a torre (`--senza-ventaglio` lo
-   spegne). **Filo tondo**, diametro d: un filo che incrocia uno già posato ne sta a un diametro pieno
-   (centro a z + √(d² − ρ²), ρ la distanza in pianta) e **lo tira verso il basso** di
-   `TIRO_INCROCIO_FRAZ` di quello scostamento, a triangolo lungo il punto sotto fino ai suoi fori (filo
-   teso con un carico), se sotto c'è posto: la garza si comprime fino a `GARZA_FORO`, un filo teso sopra
-   un vuoto ci scende; poi il filo nuovo si riposa sopra. Un filo quasi parallelo (entro
-   `PARALLELI_ANGOLO_GRADI`) non sale su quello vicino e non lo tira: gli sta di fianco, e ci sale solo se
+   spegne). **Filo tondo**, diametro d: un filo che incrocia uno già posato gli passa sopra (centro a
+   z + (r + r·C) · √(1 − ρ²/d²), ρ la distanza in pianta, C l'altezza rimasta del filo sotto / d) e,
+   **tirato giù dalla bobina, lo preme verso la superficie e lo schiaccia un po'**: sotto di sé il filo
+   vecchio resta alto d · (1 − `SCHIACCIAMENTO_INCROCIO` · w) (w = √(1 − ρ²/d²), pieno in mezzo
+   all'incrocio) e il suo fondo scende di `TIRO_INCROCIO_FRAZ` · w della distanza dal suo appoggio premuto
+   (fili più vecchi o garza compressa fino a `GARZA_FORO`). Tutti e due pieni se il filo sotto sta sulla
+   superficie, via via meno se sotto ha già dei fili, niente da `PILA_SENZA_TIRO_D` diametri di pila in
+   su. La garza cede solo attorno a dove si preme (a triangolo fino ai fori del punto); il punto vecchio
+   riprende la forma di un **filo teso** fra i suoi fori, sopra gli appoggi e sotto i nodi premuti: fra
+   due incroci resta dritto, non fa una sega. Poi il filo nuovo si riposa sopra. **Niente spigoli**: ogni
+   profilo teso viene arrotondato con raggio `RAGGIO_CURVA_MM` (il bordo alto di un cerchio fatto
+   scorrere sul filo; resta sopra, uguale dove è dritto). Un filo quasi parallelo (entro
+   `PARALLELI_ANGOLO_GRADI`) non sale su quello vicino e non lo preme: gli sta di fianco, e ci sale solo se
    i centri distano meno di r (i passaggi sugli stessi fori, che il ventaglio apre). **Ai fori** l'ago
    schiaccia la garza: entro `RAGGIO_AGO` sotto il filo ne resta `GARZA_FORO`, fino a 2 × `RAGGIO_AGO`
    si torna alla garza piena; dentro `RAGGIO_AGO` da un foro in comune i fili non si impilano (scendono
-   insieme nel foro). I nodi posati stanno in una griglia (celle di lato d); ricerca e tiro compilati
-   con numba (`solutore.quota_fili`, `solutore.tira_giu`).
+   insieme nel foro). I nodi posati stanno in una griglia (celle di lato d); ricerca, tiro, filo teso e
+   curva compilati con numba (`solutore.quota_fili`, `tira_giu`, `filo_teso`, `curva`). Il visualizzatore
+   disegna il filo tondo, ovale solo dove è schiacciato.
 3. **Rimozione della garza**. La cucitura si esegue **due volte con la stessa logica** (ventaglio
    compreso): con gli strati scelti e con 0 strati. La cucitura a 0 strati è lo **stato di riposo**:
    lunghezze di riposo per lato e curvature di riposo vengono da lì, non dal filo dritto. Il **filo in
@@ -70,7 +78,7 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
 | rimozione | `RIENTRO_FORO` · `APERTURA_MAX_GRADI` · `APERTURA_ECCESSO_PIENO` | 0,4 · 40° · 0,25 | DA_MISURARE |
 | rilassamento | `COLLARE_FRAZ` · `COLLARE_RAGGIO` · `RIGIDEZZA_FLESSIONE` · `ITERAZIONI` · `GRAVITA_PER_ITER` | 0,6 · 1,0 mm · 0,08 · 160 · 0 | collare DA_MISURARE |
 | non più nella rimozione | `ALLUNGAMENTO_RECUPERATO` | 0,010 | varrebbe uguale nelle due cuciture: nell'eccesso si annulla |
-| incroci (rigida) | `TIRO_INCROCIO_FRAZ` · `PARALLELI_ANGOLO_GRADI` | 0,5 · 20° | DA_MISURARE (sezione tagliata di un incrocio, macro di un satin) |
+| incroci (rigida) | `TIRO_INCROCIO_FRAZ` · `SCHIACCIAMENTO_INCROCIO` · `PILA_SENZA_TIRO_D` · `PARALLELI_ANGOLO_GRADI` · `RAGGIO_CURVA_MM` | 1,0 · 0,20 · 2 · 20° · 0,25 mm | DA_MISURARE (sezione tagliata di un incrocio, macro di un satin e di profilo) |
 | non più usati | `SCHIACCIAMENTO_FILO` · `SCHIACCIAMENTO_FORO` | 0,60 · 0,30 | il filo della rigida è tondo |
 | ventaglio (rigida) | `SCOSTAMENTI_N` · `VENTAGLIO_MAX_MM` · `VENTAGLIO_FRAZ` · `VENTAGLIO_BORDO_FRAZ` · `K_VENTAGLIO` | 25 · 0,8 mm · 0,22 · 0,10 · 2,5 | max, frazione e K DA_MISURARE (macro con righello) |
 | fasci (metrica) | `TOLLERANZA_FORI_FASCIO` · `FASCIO_MIN_PASSAGGI` | 0,25 mm · 4 | tolleranza da confermare |
@@ -173,14 +181,16 @@ della zona e l'HTML si chiama `rg-ricamo-3d-zona-<id>.html`.
 - "Filo in più" è la media per punto: le fermature da 0,5 mm la gonfiano.
 - Nessuna torsione reale dei capi.
 - Nessun parametro è calibrato su campioni reali.
-- **Filo tondo, altezze.** La sezione schiacciata (spessore d × 0,6, poi ellisse larga) è stata tolta:
-  non è così che sta il filo, e il visualizzatore la allargava fino a 3 volte ai fori. Col filo tondo gli
-  incroci non si compenetrano (0 % in cucitura e dopo la rimozione, sul ritaglio da 40 mm del
-  cartamodello), ma le pile sono più alte: altezza media del centro filo 0,40 mm a 0 strati e 0,59 con 2
-  garze (sezione schiacciata: 0,27 e 0,50). Il tiro in basso agisce solo dove sotto c'è posto: nella zona
-  H di calibrazione con 2 garze il filo sotto all'incrocio scende da 0,29 a 0,21 mm e quello sopra da
-  0,61 a 0,50; senza garza quasi niente (0,42 → 0,34 il più alto), perché il pavimento è rigido.
-- Il filo teso sopra gli ostacoli è un inviluppo convesso: fa spigoli dove sale su un filo.
+- **Filo tondo, altezze.** La sezione schiacciata fissa (spessore d × 0,6, poi ellisse larga) è stata tolta:
+  non è così che sta il filo, e il visualizzatore la allargava fino a 3 volte ai fori. Ora il filo è tondo
+  e si schiaccia solo sotto un incrocio. Sul ritaglio da 40 mm del cartamodello (cotone 30) gli incroci
+  non si compenetrano (0 % in cucitura e dopo la rimozione); altezza media del centro filo 0,37 mm a
+  0 strati e 0,56 con 2 garze (filo tondo senza tiro né curva: 0,40 e 0,59; sezione schiacciata fissa:
+  0,27 e 0,50). Zona H di calibrazione, 2 garze: il filo più alto passa da 0,53 a 0,42 mm col tiro e lo
+  schiacciamento, la media da 0,35 a 0,31. **La curva alza**: con `RAGGIO_CURVA_MM` 0,5 la media a 0 strati
+  sale a 0,42 mm, per questo è 0,25 (circa un diametro).
+- Senza garza sotto c'è un pavimento rigido: lì il filo sotto si schiaccia ma non affonda.
+- Stop diversi con strati di garza aggiunti fra uno e l'altro non ci sono ancora: cambiano tutto.
 
 **Cucitura incrementale** (`cucitura.py`):
 - **Solo su pezzetti.** Su ritagli oltre pochi millimetri di un disegno fitto ci mette minuti e molti punti

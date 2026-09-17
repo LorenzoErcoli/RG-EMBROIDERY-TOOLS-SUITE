@@ -1692,6 +1692,22 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   **Incrementale:** anche un ritaglio da 8 mm del cartamodello supera i 10 minuti; da 6 mm fa le 6 varianti
   in 17 s (con molti punti al tetto di iterazioni). La **rigida è la predefinita** (interfaccia, `esegui.py`);
   l'incrementale nell'interfaccia simula solo un quadrato da 6 mm e il server rifiuta lati più grandi.
+- **La bobina schiaccia gli incroci, niente spigoli (2026-09-17, Lorenzo: «sistema anche lo spigolo, deve
+  fare una curva. Ma soprattutto fisicamente il filo viene tirato verso il basso dalla bobina, quindi fa
+  schiacciare sulla superficie quello sotto e un po' lo schiaccia. Per questo si appiattisce tutto. Questo
+  se il filo è sullo stesso livello e se sotto non ce n'è troppo. Se poi ci sono stop diversi con aggiunte
+  incrementali di termogarze cambia tutto»).** Chi passa sopra preme il filo sotto verso l'appoggio
+  (`TIRO_INCROCIO_FRAZ` = 1) e lo schiaccia sotto di sé fino a 0,8 d (`SCHIACCIAMENTO_INCROCIO` = 0,2), pieni
+  se il filo sotto sta sulla superficie e nulli da 2 diametri di pila sotto (`PILA_SENZA_TIRO_D`); tutti
+  DA_MISURARE. Il punto sotto riprende la forma di un filo teso: **primo giro sbagliato**, i triangoli di più
+  incroci si sommavano in una sega (un punto da 2,9 mm arrivava a 5,9 mm di filo e dopo la rimozione a
+  2,2 mm d'arco); **secondo giro sbagliato**, un punto toccato scendeva tutto sulla garza compressa anche
+  senza tiro. Ora la garza cede solo attorno a dove si preme. Spigoli: raggio minimo `RAGGIO_CURVA_MM` =
+  0,25 mm, anche sui punti ripresi dal tiro (prima lì la curva spariva); a 0,5 mm le pile salgono
+  (media 0,42 mm senza garza). Il visualizzatore disegna ovale solo dove il filo è schiacciato.
+  **Misurato** (centro cartamodello 40 mm, cotone 30): compenetrazioni 0 %; altezza media 0,37 mm a 0 garze
+  e 0,56 con 2 (prima 0,40 e 0,59); zona H con 2 garze filo più alto 0,53 → 0,42 mm. Test verdi. Da fare:
+  stop con garze aggiunte fra uno e l'altro.
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 

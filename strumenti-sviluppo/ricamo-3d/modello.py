@@ -85,6 +85,7 @@ class Fili:
     def __init__(self, segs, offs, d, mezzo_lato):
         self.segs, self.offs, self.d = segs, offs, d
         self.P = np.zeros((offs[-1], 3))
+        self.C = np.ones(offs[-1])          # altezza rimasta del filo / d: 1 tondo, meno dove un filo sopra lo schiaccia
         self.seg_di = np.repeat(np.arange(len(segs)), np.diff(offs))
         corde = np.maximum(np.hypot(segs[:, 2] - segs[:, 0], segs[:, 3] - segs[:, 1]), 1e-9)
         self.dirs = np.c_[(segs[:, 2] - segs[:, 0]) / corde, (segs[:, 3] - segs[:, 1]) / corde]
@@ -99,14 +100,16 @@ class Fili:
 
     def quota(self, X, Y, k, limite):
         """Quota minima del centro del punto k in X, Y sopra i nodi con indice < limite."""
-        return S.quota_fili(X, Y, self.dirs[k, 0], self.dirs[k, 1], self.fori[k], self.P, self.seg_di, self.fori,
+        return S.quota_fili(X, Y, self.dirs[k, 0], self.dirs[k, 1], self.fori[k], self.P, self.C, self.seg_di, self.fori,
                             self.dirs, self.succ, self.testa, self.origine, self.cella, limite, self.d,
                             self.cos_par, self.r_par, P.RAGGIO_AGO, STESSO_FORO_MM)
 
-    def tira_giu(self, x, y, z, k, pavimento):
-        return S.tira_giu(x, y, z, self.dirs[k, 0], self.dirs[k, 1], self.fori[k], self.P, self.seg_di, self.offs,
-                          self.fori, self.dirs, self.succ, self.testa, self.origine, self.cella, self.offs[k], self.d,
-                          self.cos_par, self.r_par, P.RAGGIO_AGO, STESSO_FORO_MM, P.TIRO_INCROCIO_FRAZ, pavimento)
+    def tira_giu(self, x, y, z, k, h_garza):
+        return S.tira_giu(x, y, z, self.dirs[k, 0], self.dirs[k, 1], self.fori[k], self.P, self.C, self.seg_di,
+                          self.offs, self.fori, self.dirs, self.succ, self.testa, self.origine, self.cella,
+                          self.offs[k], self.d, self.cos_par, self.r_par, P.RAGGIO_AGO, STESSO_FORO_MM,
+                          P.TIRO_INCROCIO_FRAZ, P.SCHIACCIAMENTO_INCROCIO, P.PILA_SENZA_TIRO_D * self.d,
+                          h_garza, P.GARZA_FORO, P.RAGGIO_CURVA_MM)
 
     def posa(self, k, x, y, z):
         a, b = self.offs[k], self.offs[k + 1]
@@ -159,9 +162,10 @@ def involucro_superiore(s, z):
 def _cuci_rigida(segs, offs, r, d, h_garza, n_scost, mezzo_lato, progresso=None):
     """Cucitura rigida, filo tondo: ogni punto (a ventaglio) passa teso sopra la garza e i fili già posati,
     a un diametro pieno dal centro di quelli che incrocia, e li tira un po' verso il basso dove sotto c'è
-    posto (garza che si comprime, vuoti sotto un filo teso). Poi si riposa sopra di loro."""
+    posto (garza che si comprime, vuoti sotto un filo teso), e li schiaccia un po': la bobina lo tira giù.
+    Poi si riposa sopra di loro, con gli spigoli arrotondati (solutore.curva). Restituisce anche, per nodo, l'altezza
+    rimasta del filo / d."""
     fili = Fili(segs, offs, d, mezzo_lato)
-    pavimento = h_garza * P.GARZA_FORO + r           # più giù di così un filo tirato non va: garza tutta compressa
     L_cucita = np.zeros(len(segs))
     for k, (ax, ay, bx, by) in enumerate(segs):
         a, b = offs[k], offs[k + 1]
@@ -176,9 +180,12 @@ def _cuci_rigida(segs, offs, r, d, h_garza, n_scost, mezzo_lato, progresso=None)
         def profilo():
             prof = _appoggio(fili, k, x, y, ax, ay, bx, by, r, h_garza)
             prof[0] = prof[-1] = r                     # il filo entra nel foro
-            return involucro_superiore(s_, prof)       # filo in tensione = teso sopra gli ostacoli
+            z = involucro_superiore(s_, prof)          # filo in tensione = teso sopra gli ostacoli
+            z = S.curva(s_, z, P.RAGGIO_CURVA_MM)     # niente spigoli: il filo ha una sua rigidità
+            z[0] = z[-1] = r
+            return z
         z = profilo()
-        if fili.tira_giu(x, y, z, k, pavimento):
+        if fili.tira_giu(x, y, z, k, h_garza):
             z = profilo()
         fili.posa(k, x, y, z)
         if progresso is not None:
@@ -187,7 +194,7 @@ def _cuci_rigida(segs, offs, r, d, h_garza, n_scost, mezzo_lato, progresso=None)
     for k in range(len(segs)):                         # lunghezze alla fine: i punti tirati giù si allungano
         a, b = offs[k], offs[k + 1]
         L_cucita[k] = np.linalg.norm(np.diff(cucito[a:b], axis=0), axis=1).sum()
-    return cucito, L_cucita
+    return cucito, L_cucita, fili.C
 
 
 def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", progresso=None, ventaglio=True):
@@ -229,14 +236,16 @@ def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", prog
 
     def cuci(h, base):
         if cucitura == "rigida":
-            c, L = _cuci_rigida(segs, offs, r, d, h, n_scost, mezzo_lato, avanzamento(base))
-            return c, L, {"comp": np.ones(len(c))}         # filo tondo
+            c, L, comp = _cuci_rigida(segs, offs, r, d, h, n_scost, mezzo_lato, avanzamento(base))
+            return c, L, {"comp": comp}                    # tondo, schiacciato solo sotto gli incroci
         import cucitura as C
         R_c = C.cuci(segs, offs, seg_id, loc, nloc, r, h, filato, involucro_superiore, progresso=avanzamento(base))
         return R_c["pos"], R_c["L_cucita"], R_c
 
     cucito, L_cucita, R_c = cuci(h_garza, 0)
-    if cucitura == "incrementale":
+    if cucitura == "rigida":
+        extra["compattazione"] = R_c["comp"]
+    else:
         legato, foro_legato = R_c["legato"], R_c["foro_legato"]
         extra = {"compattazione": R_c["comp"], "infilzati": R_c["infilzati"],
                  "spostamento_laterale_mm": R_c["spostamento_laterale_mm"],
@@ -288,7 +297,7 @@ def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", prog
     passo = (L_obiettivo / np.maximum(np.diff(offs) - 1, 1))[seg_id]
     vicino_foro = np.minimum(loc, nloc - 1 - loc) * passo < 0.6 * d
     attivo = np.where(~vicino_foro)[0]
-    # sezione di contatto: rigida tonda; incrementale quella schiacciata della cucitura a 0 strati (semiassi r/c e r*c)
+    # sezione di contatto: quella della cucitura a 0 strati (semiassi r/c e r*c; rigida tonda tranne sotto gli incroci)
     c_nodo = np.clip(R_zero["comp"], 0.2, 1.0)
     spessore_nodo = d * c_nodo
     # coppie che si toccano o quasi: le sezioni schiacciate sono larghe r/c

@@ -58,12 +58,20 @@ SEME = 7
 # + K_VENTAGLIO * (lunghezza in pianta - corda). Vince il costo minimo; a parità lo scostamento più piccolo.
 # SCOSTAMENTI_N = 1: nessun ventaglio (la cucitura rigida di prima).
 SCOSTAMENTI_N = 25
-# Incroci nella cucitura rigida (filo tondo). Un filo che passa sopra uno già posato ne sta a un diametro
-# pieno e lo tira verso il basso di TIRO_INCROCIO_FRAZ del loro scostamento verticale, se sotto c'è posto
-# (garza che si comprime fino a GARZA_FORO, vuoti sotto un filo teso): a triangolo lungo il punto sotto,
-# fino ai suoi fori. Un filo quasi parallelo (entro PARALLELI_ANGOLO_GRADI) non sale su quello vicino e
-# non lo tira: gli sta di fianco, e ci sale solo se i centri distano meno di r (passaggi sugli stessi fori).
-TIRO_INCROCIO_FRAZ = 0.5         # DA_MISURARE (sezione tagliata di un incrocio)
+# Incroci nella cucitura rigida (filo tondo). La bobina tira giù il filo nuovo: dove passa sopra un filo
+# che incrocia lo preme verso la superficie e lo schiaccia un po', così tutto si appiattisce.
+# - il filo sotto scende verso il suo appoggio (garza compressa fino a GARZA_FORO, fili più vecchi) di
+#   TIRO_INCROCIO_FRAZ della distanza, nel punto d'incrocio, e a triangolo fino ai suoi fori;
+# - sotto il filo nuovo resta alto d * (1 - SCHIACCIAMENTO_INCROCIO) (in mezzo all'incrocio, meno ai lati);
+# - tutti e due pieni se il filo sotto sta sulla superficie, via via meno se sotto ha già dei fili, niente
+#   da una pila di PILA_SENZA_TIRO_D diametri in su.
+# Un filo quasi parallelo (entro PARALLELI_ANGOLO_GRADI) non sale su quello vicino e non lo tira: gli sta di
+# fianco, e ci sale solo se i centri distano meno di r (passaggi sugli stessi fori).
+# Il filo teso non piega più stretto di RAGGIO_CURVA_MM: dove sale su un filo fa una curva, non uno spigolo.
+TIRO_INCROCIO_FRAZ = 1.0         # DA_MISURARE (sezione tagliata di un incrocio)
+SCHIACCIAMENTO_INCROCIO = 0.20   # DA_MISURARE (sezione tagliata di un incrocio)
+PILA_SENZA_TIRO_D = 2.0          # DA_MISURARE
+RAGGIO_CURVA_MM = 0.25           # DA_MISURARE (macro di profilo); circa un diametro: di più alza molto le pile
 PARALLELI_ANGOLO_GRADI = 20.0    # DA_MISURARE (macro di un satin denso)
 VENTAGLIO_MAX_MM = 0.8           # DA_MISURARE (macro con righello)
 VENTAGLIO_FRAZ = 0.22            # DA_MISURARE
