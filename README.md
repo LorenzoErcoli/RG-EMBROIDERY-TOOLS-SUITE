@@ -53,6 +53,7 @@ packages/core            @rg/core — mm, import SVG/DXF, geometria, punti, expo
 packages/ui              @rg/ui — design system + topbar + pan/zoom + salvataggio + guida
 packages/pattern-grammar motore del Generatore pattern
 packages/design-system   RG Design System (submodule git, pinnato a un tag)
+strumenti-sviluppo/<nome> strumenti di sviluppo fuori dai workspace (es. ricamo-3d, Python)
 ```
 
 Ogni strumento è **sia standalone sia integrato**: la shell lo monta dentro di sé, ma
@@ -75,6 +76,7 @@ npm run dev:oblique  # apre un singolo strumento (dev:net-45, dev:interlace, dev
 npm test             # smoke test delle primitive condivise e dei motori
 npm run typecheck    # controllo dei tipi (la build non lo fa: vite usa esbuild)
 npm run build        # sito statico in apps/shell/dist
+npm run sviluppo:ricamo-3d -- "file.dst"  # modello 3D su termogarza (Python: vedi strumenti-sviluppo/ricamo-3d/README.md)
 ```
 
 `npm test` e `npm run typecheck` girano anche in CI a ogni push, insieme alla build e alla

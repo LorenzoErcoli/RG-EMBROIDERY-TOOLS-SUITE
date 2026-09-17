@@ -19,3 +19,8 @@ apps/shell/cannage-zone.svg
 
 # artefatti delle misure del prototipo (gli .svg si rigenerano con lo script)
 apps/*/scripts/out/
+
+# strumenti di sviluppo Python (strumenti-sviluppo/): ambiente locale e uscite generate
+strumenti-sviluppo/*/.venv/
+strumenti-sviluppo/**/__pycache__/
+strumenti-sviluppo/ricamo-3d/rg-ricamo-3d-termogarza.html

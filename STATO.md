@@ -1,7 +1,7 @@
 # STATO — RG Embroidery Tools Suite
 
 > Progetto: **RG-EMBROIDERY-TOOLS-SUITE** · pacchetto npm `rg-embroidery-tools-suite` · brand in interfaccia "RG Tools".
-> Aggiornato: 2026-09-04 · Suite con **nove tool live**: `pittorico` è entrato nella home e gira in browser — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
+> Aggiornato: 2026-09-17 · entra il primo **strumento di sviluppo**, `strumenti-sviluppo/ricamo-3d` (modello 3D del ricamo su termogarza, Python v0) · Suite con **nove tool live**: `pittorico` è entrato nella home e gira in browser — `broccato` è completo end-to-end (immagine → tinte → regioni → raso → passaggi nascosti → export SVG/DST), in attesa della verifica visiva di Lorenzo
 > Regola: **questo file si aggiorna nello stesso commit** di ogni modifica.
 > Rete di sicurezza: `npm test` (749 asserzioni) · `npm run typecheck` · `npm run build` — tutti e tre verdi, tutti e tre in CI.
 
@@ -1328,6 +1328,37 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   `MAPPA=1` (dove stanno le celle nude e i tratti corti), `PROBE=x,y` (cosa c'è attorno a un punto),
   `CROP=x0,y0,x1,y1` (un ritaglio leggero da aprire nel browser, `SOLO_BASI=1` senza denti).
 
+**Strumento di sviluppo `ricamo-3d` — v0, integrato il 2026-09-17 (non è un tool della home):**
+- **Cos'è.** Modulo Python di Lorenzo per la **visualizzazione 3D fisica** di un ricamo su termogarza:
+  cucitura in ordine macchina (filo teso sopra garza compressa e fili già posati), rimozione della
+  garza, assestamento (lunghezza, flessione, contatto filo-filo, appoggio). Legge il DST col suo
+  lettore interno, ritaglia 22 × 22 mm al centro, calcola cotone 30/40 × 0/1/2 strati e scrive
+  `rg-ricamo-3d-termogarza.html` (three.js) con le metriche per variante.
+- **Dove sta e come si lancia.** `strumenti-sviluppo/ricamo-3d/`, **fuori dai workspace npm**
+  (regola di crescita 5 aggiornata in `ARCHITETTURA.md`): file copiati **identici** dalla cartella
+  consegnata, `parametri.py` compreso. Dipendenze in `requirements.txt` (numpy, scipy), ambiente in
+  `.venv/` locale; entry point `npm run sviluppo:ricamo-3d -- "file.dst"`; anteprima dell'HTML con la
+  configurazione `ricamo-3d` di `.claude/launch.json` (porta 5312). `.venv/`, `__pycache__/` e l'HTML
+  generato sono in `.gitignore`. La suite non lo esegue; test, typecheck, build e CI non lo toccano.
+- **Verificato su `pattern (1).dst`** (100 × 100 mm, 8.188 segmenti; nel ritaglio 350 segmenti, 9.510
+  nodi; ~1,5 s per variante con numpy 2.5.3 / scipy 1.18.1 su Python 3.14). HTML generato (0,9 MB),
+  aperto nel browser: le sei varianti e le due fasi si scambiano, nessun errore in console. Due
+  giri danno numeri identici.
+
+  | variante | Ø filo | garza compr. | filo in più | arco medio / p90 | copertura durante → dopo | err. lunghezza |
+  |---|---|---|---|---|---|---|
+  | cotone 30 · 0 | 0,217 | 0,00 | −0,2 % | 0,058 / 0,245 | 25,6 → 33,4 % | +0,74 % |
+  | cotone 30 · 1 | 0,217 | 0,15 | 10,5 % | 0,207 / 0,600 | 25,6 → 34,9 % | −3,06 % |
+  | cotone 30 · 2 | 0,217 | 0,30 | 27,1 % | 0,445 / 0,851 | 25,6 → 36,0 % | −2,77 % |
+  | cotone 40 · 0 | 0,188 | 0,00 | −0,4 % | 0,041 / 0,171 | 21,1 → 28,1 % | +0,72 % |
+  | cotone 40 · 1 | 0,188 | 0,15 | 10,3 % | 0,194 / 0,550 | 21,1 → 29,3 % | −3,11 % |
+  | cotone 40 · 2 | 0,188 | 0,30 | 26,9 % | 0,435 / 0,808 | 21,1 → 30,0 % | −2,83 % |
+
+- **Da guardare (non toccato: nessun parametro è calibrato).** A 0 strati la copertura sale comunque
+  di 8 punti dopo il rilascio, con filo in più negativo: il rilassamento allarga il filo anche senza
+  eccesso. L'errore di lunghezza sta sul −3 % dichiarato dal README. Tutti i `DA_MISURARE` di
+  `parametri.py` restano ipotesi fino ai campioni a 0/1/2 strati.
+
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 
 ---
@@ -1429,7 +1460,7 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 
 ### Fuori lista (fatto, o non nostro)
 
-Il **satellite Python** `bitmap_to_stitch` (laboratorio DST/recipe/library con AI) resta fuori scope: condivide i contratti, non il codice. La **verifica visiva automatica** non è recuperabile: la preview dell'assistente non compone gli screenshot (§4) — il DOM e i numeri sì, e vengono usati al posto suo.
+Il **satellite Python** `bitmap_to_stitch` (laboratorio DST/recipe/library con AI) resta fuori scope: condivide i contratti, non il codice. Diverso è `strumenti-sviluppo/ricamo-3d`: Python **dentro** il repo ma fuori dai workspace, lanciato a mano e mai dalla suite (§1). La **verifica visiva automatica** non è recuperabile: la preview dell'assistente non compone gli screenshot (§4) — il DOM e i numeri sì, e vengono usati al posto suo.
 
 ---
 
