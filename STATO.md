@@ -1744,6 +1744,23 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   (prima 0,217 e 0,188) con la densità 0,90 che resta DA_MISURARE. L'allargamento del filo schiacciato nel
   visualizzatore (al più 1,25) resta com'è, per decisione di Lorenzo. Centro cartamodello 40 mm, cotone 30:
   0 garze media 0,30 mm, max 0,82; 2 garze rilasciato 0,46 · 1,20; onde 0 % e 4 %. Test verdi.
+- **Togliendo la garza si muoveva troppo; mazzetti a punta (2026-09-18, Lorenzo: «siamo sicuri che la lunghezza
+  del filo non cambia? … si muove solo perché le parti incastrate nella garza vengono liberate, lo spostamento
+  laterale aumenta se il tratto è più lungo … dove l'ago buca sempre nello stesso punto il filo già cucito lo fa
+  spostare di pochissimo, un po' a destra un po' a sinistra: i mazzetti li vedo un po' più larghi sul finale, non
+  a punta»).** **Misurato: la lunghezza cambiava.** Dopo il rilassamento i punti erano in media 0,15 mm più lunghi
+  del riposo invece di 0,08 (i contatti li stiravano). E il filo liberato si alzava ad arco: su un punto da 3–5 mm
+  0,33 mm in alto, 0,06 di lato (con poco eccesso l'angolo di apertura era quasi verticale). **Ora:** (1) alla
+  fine ogni punto torna esattamente alla sua lunghezza (riposo + filo liberato; bisezione verso il riposo);
+  (2) il filo liberato si piega di lato, `APERTURA_GRADI` = 75° dalla verticale (DA_MISURARE; tolti
+  `APERTURA_MAX_GRADI` e `APERTURA_ECCESSO_PIENO`); (3) perdendo la tensione si accorcia di `TENSIONE_CN` / EA
+  (0,85 % per il cotone 30), cosa che a 0 strati non succede perché resta teso. Spostamento massimo per punto,
+  2 garze: di lato 0,02 mm (punti sotto 1 mm) → 0,11 (oltre 5 mm), in alto 0,03–0,06 (prima 0,05–0,42). Altezza
+  media dopo la rimozione 0,33 mm (prima 0,46). **Deviazione dell'ago:** alla n-esima bucatura in un foro già
+  usato l'ago si sposta di ceil(n/2) × 0,25 d, alternando i lati, al più 0,2 mm (`DEVIAZIONE_AGO_FRAZ`,
+  `DEVIAZIONE_AGO_MAX_MM`, DA_MISURARE); fine di un punto e inizio del seguente sono la stessa bucatura. Sui 42
+  fori con 3+ passaggi del ritaglio i capi si aprono in media 0,22 mm (senza 0,19), al più 0,43 (0,32). Test
+  verdi, onde 0 % e 3 %.
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 

@@ -29,7 +29,11 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
    min(`VENTAGLIO_MAX_MM`, `VENTAGLIO_FRAZ` × corda)) sceglie quello di costo minimo, altezza media
    d'appoggio nella parte centrale + `K_VENTAGLIO` × (lunghezza in pianta − corda); a parità il più
    piccolo. Così i passaggi ripetuti sugli stessi fori non si impilano a torre (`--senza-ventaglio` lo
-   spegne). **Il filo si fa spazio**: la rigida lavora in tre tempi.
+   spegne). **Deviazione dell'ago**: l'ago che torna in un foro dove c'è già filo viene spostato un
+   pochino da quel filo, un po' a destra e un po' a sinistra (perpendicolare al punto), di ceil(n/2) ×
+   `DEVIAZIONE_AGO_FRAZ` × d alla n-esima volta, al più `DEVIAZIONE_AGO_MAX_MM`: i mazzetti finiscono un
+   po' larghi, non a punta (`modello.deviazione_ago`; fine di un punto e inizio del seguente sono la stessa
+   bucatura). **Il filo si fa spazio**: la rigida lavora in tre tempi.
    (a) *Chi sta sopra.* Ogni punto passa teso sopra la garza e sopra i fili già posati, tondi (centro a
    z + (r + r) · √(1 − ρ²/d²), ρ la distanza in pianta): fissa la pianta e l'ordine sopra/sotto. Un filo
    quasi parallelo (entro `PARALLELI_ANGOLO_GRADI`) non sale su quello vicino, gli sta di fianco, e ci sale
@@ -51,18 +55,22 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
 3. **Rimozione della garza**. La cucitura si esegue **due volte con la stessa logica** (ventaglio
    compreso): con gli strati scelti e con 0 strati. La cucitura a 0 strati è lo **stato di riposo**:
    lunghezze di riposo per lato e curvature di riposo vengono da lì, non dal filo dritto. Il **filo in
-   eccesso** di ogni punto è la lunghezza cucita con la garza meno quella a 0 strati, meno la parte che
-   rientra nel foro (`RIENTRO_FORO`); si aggiunge alle lunghezze di riposo. La forma di partenza è la
-   cucitura a 0 strati con l'eccesso come arco, aperto di lato (verso cui il punto si è aperto a
-   ventaglio) di un angolo proporzionale all'eccesso fino a `APERTURA_MAX_GRADI` (pieno a
-   `APERTURA_ECCESSO_PIENO`). Niente forma casuale. **Con 0 strati non si muove niente**: lo verifica
-   `test_rimozione.py`.
+   eccesso** (il filo liberato) di ogni punto è la lunghezza cucita con la garza meno quella a 0 strati,
+   meno la parte che rientra nel foro (`RIENTRO_FORO`), meno quanto il filo si accorcia perdendo la
+   tensione (lunghezza a 0 strati × `TENSIONE_CN` / EA, circa 0,85 %: a 0 strati resta teso, liberato no);
+   si aggiunge alle lunghezze di riposo. Il filo liberato **si piega di lato**, appoggiato, a
+   `APERTURA_GRADI` dalla verticale, verso cui il punto si è aperto a ventaglio: a parità di filo liberato
+   lo spostamento cresce con la radice della lunghezza del tratto. Niente forma casuale. **Con 0 strati non
+   si muove niente**: lo verifica `test_rimozione.py`.
 4. **Rilassamento finale**: lunghezza e flessione verso lo stato di riposo; contatto fra le sezioni
    della cucitura a 0 strati (rigida: tonde, distanza d; incrementale: ellittiche, dalla compattazione
    del nodo), mai più stretto della distanza che la coppia aveva
    a riposo, **con la direzione di spinta fissata dallo stato di riposo**: chi a 0 strati stava sopra
    resta sopra anche se l'arco di quello sotto sale; collare attorno ai fori;
    gli infilzati restano sul foro. La forma rilasciata si disegna con le sezioni della cucitura a 0 strati.
+5. **La lunghezza non cambia.** Un punto che il rilassamento ha allungato oltre la sua lunghezza (riposo +
+   filo liberato) torna verso il riposo lungo lo stesso spostamento finché la lunghezza torna (bisezione).
+   Prima i contatti allungavano i punti in media di 0,07 mm oltre il dovuto.
 
 ## Parametri (`parametri.py`)
 | gruppo | parametro | valore | stato |
@@ -76,9 +84,10 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
 | attrito | `ATTRITO` (statico) · `ATTRITO_DINAMICO_FRAZ` | cotone 0,5, filamento 0,25 · 0,8 | DA_MISURARE |
 | ago | `DIAMETRO_AGO` · `SOGLIA_INFILZATO` | 0,75 mm · cotone 0,6, filamento 0,3 | soglia DA_MISURARE |
 | fori | `RAGGIO_AGO` · `GARZA_FORO` | 0,375 mm · 0,35 | DA_MISURARE (tranne il raggio) |
-| rimozione | `RIENTRO_FORO` · `APERTURA_MAX_GRADI` · `APERTURA_ECCESSO_PIENO` | 0,4 · 40° · 0,25 | DA_MISURARE |
+| rimozione | `RIENTRO_FORO` · `APERTURA_GRADI` | 0,4 · 75° | DA_MISURARE |
+| deviazione dell'ago (rigida) | `DEVIAZIONE_AGO_FRAZ` · `DEVIAZIONE_AGO_MAX_MM` | 0,25 d · 0,2 mm | DA_MISURARE (macro della fine di un mazzetto) |
 | rilassamento | `COLLARE_FRAZ` · `COLLARE_RAGGIO` · `RIGIDEZZA_FLESSIONE` · `ITERAZIONI` · `GRAVITA_PER_ITER` | 0,6 · 1,0 mm · 0,08 · 160 · 0 | collare DA_MISURARE |
-| non più nella rimozione | `ALLUNGAMENTO_RECUPERATO` | 0,010 | varrebbe uguale nelle due cuciture: nell'eccesso si annulla |
+| non più usato | `ALLUNGAMENTO_RECUPERATO` | 0,010 | l'accorciamento del filo liberato viene da `TENSIONE_CN` / EA |
 | pile e fori (rigida) | `COMPATTAZIONE_PILA_MIN` · `CARICO_PILA_STRATI` · `IMBUTO_PENDENZA` · `PARALLELI_ANGOLO_GRADI` · `RAGGIO_CURVA_MM` | 0,45 · 1 filo · 0,5 · 20° · 0,25 mm | DA_MISURARE (sezione tagliata di una pila, macro di profilo e di un satin) |
 | non più usati | `SCHIACCIAMENTO_FILO` · `SCHIACCIAMENTO_FORO` | 0,60 · 0,30 | il filo della rigida è tondo |
 | ventaglio (rigida) | `SCOSTAMENTI_N` · `VENTAGLIO_MAX_MM` · `VENTAGLIO_FRAZ` · `VENTAGLIO_BORDO_FRAZ` · `K_VENTAGLIO` | 25 · 0,8 mm · 0,22 · 0,10 · 2,5 | max, frazione e K DA_MISURARE (macro con righello) |

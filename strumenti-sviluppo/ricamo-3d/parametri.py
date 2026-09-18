@@ -14,8 +14,7 @@ FILATI = {
 }
 DENSITA_APPARENTE_COTONE = 0.90  # g/cm3 = fibra ~1.5 x compattezza ~0.6  DA_MISURARE
 SCHIACCIAMENTO_FILO = 0.60        # non più usato: nella rigida lo schiacciamento viene dal carico (vedi COMPATTAZIONE_PILA_MIN)
-ALLUNGAMENTO_RECUPERATO = 0.010  # frazione di lunghezza persa al rilascio della tensione  DA_MISURARE
-                                 # (non entra più nella rimozione: varrebbe uguale nelle due cuciture, vedi sotto)
+ALLUNGAMENTO_RECUPERATO = 0.010  # non più usato: l'accorciamento del filo liberato viene da TENSIONE_CN / EA
 
 # --- Fori (cucitura rigida e rilassamento) ------------------------------------------
 # Entro RAGGIO_AGO dal foro l'ago schiaccia la garza: sotto il filo ne resta solo GARZA_FORO. Fra RAGGIO_AGO e
@@ -30,8 +29,9 @@ SPESSORE_GARZA_STRATO = 0.25     # mm nominali per strato  DA_MISURARE (calibro 
 COMPRESSIONE_GARZA = 0.60        # spessore sotto ago e tensione / nominale  DA_MISURARE (sezione campione)
 
 # --- Rilassamento dopo la rimozione -----------------------------------------
-APERTURA_MAX_GRADI = 40          # quanto l'eccesso di filo può andare di lato invece che in alto
-APERTURA_ECCESSO_PIENO = 0.25    # eccesso relativo (filo in più / lunghezza a 0 strati) a cui l'apertura è piena  DA_MISURARE
+# Il filo liberato dalla garza non si alza ad arco: si piega di lato, appoggiato su quello che ha sotto, di più
+# dove il tratto è lungo (a parità di filo liberato lo spostamento cresce con la radice della lunghezza).
+APERTURA_GRADI = 75              # direzione dello spostamento, dalla verticale (90 = tutto di lato)  DA_MISURARE
 RIGIDEZZA_FLESSIONE = 0.08       # 0 = filo morbidissimo, 1 = rigido
 GRAVITA_PER_ITER = 0.0           # mm di spinta verso il tessuto per iterazione. Solo per test:
                                  # a questa scala la rigidità del filo domina sul peso (con 0.0015 il filo crollava ai fori)
@@ -45,7 +45,10 @@ COLLARE_FRAZ = 0.6               # frazione dello spessore di garza compressa ch
 COLLARE_RAGGIO = 1.0             # mm in pianta oltre i quali il collare non sostiene più  DA_MISURARE
 # Rimozione: lo stato di riposo è la cucitura a 0 strati (stessa logica, ventaglio compreso). Filo in eccesso
 # di un punto = lunghezza cucita con la garza - lunghezza cucita a 0 strati; parte rientra nel foro (verso il
-# rovescio / i punti vicini) e non fa arco: lunghezza obiettivo = lunghezza a 0 strati + eccesso * (1 - RIENTRO_FORO).
+# rovescio / i punti vicini) e non fa arco. Il filo liberato perde anche la tensione e si accorcia di
+# TENSIONE_CN / EA (a 0 strati resta teso): lunghezza obiettivo = lunghezza a 0 strati + eccesso * (1 - RIENTRO_FORO)
+# - lunghezza a 0 strati * TENSIONE_CN / EA, mai sotto la lunghezza a 0 strati. Alla fine del rilassamento
+# nessun punto è più lungo di così.
 RIENTRO_FORO = 0.4               # frazione dell'eccesso che rientra nel foro  DA_MISURARE (il più importante)
 PASSI_LUNGHEZZA = 4
 PASSO_NODI_FRAZ_DIAMETRO = 0.5   # distanza tra nodi = frazione del diametro filo
@@ -73,6 +76,11 @@ CARICO_PILA_STRATI = 1.0         # fili sopra a cui lo schiacciamento è a 1/e  
 IMBUTO_PENDENZA = 0.5            # mm di salita per mm di distanza dal foro  DA_MISURARE (macro di profilo)
 RAGGIO_CURVA_MM = 0.25           # DA_MISURARE (macro di profilo); circa un diametro: di più alza molto le pile
 PARALLELI_ANGOLO_GRADI = 20.0    # DA_MISURARE (macro di un satin denso)
+# Deviazione dell'ago (cucitura rigida): l'ago che torna in un foro dove c'è già filo viene spostato un pochino,
+# un po' a destra e un po' a sinistra, di ceil(n/2) * DEVIAZIONE_AGO_FRAZ * d alla n-esima volta, al più
+# DEVIAZIONE_AGO_MAX_MM. I mazzetti finiscono un po' larghi, non a punta.
+DEVIAZIONE_AGO_FRAZ = 0.25       # DA_MISURARE (macro della fine di un mazzetto)
+DEVIAZIONE_AGO_MAX_MM = 0.2      # DA_MISURARE
 VENTAGLIO_MAX_MM = 0.8           # DA_MISURARE (macro con righello)
 VENTAGLIO_FRAZ = 0.22            # DA_MISURARE
 VENTAGLIO_BORDO_FRAZ = 0.10

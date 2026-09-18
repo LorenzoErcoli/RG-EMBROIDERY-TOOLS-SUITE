@@ -218,6 +218,71 @@ def _cuci_rigida(segs, offs, r, d, h_garza, n_scost, mezzo_lato, progresso=None)
     return cucito, L_cucita, c
 
 
+def _lunghezze(pos, offs):
+    passi = np.linalg.norm(np.diff(pos, axis=0), axis=1)
+    cum = np.r_[0.0, np.cumsum(passi)]
+    return cum[offs[1:] - 1] - cum[offs[:-1]]
+
+
+def _a_lunghezza(riposo, pos, offs, L_obiettivo, passi=30):
+    """Per ogni punto più lungo di L_obiettivo: pos = riposo + t * (pos - riposo), t in [0, 1] trovato per
+    bisezione perché la lunghezza torni L_obiettivo. I punti non più lunghi restano come sono."""
+    lungo = _lunghezze(pos, offs) > L_obiettivo * (1 + 1e-4)
+    if not lungo.any():
+        return pos
+    seg = np.repeat(np.arange(len(offs) - 1), np.diff(offs))
+    lo = np.zeros(len(offs) - 1)
+    hi = np.ones(len(offs) - 1)
+    delta = pos - riposo
+    for _ in range(passi):
+        t = np.where(lungo, (lo + hi) / 2, 1.0)
+        troppo = _lunghezze(riposo + delta * t[seg][:, None], offs) > L_obiettivo
+        hi = np.where(lungo & troppo, t, hi)
+        lo = np.where(lungo & ~troppo, t, lo)
+    t = np.where(lungo, lo, 1.0)
+    return riposo + delta * t[seg][:, None]
+
+
+def deviazione_ago(segs, d):
+    """L'ago che torna in un foro dove c'è già filo viene spostato un pochino da quel filo: un po' a destra,
+    un po' a sinistra, perpendicolare al punto. Così i mazzetti finiscono un po' larghi, non a punta.
+
+    Un foro è una bucatura dell'ago: la fine di un punto e l'inizio del seguente, se coincidono, sono la stessa.
+    Alla n-esima bucatura entro STESSO_FORO_MM da bucature precedenti (n = 1, 2, 3, ...) l'ago si sposta di
+    ceil(n / 2) * DEVIAZIONE_AGO_FRAZ * d, alternando i lati, al più DEVIAZIONE_AGO_MAX_MM. Deterministico:
+    con e senza garza le stesse posizioni. Restituisce una copia dei segmenti con i fori spostati.
+    """
+    segs = np.array(segs, dtype=float)
+    out = segs.copy()
+    if len(segs) == 0:
+        return out
+    corde = np.maximum(np.hypot(segs[:, 2] - segs[:, 0], segs[:, 3] - segs[:, 1]), 1e-9)
+    ux, uy = (segs[:, 2] - segs[:, 0]) / corde, (segs[:, 3] - segs[:, 1]) / corde
+    fatti = []                                          # posizioni originali delle bucature già fatte
+    passo = P.DEVIAZIONE_AGO_FRAZ * d
+
+    def buca(x, y, k):
+        vicine = sum(1 for (fx, fy) in fatti if (fx - x) ** 2 + (fy - y) ** 2 < STESSO_FORO_MM ** 2)
+        fatti.append((x, y))
+        if vicine == 0:
+            return 0.0, 0.0
+        m = min((vicine + 1) // 2 * passo, P.DEVIAZIONE_AGO_MAX_MM)
+        lato = 1.0 if vicine % 2 == 1 else -1.0
+        return -uy[k] * m * lato, ux[k] * m * lato
+
+    for k in range(len(segs)):
+        ax, ay, bx, by = segs[k, :4]
+        continuo = k > 0 and abs(segs[k - 1, 2] - ax) < 1e-9 and abs(segs[k - 1, 3] - ay) < 1e-9
+        if continuo:
+            out[k, 0], out[k, 1] = out[k - 1, 2], out[k - 1, 3]       # stessa bucatura del punto prima
+        else:
+            dx, dy = buca(ax, ay, k)
+            out[k, 0], out[k, 1] = ax + dx, ay + dy
+        dx, dy = buca(bx, by, k)
+        out[k, 2], out[k, 3] = bx + dx, by + dy
+    return out
+
+
 def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", progresso=None, ventaglio=True):
     """Una variante. `progresso(k, n)` viene chiamata dopo ogni punto cucito e può sollevare un'eccezione per annullare.
     `ventaglio=False` spegne il ventaglio della cucitura rigida.
@@ -232,6 +297,8 @@ def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", prog
     d = P.diametro_filo(P.FILATI[filato]["tex"])
     r = d / 2
     h_garza = strati * P.SPESSORE_GARZA_STRATO * P.COMPRESSIONE_GARZA
+    if cucitura == "rigida":
+        segs = deviazione_ago(segs, d)                 # l'ago non ribuca mai esattamente lo stesso punto
     N = offs[-1]
     seg_id = np.zeros(N, int)
     loc = np.zeros(N, int)
@@ -280,7 +347,10 @@ def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", prog
 
     # --- 3. rimozione garza: riposo a 0 strati + eccesso come arco ---------------
     corde = np.hypot(segs[:, 2] - segs[:, 0], segs[:, 3] - segs[:, 1])
-    eccesso = np.maximum(0.0, L_cucita - L_zero) * (1 - P.RIENTRO_FORO)
+    # filo liberato: quello che con la garza faceva il giro sopra di lei, meno la parte che rientra nel foro,
+    # meno quanto il filo si accorcia perdendo la tensione (a 0 strati resta teso, liberato no: TENSIONE_CN / EA)
+    allungamento = P.TENSIONE_CN / (P.MODULO_SPECIFICO_CN_TEX[P.FILATI[filato]["materiale"]] * P.FILATI[filato]["tex"])
+    eccesso = np.maximum(0.0, np.maximum(0.0, L_cucita - L_zero) * (1 - P.RIENTRO_FORO) - allungamento * L_zero)
     L_obiettivo = L_zero + eccesso
     scala = L_obiettivo / np.maximum(L_zero, 1e-12)
     i_edge = np.where(loc < nloc - 1)[0]
@@ -297,10 +367,11 @@ def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", prog
         A = (2 * L0 / math.pi) * math.sqrt(max(L_obiettivo[k] / L0 - 1, 0))
         ux, uy = (bx - ax) / corde[k], (by - ay) / corde[k]
         px, py = -uy, ux
-        # di lato verso cui il punto si è già aperto (ventaglio), altrimenti a sinistra; apertura proporzionale all'eccesso
+        # il filo liberato si piega di lato, appoggiato (APERTURA_GRADI dalla verticale), verso cui il punto si
+        # è già aperto (ventaglio), altrimenti a sinistra
         scost = float(np.mean((riposo_geo[a:b, 0] - ax) * px + (riposo_geo[a:b, 1] - ay) * py))
         lato = -1.0 if scost < -1e-6 else 1.0
-        th = math.radians(P.APERTURA_MAX_GRADI) * min(1.0, (eccesso[k] / L0) / P.APERTURA_ECCESSO_PIENO)
+        th = math.radians(P.APERTURA_GRADI)
         bump = np.sin(math.pi * np.linspace(0, 1, n))
         pos[a:b, 0] += lato * px * A * math.sin(th) * bump
         pos[a:b, 1] += lato * py * A * math.sin(th) * bump
@@ -378,6 +449,10 @@ def simula(segs, offs, filato, strati, mezzo_lato, cucitura="incrementale", prog
         pos[~libero] = ancore
         if len(i_legati):
             pos[i_legati, :2] = foro_legato[i_legati]
+
+    # --- 5. la lunghezza del filo non cambia: un punto che il rilassamento ha allungato oltre la sua lunghezza
+    # (riposo + filo liberato) torna verso il riposo lungo lo stesso spostamento, finché la lunghezza torna
+    pos = _a_lunghezza(riposo_geo, pos, offs, L_obiettivo)
 
     return {
         "err_lunghezza_pct": float(np.mean((np.array([np.linalg.norm(np.diff(pos[a:b], axis=0), axis=1).sum() for a, b in zip(offs[:-1], offs[1:])]) / np.maximum(L_obiettivo, 1e-9) - 1)) * 100),
