@@ -5,11 +5,12 @@ misure sui campioni di calibrazione (0 / 1 / 2 strati di termogarza).
 """
 
 # --- Filati -----------------------------------------------------------------
-# Titolo "a peso" (wt): N km pesano 1 kg -> tex = 1000 / N.
-# ATTENZIONE: se Cieffe indica il cotone come Ne 30/2 o simile, il tex cambia.
+# Cieffe Cotone Makò (pettinato, gasato, mercerizzato), titolo inglese a due capi: Ne 30/2 e Ne 40/2.
+# tex = 590,5 / Ne x 2 capi. Il catalogo Cieffe lo conferma col peso dei coni (28/2: 1000 m = 42 g;
+# 40/2: 1000 m = 28 g). Prima erano 1000/30 e 1000/40 (titolo "a peso"), circa il 10 % più sottili.
 FILATI = {
-    "cotone_30": {"tex": 1000 / 30, "colore": "#e9e4d6", "materiale": "cotone"},
-    "cotone_40": {"tex": 1000 / 40, "colore": "#e9e4d6", "materiale": "cotone"},
+    "cotone_30": {"tex": 39.4, "colore": "#e9e4d6", "materiale": "cotone"},   # Ne 30/2
+    "cotone_40": {"tex": 29.5, "colore": "#e9e4d6", "materiale": "cotone"},   # Ne 40/2
 }
 DENSITA_APPARENTE_COTONE = 0.90  # g/cm3 = fibra ~1.5 x compattezza ~0.6  DA_MISURARE
 SCHIACCIAMENTO_FILO = 0.60        # non più usato: nella rigida lo schiacciamento viene dal carico (vedi COMPATTAZIONE_PILA_MIN)

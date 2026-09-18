@@ -1736,6 +1736,14 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   altezza 0 garze media 0,28 mm, max 0,74, max entro 0,5 mm dai fori 0,72; 2 garze rilasciato 0,45 · 1,16 ·
   1,15. Compenetrazioni: chi entra nel suo foro passa dentro la pila attorno (entro 0,4 mm dai fori 17–62 %),
   oltre 0,8 mm 0 %. Test verdi.
+- **Il filo vero: Cieffe Cotone Makò 30/2 e 40/2 (2026-09-18, Lorenzo: «ho il dubbio che il filo nella realtà sia
+  un po' più spesso di quello che vedo a video … il filo è CIEFFE cotone 30 e 40, cerca online quanto è
+  spesso»).** Dal catalogo Cieffe il Cotone Makò si vende in 12/2, 30/2 (anche 28/2) e 40/2: titolo inglese Ne
+  a due capi, confermato dal peso dei coni (28/2: 1000 m = 42 g; 40/2: 1000 m = 28 g). Il modello leggeva
+  «30» come 1000/30 = 33,3 tex: ora **39,4 tex** (Ne 30/2) e **29,5 tex** (Ne 40/2), diametro 0,236 e 0,204 mm
+  (prima 0,217 e 0,188) con la densità 0,90 che resta DA_MISURARE. L'allargamento del filo schiacciato nel
+  visualizzatore (al più 1,25) resta com'è, per decisione di Lorenzo. Centro cartamodello 40 mm, cotone 30:
+  0 garze media 0,30 mm, max 0,82; 2 garze rilasciato 0,46 · 1,20; onde 0 % e 4 %. Test verdi.
 
 **Modello operativo:** per ogni bisogno di UI comanda il subagent `design-system`; già applicato due volte (componenti `rg-workspace` e `rg-topbar--app`).
 

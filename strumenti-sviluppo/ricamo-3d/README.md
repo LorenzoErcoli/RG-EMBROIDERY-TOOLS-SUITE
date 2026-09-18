@@ -67,7 +67,7 @@ per l'anteprima della calibrazione). Il lettore DST è interno.
 ## Parametri (`parametri.py`)
 | gruppo | parametro | valore | stato |
 |---|---|---|---|
-| filato | `FILATI` (tex, materiale) · `DENSITA_APPARENTE_COTONE` | 1000/30, 1000/40 cotone · 0,90 g/cm³ | densità DA_MISURARE |
+| filato | `FILATI` (tex, materiale) · `DENSITA_APPARENTE_COTONE` | Cieffe Cotone Makò Ne 30/2 = 39,4 tex, Ne 40/2 = 29,5 tex (diametro 0,236 e 0,204 mm) · 0,90 g/cm³ | tex dal catalogo Cieffe; densità DA_MISURARE |
 | garza | `SPESSORE_GARZA_STRATO` · `COMPRESSIONE_GARZA` | 0,25 mm · 0,60 | DA_MISURARE |
 | cucitura | `RAGGIO_LOCALE` · `ITER_LOCALI` (minime) · `ITER_LOCALI_MAX` · `TOLLERANZA_LOCALE_MM` · `SOLUTORE` · `FINESTRA_CONVERGENZA` | 2,5 mm · 25 · 400 · 0,001 mm · gauss-seidel · 10 | numerici |
 | tensione | `TENSIONE_CN` | 90 cN | DA_MISURARE (tensiometro) |
