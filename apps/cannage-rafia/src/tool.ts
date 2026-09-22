@@ -4,6 +4,7 @@ import { parseImportedBoundarySource, type ImportScaleMode, type PatternConfig }
 import { buildSvg, dstFromExportLayers, DST_FILE, readProjectMetadata, readDstMetadata } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
+import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 // La libreria dei pattern è quella del Generatore pattern, letta dal suo file (come fa Pattern a zone):
 // un preset pubblicato lì è subito disponibile per le basi, senza un doppione da tenere allineato.
@@ -67,6 +68,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
       <header class="rg-workspace__stage-header">
         <h2 class="rg-h3">Anteprima</h2>
         <div class="rg-cluster">
+          <button id="simulaBtn" class="rg-button rg-button--ghost rg-button--small" aria-pressed="false" title="Il simulatore: il filo si cuce sullo schermo nell'ordine del DST">Simula</button>
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Scarica SVG</button>
@@ -75,6 +77,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
       <div class="rg-workspace__canvas" id="canvas">
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
       </div>
+      <div id="simControlli" class="sim-controlli" hidden></div>
       <footer class="rg-workspace__statusbar">
         <span><span id="status">Carica il disegno a zone (SVG o DXF).</span><span id="points" class="rg-mono"></span></span>
         <span id="zoom" class="rg-mono">zoom 100%</span>
@@ -127,6 +130,9 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
   let cacheSagoma: { chiave: string; sagoma: Sagoma } | null = null;
   let versioneZone = 0;
   let zoneStatusText = 'Nessun disegno caricato.';
+  /** Il simulatore (lo stesso del Pettine): al posto dell'anteprima, il DST che si cuce sullo schermo. */
+  let simulando = false;
+  let simulatore: Simulatore | null = null;
   let drawingNote = '';
 
   const pz = hookPanZoom($('canvas'), $('layer'), (z) => { $('zoom').textContent = `zoom ${Math.round(z * 100)}%`; });
@@ -599,7 +605,9 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
   const d = (pl: Punto[]) => pl.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
 
   function disegna(adatta = false) {
+    if (simulatore) { simulatore.distruggi(); simulatore = null; }
     if (!zone.length) { $('layer').innerHTML = ''; return; }
+    if (simulando && simula()) { if (adatta) pz.fit(); return; }
     const c = contornoDaZone(zone);
     const x0 = c[0].x - 6, y0 = c[0].y - 6, w = c[2].x - c[0].x + 12, h = c[2].y - c[0].y + 12;
     const p1 = conRuolo('pattern1');
@@ -620,6 +628,31 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
       : '';
     $('layer').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${w.toFixed(2)}mm" height="${h.toFixed(2)}mm" viewBox="${x0.toFixed(2)} ${y0.toFixed(2)} ${w.toFixed(2)} ${h.toFixed(2)}">${zs}${lati}${fili}${aree}</svg>`;
     if (adatta) pz.fit();
+  }
+
+  /**
+   * Il DST di adesso, cucito sullo schermo punto per punto nell'ordine della macchina (Lorenzo, 17/09). Il
+   * DST della suite è centrato sullo zero: il riquadro del simulatore parte da lì, con 5 mm di margine.
+   * Toccando un parametro il programma si rifà e la simulazione riparte dall'inizio.
+   */
+  function simula(): boolean {
+    const strati = stratiProgramma(stop);
+    if (!strati.length) return false;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const l of strati) for (const pl of l.polylines) for (const p of pl) {
+      x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y);
+    }
+    const margine = 5, w = x1 - x0 + 2 * margine, h = y1 - y0 + 2 * margine;
+    try {
+      // lo stesso file di «Esporta DST», metadati compresi: si simula quello che va in macchina
+      const bytes = dstFromExportLayers(strati, { label: nomeBase().toUpperCase().slice(0, 16), metadata: progetto() });
+      simulatore = montaSimulatore($('layer'), $('simControlli'), bytes, strati.map((l) => l.color), w, h,
+        (t) => { $('status').textContent = t; }, { x: -w / 2, y: -h / 2 });
+      return true;
+    } catch (e) {
+      $('status').textContent = (e as Error).message;
+      return false;
+    }
   }
 
   // ---- progetto riapribile (R9/R27/R31): parametri, pattern delle basi, ruoli e — se ci sta — il disegno ----
@@ -764,6 +797,12 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
   }
 
   $('fitBtn').addEventListener('click', () => pz.fit());
+  $('simulaBtn').addEventListener('click', () => {
+    simulando = !simulando;
+    $('simulaBtn').setAttribute('aria-pressed', String(simulando));
+    ($('simControlli') as HTMLElement).hidden = !simulando;
+    disegna(true);
+  });
 
   // Scegliere un lato: un clic (non un trascinamento) sull'anteprima prende il lato più vicino. Il clic si
   // legge sulla tela e si riporta in mm, perché il pan cattura il puntatore e il bersaglio non è il lato.

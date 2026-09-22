@@ -27,7 +27,7 @@ import { DST_FILE, readDstMetadata, type PixelImage } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { montaSimulatore, type Simulatore } from './simulatore';
+import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 // il pannello di esempio, per provare il tool senza cercare i file (e per il simulatore)
 const ESEMPIO_SVG = new URL('../fixtures/VETTORIALE-6-colori-v2-gruppo-blocchi.svg', import.meta.url).href;
 import {

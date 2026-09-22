@@ -8,7 +8,12 @@
 // Tre tele sovrapposte: la base grigia (disegnata una volta), il filo cucito (si aggiunge un pezzo alla
 // volta: avanzare costa solo i punti nuovi), e l'ago (ridisegnato a ogni quadro). Tornare indietro
 // ridisegna il cucito da capo fino al punto: sono al massimo duecentomila segmenti, mezzo secondo.
+//
+// Nato nel Pettine, qui in @rg/ui dal 2026-09-17: lo vuole anche Cannage rafia (Lorenzo: «mi inserisci la
+// simulazione nel pattern cannage?») e le app non si importano fra loro. `origine` e' l'angolo in alto a
+// sinistra del riquadro nelle coordinate del DST: il Pettine lo scrive da 0, l'export della suite lo centra.
 import { readDst } from '@rg/core';
+import './simulatore.css';
 
 export interface Simulatore {
   /** ferma l'animazione e stacca i controlli */
@@ -19,7 +24,9 @@ interface Segmento { x0: number; y0: number; x1: number; y1: number; ago: number
 
 export function montaSimulatore(
   host: HTMLElement, controlli: HTMLElement, dst: Uint8Array, colori: string[], larghezzaMm: number, altezzaMm: number, stato: (s: string) => void,
+  origine: { x: number; y: number } = { x: 0, y: 0 },
 ): Simulatore {
+  const ox = origine.x, oy = origine.y;
   const letto = readDst(dst);
   // la sequenza: un segmento per punto, piu' un segmento di salto fra un blocco e il successivo
   const seg: Segmento[] = [];
@@ -50,12 +57,13 @@ export function montaSimulatore(
     cornice.appendChild(c);
     const g = c.getContext('2d')!;
     g.scale(PXMM, PXMM);
+    g.translate(-ox, -oy);
     g.lineCap = 'round'; g.lineJoin = 'round';
     return g;
   };
   const base = tela(), filo = tela(), ago = tela();
   host.appendChild(cornice);
-  base.fillStyle = '#f7f6f3'; base.fillRect(0, 0, larghezzaMm, altezzaMm);
+  base.fillStyle = '#f7f6f3'; base.fillRect(ox, oy, larghezzaMm, altezzaMm);
   base.strokeStyle = '#d9d9d9'; base.lineWidth = 0.12;
   base.beginPath();
   for (const s of seg) if (!s.salto) { base.moveTo(s.x0, s.y0); base.lineTo(s.x1, s.y1); }
@@ -65,7 +73,7 @@ export function montaSimulatore(
   const tratto = (n: number): string => (n === 1 && /^#(d|e|f)/i.test(colore(n)) ? '#9a9a9a' : colore(n));
   let disegnato = 0;   // quanti segmenti sono gia' sul filo cucito
   const disegnaFino = (fino: number): void => {
-    if (fino < disegnato) { filo.clearRect(0, 0, larghezzaMm, altezzaMm); disegnato = 0; }
+    if (fino < disegnato) { filo.clearRect(ox, oy, larghezzaMm, altezzaMm); disegnato = 0; }
     let i = disegnato;
     while (i < fino) {
       // un tratto per ogni corsa di segmenti dello stesso tipo e dello stesso ago
@@ -82,7 +90,7 @@ export function montaSimulatore(
     disegnato = fino;
   };
   const disegnaAgo = (pos: number): void => {
-    ago.clearRect(0, 0, larghezzaMm, altezzaMm);
+    ago.clearRect(ox, oy, larghezzaMm, altezzaMm);
     if (!N) return;
     const s = seg[Math.min(N - 1, Math.max(0, pos - 1))];
     const x = pos > 0 ? s.x1 : seg[0].x0, y = pos > 0 ? s.y1 : seg[0].y0;

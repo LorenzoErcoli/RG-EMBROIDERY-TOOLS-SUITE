@@ -6,26 +6,3 @@
 @import '../../design-system/styles/rg-components.css';
 @import '../../design-system/styles/rg-layout.css';
 @import '../../design-system/styles/rg-utilities.css';
-
-/* ─────────────────────────────────────────────────────────────────────────────────────────────
-   CORREZIONE DI UN DIFETTO DEL DS (v1.14.1) — da togliere quando il DS lo risolve.
-
-   Il campo numerico con unità mostrava un BUCO fra il numero e la sua unità ("100      mm"),
-   in tutti i 106 campi di tutti i 12 tool. Misurato: 14px, sempre.
-
-   Causa: la larghezza `--rg-input-numeric-width: 12ch` viene risolta DUE VOLTE in due font
-   diversi. `ch` vale la larghezza dello "0" nel font di chi la usa:
-   - la colonna della griglia (`.rg-field-with-unit:has(.rg-input--numeric)`) la calcola nel font
-     del contenitore, GT America 16px  → 106,8px;
-   - il `max-width` dell'input (`.rg-input--numeric`) la calcola nel suo font, GT America Mono
-     14px → 92,4px.
-   L'input resta 14px più corto della sua colonna, e l'unità comincia dopo la colonna.
-
-   Correzione: dentro il campo con unità la larghezza la decide la COLONNA, e l'input la riempie
-   (è un elemento di griglia, quindi si allarga da sé alla traccia). Fuori dal campo con unità il
-   `max-width` resta com'è, perché lì serve.
-
-   Da portare nel DS, in `styles/rg-components.css` subito dopo la regola `:has(.rg-input--numeric)`:
-     .rg-field-with-unit .rg-input--numeric { max-width: none; }
-   ───────────────────────────────────────────────────────────────────────────────────────────── */
-.rg-field-with-unit .rg-input--numeric { max-width: none; }
