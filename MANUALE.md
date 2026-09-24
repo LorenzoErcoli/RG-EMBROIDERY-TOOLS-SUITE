@@ -491,22 +491,23 @@ collegamenti restano corti e il taglio si paga solo per cambiare blocco.
 ## Cross-Stitch (`cross-stitch`)
 
 **A cosa serve.** A ricamare un disegno fatto di **diagonali in una griglia**: la diagonale
-singola, la **V** (due diagonali che si toccano nell'angolo, il punto della **maglia**) e la
-**croce**. Si disegna a mano cella per cella, o si parte da un'immagine e la griglia si riempie
-da sola di V colorate.
+singola, la **V** (il punto della **maglia**), la **Λ** e la **croce**. **Un punto per cella**:
+la V sta dentro la sua cella — dall'angolo in alto a sinistra alla punta a metà del lato di sotto,
+e su all'angolo in alto a destra — quindi V e croce hanno la stessa misura e si mescolano. Si
+disegna a mano cella per cella, o si parte da un'immagine e la griglia si riempie da sola.
 
 **Modificare: la barra sopra il disegno.** Sempre visibile, con gli strumenti, la grandezza del
 pennello, i fili e Annulla/Rifai.
 - **Sposta** (H): trascini la vista, il ricamo non si tocca. Rotella = ingrandisci.
-- **Pennello** (B): trascinando, le V sotto il pennello passano al filo scelto — per pulire
-  l'interno di una scritta, bianco sopra il nero. Lavora sempre a V intere, allineate alla maglia.
-  Sulle celle vuote mette il *punto nuovo* scelto nella sezione 04 (V, diagonale o croce; col clic
-  destro Λ o «/»).
+- **Pennello** (B): trascinando, i punti sotto il pennello passano al filo scelto — per pulire
+  l'interno di una scritta, bianco sopra il nero. Lavora a celle intere, una cella = un punto. Sulle celle vuote mette il punto
+  scelto nella barra, alla voce *Punto* (V, Croce, Diagonale; col clic destro Λ o «/»).
 - **Riempi** (F): un clic passa al filo scelto tutta la zona COLLEGATA dello stesso colore. Attento:
   segue tutto quello che si tocca, quindi va usato su zone chiuse (l'interno di una lettera); per i
   ritocchi c'è il pennello.
 - **Gomma** (E): cancella, lì non si cuce niente. Con qualunque strumento, Maiuscolo cancella.
-- **Grandezza** 1, 2, 4, 8 V: sotto il mouse si vede l'impronta del pennello.
+- **Griglia**: accesa, le linee della griglia si vedono anche sopra il ricamo.
+- **Grandezza** 1, 2, 4, 8 punti: sotto il mouse si vede l'impronta del pennello.
 - **Filo**: i quadratini dei fili, un clic sceglie quello del pennello.
 - **Annulla / Rifai**: anche Ctrl+Z e Ctrl+Y. Spazio + trascina sposta la vista con ogni strumento.
 
@@ -520,21 +521,24 @@ vengono dopo.
 subito, ogni V col filo più vicino al colore dell'immagine sotto di lei (i colori dei fili si
 ricavano dall'immagine, tanti quanti sono i fili, il più chiaro per primo). Poi in *02 Misure del
 ricamo* scegli **larghezza e altezza del ricamo** in mm, **larghezza e altezza della cella** e il
-**sormonto delle righe**: colonne e righe le calcola il tool, e la maglia si rifà da sola. Le
-colonne sono sempre pari (una V occupa due colonne) e le celle sono intere, quindi il ricamo esce
+**sormonto delle righe**: colonne e righe le calcola il tool, e la maglia si rifà da sola. Le celle
+sono intere, quindi il ricamo esce
 della misura più vicina possibile: la riga sotto le misure dice quella vera. L'altezza segue le
 proporzioni dell'immagine; se la scrivi a mano la proporzione si sblocca e l'immagine si stira.
 Il **sormonto** è solo verticale: ogni riga sale dentro quella di sopra di quella percentuale
 dell'altezza, e le V si infilano una nell'altra; in orizzontale le V si toccano e basta. Per
-l'effetto maglia: celle strette e alte (per esempio 2,5 × 6 mm). Se ritocchi il disegno a mano,
+l'effetto maglia: celle più alte che larghe (per esempio 3 × 3,8 mm, sormonto 30%). Se ritocchi il disegno a mano,
 cambiando le misure non si rifà più dall'immagine: c'è *Rifai la maglia dall'immagine*.
+
+**Il punto della generazione.** In *01 Immagine*, *Punto*: V (la maglia, di partenza), Λ (la V
+capovolta), Croce, o la sola diagonale. Uno per cella, ognuno col suo filo. Per più dettaglio
+in orizzontale si stringe la cella.
 
 **Leggere bene l'immagine.** I colori dei fili si ricavano dall'immagine e si affinano, così un
 nero resta nero anche se attorno ci sono molti grigi di bordo. Il filo che copre di più va per
 **ultimo, cioè sopra**: gli altri nascondono i loro passaggi sotto di lui. La **soglia del
-dettaglio** dice quanta parte di un colore di dettaglio (il nero) basta dentro una V per farla di
-quel colore: più bassa salva i tratti sottili come le lettere, 50% è la maggioranza. **Mezza V**
-decide il colore per ogni gamba e raddoppia il dettaglio in orizzontale.
+dettaglio** dice quanta parte di un colore di dettaglio (il nero) basta dentro una cella per farla di
+quel colore: più bassa salva i tratti sottili come le lettere, 50% è la maggioranza.
 
 **Swatch: il ritaglio.** Per provare un pezzo piccolo premi **Ritaglia** e trascina un
 rettangolo sul disegno: la maglia si rifà solo su quel pezzo, con le proporzioni del pezzo, e
@@ -547,8 +551,9 @@ già cucita (arancio, ingrossa un po' il punto), lungo un bordo di cella in vist
 *Salta oltre* diventa un salto con taglio. La barra di stato dice quanti mm di ciascun tipo.
 Il **ripasso** su una diagonale già cucita costa pochissimo: il filo si sposta usando i suoi
 stessi punti. **Niente passaggi orizzontali**: per cambiare riga il filo scende o sale **in
-verticale, da vertice a vertice** (dalla punta di una V alla punta della V sotto, o da angolo ad
-angolo), in blu nell'anteprima. Se quel verticale passerebbe sopra una V di un colore già cucito,
+verticale, dai vertici della V**: ripassa mezza V fino alla punta, scende al centro fino alla
+punta della V sotto e risale (in blu nell'anteprima). Mezza V prende un passaggio in più, ma il filo
+resta dentro il punto invece di scendere sul lato fra due celle. Se quel verticale passerebbe sopra una V di un colore già cucito,
 lo evita. **Niente salti**: a macchina un salto lascia un filo che attraversa gli altri colori; si
 salta solo oltre *Salta oltre* (400 mm di partenza). In una zona chiusa (il bianco dentro una
 lettera nera) il filo che va sopra deve attraversare il contorno una volta, e lo fa nel punto più
@@ -559,9 +564,11 @@ indietro, avanti sugli stessi fori e poi la V dopo, come il punto triplo delle m
 la riga*: ogni passata è un pezzo a sé, la riga si fa all'andata e si ripassa al ritorno; conviene
 con passate **pari**. *Direzione fissa* obbliga «\» dall'alto e «/» dal basso.
 
-**Salvare e riaprire.** SVG e DST portano dentro tutto il progetto: *Apri progetto…* li rimette
-com'erano. Apre anche i progetti `.json` della vecchia app ThreadRoute. L'ultimo lavoro si
-riapre da solo.
+**Salvare e riaprire.** Aggiornando la pagina si riparte **sempre puliti**: il tool non tiene
+niente in memoria. Per riprendere un lavoro, SVG e DST esportati da qui portano dentro tutti i
+valori e il disegno: in fondo al pannello, *06 Carica parametri*, li rimette com'erano. Apre anche
+i progetti `.json` della vecchia app ThreadRoute. L'immagine di partenza non è nel file: se vuoi
+rifare la maglia, ricaricala.
 
 ## Se qualcosa non torna
 

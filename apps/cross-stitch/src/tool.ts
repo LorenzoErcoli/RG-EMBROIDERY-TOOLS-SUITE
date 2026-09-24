@@ -9,7 +9,7 @@ import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import {
   type Button, type Cells, type GridSpec, type Leg, type Thread, type Tool,
-  type Pixels, type BrushStitch, DEFAULT_GRID, applyEdits, brushArea, brushEdits, fillEdits, knitFromImage, gridForSize, refinePalette, paletteShares, DEFAULT_KNIT, cellIndex, cellsFromJson, cellsToJson, editsFor, fromThreadRoute, legEnds, legsOf,
+  type Pixels, type BrushStitch, type KnitStitch, DEFAULT_GRID, applyEdits, brushArea, brushEdits, fillEdits, knitFromImage, gridForSize, refinePalette, paletteShares, DEFAULT_KNIT, cellIndex, cellsFromJson, cellsToJson, editsFor, fromThreadRoute, fromTwoColumnV, stitchLegs,
   resizeCells, pointInRow, segmentPoints, rowPitch, gridHeight,
 } from './model';
 import {
@@ -17,8 +17,14 @@ import {
   DEFAULT_ROUTE, DEFAULT_STITCH, colorPolylines, routeCells,
 } from './routing';
 
-const VERSION = '0.3.0';
-const AUTOSAVE_KEY = 'rg-cross-stitch-autosave';
+// 0.4.0: un punto per colonna (la V dentro la sua cella). I progetti di prima si convertono.
+const VERSION = '0.4.0';
+/**
+ * Il vecchio salvataggio automatico. Tolto su richiesta di Lorenzo (2026-09-24): «cancella sempre
+ * tutto» a ogni aggiornamento della pagina; per riprendere un lavoro si ricarica il DST o l'SVG
+ * esportato (sezione 06). La chiave serve solo a cancellare quello che era rimasto nel browser.
+ */
+const OLD_AUTOSAVE_KEY = 'rg-cross-stitch-autosave';
 
 /** I fili di partenza: l'ordine è l'ordine degli aghi. */
 const DEFAULT_THREADS: Thread[] = [{ hex: '#1a1a1a' }, { hex: '#b3261e' }];
@@ -28,7 +34,7 @@ type Mode = 'pan' | 'paint' | 'fill' | 'erase';
 
 const MODE_HELP: Record<Mode, string> = {
   pan: 'Sposta: trascina per muovere la vista, rotella per ingrandire. Il ricamo non si tocca.',
-  paint: 'Pennello: trascina per passare le V al filo scelto. Sulle celle vuote mette il punto nuovo (sezione 04). Maiuscolo + trascina cancella.',
+  paint: 'Pennello: trascina per passare le V al filo scelto. Sulle celle vuote mette il punto scelto qui a fianco (V, croce, diagonale). Maiuscolo + trascina cancella.',
   fill: 'Riempi: un clic passa al filo scelto tutta la zona collegata dello stesso colore — per esempio l’interno di una lettera.',
   erase: 'Gomma: trascina per cancellare; lì non si cuce niente.',
 };
@@ -66,16 +72,20 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             </label>
             <p class="rg-file-input__status" id="imageStatus" role="status">Carica la foto o il disegno: la maglia si crea da sola, poi regoli le misure qui sotto.</p>
           </div>
+          <div class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Punto</span>
+            <div class="rg-segmented" id="knitStitchSel" role="group" aria-label="Punto della generazione">
+              <button type="button" class="rg-segmented__item" data-kstitch="v">V</button>
+              <button type="button" class="rg-segmented__item" data-kstitch="lambda">Λ</button>
+              <button type="button" class="rg-segmented__item" data-kstitch="cross">Croce</button>
+              <button type="button" class="rg-segmented__item" data-kstitch="down">«\\»</button>
+              <button type="button" class="rg-segmented__item" data-kstitch="up">«/»</button>
+            </div>
+            <small class="rg-field__help">Il punto con cui l’immagine riempie la griglia: uno per cella, ognuno col suo filo.</small>
+          </div>
           <label class="rg-field"><span class="rg-field__label">Soglia del dettaglio</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="detailPct" type="number" min="1" max="100" step="5"><span>%</span></span></label>
-          <div class="rg-field">
-            <span class="rg-field__label">Colore per</span>
-            <div class="rg-segmented" id="perLegSel" role="group" aria-label="Colore per">
-              <button type="button" class="rg-segmented__item" data-perleg="0">V intera</button>
-              <button type="button" class="rg-segmented__item" data-perleg="1">Mezza V</button>
-            </div>
-          </div>
-          <small class="rg-field__help rg-param-grid__wide">Soglia: basta questa parte di un colore di dettaglio (il nero) dentro una V per farla di quel colore. Più bassa salva i tratti sottili come le lettere; 50% = la maggioranza. «Mezza V» decide il colore per ogni gamba: il doppio di dettaglio in orizzontale.</small>
+          <small class="rg-field__help rg-param-grid__wide">Soglia: basta questa parte di un colore di dettaglio (il nero) dentro una cella per farla di quel colore. Più bassa salva i tratti sottili come le lettere; 50% = la maggioranza. Per più dettaglio in orizzontale, stringi la cella.</small>
           <label class="rg-field"><span class="rg-field__label">Opacità sotto la griglia</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="imageOpacity" type="number" min="0" max="100" step="5" value="0"><span>%</span></span></label>
           <div class="rg-cluster rg-param-grid__wide">
@@ -109,13 +119,6 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="overlap" type="number" min="0" max="90" step="5"><span>%</span></span>
             <small class="rg-field__help">Solo in verticale: quanto ogni riga sale dentro quella di sopra, così le V si avvicinano e si infilano una nell’altra. In orizzontale le V si toccano e basta.</small></label>
           <p class="rg-field__help rg-param-grid__wide" id="formatInfo"></p>
-          <div class="rg-file-input rg-param-grid__wide">
-            <label class="rg-file-input__control">
-              <input type="file" id="projectInput" accept=".svg,.dst,.json" />
-              <span class="rg-button rg-button--ghost rg-button--small">Apri progetto…</span>
-            </label>
-            <p class="rg-file-input__status" id="projectStatus" role="status">SVG o DST esportati da qui, o un progetto ThreadRoute (.json).</p>
-          </div>
         </div>
       </section>
 
@@ -127,33 +130,16 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       </section>
 
       <details class="rg-param-section rg-disclosure" open>
-        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">04</span><span class="rg-param-section__title">Punto</span></summary>
+        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">04</span><span class="rg-param-section__title">Passaggi</span></summary>
         <div class="rg-param-grid">
-          <div class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Punto nuovo del pennello</span>
-            <div class="rg-segmented" id="stitchSel" role="group" aria-label="Punto nuovo del pennello">
-              <button type="button" class="rg-segmented__item" data-stitch="v">V</button>
-              <button type="button" class="rg-segmented__item" data-stitch="diag">Diagonale</button>
-              <button type="button" class="rg-segmented__item" data-stitch="cross">Croce</button>
-            </div>
-            <small class="rg-field__help">Il punto che il pennello mette sulle celle VUOTE; su quelle piene cambia solo il colore. Col clic destro: Λ al posto di V, «/» al posto di «\».</small>
-          </div>
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Gamba sopra nella croce</span>
             <div class="rg-segmented" id="topLegSel" role="group" aria-label="Gamba sopra nella croce">
               <button type="button" class="rg-segmented__item" data-leg="down">«\\»</button>
               <button type="button" class="rg-segmented__item" data-leg="up">«/»</button>
             </div>
+            <small class="rg-field__help">Nella croce si cuce prima una gamba e poi l’altra, sempre nello stesso ordine: questa è quella che resta sopra.</small>
           </div>
-          <div class="rg-cluster rg-param-grid__wide">
-            <button type="button" id="clearBtn" class="rg-button rg-button--ghost rg-button--small">Svuota tutto</button>
-          </div>
-        </div>
-      </details>
-
-      <details class="rg-param-section rg-disclosure" open>
-        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">05</span><span class="rg-param-section__title">Passaggi</span></summary>
-        <div class="rg-param-grid">
           <label class="rg-field"><span class="rg-field__label">Passate per diagonale</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="reps" type="number" min="1" max="8" step="1"><span>n</span></span></label>
           <label class="rg-field"><span class="rg-field__label">Salta oltre</span>
@@ -177,7 +163,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       </details>
 
       <details class="rg-param-section rg-disclosure">
-        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">06</span><span class="rg-param-section__title">Macchina</span></summary>
+        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">05</span><span class="rg-param-section__title">Macchina</span></summary>
         <div class="rg-param-grid">
           <label class="rg-field"><span class="rg-field__label">Punto massimo</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="maxStitch" type="number" min="1" max="12" step="0.5"><span>mm</span></span></label>
@@ -186,6 +172,19 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           <small class="rg-field__help rg-param-grid__wide">Le diagonali più lunghe del punto massimo si spezzano in punti uguali.</small>
         </div>
       </details>
+
+      <section class="rg-param-section">
+        <div class="rg-param-section__header"><span class="rg-param-section__index">06</span><h3 class="rg-param-section__title">Carica parametri</h3></div>
+        <div class="rg-param-grid">
+          <div class="rg-file-input rg-param-grid__wide">
+            <label class="rg-file-input__control">
+              <input type="file" id="projectInput" accept=".dst,.svg,.json" />
+              <span class="rg-button rg-button--outline">Carica un DST o un SVG…</span>
+            </label>
+            <p class="rg-file-input__status" id="projectStatus" role="status">Un DST o un SVG esportato da qui rimette tutti i valori e il disegno. Si apre anche un progetto ThreadRoute (.json).</p>
+          </div>
+        </div>
+      </section>
     </aside>
 
     <div class="rg-workspace__stage">
@@ -214,13 +213,25 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           </div>
         </div>
         <div class="cs-editbar__group">
+          <span class="cs-editbar__label">Punto</span>
+          <div class="rg-segmented" id="stitchSel" role="group" aria-label="Punto del disegno">
+            <button type="button" class="rg-segmented__item" data-stitch="v" title="V dentro la cella. Clic destro: Λ">V</button>
+            <button type="button" class="rg-segmented__item" data-stitch="cross" title="Croce: una colonna">Croce</button>
+            <button type="button" class="rg-segmented__item" data-stitch="diag" title="Diagonale: una colonna. Sinistro «\\», destro «/»">Diagonale</button>
+          </div>
+        </div>
+        <div class="cs-editbar__group">
           <span class="cs-editbar__label">Filo</span>
           <span class="cs-editbar__threads" id="editThreads" role="group" aria-label="Filo del pennello"></span>
         </div>
         <div class="cs-editbar__group">
           <button type="button" id="undoBtn" class="rg-button rg-button--ghost rg-button--small" title="Annulla (Ctrl+Z)">Annulla</button>
           <button type="button" id="redoBtn" class="rg-button rg-button--ghost rg-button--small" title="Rifai (Ctrl+Y)">Rifai</button>
+          <button type="button" id="clearBtn" class="rg-button rg-button--ghost rg-button--small">Svuota tutto</button>
         </div>
+        <label class="rg-toggle">
+          <input type="checkbox" id="showGrid" checked><span class="rg-toggle__track"></span><span>Griglia</span>
+        </label>
         <p class="cs-editbar__help" id="modeHelp"></p>
       </div>
       <div class="rg-workspace__canvas" id="canvas">
@@ -256,13 +267,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   let brushStitch: BrushStitch = 'v';
   let activeThread = 0;
   let showPaths = true;
+  let showGrid = true;
   let image: { url: string; w: number; h: number; px: Pixels } | null = null;
   let imageOpacity = 0;
   /** Le misure del ricamo chieste (mm): la griglia se ne ricava. */
   let target = { w: st.grid.cols * st.grid.cellW, h: gridHeight(st.grid) };
   /** Vero finché il disegno è quello uscito dall'immagine: cambiando le misure si rifà. */
   let fromImage = false;
-  /** Come si legge l'immagine: soglia del dettaglio e colore per mezza V. */
+  /** Come si legge l'immagine: il punto e la soglia del dettaglio. */
   const knit = { ...DEFAULT_KNIT };
   /** L'immagine originale e il pezzo ritagliato (px dell'originale); null = tutta. */
   let source: { img: HTMLImageElement; name: string } | null = null;
@@ -285,7 +297,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
    * era un capello (0,13 della cella): su 450 mm di giornale le lettere sembravano perse anche
    * dove c'erano, perché il filo non copriva niente.
    */
-  const threadWidth = () => Math.min(st.grid.cellW, st.grid.cellH) * Math.min(0.9, 0.5 * (1 + 0.15 * (st.route.repetitions - 1)));
+  const threadWidth = () => Math.min(st.grid.cellW / 2, st.grid.cellH) * Math.min(0.9, 0.5 * (1 + 0.15 * (st.route.repetitions - 1)));
 
   function svgMarkup(): string {
     const g = st.grid;
@@ -298,18 +310,19 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     parts.push(`<rect x="0" y="0" width="${f(w)}" height="${f(h)}" style="fill:var(--rg-color-neutral-200)"/>`);
     if (image) parts.push(`<image href="${image.url}" x="0" y="0" width="${f(w)}" height="${f(h)}" preserveAspectRatio="none" opacity="${imageOpacity}"/>`);
     // la griglia: un pattern per le celle, una riga più scura ogni 10
-    parts.push(`<defs><pattern id="cs-cell" width="${f(g.cellW)}" height="${f(pitch)}" patternUnits="userSpaceOnUse"><path d="M ${f(g.cellW)} 0 L 0 0 0 ${f(pitch)}" fill="none" style="stroke:var(--rg-color-neutral-200)" stroke-width="0.6" vector-effect="non-scaling-stroke"/></pattern>`
-      + `<pattern id="cs-major" width="${f(g.cellW * 10)}" height="${f(pitch * 10)}" patternUnits="userSpaceOnUse"><path d="M ${f(g.cellW * 10)} 0 L 0 0 0 ${f(pitch * 10)}" fill="none" style="stroke:var(--rg-color-neutral-400)" stroke-width="0.8" vector-effect="non-scaling-stroke"/></pattern></defs>`);
-    parts.push(`<rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="url(#cs-cell)"/>`);
-    parts.push(`<rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="url(#cs-major)" style="stroke:var(--rg-color-neutral-600)" stroke-width="1" vector-effect="non-scaling-stroke"/>`);
+    parts.push(`<defs><pattern id="cs-cell" width="${f(g.cellW)}" height="${f(pitch)}" patternUnits="userSpaceOnUse"><path d="M ${f(g.cellW)} 0 L 0 0 0 ${f(pitch)}" fill="none" style="stroke:var(--rg-color-neutral-400)" stroke-width="0.6" vector-effect="non-scaling-stroke"/></pattern>`
+      + `<pattern id="cs-major" width="${f(g.cellW * 10)}" height="${f(pitch * 10)}" patternUnits="userSpaceOnUse"><path d="M ${f(g.cellW * 10)} 0 L 0 0 0 ${f(pitch * 10)}" fill="none" style="stroke:var(--rg-color-neutral-800)" stroke-width="0.9" vector-effect="non-scaling-stroke"/></pattern></defs>`);
+    // La griglia: sotto il ricamo quando è spenta (si vede solo nel vuoto), SOPRA quando è accesa,
+    // così si vede anche dove il ricamo copre tutto (Lorenzo: «io ho bisogno di vedere la griglia»).
+    const gridMarkup = `<g opacity="${showGrid ? 0.55 : 1}" pointer-events="none"><rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="url(#cs-cell)"/><rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="url(#cs-major)" style="stroke:var(--rg-color-neutral-800)" stroke-width="1" vector-effect="non-scaling-stroke"/></g>`;
+    if (!showGrid) parts.push(gridMarkup);
     // i punti, colore per colore nell'ordine degli aghi; nella croce la gamba sopra per seconda
     const sw = f(threadWidth());
     const byColor = new Map<number, string[]>();
     for (const [k, mark] of st.cells) {
       const r = Math.floor(k / g.cols), c = k - r * g.cols;
       const list = byColor.get(mark.color) ?? [];
-      for (const leg of legsOf(mark.stitch, st.route.topLeg)) {
-        const { a, b } = legEnds(g, r, c, leg);
+      for (const { a, b } of stitchLegs(g, r, c, mark.stitch, st.route.topLeg)) {
         const pa = pointInRow(g, a, r), pb = pointInRow(g, b, r);
         list.push(`M${f(pa.x)} ${f(pa.y)}L${f(pb.x)} ${f(pb.y)}`);
       }
@@ -319,6 +332,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       const hex = st.threads[ci]?.hex ?? '#000000';
       parts.push(`<path d="${byColor.get(ci)!.join('')}" stroke="${hex}" stroke-width="${sw}" stroke-linecap="round" fill="none"/>`);
     });
+    if (showGrid) parts.push(gridMarkup);
     // i passaggi
     if (showPaths && result) {
       const paths: Record<string, string[]> = { visible: [], retrace: [], vertical: [], hidden: [], jump: [] };
@@ -357,7 +371,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   function draw(): void {
     $('layer').innerHTML = svgMarkup();
     const { w, h } = sizeMm();
-    $('formatInfo').textContent = `Griglia: ${st.grid.cols} colonne (${Math.floor(st.grid.cols / 2)} V) × ${st.grid.rows} righe · il ricamo esce ${f(w)} × ${f(h)} mm (le celle sono intere)`;
+    $('formatInfo').textContent = `Griglia: ${st.grid.cols} colonne × ${st.grid.rows} righe, un punto per cella · il ricamo esce ${f(w)} × ${f(h)} mm (le celle sono intere)`;
     if (!result) return;
     const m = result.metrics;
     if (!m.legs) { $('status').textContent = 'Griglia vuota: disegna con il clic.'; return; }
@@ -365,15 +379,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $('status').textContent = `${m.legs} diagonali · passaggi in vista ${mm(m.visibleMm)} · ripassi ${mm(m.retraceMm)} · vertice-vertice ${mm(m.verticalMm)} · nascosti ${mm(m.hiddenMm)} · ${m.jumps} salt${m.jumps === 1 ? 'o' : 'i'}`;
   }
 
-  function autosave(): void {
-    try { localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(projectMetadata())); } catch { /* niente spazio: pazienza */ }
-  }
-
-  /** Ricalcola e ridisegna; `save` = salva anche in automatico. */
-  function update(save = true): void {
+  /** Ricalcola e ridisegna. */
+  function update(): void {
     recompute();
     draw();
-    if (save) autosave();
   }
 
   // ---- campi ------------------------------------------------------------------
@@ -439,10 +448,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   num('reps').addEventListener('change', () => { st.route.repetitions = clampInt(Number(num('reps').value) || 1, 1, 8); syncFields(); update(); });
   num('jumpMm').addEventListener('change', () => { st.route.jumpMm = Math.max(0, Number(num('jumpMm').value) || 0); syncFields(); update(); });
-  num('maxStitch').addEventListener('change', () => { st.stitch.maxStitchMm = Math.min(12, Math.max(1, Number(num('maxStitch').value) || DEFAULT_STITCH.maxStitchMm)); syncFields(); autosave(); });
-  num('travelStitch').addEventListener('change', () => { st.stitch.travelStitchMm = Math.min(12, Math.max(0.5, Number(num('travelStitch').value) || DEFAULT_STITCH.travelStitchMm)); syncFields(); autosave(); });
+  num('maxStitch').addEventListener('change', () => { st.stitch.maxStitchMm = Math.min(12, Math.max(1, Number(num('maxStitch').value) || DEFAULT_STITCH.maxStitchMm)); syncFields(); });
+  num('travelStitch').addEventListener('change', () => { st.stitch.travelStitchMm = Math.min(12, Math.max(0.5, Number(num('travelStitch').value) || DEFAULT_STITCH.travelStitchMm)); syncFields(); });
   $<HTMLInputElement>('fixedDir').addEventListener('change', (e) => { st.route.fixedDirection = (e.target as HTMLInputElement).checked; update(); });
   $<HTMLInputElement>('showPaths').addEventListener('change', (e) => { showPaths = (e.target as HTMLInputElement).checked; draw(); });
+  $<HTMLInputElement>('showGrid').addEventListener('change', (e) => { showGrid = (e.target as HTMLInputElement).checked; draw(); });
 
   const setMode = (m: Mode) => { mode = m; syncSegmented(); hideBrush(); };
   root.querySelectorAll<HTMLButtonElement>('#modeSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode as Mode)));
@@ -483,7 +493,6 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         code.firstChild!.textContent = t.hex.toUpperCase() + ' ';
         draw();
       });
-      picker.addEventListener('change', autosave);
       sw.appendChild(picker);
 
       const code = document.createElement('span');
@@ -565,7 +574,6 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     st.threads.push({ hex: palette[(st.threads.length - 2 + palette.length) % palette.length] });
     activeThread = st.threads.length - 1;
     buildThreads();
-    autosave();
   });
 
   // ---- annulla ----------------------------------------------------------------
@@ -668,7 +676,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   /** Il pennello (o la gomma) su una cella; vero se ha cambiato qualcosa. */
   function paintCell(r: number, c: number): boolean {
     if (!painting) return false;
-    const key = r * st.grid.cols + (c - (c % 2)); // si lavora a V intere
+    const key = r * st.grid.cols + c; // una cella = un punto
     if (key === painting.last) return false;
     painting.last = key;
     return applyEdits(st.grid, st.cells, brushEdits(st.grid, st.cells, r, c, brushSize, activeThread, brushStitch, painting.button, painting.erase));
@@ -912,22 +920,22 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   function syncKnit(): void {
     num('detailPct').value = String(knit.detailPct);
-    root.querySelectorAll<HTMLButtonElement>('#perLegSel .rg-segmented__item').forEach((b) => {
-      const on = (b.dataset.perleg === '1') === knit.perLeg;
+    root.querySelectorAll<HTMLButtonElement>('#knitStitchSel .rg-segmented__item').forEach((b) => {
+      const on = b.dataset.kstitch === knit.stitch;
       b.classList.toggle('rg-segmented__item--active', on);
       b.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
   }
+  root.querySelectorAll<HTMLButtonElement>('#knitStitchSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => {
+    knit.stitch = b.dataset.kstitch as KnitStitch;
+    syncKnit();
+    reknit();
+  }));
   num('detailPct').addEventListener('change', () => {
     knit.detailPct = Math.min(100, Math.max(1, Number(num('detailPct').value) || DEFAULT_KNIT.detailPct));
     syncKnit();
     reknit();
   });
-  root.querySelectorAll<HTMLButtonElement>('#perLegSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => {
-    knit.perLeg = b.dataset.perleg === '1';
-    syncKnit();
-    reknit();
-  }));
   syncKnit();
 
   /** I fili attuali in RGB, per assegnare le V. */
@@ -984,9 +992,18 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const old = { '0.1.0': 12, '0.2.0': 30 } as Record<string, number>;
     if (typeof meta.version === 'string' && old[meta.version] === st.route.jumpMm) st.route.jumpMm = DEFAULT_ROUTE.jumpMm;
     if (meta.stitch && typeof meta.stitch === 'object') st.stitch = { ...DEFAULT_STITCH, ...(meta.stitch as Partial<StitchParams>) };
-    if (meta.knit && typeof meta.knit === 'object') Object.assign(knit, DEFAULT_KNIT, meta.knit);
+    if (meta.knit && typeof meta.knit === 'object') {
+      const mk = meta.knit as Record<string, unknown>;
+      Object.assign(knit, DEFAULT_KNIT, { detailPct: mk.detailPct ?? DEFAULT_KNIT.detailPct, stitch: mk.stitch ?? DEFAULT_KNIT.stitch });
+    }
     syncKnit();
     st.cells = cellsFromJson(st.grid, meta.cells);
+    // Fino a 0.3.0 la V occupava due colonne: si converte a «un punto per colonna».
+    if (typeof meta.version === 'string' && ['0.1.0', '0.2.0', '0.3.0'].includes(meta.version)) {
+      const conv = fromTwoColumnV(st.grid, st.cells);
+      st.grid = conv.grid;
+      st.cells = conv.cells;
+    }
     for (const m of st.cells.values()) if (m.color >= st.threads.length) m.color = 0;
     activeThread = 0;
     return true;
@@ -1081,16 +1098,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   $('fitBtn').addEventListener('click', () => pz.fit());
 
-  // ---- avvio: l'ultimo lavoro, o una riga di V di esempio ---------------------
-  let restored = false;
-  try {
-    const saved = localStorage.getItem(AUTOSAVE_KEY);
-    if (saved) restored = applyProject(JSON.parse(saved));
-  } catch { /* autosave illeggibile: si riparte puliti */ }
-  if (!restored) {
-    const r = 3;
-    for (let c = 2; c < 20; c += 2) applyEdits(st.grid, st.cells, editsFor(st.grid, 'v', 'left', r, c, 0));
-    for (let c = 2; c < 20; c += 2) applyEdits(st.grid, st.cells, editsFor(st.grid, 'v', 'right', r + 1, c, 1));
-  }
+  // ---- avvio: sempre puliti ----------------------------------------------------
+  try { localStorage.removeItem(OLD_AUTOSAVE_KEY); } catch { /* browser senza memoria: niente da togliere */ }
   afterLoad();
+  $('status').textContent = 'Griglia vuota: carica un’immagine (01) o disegna con la barra qui sopra.';
 }

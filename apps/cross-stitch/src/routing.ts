@@ -6,8 +6,10 @@
 // ogni nuovo caso ne aggiungeva un'altra. Qui c'è UNA regola, quella della suite (R16-R18): **il
 // filo di passaggio deve finire sotto il ricamo**. Il resto è una mappa di costo sul reticolo.
 //
-// Il reticolo. Il filo si muove fra gli angoli delle celle, e da un angolo può andare lungo i
-// quattro bordi o lungo le quattro diagonali. Quanto costa un tratto dipende da cosa c'è lì:
+// Il reticolo. Il filo si muove fra gli angoli delle celle e le metà dei loro lati (la punta della
+// V: un punto per colonna, model.ts), in orizzontale, in verticale, lungo le diagonali di mezza
+// cella (le gambe della V) e lungo le gambe di cella intera (croce, diagonale). Quanto costa un
+// tratto dipende da cosa c'è lì:
 //
 //   - una diagonale che verrà cucita DOPO (dello stesso colore o di un colore successivo):
 //     il passaggio ci finisce sotto e sparisce → quasi gratis (`hidden`);
@@ -28,13 +30,13 @@
 // Fra due scelte che costano uguale si prende quella che lascia meno strade aperte all'uscita
 // (regola di Warnsdorff): così non restano diagonali isolate da andare a prendere alla fine.
 //
-// La croce: la gamba sopra si fa solo dopo quella sotto della stessa cella (model.legsOf).
+// La croce: la gamba sopra si fa solo dopo quella sotto della stessa cella (model.stitchLegs).
 // Le ripetizioni: ogni passata è un'unità a sé, e l'ordine le sceglie come le altre.
 //
 // Nessun DOM.
 
 import type { Cells, GridSpec, Leg } from './model';
-import { legEnds, legsOf, segmentPoints, vertexCount } from './model';
+import { latticeWidth, segmentPoints, stitchLegs, vertexCount } from './model';
 
 export interface TravelCosts {
   /** Sotto una diagonale che verrà cucita dopo. */
@@ -43,8 +45,15 @@ export interface TravelCosts {
   retrace: number;
   /** In orizzontale, lungo il bordo della cella: da evitare. */
   border: number;
-  /** In verticale, da vertice a vertice. */
+  /** In verticale, da vertice a vertice, al centro della cella: dalla punta di una V alla punta della V sotto. */
   vertical: number;
+  /**
+   * In verticale sul LATO della cella, da angolo ad angolo: resta fuori dal punto e si vede. Più
+   * caro della strada dai vertici (Lorenzo, 2026-09-24: «mi aspetterei che i passaggi siano nei
+   * vertici, a costo di avere metà della V con un passaggio in più perché deve tornare indietro»):
+   * ripassare mezza V fino alla punta, scendere al centro e risalire costa meno di questo.
+   */
+  verticalSide: number;
   /** Lungo una diagonale dove quella gamba non c'è. */
   open: number;
   /** Sopra una diagonale di un colore precedente. */
@@ -64,7 +73,7 @@ export interface TravelCosts {
  * invece di saltare a caso. Con 0,4 il filo sopra faceva 186 salti su quel disegno, con 0,1 e la
  * soglia a 30 ne fa 18. Una volta sola però: vedi `extra`.
  */
-export const DEFAULT_COSTS: TravelCosts = { hidden: 0.05, retrace: 0.1, border: 12, vertical: 0.3, open: 1.6, over: 3, extra: 1 };
+export const DEFAULT_COSTS: TravelCosts = { hidden: 0.05, retrace: 0.1, border: 12, vertical: 0.3, verticalSide: 1.5, open: 1.6, over: 3, extra: 1 };
 
 export interface RouteParams {
   /** Passate su ogni diagonale (avanti e indietro). */
@@ -190,54 +199,53 @@ class MinHeap {
 export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, colorOrder?: number[]): RouteResult {
   const costs: TravelCosts = { ...DEFAULT_COSTS, ...(params.costs ?? {}) };
   const reps = Math.max(1, Math.round(params.repetitions));
-  const W = g.cols + 1;
-  const diagLen = Math.hypot(g.cellW, g.cellH);
+  const W = latticeWidth(g);            // vertici per riga: angoli e metà dei lati
+  const JMAX = W - 1;                   // ultima mezza colonna
+  const half = g.cellW / 2;
 
   // --- le gambe, e per ogni gamba le sue passate ---
-  // Le passate sono unità SEPARATE: non vanno fatte una dopo l'altra. Con 2 passate una riga di V
-  // si cuce all'andata e si ripassa al ritorno, invece di andare avanti e indietro su ogni
-  // diagonale e poi dover ripassare per spostarsi.
+  // Una gamba è una coppia di vertici del reticolo: mezza cella in orizzontale (le due gambe
+  // della V) o una cella intera (croce, diagonale).
   const legs: LegState[] = [];
   const units: Unit[] = [];
   const perStitch = params.passOrder === 'stitch';
-  /** cella*2 + (0 = down, 1 = up) → indice della gamba. */
+  const edgeKey = (a: number, b: number) => (a < b ? a * 4194304 + b : b * 4194304 + a);
+  /** coppia di vertici → gamba. */
   const legAt = new Map<number, number>();
+  /** vertice → gambe lunghe (cella intera) che lo toccano: sono tratti che il reticolo fine non ha. */
+  const longAt = new Map<number, number[]>();
+  /** cella → le sue gambe (per sapere cosa c'è intorno a un passaggio verticale). */
+  const cellLegs = new Map<number, number[]>();
   const keys = [...cells.keys()].sort((x, y) => x - y);
   for (const k of keys) {
     const m = cells.get(k)!;
     const r = Math.floor(k / g.cols), c = k - r * g.cols;
+    const mine: number[] = [];
     let prev = -1;
-    for (const leg of legsOf(m.stitch, params.topLeg)) {
-      const { a, b } = legEnds(g, r, c, leg);
+    const isCross = m.stitch === 'cross';
+    for (const { a, b } of stitchLegs(g, r, c, m.stitch, params.topLeg)) {
       const id = legs.length;
-      legs.push({ color: m.color, a, b, remaining: reps, extra: 0, prereq: prev });
-      legAt.set(k * 2 + (leg === 'down' ? 0 : 1), id);
+      // nella croce la gamba sopra aspetta quella sotto; nella V le due gambe sono libere
+      legs.push({ color: m.color, a, b, remaining: reps, extra: 0, prereq: isCross ? prev : -1 });
+      legAt.set(edgeKey(a, b), id);
+      const ja = a % W, jb = b % W;
+      if (Math.abs(ja - jb) === 2) for (const v of [a, b]) { const l = longAt.get(v); if (l) l.push(id); else longAt.set(v, [id]); }
+      mine.push(id);
       // Direzione fissa: le passate vanno avanti e indietro (a→b, b→a, …) come nella vecchia app.
       if (!perStitch) for (let p = 0; p < reps; p++) units.push({ leg: id, fixedEntry: params.fixedDirection ? (p % 2 === 0 ? a : b) : -1, passes: 1, done: false });
       prev = id;
     }
-  }
-  if (perStitch) {
-    // Tutte le passate sullo stesso punto. Le V (due gambe singole, stesso colore, stessa riga,
-    // colonne 2p e 2p+1, che si toccano in un vertice) diventano UNA unità; il resto una per gamba.
-    const inPair = new Set<number>();
-    for (const k of keys) {
-      const m = cells.get(k)!;
-      const r0 = Math.floor(k / g.cols), c = k - r0 * g.cols;
-      if (c % 2 !== 0 || m.stitch === 'cross') continue;
-      const n = cells.get(k + 1);
-      if (!n || c + 1 >= g.cols || n.stitch === 'cross' || n.color !== m.color) continue;
-      const l1 = legAt.get(k * 2 + (m.stitch === 'down' ? 0 : 1))!, l2 = legAt.get((k + 1) * 2 + (n.stitch === 'down' ? 0 : 1))!;
-      const L1 = legs[l1], L2 = legs[l2];
-      const mid = [L1.a, L1.b].find((v) => v === L2.a || v === L2.b);
-      if (mid === undefined) continue;
-      const a = L1.a === mid ? L1.b : L1.a, b = L2.a === mid ? L2.b : L2.a;
-      units.push({ leg: l1, fixedEntry: params.fixedDirection ? a : -1, passes: reps, pair: { leg2: l2, mid, a, b }, done: false });
-      inPair.add(l1); inPair.add(l2);
+    cellLegs.set(k, mine);
+    if (perStitch) {
+      // Tutte le passate sullo stesso punto: la V (e la Λ) è UNA unità, angolo → punta → angolo;
+      // croce e diagonale una unità per gamba.
+      if (m.stitch === 'v' || m.stitch === 'lambda') {
+        const [l1, l2] = mine, L1 = legs[l1], L2 = legs[l2];
+        units.push({ leg: l1, fixedEntry: params.fixedDirection ? L1.a : -1, passes: reps, pair: { leg2: l2, mid: L1.b, a: L1.a, b: L2.b }, done: false });
+      } else {
+        for (const id of mine) units.push({ leg: id, fixedEntry: params.fixedDirection ? legs[id].a : -1, passes: reps, done: false });
+      }
     }
-    legs.forEach((l, id) => {
-      if (!inPair.has(id)) units.push({ leg: id, fixedEntry: params.fixedDirection ? l.a : -1, passes: reps, done: false });
-    });
   }
 
   const present = [...new Set(legs.map((l) => l.color))];
@@ -254,9 +262,8 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   const touched: number[] = [];
   const heap = new MinHeap();
 
-  /** Il costo per mm e la classe di un tratto lungo la diagonale `bit` della cella (r,c), per il colore `k`. */
-  const diagClass = (r: number, c: number, bit: 0 | 1, k: number): { w: number; kind: SegKind } => {
-    const id = legAt.get((r * g.cols + c) * 2 + bit);
+  /** Il costo per mm e la classe di un tratto lungo la gamba `id` (o nel vuoto, se non c'è), per il colore `k`. */
+  const legClass = (id: number | undefined, k: number): { w: number; kind: SegKind } => {
     if (id === undefined) return { w: costs.open, kind: 'visible' };
     const leg = legs[id];
     const more = leg.extra > 0 ? costs.extra * leg.extra : 1;
@@ -268,60 +275,63 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
 
   const pitch = g.cellH * (1 - Math.min(90, Math.max(0, g.overlapPct ?? 0)) / 100);
   /**
-   * Il tratto verticale dal vertice (i, j) a (i+1, j) passa fra le celle (i, j−1) e (i, j): nella
-   * maglia è il centro di una V (j dispari) o lo stacco fra due V (j pari). Se lì c'è una V di un
-   * colore già cucito, il filo ci passerebbe sopra e si vede; se è tutto vuoto, è un filo nel vuoto.
+   * Il tratto verticale dal vertice (i, j) a (i+1, j) sta nella riga i: a metà cella (j dispari)
+   * passa al centro della cella (la punta della V), sull'angolo (j pari) fra le due celle vicine.
+   * Se lì c'è un punto di un colore già cucito, il filo ci passerebbe sopra e si vede; se è tutto
+   * vuoto, è un filo nel vuoto.
    */
   const verticalClass = (i: number, j: number, k: number): { w: number; kind: SegKind } => {
     let any = false;
-    for (const c of [j - 1, j]) {
+    const around = j % 2 === 1 ? [(j - 1) / 2] : [j / 2 - 1, j / 2];
+    for (const c of around) {
       if (c < 0 || c >= g.cols) continue;
-      for (const bit of [0, 1] as const) {
-        const id = legAt.get((i * g.cols + c) * 2 + bit);
-        if (id === undefined) continue;
+      for (const id of cellLegs.get(i * g.cols + c) ?? []) {
         any = true;
         const leg = legs[id];
         if (leg.color !== k && (rank.get(leg.color) ?? 0) < (rank.get(k) ?? 0)) return { w: costs.over, kind: 'visible' };
       }
     }
-    return any ? { w: costs.vertical, kind: 'vertical' } : { w: costs.open, kind: 'visible' };
+    if (!any) return { w: costs.open, kind: 'visible' };
+    return { w: j % 2 === 1 ? costs.vertical : costs.verticalSide, kind: 'vertical' };
   };
+
+  const shortDiag = Math.hypot(half, g.cellH), longDiag = Math.hypot(g.cellW, g.cellH);
 
   /** I vicini di `v` nel reticolo, col costo del tratto. */
   const forEachNeighbour = (v: number, k: number, fn: (w: number, cost: number) => void): void => {
     const i = Math.floor(v / W), j = v - i * W;
-    // bordi
-    if (j > 0) fn(v - 1, g.cellW * costs.border);
-    if (j < g.cols) fn(v + 1, g.cellW * costs.border);
+    // orizzontali (da evitare) e verticali (vertice-vertice)
+    if (j > 0) fn(v - 1, half * costs.border);
+    if (j < JMAX) fn(v + 1, half * costs.border);
     if (i > 0) fn(v - W, pitch * verticalClass(i - 1, j, k).w);
     if (i < g.rows) fn(v + W, pitch * verticalClass(i, j, k).w);
-    // diagonali: la cella attraversata e la sua gamba
-    if (i < g.rows && j < g.cols) fn(v + W + 1, diagLen * diagClass(i, j, 0, k).w);          // ↘ cella (i,j) «\»
-    if (i > 0 && j > 0) fn(v - W - 1, diagLen * diagClass(i - 1, j - 1, 0, k).w);             // ↖ cella (i-1,j-1) «\»
-    if (i < g.rows && j > 0) fn(v + W - 1, diagLen * diagClass(i, j - 1, 1, k).w);            // ↙ cella (i,j-1) «/»
-    if (i > 0 && j < g.cols) fn(v - W + 1, diagLen * diagClass(i - 1, j, 1, k).w);            // ↗ cella (i-1,j) «/»
+    // diagonali di mezza cella (le gambe della V, o un filo storto nel vuoto)
+    if (i < g.rows && j < JMAX) fn(v + W + 1, shortDiag * legClass(legAt.get(edgeKey(v, v + W + 1)), k).w);
+    if (i > 0 && j > 0) fn(v - W - 1, shortDiag * legClass(legAt.get(edgeKey(v, v - W - 1)), k).w);
+    if (i < g.rows && j > 0) fn(v + W - 1, shortDiag * legClass(legAt.get(edgeKey(v, v + W - 1)), k).w);
+    if (i > 0 && j < JMAX) fn(v - W + 1, shortDiag * legClass(legAt.get(edgeKey(v, v - W + 1)), k).w);
+    // diagonali di cella intera: solo dove c'è una gamba (croce, diagonale)
+    for (const id of longAt.get(v) ?? []) {
+      const l = legs[id];
+      fn(l.a === v ? l.b : l.a, longDiag * legClass(id, k).w);
+    }
   };
 
-  /** La classe di un singolo tratto fra due vertici adiacenti (per il disegno e le misure). */
+  /** La classe e la lunghezza di un singolo tratto fra due vertici (per il disegno e le misure). */
   const edgeKind = (v: number, w: number, k: number): { kind: SegKind; mm: number } => {
     const i1 = Math.floor(v / W), j1 = v - i1 * W, i2 = Math.floor(w / W), j2 = w - i2 * W;
-    if (i1 === i2) return { kind: 'visible', mm: g.cellW };
+    if (i1 === i2) return { kind: 'visible', mm: half * Math.abs(j2 - j1) };
     if (j1 === j2) return { kind: verticalClass(Math.min(i1, i2), j1, k).kind, mm: pitch };
-    const r = Math.min(i1, i2), c = Math.min(j1, j2);
-    const bit: 0 | 1 = (i2 - i1) === (j2 - j1) ? 0 : 1;
-    return { kind: diagClass(r, c, bit, k).kind, mm: diagLen };
+    return { kind: legClass(legAt.get(edgeKey(v, w)), k).kind, mm: Math.hypot(half * Math.abs(j2 - j1), g.cellH) };
   };
 
-  /** Segna il passaggio in più sulla diagonale fra due vertici vicini, se ce n'è una. */
+  /** Segna il passaggio in più sulla gamba fra due vertici, se ce n'è una. */
   const markExtra = (v: number, w: number) => {
-    const i1 = Math.floor(v / W), j1 = v - i1 * W, i2 = Math.floor(w / W), j2 = w - i2 * W;
-    if (i1 === i2 || j1 === j2) return;
-    const bit = (i2 - i1) === (j2 - j1) ? 0 : 1;
-    const id = legAt.get((Math.min(i1, i2) * g.cols + Math.min(j1, j2)) * 2 + bit);
+    const id = legAt.get(edgeKey(v, w));
     if (id !== undefined) legs[id].extra++;
   };
 
-  const pt = (v: number) => { const i = Math.floor(v / W); return { x: (v - i * W) * g.cellW, y: i * g.cellH }; };
+  const pt = (v: number) => { const i = Math.floor(v / W); return { x: (v - i * W) * half, y: i * g.cellH }; };
   const available = (id: number) => {
     const u = units[id];
     if (u.done) return false;
@@ -349,7 +359,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
 
   for (const k of order) {
     const mine: number[] = [];
-    /** vertice → passate di questo colore che lo toccano. */
+    /** vertice → unità di questo colore che lo toccano. */
     const byVertex = new Map<number, number[]>();
     units.forEach((u, id) => {
       const l = legs[u.leg];
@@ -363,7 +373,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     let left = mine.length;
     const segs: RouteSeg[] = [];
 
-    /** Quante passate si possono prendere gratis all'uscita dopo aver preso `id` (Warnsdorff). */
+    /** Quante unità si possono prendere gratis all'uscita dopo aver preso `id` (Warnsdorff). */
     const onward = (id: number, exit: number) => {
       const leg = units[id].leg;
       let n = 0;
@@ -405,8 +415,8 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     // finito il filo di prima — non con un passaggio cucito che ci arriva (era il difetto visto
     // in anteprima: 10 mm di filo rosso in vista solo per raggiungere il suo inizio).
     // E in tutti e due i casi da un capo DISPARI, se c'è (Eulero): un vertice dove si incontrano
-    // due diagonali è il mezzo di un percorso, e partendo da lì una metà resta da riprendere
-    // con un salto. Visto in anteprima sulla riga di Λ rossa, che partiva dal centro.
+    // due gambe è il mezzo di un percorso, e partendo da lì una metà resta da riprendere con un
+    // salto. Visto in anteprima sulla riga di Λ rossa, che partiva dal centro.
     if (left > 0) {
       const degree = new Map<number, number>();
       for (const id of mine) if (available(id)) for (const e of entriesOf(id)) degree.set(e, (degree.get(e) ?? 0) + 1);
@@ -487,7 +497,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
         continue;
       }
 
-      // --- niente sotto soglia: salto alla passata disponibile più vicina ---
+      // --- niente sotto soglia: salto all'unità disponibile più vicina ---
       const here = pt(at);
       let best: { id: number; entry: number; d: number } | null = null;
       for (const id of mine) {
