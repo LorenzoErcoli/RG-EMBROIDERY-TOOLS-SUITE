@@ -66,6 +66,14 @@ export interface InterlaceParams {
    *  `null` = AUTOMATICO (3 × i punti che servono davvero a coprire: taglia l'1-2% più fitto e basta).
    *  Un numero = quel tetto. 0 = nessun tetto (com'era). */
   maxStitchesPerMm2: number | null;
+  /** SFONDO NON RICAMATO (come l'esclusione sfondo del tappeto): i punti dell'immagine vicini a
+   *  `backgroundColor` entro `backgroundToleranceRgb` non sono di nessun colore e **nessun filo** ci
+   *  cuce o ci passa — restano tessuto a vista. Si poteva già ottenere spegnendo un'intera riga della
+   *  matrice, ma solo se lo sfondo era anche un colore-filo: così invece è una scelta diretta.
+   *  Sul confine con lo sfondo NON si applica il sormonto: lì il vuoto è voluto e il bordo va netto. */
+  excludeBackground: boolean;
+  backgroundColor: string;
+  backgroundToleranceRgb: number;
 }
 
 export const defaultInterlaceParams: InterlaceParams = {
@@ -84,6 +92,9 @@ export const defaultInterlaceParams: InterlaceParams = {
   zoneBans: [], // vuoto = ogni filo passa ovunque
   zoneOverlapMm: null, // null = automatico (0.6 × densità = una fila di celle); 0 = confine netto
   maxStitchesPerMm2: null, // null = automatico (3 × i punti necessari); 0 = nessun tetto
+  excludeBackground: false, // lo sfondo si ricama come tutto il resto
+  backgroundColor: '#ffffff',
+  backgroundToleranceRgb: 30,
 };
 
 // --- Costanti interne (implementazione, non parametri utente): il "movimento" del filo.
@@ -560,9 +571,17 @@ function hexToRgb(hex: string): [number, number, number] {
  * VICINO in RGB (cattura-colore). -1 = fuori immagine/trasparente (nessuna zona). È la stessa lettura
  * che serve sia alla copertura sia ai divieti, per questo sta da sola.
  */
-function imageZoneAt(x: number, y: number, palRgb: Array<[number, number, number]>, tol2: number[], sample: ImageColorAt): number {
+/** Zona speciale: lo SFONDO che si è scelto di non ricamare. Diverso da -1 (fuori immagine), dove
+ *  invece i fili si mescolano alla base. */
+export const ZONE_SFONDO = -2;
+
+function imageZoneAt(x: number, y: number, palRgb: Array<[number, number, number]>, tol2: number[], sample: ImageColorAt, bg: { rgb: [number, number, number]; tol2: number } | null): number {
   const rgb = sample(x, y);
   if (!rgb) return -1;
+  if (bg) {
+    const dr = rgb[0] - bg.rgb[0], dg = rgb[1] - bg.rgb[1], db = rgb[2] - bg.rgb[2];
+    if (dr * dr + dg * dg + db * db <= bg.tol2) return ZONE_SFONDO; // qui non cuce nessuno
+  }
   let best = -1, bestD = Infinity;
   for (let k = 0; k < palRgb.length; k++) {
     const dr = rgb[0] - palRgb[k][0], dg = rgb[1] - palRgb[k][1], db = rgb[2] - palRgb[k][2];
@@ -653,6 +672,10 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
   // Raggi di cattura al quadrato (una volta sola): assente o 0 = nessun limite per quel colore, e con
   // tutti illimitati il più vicino vince sempre — cioè esattamente il comportamento storico.
   const tol2 = imgPal ? imgPal.map((_, k) => { const t = (p.colorTolerances || [])[k]; return t && t > 0 ? t * t : Infinity; }) : [];
+  // Sfondo da NON ricamare: vale solo dove c'è un'immagine da leggere.
+  const bg = imgPal && p.excludeBackground
+    ? { rgb: hexToRgb(p.backgroundColor || '#ffffff'), tol2: Math.max(0, p.backgroundToleranceRgb || 0) ** 2 }
+    : null;
   // Il sormonto è per-passata perché dipende dalla cella di densità di QUEL colore. `null` = automatico:
   // 0.6 × cella prende esattamente la prima fila di celle oltre il confine (il centro della seconda sta
   // a 1.5 celle) — una regola che vale a qualsiasi densità, mentre un valore fisso in mm no.
@@ -678,7 +701,7 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
     for (let j = 0; j < ctx.mgh; j++) for (let i = 0; i < ctx.mgw; i++) {
       const x = ctx.mx0 + (i + 0.5) * ctx.mres, y = ctx.my0 + (j + 0.5) * ctx.mres;
       z[j * ctx.mgw + i] = imgPal
-        ? imageZoneAt(x, y, imgPal, tol2, imageColorAt as ImageColorAt)
+        ? imageZoneAt(x, y, imgPal, tol2, imageColorAt as ImageColorAt, bg)
         : noiseZoneAt(x, y, densities.length, base) % nCol;
     }
     zoneFine = z; zoneKey = key;
@@ -689,20 +712,25 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
    * lungo il confine con ciò che gli è permesso. Quel bordo è la sovrapposizione: il filo ci arriva
    * dentro e i due colori si accavallano, invece di fermarsi testa a testa lasciando la fessura.
    */
-  const banMaskOf = (ctx: FillCtx, banRow: boolean[]): Uint8Array => {
+  const banMaskOf = (ctx: FillCtx, banRow: boolean[] | null): Uint8Array => {
     const overlap = overlapFor(ctx.cell);
     const z = zoneMapOf(ctx);
     const n = ctx.mgw * ctx.mgh;
-    const vietato = new Uint8Array(n), permesso = new Uint8Array(n);
+    const vietato = new Uint8Array(n), permesso = new Uint8Array(n), sfondo = new Uint8Array(n);
     for (let c = 0; c < n; c++) {
       const zz = z[c];
-      const bad = zz >= 0 && banRow[zz] === true;
+      if (zz === ZONE_SFONDO) { sfondo[c] = 1; permesso[c] = 0; continue; }
+      const bad = zz >= 0 && banRow !== null && banRow[zz] === true;
       vietato[c] = bad ? 1 : 0;
       permesso[c] = bad ? 0 : 1;
     }
-    if (overlap <= 0) return vietato;
-    const dist = chamferDT(permesso, ctx.mgw, ctx.mgh, ctx.mres); // distanza dal permesso più vicino
-    for (let c = 0; c < n; c++) if (vietato[c] && dist[c] <= overlap) vietato[c] = 0; // il bordo si apre
+    if (overlap > 0) {
+      const dist = chamferDT(permesso, ctx.mgw, ctx.mgh, ctx.mres); // distanza dal permesso più vicino
+      for (let c = 0; c < n; c++) if (vietato[c] && dist[c] <= overlap) vietato[c] = 0; // il bordo si apre
+    }
+    // Lo sfondo si aggiunge DOPO l'erosione: fra due colori il sormonto serve a non lasciare la fessura,
+    // ma qui il vuoto è voluto e il bordo del disegno deve restare netto.
+    for (let c = 0; c < n; c++) if (sfondo[c]) vietato[c] = 1;
     return vietato;
   };
   const bans = p.clusterMode && Array.isArray(p.zoneBans) ? p.zoneBans : [];
@@ -720,7 +748,7 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
     // di celle proibite — non solo escluse dal riempimento (target 0), ma nemmeno attraversabili.
     const myColor = pIdx % nCol;
     const banRow = bans[myColor] && bans[myColor].some(Boolean) ? bans[myColor] : null;
-    const banArr = banRow ? banMaskOf(ctx, banRow) : null;
+    const banArr = banRow || bg ? banMaskOf(ctx, banRow) : null;
     if (p.clusterMode) {
       // Agglomerati: la copertura di ogni cella dipende dalla ZONA del colore — da IMMAGINE se caricata
       // (il colore va dove l'immagine ha quel colore), altrimenti dal campo di rumore per-colore/seed.
@@ -731,8 +759,10 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
         // Zona del punto: indice di colore-palette (immagine) oppure campo vincente (rumore), riportato
         // sulla palette col modulo perché la matrice ragiona per COLORE anche con più cicli.
         const zone = imgPal
-          ? imageZoneAt(x, y, imgPal, tol2, imageColorAt as ImageColorAt)
+          ? imageZoneAt(x, y, imgPal, tol2, imageColorAt as ImageColorAt, bg)
           : noiseZoneAt(x, y, densities.length, base) % nCol;
+        // Sfondo scelto come non ricamato: nessun filo, e nemmeno l'anello di sormonto (bordo netto).
+        if (zone === ZONE_SFONDO) continue;
         // Oltre il confine: se la cella cade nell'ANELLO di sovrapposizione (vietata, ma entro
         // `zoneOverlapMm` da ciò che è permesso) il filo ci posa UNA passata — il sormonto vero, quello
         // che chiude la fessura. Poter solo attraversare non basta: un punto deve finire dentro una cella

@@ -45,11 +45,11 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
         <div class="rg-param-grid">
           <div class="rg-file-input rg-param-grid__wide">
             <label class="rg-file-input__control">
-              <input type="file" id="fileInput" accept=".svg,.dxf,.dst" />
-              <span class="rg-button rg-button--outline">Carica DXF, SVG o DST…</span>
+              <input type="file" id="fileInput" accept=".svg,.dxf" />
+              <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
             </label>
             <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file: uso il cartamodello demo.</p>
-            <small class="rg-field__help">DXF o SVG = cartamodello. Un <strong>SVG o DST uscito da qui</strong> invece è un progetto: rimette i parametri, la tavola e l’immagine di riferimento com’erano.</small>
+            <small class="rg-field__help">La sagoma da riempire. Per riaprire un lavoro già fatto c’è “Carica parametri” in fondo al pannello.</small>
           </div>
           <label class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Larghezza reale (0 = auto)</span>
@@ -132,6 +132,19 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
               <button type="button" id="clearImageBtn" class="rg-button rg-button--ghost rg-button--small" disabled>Rimuovi immagine</button>
             </div>
             <small class="rg-field__help">Automatica: “Numero colori” (1–12) + “Cattura colori” quantizza l’immagine (esclude lo sfondo bianco). Manuale: clicchi i colori sull’immagine. Gli agglomerati poi RISPETTANO l’immagine (ogni colore va dove l’immagine ha quel colore).</small>
+            <label class="rg-choice">
+              <input type="checkbox" id="excludeBackground" />
+              <span>Lascia lo sfondo senza ricamo</span>
+            </label>
+            <div class="rg-cluster" id="bgField" hidden>
+              <label class="rg-color-map__swatch" id="bgSwatch">
+                <input type="color" id="bgColor" class="rg-u-visually-hidden" aria-label="Colore dello sfondo" />
+              </label>
+              <span class="rg-color-map__code" id="bgCode">#FFFFFF</span>
+              <button type="button" id="bgPickBtn" class="rg-icon-button" aria-label="Prendi il colore dello sfondo dall’immagine"></button>
+              <span class="interlace-tol"><span class="interlace-tol__pre">±</span><input class="rg-input rg-input--numeric interlace-tol__input" id="bgTolerance" type="number" min="0" step="5" aria-label="Tolleranza dello sfondo (distanza RGB)" /></span>
+            </div>
+            <small class="rg-field__help" id="bgHelp" hidden>i punti dell’immagine vicini a questo colore restano <strong>tessuto a vista</strong>: nessun filo ci cuce e nessuno ci passa sopra. Il bordo del disegno resta netto (lì il sormonto non si applica: il vuoto è voluto). La tolleranza è quanto largo è il raggio attorno al colore.</small>
           </div>
           <label class="rg-field rg-param-grid__wide" id="clusterStrengthField" hidden>
             <span class="rg-field__label">Intensità agglomerati</span>
@@ -165,6 +178,17 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
         </div>
         <div id="params" class="rg-param-grid"></div>
       </details>
+
+      <section class="rg-param-section">
+        <div class="rg-param-section__header"><h3 class="rg-param-section__title">Carica parametri</h3></div>
+        <div class="rg-file-input">
+          <label class="rg-file-input__control">
+            <input type="file" id="loadParams" accept=".dst,.svg" />
+            <span class="rg-button rg-button--outline rg-button--small">Carica da .dst o .svg…</span>
+          </label>
+          <p class="rg-file-input__status" id="loadParamsStatus" role="status">Riapre un lavoro esportato da qui: parametri, colori, tavola e immagine di riferimento. Il cartamodello importato no — quello si ricarica in alto.</p>
+        </div>
+      </section>
     </aside>
 
     <div class="rg-workspace__stage">
@@ -484,7 +508,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       pick.disabled = !refImage;
       pick.title = refImage ? 'Campiona dall’immagine di riferimento' : 'Carica un’immagine di riferimento per campionare';
       pick.setAttribute('aria-label', `Campiona il colore ${i + 1} dall’immagine`);
-      pick.addEventListener('click', () => enterPickMode(i));
+      pick.addEventListener('click', () => enterPickMode((hex) => { params.colors[i] = hex; }));
 
       picker.addEventListener('input', () => {
         params.colors[i] = picker.value;
@@ -610,7 +634,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
    * `index`. Serve per prendere due tinte SIMILI con precisione — a occhio, sulla miniatura del pannello,
    * non si distinguono. Resta locale all'app: al terzo tool che lo chiede si promuove in @rg/ui (regola 1).
    */
-  function enterPickMode(index: number) {
+  function enterPickMode(apply: (hex: string) => void) {
     if (!refImage) return;
     const W = refImage.w, H = refImage.h, SAMPLE = 15, HALF = 7, LENS = 132;
     const img = document.createElement('canvas');
@@ -664,7 +688,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     img.addEventListener('mousemove', onMove);
     img.addEventListener('click', (e) => {
       const { sx, sy } = pixelOf(e);
-      params.colors[index] = colorAt(sx, sy);
+      apply(colorAt(sx, sy));
       exit(); buildPaletteUI(); render();
     });
     // Il canvas ha pan/zoom (pointerdown → setPointerCapture): senza fermarlo il clic non arriva
@@ -774,6 +798,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     ($('clusterStrength') as HTMLInputElement).value = String(params.clusterStrength);
     syncOverlap();
     syncCap();
+    syncBackground();
     syncCluster(); // switch agglomerati + visibilità intensità
     buildParamUI();
     buildPaletteUI();
@@ -788,29 +813,13 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     return true;
   }
 
+  // --- 01: il CARTAMODELLO. Solo la sagoma; per riaprire un lavoro c'è "Carica parametri" in fondo. ---
   $('fileInput').addEventListener('change', (ev) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
-    const isDst = /\.dst$/i.test(file.name);
     const reader = new FileReader();
     reader.onload = () => {
       try {
-        // Un .dst uscito da qui non è un cartamodello: è un PROGETTO. Si legge il footer e si
-        // rimettono i parametri, senza toccare il disegno che c'è già.
-        if (isDst) {
-          const meta = readDstMetadata(new Uint8Array(reader.result as ArrayBuffer));
-          if (!meta || !applyImportedProject(meta, true)) {
-            $('fileStatus').textContent = `${file.name}: nessun parametro di questo tool nel DST`;
-            return;
-          }
-          const obj = meta.object as { widthMm?: number; heightMm?: number } | undefined;
-          const pezzi = ['parametri e colori'];
-          if (obj && obj.widthMm) pezzi.push(`tavola ${obj.widthMm}×${obj.heightMm} mm`);
-          if (typeof meta.refImage === 'string') pezzi.push('immagine di riferimento');
-          const coda = obj && obj.widthMm ? '' : ' · il cartamodello ricaricalo a parte (è un file suo)';
-          $('fileStatus').textContent = `${file.name}: ripristinati ${pezzi.join(', ')}${coda}`;
-          return;
-        }
         const text = String(reader.result);
         const isDxf = /\.dxf$/i.test(file.name);
         const result = isDxf ? parseDxfToContours(text) : parseSvgToContours(text);
@@ -827,7 +836,42 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
         console.error(e);
       }
     };
+    reader.readAsText(file);
+  });
+
+  /** Legge il progetto da un file esportato da qui (`.dst` dal footer, `.svg` dal metadata) e lo rimette
+   *  per intero — parametri, colori, tavola, immagine — ridisegnando. Ritorna il messaggio da mostrare. */
+  function restoreProjectFromFile(file: File, done: (msg: string) => void) {
+    const isDst = /\.dst$/i.test(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const meta = isDst
+          ? readDstMetadata(new Uint8Array(reader.result as ArrayBuffer))
+          : readProjectMetadata(String(reader.result));
+        if (!meta || !applyImportedProject(meta, true)) {
+          done(`${file.name}: non è un progetto di questo tool`);
+          return;
+        }
+        const obj = meta.object as { widthMm?: number; heightMm?: number } | undefined;
+        const pezzi = ['parametri e colori'];
+        if (obj && obj.widthMm) pezzi.push(`tavola ${obj.widthMm}×${obj.heightMm} mm`);
+        if (typeof meta.refImage === 'string') pezzi.push('immagine di riferimento');
+        // Senza `object` il disegno è (o era) un cartamodello importato: quello va ricaricato in alto.
+        const coda = obj && obj.widthMm ? '' : ' · il cartamodello ricaricalo in alto (è un file suo)';
+        done(`${file.name}: ripristinati ${pezzi.join(', ')}${coda}`);
+      } catch (e) {
+        done('Errore: ' + (e as Error).message);
+        console.error(e);
+      }
+    };
     if (isDst) reader.readAsArrayBuffer(file); else reader.readAsText(file);
+  }
+
+  $('loadParams').addEventListener('change', (ev) => {
+    const file = (ev.target as HTMLInputElement).files?.[0];
+    if (!file) return;
+    restoreProjectFromFile(file, (msg) => { $('loadParamsStatus').textContent = msg; });
   });
 
   $('realWidth').addEventListener('change', () => {
@@ -852,6 +896,35 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     render();
   });
 
+  // SFONDO senza ricamo: interruttore + colore (anche col contagocce) + tolleranza. Ha senso solo con
+  // gli agglomerati e un'immagine da leggere: senza immagine non c'è nessuno sfondo da riconoscere.
+  const bgCheck = $('excludeBackground') as HTMLInputElement;
+  const bgColor = $('bgColor') as HTMLInputElement;
+  const bgTol = $('bgTolerance') as HTMLInputElement;
+  ($('bgPickBtn') as HTMLButtonElement).innerHTML = EYEDROPPER_SVG;
+  function syncBackground() {
+    const attivo = params.excludeBackground;
+    bgCheck.checked = attivo;
+    ($('bgField') as HTMLElement).hidden = !attivo;
+    ($('bgHelp') as HTMLElement).hidden = !attivo;
+    const hex = asHex6(params.backgroundColor || '#ffffff');
+    bgColor.value = hex;
+    $('bgSwatch').style.setProperty('--swatch', hex);
+    $('bgCode').textContent = hex.toUpperCase();
+    bgTol.value = String(params.backgroundToleranceRgb);
+    ($('bgPickBtn') as HTMLButtonElement).disabled = !refImage;
+    ($('bgPickBtn') as HTMLButtonElement).title = refImage ? 'Prendi il colore dello sfondo dall’immagine' : 'Serve un’immagine di riferimento';
+  }
+  bgCheck.addEventListener('change', () => { params.excludeBackground = bgCheck.checked; syncBackground(); render(); });
+  bgColor.addEventListener('input', () => { params.backgroundColor = bgColor.value; syncBackground(); render(); });
+  bgTol.addEventListener('change', () => {
+    const v = parseFloat(bgTol.value);
+    params.backgroundToleranceRgb = Number.isNaN(v) ? 30 : Math.max(0, v);
+    syncBackground();
+    if (params.excludeBackground) render();
+  });
+  $('bgPickBtn').addEventListener('click', () => enterPickMode((hex) => { params.backgroundColor = hex; syncBackground(); }));
+
   // Switch distribuzione colori (rg-segmented): 'off' = mélange uniforme | 'on' = agglomerati a zone.
   const clusterBtns = Array.from($('clusterMode').querySelectorAll('.rg-segmented__item')) as HTMLButtonElement[];
   const syncCluster = () => {
@@ -862,6 +935,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     });
     ($('clusterStrengthField') as HTMLElement).hidden = !params.clusterMode; // intensità solo se attivo
     ($('clusterImageField') as HTMLElement).hidden = !params.clusterMode; // immagine solo se attivo
+    syncBackground();
     ($('zoneBanField') as HTMLElement).hidden = !params.clusterMode; // senza zone non c'è nulla da vietare
     ($('zoneOverlapField') as HTMLElement).hidden = !params.clusterMode; // il sormonto è fra zone
   };
@@ -939,6 +1013,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       $('clusterImageStatus').textContent = `Immagine ${img.width}×${img.height} — gli agglomerati la rispettano`;
       ($('captureColorsBtn') as HTMLButtonElement).disabled = false;
       ($('clearImageBtn') as HTMLButtonElement).disabled = false;
+      syncBackground();
       URL.revokeObjectURL(url);
       drawPicker(); // aggiorna l'anteprima per l'eyedropper (modalità Manuale)
       // Proporziona la TAVOLA all'immagine (larghezza invariata, altezza = larghezza × aspect) così

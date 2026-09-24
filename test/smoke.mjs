@@ -321,6 +321,25 @@ console.log('\ninterlace — agglomerati guidati da immagine (rispettano l’imm
 check('immagine: rosso più denso a SINISTRA (dov’è rosso)', redH.L > redH.R, true);
 check('immagine: blu più denso a DESTRA (dov’è blu)', bluH.R > bluH.L, true);
 
+// interlace — SFONDO SENZA RICAMO (`excludeBackground`), come l'esclusione sfondo del tappeto: i punti
+// dell'immagine vicini al colore di sfondo non sono di nessuno e NESSUN filo ci cuce o ci passa.
+// Si poteva già ottenere spegnendo un'intera riga della matrice, ma solo se lo sfondo era anche un
+// colore-filo. Sul confine NON si applica il sormonto: lì il vuoto è voluto e il bordo va netto.
+console.log('\ninterlace — sfondo senza ricamo');
+const bgSquare = [{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 60 }, { x: 0, y: 60 }];
+const bgSample = (x) => (x < 50 ? [255, 255, 255] : [2, 39, 80]); // metà bianca, metà blu
+const bgParams = { ...rg.defaultInterlaceParams, minStitchMm: 2, maxStitchMm: 5, densitySpacingMm: 2, voidClearanceMm: 0, colors: ['#ffffff', '#022750'], clusterMode: true, clusterStrength: 100, seed: 5 };
+const nelBianco = (passes, oltre) => { let n = 0; for (const pass of passes) for (const r of pass) for (const pt of r) if (pt.x < oltre) n++; return n; };
+const bgAcceso = rg.generatePasses(bgSquare, [], { ...bgParams, excludeBackground: true, backgroundColor: '#ffffff', backgroundToleranceRgb: 30 }, [2, 2], (x) => bgSample(x));
+const bgSpento = rg.generatePasses(bgSquare, [], bgParams, [2, 2], (x) => bgSample(x));
+check('sfondo spento (com’era): il bianco si ricama', nelBianco(bgSpento, 45) > 200, true);
+check('sfondo acceso: nel bianco non scende un punto, di nessun colore', nelBianco(bgAcceso, 48), 0);
+check('sfondo acceso: il resto si riempie lo stesso', bgAcceso.reduce((n, pa) => n + pa.reduce((m, r) => m + r.length, 0), 0) > 200, true);
+// Il bordo deve restare NETTO: senza sormonto sullo sfondo, nessun filo sconfina come farebbe fra due colori.
+let bgMin = 1e9;
+for (const pass of bgAcceso) for (const r of pass) for (const pt of r) if (pt.x < bgMin) bgMin = pt.x;
+check('sfondo acceso: il bordo è netto, il filo non sconfina nel vuoto voluto', bgMin >= 49, true);
+
 // interlace — TETTO AI PUNTI (`maxStitchesPerMm2`): nessun millimetro quadro prende più di N buchi
 // d'ago, contando TUTTI i colori insieme. Serve alla macchina (filo che si spezza, ago, tessuto
 // perforato): il tetto interno per-colore è relativo al suo obiettivo, quindi con più colori e
@@ -964,7 +983,11 @@ console.log('\ninterlace — riaprire un .dst rimette anche la tavola e l’imma
   check('caricando un .dst si ricostruisce, non si rimettono solo i numeri', /applyImportedProject\(meta, true\)/.test(src), true);
   check('...e la ricostruzione ridisegna (era il difetto: non succedeva nulla)', /if \(img\) restoreRefImage\(img, render\)/.test(src) && /else if \(!img\) render\(\)/.test(src), true);
   check('entrambi gli export usano lo stesso progetto', (src.match(/projectMetadata\(\)/g) || []).length >= 3, true);
-  check('il bottone dice che accetta anche i DST', /Carica DXF, SVG o DST/.test(src), true);
+  // Il carico del progetto sta in FONDO al pannello, con la sua sezione, come negli altri tool: in alto
+  // c'e' solo il cartamodello. Prima erano lo stesso campo e non si capiva quale file volesse.
+  check('la sezione "Carica parametri" c’e’ ed accetta .dst e .svg', /id="loadParams" accept="\.dst,\.svg"/.test(src), true);
+  check('in alto resta il solo cartamodello (niente .dst)', /id="fileInput" accept="\.svg,\.dxf"/.test(src), true);
+  check('lo sfondo si puo’ lasciare senza ricamo', /id="excludeBackground"/.test(src) && /excludeBackground = bgCheck\.checked/.test(src), true);
 }
 
 // oblique — griglia diagonale + placement (Fase A, sotto-step 2a). Moduli SINTETICI (l'engine è
