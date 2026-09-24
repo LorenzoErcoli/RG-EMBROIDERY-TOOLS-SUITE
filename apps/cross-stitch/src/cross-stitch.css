@@ -26,3 +26,4 @@ body {
 .cs-legend { display: inline-flex; gap: var(--rg-space-3); align-items: center; }
 .cs-legend__item { display: inline-flex; gap: var(--rg-space-1); align-items: center; }
 .cs-legend svg { width: 22px; height: 8px; }
+.cs-workspace .rg-workspace__canvas.cs-crop { cursor: cell; }

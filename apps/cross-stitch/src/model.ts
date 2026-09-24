@@ -88,11 +88,31 @@ export function pointInRow(g: GridSpec, v: number, r: number): { x: number; y: n
 
 /** I due capi in mm di un tratto fra due vertici vicini del reticolo, ognuno nella riga giusta. */
 export function segmentPoints(g: GridSpec, from: number, to: number): [{ x: number; y: number }, { x: number; y: number }] {
-  const i1 = Math.floor(from / (g.cols + 1)), i2 = Math.floor(to / (g.cols + 1));
-  // diagonale o bordo verticale: la riga è quella fra i due; bordo orizzontale: la riga che parte
-  // lì (in fondo alla griglia, l'ultima)
+  const W = g.cols + 1;
+  const i1 = Math.floor(from / W), i2 = Math.floor(to / W);
+  const j1 = from - i1 * W, j2 = to - i2 * W;
+  // Passaggio VERTICALE, da vertice a vertice (Lorenzo, 2026-09-24): nella maglia le colonne
+  // dispari del reticolo sono le PUNTE delle V (in fondo alla riga di sopra), le pari gli ANGOLI
+  // in alto. Così il tratto va esattamente dalla punta di una V alla punta della V sotto (o da
+  // angolo ad angolo), lungo quanto il passo della riga, senza scarti.
+  if (j1 === j2 && i1 !== i2) return [knitVertex(g, from), knitVertex(g, to)];
+  // diagonale: la riga è quella fra i due; bordo orizzontale: la riga che parte lì
   const r = i1 !== i2 ? Math.min(i1, i2) : Math.min(i1, g.rows - 1);
   return [pointInRow(g, from, r), pointInRow(g, to, r)];
+}
+
+/**
+ * Dove sta un vertice del reticolo nella maglia: colonna dispari = la punta della V della riga di
+ * sopra (i−1), colonna pari = l'angolo in alto della V della riga i. In fondo alla griglia, il
+ * fondo dell'ultima riga.
+ */
+export function knitVertex(g: GridSpec, v: number): { x: number; y: number } {
+  const W = g.cols + 1;
+  const i = Math.floor(v / W), j = v - i * W;
+  const p = rowPitch(g);
+  if (j % 2 === 1 && i >= 1) return { x: j * g.cellW, y: (i - 1) * p + g.cellH };
+  if (i >= g.rows) return { x: j * g.cellW, y: (g.rows - 1) * p + g.cellH };
+  return { x: j * g.cellW, y: i * p };
 }
 
 /** Gli estremi di una diagonale: `a` è l'inizio "naturale" (quello della direzione fissa). */
@@ -230,36 +250,119 @@ export function fromThreadRoute(data: unknown): { grid: GridSpec; cells: Cells; 
 /** Pixel RGBA riga per riga (lo stesso contratto di `PixelImage` in @rg/core). */
 export interface Pixels { rgba: Uint8ClampedArray | number[]; width: number; height: number; }
 
+type Rgb3 = [number, number, number];
+
+const nearest = (r: number, g: number, b: number, palette: Rgb3[]): number => {
+  let best = 0, bestD = Infinity;
+  for (let k = 0; k < palette.length; k++) {
+    const d = (r - palette[k][0]) ** 2 + (g - palette[k][1]) ** 2 + (b - palette[k][2]) ** 2;
+    if (d < bestD) { bestD = d; best = k; }
+  }
+  return best;
+};
+
+/**
+ * Affina una tavolozza con qualche giro di k-medie (Lloyd): ogni colore diventa la media dei
+ * pixel che gli sono più vicini. Serve perché il median-cut, su un'immagine quasi tutta bianca,
+ * mette il bianco da una parte e TUTTO il resto dall'altra — neri e grigi dei bordi insieme — e
+ * la media di quella scatola è un grigio: sul giornale Dior il "nero" usciva #8D8D8D. Dopo
+ * l'affinamento i grigi dei bordi vanno col colore a cui somigliano, e il nero torna nero.
+ * Deterministico: pixel campionati a passo fisso.
+ */
+export function refinePalette(img: Pixels, palette: Rgb3[], rounds = 8, maxSample = 60000): Rgb3[] {
+  const n = Math.floor(img.rgba.length / 4);
+  if (!n || !palette.length) return palette.map((c) => [...c] as Rgb3);
+  const step = Math.max(1, Math.floor(n / maxSample));
+  let pal = palette.map((c) => [...c] as Rgb3);
+  for (let it = 0; it < rounds; it++) {
+    const sum = pal.map(() => [0, 0, 0, 0]);
+    for (let i = 0; i < n; i += step) {
+      const r = img.rgba[i * 4], g = img.rgba[i * 4 + 1], b = img.rgba[i * 4 + 2];
+      const s = sum[nearest(r, g, b, pal)];
+      s[0] += r; s[1] += g; s[2] += b; s[3]++;
+    }
+    pal = pal.map((c, k) => (sum[k][3] ? [Math.round(sum[k][0] / sum[k][3]), Math.round(sum[k][1] / sum[k][3]), Math.round(sum[k][2] / sum[k][3])] : c));
+  }
+  return pal;
+}
+
+/** Quanta parte dell'immagine va a ciascun colore della tavolozza (0..1). */
+export function paletteShares(img: Pixels, palette: Rgb3[], maxSample = 60000): number[] {
+  const n = Math.floor(img.rgba.length / 4);
+  const step = Math.max(1, Math.floor(n / maxSample));
+  const count = palette.map(() => 0);
+  let tot = 0;
+  for (let i = 0; i < n; i += step) { count[nearest(img.rgba[i * 4], img.rgba[i * 4 + 1], img.rgba[i * 4 + 2], palette)]++; tot++; }
+  return count.map((c) => (tot ? c / tot : 0));
+}
+
+export interface KnitOptions {
+  /**
+   * Il colore di FONDO (indice nella tavolozza): una V lo prende a meno che un altro colore non
+   * occupi almeno `detailPct` della sua area. Di solito è quello che copre di più.
+   */
+  background: number;
+  /**
+   * La soglia del dettaglio, in %: basta questa parte di nero in una V per farla nera. Col 50% è
+   * la maggioranza; più basso salva i tratti sottili (le lettere del giornale), più alto li perde.
+   */
+  detailPct: number;
+  /** Vero = il colore si decide per ogni GAMBA (mezza V, una colonna): il doppio di dettaglio in orizzontale. */
+  perLeg: boolean;
+}
+
+export const DEFAULT_KNIT: Omit<KnitOptions, 'background'> = { detailPct: 35, perLeg: false };
+
 /**
  * La MAGLIA da un'immagine: la griglia si riempie di V — «\» e «/» in due colonne vicine, come
- * i punti di un lavoro a maglia — e ogni V prende il filo più vicino al colore medio
- * dell'immagine sotto di lei. L'immagine è stirata sulla griglia, come nell'anteprima.
+ * i punti di un lavoro a maglia — e ogni V (o ogni sua gamba, con `perLeg`) prende un filo.
+ * L'immagine è stirata sulla griglia, come nell'anteprima.
+ *
+ * Come si sceglie il filo. Non col colore MEDIO dell'area: un tratto nero sottile, mediato col
+ * bianco intorno, diventa bianco e sparisce — era il difetto sul giornale Dior, dove le lettere
+ * si perdevano. Si conta invece quanti pixel dell'area somigliano a ciascun filo, e un filo di
+ * dettaglio vince se ne ha almeno `detailPct`; altrimenti resta il fondo.
  *
  * `palette` = i fili in RGB, nell'ordine della tavolozza. Con un numero dispari di colonne
- * l'ultima resta vuota: mezza V non è un punto di maglia.
+ * l'ultima resta vuota (mezza V non è un punto di maglia), anche con `perLeg`.
  */
-export function knitFromImage(g: GridSpec, img: Pixels, palette: Array<[number, number, number]>): Cells {
+export function knitFromImage(g: GridSpec, img: Pixels, palette: Rgb3[], opts: Partial<KnitOptions> = {}): Cells {
   const out: Cells = new Map();
   if (!palette.length || img.width < 1 || img.height < 1) return out;
+  const background = Math.min(palette.length - 1, Math.max(0, opts.background ?? 0));
+  const detail = Math.min(100, Math.max(1, opts.detailPct ?? DEFAULT_KNIT.detailPct)) / 100;
+  const perLeg = opts.perLeg ?? DEFAULT_KNIT.perLeg;
   const pairs = Math.floor(g.cols / 2);
+  const count = new Array<number>(palette.length);
+
+  /** Il filo dell'area di immagine [x0,x1) × [y0,y1). */
+  const pick = (x0: number, x1: number, y0: number, y1: number): number => {
+    count.fill(0);
+    let n = 0;
+    for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
+      const i = (y * img.width + x) * 4;
+      count[nearest(img.rgba[i], img.rgba[i + 1], img.rgba[i + 2], palette)]++;
+      n++;
+    }
+    let best = background, bestN = -1;
+    for (let k = 0; k < palette.length; k++) if (k !== background && count[k] > bestN) { bestN = count[k]; best = k; }
+    return n && best !== background && bestN / n >= detail ? best : background;
+  };
+  const xAt = (c: number) => Math.floor((c * img.width) / g.cols);
+
   for (let r = 0; r < g.rows; r++) {
     const y0 = Math.floor((r * img.height) / g.rows), y1 = Math.max(y0 + 1, Math.floor(((r + 1) * img.height) / g.rows));
     for (let p = 0; p < pairs; p++) {
-      const x0 = Math.floor((2 * p * img.width) / g.cols), x1 = Math.max(x0 + 1, Math.floor(((2 * p + 2) * img.width) / g.cols));
-      let sr = 0, sg = 0, sb = 0, n = 0;
-      for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
-        const i = (y * img.width + x) * 4;
-        sr += img.rgba[i]; sg += img.rgba[i + 1]; sb += img.rgba[i + 2]; n++;
+      const c0 = 2 * p, c1 = c0 + 1;
+      let left: number, right: number;
+      if (perLeg) {
+        left = pick(xAt(c0), Math.max(xAt(c0) + 1, xAt(c1)), y0, y1);
+        right = pick(xAt(c1), Math.max(xAt(c1) + 1, xAt(c1 + 1)), y0, y1);
+      } else {
+        left = right = pick(xAt(c0), Math.max(xAt(c0) + 1, xAt(c1 + 1)), y0, y1);
       }
-      if (!n) continue;
-      sr /= n; sg /= n; sb /= n;
-      let best = 0, bestD = Infinity;
-      palette.forEach(([pr, pg, pb], k) => {
-        const d = (sr - pr) ** 2 + (sg - pg) ** 2 + (sb - pb) ** 2;
-        if (d < bestD) { bestD = d; best = k; }
-      });
-      out.set(cellIndex(g, r, 2 * p), { stitch: 'down', color: best });
-      out.set(cellIndex(g, r, 2 * p + 1), { stitch: 'up', color: best });
+      out.set(cellIndex(g, r, c0), { stitch: 'down', color: left });
+      out.set(cellIndex(g, r, c1), { stitch: 'up', color: right });
     }
   }
   return out;

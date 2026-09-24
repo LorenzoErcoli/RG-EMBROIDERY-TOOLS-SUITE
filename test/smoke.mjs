@@ -42,7 +42,7 @@ export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 export { routeCells as csRouteCells, colorPolylines as csColorPolylines, DEFAULT_ROUTE as CS_DEFAULT_ROUTE } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
-export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
+export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight, knitFromImage as csKnitFromImage, refinePalette as csRefinePalette } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
 export { reticoloDaZone, contornoDaZone, zoneDaModello, lineeDaModello } from ${JSON.stringify(posix('apps/cannage-rafia/src/reticolo.ts'))};
@@ -4669,7 +4669,17 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   }
   // Un campo di chevron: un solo cambio riga per riga (5 × 5 mm), anche con 2 passate.
   const campo = g(6, 10), cCampo = fill(campo, zig);
-  check('chevron 6×10 ×2: 25 mm in vista (un bordo per cambio riga), nessun ripasso', [Math.round(run(campo, cCampo, { repetitions: 2 }).metrics.visibleMm), Math.round(run(campo, cCampo, { repetitions: 2 }).metrics.retraceMm)], [25, 0]);
+  // Il cambio riga non è più un bordo in vista: è un passaggio VERTICALE da vertice a vertice
+  // (Lorenzo, 2026-09-24: «togliere le linee orizzontali come passaggio»). 5 cambi × 5 mm.
+  const mCampo = run(campo, cCampo, { repetitions: 2 }).metrics;
+  check('chevron 6×10 ×2: niente in vista, 25 mm vertice-vertice (uno per cambio riga), nessun ripasso', [Math.round(mCampo.visibleMm), Math.round(mCampo.verticalMm), Math.round(mCampo.retraceMm)], [0, 25, 0]);
+  // Nessun passaggio orizzontale dove c'è un'alternativa: su un campo a due fili a macchie, zero
+  // tratti orizzontali (from e to sulla stessa riga del reticolo) e zero salti.
+  const gH = { rows: 30, cols: 40, cellW: 1.5, cellH: 3.8, overlapPct: 30 };
+  const rH = run(gH, fill(gH, (r, c) => ({ stitch: c % 2 ? 'up' : 'down', color: ((r * 7 + (c >> 1) * 13) % 11) < 3 ? 0 : 1 })));
+  let orizz = 0;
+  for (const cr of rH.colors) for (const sg of cr.segs) if (sg.kind !== 'stitch' && sg.kind !== 'jump' && Math.floor(sg.from / 41) === Math.floor(sg.to / 41)) orizz++;
+  check('a macchie: nessun passaggio orizzontale, nessun salto', [orizz, rH.metrics.jumps], [0, 0]);
 
   // Ogni gamba è cucita esattamente N volte, e nella croce la gamba sopra viene sempre dopo.
   const blocco = g(5, 5), cCroci = fill(blocco, () => 'cross');
@@ -4761,6 +4771,30 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   check('150×80 mm, cella 2,5×6, sormonto 35%: 60 colonne × 20 righe', [gM.cols, gM.rows], [60, 20]);
   check('...e il ricamo esce alto 80 mm a meno di mezza riga', Math.abs(rg.csGridHeight(gM) - 80) <= 6 * 0.65 / 2, true);
   check('le colonne sono sempre pari (una V = due colonne)', rg.csGridForSize(101, 50, 2, 5, 0).cols % 2, 0);
+  // DALL'IMMAGINE — i difetti visti sul giornale Dior di Lorenzo (2026-09-24).
+  // (1) Il nero usciva grigio (#8D8D8D): il median-cut su un'immagine quasi tutta bianca fa la
+  // media di neri e grigi dei bordi. Immagine sintetica: 85% bianco, 10% nero, 5% grigio di bordo.
+  const W0 = 100, H0 = 100, rgba = new Uint8ClampedArray(W0 * H0 * 4);
+  for (let i = 0; i < W0 * H0; i++) { const v = i % 20 < 2 ? 0 : i % 20 === 2 ? 128 : 255; rgba.set([v, v, v, 255], i * 4); }
+  const img0 = { rgba, width: W0, height: H0 };
+  const pal0 = rg.csRefinePalette(img0, rg.medianCutPalette(rgba, null, 2)).sort((a, b) => a[0] - b[0]);
+  check('colori dall\'immagine: il nero resta nero (sotto 60), il bianco bianco', [pal0[0][0] < 60, pal0[1][0] > 240], [true, true]);
+  // (2) Le lettere si perdevano: un tratto nero sottile, mediato col bianco, spariva. Una V larga
+  // 10 px con dentro un tratto nero di 4 px (40%): con la soglia al 35% è nera, al 50% no.
+  const img1 = { rgba: new Uint8ClampedArray(20 * 10 * 4), width: 20, height: 10 };
+  for (let y = 0; y < 10; y++) for (let x = 0; x < 20; x++) { const v = x < 4 ? 0 : 255; img1.rgba.set([v, v, v, 255], (y * 20 + x) * 4); }
+  const gK = { rows: 1, cols: 4, cellW: 1.5, cellH: 3.8 };
+  const bw = [[0, 0, 0], [255, 255, 255]];
+  const col = (cells) => [...cells.values()].map((m) => m.color);
+  check('soglia 35%: il tratto sottile fa nera la V (e la V accanto resta bianca)', col(rg.csKnitFromImage(gK, img1, bw, { background: 1, detailPct: 35 })), [0, 0, 1, 1]);
+  check('soglia 50%: lo stesso tratto si perde', col(rg.csKnitFromImage(gK, img1, bw, { background: 1, detailPct: 50 })), [1, 1, 1, 1]);
+  check('mezza V: il tratto colora solo la gamba sotto cui sta', col(rg.csKnitFromImage(gK, img1, bw, { background: 1, detailPct: 35, perLeg: true })), [0, 1, 1, 1]);
+  // (3) I passaggi del filo sopra: ripasso quasi gratis (niente salti a caso) ma una volta sola:
+  // su un campo a due fili a macchie nessuna diagonale riceve tre passaggi in più o più.
+  const gX = { rows: 40, cols: 40, cellW: 1.5, cellH: 3.8, overlapPct: 30 };
+  const cX = fill(gX, (r, c) => ({ stitch: c % 2 ? 'up' : 'down', color: ((r * 7 + (c >> 1) * 13) % 11) < 3 ? 0 : 1 }));
+  const mX = rg.csRouteCells(gX, cX, rg.CS_DEFAULT_ROUTE).metrics;
+  check('a macchie: al massimo due passaggi in più sulla stessa diagonale', mX.maxExtra <= 2, true);
   check('sormonto: il percorso non cambia (stessi tratti che senza)', JSON.stringify(rS.colors), JSON.stringify(rg.csRouteCells({ ...gS, overlapPct: 0 }, cS, rg.CS_DEFAULT_ROUTE).colors));
 }
 

@@ -9,7 +9,7 @@ import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import {
   type Button, type Cells, type GridSpec, type Leg, type Thread, type Tool,
-  type Pixels, DEFAULT_GRID, applyEdits, knitFromImage, gridForSize, cellIndex, cellsFromJson, cellsToJson, editsFor, fromThreadRoute, legEnds, legsOf,
+  type Pixels, DEFAULT_GRID, applyEdits, knitFromImage, gridForSize, refinePalette, paletteShares, DEFAULT_KNIT, cellIndex, cellsFromJson, cellsToJson, editsFor, fromThreadRoute, legEnds, legsOf,
   resizeCells, pointInRow, segmentPoints, rowPitch, gridHeight,
 } from './model';
 import {
@@ -17,7 +17,7 @@ import {
   DEFAULT_ROUTE, DEFAULT_STITCH, colorPolylines, routeCells,
 } from './routing';
 
-const VERSION = '0.1.0';
+const VERSION = '0.2.0';
 const AUTOSAVE_KEY = 'rg-cross-stitch-autosave';
 
 /** I fili di partenza: l'ordine è l'ordine degli aghi. */
@@ -34,6 +34,7 @@ const TOOL_HELP: Record<Tool, string> = {
 const SEG_STYLE: Record<Exclude<SegKind, 'stitch'>, string> = {
   visible: 'stroke:var(--rg-color-danger);stroke-width:2',
   retrace: 'stroke:var(--rg-color-warning);stroke-width:2',
+  vertical: 'stroke:var(--rg-color-info);stroke-width:2',
   hidden: 'stroke:var(--rg-color-neutral-600);stroke-width:1;stroke-dasharray:3 2',
   jump: 'stroke:var(--rg-color-neutral-400);stroke-width:1;stroke-dasharray:1 3',
 };
@@ -62,13 +63,28 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             </label>
             <p class="rg-file-input__status" id="imageStatus" role="status">Carica la foto o il disegno: la maglia si crea da sola, poi regoli le misure qui sotto.</p>
           </div>
+          <label class="rg-field"><span class="rg-field__label">Soglia del dettaglio</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="detailPct" type="number" min="1" max="100" step="5"><span>%</span></span></label>
+          <div class="rg-field">
+            <span class="rg-field__label">Colore per</span>
+            <div class="rg-segmented" id="perLegSel" role="group" aria-label="Colore per">
+              <button type="button" class="rg-segmented__item" data-perleg="0">V intera</button>
+              <button type="button" class="rg-segmented__item" data-perleg="1">Mezza V</button>
+            </div>
+          </div>
+          <small class="rg-field__help rg-param-grid__wide">Soglia: basta questa parte di un colore di dettaglio (il nero) dentro una V per farla di quel colore. Più bassa salva i tratti sottili come le lettere; 50% = la maggioranza. «Mezza V» decide il colore per ogni gamba: il doppio di dettaglio in orizzontale.</small>
           <label class="rg-field"><span class="rg-field__label">Opacità sotto la griglia</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="imageOpacity" type="number" min="0" max="100" step="5" value="0"><span>%</span></span></label>
+          <div class="rg-cluster rg-param-grid__wide">
+            <button type="button" id="cropBtn" class="rg-button rg-button--outline rg-button--small" aria-pressed="false">Ritaglia</button>
+            <button type="button" id="uncropBtn" class="rg-button rg-button--ghost rg-button--small">Immagine intera</button>
+          </div>
+          <small class="rg-field__help rg-param-grid__wide">Ritaglia: trascini un rettangolo sul disegno e la maglia si rifà solo su quel pezzo, per provare uno swatch piccolo. Si può ritagliare più volte; «Immagine intera» torna all’originale.</small>
           <div class="rg-cluster rg-param-grid__wide">
             <button type="button" id="knitBtn" class="rg-button rg-button--outline rg-button--small">Rifai la maglia dall’immagine</button>
             <button type="button" id="removeImageBtn" class="rg-button rg-button--ghost rg-button--small">Togli l’immagine</button>
           </div>
-          <small class="rg-field__help rg-param-grid__wide">Ogni V prende il filo più vicino al colore dell’immagine sotto di lei. I colori dei fili si ricavano dall’immagine, tanti quanti sono i fili (sezione 03): il più chiaro per primo, così i suoi passaggi finiscono sotto quelli scuri.</small>
+          <small class="rg-field__help rg-param-grid__wide">I colori dei fili si ricavano dall’immagine, tanti quanti sono i fili (sezione 03). Il colore che copre di più va per ultimo, cioè SOPRA: gli altri nascondono i loro passaggi sotto di lui, e lui si sposta ripassando le sue stesse diagonali.</small>
         </div>
       </section>
 
@@ -179,6 +195,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         <span class="cs-legend" id="legend">
           <span class="cs-legend__item"><svg viewBox="0 0 22 8"><line x1="1" y1="4" x2="21" y2="4" style="${SEG_STYLE.visible}"/></svg>in vista</span>
           <span class="cs-legend__item"><svg viewBox="0 0 22 8"><line x1="1" y1="4" x2="21" y2="4" style="${SEG_STYLE.retrace}"/></svg>ripasso</span>
+          <span class="cs-legend__item"><svg viewBox="0 0 22 8"><line x1="1" y1="4" x2="21" y2="4" style="${SEG_STYLE.vertical}"/></svg>vertice-vertice</span>
           <span class="cs-legend__item"><svg viewBox="0 0 22 8"><line x1="1" y1="4" x2="21" y2="4" style="${SEG_STYLE.hidden}"/></svg>nascosto</span>
           <span class="cs-legend__item"><svg viewBox="0 0 22 8"><line x1="1" y1="4" x2="21" y2="4" style="${SEG_STYLE.jump}"/></svg>salto</span>
         </span>
@@ -207,6 +224,13 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   let target = { w: st.grid.cols * st.grid.cellW, h: gridHeight(st.grid) };
   /** Vero finché il disegno è quello uscito dall'immagine: cambiando le misure si rifà. */
   let fromImage = false;
+  /** Come si legge l'immagine: soglia del dettaglio e colore per mezza V. */
+  const knit = { ...DEFAULT_KNIT };
+  /** L'immagine originale e il pezzo ritagliato (px dell'originale); null = tutta. */
+  let source: { img: HTMLImageElement; name: string } | null = null;
+  let crop: { x: number; y: number; w: number; h: number } | null = null;
+  let cropping = false;
+  let cropDrag: { a: { x: number; y: number }; b: { x: number; y: number } } | null = null;
   let result: RouteResult | null = null;
   let sourceName = '';
   const undo: Array<{ grid: GridSpec; cells: Cells }> = [];
@@ -217,6 +241,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   const margin = () => Math.max(2, Math.min(st.grid.cellW, st.grid.cellH));
   const sizeMm = () => ({ w: st.grid.cols * st.grid.cellW, h: gridHeight(st.grid) });
   const f = (n: number) => Number(n.toFixed(3));
+  /**
+   * Lo spessore del filo nell'anteprima, in mm: circa mezza cella, di più con più passate. Prima
+   * era un capello (0,13 della cella): su 450 mm di giornale le lettere sembravano perse anche
+   * dove c'erano, perché il filo non copriva niente.
+   */
+  const threadWidth = () => Math.min(st.grid.cellW, st.grid.cellH) * Math.min(0.9, 0.5 * (1 + 0.15 * (st.route.repetitions - 1)));
 
   function svgMarkup(): string {
     const g = st.grid;
@@ -225,7 +255,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const pitch = rowPitch(g);
     const parts: string[] = [];
     parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${f(w + 2 * m)}mm" height="${f(h + 2 * m)}mm" viewBox="${f(-m)} ${f(-m)} ${f(w + 2 * m)} ${f(h + 2 * m)}">`);
-    parts.push(`<rect x="0" y="0" width="${f(w)}" height="${f(h)}" style="fill:var(--rg-color-white)"/>`);
+    // fondo grigio chiaro: sul bianco un filo bianco non si vedrebbe
+    parts.push(`<rect x="0" y="0" width="${f(w)}" height="${f(h)}" style="fill:var(--rg-color-neutral-200)"/>`);
     if (image) parts.push(`<image href="${image.url}" x="0" y="0" width="${f(w)}" height="${f(h)}" preserveAspectRatio="none" opacity="${imageOpacity}"/>`);
     // la griglia: un pattern per le celle, una riga più scura ogni 10
     parts.push(`<defs><pattern id="cs-cell" width="${f(g.cellW)}" height="${f(pitch)}" patternUnits="userSpaceOnUse"><path d="M ${f(g.cellW)} 0 L 0 0 0 ${f(pitch)}" fill="none" style="stroke:var(--rg-color-neutral-200)" stroke-width="0.6" vector-effect="non-scaling-stroke"/></pattern>`
@@ -233,7 +264,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     parts.push(`<rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="url(#cs-cell)"/>`);
     parts.push(`<rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="url(#cs-major)" style="stroke:var(--rg-color-neutral-600)" stroke-width="1" vector-effect="non-scaling-stroke"/>`);
     // i punti, colore per colore nell'ordine degli aghi; nella croce la gamba sopra per seconda
-    const sw = f(Math.min(g.cellW, g.cellH) * 0.13);
+    const sw = f(threadWidth());
     const byColor = new Map<number, string[]>();
     for (const [k, mark] of st.cells) {
       const r = Math.floor(k / g.cols), c = k - r * g.cols;
@@ -251,7 +282,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     });
     // i passaggi
     if (showPaths && result) {
-      const paths: Record<string, string[]> = { visible: [], retrace: [], hidden: [], jump: [] };
+      const paths: Record<string, string[]> = { visible: [], retrace: [], vertical: [], hidden: [], jump: [] };
       for (const cr of result.colors) {
         for (const s of cr.segs) {
           if (s.kind === 'stitch') continue;
@@ -259,7 +290,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           paths[s.kind].push(`M${f(pa.x)} ${f(pa.y)}L${f(pb.x)} ${f(pb.y)}`);
         }
       }
-      for (const kind of ['jump', 'hidden', 'retrace', 'visible'] as const) {
+      for (const kind of ['jump', 'hidden', 'retrace', 'vertical', 'visible'] as const) {
         if (paths[kind].length) parts.push(`<path d="${paths[kind].join('')}" fill="none" stroke-linecap="round" vector-effect="non-scaling-stroke" style="${SEG_STYLE[kind]}"/>`);
       }
       // dove parte ogni filo
@@ -292,7 +323,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const m = result.metrics;
     if (!m.legs) { $('status').textContent = 'Griglia vuota: disegna con il clic.'; return; }
     const mm = (x: number) => `${Math.round(x)} mm`;
-    $('status').textContent = `${m.legs} diagonali · passaggi in vista ${mm(m.visibleMm)} · ripassi ${mm(m.retraceMm)} · nascosti ${mm(m.hiddenMm)} · ${m.jumps} salt${m.jumps === 1 ? 'o' : 'i'}`;
+    $('status').textContent = `${m.legs} diagonali · passaggi in vista ${mm(m.visibleMm)} · ripassi ${mm(m.retraceMm)} · vertice-vertice ${mm(m.verticalMm)} · nascosti ${mm(m.hiddenMm)} · ${m.jumps} salt${m.jumps === 1 ? 'o' : 'i'}`;
   }
 
   function autosave(): void {
@@ -308,8 +339,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   // ---- campi ------------------------------------------------------------------
   function syncFields(): void {
-    num('sizeW').value = String(f(target.w));
-    num('sizeH').value = String(f(target.h));
+    num('sizeW').value = String(Math.round(target.w * 10) / 10);
+    num('sizeH').value = String(Math.round(target.h * 10) / 10);
     num('cellW').value = String(st.grid.cellW);
     num('cellH').value = String(st.grid.cellH);
     num('overlap').value = String(st.grid.overlapPct ?? 0);
@@ -356,7 +387,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     target = { w, h };
     const next = gridForSize(w, h, Number(num('cellW').value) || st.grid.cellW, Number(num('cellH').value) || st.grid.cellH, Number(num('overlap').value) || 0);
     pushUndo();
-    if (image && fromImage) st.cells = knitFromImage(next, image.px, threadRgb());
+    if (image && fromImage) st.cells = knitFromImage(next, image.px, threadRgb(), knitOpts());
     else st.cells = resizeCells(st.grid, next, st.cells);
     st.grid = next;
     syncFields();
@@ -508,15 +539,25 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   let painting: { button: Button; erase: boolean; last: number; lastCell: { r: number; c: number } | null; changed: boolean } | null = null;
 
   /** La cella sotto il puntatore, o null se fuori griglia. */
-  function cellAt(e: PointerEvent): { r: number; c: number } | null {
+  /** Il punto in mm sotto il puntatore, nel sistema della griglia (anche fuori griglia). */
+  function mmAt(e: PointerEvent): { x: number; y: number } | null {
     const svg = $('layer').querySelector('svg');
     if (!svg) return null;
     const rect = svg.getBoundingClientRect();
     if (rect.width <= 0 || rect.height <= 0) return null;
     const { w, h } = sizeMm();
     const m = margin();
-    const x = -m + ((e.clientX - rect.left) / rect.width) * (w + 2 * m);
-    const y = -m + ((e.clientY - rect.top) / rect.height) * (h + 2 * m);
+    return {
+      x: -m + ((e.clientX - rect.left) / rect.width) * (w + 2 * m),
+      y: -m + ((e.clientY - rect.top) / rect.height) * (h + 2 * m),
+    };
+  }
+
+  function cellAt(e: PointerEvent): { r: number; c: number } | null {
+    const p = mmAt(e);
+    if (!p) return null;
+    const { x, y } = p;
+    const { h } = sizeMm();
     // col sormonto le righe si sovrappongono: vince quella che parte più in basso (è cucita sopra)
     const c = Math.floor(x / st.grid.cellW), r = Math.min(st.grid.rows - 1, Math.floor(y / rowPitch(st.grid)));
     if (y < 0 || y > h) return null;
@@ -564,6 +605,16 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   // pan il tasto centrale e lo spazio + trascina.
   canvas.addEventListener('pointerdown', (e) => {
     if (spaceDown || (e.button !== 0 && e.button !== 2)) return;
+    if (cropping) {
+      const p = mmAt(e);
+      if (!p || e.button !== 0) return;
+      e.stopPropagation(); e.preventDefault();
+      const { w, h } = sizeMm();
+      const cl = { x: Math.min(w, Math.max(0, p.x)), y: Math.min(h, Math.max(0, p.y)) };
+      cropDrag = { a: cl, b: cl };
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      return;
+    }
     if (!cellAt(e)) return;
     e.stopPropagation(); e.preventDefault();
     pushUndo();
@@ -572,11 +623,28 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     paintAt(e);
   }, true);
   canvas.addEventListener('pointermove', (e) => {
+    if (cropDrag) {
+      e.stopPropagation();
+      const p = mmAt(e);
+      if (!p) return;
+      const { w, h } = sizeMm();
+      cropDrag.b = { x: Math.min(w, Math.max(0, p.x)), y: Math.min(h, Math.max(0, p.y)) };
+      drawCropRect(cropDrag.a, cropDrag.b);
+      return;
+    }
     if (!painting) return;
     e.stopPropagation();
     paintAt(e);
   }, true);
   const endPaint = (e: PointerEvent) => {
+    if (cropDrag) {
+      e.stopPropagation();
+      const d = cropDrag;
+      cropDrag = null;
+      try { canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      finishCrop(d.a, d.b);
+      return;
+    }
     if (!painting) return;
     e.stopPropagation();
     if (!painting.changed) undo.pop();
@@ -607,37 +675,138 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (!file) return;
     const reader = new FileReader();
     reader.onload = () => {
-      const url = String(reader.result);
       const img = new Image();
       img.onload = () => {
-        // i pixel, ridotti: per il colore medio di una V bastano e avanzano
-        const scale = Math.min(1, 600 / Math.max(img.naturalWidth, img.naturalHeight));
-        const cnv = document.createElement('canvas');
-        cnv.width = Math.max(1, Math.round(img.naturalWidth * scale));
-        cnv.height = Math.max(1, Math.round(img.naturalHeight * scale));
-        const ctx = cnv.getContext('2d')!;
-        ctx.drawImage(img, 0, 0, cnv.width, cnv.height);
-        const data = ctx.getImageData(0, 0, cnv.width, cnv.height);
-        image = { url, w: img.naturalWidth, h: img.naturalHeight, px: { rgba: data.data, width: cnv.width, height: cnv.height } };
-        // L'altezza del ricamo prende le proporzioni dell'immagine, la griglia si ricalcola e la
-        // maglia si crea subito: poi si regolano le misure.
-        $<HTMLInputElement>('keepRatio').checked = true;
-        target = { w: target.w, h: ratioHeight(target.w) };
-        st.grid = gridForSize(target.w, target.h, st.grid.cellW, st.grid.cellH, st.grid.overlapPct ?? 0);
-        syncFields();
-        knitNow();
-        $('imageStatus').textContent = `${file.name}: ${img.naturalWidth}×${img.naturalHeight} px.`;
-        requestAnimationFrame(() => pz.fit());
+        source = { img, name: file.name };
+        crop = null;
+        applySource();
       };
       img.onerror = () => { $('imageStatus').textContent = `${file.name}: immagine non leggibile.`; };
-      img.src = url;
+      img.src = String(reader.result);
     };
     reader.readAsDataURL(file);
   });
+
+  /**
+   * L'immagine di lavoro = l'originale, ritagliata se c'è un ritaglio. Il ritaglio si prende
+   * sempre dall'ORIGINALE a piena risoluzione (non dai pixel già ridotti), così anche uno swatch
+   * piccolo ha abbastanza dettaglio; poi si riduce a 600 px, che per il colore di una V bastano.
+   * L'altezza del ricamo prende le proporzioni del pezzo, la griglia si ricalcola e la maglia si
+   * rifà subito: poi si regolano le misure.
+   */
+  function applySource(): void {
+    if (!source) return;
+    const { img } = source;
+    const cr = crop ?? { x: 0, y: 0, w: img.naturalWidth, h: img.naturalHeight };
+    const scale = Math.min(1, 600 / Math.max(cr.w, cr.h));
+    const cnv = document.createElement('canvas');
+    cnv.width = Math.max(1, Math.round(cr.w * scale));
+    cnv.height = Math.max(1, Math.round(cr.h * scale));
+    const ctx = cnv.getContext('2d')!;
+    ctx.drawImage(img, cr.x, cr.y, cr.w, cr.h, 0, 0, cnv.width, cnv.height);
+    const data = ctx.getImageData(0, 0, cnv.width, cnv.height);
+    image = { url: cnv.toDataURL('image/png'), w: cr.w, h: cr.h, px: { rgba: data.data, width: cnv.width, height: cnv.height } };
+    $<HTMLInputElement>('keepRatio').checked = true;
+    target = { w: target.w, h: ratioHeight(target.w) };
+    st.grid = gridForSize(target.w, target.h, st.grid.cellW, st.grid.cellH, st.grid.overlapPct ?? 0);
+    syncFields();
+    knitNow();
+    $('imageStatus').textContent = crop
+      ? `${source.name}: ritaglio di ${Math.round(cr.w)}×${Math.round(cr.h)} px su ${img.naturalWidth}×${img.naturalHeight}.`
+      : `${source.name}: ${img.naturalWidth}×${img.naturalHeight} px.`;
+    requestAnimationFrame(() => pz.fit());
+  }
+
+  function setCropping(on: boolean): void {
+    cropping = on && !!image;
+    const b = $('cropBtn');
+    b.setAttribute('aria-pressed', cropping ? 'true' : 'false');
+    b.classList.toggle('rg-button--primary', cropping);
+    b.classList.toggle('rg-button--outline', !cropping);
+    canvas.classList.toggle('cs-crop', cropping);
+    if (cropping) $('imageStatus').textContent = 'Trascina un rettangolo sul disegno: la maglia si rifà su quel pezzo.';
+  }
+  $('cropBtn').addEventListener('click', () => {
+    if (!image) { $('imageStatus').textContent = 'Carica prima un’immagine.'; return; }
+    setCropping(!cropping);
+  });
+  $('uncropBtn').addEventListener('click', () => {
+    if (!source || !crop) return;
+    crop = null;
+    setCropping(false);
+    applySource();
+  });
+
+  /** Il rettangolo che si sta tirando, disegnato sopra l'anteprima. */
+  function drawCropRect(a: { x: number; y: number }, b: { x: number; y: number }): void {
+    const svg = $('layer').querySelector('svg');
+    if (!svg) return;
+    let r = svg.querySelector<SVGRectElement>('#cs-crop-rect');
+    if (!r) {
+      r = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      r.id = 'cs-crop-rect';
+      r.setAttribute('style', 'fill:none;stroke:var(--rg-color-focus);stroke-width:2;stroke-dasharray:6 4');
+      r.setAttribute('vector-effect', 'non-scaling-stroke');
+      svg.appendChild(r);
+    }
+    r.setAttribute('x', String(Math.min(a.x, b.x)));
+    r.setAttribute('y', String(Math.min(a.y, b.y)));
+    r.setAttribute('width', String(Math.abs(b.x - a.x)));
+    r.setAttribute('height', String(Math.abs(b.y - a.y)));
+  }
+
+  /** Chiude il ritaglio: il rettangolo (in mm sulla griglia) diventa un pezzo dell'immagine. */
+  function finishCrop(a: { x: number; y: number }, b: { x: number; y: number }): void {
+    if (!source || !image) return;
+    const { w, h } = sizeMm();
+    const fx0 = Math.min(a.x, b.x) / w, fx1 = Math.max(a.x, b.x) / w;
+    const fy0 = Math.min(a.y, b.y) / h, fy1 = Math.max(a.y, b.y) / h;
+    if (fx1 - fx0 < 0.02 || fy1 - fy0 < 0.02) { draw(); return; } // un clic, non un rettangolo
+    // L'immagine è stirata sulla griglia: le frazioni della griglia sono frazioni del pezzo attuale.
+    const cur = crop ?? { x: 0, y: 0, w: source.img.naturalWidth, h: source.img.naturalHeight };
+    crop = { x: cur.x + fx0 * cur.w, y: cur.y + fy0 * cur.h, w: (fx1 - fx0) * cur.w, h: (fy1 - fy0) * cur.h };
+    setCropping(false);
+    applySource();
+  }
   num('imageOpacity').addEventListener('change', () => {
     imageOpacity = Math.min(100, Math.max(0, Number(num('imageOpacity').value) || 0)) / 100;
     draw();
   });
+  /** Le opzioni della lettura: il fondo è l'ultimo filo, quello che sta sopra. */
+  function knitOpts() {
+    return { ...knit, background: st.threads.length - 1 };
+  }
+
+  /** Rilegge l'immagine coi fili che ci sono (senza ricalcolarne i colori). */
+  function reknit(): void {
+    if (!image) return;
+    pushUndo();
+    st.cells = knitFromImage(st.grid, image.px, threadRgb(), knitOpts());
+    fromImage = true;
+    buildThreads();
+    update();
+  }
+
+  function syncKnit(): void {
+    num('detailPct').value = String(knit.detailPct);
+    root.querySelectorAll<HTMLButtonElement>('#perLegSel .rg-segmented__item').forEach((b) => {
+      const on = (b.dataset.perleg === '1') === knit.perLeg;
+      b.classList.toggle('rg-segmented__item--active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+  num('detailPct').addEventListener('change', () => {
+    knit.detailPct = Math.min(100, Math.max(1, Number(num('detailPct').value) || DEFAULT_KNIT.detailPct));
+    syncKnit();
+    reknit();
+  });
+  root.querySelectorAll<HTMLButtonElement>('#perLegSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => {
+    knit.perLeg = b.dataset.perleg === '1';
+    syncKnit();
+    reknit();
+  }));
+  syncKnit();
+
   /** I fili attuali in RGB, per assegnare le V. */
   function threadRgb(): Array<[number, number, number]> {
     return st.threads.map((t) => {
@@ -649,18 +818,23 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   /** La maglia dall'immagine: i colori dei fili dall'immagine (chiaro prima), poi una V per cella. */
   function knitNow(): void {
     if (!image) { $('imageStatus').textContent = 'Carica prima un’immagine.'; return; }
-    const luma = (c: [number, number, number]) => 0.299 * c[0] + 0.587 * c[1] + 0.114 * c[2];
-    const pal = medianCutPalette(image.px.rgba, null, st.threads.length).sort((a, b) => luma(b) - luma(a));
+    // I colori: median-cut, poi affinati (senza, il nero del giornale usciva grigio #8D8D8D).
+    // L'ordine: chi copre di più va per ULTIMO, sopra (Lorenzo: «il bianco sopra il nero, c'è più
+    // bianco e lo posso far muovere meglio»). Gli altri nascondono i passaggi sotto di lui.
+    const pal = refinePalette(image.px, medianCutPalette(image.px.rgba, null, st.threads.length));
     if (!pal.length) return;
+    const shares = paletteShares(image.px, pal);
+    const order = pal.map((_, k) => k).sort((a, b) => shares[a] - shares[b]);
+    const sorted = order.map((k) => pal[k]);
     pushUndo();
-    st.threads = pal.map((c) => ({ hex: rgbToHex(c) }));
-    st.cells = knitFromImage(st.grid, image.px, pal);
+    st.threads = sorted.map((c) => ({ hex: rgbToHex(c) }));
+    st.cells = knitFromImage(st.grid, image.px, sorted, knitOpts());
     fromImage = true;
     buildThreads();
     update();
   }
   $('knitBtn').addEventListener('click', knitNow);
-  $('removeImageBtn').addEventListener('click', () => { image = null; fromImage = false; $('imageStatus').textContent = 'Nessuna immagine.'; draw(); });
+  $('removeImageBtn').addEventListener('click', () => { image = null; source = null; crop = null; setCropping(false); fromImage = false; $('imageStatus').textContent = 'Nessuna immagine.'; draw(); });
 
   // ---- progetto: riapertura (R27) ---------------------------------------------
   function projectMetadata(): Record<string, unknown> {
@@ -671,6 +845,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       threads: st.threads,
       route: st.route,
       stitch: st.stitch,
+      knit,
       cells: cellsToJson(st.grid, st.cells),
     };
   }
@@ -681,7 +856,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (g && g.cols && g.rows && g.cellW && g.cellH) st.grid = { cols: clampInt(g.cols, 1, 1000), rows: clampInt(g.rows, 1, 1000), cellW: g.cellW, cellH: g.cellH, overlapPct: Math.min(90, Math.max(0, Number(g.overlapPct) || 0)) };
     if (Array.isArray(meta.threads) && meta.threads.length) st.threads = (meta.threads as Thread[]).map((t) => ({ hex: asHex6(String(t.hex)) }));
     if (meta.route && typeof meta.route === 'object') st.route = { ...DEFAULT_ROUTE, ...(meta.route as Partial<RouteParams>) };
+    // 0.1.0 saltava oltre 12: era il default vecchio, non una scelta (i salti a caso sul giornale Dior)
+    if (meta.version === '0.1.0' && st.route.jumpMm === 12) st.route.jumpMm = DEFAULT_ROUTE.jumpMm;
     if (meta.stitch && typeof meta.stitch === 'object') st.stitch = { ...DEFAULT_STITCH, ...(meta.stitch as Partial<StitchParams>) };
+    if (meta.knit && typeof meta.knit === 'object') Object.assign(knit, DEFAULT_KNIT, meta.knit);
+    syncKnit();
     st.cells = cellsFromJson(st.grid, meta.cells);
     for (const m of st.cells.values()) if (m.color >= st.threads.length) m.color = 0;
     activeThread = 0;
@@ -740,7 +919,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   // ---- esportazione -----------------------------------------------------------
   function exportLayers(): ExportLayer[] {
     const res = routeCells(st.grid, st.cells, st.route);
-    const sw = Math.min(st.grid.cellW, st.grid.cellH) * 0.13;
+    const sw = threadWidth();
     return res.colors.map((cr) => ({
       id: `filo-${cr.color + 1}`,
       color: st.threads[cr.color]?.hex ?? '#000000',

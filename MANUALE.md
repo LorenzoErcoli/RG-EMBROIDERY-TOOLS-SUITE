@@ -522,10 +522,30 @@ dell'altezza, e le V si infilano una nell'altra; in orizzontale le V si toccano 
 l'effetto maglia: celle strette e alte (per esempio 2,5 × 6 mm). Se ritocchi il disegno a mano,
 cambiando le misure non si rifà più dall'immagine: c'è *Rifai la maglia dall'immagine*.
 
+**Leggere bene l'immagine.** I colori dei fili si ricavano dall'immagine e si affinano, così un
+nero resta nero anche se attorno ci sono molti grigi di bordo. Il filo che copre di più va per
+**ultimo, cioè sopra**: gli altri nascondono i loro passaggi sotto di lui. La **soglia del
+dettaglio** dice quanta parte di un colore di dettaglio (il nero) basta dentro una V per farla di
+quel colore: più bassa salva i tratti sottili come le lettere, 50% è la maggioranza. **Mezza V**
+decide il colore per ogni gamba e raddoppia il dettaglio in orizzontale.
+
+**Swatch: il ritaglio.** Per provare un pezzo piccolo premi **Ritaglia** e trascina un
+rettangolo sul disegno: la maglia si rifà solo su quel pezzo, con le proporzioni del pezzo, e
+larghezza e altezza le regoli sotto. Il pezzo si prende dall'originale a piena risoluzione, quindi
+non perde dettaglio; si può ritagliare più volte, e *Immagine intera* torna all'originale.
+
 **I passaggi si calcolano da soli.** Il filo va da una diagonale alla successiva scegliendo la
 strada più nascosta: sotto una diagonale che verrà cucita dopo (grigio tratteggiato), sopra una
 già cucita (arancio, ingrossa un po' il punto), lungo un bordo di cella in vista (rosso). Oltre
 *Salta oltre* diventa un salto con taglio. La barra di stato dice quanti mm di ciascun tipo.
+Il **ripasso** su una diagonale già cucita costa pochissimo: il filo si sposta usando i suoi
+stessi punti. **Niente passaggi orizzontali**: per cambiare riga il filo scende o sale **in
+verticale, da vertice a vertice** (dalla punta di una V alla punta della V sotto, o da angolo ad
+angolo), in blu nell'anteprima. Se quel verticale passerebbe sopra una V di un colore già cucito,
+lo evita. **Niente salti**: a macchina un salto lascia un filo che attraversa gli altri colori; si
+salta solo oltre *Salta oltre* (400 mm di partenza). In una zona chiusa (il bianco dentro una
+lettera nera) il filo che va sopra deve attraversare il contorno una volta, e lo fa nel punto più
+corto.
 Con più *Passate per diagonale* ogni passata si fa a parte: una riga di V si cuce all'andata e si
 ripassa al ritorno. *Direzione fissa* obbliga «\» dall'alto e «/» dal basso.
 

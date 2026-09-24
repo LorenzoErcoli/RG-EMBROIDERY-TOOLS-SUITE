@@ -13,7 +13,10 @@
 //     il passaggio ci finisce sotto e sparisce → quasi gratis (`hidden`);
 //   - una diagonale dello stesso colore GIÀ cucita: ci si ripassa sopra, si vede poco ma il
 //     punto si ingrossa → poco (`retrace`);
-//   - un bordo di cella: nessun punto lo copre mai, si vede → il prezzo pieno (`border`);
+//   - in VERTICALE, da vertice a vertice (la punta di una V e quella sotto, o angolo e angolo):
+//     il passaggio che Lorenzo ha scelto al posto di quelli orizzontali (`vertical`); se passa
+//     dentro una V di un colore già cucito si vede, e costa come un filo sopra un altro colore;
+//   - in ORIZZONTALE, sul bordo della cella: da evitare, solo se non c'è altra strada (`border`);
 //   - una diagonale in una cella dove non c'è quella gamba: un filo storto nel vuoto → di più;
 //   - una diagonale di un colore PRECEDENTE, già cucita: un filo di un altro colore sopra → il
 //     massimo.
@@ -38,16 +41,30 @@ export interface TravelCosts {
   hidden: number;
   /** Sopra una diagonale dello stesso colore già cucita. */
   retrace: number;
-  /** Lungo un bordo di cella. */
+  /** In orizzontale, lungo il bordo della cella: da evitare. */
   border: number;
+  /** In verticale, da vertice a vertice. */
+  vertical: number;
   /** Lungo una diagonale dove quella gamba non c'è. */
   open: number;
   /** Sopra una diagonale di un colore precedente. */
   over: number;
+  /**
+   * Moltiplicatore per ogni passaggio IN PIÙ sulla stessa diagonale (sopra o sotto che sia): una
+   * volta in più non si nota, due e tre ingrossano il punto e si vedono.
+   */
+  extra: number;
 }
 
-/** Costi per mm di filo. `border` = 1: la soglia del salto si legge quindi in "mm di passaggio in vista". */
-export const DEFAULT_COSTS: TravelCosts = { hidden: 0.05, retrace: 0.4, border: 1, open: 1.6, over: 3 };
+/**
+ * Costi per mm di filo. `border` = 1: la soglia del salto si legge quindi in "mm di passaggio in vista".
+ *
+ * Il ripasso è quasi gratis (0,1) da quando Lorenzo l'ha visto sul giornale Dior: «se si passa una
+ * volta in più sulle diagonali del punto non si nota» — e i passaggi devono usare gli stessi punti
+ * invece di saltare a caso. Con 0,4 il filo sopra faceva 186 salti su quel disegno, con 0,1 e la
+ * soglia a 30 ne fa 18. Una volta sola però: vedi `extra`.
+ */
+export const DEFAULT_COSTS: TravelCosts = { hidden: 0.05, retrace: 0.1, border: 12, vertical: 0.3, open: 1.6, over: 3, extra: 1 };
 
 export interface RouteParams {
   /** Passate su ogni diagonale (avanti e indietro). */
@@ -61,10 +78,11 @@ export interface RouteParams {
   costs?: Partial<TravelCosts>;
 }
 
-export const DEFAULT_ROUTE: RouteParams = { repetitions: 1, fixedDirection: false, topLeg: 'down', jumpMm: 12 };
+// Salti quasi mai: a macchina un salto lascia un filo che attraversa gli altri colori (Lorenzo).
+export const DEFAULT_ROUTE: RouteParams = { repetitions: 1, fixedDirection: false, topLeg: 'down', jumpMm: 400 };
 
 /** Un tratto del percorso fra due vertici del reticolo. */
-export type SegKind = 'stitch' | 'hidden' | 'retrace' | 'visible' | 'jump';
+export type SegKind = 'stitch' | 'hidden' | 'retrace' | 'vertical' | 'visible' | 'jump';
 export interface RouteSeg { kind: SegKind; from: number; to: number; }
 
 export interface ColorRoute { color: number; segs: RouteSeg[]; }
@@ -74,11 +92,14 @@ export interface RouteMetrics {
   legs: number;
   /** mm di passaggio per tipo. */
   hiddenMm: number;
+  verticalMm: number;
   retraceMm: number;
   visibleMm: number;
   /** Salti (tagli): fra due colori non si conta, lì il taglio c'è comunque. */
   jumps: number;
   jumpMm: number;
+  /** Il massimo di passaggi in più finiti su una stessa diagonale. */
+  maxExtra: number;
 }
 
 export interface RouteResult { colors: ColorRoute[]; metrics: RouteMetrics; }
@@ -89,6 +110,8 @@ interface LegState {
   b: number;
   /** Passate ancora da fare su questa gamba. */
   remaining: number;
+  /** Passaggi (non punti) che le sono già passati sopra o sotto. */
+  extra: number;
   /** La gamba che va finita prima (la gamba sotto della croce), o -1. */
   prereq: number;
 }
@@ -169,7 +192,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     for (const leg of legsOf(m.stitch, params.topLeg)) {
       const { a, b } = legEnds(g, r, c, leg);
       const id = legs.length;
-      legs.push({ color: m.color, a, b, remaining: reps, prereq: prev });
+      legs.push({ color: m.color, a, b, remaining: reps, extra: 0, prereq: prev });
       legAt.set(k * 2 + (leg === 'down' ? 0 : 1), id);
       // Direzione fissa: le passate vanno avanti e indietro (a→b, b→a, …) come nella vecchia app.
       for (let p = 0; p < reps; p++) units.push({ leg: id, fixedEntry: params.fixedDirection ? (p % 2 === 0 ? a : b) : -1, done: false });
@@ -181,7 +204,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   const order = (colorOrder ?? [...present].sort((x, y) => x - y)).filter((c) => present.includes(c));
   const rank = new Map<number, number>(order.map((c, i) => [c, i]));
 
-  const metrics: RouteMetrics = { legs: legs.length, hiddenMm: 0, retraceMm: 0, visibleMm: 0, jumps: 0, jumpMm: 0 };
+  const metrics: RouteMetrics = { legs: legs.length, hiddenMm: 0, verticalMm: 0, retraceMm: 0, visibleMm: 0, jumps: 0, jumpMm: 0, maxExtra: 0 };
   const colors: ColorRoute[] = [];
 
   // --- stato del Dijkstra, riusato ---
@@ -196,10 +219,32 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     const id = legAt.get((r * g.cols + c) * 2 + bit);
     if (id === undefined) return { w: costs.open, kind: 'visible' };
     const leg = legs[id];
-    if (leg.color === k) return leg.remaining > 0 ? { w: costs.hidden, kind: 'hidden' } : { w: costs.retrace, kind: 'retrace' };
+    const more = leg.extra > 0 ? costs.extra * leg.extra : 1;
+    if (leg.color === k) return leg.remaining > 0 ? { w: costs.hidden * more, kind: 'hidden' } : { w: costs.retrace * more, kind: 'retrace' };
     return (rank.get(leg.color) ?? 0) > (rank.get(k) ?? 0)
-      ? { w: costs.hidden, kind: 'hidden' }
+      ? { w: costs.hidden * more, kind: 'hidden' }
       : { w: costs.over, kind: 'visible' };
+  };
+
+  const pitch = g.cellH * (1 - Math.min(90, Math.max(0, g.overlapPct ?? 0)) / 100);
+  /**
+   * Il tratto verticale dal vertice (i, j) a (i+1, j) passa fra le celle (i, j−1) e (i, j): nella
+   * maglia è il centro di una V (j dispari) o lo stacco fra due V (j pari). Se lì c'è una V di un
+   * colore già cucito, il filo ci passerebbe sopra e si vede; se è tutto vuoto, è un filo nel vuoto.
+   */
+  const verticalClass = (i: number, j: number, k: number): { w: number; kind: SegKind } => {
+    let any = false;
+    for (const c of [j - 1, j]) {
+      if (c < 0 || c >= g.cols) continue;
+      for (const bit of [0, 1] as const) {
+        const id = legAt.get((i * g.cols + c) * 2 + bit);
+        if (id === undefined) continue;
+        any = true;
+        const leg = legs[id];
+        if (leg.color !== k && (rank.get(leg.color) ?? 0) < (rank.get(k) ?? 0)) return { w: costs.over, kind: 'visible' };
+      }
+    }
+    return any ? { w: costs.vertical, kind: 'vertical' } : { w: costs.open, kind: 'visible' };
   };
 
   /** I vicini di `v` nel reticolo, col costo del tratto. */
@@ -208,8 +253,8 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     // bordi
     if (j > 0) fn(v - 1, g.cellW * costs.border);
     if (j < g.cols) fn(v + 1, g.cellW * costs.border);
-    if (i > 0) fn(v - W, g.cellH * costs.border);
-    if (i < g.rows) fn(v + W, g.cellH * costs.border);
+    if (i > 0) fn(v - W, pitch * verticalClass(i - 1, j, k).w);
+    if (i < g.rows) fn(v + W, pitch * verticalClass(i, j, k).w);
     // diagonali: la cella attraversata e la sua gamba
     if (i < g.rows && j < g.cols) fn(v + W + 1, diagLen * diagClass(i, j, 0, k).w);          // ↘ cella (i,j) «\»
     if (i > 0 && j > 0) fn(v - W - 1, diagLen * diagClass(i - 1, j - 1, 0, k).w);             // ↖ cella (i-1,j-1) «\»
@@ -221,10 +266,19 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   const edgeKind = (v: number, w: number, k: number): { kind: SegKind; mm: number } => {
     const i1 = Math.floor(v / W), j1 = v - i1 * W, i2 = Math.floor(w / W), j2 = w - i2 * W;
     if (i1 === i2) return { kind: 'visible', mm: g.cellW };
-    if (j1 === j2) return { kind: 'visible', mm: g.cellH };
+    if (j1 === j2) return { kind: verticalClass(Math.min(i1, i2), j1, k).kind, mm: pitch };
     const r = Math.min(i1, i2), c = Math.min(j1, j2);
     const bit: 0 | 1 = (i2 - i1) === (j2 - j1) ? 0 : 1;
     return { kind: diagClass(r, c, bit, k).kind, mm: diagLen };
+  };
+
+  /** Segna il passaggio in più sulla diagonale fra due vertici vicini, se ce n'è una. */
+  const markExtra = (v: number, w: number) => {
+    const i1 = Math.floor(v / W), j1 = v - i1 * W, i2 = Math.floor(w / W), j2 = w - i2 * W;
+    if (i1 === i2 || j1 === j2) return;
+    const bit = (i2 - i1) === (j2 - j1) ? 0 : 1;
+    const id = legAt.get((Math.min(i1, i2) * g.cols + Math.min(j1, j2)) * 2 + bit);
+    if (id !== undefined) legs[id].extra++;
   };
 
   const pt = (v: number) => { const i = Math.floor(v / W); return { x: (v - i * W) * g.cellW, y: i * g.cellH }; };
@@ -360,8 +414,10 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
         let from = at;
         for (const v of path) {
           const { kind, mm } = edgeKind(from, v, k);
+          if (kind === 'hidden' || kind === 'retrace') markExtra(from, v);
           segs.push({ kind, from, to: v });
           if (kind === 'hidden') metrics.hiddenMm += mm;
+          else if (kind === 'vertical') metrics.verticalMm += mm;
           else if (kind === 'retrace') metrics.retraceMm += mm;
           else metrics.visibleMm += mm;
           from = v;
@@ -392,6 +448,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     colors.push({ color: k, segs });
   }
 
+  for (const l of legs) if (l.extra > metrics.maxExtra) metrics.maxExtra = l.extra;
   return { colors, metrics };
 }
 
