@@ -949,6 +949,24 @@ for (const [tool, id] of [['net-45', 'net-45'], ['pattern-grammar', 'pattern-gra
   check(`${tool}: accetta un .dst in ingresso`, /accept="[^"]*\.dst/.test(src), true);
 }
 
+// interlace — RIAPRIRE un .dst non è solo rimettere i numeri. Il tool accettava già i .dst e ne
+// rileggeva i parametri, ma: (1) non ridisegnava, quindi a schermo non succedeva NIENTE e sembrava
+// rotto; (2) la tavola generata non era nel file, quindi restava quella di prima; (3) l'immagine di
+// riferimento nemmeno, e gli agglomerati tornavano al rumore — stessi parametri, disegno diverso,
+// in silenzio. Gli handler vivono nel DOM e headless non si chiamano: si controlla il SORGENTE, come
+// per la riapertura del .dst qui sopra.
+console.log('\ninterlace — riaprire un .dst rimette anche la tavola e l’immagine');
+{
+  const src = readFileSync(join(root, 'apps/interlace/src/tool.ts'), 'utf8');
+  check('il progetto esportato porta la tavola generata', /object: generated \? \{ widthMm/.test(src), true);
+  check('il progetto esportato porta l’immagine di riferimento', /refImage: refImageUrl/.test(src), true);
+  check('l’immagine si salva come data-URL al caricamento', /refImageUrl = cnv\.toDataURL/.test(src), true);
+  check('caricando un .dst si ricostruisce, non si rimettono solo i numeri', /applyImportedProject\(meta, true\)/.test(src), true);
+  check('...e la ricostruzione ridisegna (era il difetto: non succedeva nulla)', /if \(img\) restoreRefImage\(img, render\)/.test(src) && /else if \(!img\) render\(\)/.test(src), true);
+  check('entrambi gli export usano lo stesso progetto', (src.match(/projectMetadata\(\)/g) || []).length >= 3, true);
+  check('il bottone dice che accetta anche i DST', /Carica DXF, SVG o DST/.test(src), true);
+}
+
 // oblique — griglia diagonale + placement (Fase A, sotto-step 2a). Moduli SINTETICI (l'engine è
 // Node-safe: riceve geometrie già parsate; il parse SVG DOM vive in tool.ts). Verifica che la
 // griglia condivisa nasca dal Livello 1, che i moduli coprano il formato e che il global offset trasli.

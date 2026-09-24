@@ -46,9 +46,10 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
           <div class="rg-file-input rg-param-grid__wide">
             <label class="rg-file-input__control">
               <input type="file" id="fileInput" accept=".svg,.dxf,.dst" />
-              <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
+              <span class="rg-button rg-button--outline">Carica DXF, SVG o DST…</span>
             </label>
             <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file: uso il cartamodello demo.</p>
+            <small class="rg-field__help">DXF o SVG = cartamodello. Un <strong>SVG o DST uscito da qui</strong> invece è un progetto: rimette i parametri, la tavola e l’immagine di riferimento com’erano.</small>
           </div>
           <label class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Larghezza reale (0 = auto)</span>
@@ -192,6 +193,12 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   const params: InterlaceParams = { ...defaultInterlaceParams };
   // Immagine di riferimento per gli agglomerati (opzionale): pixel RGBA campionati da un canvas.
   let refImage: { data: Uint8ClampedArray; w: number; h: number } | null = null;
+  /** L'immagine ridotta come data-URL: è la SOLA forma in cui può viaggiare nel file esportato, e senza
+   *  di lei riaprire un progetto ad agglomerati-da-immagine dava un disegno DIVERSO, in silenzio. */
+  let refImageUrl: string | null = null;
+  /** Misure della tavola generata (0 = c'è un cartamodello importato, che non sta nel DST). Senza queste
+   *  il .dst rimetteva i parametri ma lasciava la sagoma demo: sembrava che non funzionasse. */
+  let generated: { w: number; h: number } | null = null;
 
   const currentContours = () => applyRealWidth(imported, params.realWidthMm);
   const contourColors = () => imported.contours.map((c) => c.color);
@@ -712,8 +719,45 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     updateFileStatus(label);
   }
 
-  /** Ripristina parametri e ruoli dal metadata di un SVG esportato dalla suite (R27: file riapribile). */
-  function applyImportedProject(meta: Record<string, unknown>): boolean {
+  /** Tutto quello che serve a RIAPRIRE il progetto: parametri, ruoli, la tavola generata e l'immagine di
+   *  riferimento. Viaggia nel footer del DST (che la macchina legge fino all'END e ignora) e nel
+   *  `<metadata>` dell'SVG. Il cartamodello importato NO: quello si ricarica a parte, è un file suo. */
+  function projectMetadata() {
+    return {
+      rgProject: 'interlace', version: '0.1.0', params, roles,
+      object: generated ? { widthMm: generated.w, heightMm: generated.h } : undefined,
+      refImage: refImageUrl ?? undefined,
+    };
+  }
+
+  /**
+   * Rimette l'immagine di riferimento salvata nel file. Va DECODIFICATA, quindi è asincrona e ridisegna
+   * da sola quando è pronta. Senza di lei riaprire un progetto ad agglomerati-da-immagine tornava al
+   * rumore: stessi parametri, disegno diverso, e nessuno lo diceva.
+   */
+  function restoreRefImage(dataUrl: string, done: () => void) {
+    const img = new Image();
+    img.onload = () => {
+      const cnv = document.createElement('canvas');
+      cnv.width = img.width; cnv.height = img.height;
+      const cx = cnv.getContext('2d');
+      if (!cx) { done(); return; }
+      cx.drawImage(img, 0, 0);
+      refImage = { data: cx.getImageData(0, 0, img.width, img.height).data, w: img.width, h: img.height };
+      refImageUrl = dataUrl;
+      ($('captureColorsBtn') as HTMLButtonElement).disabled = false;
+      ($('clearImageBtn') as HTMLButtonElement).disabled = false;
+      $('clusterImageStatus').textContent = `Immagine ripristinata dal progetto (${img.width}×${img.height})`;
+      drawPicker();
+      done();
+    };
+    img.onerror = () => done();
+    img.src = dataUrl;
+  }
+
+  /** Ripristina un progetto esportato da qui (R27). Con `rebuild` rimette anche la TAVOLA e l'IMMAGINE e
+   *  ridisegna: serve al `.dst`, che non porta contorni e quindi da solo non farebbe succedere nulla. */
+  function applyImportedProject(meta: Record<string, unknown>, rebuild = false): boolean {
     if (meta.rgProject !== 'interlace') return false;
     const mp = meta.params;
     if (mp && typeof mp === 'object') {
@@ -733,6 +777,14 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     syncCluster(); // switch agglomerati + visibilità intensità
     buildParamUI();
     buildPaletteUI();
+    if (!rebuild) return true; // dall'SVG il disegno arriva coi contorni: ci pensa loadImport
+
+    const obj = meta.object as { widthMm?: number; heightMm?: number } | undefined;
+    const img = typeof meta.refImage === 'string' ? meta.refImage : null;
+    if (img) restoreRefImage(img, render);
+    // La tavola generata sono due misure e stanno nel file; i ruoli restaurati non si toccano.
+    if (obj && obj.widthMm && obj.heightMm) generateObject(obj.widthMm, obj.heightMm, { keepRoles: true });
+    else if (!img) render(); // senza tavola e senza immagine, almeno ridisegna: prima non lo faceva
     return true;
   }
 
@@ -747,15 +799,23 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
         // rimettono i parametri, senza toccare il disegno che c'è già.
         if (isDst) {
           const meta = readDstMetadata(new Uint8Array(reader.result as ArrayBuffer));
-          $('fileStatus').textContent = meta && applyImportedProject(meta)
-            ? `${file.name}: parametri ripristinati dal DST`
-            : `${file.name}: nessun parametro di questo tool nel DST`;
+          if (!meta || !applyImportedProject(meta, true)) {
+            $('fileStatus').textContent = `${file.name}: nessun parametro di questo tool nel DST`;
+            return;
+          }
+          const obj = meta.object as { widthMm?: number; heightMm?: number } | undefined;
+          const pezzi = ['parametri e colori'];
+          if (obj && obj.widthMm) pezzi.push(`tavola ${obj.widthMm}×${obj.heightMm} mm`);
+          if (typeof meta.refImage === 'string') pezzi.push('immagine di riferimento');
+          const coda = obj && obj.widthMm ? '' : ' · il cartamodello ricaricalo a parte (è un file suo)';
+          $('fileStatus').textContent = `${file.name}: ripristinati ${pezzi.join(', ')}${coda}`;
           return;
         }
         const text = String(reader.result);
         const isDxf = /\.dxf$/i.test(file.name);
         const result = isDxf ? parseDxfToContours(text) : parseSvgToContours(text);
         sourceName = file.name.replace(/\.[^.]+$/, '');
+        generated = null; // da qui in poi la sagoma è quella del file, non una tavola generata
         // Se è un SVG esportato dalla suite, rileggi i parametri salvati PRIMA di caricare (così
         // realWidth/ruoli restaurati valgono già; autoAssign non sovrascrive i ruoli ripristinati).
         let restored = false;
@@ -875,6 +935,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       if (!cx) { $('clusterImageStatus').textContent = 'Canvas non disponibile'; URL.revokeObjectURL(url); return; }
       cx.drawImage(img, 0, 0, w, h);
       refImage = { data: cx.getImageData(0, 0, w, h).data, w, h };
+      refImageUrl = cnv.toDataURL('image/png'); // già ridotta a ≤256px: è quella che viaggia nel file
       $('clusterImageStatus').textContent = `Immagine ${img.width}×${img.height} — gli agglomerati la rispettano`;
       ($('captureColorsBtn') as HTMLButtonElement).disabled = false;
       ($('clearImageBtn') as HTMLButtonElement).disabled = false;
@@ -907,6 +968,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   });
   $('clearImageBtn').addEventListener('click', () => {
     refImage = null;
+    refImageUrl = null;
     $('clusterImageStatus').textContent = 'Nessuna: agglomerati casuali (per variante).';
     ($('captureColorsBtn') as HTMLButtonElement).disabled = true;
     ($('clearImageBtn') as HTMLButtonElement).disabled = true;
@@ -961,13 +1023,15 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   });
   syncColorMode();
 
-  $('sampleBtn').addEventListener('click', () => { roles = {}; sourceName = ''; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
+  $('sampleBtn').addEventListener('click', () => { roles = {}; sourceName = ''; generated = null; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
 
   // Oggetto pieno: genera un rettangolo largo×alto (mm) senza fori, da riempire subito (nessun file).
-  function generateObject(w: number, h: number) {
+  function generateObject(w: number, h: number, opts: { keepRoles?: boolean } = {}) {
     const rect: Contour[] = [{ points: [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }], closed: true, color: '#2b6cb0' }];
-    roles = {}; sourceName = `oggetto-${w}x${h}`; params.realWidthMm = 0;
-    ($('realWidth') as HTMLInputElement).value = '0';
+    if (!opts.keepRoles) { roles = {}; params.realWidthMm = 0; }
+    sourceName = `oggetto-${w}x${h}`;
+    generated = { w, h };
+    ($('realWidth') as HTMLInputElement).value = String(params.realWidthMm);
     ($('objW') as HTMLInputElement).value = String(w);
     ($('objH') as HTMLInputElement).value = String(h);
     loadImport(importResultFromContours(rect), `Oggetto pieno ${w}×${h} mm`);
@@ -984,7 +1048,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     // Sotto try/catch: nessun export deve fallire in silenzio.
     try {
       const { exportLayers, bounds, stopCount } = runPipeline(currentContours(), roles, params, { imageColorAt: imageSampler() });
-      const metadata = { rgProject: 'interlace', version: '0.1.0', params, roles };
+      const metadata = projectMetadata();
       let svg: string;
       if (imported.frame) {
         const r = params.realWidthMm > 0 && imported.widthMm > 0 ? params.realWidthMm / imported.widthMm : 1;
@@ -1012,7 +1076,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       // fino all'END e lo ignora, noi lo rileggiamo. Senza, il .dst non sapeva da dove veniva.
       const bytes = dstFromExportLayers(exportLayers, {
         label: (sourceName || 'INTERLACE').toUpperCase().slice(0, 16),
-        metadata: { rgProject: 'interlace', version: '0.1.0', params, roles },
+        metadata: projectMetadata(),
       });
       const name = sourceName ? `${sourceName}-interlace.dst` : 'interlace.dst';
       const outcome = await saveBinaryFile(bytes, { suggestedName: name, ...DST_FILE });

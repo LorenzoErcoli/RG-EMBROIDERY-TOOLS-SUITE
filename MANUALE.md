@@ -80,7 +80,7 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
 **Esportazione.** SVG o DST (un ago per stop → cambi-colore in sequenza per la macchina).
 
 
-**Riaprire un progetto.** Il campo di caricamento accetta anche un `.dst` uscito da qui: i parametri stanno dopo il record di fine, dove la macchina non guarda, e ricaricandolo tornano com'erano. Il cartamodello no — quello si ricarica a parte.
+**Riaprire un progetto.** Il campo di caricamento accetta anche un `.svg` o un `.dst` usciti da qui: i parametri stanno dopo il record di fine, dove la macchina non guarda. Ricaricandolo tornano **parametri, colori, la tavola generata (largo×alto) e l'immagine di riferimento**, e l'anteprima si ridisegna da sola — il messaggio sotto al bottone elenca cos'è tornato. Il **cartamodello importato** no: quello è un file suo e si ricarica a parte. *I file esportati prima del 24/09/2026 non hanno dentro la tavola e l'immagine: da quelli tornano i parametri, il resto lo rimetti una volta e poi riesporti.*
 ---
 
 ## Oblique Pattern — Broderie Anglaise (`oblique`)
