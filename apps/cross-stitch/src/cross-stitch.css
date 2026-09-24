@@ -27,3 +27,31 @@ body {
 .cs-legend__item { display: inline-flex; gap: var(--rg-space-1); align-items: center; }
 .cs-legend svg { width: 22px; height: 8px; }
 .cs-workspace .rg-workspace__canvas.cs-crop { cursor: cell; }
+
+/* La barra di modifica sopra il disegno: strumenti, grandezza, filo, annulla. */
+.cs-editbar {
+  display: flex; flex-wrap: wrap; align-items: center; gap: var(--rg-space-2) var(--rg-space-4);
+  padding: var(--rg-space-2) var(--rg-space-4);
+  border-bottom: 1px solid var(--rg-color-border);
+  background: var(--rg-color-surface);
+}
+.cs-editbar__group { display: inline-flex; align-items: center; gap: var(--rg-space-2); }
+.cs-editbar__label { font-size: var(--rg-font-size-sm); color: var(--rg-color-text-secondary); }
+.cs-editbar__threads { display: inline-flex; gap: var(--rg-space-1); }
+.cs-editbar__thread {
+  width: 26px; height: 26px; padding: 0; cursor: pointer;
+  background: var(--swatch); border: 1px solid var(--rg-color-border-strong); border-radius: var(--rg-radius-sm);
+}
+.cs-editbar__thread--active { outline: 2px solid var(--rg-color-black); outline-offset: 2px; }
+.cs-editbar__thread:focus-visible { outline: 2px solid var(--rg-color-focus); outline-offset: 2px; }
+.cs-editbar__help { flex-basis: 100%; margin: 0; font-size: var(--rg-font-size-sm); color: var(--rg-color-text-secondary); }
+
+/* Il puntatore dice cosa fa il clic. */
+.cs-workspace .rg-workspace__canvas.cs-mode-pan { cursor: grab; }
+.cs-workspace .rg-workspace__canvas.cs-mode-fill { cursor: copy; }
+
+/* Lo stage del DS ha tre righe (testa, tela, stato): la barra di modifica è una quarta, alta
+   quanto serve, e la tela resta la riga elastica. */
+.cs-workspace .rg-workspace__stage { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.cs-workspace .cs-editbar { margin: 0; }
+

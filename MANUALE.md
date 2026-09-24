@@ -495,15 +495,22 @@ singola, la **V** (due diagonali che si toccano nell'angolo, il punto della **ma
 **croce**. Si disegna a mano cella per cella, o si parte da un'immagine e la griglia si riempie
 da sola di V colorate.
 
-**Disegnare.** Scegli lo strumento in *Punto*:
-- **Diagonale** — clic sinistro «\», clic destro «/».
-- **V** — un clic mette due celle vicine: sinistro V, destro Λ. Trascinando, le V si mettono una
-  accanto all'altra.
-- **Croce** — la gamba sopra è sempre la stessa (la scegli sotto).
-- **Gomma** — svuota. Con qualunque strumento, **Maiuscolo + clic** svuota.
+**Modificare: la barra sopra il disegno.** Sempre visibile, con gli strumenti, la grandezza del
+pennello, i fili e Annulla/Rifai.
+- **Sposta** (H): trascini la vista, il ricamo non si tocca. Rotella = ingrandisci.
+- **Pennello** (B): trascinando, le V sotto il pennello passano al filo scelto — per pulire
+  l'interno di una scritta, bianco sopra il nero. Lavora sempre a V intere, allineate alla maglia.
+  Sulle celle vuote mette il *punto nuovo* scelto nella sezione 04 (V, diagonale o croce; col clic
+  destro Λ o «/»).
+- **Riempi** (F): un clic passa al filo scelto tutta la zona COLLEGATA dello stesso colore. Attento:
+  segue tutto quello che si tocca, quindi va usato su zone chiuse (l'interno di una lettera); per i
+  ritocchi c'è il pennello.
+- **Gomma** (E): cancella, lì non si cuce niente. Con qualunque strumento, Maiuscolo cancella.
+- **Grandezza** 1, 2, 4, 8 V: sotto il mouse si vede l'impronta del pennello.
+- **Filo**: i quadratini dei fili, un clic sceglie quello del pennello.
+- **Annulla / Rifai**: anche Ctrl+Z e Ctrl+Y. Spazio + trascina sposta la vista con ogni strumento.
 
-Si trascina per disegnare di seguito. **Spazio + trascina** o il tasto centrale spostano la vista,
-la rotella ingrandisce. **Ctrl+Z** annulla.
+Mentre trascini il pennello si ridisegnano solo i punti; i passaggi si ricalcolano quando lasci.
 
 **Fili.** Clic su un filo per disegnare con quello. L'ordine della lista è l'**ordine degli aghi**
 (↑ per anticipare un filo): i passaggi di un filo si nascondono sotto le diagonali dei fili che
@@ -546,8 +553,11 @@ lo evita. **Niente salti**: a macchina un salto lascia un filo che attraversa gl
 salta solo oltre *Salta oltre* (400 mm di partenza). In una zona chiusa (il bianco dentro una
 lettera nera) il filo che va sopra deve attraversare il contorno una volta, e lo fa nel punto più
 corto.
-Con più *Passate per diagonale* ogni passata si fa a parte: una riga di V si cuce all'andata e si
-ripassa al ritorno. *Direzione fissa* obbliga «\» dall'alto e «/» dal basso.
+Con più *Passate per diagonale* si sceglie **come** farle. *Tutte sulla stessa V* (la partenza): avanti,
+indietro, avanti sugli stessi fori e poi la V dopo, come il punto triplo delle macchine. Con passate
+**dispari** ogni V finisce nell'angolo dove comincia la successiva, e la riga si cuce di filato. *Lungo
+la riga*: ogni passata è un pezzo a sé, la riga si fa all'andata e si ripassa al ritorno; conviene
+con passate **pari**. *Direzione fissa* obbliga «\» dall'alto e «/» dal basso.
 
 **Salvare e riaprire.** SVG e DST portano dentro tutto il progetto: *Apri progetto…* li rimette
 com'erano. Apre anche i progetti `.json` della vecchia app ThreadRoute. L'ultimo lavoro si

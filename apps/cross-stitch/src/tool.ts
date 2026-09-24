@@ -9,7 +9,7 @@ import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import {
   type Button, type Cells, type GridSpec, type Leg, type Thread, type Tool,
-  type Pixels, DEFAULT_GRID, applyEdits, knitFromImage, gridForSize, refinePalette, paletteShares, DEFAULT_KNIT, cellIndex, cellsFromJson, cellsToJson, editsFor, fromThreadRoute, legEnds, legsOf,
+  type Pixels, type BrushStitch, DEFAULT_GRID, applyEdits, brushArea, brushEdits, fillEdits, knitFromImage, gridForSize, refinePalette, paletteShares, DEFAULT_KNIT, cellIndex, cellsFromJson, cellsToJson, editsFor, fromThreadRoute, legEnds, legsOf,
   resizeCells, pointInRow, segmentPoints, rowPitch, gridHeight,
 } from './model';
 import {
@@ -17,17 +17,20 @@ import {
   DEFAULT_ROUTE, DEFAULT_STITCH, colorPolylines, routeCells,
 } from './routing';
 
-const VERSION = '0.2.0';
+const VERSION = '0.3.0';
 const AUTOSAVE_KEY = 'rg-cross-stitch-autosave';
 
 /** I fili di partenza: l'ordine è l'ordine degli aghi. */
 const DEFAULT_THREADS: Thread[] = [{ hex: '#1a1a1a' }, { hex: '#b3261e' }];
 
-const TOOL_HELP: Record<Tool, string> = {
-  diag: 'Clic sinistro «\\», clic destro «/». Maiuscolo + clic cancella.',
-  v: 'Un clic mette due celle che si toccano nell’angolo: sinistro V, destro Λ.',
-  cross: 'Clic: la croce, con la gamba sopra sempre dallo stesso lato.',
-  erase: 'Clic o trascina per svuotare le celle.',
+/** Gli strumenti della barra di modifica. */
+type Mode = 'pan' | 'paint' | 'fill' | 'erase';
+
+const MODE_HELP: Record<Mode, string> = {
+  pan: 'Sposta: trascina per muovere la vista, rotella per ingrandire. Il ricamo non si tocca.',
+  paint: 'Pennello: trascina per passare le V al filo scelto. Sulle celle vuote mette il punto nuovo (sezione 04). Maiuscolo + trascina cancella.',
+  fill: 'Riempi: un clic passa al filo scelto tutta la zona collegata dello stesso colore — per esempio l’interno di una lettera.',
+  erase: 'Gomma: trascina per cancellare; lì non si cuce niente.',
 };
 
 /** Come si disegna ogni tipo di passaggio nell'anteprima (colori dai token del DS). */
@@ -127,13 +130,13 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">04</span><span class="rg-param-section__title">Punto</span></summary>
         <div class="rg-param-grid">
           <div class="rg-field rg-param-grid__wide">
-            <div class="rg-segmented" id="toolSel" role="group" aria-label="Strumento">
-              <button type="button" class="rg-segmented__item" data-tool="diag">Diagonale</button>
-              <button type="button" class="rg-segmented__item" data-tool="v">V</button>
-              <button type="button" class="rg-segmented__item" data-tool="cross">Croce</button>
-              <button type="button" class="rg-segmented__item" data-tool="erase">Gomma</button>
+            <span class="rg-field__label">Punto nuovo del pennello</span>
+            <div class="rg-segmented" id="stitchSel" role="group" aria-label="Punto nuovo del pennello">
+              <button type="button" class="rg-segmented__item" data-stitch="v">V</button>
+              <button type="button" class="rg-segmented__item" data-stitch="diag">Diagonale</button>
+              <button type="button" class="rg-segmented__item" data-stitch="cross">Croce</button>
             </div>
-            <small class="rg-field__help" id="toolHelp"></small>
+            <small class="rg-field__help">Il punto che il pennello mette sulle celle VUOTE; su quelle piene cambia solo il colore. Col clic destro: Λ al posto di V, «/» al posto di «\».</small>
           </div>
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Gamba sopra nella croce</span>
@@ -143,7 +146,6 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             </div>
           </div>
           <div class="rg-cluster rg-param-grid__wide">
-            <button type="button" id="undoBtn" class="rg-button rg-button--outline rg-button--small">Annulla</button>
             <button type="button" id="clearBtn" class="rg-button rg-button--ghost rg-button--small">Svuota tutto</button>
           </div>
         </div>
@@ -156,6 +158,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="reps" type="number" min="1" max="8" step="1"><span>n</span></span></label>
           <label class="rg-field"><span class="rg-field__label">Salta oltre</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="jumpMm" type="number" min="0" step="1"><span>mm</span></span></label>
+          <div class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Le passate</span>
+            <div class="rg-segmented" id="passOrderSel" role="group" aria-label="Come si fanno le passate">
+              <button type="button" class="rg-segmented__item" data-order="stitch">Tutte sulla stessa V</button>
+              <button type="button" class="rg-segmented__item" data-order="row">Lungo la riga</button>
+            </div>
+            <small class="rg-field__help">«Sulla stessa V»: avanti, indietro, avanti sugli stessi fori, poi la V dopo (il punto triplo). Con passate DISPARI ogni V finisce dove comincia la successiva e la riga si cuce di filato; con passate pari conviene «lungo la riga».</small>
+          </div>
           <label class="rg-toggle rg-param-grid__wide">
             <input type="checkbox" id="fixedDir"><span class="rg-toggle__track"></span><span>Direzione fissa («\\» dall’alto, «/» dal basso)</span>
           </label>
@@ -187,6 +197,32 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Esporta SVG</button>
         </div>
       </header>
+      <div class="cs-editbar" role="toolbar" aria-label="Modifica">
+        <div class="rg-segmented" id="modeSel" role="group" aria-label="Strumento">
+          <button type="button" class="rg-segmented__item" data-mode="pan" title="Sposta (H)">Sposta</button>
+          <button type="button" class="rg-segmented__item" data-mode="paint" title="Pennello (B)">Pennello</button>
+          <button type="button" class="rg-segmented__item" data-mode="fill" title="Riempi (F)">Riempi</button>
+          <button type="button" class="rg-segmented__item" data-mode="erase" title="Gomma (E)">Gomma</button>
+        </div>
+        <div class="cs-editbar__group">
+          <span class="cs-editbar__label">Grandezza</span>
+          <div class="rg-segmented" id="sizeSel" role="group" aria-label="Grandezza del pennello in V">
+            <button type="button" class="rg-segmented__item" data-size="1">1</button>
+            <button type="button" class="rg-segmented__item" data-size="2">2</button>
+            <button type="button" class="rg-segmented__item" data-size="4">4</button>
+            <button type="button" class="rg-segmented__item" data-size="8">8</button>
+          </div>
+        </div>
+        <div class="cs-editbar__group">
+          <span class="cs-editbar__label">Filo</span>
+          <span class="cs-editbar__threads" id="editThreads" role="group" aria-label="Filo del pennello"></span>
+        </div>
+        <div class="cs-editbar__group">
+          <button type="button" id="undoBtn" class="rg-button rg-button--ghost rg-button--small" title="Annulla (Ctrl+Z)">Annulla</button>
+          <button type="button" id="redoBtn" class="rg-button rg-button--ghost rg-button--small" title="Rifai (Ctrl+Y)">Rifai</button>
+        </div>
+        <p class="cs-editbar__help" id="modeHelp"></p>
+      </div>
       <div class="rg-workspace__canvas" id="canvas">
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
       </div>
@@ -215,7 +251,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     route: { ...DEFAULT_ROUTE },
     stitch: { ...DEFAULT_STITCH },
   };
-  let tool: Tool = 'v';
+  let mode: Mode = 'paint';
+  let brushSize = 1;
+  let brushStitch: BrushStitch = 'v';
   let activeThread = 0;
   let showPaths = true;
   let image: { url: string; w: number; h: number; px: Pixels } | null = null;
@@ -234,6 +272,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   let result: RouteResult | null = null;
   let sourceName = '';
   const undo: Array<{ grid: GridSpec; cells: Cells }> = [];
+  const redo: Array<{ grid: GridSpec; cells: Cells }> = [];
 
   const pz = hookPanZoom($('canvas'), $('layer'), (z) => { $('zoom').textContent = `zoom ${Math.round(z * 100)}%`; });
 
@@ -353,17 +392,19 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   }
 
   function syncSegmented(): void {
-    root.querySelectorAll<HTMLButtonElement>('#toolSel .rg-segmented__item').forEach((b) => {
-      const on = b.dataset.tool === tool;
-      b.classList.toggle('rg-segmented__item--active', on);
-      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    const mark = (sel: string, on: (b: HTMLButtonElement) => boolean) => root.querySelectorAll<HTMLButtonElement>(sel).forEach((b) => {
+      const yes = on(b);
+      b.classList.toggle('rg-segmented__item--active', yes);
+      b.setAttribute('aria-pressed', yes ? 'true' : 'false');
     });
-    root.querySelectorAll<HTMLButtonElement>('#topLegSel .rg-segmented__item').forEach((b) => {
-      const on = b.dataset.leg === st.route.topLeg;
-      b.classList.toggle('rg-segmented__item--active', on);
-      b.setAttribute('aria-pressed', on ? 'true' : 'false');
-    });
-    $('toolHelp').textContent = TOOL_HELP[tool];
+    mark('#modeSel .rg-segmented__item', (b) => b.dataset.mode === mode);
+    mark('#sizeSel .rg-segmented__item', (b) => Number(b.dataset.size) === brushSize);
+    mark('#stitchSel .rg-segmented__item', (b) => b.dataset.stitch === brushStitch);
+    mark('#topLegSel .rg-segmented__item', (b) => b.dataset.leg === st.route.topLeg);
+    mark('#passOrderSel .rg-segmented__item', (b) => b.dataset.order === (st.route.passOrder ?? DEFAULT_ROUTE.passOrder));
+    $('modeHelp').textContent = MODE_HELP[mode];
+    const cv = root.querySelector('#canvas');
+    if (cv) for (const m of ['pan', 'paint', 'fill', 'erase']) cv.classList.toggle('cs-mode-' + m, m === mode);
   }
 
   const clampInt = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.round(v)));
@@ -403,10 +444,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   $<HTMLInputElement>('fixedDir').addEventListener('change', (e) => { st.route.fixedDirection = (e.target as HTMLInputElement).checked; update(); });
   $<HTMLInputElement>('showPaths').addEventListener('change', (e) => { showPaths = (e.target as HTMLInputElement).checked; draw(); });
 
-  root.querySelectorAll<HTMLButtonElement>('#toolSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => {
-    tool = b.dataset.tool as Tool;
-    syncSegmented();
-  }));
+  const setMode = (m: Mode) => { mode = m; syncSegmented(); hideBrush(); };
+  root.querySelectorAll<HTMLButtonElement>('#modeSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode as Mode)));
+  root.querySelectorAll<HTMLButtonElement>('#sizeSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => { brushSize = Number(b.dataset.size) || 1; syncSegmented(); }));
+  root.querySelectorAll<HTMLButtonElement>('#passOrderSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => { st.route.passOrder = b.dataset.order as 'row' | 'stitch'; syncSegmented(); update(); }));
+  root.querySelectorAll<HTMLButtonElement>('#stitchSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => { brushStitch = b.dataset.stitch as BrushStitch; syncSegmented(); }));
   root.querySelectorAll<HTMLButtonElement>('#topLegSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => {
     st.route.topLeg = b.dataset.leg as Leg;
     syncSegmented();
@@ -477,6 +519,24 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       li.append(sw, code, aside);
       host.appendChild(li);
     });
+    buildEditThreads();
+  }
+
+  /** I fili nella barra di modifica: un clic sceglie quello del pennello. */
+  function buildEditThreads(): void {
+    const host = $('editThreads');
+    host.innerHTML = '';
+    st.threads.forEach((t, i) => {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'cs-editbar__thread' + (i === activeThread ? ' cs-editbar__thread--active' : '');
+      b.style.setProperty('--swatch', t.hex);
+      b.title = `Filo ${i + 1} (${t.hex.toUpperCase()})`;
+      b.setAttribute('aria-label', `Filo ${i + 1}, ${t.hex}`);
+      b.setAttribute('aria-pressed', i === activeThread ? 'true' : 'false');
+      b.addEventListener('click', () => { activeThread = i; buildThreads(); if (mode === 'pan' || mode === 'erase') setMode('paint'); });
+      host.appendChild(b);
+    });
   }
 
   /** Scambia due aghi: cambia l'ordine di cucitura, non il disegno. */
@@ -513,18 +573,30 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   function pushUndo(): void {
     undo.push({ grid: { ...st.grid }, cells: cloneCells(st.cells) });
     if (undo.length > 100) undo.shift();
+    redo.length = 0;
   }
-  function doUndo(): void {
-    const prev = undo.pop();
-    if (!prev) return;
-    st.grid = prev.grid;
-    st.cells = prev.cells;
+  function restore(snap: { grid: GridSpec; cells: Cells }): void {
+    st.grid = snap.grid;
+    st.cells = snap.cells;
     target = { w: st.grid.cols * st.grid.cellW, h: gridHeight(st.grid) };
     syncFields();
     buildThreads();
     update();
   }
+  function doUndo(): void {
+    const prev = undo.pop();
+    if (!prev) return;
+    redo.push({ grid: { ...st.grid }, cells: cloneCells(st.cells) });
+    restore(prev);
+  }
+  function doRedo(): void {
+    const next = redo.pop();
+    if (!next) return;
+    undo.push({ grid: { ...st.grid }, cells: cloneCells(st.cells) });
+    restore(next);
+  }
   $('undoBtn').addEventListener('click', doUndo);
+  $('redoBtn').addEventListener('click', doRedo);
   $('clearBtn').addEventListener('click', () => {
     if (!st.cells.size) return;
     pushUndo();
@@ -565,18 +637,41 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     return { r, c };
   }
 
-  /** Mette il punto in una cella durante il gesto; vero se ha cambiato qualcosa. */
+  /** L'impronta del pennello sotto il mouse: si vede dove si sta per modificare. */
+  function showBrush(at: { r: number; c: number } | null): void {
+    const svg = $('layer').querySelector('svg');
+    if (!svg) return;
+    let rect = svg.querySelector<SVGRectElement>('#cs-brush');
+    if (!at || mode === 'pan' || cropping) { rect?.remove(); return; }
+    if (!rect) {
+      rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.id = 'cs-brush';
+      rect.setAttribute('vector-effect', 'non-scaling-stroke');
+      rect.setAttribute('pointer-events', 'none');
+      svg.appendChild(rect);
+    }
+    const cellsIn = brushArea(st.grid, at.r, at.c, mode === 'fill' ? 1 : brushSize);
+    if (!cellsIn.length) { rect.remove(); return; }
+    const p = rowPitch(st.grid);
+    const c0 = Math.min(...cellsIn.map((x) => x.c)), c1 = Math.max(...cellsIn.map((x) => x.c)) + 1;
+    const r0 = Math.min(...cellsIn.map((x) => x.r)), r1 = Math.max(...cellsIn.map((x) => x.r));
+    rect.setAttribute('x', String(c0 * st.grid.cellW));
+    rect.setAttribute('y', String(r0 * p));
+    rect.setAttribute('width', String((c1 - c0) * st.grid.cellW));
+    rect.setAttribute('height', String(r1 * p + st.grid.cellH - r0 * p));
+    rect.setAttribute('style', mode === 'erase'
+      ? 'fill:none;stroke:var(--rg-color-danger);stroke-width:2;stroke-dasharray:4 3'
+      : `fill:none;stroke:var(--rg-color-focus);stroke-width:2`);
+  }
+  function hideBrush(): void { showBrush(null); }
+
+  /** Il pennello (o la gomma) su una cella; vero se ha cambiato qualcosa. */
   function paintCell(r: number, c: number): boolean {
     if (!painting) return false;
-    const k = cellIndex(st.grid, r, c);
-    if (k === painting.last) return false;
-    // Con la V si trascina a passo di due celle, così le V si mettono una accanto all'altra.
-    if (tool === 'v' && !painting.erase && painting.last >= 0) {
-      const lr = Math.floor(painting.last / st.grid.cols), lc = painting.last - lr * st.grid.cols;
-      if (lr === r && Math.abs(lc - c) < 2) return false;
-    }
-    painting.last = k;
-    return applyEdits(st.grid, st.cells, editsFor(st.grid, tool, painting.button, r, c, activeThread, painting.erase));
+    const key = r * st.grid.cols + (c - (c % 2)); // si lavora a V intere
+    if (key === painting.last) return false;
+    painting.last = key;
+    return applyEdits(st.grid, st.cells, brushEdits(st.grid, st.cells, r, c, brushSize, activeThread, brushStitch, painting.button, painting.erase));
   }
 
   function paintAt(e: PointerEvent): void {
@@ -589,20 +684,24 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const n = Math.max(Math.abs(at.r - from.r), Math.abs(at.c - from.c));
     let changed = false;
     for (let s = n === 0 ? 0 : 1; s <= n; s++) {
-      const r = Math.round(from.r + ((at.r - from.r) * s) / Math.max(1, n));
-      const c = Math.round(from.c + ((at.c - from.c) * s) / Math.max(1, n));
-      if (paintCell(r, c)) changed = true;
+      const rr = Math.round(from.r + ((at.r - from.r) * s) / Math.max(1, n));
+      const cc = Math.round(from.c + ((at.c - from.c) * s) / Math.max(1, n));
+      if (paintCell(rr, cc)) changed = true;
     }
     painting.lastCell = at;
     if (changed) {
       painting.changed = true;
       fromImage = false; // ritoccato a mano: cambiando le misure non si rifà più dall'immagine
-      update(false);
+      // Mentre si trascina si ridisegnano solo i punti: i passaggi si ricalcolano quando si lascia
+      // (sul giornale Dior sono 56.000 diagonali, e ricalcolarli a ogni mossa rallentava il pennello).
+      result = null;
+      draw();
     }
+    showBrush(at);
   }
 
-  // In cattura: il gesto di disegno è nostro, il pan/zoom non lo deve nemmeno vedere. Restano al
-  // pan il tasto centrale e lo spazio + trascina.
+  // In cattura: il gesto di modifica è nostro, il pan/zoom non lo deve nemmeno vedere. Restano al
+  // pan lo strumento Sposta, il tasto centrale e lo spazio + trascina.
   canvas.addEventListener('pointerdown', (e) => {
     if (spaceDown || (e.button !== 0 && e.button !== 2)) return;
     if (cropping) {
@@ -615,10 +714,24 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
       return;
     }
-    if (!cellAt(e)) return;
+    if (mode === 'pan') return;
+    const at = cellAt(e);
+    if (!at) return;
     e.stopPropagation(); e.preventDefault();
+    const button: Button = e.button === 2 ? 'right' : 'left';
+    if (mode === 'fill') {
+      const edits = fillEdits(st.grid, st.cells, at.r, at.c, activeThread, brushStitch, button, e.shiftKey);
+      if (!edits.length) return;
+      pushUndo();
+      applyEdits(st.grid, st.cells, edits);
+      fromImage = false;
+      buildThreads();
+      update();
+      $('status').textContent = `Riempite ${Math.round(edits.length / 2)} V. ` + $('status').textContent;
+      return;
+    }
     pushUndo();
-    painting = { button: e.button === 2 ? 'right' : 'left', erase: e.shiftKey, last: -1, lastCell: null, changed: false };
+    painting = { button, erase: mode === 'erase' || e.shiftKey, last: -1, lastCell: null, changed: false };
     try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
     paintAt(e);
   }, true);
@@ -632,10 +745,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       drawCropRect(cropDrag.a, cropDrag.b);
       return;
     }
-    if (!painting) return;
+    if (!painting) { showBrush(spaceDown ? null : cellAt(e)); return; }
     e.stopPropagation();
     paintAt(e);
   }, true);
+  canvas.addEventListener('pointerleave', () => { if (!painting) hideBrush(); });
   const endPaint = (e: PointerEvent) => {
     if (cropDrag) {
       e.stopPropagation();
@@ -647,10 +761,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     }
     if (!painting) return;
     e.stopPropagation();
-    if (!painting.changed) undo.pop();
-    else { buildThreads(); autosave(); }
+    const changed = painting.changed;
     painting = null;
     try { canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+    if (!changed) { undo.pop(); return; }
+    buildThreads();
+    update();
   };
   canvas.addEventListener('pointerup', endPaint, true);
   canvas.addEventListener('pointercancel', endPaint, true);
@@ -661,7 +777,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (!root.isConnected) { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); return; }
     if (isTyping(e.target)) return;
     if (e.code === 'Space') { spaceDown = true; canvas.classList.add('cs-pan'); e.preventDefault(); }
-    if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z') { e.preventDefault(); doUndo(); }
+    const k = e.key.toLowerCase();
+    if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); if (e.shiftKey) doRedo(); else doUndo(); return; }
+    if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); doRedo(); return; }
+    if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (k === 'b') setMode('paint');
+    else if (k === 'f') setMode('fill');
+    else if (k === 'e') setMode('erase');
+    else if (k === 'h') setMode('pan');
   };
   const onKeyUp = (e: KeyboardEvent) => {
     if (e.code === 'Space') { spaceDown = false; canvas.classList.remove('cs-pan'); }
@@ -856,8 +979,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (g && g.cols && g.rows && g.cellW && g.cellH) st.grid = { cols: clampInt(g.cols, 1, 1000), rows: clampInt(g.rows, 1, 1000), cellW: g.cellW, cellH: g.cellH, overlapPct: Math.min(90, Math.max(0, Number(g.overlapPct) || 0)) };
     if (Array.isArray(meta.threads) && meta.threads.length) st.threads = (meta.threads as Thread[]).map((t) => ({ hex: asHex6(String(t.hex)) }));
     if (meta.route && typeof meta.route === 'object') st.route = { ...DEFAULT_ROUTE, ...(meta.route as Partial<RouteParams>) };
-    // 0.1.0 saltava oltre 12: era il default vecchio, non una scelta (i salti a caso sul giornale Dior)
-    if (meta.version === '0.1.0' && st.route.jumpMm === 12) st.route.jumpMm = DEFAULT_ROUTE.jumpMm;
+    // Le versioni prima saltavano oltre 12 (0.1.0) o 30 (0.2.0): erano i default di allora, non
+    // scelte. Da 0.3.0 niente salti (Lorenzo: si vedono, passano sopra gli altri colori).
+    const old = { '0.1.0': 12, '0.2.0': 30 } as Record<string, number>;
+    if (typeof meta.version === 'string' && old[meta.version] === st.route.jumpMm) st.route.jumpMm = DEFAULT_ROUTE.jumpMm;
     if (meta.stitch && typeof meta.stitch === 'object') st.stitch = { ...DEFAULT_STITCH, ...(meta.stitch as Partial<StitchParams>) };
     if (meta.knit && typeof meta.knit === 'object') Object.assign(knit, DEFAULT_KNIT, meta.knit);
     syncKnit();

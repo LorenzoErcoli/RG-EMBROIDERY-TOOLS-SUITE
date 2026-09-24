@@ -42,7 +42,7 @@ export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 export { routeCells as csRouteCells, colorPolylines as csColorPolylines, DEFAULT_ROUTE as CS_DEFAULT_ROUTE } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
-export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight, knitFromImage as csKnitFromImage, refinePalette as csRefinePalette } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
+export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight, knitFromImage as csKnitFromImage, refinePalette as csRefinePalette, brushEdits as csBrushEdits, fillEdits as csFillEdits, applyEdits as csApplyEdits } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
 export { reticoloDaZone, contornoDaZone, zoneDaModello, lineeDaModello } from ${JSON.stringify(posix('apps/cannage-rafia/src/reticolo.ts'))};
@@ -4664,14 +4664,15 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   // dopo l'altra sulla stessa diagonale, 57).
   const riga = g(1, 10), cRiga = fill(riga, zig);
   for (const reps of [1, 2, 3]) {
-    const m = run(riga, cRiga, { repetitions: reps }).metrics;
+    // con passate pari si va e si torna lungo la riga; con dispari, sulla stessa V (la partenza)
+    const m = run(riga, cRiga, { repetitions: reps, passOrder: reps % 2 ? 'stitch' : 'row' }).metrics;
     check(`riga di V ×${reps}: zero passaggi in vista, zero ripassi, zero salti`, [m.visibleMm, m.retraceMm, m.jumps], [0, 0, 0]);
   }
   // Un campo di chevron: un solo cambio riga per riga (5 × 5 mm), anche con 2 passate.
   const campo = g(6, 10), cCampo = fill(campo, zig);
   // Il cambio riga non è più un bordo in vista: è un passaggio VERTICALE da vertice a vertice
   // (Lorenzo, 2026-09-24: «togliere le linee orizzontali come passaggio»). 5 cambi × 5 mm.
-  const mCampo = run(campo, cCampo, { repetitions: 2 }).metrics;
+  const mCampo = run(campo, cCampo, { repetitions: 2, passOrder: 'row' }).metrics;
   check('chevron 6×10 ×2: niente in vista, 25 mm vertice-vertice (uno per cambio riga), nessun ripasso', [Math.round(mCampo.visibleMm), Math.round(mCampo.verticalMm), Math.round(mCampo.retraceMm)], [0, 25, 0]);
   // Nessun passaggio orizzontale dove c'è un'alternativa: su un campo a due fili a macchie, zero
   // tratti orizzontali (from e to sulla stessa riga del reticolo) e zero salti.
@@ -4681,6 +4682,16 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   for (const cr of rH.colors) for (const sg of cr.segs) if (sg.kind !== 'stitch' && sg.kind !== 'jump' && Math.floor(sg.from / 41) === Math.floor(sg.to / 41)) orizz++;
   check('a macchie: nessun passaggio orizzontale, nessun salto', [orizz, rH.metrics.jumps], [0, 0]);
 
+  // PASSATE SULLA STESSA V (Lorenzo: «che succede se per ogni punto faccio i più passaggi?»).
+  // Con 3 passate la V si cuce avanti-indietro-avanti e finisce nell'angolo dove comincia la
+  // successiva: la riga va di filato, senza un passaggio; e le 6 passate di ogni V sono di fila.
+  const r3 = run(riga, cRiga, { repetitions: 3, passOrder: 'stitch' });
+  const st3 = r3.colors[0].segs;
+  check('sulla V ×3: riga di V senza nessun passaggio', [r3.metrics.visibleMm, r3.metrics.verticalMm, r3.metrics.retraceMm, st3.every((sg) => sg.kind === 'stitch')], [0, 0, 0, true]);
+  let diFila = true;
+  for (let v = 0; v < 5; v++) { const blocco = st3.slice(v * 6, v * 6 + 6); const vert = new Set(blocco.flatMap((sg) => [sg.from, sg.to])); if (vert.size !== 3) diFila = false; }
+  check('sulla V ×3: le 6 passate di ogni V una dopo l’altra, sugli stessi 3 fori', diFila, true);
+  check('sulla V ×2: con passate pari si torna da dove si è partiti, e serve un passaggio', run(riga, cRiga, { repetitions: 2, passOrder: 'stitch' }).metrics.verticalMm + run(riga, cRiga, { repetitions: 2, passOrder: 'stitch' }).metrics.retraceMm > 0, true);
   // Ogni gamba è cucita esattamente N volte, e nella croce la gamba sopra viene sempre dopo.
   const blocco = g(5, 5), cCroci = fill(blocco, () => 'cross');
   for (const reps of [1, 2]) {
@@ -4795,6 +4806,31 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   const cX = fill(gX, (r, c) => ({ stitch: c % 2 ? 'up' : 'down', color: ((r * 7 + (c >> 1) * 13) % 11) < 3 ? 0 : 1 }));
   const mX = rg.csRouteCells(gX, cX, rg.CS_DEFAULT_ROUTE).metrics;
   check('a macchie: al massimo due passaggi in più sulla stessa diagonale', mX.maxExtra <= 2, true);
+  // LA MODIFICA A MANO (Lorenzo: «pulire l'interno della scritta… o cancellare qualcosa»).
+  // Una lettera: un anello nero di V con dentro il bianco e un tratto nero staccato.
+  const gE2 = { rows: 7, cols: 14, cellW: 1.5, cellH: 3.8 };
+  const ring = (r, c) => { const v = c >> 1; const bordo = r === 0 || r === 6 || v === 0 || v === 6; const tratto = r === 3 && v === 3; return { stitch: c % 2 ? 'up' : 'down', color: bordo || tratto ? 0 : 1 }; };
+  const nNero = (cells) => [...cells.values()].filter((m) => m.color === 0).length;
+  // pennello bianco sul tratto interno: solo quella V cambia colore, i punti restano V
+  const cP = fill(gE2, ring);
+  rg.csApplyEdits(gE2, cP, rg.csBrushEdits(gE2, cP, 3, 7, 1, 1, 'v', 'left', false));
+  check('pennello bianco sul tratto dentro la lettera: sparisce solo lui, la V resta V', [nNero(cP), cP.get(3 * 14 + 6).stitch, cP.get(3 * 14 + 7).stitch], [nNero(fill(gE2, ring)) - 2, 'down', 'up']);
+  // il pennello lavora a V intere: cliccare la gamba destra ricolora anche la sinistra
+  const cP2 = fill(gE2, ring);
+  check('il pennello non spezza mai una V', rg.csBrushEdits(gE2, cP2, 3, 7, 1, 1, 'v', 'left', false).map((e) => e.c), [6, 7]);
+  // riempi col bianco il tratto staccato: solo lui (non tocca il contorno)
+  const cF = fill(gE2, ring);
+  check('riempi sul tratto staccato: 1 V, il contorno resta', rg.csFillEdits(gE2, cF, 3, 6, 1, 'v', 'left', false).length, 2);
+  // riempi col nero dall'interno bianco: si ferma al contorno, non esce dalla lettera
+  const cF2 = fill(gE2, ring);
+  rg.csApplyEdits(gE2, cF2, rg.csFillEdits(gE2, cF2, 1, 2, 0, 'v', 'left', false));
+  check('riempi di nero l’interno: tutta la lettera nera, niente fuori', nNero(cF2), 7 * 14);
+  // gomma: svuota, e su una cella vuota il pennello rimette una V allineata alla maglia
+  const cG = fill(gE2, ring);
+  rg.csApplyEdits(gE2, cG, rg.csBrushEdits(gE2, cG, 2, 4, 2, 0, 'v', 'left', true));
+  check('gomma grandezza 2: 2 V × 2 righe = 8 celle vuote', 7 * 14 - cG.size, 8);
+  rg.csApplyEdits(gE2, cG, rg.csBrushEdits(gE2, cG, 2, 5, 1, 1, 'v', 'left', false));
+  check('pennello su celle vuote: una V nuova allineata (giù poi su)', [cG.get(2 * 14 + 4).stitch, cG.get(2 * 14 + 5).stitch], ['down', 'up']);
   check('sormonto: il percorso non cambia (stessi tratti che senza)', JSON.stringify(rS.colors), JSON.stringify(rg.csRouteCells({ ...gS, overlapPct: 0 }, cS, rg.CS_DEFAULT_ROUTE).colors));
 }
 

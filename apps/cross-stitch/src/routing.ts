@@ -71,6 +71,14 @@ export interface RouteParams {
   repetitions: number;
   /** Vero = ogni diagonale si cuce solo nel suo verso (\ dall'alto, / dal basso), come nella vecchia app. */
   fixedDirection: boolean;
+  /**
+   * Come si distribuiscono le passate. `row` = ogni passata è un pezzo a sé: la riga si fa
+   * all'andata e si ripassa al ritorno. `stitch` = tutte le passate sullo stesso punto prima del
+   * successivo, come il punto triplo delle macchine (avanti, indietro, avanti sugli stessi fori).
+   * Con la V e un numero DISPARI di passate si finisce nell'angolo dove comincia la V dopo, e una
+   * riga si cuce di filato senza passaggi (Lorenzo, 2026-09-24).
+   */
+  passOrder?: 'row' | 'stitch';
   /** La gamba che sta sopra nella croce. */
   topLeg: Leg;
   /** Oltre questo costo di passaggio (≈ mm in vista) si salta: taglio e ripartenza. */
@@ -79,7 +87,8 @@ export interface RouteParams {
 }
 
 // Salti quasi mai: a macchina un salto lascia un filo che attraversa gli altri colori (Lorenzo).
-export const DEFAULT_ROUTE: RouteParams = { repetitions: 1, fixedDirection: false, topLeg: 'down', jumpMm: 400 };
+// Le passate tutte sulla stessa V: la partenza scelta da Lorenzo (2026-09-24), che lavora a passate dispari.
+export const DEFAULT_ROUTE: RouteParams = { repetitions: 1, fixedDirection: false, topLeg: 'down', jumpMm: 400, passOrder: 'stitch' };
 
 /** Un tratto del percorso fra due vertici del reticolo. */
 export type SegKind = 'stitch' | 'hidden' | 'retrace' | 'vertical' | 'visible' | 'jump';
@@ -116,11 +125,19 @@ interface LegState {
   prereq: number;
 }
 
-/** Una passata su una gamba: è l'unità che l'ordine sceglie. */
+/**
+ * L'unità che l'ordine sceglie. Con `passOrder: 'row'` è UNA passata su una gamba; con
+ * `'stitch'` sono TUTTE le passate di un punto: di una gamba, o di una V intera (due gambe della
+ * stessa riga che si toccano, `pair`).
+ */
 interface Unit {
   leg: number;
   /** Con la direzione fissa: l'unico capo da cui si può entrare. -1 = tutti e due. */
   fixedEntry: number;
+  /** Quante passate cuce l'unità. */
+  passes: number;
+  /** La V: la seconda gamba, il vertice in comune (la punta) e i due capi liberi. */
+  pair?: { leg2: number; mid: number; a: number; b: number };
   done: boolean;
 }
 
@@ -182,6 +199,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   // diagonale e poi dover ripassare per spostarsi.
   const legs: LegState[] = [];
   const units: Unit[] = [];
+  const perStitch = params.passOrder === 'stitch';
   /** cella*2 + (0 = down, 1 = up) → indice della gamba. */
   const legAt = new Map<number, number>();
   const keys = [...cells.keys()].sort((x, y) => x - y);
@@ -195,9 +213,31 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       legs.push({ color: m.color, a, b, remaining: reps, extra: 0, prereq: prev });
       legAt.set(k * 2 + (leg === 'down' ? 0 : 1), id);
       // Direzione fissa: le passate vanno avanti e indietro (a→b, b→a, …) come nella vecchia app.
-      for (let p = 0; p < reps; p++) units.push({ leg: id, fixedEntry: params.fixedDirection ? (p % 2 === 0 ? a : b) : -1, done: false });
+      if (!perStitch) for (let p = 0; p < reps; p++) units.push({ leg: id, fixedEntry: params.fixedDirection ? (p % 2 === 0 ? a : b) : -1, passes: 1, done: false });
       prev = id;
     }
+  }
+  if (perStitch) {
+    // Tutte le passate sullo stesso punto. Le V (due gambe singole, stesso colore, stessa riga,
+    // colonne 2p e 2p+1, che si toccano in un vertice) diventano UNA unità; il resto una per gamba.
+    const inPair = new Set<number>();
+    for (const k of keys) {
+      const m = cells.get(k)!;
+      const r0 = Math.floor(k / g.cols), c = k - r0 * g.cols;
+      if (c % 2 !== 0 || m.stitch === 'cross') continue;
+      const n = cells.get(k + 1);
+      if (!n || c + 1 >= g.cols || n.stitch === 'cross' || n.color !== m.color) continue;
+      const l1 = legAt.get(k * 2 + (m.stitch === 'down' ? 0 : 1))!, l2 = legAt.get((k + 1) * 2 + (n.stitch === 'down' ? 0 : 1))!;
+      const L1 = legs[l1], L2 = legs[l2];
+      const mid = [L1.a, L1.b].find((v) => v === L2.a || v === L2.b);
+      if (mid === undefined) continue;
+      const a = L1.a === mid ? L1.b : L1.a, b = L2.a === mid ? L2.b : L2.a;
+      units.push({ leg: l1, fixedEntry: params.fixedDirection ? a : -1, passes: reps, pair: { leg2: l2, mid, a, b }, done: false });
+      inPair.add(l1); inPair.add(l2);
+    }
+    legs.forEach((l, id) => {
+      if (!inPair.has(id)) units.push({ leg: id, fixedEntry: params.fixedDirection ? l.a : -1, passes: reps, done: false });
+    });
   }
 
   const present = [...new Set(legs.map((l) => l.color))];
@@ -288,15 +328,22 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     const pre = legs[u.leg].prereq;
     return pre < 0 || legs[pre].remaining === 0;
   };
+  /** I due capi da cui si entra in un'unità (della V: gli angoli liberi, non la punta). */
+  const endsOf = (id: number): [number, number] => {
+    const u = units[id];
+    return u.pair ? [u.pair.a, u.pair.b] : [legs[u.leg].a, legs[u.leg].b];
+  };
   const entriesOf = (id: number) => {
     const u = units[id];
-    return u.fixedEntry >= 0 ? [u.fixedEntry] : [legs[u.leg].a, legs[u.leg].b];
+    return u.fixedEntry >= 0 ? [u.fixedEntry] : endsOf(id);
   };
+  /** Con un numero dispari di passate si esce dall'altro capo, con uno pari da dove si è entrati. */
   const exitOf = (id: number, entry: number) => {
-    const l = legs[units[id].leg];
-    return entry === l.a ? l.b : l.a;
+    const [a, b] = endsOf(id);
+    if (units[id].passes % 2 === 0) return entry;
+    return entry === a ? b : a;
   };
-  const topLeft = (id: number) => Math.min(legs[units[id].leg].a, legs[units[id].leg].b);
+  const topLeft = (id: number) => Math.min(...endsOf(id));
 
   let at = -1; // vertice dove si trova l'ago (-1 = non ancora partito)
 
@@ -308,7 +355,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       const l = legs[u.leg];
       if (l.color !== k) return;
       mine.push(id);
-      for (const v of [l.a, l.b]) {
+      for (const v of endsOf(id)) {
         const list = byVertex.get(v);
         if (list) list.push(id); else byVertex.set(v, [id]);
       }
@@ -324,19 +371,33 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
         if (o === id || units[o].done) continue;
         const pre = legs[units[o].leg].prereq;
         // la gamba sopra si libera se questa è l'ultima passata della gamba sotto
-        if (pre >= 0 && legs[pre].remaining > (pre === leg ? 1 : 0)) continue;
+        if (pre >= 0 && legs[pre].remaining > (pre === leg ? units[id].passes : 0)) continue;
         if (entriesOf(o).includes(exit)) n++;
       }
       return n;
     };
 
     const take = (id: number, entry: number) => {
-      const exit = exitOf(id, entry);
-      segs.push({ kind: 'stitch', from: entry, to: exit });
-      units[id].done = true;
-      legs[units[id].leg].remaining--;
+      const u = units[id];
+      const [a, b] = endsOf(id);
+      const other = entry === a ? b : a;
+      let cur = entry;
+      for (let q = 0; q < u.passes; q++) {
+        const to = cur === entry ? other : entry;
+        if (u.pair) {
+          // la V: angolo → punta → angolo, avanti e indietro
+          segs.push({ kind: 'stitch', from: cur, to: u.pair.mid });
+          segs.push({ kind: 'stitch', from: u.pair.mid, to });
+        } else {
+          segs.push({ kind: 'stitch', from: cur, to });
+        }
+        cur = to;
+      }
+      u.done = true;
+      legs[u.leg].remaining -= u.passes;
+      if (u.pair) legs[u.pair.leg2].remaining -= u.passes;
       left--;
-      at = exit;
+      at = cur;
     };
 
     // Da dove parte il filo. Il primo: dalla diagonale più in alto a sinistra. Gli altri: dopo il

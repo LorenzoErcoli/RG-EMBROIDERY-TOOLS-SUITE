@@ -383,3 +383,92 @@ export function gridForSize(widthMm: number, heightMm: number, cellW: number, ce
   const rows = Math.min(1000, Math.max(1, Math.round((Math.max(h, heightMm) - h) / pitch) + 1));
   return { cols, rows, cellW: w, cellH: h, overlapPct: pct };
 }
+
+// ------------------------------------------------------------
+// La modifica a mano: pennello, riempimento, gomma
+//
+// Chiesta da Lorenzo dopo la prima maglia dal giornale Dior: «se voglio pulire l'interno della
+// scritta che mi mette il nero e invece voglio il bianco devo poterlo fare, o se voglio proprio
+// cancellare qualcosa». Il pennello lavora a V INTERE, allineate alla maglia (colonne pari): una V
+// non si spezza mai a metà, altrimenti la maglia perde il suo disegno.
+// ------------------------------------------------------------
+
+/** Il punto che il pennello mette su una cella vuota. */
+export type BrushStitch = 'v' | 'diag' | 'cross';
+
+/** La prima colonna della V che contiene la colonna `c`. */
+export const vColumn = (c: number): number => c - (c % 2);
+
+/** Il punto nuovo per una cella vuota: V/Λ secondo la colonna, diagonale, o croce. */
+function freshStitch(stitch: BrushStitch, button: Button, c: number): Stitch {
+  if (stitch === 'cross') return 'cross';
+  if (stitch === 'diag') return button === 'left' ? 'down' : 'up';
+  const first = c % 2 === 0;               // gamba sinistra della V
+  const v = button === 'left';             // V (sinistro) o Λ (destro)
+  return first === v ? 'down' : 'up';
+}
+
+/** Le celle sotto un pennello di `size` V, centrato sulla cella (r, c). */
+export function brushArea(g: GridSpec, r: number, c: number, size: number): Array<{ r: number; c: number }> {
+  const n = Math.max(1, Math.round(size));
+  const r0 = r - Math.floor((n - 1) / 2);
+  const p0 = Math.floor(c / 2) - Math.floor((n - 1) / 2);
+  const out: Array<{ r: number; c: number }> = [];
+  for (let rr = r0; rr < r0 + n; rr++) {
+    if (rr < 0 || rr >= g.rows) continue;
+    for (let p = p0; p < p0 + n; p++) {
+      for (const cc of [2 * p, 2 * p + 1]) if (cc >= 0 && cc < g.cols) out.push({ r: rr, c: cc });
+    }
+  }
+  return out;
+}
+
+/**
+ * Il pennello: ricolora col filo `color` quello che c'è sotto (il punto resta quello che è), e
+ * sulle celle vuote mette il punto scelto. `erase` = gomma: svuota.
+ */
+export function brushEdits(g: GridSpec, cells: Cells, r: number, c: number, size: number, color: number, stitch: BrushStitch, button: Button, erase: boolean): CellEdit[] {
+  return brushArea(g, r, c, size).map(({ r: rr, c: cc }) => {
+    if (erase) return { r: rr, c: cc, mark: null };
+    const old = cells.get(cellIndex(g, rr, cc));
+    return { r: rr, c: cc, mark: { stitch: old ? old.stitch : freshStitch(stitch, button, cc), color } };
+  });
+}
+
+/**
+ * Il riempimento: dalla cella (r, c) si allarga alle celle vicine (sopra, sotto, destra, sinistra)
+ * che hanno lo STESSO colore — o sono vuote, se si parte da una vuota — e le passa tutte al filo
+ * `color` (o le svuota, con `erase`). Si lavora a V intere: la V di partenza e ogni V toccata.
+ * È il modo di pulire l'interno di una lettera con un clic.
+ */
+export function fillEdits(g: GridSpec, cells: Cells, r: number, c: number, color: number, stitch: BrushStitch, button: Button, erase: boolean): CellEdit[] {
+  if (r < 0 || c < 0 || r >= g.rows || c >= g.cols) return [];
+  const keyOf = (rr: number, cc: number) => cells.get(cellIndex(g, rr, cc))?.color ?? -1;
+  const target = keyOf(r, c);
+  if (!erase && target === color) return [];
+  if (erase && target === -1) return [];
+  // si lavora per V: una V appartiene alla zona se almeno una sua gamba ha il colore di partenza
+  const pairs = Math.ceil(g.cols / 2);
+  const seen = new Uint8Array(g.rows * pairs);
+  const inZone = (rr: number, p: number) => {
+    for (const cc of [2 * p, 2 * p + 1]) if (cc < g.cols && keyOf(rr, cc) === target) return true;
+    return false;
+  };
+  const edits: CellEdit[] = [];
+  const stack: Array<[number, number]> = [[r, Math.floor(c / 2)]];
+  seen[r * pairs + Math.floor(c / 2)] = 1;
+  while (stack.length) {
+    const [rr, p] = stack.pop()!;
+    for (const cc of [2 * p, 2 * p + 1]) {
+      if (cc >= g.cols || keyOf(rr, cc) !== target) continue;
+      const old = cells.get(cellIndex(g, rr, cc));
+      edits.push({ r: rr, c: cc, mark: erase ? null : { stitch: old ? old.stitch : freshStitch(stitch, button, cc), color } });
+    }
+    for (const [nr, np] of [[rr - 1, p], [rr + 1, p], [rr, p - 1], [rr, p + 1]] as Array<[number, number]>) {
+      if (nr < 0 || nr >= g.rows || np < 0 || np >= pairs || seen[nr * pairs + np]) continue;
+      seen[nr * pairs + np] = 1;
+      if (inZone(nr, np)) stack.push([nr, np]);
+    }
+  }
+  return edits;
+}
