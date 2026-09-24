@@ -23,12 +23,13 @@
     "dev:zone-pattern": "npm run dev --workspace apps/zone-pattern",
     "dev:cannage-rafia": "npm run dev --workspace apps/cannage-rafia",
     "dev:pittorico": "npm run dev --workspace apps/pittorico",
+    "dev:cross-stitch": "npm run dev --workspace apps/cross-stitch",
     "build": "npm run build --workspace apps/shell",
     "build:net-45": "npm run build --workspace apps/net-45",
     "sviluppo:ricamo-3d": "python strumenti-sviluppo/ricamo-3d/esegui.py",
     "sviluppo:ricamo-3d:app": "python strumenti-sviluppo/ricamo-3d/server.py",
     "test": "node test/smoke.mjs",
-    "typecheck": "tsc -p packages/core/tsconfig.json && tsc -p packages/pattern-grammar/tsconfig.json && tsc -p apps/net-45/tsconfig.json && tsc -p apps/pattern-grammar/tsconfig.json && tsc -p apps/interlace/tsconfig.json && tsc -p apps/bitmap/tsconfig.json && tsc -p apps/oblique/tsconfig.json && tsc -p apps/striatura/tsconfig.json && tsc -p apps/broccato/tsconfig.json && tsc -p apps/zone-pattern/tsconfig.json && tsc -p apps/pittorico/tsconfig.json && tsc -p apps/sfrangiatura/tsconfig.json && tsc -p apps/pettine/tsconfig.json && tsc -p apps/cannage-rafia/tsconfig.json && tsc -p apps/shell/tsconfig.json",
+    "typecheck": "tsc -p packages/core/tsconfig.json && tsc -p packages/pattern-grammar/tsconfig.json && tsc -p apps/net-45/tsconfig.json && tsc -p apps/pattern-grammar/tsconfig.json && tsc -p apps/interlace/tsconfig.json && tsc -p apps/bitmap/tsconfig.json && tsc -p apps/oblique/tsconfig.json && tsc -p apps/striatura/tsconfig.json && tsc -p apps/broccato/tsconfig.json && tsc -p apps/zone-pattern/tsconfig.json && tsc -p apps/pittorico/tsconfig.json && tsc -p apps/sfrangiatura/tsconfig.json && tsc -p apps/pettine/tsconfig.json && tsc -p apps/cannage-rafia/tsconfig.json && tsc -p apps/cross-stitch/tsconfig.json && tsc -p apps/shell/tsconfig.json",
     "lab:pettine": "esbuild apps/pettine/scripts/lab.ts --bundle --format=esm --platform=node --alias:@rg/core=./packages/core/src/index.ts --alias:@rg/pattern-grammar=./packages/pattern-grammar/src/index.ts --outfile=apps/pettine/scripts/lab.mjs --log-level=warning && node --max-old-space-size=6144 apps/pettine/scripts/lab.mjs"
   }
 }

@@ -89,6 +89,22 @@
       "port": 5313,
       "autoPort": false,
       "url": "http://127.0.0.1:5313"
+    },
+    {
+      "name": "cross-stitch-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--workspace",
+        "apps/cross-stitch",
+        "--",
+        "--port",
+        "5284"
+      ],
+      "port": 5284,
+      "autoPort": false,
+      "url": "http://127.0.0.1:5284"
     }
   ]
 }

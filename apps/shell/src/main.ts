@@ -13,6 +13,7 @@ import { mountSfrangiatura } from '@app/sfrangiatura';
 import { mountZonePattern } from '@app/zone-pattern';
 import { mountPettine } from '@app/pettine';
 import { mountCannageRafia } from '@app/cannage-rafia';
+import { mountCrossStitch } from '@app/cross-stitch';
 
 const app = document.getElementById('app')!;
 
@@ -30,6 +31,7 @@ function route(): void {
   else if (hash === '#/zone-pattern') mountZonePattern(app, { backHref: '#/' });
   else if (hash === '#/pettine') mountPettine(app, { backHref: '#/' });
   else if (hash === '#/cannage-rafia') mountCannageRafia(app, { backHref: '#/' });
+  else if (hash === '#/cross-stitch') mountCrossStitch(app, { backHref: '#/' });
   else if (hash === '#/sviluppo') renderHome(app, 'sviluppo');
   else renderHome(app);
 }

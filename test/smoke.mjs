@@ -41,6 +41,8 @@ export { sfrangia } from ${JSON.stringify(posix('apps/sfrangiatura/src/frange.ts
 export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('apps/pittorico/src/primitives.ts'))};
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
+export { routeCells as csRouteCells, colorPolylines as csColorPolylines, DEFAULT_ROUTE as CS_DEFAULT_ROUTE } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
+export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
 export { reticoloDaZone, contornoDaZone, zoneDaModello, lineeDaModello } from ${JSON.stringify(posix('apps/cannage-rafia/src/reticolo.ts'))};
@@ -955,7 +957,7 @@ check('S/s: stessa area della C esplicita', Math.round(Math.abs(rg.polygonArea(p
 console.log('\nsuite — ogni tool scrive i parametri nel .dst e li sa rileggere (R27)');
 for (const [tool, id] of [['net-45', 'net-45'], ['pattern-grammar', 'pattern-grammar'],
   ['interlace', 'interlace'], ['striatura', 'striatura'], ['oblique', 'oblique'],
-  ['bitmap', 'bitmap'], ['zone-pattern', 'zone-pattern'], ['cannage-rafia', 'cannage-rafia']]) {
+  ['bitmap', 'bitmap'], ['zone-pattern', 'zone-pattern'], ['cannage-rafia', 'cannage-rafia'], ['cross-stitch', 'cross-stitch']]) {
   const src = readFileSync(join(root, `apps/${tool}/src/tool.ts`), 'utf8');
   const call = src.indexOf('dstFromExportLayers(');
   const blocco = call >= 0 ? src.slice(call, call + 600) : '';
@@ -4644,6 +4646,122 @@ console.log('cannage-rafia — la bordatura rifà il DST vero M1424');
   const aperte = rg.lineeDaModello(mLinea);
   check('le linee aperte del disegno si leggono con la loro tinta, anche <line>, e non diventano zone',
     [aperte.map((l) => l.color).sort(), rg.zoneDaModello(mLinea).length], [['#00aa00', '#ff00ff'], 1]);
+}
+
+// cross-stitch — i PASSAGGI. Il motore vecchio (ThreadRoute) era un mucchio di connettori con premi
+// e penalità scritti a mano; quello nuovo ha una regola sola (il passaggio va sotto il ricamo che
+// viene dopo) e una mappa di costo. Qui si blocca quello che si è misurato migrando: sugli stessi
+// disegni il vecchio lasciava 105-209 mm di passaggi in vista sul cuore, il nuovo 20-45.
+console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
+{
+  const g = (rows, cols) => ({ rows, cols, cellW: 5, cellH: 5 });
+  const fill = (grid, f) => { const m = new Map(); for (let r = 0; r < grid.rows; r++) for (let c = 0; c < grid.cols; c++) { const s = f(r, c); if (s) m.set(r * grid.cols + c, typeof s === 'string' ? { stitch: s, color: 0 } : s); } return m; };
+  const run = (grid, cells, p = {}) => rg.csRouteCells(grid, cells, { ...rg.CS_DEFAULT_ROUTE, ...p });
+  const zig = (r, c) => (c % 2 ? 'up' : 'down');
+
+  // Una riga di V si cuce di filato: nessun passaggio. Con 2 passate si va e si torna, senza
+  // ripassare (il vecchio ripassava 64 mm; la prima versione nuova, che faceva le passate una
+  // dopo l'altra sulla stessa diagonale, 57).
+  const riga = g(1, 10), cRiga = fill(riga, zig);
+  for (const reps of [1, 2, 3]) {
+    const m = run(riga, cRiga, { repetitions: reps }).metrics;
+    check(`riga di V ×${reps}: zero passaggi in vista, zero ripassi, zero salti`, [m.visibleMm, m.retraceMm, m.jumps], [0, 0, 0]);
+  }
+  // Un campo di chevron: un solo cambio riga per riga (5 × 5 mm), anche con 2 passate.
+  const campo = g(6, 10), cCampo = fill(campo, zig);
+  check('chevron 6×10 ×2: 25 mm in vista (un bordo per cambio riga), nessun ripasso', [Math.round(run(campo, cCampo, { repetitions: 2 }).metrics.visibleMm), Math.round(run(campo, cCampo, { repetitions: 2 }).metrics.retraceMm)], [25, 0]);
+
+  // Ogni gamba è cucita esattamente N volte, e nella croce la gamba sopra viene sempre dopo.
+  const blocco = g(5, 5), cCroci = fill(blocco, () => 'cross');
+  for (const reps of [1, 2]) {
+    const res = run(blocco, cCroci, { repetitions: reps });
+    const conta = new Map(), primaVolta = new Map(), ultimaVolta = new Map();
+    let i = 0;
+    for (const s of res.colors[0].segs) {
+      i++;
+      if (s.kind !== 'stitch') continue;
+      const k = Math.min(s.from, s.to) + ':' + Math.max(s.from, s.to);
+      conta.set(k, (conta.get(k) ?? 0) + 1);
+      if (!primaVolta.has(k)) primaVolta.set(k, i);
+      ultimaVolta.set(k, i);
+    }
+    check(`croci ×${reps}: 50 gambe, ognuna cucita ${reps} volte`, [conta.size, [...conta.values()].every((n) => n === reps)], [50, true]);
+    let sottoPrima = true;
+    for (let r = 0; r < 5; r++) for (let c = 0; c < 5; c++) {
+      const W = 6, tl = r * W + c, tr = tl + 1, bl = tl + W, br = bl + 1;
+      const giu = primaVolta.get(Math.min(tl, br) + ':' + Math.max(tl, br)), su = ultimaVolta.get(Math.min(bl, tr) + ':' + Math.max(bl, tr));
+      // gamba sopra «\» (default): la «/» sotto deve essere finita prima che la «\» cominci
+      if (!(su < giu)) sottoPrima = false;
+    }
+    check(`croci ×${reps}: la gamba sopra («\\») sempre dopo quella sotto`, sottoPrima, true);
+  }
+
+  // Il percorso è continuo: ogni tratto parte dove è finito il precedente (i salti inclusi).
+  const res2 = run(g(8, 8), fill(g(8, 8), (r, c) => ({ stitch: 'cross', color: ((r >> 1) + (c >> 1)) % 2 })), { repetitions: 2 });
+  let continuo = true;
+  for (const cr of res2.colors) for (let i = 1; i < cr.segs.length; i++) if (cr.segs[i].from !== cr.segs[i - 1].to) continuo = false;
+  check('a scacchi con 2 fili: percorso continuo, un filo per colore', [continuo, res2.colors.length], [true, 2]);
+  // Il primo filo si nasconde sotto il secondo: invertendo l'ordine degli aghi, i passaggi del
+  // filo che era primo non possono più nascondersi sotto l'altro.
+  const scacchi = fill(g(8, 8), (r, c) => ({ stitch: 'cross', color: ((r >> 1) + (c >> 1)) % 2 }));
+  const sottoIlSecondo = (order) => {
+    const out = rg.csRouteCells(g(8, 8), scacchi, rg.CS_DEFAULT_ROUTE, order);
+    return out.colors[0].segs.filter((s) => s.kind === 'hidden').length;
+  };
+  check('il primo ago nasconde dei passaggi sotto il secondo (e ne ha, col suo ordine)', sottoIlSecondo([0, 1]) > 0, true);
+
+  // Direzione fissa: «\» sempre dall'alto, «/» sempre dal basso (con 1 passata).
+  const fisso = run(g(4, 6), fill(g(4, 6), zig), { fixedDirection: true });
+  const W = 7;
+  const versoGiusto = fisso.colors[0].segs.filter((s) => s.kind === 'stitch').every((s) => {
+    const di = Math.floor(s.to / W) - Math.floor(s.from / W), dj = (s.to % W) - (s.from % W);
+    return (dj === 1 && di === 1) || (dj === 1 && di === -1); // sempre verso destra: «\» giù, «/» su
+  });
+  check('direzione fissa: ogni diagonale nel suo verso', versoGiusto, true);
+
+  // Nuovo filo dopo il cambio colore: parte da un capo, non con un passaggio cucito dal filo di prima.
+  const dueRighe = fill(g(2, 10), (r, c) => ({ stitch: r === 0 ? zig(r, c) : (c % 2 ? 'down' : 'up'), color: r }));
+  const m2 = run(g(2, 10), dueRighe).metrics;
+  check('riga di V nera + riga di Λ rossa: niente in vista, niente salti', [m2.visibleMm, m2.jumps], [0, 0]);
+
+  // Gli strumenti: la V è UN clic su due celle; sul bordo destro solo la prima metà.
+  const gE = g(3, 4);
+  check('V col sinistro: «\\» qui e «/» a destra', rg.csEditsFor(gE, 'v', 'left', 1, 1, 2).map((e) => [e.c, e.mark.stitch, e.mark.color]), [[1, 'down', 2], [2, 'up', 2]]);
+  check('Λ col destro: «/» qui e «\\» a destra', rg.csEditsFor(gE, 'v', 'right', 1, 1, 0).map((e) => [e.c, e.mark.stitch]), [[1, 'up'], [2, 'down']]);
+  check('V sull’ultima colonna: solo la prima metà', rg.csEditsFor(gE, 'v', 'left', 0, 3, 0).length, 1);
+  check('maiuscolo + clic svuota con qualunque strumento', rg.csEditsFor(gE, 'cross', 'left', 0, 0, 0, true)[0].mark, null);
+
+  // Il progetto torna uguale dal metadata, e un progetto ThreadRoute si apre.
+  const cJ = fill(g(3, 4), (r, c) => (c === r ? 'cross' : c === 3 ? 'up' : null));
+  check('celle → JSON → celle: uguali', JSON.stringify([...rg.csCellsFromJson(g(3, 4), rg.csCellsToJson(g(3, 4), cJ))]), JSON.stringify([...cJ].sort((a, b) => a[0] - b[0])));
+  const vecchio = rg.csFromThreadRoute({ grid: { rows: 2, columns: 3, cellWidth: 4, cellHeight: 6, gapX: 0, gapY: 0 }, primitive: { repetitions: 2 }, cells: [{ row: 0, col: 1, enabled: true, orientation: 'diagonalUp' }, { row: 1, col: 2, enabled: true, orientation: 'diagonalDown' }, { row: 1, col: 0, enabled: false, orientation: null }] });
+  check('progetto ThreadRoute: griglia, celle, passate', [vecchio.grid, [...vecchio.cells], vecchio.repetitions], [{ rows: 2, cols: 3, cellW: 4, cellH: 6 }, [[1, { stitch: 'up', color: 0 }], [5, { stitch: 'down', color: 0 }]], 2]);
+
+  // In macchina: nessun punto oltre il massimo (le celle grandi si spezzano in punti uguali).
+  const grande = { rows: 2, cols: 2, cellW: 20, cellH: 20 };
+  const rG = rg.csRouteCells(grande, fill(grande, () => 'cross'), rg.CS_DEFAULT_ROUTE);
+  let lungo = 0;
+  for (const pl of rg.csColorPolylines(grande, rG.colors[0], { maxStitchMm: 7, travelStitchMm: 2.5 })) for (let i = 1; i < pl.length; i++) lungo = Math.max(lungo, Math.hypot(pl[i].x - pl[i - 1].x, pl[i].y - pl[i - 1].y));
+  check('celle da 20 mm: nessun punto oltre i 7 mm', lungo <= 7 + 1e-9, true);
+
+  // Il SORMONTO delle righe (chiesto da Lorenzo per avvicinare le V come nella maglia): la riga r
+  // parte a r·passo, e passo = altezza × (1 − sormonto). Il percorso resta quello del reticolo.
+  const gS = { rows: 3, cols: 4, cellW: 2, cellH: 5, overlapPct: 40 };
+  const cS = fill(gS, zig);
+  const rS = rg.csRouteCells(gS, cS, rg.CS_DEFAULT_ROUTE);
+  const ys = new Set();
+  for (const pl of rg.csColorPolylines(gS, rS.colors[0], { maxStitchMm: 12, travelStitchMm: 12 })) for (const p of pl) ys.add(Math.round(p.y * 1000) / 1000);
+  check('sormonto 40% su celle alte 5: le righe partono a 0, 3, 6 e finiscono a 5, 8, 11', [...ys].sort((x, y) => x - y), [0, 3, 5, 6, 8, 11]);
+  // Solo in verticale: fra la riga sopra e la riga sotto. In orizzontale nessun sormonto (Lorenzo):
+  // le x dei punti sono le stesse che senza.
+  const xs = (gg) => { const out = []; for (const pl of rg.csColorPolylines(gg, rg.csRouteCells(gg, cS, rg.CS_DEFAULT_ROUTE).colors[0], { maxStitchMm: 12, travelStitchMm: 12 })) for (const p of pl) out.push(p.x); return [...new Set(out)].sort((x, y) => x - y); };
+  check('sormonto solo verticale: i punti cadono sulle stesse colonne (x) che senza', JSON.stringify(xs(gS)), JSON.stringify(xs({ ...gS, overlapPct: 0 })));
+  // Le MISURE comandano la griglia (Lorenzo): ricamo L×A, cella, sormonto → colonne e righe.
+  const gM = rg.csGridForSize(150, 80, 2.5, 6, 35);
+  check('150×80 mm, cella 2,5×6, sormonto 35%: 60 colonne × 20 righe', [gM.cols, gM.rows], [60, 20]);
+  check('...e il ricamo esce alto 80 mm a meno di mezza riga', Math.abs(rg.csGridHeight(gM) - 80) <= 6 * 0.65 / 2, true);
+  check('le colonne sono sempre pari (una V = due colonne)', rg.csGridForSize(101, 50, 2, 5, 0).cols % 2, 0);
+  check('sormonto: il percorso non cambia (stessi tratti che senza)', JSON.stringify(rS.colors), JSON.stringify(rg.csRouteCells({ ...gS, overlapPct: 0 }, cS, rg.CS_DEFAULT_ROUTE).colors));
 }
 
 rmSync(outDir, { recursive: true, force: true });

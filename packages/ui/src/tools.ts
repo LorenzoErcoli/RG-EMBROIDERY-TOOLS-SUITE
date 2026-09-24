@@ -19,7 +19,7 @@ export const TOOLS: ToolDef[] = [
   { id: 'pattern-grammar', name: 'Generatore pattern', description: 'Genera pattern e basi ricamo da grammatica, con sagoma importabile.', status: 'live', section: 'suite' },
   { id: 'interlace', name: 'Interlace', description: 'Riempimento a intreccio multicolore: passaggi brevi che si intrecciano, con aree vuote.', status: 'live', section: 'suite' },
   { id: 'oblique', name: 'Oblique Pattern', description: 'Pattern obliqui a più livelli (Broderie Anglaise) con fori laser.', status: 'live', section: 'suite' },
-  { id: 'cross-stitch', name: 'Cross-Stitch', description: 'Griglia a punto croce con routing ottimizzato. È ancora l’app separata (ThreadRoute Grid Lab): si apre in una scheda nuova, finché non viene migrata nella suite.', status: 'live', section: 'sviluppo', href: 'https://lorenzoercoli.github.io/cross-stitch-grid-embroidery-tool/' },
+  { id: 'cross-stitch', name: 'Cross-Stitch', description: 'Griglia di celle con diagonali, V e croci in più fili: i passaggi si calcolano da soli e finiscono sotto il ricamo che viene dopo. Export SVG e DST.', status: 'live', section: 'sviluppo' },
   { id: 'bitmap', name: 'Bitmap → Stitch', description: 'Da immagine raster a tracciato di ricamo: selezione pixel, colori e punti ordinati in SVG.', status: 'live', section: 'suite' },
   { id: 'striatura', name: 'Punto Striato', description: 'Striature verticali a spola che formano macchie maculate su base di riempimento parallelo.', status: 'live', section: 'suite' },
   { id: 'zone-pattern', name: 'Pattern a zone', description: 'Riempie ogni zona colorata di un disegno col suo pattern, ruotato sulle perpendicolari della zona.', status: 'live', section: 'suite' },

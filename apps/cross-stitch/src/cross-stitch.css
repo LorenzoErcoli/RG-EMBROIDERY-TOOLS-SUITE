@@ -1,0 +1,28 @@
+/* Stili locali del tool "Cross-Stitch". Solo ciò che il design system non copre: il sizing d'app,
+   il contenimento dell'anteprima, il cursore dell'editor e il filo attivo. Colori solo da token. */
+
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--rg-color-background);
+  color: var(--rg-color-text-primary);
+  font-family: var(--rg-font-body);
+}
+#app { display: flex; flex-direction: column; height: 100vh; }
+.cs-workspace { flex: 1 1 auto; min-height: 0; }
+
+/* L'anteprima non sborda dalla tela (difetto già trovato in striatura). */
+.cs-workspace #layer svg { max-width: 100%; max-height: 100%; }
+
+/* Nell'editor il clic disegna: il puntatore lo dice. Il pan resta a spazio + trascina e al tasto centrale. */
+.cs-workspace .rg-workspace__canvas { cursor: crosshair; }
+.cs-workspace .rg-workspace__canvas.cs-pan,
+.cs-workspace .rg-workspace__canvas.is-dragging { cursor: grabbing; }
+
+/* Il filo con cui si sta disegnando. */
+.cs-thread { cursor: pointer; }
+.cs-thread--active { outline: 2px solid var(--rg-color-black); outline-offset: 2px; }
+
+/* La legenda dei passaggi sotto l'anteprima. */
+.cs-legend { display: inline-flex; gap: var(--rg-space-3); align-items: center; }
+.cs-legend__item { display: inline-flex; gap: var(--rg-space-1); align-items: center; }
+.cs-legend svg { width: 22px; height: 8px; }

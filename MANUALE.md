@@ -488,6 +488,51 @@ questa scala, spargere i passaggi costava tagli, e Lorenzo i tagli non li vuole.
 staccati. Il tool li raggruppa in zone e finisce una zona prima di cominciare la successiva, così i
 collegamenti restano corti e il taglio si paga solo per cambiare blocco.
 
+## Cross-Stitch (`cross-stitch`)
+
+**A cosa serve.** A ricamare un disegno fatto di **diagonali in una griglia**: la diagonale
+singola, la **V** (due diagonali che si toccano nell'angolo, il punto della **maglia**) e la
+**croce**. Si disegna a mano cella per cella, o si parte da un'immagine e la griglia si riempie
+da sola di V colorate.
+
+**Disegnare.** Scegli lo strumento in *Punto*:
+- **Diagonale** — clic sinistro «\», clic destro «/».
+- **V** — un clic mette due celle vicine: sinistro V, destro Λ. Trascinando, le V si mettono una
+  accanto all'altra.
+- **Croce** — la gamba sopra è sempre la stessa (la scegli sotto).
+- **Gomma** — svuota. Con qualunque strumento, **Maiuscolo + clic** svuota.
+
+Si trascina per disegnare di seguito. **Spazio + trascina** o il tasto centrale spostano la vista,
+la rotella ingrandisce. **Ctrl+Z** annulla.
+
+**Fili.** Clic su un filo per disegnare con quello. L'ordine della lista è l'**ordine degli aghi**
+(↑ per anticipare un filo): i passaggi di un filo si nascondono sotto le diagonali dei fili che
+vengono dopo.
+
+**Maglia dall'immagine.** Si parte da qui. In *01 Immagine* carichi la foto: la maglia si crea
+subito, ogni V col filo più vicino al colore dell'immagine sotto di lei (i colori dei fili si
+ricavano dall'immagine, tanti quanti sono i fili, il più chiaro per primo). Poi in *02 Misure del
+ricamo* scegli **larghezza e altezza del ricamo** in mm, **larghezza e altezza della cella** e il
+**sormonto delle righe**: colonne e righe le calcola il tool, e la maglia si rifà da sola. Le
+colonne sono sempre pari (una V occupa due colonne) e le celle sono intere, quindi il ricamo esce
+della misura più vicina possibile: la riga sotto le misure dice quella vera. L'altezza segue le
+proporzioni dell'immagine; se la scrivi a mano la proporzione si sblocca e l'immagine si stira.
+Il **sormonto** è solo verticale: ogni riga sale dentro quella di sopra di quella percentuale
+dell'altezza, e le V si infilano una nell'altra; in orizzontale le V si toccano e basta. Per
+l'effetto maglia: celle strette e alte (per esempio 2,5 × 6 mm). Se ritocchi il disegno a mano,
+cambiando le misure non si rifà più dall'immagine: c'è *Rifai la maglia dall'immagine*.
+
+**I passaggi si calcolano da soli.** Il filo va da una diagonale alla successiva scegliendo la
+strada più nascosta: sotto una diagonale che verrà cucita dopo (grigio tratteggiato), sopra una
+già cucita (arancio, ingrossa un po' il punto), lungo un bordo di cella in vista (rosso). Oltre
+*Salta oltre* diventa un salto con taglio. La barra di stato dice quanti mm di ciascun tipo.
+Con più *Passate per diagonale* ogni passata si fa a parte: una riga di V si cuce all'andata e si
+ripassa al ritorno. *Direzione fissa* obbliga «\» dall'alto e «/» dal basso.
+
+**Salvare e riaprire.** SVG e DST portano dentro tutto il progetto: *Apri progetto…* li rimette
+com'erano. Apre anche i progetti `.json` della vecchia app ThreadRoute. L'ultimo lavoro si
+riapre da solo.
+
 ## Se qualcosa non torna
 
 - **"Non vedo niente in anteprima."** Controlla di aver assegnato i **ruoli** ai colori (spesso manca l'area da riempire), e prova **Adatta**.
