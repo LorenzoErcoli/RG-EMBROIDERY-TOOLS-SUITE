@@ -41,7 +41,7 @@ export { sfrangia } from ${JSON.stringify(posix('apps/sfrangiatura/src/frange.ts
 export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('apps/pittorico/src/primitives.ts'))};
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
-export { routeCells as csRouteCells, colorPolylines as csColorPolylines, DEFAULT_ROUTE as CS_DEFAULT_ROUTE } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
+export { routeCells as csRouteCells, colorPolylines as csColorPolylines, DEFAULT_ROUTE as CS_DEFAULT_ROUTE, RETRACE_PRESETS as CS_RETRACE_PRESETS } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
 export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight, knitFromImage as csKnitFromImage, refinePalette as csRefinePalette, brushEdits as csBrushEdits, fillEdits as csFillEdits, applyEdits as csApplyEdits, fromTwoColumnV as csFromTwoColumnV } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { zonesOf as csZonesOf } from ${JSON.stringify(posix('apps/cross-stitch/src/zones.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
@@ -4887,6 +4887,29 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   const ingressi = (res) => { let n = 0, prima = false; const W2 = LW(gT); for (const sg of res.colors[0].segs) { if (sg.kind !== 'stitch') continue; const i = Math.min(Math.floor(sg.from / W2), Math.floor(sg.to / W2)); const t = i >= 12 && i < 15; if (t && !prima) n++; prima = t; } return n; };
   check('gruppi: il titolo diviso dalla zona massima si cuce in due volte, col gruppo in una', [ingressi(run(gT, cT, { zones: { maxMm: 30 } })), ingressi(run(gT, cT, { zones: { maxMm: 30 }, groups: [titoloG] }))], [2, 1]);
   check('gruppi: valgono anche senza zone automatiche', ingressi(run(gT, cT, { zones: null, groups: [titoloG] })), 1);
+  // L'ORDINE DEI GRUPPI (Lorenzo: «l'ordine dei gruppi»): prima i gruppi, nell'ordine della
+  // lista, poi il resto. Il corpo in basso a destra come gruppo 1 e il titolo come 2.
+  const corpoG = { x: 69, y: 17 * pT, w: 51, h: 13 * pT };
+  const sequenza = (groups) => {
+    const W2 = LW(gT); const lab = [];
+    for (const sg of run(gT, cT, { groups }).colors[0].segs) {
+      if (sg.kind !== 'stitch') continue;
+      const i = Math.min(Math.floor(sg.from / W2), Math.floor(sg.to / W2)), j = Math.min(sg.from % W2, sg.to % W2);
+      const x = (Math.floor(j / 2) + 0.5) * 3, y = i * pT + 1.9;
+      const l = groups.findIndex((q) => x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h);
+      const t = l < 0 ? '-' : String(l + 1);
+      if (lab[lab.length - 1] !== t) lab.push(t);
+    }
+    return lab.join('');
+  };
+  check('gruppi in ordine: tutto il gruppo 1, poi tutto il 2, poi il resto', [sequenza([corpoG, titoloG]), sequenza([titoloG, corpoG])], ['12-', '12-']);
+
+  // RIPASSI O FILO IN VISTA: la scelta sposta il compromesso, e non rompe l'ordine né fa saltare.
+  const gR = { rows: 40, cols: 20, cellW: 3, cellH: 3.8, overlapPct: 30 };
+  const cR = fill(gR, macchie);
+  const conPeso = (retrace) => run(gR, cR, { costs: { retrace } }).metrics;
+  const [mV, mE, mRp] = ['vista', 'equilibrio', 'ripassi'].map((k) => conPeso(rg.CS_RETRACE_PRESETS[k]));
+  check('meno ripassi: ripassa meno, mette più filo in vista, e non salta', [mRp.retraceMm < mE.retraceMm && mE.retraceMm <= mV.retraceMm, mRp.visibleMm >= mV.visibleMm, mRp.jumps], [true, true, 0]);
 
   // LA MODIFICA A MANO (Lorenzo: «pulire l'interno della scritta… o cancellare qualcosa»).
   // Una lettera: un anello nero di V con dentro il bianco e un tratto nero staccato.

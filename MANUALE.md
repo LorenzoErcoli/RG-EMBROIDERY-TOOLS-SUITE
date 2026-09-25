@@ -586,9 +586,24 @@ e ognuno lo finisce prima di passare al successivo.
 Con lo strumento **Gruppi** della barra si trascina un rettangolo attorno: dentro, ogni colore è una
 zona sola e il filo la finisce tutta prima di uscire (sul Dior: una volta sola, con gli stessi ripassi).
 Fuori dai gruppi resta il taglio automatico. I gruppi si vedono in modalità Gruppi, col loro numero;
-in *04 Passaggi* c'è la lista: passandoci sopra si evidenzia il gruppo, il cestino lo toglie, *Togli
-tutti* chiede conferma. Se due gruppi si sovrappongono vale l'ultimo disegnato. Si salvano nel
+in *04 Passaggi* c'è la lista: passandoci sopra si evidenzia il gruppo, la freccia lo porta più su,
+il cestino lo toglie, *Togli tutti* chiede conferma. **I gruppi si cuciono per primi, nell'ordine
+della lista** (per ogni colore): tutto il gruppo 1, poi tutto il 2, poi il resto per vicinanza.
+Imporre un ordine costa qualche ripasso in più (sul Dior, colonna e titolo: da 25,1 a 25,7–26,4 m). Se due gruppi si sovrappongono vale l'ultimo disegnato. Si salvano nel
 progetto (DST e SVG) e tornano con *Carica parametri*.
+
+**Per spostarsi** (in *04 Passaggi*) sceglie il compromesso fra ripassi e filo in vista. Il ripasso
+lungo è quasi tutto strutturale: il filo finisce un tratto dal capo sbagliato e torna sopra la riga
+appena cucita. Per ripassare meno deve prendere scorciatoie sopra gli altri colori. Sul giornale Dior
+(450 mm, 3 passate, base bianca):
+
+| Scelta | Ripassi | Filo in vista |
+|---|---|---|
+| *Meno in vista* (partenza) | 25,1 m | 0,90 m |
+| *Equilibrio* | 20,7 m | 1,21 m |
+| *Meno ripassi* | 18,8 m | 1,46 m |
+
+In tutti e tre i casi niente salti e nessun ritorno in un pezzo lasciato a metà.
 
 **Stop accesi e spenti.** Nella riga di ogni filo, **Vedi** accende o spegne quello stop
 nell'anteprima (punti e passaggi), per guardare un colore alla volta. Uno stop spento **non va

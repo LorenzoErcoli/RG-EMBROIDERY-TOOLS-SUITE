@@ -76,6 +76,20 @@ export interface TravelCosts {
  */
 export const DEFAULT_COSTS: TravelCosts = { hidden: 0.05, retrace: 0.1, border: 12, vertical: 0.3, verticalSide: 1.5, open: 1.6, over: 3, extra: 1 };
 
+/**
+ * RIPASSI O FILO IN VISTA (Lorenzo, 2026-09-25: «meno ripassi»). Il ripasso lungo è quasi tutto
+ * strutturale: il filo finisce un tratto dal capo sbagliato e torna sopra la riga appena cucita.
+ * Per ripassare meno bisogna accettare scorciatoie in vista sopra gli altri colori: è un
+ * compromesso, e si sceglie qui (il costo di un mm di ripasso). Sul giornale Dior (450 mm, 3 passate,
+ * base bianca): 0,1 → ripassi 25,1 m, in vista 0,90 m; 0,25 → 20,7 e 1,21; 0,4 → 18,8 e 1,46.
+ * In tutti e tre i casi zero salti e nessun ritorno in un pezzo lasciato a metà.
+ * Provati e scartati (peggio in ripassi o nell'ordine): guardare avanti un tratto; celle a
+ * bustrofedico (−1,3 m ma 32 ritorni in pezzi lasciati a metà); ordine delle celle pianificato in
+ * linea d'aria.
+ */
+export const RETRACE_PRESETS = { vista: 0.1, equilibrio: 0.25, ripassi: 0.4 } as const;
+export type RetracePreset = keyof typeof RETRACE_PRESETS;
+
 export interface RouteParams {
   /** Passate su ogni diagonale (avanti e indietro). */
   repetitions: number;
@@ -275,6 +289,8 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   }
   // le zone di ogni colore del disegno (un numero unico per tutta la griglia)
   const zoneOfCell = new Map<number, number>();
+  /** Zona di un gruppo → la sua posizione nella lista dei gruppi (si cuciono in quest'ordine). */
+  const zoneRank = new Map<number, number>();
   const groups = params.groups ?? [];
   if (params.blocks !== false && (params.zones !== null || groups.length)) {
     let offset = 0;
@@ -290,6 +306,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       }
       const used = [...new Set(inGroup.values())];
       for (const [k, gi] of inGroup) zoneOfCell.set(k, offset + used.indexOf(gi));
+      used.forEach((gi, n) => zoneRank.set(offset + n, gi));
       offset += used.length;
       if (params.zones === null) { for (const k of free.keys()) zoneOfCell.set(k, offset); offset++; continue; }
       const z = zonesOf(g, free, col, params.zones ?? {});
@@ -524,10 +541,18 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     for (const id of mine) { const z = legs[units[id].leg].zone; zoneLeft.set(z, (zoneLeft.get(z) ?? 0) + 1); }
     let currentZone = -3;
     /** Nella zona corrente finché non è finita; dentro la zona, nel blocco corrente finché non è finito. */
+    // I GRUPPI IN ORDINE (Lorenzo: «l'ordine dei gruppi»): finita la zona corrente, se restano
+    // gruppi di questo colore si passa al primo della lista; il resto dopo, per vicinanza.
+    const groupZones = [...new Set(mine.map((id) => legs[units[id].leg].zone))].filter((z) => zoneRank.has(z)).sort((a, b) => zoneRank.get(a)! - zoneRank.get(b)!);
+    const nextGroupZone = () => {
+      while (groupZones.length && !(zoneLeft.get(groupZones[0]) ?? 0)) groupZones.shift();
+      return groupZones[0];
+    };
     const inBlock = (id: number) => {
       if (!byBlocks) return true;
       const leg = legs[units[id].leg];
       if ((zoneLeft.get(currentZone) ?? 0) > 0 && leg.zone !== currentZone) return false;
+      if ((zoneLeft.get(currentZone) ?? 0) === 0) { const gz = nextGroupZone(); if (gz !== undefined && leg.zone !== gz) return false; }
       return (blockLeft.get(current) ?? 0) === 0 || leg.block === current;
     };
     const byRuns = byBlocks && params.runs !== false;
@@ -595,7 +620,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     // salto. Visto in anteprima sulla riga di Λ rossa, che partiva dal centro.
     if (left > 0) {
       const degree = new Map<number, number>();
-      for (const id of mine) if (available(id)) for (const e of entriesOf(id)) degree.set(e, (degree.get(e) ?? 0) + 1);
+      for (const id of mine) if (available(id) && inBlock(id)) for (const e of entriesOf(id)) degree.set(e, (degree.get(e) ?? 0) + 1);
       const ends = [...degree].filter(([, n]) => n % 2 === 1).map(([v]) => v);
       const pool = ends.length ? ends : [...degree.keys()];
       const here = at >= 0 ? pt(at) : { x: 0, y: 0 };

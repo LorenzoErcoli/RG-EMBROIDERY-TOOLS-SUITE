@@ -15,7 +15,7 @@ import {
 } from './model';
 import {
   type RouteParams, type RouteResult, type SegKind, type StitchParams,
-  DEFAULT_ROUTE, DEFAULT_STITCH, colorPolylines, routeCells,
+  DEFAULT_ROUTE, DEFAULT_STITCH, RETRACE_PRESETS, colorPolylines, routeCells, type RetracePreset,
 } from './routing';
 import { DEFAULT_ZONES, type ZoneGroup } from './zones';
 
@@ -39,7 +39,7 @@ const MODE_HELP: Record<Mode, string> = {
   paint: 'Pennello: trascina per passare le V al filo scelto. Sulle celle vuote mette il punto scelto qui a fianco (V, croce, diagonale). Maiuscolo + trascina cancella.',
   fill: 'Riempi: un clic passa al filo scelto tutta la zona collegata dello stesso colore — per esempio l’interno di una lettera.',
   erase: 'Gomma: trascina per cancellare; lì non si cuce niente.',
-  group: 'Gruppi: trascina un rettangolo attorno a una parte (per esempio un titolo): il filo di ogni colore la cuce tutta insieme. Si tolgono in 04 Passaggi.',
+  group: 'Gruppi: trascina un rettangolo attorno a una parte (per esempio un titolo): il filo di ogni colore la cuce tutta insieme, prima del resto e nell’ordine della lista in 04 Passaggi.',
 };
 
 /** Come si disegna ogni tipo di passaggio nell'anteprima (colori dai token del DS). */
@@ -161,6 +161,15 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
               <button type="button" class="rg-segmented__item" data-order="row">Lungo la riga</button>
             </div>
             <span class="rg-field__help">Sulla stessa V con passate dispari, lungo la riga con pari</span>
+          </div>
+          <div class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label" id="lbl-retrace">Per spostarsi</span>
+            <div class="rg-segmented" id="retraceSel" role="group" aria-labelledby="lbl-retrace">
+              <button type="button" class="rg-segmented__item" data-retrace="vista">Meno in vista</button>
+              <button type="button" class="rg-segmented__item" data-retrace="equilibrio">Equilibrio</button>
+              <button type="button" class="rg-segmented__item" data-retrace="ripassi">Meno ripassi</button>
+            </div>
+            <span class="rg-field__help">Meno ripassi sui propri punti costano più filo in vista sugli altri colori</span>
           </div>
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label" id="lbl-top">Gamba sopra nella croce</span>
@@ -597,6 +606,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     mark('#stitchSel .rg-segmented__item', (b) => b.dataset.stitch === brushStitch);
     mark('#topLegSel .rg-segmented__item', (b) => b.dataset.leg === st.route.topLeg);
     mark('#passOrderSel .rg-segmented__item', (b) => b.dataset.order === (st.route.passOrder ?? DEFAULT_ROUTE.passOrder));
+    const rt = st.route.costs?.retrace ?? RETRACE_PRESETS.vista;
+    mark('#retraceSel .rg-segmented__item', (b) => RETRACE_PRESETS[b.dataset.retrace as RetracePreset] === rt);
     $('modeHelp').textContent = MODE_HELP[mode];
     const cv = root.querySelector('#canvas');
     if (cv) for (const m of ['pan', 'paint', 'fill', 'erase', 'group']) cv.classList.toggle('cs-mode-' + m, m === mode);
@@ -653,6 +664,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   const setMode = (m: Mode) => { mode = m; syncSegmented(); hideBrush(); drawGroups(); };
   root.querySelectorAll<HTMLButtonElement>('#modeSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode as Mode)));
   root.querySelectorAll<HTMLButtonElement>('#sizeSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => { brushSize = Number(b.dataset.size) || 1; syncSegmented(); }));
+  root.querySelectorAll<HTMLButtonElement>('#retraceSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => {
+    st.route.costs = { ...(st.route.costs ?? {}), retrace: RETRACE_PRESETS[b.dataset.retrace as RetracePreset] };
+    syncSegmented(); update();
+  }));
   root.querySelectorAll<HTMLButtonElement>('#passOrderSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => { st.route.passOrder = b.dataset.order as 'row' | 'stitch'; syncSegmented(); update(); }));
   root.querySelectorAll<HTMLButtonElement>('#stitchSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => { brushStitch = b.dataset.stitch as BrushStitch; syncSegmented(); }));
   root.querySelectorAll<HTMLButtonElement>('#topLegSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => {
@@ -1253,12 +1268,24 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       const li = document.createElement('li');
       li.className = 'rg-list-row';
       li.innerHTML = `<div class="rg-list-row__head"><span class="rg-list-row__title">Gruppo ${i + 1}</span><span class="rg-mono">${fmtNum(Math.round(q.w))} × ${fmtNum(Math.round(q.h))} mm</span>`
-        + `<span class="rg-list-row__actions"><span class="rg-tooltip rg-tooltip--end"><button type="button" class="rg-icon-button rg-icon-button--danger" aria-labelledby="tip-gdel-${i}">`
+        + `<span class="rg-list-row__actions">`
+        + (i > 0 ? `<span class="rg-tooltip rg-tooltip--end"><button type="button" class="rg-icon-button" data-up aria-labelledby="tip-gup-${i}">`
+          + '<svg class="rg-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M12 20V5M6 11l6-6 6 6"/></svg></button>'
+          + `<span class="rg-tooltip__text" role="tooltip" id="tip-gup-${i}">Cuci prima il gruppo ${i + 1}</span></span>` : '')
+        + `<span class="rg-tooltip rg-tooltip--end"><button type="button" class="rg-icon-button rg-icon-button--danger" data-del aria-labelledby="tip-gdel-${i}">`
         + `<svg class="rg-icon" aria-hidden="true" focusable="false"><use href="${ICONS}#rg-icon-elimina"></use></svg></button>`
         + `<span class="rg-tooltip__text" role="tooltip" id="tip-gdel-${i}">Elimina Gruppo ${i + 1}</span></span></span></div>`;
       li.addEventListener('mouseenter', () => { groupHover = i; drawGroups(); });
       li.addEventListener('mouseleave', () => { groupHover = -1; drawGroups(); });
-      li.querySelector('button')!.addEventListener('click', () => {
+      li.querySelector('[data-up]')?.addEventListener('click', () => {
+        const next = [...groups];
+        [next[i - 1], next[i]] = [next[i], next[i - 1]];
+        st.route.groups = next;
+        groupHover = -1;
+        buildGroups();
+        update();
+      });
+      li.querySelector('[data-del]')!.addEventListener('click', () => {
         st.route.groups = groups.filter((_, j) => j !== i);
         groupHover = -1;
         buildGroups();
