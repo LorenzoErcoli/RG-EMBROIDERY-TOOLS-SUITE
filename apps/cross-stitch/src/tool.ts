@@ -17,6 +17,7 @@ import {
   type RouteParams, type RouteResult, type SegKind, type StitchParams,
   DEFAULT_ROUTE, DEFAULT_STITCH, colorPolylines, routeCells,
 } from './routing';
+import { DEFAULT_ZONES } from './zones';
 
 // 0.4.0: un punto per colonna (la V dentro la sua cella). I progetti di prima si convertono.
 const VERSION = '0.4.0';
@@ -174,6 +175,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <input type="checkbox" id="byBlocks" checked aria-describedby="h-blocks"><span class="rg-toggle__track"></span><span>Per blocchi di colore</span>
           </label>
           <span class="rg-field__help rg-param-grid__wide" id="h-blocks">Finisce ogni zona di un colore prima di passare alla successiva</span>
+          <label class="rg-field"><span class="rg-field__label">Vuoto che separa</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="zoneGap" type="text" inputmode="decimal" aria-describedby="h-zoneGap"><span>mm</span></span>
+            <span class="rg-field__help" id="h-zoneGap">Più alto, zone più grandi</span></label>
+          <label class="rg-field"><span class="rg-field__label">Zona massima</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="zoneMax" type="text" inputmode="decimal" aria-describedby="h-zoneMax"><span>mm</span></span>
+            <span class="rg-field__help" id="h-zoneMax">Oltre, la zona si divide</span></label>
           <label class="rg-toggle rg-param-grid__wide">
             <input type="checkbox" id="fixedDir"><span class="rg-toggle__track"></span><span>Direzione fissa («\\» dall’alto, «/» dal basso)</span>
           </label>
@@ -560,6 +567,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     num('travelStitch').value = fmtNum(st.stitch.travelStitchMm);
     $<HTMLInputElement>('fixedDir').checked = st.route.fixedDirection;
     $<HTMLInputElement>('byBlocks').checked = st.route.blocks !== false;
+    num('zoneGap').value = fmtNum(st.route.zones?.gapMm ?? DEFAULT_ZONES.gapMm);
+    num('zoneMax').value = fmtNum(st.route.zones?.maxMm ?? DEFAULT_ZONES.maxMm);
+    num('zoneGap').disabled = num('zoneMax').disabled = st.route.blocks === false;
     syncSegmented();
   }
 
@@ -612,7 +622,16 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   num('jumpMm').addEventListener('change', () => { st.route.jumpMm = Math.max(0, readNum('jumpMm') || 0); syncFields(); update(); });
   num('maxStitch').addEventListener('change', () => { st.stitch.maxStitchMm = Math.min(12, Math.max(1, readNum('maxStitch') || DEFAULT_STITCH.maxStitchMm)); syncFields(); });
   num('travelStitch').addEventListener('change', () => { st.stitch.travelStitchMm = Math.min(12, Math.max(0.5, readNum('travelStitch') || DEFAULT_STITCH.travelStitchMm)); syncFields(); });
-  $<HTMLInputElement>('byBlocks').addEventListener('change', (e) => { st.route.blocks = (e.target as HTMLInputElement).checked; update(); });
+  $<HTMLInputElement>('byBlocks').addEventListener('change', (e) => { st.route.blocks = (e.target as HTMLInputElement).checked; syncFields(); update(); });
+  const setZones = () => {
+    st.route.zones = {
+      gapMm: Math.max(0, readNum('zoneGap') ?? DEFAULT_ZONES.gapMm),
+      maxMm: Math.max(10, readNum('zoneMax') ?? DEFAULT_ZONES.maxMm),
+    };
+    syncFields(); update();
+  };
+  num('zoneGap').addEventListener('change', setZones);
+  num('zoneMax').addEventListener('change', setZones);
   $<HTMLInputElement>('fixedDir').addEventListener('change', (e) => { st.route.fixedDirection = (e.target as HTMLInputElement).checked; update(); });
   $<HTMLInputElement>('showPaths').addEventListener('change', (e) => { showPaths = (e.target as HTMLInputElement).checked; draw(); });
   $<HTMLInputElement>('showGrid').addEventListener('change', (e) => { showGrid = (e.target as HTMLInputElement).checked; draw(); });
@@ -1331,8 +1350,16 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   });
 
   // ---- esportazione -----------------------------------------------------------
+  /**
+   * Le tracce da esportare: solo gli stop accesi (Vedi). Uno stop spento non esiste nel file, e i
+   * passaggi degli altri si ricalcolano come se non ci fosse: quello che copriva non copre più.
+   */
   function exportLayers(): ExportLayer[] {
-    const res = routeCells(st.grid, st.cells, routeParams());
+    const on = (color: number) => !st.threads[color]?.hidden;
+    const cells: Cells = new Map([...st.cells].filter(([, m]) => on(m.color)));
+    const params = routeParams();
+    if (params.base && !on(params.base.color)) params.base = null;
+    const res = routeCells(st.grid, cells, params);
     return res.colors.map((cr) => ({
       id: `filo-${cr.color + 1}`,
       color: st.threads[cr.color]?.hex ?? '#000000',
@@ -1343,7 +1370,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   $('exportBtn').addEventListener('click', async () => {
     const layers = exportLayers();
-    if (!layers.length) { $('status').textContent = 'Niente da esportare: la griglia è vuota.'; return; }
+    if (!layers.length) { $('status').textContent = 'Niente da esportare: la griglia è vuota o gli stop sono spenti.'; return; }
     const { w, h } = sizeMm();
     const svg = buildSvg(layers, { bounds: { minX: 0, minY: 0, maxX: w, maxY: h }, marginMm: 5, metadata: projectMetadata() });
     const name = `${sourceName || 'cross-stitch'}-cross-stitch.svg`;
@@ -1354,7 +1381,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   $('exportDstBtn').addEventListener('click', async () => {
     let bytes: Uint8Array;
     try {
-      bytes = dstFromExportLayers(exportLayers(), {
+      const layers = exportLayers();
+      if (!layers.length) { $('status').textContent = 'Niente da esportare: la griglia è vuota o gli stop sono spenti.'; return; }
+      bytes = dstFromExportLayers(layers, {
         label: (sourceName || 'CROSS-STITCH').toUpperCase().slice(0, 16),
         metadata: projectMetadata(),
       });

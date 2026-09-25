@@ -572,12 +572,16 @@ e ognuno lo finisce prima di passare al successivo.
    come si legge l'impaginazione di un giornale: una colonna di testo, un titolo, la montagna. Una
    zona più grande di 100 mm senza strisce vuote si taglia sulla linea meno piena. Il filo finisce
    la zona e passa alla più vicina: una colonna non si cuce un po' all'inizio e un po' alla fine.
+   I due valori si regolano in *04 Passaggi*: **Vuoto che separa** (5 mm) e **Zona massima**
+   (100 mm). Più alti danno zone più grandi e meno numerose: sul giornale Dior, con 8 mm o con
+   200 mm le zone passano da 37 a meno di 10 e gli articoli si fondono.
 2. **Pezzi che si toccano**, dentro la zona (una parola, una lettera).
 3. **Tratti di riga** (celle consecutive dello stesso colore), dentro il pezzo: finisce il tratto
    in cui si trova ed entra in uno nuovo da un'estremità, così lo percorre tutto in una volta.
 
 **Stop accesi e spenti.** Nella riga di ogni filo, **Vedi** accende o spegne quello stop
-nell'anteprima (punti e passaggi), per guardare un colore alla volta. Il ricamo e l'export non cambiano.
+nell'anteprima (punti e passaggi), per guardare un colore alla volta. Uno stop spento **non va
+nell'export** (DST e SVG): i passaggi degli altri fili si ricalcolano come se non ci fosse.
 
 **Le passate sono per filo**: nella riga di ogni filo c'è il suo numero (*pass*) (per esempio la base a 3 e
 il colore sopra a 5). Con più passate si sceglie **come** farle. *Tutte sulla stessa V* (la partenza): avanti,
