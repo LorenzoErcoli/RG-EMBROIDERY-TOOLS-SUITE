@@ -36,7 +36,7 @@
 // Nessun DOM.
 
 import type { Cells, GridSpec, Leg, Stitch } from './model';
-import { latticeWidth, segmentPoints, stitchLegs, vertexCount } from './model';
+import { latticeWidth, segmentPoints, stitchLegs, vertexCount, vertexIndex } from './model';
 
 export interface TravelCosts {
   /** Sotto una diagonale che verrà cucita dopo. */
@@ -112,6 +112,13 @@ export interface RouteParams {
    * 471 volte e rientrava 332 volte in blocchi lasciati a metà.
    */
   blocks?: boolean;
+  /**
+   * Dentro un blocco, per TRATTI DI RIGA (default vero, con i blocchi): celle consecutive dello
+   * stesso colore sulla stessa riga. Il filo finisce il tratto in cui si trova e ne comincia uno
+   * nuovo solo da un'estremità, così lo percorre tutto in una volta. Sul giornale Dior, a blocchi il
+   * filo faceva 2,5 volte il ripasso minimo: entrava nei tratti a metà e ci tornava.
+   */
+  runs?: boolean;
 }
 
 // Salti quasi mai: a macchina un salto lascia un filo che attraversa gli altri colori (Lorenzo).
@@ -153,6 +160,8 @@ interface LegState {
   prereq: number;
   /** Il blocco di colore a cui appartiene (-1 = la base). */
   block: number;
+  /** Il tratto di riga a cui appartiene. */
+  run: number;
 }
 
 /**
@@ -272,10 +281,33 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     }
   }
   const nBase = base ? g.rows * g.cols : 0; // le prime nBase voci sono la base
+  // Tratti di riga: per il disegno, celle consecutive dello stesso colore; per la base, la riga
+  // intera. Le estremità sono i quattro angoli esterni del tratto.
+  const runOfCell = new Map<number, number>();
+  const runEnds: Array<Set<number>> = [];
+  const addRun = (row: number, c0: number, c1: number) => {
+    runEnds.push(new Set([vertexIndex(g, row, 2 * c0), vertexIndex(g, row + 1, 2 * c0), vertexIndex(g, row, 2 * c1 + 2), vertexIndex(g, row + 1, 2 * c1 + 2)]));
+    return runEnds.length - 1;
+  };
+  for (let row = 0; row < g.rows; row++) {
+    let c = 0;
+    while (c < g.cols) {
+      const m0 = cells.get(row * g.cols + c);
+      if (!m0 || (base && m0.color === base.color)) { c++; continue; }
+      let c1 = c;
+      while (c1 + 1 < g.cols) { const n = cells.get(row * g.cols + c1 + 1); if (!n || n.color !== m0.color) break; c1++; }
+      const id = addRun(row, c, c1);
+      for (let x = c; x <= c1; x++) runOfCell.set(row * g.cols + x, id);
+      c = c1 + 1;
+    }
+  }
+  const baseRun: number[] = [];
+  if (base) for (let row = 0; row < g.rows; row++) baseRun.push(addRun(row, 0, g.cols - 1));
   let entryIndex = -1;
   for (const [k, m] of entries) {
     entryIndex++;
     const block = entryIndex < nBase ? -1 : (blockOfCell.get(k) ?? -2);
+    const run = entryIndex < nBase ? baseRun[Math.floor(k / g.cols)] : (runOfCell.get(k) ?? -2);
     const reps = repsOf(m.color);
     const r = Math.floor(k / g.cols), c = k - r * g.cols;
     const mine: number[] = [];
@@ -284,7 +316,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     for (const { a, b } of stitchLegs(g, r, c, m.stitch, params.topLeg)) {
       const id = legs.length;
       // nella croce la gamba sopra aspetta quella sotto; nella V le due gambe sono libere
-      legs.push({ color: m.color, a, b, remaining: reps, extra: 0, prereq: isCross ? prev : -1, block });
+      legs.push({ color: m.color, a, b, remaining: reps, extra: 0, prereq: isCross ? prev : -1, block, run });
       const ek = edgeKey(a, b);
       const onEdge = legAt.get(ek);
       if (onEdge) onEdge.push(id); else legAt.set(ek, [id]);
@@ -449,6 +481,17 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     let current = -3; // nessun blocco ancora
     /** Si può prendere: se il blocco corrente non è finito, solo le sue unità. */
     const inBlock = (id: number) => !byBlocks || (blockLeft.get(current) ?? 0) === 0 || legs[units[id].leg].block === current;
+    const byRuns = byBlocks && params.runs !== false;
+    const runLeft = new Map<number, number>();
+    for (const id of mine) { const rn = legs[units[id].leg].run; runLeft.set(rn, (runLeft.get(rn) ?? 0) + 1); }
+    let currentRun = -3;
+    /** Nel tratto corrente finché non è finito; un tratto nuovo solo da un'estremità. */
+    const inRun = (id: number, v: number) => {
+      if (!byRuns) return true;
+      const rn = legs[units[id].leg].run;
+      if ((runLeft.get(currentRun) ?? 0) > 0) return rn === currentRun;
+      return runEnds[rn]?.has(v) ?? true;
+    };
     const segs: RouteSeg[] = [];
 
     /** Quante unità si possono prendere gratis all'uscita dopo aver preso `id` (Warnsdorff). */
@@ -484,6 +527,8 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       u.done = true;
       current = legs[u.leg].block;
       blockLeft.set(current, (blockLeft.get(current) ?? 1) - 1);
+      currentRun = legs[u.leg].run;
+      runLeft.set(currentRun, (runLeft.get(currentRun) ?? 1) - 1);
       legs[u.leg].remaining -= u.passes;
       if (u.pair) legs[u.pair.leg2].remaining -= u.passes;
       left--;
@@ -513,31 +558,37 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
 
     while (left > 0) {
       // --- Dijkstra dal vertice dell'ago, fermo alla soglia del salto ---
-      for (const t of touched) { dist[t] = Infinity; prevV[t] = -1; }
-      touched.length = 0;
-      heap.clear();
-      dist[at] = 0; touched.push(at); heap.push(0, at);
-      let bestD = Infinity;
-      const cands: Array<{ id: number; entry: number; d: number }> = [];
       const limit = params.jumpMm;
-      while (heap.size) {
-        const d = heap.peekD();
-        const v = heap.pop();
-        if (d > dist[v]) continue;
-        if (d > bestD + 1e-6 || d > limit) break;
-        for (const id of byVertex.get(v) ?? []) {
-          if (!available(id) || !inBlock(id) || !entriesOf(id).includes(v)) continue;
-          cands.push({ id, entry: v, d });
-          if (d < bestD) bestD = d;
-        }
-        forEachNeighbour(v, k, (w, cost) => {
-          const nd = d + cost;
-          if (nd < dist[w] && nd <= limit) {
-            if (dist[w] === Infinity) touched.push(w);
-            dist[w] = nd; prevV[w] = v; heap.push(nd, w);
+      const search = (accept: (id: number, v: number) => boolean) => {
+        for (const t of touched) { dist[t] = Infinity; prevV[t] = -1; }
+        touched.length = 0;
+        heap.clear();
+        dist[at] = 0; touched.push(at); heap.push(0, at);
+        let best = Infinity;
+        const found: Array<{ id: number; entry: number; d: number }> = [];
+        while (heap.size) {
+          const d = heap.peekD();
+          const v = heap.pop();
+          if (d > dist[v]) continue;
+          if (d > best + 1e-6 || d > limit) break;
+          for (const id of byVertex.get(v) ?? []) {
+            if (!available(id) || !accept(id, v) || !entriesOf(id).includes(v)) continue;
+            found.push({ id, entry: v, d });
+            if (d < best) best = d;
           }
-        });
-      }
+          forEachNeighbour(v, k, (w, cost) => {
+            const nd = d + cost;
+            if (nd < dist[w] && nd <= limit) {
+              if (dist[w] === Infinity) touched.push(w);
+              dist[w] = nd; prevV[w] = v; heap.push(nd, w);
+            }
+          });
+        }
+        return { found, best };
+      };
+      // prima dentro il tratto (o da un'estremità di uno nuovo); se non si trova niente, il blocco
+      let { found: cands, best: bestD } = search((id, v) => inBlock(id) && inRun(id, v));
+      if (!cands.length && byRuns) ({ found: cands, best: bestD } = search((id) => inBlock(id)));
 
       if (cands.length) {
         // A parità di costo, in quest'ordine:

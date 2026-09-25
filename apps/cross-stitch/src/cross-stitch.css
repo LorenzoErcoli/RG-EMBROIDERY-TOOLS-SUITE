@@ -24,7 +24,9 @@ body {
 
 /* Lo stage del DS ha tre righe (testa, tela, stato): la barra di modifica (rg-toolbar) è una
    quarta, alta quanto serve, e la tela resta la riga elastica. La testata ha già il suo filetto. */
-.cs-workspace .rg-workspace__stage { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.cs-workspace .rg-workspace__stage { grid-template-rows: auto auto minmax(0, 1fr) auto; grid-template-columns: minmax(0, 1fr); }
+/* (la colonna è bloccata alla larghezza dello stage: senza, dopo uno zoom forte la barra e la testata
+   si allargavano a 1150 px dentro uno stage di 455 e i bottoni di export finivano fuori schermo) */
 .cs-workspace .cs-editbar { margin: 0; border-top: 0; }
 .cs-editbar__group { display: inline-flex; align-items: center; gap: var(--rg-space-2); }
 
@@ -44,8 +46,9 @@ body {
 .cs-workspace .rg-button[aria-pressed="true"] { color: var(--rg-color-white); background: var(--rg-color-black); border-color: var(--rg-color-black); }
 
 /* La barra di stato: a sinistra cosa fa lo strumento e i numeri; la legenda dei passaggi. */
-.cs-status { display: inline-flex; flex-direction: column; gap: var(--rg-space-1); min-width: 0; }
-.cs-status__help { color: var(--rg-color-text-secondary); }
+.cs-status { display: inline-flex; flex: 1 1 auto; flex-direction: column; gap: var(--rg-space-1); min-width: 0; }
+/* l'aiuto dello strumento su una riga sola: in una tela stretta andava a capo e allungava la barra */
+.cs-status__help { overflow: hidden; color: var(--rg-color-text-secondary); white-space: nowrap; text-overflow: ellipsis; }
 .cs-legend { display: inline-flex; gap: var(--rg-space-3); align-items: center; }
 .cs-legend__item { display: inline-flex; gap: var(--rg-space-1); align-items: center; }
 .cs-legend svg { width: 22px; height: 8px; }
@@ -53,3 +56,7 @@ body {
 /* I comandi del filo (passate, ordine, togli) vanno su una seconda riga, allineati al codice: sulla
    stessa riga schiacciavano il codice fino a spezzarlo lettera per lettera (visto nel pannello). */
 .cs-thread__controls { grid-column: 2 / -1; justify-content: flex-start; gap: var(--rg-space-2); }
+
+/* La scena dell'anteprima: il canvas coi punti e sopra l'SVG con griglia, pennello e ritaglio. */
+.cs-scene { position: relative; flex: none; }
+.cs-scene > canvas, .cs-scene > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }

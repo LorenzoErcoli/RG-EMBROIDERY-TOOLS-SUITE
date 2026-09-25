@@ -569,7 +569,11 @@ corto.
 **Per blocchi di colore** (in *04 Passaggi*, acceso di partenza): un blocco è una zona di celle
 dello stesso colore che si toccano. Il filo finisce la zona in cui si trova prima di passare alla
 successiva, invece di andare sempre sulla cosa più vicina e tornare dopo nelle zone lasciate a metà.
-Costa un po' più di ripasso fra una zona e l'altra.
+Dentro la zona lavora per **tratti di riga** (celle consecutive dello stesso colore): finisce il
+tratto in cui si trova ed entra in uno nuovo da un'estremità, così lo percorre tutto in una volta.
+
+**Stop accesi e spenti.** Nella riga di ogni filo, **Vedi** accende o spegne quello stop
+nell'anteprima (punti e passaggi), per guardare un colore alla volta. Il ricamo e l'export non cambiano.
 
 **Le passate sono per filo**: nella riga di ogni filo c'è il suo numero (*pass*) (per esempio la base a 3 e
 il colore sopra a 5). Con più passate si sceglie **come** farle. *Tutte sulla stessa V* (la partenza): avanti,

@@ -313,7 +313,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     d.addEventListener('toggle', () => { try { localStorage.setItem(key, d.open ? '1' : '0'); } catch { /* pazienza */ } });
   }
 
-  const pz = hookPanZoom($('canvas'), $('layer'), (z) => { $('zoom').textContent = `zoom ${Math.round(z * 100)}%`; });
+  /** Chiamato a ogni cambio di zoom: il canvas si ridisegna nitido quando la rotella si ferma. */
+  let onZoomHook: () => void = () => { /* finché la scena non c'è */ };
+  const pz = hookPanZoom($('canvas'), $('layer'), (z) => { $('zoom').textContent = `zoom ${Math.round(z * 100)}%`; onZoomHook(); });
 
   // ---- disegno dell'anteprima -------------------------------------------------
   const margin = () => Math.max(2, Math.min(st.grid.cellW, st.grid.cellH));
@@ -330,77 +332,199 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   /** I parametri del routing con le passate di ogni filo. */
   const routeParams = (): RouteParams => ({ ...st.route, passesByColor: Object.fromEntries(st.threads.map((_, i) => [i, passesOf(i)])) });
 
-  function svgMarkup(): string {
+  // ---- L'anteprima --------------------------------------------------------------
+  //
+  // I punti, l'immagine e i passaggi si disegnano su un CANVAS; sopra c'è un SVG leggero con la
+  // griglia, il pennello e il ritaglio. Prima era tutto un SVG: sul giornale Dior (450 mm) pesava
+  // 2,3 MB e il browser impiegava 1,5-2 secondi solo a ridisegnarlo a ogni modifica (Lorenzo: «la
+  // visualizzazione è abbastanza lenta»). Il canvas si ridisegna alla risoluzione dello zoom del
+  // momento, così resta nitido quando si ingrandisce. L'export SVG/DST non passa di qui.
+
+  /** Il colore di un token del DS, per il canvas (che le variabili CSS non le legge da solo). */
+  const token = (name: string, fallback: string) => {
+    const v = getComputedStyle(root).getPropertyValue(name).trim();
+    return v || fallback;
+  };
+  const PATH_STYLE: Record<Exclude<SegKind, 'stitch'>, { color: string; width: number; dash: number[] }> = {
+    visible: { color: token('--rg-color-danger', '#b3261e'), width: 2, dash: [] },
+    retrace: { color: token('--rg-color-warning', '#b7791f'), width: 2, dash: [] },
+    vertical: { color: token('--rg-color-info', '#2b6cb0'), width: 2, dash: [] },
+    hidden: { color: token('--rg-color-neutral-600', '#555555'), width: 1, dash: [3, 2] },
+    jump: { color: token('--rg-color-neutral-400', '#999999'), width: 1, dash: [1, 3] },
+  };
+  const BG = token('--rg-color-neutral-200', '#e6e6e6');
+
+  let imageEl: HTMLImageElement | null = null;   // l'immagine di riferimento, pronta per il canvas
+  let imageElUrl = '';
+  let renderZoom = 1;                            // lo zoom a cui è stato disegnato il canvas
+  let zoomTimer = 0;
+
+  /** La scena: un contenitore con il canvas e l'SVG sopra, grande quanto il ricamo nella tela. */
+  function ensureScene(): { wrap: HTMLDivElement; canvasEl: HTMLCanvasElement; overlay: SVGSVGElement } {
+    const layer = $('layer');
+    let wrap = layer.querySelector<HTMLDivElement>('.cs-scene');
+    if (!wrap) {
+      layer.innerHTML = '<div class="cs-scene"><canvas></canvas><svg xmlns="http://www.w3.org/2000/svg"></svg></div>';
+      wrap = layer.querySelector<HTMLDivElement>('.cs-scene')!;
+    }
+    return { wrap, canvasEl: wrap.querySelector('canvas')!, overlay: wrap.querySelector('svg')! };
+  }
+
+  /** La misura della scena in px CSS: quella naturale in mm, ridotta se non entra nella tela. */
+  function sceneSize(): { cssW: number; cssH: number } {
+    const { w, h } = sizeMm();
+    const m = margin();
+    const pxPerMm = 96 / 25.4;
+    const natW = (w + 2 * m) * pxPerMm, natH = (h + 2 * m) * pxPerMm;
+    const box = $('layer').getBoundingClientRect();
+    const z = pz?.getZoom() || 1;
+    const availW = box.width / z || natW, availH = box.height / z || natH;
+    const k = Math.min(1, availW / natW, availH / natH);
+    return { cssW: natW * k, cssH: natH * k };
+  }
+
+  function draw(): void {
     const g = st.grid;
     const { w, h } = sizeMm();
     const m = margin();
-    const pitch = rowPitch(g);
-    const parts: string[] = [];
-    parts.push(`<svg xmlns="http://www.w3.org/2000/svg" width="${f(w + 2 * m)}mm" height="${f(h + 2 * m)}mm" viewBox="${f(-m)} ${f(-m)} ${f(w + 2 * m)} ${f(h + 2 * m)}">`);
-    // fondo grigio chiaro: sul bianco un filo bianco non si vedrebbe
-    parts.push(`<rect x="0" y="0" width="${f(w)}" height="${f(h)}" style="fill:var(--rg-color-neutral-200)"/>`);
-    if (image) parts.push(`<image href="${image.url}" x="0" y="0" width="${f(w)}" height="${f(h)}" preserveAspectRatio="none" opacity="${imageOpacity}"/>`);
-    // la griglia: un pattern per le celle, una riga più scura ogni 10
-    parts.push(`<defs><pattern id="cs-cell" width="${f(g.cellW)}" height="${f(pitch)}" patternUnits="userSpaceOnUse"><path d="M ${f(g.cellW)} 0 L 0 0 0 ${f(pitch)}" fill="none" style="stroke:var(--rg-color-neutral-400)" stroke-width="0.6" vector-effect="non-scaling-stroke"/></pattern>`
-      + `<pattern id="cs-major" width="${f(g.cellW * 10)}" height="${f(pitch * 10)}" patternUnits="userSpaceOnUse"><path d="M ${f(g.cellW * 10)} 0 L 0 0 0 ${f(pitch * 10)}" fill="none" style="stroke:var(--rg-color-neutral-800)" stroke-width="0.9" vector-effect="non-scaling-stroke"/></pattern></defs>`);
-    // La griglia: sotto il ricamo quando è spenta (si vede solo nel vuoto), SOPRA quando è accesa,
-    // così si vede anche dove il ricamo copre tutto (Lorenzo: «io ho bisogno di vedere la griglia»).
-    const gridMarkup = `<g opacity="${showGrid ? 0.55 : 1}" pointer-events="none"><rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="url(#cs-cell)"/><rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="url(#cs-major)" style="stroke:var(--rg-color-neutral-800)" stroke-width="1" vector-effect="non-scaling-stroke"/></g>`;
-    if (!showGrid) parts.push(gridMarkup);
-    // i punti, colore per colore nell'ordine degli aghi; nella croce la gamba sopra per seconda
-    const byColor = new Map<number, string[]>();
-    const base = st.route.base ?? null;
-    if (base) {
-      const list: string[] = [];
-      for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) {
-        for (const { a, b } of stitchLegs(g, r, c, base.stitch, st.route.topLeg)) {
+    const { wrap, canvasEl, overlay } = ensureScene();
+    const { cssW, cssH } = sceneSize();
+    wrap.style.width = `${cssW}px`;
+    wrap.style.height = `${cssH}px`;
+
+    // --- il canvas, alla risoluzione dello zoom corrente (con un tetto di pixel) ---
+    const dpr = window.devicePixelRatio || 1;
+    const z = pz?.getZoom() || 1;
+    let s = dpr * z;
+    const MAX_PX = 16_000_000;
+    if (cssW * s * cssH * s > MAX_PX) s = Math.sqrt(MAX_PX / (cssW * cssH));
+    renderZoom = z;
+    canvasEl.width = Math.max(1, Math.round(cssW * s));
+    canvasEl.height = Math.max(1, Math.round(cssH * s));
+    const ctx = canvasEl.getContext('2d')!;
+    const k = canvasEl.width / (w + 2 * m);         // px del canvas per mm
+    const X = (x: number) => (x + m) * k, Y = (y: number) => (y + m) * k;
+    const screenPx = canvasEl.width / (cssW * z);  // px del canvas per px dello schermo (larghezze fisse)
+    ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
+    ctx.fillStyle = BG;
+    ctx.fillRect(X(0), Y(0), w * k, h * k);
+    if (image && imageOpacity > 0) {
+      if (imageElUrl !== image.url) { imageEl = new Image(); imageEl.onload = () => draw(); imageEl.src = image.url; imageElUrl = image.url; }
+      if (imageEl?.complete && imageEl.naturalWidth) {
+        ctx.globalAlpha = imageOpacity;
+        ctx.drawImage(imageEl, X(0), Y(0), w * k, h * k);
+        ctx.globalAlpha = 1;
+      }
+    }
+    // i punti, colore per colore nell'ordine degli aghi (la base per prima); i fili spenti no
+    ctx.lineCap = 'round';
+    const strokeLegs = (color: number, each: (fn: (r: number, c: number, stitch: Stitch) => void) => void) => {
+      if (st.threads[color]?.hidden) return;
+      ctx.strokeStyle = st.threads[color]?.hex ?? '#000000';
+      ctx.lineWidth = threadWidth(color) * k;
+      ctx.beginPath();
+      each((r, c, stitch) => {
+        for (const { a, b } of stitchLegs(g, r, c, stitch, st.route.topLeg)) {
           const pa = pointInRow(g, a, r), pb = pointInRow(g, b, r);
-          list.push(`M${f(pa.x)} ${f(pa.y)}L${f(pb.x)} ${f(pb.y)}`);
+          ctx.moveTo(X(pa.x), Y(pa.y));
+          ctx.lineTo(X(pb.x), Y(pb.y));
         }
-      }
-      parts.push(`<path d="${list.join('')}" stroke="${st.threads[base.color]?.hex ?? '#ffffff'}" stroke-width="${f(threadWidth(base.color))}" stroke-linecap="round" fill="none"/>`);
-    }
-    for (const [k, mark] of st.cells) {
+      });
+      ctx.stroke();
+    };
+    const base = st.route.base ?? null;
+    if (base) strokeLegs(base.color, (fn) => { for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) fn(r, c, base.stitch); });
+    const byColor = new Map<number, number[]>();
+    for (const [key, mark] of st.cells) {
       if (base && mark.color === base.color) continue; // già coperta dalla base
-      const r = Math.floor(k / g.cols), c = k - r * g.cols;
-      const list = byColor.get(mark.color) ?? [];
-      for (const { a, b } of stitchLegs(g, r, c, mark.stitch, st.route.topLeg)) {
-        const pa = pointInRow(g, a, r), pb = pointInRow(g, b, r);
-        list.push(`M${f(pa.x)} ${f(pa.y)}L${f(pb.x)} ${f(pb.y)}`);
-      }
-      byColor.set(mark.color, list);
+      const list = byColor.get(mark.color);
+      if (list) list.push(key); else byColor.set(mark.color, [key]);
     }
-    [...byColor.keys()].sort((x, y) => x - y).forEach((ci) => {
-      const hex = st.threads[ci]?.hex ?? '#000000';
-      parts.push(`<path d="${byColor.get(ci)!.join('')}" stroke="${hex}" stroke-width="${f(threadWidth(ci))}" stroke-linecap="round" fill="none"/>`);
-    });
-    if (showGrid) parts.push(gridMarkup);
-    // i passaggi
+    for (const ci of [...byColor.keys()].sort((x, y) => x - y)) {
+      strokeLegs(ci, (fn) => { for (const key of byColor.get(ci)!) { const r = Math.floor(key / g.cols); fn(r, key - r * g.cols, st.cells.get(key)!.stitch); } });
+    }
+    // i passaggi (dei fili accesi), con la larghezza fissa sullo schermo
     if (showPaths && result) {
-      const paths: Record<string, string[]> = { visible: [], retrace: [], vertical: [], hidden: [], jump: [] };
-      for (const cr of result.colors) {
-        for (const s of cr.segs) {
-          if (s.kind === 'stitch') continue;
-          const [pa, pb] = segmentPoints(g, s.from, s.to);
-          paths[s.kind].push(`M${f(pa.x)} ${f(pa.y)}L${f(pb.x)} ${f(pb.y)}`);
-        }
-      }
       for (const kind of ['jump', 'hidden', 'retrace', 'vertical', 'visible'] as const) {
-        if (paths[kind].length) parts.push(`<path d="${paths[kind].join('')}" fill="none" stroke-linecap="round" vector-effect="non-scaling-stroke" style="${SEG_STYLE[kind]}"/>`);
+        const style = PATH_STYLE[kind];
+        ctx.strokeStyle = style.color;
+        ctx.lineWidth = style.width * screenPx;
+        ctx.setLineDash(style.dash.map((d) => d * screenPx));
+        ctx.beginPath();
+        for (const cr of result.colors) {
+          if (st.threads[cr.color]?.hidden) continue;
+          for (const sg of cr.segs) {
+            if (sg.kind !== kind) continue;
+            const [pa, pb] = segmentPoints(g, sg.from, sg.to);
+            ctx.moveTo(X(pa.x), Y(pa.y));
+            ctx.lineTo(X(pb.x), Y(pb.y));
+          }
+        }
+        ctx.stroke();
       }
+      ctx.setLineDash([]);
       // dove parte ogni filo
       for (const cr of result.colors) {
         const first = cr.segs[0];
-        if (!first) continue;
+        if (!first || st.threads[cr.color]?.hidden) continue;
         const p = segmentPoints(g, first.from, first.to)[0];
-        parts.push(`<circle cx="${f(p.x)}" cy="${f(p.y)}" r="${f(Math.min(g.cellW, g.cellH) * 0.18)}" fill="${st.threads[cr.color]?.hex ?? '#000000'}" style="stroke:var(--rg-color-white)" stroke-width="1" vector-effect="non-scaling-stroke"/>`);
+        ctx.beginPath();
+        ctx.arc(X(p.x), Y(p.y), Math.min(g.cellW, g.cellH) * 0.18 * k, 0, Math.PI * 2);
+        ctx.fillStyle = st.threads[cr.color]?.hex ?? '#000000';
+        ctx.fill();
+        ctx.lineWidth = screenPx;
+        ctx.strokeStyle = '#ffffff';
+        ctx.stroke();
       }
     }
-    parts.push('</svg>');
-    return parts.join('');
+
+    // --- l'SVG sopra: solo la griglia (il pennello e il ritaglio ci si aggiungono) ---
+    const pitch = rowPitch(g);
+    overlay.setAttribute('viewBox', `${f(-m)} ${f(-m)} ${f(w + 2 * m)} ${f(h + 2 * m)}`);
+    overlay.innerHTML = `<defs><pattern id="cs-cell" width="${f(g.cellW)}" height="${f(pitch)}" patternUnits="userSpaceOnUse"><path d="M ${f(g.cellW)} 0 L 0 0 0 ${f(pitch)}" fill="none" style="stroke:var(--rg-color-neutral-400)" stroke-width="0.6" vector-effect="non-scaling-stroke"/></pattern>`
+      + `<pattern id="cs-major" width="${f(g.cellW * 10)}" height="${f(pitch * 10)}" patternUnits="userSpaceOnUse"><path d="M ${f(g.cellW * 10)} 0 L 0 0 0 ${f(pitch * 10)}" fill="none" style="stroke:var(--rg-color-neutral-800)" stroke-width="0.9" vector-effect="non-scaling-stroke"/></pattern></defs>`
+      + (showGrid ? `<g opacity="0.55" pointer-events="none"><rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="url(#cs-cell)"/><rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="url(#cs-major)"/></g>` : '')
+      + `<rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="none" style="stroke:var(--rg-color-neutral-800)" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
+
+    $('formatInfo').textContent = `Griglia: ${st.grid.cols} colonne × ${st.grid.rows} righe, un punto per cella · il ricamo esce ${fmtNum(w)} × ${fmtNum(h)} mm (le celle sono intere)`;
+    showStatus();
   }
 
+  /** I numeri dei passaggi nella barra di stato (o che si stanno calcolando). */
+  function showStatus(): void {
+    if (routing) { $('status').textContent = 'Calcolo dei passaggi…'; return; }
+    if (!result) return;
+    const m = result.metrics;
+    if (!m.legs) { $('status').textContent = 'Griglia vuota: disegna con il clic.'; return; }
+    const mm = (x: number) => `${Math.round(x)} mm`;
+    $('status').textContent = `${m.legs} diagonali · passaggi in vista ${mm(m.visibleMm)} · ripassi ${mm(m.retraceMm)} · vertice-vertice ${mm(m.verticalMm)} · nascosti ${mm(m.hiddenMm)} · ${m.jumps} salt${m.jumps === 1 ? 'o' : 'i'}`;
+  }
+
+  // ---- I passaggi in un processo a parte (Web Worker) ----------------------------
+  // Il calcolo sul giornale intero prende mezzo secondo o più: fatto qui bloccava la pagina. Nel
+  // worker la pagina resta libera: i punti si vedono subito, i passaggi arrivano appena pronti.
+  // Una richiesta vecchia che arriva dopo una nuova si scarta.
+  let routing = false;
+  let routeRequest = 0;
+  let worker: Worker | null = null;
+  try {
+    worker = new Worker(new URL('./routing.worker.ts', import.meta.url), { type: 'module' });
+    worker.onmessage = (e: MessageEvent<{ id: number; result?: RouteResult; error?: string }>) => {
+      if (e.data.id !== routeRequest) return;
+      routing = false;
+      if (e.data.error) { result = null; $('status').textContent = 'Errore nei passaggi: ' + e.data.error; return; }
+      result = e.data.result ?? null;
+      draw();
+    };
+  } catch { worker = null; /* senza worker si calcola qui, come prima */ }
+
   function recompute(): void {
+    routeRequest++;
+    if (worker) {
+      routing = true;
+      worker.postMessage({ id: routeRequest, grid: st.grid, cells: st.cells, params: routeParams() });
+      return;
+    }
     try {
       result = routeCells(st.grid, st.cells, routeParams());
     } catch (e) {
@@ -410,22 +534,19 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     }
   }
 
-  function draw(): void {
-    $('layer').innerHTML = svgMarkup();
-    const { w, h } = sizeMm();
-    $('formatInfo').textContent = `Griglia: ${st.grid.cols} colonne × ${st.grid.rows} righe, un punto per cella · il ricamo esce ${fmtNum(w)} × ${fmtNum(h)} mm (le celle sono intere)`;
-    if (!result) return;
-    const m = result.metrics;
-    if (!m.legs) { $('status').textContent = 'Griglia vuota: disegna con il clic.'; return; }
-    const mm = (x: number) => `${Math.round(x)} mm`;
-    $('status').textContent = `${m.legs} diagonali · passaggi in vista ${mm(m.visibleMm)} · ripassi ${mm(m.retraceMm)} · vertice-vertice ${mm(m.verticalMm)} · nascosti ${mm(m.hiddenMm)} · ${m.jumps} salt${m.jumps === 1 ? 'o' : 'i'}`;
-  }
-
-  /** Ricalcola e ridisegna. */
+  /** Ricalcola e ridisegna: i punti subito, i passaggi quando il worker ha finito. */
   function update(): void {
     recompute();
     draw();
   }
+
+  // Ridisegna nitido dopo uno zoom (quando la rotella si ferma) e quando la tela cambia misura.
+  function onZoom(): void {
+    window.clearTimeout(zoomTimer);
+    zoomTimer = window.setTimeout(() => { if (Math.abs((pz?.getZoom() || 1) - renderZoom) > 1e-3) draw(); }, 150);
+  }
+  onZoomHook = onZoom;
+  new ResizeObserver(() => { if (root.isConnected) draw(); }).observe($('canvas'));
 
   // ---- campi ------------------------------------------------------------------
   function syncFields(): void {
@@ -576,6 +697,21 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       passU.textContent = 'pass';
       pass.append(passIn, passU);
       aside.appendChild(pass);
+      // lo stop acceso o spento nell'anteprima
+      const vis = document.createElement('label');
+      vis.className = 'rg-toggle';
+      vis.title = 'Mostra o nascondi questo stop nell’anteprima (il ricamo non cambia)';
+      const visIn = document.createElement('input');
+      visIn.type = 'checkbox';
+      visIn.checked = !t.hidden;
+      visIn.setAttribute('aria-label', `Mostra lo stop del filo ${i + 1}`);
+      visIn.addEventListener('change', () => { t.hidden = !visIn.checked; draw(); });
+      const visTrack = document.createElement('span');
+      visTrack.className = 'rg-toggle__track';
+      const visTxt = document.createElement('span');
+      visTxt.textContent = 'Vedi';
+      vis.append(visIn, visTrack, visTxt);
+      aside.appendChild(vis);
       // ordine e togli: bottoni a icona con suggerimento (DS)
       const iconBtn = (tip: string, id: string, svg: string, danger: boolean, onClick: () => void) => {
         const grp = document.createElement('span');

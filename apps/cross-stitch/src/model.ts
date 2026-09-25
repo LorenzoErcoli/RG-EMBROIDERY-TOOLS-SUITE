@@ -54,6 +54,11 @@ export interface Thread {
   hex: string;
   /** Passate su ogni diagonale di questo filo (Lorenzo: «un colore 3 passaggi, quello sopra 5»). */
   passes?: number;
+  /**
+   * Stop spento nell'anteprima (Lorenzo, 2026-09-25: «spegnere e accendere i vari stop aghi»): i suoi
+   * punti e i suoi passaggi non si disegnano. Il ricamo e l'export non cambiano.
+   */
+  hidden?: boolean;
 }
 
 export const DEFAULT_GRID: GridSpec = { cols: 24, rows: 16, cellW: 5, cellH: 5 };
