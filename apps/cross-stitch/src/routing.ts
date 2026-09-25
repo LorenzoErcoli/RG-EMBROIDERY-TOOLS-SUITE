@@ -145,6 +145,8 @@ export interface RouteParams {
    * filo la finisce tutta prima di uscire. Valgono con *blocks*, anche senza zone automatiche.
    */
   groups?: ZoneGroup[];
+  /** Il recinto della zona: i passaggi restano nella zona finché non è finita (default vero). */
+  fence?: boolean;
 }
 
 // Salti quasi mai: a macchina un salto lascia un filo che attraversa gli altri colori (Lorenzo).
@@ -567,6 +569,29 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       return runEnds[rn]?.has(v) ?? true;
     };
     const segs: RouteSeg[] = [];
+    // IL RECINTO DELLA ZONA (Lorenzo, 2026-09-25, sul titolo del Dior: «scende di continuo verso il
+    // sotto quando io vorrei che facesse tutta la scritta e poi si spostasse sotto»). Il titolo era
+    // cucito tutto prima della riga sotto, ma per andare da una lettera all'altra il filo scendeva
+    // sulla riga sotto (cucita dopo, quindi lo nasconde) e risaliva, attraversando il bianco in
+    // vista. Mentre la zona non è finita, anche i passaggi restano nel suo riquadro, allargato di
+    // una cella; solo se da lì non c'è strada si esce.
+    const zoneBox = new Map<number, [number, number, number, number]>();
+    for (const id of mine) {
+      const l = legs[units[id].leg];
+      for (const v of [l.a, l.b]) {
+        const i = Math.floor(v / W), j = v - i * W;
+        const bx = zoneBox.get(l.zone);
+        if (!bx) zoneBox.set(l.zone, [i, j, i, j]);
+        else { if (i < bx[0]) bx[0] = i; if (j < bx[1]) bx[1] = j; if (i > bx[2]) bx[2] = i; if (j > bx[3]) bx[3] = j; }
+      }
+    }
+    const fenceOn = byBlocks && params.fence !== false;
+    /** Il recinto corrente (null = nessuno): la zona in cui si lavora, se non è finita. */
+    const fence = (): [number, number, number, number] | null => {
+      if (!fenceOn || currentZone < -1 || !((zoneLeft.get(currentZone) ?? 0) > 0)) return null;
+      const bx = zoneBox.get(currentZone);
+      return bx ? [bx[0] - 1, bx[1] - 2, bx[2] + 1, bx[3] + 2] : null;
+    };
 
     /** Quante unità si possono prendere gratis all'uscita dopo aver preso `id` (Warnsdorff). */
     const onward = (id: number, exit: number) => {
@@ -635,7 +660,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     while (left > 0) {
       // --- Dijkstra dal vertice dell'ago, fermo alla soglia del salto ---
       const limit = params.jumpMm;
-      const search = (accept: (id: number, v: number) => boolean) => {
+      const search = (accept: (id: number, v: number) => boolean, box: [number, number, number, number] | null = null) => {
         for (const t of touched) { dist[t] = Infinity; prevV[t] = -1; }
         touched.length = 0;
         heap.clear();
@@ -653,6 +678,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
             if (d < best) best = d;
           }
           forEachNeighbour(v, k, (w, cost) => {
+            if (box) { const wi = Math.floor(w / W), wj = w - wi * W; if (wi < box[0] || wi > box[2] || wj < box[1] || wj > box[3]) return; }
             const nd = d + cost;
             if (nd < dist[w] && nd <= limit) {
               if (dist[w] === Infinity) touched.push(w);
@@ -663,8 +689,14 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
         return { found, best };
       };
       // prima dentro il tratto (o da un'estremità di uno nuovo); se non si trova niente, il blocco
-      let { found: cands, best: bestD } = search((id, v) => inBlock(id) && inRun(id, v));
-      if (!cands.length && byRuns) ({ found: cands, best: bestD } = search((id) => inBlock(id)));
+      const box = fence();
+      let { found: cands, best: bestD } = search((id, v) => inBlock(id) && inRun(id, v), box);
+      if (!cands.length && byRuns) ({ found: cands, best: bestD } = search((id) => inBlock(id), box));
+      // dal recinto non c'è strada: si esce
+      if (!cands.length && box) {
+        ({ found: cands, best: bestD } = search((id, v) => inBlock(id) && inRun(id, v)));
+        if (!cands.length && byRuns) ({ found: cands, best: bestD } = search((id) => inBlock(id)));
+      }
 
       if (cands.length) {
         // A parità di costo, in quest'ordine:

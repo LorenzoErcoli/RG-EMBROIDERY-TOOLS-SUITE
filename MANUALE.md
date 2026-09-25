@@ -581,6 +581,13 @@ e ognuno lo finisce prima di passare al successivo.
 3. **Tratti di riga** (celle consecutive dello stesso colore), dentro il pezzo: finisce il tratto
    in cui si trova ed entra in uno nuovo da un'estremità, così lo percorre tutto in una volta.
 
+**Il recinto.** Mentre il filo lavora una zona (o un gruppo), anche i suoi **passaggi** restano
+dentro la zona, allargata di una cella: non scende a nascondersi sotto la zona accanto per poi
+risalire. Se da dentro non c'è strada, esce. Sul titolo del Dior, fra una lettera e l'altra il
+filo scendeva sotto la riga cucita dopo e risaliva (le linee rosse verso il basso); ora fa tutta la
+scritta e poi si sposta sotto. Il prezzo: fra una parola e l'altra attraversa il bianco sopra 2–3 V
+della base (sul titolo da 14 a 24 cm di filo in vista).
+
 **Gruppi.** Nessuna regola automatica sa che un titolo è una cosa sola: sul giornale Dior il titolo
 è largo quasi quanto la pagina, e qualsiasi zona massima lo divide (il filo lo cuciva in 6 volte).
 Con lo strumento **Gruppi** della barra si trascina un rettangolo attorno: dentro, ogni colore è una

@@ -4913,6 +4913,26 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   const [mV, mE, mRp] = ['vista', 'equilibrio', 'ripassi'].map((k) => conPeso(rg.CS_RETRACE_PRESETS[k]));
   check('meno ripassi: ripassa meno, mette più filo in vista, e non salta', [mRp.retraceMm < mE.retraceMm && mE.retraceMm <= mV.retraceMm, mRp.visibleMm >= mV.visibleMm, mRp.jumps], [true, true, 0]);
 
+  // IL RECINTO DELLA ZONA (Lorenzo, sul titolo del Dior: «scende di continuo verso il sotto quando
+  // io vorrei che facesse tutta la scritta e poi si spostasse sotto»). Lettere staccate, sotto una
+  // riga cucita dopo (due gruppi), base bianca: per andare da una lettera all'altra il filo scendeva
+  // a nascondersi sotto la riga e risaliva. Col recinto resta nel titolo finché non l'ha finito.
+  const gRc = { rows: 16, cols: 42, cellW: 2.4, cellH: 3.5, overlapPct: 30 };
+  const pRc = 3.5 * 0.7;
+  const cRc = fill(gRc, (r, c) => ({ stitch: 'v', color: (r >= 2 && r < 8 && c >= 1 && c < 41 && (c - 1) % 6 < 3) || (r >= 9 && r < 11 && c >= 1 && c < 41) ? 1 : 0 }));
+  const gruppiRc = [{ x: 0, y: 2 * pRc - 0.3, w: 100.8, h: 6 * pRc + 0.2 }, { x: 0, y: 9 * pRc - 0.3, w: 100.8, h: 2 * pRc + 0.2 }];
+  const scende = (fence) => {
+    const W2 = LW(gRc); let n = 0, dentro = false, via = [];
+    for (const sg of run(gRc, cRc, { base: { color: 0, stitch: "v" }, groups: gruppiRc, fence }).colors.find((c) => c.color === 1).segs) {
+      if (sg.kind !== 'stitch') { via.push(sg); continue; }
+      const t = Math.min(Math.floor(sg.from / W2), Math.floor(sg.to / W2)) >= 2 && Math.min(Math.floor(sg.from / W2), Math.floor(sg.to / W2)) < 8;
+      if (t && dentro && via.some((x) => Math.max(Math.floor(x.from / W2), Math.floor(x.to / W2)) > 9)) n++;
+      dentro = t; via = [];
+    }
+    return n;
+  };
+  check('recinto: fra una lettera e l\'altra il filo non scende sotto la riga (senza recinto 6 volte)', [scende(true), scende(false)], [0, 6]);
+
   // L'AREA DI PROVA (Lorenzo: «disegno grande, poi ritaglio, ma fuori rimane: per testare un
   // punto del ricamo»). Passaggi ed export su una griglia a sé; rimessa al suo posto, ogni tratto
   // cade esattamente sui punti del disegno grande, anche col sormonto delle righe.
