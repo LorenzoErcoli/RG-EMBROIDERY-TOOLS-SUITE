@@ -8,7 +8,7 @@ import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import {
-  type Button, type Cells, type GridSpec, type Leg, type Thread, type Tool,
+  type Button, type Cells, type GridSpec, type Leg, type Stitch, type Thread, type Tool,
   type Pixels, type BrushStitch, type KnitStitch, DEFAULT_GRID, applyEdits, brushArea, brushEdits, fillEdits, knitFromImage, gridForSize, refinePalette, paletteShares, DEFAULT_KNIT, cellIndex, cellsFromJson, cellsToJson, editsFor, fromThreadRoute, fromTwoColumnV, stitchLegs,
   resizeCells, pointInRow, segmentPoints, rowPitch, gridHeight,
 } from './model';
@@ -126,7 +126,17 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         <div class="rg-param-section__header"><span class="rg-param-section__index">03</span><h3 class="rg-param-section__title">Fili</h3></div>
         <ul class="rg-color-map" id="threads"></ul>
         <div class="rg-cluster"><button type="button" id="addThread" class="rg-button rg-button--ghost rg-button--small">Aggiungi filo</button></div>
-        <p class="rg-field__help">Clic su un filo per disegnare con quello. L’ordine è l’ordine degli aghi: i passaggi di un filo si nascondono sotto quelli che vengono dopo.</p>
+        <div class="rg-field" id="baseBox" hidden>
+          <span class="rg-field__label" id="baseLabel">Punto della base</span>
+          <div class="rg-segmented" id="baseStitchSel" role="group" aria-label="Punto della base">
+            <button type="button" class="rg-segmented__item" data-bstitch="v">V</button>
+            <button type="button" class="rg-segmented__item" data-bstitch="lambda">Λ</button>
+            <button type="button" class="rg-segmented__item" data-bstitch="cross">Croce</button>
+            <button type="button" class="rg-segmented__item" data-bstitch="down">«\\»</button>
+            <button type="button" class="rg-segmented__item" data-bstitch="up">«/»</button>
+          </div>
+        </div>
+        <p class="rg-field__help">Clic su un filo per disegnare con quello. L’ordine è l’ordine degli aghi: i passaggi di un filo si nascondono sotto quelli che vengono dopo. «Base» fa di un filo il fondo: riempie tutta la griglia col suo punto, si cuce per primo, e il disegno si ricama sopra.</p>
       </section>
 
       <details class="rg-param-section rg-disclosure" open>
@@ -140,8 +150,6 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             </div>
             <small class="rg-field__help">Nella croce si cuce prima una gamba e poi l’altra, sempre nello stesso ordine: questa è quella che resta sopra.</small>
           </div>
-          <label class="rg-field"><span class="rg-field__label">Passate per diagonale</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="reps" type="number" min="1" max="8" step="1"><span>n</span></span></label>
           <label class="rg-field"><span class="rg-field__label">Salta oltre</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="jumpMm" type="number" min="0" step="1"><span>mm</span></span></label>
           <div class="rg-field rg-param-grid__wide">
@@ -297,7 +305,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
    * era un capello (0,13 della cella): su 450 mm di giornale le lettere sembravano perse anche
    * dove c'erano, perché il filo non copriva niente.
    */
-  const threadWidth = () => Math.min(st.grid.cellW / 2, st.grid.cellH) * Math.min(0.9, 0.5 * (1 + 0.15 * (st.route.repetitions - 1)));
+  const threadWidth = (color = 0) => Math.min(st.grid.cellW / 2, st.grid.cellH) * Math.min(0.9, 0.5 * (1 + 0.15 * (passesOf(color) - 1)));
+  /** Le passate di un filo: le sue, o quelle generali dei progetti di prima. */
+  const passesOf = (color: number) => Math.max(1, Math.round(st.threads[color]?.passes ?? st.route.repetitions ?? 1));
+  /** I parametri del routing con le passate di ogni filo. */
+  const routeParams = (): RouteParams => ({ ...st.route, passesByColor: Object.fromEntries(st.threads.map((_, i) => [i, passesOf(i)])) });
 
   function svgMarkup(): string {
     const g = st.grid;
@@ -317,9 +329,20 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const gridMarkup = `<g opacity="${showGrid ? 0.55 : 1}" pointer-events="none"><rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="url(#cs-cell)"/><rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="url(#cs-major)" style="stroke:var(--rg-color-neutral-800)" stroke-width="1" vector-effect="non-scaling-stroke"/></g>`;
     if (!showGrid) parts.push(gridMarkup);
     // i punti, colore per colore nell'ordine degli aghi; nella croce la gamba sopra per seconda
-    const sw = f(threadWidth());
     const byColor = new Map<number, string[]>();
+    const base = st.route.base ?? null;
+    if (base) {
+      const list: string[] = [];
+      for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) {
+        for (const { a, b } of stitchLegs(g, r, c, base.stitch, st.route.topLeg)) {
+          const pa = pointInRow(g, a, r), pb = pointInRow(g, b, r);
+          list.push(`M${f(pa.x)} ${f(pa.y)}L${f(pb.x)} ${f(pb.y)}`);
+        }
+      }
+      parts.push(`<path d="${list.join('')}" stroke="${st.threads[base.color]?.hex ?? '#ffffff'}" stroke-width="${f(threadWidth(base.color))}" stroke-linecap="round" fill="none"/>`);
+    }
     for (const [k, mark] of st.cells) {
+      if (base && mark.color === base.color) continue; // già coperta dalla base
       const r = Math.floor(k / g.cols), c = k - r * g.cols;
       const list = byColor.get(mark.color) ?? [];
       for (const { a, b } of stitchLegs(g, r, c, mark.stitch, st.route.topLeg)) {
@@ -330,7 +353,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     }
     [...byColor.keys()].sort((x, y) => x - y).forEach((ci) => {
       const hex = st.threads[ci]?.hex ?? '#000000';
-      parts.push(`<path d="${byColor.get(ci)!.join('')}" stroke="${hex}" stroke-width="${sw}" stroke-linecap="round" fill="none"/>`);
+      parts.push(`<path d="${byColor.get(ci)!.join('')}" stroke="${hex}" stroke-width="${f(threadWidth(ci))}" stroke-linecap="round" fill="none"/>`);
     });
     if (showGrid) parts.push(gridMarkup);
     // i passaggi
@@ -360,7 +383,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   function recompute(): void {
     try {
-      result = routeCells(st.grid, st.cells, st.route);
+      result = routeCells(st.grid, st.cells, routeParams());
     } catch (e) {
       result = null;
       $('status').textContent = 'Errore nei passaggi: ' + (e as Error).message;
@@ -392,7 +415,6 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     num('cellW').value = String(st.grid.cellW);
     num('cellH').value = String(st.grid.cellH);
     num('overlap').value = String(st.grid.overlapPct ?? 0);
-    num('reps').value = String(st.route.repetitions);
     num('jumpMm').value = String(st.route.jumpMm);
     num('maxStitch').value = String(st.stitch.maxStitchMm);
     num('travelStitch').value = String(st.stitch.travelStitchMm);
@@ -446,7 +468,6 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   for (const id of ['sizeW', 'sizeH', 'cellW', 'cellH', 'overlap']) num(id).addEventListener('change', onSizeChange);
   $<HTMLInputElement>('keepRatio').addEventListener('change', () => { if ($<HTMLInputElement>('keepRatio').checked) onSizeChange(); });
 
-  num('reps').addEventListener('change', () => { st.route.repetitions = clampInt(Number(num('reps').value) || 1, 1, 8); syncFields(); update(); });
   num('jumpMm').addEventListener('change', () => { st.route.jumpMm = Math.max(0, Number(num('jumpMm').value) || 0); syncFields(); update(); });
   num('maxStitch').addEventListener('change', () => { st.stitch.maxStitchMm = Math.min(12, Math.max(1, Number(num('maxStitch').value) || DEFAULT_STITCH.maxStitchMm)); syncFields(); });
   num('travelStitch').addEventListener('change', () => { st.stitch.travelStitchMm = Math.min(12, Math.max(0.5, Number(num('travelStitch').value) || DEFAULT_STITCH.travelStitchMm)); syncFields(); });
@@ -500,11 +521,41 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       code.append(document.createTextNode(t.hex.toUpperCase() + ' '));
       const meta = document.createElement('span');
       meta.className = 'rg-color-map__meta';
-      meta.textContent = `ago ${i + 1} · ${used.get(i) ?? 0} celle`;
+      const isBase = st.route.base?.color === i;
+      meta.textContent = isBase ? 'base · tutta la griglia · primo ago' : `ago ${i + 1} · ${used.get(i) ?? 0} celle`;
       code.appendChild(meta);
 
       const aside = document.createElement('span');
       aside.className = 'rg-color-map__aside rg-cluster';
+      const baseBtn = document.createElement('button');
+      baseBtn.type = 'button';
+      baseBtn.className = 'rg-button rg-button--small ' + (isBase ? 'rg-button--primary' : 'rg-button--ghost');
+      baseBtn.textContent = 'Base';
+      baseBtn.title = isBase ? 'Togli la base' : 'Fai di questo filo la base: riempie tutta la griglia, sotto al disegno';
+      baseBtn.setAttribute('aria-pressed', isBase ? 'true' : 'false');
+      baseBtn.addEventListener('click', (e) => { e.stopPropagation(); toggleBase(i); });
+      aside.appendChild(baseBtn);
+      const pass = document.createElement('label');
+      pass.className = 'cs-passes';
+      pass.title = 'Passate su ogni diagonale di questo filo';
+      const passIn = document.createElement('input');
+      passIn.type = 'number';
+      passIn.min = '1';
+      passIn.max = '9';
+      passIn.step = '1';
+      passIn.className = 'rg-input rg-input--numeric';
+      passIn.value = String(passesOf(i));
+      passIn.setAttribute('aria-label', `Passate del filo ${i + 1}`);
+      passIn.addEventListener('click', (e) => e.stopPropagation());
+      passIn.addEventListener('change', () => {
+        t.passes = clampInt(Number(passIn.value) || 1, 1, 9);
+        passIn.value = String(t.passes);
+        update();
+      });
+      const x = document.createElement('span');
+      x.textContent = 'passate';
+      pass.append(passIn, x);
+      aside.appendChild(pass);
       if (i > 0) {
         const up = document.createElement('button');
         up.type = 'button';
@@ -529,7 +580,32 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       host.appendChild(li);
     });
     buildEditThreads();
+    syncBase();
   }
+
+  /** La base: un filo alla volta; ricliccando si toglie. Il punto parte da quello della generazione. */
+  function toggleBase(i: number): void {
+    st.route.base = st.route.base?.color === i ? null : { color: i, stitch: st.route.base?.stitch ?? knit.stitch };
+    buildThreads();
+    update();
+  }
+  function syncBase(): void {
+    const base = st.route.base ?? null;
+    $('baseBox').hidden = !base;
+    if (!base) return;
+    $('baseLabel').textContent = `Punto della base (filo ${base.color + 1})`;
+    root.querySelectorAll<HTMLButtonElement>('#baseStitchSel .rg-segmented__item').forEach((b) => {
+      const on = b.dataset.bstitch === base.stitch;
+      b.classList.toggle('rg-segmented__item--active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
+  }
+  root.querySelectorAll<HTMLButtonElement>('#baseStitchSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => {
+    if (!st.route.base) return;
+    st.route.base = { ...st.route.base, stitch: b.dataset.bstitch as Stitch };
+    syncBase();
+    update();
+  }));
 
   /** I fili nella barra di modifica: un clic sceglie quello del pennello. */
   function buildEditThreads(): void {
@@ -553,6 +629,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     [st.threads[a], st.threads[b]] = [st.threads[b], st.threads[a]];
     for (const m of st.cells.values()) m.color = m.color === a ? b : m.color === b ? a : m.color;
     if (activeThread === a) activeThread = b; else if (activeThread === b) activeThread = a;
+    const bc = st.route.base?.color;
+    if (st.route.base && (bc === a || bc === b)) st.route.base = { ...st.route.base, color: bc === a ? b : a };
     buildThreads();
     update();
   }
@@ -565,13 +643,17 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       else if (m.color > i) m.color--;
     }
     activeThread = Math.min(activeThread, st.threads.length - 1);
+    if (st.route.base) {
+      if (st.route.base.color === i) st.route.base = null;
+      else if (st.route.base.color > i) st.route.base = { ...st.route.base, color: st.route.base.color - 1 };
+    }
     buildThreads();
     update();
   }
 
   $('addThread').addEventListener('click', () => {
     const palette = ['#2b6cb0', '#2f855a', '#b7791f', '#6b46c1', '#c05621', '#1a1a1a'];
-    st.threads.push({ hex: palette[(st.threads.length - 2 + palette.length) % palette.length] });
+    st.threads.push({ hex: palette[(st.threads.length - 2 + palette.length) % palette.length], passes: passesOf(activeThread) });
     activeThread = st.threads.length - 1;
     buildThreads();
   });
@@ -958,7 +1040,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const order = pal.map((_, k) => k).sort((a, b) => shares[a] - shares[b]);
     const sorted = order.map((k) => pal[k]);
     pushUndo();
-    st.threads = sorted.map((c) => ({ hex: rgbToHex(c) }));
+    // i colori nuovi, le passate di prima (per posizione)
+    st.threads = sorted.map((c, i) => ({ hex: rgbToHex(c), passes: passesOf(i) }));
     st.cells = knitFromImage(st.grid, image.px, sorted, knitOpts());
     fromImage = true;
     buildThreads();
@@ -985,13 +1068,17 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (meta.rgProject !== 'cross-stitch') return false;
     const g = meta.grid as Partial<GridSpec> | undefined;
     if (g && g.cols && g.rows && g.cellW && g.cellH) st.grid = { cols: clampInt(g.cols, 1, 1000), rows: clampInt(g.rows, 1, 1000), cellW: g.cellW, cellH: g.cellH, overlapPct: Math.min(90, Math.max(0, Number(g.overlapPct) || 0)) };
-    if (Array.isArray(meta.threads) && meta.threads.length) st.threads = (meta.threads as Thread[]).map((t) => ({ hex: asHex6(String(t.hex)) }));
+    const repsOld = Math.max(1, Math.round(Number((meta.route as { repetitions?: number } | undefined)?.repetitions) || 1));
+    // le passate per filo; nei progetti di prima c'era un valore solo per tutti
+    if (Array.isArray(meta.threads) && meta.threads.length) st.threads = (meta.threads as Thread[]).map((t) => ({ hex: asHex6(String(t.hex)), passes: Math.max(1, Math.round(Number(t.passes) || repsOld)) }));
     if (meta.route && typeof meta.route === 'object') st.route = { ...DEFAULT_ROUTE, ...(meta.route as Partial<RouteParams>) };
     // Le versioni prima saltavano oltre 12 (0.1.0) o 30 (0.2.0): erano i default di allora, non
     // scelte. Da 0.3.0 niente salti (Lorenzo: si vedono, passano sopra gli altri colori).
     const old = { '0.1.0': 12, '0.2.0': 30 } as Record<string, number>;
     if (typeof meta.version === 'string' && old[meta.version] === st.route.jumpMm) st.route.jumpMm = DEFAULT_ROUTE.jumpMm;
     if (meta.stitch && typeof meta.stitch === 'object') st.stitch = { ...DEFAULT_STITCH, ...(meta.stitch as Partial<StitchParams>) };
+    // una base che punta a un filo che non c'è (file ritoccato a mano, fili tolti): niente base
+    if (st.route.base && !(Number.isInteger(st.route.base.color) && st.route.base.color >= 0 && st.route.base.color < st.threads.length)) st.route.base = null;
     if (meta.knit && typeof meta.knit === 'object') {
       const mk = meta.knit as Record<string, unknown>;
       Object.assign(knit, DEFAULT_KNIT, { detailPct: mk.detailPct ?? DEFAULT_KNIT.detailPct, stitch: mk.stitch ?? DEFAULT_KNIT.stitch });
@@ -1060,13 +1147,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   // ---- esportazione -----------------------------------------------------------
   function exportLayers(): ExportLayer[] {
-    const res = routeCells(st.grid, st.cells, st.route);
-    const sw = threadWidth();
+    const res = routeCells(st.grid, st.cells, routeParams());
     return res.colors.map((cr) => ({
       id: `filo-${cr.color + 1}`,
       color: st.threads[cr.color]?.hex ?? '#000000',
       polylines: colorPolylines(st.grid, cr, st.stitch),
-      strokeMm: sw,
+      strokeMm: threadWidth(cr.color),
     }));
   }
 

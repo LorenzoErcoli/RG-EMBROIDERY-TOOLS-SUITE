@@ -4832,6 +4832,24 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   const mX = rg.csRouteCells(gX, fill(gX, macchie), rg.CS_DEFAULT_ROUTE).metrics;
   check('a macchie 40×20: nessun salto, al massimo tre passaggi in più sulla stessa gamba', [mX.jumps, mX.maxExtra <= 3], [0, true]);
 
+  // LA BASE (Lorenzo, 2026-09-25: «selezionare un colore e dirgli di diventare base completa»):
+  // un filo riempie TUTTA la griglia col suo punto, cucito per primo; il disegno sopra.
+  const gB = { rows: 4, cols: 5, cellW: 3, cellH: 3.8, overlapPct: 30 };
+  const disegno = fill(gB, (r, c) => (r === 1 && c > 0 && c < 4 ? { stitch: 'v', color: 0 } : r === 2 && c === 2 ? { stitch: 'v', color: 1 } : null));
+  const conBase = run(gB, disegno, { base: { color: 1, stitch: 'v' } });
+  check('base V: tutta la griglia (20 V) più il disegno sopra (3 V nere); la cella bianca non si cuce due volte', [conBase.metrics.legs, conBase.colors.map((c) => c.color)], [(20 + 3) * 2, [1, 0]]);
+  check('base: si cuce per prima anche se nella tavolozza viene dopo, e senza salti', [conBase.colors[0].color, conBase.metrics.jumps], [1, 0]);
+  const baseCroce = run(gB, disegno, { base: { color: 1, stitch: 'cross' } });
+  check('base a croce e disegno a V sopra: ogni gamba cucita una volta', (() => { const n = new Map(); for (const cr of baseCroce.colors) for (const sg of cr.segs) if (sg.kind === 'stitch') { const k = cr.color + ':' + Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to); n.set(k, (n.get(k) ?? 0) + 1); } return [n.size, [...n.values()].every((x) => x === 1)]; })(), [20 * 2 + 3 * 2, true]);
+  // il disegno sopra la base si sposta ripassando se stesso o in verticale: mai orizzontale
+  const nero = conBase.colors[1].segs;
+  check('il disegno sopra la base: nessun passaggio orizzontale', nero.filter((sg) => sg.kind !== 'stitch' && sg.kind !== 'jump' && Math.floor(sg.from / LW(gB)) === Math.floor(sg.to / LW(gB))).length, 0);
+
+  // PASSATE PER FILO (Lorenzo: «un colore voglio 3 passaggi e quello sopra 5»).
+  const perFilo = run(gB, disegno, { base: { color: 1, stitch: 'v' }, passesByColor: { 1: 3, 0: 5 } });
+  const quante = (cr) => { const n = new Map(); for (const sg of cr.segs) if (sg.kind === 'stitch') { const k = Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to); n.set(k, (n.get(k) ?? 0) + 1); } return [...new Set(n.values())]; };
+  check('base a 3 passate, nero sopra a 5: ogni gamba del suo filo', perFilo.colors.map(quante), [[3], [5]]);
+
   // LA MODIFICA A MANO (Lorenzo: «pulire l'interno della scritta… o cancellare qualcosa»).
   // Una lettera: un anello nero di V con dentro il bianco e un tratto nero staccato.
   const gE2 = { rows: 7, cols: 7, cellW: 3, cellH: 3.8 };

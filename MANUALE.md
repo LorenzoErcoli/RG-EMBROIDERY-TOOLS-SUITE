@@ -517,6 +517,12 @@ Mentre trascini il pennello si ridisegnano solo i punti; i passaggi si ricalcola
 (↑ per anticipare un filo): i passaggi di un filo si nascondono sotto le diagonali dei fili che
 vengono dopo.
 
+**La base.** Nella lista dei fili, **Base** fa di un filo il fondo: riempie **tutta la griglia** col
+punto che scegli sotto la lista (V, Λ, croce, «\», «/»), si cuce **per primo** con il suo ago, e il
+disegno degli altri fili si ricama sopra, ognuno col suo punto. Le celle del disegno che hanno già
+il colore della base non si cuciono due volte. Per esempio: base tutta bianca a V, e sopra il nero,
+a V o con un punto diverso. Ricliccando *Base* si toglie.
+
 **Maglia dall'immagine.** Si parte da qui. In *01 Immagine* carichi la foto: la maglia si crea
 subito, ogni V col filo più vicino al colore dell'immagine sotto di lei (i colori dei fili si
 ricavano dall'immagine, tanti quanti sono i fili, il più chiaro per primo). Poi in *02 Misure del
@@ -558,7 +564,8 @@ lo evita. **Niente salti**: a macchina un salto lascia un filo che attraversa gl
 salta solo oltre *Salta oltre* (400 mm di partenza). In una zona chiusa (il bianco dentro una
 lettera nera) il filo che va sopra deve attraversare il contorno una volta, e lo fa nel punto più
 corto.
-Con più *Passate per diagonale* si sceglie **come** farle. *Tutte sulla stessa V* (la partenza): avanti,
+**Le passate sono per filo**: nella riga di ogni filo c'è il suo numero (per esempio la base a 3 e
+il colore sopra a 5). Con più passate si sceglie **come** farle. *Tutte sulla stessa V* (la partenza): avanti,
 indietro, avanti sugli stessi fori e poi la V dopo, come il punto triplo delle macchine. Con passate
 **dispari** ogni V finisce nell'angolo dove comincia la successiva, e la riga si cuce di filato. *Lungo
 la riga*: ogni passata è un pezzo a sé, la riga si fa all'andata e si ripassa al ritorno; conviene

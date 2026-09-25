@@ -55,3 +55,7 @@ body {
 .cs-workspace .rg-workspace__stage { grid-template-rows: auto auto minmax(0, 1fr) auto; }
 .cs-workspace .cs-editbar { margin: 0; }
 
+
+/* Le passate nella riga del filo: un campo piccolo. */
+.cs-passes { display: inline-flex; align-items: center; gap: var(--rg-space-1); font-size: var(--rg-font-size-sm); color: var(--rg-color-text-secondary); }
+.cs-passes .rg-input { width: 4.5ch; min-height: 28px; padding: 2px 4px; }

@@ -52,6 +52,8 @@ export type Cells = Map<number, CellMark>;
 /** Un filo della tavolozza. L'ordine della tavolozza è l'ordine degli aghi. */
 export interface Thread {
   hex: string;
+  /** Passate su ogni diagonale di questo filo (Lorenzo: «un colore 3 passaggi, quello sopra 5»). */
+  passes?: number;
 }
 
 export const DEFAULT_GRID: GridSpec = { cols: 24, rows: 16, cellW: 5, cellH: 5 };
