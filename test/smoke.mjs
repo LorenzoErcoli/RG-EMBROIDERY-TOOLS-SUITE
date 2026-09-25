@@ -43,6 +43,7 @@ export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 export { routeCells as csRouteCells, colorPolylines as csColorPolylines, DEFAULT_ROUTE as CS_DEFAULT_ROUTE } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
 export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight, knitFromImage as csKnitFromImage, refinePalette as csRefinePalette, brushEdits as csBrushEdits, fillEdits as csFillEdits, applyEdits as csApplyEdits, fromTwoColumnV as csFromTwoColumnV } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
+export { zonesOf as csZonesOf } from ${JSON.stringify(posix('apps/cross-stitch/src/zones.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
 export { reticoloDaZone, contornoDaZone, zoneDaModello, lineeDaModello } from ${JSON.stringify(posix('apps/cannage-rafia/src/reticolo.ts'))};
@@ -4859,6 +4860,18 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   for (const [k, m] of cBl) { if (blk.has(k)) continue; const st = [k]; blk.set(k, nBl); while (st.length) { const x = st.pop(); const r = Math.floor(x / 20), c = x % 20; for (const [r2, c2] of [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]]) { if (r2 < 0 || c2 < 0 || r2 >= 30 || c2 >= 20) continue; const y = r2 * 20 + c2; if (!blk.has(y) && cBl.get(y).color === m.color) { blk.set(y, nBl); st.push(y); } } } nBl++; }
   const rientri = (res) => { let tot = 0; const W2 = LW(gBl); for (const cr of res.colors) { let cur = -1; const visti = new Set(); for (const sg of cr.segs) { if (sg.kind !== 'stitch') continue; const i = Math.min(Math.floor(sg.from / W2), Math.floor(sg.to / W2)), j = Math.min(sg.from % W2, sg.to % W2); const b = blk.get(i * 20 + Math.floor(j / 2)); if (b !== cur) { if (visti.has(b)) tot++; if (cur >= 0) visti.add(cur); cur = b; } } } return tot; };
   check('a blocchi: nessun rientro in una zona lasciata a metà (senza blocchi ce ne sono)', [rientri(run(gBl, cBl)), rientri(run(gBl, cBl, { blocks: false })) > 0], [0, true]);
+
+  // LE ZONE (Lorenzo, 2026-09-25: «concludere tutto il blocco… e poi passare al successivo»). Due
+  // colonne di testo, righe di parole staccate, con 6 mm di vuoto in mezzo: ogni parola è un blocco
+  // a sé, ma le colonne sono due zone, e il filo finisce la prima prima di passare all'altra (senza
+  // zone passa di là e torna). Sul giornale Dior: 148 rientri nelle zone → 0, ripassi 25,6 → 25,1 m.
+  const gZ = { rows: 30, cols: 14, cellW: 3, cellH: 3.8, overlapPct: 30 };
+  const cZ = fill(gZ, (r, c) => { const cc = c < 6 ? c : c - 8; return c !== 6 && c !== 7 && r % 2 === 0 && cc % 3 !== 2 ? { stitch: 'v', color: 0 } : null; });
+  const zZ = rg.csZonesOf(gZ, cZ, 0);
+  check('zone: le due colonne di testo sono due zone (il vuoto fra le parole è sotto i 5 mm)', [new Set(zZ.values()).size, zZ.get(0) !== zZ.get(8)], [2, true]);
+  const cambiZona = (res) => { let n = 0, cur; const W2 = LW(gZ); for (const sg of res.colors[0].segs) { if (sg.kind !== 'stitch') continue; const i = Math.min(Math.floor(sg.from / W2), Math.floor(sg.to / W2)), j = Math.min(sg.from % W2, sg.to % W2); const z = zZ.get(i * 14 + Math.floor(j / 2)); if (z !== cur) { n++; cur = z; } } return n; };
+  check('zone: il filo entra una volta in ogni colonna (senza zone ci torna)', [cambiZona(run(gZ, cZ)), cambiZona(run(gZ, cZ, { zones: null })) > 2], [2, true]);
+  check('zone: e la misura massima taglia una zona troppo grande', new Set(rg.csZonesOf(gZ, cZ, 0, { maxMm: 30 }).values()).size > 2, true);
 
   // LA MODIFICA A MANO (Lorenzo: «pulire l'interno della scritta… o cancellare qualcosa»).
   // Una lettera: un anello nero di V con dentro il bianco e un tratto nero staccato.

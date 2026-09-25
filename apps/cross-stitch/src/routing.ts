@@ -37,6 +37,7 @@
 
 import type { Cells, GridSpec, Leg, Stitch } from './model';
 import { latticeWidth, segmentPoints, stitchLegs, vertexCount, vertexIndex } from './model';
+import { zonesOf, type ZoneOptions } from './zones';
 
 export interface TravelCosts {
   /** Sotto una diagonale che verrà cucita dopo. */
@@ -119,6 +120,12 @@ export interface RouteParams {
    * filo faceva 2,5 volte il ripasso minimo: entrava nei tratti a metà e ci tornava.
    */
   runs?: boolean;
+  /**
+   * Le ZONE (zones.ts): il disegno di ogni colore tagliato lungo le strisce vuote, come
+   * l'impaginazione di un giornale. Il filo finisce la zona prima di passare alla più vicina; dentro
+   * la zona, i pezzi che si toccano e i tratti di riga come sopra. null = niente zone.
+   */
+  zones?: Partial<ZoneOptions> | null;
 }
 
 // Salti quasi mai: a macchina un salto lascia un filo che attraversa gli altri colori (Lorenzo).
@@ -160,6 +167,8 @@ interface LegState {
   prereq: number;
   /** Il blocco di colore a cui appartiene (-1 = la base). */
   block: number;
+  /** La zona a cui appartiene (-1 = la base). */
+  zone: number;
   /** Il tratto di riga a cui appartiene. */
   run: number;
 }
@@ -259,6 +268,18 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     if (base && m.color === base.color) continue;
     entries.push([k, m]);
   }
+  // le zone di ogni colore del disegno (un numero unico per tutta la griglia)
+  const zoneOfCell = new Map<number, number>();
+  if (params.blocks !== false && params.zones !== null) {
+    let offset = 0;
+    const colorsInDesign = [...new Set([...cells.values()].map((m) => m.color))].filter((c) => !(base && c === base.color));
+    for (const col of colorsInDesign) {
+      const z = zonesOf(g, cells, col, params.zones ?? {});
+      let top = -1;
+      for (const [k, v] of z) { zoneOfCell.set(k, offset + v); if (v > top) top = v; }
+      offset += top + 1;
+    }
+  }
   const blockOfCell = new Map<number, number>();
   {
     let nb = 0;
@@ -272,7 +293,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
         for (const [r2, c2] of [[rr - 1, cc], [rr + 1, cc], [rr, cc - 1], [rr, cc + 1]]) {
           if (r2 < 0 || c2 < 0 || r2 >= g.rows || c2 >= g.cols) continue;
           const y = r2 * g.cols + c2;
-          if (blockOfCell.has(y) || cells.get(y)?.color !== m0.color) continue;
+          if (blockOfCell.has(y) || cells.get(y)?.color !== m0.color || zoneOfCell.get(y) !== zoneOfCell.get(k0)) continue;
           blockOfCell.set(y, nb);
           stack.push(y);
         }
@@ -295,7 +316,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       const m0 = cells.get(row * g.cols + c);
       if (!m0 || (base && m0.color === base.color)) { c++; continue; }
       let c1 = c;
-      while (c1 + 1 < g.cols) { const n = cells.get(row * g.cols + c1 + 1); if (!n || n.color !== m0.color) break; c1++; }
+      while (c1 + 1 < g.cols) { const n = cells.get(row * g.cols + c1 + 1); if (!n || n.color !== m0.color || zoneOfCell.get(row * g.cols + c1 + 1) !== zoneOfCell.get(row * g.cols + c)) break; c1++; }
       const id = addRun(row, c, c1);
       for (let x = c; x <= c1; x++) runOfCell.set(row * g.cols + x, id);
       c = c1 + 1;
@@ -308,6 +329,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     entryIndex++;
     const block = entryIndex < nBase ? -1 : (blockOfCell.get(k) ?? -2);
     const run = entryIndex < nBase ? baseRun[Math.floor(k / g.cols)] : (runOfCell.get(k) ?? -2);
+    const zone = entryIndex < nBase ? -1 : (zoneOfCell.get(k) ?? -2);
     const reps = repsOf(m.color);
     const r = Math.floor(k / g.cols), c = k - r * g.cols;
     const mine: number[] = [];
@@ -316,7 +338,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     for (const { a, b } of stitchLegs(g, r, c, m.stitch, params.topLeg)) {
       const id = legs.length;
       // nella croce la gamba sopra aspetta quella sotto; nella V le due gambe sono libere
-      legs.push({ color: m.color, a, b, remaining: reps, extra: 0, prereq: isCross ? prev : -1, block, run });
+      legs.push({ color: m.color, a, b, remaining: reps, extra: 0, prereq: isCross ? prev : -1, block, zone, run });
       const ek = edgeKey(a, b);
       const onEdge = legAt.get(ek);
       if (onEdge) onEdge.push(id); else legAt.set(ek, [id]);
@@ -480,7 +502,16 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     for (const id of mine) { const b = legs[units[id].leg].block; blockLeft.set(b, (blockLeft.get(b) ?? 0) + 1); }
     let current = -3; // nessun blocco ancora
     /** Si può prendere: se il blocco corrente non è finito, solo le sue unità. */
-    const inBlock = (id: number) => !byBlocks || (blockLeft.get(current) ?? 0) === 0 || legs[units[id].leg].block === current;
+    const zoneLeft = new Map<number, number>();
+    for (const id of mine) { const z = legs[units[id].leg].zone; zoneLeft.set(z, (zoneLeft.get(z) ?? 0) + 1); }
+    let currentZone = -3;
+    /** Nella zona corrente finché non è finita; dentro la zona, nel blocco corrente finché non è finito. */
+    const inBlock = (id: number) => {
+      if (!byBlocks) return true;
+      const leg = legs[units[id].leg];
+      if ((zoneLeft.get(currentZone) ?? 0) > 0 && leg.zone !== currentZone) return false;
+      return (blockLeft.get(current) ?? 0) === 0 || leg.block === current;
+    };
     const byRuns = byBlocks && params.runs !== false;
     const runLeft = new Map<number, number>();
     for (const id of mine) { const rn = legs[units[id].leg].run; runLeft.set(rn, (runLeft.get(rn) ?? 0) + 1); }
@@ -526,6 +557,8 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       }
       u.done = true;
       current = legs[u.leg].block;
+      currentZone = legs[u.leg].zone;
+      zoneLeft.set(currentZone, (zoneLeft.get(currentZone) ?? 1) - 1);
       blockLeft.set(current, (blockLeft.get(current) ?? 1) - 1);
       currentRun = legs[u.leg].run;
       runLeft.set(currentRun, (runLeft.get(currentRun) ?? 1) - 1);

@@ -566,11 +566,15 @@ lo evita. **Niente salti**: a macchina un salto lascia un filo che attraversa gl
 salta solo oltre *Salta oltre* (400 mm di partenza). In una zona chiusa (il bianco dentro una
 lettera nera) il filo che va sopra deve attraversare il contorno una volta, e lo fa nel punto più
 corto.
-**Per blocchi di colore** (in *04 Passaggi*, acceso di partenza): un blocco è una zona di celle
-dello stesso colore che si toccano. Il filo finisce la zona in cui si trova prima di passare alla
-successiva, invece di andare sempre sulla cosa più vicina e tornare dopo nelle zone lasciate a metà.
-Dentro la zona lavora per **tratti di riga** (celle consecutive dello stesso colore): finisce il
-tratto in cui si trova ed entra in uno nuovo da un'estremità, così lo percorre tutto in una volta.
+**Per blocchi di colore** (in *04 Passaggi*, acceso di partenza): il filo lavora su tre livelli,
+e ognuno lo finisce prima di passare al successivo.
+1. **Zone.** Il disegno di ogni colore si taglia lungo le **strisce vuote** larghe almeno 5 mm,
+   come si legge l'impaginazione di un giornale: una colonna di testo, un titolo, la montagna. Una
+   zona più grande di 100 mm senza strisce vuote si taglia sulla linea meno piena. Il filo finisce
+   la zona e passa alla più vicina: una colonna non si cuce un po' all'inizio e un po' alla fine.
+2. **Pezzi che si toccano**, dentro la zona (una parola, una lettera).
+3. **Tratti di riga** (celle consecutive dello stesso colore), dentro il pezzo: finisce il tratto
+   in cui si trova ed entra in uno nuovo da un'estremità, così lo percorre tutto in una volta.
 
 **Stop accesi e spenti.** Nella riga di ogni filo, **Vedi** accende o spegne quello stop
 nell'anteprima (punti e passaggi), per guardare un colore alla volta. Il ricamo e l'export non cambiano.
