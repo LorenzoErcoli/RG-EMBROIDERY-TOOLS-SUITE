@@ -171,6 +171,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="jumpMm" type="text" inputmode="numeric" aria-describedby="h-jump"><span>mm</span></span>
             <span class="rg-field__help" id="h-jump">Oltre, salto con taglio</span></label>
           <label class="rg-toggle rg-param-grid__wide">
+            <input type="checkbox" id="byBlocks" checked aria-describedby="h-blocks"><span class="rg-toggle__track"></span><span>Per blocchi di colore</span>
+          </label>
+          <span class="rg-field__help rg-param-grid__wide" id="h-blocks">Finisce ogni zona di un colore prima di passare alla successiva</span>
+          <label class="rg-toggle rg-param-grid__wide">
             <input type="checkbox" id="fixedDir"><span class="rg-toggle__track"></span><span>Direzione fissa («\\» dall’alto, «/» dal basso)</span>
           </label>
         </div>
@@ -434,6 +438,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     num('maxStitch').value = fmtNum(st.stitch.maxStitchMm);
     num('travelStitch').value = fmtNum(st.stitch.travelStitchMm);
     $<HTMLInputElement>('fixedDir').checked = st.route.fixedDirection;
+    $<HTMLInputElement>('byBlocks').checked = st.route.blocks !== false;
     syncSegmented();
   }
 
@@ -486,6 +491,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   num('jumpMm').addEventListener('change', () => { st.route.jumpMm = Math.max(0, readNum('jumpMm') || 0); syncFields(); update(); });
   num('maxStitch').addEventListener('change', () => { st.stitch.maxStitchMm = Math.min(12, Math.max(1, readNum('maxStitch') || DEFAULT_STITCH.maxStitchMm)); syncFields(); });
   num('travelStitch').addEventListener('change', () => { st.stitch.travelStitchMm = Math.min(12, Math.max(0.5, readNum('travelStitch') || DEFAULT_STITCH.travelStitchMm)); syncFields(); });
+  $<HTMLInputElement>('byBlocks').addEventListener('change', (e) => { st.route.blocks = (e.target as HTMLInputElement).checked; update(); });
   $<HTMLInputElement>('fixedDir').addEventListener('change', (e) => { st.route.fixedDirection = (e.target as HTMLInputElement).checked; update(); });
   $<HTMLInputElement>('showPaths').addEventListener('change', (e) => { showPaths = (e.target as HTMLInputElement).checked; draw(); });
   $<HTMLInputElement>('showGrid').addEventListener('change', (e) => { showGrid = (e.target as HTMLInputElement).checked; draw(); });

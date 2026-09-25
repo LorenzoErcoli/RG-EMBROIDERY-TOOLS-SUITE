@@ -104,6 +104,14 @@ export interface RouteParams {
    * hanno già il colore della base non si cuciono una seconda volta.
    */
   base?: { color: number; stitch: Stitch } | null;
+  /**
+   * Per BLOCCHI di colore (default vero; Lorenzo, 2026-09-25: «lavorare per blocchi colore»): un
+   * blocco è un gruppo di celle dello stesso colore che si toccano (sopra, sotto, di lato); la base
+   * è un blocco solo. Il filo finisce il blocco in cui si trova prima di passare a un altro, invece
+   * di andare sempre sulla cosa più vicina: sul giornale Dior il nero (139 blocchi) cambiava blocco
+   * 471 volte e rientrava 332 volte in blocchi lasciati a metà.
+   */
+  blocks?: boolean;
 }
 
 // Salti quasi mai: a macchina un salto lascia un filo che attraversa gli altri colori (Lorenzo).
@@ -143,6 +151,8 @@ interface LegState {
   extra: number;
   /** La gamba che va finita prima (la gamba sotto della croce), o -1. */
   prereq: number;
+  /** Il blocco di colore a cui appartiene (-1 = la base). */
+  block: number;
 }
 
 /**
@@ -240,7 +250,32 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     if (base && m.color === base.color) continue;
     entries.push([k, m]);
   }
+  const blockOfCell = new Map<number, number>();
+  {
+    let nb = 0;
+    for (const [k0, m0] of cells) {
+      if (blockOfCell.has(k0) || (base && m0.color === base.color)) continue;
+      const stack = [k0];
+      blockOfCell.set(k0, nb);
+      while (stack.length) {
+        const x = stack.pop()!;
+        const rr = Math.floor(x / g.cols), cc = x - rr * g.cols;
+        for (const [r2, c2] of [[rr - 1, cc], [rr + 1, cc], [rr, cc - 1], [rr, cc + 1]]) {
+          if (r2 < 0 || c2 < 0 || r2 >= g.rows || c2 >= g.cols) continue;
+          const y = r2 * g.cols + c2;
+          if (blockOfCell.has(y) || cells.get(y)?.color !== m0.color) continue;
+          blockOfCell.set(y, nb);
+          stack.push(y);
+        }
+      }
+      nb++;
+    }
+  }
+  const nBase = base ? g.rows * g.cols : 0; // le prime nBase voci sono la base
+  let entryIndex = -1;
   for (const [k, m] of entries) {
+    entryIndex++;
+    const block = entryIndex < nBase ? -1 : (blockOfCell.get(k) ?? -2);
     const reps = repsOf(m.color);
     const r = Math.floor(k / g.cols), c = k - r * g.cols;
     const mine: number[] = [];
@@ -249,7 +284,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     for (const { a, b } of stitchLegs(g, r, c, m.stitch, params.topLeg)) {
       const id = legs.length;
       // nella croce la gamba sopra aspetta quella sotto; nella V le due gambe sono libere
-      legs.push({ color: m.color, a, b, remaining: reps, extra: 0, prereq: isCross ? prev : -1 });
+      legs.push({ color: m.color, a, b, remaining: reps, extra: 0, prereq: isCross ? prev : -1, block });
       const ek = edgeKey(a, b);
       const onEdge = legAt.get(ek);
       if (onEdge) onEdge.push(id); else legAt.set(ek, [id]);
@@ -408,6 +443,12 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       }
     });
     let left = mine.length;
+    const byBlocks = params.blocks !== false;
+    const blockLeft = new Map<number, number>();
+    for (const id of mine) { const b = legs[units[id].leg].block; blockLeft.set(b, (blockLeft.get(b) ?? 0) + 1); }
+    let current = -3; // nessun blocco ancora
+    /** Si può prendere: se il blocco corrente non è finito, solo le sue unità. */
+    const inBlock = (id: number) => !byBlocks || (blockLeft.get(current) ?? 0) === 0 || legs[units[id].leg].block === current;
     const segs: RouteSeg[] = [];
 
     /** Quante unità si possono prendere gratis all'uscita dopo aver preso `id` (Warnsdorff). */
@@ -441,6 +482,8 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
         cur = to;
       }
       u.done = true;
+      current = legs[u.leg].block;
+      blockLeft.set(current, (blockLeft.get(current) ?? 1) - 1);
       legs[u.leg].remaining -= u.passes;
       if (u.pair) legs[u.pair.leg2].remaining -= u.passes;
       left--;
@@ -483,7 +526,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
         if (d > dist[v]) continue;
         if (d > bestD + 1e-6 || d > limit) break;
         for (const id of byVertex.get(v) ?? []) {
-          if (!available(id) || !entriesOf(id).includes(v)) continue;
+          if (!available(id) || !inBlock(id) || !entriesOf(id).includes(v)) continue;
           cands.push({ id, entry: v, d });
           if (d < bestD) bestD = d;
         }
@@ -538,7 +581,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       const here = pt(at);
       let best: { id: number; entry: number; d: number } | null = null;
       for (const id of mine) {
-        if (!available(id)) continue;
+        if (!available(id) || !inBlock(id)) continue;
         for (const e of entriesOf(id)) {
           const p = pt(e);
           const d = Math.hypot(p.x - here.x, p.y - here.y);

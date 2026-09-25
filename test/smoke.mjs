@@ -4850,6 +4850,16 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   const quante = (cr) => { const n = new Map(); for (const sg of cr.segs) if (sg.kind === 'stitch') { const k = Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to); n.set(k, (n.get(k) ?? 0) + 1); } return [...new Set(n.values())]; };
   check('base a 3 passate, nero sopra a 5: ogni gamba del suo filo', perFilo.colors.map(quante), [[3], [5]]);
 
+  // PER BLOCCHI DI COLORE (Lorenzo: «lavorare per blocchi colore»): il filo finisce la zona in cui
+  // si trova prima di passare a un'altra. Sul campo a macchie senza blocchi il filo lascia zone a
+  // metà e ci torna (10 rientri su 30×20); a blocchi mai. Sul giornale Dior: 332 rientri → 0.
+  const gBl = { rows: 30, cols: 20, cellW: 3, cellH: 3.8, overlapPct: 30 };
+  const cBl = fill(gBl, macchie);
+  const blk = new Map(); let nBl = 0;
+  for (const [k, m] of cBl) { if (blk.has(k)) continue; const st = [k]; blk.set(k, nBl); while (st.length) { const x = st.pop(); const r = Math.floor(x / 20), c = x % 20; for (const [r2, c2] of [[r - 1, c], [r + 1, c], [r, c - 1], [r, c + 1]]) { if (r2 < 0 || c2 < 0 || r2 >= 30 || c2 >= 20) continue; const y = r2 * 20 + c2; if (!blk.has(y) && cBl.get(y).color === m.color) { blk.set(y, nBl); st.push(y); } } } nBl++; }
+  const rientri = (res) => { let tot = 0; const W2 = LW(gBl); for (const cr of res.colors) { let cur = -1; const visti = new Set(); for (const sg of cr.segs) { if (sg.kind !== 'stitch') continue; const i = Math.min(Math.floor(sg.from / W2), Math.floor(sg.to / W2)), j = Math.min(sg.from % W2, sg.to % W2); const b = blk.get(i * 20 + Math.floor(j / 2)); if (b !== cur) { if (visti.has(b)) tot++; if (cur >= 0) visti.add(cur); cur = b; } } } return tot; };
+  check('a blocchi: nessun rientro in una zona lasciata a metà (senza blocchi ce ne sono)', [rientri(run(gBl, cBl)), rientri(run(gBl, cBl, { blocks: false })) > 0], [0, true]);
+
   // LA MODIFICA A MANO (Lorenzo: «pulire l'interno della scritta… o cancellare qualcosa»).
   // Una lettera: un anello nero di V con dentro il bianco e un tratto nero staccato.
   const gE2 = { rows: 7, cols: 7, cellW: 3, cellH: 3.8 };

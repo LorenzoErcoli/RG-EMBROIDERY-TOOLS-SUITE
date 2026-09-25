@@ -566,6 +566,11 @@ lo evita. **Niente salti**: a macchina un salto lascia un filo che attraversa gl
 salta solo oltre *Salta oltre* (400 mm di partenza). In una zona chiusa (il bianco dentro una
 lettera nera) il filo che va sopra deve attraversare il contorno una volta, e lo fa nel punto più
 corto.
+**Per blocchi di colore** (in *04 Passaggi*, acceso di partenza): un blocco è una zona di celle
+dello stesso colore che si toccano. Il filo finisce la zona in cui si trova prima di passare alla
+successiva, invece di andare sempre sulla cosa più vicina e tornare dopo nelle zone lasciate a metà.
+Costa un po' più di ripasso fra una zona e l'altra.
+
 **Le passate sono per filo**: nella riga di ogni filo c'è il suo numero (*pass*) (per esempio la base a 3 e
 il colore sopra a 5). Con più passate si sceglie **come** farle. *Tutte sulla stessa V* (la partenza): avanti,
 indietro, avanti sugli stessi fori e poi la V dopo, come il punto triplo delle macchine. Con passate
