@@ -1,5 +1,6 @@
 /* Stili locali del tool "Cross-Stitch". Solo ciò che il design system non copre: il sizing d'app,
-   il contenimento dell'anteprima, il cursore dell'editor e il filo attivo. Colori solo da token. */
+   il contenimento dell'anteprima, il cursore dell'editor, la riga del filo e la barra sopra la
+   tela (forma data dall'agente design-system, 2026-09-25). Colori solo da token. */
 
 html, body { height: 100%; margin: 0; }
 body {
@@ -13,49 +14,42 @@ body {
 /* L'anteprima non sborda dalla tela (difetto già trovato in striatura). */
 .cs-workspace #layer svg { max-width: 100%; max-height: 100%; }
 
-/* Nell'editor il clic disegna: il puntatore lo dice. Il pan resta a spazio + trascina e al tasto centrale. */
+/* Il puntatore dice cosa fa il clic. Il pan resta a Sposta, a spazio + trascina e al tasto centrale. */
 .cs-workspace .rg-workspace__canvas { cursor: crosshair; }
 .cs-workspace .rg-workspace__canvas.cs-pan,
 .cs-workspace .rg-workspace__canvas.is-dragging { cursor: grabbing; }
+.cs-workspace .rg-workspace__canvas.cs-mode-pan { cursor: grab; }
+.cs-workspace .rg-workspace__canvas.cs-mode-fill { cursor: copy; }
+.cs-workspace .rg-workspace__canvas.cs-crop { cursor: cell; }
 
-/* Il filo con cui si sta disegnando. */
-.cs-thread { cursor: pointer; }
-.cs-thread--active { outline: 2px solid var(--rg-color-black); outline-offset: 2px; }
+/* Lo stage del DS ha tre righe (testa, tela, stato): la barra di modifica (rg-toolbar) è una
+   quarta, alta quanto serve, e la tela resta la riga elastica. La testata ha già il suo filetto. */
+.cs-workspace .rg-workspace__stage { grid-template-rows: auto auto minmax(0, 1fr) auto; }
+.cs-workspace .cs-editbar { margin: 0; border-top: 0; }
+.cs-editbar__group { display: inline-flex; align-items: center; gap: var(--rg-space-2); }
 
-/* La legenda dei passaggi sotto l'anteprima. */
+/* I fili del pennello nella barra: un segmented di campioni. */
+.cs-swatch-seg .rg-segmented__item { display: inline-grid; place-items: center; padding-inline: var(--rg-space-2); }
+.cs-swatch-seg .rg-segmented__item[aria-pressed="true"] .rg-color-map__swatch { border-color: var(--rg-color-white); }
+
+/* La riga del filo: colore (apre il selettore), codice (sceglie il filo del pennello), passate, ordine. */
+.cs-thread { padding-inline-start: var(--rg-space-2); }
+.cs-thread--active { background: var(--rg-color-surface); box-shadow: inset var(--rg-border-strong) 0 0 var(--rg-color-black); }
+.cs-thread__color { display: inline-grid; place-items: center; width: calc(var(--rg-space-8) + var(--rg-space-2)); height: calc(var(--rg-space-8) + var(--rg-space-2)); cursor: pointer; }
+.cs-thread__color:has(input:focus-visible),
+.cs-thread__pick:focus-visible { outline: var(--rg-border-strong) var(--rg-border-style) var(--rg-color-focus); outline-offset: var(--rg-border-strong); }
+.cs-thread__pick { min-height: calc(var(--rg-space-8) + var(--rg-space-2)); padding: 0; color: inherit; text-align: left; background: transparent; border: 0; cursor: pointer; }
+
+/* Ritaglia è un rg-button che resta premuto finché si tira il rettangolo (il DS non ha lo stato). */
+.cs-workspace .rg-button[aria-pressed="true"] { color: var(--rg-color-white); background: var(--rg-color-black); border-color: var(--rg-color-black); }
+
+/* La barra di stato: a sinistra cosa fa lo strumento e i numeri; la legenda dei passaggi. */
+.cs-status { display: inline-flex; flex-direction: column; gap: var(--rg-space-1); min-width: 0; }
+.cs-status__help { color: var(--rg-color-text-secondary); }
 .cs-legend { display: inline-flex; gap: var(--rg-space-3); align-items: center; }
 .cs-legend__item { display: inline-flex; gap: var(--rg-space-1); align-items: center; }
 .cs-legend svg { width: 22px; height: 8px; }
-.cs-workspace .rg-workspace__canvas.cs-crop { cursor: cell; }
 
-/* La barra di modifica sopra il disegno: strumenti, grandezza, filo, annulla. */
-.cs-editbar {
-  display: flex; flex-wrap: wrap; align-items: center; gap: var(--rg-space-2) var(--rg-space-4);
-  padding: var(--rg-space-2) var(--rg-space-4);
-  border-bottom: 1px solid var(--rg-color-border);
-  background: var(--rg-color-surface);
-}
-.cs-editbar__group { display: inline-flex; align-items: center; gap: var(--rg-space-2); }
-.cs-editbar__label { font-size: var(--rg-font-size-sm); color: var(--rg-color-text-secondary); }
-.cs-editbar__threads { display: inline-flex; gap: var(--rg-space-1); }
-.cs-editbar__thread {
-  width: 26px; height: 26px; padding: 0; cursor: pointer;
-  background: var(--swatch); border: 1px solid var(--rg-color-border-strong); border-radius: var(--rg-radius-sm);
-}
-.cs-editbar__thread--active { outline: 2px solid var(--rg-color-black); outline-offset: 2px; }
-.cs-editbar__thread:focus-visible { outline: 2px solid var(--rg-color-focus); outline-offset: 2px; }
-.cs-editbar__help { flex-basis: 100%; margin: 0; font-size: var(--rg-font-size-sm); color: var(--rg-color-text-secondary); }
-
-/* Il puntatore dice cosa fa il clic. */
-.cs-workspace .rg-workspace__canvas.cs-mode-pan { cursor: grab; }
-.cs-workspace .rg-workspace__canvas.cs-mode-fill { cursor: copy; }
-
-/* Lo stage del DS ha tre righe (testa, tela, stato): la barra di modifica è una quarta, alta
-   quanto serve, e la tela resta la riga elastica. */
-.cs-workspace .rg-workspace__stage { grid-template-rows: auto auto minmax(0, 1fr) auto; }
-.cs-workspace .cs-editbar { margin: 0; }
-
-
-/* Le passate nella riga del filo: un campo piccolo. */
-.cs-passes { display: inline-flex; align-items: center; gap: var(--rg-space-1); font-size: var(--rg-font-size-sm); color: var(--rg-color-text-secondary); }
-.cs-passes .rg-input { width: 4.5ch; min-height: 28px; padding: 2px 4px; }
+/* I comandi del filo (passate, ordine, togli) vanno su una seconda riga, allineati al codice: sulla
+   stessa riga schiacciavano il codice fino a spezzarlo lettera per lettera (visto nel pannello). */
+.cs-thread__controls { grid-column: 2 / -1; justify-content: flex-start; gap: var(--rg-space-2); }

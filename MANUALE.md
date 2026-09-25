@@ -506,7 +506,9 @@ pennello, i fili e Annulla/Rifai.
   segue tutto quello che si tocca, quindi va usato su zone chiuse (l'interno di una lettera); per i
   ritocchi c'è il pennello.
 - **Gomma** (E): cancella, lì non si cuce niente. Con qualunque strumento, Maiuscolo cancella.
-- **Griglia**: accesa, le linee della griglia si vedono anche sopra il ricamo.
+- **Vista**, a destra della barra: **Griglia** (accesa, le linee si vedono anche sopra il ricamo) e
+  **Passaggi** (i passaggi colorati sull'anteprima). Sotto il disegno, la barra di stato dice cosa fa
+  lo strumento scelto.
 - **Grandezza** 1, 2, 4, 8 punti: sotto il mouse si vede l'impronta del pennello.
 - **Filo**: i quadratini dei fili, un clic sceglie quello del pennello.
 - **Annulla / Rifai**: anche Ctrl+Z e Ctrl+Y. Spazio + trascina sposta la vista con ogni strumento.
@@ -517,11 +519,11 @@ Mentre trascini il pennello si ridisegnano solo i punti; i passaggi si ricalcola
 (↑ per anticipare un filo): i passaggi di un filo si nascondono sotto le diagonali dei fili che
 vengono dopo.
 
-**La base.** Nella lista dei fili, **Base** fa di un filo il fondo: riempie **tutta la griglia** col
-punto che scegli sotto la lista (V, Λ, croce, «\», «/»), si cuce **per primo** con il suo ago, e il
+**La base.** Sotto la lista dei fili, **Filo di base** fa di un filo il fondo: riempie **tutta la griglia** col
+punto che scegli lì sotto (V, Λ, croce, «\», «/»), si cuce **per primo** con il suo ago, e il
 disegno degli altri fili si ricama sopra, ognuno col suo punto. Le celle del disegno che hanno già
 il colore della base non si cuciono due volte. Per esempio: base tutta bianca a V, e sopra il nero,
-a V o con un punto diverso. Ricliccando *Base* si toglie.
+a V o con un punto diverso. Con «— nessuna» si toglie.
 
 **Maglia dall'immagine.** Si parte da qui. In *01 Immagine* carichi la foto: la maglia si crea
 subito, ogni V col filo più vicino al colore dell'immagine sotto di lei (i colori dei fili si
@@ -564,7 +566,7 @@ lo evita. **Niente salti**: a macchina un salto lascia un filo che attraversa gl
 salta solo oltre *Salta oltre* (400 mm di partenza). In una zona chiusa (il bianco dentro una
 lettera nera) il filo che va sopra deve attraversare il contorno una volta, e lo fa nel punto più
 corto.
-**Le passate sono per filo**: nella riga di ogni filo c'è il suo numero (per esempio la base a 3 e
+**Le passate sono per filo**: nella riga di ogni filo c'è il suo numero (*pass*) (per esempio la base a 3 e
 il colore sopra a 5). Con più passate si sceglie **come** farle. *Tutte sulla stessa V* (la partenza): avanti,
 indietro, avanti sugli stessi fori e poi la V dopo, come il punto triplo delle macchine. Con passate
 **dispari** ogni V finisce nell'angolo dove comincia la successiva, e la riga si cuce di filato. *Lungo
