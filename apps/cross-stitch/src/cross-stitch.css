@@ -31,7 +31,7 @@ body {
 /* (la colonna è bloccata alla larghezza dello stage: senza, dopo uno zoom forte la barra e la testata
    si allargavano a 1150 px dentro uno stage di 455 e i bottoni di export finivano fuori schermo) */
 .cs-workspace .cs-editbar { margin: 0; border-top: 0; }
-.cs-editbar__group { display: inline-flex; align-items: center; gap: var(--rg-space-2); }
+.cs-editbar__group { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--rg-space-2); }
 
 /* I fili del pennello nella barra: un segmented di campioni. */
 .cs-swatch-seg .rg-segmented__item { display: inline-grid; place-items: center; padding-inline: var(--rg-space-2); }
@@ -63,3 +63,22 @@ body {
 /* La scena dell'anteprima: il canvas coi punti e sopra l'SVG con griglia, pennello e ritaglio. */
 .cs-scene { position: relative; flex: none; }
 .cs-scene > canvas, .cs-scene > svg { position: absolute; inset: 0; width: 100%; height: 100%; display: block; }
+
+/* Salti a mano: il cursore indica che si clicca un passaggio */
+.cs-workspace .rg-workspace__canvas.cs-mode-cut { cursor: pointer; }
+.cs-cuts .rg-button { justify-self: start; }
+/* Vista dell'ordine (nel DS non c'è un range né una scala sequenziale: classi locali) */
+.cs-editbar { --cs-order-from: var(--rg-color-accent-blue); --cs-order-to: var(--rg-color-black); }
+.cs-scrub { display: inline-flex; flex-wrap: wrap; align-items: center; gap: var(--rg-space-2); max-width: 100%; }
+.cs-scrub[hidden] { display: none; }
+.cs-scrub__range { min-height: 40px; width: calc(var(--rg-space-24) * 2); max-width: 100%; accent-color: var(--rg-color-black); }
+.cs-scrub__range:focus-visible { outline: 2px solid var(--rg-color-focus); outline-offset: 3px; }
+.cs-scrub__value { font-size: var(--rg-font-size-xs); min-width: calc(var(--rg-space-24) + var(--rg-space-6)); }
+.cs-order-legend { display: inline-flex; align-items: center; gap: var(--rg-space-1); font-size: var(--rg-font-size-xs); color: var(--rg-color-text-secondary); }
+.cs-order-legend__steps { display: inline-flex; }
+.cs-order-legend__steps i { width: var(--rg-space-2); height: var(--rg-space-2); }
+.cs-order-legend__steps i:nth-child(1) { background: var(--cs-order-from); }
+.cs-order-legend__steps i:nth-child(2) { background: color-mix(in oklab, var(--cs-order-to) 25%, var(--cs-order-from)); }
+.cs-order-legend__steps i:nth-child(3) { background: color-mix(in oklab, var(--cs-order-to) 50%, var(--cs-order-from)); }
+.cs-order-legend__steps i:nth-child(4) { background: color-mix(in oklab, var(--cs-order-to) 75%, var(--cs-order-from)); }
+.cs-order-legend__steps i:nth-child(5) { background: var(--cs-order-to); }

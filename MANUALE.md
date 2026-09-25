@@ -506,6 +506,11 @@ pennello, i fili e Annulla/Rifai.
   segue tutto quello che si tocca, quindi va usato su zone chiuse (l'interno di una lettera); per i
   ritocchi c'è il pennello.
 - **Gomma** (E): cancella, lì non si cuce niente. Con qualunque strumento, Maiuscolo cancella.
+- **Salti** (T): clicca un passaggio sull'anteprima e diventa un **salto**: la macchina taglia il filo
+  lì, invece di cucire il passaggio. I punti e il loro ordine non cambiano. Il salto a mano si vede
+  come una linea tratteggiata azzurra dritta fra i due punti: cliccandola torna passaggio. In *04
+  Passaggi* c'è quanti sono, e *Togli tutti* (chiede conferma). Si salvano nel progetto. Se il
+  disegno cambia e quel passaggio non c'è più, il salto semplicemente non si applica.
 - **Gruppi** (G): trascina un rettangolo attorno a una parte del disegno che va cucita tutta insieme
   (vedi *Gruppi* più sotto). Il ricamo non cambia, cambia l'ordine dei passaggi.
 - **Vista**, a destra della barra: **Griglia** (accesa, le linee si vedono anche sopra il ricamo) e
@@ -619,6 +624,13 @@ dell'area, pronto per uno swatch. Fuori il disegno resta, velato, e si può cont
 Per provare un altro punto si trascina un'altra area; *Tutto il disegno* torna al ricamo intero.
 Diverso da *Ritaglia* (in *01 Immagine*), che rifà la maglia da un pezzo della foto e perde le
 modifiche a mano. L'area si salva nel progetto.
+
+**La vista dell'ordine** (*Vista → Ordine*, nella barra): i punti si colorano nell'ordine in cui la
+macchina li cuce, dall'azzurro (prima) al nero (dopo). Il cursore accanto fa vedere il ricamo solo
+fino a quel punto, con il numero: trascinandolo si vede il filo lavorare. La scala colora il filo che
+si sta cucendo al punto del cursore; i fili già finiti sono quasi bianchi, i punti ancora da fare in
+grigio chiaro. Serve per vedere i blocchi e i gruppi: una zona lasciata a metà e ripresa dopo si
+riconosce subito (due colori lontani nella stessa zona).
 
 **Stop accesi e spenti.** Nella riga di ogni filo, **Vedi** accende o spegne quello stop
 nell'anteprima (punti e passaggi), per guardare un colore alla volta. Uno stop spento **non va

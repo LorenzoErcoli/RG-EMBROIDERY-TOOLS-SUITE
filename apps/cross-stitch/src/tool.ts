@@ -33,13 +33,14 @@ const OLD_AUTOSAVE_KEY = 'rg-cross-stitch-autosave';
 const DEFAULT_THREADS: Thread[] = [{ hex: '#1a1a1a' }, { hex: '#b3261e' }];
 
 /** Gli strumenti della barra di modifica. */
-type Mode = 'pan' | 'paint' | 'fill' | 'erase' | 'group';
+type Mode = 'pan' | 'paint' | 'fill' | 'erase' | 'group' | 'cut';
 
 const MODE_HELP: Record<Mode, string> = {
   pan: 'Sposta: trascina per muovere la vista, rotella per ingrandire. Il ricamo non si tocca.',
   paint: 'Pennello: trascina per passare le V al filo scelto. Sulle celle vuote mette il punto scelto qui a fianco (V, croce, diagonale). Maiuscolo + trascina cancella.',
   fill: 'Riempi: un clic passa al filo scelto tutta la zona collegata dello stesso colore — per esempio l’interno di una lettera.',
   erase: 'Gomma: trascina per cancellare; lì non si cuce niente.',
+  cut: 'Salti: clicca un passaggio e diventa un salto (la macchina taglia il filo); clicca un salto fatto a mano e torna passaggio. Si tolgono tutti in 04 Passaggi.',
   group: 'Gruppi: trascina un rettangolo attorno a una parte (per esempio un titolo): il filo di ogni colore la cuce tutta insieme, prima del resto e nell’ordine della lista in 04 Passaggi.',
 };
 
@@ -51,6 +52,8 @@ const SEG_STYLE: Record<Exclude<SegKind, 'stitch'>, string> = {
   hidden: 'stroke:var(--rg-color-neutral-600);stroke-width:1;stroke-dasharray:3 2',
   jump: 'stroke:var(--rg-color-neutral-400);stroke-width:1;stroke-dasharray:1 3',
 };
+/** Il salto messo a mano: si distingue da quello automatico anche per il tratteggio. */
+const CUT_STYLE = 'stroke:var(--rg-color-accent-blue);stroke-width:2;stroke-dasharray:6 3';
 
 interface State {
   grid: GridSpec;
@@ -58,6 +61,8 @@ interface State {
   threads: Thread[];
   route: RouteParams;
   stitch: StitchParams;
+  /** I salti a mano: passaggi fra due vertici (riga, colonna del reticolo del disegno intero). */
+  cuts: Array<[number, number, number, number]>;
   /** L'area di prova (area.ts): passaggi ed export solo lì, il disegno resta tutto. */
   area: TestArea | null;
 }
@@ -194,6 +199,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           <label class="rg-field"><span class="rg-field__label">Zona massima</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="zoneMax" type="text" inputmode="decimal" aria-describedby="h-zoneMax"><span>mm</span></span>
             <span class="rg-field__help" id="h-zoneMax">Oltre, la zona si divide</span></label>
+          <div class="rg-field rg-param-grid__wide cs-cuts">
+            <span class="rg-field__label" id="lbl-cuts">Salti a mano</span>
+            <span class="rg-mono" id="cutCount" aria-labelledby="lbl-cuts">0</span>
+            <span class="rg-field__help">Scegli «Salti» nella barra e clicca un passaggio: diventa salto. Riclicca per tornare indietro.</span>
+            <button type="button" class="rg-button rg-button--small rg-button--ghost rg-button--danger" id="cutClear" disabled><svg class="rg-icon" aria-hidden="true" focusable="false"><use href="${ICONS}#rg-icon-elimina"></use></svg>Togli tutti</button>
+          </div>
           <div class="rg-field rg-param-grid__wide cs-groups" id="groupsBox">
             <span class="rg-field__label">Gruppi</span>
             <ul class="rg-list" id="groupList" aria-label="Gruppi"></ul>
@@ -250,6 +261,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <button type="button" class="rg-segmented__item" data-mode="fill" title="Riempi (F)">Riempi</button>
             <button type="button" class="rg-segmented__item" data-mode="erase" title="Gomma (E)">Gomma</button>
             <button type="button" class="rg-segmented__item" data-mode="group" title="Gruppi (G)">Gruppi</button>
+            <button type="button" class="rg-segmented__item" data-mode="cut" title="Salti (T)">Salti</button>
           </div>
           <div class="cs-editbar__group" role="group" aria-labelledby="eb-gr"><span class="rg-label" id="eb-gr">Grandezza</span>
             <div class="rg-segmented" id="sizeSel">
@@ -275,6 +287,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         <div class="cs-editbar__group" role="group" aria-labelledby="eb-vista"><span class="rg-label" id="eb-vista">Vista</span>
           <label class="rg-toggle"><input type="checkbox" id="showGrid" checked><span class="rg-toggle__track"></span><span>Griglia</span></label>
           <label class="rg-toggle"><input type="checkbox" id="showPaths" checked><span class="rg-toggle__track"></span><span>Passaggi</span></label>
+          <label class="rg-toggle"><input type="checkbox" id="showOrder"><span class="rg-toggle__track"></span><span>Ordine</span></label>
+          <span class="cs-scrub" id="orderScrub" hidden>
+            <input type="range" class="cs-scrub__range" id="orderUpTo" min="0" max="1" step="1" value="1" aria-label="Mostra fino al punto" aria-describedby="orderNow">
+            <output class="rg-mono cs-scrub__value" id="orderNow" for="orderUpTo">0 / 0</output>
+            <span class="cs-order-legend" aria-hidden="true">prima<span class="cs-order-legend__steps"><i></i><i></i><i></i><i></i><i></i></span>dopo</span>
+          </span>
         </div>
       </div>
       <div class="rg-workspace__canvas" id="canvas">
@@ -288,6 +306,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           <span class="cs-legend__item"><svg viewBox="0 0 22 8"><line x1="1" y1="4" x2="21" y2="4" style="${SEG_STYLE.vertical}"/></svg>vertice-vertice</span>
           <span class="cs-legend__item"><svg viewBox="0 0 22 8"><line x1="1" y1="4" x2="21" y2="4" style="${SEG_STYLE.hidden}"/></svg>nascosto</span>
           <span class="cs-legend__item"><svg viewBox="0 0 22 8"><line x1="1" y1="4" x2="21" y2="4" style="${SEG_STYLE.jump}"/></svg>salto</span>
+          <span class="cs-legend__item"><svg viewBox="0 0 22 8"><line x1="1" y1="4" x2="21" y2="4" style="${CUT_STYLE}"/></svg>salto a mano</span>
         </span>
         <span id="zoom" class="rg-mono">zoom 100%</span>
       </footer>
@@ -310,12 +329,16 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     route: { ...DEFAULT_ROUTE },
     stitch: { ...DEFAULT_STITCH },
     area: null,
+    cuts: [],
   };
   let mode: Mode = 'paint';
   let brushSize = 1;
   let brushStitch: BrushStitch = 'v';
   let activeThread = 0;
   let showPaths = true;
+  /** La vista dell'ordine: i punti dal primo (azzurro) all'ultimo (nero), fino a orderUpTo. */
+  let showOrder = false;
+  let orderUpTo = Infinity;
   let showGrid = true;
   let image: { url: string; w: number; h: number; px: Pixels } | null = null;
   let imageOpacity = 0;
@@ -336,7 +359,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   let areaPicking = false;
   let areaDrag: { a: { x: number; y: number }; b: { x: number; y: number } } | null = null;
   /** Dove stanno i passaggi calcolati: la griglia su cui sono fatti e lo spostamento per l'anteprima. */
-  let routeGeom: { grid: GridSpec; dx: number; dy: number } = { grid: DEFAULT_GRID, dx: 0, dy: 0 };
+  let routeGeom: { grid: GridSpec; dx: number; dy: number; i0: number; j0: number } = { grid: DEFAULT_GRID, dx: 0, dy: 0, i0: 0, j0: 0 };
   /** Il gruppo evidenziato dalla lista (passandoci sopra col mouse). */
   let groupHover = -1;
   let result: RouteResult | null = null;
@@ -377,9 +400,18 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   const routeInput = (cells: Cells = st.cells) => {
     const params = routeParams();
     const a = clampArea(st.grid, st.area);
-    if (!a) return { grid: st.grid, cells, params, dx: 0, dy: 0 };
+    const toIndex = (grid: GridSpec, i0: number, j0: number) => (i: number, j: number) => {
+      const ii = i - i0, jj = j - j0;
+      return ii < 0 || ii > grid.rows || jj < 0 || jj > 2 * grid.cols ? -1 : ii * (2 * grid.cols + 1) + jj;
+    };
+    const withCuts = (grid: GridSpec, i0: number, j0: number) => {
+      const ix = toIndex(grid, i0, j0);
+      params.cuts = st.cuts.map(([i1, j1, i2, j2]) => [ix(i1, j1), ix(i2, j2)] as [number, number]).filter(([x, y]) => x >= 0 && y >= 0);
+    };
+    if (!a) { withCuts(st.grid, 0, 0); return { grid: st.grid, cells, params, dx: 0, dy: 0 }; }
     const sub = subGrid(st.grid, cells, a);
     if (params.groups) params.groups = params.groups.map((q) => ({ ...q, x: q.x - sub.dx, y: q.y - sub.dy }));
+    withCuts(sub.grid, a.r0, 2 * a.c0);
     return { ...sub, params };
   };
 
@@ -404,6 +436,26 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     jump: { color: token('--rg-color-neutral-400', '#999999'), width: 1, dash: [1, 3] },
   };
   const BG = token('--rg-color-neutral-200', '#e6e6e6');
+  const CUT_PATH = { color: token('--rg-color-accent-blue', '#6f8fa6'), width: 2, dash: [6, 3] };
+  /** Un colore dei token in [r, g, b] (il canvas normalizza il formato). */
+  const rgbOf = (c: string): [number, number, number] => {
+    const x = document.createElement('canvas').getContext('2d')!;
+    x.fillStyle = '#000'; x.fillStyle = c;
+    const v = String(x.fillStyle);
+    if (v.startsWith('#')) return [1, 3, 5].map((i) => parseInt(v.slice(i, i + 2), 16)) as [number, number, number];
+    const m = v.match(/\d+(\.\d+)?/g) ?? ['0', '0', '0'];
+    return [Number(m[0]), Number(m[1]), Number(m[2])];
+  };
+  const ORDER_FROM = rgbOf(token('--rg-color-accent-blue', '#8fb3cc'));
+  const ORDER_TO = rgbOf(token('--rg-color-black', '#000000'));
+  const orderColor = (t: number) => `rgb(${ORDER_FROM.map((a, i) => Math.round(a + (ORDER_TO[i] - a) * t)).join(',')})`;
+  /** Il salto a mano (vertici del reticolo calcolato) come chiave. */
+  const cutKeyOf = (from: number, to: number) => {
+    const Wr = 2 * routeGeom.grid.cols + 1;
+    const a = [Math.floor(from / Wr) + routeGeom.i0, (from % Wr) + routeGeom.j0], b = [Math.floor(to / Wr) + routeGeom.i0, (to % Wr) + routeGeom.j0];
+    return a[0] < b[0] || (a[0] === b[0] && a[1] <= b[1]) ? `${a[0]},${a[1]},${b[0]},${b[1]}` : `${b[0]},${b[1]},${a[0]},${a[1]}`;
+  };
+  const cutSet = () => new Set(st.cuts.map(([i1, j1, i2, j2]) => (i1 < i2 || (i1 === i2 && j1 <= j2) ? `${i1},${j1},${i2},${j2}` : `${i2},${j2},${i1},${j1}`)));
 
   let imageEl: HTMLImageElement | null = null;   // l'immagine di riferimento, pronta per il canvas
   let imageElUrl = '';
@@ -484,14 +536,50 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       ctx.stroke();
     };
     const base = st.route.base ?? null;
-    if (base) strokeLegs(base.color, (fn) => { for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) fn(r, c, base.stitch); });
+    const byOrder = showOrder && !!result;
+    // la vista dell'ordine: i punti dal risultato, nel tempo; oltre il cursore in grigio chiaro
+    let orderTotal = 0;
+    if (byOrder) {
+      for (const cr of result!.colors) if (!st.threads[cr.color]?.hidden) for (const sg of cr.segs) if (sg.kind === 'stitch') orderTotal++;
+      const upTo = Math.min(orderUpTo, orderTotal);
+      const BUCKETS = 48;
+      const [lr, lg, lb] = rgbOf(token('--rg-color-neutral-400', '#9a9a94'));
+      const later = `rgba(${lr},${lg},${lb},0.45)`;
+      const done = token('--rg-color-neutral-100', '#efefec');
+      // La scala colora solo il filo che si sta cucendo al cursore; i fili già finiti in grigio
+      // medio, quelli da fare in grigio chiaro. Con una sola scala per tutto, la base (tre quarti
+      // dei punti sul Dior) e il disegno sopra si confondevano.
+      let n = 0;
+      for (const cr of result!.colors) {
+        if (st.threads[cr.color]?.hidden) continue;
+        let total = 0;
+        for (const sg of cr.segs) if (sg.kind === 'stitch') total++;
+        const start = n;
+        const state = upTo >= start + total ? (upTo === orderTotal && start + total === orderTotal ? 'active' : 'done') : upTo > start ? 'active' : 'later';
+        const paths: Path2D[] = Array.from({ length: BUCKETS + 1 }, () => new Path2D());
+        let nc = 0;
+        for (const sg of cr.segs) {
+          if (sg.kind !== 'stitch') continue;
+          const [pa, pb] = segmentPoints(routeGeom.grid, sg.from, sg.to);
+          const b = state === 'active' && n < upTo ? Math.min(BUCKETS - 1, Math.floor((nc / Math.max(1, total - 1)) * BUCKETS)) : BUCKETS;
+          paths[b].moveTo(X(pa.x + routeGeom.dx), Y(pa.y + routeGeom.dy));
+          paths[b].lineTo(X(pb.x + routeGeom.dx), Y(pb.y + routeGeom.dy));
+          n++; nc++;
+        }
+        ctx.lineWidth = threadWidth(cr.color) * k;
+        ctx.strokeStyle = state === 'done' ? done : later;
+        ctx.stroke(paths[BUCKETS]);
+        for (let b = 0; b < BUCKETS; b++) { ctx.strokeStyle = orderColor(b / (BUCKETS - 1)); ctx.stroke(paths[b]); }
+      }
+    }
+    if (!byOrder && base) strokeLegs(base.color, (fn) => { for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) fn(r, c, base.stitch); });
     const byColor = new Map<number, number[]>();
     for (const [key, mark] of st.cells) {
       if (base && mark.color === base.color) continue; // già coperta dalla base
       const list = byColor.get(mark.color);
       if (list) list.push(key); else byColor.set(mark.color, [key]);
     }
-    for (const ci of [...byColor.keys()].sort((x, y) => x - y)) {
+    if (!byOrder) for (const ci of [...byColor.keys()].sort((x, y) => x - y)) {
       strokeLegs(ci, (fn) => { for (const key of byColor.get(ci)!) { const r = Math.floor(key / g.cols); fn(r, key - r * g.cols, st.cells.get(key)!.stitch); } });
     }
     // fuori dall'area di prova il disegno resta, velato
@@ -510,17 +598,23 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     }
     // i passaggi (dei fili accesi), con la larghezza fissa sullo schermo
     const rg0 = routeGeom.grid, odx = routeGeom.dx, ody = routeGeom.dy;
+    const cutsNow = cutSet();
     if (showPaths && result) {
-      for (const kind of ['jump', 'hidden', 'retrace', 'vertical', 'visible'] as const) {
-        const style = PATH_STYLE[kind];
+      for (const kind of ['jump', 'cut', 'hidden', 'retrace', 'vertical', 'visible'] as const) {
+        const style = kind === 'cut' ? CUT_PATH : PATH_STYLE[kind];
         ctx.strokeStyle = style.color;
         ctx.lineWidth = style.width * screenPx;
         ctx.setLineDash(style.dash.map((d) => d * screenPx));
         ctx.beginPath();
+        let n = 0;
+        const upTo = byOrder ? Math.min(orderUpTo, orderTotal) : Infinity;
         for (const cr of result.colors) {
           if (st.threads[cr.color]?.hidden) continue;
           for (const sg of cr.segs) {
-            if (sg.kind !== kind) continue;
+            if (sg.kind === 'stitch') { n++; continue; }
+            if (n >= upTo) continue;
+            const isCut = sg.kind === 'jump' && cutsNow.has(cutKeyOf(sg.from, sg.to));
+            if (kind === 'cut' ? !isCut : sg.kind !== kind || isCut) continue;
             const [pa, pb] = segmentPoints(rg0, sg.from, sg.to);
             ctx.moveTo(X(pa.x + odx), Y(pa.y + ody));
             ctx.lineTo(X(pb.x + odx), Y(pb.y + ody));
@@ -558,6 +652,16 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     }
     drawGroups();
     drawAreaDrag();
+    $('orderScrub').hidden = !showOrder;
+    if (showOrder) {
+      const range = $<HTMLInputElement>('orderUpTo');
+      range.max = String(orderTotal);
+      const v = Math.min(orderUpTo, orderTotal);
+      range.value = String(v);
+      $('orderNow').textContent = `${v} / ${orderTotal}`;
+    }
+    $('cutCount').textContent = String(st.cuts.length);
+    $<HTMLButtonElement>('cutClear').disabled = !st.cuts.length;
     $('formatInfo').textContent = `Griglia: ${st.grid.cols} colonne × ${st.grid.rows} righe, un punto per cella · il ricamo esce ${fmtNum(w)} × ${fmtNum(h)} mm (le celle sono intere)`
       + (area ? ` · area di prova ${area.c1 - area.c0} × ${area.r1 - area.r0} celle, ${fmtNum(Math.round(subGrid(g, new Map(), area).grid.cols * g.cellW))} × ${fmtNum(Math.round(gridHeight(subGrid(g, new Map(), area).grid)))} mm: passaggi ed export solo lì` : '');
     $('areaAllBtn').hidden = !area;
@@ -595,7 +699,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   function recompute(): void {
     routeRequest++;
     const inp = routeInput();
-    routeGeom = { grid: inp.grid, dx: inp.dx, dy: inp.dy };
+    const ar = clampArea(st.grid, st.area);
+    routeGeom = { grid: inp.grid, dx: inp.dx, dy: inp.dy, i0: ar ? ar.r0 : 0, j0: ar ? 2 * ar.c0 : 0 };
     if (worker) {
       routing = true;
       worker.postMessage({ id: routeRequest, grid: inp.grid, cells: inp.cells, params: inp.params });
@@ -657,8 +762,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     mark('#retraceSel .rg-segmented__item', (b) => RETRACE_PRESETS[b.dataset.retrace as RetracePreset] === rt);
     $('modeHelp').textContent = MODE_HELP[mode];
     const cv = root.querySelector('#canvas');
-    if (cv) for (const m of ['pan', 'paint', 'fill', 'erase', 'group']) cv.classList.toggle('cs-mode-' + m, m === mode);
-    for (const id of ['sizeSel', 'stitchSel', 'editThreads']) root.querySelectorAll<HTMLButtonElement>('#' + id + ' button').forEach((b) => { b.disabled = mode === 'group'; });
+    if (cv) for (const m of ['pan', 'paint', 'fill', 'erase', 'group', 'cut']) cv.classList.toggle('cs-mode-' + m, m === mode);
+    for (const id of ['sizeSel', 'stitchSel', 'editThreads']) root.querySelectorAll<HTMLButtonElement>('#' + id + ' button').forEach((b) => { b.disabled = mode === 'group' || mode === 'cut'; });
   }
 
   const clampInt = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.round(v)));
@@ -707,9 +812,27 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   num('zoneMax').addEventListener('change', setZones);
   $<HTMLInputElement>('fixedDir').addEventListener('change', (e) => { st.route.fixedDirection = (e.target as HTMLInputElement).checked; update(); });
   $<HTMLInputElement>('showPaths').addEventListener('change', (e) => { showPaths = (e.target as HTMLInputElement).checked; draw(); });
+  $<HTMLInputElement>('showOrder').addEventListener('change', (e) => { showOrder = (e.target as HTMLInputElement).checked; orderUpTo = Infinity; draw(); });
+  $<HTMLInputElement>('orderUpTo').addEventListener('input', (e) => {
+    const el = e.target as HTMLInputElement;
+    const v = Number(el.value);
+    orderUpTo = v >= Number(el.max) ? Infinity : v;
+    draw();
+  });
+  $('cutClear').addEventListener('click', () => {
+    const n = st.cuts.length;
+    if (!n || !window.confirm(n === 1 ? 'Togliere il salto a mano?' : `Togliere tutti i ${n} salti a mano?`)) return;
+    st.cuts = [];
+    update();
+  });
   $<HTMLInputElement>('showGrid').addEventListener('change', (e) => { showGrid = (e.target as HTMLInputElement).checked; draw(); });
 
-  const setMode = (m: Mode) => { mode = m; syncSegmented(); hideBrush(); drawGroups(); };
+  const setMode = (m: Mode) => {
+    mode = m;
+    // senza passaggi visibili non c'è niente da cliccare
+    if (m === 'cut' && !showPaths) { showPaths = true; $<HTMLInputElement>('showPaths').checked = true; draw(); }
+    syncSegmented(); hideBrush(); drawGroups();
+  };
   root.querySelectorAll<HTMLButtonElement>('#modeSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode as Mode)));
   root.querySelectorAll<HTMLButtonElement>('#sizeSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => { brushSize = Number(b.dataset.size) || 1; syncSegmented(); }));
   root.querySelectorAll<HTMLButtonElement>('#retraceSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => {
@@ -1013,7 +1136,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const svg = $('layer').querySelector('svg');
     if (!svg) return;
     let rect = svg.querySelector<SVGRectElement>('#cs-brush');
-    if (!at || mode === 'pan' || mode === 'group' || cropping) { rect?.remove(); return; }
+    if (!at || mode === 'pan' || mode === 'group' || mode === 'cut' || cropping) { rect?.remove(); return; }
     if (!rect) {
       rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       rect.id = 'cs-brush';
@@ -1096,6 +1219,13 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       return;
     }
     if (mode === 'pan') return;
+    if (mode === 'cut') {
+      const p = mmAt(e);
+      if (!p || e.button !== 0) return;
+      e.stopPropagation(); e.preventDefault();
+      toggleCutAt(p);
+      return;
+    }
     if (mode === 'group') {
       const p = mmAt(e);
       if (!p || e.button !== 0) return;
@@ -1220,6 +1350,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     else if (k === 'e') setMode('erase');
     else if (k === 'h') setMode('pan');
     else if (k === 'g') setMode('group');
+    else if (k === 't') setMode('cut');
   };
   const onKeyUp = (e: KeyboardEvent) => {
     if (e.code === 'Space') { spaceDown = false; canvas.classList.remove('cs-pan'); }
@@ -1381,6 +1512,52 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     update();
   });
 
+  /**
+   * Il passaggio (o il salto a mano) più vicino al clic, entro 8 px sullo schermo: un passaggio
+   * diventa salto, un salto a mano torna passaggio.
+   */
+  function toggleCutAt(p: { x: number; y: number }): void {
+    if (!result) return;
+    const { w } = sizeMm();
+    const pxPerMm = ($('layer').querySelector('svg')!.getBoundingClientRect().width || 1) / (w + 2 * margin());
+    const tol = 8 / pxPerMm;
+    const cuts = cutSet();
+    const dSeg = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+      const vx = b.x - a.x, vy = b.y - a.y, L = vx * vx + vy * vy;
+      const t = L ? Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.y - a.y) * vy) / L)) : 0;
+      return Math.hypot(a.x + t * vx - p.x, a.y + t * vy - p.y);
+    };
+    let best: { key: string; d: number } | null = null;
+    for (const cr of result.colors) {
+      if (st.threads[cr.color]?.hidden) continue;
+      const segs = cr.segs;
+      for (let i = 0; i < segs.length; i++) {
+        if (segs[i].kind === 'stitch') continue;
+        let j = i, d = Infinity;
+        if (segs[i].kind === 'jump') {
+          j = i + 1;
+          const key = cutKeyOf(segs[i].from, segs[i].to);
+          if (!cuts.has(key)) { continue; } // i salti automatici non si toccano
+        } else while (j < segs.length && segs[j].kind !== 'stitch' && segs[j].kind !== 'jump') j++;
+        for (let q = i; q < j; q++) {
+          const [a, b] = segmentPoints(routeGeom.grid, segs[q].from, segs[q].to);
+          d = Math.min(d, dSeg({ x: a.x + routeGeom.dx, y: a.y + routeGeom.dy }, { x: b.x + routeGeom.dx, y: b.y + routeGeom.dy }));
+        }
+        const key = cutKeyOf(segs[i].from, segs[j - 1].to);
+        if (d <= tol && (!best || d < best.d)) best = { key, d };
+        i = j - 1;
+      }
+    }
+    if (!best) { $('status').textContent = 'Nessun passaggio qui: clicca sopra una linea di passaggio.'; return; }
+    const [i1, j1, i2, j2] = best.key.split(',').map(Number);
+    const had = cuts.has(best.key);
+    st.cuts = had
+      ? st.cuts.filter((c) => cutKeyOf2(c) !== best!.key)
+      : [...st.cuts, [i1, j1, i2, j2]];
+    update();
+  }
+  const cutKeyOf2 = ([i1, j1, i2, j2]: [number, number, number, number]) => (i1 < i2 || (i1 === i2 && j1 <= j2) ? `${i1},${j1},${i2},${j2}` : `${i2},${j2},${i1},${j1}`);
+
   /** Il rettangolo dell'area che si sta tirando. */
   function drawAreaDrag(): void {
     const svg = $('layer').querySelector('svg');
@@ -1520,6 +1697,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       route: st.route,
       stitch: st.stitch,
       area: st.area,
+      cuts: st.cuts,
       knit,
       cells: cellsToJson(st.grid, st.cells),
     };
@@ -1547,6 +1725,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     syncKnit();
     st.cells = cellsFromJson(st.grid, meta.cells);
     st.area = clampArea(st.grid, meta.area as Partial<TestArea> | null);
+    st.cuts = Array.isArray(meta.cuts) ? (meta.cuts as unknown[]).filter((c): c is [number, number, number, number] => Array.isArray(c) && c.length === 4 && c.every((x) => Number.isInteger(x))) : [];
     // Fino a 0.3.0 la V occupava due colonne: si converte a «un punto per colonna».
     if (typeof meta.version === 'string' && ['0.1.0', '0.2.0', '0.3.0'].includes(meta.version)) {
       const conv = fromTwoColumnV(st.grid, st.cells);

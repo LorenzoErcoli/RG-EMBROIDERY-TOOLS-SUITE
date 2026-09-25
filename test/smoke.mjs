@@ -4933,6 +4933,26 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   };
   check('recinto: fra una lettera e l\'altra il filo non scende sotto la riga (senza recinto 6 volte)', [scende(true), scende(false)], [0, 6]);
 
+  // SALTI A MANO (Lorenzo: «eliminare i passaggi, farli diventare salti»). Un passaggio scelto
+  // diventa un salto; i punti, il loro ordine e gli altri passaggi restano identici.
+  const baseRc = { base: { color: 0, stitch: 'v' }, groups: gruppiRc };
+  const primaRc = run(gRc, cRc, baseRc);
+  const neroRc = primaRc.colors.find((c) => c.color === 1).segs;
+  // i passaggi del nero: da dove finisce un punto a dove comincia il successivo
+  const passaggiRc = [];
+  for (let i = 0; i < neroRc.length; i++) {
+    if (neroRc[i].kind === 'stitch' || neroRc[i].kind === 'jump') continue;
+    let j = i; while (j < neroRc.length && neroRc[j].kind !== 'stitch' && neroRc[j].kind !== 'jump') j++;
+    passaggiRc.push({ from: neroRc[i].from, to: neroRc[j - 1].to, n: j - i }); i = j - 1;
+  }
+  const scelto = passaggiRc.reduce((a, b) => (b.n > a.n ? b : a));
+  const dopoRc = run(gRc, cRc, { ...baseRc, cuts: [[scelto.to, scelto.from]] });
+  const soloPunti = (res) => JSON.stringify(res.colors.map((c) => c.segs.filter((sg) => sg.kind === 'stitch')));
+  const neroDopo = dopoRc.colors.find((c) => c.color === 1).segs;
+  check('salto a mano: quel passaggio diventa un salto, i punti restano identici',
+    [soloPunti(dopoRc) === soloPunti(primaRc), neroDopo.filter((sg) => sg.kind === 'jump' && sg.from === scelto.from && sg.to === scelto.to).length, dopoRc.metrics.jumps - primaRc.metrics.jumps, neroDopo.length, dopoRc.metrics.retraceMm + dopoRc.metrics.verticalMm + dopoRc.metrics.hiddenMm + dopoRc.metrics.visibleMm < primaRc.metrics.retraceMm + primaRc.metrics.verticalMm + primaRc.metrics.hiddenMm + primaRc.metrics.visibleMm],
+    [true, 1, 1, neroRc.length - scelto.n + 1, true]);
+
   // L'AREA DI PROVA (Lorenzo: «disegno grande, poi ritaglio, ma fuori rimane: per testare un
   // punto del ricamo»). Passaggi ed export su una griglia a sé; rimessa al suo posto, ogni tratto
   // cade esattamente sui punti del disegno grande, anche col sormonto delle righe.

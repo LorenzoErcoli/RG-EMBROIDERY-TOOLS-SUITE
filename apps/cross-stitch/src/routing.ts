@@ -147,6 +147,13 @@ export interface RouteParams {
   groups?: ZoneGroup[];
   /** Il recinto della zona: i passaggi restano nella zona finché non è finita (default vero). */
   fence?: boolean;
+  /**
+   * SALTI A MANO (Lorenzo, 2026-09-25: «eliminare i passaggi, farli diventare salti»): ogni coppia
+   * è un passaggio, riconosciuto dai due vertici che collega (dove finisce un punto e dove comincia
+   * il successivo, in qualunque ordine). Quel passaggio non si cuce: diventa un salto col taglio.
+   * Il percorso non cambia, cambia solo come si va da un punto all'altro.
+   */
+  cuts?: Array<[number, number]>;
 }
 
 // Salti quasi mai: a macchina un salto lascia un filo che attraversa gli altri colori (Lorenzo).
@@ -519,6 +526,8 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   const topLeft = (id: number) => Math.min(...endsOf(id));
 
   let at = -1; // vertice dove si trova l'ago (-1 = non ancora partito)
+  const cutKey = (a: number, b: number) => (a < b ? a + ':' + b : b + ':' + a);
+  const cutKeys = new Set((params.cuts ?? []).map(([a, b]) => cutKey(a, b)));
 
   for (const k of order) {
     const mine: number[] = [];
@@ -753,6 +762,34 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       take(best.id, best.entry);
     }
 
+    // i salti a mano: il passaggio fra quei due vertici diventa un salto
+    if (cutKeys.size) {
+      const out: RouteSeg[] = [];
+      let i = 0;
+      while (i < segs.length) {
+        if (segs[i].kind === 'stitch' || segs[i].kind === 'jump') { out.push(segs[i]); i++; continue; }
+        let j = i;
+        while (j < segs.length && segs[j].kind !== 'stitch' && segs[j].kind !== 'jump') j++;
+        const from = segs[i].from, to = segs[j - 1].to;
+        if (cutKeys.has(cutKey(from, to))) {
+          for (let q = i; q < j; q++) {
+            const mm = edgeKind(segs[q].from, segs[q].to, k).mm;
+            const kind = segs[q].kind;
+            if (kind === 'hidden') metrics.hiddenMm -= mm;
+            else if (kind === 'vertical') metrics.verticalMm -= mm;
+            else if (kind === 'retrace') metrics.retraceMm -= mm;
+            else metrics.visibleMm -= mm;
+          }
+          const a = pt(from), b = pt(to);
+          metrics.jumps++;
+          metrics.jumpMm += Math.hypot(b.x - a.x, b.y - a.y);
+          out.push({ kind: 'jump', from, to });
+        } else for (let q = i; q < j; q++) out.push(segs[q]);
+        i = j;
+      }
+      segs.length = 0;
+      for (const sg of out) segs.push(sg); // (non push(...out): sui ricami grandi supera lo stack)
+    }
     // il primo tratto di un colore che parte con un salto non è un salto: è il cambio colore
     if (segs.length && segs[0].kind === 'jump') segs.shift();
     colors.push({ color: k, segs });
