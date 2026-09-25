@@ -605,6 +605,14 @@ appena cucita. Per ripassare meno deve prendere scorciatoie sopra gli altri colo
 
 In tutti e tre i casi niente salti e nessun ritorno in un pezzo lasciato a metà.
 
+**Area di prova** (in alto, accanto ad *Adatta*): si disegna e si modifica **una volta sola** il ricamo
+grande, poi si prova un pezzo. Premi *Area di prova* e trascina un rettangolo sul disegno: passaggi,
+numeri nella barra di stato ed export (DST e SVG) valgono **solo lì**, e il file esce della misura
+dell'area, pronto per uno swatch. Fuori il disegno resta, velato, e si può continuare a modificare.
+Per provare un altro punto si trascina un'altra area; *Tutto il disegno* torna al ricamo intero.
+Diverso da *Ritaglia* (in *01 Immagine*), che rifà la maglia da un pezzo della foto e perde le
+modifiche a mano. L'area si salva nel progetto.
+
 **Stop accesi e spenti.** Nella riga di ogni filo, **Vedi** accende o spegne quello stop
 nell'anteprima (punti e passaggi), per guardare un colore alla volta. Uno stop spento **non va
 nell'export** (DST e SVG): i passaggi degli altri fili si ricalcolano come se non ci fosse.

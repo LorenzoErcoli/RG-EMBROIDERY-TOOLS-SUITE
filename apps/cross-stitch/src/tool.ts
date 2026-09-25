@@ -18,6 +18,7 @@ import {
   DEFAULT_ROUTE, DEFAULT_STITCH, RETRACE_PRESETS, colorPolylines, routeCells, type RetracePreset,
 } from './routing';
 import { DEFAULT_ZONES, type ZoneGroup } from './zones';
+import { areaFromMm, clampArea, subGrid, type TestArea } from './area';
 
 // 0.4.0: un punto per colonna (la V dentro la sua cella). I progetti di prima si convertono.
 const VERSION = '0.4.0';
@@ -57,6 +58,8 @@ interface State {
   threads: Thread[];
   route: RouteParams;
   stitch: StitchParams;
+  /** L'area di prova (area.ts): passaggi ed export solo lì, il disegno resta tutto. */
+  area: TestArea | null;
 }
 
 /** Monta il tool "Cross-Stitch" dentro `root`. `backHref` = link di ritorno alla home suite. */
@@ -233,6 +236,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         <h2 class="rg-h3">Disegno</h2>
         <div class="rg-cluster">
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
+          <span class="rg-tooltip"><button type="button" id="areaBtn" class="rg-button rg-button--outline rg-button--small" aria-pressed="false" aria-describedby="tip-area">Area di prova</button><span class="rg-tooltip__text" role="tooltip" id="tip-area">Trascina un rettangolo: passaggi ed export solo lì, il disegno fuori resta</span></span>
+          <button type="button" id="areaAllBtn" class="rg-button rg-button--ghost rg-button--small" hidden>Tutto il disegno</button>
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Esporta SVG</button>
         </div>
@@ -304,6 +309,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     threads: DEFAULT_THREADS.map((t) => ({ ...t })),
     route: { ...DEFAULT_ROUTE },
     stitch: { ...DEFAULT_STITCH },
+    area: null,
   };
   let mode: Mode = 'paint';
   let brushSize = 1;
@@ -326,6 +332,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   let cropDrag: { a: { x: number; y: number }; b: { x: number; y: number } } | null = null;
   /** Il rettangolo di un gruppo che si sta tirando (modalità Gruppi). */
   let groupDrag: { a: { x: number; y: number }; b: { x: number; y: number } } | null = null;
+  /** Si sta scegliendo l'area di prova (il prossimo trascinamento la disegna). */
+  let areaPicking = false;
+  let areaDrag: { a: { x: number; y: number }; b: { x: number; y: number } } | null = null;
+  /** Dove stanno i passaggi calcolati: la griglia su cui sono fatti e lo spostamento per l'anteprima. */
+  let routeGeom: { grid: GridSpec; dx: number; dy: number } = { grid: DEFAULT_GRID, dx: 0, dy: 0 };
   /** Il gruppo evidenziato dalla lista (passandoci sopra col mouse). */
   let groupHover = -1;
   let result: RouteResult | null = null;
@@ -359,6 +370,18 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   const passesOf = (color: number) => Math.max(1, Math.round(st.threads[color]?.passes ?? st.route.repetitions ?? 1));
   /** I parametri del routing con le passate di ogni filo. */
   const routeParams = (): RouteParams => ({ ...st.route, passesByColor: Object.fromEntries(st.threads.map((_, i) => [i, passesOf(i)])) });
+  /**
+   * Cosa si passa al motore: tutto il disegno, o solo l'area di prova (una griglia a sé che parte
+   * da 0; i gruppi, in mm, si spostano con lei).
+   */
+  const routeInput = (cells: Cells = st.cells) => {
+    const params = routeParams();
+    const a = clampArea(st.grid, st.area);
+    if (!a) return { grid: st.grid, cells, params, dx: 0, dy: 0 };
+    const sub = subGrid(st.grid, cells, a);
+    if (params.groups) params.groups = params.groups.map((q) => ({ ...q, x: q.x - sub.dx, y: q.y - sub.dy }));
+    return { ...sub, params };
+  };
 
   // ---- L'anteprima --------------------------------------------------------------
   //
@@ -471,7 +494,22 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     for (const ci of [...byColor.keys()].sort((x, y) => x - y)) {
       strokeLegs(ci, (fn) => { for (const key of byColor.get(ci)!) { const r = Math.floor(key / g.cols); fn(r, key - r * g.cols, st.cells.get(key)!.stitch); } });
     }
+    // fuori dall'area di prova il disegno resta, velato
+    const area = clampArea(g, st.area);
+    if (area) {
+      const pa = rowPitch(g);
+      const ax0 = area.c0 * g.cellW, ax1 = area.c1 * g.cellW, ay0 = area.r0 * pa, ay1 = (area.r1 - 1) * pa + g.cellH;
+      ctx.save();
+      ctx.globalAlpha = 0.72;
+      ctx.fillStyle = BG;
+      ctx.beginPath();
+      ctx.rect(X(0), Y(0), w * k, h * k);
+      ctx.rect(X(ax0), Y(ay0), (ax1 - ax0) * k, (ay1 - ay0) * k);
+      ctx.fill('evenodd');
+      ctx.restore();
+    }
     // i passaggi (dei fili accesi), con la larghezza fissa sullo schermo
+    const rg0 = routeGeom.grid, odx = routeGeom.dx, ody = routeGeom.dy;
     if (showPaths && result) {
       for (const kind of ['jump', 'hidden', 'retrace', 'vertical', 'visible'] as const) {
         const style = PATH_STYLE[kind];
@@ -483,9 +521,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           if (st.threads[cr.color]?.hidden) continue;
           for (const sg of cr.segs) {
             if (sg.kind !== kind) continue;
-            const [pa, pb] = segmentPoints(g, sg.from, sg.to);
-            ctx.moveTo(X(pa.x), Y(pa.y));
-            ctx.lineTo(X(pb.x), Y(pb.y));
+            const [pa, pb] = segmentPoints(rg0, sg.from, sg.to);
+            ctx.moveTo(X(pa.x + odx), Y(pa.y + ody));
+            ctx.lineTo(X(pb.x + odx), Y(pb.y + ody));
           }
         }
         ctx.stroke();
@@ -495,9 +533,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       for (const cr of result.colors) {
         const first = cr.segs[0];
         if (!first || st.threads[cr.color]?.hidden) continue;
-        const p = segmentPoints(g, first.from, first.to)[0];
+        const p = segmentPoints(rg0, first.from, first.to)[0];
         ctx.beginPath();
-        ctx.arc(X(p.x), Y(p.y), Math.min(g.cellW, g.cellH) * 0.18 * k, 0, Math.PI * 2);
+        ctx.arc(X(p.x + odx), Y(p.y + ody), Math.min(g.cellW, g.cellH) * 0.18 * k, 0, Math.PI * 2);
         ctx.fillStyle = st.threads[cr.color]?.hex ?? '#000000';
         ctx.fill();
         ctx.lineWidth = screenPx;
@@ -514,8 +552,15 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       + (showGrid ? `<g opacity="0.55" pointer-events="none"><rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="url(#cs-cell)"/><rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="url(#cs-major)"/></g>` : '')
       + `<rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="none" style="stroke:var(--rg-color-neutral-800)" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
 
+    if (area) {
+      const pa = rowPitch(g);
+      overlay.insertAdjacentHTML('beforeend', `<rect x="${f(area.c0 * g.cellW)}" y="${f(area.r0 * pa)}" width="${f((area.c1 - area.c0) * g.cellW)}" height="${f((area.r1 - 1 - area.r0) * pa + g.cellH)}" fill="none" style="stroke:var(--rg-color-focus)" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none"/>`);
+    }
     drawGroups();
-    $('formatInfo').textContent = `Griglia: ${st.grid.cols} colonne × ${st.grid.rows} righe, un punto per cella · il ricamo esce ${fmtNum(w)} × ${fmtNum(h)} mm (le celle sono intere)`;
+    drawAreaDrag();
+    $('formatInfo').textContent = `Griglia: ${st.grid.cols} colonne × ${st.grid.rows} righe, un punto per cella · il ricamo esce ${fmtNum(w)} × ${fmtNum(h)} mm (le celle sono intere)`
+      + (area ? ` · area di prova ${area.c1 - area.c0} × ${area.r1 - area.r0} celle, ${fmtNum(Math.round(subGrid(g, new Map(), area).grid.cols * g.cellW))} × ${fmtNum(Math.round(gridHeight(subGrid(g, new Map(), area).grid)))} mm: passaggi ed export solo lì` : '');
+    $('areaAllBtn').hidden = !area;
     showStatus();
   }
 
@@ -549,13 +594,15 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   function recompute(): void {
     routeRequest++;
+    const inp = routeInput();
+    routeGeom = { grid: inp.grid, dx: inp.dx, dy: inp.dy };
     if (worker) {
       routing = true;
-      worker.postMessage({ id: routeRequest, grid: st.grid, cells: st.cells, params: routeParams() });
+      worker.postMessage({ id: routeRequest, grid: inp.grid, cells: inp.cells, params: inp.params });
       return;
     }
     try {
-      result = routeCells(st.grid, st.cells, routeParams());
+      result = routeCells(inp.grid, inp.cells, inp.params);
     } catch (e) {
       result = null;
       $('status').textContent = 'Errore nei passaggi: ' + (e as Error).message;
@@ -638,6 +685,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (image && fromImage) st.cells = knitFromImage(next, image.px, threadRgb(), knitOpts());
     else st.cells = resizeCells(st.grid, next, st.cells);
     st.grid = next;
+    st.area = clampArea(st.grid, st.area);
     syncFields();
     update();
   }
@@ -1027,6 +1075,16 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   // pan lo strumento Sposta, il tasto centrale e lo spazio + trascina.
   canvas.addEventListener('pointerdown', (e) => {
     if (spaceDown || (e.button !== 0 && e.button !== 2)) return;
+    if (areaPicking) {
+      const p = mmAt(e);
+      if (!p || e.button !== 0) return;
+      e.stopPropagation(); e.preventDefault();
+      const { w, h } = sizeMm();
+      const cl = { x: Math.min(w, Math.max(0, p.x)), y: Math.min(h, Math.max(0, p.y)) };
+      areaDrag = { a: cl, b: cl };
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      return;
+    }
     if (cropping) {
       const p = mmAt(e);
       if (!p || e.button !== 0) return;
@@ -1069,6 +1127,15 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     paintAt(e);
   }, true);
   canvas.addEventListener('pointermove', (e) => {
+    if (areaDrag) {
+      e.stopPropagation();
+      const p = mmAt(e);
+      if (!p) return;
+      const { w, h } = sizeMm();
+      areaDrag.b = { x: Math.min(w, Math.max(0, p.x)), y: Math.min(h, Math.max(0, p.y)) };
+      drawAreaDrag();
+      return;
+    }
     if (cropDrag) {
       e.stopPropagation();
       const p = mmAt(e);
@@ -1093,6 +1160,16 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   }, true);
   canvas.addEventListener('pointerleave', () => { if (!painting) hideBrush(); });
   const endPaint = (e: PointerEvent) => {
+    if (areaDrag) {
+      e.stopPropagation();
+      const d = areaDrag;
+      areaDrag = null;
+      try { canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      const a = areaFromMm(st.grid, d.a.x, d.a.y, d.b.x, d.b.y);
+      setAreaPicking(false);
+      if (a) { st.area = a; update(); } else draw();
+      return;
+    }
     if (cropDrag) {
       e.stopPropagation();
       const d = cropDrag;
@@ -1200,6 +1277,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   function setCropping(on: boolean): void {
     cropping = on && !!image;
+    if (cropping && areaPicking) setAreaPicking(false);
     const b = $('cropBtn');
     b.setAttribute('aria-pressed', cropping ? 'true' : 'false');
     b.classList.toggle('rg-button--primary', cropping);
@@ -1302,6 +1380,35 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     buildGroups();
     update();
   });
+
+  /** Il rettangolo dell'area che si sta tirando. */
+  function drawAreaDrag(): void {
+    const svg = $('layer').querySelector('svg');
+    if (!svg) return;
+    svg.querySelector('#cs-area-drag')?.remove();
+    if (!areaDrag) return;
+    const d = areaDrag;
+    const rc = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rc.id = 'cs-area-drag';
+    rc.setAttribute('x', String(Math.min(d.a.x, d.b.x))); rc.setAttribute('y', String(Math.min(d.a.y, d.b.y)));
+    rc.setAttribute('width', String(Math.abs(d.b.x - d.a.x))); rc.setAttribute('height', String(Math.abs(d.b.y - d.a.y)));
+    rc.setAttribute('vector-effect', 'non-scaling-stroke');
+    rc.setAttribute('pointer-events', 'none');
+    rc.setAttribute('style', 'fill:none;stroke:var(--rg-color-focus);stroke-width:2');
+    svg.appendChild(rc);
+  }
+  function setAreaPicking(on: boolean): void {
+    areaPicking = on;
+    if (on) setCropping(false);
+    const b = $('areaBtn');
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    b.classList.toggle('rg-button--primary', on);
+    b.classList.toggle('rg-button--outline', !on);
+    canvas.classList.toggle('cs-crop', on || cropping);
+    if (on) $('status').textContent = 'Trascina un rettangolo sul disegno: passaggi ed export solo lì, il resto rimane.';
+  }
+  $('areaBtn').addEventListener('click', () => setAreaPicking(!areaPicking));
+  $('areaAllBtn').addEventListener('click', () => { st.area = null; setAreaPicking(false); update(); });
 
   /** Il rettangolo che si sta tirando, disegnato sopra l'anteprima. */
   function drawCropRect(a: { x: number; y: number }, b: { x: number; y: number }): void {
@@ -1412,6 +1519,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       threads: st.threads,
       route: st.route,
       stitch: st.stitch,
+      area: st.area,
       knit,
       cells: cellsToJson(st.grid, st.cells),
     };
@@ -1438,6 +1546,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     }
     syncKnit();
     st.cells = cellsFromJson(st.grid, meta.cells);
+    st.area = clampArea(st.grid, meta.area as Partial<TestArea> | null);
     // Fino a 0.3.0 la V occupava due colonne: si converte a «un punto per colonna».
     if (typeof meta.version === 'string' && ['0.1.0', '0.2.0', '0.3.0'].includes(meta.version)) {
       const conv = fromTwoColumnV(st.grid, st.cells);
@@ -1507,13 +1616,13 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   function exportLayers(): ExportLayer[] {
     const on = (color: number) => !st.threads[color]?.hidden;
     const cells: Cells = new Map([...st.cells].filter(([, m]) => on(m.color)));
-    const params = routeParams();
-    if (params.base && !on(params.base.color)) params.base = null;
-    const res = routeCells(st.grid, cells, params);
+    const inp = routeInput(cells);
+    if (inp.params.base && !on(inp.params.base.color)) inp.params.base = null;
+    const res = routeCells(inp.grid, inp.cells, inp.params);
     return res.colors.map((cr) => ({
       id: `filo-${cr.color + 1}`,
       color: st.threads[cr.color]?.hex ?? '#000000',
-      polylines: colorPolylines(st.grid, cr, st.stitch),
+      polylines: colorPolylines(inp.grid, cr, st.stitch),
       strokeMm: threadWidth(cr.color),
     }));
   }
@@ -1521,7 +1630,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   $('exportBtn').addEventListener('click', async () => {
     const layers = exportLayers();
     if (!layers.length) { $('status').textContent = 'Niente da esportare: la griglia è vuota o gli stop sono spenti.'; return; }
-    const { w, h } = sizeMm();
+    const a = clampArea(st.grid, st.area);
+    const eg = a ? subGrid(st.grid, new Map(), a).grid : st.grid;
+    const w = eg.cols * eg.cellW, h = gridHeight(eg);
     const svg = buildSvg(layers, { bounds: { minX: 0, minY: 0, maxX: w, maxY: h }, marginMm: 5, metadata: projectMetadata() });
     const name = `${sourceName || 'cross-stitch'}-cross-stitch.svg`;
     const outcome = await saveTextFile(svg, { suggestedName: name, mime: 'image/svg+xml', extension: '.svg', description: 'Immagine SVG' });

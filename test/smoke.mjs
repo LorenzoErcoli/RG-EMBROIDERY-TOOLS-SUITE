@@ -43,6 +43,8 @@ export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 export { routeCells as csRouteCells, colorPolylines as csColorPolylines, DEFAULT_ROUTE as CS_DEFAULT_ROUTE, RETRACE_PRESETS as CS_RETRACE_PRESETS } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
 export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight, knitFromImage as csKnitFromImage, refinePalette as csRefinePalette, brushEdits as csBrushEdits, fillEdits as csFillEdits, applyEdits as csApplyEdits, fromTwoColumnV as csFromTwoColumnV } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
+export { subGrid as csSubGrid, areaFromMm as csAreaFromMm, clampArea as csClampArea } from ${JSON.stringify(posix('apps/cross-stitch/src/area.ts'))};
+export { segmentPoints as csSegmentPoints } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { zonesOf as csZonesOf } from ${JSON.stringify(posix('apps/cross-stitch/src/zones.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
@@ -4910,6 +4912,26 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   const conPeso = (retrace) => run(gR, cR, { costs: { retrace } }).metrics;
   const [mV, mE, mRp] = ['vista', 'equilibrio', 'ripassi'].map((k) => conPeso(rg.CS_RETRACE_PRESETS[k]));
   check('meno ripassi: ripassa meno, mette più filo in vista, e non salta', [mRp.retraceMm < mE.retraceMm && mE.retraceMm <= mV.retraceMm, mRp.visibleMm >= mV.visibleMm, mRp.jumps], [true, true, 0]);
+
+  // L'AREA DI PROVA (Lorenzo: «disegno grande, poi ritaglio, ma fuori rimane: per testare un
+  // punto del ricamo»). Passaggi ed export su una griglia a sé; rimessa al suo posto, ogni tratto
+  // cade esattamente sui punti del disegno grande, anche col sormonto delle righe.
+  const gA = { rows: 30, cols: 25, cellW: 3, cellH: 3.8, overlapPct: 30 };
+  const cA = fill(gA, (r, c) => ((r * 7 + c * 3) % 4 ? { stitch: 'v', color: (r + c) % 3 ? 0 : 1 } : null));
+  const aA = { r0: 7, c0: 5, r1: 19, c1: 17 };
+  const sA = rg.csSubGrid(gA, cA, aA);
+  check('area di prova: 12 × 12 celle, solo quelle dentro', [sA.grid.rows, sA.grid.cols, sA.cells.size], [12, 12, [...cA.keys()].filter((k) => { const r = Math.floor(k / 25), c = k % 25; return r >= 7 && r < 19 && c >= 5 && c < 17; }).length]);
+  const WfA = LW(gA), WsA = LW(sA.grid);
+  const alSuoPosto = (v) => (Math.floor(v / WsA) + aA.r0) * WfA + (v % WsA) + 2 * aA.c0;
+  let errA = 0;
+  for (const cr of run(sA.grid, sA.cells).colors) for (const sg of cr.segs) {
+    const pS = rg.csSegmentPoints(sA.grid, sg.from, sg.to), pF = rg.csSegmentPoints(gA, alSuoPosto(sg.from), alSuoPosto(sg.to));
+    for (let t = 0; t < 2; t++) errA = Math.max(errA, Math.abs(pS[t].x + sA.dx - pF[t].x), Math.abs(pS[t].y + sA.dy - pF[t].y));
+  }
+  check('area di prova: i passaggi rimessi al loro posto cadono sui punti del disegno (< 1e-9 mm)', errA < 1e-9, true);
+  check('area di prova: dal rettangolo in mm le celle col centro dentro; fuori griglia si taglia; vuota = niente',
+    [rg.csAreaFromMm(gA, 15, 7 * 2.66 + 0.1, 51, 19 * 2.66 - 0.1), rg.csClampArea(gA, { r0: -3, c0: 20, r1: 99, c1: 40 }), rg.csAreaFromMm(gA, 10, 10, 10.5, 10.5)],
+    [aA, { r0: 0, c0: 20, r1: 30, c1: 25 }, null]);
 
   // LA MODIFICA A MANO (Lorenzo: «pulire l'interno della scritta… o cancellare qualcosa»).
   // Una lettera: un anello nero di V con dentro il bianco e un tratto nero staccato.
