@@ -21,6 +21,9 @@ body {
 .cs-workspace .rg-workspace__canvas.cs-mode-pan { cursor: grab; }
 .cs-workspace .rg-workspace__canvas.cs-mode-fill { cursor: copy; }
 .cs-workspace .rg-workspace__canvas.cs-crop { cursor: cell; }
+.cs-workspace .rg-workspace__canvas.cs-mode-group { cursor: crosshair; }
+.cs-groups .rg-empty { padding: var(--rg-space-4); }
+.cs-groups .rg-list-row__head { align-items: center; }
 
 /* Lo stage del DS ha tre righe (testa, tela, stato): la barra di modifica (rg-toolbar) è una
    quarta, alta quanto serve, e la tela resta la riga elastica. La testata ha già il suo filetto. */

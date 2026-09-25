@@ -506,6 +506,8 @@ pennello, i fili e Annulla/Rifai.
   segue tutto quello che si tocca, quindi va usato su zone chiuse (l'interno di una lettera); per i
   ritocchi c'è il pennello.
 - **Gomma** (E): cancella, lì non si cuce niente. Con qualunque strumento, Maiuscolo cancella.
+- **Gruppi** (G): trascina un rettangolo attorno a una parte del disegno che va cucita tutta insieme
+  (vedi *Gruppi* più sotto). Il ricamo non cambia, cambia l'ordine dei passaggi.
 - **Vista**, a destra della barra: **Griglia** (accesa, le linee si vedono anche sopra il ricamo) e
   **Passaggi** (i passaggi colorati sull'anteprima). Sotto il disegno, la barra di stato dice cosa fa
   lo strumento scelto.
@@ -578,6 +580,15 @@ e ognuno lo finisce prima di passare al successivo.
 2. **Pezzi che si toccano**, dentro la zona (una parola, una lettera).
 3. **Tratti di riga** (celle consecutive dello stesso colore), dentro il pezzo: finisce il tratto
    in cui si trova ed entra in uno nuovo da un'estremità, così lo percorre tutto in una volta.
+
+**Gruppi.** Nessuna regola automatica sa che un titolo è una cosa sola: sul giornale Dior il titolo
+è largo quasi quanto la pagina, e qualsiasi zona massima lo divide (il filo lo cuciva in 6 volte).
+Con lo strumento **Gruppi** della barra si trascina un rettangolo attorno: dentro, ogni colore è una
+zona sola e il filo la finisce tutta prima di uscire (sul Dior: una volta sola, con gli stessi ripassi).
+Fuori dai gruppi resta il taglio automatico. I gruppi si vedono in modalità Gruppi, col loro numero;
+in *04 Passaggi* c'è la lista: passandoci sopra si evidenzia il gruppo, il cestino lo toglie, *Togli
+tutti* chiede conferma. Se due gruppi si sovrappongono vale l'ultimo disegnato. Si salvano nel
+progetto (DST e SVG) e tornano con *Carica parametri*.
 
 **Stop accesi e spenti.** Nella riga di ogni filo, **Vedi** accende o spegne quello stop
 nell'anteprima (punti e passaggi), per guardare un colore alla volta. Uno stop spento **non va

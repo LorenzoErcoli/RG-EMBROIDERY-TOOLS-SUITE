@@ -37,7 +37,7 @@
 
 import type { Cells, GridSpec, Leg, Stitch } from './model';
 import { latticeWidth, segmentPoints, stitchLegs, vertexCount, vertexIndex } from './model';
-import { zonesOf, type ZoneOptions } from './zones';
+import { groupOfCell, zonesOf, type ZoneGroup, type ZoneOptions } from './zones';
 
 export interface TravelCosts {
   /** Sotto una diagonale che verrà cucita dopo. */
@@ -126,6 +126,11 @@ export interface RouteParams {
    * la zona, i pezzi che si toccano e i tratti di riga come sopra. null = niente zone.
    */
   zones?: Partial<ZoneOptions> | null;
+  /**
+   * I GRUPPI disegnati a mano (zones.ts): dentro ogni rettangolo, ogni colore è una zona sola e il
+   * filo la finisce tutta prima di uscire. Valgono con *blocks*, anche senza zone automatiche.
+   */
+  groups?: ZoneGroup[];
 }
 
 // Salti quasi mai: a macchina un salto lascia un filo che attraversa gli altri colori (Lorenzo).
@@ -270,11 +275,24 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   }
   // le zone di ogni colore del disegno (un numero unico per tutta la griglia)
   const zoneOfCell = new Map<number, number>();
-  if (params.blocks !== false && params.zones !== null) {
+  const groups = params.groups ?? [];
+  if (params.blocks !== false && (params.zones !== null || groups.length)) {
     let offset = 0;
     const colorsInDesign = [...new Set([...cells.values()].map((m) => m.color))].filter((c) => !(base && c === base.color));
     for (const col of colorsInDesign) {
-      const z = zonesOf(g, cells, col, params.zones ?? {});
+      // prima i gruppi: ogni gruppo è una zona del colore; il resto al taglio automatico
+      const free: Cells = new Map();
+      const inGroup = new Map<number, number>();
+      for (const [k, m] of cells) {
+        if (m.color !== col) continue;
+        const gi = groups.length ? groupOfCell(g, Math.floor(k / g.cols), k % g.cols, groups) : -1;
+        if (gi >= 0) inGroup.set(k, gi); else free.set(k, m);
+      }
+      const used = [...new Set(inGroup.values())];
+      for (const [k, gi] of inGroup) zoneOfCell.set(k, offset + used.indexOf(gi));
+      offset += used.length;
+      if (params.zones === null) { for (const k of free.keys()) zoneOfCell.set(k, offset); offset++; continue; }
+      const z = zonesOf(g, free, col, params.zones ?? {});
       let top = -1;
       for (const [k, v] of z) { zoneOfCell.set(k, offset + v); if (v > top) top = v; }
       offset += top + 1;

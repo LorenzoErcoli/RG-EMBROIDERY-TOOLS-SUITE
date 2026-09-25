@@ -17,7 +17,7 @@ import {
   type RouteParams, type RouteResult, type SegKind, type StitchParams,
   DEFAULT_ROUTE, DEFAULT_STITCH, colorPolylines, routeCells,
 } from './routing';
-import { DEFAULT_ZONES } from './zones';
+import { DEFAULT_ZONES, type ZoneGroup } from './zones';
 
 // 0.4.0: un punto per colonna (la V dentro la sua cella). I progetti di prima si convertono.
 const VERSION = '0.4.0';
@@ -32,13 +32,14 @@ const OLD_AUTOSAVE_KEY = 'rg-cross-stitch-autosave';
 const DEFAULT_THREADS: Thread[] = [{ hex: '#1a1a1a' }, { hex: '#b3261e' }];
 
 /** Gli strumenti della barra di modifica. */
-type Mode = 'pan' | 'paint' | 'fill' | 'erase';
+type Mode = 'pan' | 'paint' | 'fill' | 'erase' | 'group';
 
 const MODE_HELP: Record<Mode, string> = {
   pan: 'Sposta: trascina per muovere la vista, rotella per ingrandire. Il ricamo non si tocca.',
   paint: 'Pennello: trascina per passare le V al filo scelto. Sulle celle vuote mette il punto scelto qui a fianco (V, croce, diagonale). Maiuscolo + trascina cancella.',
   fill: 'Riempi: un clic passa al filo scelto tutta la zona collegata dello stesso colore — per esempio l’interno di una lettera.',
   erase: 'Gomma: trascina per cancellare; lì non si cuce niente.',
+  group: 'Gruppi: trascina un rettangolo attorno a una parte (per esempio un titolo): il filo di ogni colore la cuce tutta insieme. Si tolgono in 04 Passaggi.',
 };
 
 /** Come si disegna ogni tipo di passaggio nell'anteprima (colori dai token del DS). */
@@ -181,6 +182,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           <label class="rg-field"><span class="rg-field__label">Zona massima</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="zoneMax" type="text" inputmode="decimal" aria-describedby="h-zoneMax"><span>mm</span></span>
             <span class="rg-field__help" id="h-zoneMax">Oltre, la zona si divide</span></label>
+          <div class="rg-field rg-param-grid__wide cs-groups" id="groupsBox">
+            <span class="rg-field__label">Gruppi</span>
+            <ul class="rg-list" id="groupList" aria-label="Gruppi"></ul>
+            <div class="rg-empty" id="groupEmpty">Nessun gruppo. Scegli «Gruppi» nella barra e trascina un rettangolo sul disegno: quella parte si cuce tutta insieme.</div>
+            <button type="button" class="rg-button rg-button--small rg-button--ghost rg-button--danger" id="groupClear"><svg class="rg-icon" aria-hidden="true" focusable="false"><use href="${ICONS}#rg-icon-elimina"></use></svg>Togli tutti</button>
+          </div>
           <label class="rg-toggle rg-param-grid__wide">
             <input type="checkbox" id="fixedDir"><span class="rg-toggle__track"></span><span>Direzione fissa («\\» dall’alto, «/» dal basso)</span>
           </label>
@@ -228,6 +235,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <button type="button" class="rg-segmented__item" data-mode="paint" title="Pennello (B)">Pennello</button>
             <button type="button" class="rg-segmented__item" data-mode="fill" title="Riempi (F)">Riempi</button>
             <button type="button" class="rg-segmented__item" data-mode="erase" title="Gomma (E)">Gomma</button>
+            <button type="button" class="rg-segmented__item" data-mode="group" title="Gruppi (G)">Gruppi</button>
           </div>
           <div class="cs-editbar__group" role="group" aria-labelledby="eb-gr"><span class="rg-label" id="eb-gr">Grandezza</span>
             <div class="rg-segmented" id="sizeSel">
@@ -307,6 +315,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   let crop: { x: number; y: number; w: number; h: number } | null = null;
   let cropping = false;
   let cropDrag: { a: { x: number; y: number }; b: { x: number; y: number } } | null = null;
+  /** Il rettangolo di un gruppo che si sta tirando (modalità Gruppi). */
+  let groupDrag: { a: { x: number; y: number }; b: { x: number; y: number } } | null = null;
+  /** Il gruppo evidenziato dalla lista (passandoci sopra col mouse). */
+  let groupHover = -1;
   let result: RouteResult | null = null;
   let sourceName = '';
   const undo: Array<{ grid: GridSpec; cells: Cells }> = [];
@@ -493,6 +505,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       + (showGrid ? `<g opacity="0.55" pointer-events="none"><rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="url(#cs-cell)"/><rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="url(#cs-major)"/></g>` : '')
       + `<rect x="0" y="0" width="${f(w)}" height="${f(h)}" fill="none" style="stroke:var(--rg-color-neutral-800)" stroke-width="1" vector-effect="non-scaling-stroke" pointer-events="none"/>`;
 
+    drawGroups();
     $('formatInfo').textContent = `Griglia: ${st.grid.cols} colonne × ${st.grid.rows} righe, un punto per cella · il ricamo esce ${fmtNum(w)} × ${fmtNum(h)} mm (le celle sono intere)`;
     showStatus();
   }
@@ -586,7 +599,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     mark('#passOrderSel .rg-segmented__item', (b) => b.dataset.order === (st.route.passOrder ?? DEFAULT_ROUTE.passOrder));
     $('modeHelp').textContent = MODE_HELP[mode];
     const cv = root.querySelector('#canvas');
-    if (cv) for (const m of ['pan', 'paint', 'fill', 'erase']) cv.classList.toggle('cs-mode-' + m, m === mode);
+    if (cv) for (const m of ['pan', 'paint', 'fill', 'erase', 'group']) cv.classList.toggle('cs-mode-' + m, m === mode);
+    for (const id of ['sizeSel', 'stitchSel', 'editThreads']) root.querySelectorAll<HTMLButtonElement>('#' + id + ' button').forEach((b) => { b.disabled = mode === 'group'; });
   }
 
   const clampInt = (v: number, lo: number, hi: number) => Math.min(hi, Math.max(lo, Math.round(v)));
@@ -636,7 +650,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   $<HTMLInputElement>('showPaths').addEventListener('change', (e) => { showPaths = (e.target as HTMLInputElement).checked; draw(); });
   $<HTMLInputElement>('showGrid').addEventListener('change', (e) => { showGrid = (e.target as HTMLInputElement).checked; draw(); });
 
-  const setMode = (m: Mode) => { mode = m; syncSegmented(); hideBrush(); };
+  const setMode = (m: Mode) => { mode = m; syncSegmented(); hideBrush(); drawGroups(); };
   root.querySelectorAll<HTMLButtonElement>('#modeSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode as Mode)));
   root.querySelectorAll<HTMLButtonElement>('#sizeSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => { brushSize = Number(b.dataset.size) || 1; syncSegmented(); }));
   root.querySelectorAll<HTMLButtonElement>('#passOrderSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => { st.route.passOrder = b.dataset.order as 'row' | 'stitch'; syncSegmented(); update(); }));
@@ -936,7 +950,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const svg = $('layer').querySelector('svg');
     if (!svg) return;
     let rect = svg.querySelector<SVGRectElement>('#cs-brush');
-    if (!at || mode === 'pan' || cropping) { rect?.remove(); return; }
+    if (!at || mode === 'pan' || mode === 'group' || cropping) { rect?.remove(); return; }
     if (!rect) {
       rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       rect.id = 'cs-brush';
@@ -1009,6 +1023,16 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       return;
     }
     if (mode === 'pan') return;
+    if (mode === 'group') {
+      const p = mmAt(e);
+      if (!p || e.button !== 0) return;
+      e.stopPropagation(); e.preventDefault();
+      const { w, h } = sizeMm();
+      const cl = { x: Math.min(w, Math.max(0, p.x)), y: Math.min(h, Math.max(0, p.y)) };
+      groupDrag = { a: cl, b: cl };
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      return;
+    }
     const at = cellAt(e);
     if (!at) return;
     e.stopPropagation(); e.preventDefault();
@@ -1039,6 +1063,15 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       drawCropRect(cropDrag.a, cropDrag.b);
       return;
     }
+    if (groupDrag) {
+      e.stopPropagation();
+      const p = mmAt(e);
+      if (!p) return;
+      const { w, h } = sizeMm();
+      groupDrag.b = { x: Math.min(w, Math.max(0, p.x)), y: Math.min(h, Math.max(0, p.y)) };
+      drawGroups();
+      return;
+    }
     if (!painting) { showBrush(spaceDown ? null : cellAt(e)); return; }
     e.stopPropagation();
     paintAt(e);
@@ -1051,6 +1084,21 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       cropDrag = null;
       try { canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
       finishCrop(d.a, d.b);
+      return;
+    }
+    if (groupDrag) {
+      e.stopPropagation();
+      const d = groupDrag;
+      groupDrag = null;
+      try { canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      const q: ZoneGroup = { x: Math.min(d.a.x, d.b.x), y: Math.min(d.a.y, d.b.y), w: Math.abs(d.b.x - d.a.x), h: Math.abs(d.b.y - d.a.y) };
+      // un clic senza trascinare non fa un gruppo: serve almeno una cella per lato
+      if (q.w >= st.grid.cellW && q.h >= rowPitch(st.grid)) {
+        const r1 = (n: number) => Math.round(n * 10) / 10;
+        st.route.groups = [...(st.route.groups ?? []), { x: r1(q.x), y: r1(q.y), w: r1(q.w), h: r1(q.h) }];
+        buildGroups();
+        update();
+      } else drawGroups();
       return;
     }
     if (!painting) return;
@@ -1079,6 +1127,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     else if (k === 'f') setMode('fill');
     else if (k === 'e') setMode('erase');
     else if (k === 'h') setMode('pan');
+    else if (k === 'g') setMode('group');
   };
   const onKeyUp = (e: KeyboardEvent) => {
     if (e.code === 'Space') { spaceDown = false; canvas.classList.remove('cs-pan'); }
@@ -1152,6 +1201,79 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     crop = null;
     setCropping(false);
     applySource();
+  });
+
+  /**
+   * I gruppi sopra l'anteprima (in modalità Gruppi, o quello evidenziato dalla lista): un
+   * rettangolo continuo nel colore di categoria col suo numero, diverso dal ritaglio tratteggiato.
+   */
+  function drawGroups(): void {
+    const svg = $('layer').querySelector('svg');
+    if (!svg) return;
+    svg.querySelector('#cs-groups')?.remove();
+    const groups = st.route.groups ?? [];
+    if ((mode !== 'group' && groupHover < 0) || (!groups.length && !groupDrag)) return;
+    const ns = 'http://www.w3.org/2000/svg';
+    const layer = document.createElementNS(ns, 'g');
+    layer.id = 'cs-groups';
+    layer.setAttribute('pointer-events', 'none');
+    const fs = Math.max(4, sizeMm().w / 45);
+    const box = (q: ZoneGroup, strong: boolean, label: string) => {
+      const rc = document.createElementNS(ns, 'rect');
+      rc.setAttribute('x', String(q.x)); rc.setAttribute('y', String(q.y));
+      rc.setAttribute('width', String(q.w)); rc.setAttribute('height', String(q.h));
+      rc.setAttribute('vector-effect', 'non-scaling-stroke');
+      rc.setAttribute('style', `fill:none;stroke:var(--rg-color-category-2);stroke-width:${strong ? 3 : 2}`);
+      layer.appendChild(rc);
+      if (!label) return;
+      const t = document.createElementNS(ns, 'text');
+      t.setAttribute('x', String(q.x + fs * 0.3)); t.setAttribute('y', String(q.y + fs * 1.05));
+      t.setAttribute('font-size', String(fs));
+      t.setAttribute('style', 'fill:var(--rg-color-category-2);font-family:var(--rg-font-mono);paint-order:stroke;stroke:var(--rg-color-white);stroke-width:3px;stroke-linejoin:round');
+      t.textContent = label;
+      layer.appendChild(t);
+    };
+    groups.forEach((q, i) => { if (mode === 'group' || i === groupHover) box(q, i === groupHover, String(i + 1)); });
+    if (groupDrag) {
+      const d = groupDrag;
+      box({ x: Math.min(d.a.x, d.b.x), y: Math.min(d.a.y, d.b.y), w: Math.abs(d.b.x - d.a.x), h: Math.abs(d.b.y - d.a.y) }, true, '');
+    }
+    svg.appendChild(layer);
+  }
+
+  /** La lista dei gruppi nel pannello (04 Passaggi). */
+  function buildGroups(): void {
+    const groups = st.route.groups ?? [];
+    const list = $('groupList');
+    list.innerHTML = '';
+    list.hidden = !groups.length;
+    $('groupEmpty').hidden = groups.length > 0;
+    $('groupClear').hidden = !groups.length;
+    groups.forEach((q, i) => {
+      const li = document.createElement('li');
+      li.className = 'rg-list-row';
+      li.innerHTML = `<div class="rg-list-row__head"><span class="rg-list-row__title">Gruppo ${i + 1}</span><span class="rg-mono">${fmtNum(Math.round(q.w))} × ${fmtNum(Math.round(q.h))} mm</span>`
+        + `<span class="rg-list-row__actions"><span class="rg-tooltip rg-tooltip--end"><button type="button" class="rg-icon-button rg-icon-button--danger" aria-labelledby="tip-gdel-${i}">`
+        + `<svg class="rg-icon" aria-hidden="true" focusable="false"><use href="${ICONS}#rg-icon-elimina"></use></svg></button>`
+        + `<span class="rg-tooltip__text" role="tooltip" id="tip-gdel-${i}">Elimina Gruppo ${i + 1}</span></span></span></div>`;
+      li.addEventListener('mouseenter', () => { groupHover = i; drawGroups(); });
+      li.addEventListener('mouseleave', () => { groupHover = -1; drawGroups(); });
+      li.querySelector('button')!.addEventListener('click', () => {
+        st.route.groups = groups.filter((_, j) => j !== i);
+        groupHover = -1;
+        buildGroups();
+        update();
+      });
+      list.appendChild(li);
+    });
+    drawGroups();
+  }
+  $('groupClear').addEventListener('click', () => {
+    const n = (st.route.groups ?? []).length;
+    if (!n || !window.confirm(n === 1 ? 'Togliere il gruppo?' : `Togliere tutti i ${n} gruppi?`)) return;
+    st.route.groups = [];
+    buildGroups();
+    update();
   });
 
   /** Il rettangolo che si sta tirando, disegnato sopra l'anteprima. */
@@ -1304,6 +1426,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     target = { w: st.grid.cols * st.grid.cellW, h: gridHeight(st.grid) };
     syncFields();
     buildThreads();
+    buildGroups();
     update();
     requestAnimationFrame(() => pz.fit());
   }

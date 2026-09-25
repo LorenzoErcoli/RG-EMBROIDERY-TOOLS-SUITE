@@ -82,3 +82,25 @@ export function zonesOf(g: GridSpec, cells: Cells, color: number, opts: Partial<
   cut(0, g.rows, 0, g.cols, 0);
   return out;
 }
+
+// I GRUPPI (Lorenzo, 2026-09-25: «forzare che una parte venga fatta tutta insieme, tipo che la
+// scritta Christian Dior venga fatta tutta insieme»). Nessuna regola automatica sa che il titolo è
+// una cosa sola: il titolo è largo quasi quanto il giornale, e qualsiasi zona massima lo divide.
+// Allora lo dice chi disegna: un rettangolo sul disegno, e dentro ogni colore è UNA zona. Fuori
+// dai gruppi resta il taglio automatico.
+
+/** Un gruppo: un rettangolo sul ricamo, in mm dall'angolo in alto a sinistra. */
+export interface ZoneGroup { x: number; y: number; w: number; h: number; }
+
+/**
+ * Il gruppo a cui appartiene la cella (r, c): quello che contiene il suo centro, e se sono più
+ * d'uno l'ultimo disegnato. -1 = nessuno.
+ */
+export function groupOfCell(g: GridSpec, r: number, c: number, groups: readonly ZoneGroup[]): number {
+  const x = (c + 0.5) * g.cellW, y = r * rowPitch(g) + g.cellH / 2;
+  for (let i = groups.length - 1; i >= 0; i--) {
+    const q = groups[i];
+    if (x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h) return i;
+  }
+  return -1;
+}

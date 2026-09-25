@@ -4873,6 +4873,21 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   check('zone: il filo entra una volta in ogni colonna (senza zone ci torna)', [cambiZona(run(gZ, cZ)), cambiZona(run(gZ, cZ, { zones: null })) > 2], [2, true]);
   check('zone: e la misura massima taglia una zona troppo grande', new Set(rg.csZonesOf(gZ, cZ, 0, { maxMm: 30 }).values()).size > 2, true);
 
+  // I GRUPPI (Lorenzo: «forzare che una parte venga fatta tutta insieme, tipo la scritta Christian
+  // Dior»). Un titolo largo 120 mm fra due corpi di testo: la zona massima (30 mm) lo divide, e il
+  // filo lo cuce in due volte. Con un rettangolo attorno, una volta sola. Sul Dior: 6 ingressi → 1.
+  const gT = { rows: 30, cols: 40, cellW: 3, cellH: 3.8, overlapPct: 30 };
+  const cT = fill(gT, (r, c) => {
+    const titolo = r >= 12 && r < 15 && c % 5 !== 4;
+    const corpo = (r < 10 || r >= 17) && r % 2 === 0 && (c < 17 || c > 22) && c % 3 !== 2;
+    return titolo || corpo ? { stitch: 'v', color: 0 } : null;
+  });
+  const pT = 3.8 * 0.7;
+  const titoloG = { x: 0, y: 12 * pT - 0.2, w: 120, h: 3 * pT + 0.4 };
+  const ingressi = (res) => { let n = 0, prima = false; const W2 = LW(gT); for (const sg of res.colors[0].segs) { if (sg.kind !== 'stitch') continue; const i = Math.min(Math.floor(sg.from / W2), Math.floor(sg.to / W2)); const t = i >= 12 && i < 15; if (t && !prima) n++; prima = t; } return n; };
+  check('gruppi: il titolo diviso dalla zona massima si cuce in due volte, col gruppo in una', [ingressi(run(gT, cT, { zones: { maxMm: 30 } })), ingressi(run(gT, cT, { zones: { maxMm: 30 }, groups: [titoloG] }))], [2, 1]);
+  check('gruppi: valgono anche senza zone automatiche', ingressi(run(gT, cT, { zones: null, groups: [titoloG] })), 1);
+
   // LA MODIFICA A MANO (Lorenzo: «pulire l'interno della scritta… o cancellare qualcosa»).
   // Una lettera: un anello nero di V con dentro il bianco e un tratto nero staccato.
   const gE2 = { rows: 7, cols: 7, cellW: 3, cellH: 3.8 };
