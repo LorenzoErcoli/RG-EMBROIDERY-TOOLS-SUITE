@@ -28,14 +28,30 @@ npm install && npm run suite
 
 ## Gli strumenti
 
+Nella home, pagina **Strumenti**:
+
 | Strumento | Cosa fa | Ingresso |
 |---|---|---|
 | **Rete 45°** (`net-45`) | rete di cordoncini a 45° su una sagoma, filo continuo | SVG/DXF |
 | **Generatore pattern** (`pattern-grammar`) | pattern e basi ricamo da grammatica (cannage e altro) | formato + sagoma opzionale |
 | **Interlace** (`interlace`) | riempimento a intreccio multicolore, passaggi brevi, aree vuote | SVG/DXF o misure |
-| **Bitmap → Stitch** (`bitmap`) | da immagine raster a punti ordinati | PNG/JPG |
 | **Oblique Pattern** (`oblique`) | Broderie Anglaise: pattern obliquo a livelli + fori laser | SVG/DXF |
+| **Bitmap → Stitch** (`bitmap`) | da immagine raster a punti ordinati | PNG/JPG |
 | **Punto Striato** (`striatura`) | striature verticali che formano macchie maculate | SVG/DXF o misure |
+| **Pattern a zone** (`zone-pattern`) | riempie ogni zona colorata col suo pattern, ruotato sulle perpendicolari della zona | SVG a zone |
+| **Cannage rafia** (`cannage-rafia`) | il programma di una borsa in cannage rafia: linee, fermi, scalette, cornice | SVG a zone |
+| **Punto pettine sfrangiato** (`pettine`) | linee di base a passo fisso con sopra un pettine di denti rivolti verso il chiaro | SVG a gruppi + foto |
+
+Nella pagina **In sviluppo** (si aprono e si usano, ma non sono ancora strumenti su cui contare):
+
+| Strumento | Cosa fa | Ingresso |
+|---|---|---|
+| **Cross-Stitch** (`cross-stitch`) | griglia di diagonali, V e croci in più fili; l'effetto maglia | griglia disegnata o immagine |
+| **Broccato** (`broccato`) | aree di colore a raso rado, coi passaggi nascosti sotto i colori successivi | immagine |
+| **Sfrangiatura** (`sfrangiatura`) | frange a X sui capi dei rasi di un DST già cucito, dove marchi col pennello | DST |
+| **Punto Pittorico** (`pittorico`) | riempimenti che seguono le curve: degradé col frastaglio, taglio secco dove il colore stacca | immagine |
+
+L'elenco vero è il registro `packages/ui/src/tools.ts`: questa tabella lo riassume.
 
 La **guida d'uso** è dentro l'applicazione (bottone *Guida* nella topbar) ed è generata da
 [`MANUALE.md`](MANUALE.md): unica fonte, non si sdoppia.
@@ -48,10 +64,11 @@ Monorepo a workspace npm. Il codice condiviso sta in `packages/`, gli strumenti 
 
 ```
 apps/shell               HOME della suite (hash routing: #/net-45, #/interlace, …)
-apps/<tool>              i sei strumenti; ognuno esporta mount<Tool>(root)
+apps/<tool>              gli strumenti; ognuno esporta mount<Tool>(root)
 packages/core            @rg/core — mm, import SVG/DXF, geometria, punti, export SVG + DST
 packages/ui              @rg/ui — design system + topbar + pan/zoom + salvataggio + guida
 packages/pattern-grammar motore del Generatore pattern
+packages/testkit         aiuti per i test e i banchi (lettura/scrittura BMP e PNG)
 packages/design-system   RG Design System (submodule git, pinnato a un tag)
 strumenti-sviluppo/<nome> strumenti di sviluppo fuori dai workspace (es. ricamo-3d, Python)
 ```
@@ -111,3 +128,4 @@ Il procedimento completo è in [`AVVIO-NUOVO-TOOL.md`](AVVIO-NUOVO-TOOL.md). In 
 | [`MANUALE.md`](MANUALE.md) | il manuale d'uso (è anche la *Guida* in-app) |
 | [`REVISIONE-PARAMETRI.md`](REVISIONE-PARAMETRI.md) | nomi, etichette e unità dei parametri, decisi uno per uno |
 | [`AVVIO-NUOVO-TOOL.md`](AVVIO-NUOVO-TOOL.md) | briefing per chi apre un nuovo strumento |
+| [`AVVIO-CERVELLO-RICAMO.md`](AVVIO-CERVELLO-RICAMO.md) | il piano del *cervello*: una lingua sola per i tool, una conoscenza sola, un agente che parametrizza |

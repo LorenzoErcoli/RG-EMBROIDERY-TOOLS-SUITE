@@ -1845,13 +1845,14 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 
 | # | Cosa | Stato |
 |---|---|---|
-| **H1** | ~~**Un'icona per tool, e i progetti non finiti in una pagina a parte**~~ | ✅ **Fatto il 2026-09-16** su richiesta di Lorenzo. Ogni card ha un **pittogramma che disegna la struttura del punto** del suo tool (rombi della rete, zig-zag della grammatica, striature verticali, denti del pettine, croci del cross-stitch…): geometrici, a tratto, nel colore del testo, sempre accanto al nome — la regola del DS. Stanno in `packages/ui/src/tool-icons.ts`. La home ha ora **due pagine** collegate dalle `rg-tabs` del DS: **Strumenti** (`#/`, 9 tool) e **In sviluppo** (`#/sviluppo`, 4). In sviluppo: **broccato, sfrangiatura, Punto Pittorico, cross-stitch** — si aprono e si usano, ma col badge *In sviluppo* invece di *Disponibile*. Il registro dice dove sta ogni tool (`section` in `packages/ui/src/tools.ts`): spostarne uno è cambiare una parola. **Cross-stitch è attivo ma è ancora l'app React separata** (ThreadRoute Grid Lab, repo `cross-stitch-grid-embroidery-tool`): la card apre la versione pubblicata su GitHub Pages in una scheda nuova, col badge *App esterna*. Portarlo dentro la suite è una migrazione vera (motore in TS puro, pannello DS), da fare in una chat operativa. |
+| **H1** | ~~**Un'icona per tool, e i progetti non finiti in una pagina a parte**~~ | ✅ **Fatto il 2026-09-16** su richiesta di Lorenzo. Ogni card ha un **pittogramma che disegna la struttura del punto** del suo tool (rombi della rete, zig-zag della grammatica, striature verticali, denti del pettine, croci del cross-stitch…): geometrici, a tratto, nel colore del testo, sempre accanto al nome — la regola del DS. Stanno in `packages/ui/src/tool-icons.ts`. La home ha ora **due pagine** collegate dalle `rg-tabs` del DS: **Strumenti** (`#/`, 9 tool) e **In sviluppo** (`#/sviluppo`, 4). In sviluppo: **broccato, sfrangiatura, Punto Pittorico, cross-stitch** — si aprono e si usano, ma col badge *In sviluppo* invece di *Disponibile*. Il registro dice dove sta ogni tool (`section` in `packages/ui/src/tools.ts`): spostarne uno è cambiare una parola. Cross-stitch, che il 16 settembre era ancora l'app React separata aperta come *App esterna*, **dal 2026-09-24 è migrato dentro la suite** (vedi N2). |
 
 ### DS — Difetti del design system da portare nel DS (li chiude Lorenzo, il DS è suo)
 
 | # | Difetto | Stato |
 |---|---|---|
-| **DS1** | **Numero staccato dalla sua unità** nel campo `rg-field-with-unit` + `rg-input--numeric` ("100      mm"). Segnalato da Lorenzo il 2026-09-16 (*«lo vedo spesso»*): era in **tutti i 106 campi di tutti i 12 tool**, sempre **14px**. **Causa misurata:** la stessa larghezza `--rg-input-numeric-width: 12ch` viene risolta in due font diversi — `ch` vale lo "0" del font di chi la usa. La colonna della griglia la calcola nel font del contenitore (GT America 16px → **106,8px**), il `max-width` dell'input nel suo mono (GT America Mono 14px → **92,4px**): l'input resta più corto della sua colonna e l'unità parte dopo. | ✅ **Corretto nella suite** con una regola documentata in `packages/ui/src/rg.css`: dentro il campo con unità la larghezza la decide la colonna e l'input la riempie. Verificato nel browser: buco **0px** su 73 campi in 5 tool. **Da portare nel DS** (`styles/rg-components.css`, subito dopo la regola `:has(.rg-input--numeric)`): `.rg-field-with-unit .rg-input--numeric { max-width: none; }` — e **al bump del submodule che la contiene, togliere l'override dalla suite**. |
+| **DS1** | **Numero staccato dalla sua unità** nel campo `rg-field-with-unit` + `rg-input--numeric` ("100      mm"). Segnalato da Lorenzo il 2026-09-16 (*«lo vedo spesso»*): era in **tutti i 106 campi di tutti i 12 tool**, sempre **14px**. **Causa misurata:** la stessa larghezza `--rg-input-numeric-width: 12ch` viene risolta in due font diversi — `ch` vale lo "0" del font di chi la usa. La colonna della griglia la calcola nel font del contenitore (GT America 16px → **106,8px**), il `max-width` dell'input nel suo mono (GT America Mono 14px → **92,4px**): l'input resta più corto della sua colonna e l'unità parte dopo. | ✅ **Chiusa nel DS v1.19.1** (2026-09-16, su richiesta di Lorenzo: *«portalo tu nel design system»*): `.rg-field-with-unit .rg-input--numeric { max-width: none; }` in `styles/rg-components.css`, con la nota *«Il perché, da non rompere»* in `components/forms.md`. La suite è passata da 1.14.1 a **1.19.1** e l'override temporaneo è **uscito da `packages/ui/src/rg.css`**, come diceva il suo commento. Verificato nel browser: buco **0px** su 137 campi in 7 tool, e la regola arriva dal foglio del DS. |
+| **DS2** | **Casella di spunta schiacciata** dentro `rg-choice` quando l'etichetta è lunga: 13–14px di larghezza invece di 16. | **C'era già con la 1.14.1**, non l'ha portata il bump (misurato prima e dopo). Da decidere se e quando portarla nel DS. |
 
 ### P — Propagazione: portare a tutti quello che è nato in un tool solo
 
@@ -1863,12 +1864,39 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 | # | Cosa | Stato |
 |---|---|---|
 | **P0** | ~~**`pettine_v2` fuori dalla suite**~~ | ✅ **Fatto il 2026-09-10.** Era un'isola: fuori dal registro, senza route nella shell, fuori dal typecheck. Via 60 file e 8.768 righe, fra cui due copie dello stesso motore (`motore.ts` 1.388 + `riferimento-v1.ts` 2.159): contando pettine, dello stesso motore circolavano **tre copie**. Import app→app da 66 a **33**. |
-| **P1** | **Il simulatore a tutta la suite.** Undici tool su dodici producono un DST e **solo pettine può vederlo cucire**. 158 righe che si spostano in `@rg/ui`. | **Briefing pronto:** [`AVVIO-SIMULATORE-CONDIVISO.md`](AVVIO-SIMULATORE-CONDIVISO.md). Deciso da Lorenzo: *«lo vorrei ovunque»*. |
+| **P1** *(a metà)* | **Il simulatore a tutta la suite.** Si è **spostato** in `@rg/ui` (`packages/ui/src/simulatore.ts`) ma **non si è diffuso**: al 2026-09-28 lo usano 2 tool su 13 (pettine, cannage-rafia). | **Briefing pronto:** [`AVVIO-SIMULATORE-CONDIVISO.md`](AVVIO-SIMULATORE-CONDIVISO.md). Deciso da Lorenzo: *«lo vorrei ovunque»*. |
 | **P2** | ~~**Le primitive del Pittorico salgono nel core**~~ | ✅ **Fatto il 2026-09-10.** Gli import da un'app all'altra passano da **33 a 1** — e quell'uno è un file di dati (zone-pattern legge la libreria preset di pattern-grammar), non codice. `makeRegion`/`BoundaryIndex`/`lisciaRegione` **fusi in `core/regions.ts`** invece che in un file nuovo: due file `region`/`regions` sarebbero stati la trappola perfetta. `rasterizza`/`livello`/`incatena` → **`core/isolines.ts`**, e **solo quelle tre**: `buildIsoFill` resta nel Pittorico perché dipende dal suo campo di direzione e ha un cliente solo (regola di crescita 1: si estrae quel che serve al secondo cliente, non tutto il file). `borders.ts` e `colonne.ts` interi. `bmp`/`png` → **`packages/testkit`**, che non è il core: quelli non fanno ricamo, servono a guardarlo. Trasloco a comportamento invariato, verificato dopo **ogni** modulo: `npm test` da 718 a **749** asserzioni, typecheck sui 13 progetti, build, e lo script headless del laboratorio compila. |
 | **P3** | **Le regole sui passaggi nel core.** Il lavoro del 9–10 settembre su pettine (corridoi, sormonto trattato come una riga, passaggi sparsi sulle basi, tinta minima, tetto come manopola: **da 424 a 40 rasafili**) è conoscenza di dominio, non di pettine. Parte è già in `core/routing.ts` (mappa di copertura, costeggia il contorno, spingi dentro). | Da fare. Vale per broccato, striatura, interlace, pittorico. |
 | **P4** | **Il laboratorio dei casi come metodo condiviso.** Il motore registra le decisioni del filo, una pagina le mostra, le risposte di Lorenzo stanno accanto, si rigenera a ogni push. Oggi vive in `apps/pettine/scripts`. | Da fare. Serve uguale a striatura (macchie), interlace (agglomerati), pittorico (copertura). |
 | **P5** | **Due importer SVG, e tre clienti fuori casa.** `parseSvgPolylines` di `@rg/pattern-grammar` è usato da pettine e zone-pattern oltre che dal suo tool; il core ha il suo importer a DOM. Il vecchio "restano due" adesso costa di più. | Da decidere. |
 | **P6** | **Igiene.** `BRIEFING-RASO-OMOGENEO.zip` (3 MB) sta in radice non tracciato; `test/smoke.mjs` è un file solo da 3.680 righe con 718 asserzioni. | Da fare quando dà fastidio. |
+
+### K — Il cervello del ricamo: una lingua sola, poi una conoscenza sola
+
+> Chiesto da Lorenzo nella chat globale il **2026-09-28**: *«un cervello che possa funzionare come
+> agente, esperto di ricamo e in grado di parametrizzare i progetti. In primis omogeneizzare tutti i
+> tools, e poi omogeneizzare le conoscenze.»* **Il piano intero, col controllo globale misurato, è in
+> [`AVVIO-CERVELLO-RICAMO.md`](AVVIO-CERVELLO-RICAMO.md).** In breve, cosa ha trovato il controllo:
+> 13 tool su 13 scrivono un file riapribile ma **0 su 13 aprono quello di un altro**; nel codice ci
+> sono **211 nomi di parametri** fisici, e **18 dei 35** nomi canonici della Costituzione §3 controllati
+> **non li usa nessuno**; `params.schema.json`, disegnato in ARCHITETTURA come contratto, **non esiste**;
+> 21 decisioni di mestiere stanno solo nella memoria dell'assistente, fuori dal repo.
+
+| # | Fase | Stato |
+|---|---|---|
+| **K1** | **Registro dei parametri** (`packages/cervello`) per i 13 tool + `params.schema.json` generato + il **cricchetto**: un test che fallisce se un tool salva un parametro non registrato, con una lista del debito che può solo scendere. | **Pronta a partire**, non aspetta nessuno. |
+| **K2** | **La busta di progetto v1** + `leggiProgetto` nel core: il file di un tool si apre in un altro e porta sorgente, misura reale, ruoli e fili. | Dopo K1. |
+| **K3** | **Il referto comune** (punti, metri di filo, salti, filo in vista) calcolato dal DST con una funzione sola e scritto nella busta. | Dopo K1. |
+| **K4** | **La scheda di ogni tool** in `tools.ts`: ingressi, uscite, tecniche R24, parametri. | Dopo K1. |
+| **K5** | **`sapere/`**: tecniche, decisioni, riferimenti, materiali — con la migrazione delle note e delle decisioni di STATO, e un test di coerenza col registro. | Aspetta **D2** di Lorenzo (le note nel repo). |
+| **K6** | **I riferimenti misurati**: uno script legge i DST di riferimento e ne scrive le misure in `sapere/riferimenti/`. | Dopo K5. |
+| **K7** | **Il banco senza interfaccia** (`npm run cervello -- prova <tool> …` → busta + DST + PNG + referto). Raccoglie P1 e P4. | Dopo K2–K3. |
+| **K8** | **L'agente `esperto-ricamo`**: dato un brief, consegna un file di progetto provato e motivato, che il tool apre con *Riapri*. | Ultima. |
+
+**Decisioni aperte per Lorenzo (nessuna blocca K1):** **D1** id in inglese ed etichette in italiano? ·
+**D2** le 21 note della memoria dell'assistente si portano nel repo? · **D3** l'agente prima come agente
+di Claude Code, la suite resta senza server? · **D4** i concetti misurati in due modi (es. la densità di
+interlace e di bitmap) si decidono caso per caso? Le proposte sono in §7 del briefing.
 
 ### In progettazione
 

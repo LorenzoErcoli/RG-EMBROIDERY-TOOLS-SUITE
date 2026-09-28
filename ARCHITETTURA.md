@@ -85,7 +85,7 @@ graph TD
 
 ## Come si legge
 
-- **Contratti** (in alto): non è codice eseguibile, è il *linguaggio*. La Costituzione governa tutto; `params.schema.json` è il ponte che fa parlare anche il satellite Python.
+- **Contratti** (in alto): non è codice eseguibile, è il *linguaggio*. La Costituzione governa tutto; `params.schema.json` è il ponte che fa parlare anche il satellite Python. **Attenzione: al 2026-09-28 `params.schema.json` non esiste ancora** — è disegnato qui ma non è mai stato scritto. Nasce generato dal registro dei parametri, fase **K1** di [`AVVIO-CERVELLO-RICAMO.md`](AVVIO-CERVELLO-RICAMO.md).
 - **Packages**: il codice condiviso. `core` è la base che propaga. `ui-kit` e `scaffold` accelerano i nuovi tool ma non sono obbligatori dal giorno 1.
 - **Apps**: i tool (net-45, pattern-grammar, interlace, bitmap, oblique). Ognuno importa `core`; nessuno duplica.
 - **Freccia di promozione** (tool → core): il percorso per cui una buona idea in un tool diventa patrimonio di tutti.
