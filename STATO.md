@@ -1880,7 +1880,7 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 > 13 tool su 13 scrivono un file riapribile ma **0 su 13 aprono quello di un altro**; nel codice ci
 > sono **211 nomi di parametri** fisici, e **18 dei 35** nomi canonici della Costituzione §3 controllati
 > **non li usa nessuno**; `params.schema.json`, disegnato in ARCHITETTURA come contratto, **non esiste**;
-> 21 decisioni di mestiere stanno solo nella memoria dell'assistente, fuori dal repo.
+> 20 decisioni di mestiere stavano solo nella memoria dell'assistente, fuori dal repo — **portate in [`sapere/`](sapere/LEGGIMI.md) lo stesso giorno**.
 
 | # | Fase | Stato |
 |---|---|---|
@@ -1888,15 +1888,15 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 | **K2** | **La busta di progetto v1** + `leggiProgetto` nel core: il file di un tool si apre in un altro e porta sorgente, misura reale, ruoli e fili. | Dopo K1. |
 | **K3** | **Il referto comune** (punti, metri di filo, salti, filo in vista) calcolato dal DST con una funzione sola e scritto nella busta. | Dopo K1. |
 | **K4** | **La scheda di ogni tool** in `tools.ts`: ingressi, uscite, tecniche R24, parametri. | Dopo K1. |
-| **K5** | **`sapere/`**: tecniche, decisioni, riferimenti, materiali — con la migrazione delle note e delle decisioni di STATO, e un test di coerenza col registro. | Aspetta **D2** di Lorenzo (le note nel repo). |
+| **K5** *(a metà)* | **`sapere/`**: tecniche, decisioni, riferimenti, materiali — con la migrazione delle note e delle decisioni di STATO, e un test di coerenza col registro. | ✅ **Le 20 note sono nel repo** (2026-09-28): `sapere/tool`, `decisioni`, `metodo`, `codice`, `riferimenti`. Restano le decisioni sparse in STATO, `tecniche/`, `materiali/` e il test (dopo K1). |
 | **K6** | **I riferimenti misurati**: uno script legge i DST di riferimento e ne scrive le misure in `sapere/riferimenti/`. | Dopo K5. |
 | **K7** | **Il banco senza interfaccia** (`npm run cervello -- prova <tool> …` → busta + DST + PNG + referto). Raccoglie P1 e P4. | Dopo K2–K3. |
 | **K8** | **L'agente `esperto-ricamo`**: dato un brief, consegna un file di progetto provato e motivato, che il tool apre con *Riapri*. | Ultima. |
 
-**Decisioni aperte per Lorenzo (nessuna blocca K1):** **D1** id in inglese ed etichette in italiano? ·
-**D2** le 21 note della memoria dell'assistente si portano nel repo? · **D3** l'agente prima come agente
-di Claude Code, la suite resta senza server? · **D4** i concetti misurati in due modi (es. la densità di
-interlace e di bitmap) si decidono caso per caso? Le proposte sono in §7 del briefing.
+**Decise da Lorenzo il 2026-09-28** (*«si parametri inglese, etichette italiano, D2 portale nel repo, si
+agente claude, ok d4»*): **D1** id dei parametri in inglese camelCase, etichette in italiano · **D2** le
+note nel repo → fatto, `sapere/` · **D3** l'agente è un agente di Claude Code, la suite resta senza
+server · **D4** i concetti misurati in due modi si decidono caso per caso, col ricamo in mano.
 
 ### In progettazione
 

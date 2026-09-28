@@ -21,7 +21,7 @@
 | Stesso concetto, due nomi | `realWidthMm`/`larghezzaRealeMm` (pettine li ha tutti e due), `threadMm`/`filoMm`, `jumpMm`/`saltoMm` | È il problema che §3 diceva di risolvere «alla radice». |
 | `params.schema.json` | **non esiste** | `ARCHITETTURA.md` lo disegna come contratto che governa il core; la Costituzione lo promette. |
 | Simulatore | in `@rg/ui`, **usato da 2 tool** (pettine, cannage-rafia) | P1 è a metà: si è spostato, non si è diffuso. |
-| Dove sta la conoscenza di mestiere | Costituzione (31 regole), STATO (2.028 righe), REVISIONE-PARAMETRI, MANUALE, 6 briefing, il laboratorio di pettine, i DST di riferimento — **e 21 note nella memoria dell'assistente, fuori dal repo** | Decisioni preziose (*«densità = cella»*, *«ruota il piano, non il modulo»*, *«immagini, non vettori»*…) oggi le vede **solo l'assistente**, e solo da questa cartella. |
+| Dove sta la conoscenza di mestiere | Costituzione (31 regole), STATO (2.028 righe), REVISIONE-PARAMETRI, MANUALE, 6 briefing, il laboratorio di pettine, i DST di riferimento — **e 20 note nella memoria dell'assistente, fuori dal repo** | Decisioni preziose (*«densità = cella»*, *«ruota il piano, non il modulo»*, *«immagini, non vettori»*…) le vedeva **solo l'assistente**. **Portate in [`sapere/`](sapere/LEGGIMI.md) lo stesso giorno** (D2). |
 
 **In una riga:** i tool hanno già un canale per parlarsi (il file riapribile) ma non una lingua
 comune per farlo, e la conoscenza che li ha fatti nascere è sparsa in dieci posti, uno dei quali
@@ -140,15 +140,21 @@ come le note di memoria che già funzionano:
 
 ```
 sapere/
-  tecniche/     raso, pettine, cordoncino, striatura, broccato, frastaglio, cannage, maglia…
-                cos'è, quando si usa, parametri tipici CON range, che tool la fa, che DST la mostra
-  decisioni/    le decisioni di Lorenzo, una per file: data, cosa, perché, come si applica
-  riferimenti/  i DST di riferimento con le loro misure (densità, lunghezze, angoli, salti)
+  tool/         cos'è ogni tool, da quale riferimento è nato, le decisioni che lo definiscono   ✅
+  decisioni/    le scelte di resa e di modello, col perché e le strade provate e scartate       ✅
+  metodo/       come si lavora con Lorenzo e su questo repo, valido per tutti                   ✅
+  codice/       fatti del codice che non si vedono leggendolo (formati, trappole)               ✅
+  riferimenti/  i DST e i file di riferimento: dove stanno; poi le loro misure (K6)             ✅ indice
+  tecniche/     una per tipo di punto, coi range dei parametri presi dal registro (dopo K1)
   materiali/    fili (Cieffe Makò Ne 30/2 = 39,4 tex…), supporti (termogarza…), aghi
 ```
 
+**Fatto il 2026-09-28:** le 20 note sono in `sapere/`, con la forma dei file e le regole in
+[`sapere/LEGGIMI.md`](sapere/LEGGIMI.md). Restano di K5: le decisioni sparse in STATO, `tecniche/`,
+`materiali/` e il test di coerenza col registro (che aspetta K1).
+
 **Da dove arriva, senza inventare niente:**
-1. le **21 note della memoria dell'assistente** → `decisioni/` e `tecniche/` (sono di Lorenzo: devono
+1. le **20 note della memoria dell'assistente** → `decisioni/` e `tecniche/` (sono di Lorenzo: devono
    stare dove le vede lui e dove le vede ogni chat);
 2. le **decisioni sparse in STATO** e nei blocchi per tool → `decisioni/`, con un rimando;
 3. `REVISIONE-PARAMETRI.md` → nel registro (3a), e il file si cancella come dice lui stesso;
@@ -210,13 +216,13 @@ supposizioni.
 | **K2** | **La busta v1** + `leggiProgetto` nel core; ogni tool scrive la busta e legge i propri file vecchi; il primo interscambio vero (sorgente + misura + ruoli + fili da un file di qualunque tool) | un file di un tool si apre in un altro e porta con sé quello che ha senso | medio |
 | **K3** | **Il referto comune** (`misure` nella busta, calcolate dal DST con una funzione sola) | due tool diversi, stesso referto, stessi numeri sullo stesso DST | piccolo |
 | **K4** | **Le schede dei tool** in `tools.ts` (ingressi, uscite, tecniche R24, parametri) | la home e l'agente sanno cosa fa ogni tool senza leggere il codice | piccolo |
-| **K5** | **`sapere/`** + migrazione delle 21 note e delle decisioni di STATO + il test di coerenza | ogni decisione di Lorenzo ha un file, una data e un perché, nel repo | medio |
+| **K5** *(a metà)* | **`sapere/`** + migrazione delle 20 note (✅ fatta) e delle decisioni di STATO + il test di coerenza | ogni decisione di Lorenzo ha un file, una data e un perché, nel repo | medio |
 | **K6** | **I riferimenti misurati**: lo script che legge i DST di riferimento e scrive le loro misure | ogni tecnica ha i suoi numeri veri accanto | piccolo |
 | **K7** | **Il banco** (`npm run cervello -- prova …`) su tutti i motori | ogni tool gira da riga di comando e dà busta + DST + PNG + referto | medio |
 | **K8** | **L'agente** `esperto-ricamo` | dato un brief, consegna un file di progetto provato e motivato | medio |
 
-**K1 è la prima e non aspetta nessuno.** K2–K4 si possono fare in qualunque ordine dopo K1. K5 ha
-bisogno del sì di Lorenzo sul punto D2 qui sotto. K7 raccoglie P1 (simulatore) e P4 (laboratorio):
+**K1 è la prima e non aspetta nessuno.** K2–K4 si possono fare in qualunque ordine dopo K1. K5 è
+partita (D2 decisa). K7 raccoglie P1 (simulatore) e P4 (laboratorio):
 quando il banco esiste, il simulatore e il laboratorio ne sono due viste.
 
 **Cosa non cambia:** nessun motore viene riscritto, nessun parametro viene rinominato d'ufficio,
@@ -224,11 +230,14 @@ nessun file vecchio smette di aprirsi. Tutto per aggiunta, un tool alla volta (r
 
 ---
 
-## 7. Decisioni di Lorenzo (nessuna blocca K1)
+## 7. Decisioni di Lorenzo — **tutte prese il 2026-09-28**
 
-| # | Domanda | La mia proposta |
+> Lorenzo: *«si parametri inglese, etichette italiano, D2 portale nel repo, si agente claude, ok d4»*.
+> Le quattro proposte qui sotto sono passate come scritte.
+
+| # | Domanda | Deciso |
 |---|---|---|
 | **D1** | Gli **id** dei parametri: inglese o italiano? Oggi sono mescolati; le etichette sono già tutte in italiano. | **Id in inglese camelCase** come dice già la Costituzione §3, **etichette in italiano** nel registro. I nomi italiani esistenti (`sormontoMm`, `passoMm`…) restano come sinonimi finché il loro tool non si tocca. |
-| **D2** | Le **21 note** che oggi stanno nella memoria dell'assistente: si portano nel repo? | **Sì.** Sono decisioni tue: oggi le vede solo l'assistente e solo da questa cartella; nel repo le vedi tu, ogni chat, e il test che le controlla. |
+| **D2** | Le **20 note** che oggi stanno nella memoria dell'assistente: si portano nel repo? | **Sì.** Sono decisioni tue: oggi le vede solo l'assistente e solo da questa cartella; nel repo le vedi tu, ogni chat, e il test che le controlla. |
 | **D3** | Dove vive l'agente. | **Prima come agente di Claude Code** (come quello del design system): zero infrastruttura, e la suite resta senza server. Un pannello *Chiedi* dentro la suite è possibile dopo, perché il cervello sono dati — ma vuol dire un servizio e una chiave, ed è una scelta a parte. |
 | **D4** | Quando due tool misurano lo stesso concetto in due modi (la densità di interlace e quella di bitmap, C6), chi vince? | Nessuno d'ufficio: il registro le mette una accanto all'altra, e si decide caso per caso col ricamo in mano (regola 7). |

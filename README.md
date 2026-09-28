@@ -128,4 +128,5 @@ Il procedimento completo è in [`AVVIO-NUOVO-TOOL.md`](AVVIO-NUOVO-TOOL.md). In 
 | [`MANUALE.md`](MANUALE.md) | il manuale d'uso (è anche la *Guida* in-app) |
 | [`REVISIONE-PARAMETRI.md`](REVISIONE-PARAMETRI.md) | nomi, etichette e unità dei parametri, decisi uno per uno |
 | [`AVVIO-NUOVO-TOOL.md`](AVVIO-NUOVO-TOOL.md) | briefing per chi apre un nuovo strumento |
+| [`sapere/`](sapere/LEGGIMI.md) | la conoscenza di mestiere: cos'è ogni tool, le decisioni di Lorenzo col loro perché, il metodo, i riferimenti — **da leggere prima di lavorare su un tool** |
 | [`AVVIO-CERVELLO-RICAMO.md`](AVVIO-CERVELLO-RICAMO.md) | il piano del *cervello*: una lingua sola per i tool, una conoscenza sola, un agente che parametrizza |
