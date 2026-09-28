@@ -82,3 +82,16 @@ body {
 .cs-order-legend__steps i:nth-child(3) { background: color-mix(in oklab, var(--cs-order-to) 50%, var(--cs-order-from)); }
 .cs-order-legend__steps i:nth-child(4) { background: color-mix(in oklab, var(--cs-order-to) 75%, var(--cs-order-from)); }
 .cs-order-legend__steps i:nth-child(5) { background: var(--cs-order-to); }
+
+/* L'intestazione dello stage su una riga anche con la finestra stretta (spazio fra titolo e pulsanti ridotto) */
+.cs-workspace .rg-workspace__stage-header { gap: var(--rg-space-3); }
+.cs-workspace .rg-workspace__stage-header .rg-cluster { gap: var(--rg-space-2); }
+/* Adatta nella barra di stato, accanto allo zoom: è un comando di vista (DS, patterns/workspace.md) */
+.cs-viewctl { display: inline-flex; align-items: center; gap: var(--rg-space-2); white-space: nowrap; }
+/* La barra di stato va a capo quando lo stage è stretto: lo stato su una riga, legenda e vista sotto */
+.cs-workspace .rg-workspace__statusbar { flex-wrap: wrap; row-gap: var(--rg-space-1); }
+.cs-workspace .cs-status { flex-basis: 10rem; }
+.cs-workspace .cs-legend { flex-wrap: wrap; row-gap: var(--rg-space-1); }
+.cs-viewctl { margin-left: auto; }
+/* Sei strumenti: con lo stage stretto il selettore va a capo invece di uscire dalla barra */
+.cs-editbar #modeSel { flex-wrap: wrap; max-width: 100%; }

@@ -617,7 +617,7 @@ appena cucita. Per ripassare meno deve prendere scorciatoie sopra gli altri colo
 
 In tutti e tre i casi niente salti e nessun ritorno in un pezzo lasciato a metà.
 
-**Area di prova** (in alto, accanto ad *Adatta*): si disegna e si modifica **una volta sola** il ricamo
+**Area di prova** (nella barra di modifica, gruppo *Area*; *Adatta* è in basso, accanto allo zoom): si disegna e si modifica **una volta sola** il ricamo
 grande, poi si prova un pezzo. Premi *Area di prova* e trascina un rettangolo sul disegno: passaggi,
 numeri nella barra di stato ed export (DST e SVG) valgono **solo lì**, e il file esce della misura
 dell'area, pronto per uno swatch. Fuori il disegno resta, velato, e si può continuare a modificare.

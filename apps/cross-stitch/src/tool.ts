@@ -246,9 +246,6 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       <header class="rg-workspace__stage-header">
         <h2 class="rg-h3">Disegno</h2>
         <div class="rg-cluster">
-          <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
-          <span class="rg-tooltip"><button type="button" id="areaBtn" class="rg-button rg-button--outline rg-button--small" aria-pressed="false" aria-describedby="tip-area">Area di prova</button><span class="rg-tooltip__text" role="tooltip" id="tip-area">Trascina un rettangolo: passaggi ed export solo lì, il disegno fuori resta</span></span>
-          <button type="button" id="areaAllBtn" class="rg-button rg-button--ghost rg-button--small" hidden>Tutto il disegno</button>
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Esporta SVG</button>
         </div>
@@ -262,6 +259,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <button type="button" class="rg-segmented__item" data-mode="erase" title="Gomma (E)">Gomma</button>
             <button type="button" class="rg-segmented__item" data-mode="group" title="Gruppi (G)">Gruppi</button>
             <button type="button" class="rg-segmented__item" data-mode="cut" title="Salti (T)">Salti</button>
+          </div>
+          <div class="cs-editbar__group" role="group" aria-labelledby="eb-area"><span class="rg-label" id="eb-area">Area</span>
+            <span class="rg-tooltip rg-tooltip--below"><button type="button" id="areaBtn" class="rg-button rg-button--outline rg-button--small" aria-pressed="false" aria-describedby="tip-area">Area di prova</button><span class="rg-tooltip__text" role="tooltip" id="tip-area">Trascina un rettangolo: passaggi ed export solo lì, il disegno fuori resta</span></span>
+            <button type="button" id="areaAllBtn" class="rg-button rg-button--ghost rg-button--small" hidden>Tutto il disegno</button>
           </div>
           <div class="cs-editbar__group" role="group" aria-labelledby="eb-gr"><span class="rg-label" id="eb-gr">Grandezza</span>
             <div class="rg-segmented" id="sizeSel">
@@ -308,7 +309,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           <span class="cs-legend__item"><svg viewBox="0 0 22 8"><line x1="1" y1="4" x2="21" y2="4" style="${SEG_STYLE.jump}"/></svg>salto</span>
           <span class="cs-legend__item"><svg viewBox="0 0 22 8"><line x1="1" y1="4" x2="21" y2="4" style="${CUT_STYLE}"/></svg>salto a mano</span>
         </span>
-        <span id="zoom" class="rg-mono">zoom 100%</span>
+        <span class="cs-viewctl"><span id="zoom" class="rg-mono">zoom 100%</span><button type="button" id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button></span>
       </footer>
     </div>
   </div>`;
