@@ -592,6 +592,9 @@ risalire. Se da dentro non c'è strada, esce. Sul titolo del Dior, fra una lette
 filo scendeva sotto la riga cucita dopo e risaliva (le linee rosse verso il basso); ora fa tutta la
 scritta e poi si sposta sotto. Il prezzo: fra una parola e l'altra attraversa il bianco sopra 2–3 V
 della base (sul titolo da 14 a 24 cm di filo in vista).
+Fuori dal recinto il filo può comunque passare sopra i **propri punti già cuciti** (ripassandoli):
+se una riga è stata cucita prima dei pezzi appesi sotto, per andare da un pezzo all'altro risale e
+ripassa la riga, invece di attraversare il bianco.
 
 **Gruppi.** Nessuna regola automatica sa che un titolo è una cosa sola: sul giornale Dior il titolo
 è largo quasi quanto la pagina, e qualsiasi zona massima lo divide (il filo lo cuciva in 6 volte).

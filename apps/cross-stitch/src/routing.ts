@@ -595,6 +595,29 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       }
     }
     const fenceOn = byBlocks && params.fence !== false;
+    // Fuori dal recinto si passa solo sui propri punti GIÀ CUCITI: ripasso sulle diagonali, o
+    // vertice-vertice dentro V di questo filo già finite. Lorenzo (2026-09-28, due pezzi sotto una
+    // riga, collegati a lei): il filo attraversava il bianco fra i due pezzi, invece di risalire da
+    // dove era entrato, ripassare la riga (già cucita, di un altro gruppo) e riscendere nell'altro.
+    // Resta vietato nascondersi sotto punti che verranno dopo (il titolo che scendeva sotto la riga).
+    const settled = (v: number, w: number): boolean => {
+      const i1 = Math.floor(v / W), j1 = v - i1 * W, i2 = Math.floor(w / W), j2 = w - i2 * W;
+      if (i1 === i2) return false;
+      if (j1 !== j2) return edgeKind(v, w, k).kind === 'retrace';
+      const i = Math.min(i1, i2);
+      const around = j1 % 2 === 1 ? [(j1 - 1) / 2] : [j1 / 2 - 1, j1 / 2];
+      let mineDone = false;
+      for (const c of around) {
+        if (c < 0 || c >= g.cols) continue;
+        for (const id of cellLegs.get(i * g.cols + c) ?? []) {
+          const leg = legs[id];
+          if (leg.color !== k) continue;
+          if (leg.remaining > 0) return false;
+          mineDone = true;
+        }
+      }
+      return mineDone;
+    };
     /** Il recinto corrente (null = nessuno): la zona in cui si lavora, se non è finita. */
     const fence = (): [number, number, number, number] | null => {
       if (!fenceOn || currentZone < -1 || !((zoneLeft.get(currentZone) ?? 0) > 0)) return null;
@@ -687,7 +710,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
             if (d < best) best = d;
           }
           forEachNeighbour(v, k, (w, cost) => {
-            if (box) { const wi = Math.floor(w / W), wj = w - wi * W; if (wi < box[0] || wi > box[2] || wj < box[1] || wj > box[3]) return; }
+            if (box) { const wi = Math.floor(w / W), wj = w - wi * W; if ((wi < box[0] || wi > box[2] || wj < box[1] || wj > box[3]) && !settled(v, w)) return; }
             const nd = d + cost;
             if (nd < dist[w] && nd <= limit) {
               if (dist[w] === Infinity) touched.push(w);

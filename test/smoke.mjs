@@ -4933,6 +4933,13 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   };
   check('recinto: fra una lettera e l\'altra il filo non scende sotto la riga (senza recinto 6 volte)', [scende(true), scende(false)], [0, 6]);
 
+  // FUORI DAL RECINTO, SUI PROPRI PUNTI GIÀ CUCITI (Lorenzo, 2026-09-28: due pezzi appesi a una riga
+  // con le loro gambe; il filo attraversava il bianco fra i due invece di tornare da dove era
+  // entrato). Riga e pezzi in zone diverse (zona massima 15 mm): prima del ritocco 4 mm in vista.
+  const gAp = { rows: 9, cols: 24, cellW: 2.4, cellH: 3.5, overlapPct: 30 };
+  const cAp = fill(gAp, (r, c) => ({ stitch: 'v', color: (r >= 1 && r <= 2 && c >= 1 && c <= 22) || (r === 3 && (c === 6 || c === 16)) || (r >= 4 && r <= 6 && ((c >= 3 && c <= 10) || (c >= 14 && c <= 19))) ? 1 : 0 }));
+  check('recinto: fuori si passa sui propri punti già cuciti, non sul bianco', run(gAp, cAp, { base: { color: 0, stitch: "v" }, zones: { gapMm: 5, maxMm: 15 } }).metrics.visibleMm, 0);
+
   // SALTI A MANO (Lorenzo: «eliminare i passaggi, farli diventare salti»). Un passaggio scelto
   // diventa un salto; i punti, il loro ordine e gli altri passaggi restano identici.
   const baseRc = { base: { color: 0, stitch: 'v' }, groups: gruppiRc };
