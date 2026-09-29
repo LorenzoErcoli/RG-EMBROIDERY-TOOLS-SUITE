@@ -594,7 +594,9 @@ scritta e poi si sposta sotto. Il prezzo: fra una parola e l'altra attraversa il
 della base (sul titolo da 14 a 24 cm di filo in vista).
 Fuori dal recinto il filo può comunque passare sopra i **propri punti già cuciti** (ripassandoli):
 se una riga è stata cucita prima dei pezzi appesi sotto, per andare da un pezzo all'altro risale e
-ripassa la riga, invece di attraversare il bianco.
+ripassa la riga, invece di attraversare il bianco. Questo vale per le zone automatiche. **Un gruppo invece è un confine**:
+mentre il filo lo lavora, i passaggi restano nel suo riquadro, senza margine e senza eccezioni (esce
+solo se dentro non c'è proprio strada). Così non risale e riscende fra gruppi diversi.
 
 **Gruppi.** Nessuna regola automatica sa che un titolo è una cosa sola: sul giornale Dior il titolo
 è largo quasi quanto la pagina, e qualsiasi zona massima lo divide (il filo lo cuciva in 6 volte).

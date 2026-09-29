@@ -4940,6 +4940,26 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   const cAp = fill(gAp, (r, c) => ({ stitch: 'v', color: (r >= 1 && r <= 2 && c >= 1 && c <= 22) || (r === 3 && (c === 6 || c === 16)) || (r >= 4 && r <= 6 && ((c >= 3 && c <= 10) || (c >= 14 && c <= 19))) ? 1 : 0 }));
   check('recinto: fuori si passa sui propri punti già cuciti, non sul bianco', run(gAp, cAp, { base: { color: 0, stitch: "v" }, zones: { gapMm: 5, maxMm: 15 } }).metrics.visibleMm, 0);
 
+  // IL GRUPPO È UN CONFINE (Lorenzo, 2026-09-29: «nonostante sia diviso a gruppi sale e scende più
+  // volte tra gruppi diversi»). Una riga nel gruppo 1, sotto pezzi staccati nel gruppo 2: col
+  // margine e il ripasso fuori dal recinto il filo risaliva sulla riga (già cucita) e riscendeva
+  // (5 volte). Dentro un gruppo i passaggi restano nel suo riquadro, senza eccezioni.
+  const gGc = { rows: 9, cols: 40, cellW: 2.4, cellH: 3.5, overlapPct: 30 };
+  const pGc = 3.5 * 0.7;
+  const cGc = fill(gGc, (r, c) => ({ stitch: 'v', color: (r >= 1 && r <= 2 && c >= 1 && c <= 38) || (r >= 4 && r <= 6 && c >= 2 && c <= 37 && (c - 2) % 7 < 3) ? 1 : 0 }));
+  const gruppiGc = [{ x: 0, y: 0.5 * pGc, w: 96, h: 2.6 * pGc }, { x: 0, y: 3.8 * pGc, w: 96, h: 3.5 * pGc }];
+  const risale = (extra) => {
+    const W2 = LW(gGc); let n = 0, via = [], prima = false;
+    for (const sg of run(gGc, cGc, { base: { color: 0, stitch: 'v' }, groups: gruppiGc, ...extra }).colors.find((c) => c.color === 1).segs) {
+      if (sg.kind !== 'stitch') { via.push(sg); continue; }
+      const sotto = Math.min(Math.floor(sg.from / W2), Math.floor(sg.to / W2)) >= 4;
+      if (sotto && prima && via.some((x) => Math.min(Math.floor(x.from / W2), Math.floor(x.to / W2)) < 3)) n++;
+      prima = sotto; via = [];
+    }
+    return n;
+  };
+  check('gruppi: mentre cuce il gruppo 2 il filo non risale mai nel gruppo 1 (senza recinto 5 volte)', [risale({}), risale({ fence: false })], [0, 5]);
+
   // SALTI A MANO (Lorenzo: «eliminare i passaggi, farli diventare salti»). Un passaggio scelto
   // diventa un salto; i punti, il loro ordine e gli altri passaggi restano identici.
   const baseRc = { base: { color: 0, stitch: 'v' }, groups: gruppiRc };

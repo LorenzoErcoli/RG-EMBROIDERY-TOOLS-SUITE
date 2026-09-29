@@ -18,4 +18,5 @@ sotto il secondo.
 immagine, ordine dei fili) si misura contro la **resa maglia**, non solo contro i mm di passaggio
 (vedi [la resa prima delle misure](../metodo/resa-prima-delle-misure.md)). Migrato in
 `apps/cross-stitch` lo stesso giorno; la fila di lavoro è la voce N2 di `STATO.md`. Sui passaggi vedi
-anche [ripassi o filo in vista](../decisioni/cross-stitch-ripassi.md).
+anche [ripassi o filo in vista](../decisioni/cross-stitch-ripassi.md) e [il gruppo è un
+confine](../decisioni/cross-stitch-gruppi-confine.md).

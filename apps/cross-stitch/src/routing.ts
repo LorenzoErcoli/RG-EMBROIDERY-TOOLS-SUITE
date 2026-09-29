@@ -619,10 +619,20 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       return mineDone;
     };
     /** Il recinto corrente (null = nessuno): la zona in cui si lavora, se non è finita. */
-    const fence = (): [number, number, number, number] | null => {
+    /**
+     * Il recinto corrente (null = nessuno): la zona in cui si lavora, se non è finita. Per un GRUPPO
+     * (disegnato da Lorenzo) il riquadro è stretto, senza margine e senza eccezioni: per lui il
+     * gruppo è un confine (2026-09-29, sul suo file: «nonostante sia diviso a gruppi sale e scende
+     * più volte tra gruppi diversi» — col margine di una cella e il ripasso fuori, il filo risaliva
+     * sulla riga del gruppo sopra e riscendeva). Per le zone automatiche: margine di una cella e,
+     * fuori, i propri punti già cuciti.
+     */
+    const fence = (): { box: [number, number, number, number]; strict: boolean } | null => {
       if (!fenceOn || currentZone < -1 || !((zoneLeft.get(currentZone) ?? 0) > 0)) return null;
       const bx = zoneBox.get(currentZone);
-      return bx ? [bx[0] - 1, bx[1] - 2, bx[2] + 1, bx[3] + 2] : null;
+      if (!bx) return null;
+      if (zoneRank.has(currentZone)) return { box: [bx[0], bx[1], bx[2], bx[3]], strict: true };
+      return { box: [bx[0] - 1, bx[1] - 2, bx[2] + 1, bx[3] + 2], strict: false };
     };
 
     /** Quante unità si possono prendere gratis all'uscita dopo aver preso `id` (Warnsdorff). */
@@ -692,7 +702,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     while (left > 0) {
       // --- Dijkstra dal vertice dell'ago, fermo alla soglia del salto ---
       const limit = params.jumpMm;
-      const search = (accept: (id: number, v: number) => boolean, box: [number, number, number, number] | null = null) => {
+      const search = (accept: (id: number, v: number) => boolean, box: { box: [number, number, number, number]; strict: boolean } | null = null) => {
         for (const t of touched) { dist[t] = Infinity; prevV[t] = -1; }
         touched.length = 0;
         heap.clear();
@@ -710,7 +720,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
             if (d < best) best = d;
           }
           forEachNeighbour(v, k, (w, cost) => {
-            if (box) { const wi = Math.floor(w / W), wj = w - wi * W; if ((wi < box[0] || wi > box[2] || wj < box[1] || wj > box[3]) && !settled(v, w)) return; }
+            if (box) { const wi = Math.floor(w / W), wj = w - wi * W; if ((wi < box.box[0] || wi > box.box[2] || wj < box.box[1] || wj > box.box[3]) && (box.strict || !settled(v, w))) return; }
             const nd = d + cost;
             if (nd < dist[w] && nd <= limit) {
               if (dist[w] === Infinity) touched.push(w);
