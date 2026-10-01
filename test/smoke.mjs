@@ -2417,6 +2417,64 @@ console.log('\noblique — routing + orchestratore (2d)');
       readFileSync(join(root, file), 'utf8').includes("name: 'reliefPercent', label: 'Scarico nelle aree', unit: '%'"), true);
   }
 
+  // L'AREA VUOTA VALE ANCHE DA SOLA (R5; Lorenzo, 2026-10-01: «fai valere l'area vuota anche da sola»).
+  // Prima il Generatore pattern buttava via la sagoma se nessuna tinta era «Confine di ritaglio»: un file
+  // col solo buco veniva ricamato pieno. Ora senza perimetro il bordo è il rettangolo del pannello, il
+  // buco si toglie e il resto del pattern NON cambia.
+  console.log('\npattern-grammar — un\'area vuota senza perimetro (R5)');
+  {
+    const preset = JSON.parse(readFileSync(join(root, 'apps/pattern-grammar/src/presets.shared.json'), 'utf8'));
+    const cfgV = { ...preset[Object.keys(preset)[0]], widthMm: 120, heightMm: 120 };
+    const anello = (x0, y0, x1, y1) => [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }, { x: x0, y: y0 }];
+    const perim = anello(10, 10, 110, 110), buco = anello(45, 45, 75, 75);
+    const sagoma = (paths) => ({ id: 'b', sourceFileName: 't.svg', sourceType: 'svg', paths, bounds: { minX: 0, minY: 0, maxX: 120, maxY: 120 } });
+    const via = (pts, hole) => ({ id: `p${pts[0].x}-${hole}`, points: pts, closed: true, hole });
+    const nelBuco = (p) => p.x > 45 && p.x < 75 && p.y > 45 && p.y < 75;
+    const fondo = (p) => Math.min(p.x - 45, 75 - p.x, p.y - 45, 75 - p.y);
+    const punti = (cfg) => rg.generateFinalPatternPoints(cfg).visualPolylines.flat();
+    const senza = punti({ ...cfgV, shapeType: 'none' });
+    const soloVuoto = punti({ ...cfgV, shapeType: 'imported', importedBoundary: sagoma([via(buco, true)]) });
+    const conConfine = punti({ ...cfgV, shapeType: 'imported', importedBoundary: sagoma([via(perim, false), via(buco, true)]) });
+    // "dentro il buco" vuol dire DENTRO: il bordo del vuoto è ricamabile, ci si appoggia (R5)
+    const dentroDavvero = (pts) => pts.filter(nelBuco).filter((p) => fondo(p) > 0.2).length;
+    check('senza la sagoma il buco si ricama; col solo vuoto e col vuoto più il confine, no',
+      [dentroDavvero(senza) > 100, dentroDavvero(soloVuoto), dentroDavvero(conConfine)], [true, 0, 0]);
+    // fuori dal buco non si perde un punto: il vuoto da solo toglie il buco e basta
+    const chiave = (p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`;
+    const fuoriSenza = new Set(senza.filter((p) => !nelBuco(p)).map(chiave));
+    const fuoriCon = new Set(soloVuoto.filter((p) => !nelBuco(p)).map(chiave));
+    const ingombro = (pts) => [Math.max(...pts.map((p) => p.x)).toFixed(1), Math.max(...pts.map((p) => p.y)).toFixed(1)];
+    check('fuori dal buco il pattern resta identico, e il formato del pannello taglia come prima',
+      [[...fuoriSenza].filter((k) => !fuoriCon.has(k)).length, ingombro(soloVuoto)], [0, ingombro(senza)]);
+
+    // L'IMPUNTURA NEL VUOTO (Lorenzo, 2026-10-01): «il ricamo non deve evitare del tutto di passare in
+    // quel vuoto, ma deve diventare un'impuntura normale con distanza punto definita… i punti
+    // particolari spariscono e tutto diventa un'impuntura semplice, per poi riprendere fuori».
+    const misura = (passo) => {
+      const linee = rg.generateFinalPatternPoints({ ...cfgV, shapeType: 'imported', voidStitchMm: passo, importedBoundary: sagoma([via(buco, true)]) }).visualPolylines;
+      const lunghezze = [], dentroTutto = (...pp) => pp.every((p) => p.x > 45.3 && p.x < 74.7 && p.y > 45.3 && p.y < 74.7);
+      let svolte = 0;
+      for (const linea of linee) {
+        for (let i = 1; i < linea.length; i++) if (dentroTutto(linea[i - 1], linea[i])) lunghezze.push(Math.hypot(linea[i].x - linea[i - 1].x, linea[i].y - linea[i - 1].y));
+        // gli angoli dentro il vuoto: un'impuntura va dritta, lo zig-zag no
+        for (let i = 2; i < linea.length; i++) {
+          if (!dentroTutto(linea[i - 2], linea[i - 1], linea[i])) continue;
+          const a1 = Math.atan2(linea[i - 1].y - linea[i - 2].y, linea[i - 1].x - linea[i - 2].x);
+          const a2 = Math.atan2(linea[i].y - linea[i - 1].y, linea[i].x - linea[i - 1].x);
+          let d = Math.abs(a2 - a1);
+          if (d > Math.PI) d = 2 * Math.PI - d;
+          if ((d * 180) / Math.PI > 30) svolte++;
+        }
+      }
+      lunghezze.sort((a, b) => a - b);
+      return { tratti: lunghezze.length, mediana: lunghezze.length ? Number(lunghezze[lunghezze.length >> 1].toFixed(2)) : 0, svolte };
+    };
+    const impuntura2 = misura(2), impuntura4 = misura(4);
+    check('col punto dell\'impuntura il vuoto si attraversa: punti di quella misura, dritti, e niente zig-zag dentro',
+      [impuntura2.tratti > 100, impuntura2.mediana, impuntura2.svolte, impuntura4.mediana, impuntura4.svolte, misura(0).tratti],
+      [true, 2, 0, 4, 0, 0]);
+  }
+
   console.log('\nzone-pattern — le aree di scarico sul davanti di Lorenzo');
   const modello = rg.parseImportedBoundarySource(
     readFileSync(join(here, 'fixtures/scarico-davanti.svg'), 'utf8'), 'scarico-davanti.svg',

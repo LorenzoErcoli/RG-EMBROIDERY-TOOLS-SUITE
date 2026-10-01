@@ -150,6 +150,13 @@ export type PatternConfig = {
   reliefAreas?: Point[][];
   /** Quanto scaricare dentro le aree, in %: 50 = metà delle passate. 0 = niente. */
   reliefPercent?: number;
+  /**
+   * Punto dell'IMPUNTURA dentro le AREE VUOTE, mm (Lorenzo, 2026-10-01: «il ricamo non deve evitare
+   * del tutto di passare in quel vuoto, ma deve diventare un'impuntura normale con distanza punto
+   * definita»). Dentro un vuoto i punti particolari spariscono e il filo lo attraversa dritto, a
+   * punti di questa misura; fuori il pattern riprende. `0` = dentro non si cuce (R5 puro).
+   */
+  voidStitchMm?: number;
   exportCompatibilityMode?: ExportCompatibilityMode;
   sourceAnalysis?: PatternAnalysis;
 };

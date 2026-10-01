@@ -1,8 +1,8 @@
 import { THREAD_STROKE_MM } from "@rg/core";
-import type { GeneratedPoint, PatternConfig, Point } from "../grammar/types.ts";
+import type { GeneratedPoint, ImportedBoundary, PatternConfig, Point } from "../grammar/types.ts";
 import { resolvePatternGrammar } from "../grammar/patternGrammar.ts";
 import { exportSvg } from "../exporter/svgExporter.ts";
-import { cleanupBoundaryConnectedPath, clipPathToBoundaryChunks, connectClippedChunksAlongBoundary, type TravelMove } from "./applyBoundary.ts";
+import { cleanupBoundaryConnectedPath, clipPathToBoundaryChunks, connectClippedChunksAlongBoundary, importedVoidRings, runningStitchInVoids, type TravelMove } from "./applyBoundary.ts";
 import { cleanupPolyline, removeConsecutiveDuplicatePoints } from "./cleanupPolyline.ts";
 import { generateConnector } from "./generateConnector.ts";
 import { generateModule, type ModulePhase } from "./generateModule.ts";
@@ -54,6 +54,20 @@ export type ExportReport = {
 const ILLUSTRATOR_SAFE_MAX_POINTS_PER_PATH = 5_000;
 
 /** Single source of truth used by both SVG export and browser preview. */
+/**
+ * La stessa sagoma senza le aree vuote: serve quando il vuoto si attraversa a impuntura, perché il
+ * ritaglio non deve toglierla. Si tiene in cache per contorno — gli anelli di un file vero hanno
+ * decine di migliaia di vertici, e `applyBoundary` li semplifica una volta sola per oggetto.
+ */
+const sagomeSenzaVuoti = new WeakMap<ImportedBoundary, ImportedBoundary>();
+function sagomaSenzaVuoti(boundary: ImportedBoundary): ImportedBoundary {
+  const gia = sagomeSenzaVuoti.get(boundary);
+  if (gia) return gia;
+  const senza = { ...boundary, paths: boundary.paths.filter((path) => path.hole !== true) };
+  sagomeSenzaVuoti.set(boundary, senza);
+  return senza;
+}
+
 export function generateFinalPatternPoints(config: PatternConfig): FinalPatternPoints {
   const grammar = resolvePatternGrammar(config);
   const marginX = grammar.moduleWidth * 1.6;
@@ -256,7 +270,11 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
   // Coordinates are already millimeters. Panel dimensions can add empty space,
   // but they must never fit/scale the generated geometry or UI parameters stop
   // matching real physical measurements.
-  const importedBounds = grammar.shapeType === "imported" ? grammar.importedBoundary?.bounds : undefined;
+  // Il contorno importato decide il formato del pannello solo se ha un PERIMETRO: con le sole aree
+  // vuote (R5) il pannello resta quello del disegno o del formato, e il vuoto toglie solo il suo buco.
+  const conPerimetro = (grammar.importedBoundary?.paths ?? [])
+    .some((path) => path.closed && path.points.length >= 3 && path.hole !== true);
+  const importedBounds = grammar.shapeType === "imported" && conPerimetro ? grammar.importedBoundary?.bounds : undefined;
   const importedWidth = importedBounds ? Math.max(0, importedBounds.maxX) : 0;
   const importedHeight = importedBounds ? Math.max(0, importedBounds.maxY) : 0;
   const usesImportedBoundary = Boolean(importedBounds);
@@ -275,13 +293,18 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
   const clipShape = (grammar.shapeType === "none" && (grammar.totalWidth !== undefined || grammar.totalHeight !== undefined))
     ? "rectangle"
     : grammar.shapeType;
-  const layoutPoints = scaled;
+  // L'IMPUNTURA NEL VUOTO (Lorenzo, 2026-10-01): con un passo > 0 il pattern non salta l'area vuota —
+  // dentro diventa un'impuntura dritta, e il taglio sui buchi si spegne, altrimenti la toglierebbe.
+  const opzioniVuoto = { width, height, inset, shapeType: clipShape, importedBoundary: grammar.importedBoundary };
+  const vuoti = grammar.voidStitchMm > 0 && clipShape === "imported" ? importedVoidRings(opzioniVuoto) : [];
+  const layoutPoints = vuoti.length ? runningStitchInVoids(scaled, vuoti, grammar.voidStitchMm) : scaled;
+  const boundaryPerRitaglio = vuoti.length ? sagomaSenzaVuoti(grammar.importedBoundary!) : grammar.importedBoundary;
   const clipResult = clipPathToBoundaryChunks(layoutPoints, {
     width,
     height,
     inset,
     shapeType: clipShape,
-    importedBoundary: grammar.importedBoundary
+    importedBoundary: boundaryPerRitaglio
   });
   const cleanedChunks = clipResult.chunks
     .map((chunk) => removeConsecutiveDuplicatePoints(cleanupPolyline(chunk.points, {
@@ -302,14 +325,14 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
     ? removeConsecutiveDuplicatePoints(cleanupBoundaryConnectedPath(
       connectClippedChunksAlongBoundary(
         stitchedPolylines.map((points, index) => ({ points, sourceStartIndex: index, sourceEndIndex: index })),
-        { width, height, inset, shapeType: clipShape, importedBoundary: grammar.importedBoundary, connectorStep: Math.max(1, grammar.maxStitchLength || grammar.constructionStroke * 4) }
+        { width, height, inset, shapeType: clipShape, importedBoundary: boundaryPerRitaglio, connectorStep: Math.max(1, grammar.maxStitchLength || grammar.constructionStroke * 4) }
       ),
       {
         width,
         height,
         inset,
         shapeType: clipShape,
-        importedBoundary: grammar.importedBoundary,
+        importedBoundary: boundaryPerRitaglio,
         minPointDistance: grammar.minPointDistance,
         boundaryCleanupMode: grammar.boundaryCleanupMode,
         maxBoundaryAdjustment: grammar.maxBoundaryAdjustment

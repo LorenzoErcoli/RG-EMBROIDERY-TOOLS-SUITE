@@ -58,6 +58,7 @@ export const CORPO: Group[] = [
       { kind: 'select', name: 'boundaryCleanupMode', label: 'Punti fuori dal contorno', value: 'adjust-then-delete', options: [['adjust-then-delete', 'Avvicina al bordo, poi elimina'], ['delete', 'Elimina']] },
       { kind: 'num', name: 'maxBoundaryAdjustment', label: 'Spostamento massimo verso il bordo', unit: 'mm', min: 0, step: 0.01, value: 0 },
       { kind: 'num', name: 'reliefPercent', label: 'Scarico nelle aree', unit: '%', min: 0, step: 5, value: 50, help: 'dentro le tinte marcate «Area di scarico» i zig-zag verticali e orizzontali hanno meno passate: 50 = metà; 0 = niente' },
+      { kind: 'num', name: 'voidStitchMm', label: 'Impuntura nelle aree vuote', unit: 'mm', min: 0, step: 0.5, value: 0, help: 'dentro le tinte marcate «Area vuota» il pattern diventa un’impuntura dritta con questo punto, e riprende fuori; 0 = dentro non si cuce' },
       { kind: 'select', name: 'exportCompatibilityMode', label: 'Compatibilità export', value: 'illustrator-safe', options: [['normal', 'Normale'], ['illustrator-safe', 'Sicuro per Illustrator']] },
       { kind: 'select', name: 'shapeType', label: 'Sagoma di ritaglio', value: 'none', options: [['none', 'Nessuna'], ['rectangle', 'Rettangolo'], ['circle', 'Cerchio'], ['diamond', 'Rombo'], ['imported', 'Importata DXF/SVG']] },
     ],

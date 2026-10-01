@@ -41,6 +41,7 @@ export type ResolvedPatternGrammar = {
   maxBoundaryAdjustment: number;
   reliefAreas?: Point[][];
   reliefPercent: number;
+  voidStitchMm: number;
   exportCompatibilityMode: ExportCompatibilityMode;
 };
 
@@ -140,6 +141,8 @@ export function resolvePatternGrammar(config: PatternConfig): ResolvedPatternGra
       : minPointDistance,
     reliefAreas: config.reliefAreas,
     reliefPercent: Number.isFinite(config.reliefPercent) ? Math.min(100, Math.max(0, config.reliefPercent!)) : 0,
+    // il passo dell'impuntura nel vuoto NON si scala coi parametri: è una misura di macchina, come il punto minimo
+    voidStitchMm: Number.isFinite(config.voidStitchMm) ? Math.max(0, config.voidStitchMm!) : 0,
     exportCompatibilityMode: config.exportCompatibilityMode ?? "normal"
   };
 }

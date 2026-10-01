@@ -324,7 +324,9 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     cfg.reliefAreas = anelli.length ? anelli : undefined;
     const scelti = (boundaryModel?.choices ?? []).filter((c) => boundaryRoles[c.id] && boundaryRoles[c.id] !== 'scarico');
     const perimetri = scelti.filter((c) => boundaryRoles[c.id] === 'confine');
-    if (!perimetri.length) {
+    // Un'AREA VUOTA vale anche DA SOLA (Lorenzo, 2026-10-01): senza un confine non c'è niente da
+    // ritagliare attorno, ma il buco si toglie lo stesso e il resto del pattern resta com'è.
+    if (!perimetri.length && !scelti.length) {
       cfg.importedBoundary = undefined;
       if (cfg.shapeType === 'imported') cfg.shapeType = 'none';
       const shapeSel = root.querySelector<HTMLSelectElement>('#f-shapeType');
@@ -336,7 +338,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       ...path,
       hole: boundaryRoles[c.id] === 'vuoto',
     })));
-    const base = perimetri[0].boundary;
+    const base = (perimetri[0] ?? scelti[0]).boundary;
     const xs = paths.flatMap((p) => p.points.map((q) => q.x));
     const ys = paths.flatMap((p) => p.points.map((q) => q.y));
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;

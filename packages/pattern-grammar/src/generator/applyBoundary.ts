@@ -244,6 +244,15 @@ function diamondPointAtPerimeter(perimeter: number, vertices: Point[], total: nu
   return vertices[0];
 }
 
+/**
+ * Il perimetro su cui lavorare. Con le sole AREE VUOTE dichiarate e nessun contorno (Lorenzo,
+ * 2026-10-01: «fai valere l'area vuota anche da sola») il perimetro è il RETTANGOLO DEL PANNELLO: il
+ * vuoto toglie il suo buco e tutto il resto — formato compreso — si comporta come prima.
+ */
+function perimetroImportato(outer: Point[], options: BoundaryOptions): Point[] {
+  return outer.length >= 3 ? outer : closePolygon(rectangleVertices(options));
+}
+
 function rectangleVertices(options: BoundaryOptions): Point[] {
   const inset = Math.max(0, options.inset ?? 0);
   return [
@@ -543,7 +552,8 @@ function boundaryConnector(from: GeneratedPoint, to: GeneratedPoint, options: Bo
     // Il raccordo cammina sul PERIMETRO, che però può passare sopra un'area vuota: il giro va
     // deviato attorno ai buchi, altrimenti il filo attraversa il vuoto (misurato sulla cornice
     // di Lorenzo: 490 punti di raccordo dentro lo specchio, fino a 26,1mm di profondità).
-    const { outer, holes } = importedBoundaryParts(options);
+    const { outer: importato, holes } = importedBoundaryParts(options);
+    const outer = perimetroImportato(importato, options);
     const way = polygonBoundaryConnector(from, to, outer, options);
     if (!holes.length || way.length < 2) return way;
     const around = avoidVoids([from, ...way], holes, options.inset ?? 0).slice(1);
@@ -708,15 +718,97 @@ function computeBoundaryParts(options: BoundaryOptions): { outer: Point[]; holes
   return { outer: all[0] ?? [], holes: all.slice(1) };
 }
 
-/** Il solo perimetro. Resta per chi deve camminare SUL bordo esterno (i raccordi al confine). */
-function importedBoundaryPolygon(options: BoundaryOptions): Point[] {
-  return importedBoundaryParts(options).outer;
+/** Le sole AREE VUOTE del contorno importato (anelli chiusi, già semplificati e in cache). */
+export function importedVoidRings(options: BoundaryOptions): Point[][] {
+  return importedBoundaryParts(options).holes;
 }
 
-/** Dentro il perimetro E fuori da ogni buco. È la definizione di "area ricamabile" (R5). */
-function insideImported(point: Point, options: BoundaryOptions, tolerance: number): boolean {
+/**
+ * Dentro le aree vuote il pattern diventa un'IMPUNTURA (Lorenzo, 2026-10-01: «se l'area è al centro di
+ * colonne di punti particolari, dentro quell'area i punti particolari spariscono e tutto diventa
+ * un'impuntura semplice, per poi riprendere fuori dall'area»).
+ *
+ * Ogni corsa di punti dentro un vuoto si sostituisce con la RETTA dal punto d'entrata a quello
+ * d'uscita, ricampionata a `stitchMm`: il filo non si stacca, non ricama il motivo, e riprende dove
+ * esce. Il taglio sul vuoto si disattiva a monte (chi chiama toglie i buchi dalla sagoma di ritaglio),
+ * altrimenti l'impuntura appena messa verrebbe tolta subito dopo.
+ */
+export function runningStitchInVoids<T extends Point>(points: T[], holes: Point[][], stitchMm: number): T[] {
+  if (!(stitchMm > 0) || !holes.length || points.length < 2) return points;
+  const dentro = (point: Point) => holes.some((hole) => pointInPolygon(point, hole));
+  const out: T[] = [];
+  let index = 0;
+  while (index < points.length) {
+    if (!dentro(points[index])) { out.push(points[index++]); continue; }
+    let end = index;
+    while (end < points.length && dentro(points[end])) end++;
+    // da dove si entra (l'ultimo punto fuori, o il primo della corsa) a dove si esce (il primo fuori)
+    const from = out[out.length - 1] ?? points[index];
+    const to = points[end] ?? points[points.length - 1];
+    const modello = points[index];
+    const dritta = retta(from, to, stitchMm, modello);
+    // un vuoto a C o a L: la retta uscirebbe dall'area e si poserebbe sopra il pattern di fuori.
+    // Allora l'impuntura segue la strada che faceva il filo, ricampionata allo stesso passo. Si giudica
+    // sulla corda fra il PRIMO e l'ULTIMO punto dentro: from e to stanno fuori per definizione (sono i
+    // punti di entrata e uscita), e su un vuoto convesso darebbero sempre "esce".
+    const fuoriDalVuoto = retta(points[index], points[end - 1], Math.max(0.5, stitchMm / 2), modello)
+      .some((p) => !dentro(p));
+    const dentroIlVuoto = fuoriDalVuoto
+      ? ricampiona([from, ...points.slice(index, end), to], stitchMm, modello)
+      : dritta;
+    for (const p of dentroIlVuoto) out.push(p);
+    if (end >= points.length) out.push({ ...modello, x: to.x, y: to.y });
+    index = end;
+  }
+  return out;
+}
+
+/** I punti intermedi di una retta, al passo dato (gli estremi li mette chi chiama). */
+function retta<T extends Point>(from: Point, to: Point, stitchMm: number, modello: T): T[] {
+  const span = Math.hypot(to.x - from.x, to.y - from.y);
+  const steps = Math.max(1, Math.round(span / stitchMm));
+  const out: T[] = [];
+  for (let k = 1; k < steps; k++) {
+    out.push({ ...modello, x: from.x + ((to.x - from.x) * k) / steps, y: from.y + ((to.y - from.y) * k) / steps });
+  }
+  return out;
+}
+
+/** La stessa strada, ripercorsa a punti del passo dato (gli estremi li mette chi chiama). */
+function ricampiona<T extends Point>(way: Point[], stitchMm: number, modello: T): T[] {
+  const cum = [0];
+  for (let i = 1; i < way.length; i++) cum.push(cum[i - 1] + Math.hypot(way[i].x - way[i - 1].x, way[i].y - way[i - 1].y));
+  const total = cum[cum.length - 1];
+  if (!(total > 0)) return [];
+  const steps = Math.max(1, Math.round(total / stitchMm));
+  const out: T[] = [];
+  let seg = 1;
+  for (let k = 1; k < steps; k++) {
+    const s = (total * k) / steps;
+    while (seg < way.length - 1 && cum[seg] < s) seg++;
+    const t = (s - cum[seg - 1]) / ((cum[seg] - cum[seg - 1]) || 1);
+    out.push({ ...modello, x: way[seg - 1].x + (way[seg].x - way[seg - 1].x) * t, y: way[seg - 1].y + (way[seg].y - way[seg - 1].y) * t });
+  }
+  return out;
+}
+
+/** Il solo perimetro. Resta per chi deve camminare SUL bordo esterno (i raccordi al confine). */
+function importedBoundaryPolygon(options: BoundaryOptions): Point[] {
   const { outer, holes } = importedBoundaryParts(options);
-  if (!outer.length) return true;
+  return outer.length || holes.length ? perimetroImportato(outer, options) : [];
+}
+
+/**
+ * Dentro il perimetro E fuori da ogni buco. È la definizione di "area ricamabile" (R5).
+ *
+ * SENZA perimetro (solo aree vuote dichiarate, Lorenzo 2026-10-01: «fai valere l'area vuota anche da
+ * sola») la prima metà della domanda cade: ricamabile = fuori da ogni buco, e il resto del pattern
+ * resta com'è.
+ */
+function insideImported(point: Point, options: BoundaryOptions, tolerance: number): boolean {
+  const { outer: importato, holes } = importedBoundaryParts(options);
+  if (!importato.length && !holes.length) return true;
+  const outer = perimetroImportato(importato, options);
   const onOuter = pointInPolygon(point, outer)
     || nearestPointOnPolygonBoundary(point, outer).distance <= tolerance;
   if (!onOuter) return false;
@@ -781,8 +873,9 @@ function cross(a: Point, b: Point): number {
 }
 
 function polygonSegmentInterval(a: Point, b: Point, options: BoundaryOptions): [number, number] | undefined {
-  const { outer, holes } = importedBoundaryParts(options);
-  if (outer.length < 3) return [0, 1];
+  const { outer: importato, holes } = importedBoundaryParts(options);
+  if (importato.length < 3 && !holes.length) return [0, 1];
+  const outer = perimetroImportato(importato, options);
   // I punti di taglio arrivano dal perimetro E dal bordo di ogni buco: senza gli incroci coi
   // buchi un segmento che li attraversa resterebbe intero, e il vuoto verrebbe ricamato.
   const values = [0, 1];
