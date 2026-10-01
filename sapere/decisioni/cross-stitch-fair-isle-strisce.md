@@ -43,6 +43,13 @@ classifica (2,02 m), il migliore 1,38 m; quello scelto 1,43 m — è il chiaro�
 ultimo**: il marrone (motivi piccoli e sparsi) da ultimo non ha sotto cosa nascondere i passaggi, il
 ruggine (pochi pezzi grandi) passa poco.
 
+**Ricava modulo nel tool** (`module.ts`, 2026-10-01): fa da solo i passi qui sopra e ritrova
+esattamente 429 × 657 px, 72 × 112 V, modulo 36 × 56, 6 fili, 1 colore di bordo tolto (circa 4 s).
+Le righe le dà la trama del filo (che in verticale si ripete ogni 2 righe, 11,73 px) col multiplo che
+fa la V quasi quadrata; colonne e righe restano correggibili a mano. Su un'immagine sintetica a bordi
+netti i bordi dopo la media 5×5 facevano «pianori» e contavano 3-5 bordi spostati per uno: un bordo
+solo, al centro del pianoro.
+
 **Ancora aperto:** il 67% del filo in vista sta nei passaggi oltre 12 mm (32 su 116 per striscia di
 2 moduli). Farli diventare salti col taglio lo porterebbe a circa un terzo, con più tagli in macchina:
 da decidere con Lorenzo.

@@ -9,7 +9,7 @@ import ICONS from '../../../packages/design-system/icons/rg-icons.svg?url';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import {
-  type Button, type Cells, type GridSpec, type Leg, type Stitch, type Thread, type Tool,
+  type Button, type CellEdit, type Cells, type GridSpec, type Leg, type Stitch, type Thread, type Tool,
   type Pixels, type BrushStitch, type KnitStitch, DEFAULT_GRID, applyEdits, brushArea, brushEdits, fillEdits, knitFromImage, gridForSize, refinePalette, paletteShares, DEFAULT_KNIT, cellIndex, cellsFromJson, cellsToJson, editsFor, fromThreadRoute, fromTwoColumnV, stitchLegs,
   resizeCells, pointInRow, segmentPoints, rowPitch, gridHeight,
 } from './model';
@@ -18,6 +18,7 @@ import {
   DEFAULT_ROUTE, DEFAULT_STITCH, RETRACE_PRESETS, colorPolylines, routeCells, type RetracePreset,
 } from './routing';
 import { routeAll, stripRanges } from './strips';
+import { editsOnAllCopies, findModule, tileModule, type KnitModule } from './module';
 import { DEFAULT_ZONES, type ZoneGroup } from './zones';
 import { areaFromMm, clampArea, subGrid, type TestArea } from './area';
 
@@ -62,6 +63,8 @@ interface State {
   threads: Thread[];
   route: RouteParams;
   stitch: StitchParams;
+  /** Il modulo che si ripete (module.ts): il ricamo è il modulo ripetuto. null = niente modulo. */
+  module: KnitModule | null;
   /** I salti a mano: passaggi fra due vertici (riga, colonna del reticolo del disegno intero). */
   cuts: Array<[number, number, number, number]>;
   /** L'area di prova (area.ts): passaggi ed export solo lì, il disegno resta tutto. */
@@ -99,9 +102,21 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="detailPct" type="text" inputmode="numeric" aria-describedby="h-soglia"><span>%</span></span>
             <span class="rg-field__help" id="h-soglia">Più bassa salva i tratti sottili</span></label>
           <div class="rg-cluster rg-param-grid__wide">
+            <span class="rg-tooltip"><button type="button" id="moduleBtn" class="rg-button rg-button--outline rg-button--small" aria-describedby="tip-module">Ricava modulo</button><span class="rg-tooltip__text" role="tooltip" id="tip-module">Trova il motivo che si ripete e riempie il ricamo ripetendolo: i ritocchi a mano si perdono</span></span>
             <span class="rg-tooltip"><button type="button" id="cropBtn" class="rg-button rg-button--outline rg-button--small" aria-pressed="false" aria-describedby="tip-crop">Ritaglia</button><span class="rg-tooltip__text" role="tooltip" id="tip-crop">Trascina un rettangolo sul disegno: la maglia si rifà su quel pezzo</span></span>
             <button type="button" id="uncropBtn" class="rg-button rg-button--ghost rg-button--small">Immagine intera</button>
             <button type="button" id="removeImageBtn" class="rg-button rg-button--ghost rg-button--small">Togli</button>
+          </div>
+          <output class="rg-technical rg-param-grid__wide" id="moduleInfo" aria-live="polite" hidden></output>
+          <div class="rg-param-grid rg-param-grid__wide" id="moduleBox" hidden>
+            <label class="rg-field"><span class="rg-field__label">Colonne</span>
+              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="moduleCols" type="text" inputmode="numeric" aria-describedby="h-module"><span>V</span></span></label>
+            <label class="rg-field"><span class="rg-field__label">Righe</span>
+              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="moduleRows" type="text" inputmode="numeric" aria-describedby="h-module"><span>V</span></span></label>
+            <span class="rg-field__help rg-param-grid__wide" id="h-module">Misura del modulo: correggila se il tool ha sbagliato</span>
+            <div class="rg-cluster rg-param-grid__wide">
+              <button type="button" id="moduleOffBtn" class="rg-button rg-button--ghost rg-button--small">Maglia normale dall'immagine</button>
+            </div>
           </div>
           <details class="rg-disclosure rg-param-grid__wide">
             <summary class="rg-disclosure__trigger">Altro</summary>
@@ -267,6 +282,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <button type="button" class="rg-segmented__item" data-mode="group" title="Gruppi (G)">Gruppi</button>
             <button type="button" class="rg-segmented__item" data-mode="cut" title="Salti (T)">Salti</button>
           </div>
+          <div class="cs-editbar__group" id="moduleEditGroup" role="group" aria-labelledby="eb-mod" hidden><span class="rg-label" id="eb-mod">Modulo</span>
+            <label class="rg-toggle" title="Pennello, Riempi e Gomma cambiano lo stesso punto in ogni copia del modulo">
+              <input type="checkbox" id="editAllCopies" checked><span class="rg-toggle__track"></span><span>Su tutte le copie</span>
+            </label>
+          </div>
           <div class="cs-editbar__group" role="group" aria-labelledby="eb-area"><span class="rg-label" id="eb-area">Area</span>
             <span class="rg-tooltip rg-tooltip--below"><button type="button" id="areaBtn" class="rg-button rg-button--outline rg-button--small" aria-pressed="false" aria-describedby="tip-area">Area di prova</button><span class="rg-tooltip__text" role="tooltip" id="tip-area">Trascina un rettangolo: passaggi ed export solo lì, il disegno fuori resta</span></span>
             <button type="button" id="areaAllBtn" class="rg-button rg-button--ghost rg-button--small" hidden>Tutto il disegno</button>
@@ -338,6 +358,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     stitch: { ...DEFAULT_STITCH },
     area: null,
     cuts: [],
+    module: null,
   };
   let mode: Mode = 'paint';
   let brushSize = 1;
@@ -372,8 +393,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   let groupHover = -1;
   let result: RouteResult | null = null;
   let sourceName = '';
-  const undo: Array<{ grid: GridSpec; cells: Cells }> = [];
-  const redo: Array<{ grid: GridSpec; cells: Cells }> = [];
+  const undo: Array<{ grid: GridSpec; cells: Cells; module?: KnitModule | null }> = [];
+  const redo: Array<{ grid: GridSpec; cells: Cells; module?: KnitModule | null }> = [];
 
   // Le sezioni richiudibili si ricordano (solo l'aperto/chiuso: il lavoro no, si riparte puliti).
   for (const id of ['sec-passaggi', 'sec-macchina', 'sec-carica']) {
@@ -800,7 +821,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     target = { w, h };
     const next = gridForSize(w, h, readNum('cellW') || st.grid.cellW, readNum('cellH') || st.grid.cellH, readNum('overlap') || 0);
     pushUndo();
-    if (image && fromImage) st.cells = knitFromImage(next, image.px, threadRgb(), knitOpts());
+    if (st.module) st.cells = tileModule(next, st.module);
+    else if (image && fromImage) st.cells = knitFromImage(next, image.px, threadRgb(), knitOpts());
     else st.cells = resizeCells(st.grid, next, st.cells);
     st.grid = next;
     st.area = clampArea(st.grid, st.area);
@@ -1085,14 +1107,16 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   // ---- annulla ----------------------------------------------------------------
   function cloneCells(c: Cells): Cells { return new Map([...c].map(([k, m]) => [k, { ...m }])); }
+  const cloneModule = (m: KnitModule | null): KnitModule | null => (m ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x ? { ...x } : null)) } : null);
   function pushUndo(): void {
-    undo.push({ grid: { ...st.grid }, cells: cloneCells(st.cells) });
+    undo.push({ grid: { ...st.grid }, cells: cloneCells(st.cells), module: cloneModule(st.module) });
     if (undo.length > 100) undo.shift();
     redo.length = 0;
   }
-  function restore(snap: { grid: GridSpec; cells: Cells }): void {
+  function restore(snap: { grid: GridSpec; cells: Cells; module?: KnitModule | null }): void {
     st.grid = snap.grid;
     st.cells = snap.cells;
+    if (snap.module !== undefined) { st.module = snap.module; syncModuleUI(); }
     target = { w: st.grid.cols * st.grid.cellW, h: gridHeight(st.grid) };
     syncFields();
     buildThreads();
@@ -1101,13 +1125,13 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   function doUndo(): void {
     const prev = undo.pop();
     if (!prev) return;
-    redo.push({ grid: { ...st.grid }, cells: cloneCells(st.cells) });
+    redo.push({ grid: { ...st.grid }, cells: cloneCells(st.cells), module: cloneModule(st.module) });
     restore(prev);
   }
   function doRedo(): void {
     const next = redo.pop();
     if (!next) return;
-    undo.push({ grid: { ...st.grid }, cells: cloneCells(st.cells) });
+    undo.push({ grid: { ...st.grid }, cells: cloneCells(st.cells), module: cloneModule(st.module) });
     restore(next);
   }
   $('undoBtn').addEventListener('click', doUndo);
@@ -1180,13 +1204,19 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   }
   function hideBrush(): void { showBrush(null); }
 
+  /** Le modifiche a mano: con un modulo e «Su tutte le copie», in ogni copia (e nel modulo). */
+  function applyUserEdits(edits: CellEdit[]): boolean {
+    const all = st.module && $<HTMLInputElement>('editAllCopies').checked;
+    return applyEdits(st.grid, st.cells, all ? editsOnAllCopies(st.grid, st.module!, edits) : edits);
+  }
+
   /** Il pennello (o la gomma) su una cella; vero se ha cambiato qualcosa. */
   function paintCell(r: number, c: number): boolean {
     if (!painting) return false;
     const key = r * st.grid.cols + c; // una cella = un punto
     if (key === painting.last) return false;
     painting.last = key;
-    return applyEdits(st.grid, st.cells, brushEdits(st.grid, st.cells, r, c, brushSize, activeThread, brushStitch, painting.button, painting.erase));
+    return applyUserEdits(brushEdits(st.grid, st.cells, r, c, brushSize, activeThread, brushStitch, painting.button, painting.erase));
   }
 
   function paintAt(e: PointerEvent): void {
@@ -1265,7 +1295,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       const edits = fillEdits(st.grid, st.cells, at.r, at.c, activeThread, brushStitch, button, e.shiftKey);
       if (!edits.length) return;
       pushUndo();
-      applyEdits(st.grid, st.cells, edits);
+      applyUserEdits(edits);
       fromImage = false;
       buildThreads();
       update();
@@ -1706,6 +1736,68 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     update();
   }
   $('knitBtn').addEventListener('click', knitNow);
+
+  // ---- ricava modulo (module.ts) ----------------------------------------------
+  /** Le V del motivo nell'immagine per V del modulo (2 se il modulo è metà del motivo): per le correzioni a mano. */
+  let moduleFactor = { c: 1, r: 1 };
+  function syncModuleUI(): void {
+    const m = st.module;
+    $('moduleBox').hidden = !m;
+    $('moduleEditGroup').hidden = !m;
+    if (!m) { $('moduleInfo').hidden = true; return; }
+    num('moduleCols').value = String(m.cols);
+    num('moduleRows').value = String(m.rows);
+  }
+  /** I pixel dell'originale a piena risoluzione (ritagliato se c'è un ritaglio): le V possono essere di 6 px. */
+  function sourcePixels(): Pixels | null {
+    if (!source) return null;
+    const { img } = source;
+    const cr = crop ?? { x: 0, y: 0, w: img.naturalWidth, h: img.naturalHeight };
+    const scale = Math.min(1, 2000 / Math.max(cr.w, cr.h));
+    const cnv = document.createElement('canvas');
+    cnv.width = Math.max(1, Math.round(cr.w * scale)); cnv.height = Math.max(1, Math.round(cr.h * scale));
+    const ctx = cnv.getContext('2d')!;
+    ctx.drawImage(img, cr.x, cr.y, cr.w, cr.h, 0, 0, cnv.width, cnv.height);
+    const d = ctx.getImageData(0, 0, cnv.width, cnv.height);
+    return { rgba: d.data, width: cnv.width, height: cnv.height };
+  }
+  function runModule(force?: { cols: number; rows: number }): void {
+    const px = sourcePixels();
+    if (!px) { $('imageStatus').textContent = 'Carica prima un’immagine.'; return; }
+    const info = $('moduleInfo');
+    info.hidden = false;
+    info.textContent = 'Cerco il modulo…';
+    window.setTimeout(() => {
+      const found = findModule(px, { colors: 7, cols: force?.cols, rows: force?.rows });
+      moduleFactor = { c: found.imageCells.cols / found.cols, r: found.imageCells.rows / found.rows };
+      pushUndo();
+      const stitch = knit.stitch === 'cross' || knit.stitch === 'down' || knit.stitch === 'up' || knit.stitch === 'lambda' ? knit.stitch : 'v';
+      st.module = { cols: found.cols, rows: found.rows, marks: found.map.map((k) => ({ stitch, color: k })) };
+      st.threads = found.palette.map((hex, i) => ({ hex, passes: passesOf(i) }));
+      st.route.base = { color: 0, stitch: 'v' };
+      st.route.strips = { rows: found.rows, shiftMm: st.route.strips?.shiftMm ?? 0 };
+      st.cells = tileModule(st.grid, st.module);
+      fromImage = false;
+      const rx = (st.grid.cols / found.cols), ry = (st.grid.rows / found.rows);
+      const fmt1 = (v: number) => fmtNum(Math.round(v * 10) / 10);
+      info.textContent = `Modulo ${found.cols} × ${found.rows} V (nell'immagine il motivo è ${found.imageCells.cols} × ${found.imageCells.rows} V, ${found.periodPx.w} × ${found.periodPx.h} px), ripetuto ${fmt1(rx)} × ${fmt1(ry)}; ${found.palette.length} fili, base il più diffuso`
+        + (found.removed ? `; tolt${found.removed === 1 ? 'o 1 colore' : `i ${found.removed} colori`} di bordo` : '')
+        + `. Strisce di ${found.rows} righe.`;
+      buildThreads();
+      syncFields();
+      syncModuleUI();
+      update();
+    }, 30);
+  }
+  $('moduleBtn').addEventListener('click', () => runModule());
+  const forceModule = () => {
+    const c = Math.max(2, Math.round(readNum('moduleCols') || 0)), rr = Math.max(2, Math.round(readNum('moduleRows') || 0));
+    if (!st.module || (c === st.module.cols && rr === st.module.rows)) return;
+    runModule({ cols: Math.round(c * moduleFactor.c), rows: Math.round(rr * moduleFactor.r) });
+  };
+  num('moduleCols').addEventListener('change', forceModule);
+  num('moduleRows').addEventListener('change', forceModule);
+  $('moduleOffBtn').addEventListener('click', () => { pushUndo(); st.module = null; syncModuleUI(); knitNow(); });
   $('removeImageBtn').addEventListener('click', () => { image = null; source = null; crop = null; setCropping(false); fromImage = false; $('imageStatus').textContent = 'Nessuna immagine.'; draw(); });
 
   // ---- progetto: riapertura (R27) ---------------------------------------------
@@ -1719,6 +1811,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       stitch: st.stitch,
       area: st.area,
       cuts: st.cuts,
+      module: st.module,
       knit,
       cells: cellsToJson(st.grid, st.cells),
     };
@@ -1746,6 +1839,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     syncKnit();
     st.cells = cellsFromJson(st.grid, meta.cells);
     st.area = clampArea(st.grid, meta.area as Partial<TestArea> | null);
+    {
+      const m = meta.module as KnitModule | null | undefined;
+      st.module = m && Number.isInteger(m.cols) && Number.isInteger(m.rows) && Array.isArray(m.marks) && m.marks.length === m.cols * m.rows
+        ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x && typeof x === 'object' ? { stitch: x.stitch, color: Number(x.color) } : null)) }
+        : null;
+    }
     st.cuts = Array.isArray(meta.cuts) ? (meta.cuts as unknown[]).filter((c): c is [number, number, number, number] => Array.isArray(c) && c.length === 4 && c.every((x) => Number.isInteger(x))) : [];
     // Fino a 0.3.0 la V occupava due colonne: si converte a «un punto per colonna».
     if (typeof meta.version === 'string' && ['0.1.0', '0.2.0', '0.3.0'].includes(meta.version)) {
@@ -1763,6 +1862,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     syncFields();
     buildThreads();
     buildGroups();
+    syncModuleUI();
     update();
     requestAnimationFrame(() => pz.fit());
   }

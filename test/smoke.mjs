@@ -46,6 +46,7 @@ export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as 
 export { subGrid as csSubGrid, areaFromMm as csAreaFromMm, clampArea as csClampArea } from ${JSON.stringify(posix('apps/cross-stitch/src/area.ts'))};
 export { segmentPoints as csSegmentPoints } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { routeAll as csRouteAll, stripRanges as csStripRanges } from ${JSON.stringify(posix('apps/cross-stitch/src/strips.ts'))};
+export { findModule as csFindModule, tileModule as csTileModule, editsOnAllCopies as csEditsOnAllCopies } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
 export { zonesOf as csZonesOf } from ${JSON.stringify(posix('apps/cross-stitch/src/zones.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
@@ -4995,6 +4996,50 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   check('strisce: base e colori per striscia, nessun passaggio fuori dalla sua, gli stessi punti',
     [conSt.colors.map((cr) => cr.strip + '/' + cr.color).join(' '), fuori, punti(conSt) === punti(senzaSt), conSt.metrics.legs === senzaSt.metrics.legs],
     ['0/0 0/1 0/2 1/0 1/1 1/2 2/0 2/1 2/2', 0, true, true]);
+
+  // RICAVA MODULO (Lorenzo, 2026-10-01, Fair Isle: «in primis definire il modulo»). Un'immagine
+  // sintetica: un modulo 12 × 8 V di 3 colori, V da 6 × 6 px, ripetuto 5 × 4; dentro, un quarto
+  // colore a V isolate sparse (il «bordo sfumato»). Il motore deve ritrovare il modulo, i 3 fili
+  // (la base è il più diffuso) e togliere il colore finto.
+  {
+    const MCt = 12, MRt = 8, CP = 6, RX = 5, RY = 4;
+    const COL = [[136, 135, 138], [220, 202, 177], [126, 86, 61], [162, 151, 144]];
+    const pat = (r, c) => {
+      if ((r === 1 && c === 2) || (r === 4 && c === 9) || (r === 6 && c === 5) || (r === 2 && c === 7) || (r === 5 && c === 0) || (r === 7 && c === 10) || (r === 3 && c === 4)) return 3; // V isolate del colore finto
+      if (r === 0 || (r >= 3 && r <= 4 && (c + r) % 4 < 2)) return 1;
+      if (c === 3 || (r === 6 && c > 6)) return 2;
+      return 0;
+    };
+    const Wt = MCt * CP * RX, Ht = MRt * CP * RY;
+    const rgba = new Uint8ClampedArray(Wt * Ht * 4);
+    for (let y = 0; y < Ht; y++) for (let x = 0; x < Wt; x++) {
+      const k = pat(Math.floor(y / CP) % MRt, Math.floor(x / CP) % MCt), i = 4 * (y * Wt + x);
+      rgba[i] = COL[k][0]; rgba[i + 1] = COL[k][1]; rgba[i + 2] = COL[k][2]; rgba[i + 3] = 255;
+    }
+    const fm = rg.csFindModule({ rgba, width: Wt, height: Ht }, { colors: 4 });
+    // il modulo ritrovato può partire da un'altra V: si confronta a meno di uno spostamento
+    let uguale = false;
+    for (let dr = 0; dr < MRt && !uguale; dr++) for (let dc = 0; dc < MCt && !uguale; dc++) {
+      const perm = new Map(); let ok = true;
+      for (let rr = 0; rr < MRt && ok; rr++) for (let cc = 0; cc < MCt && ok; cc++) {
+        const want = pat((rr + dr) % MRt, (cc + dc) % MCt); if (want === 3) continue;
+        const got = fm.map[rr * fm.cols + cc];
+        if (perm.has(want) ? perm.get(want) !== got : [...perm.values()].includes(got)) ok = false; else perm.set(want, got);
+      }
+      uguale = ok;
+    }
+    check('ricava modulo: periodo, modulo 12 × 8, 3 fili (tolto il colore finto), il disegno giusto',
+      [fm.periodPx.w, fm.periodPx.h, fm.cols, fm.rows, fm.palette.length, fm.removed, fm.palette[0], uguale],
+      [MCt * CP, MRt * CP, MCt, MRt, 3, 1, '#88878a', true]);
+
+    // il modulo nel ricamo: ripetuto, e una modifica su tutte le copie
+    const modK = { cols: 3, rows: 2, marks: [{ stitch: 'v', color: 1 }, null, { stitch: 'v', color: 2 }, { stitch: 'v', color: 0 }, { stitch: 'v', color: 0 }, null] };
+    const gK = { rows: 5, cols: 7, cellW: 2.4, cellH: 3.5 };
+    const tiled = rg.csTileModule(gK, modK);
+    check('modulo ripetuto: ogni V come la sua nel modulo', [tiled.get(0 * 7 + 3)?.color, tiled.has(1 * 7 + 5), tiled.get(4 * 7 + 6)?.color, tiled.size], [1, false, 1, 25]);
+    const allE = rg.csEditsOnAllCopies(gK, modK, [{ r: 2, c: 4, mark: { stitch: 'v', color: 2 } }]);
+    check('su tutte le copie: la V (2,4) cambia in ogni copia, e nel modulo', [allE.map((e) => e.r + ',' + e.c).join(' '), modK.marks[0 * 3 + 1]?.color], ['0,1 0,4 2,1 2,4 4,1 4,4', 2]);
+  }
 
   // SALTI A MANO (Lorenzo: «eliminare i passaggi, farli diventare salti»). Un passaggio scelto
   // diventa un salto; i punti, il loro ordine e gli altri passaggi restano identici.

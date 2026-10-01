@@ -643,6 +643,19 @@ si sta cucendo al punto del cursore; i fili già finiti sono quasi bianchi, i pu
 grigio chiaro. Serve per vedere i blocchi e i gruppi: una zona lasciata a metà e ripresa dopo si
 riconosce subito (due colori lontani nella stessa zona).
 
+**Ricava modulo** (in *01 Immagine*, accanto a *Ritaglia*): per le immagini di una maglia a motivo
+che si ripete (un Fair Isle). Il tool trova il motivo che si ripete, quante V ci stanno, il colore di
+ogni V e i fili, e riempie il ricamo **ripetendo il modulo**. Se il motivo è fatto di copie uguali (a
+meno dei bordi sfumati dell'immagine), il modulo è una copia sola. Toglie i **colori finti**: un colore
+fatto solo di V isolate lungo i bordi è la sfumatura fra due colori, non un filo. La base è il filo più
+diffuso, gli altri vanno dal chiaro allo scuro; le *Strisce* diventano alte un modulo. Sotto il
+pulsante: com'è fatto il modulo, *Colonne* e *Righe* per correggerlo se il tool ha sbagliato, e
+*Maglia normale dall'immagine* per tornare indietro. Cerca fino a 7 colori; ci mette qualche secondo.
+Nella barra di modifica, **Su tutte le copie** (acceso di partenza): pennello, riempi e gomma cambiano
+la stessa V in ogni copia del modulo, e il modulo stesso, così cambiando le misure del ricamo il
+modulo ripetuto resta quello modificato. Spento, si modifica una copia sola, ma cambiando le misure il
+ricamo si rifà dal modulo. Il modulo si salva nel progetto.
+
 **Strisce** (in *04 Passaggi*): il ricamo si fa a strisce orizzontali di *Strisce* righe. Ogni striscia
 ha la sua base e i suoi colori, e i passaggi non escono dalla striscia; poi si scende alla striscia
 dopo e si ricomincia. Serve al **registro**: con i ritiri della macchina, cucendo tutto un colore e poi
