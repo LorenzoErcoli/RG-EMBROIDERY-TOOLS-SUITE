@@ -597,6 +597,12 @@ se una riga è stata cucita prima dei pezzi appesi sotto, per andare da un pezzo
 ripassa la riga, invece di attraversare il bianco. Questo vale per le zone automatiche. **Un gruppo invece è un confine**:
 mentre il filo lo lavora, i passaggi restano nel suo riquadro, senza margine e senza eccezioni (esce
 solo se dentro non c'è proprio strada). Così non risale e riscende fra gruppi diversi.
+**E un gruppo già finito non si attraversa più**: nessun passaggio ci torna sopra, né mentre si lavora
+un altro gruppo, né nel passaggio da un gruppo al successivo, né fra le celle fuori dai gruppi. Se
+non c'è nessun'altra strada, come ultima risorsa sì. Il prezzo: dove prima ripassava nascosto sopra
+il gruppo finito, il filo gira intorno sul bianco (sul Dior +26 mm di filo in vista in tutto; in un
+caso di prova con un gruppo in mezzo fra due pezzi, da 22 a 96 mm). Quei passaggi si possono far
+diventare salti con lo strumento *Salti*.
 
 **Gruppi.** Nessuna regola automatica sa che un titolo è una cosa sola: sul giornale Dior il titolo
 è largo quasi quanto la pagina, e qualsiasi zona massima lo divide (il filo lo cuciva in 6 volte).

@@ -4958,7 +4958,26 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     }
     return n;
   };
-  check('gruppi: mentre cuce il gruppo 2 il filo non risale mai nel gruppo 1 (senza recinto 5 volte)', [risale({}), risale({ fence: false })], [0, 5]);
+  check('gruppi: mentre cuce il gruppo 2 il filo non risale mai nel gruppo 1 (senza recinto né gruppi finiti evitati: 5 volte)', [risale({}), risale({ fence: false, avoidDone: false })], [0, 5]);
+
+  // MAI SOPRA UN GRUPPO GIÀ FINITO (Lorenzo, 2026-09-30: «evitare che, essendoci i gruppi, si creino
+  // passaggi su gruppi precedenti»). Un gruppo in mezzo, due pezzi fuori dai gruppi ai lati: finito
+  // il gruppo, per andare da un pezzo all'altro il filo lo ripassava (20 tratti); ora gira intorno.
+  const gAv = { rows: 8, cols: 30, cellW: 2.4, cellH: 3.5, overlapPct: 30 };
+  const pAv = 3.5 * 0.7;
+  const cAv = fill(gAv, (r, c) => ({ stitch: 'v', color: r >= 2 && r <= 5 && ((c >= 10 && c <= 19) || (c >= 6 && c <= 8) || (c >= 21 && c <= 23)) ? 1 : 0 }));
+  const gruppoAv = [{ x: 10 * 2.4 - 0.1, y: 1.8 * pAv, w: 10 * 2.4 + 0.2, h: 4.5 * pAv }];
+  const sopraAv = (extra) => {
+    const W2 = LW(gAv); let n = 0, iniziato = false, finito = false;
+    for (const sg of run(gAv, cAv, { base: { color: 0, stitch: 'v' }, groups: gruppoAv, ...extra }).colors.find((c) => c.color === 1).segs) {
+      const i1 = Math.floor(sg.from / W2), i2 = Math.floor(sg.to / W2), c = Math.floor(Math.min(sg.from % W2, sg.to % W2) / 2);
+      const nelGruppo = c >= 10 && c <= 19;
+      if (sg.kind === 'stitch') { if (nelGruppo) iniziato = true; else if (iniziato) finito = true; continue; }
+      if (finito && sg.kind !== 'jump' && nelGruppo && Math.min(i1, i2) >= 2 && Math.max(i1, i2) <= 6 && !(i1 === i2 && (i1 === 2 || i1 === 6))) n++;
+    }
+    return n;
+  };
+  check('gruppi: finito il gruppo, nessun passaggio ci torna sopra (senza la regola 20 tratti)', [sopraAv({}), sopraAv({ avoidDone: false })], [0, 20]);
 
   // SALTI A MANO (Lorenzo: «eliminare i passaggi, farli diventare salti»). Un passaggio scelto
   // diventa un salto; i punti, il loro ordine e gli altri passaggi restano identici.

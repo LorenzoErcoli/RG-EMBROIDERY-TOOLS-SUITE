@@ -145,6 +145,8 @@ export interface RouteParams {
    * filo la finisce tutta prima di uscire. Valgono con *blocks*, anche senza zone automatiche.
    */
   groups?: ZoneGroup[];
+  /** Mai passaggi sopra un gruppo già finito, se c'è un'altra strada (default vero). */
+  avoidDone?: boolean;
   /** Il recinto della zona: i passaggi restano nella zona finché non è finita (default vero). */
   fence?: boolean;
   /**
@@ -301,6 +303,9 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   /** Zona di un gruppo → la sua posizione nella lista dei gruppi (si cuciono in quest'ordine). */
   const zoneRank = new Map<number, number>();
   const groups = params.groups ?? [];
+  /** Cella → gruppo (-1 = nessuno), per tenere i passaggi fuori dai gruppi già finiti. */
+  const cellGroup = new Int16Array(g.rows * g.cols).fill(-1);
+  if (groups.length) for (let rr = 0; rr < g.rows; rr++) for (let cc = 0; cc < g.cols; cc++) cellGroup[rr * g.cols + cc] = groupOfCell(g, rr, cc, groups);
   if (params.blocks !== false && (params.zones !== null || groups.length)) {
     let offset = 0;
     const colorsInDesign = [...new Set([...cells.values()].map((m) => m.color))].filter((c) => !(base && c === base.color));
@@ -595,6 +600,27 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       }
     }
     const fenceOn = byBlocks && params.fence !== false;
+    // I GRUPPI GIÀ FINITI (Lorenzo, 2026-09-30: «essere più precisi nell'evitare che, essendoci i
+    // gruppi, si creino passaggi su gruppi precedenti»). Un passaggio non attraversa un gruppo che
+    // questo filo ha già finito: né dentro una zona, né nel cambio da un gruppo all'altro, né fra le
+    // celle fuori dai gruppi. Solo se non c'è nessun'altra strada.
+    const groupZoneOf = new Map<number, number>(); // gruppo → la sua zona per questo filo
+    for (const z of zoneLeft.keys()) { const gi = zoneRank.get(z); if (gi !== undefined) groupZoneOf.set(gi, z); }
+    const finishedGroups = (): Set<number> | null => {
+      if (!groups.length || !byBlocks || params.avoidDone === false) return null;
+      const out = new Set<number>();
+      for (const [gi, z] of groupZoneOf) if (!((zoneLeft.get(z) ?? 0) > 0) && z !== currentZone) out.add(gi);
+      return out.size ? out : null;
+    };
+    /** Il tratto v→w passa sopra un gruppo in `avoid`? (le celle che attraversa o che lo affiancano) */
+    const overGroup = (v: number, w: number, avoid: Set<number>): boolean => {
+      const i1 = Math.floor(v / W), j1 = v - i1 * W, i2 = Math.floor(w / W), j2 = w - i2 * W;
+      const hit = (rr: number, cc: number) => rr >= 0 && cc >= 0 && rr < g.rows && cc < g.cols && avoid.has(cellGroup[rr * g.cols + cc]);
+      if (i1 === i2) { const cc = Math.floor(Math.min(j1, j2) / 2); return hit(i1 - 1, cc) && hit(i1, cc); }
+      const i = Math.min(i1, i2);
+      if (j1 === j2) return j1 % 2 === 1 ? hit(i, (j1 - 1) / 2) : hit(i, j1 / 2 - 1) && hit(i, j1 / 2);
+      return hit(i, Math.floor(Math.min(j1, j2) / 2));
+    };
     // Fuori dal recinto si passa solo sui propri punti GIÀ CUCITI: ripasso sulle diagonali, o
     // vertice-vertice dentro V di questo filo già finite. Lorenzo (2026-09-28, due pezzi sotto una
     // riga, collegati a lei): il filo attraversava il bianco fra i due pezzi, invece di risalire da
@@ -702,7 +728,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     while (left > 0) {
       // --- Dijkstra dal vertice dell'ago, fermo alla soglia del salto ---
       const limit = params.jumpMm;
-      const search = (accept: (id: number, v: number) => boolean, box: { box: [number, number, number, number]; strict: boolean } | null = null) => {
+      const search = (accept: (id: number, v: number) => boolean, box: { box: [number, number, number, number]; strict: boolean } | null = null, avoid: Set<number> | null = null) => {
         for (const t of touched) { dist[t] = Infinity; prevV[t] = -1; }
         touched.length = 0;
         heap.clear();
@@ -720,6 +746,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
             if (d < best) best = d;
           }
           forEachNeighbour(v, k, (w, cost) => {
+            if (avoid && overGroup(v, w, avoid)) return;
             if (box) { const wi = Math.floor(w / W), wj = w - wi * W; if ((wi < box.box[0] || wi > box.box[2] || wj < box.box[1] || wj > box.box[3]) && (box.strict || !settled(v, w))) return; }
             const nd = d + cost;
             if (nd < dist[w] && nd <= limit) {
@@ -732,12 +759,17 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       };
       // prima dentro il tratto (o da un'estremità di uno nuovo); se non si trova niente, il blocco
       const box = fence();
-      let { found: cands, best: bestD } = search((id, v) => inBlock(id) && inRun(id, v), box);
-      if (!cands.length && byRuns) ({ found: cands, best: bestD } = search((id) => inBlock(id), box));
-      // dal recinto non c'è strada: si esce
-      if (!cands.length && box) {
-        ({ found: cands, best: bestD } = search((id, v) => inBlock(id) && inRun(id, v)));
-        if (!cands.length && byRuns) ({ found: cands, best: bestD } = search((id) => inBlock(id)));
+      const avoid = finishedGroups();
+      // in ordine: nel recinto e fuori dai gruppi finiti; fuori dal recinto ma sempre fuori dai
+      // gruppi finiti; solo se non c'è strada, anche sopra i gruppi finiti
+      const tries: Array<[typeof box, Set<number> | null]> = [[box, avoid]];
+      if (box) tries.push([null, avoid]);
+      if (avoid) tries.push([null, null]);
+      let cands: Array<{ id: number; entry: number; d: number }> = [], bestD = Infinity;
+      for (const [b, a] of tries) {
+        ({ found: cands, best: bestD } = search((id, v) => inBlock(id) && inRun(id, v), b, a));
+        if (!cands.length && byRuns) ({ found: cands, best: bestD } = search((id) => inBlock(id), b, a));
+        if (cands.length) break;
       }
 
       if (cands.length) {

@@ -29,6 +29,13 @@ successiva, e mentre la lavora anche i suoi **passaggi** restano nel riquadro de
    al filo risalire sulla riga del gruppo sopra, già cucita, e riscendere. Sul suo file: 2 uscite
    dal gruppo (1 prima del punto 2, 3 senza recinto); col riquadro stretto per i gruppi, 0, con lo
    stesso filo in vista (200 mm contro 197) e 0,7 m di ripasso in più. Sul Dior non cambia niente.
+4. *2026-09-30* — «dobbiamo essere un po' più precisi nell'evitare che, essendoci i gruppi, si
+   creino passaggi su gruppi precedenti». Restavano due strade sopra gruppi già finiti: fra le celle
+   fuori dai gruppi (zone automatiche, col ripasso fuori dal recinto: 187 mm sul suo file) e nel
+   cambio da un gruppo al successivo (Dior, dal 7 all'8 sopra il 5: 117 mm). Ora un gruppo che il filo
+   ha finito non si attraversa più, in nessuna fase, salvo che non ci sia nessun'altra strada. Il
+   prezzo è filo in vista intorno: +17 mm sul suo file, +26 mm sul Dior; nel caso peggiore provato
+   (un gruppo in mezzo fra due pezzi fuori dai gruppi) da 22 a 96 mm.
 
 Il gruppo è una scelta di Lorenzo sul disegno: per lui vale come confine vero, anche quando per il
 motore sarebbe più economico uscirne.
