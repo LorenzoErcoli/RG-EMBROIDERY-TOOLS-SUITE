@@ -50,6 +50,13 @@ fa la V quasi quadrata; colonne e righe restano correggibili a mano. Su un'immag
 netti i bordi dopo la media 5×5 facevano «pianori» e contavano 3-5 bordi spostati per uno: un bordo
 solo, al centro del pianoro.
 
+**La vista Modulo** (2026-10-01, Lorenzo: «un editor del modulo… si riverbera su tutto»; e poi «i
+passaggi del filo»: si comincia dalla vista). Le giunture del modulo sono arbitrarie e tagliano i
+motivi: sul Fair Isle, così come esce, la verticale taglia 25 V di disegno e l'orizzontale 7; con
+*Giunture sulla base* 20 e 4. La verticale non scende sotto 20: le fasce orizzontali (verde,
+triangoli) attraversano tutto il modulo e qualsiasi giuntura verticale le taglia — quando i passaggi
+si calcoleranno per modulo, il passaggio da una copia all'altra lungo le fasce va gestito.
+
 **Ancora aperto:** il 67% del filo in vista sta nei passaggi oltre 12 mm (32 su 116 per striscia di
 2 moduli). Farli diventare salti col taglio lo porterebbe a circa un terzo, con più tagli in macchina:
 da decidere con Lorenzo.

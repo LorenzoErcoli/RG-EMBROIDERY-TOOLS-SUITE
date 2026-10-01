@@ -46,7 +46,7 @@ export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as 
 export { subGrid as csSubGrid, areaFromMm as csAreaFromMm, clampArea as csClampArea } from ${JSON.stringify(posix('apps/cross-stitch/src/area.ts'))};
 export { segmentPoints as csSegmentPoints } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { routeAll as csRouteAll, stripRanges as csStripRanges } from ${JSON.stringify(posix('apps/cross-stitch/src/strips.ts'))};
-export { findModule as csFindModule, tileModule as csTileModule, editsOnAllCopies as csEditsOnAllCopies } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
+export { findModule as csFindModule, tileModule as csTileModule, editsOnAllCopies as csEditsOnAllCopies, shiftModule as csShiftModule, seamShift as csSeamShift } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
 export { zonesOf as csZonesOf } from ${JSON.stringify(posix('apps/cross-stitch/src/zones.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
@@ -5039,6 +5039,23 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     check('modulo ripetuto: ogni V come la sua nel modulo', [tiled.get(0 * 7 + 3)?.color, tiled.has(1 * 7 + 5), tiled.get(4 * 7 + 6)?.color, tiled.size], [1, false, 1, 25]);
     const allE = rg.csEditsOnAllCopies(gK, modK, [{ r: 2, c: 4, mark: { stitch: 'v', color: 2 } }]);
     check('su tutte le copie: la V (2,4) cambia in ogni copia, e nel modulo', [allE.map((e) => e.r + ',' + e.c).join(' '), modK.marks[0 * 3 + 1]?.color], ['0,1 0,4 2,1 2,4 4,1 4,4', 2]);
+  }
+
+  // LA VISTA MODULO: spostare l'inizio del modulo, e portare le giunture sulla base. Un modulo 6 × 4
+  // con un motivo (colore 1) che oggi è tagliato dal bordo; il motivo è un rettangolo di 2 × 2 nelle
+  // colonne 5 e 0 e nelle righe 3 e 0: le giunture giuste sono prima della colonna 1 e della riga 1.
+  {
+    const mk = (r, c) => ({ stitch: 'v', color: (c === 5 || c === 0) && (r === 3 || r === 0) ? 1 : 0 });
+    const modS = { cols: 6, rows: 4, marks: Array.from({ length: 24 }, (_, i) => mk(Math.floor(i / 6), i % 6)) };
+    const sh = rg.csShiftModule(modS, 1, 2);
+    check('sposta l\'inizio: la V (1, 2) di prima diventa la prima', [sh.marks[0].color, sh.marks[(3 - 1) * 6 + (6 - 2)].color, sh.marks.filter((m) => m.color === 1).length], [modS.marks[1 * 6 + 2].color, 1, 4]);
+    const seam = rg.csSeamShift(modS, 0);
+    const dopo = rg.csShiftModule(modS, seam.dr, seam.dc);
+    check('giunture sulla base: nessun motivo tagliato', [seam.cutCols, seam.cutRows], [0, 0]);
+    // il motivo 2×2 deve stare in un blocco solo: righe e colonne consecutive
+    const pos = dopo.marks.map((m, i) => (m.color === 1 ? [Math.floor(i / 6), i % 6] : null)).filter(Boolean);
+    const rs = [...new Set(pos.map((q) => q[0]))].sort((x, y) => x - y), cs = [...new Set(pos.map((q) => q[1]))].sort((x, y) => x - y);
+    check('giunture sulla base: il motivo intero (2 righe e 2 colonne vicine)', [rs.length, rs[1] - rs[0], cs.length, cs[1] - cs[0]], [2, 1, 2, 1]);
   }
 
   // SALTI A MANO (Lorenzo: «eliminare i passaggi, farli diventare salti»). Un passaggio scelto

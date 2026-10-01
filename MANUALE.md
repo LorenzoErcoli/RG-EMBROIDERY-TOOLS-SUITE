@@ -656,6 +656,15 @@ la stessa V in ogni copia del modulo, e il modulo stesso, così cambiando le mis
 modulo ripetuto resta quello modificato. Spento, si modifica una copia sola, ma cambiando le misure il
 ricamo si rifà dal modulo. Il modulo si salva nel progetto.
 
+**La vista Modulo** (gruppo *Modulo* nella barra: *Ricamo | Modulo*): la tela mostra un modulo solo, al
+centro e contornato, con le 8 copie vicine intorno un po' velate, così si vedono le giunture. Lì
+pennello, riempi e gomma cambiano il modulo, e quindi tutto il ricamo (*Su tutte le copie* resta
+acceso). Gruppi, Salti e Area di prova non valgono, e i passaggi si vedono tornando al *Ricamo*. Il
+gruppo *Inizio* sposta l'inizio del modulo: le frecce di una V alla volta (il disegno scorre in quella
+direzione); **Giunture sulla base** lo sposta da solo perché i bordi del modulo taglino meno motivi
+possibile (nella barra di stato: quante V di disegno tagliano ancora le due giunture). Spostare
+l'inizio cambia anche come il motivo cade sui bordi del ricamo.
+
 **Strisce** (in *04 Passaggi*): il ricamo si fa a strisce orizzontali di *Strisce* righe. Ogni striscia
 ha la sua base e i suoi colori, e i passaggi non escono dalla striscia; poi si scende alla striscia
 dopo e si ricomincia. Serve al **registro**: con i ritiri della macchina, cucendo tutto un colore e poi

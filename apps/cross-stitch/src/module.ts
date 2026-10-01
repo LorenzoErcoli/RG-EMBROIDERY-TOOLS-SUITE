@@ -368,3 +368,38 @@ export function editsOnAllCopies(g: GridSpec, mod: KnitModule, edits: CellEdit[]
   }
   return out;
 }
+
+/** Il modulo con l'inizio spostato: la V (dr, dc) di prima diventa la prima (0, 0). */
+export function shiftModule(mod: KnitModule, dr: number, dc: number): KnitModule {
+  const R = mod.rows, C = mod.cols;
+  const sr = ((dr % R) + R) % R, sc = ((dc % C) + C) % C;
+  const marks: Array<CellMark | null> = [];
+  for (let r = 0; r < R; r++) for (let c = 0; c < C; c++) {
+    const m = mod.marks[((r + sr) % R) * C + ((c + sc) % C)];
+    marks.push(m ? { ...m } : null);
+  }
+  return { cols: C, rows: R, marks };
+}
+
+/**
+ * Dove far cominciare il modulo perché le giunture cadano sulla base: il bordo del modulo è
+ * arbitrario, e se taglia un motivo il motivo finisce in due copie (e, coi passaggi per modulo,
+ * cucito in due pezzi). Si cerca la colonna e la riga di giuntura che separano meno coppie di V
+ * fuori dalla base (una V vuota conta come base). Restituisce lo spostamento per shiftModule.
+ */
+export function seamShift(mod: KnitModule, baseColor: number): { dr: number; dc: number; cutCols: number; cutRows: number } {
+  const R = mod.rows, C = mod.cols;
+  const design = (r: number, c: number) => { const m = mod.marks[((r + R) % R) * C + ((c + C) % C)]; return !!m && m.color !== baseColor; };
+  // giuntura verticale prima della colonna c: coppie (c-1, c) entrambe di disegno, su tutte le righe
+  let dc = 0, cutCols = Infinity;
+  for (let c = 0; c < C; c++) {
+    let n = 0; for (let r = 0; r < R; r++) if (design(r, c - 1) && design(r, c)) n++;
+    if (n < cutCols) { cutCols = n; dc = c; }
+  }
+  let dr = 0, cutRows = Infinity;
+  for (let r = 0; r < R; r++) {
+    let n = 0; for (let c = 0; c < C; c++) if (design(r - 1, c) && design(r, c)) n++;
+    if (n < cutRows) { cutRows = n; dr = r; }
+  }
+  return { dr, dc, cutCols, cutRows };
+}
