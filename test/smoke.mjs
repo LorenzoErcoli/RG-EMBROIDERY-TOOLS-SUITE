@@ -5058,6 +5058,26 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     check('giunture sulla base: il motivo intero (2 righe e 2 colonne vicine)', [rs.length, rs[1] - rs[0], cs.length, cs[1] - cs[0]], [2, 1, 2, 1]);
   }
 
+  // COPIA PER COPIA (Lorenzo, 2026-10-01: i passaggi del modulo). Ogni copia del modulo è un gruppo,
+  // da sinistra a destra: dopo le prime 2-3 copie il percorso di ogni filo si ripete identico, a ogni
+  // copia o a copie alterne (una serpentina: un verso e poi l'altro). Sul Fair Isle: a ogni copia.
+  {
+    const Cc = 12, Rc = 8, Nc = 6;
+    const modC = { cols: Cc, rows: Rc, marks: Array.from({ length: Cc * Rc }, (_, i) => { const rr = Math.floor(i / Cc), cc = i % Cc; return { stitch: 'v', color: rr === 0 || rr === 7 ? 1 : (rr + cc) % 5 === 0 ? 2 : cc === 6 && rr > 2 && rr < 6 ? 3 : 0 }; }) };
+    const gC = { cols: Cc * Nc, rows: Rc, cellW: 2.4, cellH: 3.5, overlapPct: 30 };
+    const pC = 3.5 * 0.7;
+    const copie = Array.from({ length: Nc }, (_, k) => ({ x: k * Cc * 2.4 + 0.01, y: -1, w: Cc * 2.4 - 0.02, h: Rc * pC + 5 }));
+    const resC = run(gC, rg.csTileModule(gC, modC), { base: { color: 0, stitch: 'v' }, groups: copie });
+    const W2 = LW(gC);
+    const ritmo = resC.colors.filter((cr) => cr.color !== 0).map((cr) => {
+      const lists = Array.from({ length: Nc }, () => []); let pend = [];
+      for (const sg of cr.segs) { if (sg.kind !== 'stitch') { pend.push(sg); continue; } lists[Math.min(Nc - 1, Math.floor(Math.min(sg.from % W2, sg.to % W2) / 2 / Cc))].push(...pend, sg); pend = []; }
+      const sig = lists.map((l, k) => l.map((sg) => sg.kind + ':' + (sg.from - 2 * Cc * k) + ':' + (sg.to - 2 * Cc * k)).join('|'));
+      return [4, 5].every((k) => sig[k] === sig[k - 2]);
+    });
+    check('copia per copia: a regime il percorso di ogni filo si ripete (ogni 1 o 2 copie)', ritmo, [true, true, true]);
+  }
+
   // SALTI A MANO (Lorenzo: «eliminare i passaggi, farli diventare salti»). Un passaggio scelto
   // diventa un salto; i punti, il loro ordine e gli altri passaggi restano identici.
   const baseRc = { base: { color: 0, stitch: 'v' }, groups: gruppiRc };

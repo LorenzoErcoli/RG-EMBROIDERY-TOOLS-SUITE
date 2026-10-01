@@ -659,11 +659,21 @@ ricamo si rifà dal modulo. Il modulo si salva nel progetto.
 **La vista Modulo** (gruppo *Modulo* nella barra: *Ricamo | Modulo*): la tela mostra un modulo solo, al
 centro e contornato, con le 8 copie vicine intorno un po' velate, così si vedono le giunture. Lì
 pennello, riempi e gomma cambiano il modulo, e quindi tutto il ricamo (*Su tutte le copie* resta
-acceso). Gruppi, Salti e Area di prova non valgono, e i passaggi si vedono tornando al *Ricamo*. Il
+acceso). Gruppi e Area di prova non valgono. Il
 gruppo *Inizio* sposta l'inizio del modulo: le frecce di una V alla volta (il disegno scorre in quella
 direzione); **Giunture sulla base** lo sposta da solo perché i bordi del modulo taglino meno motivi
 possibile (nella barra di stato: quante V di disegno tagliano ancora le due giunture). Spostare
 l'inizio cambia anche come il motivo cade sui bordi del ricamo.
+
+**I passaggi del modulo.** Con un modulo, ogni striscia si cuce **copia per copia**, da sinistra a
+destra (se hai disegnato gruppi tuoi, valgono quelli). Dopo le prime 2-3 copie il motore ripete da solo
+lo stesso giro in ogni copia, fino all'ultima che tocca il bordo. A volte le copie si alternano fra due
+giri, come una serpentina: un verso e poi l'altro. Sul Fair Isle costa l'8% di filo in vista in più
+della striscia libera. In **vista Modulo** al centro si vedono i passaggi di una copia «a regime» (la
+terza della prima striscia, se ce ne sono almeno 4) e lì con lo strumento **Salti** si decide: un salto
+messo sul modulo vale in **tutte le copie**. Anche nel *Ricamo*, con *Su tutte le copie* acceso, un
+salto vale in ogni copia. Se le copie si alternano, il salto si applica solo dove quel passaggio c'è,
+cioè una copia sì e una no.
 
 **Strisce** (in *04 Passaggi*): il ricamo si fa a strisce orizzontali di *Strisce* righe. Ogni striscia
 ha la sua base e i suoi colori, e i passaggi non escono dalla striscia; poi si scende alla striscia

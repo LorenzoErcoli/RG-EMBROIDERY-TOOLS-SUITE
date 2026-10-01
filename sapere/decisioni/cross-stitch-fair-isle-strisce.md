@@ -57,6 +57,14 @@ motivi: sul Fair Isle, così come esce, la verticale taglia 25 V di disegno e l'
 triangoli) attraversano tutto il modulo e qualsiasi giuntura verticale le taglia — quando i passaggi
 si calcoleranno per modulo, il passaggio da una copia all'altra lungo le fasce va gestito.
 
+**I passaggi del modulo** (2026-10-01). Calcolati su un modulo da solo e ripetuti non funzionano:
+inizio e fine di ogni filo cadono dove capita (quasi tutti a sinistra), e per passare alla copia dopo
+il filo attraverserebbe il modulo. Con **ogni copia un gruppo, da sinistra a destra**, invece, il motore
+dopo 2-3 copie ripete da solo lo stesso giro (sul Fair Isle, 8 copie: tutti i fili identici dalla
+terza alla settima; su un modulo sintetico alcuni fili si alternano fra due giri, a serpentina). Costo
+sul Fair Isle: filo in vista 6,27 → 6,77 m per striscia di 5 copie (+8%), ripassi 22,7 → 22,0 m. Un
+salto deciso sul modulo si mette in ogni copia (un clic, 10 salti su 5 × 2 copie).
+
 **Ancora aperto:** il 67% del filo in vista sta nei passaggi oltre 12 mm (32 su 116 per striscia di
 2 moduli). Farli diventare salti col taglio lo porterebbe a circa un terzo, con più tagli in macchina:
 da decidere con Lorenzo.

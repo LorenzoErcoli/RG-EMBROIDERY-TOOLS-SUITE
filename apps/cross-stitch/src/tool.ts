@@ -14,7 +14,7 @@ import {
   resizeCells, pointInRow, segmentPoints, rowPitch, gridHeight,
 } from './model';
 import {
-  type RouteParams, type RouteResult, type SegKind, type StitchParams,
+  type RouteParams, type RouteResult, type RouteSeg, type SegKind, type StitchParams,
   DEFAULT_ROUTE, DEFAULT_STITCH, RETRACE_PRESETS, colorPolylines, routeCells, type RetracePreset,
 } from './routing';
 import { routeAll, stripRanges } from './strips';
@@ -441,6 +441,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
    */
   const routeInput = (cells: Cells = st.cells) => {
     const params = routeParams();
+    // COPIA PER COPIA (Lorenzo, 2026-10-01: i passaggi del modulo). Con un modulo, ogni striscia si
+    // cuce una copia alla volta, da sinistra a destra: dopo 2-3 copie il motore ripete da solo lo
+    // stesso giro in ogni copia (misurato sul Fair Isle: copie identiche fino al bordo). Costa +8%
+    // di filo in vista sulla striscia libera. Se ci sono gruppi disegnati a mano, valgono quelli.
+    if (st.module && !(params.groups && params.groups.length)) {
+      const C = st.module.cols, n = Math.ceil(st.grid.cols / C), h = gridHeight(st.grid);
+      params.groups = Array.from({ length: n }, (_, k) => ({ x: k * C * st.grid.cellW + 0.01, y: -1, w: C * st.grid.cellW - 0.02, h: h + 2 }));
+    }
     const a = clampArea(st.grid, st.area);
     const toIndex = (grid: GridSpec, i0: number, j0: number) => (i: number, j: number) => {
       const ii = i - i0, jj = j - j0;
@@ -497,7 +505,31 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const a = [Math.floor(from / Wr) + routeGeom.i0, (from % Wr) + routeGeom.j0], b = [Math.floor(to / Wr) + routeGeom.i0, (to % Wr) + routeGeom.j0];
     return a[0] < b[0] || (a[0] === b[0] && a[1] <= b[1]) ? `${a[0]},${a[1]},${b[0]},${b[1]}` : `${b[0]},${b[1]},${a[0]},${a[1]}`;
   };
-  const cutSet = () => new Set(st.cuts.map(([i1, j1, i2, j2]) => (i1 < i2 || (i1 === i2 && j1 <= j2) ? `${i1},${j1},${i2},${j2}` : `${i2},${j2},${i1},${j1}`)));
+  const cutKeyNorm = (i1: number, j1: number, i2: number, j2: number) => (i1 < i2 || (i1 === i2 && j1 <= j2) ? `${i1},${j1},${i2},${j2}` : `${i2},${j2},${i1},${j1}`);
+  /** I salti a mano come chiavi; in vista modulo, riportati sul modulo al centro. */
+  const cutSet = () => {
+    if (moduleView && st.module) {
+      const R = st.module.rows, C = st.module.cols;
+      return new Set(st.cuts.map(([i1, j1, i2, j2]) => { const a = moduleRel(i1, j1, i2, j2); return cutKeyNorm(a[0] + R, a[1] + 2 * C, a[2] + R, a[3] + 2 * C); }));
+    }
+    return new Set(st.cuts.map(([i1, j1, i2, j2]) => cutKeyNorm(i1, j1, i2, j2)));
+  };
+  /** Un passaggio (vertici del ricamo) relativo alla sua copia del modulo: la copia del primo vertice. */
+  const moduleRel = (i1: number, j1: number, i2: number, j2: number): [number, number, number, number] => {
+    const R = st.module!.rows, C = st.module!.cols;
+    const s0 = Math.floor(Math.min(i1, i2) / R), k0 = Math.floor(Math.min(j1, j2) / (2 * C));
+    return [i1 - s0 * R, j1 - 2 * C * k0, i2 - s0 * R, j2 - 2 * C * k0];
+  };
+  /** Lo stesso passaggio (relativo al modulo) in ogni copia del ricamo vero. */
+  const allCopiesOf = (rel: [number, number, number, number]): Array<[number, number, number, number]> => {
+    const g0 = moduleView && realDesign ? realDesign.grid : st.grid;
+    const R = st.module!.rows, C = st.module!.cols, out: Array<[number, number, number, number]> = [];
+    for (let s0 = 0; s0 * R <= g0.rows; s0++) for (let k0 = 0; k0 * C <= g0.cols; k0++) {
+      const q: [number, number, number, number] = [rel[0] + s0 * R, rel[1] + 2 * C * k0, rel[2] + s0 * R, rel[3] + 2 * C * k0];
+      if (q[0] >= 0 && q[2] >= 0 && q[0] <= g0.rows && q[2] <= g0.rows && q[1] >= 0 && q[3] >= 0 && q[1] <= 2 * g0.cols && q[3] <= 2 * g0.cols) out.push(q);
+    }
+    return out;
+  };
 
   let imageEl: HTMLImageElement | null = null;   // l'immagine di riferimento, pronta per il canvas
   let imageElUrl = '';
@@ -716,6 +748,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   /** I numeri dei passaggi nella barra di stato (o che si stanno calcolando). */
   function showStatus(): void {
     if (routing) { $('status').textContent = 'Calcolo dei passaggi…'; return; }
+    if (moduleView) { $('status').textContent = moduleCopyNote; return; }
     if (!result) return;
     const m = result.metrics;
     if (!m.legs) { $('status').textContent = 'Griglia vuota: disegna con il clic.'; return; }
@@ -739,13 +772,19 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       routing = false;
       if (e.data.error) { result = null; $('status').textContent = 'Errore nei passaggi: ' + e.data.error; return; }
       result = e.data.result ?? null;
+      lastReal = result ? { result, geom: { ...routeGeom } } : null;
+      if (moduleView) showModulePasses();
       draw();
     };
   } catch { worker = null; /* senza worker si calcola qui, come prima */ }
 
   function recompute(): void {
     routeRequest++;
+    // in vista modulo si calcola il ricamo vero (il modulo ripetuto), non la vista
+    const saved = moduleView && realDesign && st.module ? { grid: st.grid, cells: st.cells } : null;
+    if (saved) { st.grid = realDesign!.grid; st.cells = tileModule(realDesign!.grid, st.module!); }
     const inp = routeInput();
+    if (saved) { st.grid = saved.grid; st.cells = saved.cells; }
     const ar = clampArea(st.grid, st.area);
     routeGeom = { grid: inp.grid, dx: inp.dx, dy: inp.dy, i0: ar ? ar.r0 : 0, j0: ar ? 2 * ar.c0 : 0 };
     if (worker) {
@@ -755,6 +794,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     }
     try {
       result = routeAll(inp.grid, inp.cells, inp.params);
+      lastReal = { result, geom: { ...routeGeom } };
+      if (moduleView) showModulePasses();
     } catch (e) {
       result = null;
       $('status').textContent = 'Errore nei passaggi: ' + (e as Error).message;
@@ -764,7 +805,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   /** Ricalcola e ridisegna: i punti subito, i passaggi quando il worker ha finito. */
   function update(): void {
-    if (moduleView) { result = null; draw(); return; }
+    if (moduleView) { result = null; recompute(); draw(); return; }
     recompute();
     draw();
   }
@@ -1630,9 +1671,17 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (!best) { $('status').textContent = 'Nessun passaggio qui: clicca sopra una linea di passaggio.'; return; }
     const [i1, j1, i2, j2] = best.key.split(',').map(Number);
     const had = cuts.has(best.key);
-    st.cuts = had
-      ? st.cuts.filter((c) => cutKeyOf2(c) !== best!.key)
-      : [...st.cuts, [i1, j1, i2, j2]];
+    if (st.module && (moduleView || $<HTMLInputElement>('editAllCopies').checked)) {
+      // con un modulo il salto vale in ogni copia: si toglie o si mette in tutte
+      const R = st.module.rows, C = st.module.cols;
+      const rel: [number, number, number, number] = moduleView ? [i1 - R, j1 - 2 * C, i2 - R, j2 - 2 * C] : moduleRel(i1, j1, i2, j2);
+      const keys = new Set(allCopiesOf(rel).map((q) => cutKeyNorm(...q)));
+      st.cuts = had ? st.cuts.filter((c) => !keys.has(cutKeyOf2(c))) : [...st.cuts.filter((c) => !keys.has(cutKeyOf2(c))), ...allCopiesOf(rel)];
+    } else {
+      st.cuts = had
+        ? st.cuts.filter((c) => cutKeyOf2(c) !== best!.key)
+        : [...st.cuts, [i1, j1, i2, j2]];
+    }
     update();
   }
   const cutKeyOf2 = ([i1, j1, i2, j2]: [number, number, number, number]) => (i1 < i2 || (i1 === i2 && j1 <= j2) ? `${i1},${j1},${i2},${j2}` : `${i2},${j2},${i1},${j1}`);
@@ -1771,6 +1820,43 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   // La tela mostra il modulo al centro con le 8 copie vicine velate (le giunture si vedono). Il
   // ricamo vero resta da parte in `realDesign` e si rifà dal modulo quando si torna al Ricamo.
   let moduleView = false;
+  /** L'ultimo calcolo dei passaggi sul ricamo vero, con la sua geometria. */
+  let lastReal: { result: RouteResult; geom: typeof routeGeom } | null = null;
+  let moduleCopyNote = '';
+  /** In vista modulo: quale copia del ricamo si mostra al centro (colonna di copie, striscia 0). */
+  let shownCopy = -1;
+  /**
+   * I passaggi del modulo, in vista modulo: quelli di una copia «a regime» del ricamo vero (la
+   * terza, se ce ne sono almeno 4: le prime si assestano, l'ultima tocca il bordo), della prima
+   * striscia, riportati sul modulo al centro.
+   */
+  function showModulePasses(): void {
+    if (!moduleView || !st.module || !realDesign || !lastReal) { result = null; return; }
+    const m = st.module, rg = realDesign.grid, geom = lastReal.geom;
+    const R = m.rows, C = m.cols;
+    const full = Math.floor(rg.cols / C);
+    if (rg.rows < R || full < 1 || geom.grid.cols !== rg.cols || geom.i0 !== 0) { result = null; moduleCopyNote = 'Vista modulo: i passaggi si vedono con almeno un modulo intero nel ricamo (e senza area di prova).'; return; }
+    const kc = full >= 4 ? 2 : Math.max(0, full - 2);
+    shownCopy = kc;
+    const Wr = 2 * rg.cols + 1, Wv = 2 * (3 * C) + 1;
+    const toView = (v: number) => { const i = Math.floor(v / Wr), j = v % Wr; return (i + R) * Wv + (j - 2 * C * kc + 2 * C); };
+    const copyOf = (sg: { from: number; to: number }) => Math.floor(Math.min(sg.from % Wr, sg.to % Wr) / 2 / C);
+    const rowOf = (sg: { from: number; to: number }) => Math.min(Math.floor(sg.from / Wr), Math.floor(sg.to / Wr));
+    const colors: RouteResult['colors'] = [];
+    for (const cr of lastReal.result.colors) {
+      if ((cr.strip ?? 0) !== 0) continue;
+      const segs: RouteSeg[] = []; let pend: RouteSeg[] = [];
+      for (const sg of cr.segs) {
+        if (sg.kind !== 'stitch') { pend.push(sg); continue; }
+        if (copyOf(sg) === kc && rowOf(sg) < R) for (const t of [...pend, sg]) segs.push({ kind: t.kind, from: toView(t.from), to: toView(t.to) });
+        pend = [];
+      }
+      if (segs.length) colors.push({ color: cr.color, segs });
+    }
+    result = { colors, metrics: { ...lastReal.result.metrics } };
+    routeGeom = { grid: st.grid, dx: 0, dy: 0, i0: 0, j0: 0 };
+    moduleCopyNote = `Vista modulo: i passaggi di una copia del ricamo (la ${kc + 1}ª della prima striscia). I salti messi qui valgono su tutte le copie.`;
+  }
   let realDesign: { grid: GridSpec; cells: Cells } | null = null;
   const viewGridOf = (g: GridSpec, m: KnitModule): GridSpec => ({ ...g, cols: m.cols * 3, rows: m.rows * 3 });
   function enterModuleView(): void {
@@ -1780,11 +1866,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     st.cells = tileModule(st.grid, st.module);
     moduleView = true;
     result = null;
-    if (mode === 'group' || mode === 'cut') setMode('paint');
+    showModulePasses();
+    if (mode === 'group') setMode('paint');
     if (areaPicking) setAreaPicking(false);
     syncModuleUI();
     draw();
-    $('status').textContent = 'Vista modulo: i passaggi si calcolano e si vedono tornando al Ricamo.';
+    showStatus();
     requestAnimationFrame(() => pz.fit());
   }
   function exitModuleView(): void {
@@ -1839,7 +1926,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const all = $<HTMLInputElement>('editAllCopies');
     if (moduleView) all.checked = true;
     all.disabled = moduleView;
-    for (const sel of ['[data-mode="group"]', '[data-mode="cut"]']) root.querySelector<HTMLButtonElement>('#modeSel ' + sel)!.disabled = moduleView;
+    root.querySelector<HTMLButtonElement>('#modeSel [data-mode="group"]')!.disabled = moduleView;
     $<HTMLButtonElement>('areaBtn').disabled = moduleView;
     if (!m) { $('moduleInfo').hidden = true; return; }
     num('moduleCols').value = String(m.cols);
