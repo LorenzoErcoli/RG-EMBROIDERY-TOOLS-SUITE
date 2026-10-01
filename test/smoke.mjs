@@ -45,6 +45,7 @@ export { routeCells as csRouteCells, colorPolylines as csColorPolylines, DEFAULT
 export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight, knitFromImage as csKnitFromImage, refinePalette as csRefinePalette, brushEdits as csBrushEdits, fillEdits as csFillEdits, applyEdits as csApplyEdits, fromTwoColumnV as csFromTwoColumnV } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { subGrid as csSubGrid, areaFromMm as csAreaFromMm, clampArea as csClampArea } from ${JSON.stringify(posix('apps/cross-stitch/src/area.ts'))};
 export { segmentPoints as csSegmentPoints } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
+export { routeAll as csRouteAll, stripRanges as csStripRanges } from ${JSON.stringify(posix('apps/cross-stitch/src/strips.ts'))};
 export { zonesOf as csZonesOf } from ${JSON.stringify(posix('apps/cross-stitch/src/zones.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
@@ -4978,6 +4979,22 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     return n;
   };
   check('gruppi: finito il gruppo, nessun passaggio ci torna sopra (senza la regola 20 tratti)', [sopraAv({}), sopraAv({ avoidDone: false })], [0, 20]);
+
+  // IL RICAMO A STRISCE (Lorenzo, 2026-10-01, Fair Isle: «muovendosi a strisce, in cui faccio
+  // lavorare prima tutti i colori e poi scendo e ricomincio»). Ogni striscia: la sua base, poi i suoi
+  // colori; nessun passaggio esce dalla sua striscia; i punti sono gli stessi che senza strisce.
+  check('strisce: le righe di ogni striscia (l\'ultima più corta)', JSON.stringify(rg.csStripRanges({ rows: 10, cols: 4, cellW: 3, cellH: 3.8 }, 4)), JSON.stringify([[0, 4], [4, 8], [8, 10]]));
+  const gSt = { rows: 12, cols: 16, cellW: 2.4, cellH: 3.5, overlapPct: 30 };
+  const cSt = fill(gSt, (r, c) => ({ stitch: 'v', color: (r * 3 + c * 5) % 7 < 2 ? 1 : (r + 2 * c) % 9 === 0 ? 2 : 0 }));
+  const parSt = { ...rg.CS_DEFAULT_ROUTE, base: { color: 0, stitch: 'v' } };
+  const conSt = rg.csRouteAll(gSt, cSt, { ...parSt, strips: { rows: 4 } });
+  const senzaSt = rg.csRouteAll(gSt, cSt, parSt);
+  const W2 = LW(gSt);
+  const fuori = conSt.colors.reduce((n, cr) => n + cr.segs.filter((sg) => { const r0 = cr.strip * 4; const i1 = Math.floor(sg.from / W2), i2 = Math.floor(sg.to / W2); return sg.kind !== 'jump' && (Math.min(i1, i2) < r0 || Math.max(i1, i2) > r0 + 4); }).length, 0);
+  const punti = (res) => res.colors.flatMap((cr) => cr.segs.filter((sg) => sg.kind === 'stitch').map((sg) => cr.color + ':' + Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to))).sort().join('|');
+  check('strisce: base e colori per striscia, nessun passaggio fuori dalla sua, gli stessi punti',
+    [conSt.colors.map((cr) => cr.strip + '/' + cr.color).join(' '), fuori, punti(conSt) === punti(senzaSt), conSt.metrics.legs === senzaSt.metrics.legs],
+    ['0/0 0/1 0/2 1/0 1/1 1/2 2/0 2/1 2/2', 0, true, true]);
 
   // SALTI A MANO (Lorenzo: «eliminare i passaggi, farli diventare salti»). Un passaggio scelto
   // diventa un salto; i punti, il loro ordine e gli altri passaggi restano identici.

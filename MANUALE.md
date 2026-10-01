@@ -643,6 +643,14 @@ si sta cucendo al punto del cursore; i fili già finiti sono quasi bianchi, i pu
 grigio chiaro. Serve per vedere i blocchi e i gruppi: una zona lasciata a metà e ripresa dopo si
 riconosce subito (due colori lontani nella stessa zona).
 
+**Strisce** (in *04 Passaggi*): il ricamo si fa a strisce orizzontali di *Strisce* righe. Ogni striscia
+ha la sua base e i suoi colori, e i passaggi non escono dalla striscia; poi si scende alla striscia
+dopo e si ricomincia. Serve al **registro**: con i ritiri della macchina, cucendo tutto un colore e poi
+tutto un altro le parti non tornano più a posto. Nel DST gli stop si ripetono per ogni striscia
+(nella barra di stato: quante strisce e quanti stop). *Ritiro fra strisce* sposta ogni striscia nel
+file esportato (la seconda di 1 volta il valore, la terza di 2…): positivo le allontana, negativo le
+avvicina. L'anteprima mostra il disegno com'è, senza lo spostamento. 0 righe = tutto insieme.
+
 **Stop accesi e spenti.** Nella riga di ogni filo, **Vedi** accende o spegne quello stop
 nell'anteprima (punti e passaggi), per guardare un colore alla volta. Uno stop spento **non va
 nell'export** (DST e SVG): i passaggi degli altri fili si ricalcolano come se non ci fosse.

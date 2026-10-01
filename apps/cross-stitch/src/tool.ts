@@ -17,6 +17,7 @@ import {
   type RouteParams, type RouteResult, type SegKind, type StitchParams,
   DEFAULT_ROUTE, DEFAULT_STITCH, RETRACE_PRESETS, colorPolylines, routeCells, type RetracePreset,
 } from './routing';
+import { routeAll, stripRanges } from './strips';
 import { DEFAULT_ZONES, type ZoneGroup } from './zones';
 import { areaFromMm, clampArea, subGrid, type TestArea } from './area';
 
@@ -189,6 +190,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           <label class="rg-field"><span class="rg-field__label">Salta oltre</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="jumpMm" type="text" inputmode="numeric" aria-describedby="h-jump"><span>mm</span></span>
             <span class="rg-field__help" id="h-jump">Oltre, salto con taglio</span></label>
+          <label class="rg-field"><span class="rg-field__label">Strisce</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="stripRows" type="text" inputmode="numeric" aria-describedby="h-stripRows"><span>righe</span></span>
+            <span class="rg-field__help" id="h-stripRows">Ogni striscia: base e colori, poi la dopo. 0 = tutto insieme</span></label>
+          <label class="rg-field"><span class="rg-field__label">Ritiro fra strisce</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="stripShift" type="text" inputmode="decimal" aria-describedby="h-stripShift"><span>mm</span></span>
+            <span class="rg-field__help" id="h-stripShift">Sposta ogni striscia nel file: + allontana, − avvicina</span></label>
           <label class="rg-toggle rg-param-grid__wide">
             <input type="checkbox" id="byBlocks" checked aria-describedby="h-blocks"><span class="rg-toggle__track"></span><span>Per blocchi di colore</span>
           </label>
@@ -676,7 +683,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const m = result.metrics;
     if (!m.legs) { $('status').textContent = 'Griglia vuota: disegna con il clic.'; return; }
     const mm = (x: number) => `${Math.round(x)} mm`;
-    $('status').textContent = `${m.legs} diagonali · passaggi in vista ${mm(m.visibleMm)} · ripassi ${mm(m.retraceMm)} · vertice-vertice ${mm(m.verticalMm)} · nascosti ${mm(m.hiddenMm)} · ${m.jumps} salt${m.jumps === 1 ? 'o' : 'i'}`;
+    const nStrips = st.route.strips ? stripRanges(routeGeom.grid, st.route.strips.rows).length : 0;
+    const stops = result.colors.length;
+    $('status').textContent = (nStrips > 1 ? `${nStrips} strisce, ${stops} stop · ` : '') + `${m.legs} diagonali · passaggi in vista ${mm(m.visibleMm)} · ripassi ${mm(m.retraceMm)} · vertice-vertice ${mm(m.verticalMm)} · nascosti ${mm(m.hiddenMm)} · ${m.jumps} salt${m.jumps === 1 ? 'o' : 'i'}`;
   }
 
   // ---- I passaggi in un processo a parte (Web Worker) ----------------------------
@@ -708,7 +717,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       return;
     }
     try {
-      result = routeCells(inp.grid, inp.cells, inp.params);
+      result = routeAll(inp.grid, inp.cells, inp.params);
     } catch (e) {
       result = null;
       $('status').textContent = 'Errore nei passaggi: ' + (e as Error).message;
@@ -744,6 +753,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $<HTMLInputElement>('byBlocks').checked = st.route.blocks !== false;
     num('zoneGap').value = fmtNum(st.route.zones?.gapMm ?? DEFAULT_ZONES.gapMm);
     num('zoneMax').value = fmtNum(st.route.zones?.maxMm ?? DEFAULT_ZONES.maxMm);
+    num('stripRows').value = String(st.route.strips?.rows ?? 0);
+    num('stripShift').value = fmtNum(st.route.strips?.shiftMm ?? 0);
+    num('stripShift').disabled = !st.route.strips;
     num('zoneGap').disabled = num('zoneMax').disabled = st.route.blocks === false;
     syncSegmented();
   }
@@ -811,6 +823,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   };
   num('zoneGap').addEventListener('change', setZones);
   num('zoneMax').addEventListener('change', setZones);
+  const setStrips = () => {
+    const rows = Math.max(0, Math.round(readNum('stripRows') || 0));
+    const shiftMm = Number.isFinite(readNum('stripShift')) ? readNum('stripShift') : 0;
+    st.route.strips = rows > 0 ? { rows, shiftMm } : null;
+    syncFields(); update();
+  };
+  num('stripRows').addEventListener('change', setStrips);
+  num('stripShift').addEventListener('change', setStrips);
   $<HTMLInputElement>('fixedDir').addEventListener('change', (e) => { st.route.fixedDirection = (e.target as HTMLInputElement).checked; update(); });
   $<HTMLInputElement>('showPaths').addEventListener('change', (e) => { showPaths = (e.target as HTMLInputElement).checked; draw(); });
   $<HTMLInputElement>('showOrder').addEventListener('change', (e) => { showOrder = (e.target as HTMLInputElement).checked; orderUpTo = Infinity; draw(); });
@@ -1798,13 +1818,19 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const cells: Cells = new Map([...st.cells].filter(([, m]) => on(m.color)));
     const inp = routeInput(cells);
     if (inp.params.base && !on(inp.params.base.color)) inp.params.base = null;
-    const res = routeCells(inp.grid, inp.cells, inp.params);
-    return res.colors.map((cr) => ({
-      id: `filo-${cr.color + 1}`,
-      color: st.threads[cr.color]?.hex ?? '#000000',
-      polylines: colorPolylines(inp.grid, cr, st.stitch),
-      strokeMm: threadWidth(cr.color),
-    }));
+    const res = routeAll(inp.grid, inp.cells, inp.params);
+    // la compensazione del ritiro: la striscia k scende (o sale) di k × shiftMm
+    const shift = inp.params.strips?.shiftMm ?? 0;
+    return res.colors.map((cr) => {
+      const dy = (cr.strip ?? 0) * shift;
+      const polylines = colorPolylines(inp.grid, cr, st.stitch).map((pl) => (dy ? pl.map((q) => ({ x: q.x, y: q.y + dy })) : pl));
+      return {
+        id: cr.strip === undefined ? `filo-${cr.color + 1}` : `striscia-${cr.strip + 1}-filo-${cr.color + 1}`,
+        color: st.threads[cr.color]?.hex ?? '#000000',
+        polylines,
+        strokeMm: threadWidth(cr.color),
+      };
+    });
   }
 
   $('exportBtn').addEventListener('click', async () => {

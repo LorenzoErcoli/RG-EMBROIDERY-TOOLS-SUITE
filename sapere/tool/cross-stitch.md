@@ -19,4 +19,5 @@ immagine, ordine dei fili) si misura contro la **resa maglia**, non solo contro 
 (vedi [la resa prima delle misure](../metodo/resa-prima-delle-misure.md)). Migrato in
 `apps/cross-stitch` lo stesso giorno; la fila di lavoro è la voce N2 di `STATO.md`. Sui passaggi vedi
 anche [ripassi o filo in vista](../decisioni/cross-stitch-ripassi.md) e [il gruppo è un
-confine](../decisioni/cross-stitch-gruppi-confine.md).
+confine](../decisioni/cross-stitch-gruppi-confine.md). Sul Fair Isle a moduli e strisce vedi
+[modulo, strisce, ordine dei fili](../decisioni/cross-stitch-fair-isle-strisce.md).

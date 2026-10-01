@@ -145,6 +145,8 @@ export interface RouteParams {
    * filo la finisce tutta prima di uscire. Valgono con *blocks*, anche senza zone automatiche.
    */
   groups?: ZoneGroup[];
+  /** Il ricamo a strisce (strips.ts): righe per striscia e compensazione del ritiro. null = tutto insieme. */
+  strips?: { rows: number; shiftMm?: number } | null;
   /** Mai passaggi sopra un gruppo già finito, se c'è un'altra strada (default vero). */
   avoidDone?: boolean;
   /** Il recinto della zona: i passaggi restano nella zona finché non è finita (default vero). */
@@ -166,7 +168,8 @@ export const DEFAULT_ROUTE: RouteParams = { repetitions: 1, fixedDirection: fals
 export type SegKind = 'stitch' | 'hidden' | 'retrace' | 'vertical' | 'visible' | 'jump';
 export interface RouteSeg { kind: SegKind; from: number; to: number; }
 
-export interface ColorRoute { color: number; segs: RouteSeg[]; }
+/** I passaggi di un filo; con le strisce (strips.ts), quale striscia. */
+export interface ColorRoute { color: number; segs: RouteSeg[]; strip?: number; }
 
 export interface RouteMetrics {
   /** Diagonali (gambe) da cucire. */
