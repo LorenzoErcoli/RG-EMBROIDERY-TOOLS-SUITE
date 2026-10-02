@@ -643,35 +643,30 @@ si sta cucendo al punto del cursore; i fili già finiti sono quasi bianchi, i pu
 grigio chiaro. Serve per vedere i blocchi e i gruppi: una zona lasciata a metà e ripresa dopo si
 riconosce subito (due colori lontani nella stessa zona).
 
-**Ricava modulo** (in *01 Immagine*, accanto a *Ritaglia*): per le immagini di una maglia a motivo
-che si ripete (un Fair Isle). Il tool trova il motivo che si ripete, quante V ci stanno, il colore di
-ogni V e i fili, e riempie il ricamo **ripetendo il modulo**. Se il motivo è fatto di copie uguali (a
-meno dei bordi sfumati dell'immagine), il modulo è una copia sola. Toglie i **colori finti**: un colore
-fatto solo di V isolate lungo i bordi è la sfumatura fra due colori, non un filo. La base è il filo più
-diffuso, gli altri vanno dal chiaro allo scuro; le *Strisce* diventano alte un modulo. Sotto il
-pulsante: com'è fatto il modulo, *Colonne* e *Righe* per correggerlo se il tool ha sbagliato, e
-*Maglia normale dall'immagine* per tornare indietro. Cerca fino a 7 colori; ci mette qualche secondo.
-Nella barra di modifica, **Su tutte le copie** (acceso di partenza): pennello, riempi e gomma cambiano
-la stessa V in ogni copia del modulo, e il modulo stesso, così cambiando le misure del ricamo il
-modulo ripetuto resta quello modificato. Spento, si modifica una copia sola, ma cambiando le misure il
-ricamo si rifà dal modulo. Il modulo si salva nel progetto.
+**L'editor del modulo** (in *01 Immagine*, **Editor modulo**): una schermata a sé per fare il modulo
+che si ripete, per esempio un Fair Isle. Il titolo diventa *Modulo*; a destra **Torna al ricamo** (lascia
+le modifiche fatte nell'editor; chiede conferma se hai cambiato qualcosa) e **Ripeti nel ricamo** (il
+ricamo diventa il modulo ripetuto, a strisce alte un modulo). Nell'editor **i passaggi non si
+calcolano**, così ogni tocco è immediato: si vedono tornando al ricamo.
+- **01 Immagine**: *Carica immagine…*; **Trova da solo** (qualche secondo): il tool trova il motivo che
+  si ripete, aggancia l'immagine alla griglia e ricopia il colore di ogni V. Se il motivo è fatto di copie
+  uguali, il modulo è una copia sola; i **colori finti** (un colore fatto quasi solo di V isolate lungo
+  i bordi: la sfumatura fra due colori) vengono tolti. *Colori dall'immagine* propone i fili dal pezzo
+  d'immagine del modulo (la base è il più diffuso, poi dal chiaro allo scuro). *Opacità immagine*.
+- **02 Griglia**: la cella (larghezza, altezza, sormonto) e la misura del modulo in V (colonne, righe:
+  cambiandole il modulo si allarga o si accorcia e quello che hai disegnato resta). Poi l'**immagine
+  agganciata alla griglia**: quanti pixel è *una V* e *una riga* nell'immagine, e dove comincia il
+  modulo (*Inizio x, y*). Si regola anche col nuovo strumento **Sposta immagine** (tasto M):
+  trascinando, l'immagine scorre sotto la griglia finché il motivo cade giusto sulle V.
+- **Fili**: gli stessi del ricamo; la *Base* (il filo che riempie tutto sotto) si sceglie lì.
+- Sulla tela: il modulo al centro con le copie vicine, l'immagine **sopra** i punti a metà
+  trasparenza (*Vista → Immagine*), la griglia. Pennello, riempi e gomma cambiano il modulo; le frecce
+  di *Inizio* e *Giunture sulla base* come nella vista Modulo.
 
-**Nuovo modulo** (in *01 Immagine*, accanto a *Ricava modulo*): quando dall'immagine c'è troppo da
-correggere, il modulo lo disegni tu. Prima, con **Ritaglia**, trascini un rettangolo intorno a **una
-ripetizione** del motivo. Poi *Nuovo modulo*: un modulo tutto base, con le colonne del modulo di prima
-(o 24) e le righe prese dalle proporzioni del ritaglio. I fili sono proposti dai colori del ritaglio, e
-si apre la vista Modulo. Il ritaglio diventa la **guida**: stirato su ogni copia del modulo, **sopra** i
-punti a metà trasparenza (sotto, un modulo pieno di V lo coprirebbe), e si accende e spegne con
-**Immagine** nella *Vista*. Con la *Griglia* accesa vedi su quale V cade ogni pezzo d'immagine.
-Disegni colore per colore con pennello e riempi, e il ricamo ripete il modulo. Colonne e righe di un
-modulo disegnato si cambiano nei campi: il modulo si allarga o si accorcia, e quello che hai
-disegnato resta. **Cambiare il ritaglio dopo**: con un modulo, *Ritaglia* mostra l'immagine intera e il
-nuovo rettangolo cambia solo la guida, non il modulo (se il modulo disegnato è ancora vuoto, prende
-anche le proporzioni nuove). *Immagine intera* fa guida l'immagine intera. Anche dopo *Ricava modulo*
-la guida è il pezzo d'immagine che il tool ha trovato, quindi puoi correggere il modulo guardandola.
-
-L'immagine sotto la griglia (*Altro → Opacità*) ora viene disegnata dall'originale: prima era la copia
-ridotta a 600 px che il tool usa per leggere i colori, e si vedeva sgranata.
+Senza editor, nel ricamo con un modulo, **Su tutte le copie** (nella barra) fa valere pennello, riempi e
+gomma in ogni copia e nel modulo. Il modulo, con il suo aggancio all'immagine, si salva nel progetto.
+L'immagine sotto la griglia (*Altro → Opacità*) si disegna dall'originale (prima era la copia ridotta a
+600 px usata per leggere i colori, e si vedeva sgranata).
 
 **La vista Modulo** (gruppo *Modulo* nella barra: *Ricamo | Modulo*): la tela mostra un modulo solo, al
 centro e contornato, con le 8 copie vicine intorno un po' velate, così si vedono le giunture. Lì

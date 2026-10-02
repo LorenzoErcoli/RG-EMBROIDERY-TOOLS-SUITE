@@ -75,6 +75,16 @@ leggere i colori: ora si disegna dall'originale. Correggendo mezzo pixel nella p
 7, e non veniva più tolto: il criterio ora è la misura media dei pezzi (al più 2 V; finto 1,3, veri da
 3 in su), non il pezzo più grande.
 
+**L'editor del modulo** (2026-10-02, Lorenzo: «molto lento e davvero poco chiaro… la scelta e gestione
+del modulo la prima cosa… un ritaglio ancorato alla griglia»; «schermata a sé»). Una schermata con solo
+Immagine e Griglia del modulo: l'immagine non si ritaglia con un rettangolo libero ma si **aggancia
+alla griglia** (px per V, px per riga, inizio; o trascinandola), e *Trova da solo* fa l'aggancio da
+sé (Fair Isle: 5,96 × 5,87 px, inizio 3,1 / 1,3 px). La lentezza era il ricalcolo dei passaggi
+dell'intero ricamo a ogni tocco (quasi 1 s sul Fair Isle): nell'editor non si calcolano, e un colpo di
+pennello costa 30 ms. Prossime fasi decise con Lorenzo: (b) il percorso del modulo, ingresso a
+sinistra e uscita a destra alla stessa altezza — col segno di dove finire —, ordine = ordine di
+disegno, riordinabile; (c) i passaggi modificati a mano e i salti.
+
 **Ancora aperto:** il 67% del filo in vista sta nei passaggi oltre 12 mm (32 su 116 per striscia di
 2 moduli). Farli diventare salti col taglio lo porterebbe a circa un terzo, con più tagli in macchina:
 da decidere con Lorenzo.
