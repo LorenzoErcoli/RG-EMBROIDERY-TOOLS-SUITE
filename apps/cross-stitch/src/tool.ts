@@ -17,8 +17,8 @@ import {
   type RouteParams, type RouteResult, type RouteSeg, type SegKind, type StitchParams,
   DEFAULT_ROUTE, DEFAULT_STITCH, RETRACE_PRESETS, colorPolylines, routeCells, type RetracePreset,
 } from './routing';
-import { routeAll, stripRanges } from './strips';
-import { editsOnAllCopies, findModule, resizeModule, seamShift, shiftModule, tileModule, type KnitModule } from './module';
+import { entryRows, routeAll, routeModule, stripRanges, type ModulePath } from './strips';
+import { editsOnAllCopies, findModule, movePiece, piecesOf, resizeModule, seamShift, shiftModule, tileModule, type KnitModule } from './module';
 import { DEFAULT_ZONES, type ZoneGroup } from './zones';
 import { areaFromMm, clampArea, subGrid, type TestArea } from './area';
 
@@ -35,7 +35,7 @@ const OLD_AUTOSAVE_KEY = 'rg-cross-stitch-autosave';
 const DEFAULT_THREADS: Thread[] = [{ hex: '#1a1a1a' }, { hex: '#b3261e' }];
 
 /** Gli strumenti della barra di modifica. */
-type Mode = 'pan' | 'paint' | 'fill' | 'erase' | 'group' | 'cut' | 'image';
+type Mode = 'pan' | 'paint' | 'fill' | 'erase' | 'group' | 'cut' | 'image' | 'order';
 
 const MODE_HELP: Record<Mode, string> = {
   pan: 'Sposta: trascina per muovere la vista, rotella per ingrandire. Il ricamo non si tocca.',
@@ -43,6 +43,7 @@ const MODE_HELP: Record<Mode, string> = {
   fill: 'Riempi: un clic passa al filo scelto tutta la zona collegata dello stesso colore — per esempio l’interno di una lettera.',
   erase: 'Gomma: trascina per cancellare; lì non si cuce niente.',
   cut: 'Salti: clicca un passaggio e diventa un salto (la macchina taglia il filo); clicca un salto fatto a mano e torna passaggio. Si tolgono tutti in 04 Passaggi.',
+  order: 'Ordine pezzi: clicca i pezzi del filo scelto nell’ordine in cui vuoi cucirli (il primo clic è il primo pezzo). Il primo pezzo dà l’ingresso: il filo entra lì a sinistra ed esce a destra alla stessa altezza.',
   image: 'Sposta immagine: trascina l’immagine sotto la griglia finché il motivo cade giusto sulle V del modulo.',
   group: 'Gruppi: trascina un rettangolo attorno a una parte (per esempio un titolo): il filo di ogni colore la cuce tutta insieme, prima del resto e nell’ordine della lista in 04 Passaggi.',
 };
@@ -322,6 +323,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <button type="button" class="rg-segmented__item" data-mode="group" title="Gruppi (G)">Gruppi</button>
             <button type="button" class="rg-segmented__item" data-mode="cut" title="Salti (T)">Salti</button>
             <button type="button" class="rg-segmented__item" data-mode="image" hidden>Sposta immagine</button>
+            <button type="button" class="rg-segmented__item" data-mode="order" hidden>Ordine pezzi</button>
           </div>
           <div class="cs-editbar__group" id="moduleEditGroup" role="group" aria-labelledby="eb-mod" hidden><span class="rg-label" id="eb-mod">Modulo</span>
             <div class="rg-segmented" id="moduleViewSel" role="group" aria-label="Vista">
@@ -444,6 +446,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   let areaDrag: { a: { x: number; y: number }; b: { x: number; y: number } } | null = null;
   /** Dove stanno i passaggi calcolati: la griglia su cui sono fatti e lo spostamento per l'anteprima. */
   let routeGeom: { grid: GridSpec; dx: number; dy: number; i0: number; j0: number } = { grid: DEFAULT_GRID, dx: 0, dy: 0, i0: 0, j0: 0 };
+  /** Il pezzo che si sta disegnando (editor), e quanti pezzi si sono già messi in ordine (strumento Ordine pezzi). */
+  let currentPiece = 0;
+  let orderClicks = 0;
   /** Il trascinamento dell'immagine (strumento «Sposta immagine» dell'editor). */
   let imageDrag: { x0: number; y0: number; gx: number; gy: number } | null = null;
   /** Il gruppo evidenziato dalla lista (passandoci sopra col mouse). */
@@ -483,13 +488,29 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
    * Cosa si passa al motore: tutto il disegno, o solo l'area di prova (una griglia a sé che parte
    * da 0; i gruppi, in mm, si spostano con lei).
    */
+  /** Il modulo come percorso: pezzi e riga d'ingresso di ogni filo (il primo pezzo dice dove). */
+  const modulePathOf = (m: KnitModule): ModulePath => ({ cols: m.cols, rows: m.rows, marks: m.marks, pieceOf: m.seq, entryRow: entryRows({ cols: m.cols, marks: m.marks, pieceOf: m.seq, starts: m.starts }) });
+  /** Il ricamo è proprio il modulo ripetuto (nessuna V ritoccata su una copia sola)? */
+  const designIsTiled = (): boolean => {
+    const m = st.module; if (!m) return false;
+    const t = tileModule(st.grid, m);
+    if (t.size !== st.cells.size) return false;
+    for (const [k, v] of t) { const c = st.cells.get(k); if (!c || c.color !== v.color || c.stitch !== v.stitch) return false; }
+    return true;
+  };
   const routeInput = (cells: Cells = st.cells) => {
     const params = routeParams();
+    // IL PERCORSO DEL MODULO RIPETUTO (strips.ts): con un modulo, senza gruppi a mano e senza area di
+    // prova, ogni filo si calcola una volta sul modulo (ingresso a sinistra, uscita a destra alla stessa
+    // altezza) e si ripete identico in ogni copia.
+    if (st.module && !(params.groups && params.groups.length) && !clampArea(st.grid, st.area) && designIsTiled()) {
+      params.modulePath = modulePathOf(st.module);
+    }
     // COPIA PER COPIA (Lorenzo, 2026-10-01: i passaggi del modulo). Con un modulo, ogni striscia si
     // cuce una copia alla volta, da sinistra a destra: dopo 2-3 copie il motore ripete da solo lo
     // stesso giro in ogni copia (misurato sul Fair Isle: copie identiche fino al bordo). Costa +8%
     // di filo in vista sulla striscia libera. Se ci sono gruppi disegnati a mano, valgono quelli.
-    if (st.module && !(params.groups && params.groups.length)) {
+    if (st.module && !params.modulePath && !(params.groups && params.groups.length)) {
       const C = st.module.cols, n = Math.ceil(st.grid.cols / C), h = gridHeight(st.grid);
       params.groups = Array.from({ length: n }, (_, k) => ({ x: k * C * st.grid.cellW + 0.01, y: -1, w: C * st.grid.cellW - 0.02, h: h + 2 }));
     }
@@ -807,14 +828,15 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $('formatInfo').textContent = `Griglia: ${st.grid.cols} colonne × ${st.grid.rows} righe, un punto per cella · il ricamo esce ${fmtNum(w)} × ${fmtNum(h)} mm (le celle sono intere)`
       + (area ? ` · area di prova ${area.c1 - area.c0} × ${area.r1 - area.r0} celle, ${fmtNum(Math.round(subGrid(g, new Map(), area).grid.cols * g.cellW))} × ${fmtNum(Math.round(gridHeight(subGrid(g, new Map(), area).grid)))} mm: passaggi ed export solo lì` : '');
     $('areaAllBtn').hidden = !area || moduleView;
+    drawEditorMarks();
     if (moduleView && st.module) $('formatInfo').textContent = `Vista modulo: ${st.module.cols} × ${st.module.rows} V al centro, intorno le copie vicine. Ogni modifica vale su tutto il ricamo.`;
     showStatus();
   }
 
   /** I numeri dei passaggi nella barra di stato (o che si stanno calcolando). */
   function showStatus(): void {
+    if (editorOpen && st.module) { const g0 = realGrid(); const nP = piecesOf(st.module, activeThread).length; $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V · ${fmtNum(Math.round(st.module.cols * g0.cellW))} × ${fmtNum(Math.round(st.module.rows * rowPitch(g0)))} mm · filo in vista ${Math.round(editorVisible)} mm per modulo · filo scelto: ${nP} pezz${nP === 1 ? 'o' : 'i'}; pieno = ingresso, anello = dove finire`; return; }
     if (routing) { $('status').textContent = 'Calcolo dei passaggi…'; return; }
-    if (editorOpen && st.module) { const g0 = realGrid(); $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V · ${fmtNum(Math.round(st.module.cols * g0.cellW))} × ${fmtNum(Math.round(st.module.rows * rowPitch(g0)))} mm · i passaggi si vedono nel ricamo`; return; }
     if (moduleView) { $('status').textContent = moduleCopyNote; return; }
     if (!result) return;
     const m = result.metrics;
@@ -840,6 +862,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       if (e.data.error) { result = null; $('status').textContent = 'Errore nei passaggi: ' + e.data.error; return; }
       result = e.data.result ?? null;
       lastReal = result ? { result, geom: { ...requestGeom } } : null; // la geometria della richiesta, non quella di adesso
+      if (editorOpen) { editorRoute(); draw(); return; } // nell'editor vale il percorso del modulo
       if (moduleView) showModulePasses();
       draw();
     };
@@ -873,7 +896,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   /** Ricalcola e ridisegna: i punti subito, i passaggi quando il worker ha finito. */
   function update(): void {
-    if (editorOpen) { result = null; draw(); return; } // nell'editor non si calcolano i passaggi: è immediato
+    if (editorOpen) { editorRoute(); draw(); return; } // nell'editor: solo il modulo, pochi millesimi
     if (moduleView) { result = null; recompute(); draw(); return; }
     recompute();
     draw();
@@ -1001,6 +1024,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   const setMode = (m: Mode) => {
     mode = m;
+    if (m === 'order') orderClicks = 0;
     // senza passaggi visibili non c'è niente da cliccare
     if (m === 'cut' && !showPaths) { showPaths = true; $<HTMLInputElement>('showPaths').checked = true; draw(); }
     syncSegmented(); hideBrush(); drawGroups();
@@ -1195,7 +1219,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       sw.className = 'rg-color-map__swatch';
       sw.style.setProperty('--swatch', t.hex);
       b.appendChild(sw);
-      b.addEventListener('click', () => { activeThread = i; buildThreads(); if (mode === 'pan' || mode === 'erase') setMode('paint'); });
+      b.addEventListener('click', () => { activeThread = i; orderClicks = 0; buildThreads(); if (editorOpen) draw(); if (mode === 'pan' || mode === 'erase') setMode('paint'); });
       host.appendChild(b);
     });
   }
@@ -1240,7 +1264,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   const snapshot = () => (moduleView && realDesign && st.module
     ? { grid: { ...realDesign.grid }, cells: tileModule(realDesign.grid, st.module), module: cloneModule(st.module) }
     : { grid: { ...st.grid }, cells: cloneCells(st.cells), module: cloneModule(st.module) });
-  const cloneModule = (m: KnitModule | null): KnitModule | null => (m ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x ? { ...x } : null)), guide: m.guide ? { ...m.guide } : m.guide, drawn: m.drawn } : null);
+  const cloneModule = (m: KnitModule | null): KnitModule | null => (m ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x ? { ...x } : null)), guide: m.guide ? { ...m.guide } : m.guide, drawn: m.drawn, seq: m.seq ? [...m.seq] : m.seq, starts: m.starts ? { ...m.starts } : m.starts } : null);
   function pushUndo(): void {
     undo.push(snapshot());
     if (undo.length > 100) undo.shift();
@@ -1347,7 +1371,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   function applyUserEdits(edits: CellEdit[]): boolean {
     if (editorSnap) editorSnap.changed = true;
     const all = st.module && (moduleView || $<HTMLInputElement>('editAllCopies').checked);
-    return applyEdits(st.grid, st.cells, all ? editsOnAllCopies(st.grid, st.module!, edits) : edits);
+    return applyEdits(st.grid, st.cells, all ? editsOnAllCopies(st.grid, st.module!, edits, editorOpen ? currentPiece : 0) : edits);
   }
 
   /** Il pennello (o la gomma) su una cella; vero se ha cambiato qualcosa. */
@@ -1441,6 +1465,21 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (!at) return;
     e.stopPropagation(); e.preventDefault();
     const button: Button = e.button === 2 ? 'right' : 'left';
+    if (mode === 'order' && st.module) {
+      // il pezzo cliccato diventa il prossimo nell'ordine del suo filo
+      const m = st.module, idx = (((at.r % m.rows) + m.rows) % m.rows) * m.cols + (((at.c % m.cols) + m.cols) % m.cols);
+      const mk = m.marks[idx];
+      if (!mk || !(m.seq?.[idx] ?? 0)) { $('status').textContent = 'Qui non c’è un pezzo disegnato: clicca una V disegnata col pennello o col riempi.'; return; }
+      if (mk.color !== activeThread) { activeThread = mk.color; orderClicks = 0; buildThreads(); }
+      pushUndo();
+      orderClicks++;
+      movePiece(m, idx, orderClicks);
+      if (editorSnap) editorSnap.changed = true;
+      update();
+      return;
+    }
+    // nell'editor ogni tratto (pennello, riempi) è un pezzo nuovo, cucito dopo i precedenti
+    if (editorOpen && st.module) currentPiece = (mode === 'erase' || e.shiftKey) ? 0 : Math.max(0, ...(st.module.seq ?? [0])) + 1;
     if (mode === 'fill') {
       const edits = fillEdits(st.grid, st.cells, at.r, at.c, activeThread, brushStitch, button, e.shiftKey);
       if (!edits.length) return;
@@ -2191,6 +2230,54 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   // secondo a ogni tocco, era la lentezza). L'immagine si aggancia alla griglia: quanti px è una V, una
   // riga, e dove comincia il modulo — campi o trascinando con «Sposta immagine».
   let editorOpen = false;
+  /** Nell'editor: il percorso del modulo (sul modulo solo) riportato sul modulo al centro della vista. */
+  let editorEntry: Record<number, number> = {};
+  let editorVisible = 0;
+  function editorRoute(): void {
+    const m = st.module;
+    if (!m || !moduleView) { result = null; return; }
+    const mp = modulePathOf(m);
+    editorEntry = mp.entryRow;
+    let res: RouteResult;
+    try { res = routeModule(realGrid(), mp, routeParams()); } catch { result = null; return; }
+    const R = m.rows, C = m.cols, Wm = 2 * C + 1, Wv = 2 * (3 * C) + 1;
+    const toView = (v: number) => { const i = Math.floor(v / Wm), j = v - i * Wm; return (i + R) * Wv + j + 2 * C; };
+    result = { colors: res.colors.map((cr) => ({ color: cr.color, segs: cr.segs.map((sg) => ({ kind: sg.kind, from: toView(sg.from), to: toView(sg.to) })) })), metrics: res.metrics };
+    editorVisible = res.metrics.visibleMm;
+    routeGeom = { grid: st.grid, dx: 0, dy: 0, i0: 0, j0: 0 };
+  }
+  /** I segni dell'editor per il filo scelto: ingresso (pieno) a sinistra, arrivo (anello) a destra, numeri dei pezzi. */
+  function drawEditorMarks(): void {
+    const svg = $('layer').querySelector('svg');
+    if (!svg) return;
+    svg.querySelector('#cs-ed-marks')?.remove();
+    const m = st.module;
+    if (!editorOpen || !m) return;
+    const g = st.grid, pa = rowPitch(g), R = m.rows, C = m.cols;
+    const ns = 'http://www.w3.org/2000/svg';
+    const layer = document.createElementNS(ns, 'g');
+    layer.id = 'cs-ed-marks';
+    layer.setAttribute('pointer-events', 'none');
+    const col = st.threads[activeThread]?.hex ?? '#000';
+    const rad = Math.max(g.cellW, pa) * 0.9;
+    const row = editorEntry[activeThread];
+    if (row !== undefined) {
+      const y = (R + row) * pa; // il vertice in alto della riga d'ingresso
+      const x0 = C * g.cellW, x1 = 2 * C * g.cellW;
+      layer.insertAdjacentHTML('beforeend',
+        `<circle cx="${x0}" cy="${y}" r="${rad}" fill="${col}" style="stroke:var(--rg-color-white)" stroke-width="2" vector-effect="non-scaling-stroke"/>`
+        + `<circle cx="${x1}" cy="${y}" r="${rad * 1.3}" fill="none" style="stroke:var(--rg-color-focus)" stroke-width="3" vector-effect="non-scaling-stroke"/>`
+        + `<circle cx="${x1}" cy="${y}" r="${rad * 0.45}" fill="${col}"/>`);
+    }
+    const fs = Math.max(3, g.cellW * 1.6);
+    for (const pc of piecesOf(m, activeThread)) {
+      if (pc.start < 0) continue;
+      const r0 = Math.floor(pc.start / C) + R, c0 = (pc.start % C) + C;
+      const x = (c0 + 0.5) * g.cellW, y = r0 * pa + g.cellH / 2;
+      layer.insertAdjacentHTML('beforeend', `<text x="${x}" y="${y}" font-size="${fs}" text-anchor="middle" dominant-baseline="middle" style="fill:var(--rg-color-black);font-family:var(--rg-font-mono);paint-order:stroke;stroke:var(--rg-color-white);stroke-width:3px;stroke-linejoin:round">${pc.position}</text>`);
+    }
+    svg.appendChild(layer);
+  }
   let editorSnap: { grid: GridSpec; cells: Cells; module: KnitModule | null; threads: Thread[]; route: RouteParams; changed: boolean } | null = null;
   const realGrid = (): GridSpec => (moduleView && realDesign ? realDesign.grid : st.grid);
   /** La tela dell'editor rifatta dal modulo (dopo un cambio di misure, di griglia, di modulo). */
@@ -2200,7 +2287,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     st.grid = viewGridOf(realDesign!.grid, st.module);
     st.cells = tileModule(st.grid, st.module);
     syncEditorFields();
-    draw();
+    update();
     if (editorSnap) editorSnap.changed = true;
   }
   function syncEditorFields(): void {
@@ -2229,16 +2316,18 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $('stageActions').hidden = true; $('editorActions').hidden = false;
     document.title = 'Modulo · Cross-Stitch';
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="image"]')!.hidden = false;
+    root.querySelector<HTMLButtonElement>('#modeSel [data-mode="order"]')!.hidden = false;
     for (const sel of ['[data-mode="group"]', '[data-mode="cut"]']) root.querySelector<HTMLButtonElement>('#modeSel ' + sel)!.hidden = true;
     $('moduleViewSel').hidden = true;
     $('areaBtn').closest('.cs-editbar__group')!.setAttribute('hidden', '');
-    for (const id of ['showPaths', 'showOrder']) $(id).closest('label')!.hidden = true;
+
     showGrid = true; $<HTMLInputElement>('showGrid').checked = true;
     showGuide = true; $<HTMLInputElement>('showGuide').checked = true;
     if (imageOpacity <= 0) imageOpacity = 0.5;
     enterModuleView();
     setMode('paint');
     syncEditorFields();
+    update();
     $('stageTitle').focus();
   }
   function closeEditor(apply: boolean): void {
@@ -2251,11 +2340,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $('stageActions').hidden = false; $('editorActions').hidden = true;
     document.title = 'Cross-Stitch — RG Tools';
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="image"]')!.hidden = true;
+    root.querySelector<HTMLButtonElement>('#modeSel [data-mode="order"]')!.hidden = true;
     for (const sel of ['[data-mode="group"]', '[data-mode="cut"]']) root.querySelector<HTMLButtonElement>('#modeSel ' + sel)!.hidden = false;
     $('moduleViewSel').hidden = false;
     $('areaBtn').closest('.cs-editbar__group')!.removeAttribute('hidden');
-    for (const id of ['showPaths', 'showOrder']) $(id).closest('label')!.hidden = false;
-    if (mode === 'image') setMode('paint');
+
+    if (mode === 'image' || mode === 'order') setMode('paint');
     if (apply) { exitModuleView(); }
     else if (editorSnap) {
       // si torna com'era all'apertura
@@ -2356,7 +2446,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       st.module = m && Number.isInteger(m.cols) && Number.isInteger(m.rows) && Array.isArray(m.marks) && m.marks.length === m.cols * m.rows
         ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x && typeof x === 'object' ? { stitch: x.stitch, color: Number(x.color) } : null)),
           guide: m.guide && typeof m.guide === 'object' && [m.guide.x, m.guide.y, m.guide.w, m.guide.h].every((v) => Number.isFinite(Number(v))) ? { x: Number(m.guide.x), y: Number(m.guide.y), w: Number(m.guide.w), h: Number(m.guide.h) } : null,
-          drawn: !!m.drawn }
+          drawn: !!m.drawn,
+          seq: Array.isArray(m.seq) && m.seq.length === m.cols * m.rows ? m.seq.map((v) => Math.max(0, Math.round(Number(v) || 0))) : undefined,
+          starts: m.starts && typeof m.starts === 'object' ? Object.fromEntries(Object.entries(m.starts).map(([k, v]) => [Number(k), Number(v)])) : undefined }
         : null;
     }
     st.cuts = Array.isArray(meta.cuts) ? (meta.cuts as unknown[]).filter((c): c is [number, number, number, number] => Array.isArray(c) && c.length === 4 && c.every((x) => Number.isInteger(x))) : [];

@@ -663,6 +663,20 @@ calcolano**, così ogni tocco è immediato: si vedono tornando al ricamo.
   trasparenza (*Vista → Immagine*), la griglia. Pennello, riempi e gomma cambiano il modulo; le frecce
   di *Inizio* e *Giunture sulla base* come nella vista Modulo.
 
+**Il percorso del modulo** (nell'editor). Ogni tratto di pennello o riempimento è un **pezzo**, numerato
+nell'ordine in cui lo disegni, e il filo cuce i pezzi di ogni colore in quell'ordine (la gomma toglie
+le V dai pezzi). Il filo **entra sul lato sinistro** del modulo all'altezza dove hai cominciato il suo
+primo pezzo, e **finisce sul lato destro alla stessa altezza**: è l'ingresso della copia accanto, così
+le copie si concatenano senza passaggi in mezzo. Per il filo scelto (in *Filo* nella barra) la tela
+mostra un **punto pieno** all'ingresso, un **anello** dove deve finire, e sui pezzi i loro numeri;
+i passaggi del modulo si vedono subito (si calcolano sul modulo solo). Nella barra di stato: il filo
+in vista per modulo. Per cambiare l'ordine: strumento **Ordine pezzi**, poi clicca i pezzi nell'ordine
+in cui vuoi cucirli (il primo clic è il primo pezzo; cambiando filo si ricomincia da 1). Nel ricamo il
+percorso del modulo si **ripete identico** in ogni copia: per ogni striscia la base, poi ogni filo
+copia per copia; le copie tagliate dal bordo le fa il motore, partendo da dove esce l'ultima copia
+intera. Vale finché il ricamo è proprio il modulo ripetuto (senza ritocchi su una copia sola, senza
+gruppi a mano e senza area di prova); altrimenti si torna al copia per copia.
+
 Senza editor, nel ricamo con un modulo, **Su tutte le copie** (nella barra) fa valere pennello, riempi e
 gomma in ogni copia e nel modulo. Il modulo, con il suo aggancio all'immagine, si salva nel progetto.
 L'immagine sotto la griglia (*Altro → Opacità*) si disegna dall'originale (prima era la copia ridotta a

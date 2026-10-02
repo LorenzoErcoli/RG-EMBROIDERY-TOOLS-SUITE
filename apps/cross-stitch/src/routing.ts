@@ -145,6 +145,22 @@ export interface RouteParams {
    * filo la finisce tutta prima di uscire. Valgono con *blocks*, anche senza zone automatiche.
    */
   groups?: ZoneGroup[];
+  /**
+   * L'ORDINE DEI PEZZI (Lorenzo, 2026-10-02: «se disegno a mano… quello che disegno dopo va dopo»):
+   * per cella (r * cols + c) il numero del pezzo in cui è stata disegnata (0 = nessuno). Ogni pezzo di
+   * un colore è una zona, cucita in ordine crescente, prima delle celle senza pezzo.
+   */
+  pieceOf?: number[];
+  /**
+   * INGRESSO E USCITA per filo (vertice del reticolo): il filo parte da `startAt` e, finiti i suoi
+   * punti, va a `endAt` con un passaggio. Per il modulo: ingresso sul lato sinistro, uscita sul lato
+   * destro alla stessa altezza — l'ingresso della copia accanto (Lorenzo: «il percorso del filo inizia
+   * dal lato sinistro e deve finire nel lato destro alla stessa altezza»).
+   */
+  startAt?: Record<number, number>;
+  endAt?: Record<number, number>;
+  /** Il percorso del modulo ripetuto (strips.ts, routeModuleTiled): con questo il ricamo è il modulo ripetuto. */
+  modulePath?: { cols: number; rows: number; marks: Array<{ stitch: Stitch; color: number } | null>; pieceOf?: number[]; entryRow: Record<number, number> } | null;
   /** Il ricamo a strisce (strips.ts): righe per striscia e compensazione del ritiro. null = tutto insieme. */
   strips?: { rows: number; shiftMm?: number } | null;
   /** Mai passaggi sopra un gruppo già finito, se c'è un'altra strada (default vero). */
@@ -309,7 +325,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   /** Cella → gruppo (-1 = nessuno), per tenere i passaggi fuori dai gruppi già finiti. */
   const cellGroup = new Int16Array(g.rows * g.cols).fill(-1);
   if (groups.length) for (let rr = 0; rr < g.rows; rr++) for (let cc = 0; cc < g.cols; cc++) cellGroup[rr * g.cols + cc] = groupOfCell(g, rr, cc, groups);
-  if (params.blocks !== false && (params.zones !== null || groups.length)) {
+  if (params.blocks !== false && (params.zones !== null || groups.length || params.pieceOf)) {
     let offset = 0;
     const colorsInDesign = [...new Set([...cells.values()].map((m) => m.color))].filter((c) => !(base && c === base.color));
     for (const col of colorsInDesign) {
@@ -325,6 +341,15 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       for (const [k, gi] of inGroup) zoneOfCell.set(k, offset + used.indexOf(gi));
       used.forEach((gi, n) => zoneRank.set(offset + n, gi));
       offset += used.length;
+      // i pezzi disegnati: in ordine di numero, dopo i gruppi (rango = gruppi + numero d'ordine)
+      if (params.pieceOf) {
+        const pieceCells = new Map<number, number>();
+        for (const k of [...free.keys()]) { const pc = params.pieceOf[k] ?? 0; if (pc > 0) { pieceCells.set(k, pc); free.delete(k); } }
+        const order = [...new Set(pieceCells.values())].sort((a, b) => a - b);
+        for (const [k, pc] of pieceCells) zoneOfCell.set(k, offset + order.indexOf(pc));
+        order.forEach((_, n) => zoneRank.set(offset + n, groups.length + n));
+        offset += order.length;
+      }
       if (params.zones === null) { for (const k of free.keys()) zoneOfCell.set(k, offset); offset++; continue; }
       const z = zonesOf(g, free, col, params.zones ?? {});
       let top = -1;
@@ -714,7 +739,9 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     // E in tutti e due i casi da un capo DISPARI, se c'è (Eulero): un vertice dove si incontrano
     // due gambe è il mezzo di un percorso, e partendo da lì una metà resta da riprendere con un
     // salto. Visto in anteprima sulla riga di Λ rossa, che partiva dal centro.
-    if (left > 0) {
+    if (left > 0 && params.startAt && params.startAt[k] !== undefined) {
+      at = params.startAt[k];
+    } else if (left > 0) {
       const degree = new Map<number, number>();
       for (const id of mine) if (available(id) && inBlock(id)) for (const e of entriesOf(id)) degree.set(e, (degree.get(e) ?? 0) + 1);
       const ends = [...degree].filter(([, n]) => n % 2 === 1).map(([v]) => v);
@@ -830,6 +857,45 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       take(best.id, best.entry);
     }
 
+    // l'arrivo: dall'ultimo punto all'uscita data (il percorso più economico; senza strada, salto)
+    const endV = params.endAt?.[k];
+    if (endV !== undefined && at >= 0 && at !== endV && segs.length) {
+      for (const t of touched) { dist[t] = Infinity; prevV[t] = -1; }
+      touched.length = 0;
+      heap.clear();
+      dist[at] = 0; touched.push(at); heap.push(0, at);
+      while (heap.size) {
+        const d = heap.peekD();
+        const v = heap.pop();
+        if (d > dist[v]) continue;
+        if (v === endV) break;
+        forEachNeighbour(v, k, (w, cost) => {
+          const nd = d + cost;
+          if (nd < dist[w]) { if (dist[w] === Infinity) touched.push(w); dist[w] = nd; prevV[w] = v; heap.push(nd, w); }
+        });
+      }
+      if (dist[endV] < Infinity) {
+        const path: number[] = [];
+        for (let v = endV; v !== at && v >= 0; v = prevV[v]) path.push(v);
+        path.reverse();
+        let from = at;
+        for (const v of path) {
+          const { kind, mm } = edgeKind(from, v, k);
+          segs.push({ kind, from, to: v });
+          if (kind === 'hidden') metrics.hiddenMm += mm;
+          else if (kind === 'vertical') metrics.verticalMm += mm;
+          else if (kind === 'retrace') metrics.retraceMm += mm;
+          else metrics.visibleMm += mm;
+          from = v;
+        }
+      } else {
+        const a = pt(at), b = pt(endV);
+        metrics.jumps++; metrics.jumpMm += Math.hypot(b.x - a.x, b.y - a.y);
+        segs.push({ kind: 'jump', from: at, to: endV });
+      }
+      at = endV;
+    }
+
     // i salti a mano: il passaggio fra quei due vertici diventa un salto
     if (cutKeys.size) {
       const out: RouteSeg[] = [];
@@ -859,7 +925,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       for (const sg of out) segs.push(sg); // (non push(...out): sui ricami grandi supera lo stack)
     }
     // il primo tratto di un colore che parte con un salto non è un salto: è il cambio colore
-    if (segs.length && segs[0].kind === 'jump') segs.shift();
+    if (segs.length && segs[0].kind === 'jump' && !(params.startAt && params.startAt[k] !== undefined)) segs.shift();
     colors.push({ color: k, segs });
   }
 

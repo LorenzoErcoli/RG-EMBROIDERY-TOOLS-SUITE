@@ -85,6 +85,15 @@ pennello costa 30 ms. Prossime fasi decise con Lorenzo: (b) il percorso del modu
 sinistra e uscita a destra alla stessa altezza — col segno di dove finire —, ordine = ordine di
 disegno, riordinabile; (c) i passaggi modificati a mano e i salti.
 
+**Il percorso del modulo** (2026-10-02, fase b dell'editor; Lorenzo: «inizia dal lato sinistro e deve
+finire nel lato destro alla stessa altezza»; «quello che disegno dopo va dopo»; «dammi un segno per
+definire dove devo finire in base a dove ho iniziato»). Ogni filo si calcola una volta sul modulo:
+ingresso a sinistra alla riga del primo pezzo, pezzi nell'ordine di disegno (riordinabili), uscita a
+destra alla stessa riga = ingresso della copia accanto. Sul Fair Isle (5 copie): filo continuo, filo in
+vista 6,18 m contro 6,13 del copia per copia, ripassi 21,8 contro 23,0 m, 88 ms contro 340. La copia
+tagliata dal bordo all'inizio cominciava altrove (4 salti nel test): ora parte dall'uscita
+dell'ultima copia intera.
+
 **Ancora aperto:** il 67% del filo in vista sta nei passaggi oltre 12 mm (32 su 116 per striscia di
 2 moduli). Farli diventare salti col taglio lo porterebbe a circa un terzo, con più tagli in macchina:
 da decidere con Lorenzo.

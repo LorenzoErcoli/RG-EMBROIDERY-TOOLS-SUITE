@@ -45,8 +45,8 @@ export { routeCells as csRouteCells, colorPolylines as csColorPolylines, DEFAULT
 export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight, knitFromImage as csKnitFromImage, refinePalette as csRefinePalette, brushEdits as csBrushEdits, fillEdits as csFillEdits, applyEdits as csApplyEdits, fromTwoColumnV as csFromTwoColumnV } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { subGrid as csSubGrid, areaFromMm as csAreaFromMm, clampArea as csClampArea } from ${JSON.stringify(posix('apps/cross-stitch/src/area.ts'))};
 export { segmentPoints as csSegmentPoints } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
-export { routeAll as csRouteAll, stripRanges as csStripRanges } from ${JSON.stringify(posix('apps/cross-stitch/src/strips.ts'))};
-export { findModule as csFindModule, tileModule as csTileModule, editsOnAllCopies as csEditsOnAllCopies, shiftModule as csShiftModule, seamShift as csSeamShift, resizeModule as csResizeModule } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
+export { routeAll as csRouteAll, stripRanges as csStripRanges, routeModule as csRouteModule, entryRows as csEntryRows } from ${JSON.stringify(posix('apps/cross-stitch/src/strips.ts'))};
+export { findModule as csFindModule, tileModule as csTileModule, editsOnAllCopies as csEditsOnAllCopies, shiftModule as csShiftModule, seamShift as csSeamShift, resizeModule as csResizeModule, movePiece as csMovePiece, piecesOf as csPiecesOf } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
 export { zonesOf as csZonesOf } from ${JSON.stringify(posix('apps/cross-stitch/src/zones.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
@@ -5193,6 +5193,43 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
       return [4, 5].every((k) => sig[k] === sig[k - 2]);
     });
     check('copia per copia: a regime il percorso di ogni filo si ripete (ogni 1 o 2 copie)', ritmo, [true, true, true]);
+  }
+
+  // IL PERCORSO DEL MODULO (Lorenzo, 2026-10-02: «il percorso del filo inizia dal lato sinistro e deve
+  // finire nel lato destro alla stessa altezza… quello che disegno dopo va dopo»). Un modulo 12 × 8:
+  // il filo 1 in due pezzi (riga 2 a sinistra, riga 5 a destra), il filo 2 a puntini; base sotto.
+  {
+    const Cm = 12, Rm = 8;
+    const marksP = Array.from({ length: Cm * Rm }, (_, i) => { const rr = Math.floor(i / Cm), cc = i % Cm; return { stitch: 'v', color: (rr === 2 && cc >= 1 && cc <= 4) || (rr === 5 && cc >= 7 && cc <= 10) ? 1 : (rr + cc) % 6 === 0 ? 2 : 0 }; });
+    const pieceA = Array.from({ length: Cm * Rm }, (_, i) => { const rr = Math.floor(i / Cm), cc = i % Cm; return rr === 2 && cc >= 1 && cc <= 4 ? 1 : rr === 5 && cc >= 7 && cc <= 10 ? 2 : 0; });
+    const pieceB = pieceA.map((v) => (v === 1 ? 2 : v === 2 ? 1 : 0)); // l'ordine al contrario
+    const gP = { cols: Cm, rows: Rm, cellW: 2.4, cellH: 3.5, overlapPct: 30 };
+    const Wp = LW(gP);
+    const par = { ...rg.CS_DEFAULT_ROUTE, base: { color: 0, stitch: 'v' } };
+    const percorso = (pieceOf, entryRow) => rg.csRouteModule(gP, { cols: Cm, rows: Rm, marks: marksP, pieceOf, entryRow }, par);
+    const mA = percorso(pieceA, { 1: 2, 2: 0 }), mB = percorso(pieceB, { 1: 5, 2: 0 });
+    const f1 = (res) => res.colors.find((c) => c.color === 1).segs;
+    const primaRiga = (segs) => Math.min(...segs.filter((sg) => sg.kind === 'stitch').slice(0, 1).map((sg) => Math.min(Math.floor(sg.from / Wp), Math.floor(sg.to / Wp))));
+    check('percorso del modulo: entra a sinistra ed esce a destra alla riga d\'ingresso', [f1(mA)[0].from, f1(mA)[f1(mA).length - 1].to], [2 * Wp + 0, 2 * Wp + 2 * Cm]);
+    check('percorso del modulo: i pezzi nell\'ordine dei numeri (riga 2 prima, oppure riga 5 prima)', [primaRiga(f1(mA)), primaRiga(f1(mB))], [2, 5]);
+    check('la riga d\'ingresso: dove comincia il primo pezzo del filo', rg.csEntryRows({ cols: Cm, marks: marksP, pieceOf: pieceA, starts: { 1: 2 * Cm + 1, 2: 5 * Cm + 7 } })[1], 2);
+    // nel ricamo: il percorso del modulo ripetuto, il filo continuo fra le copie, gli stessi punti
+    const gT2 = { ...gP, cols: Cm * 3 + 5, rows: Rm * 2 };
+    const modK2 = { cols: Cm, rows: Rm, marks: marksP };
+    const cT2 = rg.csTileModule(gT2, modK2);
+    const tiled = rg.csRouteAll(gT2, cT2, { ...par, modulePath: { cols: Cm, rows: Rm, marks: marksP, pieceOf: pieceA, entryRow: { 1: 2, 2: 0 } } });
+    const libero = rg.csRouteAll(gT2, cT2, par);
+    let rotture = 0; for (const cr of tiled.colors) for (let i = 1; i < cr.segs.length; i++) if (cr.segs[i].from !== cr.segs[i - 1].to) rotture++;
+    const puntiDi = (res) => res.colors.flatMap((cr) => cr.segs.filter((sg) => sg.kind === 'stitch').map((sg) => cr.color + ':' + Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to))).sort().join('|');
+    check('modulo ripetuto: filo continuo fra le copie, stessi punti del ricamo, base e fili per striscia', [rotture, puntiDi(tiled) === puntiDi(libero), tiled.colors.map((c) => c.strip + '/' + c.color).join(' ')], [0, true, '0/0 0/1 0/2 1/0 1/1 1/2']);
+    // riordinare: il pezzo cliccato diventa il primo; i pezzi di un filo in ordine
+    const modR = { cols: Cm, rows: Rm, marks: marksP.map((m) => ({ ...m })), seq: [...pieceA], starts: { 1: 2 * Cm + 1, 2: 5 * Cm + 7 } };
+    rg.csMovePiece(modR, 5 * Cm + 8, 1);
+    check('ordine pezzi: il pezzo della riga 5 diventa il primo, e la sua prima V resta quella', rg.csPiecesOf(modR, 1).map((q) => q.position + '@' + Math.floor(q.start / Cm)).join(' '), '1@5 2@2');
+    // ogni tratto è un pezzo: il pennello su tutte le copie numera le V e ricorda dove comincia
+    const modE = { cols: 4, rows: 3, marks: Array.from({ length: 12 }, () => ({ stitch: 'v', color: 0 })) };
+    rg.csEditsOnAllCopies({ rows: 6, cols: 8, cellW: 2, cellH: 3 }, modE, [{ r: 4, c: 6, mark: { stitch: 'v', color: 1 } }, { r: 4, c: 7, mark: { stitch: 'v', color: 1 } }], 3);
+    check('un tratto è un pezzo: numero sulle V e prima V del tratto', [modE.seq[1 * 4 + 2], modE.seq[1 * 4 + 3], modE.starts[3]], [3, 3, 1 * 4 + 2]);
   }
 
   // SALTI A MANO (Lorenzo: «eliminare i passaggi, farli diventare salti»). Un passaggio scelto

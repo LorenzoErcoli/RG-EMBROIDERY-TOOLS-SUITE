@@ -350,7 +350,16 @@ export function findModule(px: Pixels, opts: ModuleOptions): FoundModule {
  * dell'immagine originale (px) che il modulo ricopia: si vede sopra il modulo per disegnarci sopra.
  * `drawn` = disegnato a mano (Nuovo modulo): cambiandone colonne e righe si allarga, non si ricava.
  */
-export interface KnitModule { cols: number; rows: number; marks: Array<CellMark | null>; guide?: { x: number; y: number; w: number; h: number } | null; drawn?: boolean; }
+export interface KnitModule {
+  cols: number; rows: number; marks: Array<CellMark | null>; guide?: { x: number; y: number; w: number; h: number } | null; drawn?: boolean;
+  /**
+   * I PEZZI (Lorenzo, 2026-10-02: «quello che disegno dopo va dopo»): per V, il numero del tratto di
+   * pennello o riempimento in cui è stata disegnata (0 = nessuno); il filo li cuce in ordine.
+   */
+  seq?: number[];
+  /** Per pezzo: la sua prima V (dove ha cominciato il tratto): il primo pezzo di un filo ne dà l'ingresso. */
+  starts?: Record<number, number>;
+}
 
 /** Il ricamo = il modulo ripetuto su tutta la griglia, a partire dall'angolo in alto a sinistra. */
 export function tileModule(g: GridSpec, mod: KnitModule): Cells {
@@ -367,7 +376,7 @@ export function tileModule(g: GridSpec, mod: KnitModule): Cells {
  * sola): ogni cella toccata si ripete in ogni copia, e il modulo stesso cambia, così resta vero anche
  * se poi si cambiano le misure del ricamo.
  */
-export function editsOnAllCopies(g: GridSpec, mod: KnitModule, edits: CellEdit[]): CellEdit[] {
+export function editsOnAllCopies(g: GridSpec, mod: KnitModule, edits: CellEdit[], piece = 0): CellEdit[] {
   const out: CellEdit[] = [];
   const seen = new Set<number>();
   for (const e of edits) {
@@ -375,6 +384,12 @@ export function editsOnAllCopies(g: GridSpec, mod: KnitModule, edits: CellEdit[]
     if (seen.has(mr * mod.cols + mc)) continue;
     seen.add(mr * mod.cols + mc);
     mod.marks[mr * mod.cols + mc] = e.mark ? { ...e.mark } : null;
+    // il pezzo: la V appartiene al tratto che l'ha disegnata (la gomma la toglie da ogni pezzo)
+    if (piece > 0 || !e.mark) {
+      if (!mod.seq) mod.seq = new Array(mod.cols * mod.rows).fill(0);
+      mod.seq[mr * mod.cols + mc] = e.mark ? piece : 0;
+      if (e.mark && piece > 0) { if (!mod.starts) mod.starts = {}; if (mod.starts[piece] === undefined) mod.starts[piece] = mr * mod.cols + mc; }
+    }
     for (let r = mr; r < g.rows; r += mod.rows) for (let c = mc; c < g.cols; c += mod.cols) out.push({ r, c, mark: e.mark ? { ...e.mark } : null });
   }
   return out;
@@ -391,7 +406,11 @@ export function shiftModule(mod: KnitModule, dr: number, dc: number): KnitModule
   }
   // la guida scorre col modulo: la sua prima V è la V (sr, sc) di prima
   const guide = mod.guide ? { ...mod.guide, x: mod.guide.x + (sc * mod.guide.w) / C, y: mod.guide.y + (sr * mod.guide.h) / R } : mod.guide;
-  return { cols: C, rows: R, marks, guide, drawn: mod.drawn };
+  // i pezzi scorrono con le loro V
+  const newIdx = (i: number) => { const r0 = Math.floor(i / C), c0 = i % C; return (((r0 - sr) % R + R) % R) * C + (((c0 - sc) % C + C) % C); };
+  const seq = mod.seq ? marks.map((_, i) => mod.seq![((Math.floor(i / C) + sr) % R) * C + ((i % C) + sc) % C]) : mod.seq;
+  const starts = mod.starts ? Object.fromEntries(Object.entries(mod.starts).map(([k, v]) => [k, newIdx(v)])) : mod.starts;
+  return { cols: C, rows: R, marks, guide, drawn: mod.drawn, seq, starts };
 }
 
 /**
@@ -400,11 +419,15 @@ export function shiftModule(mod: KnitModule, dr: number, dc: number): KnitModule
  */
 export function resizeModule(mod: KnitModule, cols: number, rows: number, fill: CellMark | null): KnitModule {
   const marks: Array<CellMark | null> = [];
+  const seq: number[] = [];
   for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
-    const m = r < mod.rows && c < mod.cols ? mod.marks[r * mod.cols + c] : fill;
+    const inside = r < mod.rows && c < mod.cols;
+    const m = inside ? mod.marks[r * mod.cols + c] : fill;
     marks.push(m ? { ...m } : null);
+    seq.push(inside && mod.seq ? mod.seq[r * mod.cols + c] : 0);
   }
-  return { cols, rows, marks, guide: mod.guide, drawn: mod.drawn };
+  const starts = mod.starts ? Object.fromEntries(Object.entries(mod.starts).filter(([, v]) => Math.floor(v / mod.cols) < rows && v % mod.cols < cols).map(([k, v]) => [k, Math.floor(v / mod.cols) * cols + (v % mod.cols)])) : mod.starts;
+  return { cols, rows, marks, guide: mod.guide, drawn: mod.drawn, seq: mod.seq ? seq : undefined, starts };
 }
 
 /**
@@ -428,4 +451,38 @@ export function seamShift(mod: KnitModule, baseColor: number): { dr: number; dc:
     if (n < cutRows) { cutRows = n; dr = r; }
   }
   return { dr, dc, cutCols, cutRows };
+}
+
+/**
+ * RIORDINARE I PEZZI (Lorenzo: «un modo più pratico per modificarlo successivamente»): il pezzo che
+ * contiene la V `cell` diventa il `position`-esimo del suo filo (1 = il primo); gli altri pezzi del filo
+ * restano nell'ordine che avevano, dopo. Restituisce i numeri nuovi (1, 2, 3… per filo).
+ */
+export function movePiece(mod: KnitModule, cell: number, position: number): boolean {
+  const seq = mod.seq, m = mod.marks[cell];
+  if (!seq || !m || !(seq[cell] > 0)) return false;
+  const color = m.color, moved = seq[cell];
+  // i pezzi di questo filo, nell'ordine attuale
+  const pieces = [...new Set(mod.marks.map((x, i) => (x && x.color === color && seq[i] > 0 ? seq[i] : 0)).filter((v) => v > 0))].sort((a, b) => a - b);
+  const rest = pieces.filter((v) => v !== moved);
+  const pos = Math.max(0, Math.min(rest.length, position - 1));
+  const order = [...rest.slice(0, pos), moved, ...rest.slice(pos)];
+  // i numeri nuovi: dopo tutti i pezzi esistenti (di ogni filo), così non si scontrano con gli altri fili
+  const top = Math.max(0, ...seq);
+  const renum = new Map(order.map((v, k) => [v, top + 1 + k]));
+  for (let i = 0; i < seq.length; i++) { const x = mod.marks[i]; if (x && x.color === color && renum.has(seq[i])) seq[i] = renum.get(seq[i])!; }
+  if (mod.starts) {
+    const next: Record<number, number> = {};
+    for (const [k, v] of Object.entries(mod.starts)) next[renum.get(Number(k)) ?? Number(k)] = v;
+    mod.starts = next;
+  }
+  return true;
+}
+
+/** I pezzi di un filo in ordine: numero, posizione (1…), prima V. */
+export function piecesOf(mod: KnitModule, color: number): Array<{ piece: number; position: number; start: number }> {
+  const seq = mod.seq;
+  if (!seq) return [];
+  const pieces = [...new Set(mod.marks.map((x, i) => (x && x.color === color && seq[i] > 0 ? seq[i] : 0)).filter((v) => v > 0))].sort((a, b) => a - b);
+  return pieces.map((piece, k) => ({ piece, position: k + 1, start: mod.starts?.[piece] ?? seq.findIndex((v, i) => v === piece && mod.marks[i]?.color === color) }));
 }
