@@ -221,10 +221,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label" id="lbl-order">Le passate</span>
             <div class="rg-segmented" id="passOrderSel" role="group" aria-labelledby="lbl-order">
+              <button type="button" class="rg-segmented__item" data-order="auto">Automatico</button>
               <button type="button" class="rg-segmented__item" data-order="stitch">Tutte sulla stessa V</button>
               <button type="button" class="rg-segmented__item" data-order="row">Lungo la riga</button>
             </div>
-            <span class="rg-field__help">Sulla stessa V con passate dispari, lungo la riga con pari</span>
+            <span class="rg-field__help">Automatico: per ogni filo, sulla stessa V con passate dispari, lungo la riga con pari</span>
           </div>
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label" id="lbl-retrace">Per spostarsi</span>
@@ -1147,7 +1148,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     st.route.costs = { ...(st.route.costs ?? {}), retrace: RETRACE_PRESETS[b.dataset.retrace as RetracePreset] };
     syncSegmented(); update();
   }));
-  root.querySelectorAll<HTMLButtonElement>('#passOrderSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => { st.route.passOrder = b.dataset.order as 'row' | 'stitch'; syncSegmented(); update(); }));
+  root.querySelectorAll<HTMLButtonElement>('#passOrderSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => { st.route.passOrder = b.dataset.order as 'row' | 'stitch' | 'auto'; syncSegmented(); update(); }));
   root.querySelectorAll<HTMLButtonElement>('#stitchSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => { brushStitch = b.dataset.stitch as BrushStitch; syncSegmented(); }));
   root.querySelectorAll<HTMLButtonElement>('#topLegSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => {
     st.route.topLeg = b.dataset.leg as Leg;

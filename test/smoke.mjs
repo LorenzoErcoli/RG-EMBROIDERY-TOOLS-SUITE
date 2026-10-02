@@ -5232,6 +5232,19 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     check('un tratto è un pezzo: numero sulle V e prima V del tratto', [modE.seq[1 * 4 + 2], modE.seq[1 * 4 + 3], modE.starts[3]], [3, 3, 1 * 4 + 2]);
   }
 
+  // LE PASSATE IN AUTOMATICO (Lorenzo, 2026-10-02: «se metto pari di passate può essere lungo la riga, se
+  // è dispari tutte sulla stessa V»): filo per filo, come se avessi scelto a mano per ciascuno
+  {
+    const gA = { cols: 8, rows: 4, cellW: 2.4, cellH: 3.5, overlapPct: 30 };
+    const cA = new Map();
+    for (let c = 0; c < 8; c++) { cA.set(c, { stitch: 'v', color: 1 }); cA.set(2 * 8 + c, { stitch: 'v', color: 2 }); }
+    const base = { ...rg.CS_DEFAULT_ROUTE, passesByColor: { 1: 2, 2: 3 } };
+    // ogni filo da solo (il secondo comincia dove finisce il primo: cambiando il primo cambierebbe anche lui)
+    const solo = (color) => new Map([...cA].filter(([, m]) => m.color === color));
+    const segsOf = (order, color) => JSON.stringify(rg.csRouteCells(gA, solo(color), { ...base, passOrder: order }).colors.find((cr) => cr.color === color).segs);
+    check('passate in automatico: pari lungo la riga, dispari sulla stessa V', [segsOf('auto', 1) === segsOf('row', 1), segsOf('auto', 2) === segsOf('stitch', 2), segsOf('row', 1) !== segsOf('stitch', 1)], [true, true, true]);
+  }
+
   // LE FASCE (Lorenzo, 2026-10-02: «dello stop di questo colore prima fai la parte alta del modulo di
   // tutti i moduli consecutivi, poi passiamo al blocco sotto»; «a serpentina»; dove non si può, salti).
   // Un modulo 12 × 8: il filo 1 in una riga piena (riga 1: le copie si toccano) e in un motivo isolato

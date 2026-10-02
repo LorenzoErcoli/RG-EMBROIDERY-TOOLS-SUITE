@@ -762,7 +762,10 @@ nell'anteprima (punti e passaggi), per guardare un colore alla volta. Uno stop s
 nell'export** (DST e SVG): i passaggi degli altri fili si ricalcolano come se non ci fosse.
 
 **Le passate sono per filo**: nella riga di ogni filo c'è il suo numero (*pass*) (per esempio la base a 3 e
-il colore sopra a 5). Con più passate si sceglie **come** farle. *Tutte sulla stessa V* (la partenza): avanti,
+il colore sopra a 5). Con più passate si sceglie **come** farle. **Automatico** (la partenza) lo decide
+filo per filo dal numero di passate: dispari sulla stessa V, pari lungo la riga; così ogni stop può avere
+le sue passate (per esempio la base a 2, lungo la riga, e i colori a 3, sulla stessa V). Oppure tutti i
+fili allo stesso modo. *Tutte sulla stessa V*: avanti,
 indietro, avanti sugli stessi fori e poi la V dopo, come il punto triplo delle macchine. Con passate
 **dispari** ogni V finisce nell'angolo dove comincia la successiva, e la riga si cuce di filato. *Lungo
 la riga*: ogni passata è un pezzo a sé, la riga si fa all'andata e si ripassa al ritorno; conviene

@@ -105,9 +105,11 @@ export interface RouteParams {
    * all'andata e si ripassa al ritorno. `stitch` = tutte le passate sullo stesso punto prima del
    * successivo, come il punto triplo delle macchine (avanti, indietro, avanti sugli stessi fori).
    * Con la V e un numero DISPARI di passate si finisce nell'angolo dove comincia la V dopo, e una
-   * riga si cuce di filato senza passaggi (Lorenzo, 2026-09-24).
+   * riga si cuce di filato senza passaggi (Lorenzo, 2026-09-24). `auto` = filo per filo: dispari sulla
+   * stessa V, pari lungo la riga (Lorenzo, 2026-10-02: «se metto pari di passate può essere lungo la riga,
+   * se è dispari tutte sulla stessa V; così posso mettere diverse passate per stop, e la base pari»).
    */
-  passOrder?: 'row' | 'stitch';
+  passOrder?: 'row' | 'stitch' | 'auto';
   /** La gamba che sta sopra nella croce. */
   topLeg: Leg;
   /** Oltre questo costo di passaggio (≈ mm in vista) si salta: taglio e ripartenza. */
@@ -184,7 +186,7 @@ export interface RouteParams {
 
 // Salti quasi mai: a macchina un salto lascia un filo che attraversa gli altri colori (Lorenzo).
 // Le passate tutte sulla stessa V: la partenza scelta da Lorenzo (2026-09-24), che lavora a passate dispari.
-export const DEFAULT_ROUTE: RouteParams = { repetitions: 1, fixedDirection: false, topLeg: 'down', jumpMm: 400, passOrder: 'stitch' };
+export const DEFAULT_ROUTE: RouteParams = { repetitions: 1, fixedDirection: false, topLeg: 'down', jumpMm: 400, passOrder: 'auto' };
 
 /** Un tratto del percorso fra due vertici del reticolo. */
 export type SegKind = 'stitch' | 'hidden' | 'retrace' | 'vertical' | 'visible' | 'jump';
@@ -302,7 +304,8 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   // della V) o una cella intera (croce, diagonale).
   const legs: LegState[] = [];
   const units: Unit[] = [];
-  const perStitch = params.passOrder === 'stitch';
+  /** Tutte le passate sulla stessa V (o lungo la riga) per questo filo. */
+  const perStitchOf = (color: number) => params.passOrder === 'stitch' || (params.passOrder === 'auto' && repsOf(color) % 2 === 1);
   const edgeKey = (a: number, b: number) => (a < b ? a * 4194304 + b : b * 4194304 + a);
   /**
    * coppia di vertici → gambe. Possono essere più d'una: una V del disegno ricamata sopra la V
@@ -418,6 +421,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     const mine: number[] = [];
     let prev = -1;
     const isCross = m.stitch === 'cross';
+    const perStitch = perStitchOf(m.color);
     for (const { a, b } of stitchLegs(g, r, c, m.stitch, params.topLeg)) {
       const id = legs.length;
       // nella croce la gamba sopra aspetta quella sotto; nella V le due gambe sono libere
