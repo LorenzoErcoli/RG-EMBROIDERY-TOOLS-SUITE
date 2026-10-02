@@ -5274,6 +5274,10 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     const dopo = bInB(rg.csBandCells(modS, 1));
     const giu = rg.csMoveShapeBand(modS, 1, 3 * Cm + 5, 1);
     check('fasce per disegno: la forma passa tutta alla fascia sotto; più giù non si va', [prima.join('/'), mosso, dopo.join('/'), giu], ['4/4', true, '2/6', false]);
+    // poi un confine nuovo che attraversa la forma spostata (riga 5): la forma resta intera, con la sua fascia
+    // (Lorenzo: «metto una linea nuova e a quel punto quello rimane diverso»)
+    rg.csToggleBandBreak(modS, 1, 5);
+    check('fasce per disegno: un confine nuovo non sposta né spezza la forma spostata', bInB(rg.csBandCells(modS, 1)).join('/'), '2/6');
     const una = rg.csRouteBands(gB, { cols: Cm, rows: Rm, marks: marksB, entryRow: {}, bands: { 1: [] } }, 1, par);
     check('una fascia sola: entra a sinistra ed esce a destra, unita fra le copie', [una.length, una[0].joined, una[0].dir], [1, true, 1]);
     // INGRESSO E USCITA (Lorenzo, 2026-10-02: «per ogni fascia l'ingresso coincida con l'uscita del

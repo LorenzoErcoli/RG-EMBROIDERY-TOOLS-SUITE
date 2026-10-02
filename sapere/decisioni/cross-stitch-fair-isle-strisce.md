@@ -160,6 +160,15 @@ Lorenzo: ritorni su e giù di più di 2 righe da 47 a 27 per modulo (quelli rima
 l'altra nelle stesse colonne, o dentro una forma, sotto i suoi punti), filo in vista per modulo da 1617 a
 936 mm, nel ricamo da 58,7 a 35,1 m; salti da 295 a 270.
 
+**Forme agganciate a una riga** (2026-10-02; Lorenzo: «metto una linea poi dico questo oggetto va sotto,
+poi metto una linea nuova e a quel punto quello rimane diverso… caos da aggiustare»). Lo spostamento di
+una forma era salvato come «una fascia più giù» della fascia della sua riga: un confine nuovo
+rinumerava le fasce e la forma finiva altrove, o si spezzava. Ora tutta la forma è agganciata alla prima
+riga della fascia scelta (bandAt) e si cuce con la fascia che contiene quella riga, qualunque confine si
+aggiunga dopo. Gli spostamenti salvati prima (bandMove) non si possono tradurre: si perdono. Nello
+stesso giro: in Ridisegna passaggio Invio o Spazio fissano il passaggio, e il clic dopo ne sceglie un
+altro senza cambiare strumento (Lorenzo: «altrimenti devo ogni volta cliccare un'altra tab»).
+
 **Ancora aperto:** il 67% del filo in vista sta nei passaggi oltre 12 mm (32 su 116 per striscia di
 2 moduli). Farli diventare salti col taglio lo porterebbe a circa un terzo, con più tagli in macchina:
 da decidere con Lorenzo.

@@ -705,7 +705,9 @@ fascia del filo scelto, col numero e il verso (→ da sinistra, ← da destra); 
 tratteggiata = salti fra le copie; sul modulo i confini tratteggiati e, su ogni forma del filo, il
 numero della sua fascia. **Clic su una V del filo**: tutta la sua forma (le V che si toccano, anche in
 diagonale) passa alla fascia sotto; **Maiusc+clic**: alla fascia sopra. Serve quando due parti del
-disegno condividono righe e un confine orizzontale non le separa. **Clic su un punto della riga senza
+disegno condividono righe e un confine orizzontale non le separa. La forma spostata resta con quella
+fascia anche se poi aggiungi, togli o sposti dei confini, e resta intera anche se un confine nuovo la
+attraversa. **Clic su un punto della riga senza
 V del filo**: lì comincia una fascia nuova. **Clic su un confine**: lo togli e le due fasce si uniscono. **Trascina un confine**
 per spostarlo. **Fasce automatiche** rimette quelle del tool per il filo scelto (anche le forme spostate tornano al
 loro posto). Nella barra di stato:
@@ -718,8 +720,8 @@ che fai vale in ogni copia. **Salti** (T): un clic su un passaggio lo trasforma 
 taglia il filo); un altro clic lo rimette. **Ridisegna passaggio**: un clic sceglie il passaggio, poi
 clicchi i punti da cui deve passare, in ordine (si agganciano al vertice più vicino; il passaggio
 scelto mostra i suoi capi come anelli e i punti pieni). Fra un punto e l'altro il filo prende la
-strada più nascosta; i punti cuciti e il resto del percorso non cambiano. **Invio** finisce, **Esc**
-toglie i punti messi adesso, **Canc** rimette il passaggio automatico. Se cambi l'ordine dei pezzi o
+strada più nascosta; i punti cuciti e il resto del percorso non cambiano. **Invio** o **Spazio** fissano il
+passaggio (e il clic dopo ne sceglie un altro, senza cambiare strumento), **Esc** toglie i punti messi adesso, **Canc** rimette il passaggio automatico. Se cambi l'ordine dei pezzi o
 ridisegni, un passaggio forzato che non esiste più resta inattivo finché il filo non torna a
 collegare gli stessi due vertici.
 

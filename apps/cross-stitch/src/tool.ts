@@ -43,7 +43,7 @@ const MODE_HELP: Record<Mode, string> = {
   fill: 'Riempi: un clic passa al filo scelto tutta la zona collegata dello stesso colore — per esempio l’interno di una lettera.',
   erase: 'Gomma: trascina per cancellare; lì non si cuce niente.',
   cut: 'Salti: clicca un passaggio e diventa un salto (la macchina taglia il filo); clicca un salto fatto a mano e torna passaggio. Si tolgono tutti in 04 Passaggi.',
-  reroute: 'Ridisegna passaggio: clicca un passaggio, poi i punti da cui deve passare, in ordine. Invio finisce, Esc toglie i punti appena messi, Canc rimette il passaggio automatico.',
+  reroute: 'Ridisegna passaggio: clicca un passaggio, poi i punti da cui deve passare, in ordine. Invio o Spazio lo fissano (poi clicchi il prossimo), Esc toglie i punti appena messi, Canc rimette il passaggio automatico.',
   bands: 'Fasce: il filo scelto si cuce a fasce orizzontali, dall’alto, a serpentina lungo tutte le copie. Clic su una V del filo: la sua forma passa alla fascia sotto (Maiusc+clic: sopra). Clic su una riga vuota del filo: lì comincia una fascia nuova. Clic su un confine: lo togli. Trascina un confine per spostarlo.',
   order: 'Ordine pezzi: clicca i pezzi del filo scelto nell’ordine in cui vuoi cucirli (il primo clic è il primo pezzo). Da quel momento, per quel filo, dentro ogni fascia vale il tuo ordine invece di quello del tool.',
   pick: 'Scegli modulo: sull’immagine intera trascina un riquadro intorno a un modulo. Il riquadro si aggancia alle V che trova; colonne e righe si correggono in «Griglia». Esc torna al pennello.',
@@ -500,10 +500,13 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const idx = list.findIndex((q) => q.from === reroute!.from && q.to === reroute!.to);
     if (k === 'Escape') { pushUndo(); if (idx >= 0) { if (reroute.before.length) list[idx].via = [...reroute.before]; else list.splice(idx, 1); } }
     else if (k === 'Delete' || k === 'Backspace') { pushUndo(); if (idx >= 0) list.splice(idx, 1); }
-    else if (k !== 'Enter') return false;
+    // Invio o Spazio: il passaggio resta così (Lorenzo, 2026-10-02: «se premo invio o spazio il passaggio
+    // che sto modificando si blocca, altrimenti non posso andare a cambiare qualcos'altro»)
+    else if (k !== 'Enter' && k !== ' ') return false;
     m.forced = list;
     reroute = null;
     update();
+    $('status').textContent = k === 'Escape' ? 'Punti tolti. Clicca un passaggio da ridisegnare.' : k === 'Delete' || k === 'Backspace' ? 'Passaggio automatico. Clicca un altro passaggio da ridisegnare.' : 'Passaggio fissato. Clicca un altro passaggio da ridisegnare.';
     return true;
   }
   /** Il pezzo che si sta disegnando (editor), e quanti pezzi si sono già messi in ordine (strumento Ordine pezzi). */
@@ -553,7 +556,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
    * da 0; i gruppi, in mm, si spostano con lei).
    */
   /** Il modulo come percorso: pezzi e riga d'ingresso di ogni filo (il primo pezzo dice dove). */
-  const modulePathOf = (m: KnitModule): ModulePath => ({ cols: m.cols, rows: m.rows, marks: m.marks, pieceOf: m.seq, entryRow: entryRows({ cols: m.cols, marks: m.marks, pieceOf: m.seq, starts: m.starts }), cuts: m.cuts, forced: m.forced, bands: m.bands, bandMove: m.bandMove, ordered: m.ordered });
+  const modulePathOf = (m: KnitModule): ModulePath => ({ cols: m.cols, rows: m.rows, marks: m.marks, pieceOf: m.seq, entryRow: entryRows({ cols: m.cols, marks: m.marks, pieceOf: m.seq, starts: m.starts }), cuts: m.cuts, forced: m.forced, bands: m.bands, bandAt: m.bandAt, ordered: m.ordered });
   /** Il ricamo è proprio il modulo ripetuto (nessuna V ritoccata su una copia sola)? */
   const designIsTiled = (): boolean => {
     const m = st.module; if (!m) return false;
@@ -935,7 +938,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   /** I numeri dei passaggi nella barra di stato (o che si stanno calcolando). */
   function showStatus(): void {
     if (editorOpen && st.module && mode === 'pick') { $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V. Trascina un riquadro intorno a un modulo dell’immagine: si aggancia alle V che trova.`; return; }
-    if (editorOpen && st.module && reroute) { $('status').textContent = `Ridisegni un passaggio (filo in vista ${Math.round(editorVisible)} mm per modulo): clicca i punti da cui deve passare, in ordine. Invio finisce, Esc toglie i punti messi, Canc rimette il passaggio automatico.`; return; }
+    if (editorOpen && st.module && reroute) { $('status').textContent = `Ridisegni un passaggio (filo in vista ${Math.round(editorVisible)} mm per modulo): clicca i punti da cui deve passare, in ordine. Invio o Spazio lo fissano, Esc toglie i punti messi, Canc rimette il passaggio automatico.`; return; }
     if (editorOpen && st.module) { const g0 = realGrid(); const nP = piecesOf(st.module, activeThread).length; $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V · ${fmtNum(Math.round(st.module.cols * g0.cellW))} × ${fmtNum(Math.round(st.module.rows * rowPitch(g0)))} mm · filo in vista ${Math.round(editorVisible)} mm per modulo · filo scelto: ${nP} pezz${nP === 1 ? 'o' : 'i'}, ${bandNote()}; pieno = ingresso, anello = dove finire`; return; }
     if (routing) { $('status').textContent = 'Calcolo dei passaggi…'; return; }
     if (moduleView) { $('status').textContent = moduleCopyNote; return; }
@@ -1373,7 +1376,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   const snapshot = () => (moduleView && realDesign && st.module
     ? { grid: { ...realDesign.grid }, cells: tileModule(realDesign.grid, st.module), module: cloneModule(st.module) }
     : { grid: { ...st.grid }, cells: cloneCells(st.cells), module: cloneModule(st.module) });
-  const cloneModule = (m: KnitModule | null): KnitModule | null => (m ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x ? { ...x } : null)), guide: m.guide ? { ...m.guide } : m.guide, drawn: m.drawn, seq: m.seq ? [...m.seq] : m.seq, starts: m.starts ? { ...m.starts } : m.starts, cuts: m.cuts ? m.cuts.map((q) => [q[0], q[1]] as [number, number]) : m.cuts, forced: m.forced ? m.forced.map((q) => ({ from: q.from, to: q.to, via: [...q.via] })) : m.forced, bands: m.bands ? Object.fromEntries(Object.entries(m.bands).map(([k, v]) => [k, [...v]])) : m.bands, bandMove: m.bandMove ? Object.fromEntries(Object.entries(m.bandMove).map(([k, v]) => [k, { ...v }])) : m.bandMove, ordered: m.ordered ? [...m.ordered] : m.ordered } : null);
+  const cloneModule = (m: KnitModule | null): KnitModule | null => (m ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x ? { ...x } : null)), guide: m.guide ? { ...m.guide } : m.guide, drawn: m.drawn, seq: m.seq ? [...m.seq] : m.seq, starts: m.starts ? { ...m.starts } : m.starts, cuts: m.cuts ? m.cuts.map((q) => [q[0], q[1]] as [number, number]) : m.cuts, forced: m.forced ? m.forced.map((q) => ({ from: q.from, to: q.to, via: [...q.via] })) : m.forced, bands: m.bands ? Object.fromEntries(Object.entries(m.bands).map(([k, v]) => [k, [...v]])) : m.bands, bandAt: m.bandAt ? Object.fromEntries(Object.entries(m.bandAt).map(([k, v]) => [k, { ...v }])) : m.bandAt, ordered: m.ordered ? [...m.ordered] : m.ordered } : null);
   function pushUndo(): void {
     undo.push(snapshot());
     if (undo.length > 100) undo.shift();
@@ -1789,12 +1792,13 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   const onKeyDown = (e: KeyboardEvent) => {
     if (!root.isConnected) { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); return; }
     if (isTyping(e.target)) return;
+    // ridisegnando un passaggio, Invio e Spazio lo fissano (lo Spazio qui non sposta la tela)
+    if (mode === 'reroute' && reroute && !e.ctrlKey && !e.metaKey && !e.altKey && rerouteKey(e.key)) { e.preventDefault(); return; }
     if (e.code === 'Space') { spaceDown = true; canvas.classList.add('cs-pan'); e.preventDefault(); }
     const k = e.key.toLowerCase();
     if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); if (e.shiftKey) doRedo(); else doUndo(); return; }
     if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); doRedo(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
-    if (mode === 'reroute' && rerouteKey(e.key)) { e.preventDefault(); return; }
     if (mode === 'pick' && e.key === 'Escape') { e.preventDefault(); setMode('paint'); return; }
     if (k === 'b') setMode('paint');
     else if (k === 'f') setMode('fill');
@@ -2765,10 +2769,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   $('editorCancelBtn').addEventListener('click', () => closeEditor(false));
   $('bandsAutoBtn').addEventListener('click', () => {
     const m = st.module;
-    if (!m || (m.bands?.[activeThread] === undefined && m.bandMove?.[activeThread] === undefined)) return;
+    if (!m || (m.bands?.[activeThread] === undefined && m.bandAt?.[activeThread] === undefined)) return;
     pushUndo();
     if (m.bands) { const next = { ...m.bands }; delete next[activeThread]; m.bands = next; }
-    if (m.bandMove) { const next = { ...m.bandMove }; delete next[activeThread]; m.bandMove = next; }
+    if (m.bandAt) { const next = { ...m.bandAt }; delete next[activeThread]; m.bandAt = next; }
     if (editorSnap) editorSnap.changed = true;
     update();
   });
@@ -2864,7 +2868,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           forced: Array.isArray(m.forced) ? m.forced.filter((q) => q && Array.isArray(q.via)).map((q) => ({ from: Number(q.from), to: Number(q.to), via: q.via.map(Number) })) : undefined,
           bands: m.bands && typeof m.bands === 'object' ? Object.fromEntries(Object.entries(m.bands).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [Number(k), (v as unknown[]).map(Number)])) : undefined,
           ordered: Array.isArray(m.ordered) ? m.ordered.map(Number) : undefined,
-          bandMove: m.bandMove && typeof m.bandMove === 'object' ? Object.fromEntries(Object.entries(m.bandMove).filter(([, v]) => v && typeof v === 'object').map(([k, v]) => [Number(k), Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([i, d]) => [Number(i), Number(d)]))])) : undefined }
+          bandAt: m.bandAt && typeof m.bandAt === 'object' ? Object.fromEntries(Object.entries(m.bandAt).filter(([, v]) => v && typeof v === 'object').map(([k, v]) => [Number(k), Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([i, d]) => [Number(i), Number(d)]))])) : undefined }
         : null;
     }
     st.cuts = Array.isArray(meta.cuts) ? (meta.cuts as unknown[]).filter((c): c is [number, number, number, number] => Array.isArray(c) && c.length === 4 && c.every((x) => Number.isInteger(x))) : [];

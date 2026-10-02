@@ -97,8 +97,8 @@ export interface ModulePath {
   forced?: Array<{ from: number; to: number; via: number[] }>;
   /** Le fasce a mano: per filo, le righe dove comincia una fascia (senza: automatiche). */
   bands?: Record<number, number[]>;
-  /** Le forme spostate di fascia: per filo, V del modulo → fasce più giù (+) o più su (−). */
-  bandMove?: Record<number, Record<number, number>>;
+  /** Le forme spostate di fascia: per filo, V del modulo → la riga della fascia con cui si cuce. */
+  bandAt?: Record<number, Record<number, number>>;
   /** I fili coi pezzi messi in ordine a mano (Ordine pezzi): solo lì l'ordine dei pezzi vale nelle fasce. */
   ordered?: number[];
 }
