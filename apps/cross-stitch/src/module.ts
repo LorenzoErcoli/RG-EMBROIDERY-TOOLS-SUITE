@@ -460,6 +460,11 @@ export interface KnitModule {
    * filo, V del modulo → di quante fasce va più giù (+) o più su (−) rispetto alla fascia della sua riga.
    */
   bandMove?: Record<number, Record<number, number>>;
+  /**
+   * I fili coi pezzi messi in ordine a mano (Ordine pezzi). Solo per loro l'ordine dei pezzi vale nelle
+   * fasce; per gli altri decide il tool (Lorenzo, 2026-10-02: «decide il tool dentro le fasce»).
+   */
+  ordered?: number[];
 }
 
 /**
@@ -627,7 +632,7 @@ export function shiftModule(mod: KnitModule, dr: number, dc: number): KnitModule
   const seq = mod.seq ? marks.map((_, i) => mod.seq![((Math.floor(i / C) + sr) % R) * C + ((i % C) + sc) % C]) : mod.seq;
   const starts = mod.starts ? Object.fromEntries(Object.entries(mod.starts).map(([k, v]) => [k, newIdx(v)])) : mod.starts;
   // le fasce a mano non si spostano (una fascia scavalcherebbe il bordo): tornano automatiche
-  return { cols: C, rows: R, marks, guide, drawn: mod.drawn, seq, starts };
+  return { cols: C, rows: R, marks, guide, drawn: mod.drawn, seq, starts, ordered: mod.ordered };
 }
 
 /**
@@ -646,7 +651,7 @@ export function resizeModule(mod: KnitModule, cols: number, rows: number, fill: 
   const starts = mod.starts ? Object.fromEntries(Object.entries(mod.starts).filter(([, v]) => Math.floor(v / mod.cols) < rows && v % mod.cols < cols).map(([k, v]) => [k, Math.floor(v / mod.cols) * cols + (v % mod.cols)])) : mod.starts;
   const bands = mod.bands ? Object.fromEntries(Object.entries(mod.bands).map(([k, v]) => [k, v.filter((r) => r < rows)])) : mod.bands;
   const bandMove = mod.bandMove ? Object.fromEntries(Object.entries(mod.bandMove).map(([k, v]) => [k, Object.fromEntries(Object.entries(v).filter(([i]) => Math.floor(Number(i) / mod.cols) < rows && Number(i) % mod.cols < cols).map(([i, d]) => [Math.floor(Number(i) / mod.cols) * cols + (Number(i) % mod.cols), d]))])) : mod.bandMove;
-  return { cols, rows, marks, guide: mod.guide, drawn: mod.drawn, seq: mod.seq ? seq : undefined, starts, bands, bandMove };
+  return { cols, rows, marks, guide: mod.guide, drawn: mod.drawn, seq: mod.seq ? seq : undefined, starts, bands, bandMove, ordered: mod.ordered };
 }
 
 /**

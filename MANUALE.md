@@ -687,12 +687,16 @@ dove il filo compare, a gruppi separati da righe vuote (automatiche). Per ogni s
 intera, poi filo per filo (dal chiaro allo scuro) le sue fasce **dall'alto**, **a serpentina**: la prima
 da sinistra a destra lungo tutte le copie della striscia, la seconda da destra a sinistra, e così via.
 Poi lo stop del filo dopo. Il percorso di una fascia si calcola sul modulo e si ripete identico in ogni
-copia. Se il disegno della fascia arriva vicino ai due bordi del modulo (al più 4 V di vuoto attraverso
-la giuntura), il filo entra da un bordo ed esce dall'altro alla stessa altezza e passa da una copia
-all'altra senza staccarsi: sulla tela il **punto pieno** è l'ingresso e l'**anello** l'uscita, una
-coppia per fascia. Se non ci arriva (motivi isolati), fra una copia e l'altra il filo **salta**, e salta
-anche fra una fascia e la successiva: è un salto semplice, senza taglio (il disegno si stacca e riparte),
-da pulire poi a mano se serve. Le copie tagliate dal bordo destro le fa il motore, attaccate alla copia
+copia. La fascia **comincia dalla V più a sinistra** (più a destra al ritorno) e **finisce il più vicino
+possibile all'inizio della copia accanto**, anche a un'altezza diversa da dove è cominciata: dentro la
+fascia l'ordine lo decide il tool, a spicchi verticali di 4 V nel verso della fascia (l'ordine dei pezzi
+vale solo per i fili che metti in ordine a mano con *Ordine pezzi*). Se dalla fine all'inizio della copia
+accanto ci sono al più 4 V di vuoto (in larghezza o in altezza), il filo ci arriva con un passaggio corto
+e non si stacca; altrimenti (motivi isolati) **salta**, dall'ultima V alla prima della copia accanto: un
+salto corto. Si salta anche fra una fascia e la successiva. È un salto semplice, senza taglio (il disegno
+si stacca e riparte), da pulire poi a mano se serve. Sulla tela, per ogni fascia del filo scelto, il
+**punto pieno** è l'inizio e l'**anello** la fine; il collegamento verso la copia accanto si vede come
+passaggio o come salto tratteggiato. Le copie tagliate dal bordo destro le fa il motore, attaccate alla copia
 intera vicina. Una striscia tagliata dal fondo del ricamo si fa col motore, tutta insieme.
 
 Le fasce si cambiano con lo strumento **Fasce** (nell'editor): a sinistra del modulo una barra per

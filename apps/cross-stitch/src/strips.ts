@@ -99,6 +99,8 @@ export interface ModulePath {
   bands?: Record<number, number[]>;
   /** Le forme spostate di fascia: per filo, V del modulo → fasce più giù (+) o più su (−). */
   bandMove?: Record<number, Record<number, number>>;
+  /** I fili coi pezzi messi in ordine a mano (Ordine pezzi): solo lì l'ordine dei pezzi vale nelle fasce. */
+  ordered?: number[];
 }
 
 /** Il percorso di ogni filo sul modulo da solo (la base, se c'è, non è nel modulo: va sotto tutto). */
@@ -138,70 +140,120 @@ export function entryRows(mp: { cols: number; marks: Array<{ color: number } | n
 //
 // Ogni filo si cuce fascia per fascia dall'alto: la prima da sinistra a destra lungo tutte le copie
 // della striscia, la seconda da destra a sinistra, e così via. Il percorso di una fascia si calcola UNA
-// volta sul modulo: se il disegno della fascia arriva vicino ai due bordi del modulo (al più
-// BAND_JOIN_V V di vuoto attraverso la giuntura) entra da un bordo ed esce dall'altro alla stessa
-// altezza, e le copie si concatenano senza staccarsi; altrimenti (motivi isolati) fra una copia e
-// l'altra il filo salta. Anche fra una fascia e la successiva si salta. Un modulo con una fascia sola
-// per filo è il percorso del modulo intero di prima.
+// volta e si ripete in ogni copia.
+//
+// INIZIO E FINE (Lorenzo, 2026-10-02: «essendo a fasce il punto iniziale e finale è diverso… dovrebbero
+// sempre iniziare il più a sinistra possibile e finire il più a destra possibile, per permettere di
+// avere una continuità. E così se metto i salti il salto è lineare e vicino»; «decide il tool dentro le
+// fasce»). La fascia comincia dalla V più a sinistra (più a destra al ritorno) e si calcola su un
+// modulo largo due copie, dovendo arrivare all'inizio della copia accanto: così finisce il più vicino
+// possibile a lì, a qualunque altezza. Se il vuoto fino alla copia accanto è al più BAND_JOIN_V V il
+// filo ci arriva con un passaggio corto e non si stacca; altrimenti salta, dall'ultima V alla prima
+// della copia accanto: un salto corto. Anche fra una fascia e la successiva si salta. Dentro la fascia
+// l'ordine lo decide il motore, a spicchi verticali di BAND_SLICE_V V nel verso della fascia (da solo
+// non tendeva verso la copia accanto); l'ordine dei pezzi vale solo per i fili messi in ordine a mano.
 // ------------------------------------------------------------
 
-/** Il vuoto massimo (in V) attraverso la giuntura perché il filo passi da una copia all'altra. */
+/** Il vuoto massimo (in V) fra una copia e l'altra perché il filo ci passi invece di saltare. */
 export const BAND_JOIN_V = 4;
+/**
+ * La larghezza degli spicchi (in V) in cui si cuce una fascia, nel suo verso. Sul modulo di Lorenzo: con
+ * 4 V tutte le fasce continue restano unite fra le copie (295 salti nel ricamo); con 2 il filo in vista
+ * sale (65 m contro 59), con 6 o più le fasce grandi tornano a finire lontano (360 salti).
+ */
+export const BAND_SLICE_V = 4;
 
-/** Il percorso di una fascia sul modulo: i suoi punti, entrando dal lato `dir` (1 = sinistra). */
+/** Un vertice rispetto al modulo: riga e colonna del reticolo (la colonna può uscire dal modulo). */
+export type ModVertex = [number, number];
+
+/** Il percorso di una fascia, in vertici rispetto al modulo, entrando dal lato `dir` (1 = sinistra). */
 export interface BandRoute {
   rows: [number, number];
   /** Le V del modulo nella fascia. */
   cells: number[];
   dir: 1 | -1;
-  /** Vero = entra da un bordo ed esce dall'altro alla riga `row`: le copie si concatenano. */
+  /** I punti della fascia, dalla prima all'ultima V. */
+  body: Array<{ kind: RouteSeg['kind']; from: ModVertex; to: ModVertex }>;
+  /** Il passaggio corto fino all'inizio della copia accanto (vuoto se lì si salta). */
+  tail: Array<{ kind: RouteSeg['kind']; from: ModVertex; to: ModVertex }>;
+  /** Vero = fra una copia e l'altra il filo passa (tail), falso = salta. */
   joined: boolean;
-  row: number;
-  segs: RouteSeg[];
+  start: ModVertex;
+  end: ModVertex;
+  /** Dove comincia la copia accanto (nel verso della fascia). */
+  next: ModVertex;
   metrics: RouteMetrics;
 }
 
-/** Le fasce di un filo sul modulo, già calcolate, a serpentina (la prima da sinistra). */
+/** Il vuoto fra due vertici, in V: in larghezza (due colonne del reticolo per V) o in righe, il maggiore. */
+const gapV = (a: ModVertex, b: ModVertex) => Math.max(Math.abs(a[1] - b[1]) / 2, Math.abs(a[0] - b[0]));
+
+/** Le fasce di un filo, già calcolate, a serpentina (la prima da sinistra). */
 export function routeBands(g: GridSpec, mp: ModulePath, color: number, params: RouteParams): BandRoute[] {
-  const C = mp.cols, R = mp.rows;
-  const mg: GridSpec = { ...g, cols: C, rows: R };
+  const C = mp.cols, R = mp.rows, Wm = 2 * C + 1, W2 = 4 * C + 1;
+  const g2: GridSpec = { ...g, cols: 2 * C, rows: R };
   return bandCells(mp, color).map((band, bi) => {
-    const [a, b] = band.rows;
     const dir: 1 | -1 = bi % 2 === 0 ? 1 : -1;
+    // la fascia sta nella copia di sinistra (andata) o di destra (ritorno) del modulo doppio
+    const offC = dir > 0 ? 0 : C, off = 2 * offC;
     const cells: Cells = new Map();
-    let lo = C, hi = -1;
-    const rowGap = new Map<number, number>();
-    const rowLo = new Map<number, number>(), rowHi = new Map<number, number>();
+    for (const i of band.cells) cells.set(Math.floor(i / C) * 2 * C + (i % C) + offC, { ...mp.marks[i]! });
+    // la V più a destra e la più a sinistra; a parità di colonna, alla stessa altezza dell'altra (salto dritto)
+    const rc = band.cells.map((i) => [Math.floor(i / C), i % C] as [number, number]);
+    const right = rc.reduce((q, w) => (w[1] > q[1] || (w[1] === q[1] && w[0] < q[0]) ? w : q));
+    const left = rc.filter((q) => q[1] === Math.min(...rc.map((w) => w[1]))).sort((q, w) => Math.abs(q[0] - right[0]) - Math.abs(w[0] - right[0]) || q[0] - w[0])[0];
+    // l'inizio: il vertice esterno della prima V; la copia accanto comincia allo stesso punto, una copia più in là
+    const start: ModVertex = dir > 0 ? [left[0], 2 * left[1]] : [right[0], 2 * right[1] + 2];
+    const next: ModVertex = [start[0], start[1] + dir * 2 * C];
+    const v2 = (q: ModVertex) => q[0] * W2 + q[1] + off;
+    const back = (v: number): ModVertex => { const i = Math.floor(v / W2); return [i, v - i * W2 - off]; };
+    const fromMod = (v: number) => { const i = Math.floor(v / Wm); return i * W2 + (v - i * Wm) + off; };
+    // l'ordine: i pezzi messi in ordine a mano; altrimenti a spicchi verticali nel verso della fascia
+    // (il motore da solo non tende verso la copia accanto: finiva dove capitava, anche a sinistra)
+    const pieceOf = new Array(R * 2 * C).fill(0);
+    const manual = !!mp.pieceOf && !!mp.ordered?.includes(color);
     for (const i of band.cells) {
-      const rr = Math.floor(i / C), c = i % C;
-      cells.set(i, { ...mp.marks[i]! });
-      rowLo.set(rr, Math.min(rowLo.get(rr) ?? C, c)); rowHi.set(rr, Math.max(rowHi.get(rr) ?? -1, c));
-      lo = Math.min(lo, c); hi = Math.max(hi, c);
+      const c = i % C;
+      pieceOf[Math.floor(i / C) * 2 * C + c + offC] = manual ? (mp.pieceOf![i] ?? 0) : 1 + Math.floor((dir > 0 ? c : C - 1 - c) / BAND_SLICE_V);
     }
-    for (const [rr, l] of rowLo) rowGap.set(rr, C - 1 - rowHi.get(rr)! + l);
-    const joined = C - 1 - hi + lo <= BAND_JOIN_V;
-    // la riga d'ingresso: quella del filo se cade nella fascia, altrimenti la riga col vuoto più stretto
-    let row = mp.entryRow[color];
-    if (row === undefined || !rowGap.has(row)) row = [...rowGap].sort((q, w) => q[1] - w[1] || q[0] - w[0])[0][0];
-    const ends = joined ? { startAt: { [color]: vertexIndex(mg, row, dir > 0 ? 0 : 2 * C) }, endAt: { [color]: vertexIndex(mg, row, dir > 0 ? 2 * C : 0) } } : {};
-    const res = routeCells(mg, cells, { ...params, base: null, strips: null, modulePath: null, groups: [], cuts: mp.cuts ?? [], forced: mp.forced ?? [], pieceOf: mp.pieceOf, ...ends });
-    return { rows: [a, b], cells: band.cells, dir, joined, row, segs: res.colors.find((cr) => cr.color === color)?.segs ?? [], metrics: res.metrics };
+    const res = routeCells(g2, cells, {
+      ...params, base: null, strips: null, modulePath: null, groups: [],
+      cuts: (mp.cuts ?? []).map(([x, y]) => [fromMod(x), fromMod(y)] as [number, number]),
+      forced: (mp.forced ?? []).map((q) => ({ from: fromMod(q.from), to: fromMod(q.to), via: q.via.map(fromMod) })),
+      pieceOf, startAt: { [color]: v2(start) }, endAt: { [color]: v2(next) },
+    });
+    const segs = res.colors.find((cr) => cr.color === color)?.segs ?? [];
+    let last = segs.length - 1;
+    while (last >= 0 && segs[last].kind !== 'stitch') last--;
+    const toMod = (sg: RouteSeg) => ({ kind: sg.kind, from: back(sg.from), to: back(sg.to) });
+    const body = segs.slice(0, last + 1).map(toMod);
+    const end: ModVertex = body.length ? body[body.length - 1].to : start;
+    const joined = gapV(end, next) <= BAND_JOIN_V;
+    return { rows: band.rows, cells: band.cells, dir, body, tail: joined ? segs.slice(last + 1).map(toMod) : [], joined, start, end, next, metrics: res.metrics };
   });
 }
 
-/** Il percorso del modulo a fasce, sul modulo solo (per l'editor): le fasce di ogni filo in fila. */
+/**
+ * Il percorso del modulo a fasce per l'editor: per ogni fascia i suoi punti e il collegamento alla copia
+ * accanto (passaggio, o salto). I vertici sono di una griglia larga tre moduli col modulo al centro.
+ */
 export function routeModuleBands(g: GridSpec, mp: ModulePath, params: RouteParams): RouteResult & { bands: Map<number, BandRoute[]> } {
   const baseColor = params.base?.color;
   const colors: ColorRoute[] = [];
   const metrics = emptyMetrics();
   const bands = new Map<number, BandRoute[]>();
+  const W3 = 6 * mp.cols + 1;
+  const v3 = (q: ModVertex) => q[0] * W3 + q[1] + 2 * mp.cols;
   const used = [...new Set(mp.marks.filter((m) => m && m.color !== baseColor).map((m) => m!.color))].sort((x, y) => x - y);
   for (const color of used) {
     const br = routeBands(g, mp, color, params);
     bands.set(color, br);
-    const segs: RouteSeg[] = [];
-    for (const band of br) { join(g, segs, band.segs, metrics); addMetrics(metrics, band.metrics); }
-    if (segs.length) colors.push({ color, segs });
+    for (const band of br) {
+      const segs: RouteSeg[] = [...band.body, ...band.tail].map((sg) => ({ kind: sg.kind, from: v3(sg.from), to: v3(sg.to) }));
+      if (!band.joined) { segs.push({ kind: 'jump', from: v3(band.end), to: v3(band.next) }); metrics.jumps++; }
+      addMetrics(metrics, band.metrics);
+      if (segs.length) colors.push({ color, segs });
+    }
   }
   return { colors, metrics, bands };
 }
@@ -223,10 +275,21 @@ function join(g: GridSpec, segs: RouteSeg[], piece: RouteSeg[], metrics: RouteMe
   }
   for (const sg of piece) segs.push(sg);
 }
+/** Toglie il passaggio prima del primo punto o dopo l'ultimo se copre più di `maxV` V: lì si salta. */
+function trimLongTravel(g: GridSpec, segs: RouteSeg[], maxV: number): RouteSeg[] {
+  let first = 0; while (first < segs.length && segs[first].kind !== 'stitch') first++;
+  let last = segs.length - 1; while (last >= 0 && segs[last].kind !== 'stitch') last--;
+  if (last < 0) return [];
+  const W = 2 * g.cols + 1;
+  const far = (a: number, b: number) => gapV([Math.floor(a / W), a % W], [Math.floor(b / W), b % W]) > maxV;
+  const a = first > 0 && far(segs[0].from, segs[first].from) ? first : 0;
+  const b = last < segs.length - 1 && far(segs[last].to, segs[segs.length - 1].to) ? last + 1 : segs.length;
+  return segs.slice(a, b);
+}
 
 /** Il ricamo = il modulo ripetuto: per ogni striscia la base, poi ogni filo a fasce, a serpentina. */
 export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams, mp: ModulePath): RouteResult {
-  const W = 2 * g.cols + 1, Wm = 2 * mp.cols + 1;
+  const W = 2 * g.cols + 1;
   const colors: ColorRoute[] = [];
   const metrics = emptyMetrics();
   const fullX = Math.floor(g.cols / mp.cols);
@@ -265,27 +328,27 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
       if (b) colors.push({ color: baseC, strip, segs: toGlobal(b.segs) });
     }
     const c0 = fullX * mp.cols;
+    // un vertice rispetto al modulo, nella copia k della striscia
+    const at = (q: ModVertex, k: number) => (r0 + q[0]) * W + q[1] + 2 * mp.cols * k;
     for (const color of order) {
       if (color === baseC) continue;
       const segs: RouteSeg[] = [];
       for (const band of bandsBy.get(color) ?? []) {
-        // il vertice (i, j) del modulo è il vertice (r0 + i, j + 2 C k) del ricamo
-        const copy = (k: number) => band.segs.map((sg) => {
-          const tr = (v: number) => { const i = Math.floor(v / Wm), j = v - i * Wm; return (r0 + i) * W + j + 2 * mp.cols * k; };
-          return { kind: sg.kind, from: tr(sg.from), to: tr(sg.to) };
-        });
-        // le copie tagliate dal bordo destro: il motore, attaccato alla copia intera vicina
+        const copy = (k: number, withTail: boolean) => [...band.body, ...(withTail ? band.tail : [])].map((sg) => ({ kind: sg.kind, from: at(sg.from, k), to: at(sg.to, k) }));
+        // le copie tagliate dal bordo destro: il motore, attaccato alla copia intera vicina (se è vicina)
         const restCells = sub(c0, new Set(band.cells));
-        let rest: RouteSeg[] = [];
-        if (restCells.size) {
-          const edge = band.row * W + 2 * mp.cols * fullX; // il bordo destro dell'ultima copia intera (striscia)
-          const ends = band.joined ? (band.dir > 0 ? { startAt: { [color]: edge } } : { endAt: { [color]: edge } }) : {};
+        const restRoute = (ends: Partial<RouteParams>) => {
           const res = routeCells(grid, restCells, { ...stripParams, base: null, ...ends });
           addMetrics(metrics, res.metrics);
-          rest = toGlobal(res.colors.find((cr) => cr.color === color)?.segs ?? []);
+          return trimLongTravel(g, toGlobal(res.colors.find((cr) => cr.color === color)?.segs ?? []), BAND_JOIN_V);
+        };
+        if (band.dir > 0) {
+          for (let k = 0; k < fullX; k++) join(g, segs, copy(k, k < fullX - 1), metrics);
+          if (restCells.size) join(g, segs, restRoute({ startAt: { [color]: segs[segs.length - 1].to - shift } }), metrics);
+        } else {
+          if (restCells.size) join(g, segs, restRoute({ endAt: { [color]: at(band.start, fullX - 1) - shift } }), metrics);
+          for (let k = fullX - 1; k >= 0; k--) join(g, segs, copy(k, k > 0), metrics);
         }
-        if (band.dir > 0) { for (let k = 0; k < fullX; k++) join(g, segs, copy(k), metrics); join(g, segs, rest, metrics); }
-        else { join(g, segs, rest, metrics); for (let k = fullX - 1; k >= 0; k--) join(g, segs, copy(k), metrics); }
         addMetrics(metrics, band.metrics, fullX);
       }
       if (segs.length) colors.push({ color, strip, segs });

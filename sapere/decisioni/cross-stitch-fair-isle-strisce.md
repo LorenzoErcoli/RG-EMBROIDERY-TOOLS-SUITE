@@ -136,6 +136,18 @@ forma (le V del filo che si toccano, anche in diagonale) nella fascia sotto, Mai
 spostamento è salvato per V, relativo alla fascia della sua riga (bandMove), così regge se i confini
 cambiano; una fascia è un insieme di V, non un intervallo di righe.
 
+**Inizio e fine liberi** (2026-10-02; Lorenzo: «essendo a fasce il punto iniziale e finale è diverso…
+dovrebbero sempre iniziare il più a sinistra possibile e finire il più a destra possibile… così se metto i
+salti il salto è lineare e vicino»; «decide il tool dentro le fasce»). Prima una fascia unita entrava ed
+usciva dai bordi del modulo alla stessa riga. Ora comincia dalla V più a sinistra (a parità, alla stessa
+altezza dell'ultima: salto dritto) e si calcola su un modulo largo due copie con la fine obbligata
+all'inizio della copia accanto; unita se il vuoto fra fine e copia accanto è al più 4 V (in larghezza o
+in righe), altrimenti salto corto. Il tranello: il motore, anche sapendo dove finire, non tende verso
+lì (il verde in alto finiva a sinistra, 460 salti). Rimedio: dentro la fascia l'ordine va a spicchi
+verticali di 4 V nel verso della fascia; provati 2, 3, 4, 6 e 24: con 4 tutte le fasce continue restano
+unite, 295 salti nel ricamo (tutti sui motivi isolati), filo in vista 58,7 m. L'ordine dei pezzi vale
+solo per i fili messi in ordine a mano (ordered).
+
 **Ancora aperto:** il 67% del filo in vista sta nei passaggi oltre 12 mm (32 su 116 per striscia di
 2 moduli). Farli diventare salti col taglio lo porterebbe a circa un terzo, con più tagli in macchina:
 da decidere con Lorenzo.

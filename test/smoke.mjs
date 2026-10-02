@@ -5276,6 +5276,13 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     check('fasce per disegno: la forma passa tutta alla fascia sotto; più giù non si va', [prima.join('/'), mosso, dopo.join('/'), giu], ['4/4', true, '2/6', false]);
     const una = rg.csRouteBands(gB, { cols: Cm, rows: Rm, marks: marksB, entryRow: {}, bands: { 1: [] } }, 1, par);
     check('una fascia sola: entra a sinistra ed esce a destra, unita fra le copie', [una.length, una[0].joined, una[0].dir], [1, true, 1]);
+    // INIZIO E FINE LIBERI (Lorenzo, 2026-10-02: «dovrebbero sempre iniziare il più a sinistra possibile e
+    // finire il più a destra possibile»): una diagonale che scende dalla riga 1 alla 6 comincia sulla V più
+    // a sinistra (in alto) e finisce su quella più a destra (in basso); la copia accanto ricomincia in alto,
+    // 5 righe più su: si salta, e il salto è corto (dritto in su)
+    const marksD = Array.from({ length: Cm * Rm }, (_, i) => { const rr = Math.floor(i / Cm), cc = i % Cm; return { stitch: 'v', color: rr === 1 + Math.floor(cc / 2) ? 1 : 0 }; });
+    const diag = rg.csRouteBands(gB, { cols: Cm, rows: Rm, marks: marksD, entryRow: {} }, 1, par);
+    check('inizio e fine liberi: dalla V più a sinistra in alto alla più a destra in basso; salto alla copia accanto', [diag.length, diag[0].start.join(','), diag[0].end.join(','), diag[0].joined, diag[0].next.join(',')], [1, '1,0', '6,24', false, '1,24']);
   }
 
   // SCEGLI MODULO (Lorenzo, 2026-10-02: «mi aspetto che posso selezionare il perimetro che identifica il

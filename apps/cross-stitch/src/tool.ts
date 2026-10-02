@@ -45,7 +45,7 @@ const MODE_HELP: Record<Mode, string> = {
   cut: 'Salti: clicca un passaggio e diventa un salto (la macchina taglia il filo); clicca un salto fatto a mano e torna passaggio. Si tolgono tutti in 04 Passaggi.',
   reroute: 'Ridisegna passaggio: clicca un passaggio, poi i punti da cui deve passare, in ordine. Invio finisce, Esc toglie i punti appena messi, Canc rimette il passaggio automatico.',
   bands: 'Fasce: il filo scelto si cuce a fasce orizzontali, dall’alto, a serpentina lungo tutte le copie. Clic su una V del filo: la sua forma passa alla fascia sotto (Maiusc+clic: sopra). Clic su una riga vuota del filo: lì comincia una fascia nuova. Clic su un confine: lo togli. Trascina un confine per spostarlo.',
-  order: 'Ordine pezzi: clicca i pezzi del filo scelto nell’ordine in cui vuoi cucirli (il primo clic è il primo pezzo). Il primo pezzo dà l’ingresso: il filo entra lì a sinistra ed esce a destra alla stessa altezza.',
+  order: 'Ordine pezzi: clicca i pezzi del filo scelto nell’ordine in cui vuoi cucirli (il primo clic è il primo pezzo). Da quel momento, per quel filo, dentro ogni fascia vale il tuo ordine invece di quello del tool.',
   pick: 'Scegli modulo: sull’immagine intera trascina un riquadro intorno a un modulo. Il riquadro si aggancia alle V che trova; colonne e righe si correggono in «Griglia». Esc torna al pennello.',
   image: 'Sposta immagine: trascina l’immagine sotto la griglia finché il motivo cade giusto sulle V del modulo.',
   group: 'Gruppi: trascina un rettangolo attorno a una parte (per esempio un titolo): il filo di ogni colore la cuce tutta insieme, prima del resto e nell’ordine della lista in 04 Passaggi.',
@@ -553,7 +553,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
    * da 0; i gruppi, in mm, si spostano con lei).
    */
   /** Il modulo come percorso: pezzi e riga d'ingresso di ogni filo (il primo pezzo dice dove). */
-  const modulePathOf = (m: KnitModule): ModulePath => ({ cols: m.cols, rows: m.rows, marks: m.marks, pieceOf: m.seq, entryRow: entryRows({ cols: m.cols, marks: m.marks, pieceOf: m.seq, starts: m.starts }), cuts: m.cuts, forced: m.forced, bands: m.bands, bandMove: m.bandMove });
+  const modulePathOf = (m: KnitModule): ModulePath => ({ cols: m.cols, rows: m.rows, marks: m.marks, pieceOf: m.seq, entryRow: entryRows({ cols: m.cols, marks: m.marks, pieceOf: m.seq, starts: m.starts }), cuts: m.cuts, forced: m.forced, bands: m.bands, bandMove: m.bandMove, ordered: m.ordered });
   /** Il ricamo è proprio il modulo ripetuto (nessuna V ritoccata su una copia sola)? */
   const designIsTiled = (): boolean => {
     const m = st.module; if (!m) return false;
@@ -1373,7 +1373,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   const snapshot = () => (moduleView && realDesign && st.module
     ? { grid: { ...realDesign.grid }, cells: tileModule(realDesign.grid, st.module), module: cloneModule(st.module) }
     : { grid: { ...st.grid }, cells: cloneCells(st.cells), module: cloneModule(st.module) });
-  const cloneModule = (m: KnitModule | null): KnitModule | null => (m ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x ? { ...x } : null)), guide: m.guide ? { ...m.guide } : m.guide, drawn: m.drawn, seq: m.seq ? [...m.seq] : m.seq, starts: m.starts ? { ...m.starts } : m.starts, cuts: m.cuts ? m.cuts.map((q) => [q[0], q[1]] as [number, number]) : m.cuts, forced: m.forced ? m.forced.map((q) => ({ from: q.from, to: q.to, via: [...q.via] })) : m.forced, bands: m.bands ? Object.fromEntries(Object.entries(m.bands).map(([k, v]) => [k, [...v]])) : m.bands, bandMove: m.bandMove ? Object.fromEntries(Object.entries(m.bandMove).map(([k, v]) => [k, { ...v }])) : m.bandMove } : null);
+  const cloneModule = (m: KnitModule | null): KnitModule | null => (m ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x ? { ...x } : null)), guide: m.guide ? { ...m.guide } : m.guide, drawn: m.drawn, seq: m.seq ? [...m.seq] : m.seq, starts: m.starts ? { ...m.starts } : m.starts, cuts: m.cuts ? m.cuts.map((q) => [q[0], q[1]] as [number, number]) : m.cuts, forced: m.forced ? m.forced.map((q) => ({ from: q.from, to: q.to, via: [...q.via] })) : m.forced, bands: m.bands ? Object.fromEntries(Object.entries(m.bands).map(([k, v]) => [k, [...v]])) : m.bands, bandMove: m.bandMove ? Object.fromEntries(Object.entries(m.bandMove).map(([k, v]) => [k, { ...v }])) : m.bandMove, ordered: m.ordered ? [...m.ordered] : m.ordered } : null);
   function pushUndo(): void {
     undo.push(snapshot());
     if (undo.length > 100) undo.shift();
@@ -1623,6 +1623,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       pushUndo();
       orderClicks++;
       movePiece(m, idx, orderClicks);
+      if (!m.ordered?.includes(mk.color)) m.ordered = [...(m.ordered ?? []), mk.color];
       if (editorSnap) editorSnap.changed = true;
       update();
       return;
@@ -2480,8 +2481,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     editorEntry = mp.entryRow;
     let res: RouteResult;
     try { const rb = routeModuleBands(realGrid(), mp, routeParams()); res = rb; editorBands = rb.bands; } catch { result = null; editorBands = new Map(); return; }
-    const R = m.rows, C = m.cols, Wm = 2 * C + 1, Wv = 2 * (3 * C) + 1;
-    const toView = (v: number) => { const i = Math.floor(v / Wm), j = v - i * Wm; return (i + R) * Wv + j + 2 * C; };
+    const R = m.rows, Wv = 2 * (3 * m.cols) + 1;
+    const toView = (v: number) => v + R * Wv;
     result = { colors: res.colors.map((cr) => ({ color: cr.color, segs: cr.segs.map((sg) => ({ kind: sg.kind, from: toView(sg.from), to: toView(sg.to) })) })), metrics: res.metrics };
     editorVisible = res.metrics.visibleMm;
     routeGeom = { grid: st.grid, dx: 0, dy: 0, i0: 0, j0: 0 };
@@ -2609,18 +2610,18 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const pxPerMm = (svg.getBoundingClientRect().width || 1) / (wmm + 2 * margin());
     const rad = 6 / pxPerMm;
     const fs = 11 / pxPerMm;
-    // per ogni fascia unita del filo scelto: ingresso (pieno) e uscita (anello) sui due bordi, alla
-    // stessa riga; la serpentina li scambia una fascia sì e una no
+    // per ogni fascia del filo scelto: inizio (pieno) sulla prima V, fine (anello) sull'ultima, anche ad
+    // altezze diverse; il collegamento alla copia accanto lo disegna il percorso (passaggio o salto)
     const bands = editorBands.get(activeThread) ?? [];
+    const Wv = 2 * (3 * C) + 1;
+    const ptOf = (q: [number, number]) => segmentPoints(g, (q[0] + R) * Wv + q[1] + 2 * C, (q[0] + R) * Wv + q[1] + 2 * C)[0];
     for (const b of bands) {
-      if (!b.joined) continue;
-      const y = (R + b.row) * pa; // il vertice in alto della riga d'ingresso
-      const xl = C * g.cellW, xr = 2 * C * g.cellW;
-      const [xin, xout] = b.dir > 0 ? [xl, xr] : [xr, xl];
+      const pin = ptOf(b.start), pout = ptOf(b.end);
+      const [xin, y, xout, y2] = [pin.x, pin.y, pout.x, pout.y];
       layer.insertAdjacentHTML('beforeend',
         `<circle cx="${xin}" cy="${y}" r="${rad}" fill="${col}" style="stroke:var(--rg-color-white)" stroke-width="2" vector-effect="non-scaling-stroke"/>`
-        + `<circle cx="${xout}" cy="${y}" r="${rad * 1.3}" fill="none" style="stroke:var(--rg-color-focus)" stroke-width="3" vector-effect="non-scaling-stroke"/>`
-        + `<circle cx="${xout}" cy="${y}" r="${rad * 0.45}" fill="${col}"/>`);
+        + `<circle cx="${xout}" cy="${y2}" r="${rad * 1.3}" fill="none" style="stroke:var(--rg-color-focus)" stroke-width="3" vector-effect="non-scaling-stroke"/>`
+        + `<circle cx="${xout}" cy="${y2}" r="${rad * 0.45}" fill="${col}"/>`);
     }
     // LO STRUMENTO FASCE: a sinistra del modulo una barra per fascia (piena = unita fra le copie,
     // tratteggiata = salti fra le copie), il numero e la freccia del verso; i confini sul modulo
@@ -2862,6 +2863,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           cuts: Array.isArray(m.cuts) ? m.cuts.filter((q) => Array.isArray(q) && q.length === 2).map((q) => [Number(q[0]), Number(q[1])] as [number, number]) : undefined,
           forced: Array.isArray(m.forced) ? m.forced.filter((q) => q && Array.isArray(q.via)).map((q) => ({ from: Number(q.from), to: Number(q.to), via: q.via.map(Number) })) : undefined,
           bands: m.bands && typeof m.bands === 'object' ? Object.fromEntries(Object.entries(m.bands).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [Number(k), (v as unknown[]).map(Number)])) : undefined,
+          ordered: Array.isArray(m.ordered) ? m.ordered.map(Number) : undefined,
           bandMove: m.bandMove && typeof m.bandMove === 'object' ? Object.fromEntries(Object.entries(m.bandMove).filter(([, v]) => v && typeof v === 'object').map(([k, v]) => [Number(k), Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([i, d]) => [Number(i), Number(d)]))])) : undefined }
         : null;
     }
