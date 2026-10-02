@@ -115,6 +115,27 @@ trovati: i bordi in verticale di una maglia sono a zig-zag (davano righe di 6,6 
 trama ha un picco finto a 7,15 px che in certi pezzi vince su quello vero (due righe, 11,74). I tratti:
 l'immagine guida ora sta sotto i fili disegnati (sopra la base) e i tratti hanno un bordo di contrasto;
 numeri e segni a misura fissa sullo schermo, i numeri si spengono (*Numeri pezzi*).
+
+**Le fasce** (2026-10-02; Lorenzo: «dello stop di questo colore prima fai la parte alta del modulo di
+tutti i moduli consecutivi, poi passiamo al blocco sotto… mi permette di lavorare a fasce
+orizzontali»; «fasce automatiche ma dammi un modo per modificarle»; «per ogni fascia del colore di ogni
+modulo uscita e ingresso vicini… dove non è possibile facciamo i salti»; «a serpentina, base come ora»;
+«per i salti per ora non mettere niente… il programma fa un salto da un blocco all'altro», cioè salto
+semplice, senza taglio). Decisioni: fasce per filo (non comuni a tutti), automatiche dove il filo lascia
+una riga vuota, modificabili; ogni fascia calcolata sul modulo, entra da un bordo ed esce dall'altro se
+il vuoto attraverso la giuntura è al più 4 V (BAND_JOIN_V), altrimenti salti fra le copie; salto anche
+fra fascia e fascia; la serpentina riparte da sinistra a ogni filo. Sul modulo di Lorenzo (24 × 37, 5
+fili, 7 copie per striscia): beige 3 fasce, nocciola 3, ruggine 5, verde 3, marrone 3; salti fra le
+copie proprio sui motivi isolati di ruggine, verde e marrone (come aveva previsto). Filo in vista per
+modulo 1459 mm a fasce contro 1837 col percorso del modulo intero (una fascia per filo); 255 salti
+nel ricamo intero.
+
+Subito dopo (Lorenzo: «vorrei che prendesse solo il sopra e invece prende sopra e sotto», e le due
+parti condividono righe) le fasce si scelgono anche **per disegno**: un clic su una V sposta la sua
+forma (le V del filo che si toccano, anche in diagonale) nella fascia sotto, Maiusc+clic sopra. Lo
+spostamento è salvato per V, relativo alla fascia della sua riga (bandMove), così regge se i confini
+cambiano; una fascia è un insieme di V, non un intervallo di righe.
+
 **Ancora aperto:** il 67% del filo in vista sta nei passaggi oltre 12 mm (32 su 116 per striscia di
 2 moduli). Farli diventare salti col taglio lo porterebbe a circa un terzo, con più tagli in macchina:
 da decidere con Lorenzo.

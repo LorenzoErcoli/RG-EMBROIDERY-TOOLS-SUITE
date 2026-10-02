@@ -449,6 +449,132 @@ export interface KnitModule {
   cuts?: Array<[number, number]>;
   /** Passaggi ridisegnati a mano del modulo: da, a, e i vertici da cui deve passare. */
   forced?: Array<{ from: number; to: number; via: number[] }>;
+  /**
+   * LE FASCE A MANO (Lorenzo, 2026-10-02: «fasce automatiche ma dammi un modo per modificarle»): per
+   * filo, le righe dove comincia una fascia nuova. Se manca, le fasce sono automatiche (bandsOf).
+   */
+  bands?: Record<number, number[]>;
+  /**
+   * LE FORME SPOSTATE DI FASCIA (Lorenzo, 2026-10-02: «va spezzata la fascia perché io vorrei che
+   * prendesse solo il sopra e invece prende sopra e sotto» — e le due parti condividono righe): per
+   * filo, V del modulo → di quante fasce va più giù (+) o più su (−) rispetto alla fascia della sua riga.
+   */
+  bandMove?: Record<number, Record<number, number>>;
+}
+
+/**
+ * LE FASCE DI UN FILO (Lorenzo, 2026-10-02: «dello stop di questo colore prima fai la parte alta del
+ * modulo di tutti i moduli consecutivi, poi passiamo al blocco sotto»): le righe del modulo dove il
+ * filo compare, a gruppi orizzontali [prima riga, ultima riga]. Automatiche: un gruppo finisce dove
+ * il filo lascia una riga vuota. A mano (bands[filo]): la fascia comincia a ogni riga della lista, e
+ * ogni fascia si stringe alle righe dove il filo c'è (le fasce vuote spariscono).
+ */
+export function bandsOf(mod: { cols: number; rows: number; marks: Array<{ color: number } | null>; bands?: Record<number, number[]> }, color: number): Array<[number, number]> {
+  const has: boolean[] = [];
+  for (let r = 0; r < mod.rows; r++) { let h = false; for (let c = 0; c < mod.cols && !h; c++) { const m = mod.marks[r * mod.cols + c]; if (m && m.color === color) h = true; } has.push(h); }
+  const out: Array<[number, number]> = [];
+  const manual = mod.bands?.[color];
+  if (manual) {
+    const breaks = new Set(manual.filter((r) => r > 0 && r < mod.rows));
+    let a = -1, b = -1;
+    for (let r = 0; r <= mod.rows; r++) {
+      if (r === mod.rows || breaks.has(r)) { if (a >= 0) out.push([a, b]); a = -1; b = -1; }
+      if (r < mod.rows && has[r]) { if (a < 0) a = r; b = r; }
+    }
+    return out;
+  }
+  let a = -1;
+  for (let r = 0; r <= mod.rows; r++) {
+    if (r < mod.rows && has[r]) { if (a < 0) a = r; }
+    else if (a >= 0) { out.push([a, r - 1]); a = -1; }
+  }
+  return out;
+}
+
+/**
+ * Cambia le fasce a mano di un filo: `row` diventa l'inizio di una fascia nuova, o smette di esserlo
+ * (le due fasce si uniscono). La prima volta si parte dalle fasce automatiche. Torna vero se è cambiato.
+ */
+export function toggleBandBreak(mod: KnitModule, color: number, row: number): boolean {
+  if (row <= 0 || row >= mod.rows) return false;
+  // gli inizi delle fasce come si vedono: le stesse fasce di qualunque lista di confini
+  const starts = new Set(bandsOf(mod, color).slice(1).map(([a]) => a));
+  if (starts.has(row)) starts.delete(row); else starts.add(row);
+  mod.bands = { ...(mod.bands ?? {}), [color]: [...starts].sort((x, y) => x - y) };
+  return true;
+}
+
+/** Sposta il confine che comincia a `from` alla riga `to`. */
+export function moveBandBreak(mod: KnitModule, color: number, from: number, to: number): boolean {
+  if (from === to || to <= 0 || to >= mod.rows) return false;
+  const starts = new Set(bandsOf(mod, color).slice(1).map(([a]) => a));
+  if (!starts.delete(from)) return false;
+  starts.add(to);
+  mod.bands = { ...(mod.bands ?? {}), [color]: [...starts].sort((x, y) => x - y) };
+  return true;
+}
+
+type BandModule = { cols: number; rows: number; marks: Array<{ color: number } | null>; bands?: Record<number, number[]>; bandMove?: Record<number, Record<number, number>> };
+
+/**
+ * Le fasce di un filo come insiemi di V: la fascia della sua riga (bandsOf), più lo spostamento a mano
+ * della sua forma (bandMove). Per ogni fascia: le righe che tocca e le sue V, dall'alto; le fasce
+ * rimaste vuote spariscono.
+ */
+export function bandCells(mod: BandModule, color: number): Array<{ rows: [number, number]; cells: number[] }> {
+  const rowBands = bandsOf(mod, color);
+  const n = rowBands.length;
+  if (!n) return [];
+  const bandOfRow = new Int16Array(mod.rows).fill(-1);
+  rowBands.forEach(([a, b], i) => { for (let rr = a; rr <= b; rr++) bandOfRow[rr] = i; });
+  // le righe vuote fra due fasce (fasce a mano) vanno alla fascia sotto
+  for (let rr = mod.rows - 2; rr >= 0; rr--) if (bandOfRow[rr] < 0) bandOfRow[rr] = bandOfRow[rr + 1];
+  const moves = mod.bandMove?.[color] ?? {};
+  const groups: number[][] = Array.from({ length: n }, () => []);
+  mod.marks.forEach((m, i) => {
+    if (!m || m.color !== color) return;
+    const base = Math.max(0, bandOfRow[Math.floor(i / mod.cols)]);
+    groups[Math.max(0, Math.min(n - 1, base + (moves[i] ?? 0)))].push(i);
+  });
+  return groups.filter((cs) => cs.length).map((cs) => {
+    const rs = cs.map((i) => Math.floor(i / mod.cols));
+    return { rows: [Math.min(...rs), Math.max(...rs)] as [number, number], cells: cs };
+  });
+}
+
+/** La forma di una V: le V dello stesso filo che si toccano, anche in diagonale (dentro il modulo). */
+export function shapeOf(mod: BandModule, color: number, cell: number): number[] {
+  const at = (i: number) => { const m = mod.marks[i]; return !!m && m.color === color; };
+  if (!at(cell)) return [];
+  const seen = new Set([cell]), stack = [cell];
+  while (stack.length) {
+    const i = stack.pop()!, r0 = Math.floor(i / mod.cols), c0 = i % mod.cols;
+    for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
+      const rr = r0 + dr, cc = c0 + dc;
+      if ((!dr && !dc) || rr < 0 || rr >= mod.rows || cc < 0 || cc >= mod.cols) continue;
+      const j = rr * mod.cols + cc;
+      if (!seen.has(j) && at(j)) { seen.add(j); stack.push(j); }
+    }
+  }
+  return [...seen];
+}
+
+/**
+ * Sposta la forma della V `cell` nella fascia sotto (dir = 1) o sopra (−1) di quella dove sta adesso.
+ * Falso se non c'è una fascia là.
+ */
+export function moveShapeBand(mod: KnitModule, color: number, cell: number, dir: 1 | -1): boolean {
+  const shape = shapeOf(mod, color, cell);
+  if (!shape.length) return false;
+  const rowBands = bandsOf(mod, color);
+  // la fascia d'arrivo, contata come le fasce delle righe (quelle su cui si misura lo spostamento)
+  const rowIdx = (i: number) => { const rr = Math.floor(i / mod.cols); let k = rowBands.findIndex(([, b]) => rr <= b); return k < 0 ? rowBands.length - 1 : k; };
+  const target = Math.max(0, Math.min(rowBands.length - 1, rowIdx(cell) + (mod.bandMove?.[color]?.[cell] ?? 0))) + dir;
+  if (target < 0 || target >= rowBands.length) return false;
+  const moves = { ...(mod.bandMove?.[color] ?? {}) };
+  for (const i of shape) { const d = target - rowIdx(i); if (d) moves[i] = d; else delete moves[i]; }
+  mod.bandMove = { ...(mod.bandMove ?? {}), [color]: moves };
+  return true;
 }
 
 /** Il ricamo = il modulo ripetuto su tutta la griglia, a partire dall'angolo in alto a sinistra. */
@@ -500,6 +626,7 @@ export function shiftModule(mod: KnitModule, dr: number, dc: number): KnitModule
   const newIdx = (i: number) => { const r0 = Math.floor(i / C), c0 = i % C; return (((r0 - sr) % R + R) % R) * C + (((c0 - sc) % C + C) % C); };
   const seq = mod.seq ? marks.map((_, i) => mod.seq![((Math.floor(i / C) + sr) % R) * C + ((i % C) + sc) % C]) : mod.seq;
   const starts = mod.starts ? Object.fromEntries(Object.entries(mod.starts).map(([k, v]) => [k, newIdx(v)])) : mod.starts;
+  // le fasce a mano non si spostano (una fascia scavalcherebbe il bordo): tornano automatiche
   return { cols: C, rows: R, marks, guide, drawn: mod.drawn, seq, starts };
 }
 
@@ -517,7 +644,9 @@ export function resizeModule(mod: KnitModule, cols: number, rows: number, fill: 
     seq.push(inside && mod.seq ? mod.seq[r * mod.cols + c] : 0);
   }
   const starts = mod.starts ? Object.fromEntries(Object.entries(mod.starts).filter(([, v]) => Math.floor(v / mod.cols) < rows && v % mod.cols < cols).map(([k, v]) => [k, Math.floor(v / mod.cols) * cols + (v % mod.cols)])) : mod.starts;
-  return { cols, rows, marks, guide: mod.guide, drawn: mod.drawn, seq: mod.seq ? seq : undefined, starts };
+  const bands = mod.bands ? Object.fromEntries(Object.entries(mod.bands).map(([k, v]) => [k, v.filter((r) => r < rows)])) : mod.bands;
+  const bandMove = mod.bandMove ? Object.fromEntries(Object.entries(mod.bandMove).map(([k, v]) => [k, Object.fromEntries(Object.entries(v).filter(([i]) => Math.floor(Number(i) / mod.cols) < rows && Number(i) % mod.cols < cols).map(([i, d]) => [Math.floor(Number(i) / mod.cols) * cols + (Number(i) % mod.cols), d]))])) : mod.bandMove;
+  return { cols, rows, marks, guide: mod.guide, drawn: mod.drawn, seq: mod.seq ? seq : undefined, starts, bands, bandMove };
 }
 
 /**

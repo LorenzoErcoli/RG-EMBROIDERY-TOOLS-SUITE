@@ -680,11 +680,33 @@ accendono con *Vista → Numeri pezzi* (con *Ordine pezzi* si vedono sempre). Se
 una misura fissa sullo schermo: non coprono il disegno a nessuno zoom;
 i passaggi del modulo si vedono subito (si calcolano sul modulo solo). Nella barra di stato: il filo
 in vista per modulo. Per cambiare l'ordine: strumento **Ordine pezzi**, poi clicca i pezzi nell'ordine
-in cui vuoi cucirli (il primo clic è il primo pezzo; cambiando filo si ricomincia da 1). Nel ricamo il
-percorso del modulo si **ripete identico** in ogni copia: per ogni striscia la base, poi ogni filo
-copia per copia; le copie tagliate dal bordo le fa il motore, partendo da dove esce l'ultima copia
-intera. Vale finché il ricamo è proprio il modulo ripetuto (senza ritocchi su una copia sola, senza
-gruppi a mano e senza area di prova); altrimenti si torna al copia per copia.
+in cui vuoi cucirli (il primo clic è il primo pezzo; cambiando filo si ricomincia da 1).
+
+**Le fasce** (la sequenza nel ricamo). Ogni filo si cuce **a fasce orizzontali**: le righe del modulo
+dove il filo compare, a gruppi separati da righe vuote (automatiche). Per ogni striscia: prima la base
+intera, poi filo per filo (dal chiaro allo scuro) le sue fasce **dall'alto**, **a serpentina**: la prima
+da sinistra a destra lungo tutte le copie della striscia, la seconda da destra a sinistra, e così via.
+Poi lo stop del filo dopo. Il percorso di una fascia si calcola sul modulo e si ripete identico in ogni
+copia. Se il disegno della fascia arriva vicino ai due bordi del modulo (al più 4 V di vuoto attraverso
+la giuntura), il filo entra da un bordo ed esce dall'altro alla stessa altezza e passa da una copia
+all'altra senza staccarsi: sulla tela il **punto pieno** è l'ingresso e l'**anello** l'uscita, una
+coppia per fascia. Se non ci arriva (motivi isolati), fra una copia e l'altra il filo **salta**, e salta
+anche fra una fascia e la successiva: è un salto semplice, senza taglio (il disegno si stacca e riparte),
+da pulire poi a mano se serve. Le copie tagliate dal bordo destro le fa il motore, attaccate alla copia
+intera vicina. Una striscia tagliata dal fondo del ricamo si fa col motore, tutta insieme.
+
+Le fasce si cambiano con lo strumento **Fasce** (nell'editor): a sinistra del modulo una barra per
+fascia del filo scelto, col numero e il verso (→ da sinistra, ← da destra); piena = unita fra le copie,
+tratteggiata = salti fra le copie; sul modulo i confini tratteggiati e, su ogni forma del filo, il
+numero della sua fascia. **Clic su una V del filo**: tutta la sua forma (le V che si toccano, anche in
+diagonale) passa alla fascia sotto; **Maiusc+clic**: alla fascia sopra. Serve quando due parti del
+disegno condividono righe e un confine orizzontale non le separa. **Clic su un punto della riga senza
+V del filo**: lì comincia una fascia nuova. **Clic su un confine**: lo togli e le due fasce si uniscono. **Trascina un confine**
+per spostarlo. **Fasce automatiche** rimette quelle del tool per il filo scelto (anche le forme spostate tornano al
+loro posto). Nella barra di stato:
+quante fasce ha il filo scelto e quante con salti. Una fascia sola per filo è il vecchio percorso del
+modulo intero. Tutto questo vale finché il ricamo è proprio il modulo ripetuto (senza ritocchi su una
+copia sola, senza gruppi a mano e senza area di prova); altrimenti si torna al copia per copia.
 
 **I passaggi a mano** (nell'editor). Due strumenti lavorano sui passaggi del modulo al centro, e quello
 che fai vale in ogni copia. **Salti** (T): un clic su un passaggio lo trasforma in salto (la macchina

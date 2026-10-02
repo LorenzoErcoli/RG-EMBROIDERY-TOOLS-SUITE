@@ -45,8 +45,8 @@ export { routeCells as csRouteCells, colorPolylines as csColorPolylines, DEFAULT
 export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight, knitFromImage as csKnitFromImage, refinePalette as csRefinePalette, brushEdits as csBrushEdits, fillEdits as csFillEdits, applyEdits as csApplyEdits, fromTwoColumnV as csFromTwoColumnV } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { subGrid as csSubGrid, areaFromMm as csAreaFromMm, clampArea as csClampArea } from ${JSON.stringify(posix('apps/cross-stitch/src/area.ts'))};
 export { segmentPoints as csSegmentPoints } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
-export { routeAll as csRouteAll, stripRanges as csStripRanges, routeModule as csRouteModule, entryRows as csEntryRows } from ${JSON.stringify(posix('apps/cross-stitch/src/strips.ts'))};
-export { findModule as csFindModule, tileModule as csTileModule, editsOnAllCopies as csEditsOnAllCopies, shiftModule as csShiftModule, seamShift as csSeamShift, resizeModule as csResizeModule, movePiece as csMovePiece, piecesOf as csPiecesOf, cellStep as csCellStep } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
+export { routeAll as csRouteAll, stripRanges as csStripRanges, routeModule as csRouteModule, entryRows as csEntryRows, routeBands as csRouteBands } from ${JSON.stringify(posix('apps/cross-stitch/src/strips.ts'))};
+export { findModule as csFindModule, tileModule as csTileModule, editsOnAllCopies as csEditsOnAllCopies, shiftModule as csShiftModule, seamShift as csSeamShift, resizeModule as csResizeModule, movePiece as csMovePiece, piecesOf as csPiecesOf, cellStep as csCellStep, bandsOf as csBandsOf, toggleBandBreak as csToggleBandBreak, moveBandBreak as csMoveBandBreak, bandCells as csBandCells, moveShapeBand as csMoveShapeBand } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
 export { zonesOf as csZonesOf } from ${JSON.stringify(posix('apps/cross-stitch/src/zones.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
@@ -5217,7 +5217,7 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     const gT2 = { ...gP, cols: Cm * 3 + 5, rows: Rm * 2 };
     const modK2 = { cols: Cm, rows: Rm, marks: marksP };
     const cT2 = rg.csTileModule(gT2, modK2);
-    const tiled = rg.csRouteAll(gT2, cT2, { ...par, modulePath: { cols: Cm, rows: Rm, marks: marksP, pieceOf: pieceA, entryRow: { 1: 2, 2: 0 } } });
+    const tiled = rg.csRouteAll(gT2, cT2, { ...par, modulePath: { cols: Cm, rows: Rm, marks: marksP, pieceOf: pieceA, entryRow: { 1: 2, 2: 0 }, bands: { 1: [], 2: [] } } });
     const libero = rg.csRouteAll(gT2, cT2, par);
     let rotture = 0; for (const cr of tiled.colors) for (let i = 1; i < cr.segs.length; i++) if (cr.segs[i].from !== cr.segs[i - 1].to) rotture++;
     const puntiDi = (res) => res.colors.flatMap((cr) => cr.segs.filter((sg) => sg.kind === 'stitch').map((sg) => cr.color + ':' + Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to))).sort().join('|');
@@ -5230,6 +5230,52 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     const modE = { cols: 4, rows: 3, marks: Array.from({ length: 12 }, () => ({ stitch: 'v', color: 0 })) };
     rg.csEditsOnAllCopies({ rows: 6, cols: 8, cellW: 2, cellH: 3 }, modE, [{ r: 4, c: 6, mark: { stitch: 'v', color: 1 } }, { r: 4, c: 7, mark: { stitch: 'v', color: 1 } }], 3);
     check('un tratto è un pezzo: numero sulle V e prima V del tratto', [modE.seq[1 * 4 + 2], modE.seq[1 * 4 + 3], modE.starts[3]], [3, 3, 1 * 4 + 2]);
+  }
+
+  // LE FASCE (Lorenzo, 2026-10-02: «dello stop di questo colore prima fai la parte alta del modulo di
+  // tutti i moduli consecutivi, poi passiamo al blocco sotto»; «a serpentina»; dove non si può, salti).
+  // Un modulo 12 × 8: il filo 1 in una riga piena (riga 1: le copie si toccano) e in un motivo isolato
+  // (riga 5, colonne 4-6: fra le copie 5 V di vuoto). Tre copie in una striscia.
+  {
+    const Cm = 12, Rm = 8;
+    const marksB = Array.from({ length: Cm * Rm }, (_, i) => { const rr = Math.floor(i / Cm), cc = i % Cm; return { stitch: 'v', color: rr === 1 || (rr === 5 && cc >= 4 && cc <= 6) ? 1 : 0 }; });
+    const gB = { cols: Cm * 3, rows: Rm, cellW: 2.4, cellH: 3.5, overlapPct: 30 };
+    const Wb = LW(gB);
+    const par = { ...rg.CS_DEFAULT_ROUTE, base: { color: 0, stitch: 'v' } };
+    const modB = { cols: Cm, rows: Rm, marks: marksB };
+    check('fasce automatiche: la riga piena e il motivo, separati dalle righe vuote', JSON.stringify(rg.csBandsOf(modB, 1)), '[[1,1],[5,5]]');
+    const cB = rg.csTileModule(gB, modB);
+    const res = rg.csRouteAll(gB, cB, { ...par, modulePath: { cols: Cm, rows: Rm, marks: marksB, entryRow: {} } });
+    const f1 = res.colors.find((c) => c.color === 1).segs;
+    // la copia e la riga di ogni punto, nell'ordine
+    const seqB = []; for (const sg of f1) if (sg.kind === 'stitch') { const i = Math.floor(sg.from / Wb), k = Math.min(2, Math.floor((sg.from % Wb) / (2 * Cm))); const key = (i <= 2 ? 'alta' : 'motivo') + k; if (seqB[seqB.length - 1] !== key) seqB.push(key); }
+    let rotture = 0; for (let i = 1; i < f1.length; i++) if (f1[i].from !== f1[i - 1].to) rotture++;
+    check('fasce: prima la fascia alta da sinistra (copie 0, 1, 2), poi il motivo da destra (2, 1, 0)', seqB.join(' '), 'alta0 alta1 alta2 motivo2 motivo1 motivo0');
+    check('fasce: salti solo fra i motivi e fra le due fasce (3), senza taglio; il filo non si rompe', [f1.filter((sg) => sg.kind === 'jump').length, rotture], [3, 0]);
+    const puntiDi = (rs) => rs.colors.flatMap((cr) => cr.segs.filter((sg) => sg.kind === 'stitch').map((sg) => cr.color + ':' + Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to))).sort().join('|');
+    check('fasce: gli stessi punti del ricamo calcolato senza modulo', puntiDi(res) === puntiDi(rg.csRouteAll(gB, cB, par)), true);
+    // a mano: un confine tolto unisce, uno nuovo divide, uno trascinato si sposta
+    const modE = { cols: Cm, rows: Rm, marks: marksB.map((m) => ({ ...m })) };
+    rg.csToggleBandBreak(modE, 1, 5);
+    const unite = JSON.stringify(rg.csBandsOf(modE, 1));
+    rg.csToggleBandBreak(modE, 1, 3);
+    const divise = JSON.stringify(rg.csBandsOf(modE, 1));
+    rg.csMoveBandBreak(modE, 1, 5, 2);
+    check('fasce a mano: unire, dividere, spostare un confine', [unite, divise, JSON.stringify(rg.csBandsOf(modE, 1))], ['[[1,5]]', '[[1,1],[5,5]]', '[[1,1],[5,5]]']);
+    // PER DISEGNO (Lorenzo, 2026-10-02: «vorrei che prendesse solo il sopra e invece prende sopra e
+    // sotto»): la forma A (righe 1-2) e la forma B (righe 3-5, colonne 5-6) non si toccano; un confine a
+    // riga 4 taglia B e la sua riga 3 resta nella fascia sopra; spostata, tutta B va sotto
+    const marksS = Array.from({ length: Cm * Rm }, (_, i) => { const rr = Math.floor(i / Cm), cc = i % Cm; return { stitch: 'v', color: rr === 1 || (rr === 2 && (cc < 2 || cc > 9)) || (rr >= 3 && rr <= 5 && (cc === 5 || cc === 6)) ? 1 : 0 }; });
+    const modS = { cols: Cm, rows: Rm, marks: marksS };
+    rg.csToggleBandBreak(modS, 1, 4);
+    const bInB = (bands) => bands.map((b) => b.cells.filter((i) => i % Cm === 5 || i % Cm === 6).length);
+    const prima = bInB(rg.csBandCells(modS, 1));
+    const mosso = rg.csMoveShapeBand(modS, 1, 3 * Cm + 5, 1);
+    const dopo = bInB(rg.csBandCells(modS, 1));
+    const giu = rg.csMoveShapeBand(modS, 1, 3 * Cm + 5, 1);
+    check('fasce per disegno: la forma passa tutta alla fascia sotto; più giù non si va', [prima.join('/'), mosso, dopo.join('/'), giu], ['4/4', true, '2/6', false]);
+    const una = rg.csRouteBands(gB, { cols: Cm, rows: Rm, marks: marksB, entryRow: {}, bands: { 1: [] } }, 1, par);
+    check('una fascia sola: entra a sinistra ed esce a destra, unita fra le copie', [una.length, una[0].joined, una[0].dir], [1, true, 1]);
   }
 
   // SCEGLI MODULO (Lorenzo, 2026-10-02: «mi aspetto che posso selezionare il perimetro che identifica il
