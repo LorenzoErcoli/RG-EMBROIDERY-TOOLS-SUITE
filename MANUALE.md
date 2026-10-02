@@ -677,6 +677,16 @@ copia per copia; le copie tagliate dal bordo le fa il motore, partendo da dove e
 intera. Vale finché il ricamo è proprio il modulo ripetuto (senza ritocchi su una copia sola, senza
 gruppi a mano e senza area di prova); altrimenti si torna al copia per copia.
 
+**I passaggi a mano** (nell'editor). Due strumenti lavorano sui passaggi del modulo al centro, e quello
+che fai vale in ogni copia. **Salti** (T): un clic su un passaggio lo trasforma in salto (la macchina
+taglia il filo); un altro clic lo rimette. **Ridisegna passaggio**: un clic sceglie il passaggio, poi
+clicchi i punti da cui deve passare, in ordine (si agganciano al vertice più vicino; il passaggio
+scelto mostra i suoi capi come anelli e i punti pieni). Fra un punto e l'altro il filo prende la
+strada più nascosta; i punti cuciti e il resto del percorso non cambiano. **Invio** finisce, **Esc**
+toglie i punti messi adesso, **Canc** rimette il passaggio automatico. Se cambi l'ordine dei pezzi o
+ridisegni, un passaggio forzato che non esiste più resta inattivo finché il filo non torna a
+collegare gli stessi due vertici.
+
 Senza editor, nel ricamo con un modulo, **Su tutte le copie** (nella barra) fa valere pennello, riempi e
 gomma in ogni copia e nel modulo. Il modulo, con il suo aggancio all'immagine, si salva nel progetto.
 L'immagine sotto la griglia (*Altro → Opacità*) si disegna dall'originale (prima era la copia ridotta a

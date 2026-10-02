@@ -94,6 +94,14 @@ vista 6,18 m contro 6,13 del copia per copia, ripassi 21,8 contro 23,0 m, 88 ms 
 tagliata dal bordo all'inizio cominciava altrove (4 salti nel test): ora parte dall'uscita
 dell'ultima copia intera.
 
+
+**I passaggi a mano** (2026-10-02, fase c; Lorenzo: «gestire i passaggi, modificandoli a mano dove
+passano dove necessario e cambiarli anche in salti quando serve»). Stanno nel modulo, non nel ricamo:
+salti (coppie di vertici del reticolo del modulo) e passaggi forzati (da, a, punti di passaggio), così
+valgono in ogni copia e fanno parte del percorso del modulo. Un passaggio forzato si riconosce dai due
+vertici che collega: il motore, dopo aver scelto l'ordine, sostituisce quel passaggio con la strada più
+economica fra i punti dati; i punti cuciti non cambiano. Se il filo non collega più quei vertici
+(ordine cambiato) il forzato resta lì ma non agisce.
 **Ancora aperto:** il 67% del filo in vista sta nei passaggi oltre 12 mm (32 su 116 per striscia di
 2 moduli). Farli diventare salti col taglio lo porterebbe a circa un terzo, con più tagli in macchina:
 da decidere con Lorenzo.

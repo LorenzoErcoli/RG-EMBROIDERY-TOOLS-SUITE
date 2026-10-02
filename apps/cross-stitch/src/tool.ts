@@ -35,7 +35,7 @@ const OLD_AUTOSAVE_KEY = 'rg-cross-stitch-autosave';
 const DEFAULT_THREADS: Thread[] = [{ hex: '#1a1a1a' }, { hex: '#b3261e' }];
 
 /** Gli strumenti della barra di modifica. */
-type Mode = 'pan' | 'paint' | 'fill' | 'erase' | 'group' | 'cut' | 'image' | 'order';
+type Mode = 'pan' | 'paint' | 'fill' | 'erase' | 'group' | 'cut' | 'image' | 'order' | 'reroute';
 
 const MODE_HELP: Record<Mode, string> = {
   pan: 'Sposta: trascina per muovere la vista, rotella per ingrandire. Il ricamo non si tocca.',
@@ -43,6 +43,7 @@ const MODE_HELP: Record<Mode, string> = {
   fill: 'Riempi: un clic passa al filo scelto tutta la zona collegata dello stesso colore — per esempio l’interno di una lettera.',
   erase: 'Gomma: trascina per cancellare; lì non si cuce niente.',
   cut: 'Salti: clicca un passaggio e diventa un salto (la macchina taglia il filo); clicca un salto fatto a mano e torna passaggio. Si tolgono tutti in 04 Passaggi.',
+  reroute: 'Ridisegna passaggio: clicca un passaggio, poi i punti da cui deve passare, in ordine. Invio finisce, Esc toglie i punti appena messi, Canc rimette il passaggio automatico.',
   order: 'Ordine pezzi: clicca i pezzi del filo scelto nell’ordine in cui vuoi cucirli (il primo clic è il primo pezzo). Il primo pezzo dà l’ingresso: il filo entra lì a sinistra ed esce a destra alla stessa altezza.',
   image: 'Sposta immagine: trascina l’immagine sotto la griglia finché il motivo cade giusto sulle V del modulo.',
   group: 'Gruppi: trascina un rettangolo attorno a una parte (per esempio un titolo): il filo di ogni colore la cuce tutta insieme, prima del resto e nell’ordine della lista in 04 Passaggi.',
@@ -324,6 +325,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <button type="button" class="rg-segmented__item" data-mode="cut" title="Salti (T)">Salti</button>
             <button type="button" class="rg-segmented__item" data-mode="image" hidden>Sposta immagine</button>
             <button type="button" class="rg-segmented__item" data-mode="order" hidden>Ordine pezzi</button>
+            <button type="button" class="rg-segmented__item" data-mode="reroute" hidden>Ridisegna passaggio</button>
           </div>
           <div class="cs-editbar__group" id="moduleEditGroup" role="group" aria-labelledby="eb-mod" hidden><span class="rg-label" id="eb-mod">Modulo</span>
             <div class="rg-segmented" id="moduleViewSel" role="group" aria-label="Vista">
@@ -446,6 +448,58 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   let areaDrag: { a: { x: number; y: number }; b: { x: number; y: number } } | null = null;
   /** Dove stanno i passaggi calcolati: la griglia su cui sono fatti e lo spostamento per l'anteprima. */
   let routeGeom: { grid: GridSpec; dx: number; dy: number; i0: number; j0: number } = { grid: DEFAULT_GRID, dx: 0, dy: 0, i0: 0, j0: 0 };
+  /** Il passaggio che si sta ridisegnando (vertici del modulo), e i suoi punti all'inizio (per Esc). */
+  let reroute: { from: number; to: number; before: number[] } | null = null;
+  /** Il vertice del reticolo della vista più vicino a un punto (mm). */
+  function vertexNear(p: { x: number; y: number }): number {
+    const g = routeGeom.grid, W = 2 * g.cols + 1, pa = rowPitch(g);
+    p = { x: p.x - routeGeom.dx, y: p.y - routeGeom.dy };
+    let best = -1, bd = Infinity;
+    const i0 = Math.round(p.y / pa), j0 = Math.round(p.x / (g.cellW / 2));
+    for (let i = i0 - 2; i <= i0 + 2; i++) for (let j = j0 - 2; j <= j0 + 2; j++) {
+      if (i < 0 || i > g.rows || j < 0 || j > 2 * g.cols) continue;
+      const v = i * W + j, q = segmentPoints(g, v, v)[0];
+      const d = Math.hypot(q.x - p.x, q.y - p.y);
+      if (d < bd) { bd = d; best = v; }
+    }
+    return best;
+  }
+  function rerouteClick(p: { x: number; y: number }): void {
+    const m = st.module;
+    if (!m) return;
+    if (!reroute) {
+      const t = travelAt(p);
+      if (!t) { $('status').textContent = 'Clicca sopra una linea di passaggio del modulo al centro.'; return; }
+      const a = viewToMod(t.from), b = viewToMod(t.to);
+      if (a < 0 || b < 0) { $('status').textContent = 'Il passaggio non è dentro il modulo al centro: cliccalo lì.'; return; }
+      const f = (m.forced ?? []).find((q) => (q.from === a && q.to === b) || (q.from === b && q.to === a));
+      reroute = { from: f ? f.from : a, to: f ? f.to : b, before: f ? [...f.via] : [] };
+      update();
+      return;
+    }
+    const v = viewToMod(vertexNear(p));
+    if (v < 0) { $('status').textContent = 'Il punto deve stare nel modulo al centro.'; return; }
+    pushUndo();
+    const list = m.forced ?? [];
+    const cur = list.find((q) => q.from === reroute!.from && q.to === reroute!.to);
+    if (cur) cur.via.push(v); else list.push({ from: reroute.from, to: reroute.to, via: [v] });
+    m.forced = list;
+    if (editorSnap) editorSnap.changed = true;
+    update();
+  }
+  function rerouteKey(k: string): boolean {
+    const m = st.module;
+    if (!reroute || !m) return false;
+    const list = m.forced ?? [];
+    const idx = list.findIndex((q) => q.from === reroute!.from && q.to === reroute!.to);
+    if (k === 'Escape') { pushUndo(); if (idx >= 0) { if (reroute.before.length) list[idx].via = [...reroute.before]; else list.splice(idx, 1); } }
+    else if (k === 'Delete' || k === 'Backspace') { pushUndo(); if (idx >= 0) list.splice(idx, 1); }
+    else if (k !== 'Enter') return false;
+    m.forced = list;
+    reroute = null;
+    update();
+    return true;
+  }
   /** Il pezzo che si sta disegnando (editor), e quanti pezzi si sono già messi in ordine (strumento Ordine pezzi). */
   let currentPiece = 0;
   let orderClicks = 0;
@@ -489,7 +543,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
    * da 0; i gruppi, in mm, si spostano con lei).
    */
   /** Il modulo come percorso: pezzi e riga d'ingresso di ogni filo (il primo pezzo dice dove). */
-  const modulePathOf = (m: KnitModule): ModulePath => ({ cols: m.cols, rows: m.rows, marks: m.marks, pieceOf: m.seq, entryRow: entryRows({ cols: m.cols, marks: m.marks, pieceOf: m.seq, starts: m.starts }) });
+  const modulePathOf = (m: KnitModule): ModulePath => ({ cols: m.cols, rows: m.rows, marks: m.marks, pieceOf: m.seq, entryRow: entryRows({ cols: m.cols, marks: m.marks, pieceOf: m.seq, starts: m.starts }), cuts: m.cuts, forced: m.forced });
   /** Il ricamo è proprio il modulo ripetuto (nessuna V ritoccata su una copia sola)? */
   const designIsTiled = (): boolean => {
     const m = st.module; if (!m) return false;
@@ -572,7 +626,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   };
   const cutKeyNorm = (i1: number, j1: number, i2: number, j2: number) => (i1 < i2 || (i1 === i2 && j1 <= j2) ? `${i1},${j1},${i2},${j2}` : `${i2},${j2},${i1},${j1}`);
   /** I salti a mano come chiavi; in vista modulo, riportati sul modulo al centro. */
+  /** Un vertice del modulo (indice del suo reticolo) nella vista, sul modulo al centro, e ritorno. */
+  const modToView = (v: number) => { const m = st.module!, Wm = 2 * m.cols + 1, Wv = 2 * (3 * m.cols) + 1; const i = Math.floor(v / Wm), j = v - i * Wm; return (i + m.rows) * Wv + j + 2 * m.cols; };
+  const viewToMod = (v: number) => { const m = st.module!, Wm = 2 * m.cols + 1, Wv = 2 * (3 * m.cols) + 1; const i = Math.floor(v / Wv) - m.rows, j = v % Wv - 2 * m.cols; return i < 0 || i > m.rows || j < 0 || j > 2 * m.cols ? -1 : i * Wm + j; };
   const cutSet = () => {
+    if (editorOpen && st.module) {
+      const Wv = 2 * (3 * st.module.cols) + 1;
+      return new Set((st.module.cuts ?? []).map(([a, b]) => { const va = modToView(a), vb = modToView(b); return cutKeyNorm(Math.floor(va / Wv), va % Wv, Math.floor(vb / Wv), vb % Wv); }));
+    }
     if (moduleView && st.module) {
       const R = st.module.rows, C = st.module.cols;
       return new Set(st.cuts.map(([i1, j1, i2, j2]) => { const a = moduleRel(i1, j1, i2, j2); return cutKeyNorm(a[0] + R, a[1] + 2 * C, a[2] + R, a[3] + 2 * C); }));
@@ -835,6 +896,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   /** I numeri dei passaggi nella barra di stato (o che si stanno calcolando). */
   function showStatus(): void {
+    if (editorOpen && st.module && reroute) { $('status').textContent = `Ridisegni un passaggio (filo in vista ${Math.round(editorVisible)} mm per modulo): clicca i punti da cui deve passare, in ordine. Invio finisce, Esc toglie i punti messi, Canc rimette il passaggio automatico.`; return; }
     if (editorOpen && st.module) { const g0 = realGrid(); const nP = piecesOf(st.module, activeThread).length; $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V · ${fmtNum(Math.round(st.module.cols * g0.cellW))} × ${fmtNum(Math.round(st.module.rows * rowPitch(g0)))} mm · filo in vista ${Math.round(editorVisible)} mm per modulo · filo scelto: ${nP} pezz${nP === 1 ? 'o' : 'i'}; pieno = ingresso, anello = dove finire`; return; }
     if (routing) { $('status').textContent = 'Calcolo dei passaggi…'; return; }
     if (moduleView) { $('status').textContent = moduleCopyNote; return; }
@@ -1025,6 +1087,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   const setMode = (m: Mode) => {
     mode = m;
     if (m === 'order') orderClicks = 0;
+    if (m !== 'reroute') reroute = null;
     // senza passaggi visibili non c'è niente da cliccare
     if (m === 'cut' && !showPaths) { showPaths = true; $<HTMLInputElement>('showPaths').checked = true; draw(); }
     syncSegmented(); hideBrush(); drawGroups();
@@ -1264,7 +1327,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   const snapshot = () => (moduleView && realDesign && st.module
     ? { grid: { ...realDesign.grid }, cells: tileModule(realDesign.grid, st.module), module: cloneModule(st.module) }
     : { grid: { ...st.grid }, cells: cloneCells(st.cells), module: cloneModule(st.module) });
-  const cloneModule = (m: KnitModule | null): KnitModule | null => (m ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x ? { ...x } : null)), guide: m.guide ? { ...m.guide } : m.guide, drawn: m.drawn, seq: m.seq ? [...m.seq] : m.seq, starts: m.starts ? { ...m.starts } : m.starts } : null);
+  const cloneModule = (m: KnitModule | null): KnitModule | null => (m ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x ? { ...x } : null)), guide: m.guide ? { ...m.guide } : m.guide, drawn: m.drawn, seq: m.seq ? [...m.seq] : m.seq, starts: m.starts ? { ...m.starts } : m.starts, cuts: m.cuts ? m.cuts.map((q) => [q[0], q[1]] as [number, number]) : m.cuts, forced: m.forced ? m.forced.map((q) => ({ from: q.from, to: q.to, via: [...q.via] })) : m.forced } : null);
   function pushUndo(): void {
     undo.push(snapshot());
     if (undo.length > 100) undo.shift();
@@ -1434,6 +1497,13 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       return;
     }
     if (mode === 'pan') return;
+    if (mode === 'reroute') {
+      const p = mmAt(e);
+      if (!p || e.button !== 0) return;
+      e.stopPropagation(); e.preventDefault();
+      rerouteClick(p);
+      return;
+    }
     if (mode === 'cut') {
       const p = mmAt(e);
       if (!p || e.button !== 0) return;
@@ -1606,6 +1676,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if ((e.ctrlKey || e.metaKey) && k === 'z') { e.preventDefault(); if (e.shiftKey) doRedo(); else doUndo(); return; }
     if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); doRedo(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
+    if (mode === 'reroute' && rerouteKey(e.key)) { e.preventDefault(); return; }
     if (k === 'b') setMode('paint');
     else if (k === 'f') setMode('fill');
     else if (k === 'e') setMode('erase');
@@ -1790,8 +1861,53 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
    * Il passaggio (o il salto a mano) più vicino al clic, entro 8 px sullo schermo: un passaggio
    * diventa salto, un salto a mano torna passaggio.
    */
+  /** Il passaggio (o salto a mano) più vicino al clic, entro 8 px: i vertici che collega (reticolo di routeGeom). */
+  function travelAt(p: { x: number; y: number }): { from: number; to: number; key: string } | null {
+    if (!result) return null;
+    const { w } = sizeMm();
+    const pxPerMm = ($('layer').querySelector('svg')!.getBoundingClientRect().width || 1) / (w + 2 * margin());
+    const tol = 8 / pxPerMm;
+    const cuts = cutSet();
+    const dSeg = (a: { x: number; y: number }, b: { x: number; y: number }) => {
+      const vx = b.x - a.x, vy = b.y - a.y, L = vx * vx + vy * vy;
+      const t = L ? Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.y - a.y) * vy) / L)) : 0;
+      return Math.hypot(a.x + t * vx - p.x, a.y + t * vy - p.y);
+    };
+    let best: { from: number; to: number; key: string; d: number } | null = null;
+    for (const cr of result.colors) {
+      if (st.threads[cr.color]?.hidden) continue;
+      const segs = cr.segs;
+      for (let i = 0; i < segs.length; i++) {
+        if (segs[i].kind === 'stitch') continue;
+        let j = i, d = Infinity;
+        if (segs[i].kind === 'jump') { j = i + 1; if (!cuts.has(cutKeyOf(segs[i].from, segs[i].to))) continue; }
+        else while (j < segs.length && segs[j].kind !== 'stitch' && segs[j].kind !== 'jump') j++;
+        for (let q = i; q < j; q++) {
+          const [a, b] = segmentPoints(routeGeom.grid, segs[q].from, segs[q].to);
+          d = Math.min(d, dSeg({ x: a.x + routeGeom.dx, y: a.y + routeGeom.dy }, { x: b.x + routeGeom.dx, y: b.y + routeGeom.dy }));
+        }
+        if (d <= tol && (!best || d < best.d)) best = { from: segs[i].from, to: segs[j - 1].to, key: cutKeyOf(segs[i].from, segs[j - 1].to), d };
+        i = j - 1;
+      }
+    }
+    return best;
+  }
   function toggleCutAt(p: { x: number; y: number }): void {
     if (!result) return;
+    // nell'editor: il salto è del modulo (vale in ogni copia, è nel percorso del modulo)
+    if (editorOpen && st.module) {
+      const t = travelAt(p);
+      if (!t) { $('status').textContent = 'Nessun passaggio qui: clicca sopra una linea di passaggio.'; return; }
+      const a = viewToMod(t.from), b = viewToMod(t.to);
+      if (a < 0 || b < 0) { $('status').textContent = 'Il passaggio non è dentro il modulo al centro: cliccalo lì.'; return; }
+      pushUndo();
+      const m = st.module, list = m.cuts ?? [];
+      const same = (q: [number, number]) => (q[0] === a && q[1] === b) || (q[0] === b && q[1] === a);
+      m.cuts = list.some(same) ? list.filter((q) => !same(q)) : [...list, [a, b]];
+      if (editorSnap) editorSnap.changed = true;
+      update();
+      return;
+    }
     const { w } = sizeMm();
     const pxPerMm = ($('layer').querySelector('svg')!.getBoundingClientRect().width || 1) / (w + 2 * margin());
     const tol = 8 / pxPerMm;
@@ -2276,6 +2392,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       const x = (c0 + 0.5) * g.cellW, y = r0 * pa + g.cellH / 2;
       layer.insertAdjacentHTML('beforeend', `<text x="${x}" y="${y}" font-size="${fs}" text-anchor="middle" dominant-baseline="middle" style="fill:var(--rg-color-black);font-family:var(--rg-font-mono);paint-order:stroke;stroke:var(--rg-color-white);stroke-width:3px;stroke-linejoin:round">${pc.position}</text>`);
     }
+    if (reroute) {
+      const pts = [reroute.from, ...((m.forced ?? []).find((q) => q.from === reroute!.from && q.to === reroute!.to)?.via ?? []), reroute.to];
+      const xy = pts.map((v) => segmentPoints(g, modToView(v), modToView(v))[0]);
+      layer.insertAdjacentHTML('beforeend', xy.map((q, n) => `<circle cx="${q.x}" cy="${q.y}" r="${rad * (n === 0 || n === xy.length - 1 ? 0.8 : 0.55)}" fill="${n === 0 || n === xy.length - 1 ? 'none' : 'var(--rg-color-focus)'}" style="stroke:var(--rg-color-focus)" stroke-width="2" vector-effect="non-scaling-stroke"/>`).join(''));
+    }
     svg.appendChild(layer);
   }
   let editorSnap: { grid: GridSpec; cells: Cells; module: KnitModule | null; threads: Thread[]; route: RouteParams; changed: boolean } | null = null;
@@ -2317,7 +2438,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     document.title = 'Modulo · Cross-Stitch';
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="image"]')!.hidden = false;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="order"]')!.hidden = false;
-    for (const sel of ['[data-mode="group"]', '[data-mode="cut"]']) root.querySelector<HTMLButtonElement>('#modeSel ' + sel)!.hidden = true;
+    root.querySelector<HTMLButtonElement>('#modeSel [data-mode="group"]')!.hidden = true;
+    root.querySelector<HTMLButtonElement>('#modeSel [data-mode="reroute"]')!.hidden = false;
     $('moduleViewSel').hidden = true;
     $('areaBtn').closest('.cs-editbar__group')!.setAttribute('hidden', '');
 
@@ -2341,11 +2463,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     document.title = 'Cross-Stitch — RG Tools';
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="image"]')!.hidden = true;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="order"]')!.hidden = true;
+    root.querySelector<HTMLButtonElement>('#modeSel [data-mode="reroute"]')!.hidden = true;
     for (const sel of ['[data-mode="group"]', '[data-mode="cut"]']) root.querySelector<HTMLButtonElement>('#modeSel ' + sel)!.hidden = false;
     $('moduleViewSel').hidden = false;
     $('areaBtn').closest('.cs-editbar__group')!.removeAttribute('hidden');
 
-    if (mode === 'image' || mode === 'order') setMode('paint');
+    if (mode === 'image' || mode === 'order' || mode === 'reroute') setMode('paint');
     if (apply) { exitModuleView(); }
     else if (editorSnap) {
       // si torna com'era all'apertura
@@ -2448,7 +2571,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           guide: m.guide && typeof m.guide === 'object' && [m.guide.x, m.guide.y, m.guide.w, m.guide.h].every((v) => Number.isFinite(Number(v))) ? { x: Number(m.guide.x), y: Number(m.guide.y), w: Number(m.guide.w), h: Number(m.guide.h) } : null,
           drawn: !!m.drawn,
           seq: Array.isArray(m.seq) && m.seq.length === m.cols * m.rows ? m.seq.map((v) => Math.max(0, Math.round(Number(v) || 0))) : undefined,
-          starts: m.starts && typeof m.starts === 'object' ? Object.fromEntries(Object.entries(m.starts).map(([k, v]) => [Number(k), Number(v)])) : undefined }
+          starts: m.starts && typeof m.starts === 'object' ? Object.fromEntries(Object.entries(m.starts).map(([k, v]) => [Number(k), Number(v)])) : undefined,
+          cuts: Array.isArray(m.cuts) ? m.cuts.filter((q) => Array.isArray(q) && q.length === 2).map((q) => [Number(q[0]), Number(q[1])] as [number, number]) : undefined,
+          forced: Array.isArray(m.forced) ? m.forced.filter((q) => q && Array.isArray(q.via)).map((q) => ({ from: Number(q.from), to: Number(q.to), via: q.via.map(Number) })) : undefined }
         : null;
     }
     st.cuts = Array.isArray(meta.cuts) ? (meta.cuts as unknown[]).filter((c): c is [number, number, number, number] => Array.isArray(c) && c.length === 4 && c.every((x) => Number.isInteger(x))) : [];

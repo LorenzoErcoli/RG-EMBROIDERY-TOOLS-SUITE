@@ -5232,6 +5232,33 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     check('un tratto è un pezzo: numero sulle V e prima V del tratto', [modE.seq[1 * 4 + 2], modE.seq[1 * 4 + 3], modE.starts[3]], [3, 3, 1 * 4 + 2]);
   }
 
+  // PASSAGGI A MANO NEL MODULO (Lorenzo, 2026-10-02: «gestire i passaggi, modificandoli a mano dove
+  // passano… e cambiarli anche in salti quando serve»). Due pezzi dello stesso filo: il passaggio fra loro
+  // ridisegnato per un punto dato, poi trasformato in salto; e il salto si ripete in ogni copia.
+  {
+    const Cm = 12, Rm = 8;
+    const marksF = Array.from({ length: Cm * Rm }, (_, i) => { const rr = Math.floor(i / Cm), cc = i % Cm; return { stitch: 'v', color: (rr === 2 && cc >= 1 && cc <= 3) || (rr === 2 && cc >= 8 && cc <= 10) ? 1 : 0 }; });
+    const pieceF = marksF.map((m, i) => (m.color !== 1 ? 0 : i % Cm < 6 ? 1 : 2));
+    const gF = { cols: Cm, rows: Rm, cellW: 2.4, cellH: 3.5, overlapPct: 30 };
+    const Wf = LW(gF);
+    const par = { ...rg.CS_DEFAULT_ROUTE, base: { color: 0, stitch: 'v' } };
+    const mpF = { cols: Cm, rows: Rm, marks: marksF, pieceOf: pieceF, entryRow: { 1: 2 } };
+    const segs1 = (res) => res.colors.find((c) => c.color === 1).segs;
+    const libero = segs1(rg.csRouteModule(gF, mpF, par));
+    // il passaggio fra i due pezzi: dal primo vertice non-punto dopo un punto, all'ultimo prima del punto dopo
+    const runs = []; for (let i = 0; i < libero.length; i++) { if (libero[i].kind === 'stitch' || libero[i].kind === 'jump') continue; let j = i; while (j < libero.length && libero[j].kind !== 'stitch' && libero[j].kind !== 'jump') j++; runs.push({ from: libero[i].from, to: libero[j - 1].to }); i = j - 1; }
+    const inMezzo = runs.find((q) => q.from % Wf > 4 && q.to % Wf < 2 * Cm - 2 && q.from !== q.to);
+    const via = 6 * Wf + 12; // un punto lontano, in basso a metà
+    const forz = segs1(rg.csRouteModule(gF, { ...mpF, forced: [{ ...inMezzo, via: [via] }] }, par));
+    const punti = (segs) => segs.filter((sg) => sg.kind === 'stitch').map((sg) => sg.from + '-' + sg.to).join(' ');
+    check('passaggio ridisegnato: passa dal punto dato, stessi punti, filo continuo', [forz.some((sg) => sg.to === via), punti(forz) === punti(libero), forz.every((sg, i) => i === 0 || sg.from === forz[i - 1].to)], [true, true, true]);
+    const salto = segs1(rg.csRouteModule(gF, { ...mpF, cuts: [[inMezzo.from, inMezzo.to]] }, par));
+    check('salto del modulo: il passaggio diventa un salto', salto.filter((sg) => sg.kind === 'jump').length, 1);
+    const gT = { ...gF, cols: Cm * 3, rows: Rm };
+    const tiled = rg.csRouteAll(gT, rg.csTileModule(gT, { cols: Cm, rows: Rm, marks: marksF }), { ...par, modulePath: { ...mpF, cuts: [[inMezzo.from, inMezzo.to]] } });
+    check('salto del modulo: si ripete in ogni copia', tiled.colors.filter((c) => c.color === 1).reduce((n, c) => n + c.segs.filter((sg) => sg.kind === 'jump').length, 0), 3);
+  }
+
   // SALTI A MANO (Lorenzo: «eliminare i passaggi, farli diventare salti»). Un passaggio scelto
   // diventa un salto; i punti, il loro ordine e gli altri passaggi restano identici.
   const baseRc = { base: { color: 0, stitch: 'v' }, groups: gruppiRc };

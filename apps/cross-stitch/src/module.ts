@@ -359,6 +359,10 @@ export interface KnitModule {
   seq?: number[];
   /** Per pezzo: la sua prima V (dove ha cominciato il tratto): il primo pezzo di un filo ne dà l'ingresso. */
   starts?: Record<number, number>;
+  /** Salti a mano del modulo: passaggi (vertici del reticolo del modulo) che diventano salti in ogni copia. */
+  cuts?: Array<[number, number]>;
+  /** Passaggi ridisegnati a mano del modulo: da, a, e i vertici da cui deve passare. */
+  forced?: Array<{ from: number; to: number; via: number[] }>;
 }
 
 /** Il ricamo = il modulo ripetuto su tutta la griglia, a partire dall'angolo in alto a sinistra. */

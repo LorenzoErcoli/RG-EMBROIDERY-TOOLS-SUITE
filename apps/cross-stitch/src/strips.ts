@@ -90,6 +90,10 @@ export interface ModulePath {
   pieceOf?: number[];
   /** Per filo: la riga (0..rows-1) dove entra a sinistra ed esce a destra. */
   entryRow: Record<number, number>;
+  /** Salti a mano del modulo (coppie di vertici del reticolo del modulo). */
+  cuts?: Array<[number, number]>;
+  /** Passaggi ridisegnati a mano del modulo (vertici del reticolo del modulo). */
+  forced?: Array<{ from: number; to: number; via: number[] }>;
 }
 
 /** Il percorso di ogni filo sul modulo da solo (la base, se c'è, non è nel modulo: va sotto tutto). */
@@ -104,7 +108,7 @@ export function routeModule(g: GridSpec, mp: ModulePath, params: RouteParams): R
     startAt[Number(c)] = vertexIndex(mg, rr, 0);
     endAt[Number(c)] = vertexIndex(mg, rr, 2 * mp.cols);
   }
-  return routeCells(mg, cells, { ...params, base: null, strips: null, modulePath: null, groups: [], cuts: [], pieceOf: mp.pieceOf, startAt, endAt });
+  return routeCells(mg, cells, { ...params, base: null, strips: null, modulePath: null, groups: [], cuts: mp.cuts ?? [], forced: mp.forced ?? [], pieceOf: mp.pieceOf, startAt, endAt });
 }
 
 /** La riga d'ingresso proposta per ogni filo: quella dove comincia il suo primo pezzo (o la sua V più in alto). */

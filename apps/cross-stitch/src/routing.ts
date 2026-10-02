@@ -159,8 +159,14 @@ export interface RouteParams {
    */
   startAt?: Record<number, number>;
   endAt?: Record<number, number>;
+  /**
+   * PASSAGGI RIDISEGNATI A MANO (Lorenzo, 2026-10-02: «gestire i passaggi, modificandoli a mano dove
+   * passano»): il passaggio da `from` a `to` (i due vertici che collega) passa per i vertici `via`, in
+   * ordine; fra un punto e l'altro la strada più economica. Il resto del percorso non cambia.
+   */
+  forced?: Array<{ from: number; to: number; via: number[] }>;
   /** Il percorso del modulo ripetuto (strips.ts, routeModuleTiled): con questo il ricamo è il modulo ripetuto. */
-  modulePath?: { cols: number; rows: number; marks: Array<{ stitch: Stitch; color: number } | null>; pieceOf?: number[]; entryRow: Record<number, number> } | null;
+  modulePath?: { cols: number; rows: number; marks: Array<{ stitch: Stitch; color: number } | null>; pieceOf?: number[]; entryRow: Record<number, number>; cuts?: Array<[number, number]>; forced?: Array<{ from: number; to: number; via: number[] }> } | null;
   /** Il ricamo a strisce (strips.ts): righe per striscia e compensazione del ritiro. null = tutto insieme. */
   strips?: { rows: number; shiftMm?: number } | null;
   /** Mai passaggi sopra un gruppo già finito, se c'è un'altra strada (default vero). */
@@ -559,6 +565,28 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   const topLeft = (id: number) => Math.min(...endsOf(id));
 
   let at = -1; // vertice dove si trova l'ago (-1 = non ancora partito)
+  /** La strada più economica da a a b (i vertici dopo a, fino a b compreso); null se non c'è. */
+  const shortestPath = (a: number, b: number, k: number): number[] | null => {
+    if (a === b) return [];
+    for (const t of touched) { dist[t] = Infinity; prevV[t] = -1; }
+    touched.length = 0;
+    heap.clear();
+    dist[a] = 0; touched.push(a); heap.push(0, a);
+    while (heap.size) {
+      const d = heap.peekD();
+      const v = heap.pop();
+      if (d > dist[v]) continue;
+      if (v === b) break;
+      forEachNeighbour(v, k, (w, cost) => {
+        const nd = d + cost;
+        if (nd < dist[w]) { if (dist[w] === Infinity) touched.push(w); dist[w] = nd; prevV[w] = v; heap.push(nd, w); }
+      });
+    }
+    if (!(dist[b] < Infinity)) return null;
+    const path: number[] = [];
+    for (let v = b; v !== a && v >= 0; v = prevV[v]) path.push(v);
+    return path.reverse();
+  };
   const cutKey = (a: number, b: number) => (a < b ? a + ':' + b : b + ':' + a);
   const cutKeys = new Set((params.cuts ?? []).map(([a, b]) => cutKey(a, b)));
 
@@ -894,6 +922,44 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
         segs.push({ kind: 'jump', from: at, to: endV });
       }
       at = endV;
+    }
+
+    // i passaggi ridisegnati a mano: la strada passa per i punti dati, in ordine
+    if (params.forced && params.forced.length) {
+      const out: RouteSeg[] = [];
+      let i = 0;
+      while (i < segs.length) {
+        if (segs[i].kind === 'stitch' || segs[i].kind === 'jump') { out.push(segs[i]); i++; continue; }
+        let j = i;
+        while (j < segs.length && segs[j].kind !== 'stitch' && segs[j].kind !== 'jump') j++;
+        const from = segs[i].from, to = segs[j - 1].to;
+        const f = params.forced.find((q) => (q.from === from && q.to === to) || (q.from === to && q.to === from));
+        const pts = f ? [from, ...(f.from === from ? f.via : [...f.via].reverse()), to] : null;
+        let route: RouteSeg[] | null = null;
+        if (pts) {
+          route = [];
+          for (let q = 1; q < pts.length && route; q++) {
+            const leg = shortestPath(pts[q - 1], pts[q], k);
+            if (!leg) { route = null; break; }
+            let a = pts[q - 1];
+            for (const v of leg) { route.push({ kind: edgeKind(a, v, k).kind, from: a, to: v }); a = v; }
+          }
+        }
+        if (route) {
+          const tally = (list: RouteSeg[], sign: number) => {
+            for (const t of list) {
+              const mm = edgeKind(t.from, t.to, k).mm * sign;
+              if (t.kind === 'hidden') metrics.hiddenMm += mm; else if (t.kind === 'vertical') metrics.verticalMm += mm; else if (t.kind === 'retrace') metrics.retraceMm += mm; else metrics.visibleMm += mm;
+            }
+          };
+          tally(segs.slice(i, j), -1);
+          tally(route, 1);
+          out.push(...route);
+        } else for (let q = i; q < j; q++) out.push(segs[q]);
+        i = j;
+      }
+      segs.length = 0;
+      for (const sg of out) segs.push(sg);
     }
 
     // i salti a mano: il passaggio fra quei due vertici diventa un salto
