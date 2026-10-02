@@ -110,7 +110,11 @@ function smooth(data: ArrayLike<number>, W: number, H: number): Float32Array {
 }
 
 /** Bordi di colore netti lungo un asse: posizione e forza. */
-function colorEdges(sm: Float32Array, W: number, H: number, axis: 'x' | 'y'): Array<[number, number]> {
+/**
+ * centroid: il bordo al baricentro della rampa (la variazione sopra soglia) invece che al massimo: con
+ * la trama del filo la rampa è increspata e i massimi cadono ai suoi capi, ±2 px (in verticale).
+ */
+function colorEdges(sm: Float32Array, W: number, H: number, axis: 'x' | 'y', centroid = false): Array<[number, number]> {
   const dist = (i: number, j: number) => Math.hypot(sm[3 * i] - sm[3 * j], sm[3 * i + 1] - sm[3 * j + 1], sm[3 * i + 2] - sm[3 * j + 2]);
   const out: Array<[number, number]> = [];
   const along = axis === 'x' ? W : H, across = axis === 'x' ? H : W;
@@ -118,6 +122,20 @@ function colorEdges(sm: Float32Array, W: number, H: number, axis: 'x' | 'y'): Ar
   const g = new Float32Array(along);
   for (let line = 4; line < across - 4; line += 2) {
     for (let t = 1; t < along - 1; t++) g[t] = dist(at(line, t + 1), at(line, t - 1));
+    if (centroid) {
+      for (let t = 4; t < along - 4; t++) {
+        if (g[t] <= 40) continue;
+        // due bordi vicini (una V di 6 px, rampe di 5-6) fanno una rampa sola: si separano dove la
+        // variazione scende sotto il 70% del massimo
+        let sw = 0, st = 0, top = 0;
+        for (; t < along - 4 && g[t] > 40; t++) {
+          if (top && g[t] < g[t - 1] && g[t] <= g[t + 1] && g[t] < 0.7 * top) { out.push([st / sw + 0.5, top]); sw = 0; st = 0; top = 0; }
+          sw += g[t]; st += g[t] * t; top = Math.max(top, g[t]);
+        }
+        out.push([st / sw + 0.5, top]);
+      }
+      continue;
+    }
     // i massimi della variazione; su un pianoro (bordo netto dopo la media: la variazione è costante
     // per qualche pixel) un bordo solo, al centro — sull'immagine sintetica se ne contavano 3-5
     for (let t = 4; t < along - 4; t++) {
@@ -154,21 +172,89 @@ function cellsInPeriod(edges: Array<[number, number]>, per: number, minPx = 4, m
 
 /** Il passo della trama del filo lungo y: il picco della luminosità passa-alto per riga. */
 function texturePeriodY(L: Float32Array, W: number, H: number, minP: number, maxP: number): number | null {
+  const pk = texturePeaks(L, W, H, minP, maxP);
+  return pk.length ? pk[0].p : null;
+}
+/** I picchi della trama lungo y che spiccano sulla media (1,6 volte), dal più forte. */
+function texturePeaks(L: Float32Array, W: number, H: number, minP: number, maxP: number): Array<{ p: number; pw: number }> {
   // passa-alto: luminosità meno la media 13×13
   const r = 6;
   const rowsum = new Float64Array(H);
   const tmp = new Float32Array(W * H);
   for (let y = 0; y < H; y++) { let s = 0; for (let x = -r; x <= r; x++) s += L[y * W + Math.min(W - 1, Math.max(0, x))]; for (let x = 0; x < W; x++) { tmp[y * W + x] = s / (2 * r + 1); s += L[y * W + Math.min(W - 1, x + r + 1)] - L[y * W + Math.max(0, x - r)]; } }
   for (let x = 0; x < W; x++) { let s = 0; for (let y = -r; y <= r; y++) s += tmp[Math.min(H - 1, Math.max(0, y)) * W + x]; for (let y = 0; y < H; y++) { rowsum[y] += L[y * W + x] - s / (2 * r + 1); s += tmp[Math.min(H - 1, y + r + 1) * W + x] - tmp[Math.max(0, y - r) * W + x]; } }
-  let best = 0, bestP = 0, sumP = 0, k = 0;
+  const spec: Array<{ p: number; pw: number }> = [];
   for (let p = minP; p <= maxP; p += 0.02) {
     let re = 0, im = 0;
     for (let y = 0; y < H; y++) { const a = (2 * Math.PI * y) / p; re += rowsum[y] * Math.cos(a); im += rowsum[y] * Math.sin(a); }
-    const pw = Math.hypot(re, im); sumP += pw; k++;
-    if (pw > best) { best = pw; bestP = p; }
+    spec.push({ p, pw: Math.hypot(re, im) });
   }
+  if (!spec.length) return [];
+  const mean = spec.reduce((a, q) => a + q.pw, 0) / spec.length;
   // un picco vero spicca sulla media
-  return k && best > 1.6 * (sumP / k) ? bestP : null;
+  return spec.filter((q, i) => q.pw > 1.6 * mean && (i === 0 || q.pw >= spec[i - 1].pw) && (i === spec.length - 1 || q.pw >= spec[i + 1].pw)).sort((a, b) => b.pw - a.pw);
+}
+
+/**
+ * IL PASSO DELLE V IN UN PEZZO D'IMMAGINE (Lorenzo, 2026-10-02: «mi aspetto che posso selezionare il
+ * perimetro che identifica il modulo»): quanti px è una V e una riga, e dove cade un bordo vicino al
+ * centro del pezzo, dai bordi di colore. Su un passo continuo (il riquadro non è un multiplo esatto), stretto quanto basta
+ * a non perdere la fase sull'ampiezza del pezzo; il passo più largo che allinea i bordi quasi quanto
+ * il migliore (anche metà passo li allinea). null su un asse se i bordi non dicono niente.
+ */
+export function cellStep(px: Pixels, rowRatio = 1, minPx = 3, maxPx = 60): { x: { step: number; phase: number } | null; y: { step: number; phase: number } | null } {
+  const { rgba, width: W, height: H } = px;
+  if (W < 16 || H < 16) return { x: null, y: null };
+  const sm = smooth(rgba, W, H);
+  // i bordi raccolti per posizione (al mezzo pixel): poche posizioni, molto peso
+  const edgesOf = (axis: 'x' | 'y') => {
+    const bins = new Map<number, number>();
+    for (const [v0, k] of colorEdges(sm, W, H, axis, true)) { const v = Math.round(v0 * 4) / 4; bins.set(v, (bins.get(v) ?? 0) + k); }
+    return [...bins];
+  };
+  // la fase misurata dal centro del pezzo (dove sta il riquadro): con un passo appena sbagliato, dal
+  // bordo del pezzo la fase scivolava di quasi un pixel
+  const centered = (edges: Array<[number, number]>, step: number, n: number) => {
+    const ph = alignment(edges.map(([v, k]) => [v - n / 2, k] as [number, number]), step).phase;
+    return (((n / 2 + ph) % step) + step) % step;
+  };
+  /** Il passo che allinea meglio i bordi fra lo e hi (il più largo fra i quasi migliori). */
+  const scan = (edges: Array<[number, number]>, n: number, lo: number, hi: number) => {
+    if (edges.length < 6) return null;
+    hi = Math.min(hi, n / 3);
+    const res: Array<{ p: number; c: number; phase: number }> = [];
+    const dp = (p: number) => Math.max(0.005, (p * p) / (6 * n));
+    for (let p = lo; p <= hi; p += dp(p)) res.push({ p, ...alignment(edges, p) });
+    // il picco è stretto: si affina intorno ai migliori e al loro doppio (senza, il passo vero preso
+    // di lato perdeva contro la sua metà)
+    for (const q0 of [...res].sort((q, r) => r.c - q.c).slice(0, 10)) for (const c0 of [q0.p, 2 * q0.p]) {
+      if (c0 > hi) continue;
+      const d = dp(c0);
+      for (let p = c0 - 1.5 * d; p <= c0 + 1.5 * d; p += d / 12) res.push({ p, ...alignment(edges, p) });
+    }
+    const top = res.length ? Math.max(...res.map((r) => r.c)) : 0;
+    // Fair Isle: il passo vero allinea 0,18, il resto sotto 0,15
+    if (top < 0.1) return null;
+    const best = res.filter((r) => r.c >= 0.95 * top).sort((q, r) => r.p - q.p)[0];
+    return { step: best.p, phase: centered(edges, best.p, n) };
+  };
+  const x = scan(edgesOf('x'), W, minPx, maxPx);
+  if (!x) return { x: null, y: null };
+  // le righe dalla trama del filo, come in findModule: i bordi in verticale di una maglia vera sono a
+  // zig-zag (la V) e davano 6,6 o 9,4 px invece di 5,87. La trama ha più picchi (Fair Isle: due righe,
+  // 11,74 px, e uno finto a 7,15 che in certi pezzi è il più forte): una riga = un picco diviso 1..4,
+  // entro il 15% di quanto la griglia si aspetta (rowRatio = altezza di una riga / larghezza di una V),
+  // il picco più forte. Il più vicino e basta prendeva i lobi di fianco al picco vero.
+  const L = new Float32Array(W * H);
+  for (let i = 0; i < W * H; i++) L[i] = 0.3 * rgba[4 * i] + 0.59 * rgba[4 * i + 1] + 0.11 * rgba[4 * i + 2];
+  const want = x.step * rowRatio;
+  let ch: number | null = null;
+  for (const pk of texturePeaks(L, W, H, want * 0.6, want * 4.2)) {
+    for (let k = 1; k <= 4 && ch === null; k++) if (Math.abs(pk.p / k / want - 1) <= 0.15) ch = pk.p / k;
+    if (ch !== null) break;
+  }
+  const y = ch ? { step: ch, phase: centered(edgesOf('y'), ch, H) } : null;
+  return { x, y };
 }
 
 // ------------------------------------------------------------ il modulo

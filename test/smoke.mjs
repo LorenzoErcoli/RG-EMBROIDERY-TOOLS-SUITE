@@ -46,7 +46,7 @@ export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as 
 export { subGrid as csSubGrid, areaFromMm as csAreaFromMm, clampArea as csClampArea } from ${JSON.stringify(posix('apps/cross-stitch/src/area.ts'))};
 export { segmentPoints as csSegmentPoints } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { routeAll as csRouteAll, stripRanges as csStripRanges, routeModule as csRouteModule, entryRows as csEntryRows } from ${JSON.stringify(posix('apps/cross-stitch/src/strips.ts'))};
-export { findModule as csFindModule, tileModule as csTileModule, editsOnAllCopies as csEditsOnAllCopies, shiftModule as csShiftModule, seamShift as csSeamShift, resizeModule as csResizeModule, movePiece as csMovePiece, piecesOf as csPiecesOf } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
+export { findModule as csFindModule, tileModule as csTileModule, editsOnAllCopies as csEditsOnAllCopies, shiftModule as csShiftModule, seamShift as csSeamShift, resizeModule as csResizeModule, movePiece as csMovePiece, piecesOf as csPiecesOf, cellStep as csCellStep } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
 export { zonesOf as csZonesOf } from ${JSON.stringify(posix('apps/cross-stitch/src/zones.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
@@ -5230,6 +5230,28 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     const modE = { cols: 4, rows: 3, marks: Array.from({ length: 12 }, () => ({ stitch: 'v', color: 0 })) };
     rg.csEditsOnAllCopies({ rows: 6, cols: 8, cellW: 2, cellH: 3 }, modE, [{ r: 4, c: 6, mark: { stitch: 'v', color: 1 } }, { r: 4, c: 7, mark: { stitch: 'v', color: 1 } }], 3);
     check('un tratto è un pezzo: numero sulle V e prima V del tratto', [modE.seq[1 * 4 + 2], modE.seq[1 * 4 + 3], modE.starts[3]], [3, 3, 1 * 4 + 2]);
+  }
+
+  // SCEGLI MODULO (Lorenzo, 2026-10-02: «mi aspetto che posso selezionare il perimetro che identifica il
+  // modulo»): il riquadro si aggancia alle V dell'immagine. Un'immagine sintetica di V colorate a caso,
+  // 6,3 × 5,9 px, con la trama del filo in ogni riga (che in verticale increspava i bordi).
+  {
+    const W = 600, H = 600, cw = 6.3, ch = 5.9, ox = 1.5, oy = 2.2;
+    const rgba = new Uint8ClampedArray(W * H * 4);
+    let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+    const pal = [[200, 60, 40], [40, 90, 180], [230, 220, 200], [60, 60, 60]];
+    const cell = new Map();
+    for (let y = 0; y < H; y++) for (let x = 0; x < W; x++) {
+      // al centro del pixel, come un'immagine vera
+      const i = Math.floor((x + 0.5 - ox) / cw), j = Math.floor((y + 0.5 - oy) / ch), key = i + ',' + j;
+      if (!cell.has(key)) cell.set(key, pal[Math.floor(rnd() * 4)]);
+      const c = cell.get(key), t = 12 * Math.cos((2 * Math.PI * (y + 0.5 - oy)) / ch), k = 4 * (y * W + x);
+      rgba[k] = c[0] + t; rgba[k + 1] = c[1] + t; rgba[k + 2] = c[2] + t; rgba[k + 3] = 255;
+    }
+    const st = rg.csCellStep({ rgba, width: W, height: H });
+    // il bordo stimato più vicino al centro contro il bordo vero
+    const scarto = (q, o, sz) => { const est = q.phase + Math.round((300 - q.phase) / q.step) * q.step; return Math.abs(est - (o + Math.round((est - o) / sz) * sz)); };
+    check('scegli modulo: una V è 6,3 × 5,9 px, e i bordi cadono giusti (entro 0,25 px)', [Math.abs(st.x.step - cw) < 0.03, Math.abs(st.y.step - ch) < 0.03, scarto(st.x, ox, cw) < 0.25, scarto(st.y, oy, ch) < 0.25], [true, true, true, true]);
   }
 
   // PASSAGGI A MANO NEL MODULO (Lorenzo, 2026-10-02: «gestire i passaggi, modificandoli a mano dove

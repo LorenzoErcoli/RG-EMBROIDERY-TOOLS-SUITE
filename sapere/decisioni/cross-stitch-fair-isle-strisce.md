@@ -102,6 +102,19 @@ valgono in ogni copia e fanno parte del percorso del modulo. Un passaggio forzat
 vertici che collega: il motore, dopo aver scelto l'ordine, sostituisce quel passaggio con la strada più
 economica fra i punti dati; i punti cuciti non cambiano. Se il filo non collega più quei vertici
 (ordine cambiato) il forzato resta lì ma non agisce.
+
+**Scegli modulo e leggibilità** (2026-10-02; Lorenzo: «se metto un'immagine grande… non capisco come
+posso poi tagliarlo… mi aspetto che posso selezionare il perimetro che identifica il modulo»; «i tratti
+non si vedono se li metto chiari»; i numeri «enormi… non so nemmeno come spegnerli»). Il riquadro si
+aggancia alle V: il passo delle colonne dai bordi di colore (al baricentro della rampa, cercato su un
+passo continuo e affinato: il picco è stretto e la metà del passo allinea anche lei), le righe dalla
+trama del filo, il picco più forte entro il 15% di quanto la griglia si aspetta; misurati su un pezzo
+fino a 1000 px intorno al riquadro (su un pezzo piccolo sbagliava), con la fase presa dal centro.
+Sul Fair Isle: 5,963 × 5,869 px in ogni pezzo, riquadri storti agganciati a 36 × 56 V. Due tranelli
+trovati: i bordi in verticale di una maglia sono a zig-zag (davano righe di 6,6 o 9,4 px), e la
+trama ha un picco finto a 7,15 px che in certi pezzi vince su quello vero (due righe, 11,74). I tratti:
+l'immagine guida ora sta sotto i fili disegnati (sopra la base) e i tratti hanno un bordo di contrasto;
+numeri e segni a misura fissa sullo schermo, i numeri si spengono (*Numeri pezzi*).
 **Ancora aperto:** il 67% del filo in vista sta nei passaggi oltre 12 mm (32 su 116 per striscia di
 2 moduli). Farli diventare salti col taglio lo porterebbe a circa un terzo, con più tagli in macchina:
 da decidere con Lorenzo.

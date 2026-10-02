@@ -18,7 +18,7 @@ import {
   DEFAULT_ROUTE, DEFAULT_STITCH, RETRACE_PRESETS, colorPolylines, routeCells, type RetracePreset,
 } from './routing';
 import { entryRows, routeAll, routeModule, stripRanges, type ModulePath } from './strips';
-import { editsOnAllCopies, findModule, movePiece, piecesOf, resizeModule, seamShift, shiftModule, tileModule, type KnitModule } from './module';
+import { cellStep, editsOnAllCopies, findModule, movePiece, piecesOf, resizeModule, seamShift, shiftModule, tileModule, type KnitModule } from './module';
 import { DEFAULT_ZONES, type ZoneGroup } from './zones';
 import { areaFromMm, clampArea, subGrid, type TestArea } from './area';
 
@@ -35,7 +35,7 @@ const OLD_AUTOSAVE_KEY = 'rg-cross-stitch-autosave';
 const DEFAULT_THREADS: Thread[] = [{ hex: '#1a1a1a' }, { hex: '#b3261e' }];
 
 /** Gli strumenti della barra di modifica. */
-type Mode = 'pan' | 'paint' | 'fill' | 'erase' | 'group' | 'cut' | 'image' | 'order' | 'reroute';
+type Mode = 'pan' | 'paint' | 'fill' | 'erase' | 'group' | 'cut' | 'image' | 'order' | 'reroute' | 'pick';
 
 const MODE_HELP: Record<Mode, string> = {
   pan: 'Sposta: trascina per muovere la vista, rotella per ingrandire. Il ricamo non si tocca.',
@@ -45,6 +45,7 @@ const MODE_HELP: Record<Mode, string> = {
   cut: 'Salti: clicca un passaggio e diventa un salto (la macchina taglia il filo); clicca un salto fatto a mano e torna passaggio. Si tolgono tutti in 04 Passaggi.',
   reroute: 'Ridisegna passaggio: clicca un passaggio, poi i punti da cui deve passare, in ordine. Invio finisce, Esc toglie i punti appena messi, Canc rimette il passaggio automatico.',
   order: 'Ordine pezzi: clicca i pezzi del filo scelto nell’ordine in cui vuoi cucirli (il primo clic è il primo pezzo). Il primo pezzo dà l’ingresso: il filo entra lì a sinistra ed esce a destra alla stessa altezza.',
+  pick: 'Scegli modulo: sull’immagine intera trascina un riquadro intorno a un modulo. Il riquadro si aggancia alle V che trova; colonne e righe si correggono in «Griglia». Esc torna al pennello.',
   image: 'Sposta immagine: trascina l’immagine sotto la griglia finché il motivo cade giusto sulle V del modulo.',
   group: 'Gruppi: trascina un rettangolo attorno a una parte (per esempio un titolo): il filo di ogni colore la cuce tutta insieme, prima del resto e nell’ordine della lista in 04 Passaggi.',
 };
@@ -323,6 +324,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <button type="button" class="rg-segmented__item" data-mode="erase" title="Gomma (E)">Gomma</button>
             <button type="button" class="rg-segmented__item" data-mode="group" title="Gruppi (G)">Gruppi</button>
             <button type="button" class="rg-segmented__item" data-mode="cut" title="Salti (T)">Salti</button>
+            <button type="button" class="rg-segmented__item" data-mode="pick" hidden>Scegli modulo</button>
             <button type="button" class="rg-segmented__item" data-mode="image" hidden>Sposta immagine</button>
             <button type="button" class="rg-segmented__item" data-mode="order" hidden>Ordine pezzi</button>
             <button type="button" class="rg-segmented__item" data-mode="reroute" hidden>Ridisegna passaggio</button>
@@ -374,6 +376,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           <label class="rg-toggle"><input type="checkbox" id="showGrid" checked><span class="rg-toggle__track"></span><span>Griglia</span></label>
           <label class="rg-toggle"><input type="checkbox" id="showPaths" checked><span class="rg-toggle__track"></span><span>Passaggi</span></label>
           <label class="rg-toggle"><input type="checkbox" id="showGuide" checked><span class="rg-toggle__track"></span><span>Immagine</span></label>
+          <label class="rg-toggle" id="showNumsWrap" hidden><input type="checkbox" id="showNums"><span class="rg-toggle__track"></span><span>Numeri pezzi</span></label>
           <label class="rg-toggle"><input type="checkbox" id="showOrder"><span class="rg-toggle__track"></span><span>Ordine</span></label>
           <span class="cs-scrub" id="orderScrub" hidden>
             <input type="range" class="cs-scrub__range" id="orderUpTo" min="0" max="1" step="1" value="1" aria-label="Mostra fino al punto" aria-describedby="orderNow">
@@ -505,6 +508,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   let orderClicks = 0;
   /** Il trascinamento dell'immagine (strumento «Sposta immagine» dell'editor). */
   let imageDrag: { x0: number; y0: number; gx: number; gy: number } | null = null;
+  /** Scegli modulo: il riquadro che si sta trascinando (mm della tela). */
+  let pickDrag: { a: { x: number; y: number }; b: { x: number; y: number } } | null = null;
+  /** I numeri dei pezzi sulla tela dell'editor (sempre con «Ordine pezzi»). */
+  let showNums = false;
   /** Il gruppo evidenziato dalla lista (passandoci sopra col mouse). */
   let groupHover = -1;
   let result: RouteResult | null = null;
@@ -711,6 +718,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     ctx.clearRect(0, 0, canvasEl.width, canvasEl.height);
     ctx.fillStyle = BG;
     ctx.fillRect(X(0), Y(0), w * k, h * k);
+    if (editorOpen && mode === 'pick' && source && st.module) {
+      drawPickView(ctx, X, Y, k, screenPx);
+      overlay.setAttribute('viewBox', `${f(-m)} ${f(-m)} ${f(w + 2 * m)} ${f(h + 2 * m)}`);
+      overlay.innerHTML = '';
+      drawPickRect();
+      showStatus();
+      return;
+    }
     if (image && imageOpacity > 0) {
       // dall'originale a piena risoluzione (prima era la copia ridotta a 600 px per leggere i colori:
       // Lorenzo, 2026-10-01, «è sgranata e non è facile da capire»)
@@ -725,9 +740,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     }
     // i punti, colore per colore nell'ordine degli aghi (la base per prima); i fili spenti no
     ctx.lineCap = 'round';
-    const strokeLegs = (color: number, each: (fn: (r: number, c: number, stitch: Stitch) => void) => void) => {
+    const strokeLegs = (color: number, each: (fn: (r: number, c: number, stitch: Stitch) => void) => void, halo = false) => {
       if (st.threads[color]?.hidden) return;
-      ctx.strokeStyle = st.threads[color]?.hex ?? '#000000';
+      const hex = st.threads[color]?.hex ?? '#000000';
       ctx.lineWidth = threadWidth(color) * k;
       ctx.beginPath();
       each((r, c, stitch) => {
@@ -737,6 +752,17 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           ctx.lineTo(X(pb.x), Y(pb.y));
         }
       });
+      // nell'editor un bordo di contrasto (scuro sotto i fili chiari, chiaro sotto gli scuri): il tratto
+      // si legge su qualunque immagine
+      if (halo) {
+        const [hr, hg, hb] = rgbOf(hex);
+        ctx.save();
+        ctx.strokeStyle = 0.3 * hr + 0.59 * hg + 0.11 * hb > 150 ? 'rgba(26,26,26,0.75)' : 'rgba(255,255,255,0.85)';
+        ctx.lineWidth = threadWidth(color) * k + 3 * screenPx;
+        ctx.stroke();
+        ctx.restore();
+      }
+      ctx.strokeStyle = hex;
       ctx.stroke();
     };
     const base = st.route.base ?? null;
@@ -777,18 +803,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       }
     }
     if (!byOrder && base) strokeLegs(base.color, (fn) => { for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) fn(r, c, base.stitch); });
-    const byColor = new Map<number, number[]>();
-    for (const [key, mark] of st.cells) {
-      if (base && mark.color === base.color) continue; // già coperta dalla base
-      const list = byColor.get(mark.color);
-      if (list) list.push(key); else byColor.set(mark.color, [key]);
-    }
-    if (!byOrder) for (const ci of [...byColor.keys()].sort((x, y) => x - y)) {
-      strokeLegs(ci, (fn) => { for (const key of byColor.get(ci)!) { const r = Math.floor(key / g.cols); fn(r, key - r * g.cols, st.cells.get(key)!.stitch); } });
-    }
     // LA GUIDA DEL MODULO (Lorenzo: «metto un'immagine sotto… disegno colore per colore il modulo»):
-    // il pezzo d'immagine del modulo stirato su ogni copia, SOPRA i punti a metà trasparenza (sotto,
-    // un modulo pieno di V la copriva tutta). Mentre si sceglie il ritaglio: l'immagine intera.
+    // il pezzo d'immagine del modulo stirato su ogni copia, sopra la base (un modulo pieno di V la
+    // copriva tutta) e SOTTO i fili disegnati: sopra, a metà trasparenza, velava i tratti chiari fino a
+    // non leggerli (Lorenzo, 2026-10-02: «non si vedono se li metto chiari»). Mentre si sceglie il
+    // ritaglio: l'immagine intera.
     if (source && st.module) {
       ctx.save();
       ctx.beginPath(); ctx.rect(X(0), Y(0), w * k, h * k); ctx.clip();
@@ -803,6 +822,15 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         for (let y0 = 0; y0 < h; y0 += mh) for (let x0 = 0; x0 < w; x0 += mw) ctx.drawImage(source.img, gd.x, gd.y, gd.w, gd.h, X(x0), Y(y0), mw * k, mh * k);
       }
       ctx.restore();
+    }
+    const byColor = new Map<number, number[]>();
+    for (const [key, mark] of st.cells) {
+      if (base && mark.color === base.color) continue; // già coperta dalla base
+      const list = byColor.get(mark.color);
+      if (list) list.push(key); else byColor.set(mark.color, [key]);
+    }
+    if (!byOrder) for (const ci of [...byColor.keys()].sort((x, y) => x - y)) {
+      strokeLegs(ci, (fn) => { for (const key of byColor.get(ci)!) { const r = Math.floor(key / g.cols); fn(r, key - r * g.cols, st.cells.get(key)!.stitch); } }, editorOpen);
     }
     // fuori dall'area di prova il disegno resta, velato
     const area = moduleView && st.module
@@ -896,6 +924,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   /** I numeri dei passaggi nella barra di stato (o che si stanno calcolando). */
   function showStatus(): void {
+    if (editorOpen && st.module && mode === 'pick') { $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V. Trascina un riquadro intorno a un modulo dell’immagine: si aggancia alle V che trova.`; return; }
     if (editorOpen && st.module && reroute) { $('status').textContent = `Ridisegni un passaggio (filo in vista ${Math.round(editorVisible)} mm per modulo): clicca i punti da cui deve passare, in ordine. Invio finisce, Esc toglie i punti messi, Canc rimette il passaggio automatico.`; return; }
     if (editorOpen && st.module) { const g0 = realGrid(); const nP = piecesOf(st.module, activeThread).length; $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V · ${fmtNum(Math.round(st.module.cols * g0.cellW))} × ${fmtNum(Math.round(st.module.rows * rowPitch(g0)))} mm · filo in vista ${Math.round(editorVisible)} mm per modulo · filo scelto: ${nP} pezz${nP === 1 ? 'o' : 'i'}; pieno = ingresso, anello = dove finire`; return; }
     if (routing) { $('status').textContent = 'Calcolo dei passaggi…'; return; }
@@ -1069,6 +1098,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   $<HTMLInputElement>('fixedDir').addEventListener('change', (e) => { st.route.fixedDirection = (e.target as HTMLInputElement).checked; update(); });
   $<HTMLInputElement>('showPaths').addEventListener('change', (e) => { showPaths = (e.target as HTMLInputElement).checked; draw(); });
   $<HTMLInputElement>('showGuide').addEventListener('change', (e) => { showGuide = (e.target as HTMLInputElement).checked; draw(); });
+  $<HTMLInputElement>('showNums').addEventListener('change', (e) => { showNums = (e.target as HTMLInputElement).checked; draw(); });
   $<HTMLInputElement>('showOrder').addEventListener('change', (e) => { showOrder = (e.target as HTMLInputElement).checked; orderUpTo = Infinity; draw(); });
   $<HTMLInputElement>('orderUpTo').addEventListener('input', (e) => {
     const el = e.target as HTMLInputElement;
@@ -1085,7 +1115,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   $<HTMLInputElement>('showGrid').addEventListener('change', (e) => { showGrid = (e.target as HTMLInputElement).checked; draw(); });
 
   const setMode = (m: Mode) => {
+    const was = mode;
     mode = m;
+    // Scegli modulo cambia la tela (l'immagine intera al posto del modulo)
+    if ((m === 'pick') !== (was === 'pick')) { pickDrag = null; draw(); }
     if (m === 'order') orderClicks = 0;
     if (m !== 'reroute') reroute = null;
     // senza passaggi visibili non c'è niente da cliccare
@@ -1407,7 +1440,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const svg = $('layer').querySelector('svg');
     if (!svg) return;
     let rect = svg.querySelector<SVGRectElement>('#cs-brush');
-    if (!at || mode === 'pan' || mode === 'group' || mode === 'cut' || cropping) { rect?.remove(); return; }
+    if (!at || mode === 'pan' || mode === 'group' || mode === 'cut' || mode === 'pick' || mode === 'reroute' || mode === 'image' || cropping) { rect?.remove(); return; }
     if (!rect) {
       rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       rect.id = 'cs-brush';
@@ -1497,6 +1530,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       return;
     }
     if (mode === 'pan') return;
+    if (mode === 'pick' && editorOpen) {
+      const p = mmAt(e);
+      if (!p || e.button !== 0) return;
+      e.stopPropagation(); e.preventDefault();
+      pickDrag = { a: p, b: p };
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      return;
+    }
     if (mode === 'reroute') {
       const p = mmAt(e);
       if (!p || e.button !== 0) return;
@@ -1585,6 +1626,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       drawCropRect(cropDrag.a, cropDrag.b);
       return;
     }
+    if (pickDrag) {
+      e.stopPropagation();
+      const p = mmAt(e);
+      if (!p) return;
+      pickDrag.b = p;
+      drawPickRect();
+      return;
+    }
     if (imageDrag && st.module?.guide) {
       e.stopPropagation();
       const p = mmAt(e);
@@ -1629,6 +1678,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       cropDrag = null;
       try { canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
       finishCrop(d.a, d.b);
+      return;
+    }
+    if (pickDrag) {
+      e.stopPropagation();
+      const d = pickDrag;
+      pickDrag = null;
+      try { canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      finishPick(d.a, d.b);
       return;
     }
     if (imageDrag) {
@@ -1677,6 +1734,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if ((e.ctrlKey || e.metaKey) && k === 'y') { e.preventDefault(); doRedo(); return; }
     if (e.ctrlKey || e.metaKey || e.altKey) return;
     if (mode === 'reroute' && rerouteKey(e.key)) { e.preventDefault(); return; }
+    if (mode === 'pick' && e.key === 'Escape') { e.preventDefault(); setMode('paint'); return; }
     if (k === 'b') setMode('paint');
     else if (k === 'f') setMode('fill');
     else if (k === 'e') setMode('erase');
@@ -1723,8 +1781,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       const pitch = rowPitch(realGrid());
       const vpx = full.w / st.module.cols;
       st.module.guide = { x: 0, y: 0, w: full.w, h: vpx * (pitch / realGrid().cellW) * st.module.rows };
-      $('edImageInfo').textContent = `${source.name}: ${full.w} × ${full.h} px. Aggancia l'immagine alla griglia (campi qui sotto o «Sposta immagine»), oppure «Trova da solo».`;
+      $('edImageInfo').textContent = `${source.name}: ${full.w} × ${full.h} px. Trascina un riquadro intorno a un modulo dell’immagine, oppure «Trova da solo».`;
+      root.querySelector<HTMLButtonElement>('#modeSel [data-mode="pick"]')!.hidden = false;
       refreshEditorView();
+      setMode('pick');
       return;
     }
     const { img } = source;
@@ -2362,6 +2422,110 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     editorVisible = res.metrics.visibleMm;
     routeGeom = { grid: st.grid, dx: 0, dy: 0, i0: 0, j0: 0 };
   }
+  // ---- SCEGLI MODULO (Lorenzo, 2026-10-02: «se metto un'immagine grande… non capisco come posso poi
+  // tagliarlo o modificarlo. Mi aspetto che posso selezionare il perimetro che identifica il modulo»).
+  // La tela mostra l'immagine intera (in proporzione); si trascina un riquadro intorno a un modulo; il
+  // riquadro si aggancia alle V dell'immagine (passo e inizio dai bordi di colore, righe dalla trama)
+  // e il modulo prende quelle colonne e righe.
+  /** Dove sta l'immagine intera sulla tela: mm = o + px · s. */
+  function pickFit(): { s: number; ox: number; oy: number } {
+    const { w, h } = sizeMm();
+    const iw = source!.img.naturalWidth, ih = source!.img.naturalHeight;
+    const s0 = Math.min(w / iw, h / ih) * 0.96;
+    return { s: s0, ox: (w - iw * s0) / 2, oy: (h - ih * s0) / 2 };
+  }
+  function drawPickView(ctx: CanvasRenderingContext2D, X: (x: number) => number, Y: (y: number) => number, k: number, sp: number): void {
+    const { s: sc, ox, oy } = pickFit();
+    const iw = source!.img.naturalWidth, ih = source!.img.naturalHeight;
+    ctx.save();
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(source!.img, X(ox), Y(oy), iw * sc * k, ih * sc * k);
+    const gd = st.module?.guide;
+    if (gd) {
+      // fuori dal modulo velato; dentro, le V che il modulo ricopia
+      const gx = ox + gd.x * sc, gy = oy + gd.y * sc, gw = gd.w * sc, gh = gd.h * sc;
+      ctx.fillStyle = 'rgba(255,255,255,0.55)';
+      ctx.beginPath();
+      ctx.rect(X(ox), Y(oy), iw * sc * k, ih * sc * k);
+      ctx.rect(X(gx), Y(gy), gw * k, gh * k);
+      ctx.fill('evenodd');
+      const m = st.module!, cw = gw / m.cols, ch = gh / m.rows;
+      if (cw * k > 4 * sp) {
+        ctx.strokeStyle = 'rgba(26,26,26,0.35)';
+        ctx.lineWidth = sp;
+        ctx.beginPath();
+        for (let c = 1; c < m.cols; c++) { ctx.moveTo(X(gx + c * cw), Y(gy)); ctx.lineTo(X(gx + c * cw), Y(gy + gh)); }
+        for (let r0 = 1; r0 < m.rows; r0++) { ctx.moveTo(X(gx), Y(gy + r0 * ch)); ctx.lineTo(X(gx + gw), Y(gy + r0 * ch)); }
+        ctx.stroke();
+      }
+      ctx.strokeStyle = token('--rg-color-focus', '#0b57d0');
+      ctx.lineWidth = 2.5 * sp;
+      ctx.strokeRect(X(gx), Y(gy), gw * k, gh * k);
+    }
+    ctx.restore();
+  }
+  /** Il riquadro che si sta trascinando. */
+  function drawPickRect(): void {
+    const svg = $('layer').querySelector('svg');
+    if (!svg) return;
+    svg.querySelector('#cs-pick')?.remove();
+    if (!pickDrag) return;
+    const { a, b } = pickDrag;
+    svg.insertAdjacentHTML('beforeend', `<rect id="cs-pick" x="${f(Math.min(a.x, b.x))}" y="${f(Math.min(a.y, b.y))}" width="${f(Math.abs(b.x - a.x))}" height="${f(Math.abs(b.y - a.y))}" fill="none" style="stroke:var(--rg-color-focus)" stroke-width="2" stroke-dasharray="6 4" vector-effect="non-scaling-stroke" pointer-events="none"/>`);
+  }
+  /** Il riquadro scelto (mm della tela) diventa il modulo: agganciato alle V dell'immagine. */
+  function finishPick(a: { x: number; y: number }, b: { x: number; y: number }): void {
+    drawPickRect();
+    const m0 = st.module;
+    if (!source || !m0) return;
+    const { s: sc, ox, oy } = pickFit();
+    const iw = source.img.naturalWidth, ih = source.img.naturalHeight;
+    const toPx = (q: { x: number; y: number }) => ({ x: Math.min(iw, Math.max(0, (q.x - ox) / sc)), y: Math.min(ih, Math.max(0, (q.y - oy) / sc)) });
+    const pa = toPx(a), pb = toPx(b);
+    const rx = Math.min(pa.x, pb.x), ry = Math.min(pa.y, pb.y), rw = Math.abs(pb.x - pa.x), rh = Math.abs(pb.y - pa.y);
+    if (rw < 8 || rh < 8) { $('edImageInfo').textContent = 'Riquadro troppo piccolo: trascina intorno a un modulo intero.'; return; }
+    // il passo delle V su un pezzo grande intorno al riquadro (su un pezzo piccolo sbaglia), a piena risoluzione
+    const side = 1000;
+    const zx = Math.max(0, Math.min(iw - Math.min(iw, side), Math.round(rx + rw / 2 - side / 2)));
+    const zy = Math.max(0, Math.min(ih - Math.min(ih, side), Math.round(ry + rh / 2 - side / 2)));
+    const zw = Math.min(iw, side), zh = Math.min(ih, side);
+    const cnv = document.createElement('canvas');
+    cnv.width = zw; cnv.height = zh;
+    const cx = cnv.getContext('2d', { willReadFrequently: true })!;
+    cx.drawImage(source.img, zx, zy, zw, zh, 0, 0, zw, zh);
+    const g0 = realGrid(), aspect = rowPitch(g0) / g0.cellW;
+    const st0 = cellStep({ rgba: cx.getImageData(0, 0, zw, zh).data, width: zw, height: zh }, aspect);
+    let cols: number, rows: number, sx: number, sy: number, x0: number, y0: number;
+    const snap = (v: number, phase: number, step: number) => phase + Math.round((v - phase) / step) * step;
+    if (st0.x) {
+      sx = st0.x.step;
+      cols = Math.max(2, Math.round(rw / sx));
+      x0 = snap(rx, zx + st0.x.phase, sx);
+      sy = st0.y ? st0.y.step : sx * aspect;
+      rows = Math.max(2, Math.round(rh / sy));
+      y0 = st0.y ? snap(ry, zy + st0.y.phase, sy) : ry;
+    } else {
+      // le V non si trovano: il riquadro com'è, con le colonne di adesso
+      cols = m0.cols; sx = rw / cols;
+      rows = Math.max(2, Math.round(rh / (sx * aspect))); sy = rh / rows;
+      x0 = rx; y0 = ry;
+    }
+    pushUndo();
+    const empty = !(m0.seq ?? []).some((v) => v > 0) && m0.marks.every((mk) => !mk || mk.color === 0);
+    if (cols !== m0.cols || rows !== m0.rows) {
+      st.module = resizeModule(m0, cols, rows, { stitch: 'v', color: 0 });
+      st.route.strips = { rows, shiftMm: st.route.strips?.shiftMm ?? 0 };
+    }
+    st.module!.guide = { x: x0, y: y0, w: cols * sx, h: rows * sy };
+    // un modulo ancora vuoto prende i colori del pezzo scelto
+    if (empty) { paletteFromGuide(); buildThreads(); }
+    const r2 = (v: number) => fmtNum(Math.round(v * 100) / 100);
+    $('edImageInfo').textContent = st0.x
+      ? `Modulo ${cols} × ${rows} V; una V è ${r2(sx)} × ${r2(sy)} px${st0.y ? '' : ' (le righe non si leggono dalla trama: come le colonne)'}. Se il numero non torna, correggi Colonne e Righe in «Griglia»; per un altro modulo, trascina di nuovo.`
+      : `Nell’immagine non trovo le V: il modulo è il riquadro com’è, ${cols} × ${rows} V. Correggi Colonne e Righe in «Griglia».`;
+    setMode('paint');
+    refreshEditorView();
+  }
   /** I segni dell'editor per il filo scelto: ingresso (pieno) a sinistra, arrivo (anello) a destra, numeri dei pezzi. */
   function drawEditorMarks(): void {
     const svg = $('layer').querySelector('svg');
@@ -2375,7 +2539,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     layer.id = 'cs-ed-marks';
     layer.setAttribute('pointer-events', 'none');
     const col = st.threads[activeThread]?.hex ?? '#000';
-    const rad = Math.max(g.cellW, pa) * 0.9;
+    // misure fisse sullo schermo (in mm erano enormi: Lorenzo, 2026-10-02, «sono enormi e non riesco a
+    // vedere sotto»)
+    const { w: wmm } = sizeMm();
+    const pxPerMm = (svg.getBoundingClientRect().width || 1) / (wmm + 2 * margin());
+    const rad = 6 / pxPerMm;
     const row = editorEntry[activeThread];
     if (row !== undefined) {
       const y = (R + row) * pa; // il vertice in alto della riga d'ingresso
@@ -2385,12 +2553,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         + `<circle cx="${x1}" cy="${y}" r="${rad * 1.3}" fill="none" style="stroke:var(--rg-color-focus)" stroke-width="3" vector-effect="non-scaling-stroke"/>`
         + `<circle cx="${x1}" cy="${y}" r="${rad * 0.45}" fill="${col}"/>`);
     }
-    const fs = Math.max(3, g.cellW * 1.6);
-    for (const pc of piecesOf(m, activeThread)) {
+    const fs = 11 / pxPerMm;
+    if (showNums || mode === 'order') for (const pc of piecesOf(m, activeThread)) {
       if (pc.start < 0) continue;
       const r0 = Math.floor(pc.start / C) + R, c0 = (pc.start % C) + C;
       const x = (c0 + 0.5) * g.cellW, y = r0 * pa + g.cellH / 2;
-      layer.insertAdjacentHTML('beforeend', `<text x="${x}" y="${y}" font-size="${fs}" text-anchor="middle" dominant-baseline="middle" style="fill:var(--rg-color-black);font-family:var(--rg-font-mono);paint-order:stroke;stroke:var(--rg-color-white);stroke-width:3px;stroke-linejoin:round">${pc.position}</text>`);
+      layer.insertAdjacentHTML('beforeend', `<text x="${x}" y="${y}" font-size="${fs}" text-anchor="middle" dominant-baseline="middle" style="fill:var(--rg-color-black);font-family:var(--rg-font-mono);font-weight:600;paint-order:stroke;stroke:var(--rg-color-white);stroke-width:2.5px;stroke-linejoin:round">${pc.position}</text>`);
     }
     if (reroute) {
       const pts = [reroute.from, ...((m.forced ?? []).find((q) => q.from === reroute!.from && q.to === reroute!.to)?.via ?? []), reroute.to];
@@ -2437,6 +2605,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $('stageActions').hidden = true; $('editorActions').hidden = false;
     document.title = 'Modulo · Cross-Stitch';
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="image"]')!.hidden = false;
+    root.querySelector<HTMLButtonElement>('#modeSel [data-mode="pick"]')!.hidden = !source;
+    $('showNumsWrap').hidden = false;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="order"]')!.hidden = false;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="group"]')!.hidden = true;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="reroute"]')!.hidden = false;
@@ -2462,13 +2632,15 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $('stageActions').hidden = false; $('editorActions').hidden = true;
     document.title = 'Cross-Stitch — RG Tools';
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="image"]')!.hidden = true;
+    root.querySelector<HTMLButtonElement>('#modeSel [data-mode="pick"]')!.hidden = true;
+    $('showNumsWrap').hidden = true;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="order"]')!.hidden = true;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="reroute"]')!.hidden = true;
     for (const sel of ['[data-mode="group"]', '[data-mode="cut"]']) root.querySelector<HTMLButtonElement>('#modeSel ' + sel)!.hidden = false;
     $('moduleViewSel').hidden = false;
     $('areaBtn').closest('.cs-editbar__group')!.removeAttribute('hidden');
 
-    if (mode === 'image' || mode === 'order' || mode === 'reroute') setMode('paint');
+    if (mode === 'image' || mode === 'order' || mode === 'reroute' || mode === 'pick') setMode('paint');
     if (apply) { exitModuleView(); }
     else if (editorSnap) {
       // si torna com'era all'apertura

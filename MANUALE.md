@@ -648,7 +648,13 @@ che si ripete, per esempio un Fair Isle. Il titolo diventa *Modulo*; a destra **
 le modifiche fatte nell'editor; chiede conferma se hai cambiato qualcosa) e **Ripeti nel ricamo** (il
 ricamo diventa il modulo ripetuto, a strisce alte un modulo). Nell'editor **i passaggi non si
 calcolano**, così ogni tocco è immediato: si vedono tornando al ricamo.
-- **01 Immagine**: *Carica immagine…*; **Trova da solo** (qualche secondo): il tool trova il motivo che
+- **01 Immagine**: *Carica immagine…*: la tela mostra l'**immagine intera** con lo strumento **Scegli
+  modulo**: trascina un riquadro intorno a un modulo. Il riquadro si **aggancia alle V** dell'immagine
+  (il tool misura quanti pixel è una V e una riga e dove cadono i bordi) e il modulo prende quelle
+  colonne e righe; il pezzo fuori resta velato, dentro si vedono le V. Se il modulo è ancora vuoto,
+  prende anche i colori del pezzo. Per scegliere un altro pezzo, di nuovo *Scegli modulo* e un altro
+  riquadro; se il conto delle V non torna, correggi *Colonne* e *Righe* in *02 Griglia*. **Esc** torna
+  al pennello. Oppure **Trova da solo** (qualche secondo): il tool trova il motivo che
   si ripete, aggancia l'immagine alla griglia e ricopia il colore di ogni V. Se il motivo è fatto di copie
   uguali, il modulo è una copia sola; i **colori finti** (un colore fatto quasi solo di V isolate lungo
   i bordi: la sfumatura fra due colori) vengono tolti. *Colori dall'immagine* propone i fili dal pezzo
@@ -659,8 +665,9 @@ calcolano**, così ogni tocco è immediato: si vedono tornando al ricamo.
   modulo (*Inizio x, y*). Si regola anche col nuovo strumento **Sposta immagine** (tasto M):
   trascinando, l'immagine scorre sotto la griglia finché il motivo cade giusto sulle V.
 - **Fili**: gli stessi del ricamo; la *Base* (il filo che riempie tutto sotto) si sceglie lì.
-- Sulla tela: il modulo al centro con le copie vicine, l'immagine **sopra** i punti a metà
-  trasparenza (*Vista → Immagine*), la griglia. Pennello, riempi e gomma cambiano il modulo; le frecce
+- Sulla tela: il modulo al centro con le copie vicine, l'immagine sopra la base e **sotto** i fili
+  disegnati (*Vista → Immagine*), la griglia. I tratti hanno un bordo di contrasto (scuro sotto i fili
+  chiari, chiaro sotto gli scuri), così si leggono su qualunque immagine. Pennello, riempi e gomma cambiano il modulo; le frecce
   di *Inizio* e *Giunture sulla base* come nella vista Modulo.
 
 **Il percorso del modulo** (nell'editor). Ogni tratto di pennello o riempimento è un **pezzo**, numerato
@@ -668,7 +675,9 @@ nell'ordine in cui lo disegni, e il filo cuce i pezzi di ogni colore in quell'or
 le V dai pezzi). Il filo **entra sul lato sinistro** del modulo all'altezza dove hai cominciato il suo
 primo pezzo, e **finisce sul lato destro alla stessa altezza**: è l'ingresso della copia accanto, così
 le copie si concatenano senza passaggi in mezzo. Per il filo scelto (in *Filo* nella barra) la tela
-mostra un **punto pieno** all'ingresso, un **anello** dove deve finire, e sui pezzi i loro numeri;
+mostra un **punto pieno** all'ingresso e un **anello** dove deve finire; i **numeri dei pezzi** si
+accendono con *Vista → Numeri pezzi* (con *Ordine pezzi* si vedono sempre). Segni e numeri hanno
+una misura fissa sullo schermo: non coprono il disegno a nessuno zoom;
 i passaggi del modulo si vedono subito (si calcolano sul modulo solo). Nella barra di stato: il filo
 in vista per modulo. Per cambiare l'ordine: strumento **Ordine pezzi**, poi clicca i pezzi nell'ordine
 in cui vuoi cucirli (il primo clic è il primo pezzo; cambiando filo si ricomincia da 1). Nel ricamo il
