@@ -573,7 +573,10 @@ export function connectClippedChunksAlongBoundary(
   for (const chunk of chunks) {
     if (!chunk.points.length) continue;
     if (!connected.length) {
-      connected.push(...chunk.points);
+      // a ciclo, non `push(...)`: lo spread passa un argomento per punto, e su un pezzo grande (440 mm
+      // di punto canvas, col vuoto attraversato a impuntura il filo non si spezza più) un tratto
+      // supera i centomila punti e il motore si fermava con "Maximum call stack size exceeded".
+      for (const point of chunk.points) connected.push(point);
       continue;
     }
 
@@ -733,61 +736,267 @@ export function importedVoidRings(options: BoundaryOptions): Point[][] {
  * esce. Il taglio sul vuoto si disattiva a monte (chi chiama toglie i buchi dalla sagoma di ritaglio),
  * altrimenti l'impuntura appena messa verrebbe tolta subito dopo.
  */
-export function runningStitchInVoids<T extends Point>(points: T[], holes: Point[][], stitchMm: number): T[] {
+export function runningStitchInVoids<T extends Point>(points: T[], holes: Point[][], stitchMm: number, minStitchMm = 0): T[] {
   if (!(stitchMm > 0) || !holes.length || points.length < 2) return points;
   const dentro = (point: Point) => holes.some((hole) => pointInPolygon(point, hole));
+  // L'ASSE di ogni colonna: la x media dei suoi punti. Le impunture stanno lì, una per colonna e a passo
+  // regolare — non dove lo zig-zag tocca la linea, che cade in un punto qualunque della larghezza della
+  // colonna e dava righe a distanze irregolari (Lorenzo, 2026-10-01: «vorrei che fosse tutto ordinato»).
+  const somme = new Map<number, { x: number; n: number }>();
+  for (const point of points) {
+    const colonna = (point as { columnIndex?: number }).columnIndex;
+    if (colonna === undefined) continue;
+    const acc = somme.get(colonna) ?? { x: 0, n: 0 };
+    acc.x += point.x; acc.n++;
+    somme.set(colonna, acc);
+  }
+  const asseDi = (corsa: T[]): number | undefined => {
+    const conta = new Map<number, number>();
+    for (const point of corsa) {
+      const colonna = (point as { columnIndex?: number }).columnIndex;
+      if (colonna !== undefined) conta.set(colonna, (conta.get(colonna) ?? 0) + 1);
+    }
+    let meglio: number | undefined, quanti = 0;
+    for (const [colonna, n] of conta) if (n > quanti) { meglio = colonna; quanti = n; }
+    const acc = meglio === undefined ? undefined : somme.get(meglio);
+    return acc ? acc.x / acc.n : undefined;
+  };
   const out: T[] = [];
+  /** I capi delle righe già messe: testa e fondo di ogni verticale. */
+  const capiRiga = new WeakSet<object>();
   let index = 0;
   while (index < points.length) {
     if (!dentro(points[index])) { out.push(points[index++]); continue; }
     let end = index;
     while (end < points.length && dentro(points[end])) end++;
-    // da dove si entra (l'ultimo punto fuori, o il primo della corsa) a dove si esce (il primo fuori)
-    const from = out[out.length - 1] ?? points[index];
-    const to = points[end] ?? points[points.length - 1];
     const modello = points[index];
-    const dritta = retta(from, to, stitchMm, modello);
-    // un vuoto a C o a L: la retta uscirebbe dall'area e si poserebbe sopra il pattern di fuori.
-    // Allora l'impuntura segue la strada che faceva il filo, ricampionata allo stesso passo. Si giudica
-    // sulla corda fra il PRIMO e l'ULTIMO punto dentro: from e to stanno fuori per definizione (sono i
-    // punti di entrata e uscita), e su un vuoto convesso darebbero sempre "esce".
-    const fuoriDalVuoto = retta(points[index], points[end - 1], Math.max(0.5, stitchMm / 2), modello)
-      .some((p) => !dentro(p));
-    const dentroIlVuoto = fuoriDalVuoto
-      ? ricampiona([from, ...points.slice(index, end), to], stitchMm, modello)
-      : dritta;
-    for (const p of dentroIlVuoto) out.push(p);
-    if (end >= points.length) out.push({ ...modello, x: to.x, y: to.y });
-    index = end;
+    const hole = holes.find((h) => pointInPolygon(modello, h))!;
+    // I DUE PUNTI DI CONTATTO con la linea del vuoto (Lorenzo, 2026-10-01: «nel punto di contatto con la
+    // linea dell'area vuota inizi subito l'imbastitura»): dove il filo attraversa davvero la linea, non
+    // l'ultimo punto fuori — che può stare un punto intero più in là, e la retta partiva storta da lì.
+    const prima = out[out.length - 1];
+    const dopo = points[end];
+    const entrata = prima ? contattoSulBordo(prima, points[index], hole, "primo") ?? points[index] : points[index];
+    const uscita = dopo ? contattoSulBordo(points[end - 1], dopo, hole, "ultimo") ?? points[end - 1] : points[end - 1];
+    const corsa = points.slice(index, end);
+    const tratto = sfoltisci(impunturaNelVuoto(entrata, uscita, corsa, hole, stitchMm, asseDi(corsa)), minStitchMm);
+    // IL PUNTO MINIMO non deve mangiare il punto sulla linea: la pulizia che viene dopo toglierebbe quello,
+    // e il filo scavalcherebbe il bordo senza toccarlo (125 volte sul davanti LASER-AI). Si toglie invece
+    // l'ultimo punto del pattern prima della linea, e il primo dopo.
+    // ...ma i capi di una riga già messa (role "boundary") non si tolgono mai: quando il filo, finita una
+    // riga, ritocca subito la linea, si toglie il primo punto del tratto nuovo, non il capo della riga.
+    // Fra due punti fissi troppo vicini vince il CAPO DI UNA RIGA (testa o fondo della verticale): la
+    // pulizia che viene dopo toglierebbe il secondo dei due, e se è la testa la riga parte storta.
+    const fisso = (p: Point) => capiRiga.has(p) || (p as { role?: string }).role === "boundary";
+    while (tratto.length > 1 && out.length > 0 && distance(out[out.length - 1], tratto[0].p) < minStitchMm) {
+      const ultimoMesso = out[out.length - 1];
+      if (out.length > 1 && !fisso(ultimoMesso)) out.pop();
+      else if (!tratto[0].fisso) tratto.shift();
+      else if (out.length > 1 && !capiRiga.has(ultimoMesso)) out.pop();
+      else if (!tratto[0].capo || distance(ultimoMesso, tratto[0].p) < 0.05) tratto.shift();
+      else break;
+    }
+    for (const t of tratto) {
+      // i capi delle righe sono "structural": la pulizia del bordo (`cleanupBoundaryConnectedPath`) toglie i
+      // punti "boundary" a meno del punto minimo dal precedente, e lì toglieva proprio la testa della riga
+      const punto: T = { ...modello, x: t.p.x, y: t.p.y, role: t.capo ? "structural" : t.fisso ? "boundary" : "subdivision" };
+      if (t.capo) capiRiga.add(punto);
+      out.push(punto);
+    }
+    const ultimo = tratto[tratto.length - 1].p;
+    let dopoIlVuoto = end;
+    while (dopoIlVuoto < points.length - 1 && !dentro(points[dopoIlVuoto]) && distance(points[dopoIlVuoto], ultimo) < minStitchMm) dopoIlVuoto++;
+    index = dopoIlVuoto;
   }
   return out;
 }
 
-/** I punti intermedi di una retta, al passo dato (gli estremi li mette chi chiama). */
-function retta<T extends Point>(from: Point, to: Point, stitchMm: number, modello: T): T[] {
-  const span = Math.hypot(to.x - from.x, to.y - from.y);
-  const steps = Math.max(1, Math.round(span / stitchMm));
-  const out: T[] = [];
-  for (let k = 1; k < steps; k++) {
-    out.push({ ...modello, x: from.x + ((to.x - from.x) * k) / steps, y: from.y + ((to.y - from.y) * k) / steps });
+/**
+ * La strada dell'impuntura dentro un vuoto, da `entrata` a `uscita` (esclusi): punti intermedi al passo.
+ *
+ * «Tutto ordinato: la linea dell'imbastitura sia perpendicolare precisa fino all'altra parte» (Lorenzo,
+ * 2026-10-01). Le colonne del pattern sono verticali: dall'entrata si scende (o si sale) DRITTI fino alla
+ * linea dall'altra parte, e da lì si cammina SULLA linea fino a dove il pattern riprende. Così tutte le
+ * impunture sono parallele e partono e arrivano sul bordo, invece di essere corde storte da un punto
+ * qualunque della colonna all'altro.
+ *
+ * Due casi in cui la verticale non è la strada giusta:
+ * - il filo entra ed esce dalla STESSA parte (sfiora il vuoto vicino a una punta): la verticale
+ *   attraverserebbe tutto il vuoto per niente → si va dritti da entrata a uscita;
+ * - il vuoto è CONCAVO (a C, a L) e la verticale esce dall'area → si segue la strada che faceva il filo,
+ *   ricampionata allo stesso passo.
+ */
+/** Un punto della strada nel vuoto: `fisso` non si toglie per il punto minimo; `capo` = testa o fondo di una riga. */
+type Tappa = { p: Point; fisso: boolean; capo?: boolean };
+
+function impunturaNelVuoto(
+  entrata: Point, uscita: Point, corsa: Point[], hole: Point[], stitchMm: number, asse?: number,
+): Tappa[] {
+  const verso = Math.sign(uscita.y - entrata.y) || Math.sign((corsa.at(-1)?.y ?? entrata.y) - entrata.y) || 1;
+  // la testa della riga: dove l'asse della colonna incontra la linea, dalla parte dell'entrata
+  const testa = (asse !== undefined ? puntoSulBordoAllaX(hole, asse, entrata) : undefined) ?? entrata;
+  const fondo = verticaleFinoAlBordo(testa, verso, hole);
+  const resta = (a: Point, b: Point) => campionaRetta(a, b, Math.max(0.5, stitchMm / 2)).every((p) => pointInPolygon(p, hole));
+  const libero = (p: Point): Tappa => ({ p, fisso: false });
+  if (fondo && Math.abs(uscita.y - entrata.y) >= 0.5 * Math.abs(fondo.y - testa.y) && resta(testa, fondo)) {
+    // entrata e uscita sono sulla linea ma si possono togliere; testa e fondo no: sono i capi della riga
+    const inizio = lungoIlBordo(hole, entrata, testa);
+    const fine = lungoIlBordo(hole, fondo, uscita);
+    return [
+      libero(entrata),
+      ...(inizio.length > 1 ? ripercorriLaLinea(inizio, stitchMm) : []),
+      { p: testa, fisso: true, capo: true },
+      ...campionaRetta(testa, fondo, stitchMm).map(libero),
+      { p: fondo, fisso: true, capo: true },
+      ...(fine.length > 1 ? ripercorriLaLinea(fine, stitchMm) : []),
+      libero(uscita),
+    ];
+  }
+  // la colonna SFIORA il vuoto (entra ed esce dalla stessa parte, di solito vicino a un angolo o a una
+  // punta): si resta SULLA linea, invece di tagliare l'angolo con una corda storta dentro il vuoto
+  const sullaLinea = lungoIlBordo(hole, entrata, uscita);
+  const lunghezza = (way: Point[]) => way.reduce((t, p, i) => (i ? t + distance(way[i - 1], p) : 0), 0);
+  if (sullaLinea.length > 1 && lunghezza(sullaLinea) <= 3 * distance(entrata, uscita) + stitchMm) {
+    // sulla linea gli spigoli contano più dei punti d'entrata e d'uscita: se il punto minimo deve
+    // togliere qualcosa, toglie quelli, e il filo gira l'angolo invece di tagliarlo
+    return [libero(entrata), ...ripercorriLaLinea(sullaLinea, stitchMm), libero(uscita)];
+  }
+  const dentro = resta(entrata, uscita) ? campionaRetta(entrata, uscita, stitchMm) : ricampionaPunti([entrata, ...corsa, uscita], stitchMm);
+  return [{ p: entrata, fisso: true }, ...dentro.map(libero), { p: uscita, fisso: true }];
+}
+
+/**
+ * Toglie dalla strada i punti più vicini del punto minimo, MAI quelli fissi (i capi della riga). Così il
+ * punto minimo vale anche dentro il vuoto senza spostare l'impuntura dalla linea.
+ */
+function sfoltisci(tappe: Tappa[], minStitchMm: number): Tappa[] {
+  if (!(minStitchMm > 0)) return tappe;
+  const vicini = (a: Tappa, b: Tappa) => distance(a.p, b.p) < minStitchMm;
+  let out = tappe.filter((t, i) => i === 0 || distance(t.p, tappe[i - 1].p) > 1e-6);
+  let cambiato = true;
+  while (cambiato && out.length > 2) {
+    cambiato = false;
+    for (let i = 0; i + 1 < out.length; i++) {
+      if (!vicini(out[i], out[i + 1])) continue;
+      const via = !out[i].fisso ? i : !out[i + 1].fisso ? i + 1 : -1;
+      if (via < 0) continue;
+      out = out.filter((_, k) => k !== via);
+      cambiato = true;
+      break;
+    }
   }
   return out;
 }
 
-/** La stessa strada, ripercorsa a punti del passo dato (gli estremi li mette chi chiama). */
-function ricampiona<T extends Point>(way: Point[], stitchMm: number, modello: T): T[] {
+/** Dove la verticale x = `x` taglia la linea dell'anello, il punto più vicino a `vicino`. */
+function puntoSulBordoAllaX(ring: Point[], x: number, vicino: Point): Point | undefined {
+  let best: Point | undefined, dist = Infinity;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const a = ring[i], b = ring[i + 1];
+    if ((a.x - x) * (b.x - x) > 0 || a.x === b.x) continue;
+    const y = a.y + ((x - a.x) * (b.y - a.y)) / (b.x - a.x);
+    const d = Math.hypot(x - vicino.x, y - vicino.y);
+    if (d < dist) { dist = d; best = { x, y }; }
+  }
+  return best;
+}
+
+/** Il punto dove il segmento a→b attraversa il bordo dell'anello: il primo o l'ultimo lungo il segmento. */
+function contattoSulBordo(a: Point, b: Point, ring: Point[], quale: "primo" | "ultimo"): Point | undefined {
+  let best: number | undefined;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const t = segmentIntersectionT(a, b, ring[i], ring[i + 1]);
+    if (t === undefined) continue;
+    if (best === undefined || (quale === "primo" ? t < best : t > best)) best = t;
+  }
+  return best === undefined ? undefined : pointOnSegment(a, b, best);
+}
+
+/** Da `p` sul bordo, dritti in verticale (verso +1 = in giù) fino al bordo dall'altra parte. */
+function verticaleFinoAlBordo(p: Point, verso: number, ring: Point[]): Point | undefined {
+  let best: number | undefined;
+  for (let i = 0; i < ring.length - 1; i++) {
+    const a = ring[i], b = ring[i + 1];
+    if ((a.x - p.x) * (b.x - p.x) > 0 || a.x === b.x) continue;
+    const y = a.y + ((p.x - a.x) * (b.y - a.y)) / (b.x - a.x);
+    const d = (y - p.y) * verso;
+    if (d > 0.05 && (best === undefined || d < best)) best = d;
+  }
+  return best === undefined ? undefined : { x: p.x, y: p.y + best * verso };
+}
+
+/** La strada più corta SULLA linea dell'anello da `da` ad `a` (tutti e due sul bordo), coi vertici in mezzo. */
+function lungoIlBordo(ring: Point[], da: Point, a: Point): Point[] {
+  if (Math.hypot(a.x - da.x, a.y - da.y) < 0.05) return [];
+  const n = ring.length - 1;
+  const cum = [0];
+  for (let i = 1; i <= n; i++) cum.push(cum[i - 1] + Math.hypot(ring[i].x - ring[i - 1].x, ring[i].y - ring[i - 1].y));
+  const L = cum[n];
+  const posizione = (p: Point) => {
+    let best = { s: 0, d: Infinity, lato: 0 };
+    for (let i = 0; i < n; i++) {
+      const c = closestPointOnSegment(p, ring[i], ring[i + 1]);
+      if (c.distance < best.d) best = { s: cum[i] + c.t * (cum[i + 1] - cum[i]), d: c.distance, lato: i };
+    }
+    return best;
+  };
+  const p0 = posizione(da), p1 = posizione(a);
+  const avanti = ((p1.s - p0.s) % L + L) % L;
+  const out: Point[] = [da];
+  if (avanti <= L - avanti) {
+    for (let k = 1, i = p0.lato; k <= n && i !== p1.lato; k++) { i = (i + 1) % n; out.push(ring[i]); }
+  } else {
+    for (let k = 1, i = p0.lato; k <= n && i !== p1.lato; k++) { out.push(ring[i]); i = (i - 1 + n) % n; }
+  }
+  out.push(a);
+  return out;
+}
+
+/**
+ * I punti intermedi di una strada SULLA linea del vuoto: ogni vertice resta (gli spigoli non si tagliano)
+ * e i lati lunghi si dividono al passo. I vertici fitti di una curva li dirada poi il punto minimo.
+ */
+function ripercorriLaLinea(way: Point[], stitchMm: number): Tappa[] {
+  const out: Tappa[] = [];
+  for (let i = 1; i < way.length; i++) {
+    for (const p of campionaRetta(way[i - 1], way[i], stitchMm)) out.push({ p, fisso: false });
+    if (i < way.length - 1) out.push({ p: way[i], fisso: svolta(way[i - 1], way[i], way[i + 1]) > SPIGOLO_DELLA_LINEA });
+  }
+  return out;
+}
+
+/** Oltre questa svolta un vertice della linea è uno SPIGOLO, e non si toglie (gradi). */
+const SPIGOLO_DELLA_LINEA = 30;
+
+function svolta(a: Point, b: Point, c: Point): number {
+  const a1 = Math.atan2(b.y - a.y, b.x - a.x), a2 = Math.atan2(c.y - b.y, c.x - b.x);
+  let d = Math.abs(a2 - a1);
+  if (d > Math.PI) d = 2 * Math.PI - d;
+  return (d * 180) / Math.PI;
+}
+
+/** I punti intermedi della retta a→b, divisa in parti uguali vicine al passo. */
+function campionaRetta(a: Point, b: Point, stitchMm: number): Point[] {
+  const steps = Math.max(1, Math.round(Math.hypot(b.x - a.x, b.y - a.y) / stitchMm));
+  const out: Point[] = [];
+  for (let k = 1; k < steps; k++) out.push({ x: a.x + ((b.x - a.x) * k) / steps, y: a.y + ((b.y - a.y) * k) / steps });
+  return out;
+}
+
+/** I punti intermedi di una strada, ripercorsa a passo uguale; l'ultimo vertice resta fuori (lo mette chi chiama). */
+function ricampionaPunti(way: Point[], stitchMm: number): Point[] {
   const cum = [0];
   for (let i = 1; i < way.length; i++) cum.push(cum[i - 1] + Math.hypot(way[i].x - way[i - 1].x, way[i].y - way[i - 1].y));
   const total = cum[cum.length - 1];
   if (!(total > 0)) return [];
   const steps = Math.max(1, Math.round(total / stitchMm));
-  const out: T[] = [];
+  const out: Point[] = [];
   let seg = 1;
   for (let k = 1; k < steps; k++) {
     const s = (total * k) / steps;
     while (seg < way.length - 1 && cum[seg] < s) seg++;
     const t = (s - cum[seg - 1]) / ((cum[seg] - cum[seg - 1]) || 1);
-    out.push({ ...modello, x: way[seg - 1].x + (way[seg].x - way[seg - 1].x) * t, y: way[seg - 1].y + (way[seg].y - way[seg - 1].y) * t });
+    out.push({ x: way[seg - 1].x + (way[seg].x - way[seg - 1].x) * t, y: way[seg - 1].y + (way[seg].y - way[seg - 1].y) * t });
   }
   return out;
 }

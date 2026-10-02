@@ -17,6 +17,10 @@ const PRESET_KEY = 'pattern-grammar-engine-presets';
  * Cosa può fare una tinta del cartamodello. «Area vuota» è R5: dentro non si ricama.
  * «Area di scarico»: dentro si ricama con meno passate (di solito per il montaggio); non ritaglia.
  */
+/** Un contorno con un ruolo, aperto meno di così, si chiude da solo (mm). */
+const CHIUSURA_MAX_MM = 5;
+const fmtMm = (v: number) => v.toLocaleString('it-IT', { maximumFractionDigits: 1 });
+
 type BoundaryRole = '' | 'confine' | 'vuoto' | 'scarico';
 const BOUNDARY_ROLES: [BoundaryRole, string][] = [
   ['', '— (ignora)'],
@@ -69,6 +73,10 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
   /** Ruolo di ogni tinta del cartamodello: perimetro, area vuota, o niente. */
   const boundaryRoles: Record<string, BoundaryRole> = {};
   let boundarySource: { text: string; name: string } | null = null;
+  /** Il testo dello stato dell'import, a cui si aggiunge la nota sui contorni chiusi d'ufficio. */
+  let testoImport = '';
+  /** Lo stato mostrato sotto il disegno (import + nota): sopravvive alla ricostruzione del pannello. */
+  let statoContorno = '';
   let lastSvg = '';
 
   const pz = hookPanZoom($('canvas'), $('layer'), (z) => { $('zoom').textContent = `zoom ${Math.round(z * 100)}%`; });
@@ -173,7 +181,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
           <input type="file" id="boundaryFile" accept=".svg,.dxf,.dst" />
           <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
         </label>
-        <p class="rg-file-input__status" id="boundaryStatus" role="status">Nessun contorno: il piano non viene ritagliato.</p>
+        <p class="rg-file-input__status" id="boundaryStatus" role="status">${boundaryModel ? statoContorno : 'Nessun contorno: il piano non viene ritagliato.'}</p>
       </div>
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Scala del file importato</span>
         <select id="scaleMode" class="rg-select">${SCALE_MODES.map(([v, l]) => `<option value="${v}"${v === 'illustrator-72dpi' ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
@@ -295,7 +303,24 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       customWidthMm: parseFloat(($('customW') as HTMLInputElement).value),
       customHeightMm: parseFloat(($('customH') as HTMLInputElement).value),
     });
-    $('boundaryStatus').textContent = `${boundarySource.name}: ${boundaryModel.choices.length} contorni. ${boundaryModel.warning ?? ''}`;
+    // IL FORMATO COPRE TUTTO IL PEZZO (Lorenzo, 2026-10-02: «se inserisco un svg o dxf metti
+    // automaticamente larghezza e altezza del pattern in modo che copra tutto il pezzo»). Il piano parte
+    // da 0 nelle coordinate del disegno: deve arrivare fino al bordo destro e a quello basso, più un mm.
+    // Prima restava quello del preset (100 × 100 nel punto canvas) e il pattern copriva solo un angolo.
+    let fineX = -Infinity, fineY = -Infinity;
+    for (const c of boundaryModel.choices) { fineX = Math.max(fineX, c.bounds.maxX); fineY = Math.max(fineY, c.bounds.maxY); }
+    if (Number.isFinite(fineX) && Number.isFinite(fineY)) {
+      cfg.totalWidth = Math.ceil(fineX) + 1;
+      cfg.totalHeight = Math.ceil(fineY) + 1;
+      for (const [campo, valore] of [['totalWidth', cfg.totalWidth], ['totalHeight', cfg.totalHeight]] as const) {
+        const input = root.querySelector<HTMLInputElement>(`#f-${campo}`);
+        if (input) input.value = String(valore);
+      }
+    }
+    const formato = Number.isFinite(fineX) ? ` Formato del pattern ${cfg.totalWidth} × ${cfg.totalHeight} mm, per coprire tutto il pezzo.` : '';
+    testoImport = `${boundarySource.name}: ${boundaryModel.choices.length} contorni.${formato} ${boundaryModel.warning ?? ''}`;
+    statoContorno = testoImport;
+    $('boundaryStatus').textContent = statoContorno;
     if (boundaryModel.choices.length) applyChoice(0);
     renderColorMap();
   }
@@ -334,10 +359,28 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       render();
       return;
     }
-    const paths = scelti.flatMap((c) => c.boundary.paths.map((path) => ({
-      ...path,
-      hole: boundaryRoles[c.id] === 'vuoto',
-    })));
+    // UN CONTORNO MARCATO CONFINE O VUOTO SI CHIUDE se il disegno lo lascia aperto di poco (Lorenzo,
+    // 2026-10-02, davanti LASER-AI: il rettangolo verde finiva a 1,1 mm da dove cominciava). Aperto non
+    // ritaglia niente e il pattern usciva dal pezzo in silenzio; chi gli dà il ruolo vuole un'area chiusa.
+    // Oltre CHIUSURA_MAX_MM non si indovina: si resta aperti e lo si dice.
+    const aperti: string[] = [];
+    const paths = scelti.flatMap((c) => c.boundary.paths.map((path) => {
+      const hole = boundaryRoles[c.id] === 'vuoto';
+      if (path.closed || path.points.length < 3) return { ...path, hole };
+      const a = path.points[0], b = path.points[path.points.length - 1];
+      const scarto = Math.hypot(a.x - b.x, a.y - b.y);
+      const colore = (c.color ?? '').toUpperCase();
+      if (scarto > CHIUSURA_MAX_MM) {
+        aperti.push(`${colore} è aperto di ${fmtMm(scarto)} mm e non ritaglia: chiudilo nel disegno`);
+        return { ...path, hole };
+      }
+      aperti.push(`${colore} era aperto di ${fmtMm(scarto)} mm: l'ho chiuso`);
+      return { ...path, hole, closed: true, points: [...path.points, { ...a }] };
+    }));
+    const nota = [...new Set(aperti)].join(' · ');
+    const stato = root.querySelector('#boundaryStatus');
+    statoContorno = nota ? `${testoImport} ${nota}.` : testoImport;
+    if (stato) stato.textContent = statoContorno;
     const base = (perimetri[0] ?? scelti[0]).boundary;
     const xs = paths.flatMap((p) => p.points.map((q) => q.x));
     const ys = paths.flatMap((p) => p.points.map((q) => q.y));
@@ -448,11 +491,18 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     $('loadPreset').addEventListener('click', () => {
       const preset = selectedPreset();
       if (!preset) return;
-      Object.assign(cfg, migratePreset(preset.config));
+      // Un preset è il PATTERN, non il pezzo: cambia tutto TRANNE larghezza, altezza e sagoma di ritaglio
+      // (Lorenzo, 2026-10-02: «vorrei che il preset tocchi tutto tranne larghezza e altezza, così se ho
+      // già caricato un svg non me lo toglie e non mi cambia le dimensioni»). Prima i preset portavano
+      // dentro formato e `shapeType` («Nessuna» in tutti quelli condivisi): caricandone uno la sagoma
+      // importata si spegneva in silenzio, e con lei ritaglio e aree vuote.
+      const restano = { totalWidth: cfg.totalWidth, totalHeight: cfg.totalHeight, shapeType: cfg.shapeType, importedBoundary: cfg.importedBoundary };
+      Object.assign(cfg, migratePreset(preset.config), restano);
       buildPanel();          // ricostruisce coi valori del preset (e ricollega gli eventi)
       refreshPresetList();
       render();
-      $('status').textContent = `Preset "${preset.name}" caricato${preset.source === 'shared' ? ' (condiviso)' : ''}.`;
+      $('status').textContent = `Preset "${preset.name}" caricato${preset.source === 'shared' ? ' (condiviso)' : ''}`
+        + ` — formato e sagoma restano${restano.importedBoundary ? ', col cartamodello e i suoi ruoli' : ''}.`;
     });
     $('deletePreset').addEventListener('click', () => {
       const preset = selectedPreset();

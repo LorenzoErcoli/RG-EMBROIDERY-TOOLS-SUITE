@@ -107,7 +107,7 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
   const appendOrderedPoints = (points: GeneratedPoint[]) => {
     const ordered = points.slice();
     if (path.length && ordered.length && path.at(-1)!.x === ordered[0].x && path.at(-1)!.y === ordered[0].y) ordered.shift();
-    path.push(...ordered);
+    for (const point of ordered) path.push(point);   // a ciclo: vedi connectClippedChunksAlongBoundary
   };
 
   /**
@@ -297,7 +297,7 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
   // dentro diventa un'impuntura dritta, e il taglio sui buchi si spegne, altrimenti la toglierebbe.
   const opzioniVuoto = { width, height, inset, shapeType: clipShape, importedBoundary: grammar.importedBoundary };
   const vuoti = grammar.voidStitchMm > 0 && clipShape === "imported" ? importedVoidRings(opzioniVuoto) : [];
-  const layoutPoints = vuoti.length ? runningStitchInVoids(scaled, vuoti, grammar.voidStitchMm) : scaled;
+  const layoutPoints = vuoti.length ? runningStitchInVoids(scaled, vuoti, grammar.voidStitchMm, grammar.minPointDistance) : scaled;
   const boundaryPerRitaglio = vuoti.length ? sagomaSenzaVuoti(grammar.importedBoundary!) : grammar.importedBoundary;
   const clipResult = clipPathToBoundaryChunks(layoutPoints, {
     width,

@@ -60,3 +60,49 @@ Due trappole pagate misurando:
 
 Il ripiego serve ai vuoti **concavi** (a C, a L), dove la retta uscirebbe dall'area e si poserebbe
 sopra il pattern di fuori: lì l'impuntura segue la strada che faceva il filo, allo stesso passo.
+
+## I bordi e l'ordine (2026-10-01, sul davanti LASER-AI col punto canvas)
+
+Lorenzo: *«c'è una sorta di spostamento, quando io vorrei che nel punto di contatto con la linea
+dell'area vuota iniziasse subito l'imbastitura. E vorrei che fosse tutto ordinato: la linea
+dell'imbastitura perpendicolare precisa fino all'altra parte.»*
+
+Come si fa adesso, colonna per colonna:
+
+1. si parte dal **punto di contatto vero** con la linea (dove il filo la attraversa, non l'ultimo punto
+   fuori);
+2. sulla linea fino all'**asse della colonna** (la x media dei suoi punti): una riga per colonna, a
+   passo regolare;
+3. **dritti** in verticale fino alla linea dall'altra parte;
+4. sulla linea fino a dove il pattern riprende.
+
+Le trappole, trovate tutte misurando sul file vero e non a occhio:
+
+- **Il punto minimo mangiava i capi delle righe.** La pulizia del bordo del motore toglie i punti
+  «boundary» più vicini del minimo al precedente: era proprio la testa della riga, e il filo
+  scavalcava la linea senza toccarla. I capi sono «structural», e fra due punti fissi troppo vicini
+  vince il capo. Ci sono voluti quattro giri (125 → 15 → 7 → 0): ogni giro ha rivelato un caso che
+  il precedente nascondeva.
+- **Una colonna che sfiora un angolo** tagliava l'angolo con una corda: ora resta sulla linea, e gli
+  spigoli della linea non si tolgono.
+- **Un pezzo grande fermava il motore**: un tratto continuo da oltre centomila punti passato con
+  `push(...)` sfonda lo stack. Col vuoto attraversato il filo non si spezza più, quindi ci si arriva
+  prima: è un rischio che cresce con questa funzione, e il test ora lo controlla.
+
+Resta visibile, fuori dal vuoto: lo zig-zag del canvas tagliato sulla linea fa piccoli «uncini» dove
+l'ultimo punto del pattern raggiunge la testa della riga. Non è stato chiesto; se serve, il prossimo
+passo è chiudere il pattern sulla linea in modo ordinato anche da fuori.
+
+## Il preset è il pattern, il formato è il pezzo (2026-10-02)
+
+Lorenzo: *«vorrei che il preset tocchi tutto tranne larghezza e altezza, così se ho già caricato un svg
+non me lo toglie e non mi cambia le dimensioni»*; e importando un SVG o un DXF *«metti automaticamente
+larghezza e altezza del pattern in modo che copra tutto il pezzo»*.
+
+Come si applica: un preset descrive il **pattern** (zig-zag, colonne, deformazioni, punti); il
+**pezzo** — formato, sagoma di ritaglio, cartamodello e ruoli — lo decide il disegno caricato. Caricare
+un preset non tocca il pezzo; caricare un disegno porta il formato a coprirlo.
+
+Da sapere per i file di Lorenzo: i contorni di Illustrator possono essere **aperti di poco** senza che si
+veda (il rettangolo del davanti LASER-AI: 1,1 mm). Un contorno aperto non ritaglia, e il pattern esce dal
+pezzo in silenzio. Il Generatore ora chiude quelli con un ruolo fino a 5 mm, e lo scrive.

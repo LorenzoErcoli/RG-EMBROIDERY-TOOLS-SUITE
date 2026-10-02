@@ -2470,9 +2470,61 @@ console.log('\noblique — routing + orchestratore (2d)');
       return { tratti: lunghezze.length, mediana: lunghezze.length ? Number(lunghezze[lunghezze.length >> 1].toFixed(2)) : 0, svolte };
     };
     const impuntura2 = misura(2), impuntura4 = misura(4);
+    // la traversata si divide in parti UGUALI vicine al passo (30 mm a passo 4 = 8 punti da 3,75): niente
+    // mozzicone in fondo, quindi il punto è il passo entro qualche decimo, mai di più del passo e mezzo
     check('col punto dell\'impuntura il vuoto si attraversa: punti di quella misura, dritti, e niente zig-zag dentro',
-      [impuntura2.tratti > 100, impuntura2.mediana, impuntura2.svolte, impuntura4.mediana, impuntura4.svolte, misura(0).tratti],
-      [true, 2, 0, 4, 0, 0]);
+      [impuntura2.tratti > 100, Math.abs(impuntura2.mediana - 2) <= 0.3, impuntura2.svolte, Math.abs(impuntura4.mediana - 4) <= 0.3, impuntura4.svolte, misura(0).tratti],
+      [true, true, 0, true, 0, 0]);
+
+    // I BORDI E L'ORDINE (Lorenzo, 2026-10-01, sul davanti LASER-AI col punto canvas): «nel punto di
+    // contatto con la linea dell'area vuota inizi subito l'imbastitura… tutto ordinato: la linea
+    // dell'imbastitura perpendicolare precisa fino all'altra parte». Le righe stanno sull'ASSE delle
+    // colonne (una per colonna, a passo regolare = la distanza fra le colonne), sono verticali, e nessun
+    // punto scavalca la linea del vuoto senza fermarcisi sopra — nemmeno col punto minimo del preset (1 mm),
+    // che prima toglieva proprio il punto sulla linea.
+    {
+      const canvas = JSON.parse(readFileSync(join(root, 'apps/pattern-grammar/src/presets.shared.json'), 'utf8'))['RG-PUNTO CANVAS CLASSICO'];
+      const linee = rg.generateFinalPatternPoints({ ...canvas, totalWidth: 120, totalHeight: 120, shapeType: 'imported', voidStitchMm: 3, importedBoundary: sagoma([via(buco, true)]) }).visualPolylines;
+      const sulBordo = (p) => fondo(p) > -0.02 && fondo(p) < 0.02 || (Math.abs(p.x - 45) < 0.02 || Math.abs(p.x - 75) < 0.02) && p.y >= 45 && p.y <= 75;
+      const xRighe = new Set();
+      let storte = 0, scavalca = 0;
+      for (const linea of linee) for (let i = 1; i < linea.length; i++) {
+        const a = linea[i - 1], b = linea[i], m = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+        if (nelBuco(m) && fondo(m) > 0.3) { if (Math.abs(a.x - b.x) < 0.01) xRighe.add(a.x.toFixed(2)); else storte++; }
+        if (nelBuco(a) !== nelBuco(b) && !sulBordo(a) && !sulBordo(b)) scavalca++;
+      }
+      const righe = [...xRighe].map(Number).sort((p, q) => p - q);
+      const passi = [...new Set(righe.slice(1).map((x, i) => (x - righe[i]).toFixed(2)))];
+      check('dentro il vuoto righe verticali sull\'asse delle colonne, a passo regolare, e il filo si ferma sempre sulla linea',
+        [righe.length > 10, passi, storte, scavalca], [true, [canvas.stepX.toFixed(2)], 0, 0]);
+    }
+    // e un pezzo grande non deve più fermare il motore: lo spread `push(...)` passa un argomento per punto
+    for (const file of ['applyBoundary.ts', 'generatePattern.ts']) {
+      check(`pattern-grammar/${file}: niente push(...) di array interi (oltre ~100.000 punti il motore si fermava)`,
+        /push\(\.\.\.(chunk\.points|ordered)\)/.test(readFileSync(join(root, 'packages/pattern-grammar/src/generator', file), 'utf8')), false);
+    }
+
+    // CARICARE UN PRESET NON SPEGNE IL CARTAMODELLO (Lorenzo, 2026-10-01: «sto provando a usare il punto
+    // canvas e non funziona»). Tutti i preset condivisi portano dentro `shapeType: none`, e caricandone
+    // uno la sagoma importata — col ritaglio e le aree vuote — si spegneva in silenzio. Qui si verifica
+    // sul sorgente, perché il bottone vive nel DOM: il caricamento deve rimettere la sagoma di prima.
+    const sorgente = readFileSync(join(root, 'apps/pattern-grammar/src/tool.ts'), 'utf8');
+    const caricamento = sorgente.slice(sorgente.indexOf("$('loadPreset')"), sorgente.indexOf("$('deletePreset')"));
+    // (2026-10-02, Lorenzo: «il preset tocchi tutto tranne larghezza e altezza») anche il formato resta
+    check('caricare un preset non tocca formato, sagoma di ritaglio e cartamodello',
+      [caricamento.includes('const restano = { totalWidth: cfg.totalWidth, totalHeight: cfg.totalHeight, shapeType: cfg.shapeType, importedBoundary: cfg.importedBoundary };'),
+        caricamento.includes('Object.assign(cfg, migratePreset(preset.config), restano);'),
+        Object.values(JSON.parse(readFileSync(join(root, 'apps/pattern-grammar/src/presets.shared.json'), 'utf8'))).some((p) => p.shapeType === 'none')],
+      [true, true, true]);
+    // e importare un SVG o un DXF porta il formato a coprire tutto il pezzo (Lorenzo, 2026-10-02)
+    const importazione = sorgente.slice(sorgente.indexOf('function reparseBoundary'), sorgente.indexOf('function applyChoice'));
+    check('importare un contorno porta larghezza e altezza del pattern fino al bordo del pezzo',
+      [importazione.includes('cfg.totalWidth = Math.ceil(fineX) + 1;'), importazione.includes('cfg.totalHeight = Math.ceil(fineY) + 1;')], [true, true]);
+    // un contorno con un ruolo, lasciato aperto di poco nel disegno, si chiude (LASER-AI: 1,1 mm) e lo si dice
+    const ricostruzione = sorgente.slice(sorgente.indexOf('function rebuildBoundary'), sorgente.indexOf('// ---- preset ----'));
+    check('un confine aperto di poco si chiude e lo si scrive; oltre 5 mm no',
+      [/const CHIUSURA_MAX_MM = 5;/.test(sorgente), ricostruzione.includes("closed: true, points: [...path.points, { ...a }]"), ricostruzione.includes('non ritaglia: chiudilo nel disegno')],
+      [true, true, true]);
   }
 
   console.log('\nzone-pattern — le aree di scarico sul davanti di Lorenzo');
