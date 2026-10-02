@@ -19,9 +19,9 @@
 //    nei grigi); ogni V prende il gruppo della maggioranza delle sue copie.
 // 5. Il modulo VERO: se le due metà (in x o in y) sono uguali, a meno del rumore sui bordi, il modulo
 //    è la metà, per maggioranza (Fair Isle: 72 × 112 = 4 copie di 36 × 56).
-// 6. I colori FINTI: un gruppo fatto solo di pezzetti minuscoli è il bordo sfumato fra due colori,
-//    non un filo (Fair Isle: 137 pezzi, 116 V isolate, mai più di 5). Le sue V prendono il colore
-//    che hanno intorno.
+// 6. I colori FINTI: un gruppo fatto quasi solo di V isolate (in media al più 2 V per pezzo) è il
+//    bordo sfumato fra due colori, non un filo (Fair Isle: 127 pezzi, 106 V isolate, 1,3 V di media).
+//    Le sue V prendono il colore che hanno intorno.
 //
 // Nessun DOM.
 
@@ -51,6 +51,8 @@ export interface FoundModule {
   removed: number;
   /** V del modulo su cui le copie non erano d'accordo. */
   uncertain: number;
+  /** Dove sta il modulo nell'immagine (px dell'immagine analizzata): la sua V (0, 0) e la sua misura. */
+  guidePx: { x: number; y: number; w: number; h: number };
 }
 
 // ------------------------------------------------------------ colore
@@ -122,7 +124,8 @@ function colorEdges(sm: Float32Array, W: number, H: number, axis: 'x' | 'y'): Ar
       if (g[t] <= 40 || g[t] <= g[t - 1]) continue;
       let e = t;
       while (e + 1 < along - 4 && Math.abs(g[e + 1] - g[t]) < 1e-3) e++;
-      if (g[e + 1] < g[t]) out.push([(t + e) / 2, g[t]]);
+      // +0,5: la posizione è contata al centro dei pixel, il bordo fra due pixel sta mezzo pixel più in là
+      if (g[e + 1] < g[t]) out.push([(t + e) / 2 + 0.5, g[t]]);
       t = e;
     }
   }
@@ -301,7 +304,10 @@ export function findModule(px: Pixels, opts: ModuleOptions): FoundModule {
     const sizes = comps(k);
     if (!sizes.length || sizes.length < 6) continue;
     const singles = sizes.filter((s) => s === 1).length;
-    if (Math.max(...sizes) <= 5 && singles / sizes.length >= 0.7) {
+    // colore finto: quasi solo V isolate, pezzi in media minuscoli (Fair Isle: 83% isolate, 1,3 V di
+    // media; i fili veri da 3 V in su). «Mai più di 5 V» era fragile: mezzo pixel di griglia ne faceva 7.
+    const mean = sizes.reduce((a, b) => a + b, 0) / sizes.length;
+    if (singles / sizes.length >= 0.7 && mean <= 2) {
       removed++;
       for (let pass = 0; pass < 6; pass++) {
         let left = 0; const next = [...map];
@@ -333,13 +339,18 @@ export function findModule(px: Pixels, opts: ModuleOptions): FoundModule {
     imageCells: { cols: MC, rows: MR },
     removed,
     uncertain,
+    guidePx: { x: x0g, y: y0g, w: cols * cw, h: rows * ch },
   };
 }
 
 // ------------------------------------------------------------ il modulo nel ricamo
 
-/** Il modulo come sta nel ricamo: ogni V col suo punto e filo (null = vuota). */
-export interface KnitModule { cols: number; rows: number; marks: Array<CellMark | null>; }
+/**
+ * Il modulo come sta nel ricamo: ogni V col suo punto e filo (null = vuota). `guide` = il pezzo
+ * dell'immagine originale (px) che il modulo ricopia: si vede sopra il modulo per disegnarci sopra.
+ * `drawn` = disegnato a mano (Nuovo modulo): cambiandone colonne e righe si allarga, non si ricava.
+ */
+export interface KnitModule { cols: number; rows: number; marks: Array<CellMark | null>; guide?: { x: number; y: number; w: number; h: number } | null; drawn?: boolean; }
 
 /** Il ricamo = il modulo ripetuto su tutta la griglia, a partire dall'angolo in alto a sinistra. */
 export function tileModule(g: GridSpec, mod: KnitModule): Cells {
@@ -378,7 +389,22 @@ export function shiftModule(mod: KnitModule, dr: number, dc: number): KnitModule
     const m = mod.marks[((r + sr) % R) * C + ((c + sc) % C)];
     marks.push(m ? { ...m } : null);
   }
-  return { cols: C, rows: R, marks };
+  // la guida scorre col modulo: la sua prima V è la V (sr, sc) di prima
+  const guide = mod.guide ? { ...mod.guide, x: mod.guide.x + (sc * mod.guide.w) / C, y: mod.guide.y + (sr * mod.guide.h) / R } : mod.guide;
+  return { cols: C, rows: R, marks, guide, drawn: mod.drawn };
+}
+
+/**
+ * Il modulo disegnato a mano con altre colonne e righe: quello che c'era resta in alto a sinistra,
+ * il nuovo si riempie con `fill` (la base). La guida resta lo stesso pezzo d'immagine.
+ */
+export function resizeModule(mod: KnitModule, cols: number, rows: number, fill: CellMark | null): KnitModule {
+  const marks: Array<CellMark | null> = [];
+  for (let r = 0; r < rows; r++) for (let c = 0; c < cols; c++) {
+    const m = r < mod.rows && c < mod.cols ? mod.marks[r * mod.cols + c] : fill;
+    marks.push(m ? { ...m } : null);
+  }
+  return { cols, rows, marks, guide: mod.guide, drawn: mod.drawn };
 }
 
 /**

@@ -46,7 +46,7 @@ export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as 
 export { subGrid as csSubGrid, areaFromMm as csAreaFromMm, clampArea as csClampArea } from ${JSON.stringify(posix('apps/cross-stitch/src/area.ts'))};
 export { segmentPoints as csSegmentPoints } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { routeAll as csRouteAll, stripRanges as csStripRanges } from ${JSON.stringify(posix('apps/cross-stitch/src/strips.ts'))};
-export { findModule as csFindModule, tileModule as csTileModule, editsOnAllCopies as csEditsOnAllCopies, shiftModule as csShiftModule, seamShift as csSeamShift } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
+export { findModule as csFindModule, tileModule as csTileModule, editsOnAllCopies as csEditsOnAllCopies, shiftModule as csShiftModule, seamShift as csSeamShift, resizeModule as csResizeModule } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
 export { zonesOf as csZonesOf } from ${JSON.stringify(posix('apps/cross-stitch/src/zones.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
@@ -5138,6 +5138,8 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
       }
       uguale = ok;
     }
+    // dove sta il modulo nell'immagine (la guida): un modulo intero, e la sua prima V sul bordo di una V
+    check('ricava modulo: la guida è un modulo intero, sulla griglia delle V', [fm.guidePx.w, fm.guidePx.h, Math.round(fm.guidePx.x) % CP, Math.round(fm.guidePx.y) % CP], [MCt * CP, MRt * CP, 0, 0]);
     check('ricava modulo: periodo, modulo 12 × 8, 3 fili (tolto il colore finto), il disegno giusto',
       [fm.periodPx.w, fm.periodPx.h, fm.cols, fm.rows, fm.palette.length, fm.removed, fm.palette[0], uguale],
       [MCt * CP, MRt * CP, MCt, MRt, 3, 1, '#88878a', true]);
@@ -5162,6 +5164,11 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     const seam = rg.csSeamShift(modS, 0);
     const dopo = rg.csShiftModule(modS, seam.dr, seam.dc);
     check('giunture sulla base: nessun motivo tagliato', [seam.cutCols, seam.cutRows], [0, 0]);
+    // la guida scorre col modulo; un modulo disegnato si allarga riempiendo di base
+    const conGuida = rg.csShiftModule({ ...modS, guide: { x: 100, y: 50, w: 60, h: 40 }, drawn: true }, 1, 2);
+    check('sposta l’inizio: la guida scorre di 2 colonne e 1 riga del modulo', [conGuida.guide.x, conGuida.guide.y, conGuida.drawn], [120, 60, true]);
+    const largo = rg.csResizeModule(modS, 8, 5, { stitch: 'v', color: 0 });
+    check('modulo disegnato più grande: quello che c’era resta in alto a sinistra, il resto è base', [largo.cols, largo.rows, largo.marks[0].color, largo.marks[5].color, largo.marks[6].color, largo.marks[7 * 1 + 4 * 8].color], [8, 5, modS.marks[0].color, modS.marks[5].color, 0, 0]);
     // il motivo 2×2 deve stare in un blocco solo: righe e colonne consecutive
     const pos = dopo.marks.map((m, i) => (m.color === 1 ? [Math.floor(i / 6), i % 6] : null)).filter(Boolean);
     const rs = [...new Set(pos.map((q) => q[0]))].sort((x, y) => x - y), cs = [...new Set(pos.map((q) => q[1]))].sort((x, y) => x - y);

@@ -656,6 +656,23 @@ la stessa V in ogni copia del modulo, e il modulo stesso, così cambiando le mis
 modulo ripetuto resta quello modificato. Spento, si modifica una copia sola, ma cambiando le misure il
 ricamo si rifà dal modulo. Il modulo si salva nel progetto.
 
+**Nuovo modulo** (in *01 Immagine*, accanto a *Ricava modulo*): quando dall'immagine c'è troppo da
+correggere, il modulo lo disegni tu. Prima, con **Ritaglia**, trascini un rettangolo intorno a **una
+ripetizione** del motivo. Poi *Nuovo modulo*: un modulo tutto base, con le colonne del modulo di prima
+(o 24) e le righe prese dalle proporzioni del ritaglio. I fili sono proposti dai colori del ritaglio, e
+si apre la vista Modulo. Il ritaglio diventa la **guida**: stirato su ogni copia del modulo, **sopra** i
+punti a metà trasparenza (sotto, un modulo pieno di V lo coprirebbe), e si accende e spegne con
+**Immagine** nella *Vista*. Con la *Griglia* accesa vedi su quale V cade ogni pezzo d'immagine.
+Disegni colore per colore con pennello e riempi, e il ricamo ripete il modulo. Colonne e righe di un
+modulo disegnato si cambiano nei campi: il modulo si allarga o si accorcia, e quello che hai
+disegnato resta. **Cambiare il ritaglio dopo**: con un modulo, *Ritaglia* mostra l'immagine intera e il
+nuovo rettangolo cambia solo la guida, non il modulo (se il modulo disegnato è ancora vuoto, prende
+anche le proporzioni nuove). *Immagine intera* fa guida l'immagine intera. Anche dopo *Ricava modulo*
+la guida è il pezzo d'immagine che il tool ha trovato, quindi puoi correggere il modulo guardandola.
+
+L'immagine sotto la griglia (*Altro → Opacità*) ora viene disegnata dall'originale: prima era la copia
+ridotta a 600 px che il tool usa per leggere i colori, e si vedeva sgranata.
+
 **La vista Modulo** (gruppo *Modulo* nella barra: *Ricamo | Modulo*): la tela mostra un modulo solo, al
 centro e contornato, con le 8 copie vicine intorno un po' velate, così si vedono le giunture. Lì
 pennello, riempi e gomma cambiano il modulo, e quindi tutto il ricamo (*Su tutte le copie* resta
