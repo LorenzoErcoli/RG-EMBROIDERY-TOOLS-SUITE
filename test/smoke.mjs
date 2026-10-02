@@ -5276,13 +5276,21 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     check('fasce per disegno: la forma passa tutta alla fascia sotto; più giù non si va', [prima.join('/'), mosso, dopo.join('/'), giu], ['4/4', true, '2/6', false]);
     const una = rg.csRouteBands(gB, { cols: Cm, rows: Rm, marks: marksB, entryRow: {}, bands: { 1: [] } }, 1, par);
     check('una fascia sola: entra a sinistra ed esce a destra, unita fra le copie', [una.length, una[0].joined, una[0].dir], [1, true, 1]);
-    // INIZIO E FINE LIBERI (Lorenzo, 2026-10-02: «dovrebbero sempre iniziare il più a sinistra possibile e
-    // finire il più a destra possibile»): una diagonale che scende dalla riga 1 alla 6 comincia sulla V più
-    // a sinistra (in alto) e finisce su quella più a destra (in basso); la copia accanto ricomincia in alto,
-    // 5 righe più su: si salta, e il salto è corto (dritto in su)
+    // INGRESSO E USCITA (Lorenzo, 2026-10-02: «per ogni fascia l'ingresso coincida con l'uscita del
+    // precedente e quindi ingresso uscita ai lati rispettivi stessa altezza»): una diagonale che scende
+    // dalla riga 1 alla 6 passa da una copia all'altra; entra a sinistra ed esce a destra alla stessa riga
     const marksD = Array.from({ length: Cm * Rm }, (_, i) => { const rr = Math.floor(i / Cm), cc = i % Cm; return { stitch: 'v', color: rr === 1 + Math.floor(cc / 2) ? 1 : 0 }; });
     const diag = rg.csRouteBands(gB, { cols: Cm, rows: Rm, marks: marksD, entryRow: {} }, 1, par);
-    check('inizio e fine liberi: dalla V più a sinistra in alto alla più a destra in basso; salto alla copia accanto', [diag.length, diag[0].start.join(','), diag[0].end.join(','), diag[0].joined, diag[0].next.join(',')], [1, '1,0', '6,24', false, '1,24']);
+    check('ingresso e uscita ai due bordi alla stessa riga: l’uscita di una copia è l’ingresso della accanto', [diag.length, diag[0].start.join(','), diag[0].end.join(','), diag[0].joined], [1, '1,0', '1,24', true]);
+    // PER FORME (Lorenzo: «ogni blocco con punti vicini deve essere concluso e poi si passa al prossimo»):
+    // tre rombi pieni, uno in alto a sinistra, uno in basso al centro, uno in alto a destra; ognuno si cuce
+    // intero, da sinistra a destra
+    const rombo = (rr, cc, r0, c0) => Math.abs(rr - r0) + Math.abs(cc - c0) <= 1;
+    const marksF = Array.from({ length: Cm * Rm }, (_, i) => { const rr = Math.floor(i / Cm), cc = i % Cm; return { stitch: 'v', color: rombo(rr, cc, 2, 2) || rombo(rr, cc, 5, 6) || rombo(rr, cc, 2, 9) ? 1 : 0 }; });
+    const fr = rg.csRouteBands(gB, { cols: Cm, rows: Rm, marks: marksF, entryRow: {}, bands: { 1: [] } }, 1, par)[0];
+    const formaDi = (sg) => { const c = Math.min(sg.from[1], sg.to[1]) / 2; return c < 4 ? 'A' : c < 8 ? 'B' : 'C'; };
+    const ordineF = []; for (const sg of fr.body) if (sg.kind === 'stitch') { const f = formaDi(sg); if (ordineF[ordineF.length - 1] !== f) ordineF.push(f); }
+    check('per forme: ogni rombo intero prima del successivo, da sinistra a destra', ordineF.join(' '), 'A B C');
   }
 
   // SCEGLI MODULO (Lorenzo, 2026-10-02: «mi aspetto che posso selezionare il perimetro che identifica il

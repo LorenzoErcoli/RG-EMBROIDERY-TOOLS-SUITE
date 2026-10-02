@@ -148,6 +148,18 @@ verticali di 4 V nel verso della fascia; provati 2, 3, 4, 6 e 24: con 4 tutte le
 unite, 295 salti nel ricamo (tutti sui motivi isolati), filo in vista 58,7 m. L'ordine dei pezzi vale
 solo per i fili messi in ordine a mano (ordered).
 
+**Per forme, ingresso e uscita ai bordi** (2026-10-02, subito dopo; Lorenzo, sul DST esportato: «si passa
+più volte da un oggetto compatto all'altro… faccio una parte di rombo poi vado sotto poi torno sopra; no,
+ogni blocco con punti vicini deve essere concluso e poi si passa al prossimo. Importante che per ogni
+fascia l'ingresso coincida con l'uscita del precedente e quindi ingresso uscita ai lati rispettivi stessa
+altezza»). Gli spicchi tagliavano le forme: via. Dentro la fascia le forme (V che si toccano, anche in
+diagonale) si cuciono intere una alla volta: prima quella dell'ingresso, ultima quella dell'uscita, in
+mezzo per colonna media. Le fasce unite tornano a entrare ed uscire dai bordi alla stessa riga (la riga
+col disegno più vicino ai due bordi); quelle a salti partono dalla V più a sinistra. Sul modulo di
+Lorenzo: ritorni su e giù di più di 2 righe da 47 a 27 per modulo (quelli rimasti: forme una sopra
+l'altra nelle stesse colonne, o dentro una forma, sotto i suoi punti), filo in vista per modulo da 1617 a
+936 mm, nel ricamo da 58,7 a 35,1 m; salti da 295 a 270.
+
 **Ancora aperto:** il 67% del filo in vista sta nei passaggi oltre 12 mm (32 su 116 per striscia di
 2 moduli). Farli diventare salti col taglio lo porterebbe a circa un terzo, con più tagli in macchina:
 da decidere con Lorenzo.
