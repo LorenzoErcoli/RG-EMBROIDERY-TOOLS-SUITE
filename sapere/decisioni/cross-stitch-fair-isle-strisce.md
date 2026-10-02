@@ -169,6 +169,15 @@ aggiunga dopo. Gli spostamenti salvati prima (bandMove) non si possono tradurre:
 stesso giro: in Ridisegna passaggio Invio o Spazio fissano il passaggio, e il clic dopo ne sceglie un
 altro senza cambiare strumento (Lorenzo: «altrimenti devo ogni volta cliccare un'altra tab»).
 
+**Le copie tagliate dal bordo** (2026-10-02; Lorenzo: «se cambio le misure a partire da un modulo i passaggi
+si rovinano nel finale e cambiano, quando in realtà dovrebbero rimanere uguali»). La copia tagliata a
+destra e la striscia tagliata in fondo le rifaceva il motore da capo: altro ordine, e lì sparivano i
+passaggi ridisegnati e i salti a mano del modulo (sul suo RIF-01: 37 passaggi ridisegnati, 6 salti). Ora
+usano il percorso del modulo tagliato al bordo: i tratti che restano dentro, nello stesso ordine; fra un
+tratto e l'altro (dove il percorso usciva e rientrava) un salto. Sul RIF-01 a 171 × 188 V (7,13 × 5,08
+moduli): stessi punti, filo in vista 18,5 m contro 20,2, salti 542 contro 490; a misure multiple del
+modulo (168 × 185) identico a prima.
+
 **Ancora aperto:** il 67% del filo in vista sta nei passaggi oltre 12 mm (32 su 116 per striscia di
 2 moduli). Farli diventare salti col taglio lo porterebbe a circa un terzo, con più tagli in macchina:
 da decidere con Lorenzo.

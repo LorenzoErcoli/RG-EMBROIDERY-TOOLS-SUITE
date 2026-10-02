@@ -5267,6 +5267,21 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     check('fasce: salti solo fra i motivi e fra le due fasce (3), senza taglio; il filo non si rompe', [f1.filter((sg) => sg.kind === 'jump').length, rotture], [3, 0]);
     const puntiDi = (rs) => rs.colors.flatMap((cr) => cr.segs.filter((sg) => sg.kind === 'stitch').map((sg) => cr.color + ':' + Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to))).sort().join('|');
     check('fasce: gli stessi punti del ricamo calcolato senza modulo', puntiDi(res) === puntiDi(rg.csRouteAll(gB, cB, par)), true);
+    // LE COPIE TAGLIATE DAL BORDO (Lorenzo, 2026-10-02: «se cambio le misure… i passaggi si rovinano nel
+    // finale e cambiano, quando dovrebbero rimanere uguali»): 2 copie e mezza, 1 striscia e mezza; nella
+    // copia tagliata i punti vengono nello stesso ordine della copia intera, e sono gli stessi del ricamo
+    {
+      const gC = { ...gB, cols: Cm * 2 + 6, rows: Rm + 4 };
+      const WC = LW(gC);
+      const cC = rg.csTileModule(gC, modB);
+      const resC = rg.csRouteAll(gC, cC, { ...par, modulePath: { cols: Cm, rows: Rm, marks: marksB, entryRow: {} } });
+      const f1C = resC.colors.filter((c) => c.color === 1 && c.strip === 0).flatMap((c) => c.segs);
+      // i punti della copia k, in coordinate del modulo, nell'ordine
+      const ordine = (k) => f1C.filter((sg) => sg.kind === 'stitch' && Math.floor((sg.from % WC) / (2 * Cm)) === k && (sg.from % WC) % (2 * Cm) !== 0).map((sg) => Math.floor(sg.from / WC) + ':' + ((sg.from % WC) - 2 * Cm * k));
+      const intera = ordine(0), tagliata = ordine(2);
+      let q = 0; for (const x of intera) if (q < tagliata.length && x === tagliata[q]) q++;
+      check('copie tagliate: lo stesso percorso del modulo, tagliato al bordo; gli stessi punti del ricamo', [tagliata.length > 0 && tagliata.length < intera.length, q === tagliata.length, puntiDi(resC) === puntiDi(rg.csRouteAll(gC, cC, par))], [true, true, true]);
+    }
     // a mano: un confine tolto unisce, uno nuovo divide, uno trascinato si sposta
     const modE = { cols: Cm, rows: Rm, marks: marksB.map((m) => ({ ...m })) };
     rg.csToggleBandBreak(modE, 1, 5);

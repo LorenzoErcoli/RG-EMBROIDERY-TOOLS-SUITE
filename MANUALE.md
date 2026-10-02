@@ -697,8 +697,11 @@ lo decide il tool **per forme**: le V del filo che si toccano (anche in diagonal
 forma si cuce intera prima di passare alla successiva, nel verso della fascia (l'ordine dei pezzi vale
 solo per i fili che metti in ordine a mano con *Ordine pezzi*). Sulla tela, per ogni fascia del filo
 scelto, il **punto pieno** è l'ingresso e l'**anello** l'uscita; il collegamento verso la copia accanto si
-vede come passaggio o come salto tratteggiato. Le copie tagliate dal bordo destro le fa il motore, attaccate alla copia
-intera vicina. Una striscia tagliata dal fondo del ricamo si fa col motore, tutta insieme.
+vede come passaggio o come salto tratteggiato. **Le copie tagliate dal bordo** (a destra, se il
+ricamo non è un numero intero di moduli, e la striscia in fondo) usano **lo stesso percorso del modulo,
+tagliato al bordo**: si cuce quello che sta dentro, nello stesso ordine e coi passaggi ridisegnati e i
+salti del modulo; dove il percorso usciva dal bordo e rientrava, il filo salta. Così cambiando le misure
+del ricamo i passaggi restano quelli del modulo.
 
 Le fasce si cambiano con lo strumento **Fasce** (nell'editor): a sinistra del modulo una barra per
 fascia del filo scelto, col numero e il verso (→ da sinistra, ← da destra); piena = unita fra le copie,

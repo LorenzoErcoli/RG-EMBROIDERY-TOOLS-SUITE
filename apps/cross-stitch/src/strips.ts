@@ -345,56 +345,55 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
     const grid: GridSpec = { ...g, rows: r1 - r0 };
     const shift = r0 * W, dy = r0 * rowPitch(g);
     const stripParams: RouteParams = { ...params, strips: null, modulePath: null, groups: params.groups?.map((q) => ({ ...q, y: q.y - dy })), cuts: [] };
-    const sub = (c0: number, only?: Set<number>): Cells => {
-      const out: Cells = new Map();
-      for (let rr = r0; rr < r1; rr++) for (let c = c0; c < g.cols; c++) {
-        const m = cells.get(rr * g.cols + c);
-        if (m && (!only || only.has((rr - r0) * mp.cols + (c % mp.cols)))) out.set((rr - r0) * g.cols + c, m);
-      }
-      return out;
-    };
     const toGlobal = (segs: RouteSeg[]) => segs.map((sg) => ({ kind: sg.kind, from: sg.from + shift, to: sg.to + shift }));
-    // una striscia tagliata dal fondo del ricamo (o senza copie intere): il motore, tutta insieme
-    if (!full || fullX === 0) {
-      const res = routeCells(grid, sub(0), stripParams);
-      addMetrics(metrics, res.metrics);
-      for (const cr of res.colors) colors.push({ color: cr.color, strip, segs: toGlobal(cr.segs) });
-      return;
-    }
     // la base: il motore, sulla striscia intera
     if (baseC !== undefined) {
       const res = routeCells(grid, new Map(), stripParams);
       addMetrics(metrics, res.metrics);
-      const b = res.colors.find((cr) => cr.color === baseC);
-      if (b) colors.push({ color: baseC, strip, segs: toGlobal(b.segs) });
+      const bc = res.colors.find((cr) => cr.color === baseC);
+      if (bc) colors.push({ color: baseC, strip, segs: toGlobal(bc.segs) });
     }
-    const c0 = fullX * mp.cols;
+    // LE COPIE TAGLIATE DAL BORDO (Lorenzo, 2026-10-02: «se cambio le misure a partire da un modulo i
+    // passaggi si rovinano nel finale e cambiano, quando in realtà dovrebbero rimanere uguali»): la copia
+    // tagliata a destra e la striscia tagliata in fondo usano lo stesso percorso del modulo, tagliato al
+    // bordo: si cuce quello che sta dentro, nello stesso ordine e coi passaggi a mano del modulo. Prima
+    // le rifaceva il motore da capo (e i passaggi ridisegnati e i salti a mano lì sparivano). Dove il
+    // percorso usciva dal bordo e rientrava, il filo salta.
+    const nRows = r1 - r0;
+    const lastK = g.cols > fullX * mp.cols ? fullX : fullX - 1; // l'ultima copia, intera o tagliata
+    const cut = (k: number) => !full || k === fullX;
+    const inside = (q: ModVertex, k: number) => q[0] <= nRows && q[1] + 2 * mp.cols * k <= 2 * g.cols;
     // un vertice rispetto al modulo, nella copia k della striscia
     const at = (q: ModVertex, k: number) => (r0 + q[0]) * W + q[1] + 2 * mp.cols * k;
     for (const color of order) {
       if (color === baseC) continue;
       const segs: RouteSeg[] = [];
       for (const band of bandsBy.get(color) ?? []) {
-        const copy = (k: number, withTail: boolean) => [...band.body, ...(withTail ? band.tail : [])].map((sg) => ({ kind: sg.kind, from: at(sg.from, k), to: at(sg.to, k) }));
-        // le copie tagliate dal bordo destro: il motore, attaccato alla copia intera vicina (se è vicina)
-        const restCells = sub(c0, new Set(band.cells));
-        const restRoute = (ends: Partial<RouteParams>) => {
-          const res = routeCells(grid, restCells, { ...stripParams, base: null, ...ends });
-          addMetrics(metrics, res.metrics);
-          return trimLongTravel(g, toGlobal(res.colors.find((cr) => cr.color === color)?.segs ?? []), BAND_JOIN_V);
+        const total = band.body.filter((sg) => sg.kind === 'stitch').length;
+        const copy = (k: number, withTail: boolean) => {
+          const src = [...band.body, ...(withTail ? band.tail : [])];
+          if (!cut(k)) { addMetrics(metrics, band.metrics); return [src.map((sg) => ({ kind: sg.kind, from: at(sg.from, k), to: at(sg.to, k) }))]; }
+          // tagliata: i tratti che restano dentro, ognuno con almeno un punto
+          const runs: RouteSeg[][] = [];
+          let cur: RouteSeg[] = [], kept = 0;
+          for (const sg of src) {
+            if (inside(sg.from, k) && inside(sg.to, k)) { cur.push({ kind: sg.kind, from: at(sg.from, k), to: at(sg.to, k) }); if (sg.kind === 'stitch') kept++; }
+            else if (cur.length) { runs.push(cur); cur = []; }
+          }
+          if (cur.length) runs.push(cur);
+          if (total) addMetrics(metrics, band.metrics, kept / total);
+          return runs.filter((run) => run.some((sg) => sg.kind === 'stitch'));
         };
-        if (band.dir > 0) {
-          for (let k = 0; k < fullX; k++) join(g, segs, copy(k, k < fullX - 1), metrics);
-          if (restCells.size) join(g, segs, restRoute({ startAt: { [color]: segs[segs.length - 1].to - shift } }), metrics);
-        } else {
-          if (restCells.size) join(g, segs, restRoute({ endAt: { [color]: at(band.start, fullX - 1) - shift } }), metrics);
-          for (let k = fullX - 1; k >= 0; k--) join(g, segs, copy(k, k > 0), metrics);
-        }
-        addMetrics(metrics, band.metrics, fullX);
+        const ks: number[] = [];
+        if (band.dir > 0) for (let k = 0; k <= lastK; k++) ks.push(k); else for (let k = lastK; k >= 0; k--) ks.push(k);
+        ks.forEach((k, n) => { for (const run of copy(k, n < ks.length - 1)) join(g, segs, run, metrics); });
       }
       if (segs.length) colors.push({ color, strip, segs });
     }
   });
+  // i salti contati sul percorso finito (le copie tagliate ne hanno una parte)
+  metrics.jumps = 0; metrics.jumpMm = 0;
+  for (const cr of colors) for (const sg of cr.segs) if (sg.kind === 'jump') { const [p0, q0] = segmentPoints(g, sg.from, sg.to); metrics.jumps++; metrics.jumpMm += Math.hypot(q0.x - p0.x, q0.y - p0.y); }
   return applyCuts(g, { colors, metrics }, params.cuts ?? []);
 }
 
