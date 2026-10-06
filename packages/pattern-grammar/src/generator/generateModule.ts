@@ -12,6 +12,12 @@ export type ModuleShapeConfig = {
   columnSpacing?: number;
   verticalZigzagWidth?: number;
   verticalZigzagPasses?: number;
+  /**
+   * Inclinazione del tratto intorno al suo PUNTO D'ATTACCO sulla spina, gradi (variazioni nell'area). Diversa
+   * da `horizontalAngleDeg`, che ruota il fascio intorno al suo centro tenendo ferma la spina e quindi dà
+   * metà dell'angolo: qui il capo lontano gira e l'angolo è proprio quello.
+   */
+  strokeTiltDeg?: number;
 };
 
 const structural = (x: number, y: number, source?: PointSource): GeneratedPoint => ({ x, y, role: "structural", source });
@@ -98,6 +104,15 @@ function horizontalPhase(width: number, height: number, shape: ModuleShapeConfig
     ...bundle,
     ...(bottom < height ? [structural(cx, height, "horizontalZigzag")] : [])
   ];
+  const tilt = (shape.strokeTiltDeg ?? 0) * Math.PI / 180;
+  if (tilt !== 0) {
+    const lontano = xOrigin - zigzagWidth;
+    for (let i = 0; i < points.length; i++) {
+      const p = points[i];
+      if (Math.abs(p.x - lontano) > 1e-9) continue;
+      points[i] = { ...p, x: xOrigin - zigzagWidth * Math.cos(tilt), y: p.y + zigzagWidth * Math.sin(tilt) };
+    }
+  }
   const angle = (shape.horizontalAngleDeg ?? 0) * Math.PI / 180;
   if (angle === 0) return points;
   const cos = Math.cos(angle);

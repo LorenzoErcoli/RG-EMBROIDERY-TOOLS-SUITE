@@ -1,4 +1,5 @@
 import type { BoundaryCleanupMode, ExportCompatibilityMode, ImportedBoundary, PatternAnalysis, PatternConfig, Point, ShapeType } from "./types.ts";
+import type { VariationParams } from "../generator/variation.ts";
 
 export type ResolvedPatternGrammar = {
   columns: number;
@@ -42,6 +43,7 @@ export type ResolvedPatternGrammar = {
   reliefAreas?: Point[][];
   reliefPercent: number;
   voidStitchMm: number;
+  variation: VariationParams;
   exportCompatibilityMode: ExportCompatibilityMode;
 };
 
@@ -143,6 +145,14 @@ export function resolvePatternGrammar(config: PatternConfig): ResolvedPatternGra
     reliefPercent: Number.isFinite(config.reliefPercent) ? Math.min(100, Math.max(0, config.reliefPercent!)) : 0,
     // il passo dell'impuntura nel vuoto NON si scala coi parametri: è una misura di macchina, come il punto minimo
     voidStitchMm: Number.isFinite(config.voidStitchMm) ? Math.max(0, config.voidStitchMm!) : 0,
+    // le variazioni sono rapporti e gradi: non si scalano coi parametri
+    variation: {
+      lati: Math.max(0.05, (Number.isFinite(config.variationSidesPercent) ? config.variationSidesPercent! : 100) / 100),
+      centro: Math.max(0.05, (Number.isFinite(config.variationCenterPercent) ? config.variationCenterPercent! : 100) / 100),
+      irregolarita: Math.max(0, (Number.isFinite(config.variationIrregularityPercent) ? config.variationIrregularityPercent! : 0) / 100),
+      angoloMaxDeg: Math.max(0, Number.isFinite(config.strokeAngleJitterDeg) ? config.strokeAngleJitterDeg! : 0),
+      seme: Number.isFinite(config.variationSeed) ? config.variationSeed! : 1,
+    },
     exportCompatibilityMode: config.exportCompatibilityMode ?? "normal"
   };
 }

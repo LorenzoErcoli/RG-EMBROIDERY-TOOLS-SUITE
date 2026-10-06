@@ -90,8 +90,13 @@ Le trappole, trovate tutte misurando sul file vero e non a occhio:
   prima: è un rischio che cresce con questa funzione, e il test ora lo controlla.
 
 Resta visibile, fuori dal vuoto: lo zig-zag del canvas tagliato sulla linea fa piccoli «uncini» dove
-l'ultimo punto del pattern raggiunge la testa della riga. Non è stato chiesto; se serve, il prossimo
-passo è chiudere il pattern sulla linea in modo ordinato anche da fuori.
+l'ultimo punto del pattern raggiunge la testa della riga (sul davanti LASER-AI: 891, da 1 a 4 mm).
+
+**Decisione di Lorenzo (2026-10-02): gli uncini restano.** Viste le due alternative sulla stessa zona —
+(1) dall'ultimo nodo un angolo retto, in orizzontale fino all'asse e poi giù dritti; (2) il canvas
+tagliato esatto sulla linea, col raccordo che corre sopra la linea — ha scelto di non cambiare: *«gli
+altri mi sembra vadano ad alterare troppo la forma»*. Non riproporle come miglioria: il criterio è che
+la forma del pattern fuori dal vuoto conta più della pulizia del raccordo.
 
 ## Il preset è il pattern, il formato è il pezzo (2026-10-02)
 

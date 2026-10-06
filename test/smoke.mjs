@@ -2513,7 +2513,7 @@ console.log('\noblique — routing + orchestratore (2d)');
     // (2026-10-02, Lorenzo: «il preset tocchi tutto tranne larghezza e altezza») anche il formato resta
     check('caricare un preset non tocca formato, sagoma di ritaglio e cartamodello',
       [caricamento.includes('const restano = { totalWidth: cfg.totalWidth, totalHeight: cfg.totalHeight, shapeType: cfg.shapeType, importedBoundary: cfg.importedBoundary };'),
-        caricamento.includes('Object.assign(cfg, migratePreset(preset.config), restano);'),
+        caricamento.includes('Object.assign(cfg, neutre, migratePreset(preset.config), restano);'),
         Object.values(JSON.parse(readFileSync(join(root, 'apps/pattern-grammar/src/presets.shared.json'), 'utf8'))).some((p) => p.shapeType === 'none')],
       [true, true, true]);
     // e importare un SVG o un DXF porta il formato a coprire tutto il pezzo (Lorenzo, 2026-10-02)
@@ -2525,6 +2525,61 @@ console.log('\noblique — routing + orchestratore (2d)');
     check('un confine aperto di poco si chiude e lo si scrive; oltre 5 mm no',
       [/const CHIUSURA_MAX_MM = 5;/.test(sorgente), ricostruzione.includes("closed: true, points: [...path.points, { ...a }]"), ricostruzione.includes('non ritaglia: chiudilo nel disegno')],
       [true, true, true]);
+  }
+
+  // LE VARIAZIONI NELL'AREA (Lorenzo, 2026-10-06): il punto nastro a squame — misure piccole e fitte ai
+  // lati, grandi e rade al centro, sfumate, con un'irregolarità morbida e il tratto che si inclina poco.
+  console.log('\npattern-grammar — le variazioni nell\'area: il punto nastro a squame');
+  {
+    const condivisi = JSON.parse(readFileSync(join(root, 'apps/pattern-grammar/src/presets.shared.json'), 'utf8'));
+    const AW = 120, AH = 80;
+    const classico = { ...condivisi['RG-PUNTO NASTRO CLASSICO'], totalWidth: AW, totalHeight: AH };
+    const squame = { ...condivisi['RG-PUNTO NASTRO — SQUAME'], totalWidth: AW, totalHeight: AH };
+    const misura = (cfg) => {
+      const linee = rg.generateFinalPatternPoints(cfg).visualPolylines;
+      let punti = 0, filo = 0, corti = 0;
+      const tratti = [[], [], []];            // lunghezza dei tratti orizzontali: lato sinistro, centro, lato destro
+      const angoli = [];
+      for (const l of linee) {
+        punti += l.length;
+        for (let i = 1; i < l.length; i++) {
+          const a = l[i - 1], b = l[i], d = Math.hypot(b.x - a.x, b.y - a.y);
+          filo += d;
+          if (d < 1) corti++;
+          // un tratto orizzontale: va più di lato che in alto
+          if (Math.abs(b.x - a.x) > 1 && Math.abs(b.y - a.y) < Math.abs(b.x - a.x) * 0.2) {
+            const mx = (a.x + b.x) / 2;
+            tratti[mx < 20 ? 0 : mx > 50 && mx < 70 ? 1 : mx > 100 ? 2 : -1]?.push(d);
+            angoli.push(Math.abs(Math.atan2(b.y - a.y, b.x - a.x) * 180 / Math.PI) % 180);
+          }
+        }
+      }
+      const med = (v) => { const s = v.slice().sort((p, q) => p - q); return s[s.length >> 1] ?? 0; };
+      const inclinazioni = angoli.map((g) => Math.min(g, 180 - g)).sort((p, q) => p - q);
+      return { punti, filo, corti, lati: (med(tratti[0]) + med(tratti[2])) / 2, centro: med(tratti[1]), angoloMediano: med(inclinazioni), angoloQuasiMassimo: inclinazioni[Math.floor(inclinazioni.length * 0.95)] ?? 0 };
+    };
+    const c = misura(classico), s = misura(squame);
+    check('al centro i tratti sono più lunghi e ai lati più corti (classico: uguali, 4 mm)',
+      [Math.abs(c.lati - c.centro) < 0.05, s.centro > c.centro * 1.3, s.lati < c.lati * 0.75], [true, true, true]);
+    // l'angolo è quello del campo, intorno al punto d'attacco: con ±3,5° il tratto tipico gira di circa un
+    // grado (il ruotare intorno al centro ne dava la metà). Il 95° percentile e non il massimo: fra una
+    // colonna e l'altra, in cima e in fondo, i raccordi sono quasi orizzontali e la misura li conta
+    check('a squame i tratti si inclinano un poco, entro il massimo (classico: dritti)',
+      [c.angoloMediano, s.angoloMediano > 0.5, s.angoloQuasiMassimo <= 3.6], [0, true, true]);
+    // la paura di Lorenzo: troppi punti. Il nastro a squame resta quasi uguale al classico, e senza punti minuscoli
+    check('a squame quasi gli stessi punti e lo stesso filo del classico, e quasi nessun punto sotto 1 mm',
+      [Math.abs(s.punti / c.punti - 1) < 0.08, Math.abs(s.filo / c.filo - 1) < 0.08, s.corti < c.corti * 3], [true, true, true]);
+    // stesso seme, stesso ricamo (si riapre uguale); un altro seme, un'altra pelle
+    const firma = (cfg) => JSON.stringify(rg.generateFinalPatternPoints(cfg).visualPolylines.flat().slice(0, 400).map((p) => [p.x.toFixed(3), p.y.toFixed(3)]));
+    check('stessa variante = stesso ricamo; un\'altra variante = un altro disegno',
+      [firma(squame) === firma({ ...squame }), firma(squame) === firma({ ...squame, variationSeed: 2 })], [true, false]);
+    // senza variazioni il generatore va per la strada di sempre: a valori neutri, identico al millesimo
+    check('a valori neutri il pattern è identico a quello senza variazioni',
+      firma({ ...classico, variationSidesPercent: 100, variationCenterPercent: 100, variationIrregularityPercent: 0, strokeAngleJitterDeg: 0, variationSeed: 9 }) === firma(classico), true);
+    // il preset a squame è nella libreria, e caricare un preset rimette neutre le variazioni che non dice
+    const sorgente = readFileSync(join(root, 'apps/pattern-grammar/src/tool.ts'), 'utf8');
+    check('caricare un preset senza variazioni le rimette neutre',
+      sorgente.includes('Object.assign(cfg, neutre, migratePreset(preset.config), restano);'), true);
   }
 
   console.log('\nzone-pattern — le aree di scarico sul davanti di Lorenzo');

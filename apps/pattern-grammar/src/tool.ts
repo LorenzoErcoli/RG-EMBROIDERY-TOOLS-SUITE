@@ -497,7 +497,10 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       // dentro formato e `shapeType` («Nessuna» in tutti quelli condivisi): caricandone uno la sagoma
       // importata si spegneva in silenzio, e con lei ritaglio e aree vuote.
       const restano = { totalWidth: cfg.totalWidth, totalHeight: cfg.totalHeight, shapeType: cfg.shapeType, importedBoundary: cfg.importedBoundary };
-      Object.assign(cfg, migratePreset(preset.config), restano);
+      // le VARIAZIONI che il preset non dice tornano neutre: i preset di prima non le hanno, e caricandone
+      // uno dopo un preset a squame le squame restavano addosso al pattern classico
+      const neutre = { variationSidesPercent: 100, variationCenterPercent: 100, variationIrregularityPercent: 0, strokeAngleJitterDeg: 0, variationSeed: 1 };
+      Object.assign(cfg, neutre, migratePreset(preset.config), restano);
       buildPanel();          // ricostruisce coi valori del preset (e ricollega gli eventi)
       refreshPresetList();
       render();

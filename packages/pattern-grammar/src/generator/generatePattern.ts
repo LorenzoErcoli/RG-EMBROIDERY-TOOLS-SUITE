@@ -13,6 +13,13 @@ import { adjustVerticalConnectorDiagonals } from "./adjustVerticalConnectors.ts"
 import { subdivideLongSegments } from "./subdivideLongSegments.ts";
 import { orientPolylinesFromTopLeft, type StartOrientation } from "./orientStartPoint.ts";
 import { insideRelief, reliefIntervalsAlongVertical, relievedPasses, usableReliefRings } from "./relief.ts";
+import { IRREGOLARITA_PIENA, variationActive, variationField } from "./variation.ts";
+import type { ModuleShapeConfig } from "./generateModule.ts";
+
+/** Un blocco della colonna: dove comincia, quanto è alto, che forma ha, di quanto la spina si scosta. */
+type Blocco = { y: number; dx: number; altezza?: number; forma?: ModuleShapeConfig };
+/** `deriva`: di quanto la spina si scosta a quell'altezza — continua, punto per punto (variazioni). */
+type Colonna = { x: number; blocchi: Blocco[]; deriva?: (y: number) => number };
 
 const translate = (points: GeneratedPoint[], x: number, y: number): GeneratedPoint[] =>
   points.map((point) => ({ ...point, x: point.x + x, y: point.y + y }));
@@ -96,6 +103,58 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
   const reliefActive = reliefRings.length > 0
     && (relievedHorizontal !== grammar.horizontalZigzagPasses || relievedVertical !== grammar.verticalZigzagPasses);
 
+  // ---- LE COLONNE. Senza variazioni: a passo fisso, blocchi tutti uguali (la strada di sempre, identica
+  //      al millesimo). Con le VARIAZIONI NELL'AREA ogni colonna ha la sua posizione e ogni blocco la sua
+  //      altezza, il suo tratto e il suo angolo (Lorenzo, 2026-10-06: la pelle squamata col punto nastro).
+  const colonne: Colonna[] = [];
+  const variazioni = variationActive(grammar.variation);
+  if (!variazioni) {
+    for (let column = 0; column < grammar.columns; column++) {
+      const offset = column % 2 === 0 ? 0 : grammar.offsetY;
+      colonne.push({
+        x: marginX + column * grammar.stepX,
+        blocchi: Array.from({ length: grammar.rows }, (_, row) => ({ y: marginY + row * grammar.stepY + offset, dx: 0 })),
+      });
+    }
+  } else {
+    // l'area va dal bordo sinistro del pannello per tutta la sua larghezza (o quella che le colonne coprono)
+    const larghezza = grammar.totalWidth !== undefined ? grammar.totalWidth / (grammar.scale || 1) : grammar.columns * grammar.stepX;
+    const fine = { x: marginX + grammar.columns * grammar.stepX, y: marginY + grammar.rows * grammar.stepY + grammar.offsetY };
+    const campo = variationField(grammar.variation, larghezza, grammar.stepX);
+    const irr = grammar.variation.irregolarita;
+    const rapporto = grammar.moduleHeight / (grammar.stepY || 1);
+    let x = marginX;
+    for (let column = 0; x <= fine.x; column++) {
+      const ax = x - marginX;
+      const base = shapeForColumn(column);
+      const s0 = campo.scala(ax);
+      const blocchi: Blocco[] = [];
+      // la prima riga di ogni colonna parte un po' sfasata: senza, le righe in cima sarebbero allineate
+      let y = marginY + (column % 2 === 0 ? 0 : grammar.offsetY * s0)
+        + irr * 0.27 * grammar.stepY * (campo.respiro(ax / 0.55, 0) + 1);
+      while (y < fine.y) {
+        const sc = campo.scala(ax);
+        const ay = y - marginY;
+        const passo = grammar.stepY * sc * (1 + irr * IRREGOLARITA_PIENA.respiro * campo.respiro(ax, ay));
+        const forma: ModuleShapeConfig = {
+          ...base,
+          horizontalZigzagWidth: grammar.horizontalZigzagWidth * sc * (1 + irr * IRREGOLARITA_PIENA.larghezza * campo.larghezza(ax, ay)),
+          horizontalZigzagHeight: grammar.horizontalZigzagHeight * sc,
+          horizontalZigzagOffsetX: grammar.horizontalZigzagOffsetX * sc,
+          verticalZigzagWidth: grammar.verticalZigzagWidth * sc,
+          strokeTiltDeg: campo.angolo(ax, ay),
+        };
+        blocchi.push({ y, altezza: passo * rapporto, forma, dx: 0 });
+        y += passo;
+      }
+      // la spina ondeggia in modo CONTINUO, punto per punto: spostata blocco per blocco, fra un blocco e
+      // l'altro nasceva un punto di pochi centesimi (5.249 punti sotto 1 mm sul punto nastro di prova)
+      const ampiezza = irr * IRREGOLARITA_PIENA.deriva * grammar.stepX;
+      colonne.push({ x, blocchi, deriva: ampiezza > 0 ? (yy) => ampiezza * campo.deriva(ax, yy - marginY) : undefined });
+      x += grammar.stepX * s0 * (1 + irr * IRREGOLARITA_PIENA.passoColonne * campo.passoColonne(ax));
+    }
+  }
+
   /** Dove sta nel disegno FINALE un punto del piano di costruzione. `null` = non si sa ancora. */
   let toFinal: ((x: number, y: number) => Point) | null = null;
   let toLayoutY: ((y: number) => number) | null = null;
@@ -121,24 +180,25 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
    *   finisce in basso a destra, il successivo riparte in alto a sinistra — lo stesso raccordo
    *   che il motore fa già fra un modulo e l'altro.
    */
-  const blockPoints = (column: number, phase: ModulePhase, x: number, y: number): GeneratedPoint[] => {
-    const shape = shapeForColumn(column);
-    const plain = () => translate(generateModule(grammar.moduleWidth, grammar.moduleHeight, phase, 1, shape).points, x, y);
+  const blockPoints = (column: number, phase: ModulePhase, x: number, y: number, blocco?: Blocco): GeneratedPoint[] => {
+    const shape = blocco?.forma ?? shapeForColumn(column);
+    const altezza = blocco?.altezza ?? grammar.moduleHeight;
+    const plain = () => translate(generateModule(grammar.moduleWidth, altezza, phase, 1, shape).points, x, y);
     if (!relief) return plain();
     const relievedShape = { ...shape, horizontalZigzagPasses: relievedHorizontal, verticalZigzagPasses: relievedVertical };
 
     if (phase === "horizontal") {
       const center = relief.toFinal(
         x + grammar.moduleWidth / 2 - grammar.horizontalZigzagOffsetX - grammar.horizontalZigzagWidth / 2,
-        y + grammar.moduleHeight / 2
+        y + altezza / 2
       );
       return insideRelief(center, reliefRings)
-        ? translate(generateModule(grammar.moduleWidth, grammar.moduleHeight, phase, 1, relievedShape).points, x, y)
+        ? translate(generateModule(grammar.moduleWidth, altezza, phase, 1, relievedShape).points, x, y)
         : plain();
     }
 
     const top = y;
-    const bottom = y + grammar.moduleHeight;
+    const bottom = y + altezza;
     const lineX = relief.toFinal(x + grammar.moduleWidth / 2, (top + bottom) / 2).x;
     // I tagli, nel piano di costruzione. Un pezzo più corto di mezzo millimetro (o del punto
     // minimo) non si fa: sarebbe un grumo di punti nello stesso buco.
@@ -164,12 +224,23 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
   };
 
   const phaseBlocks = (column: number, phase: ModulePhase): GeneratedPoint[][] => {
-    const x = marginX + column * grammar.stepX;
-    const offset = column % 2 === 0 ? 0 : grammar.offsetY;
-    const blocks = Array.from({ length: grammar.rows }, (_, row) =>
-      blockPoints(column, phase, x, marginY + row * grammar.stepY + offset)
-        .map((point) => ({ ...point, columnIndex: column, blockIndex: row }))
-    );
+    const geo = colonne[column];
+    const spina = geo.x + grammar.moduleWidth / 2;
+    const blocks = geo.blocchi.map((blocco, row) => {
+      const punti = blockPoints(column, phase, geo.x + blocco.dx, blocco.y, blocco)
+        .map((point) => ({ ...point, columnIndex: column, blockIndex: row }));
+      if (!variazioni) return punti;
+      // Con le variazioni i punti della spina ai capi del blocco diventano "intermediate": se il blocco è
+      // così basso che la spina farebbe punti sotto il punto minimo (ai lati, a 0,6, erano 0,66 mm) la
+      // pulizia li toglie e la spina va da un tratto all'altro con un punto solo. Senza variazioni restano
+      // strutturali: il pattern di sempre non cambia di un punto.
+      const fine = blocco.y + (blocco.altezza ?? grammar.moduleHeight);
+      return punti.map((point) => {
+        const capo = point.x === spina && (point.y === blocco.y || point.y === fine);
+        const x = geo.deriva ? point.x + geo.deriva(point.y) : point.x;
+        return capo ? { ...point, x, role: "intermediate" as const } : { ...point, x };
+      });
+    });
     return phase === "vertical"
       ? adjustVerticalConnectorDiagonals(blocks, grammar.verticalConnectorDiagonalOffsetY)
       : blocks;
@@ -206,7 +277,7 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
   const generateNormalTraversal = () => {
     let traversalIndex = 0;
     appendPhase(0, "vertical", traversalIndex);
-    for (let column = 0; column < grammar.columns - 1; column++) {
+    for (let column = 0; column < colonne.length - 1; column++) {
       traversalIndex++;
       connectTo(phaseStart(column + 1, "horizontal", traversalIndex));
       appendPhase(column + 1, "horizontal", traversalIndex);
@@ -217,7 +288,7 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
   };
 
   const generateBoustrophedonHorizontalColumns = () => {
-    for (let column = 0; column < grammar.columns; column++) {
+    for (let column = 0; column < colonne.length; column++) {
       const direction = columnDirection(column, true);
       const ordered = orderedPhase(column, "horizontal", direction);
       if (path.length && ordered.length) {

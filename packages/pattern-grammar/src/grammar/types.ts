@@ -157,6 +157,19 @@ export type PatternConfig = {
    * punti di questa misura; fuori il pattern riprende. `0` = dentro non si cuce (R5 puro).
    */
   voidStitchMm?: number;
+  /**
+   * LE VARIAZIONI NELL'AREA (Lorenzo, 2026-10-06): le misure del modulo cambiano da sinistra a destra.
+   * Misura ai lati e al centro in % del pattern (100 = com'è): tratto, distanza fra le colonne e fra i
+   * tratti scalano insieme, con una sfumatura continua. Tutti a 100 e il resto a 0 = pattern di sempre.
+   */
+  variationSidesPercent?: number;
+  variationCenterPercent?: number;
+  /** Irregolarità morbida in x e in y, in %: 100 = i valori della prova approvata. 0 = niente. */
+  variationIrregularityPercent?: number;
+  /** Di quanto al massimo si inclina il tratto orizzontale, gradi (±). 0 = sempre dritto. */
+  strokeAngleJitterDeg?: number;
+  /** Quale disegno casuale: a parità di valori, un altro numero dà un'altra pelle. */
+  variationSeed?: number;
   exportCompatibilityMode?: ExportCompatibilityMode;
   sourceAnalysis?: PatternAnalysis;
 };
