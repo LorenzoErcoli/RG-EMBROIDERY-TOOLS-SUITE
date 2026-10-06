@@ -510,7 +510,9 @@ collegamenti restano corti e il taglio si paga solo per cambiare blocco.
 
 **Esportazione.** SVG e DST, un solo tracciato continuo senza tagli fra un pallino e l'altro. Nel DST **nessun punto è più corto del punto minimo**, anche dopo l'arrotondamento a 0,1 mm del formato.
 
-**Riaprire un progetto.** Il campo di caricamento accetta anche un SVG o un `.dst` usciti da qui: tornano parametri, pallini fissi, sfumature **e la sagoma**, perché il progetto la porta con sé.
+**Riaprire un progetto.** **Apri progetto o DST…** (nella sezione Sagoma) riapre un SVG o un `.dst` usciti da qui: tornano parametri, pallini fissi, sfumature **e la sagoma**, perché il progetto la porta con sé, e il ricamo si rifà subito. Funziona anche dal campo «Carica DXF o SVG» se è un SVG del tool.
+
+**Un DST fatto altrove, per confronto.** Se il `.dst` non è di questo tool (per esempio un ricamo già cucito, o il riferimento del cliente) non è un progetto: viene mostrato in azzurro **sotto** il ricamo, centrato sul pezzo, con nome, misura, punti e aghi. Serve a confrontare dimensioni e resa; non cambia il ricamo né l'esportazione. **Mostra il DST di riferimento** lo nasconde, **Togli** lo elimina. Caricando una nuova sagoma sparisce.
 
 ---
 

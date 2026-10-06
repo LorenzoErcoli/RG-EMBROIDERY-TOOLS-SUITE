@@ -3,7 +3,7 @@ import './razza.css';
 import {
   type ImportResult, type Point, type Polyline,
   applyRealWidth, buildSvg, buildSvgInSourceFrame, dstFromExportLayers, DST_FILE,
-  parseDxfToContours, parseSvgToContours, pointInPolygon, polygonArea, readDstMetadata, readProjectMetadata,
+  parseDxfToContours, parseSvgToContours, pointInPolygon, polygonArea, readDst, readDstMetadata, readProjectMetadata,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import ICONS from '../../../packages/design-system/icons/rg-icons.svg?url';
@@ -90,10 +90,21 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
         <div class="rg-param-grid">
           <div class="rg-file-input rg-param-grid__wide">
             <label class="rg-file-input__control">
-              <input type="file" id="fileInput" accept=".dxf,.svg,.dst" />
+              <input type="file" id="fileInput" accept=".dxf,.svg" />
               <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
             </label>
             <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file: uso la sagoma demo.</p>
+          </div>
+          <div class="rg-file-input rg-param-grid__wide">
+            <label class="rg-file-input__control">
+              <input type="file" id="progettoInput" accept=".svg,.dst" />
+              <span class="rg-button rg-button--outline">Apri progetto o DST…</span>
+            </label>
+            <p class="rg-field__help" id="progettoStatus" role="status">Un SVG o un DST usciti da qui tornano com’erano (parametri, pallini fissi, sfumature, sagoma). Un DST fatto altrove si vede sotto il ricamo, per confronto.</p>
+          </div>
+          <div class="rg-cluster rg-param-grid__wide" id="riferimentoRiga" hidden>
+            <label class="rg-choice"><input type="checkbox" id="mostraRif" checked><span>Mostra il DST di riferimento</span></label>
+            <button id="togliRif" class="rg-button rg-button--ghost rg-button--small" type="button">Togli</button>
           </div>
           <label class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Larghezza reale (0 = auto)</span>
@@ -203,6 +214,8 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
   let nomeFile = '';
   let larghezzaReale = 0;
   let fattoreScala = 1;
+  /** Un DST fatto altrove, mostrato sotto il ricamo per confronto. Coordinate già portate sul pezzo. */
+  let riferimento: Polyline[] | null = null;
 
   // ---------------------------------------------------------------- il pannello
   const salvaApertura = (): void => {
@@ -277,8 +290,10 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
       }
       chiudiCorsa();
     }
+    const rif = riferimento && ($('mostraRif') as HTMLInputElement).checked ? riferimento.map((b) => percorso(b, false)).join('') : '';
     $('layer').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" id="rzSvg" width="${w}mm" height="${h}mm" viewBox="${pezzo.minX - MARGINE_MM} ${pezzo.minY - MARGINE_MM} ${w} ${h}">
       <path class="rz-sagoma" fill-rule="evenodd" d="${sagome}" />
+      <path class="rz-rif" d="${rif}" />
       <path class="rz-filo" d="${filo}" />
       <path class="rz-vista" d="${vista}" />
       <g id="rzOver"></g>
@@ -530,6 +545,7 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
   // ---------------------------------------------------------------- caricare una sagoma o un progetto
   function nuovoPezzo(p: Pezzo, etichetta: string, azzera = true): void {
     pezzo = p;
+    riferimento = null; $('riferimentoRiga').hidden = true; // era centrato sul pezzo di prima
     if (azzera) { fissi = []; sfumature = []; selezione = null; }
     costruisciListe();
     risultato = null; ($('exportBtn') as HTMLButtonElement).disabled = true; ($('exportDstBtn') as HTMLButtonElement).disabled = true;
@@ -570,20 +586,53 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
     return true;
   }
 
-  $('fileInput').addEventListener('change', (ev) => {
-    const file = (ev.target as HTMLInputElement).files?.[0];
-    if (!file) return;
-    const isDst = /\.dst$/i.test(file.name), isDxf = /\.dxf$/i.test(file.name);
+  /** Un DST qualunque: i suoi blocchi cuciti, portati con il centro sul centro del pezzo, da mostrare sotto il ricamo. */
+  function caricaRiferimento(bytes: Uint8Array, nome: string): void {
+    const letto = readDst(bytes);
+    const blocchi = letto.blocks.map((b) => b.points_mm.map(([x, y]) => ({ x, y }))).filter((b) => b.length > 1);
+    if (!blocchi.length) { $('progettoStatus').textContent = `${nome}: nessun punto cucito.`; return; }
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity, n = 0;
+    for (const b of blocchi) for (const q of b) { x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); n++; }
+    const dx = (pezzo.minX + pezzo.maxX) / 2 - (x0 + x1) / 2, dy = (pezzo.minY + pezzo.maxY) / 2 - (y0 + y1) / 2;
+    riferimento = blocchi.map((b) => b.map((q) => ({ x: q.x + dx, y: q.y + dy })));
+    ($('mostraRif') as HTMLInputElement).checked = true; $('riferimentoRiga').hidden = false;
+    $('progettoStatus').textContent = `${nome}: DST di riferimento, ${(x1 - x0).toFixed(0)}×${(y1 - y0).toFixed(0)} mm, ${n.toLocaleString('it-IT')} punti, ${letto.colorChanges + 1} aghi, messo al centro del pezzo.`;
+    disegnaAnteprima();
+  }
+
+  /** Apre un progetto (SVG o DST di questo tool) oppure, se è un DST di altra provenienza, lo mostra come riferimento. */
+  function apriProgettoODst(file: File): void {
+    const isDst = /\.dst$/i.test(file.name);
     const reader = new FileReader();
     reader.onload = () => {
       try {
         nomeFile = file.name.replace(/\.[^.]+$/, '');
         if (isDst) {
-          const meta = readDstMetadata(new Uint8Array(reader.result as ArrayBuffer));
-          if (!meta || !riapriProgetto(meta, file.name)) $('fileStatus').textContent = `${file.name}: nessun progetto di questo tool nel DST`;
+          const bytes = new Uint8Array(reader.result as ArrayBuffer);
+          const meta = readDstMetadata(bytes);
+          if (meta && riapriProgetto(meta, file.name)) { $('progettoStatus').textContent = `${file.name}: progetto riaperto.`; return; }
+          caricaRiferimento(bytes, file.name);
           return;
         }
+        const meta = readProjectMetadata(String(reader.result));
+        if (meta && riapriProgetto(meta, file.name)) { $('progettoStatus').textContent = `${file.name}: progetto riaperto.`; return; }
+        $('progettoStatus').textContent = `${file.name}: non è un progetto di questo tool. Per una sagoma usa «Carica DXF o SVG».`;
+      } catch (e) { $('progettoStatus').textContent = 'Errore: ' + (e as Error).message; console.error(e); }
+    };
+    if (isDst) reader.readAsArrayBuffer(file); else reader.readAsText(file, 'utf-8');
+  }
+
+  $('fileInput').addEventListener('change', (ev) => {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (!file) return;
+    const isDxf = /\.dxf$/i.test(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        nomeFile = file.name.replace(/\.[^.]+$/, '');
         const testo = String(reader.result);
+        // un SVG uscito da qui è un progetto, non una sagoma: lo si riapre (resta valido anche da questo campo)
         if (!isDxf) { const meta = readProjectMetadata(testo); if (meta && riapriProgetto(meta, file.name)) return; }
         importato = isDxf ? parseDxfToContours(testo) : parseSvgToContours(testo);
         if (!importato.contours.length) { $('fileStatus').textContent = `${file.name}: nessun contorno letto${isDxf ? '' : ' (e non è un SVG di questa suite)'}`; return; }
@@ -594,8 +643,17 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
         console.error(e);
       }
     };
-    if (isDst) reader.readAsArrayBuffer(file); else reader.readAsText(file, isDxf ? 'windows-1252' : 'utf-8');
+    reader.readAsText(file, isDxf ? 'windows-1252' : 'utf-8');
+    input.value = ''; // lo stesso file, ricaricato, deve ripartire
   });
+  $('progettoInput').addEventListener('change', (ev) => {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    if (file) apriProgettoODst(file);
+    input.value = '';
+  });
+  $('mostraRif').addEventListener('change', () => disegnaAnteprima());
+  $('togliRif').addEventListener('click', () => { riferimento = null; $('riferimentoRiga').hidden = true; $('progettoStatus').textContent = 'Riferimento tolto.'; disegnaAnteprima(); });
 
   $('realWidth').addEventListener('change', () => {
     const v = leggi(($('realWidth') as HTMLInputElement).value);

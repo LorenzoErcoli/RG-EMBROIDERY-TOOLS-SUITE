@@ -22,6 +22,7 @@ body {
 /* Il disegno: la sagoma, il filo, i passaggi che restano in vista sul fondo. */
 .rz-sagoma { fill: var(--rg-color-surface); stroke: var(--rg-color-border-medium); stroke-width: 0.4; }
 .rz-filo { fill: none; stroke: var(--rg-color-text-primary); stroke-width: 0.28; } /* niente giunti arrotondati: sono decine di migliaia di segmenti */
+.rz-rif { fill: none; stroke: var(--rg-color-accent-blue); stroke-width: 0.3; opacity: 0.9; }
 .rz-vista { fill: none; stroke: var(--rg-color-danger); stroke-width: 0.45; }
 
 /* Sopra l'anteprima: i pallini fissi e le linee di sfumatura. Si afferrano dal bordo e dal punto. */
