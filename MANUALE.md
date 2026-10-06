@@ -490,6 +490,30 @@ questa scala, spargere i passaggi costava tagli, e Lorenzo i tagli non li vuole.
 staccati. Il tool li raggruppa in zone e finisce una zona prima di cominciare la successiva, così i
 collegamenti restano corti e il taglio si paga solo per cambiare blocco.
 
+## Pelle di razza (`razza`)
+
+**A cosa serve.** Riempie una sagoma di **pallini di cordoncino**, **piccoli ai bordi e grandi verso il centro**, come la pelle di razza (galuchat). Ogni pallino è un cordoncino che parte stretto, si allarga al centro e torna stretto. I passaggi da un pallino al successivo sono **piccoli e nascosti**: passano dentro il pallino appena cucito e sotto il prossimo, quindi in vista resta solo il vuoto fra i due.
+
+**Il fondo non si ricama.** Il tool fa solo i pallini, tutti con lo stesso ago: il fondo pieno resta un altro lavoro.
+
+**Come si usa.**
+1. **Sagoma** — carica il DXF o l'SVG. Il contorno chiuso più grande è il pezzo; i contorni chiusi dentro sono **aree vuote** (lì non si ricama e il filo non passa). Le linee aperte non sono sagoma: puoi usarle come linee di sfumatura. Un DXF dove il disegno sta dentro un blocco (`INSERT`) si legge lo stesso.
+2. **Pallini** — **Pallino minimo** e **massimo** (diametro), **Distanza fra i pallini**, **Spaziatura delle file** (la densità del cordoncino), **Punto minimo** e **massimo**. Sotto i 3 mm un pallino diventa uno zig-zag: ricamato sembra un pallino. Oltre 8 mm il punto lungo si allenta, e il tool te lo dice.
+3. **Disposizione** — come si distribuiscono le misure. **Piccoli ai bordi, grandi al centro** conta quanto sei lontano dal bordo (anche da quello di un'area vuota), non dove sei nel rettangolo: una sagoma a U ha i grandi in mezzo a ogni braccio. **Distanza dal bordo del pallino massimo** dice a che profondità i pallini arrivano alla misura massima (0 = automatico). **Chiazze** rompe la regolarità. **Peso delle linee di sfumatura** e **Raggio dei pallini fissi** regolano quanto contano i tuoi interventi.
+4. **Interventi** — scegli lo strumento e lavora sull'anteprima:
+   - **Pallino fisso**: fai clic dove lo vuoi. Ha il diametro scritto nel campo e **resta lì**: non cresce, non si sposta. Il ricamo intorno nasce da lui, e la sua misura tira quella dei vicini fino al **Raggio dei pallini fissi**.
+   - **Sfumatura**: trascina una linea da **A** a **B**. In A i pallini hanno il diametro di A, in B quello di B, in mezzo passano gradualmente — come il gradiente di Illustrator. Il **verso** è quello in cui trascini; **Inverti** lo scambia. Con più linee comanda la più vicina.
+   - **Seleziona**: trascina un fisso o i capi di una sfumatura per spostarli; **Canc** elimina quello selezionato; **Esc** torna a Seleziona. Per spostare la vista trascina lo sfondo, oppure tieni **Spazio** mentre trascini.
+5. **Avanzate** — larghezza/lunghezza del pallino (1 = tondo), forma del profilo, direzione dell'asse del cordoncino, il tipo di passaggio, il margine dal bordo e il **seme del caso**: stesso seme, stesso ricamo.
+
+**Che cosa vedi.** Il filo è nero; i passaggi che restano **in vista sul fondo** sono in rosso (di solito brevissimi: è il vuoto fra due pallini). In basso trovi il numero di pallini, la copertura, i punti, i metri di filo e quanto resta in vista (mediana e massimo per giuntura). Il ricamo si ricalcola da solo dopo ogni modifica; **Genera** lo fa subito. Sul pezzo intero ci vogliono alcuni secondi.
+
+**Esportazione.** SVG e DST, un solo tracciato continuo senza tagli fra un pallino e l'altro. Nel DST **nessun punto è più corto del punto minimo**, anche dopo l'arrotondamento a 0,1 mm del formato.
+
+**Riaprire un progetto.** Il campo di caricamento accetta anche un SVG o un `.dst` usciti da qui: tornano parametri, pallini fissi, sfumature **e la sagoma**, perché il progetto la porta con sé.
+
+---
+
 ## Cross-Stitch (`cross-stitch`)
 
 **A cosa serve.** A ricamare un disegno fatto di **diagonali in una griglia**: la diagonale

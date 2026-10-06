@@ -27,6 +27,7 @@ export const TOOLS: ToolDef[] = [
   { id: 'broccato', name: 'Broccato', description: 'Da immagine a ricamo: aree di colore riempite a raso rado orizzontale, a pettine o normale, coi passaggi nascosti sotto i colori successivi.', status: 'live', section: 'sviluppo' },
   { id: 'sfrangiatura', name: 'Sfrangiatura', description: 'Aggiunge frange che si intrecciano a X sui capi dei rasi di un DST già cucito, solo dove marchi col pennello. Il ricamo di partenza non si tocca.', status: 'live', section: 'sviluppo' },
   { id: 'pettine', name: 'Punto pettine sfrangiato', description: 'Da un SVG a gruppi e da una fotografia: linee di base a passo fisso con sopra un pettine di denti rivolti verso il chiaro, col ritaglio per provare uno swatch prima del pannello.', status: 'live', section: 'suite' },
+  { id: 'razza', name: 'Pelle di razza', description: 'Riempie una sagoma di pallini di cordoncino, piccoli ai bordi e grandi verso il centro, con pallini fissi e linee di sfumatura a scelta. Passaggi corti e coperti. Export SVG e DST.', status: 'live', section: 'sviluppo' },
   { id: 'pittorico', name: 'Punto Pittorico', description: 'Da immagine a ricamo pittorico: il punto attraversa il passaggio di colore, degradé col frastaglio dei bordi dove il colore sfuma, taglio secco dove stacca.', status: 'live', section: 'sviluppo' },
 ];
 

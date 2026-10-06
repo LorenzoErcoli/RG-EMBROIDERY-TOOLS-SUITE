@@ -1,5 +1,5 @@
 // Import DXF → contorni in mm, con colore (ACI) come ruolo. Regole R2, R12.
-// Parser code-pair minimale: LINE, LWPOLYLINE, POLYLINE. Y invertita (DXF Y-up → interno Y-down).
+// Parser code-pair minimale: LINE, LWPOLYLINE, POLYLINE, CIRCLE, ARC, e INSERT di blocchi (traslazione, scala, rotazione). Y invertita (DXF Y-up → interno Y-down).
 import type { Contour, Point, ImportResult } from '../types';
 import { measureContours } from '../imports';
 
@@ -59,17 +59,47 @@ export function parseDxfToContours(dxfText: string): ImportResult {
   }
 
   const contours: Contour[] = [];
-  let i = 0;
-  // salta all'ENTITIES
-  while (i < pairs.length && !(pairs[i].code === 2 && pairs[i].value.trim() === 'ENTITIES')) i++;
 
-  const toPt = (x: number, y: number): Point => ({ x: x * unitScale, y: -y * unitScale });
+  // I BLOCCHI (sezione BLOCKS): un CAD che esporta «tutto il disegno dentro un blocco» lascia in ENTITIES un
+  // solo INSERT. Senza questo il file importava a ZERO contorni, in silenzio (difetto trovato il 2026-10-06 sul
+  // DXF di Dior, `BASERICAMO_39`). Per ogni blocco si ricorda il punto base e dove comincia il corpo.
+  const blocchi = new Map<string, { baseX: number; baseY: number; corpo: number }>();
+  for (let k = 0; k < pairs.length; k++) {
+    if (pairs[k].code !== 0 || pairs[k].value.trim() !== 'BLOCK') continue;
+    let nome = '', baseX = 0, baseY = 0, j = k + 1;
+    for (; j < pairs.length && pairs[j].code !== 0; j++) {
+      if (pairs[j].code === 2 && !nome) nome = pairs[j].value.trim();
+      else if (pairs[j].code === 10) baseX = parseFloat(pairs[j].value) || 0;
+      else if (pairs[j].code === 20) baseY = parseFloat(pairs[j].value) || 0;
+    }
+    if (nome) blocchi.set(nome, { baseX, baseY, corpo: j });
+  }
+  const PROFONDITA_MAX = 8; // blocchi dentro blocchi: oltre, probabilmente un giro
 
+  /** Legge le entita' da `inizio` fino a ENDSEC/ENDBLK; `toPt` porta le coordinate CAD di QUESTO spazio al punto finale. */
+  const leggi = (inizio: number, toPt: (x: number, y: number) => Point, profondita: number): void => {
+  let i = inizio;
   while (i < pairs.length) {
     const p = pairs[i];
     if (p.code === 0) {
       const type = p.value.trim();
-      if (type === 'ENDSEC') break;
+      if (type === 'ENDSEC' || type === 'ENDBLK') break;
+      if (type === 'INSERT') {
+        const e = readEntity(pairs, i + 1);
+        let nome = '';
+        for (let j = i + 1; j < e.next; j++) if (pairs[j].code === 2) { nome = pairs[j].value.trim(); break; }
+        const b = blocchi.get(nome);
+        if (b && profondita < PROFONDITA_MAX) {
+          const ix = e.num[10] ?? 0, iy = e.num[20] ?? 0;
+          const sx = e.num[41] ?? 1, sy = e.num[42] ?? e.num[41] ?? 1;
+          const a = ((e.num[50] ?? 0) * Math.PI) / 180, co = Math.cos(a), si = Math.sin(a);
+          leggi(b.corpo, (x, y) => {
+            const lx = (x - b.baseX) * sx, ly = (y - b.baseY) * sy;
+            return toPt(ix + co * lx - si * ly, iy + si * lx + co * ly);
+          }, profondita + 1);
+        }
+        i = e.next; continue;
+      }
       if (type === 'LINE') {
         const e = readEntity(pairs, i + 1);
         const x1 = e.num[10], y1 = e.num[20], x2 = e.num[11], y2 = e.num[21];
@@ -107,6 +137,9 @@ export function parseDxfToContours(dxfText: string): ImportResult {
       }
       if (type === 'POLYLINE') {
         // vertici in entità VERTEX successive fino a SEQEND
+        // Il flag 70 (bit 1) dice «chiusa»: un DXF corretto NON ripete il primo vertice in fondo. Prima il flag era
+        // ignorato e si guardava solo se l'ultimo punto coincideva col primo (trovato dal lucchetto sui blocchi).
+        const chiusaDaFlag = (((readEntity(pairs, i + 1).num[70] ?? 0) as number) & 1) === 1;
         let j = i + 1;
         const pts: Point[] = [];
         let color = '#000000';
@@ -118,12 +151,18 @@ export function parseDxfToContours(dxfText: string): ImportResult {
             j = e.next;
           } else j++;
         }
-        if (pts.length >= 2) contours.push({ points: pts, closed: geoClosed(pts), color });
+        if (pts.length >= 2) contours.push({ points: pts, closed: chiusaDaFlag || geoClosed(pts), color });
         i = j + 1; continue;
       }
     }
     i++;
   }
+  };
+
+  let inizio = 0;
+  // salta all'ENTITIES
+  while (inizio < pairs.length && !(pairs[inizio].code === 2 && pairs[inizio].value.trim() === 'ENTITIES')) inizio++;
+  leggi(inizio, (x, y) => ({ x: x * unitScale, y: -y * unitScale }), 0);
   return { contours, ...measureContours(contours), method: 'unit' };
 }
 

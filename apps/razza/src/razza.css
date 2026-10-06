@@ -1,0 +1,46 @@
+/* Stili locali del tool "Pelle di razza". Solo cio' che il design system non copre: il sizing d'app, il
+   contenimento dell'anteprima, il cursore degli strumenti e il disegno sopra l'anteprima (pallini fissi,
+   linee di sfumatura). Colori solo da token. */
+
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--rg-color-background);
+  color: var(--rg-color-text-primary);
+  font-family: var(--rg-font-body);
+}
+#app { display: flex; flex-direction: column; height: 100vh; }
+.razza-workspace { flex: 1 1 auto; min-height: 0; --rg-workspace-panel: 340px; }
+
+/* L'anteprima non sborda dalla tela (difetto gia' trovato in striatura). */
+.razza-workspace #layer svg { max-width: 100%; max-height: 100%; }
+.razza-workspace .rg-param-grid { --rg-input-numeric-width: 10ch; }
+
+/* Il puntatore dice cosa fa il clic. */
+.razza-workspace .rg-workspace__canvas.razza-modo-pallino,
+.razza-workspace .rg-workspace__canvas.razza-modo-sfumatura { cursor: crosshair; }
+
+/* Il disegno: la sagoma, il filo, i passaggi che restano in vista sul fondo. */
+.rz-sagoma { fill: var(--rg-color-surface); stroke: var(--rg-color-border-medium); stroke-width: 0.4; }
+.rz-filo { fill: none; stroke: var(--rg-color-text-primary); stroke-width: 0.28; } /* niente giunti arrotondati: sono decine di migliaia di segmenti */
+.rz-vista { fill: none; stroke: var(--rg-color-danger); stroke-width: 0.45; }
+
+/* Sopra l'anteprima: i pallini fissi e le linee di sfumatura. Si afferrano dal bordo e dal punto. */
+#rzOver [data-hit] { pointer-events: all; cursor: grab; }
+#rzOver text { pointer-events: none; user-select: none; fill: var(--rg-color-text-primary); font-family: var(--rg-font-mono, monospace); }
+.rz-fisso circle:not(.rz-punto) { fill: transparent; stroke: var(--rg-color-info); stroke-width: 1.2; vector-effect: non-scaling-stroke; }
+.rz-fisso .rz-punto { fill: var(--rg-color-info); stroke: none; }
+.rz-fisso.is-sel circle:not(.rz-punto) { stroke: var(--rg-color-black); stroke-width: 2; }
+.rz-sfum line { stroke: var(--rg-color-success); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.rz-sfum path { fill: var(--rg-color-success); }
+.rz-sfum .rz-misura { fill: transparent; stroke: var(--rg-color-success); stroke-width: 1; stroke-dasharray: 3 3; vector-effect: non-scaling-stroke; }
+.rz-sfum .rz-punto { fill: var(--rg-color-success); }
+.rz-sfum .rz-punto--b { fill: var(--rg-color-white); stroke: var(--rg-color-success); stroke-width: 2; vector-effect: non-scaling-stroke; }
+.rz-sfum.is-sel line, .rz-sfum.is-sel .rz-misura { stroke: var(--rg-color-black); }
+.rz-sfum.is-sel path, .rz-sfum.is-sel .rz-punto { fill: var(--rg-color-black); }
+
+/* La riga selezionata nella lista. */
+.razza-workspace .rg-color-map__row.is-selected { background: var(--rg-color-surface); outline: 1px solid var(--rg-color-border-strong); }
+/* Le righe delle liste: il pannello e' stretto, quindi l'etichetta sta in cima e i campi sotto, a tutta riga
+   (col DS di serie il nome si riduceva a 0 px e si spezzava lettera per lettera). */
+.razza-workspace .rg-color-map__row { grid-template-columns: 24px minmax(0, 1fr); }
+.razza-workspace .rg-color-map__aside { grid-column: 1 / -1; flex-wrap: wrap; justify-content: flex-start; align-items: center; }

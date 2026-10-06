@@ -19,6 +19,7 @@
       "@app/pettine": ["../pettine/src/tool.ts"],
       "@app/zone-pattern": ["../zone-pattern/src/tool.ts"],
       "@app/cross-stitch": ["../cross-stitch/src/tool.ts"],
+      "@app/razza": ["../razza/src/tool.ts"],
       "@app/cannage-rafia": ["../cannage-rafia/src/tool.ts"],
       "@rg/pattern-grammar": ["../../packages/pattern-grammar/src/index.ts"]
     }

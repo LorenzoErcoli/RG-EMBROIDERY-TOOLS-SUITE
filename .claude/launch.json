@@ -105,6 +105,19 @@
       "port": 5284,
       "autoPort": false,
       "url": "http://127.0.0.1:5284"
+    },
+    {
+      "name": "razza-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--workspace",
+        "apps/razza"
+      ],
+      "port": 5296,
+      "autoPort": false,
+      "url": "http://127.0.0.1:5296"
     }
   ]
 }

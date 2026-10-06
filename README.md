@@ -47,6 +47,7 @@ Nella pagina **In sviluppo** (si aprono e si usano, ma non sono ancora strumenti
 | Strumento | Cosa fa | Ingresso |
 |---|---|---|
 | **Cross-Stitch** (`cross-stitch`) | griglia di diagonali, V e croci in più fili; l'effetto maglia | griglia disegnata o immagine |
+| **Pelle di razza** (`razza`) | pallini di cordoncino piccoli ai bordi e grandi al centro, con pallini fissi e linee di sfumatura; passaggi corti e coperti | DXF/SVG |
 | **Broccato** (`broccato`) | aree di colore a raso rado, coi passaggi nascosti sotto i colori successivi | immagine |
 | **Sfrangiatura** (`sfrangiatura`) | frange a X sui capi dei rasi di un DST già cucito, dove marchi col pennello | DST |
 | **Punto Pittorico** (`pittorico`) | riempimenti che seguono le curve: degradé col frastaglio, taglio secco dove il colore stacca | immagine |

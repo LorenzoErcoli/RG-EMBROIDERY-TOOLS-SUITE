@@ -40,6 +40,7 @@ export { leggiRaso } from ${JSON.stringify(posix('apps/sfrangiatura/src/rasi.ts'
 export { sfrangia } from ${JSON.stringify(posix('apps/sfrangiatura/src/frange.ts'))};
 export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('apps/pittorico/src/primitives.ts'))};
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
+export { costruisci as rzCostruisci, pezzoDa as rzPezzoDa, rettangolo as rzRettangolo, stratiDaRisultato as rzStrati, stratiPerDst as rzStratiPerDst, progetto as rzProgetto, leggiProgetto as rzLeggiProgetto, daDiPassaggio as rzDaDiPassaggio, PARAMETRI_RAZZA as RZ_PARAMETRI } from ${JSON.stringify(posix('apps/razza/src/motore.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 export { routeCells as csRouteCells, colorPolylines as csColorPolylines, DEFAULT_ROUTE as CS_DEFAULT_ROUTE, RETRACE_PRESETS as CS_RETRACE_PRESETS } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
 export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight, knitFromImage as csKnitFromImage, refinePalette as csRefinePalette, brushEdits as csBrushEdits, fillEdits as csFillEdits, applyEdits as csApplyEdits, fromTwoColumnV as csFromTwoColumnV } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
@@ -1138,6 +1139,43 @@ console.log('\nimport DXF: cerchi e archi');
   const a0 = arco.contours[0].points[0], a1 = arco.contours[0].points[arco.contours[0].points.length - 1];
   check('DXF: ...da 0° (10,0) a 90° (0,10) con la Y del disegno rivolta in giù',
     [Math.round(a0.x), Math.round(a0.y), Math.round(a1.x), Math.round(a1.y)], [10, 0, 0, -10]);
+}
+
+// import DXF: i BLOCCHI. Un CAD che esporta «tutto il disegno dentro un blocco» lascia in ENTITIES un solo
+// INSERT: l'importatore leggeva solo ENTITIES e il DXF di Dior (BASERICAMO_39) usciva con ZERO contorni,
+// senza un errore (2026-10-06). Il lucchetto: lo stesso quadrato letto direttamente e via blocco coincide.
+console.log('\nimport DXF: blocchi e INSERT');
+{
+  const quadrato = (x0, y0, l) => ['0','POLYLINE','8','0','66','1','70','1',
+    ...[[x0, y0], [x0 + l, y0], [x0 + l, y0 + l], [x0, y0 + l]].flatMap(([x, y]) => ['0','VERTEX','8','0','10', String(x), '20', String(y)]), '0','SEQEND'];
+  const blocco = (nome, corpo, bx = 0, by = 0) => ['0','BLOCK','8','0','2', nome, '70','0','10', String(bx), '20', String(by), '30','0','3', nome, '1','', ...corpo, '0','ENDBLK'];
+  const file = (blocchi, entita) => ['0','SECTION','2','BLOCKS', ...blocchi, '0','ENDSEC', '0','SECTION','2','ENTITIES', ...entita, '0','ENDSEC','0','EOF'].join('\n');
+  const insert = (nome, x, y, extra = []) => ['0','INSERT','8','0','2', nome, '10', String(x), '20', String(y), ...extra];
+  const bb = (r) => { const p = r.contours[0].points; return [Math.min(...p.map((q) => q.x)), Math.min(...p.map((q) => q.y)), Math.max(...p.map((q) => q.x)), Math.max(...p.map((q) => q.y))].map((v) => Math.round(v * 100) / 100); };
+
+  const diretto = rg.parseDxfToContours(['0','SECTION','2','ENTITIES', ...quadrato(0, 0, 10), '0','ENDSEC','0','EOF'].join('\n'));
+  const viaBlocco = rg.parseDxfToContours(file([...blocco('Q', quadrato(0, 0, 10))], insert('Q', 0, 0)));
+  check('blocco + INSERT a (0,0): il disegno non sparisce (prima: 0 contorni)', viaBlocco.contours.length, 1);
+  check('...ed è identico al disegno letto direttamente', bb(viaBlocco), bb(diretto));
+  check('...e resta chiuso', viaBlocco.contours[0].closed, true);
+
+  const spostato = rg.parseDxfToContours(file([...blocco('Q', quadrato(0, 0, 10))], insert('Q', 100, 50)));
+  check('INSERT a (100,50): il quadrato si sposta di (100,50) (Y del disegno in giù)', bb(spostato), [100, -60, 110, -50]);
+
+  const ruotato = rg.parseDxfToContours(file([...blocco('Q', quadrato(0, 0, 10))], insert('Q', 100, 50, ['41','2','42','2','50','90'])));
+  check('scala 2 e rotazione 90°: lato 20, ruotato attorno al punto di inserimento', bb(ruotato), [80, -70, 100, -50]);
+
+  const base = rg.parseDxfToContours(file([...blocco('Q', quadrato(5, 5, 10), 5, 5)], insert('Q', 0, 0)));
+  check('punto base del blocco: (5,5) va a (0,0)', bb(base), [0, -10, 10, 0]);
+
+  const annidato = rg.parseDxfToContours(file([...blocco('Q', quadrato(0, 0, 10)), ...blocco('A', insert('Q', 20, 0))], insert('A', 100, 0)));
+  check('blocco dentro un blocco: le due traslazioni si sommano', bb(annidato), [120, -10, 130, 0]);
+
+  const orfano = rg.parseDxfToContours(file([], insert('NONESISTE', 0, 0)));
+  check('INSERT di un blocco che non esiste: nessun contorno, nessun errore', orfano.contours.length, 0);
+
+  const giro = rg.parseDxfToContours(file([...blocco('X', insert('X', 0, 0))], insert('X', 0, 0)));
+  check('un blocco che richiama se stesso non manda in loop', giro.contours.length, 0);
 }
 
 // oblique — i tre perimetri: sagoma, taglio pattern, passaggi. Difetti trovati usando il tool
@@ -5492,6 +5530,121 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   check('gomma grandezza 2: 2 × 2 celle vuote', 7 * 7 - cG.size, 4);
   rg.csApplyEdits(gE2, cG, rg.csBrushEdits(gE2, cG, 2, 2, 1, 1, 'v', 'right', false));
   check('pennello col destro su una cella vuota: una Λ', cG.get(2 * 7 + 2).stitch, 'lambda');
+}
+
+// ============================================================================================
+// razza — «Pelle di razza»: pallini di cordoncino piccoli ai bordi e grandi verso il centro.
+// Ogni motore va misurato contro le regole che dice di rispettare (regola di crescita 8): R3 (punto minimo, anche
+// DOPO l'arrotondamento a 0,1 mm del DST), R4 (punto massimo, anche nei passaggi), R5 (vuoti), R9/R27 (export
+// riapribile), R31 (DST). Piu' le richieste di Lorenzo (2026-10-06): piccoli esterni e grandi al centro, pallini
+// fissi, linee di sfumatura col verso, distanza e misure minima/massima come parametri.
+// ============================================================================================
+console.log('\nrazza — il ricamo rispetta le sue regole');
+{
+  const dist2 = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+  const media = (v) => v.reduce((s, x) => s + x, 0) / (v.length || 1);
+  const diam = (o) => 2 * o.a;
+  // una sagoma a «C» (apertura a sinistra, come il pezzo vero) e un rettangolo con un'area vuota
+  const C = rg.rzPezzoDa([{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 80 }, { x: 0, y: 80 }, { x: 0, y: 55 }, { x: 70, y: 55 }, { x: 70, y: 25 }, { x: 0, y: 25 }]);
+  const conVuoto = rg.rzPezzoDa([{ x: 0, y: 0 }, { x: 100, y: 0 }, { x: 100, y: 70 }, { x: 0, y: 70 }], [[{ x: 40, y: 25 }, { x: 60, y: 25 }, { x: 60, y: 45 }, { x: 40, y: 45 }]]);
+  const rett = rg.rzRettangolo(100, 60);
+
+  const r1 = rg.rzCostruisci(C, { seed: 3 });
+  const r1b = rg.rzCostruisci(C, { seed: 3 });
+  check('determinismo: stesso seed, stessi punti', [r1.punti.length, r1.punti[0].p, r1.punti.at(-1).p], [r1b.punti.length, r1b.punti[0].p, r1b.punti.at(-1).p]);
+  check('...un altro seed, un altro ricamo', rg.rzCostruisci(C, { seed: 4 }).punti.length !== r1.punti.length, true);
+  check('c è del ricamo: sulla C (misurato 445 pallini, 4.517 punti, 65%) almeno 300 pallini, 3.000 punti e metà del pezzo coperto', [r1.misure.tondini >= 300, r1.punti.length >= 3000, r1.misure.copertoPercento >= 50], [true, true, true]);
+
+  // R3 — il punto minimo vale per OGNI punto, passaggi compresi
+  check('R3: nessun punto sotto il minimo (0,8 mm)', r1.misure.puntiSottoMinimo, 0);
+  const rMin = rg.rzCostruisci(rett, { seed: 1, minStitchMm: 1.2 });
+  check('R3: il minimo è un parametro: a 1,2 mm nessun punto sotto 1,2', rMin.misure.puntoMin >= 1.2 - 1e-9, true);
+  // R4 — il punto massimo vale per i passaggi
+  const rMax = rg.rzCostruisci(rett, { seed: 1, maxStitchMm: 2 });
+  let passMaxOk = true;
+  for (let i = 1; i < rMax.punti.length; i++) if (rg.rzDaDiPassaggio(rMax.punti[i - 1], rMax.punti[i]) >= 0 && dist2(rMax.punti[i - 1].p, rMax.punti[i].p) > 2 + 1e-6) passMaxOk = false;
+  check('R4: nessun passaggio oltre il punto massimo (a 2 mm)', passMaxOk, true);
+
+  // il DST arrotonda a 0,1 mm: il minimo deve tenere ANCHE dopo (difetto trovato rileggendo i DST: 0,72 invece di 0,80)
+  const { layers: lDst } = rg.rzStratiPerDst(r1);
+  const dstBytes = rg.dstFromExportLayers(lDst, { label: 'RAZZA', center: false });
+  const letto = rg.readDst(dstBytes);
+  let minDst = Infinity;
+  for (const b of letto.blocks) for (let i = 1; i < b.points_mm.length; i++) minDst = Math.min(minDst, Math.hypot(b.points_mm[i][0] - b.points_mm[i - 1][0], b.points_mm[i][1] - b.points_mm[i - 1][1]));
+  check('R3 dopo il DST: riletto, il punto minimo è ancora 0,8 (non 0,72)', Math.round(minDst * 100) / 100 >= 0.8, true);
+  check('DST: un blocco solo, un solo salto iniziale (nessun taglio fra i pallini)', [letto.blocks.length, letto.jumps.length], [1, 1]);
+  check('DST: tutti i punti ci sono', letto.stitchCount, r1.punti.length - 1);
+
+  // R5 / sagoma — niente fuori dal pezzo, niente dentro il vuoto, nessun passaggio che li attraversa
+  const fuori = (r, pz) => r.punti.filter((q) => !rg.pointInPolygon(q.p, pz.contorno) && rg.distanceToBoundary(q.p, pz.contorno) > 0.2).length;
+  check('sagoma a C: nessun punto fuori dal pezzo', fuori(r1, C), 0);
+  check('sagoma a C: nessun passaggio attraversa l apertura', r1.misure.fuoriSagoma, 0);
+  const rv = rg.rzCostruisci(conVuoto, { seed: 2 });
+  const dentroVuoto = rv.punti.filter((q) => q.p.x > 40.2 && q.p.x < 59.8 && q.p.y > 25.2 && q.p.y < 44.8).length;
+  check('R5: nessun punto dentro l area vuota', dentroVuoto, 0);
+  check('R5: nessun passaggio attraversa l area vuota', rv.misure.fuoriSagoma, 0);
+  check('R5: attorno al vuoto il ricamo c è (non è stato buttato via)', rv.punti.filter((q) => q.p.x > 25 && q.p.x < 75 && q.p.y > 10 && q.p.y < 60).length > 200, true);
+
+  // i passaggi sono piccoli: nessuno in vista sopra 5 mm (richiesta di Lorenzo), sul rettangolo e sulla C
+  check('passaggi: nessuna giuntura in vista oltre 5 mm (rettangolo e C)', [rg.rzCostruisci(rett, { seed: 1 }).misure.vistaGiuntura.oltre5, r1.misure.vistaGiuntura.oltre5], [0, 0]);
+
+  // piccoli ai bordi, grandi verso il centro — con il controllo negativo (campo uniforme: niente differenza)
+  const fasciaBordo = (r, pz, a, b) => r.tondini.filter((o) => { const d = rg.distanceToBoundary({ x: o.cx, y: o.cy }, pz.contorno); return d >= a && d < b; });
+  const rBordo = rg.rzCostruisci(rett, { seed: 5, modoCampo: 'bordo', rumoreCampo: 0 });
+  const dBordo = media(fasciaBordo(rBordo, rett, 0, 4).map(diam)), dCentro = media(fasciaBordo(rBordo, rett, 15, 99).map(diam));
+  check('campo dal bordo: al centro i pallini sono almeno 1,5 volte quelli sul bordo', dCentro >= 1.5 * dBordo, true);
+  const rUni = rg.rzCostruisci(rett, { seed: 5, modoCampo: 'uniforme' });
+  const uBordo = media(fasciaBordo(rUni, rett, 0, 4).map(diam)), uCentro = media(fasciaBordo(rUni, rett, 15, 99).map(diam));
+  check('controllo: a campo uniforme bordo e centro NON differiscono di molto (la misura dal bordo misura davvero)', Math.abs(uCentro - uBordo) < 0.25 * uCentro, true);
+  // sulla C vale anche lungo il bordo dell'APERTURA (non solo il rettangolo che la contiene)
+  const cBordo = media(fasciaBordo(r1, C, 0, 3).map(diam)), cCentro = media(fasciaBordo(r1, C, 12, 99).map(diam));
+  check('sagoma a C: piccoli lungo tutti i bordi (apertura compresa), grandi dentro', cCentro > 1.3 * cBordo, true);
+
+  // misura minima e massima: parametri veri
+  const rMM = rg.rzCostruisci(rett, { seed: 6, diamMinMm: 3, diamMaxMm: 5 });
+  const dd = rMM.tondini.map(diam);
+  check('pallino minimo e massimo: nessun pallino fuori da 3-5 mm', [Math.min(...dd) >= 3 - 0.01, Math.max(...dd) <= 5 + 0.01], [true, true]);
+
+  // la distanza fra i pallini è un parametro
+  const minVuoto = (r) => { let m = Infinity; const t = r.tondini; for (let i = 0; i < t.length; i++) for (let j = i + 1; j < t.length; j++) { const d = Math.hypot(t[i].cx - t[j].cx, t[i].cy - t[j].cy) - t[i].a - t[j].a; if (d < m) m = d; } return m; };
+  const g0 = minVuoto(rg.rzCostruisci(rett, { seed: 7, gapMm: 0 })), g1 = minVuoto(rg.rzCostruisci(rett, { seed: 7, gapMm: 1 }));
+  check('distanza fra i pallini: a 1 mm il vuoto minimo è 1 mm; a 0 è 0', [g1 >= 1 - 1e-6, g0 >= -1e-6 && g0 < 0.2], [true, true]);
+
+  // i pallini FISSI: nel punto esatto, della misura scelta, e il resto nasce da lì
+  const fissi = [{ x: 50, y: 30, diamMm: 12 }, { x: 15, y: 15, diamMm: 3 }];
+  const rf = rg.rzCostruisci(rett, { seed: 8 }, fissi);
+  const trovati = fissi.map((f) => rf.tondini.find((o) => o.fisso && Math.hypot(o.cx - f.x, o.cy - f.y) < 1e-6));
+  check('fissi: ognuno è dove l ha messo, grande quanto ha detto', trovati.map((o) => o && Math.round(diam(o) * 100) / 100), [12, 3]);
+  const vicinoGrande = media(rf.tondini.filter((o) => !o.fisso && Math.hypot(o.cx - 50, o.cy - 30) < 16).map(diam));
+  const senzaFissi = rg.rzCostruisci(rett, { seed: 8 });
+  const vicinoSenza = media(senzaFissi.tondini.filter((o) => Math.hypot(o.cx - 50, o.cy - 30) < 16).map(diam));
+  check('fissi: il fisso grande tira su la misura dei vicini (senza, erano più piccoli)', vicinoGrande > vicinoSenza, true);
+  check('fissi: i vicini del fisso non lo toccano (vuoto rispettato)', rf.tondini.every((o) => o.fisso || Math.hypot(o.cx - 50, o.cy - 30) - o.a - 6 >= -1e-6), true);
+  const rfA = rg.rzCostruisci(rett, { seed: 8 }, [{ x: 500, y: 500, diamMm: 5 }, { x: 20, y: 20, diamMm: 0.5 }]);
+  check('fissi: fuori dal pezzo, o troppo piccoli per avere un corpo, danno un avviso e non vengono posati', [rfA.tondini.filter((o) => o.fisso).length, rfA.avvisi.length >= 2], [0, true]);
+  const rfM = rg.rzCostruisci(rett, { seed: 8 }, [{ x: 50, y: 30, diamMm: 5 }]);
+  check('fissi: sono nel ricamo (il percorso li cuce)', rfM.punti.some((q) => rfM.tondini[q.tond].fisso), true);
+
+  // le linee di sfumatura: piccolo in A, grande in B, e il verso conta
+  const sf = (da, db) => [{ a: { x: 5, y: 30 }, b: { x: 95, y: 30 }, diamAMm: da, diamBMm: db }];
+  const lato = (r, x0, x1) => media(r.tondini.filter((o) => o.cx >= x0 && o.cx < x1).map(diam));
+  const rS1 = rg.rzCostruisci(rett, { seed: 9, diamMaxMm: 10 }, [], sf(3, 10)), rS2 = rg.rzCostruisci(rett, { seed: 9, diamMaxMm: 10 }, [], sf(10, 3));
+  check('sfumatura da piccolo (sinistra) a grande (destra): a destra i pallini sono più grandi', lato(rS1, 60, 100) > 1.3 * lato(rS1, 0, 40), true);
+  check('...e invertendo il verso si inverte: a sinistra più grandi', lato(rS2, 0, 40) > 1.3 * lato(rS2, 60, 100), true);
+  check('pesoSfumature 0: la sfumatura non conta (come senza)', rg.rzCostruisci(rett, { seed: 9, pesoSfumature: 0 }, [], sf(3, 10)).punti.length, rg.rzCostruisci(rett, { seed: 9 }).punti.length);
+
+  // l'export: SVG e DST riapribili, con pezzo, fissi e sfumature (R9, R27)
+  const par = { ...rg.RZ_PARAMETRI, seed: 11, gapMm: 0.3 };
+  const proj = rg.rzProgetto(par, rett, fissi, sf(3, 9));
+  const svgOut = rg.buildSvg(rg.rzStrati(rf), { bounds: { minX: 0, minY: 0, maxX: 100, maxY: 60 }, marginMm: 2, metadata: proj });
+  const riaperto = rg.rzLeggiProgetto(rg.readProjectMetadata(svgOut));
+  check('SVG riapribile: parametri, fissi, sfumature e pezzo tornano', [riaperto?.params.gapMm, riaperto?.params.seed, riaperto?.fissi, riaperto?.sfumature.length, riaperto?.contorno.length], [0.3, 11, fissi, 1, 4]);
+  const dstProj = rg.dstFromExportLayers(lDst, { label: 'RAZZA', center: false, metadata: proj });
+  const dstRiaperto = rg.rzLeggiProgetto(rg.readDstMetadata(dstProj));
+  check('DST riapribile: i parametri viaggiano nel footer (R27)', [dstRiaperto?.params.gapMm, dstRiaperto?.fissi.length, dstRiaperto?.vuoti.length], [0.3, 2, 0]);
+  check('un file di un altro tool non viene scambiato per un progetto razza', rg.rzLeggiProgetto({ rgProject: 'net-45', params: {} }), null);
+  check('un progetto con parametri di tipo sbagliato non li prende', rg.rzLeggiProgetto({ rgProject: 'razza', params: { gapMm: 'tanto' } }).params.gapMm, rg.RZ_PARAMETRI.gapMm);
+  check('export: un solo tracciato continuo', [rg.rzStrati(rf).length, rg.rzStrati(rf)[0].polylines.length], [1, 1]);
 }
 
 rmSync(outDir, { recursive: true, force: true });
