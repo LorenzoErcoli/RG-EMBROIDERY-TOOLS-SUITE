@@ -170,6 +170,7 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
       <header class="rg-workspace__stage-header">
         <h2 class="rg-h3">Anteprima</h2>
         <div class="rg-cluster">
+          <label class="rg-choice" title="Se è spenta, il ricamo si rifà solo quando premi Genera: così puoi mettere pallini e sfumature senza aspettare."><input type="checkbox" id="autoCalcolo"><span>Ricalcola da solo</span></label>
           <button id="genBtn" class="rg-button rg-button--primary rg-button--small" type="button">Genera</button>
           <button id="exportBtn" class="rg-button rg-button--outline rg-button--small" type="button" disabled>Esporta SVG</button>
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small" type="button" disabled>Esporta DST</button>
@@ -321,10 +322,39 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
   let worker: Worker | null = null;
   let idCalcolo = 0, timer = 0, tInizio = 0, tick = 0;
 
+  /**
+   * Una modifica. Di default NON ricalcola: segna il ricamo come vecchio e aspetta che Lorenzo premi Genera, cosi' puo' mettere
+   * pallini e sfumature senza aspettare qualche secondo a ogni clic (2026-10-06). Con «Ricalcola da solo» aspetta che smetta
+   * di toccare per un secondo e mezzo. `subito` = un'azione che ha senso solo col ricamo fresco (nuovo pezzo, Genera).
+   */
+  let autoCalcolo = false;
+  try { autoCalcolo = localStorage.getItem('razza.auto') === '1'; } catch { /* senza archivio resta spento */ }
+  ($('autoCalcolo') as HTMLInputElement).checked = autoCalcolo;
+  ($('autoCalcolo') as HTMLInputElement).addEventListener('change', () => {
+    autoCalcolo = ($('autoCalcolo') as HTMLInputElement).checked;
+    try { localStorage.setItem('razza.auto', autoCalcolo ? '1' : '0'); } catch { /* idem */ }
+    if (autoCalcolo && vecchio) pianifica();
+  });
+  let vecchio = false;
+
+  /** Il ricamo che si vede non e' piu' quello dei parametri: un calcolo in corso e' da buttare, e l'export non e' piu' fedele. */
+  function invalida(): void {
+    idCalcolo++;
+    worker?.terminate(); worker = null;
+    window.clearInterval(tick);
+    vecchio = true;
+    ($('exportBtn') as HTMLButtonElement).disabled = true;
+    ($('exportDstBtn') as HTMLButtonElement).disabled = true;
+    $('genBtn').classList.toggle('rg-button--primary', true);
+  }
+
   function pianifica(subito = false): void {
     window.clearTimeout(timer);
-    $('status').textContent = subito ? 'Calcolo…' : 'Da ricalcolare…';
-    timer = window.setTimeout(genera, subito ? 0 : 700);
+    if (subito) { genera(); return; }
+    invalida();
+    if (autoCalcolo) { $('status').textContent = 'Da ricalcolare…'; timer = window.setTimeout(genera, 1500); }
+    else $('status').textContent = 'Modificato: premi Genera per ricalcolare';
+    $('misure').classList.add('razza-vecchio');
   }
 
   function genera(): void {
@@ -342,6 +372,7 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
       window.clearInterval(tick);
       if (e.data.error) { $('status').textContent = 'Errore: ' + e.data.error; return; }
       risultato = e.data.result as Risultato;
+      vecchio = false; $('misure').classList.remove('razza-vecchio');
       disegnaAnteprima();
       mostraMisure();
       ($('exportBtn') as HTMLButtonElement).disabled = !risultato.punti.length;

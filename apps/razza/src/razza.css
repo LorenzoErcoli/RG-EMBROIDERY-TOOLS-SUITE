@@ -44,3 +44,6 @@ body {
    (col DS di serie il nome si riduceva a 0 px e si spezzava lettera per lettera). */
 .razza-workspace .rg-color-map__row { grid-template-columns: 24px minmax(0, 1fr); }
 .razza-workspace .rg-color-map__aside { grid-column: 1 / -1; flex-wrap: wrap; justify-content: flex-start; align-items: center; }
+
+/* Il ricamo che si vede e' di prima della modifica: le misure in basso si spengono finche' non si ricalcola. */
+.razza-workspace .razza-vecchio { opacity: 0.45; }
