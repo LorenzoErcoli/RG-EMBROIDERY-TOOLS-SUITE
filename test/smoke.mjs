@@ -2621,6 +2621,26 @@ console.log('\noblique — routing + orchestratore (2d)');
       sorgente.includes('Object.assign(cfg, neutre, migratePreset(preset.config), restano);'), true);
   }
 
+  // IL DST RIAPRE IL PROGRAMMA INTERO (Lorenzo, 2026-10-07: «caricare un dst e che si rigenerasse il
+  // programma»). Prima nel footer c'erano i soli parametri: il cartamodello e i ruoli dei colori non
+  // tornavano. Ora ci vanno il disegno (il testo del file, con la sua scala) e i ruoli, con un tetto; e
+  // riaprendo si rilegge il disegno, si rimettono i ruoli e per ultimi i parametri. Sul sorgente: il
+  // bottone vive nel DOM. L'andata e ritorno dei byte è quella del core, già bloccata da R27.
+  {
+    const sorgente = readFileSync(join(root, 'apps/pattern-grammar/src/tool.ts'), 'utf8');
+    const salva = sorgente.slice(sorgente.indexOf("$('exportDstBtn')"), sorgente.indexOf('buildPanel();\n  render();\n}'));
+    const riapri = sorgente.slice(sorgente.indexOf('if (isDst) {'), sorgente.indexOf("if (isDst) reader.readAsArrayBuffer(file)"));
+    check('il DST del Generatore porta il disegno coi ruoli e la scala, entro un tetto',
+      [salva.includes('{ name: boundarySource.name, text: boundarySource.text, scale: { ...scalaImport }, roles: { ...boundaryRoles } }'),
+        salva.includes('MAX_DRAWING_KB'), salva.includes("...(disegno ? { drawing: disegno } : {})")], [true, true, true]);
+    check('riaprendo: prima il disegno, poi i ruoli salvati, per ultimi i parametri',
+      [riapri.indexOf('reparseBoundary()') > 0, riapri.indexOf('Object.assign(boundaryRoles, disegno.roles') > riapri.indexOf('reparseBoundary()'),
+        riapri.indexOf('Object.assign(cfg, parametri)') > riapri.indexOf('Object.assign(boundaryRoles, disegno.roles')], [true, true, true]);
+    // la scala d'import non torna più al default quando il pannello si ricostruisce (preset, riapertura)
+    check('la scala d\'import sopravvive alla ricostruzione del pannello',
+      sorgente.includes("v === scalaImport.scaleMode ? ' selected' : ''"), true);
+  }
+
   console.log('\nzone-pattern — le aree di scarico sul davanti di Lorenzo');
   const modello = rg.parseImportedBoundarySource(
     readFileSync(join(here, 'fixtures/scarico-davanti.svg'), 'utf8'), 'scarico-davanti.svg',

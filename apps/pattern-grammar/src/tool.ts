@@ -17,6 +17,16 @@ const PRESET_KEY = 'pattern-grammar-engine-presets';
  * Cosa può fare una tinta del cartamodello. «Area vuota» è R5: dentro non si ricama.
  * «Area di scarico»: dentro si ricama con meno passate (di solito per il montaggio); non ritaglia.
  */
+/** Il disegno dentro il DST: il testo del file caricato, la scala con cui leggerlo e i ruoli dei colori. */
+type DisegnoSalvato = {
+  name: string;
+  text: string;
+  scale?: { scaleMode?: string; customW?: number; customH?: number };
+  roles?: Record<string, BoundaryRole>;
+};
+/** Tetto al disegno incorporato nel DST, come negli altri tool: oltre, il file porta i soli parametri. */
+const MAX_DRAWING_KB = 256;
+
 /** Un contorno con un ruolo, aperto meno di così, si chiude da solo (mm). */
 const CHIUSURA_MAX_MM = 5;
 const fmtMm = (v: number) => v.toLocaleString('it-IT', { maximumFractionDigits: 1 });
@@ -72,11 +82,15 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
   let boundaryModel: ImportedBoundaryModel | null = null;
   /** Ruolo di ogni tinta del cartamodello: perimetro, area vuota, o niente. */
   const boundaryRoles: Record<string, BoundaryRole> = {};
+  /** La scala d'import del disegno: resta quando il pannello si ricostruisce, e viaggia nel DST. */
+  const scalaImport = { scaleMode: 'illustrator-72dpi', customW: 100, customH: 100 };
   let boundarySource: { text: string; name: string } | null = null;
   /** Il testo dello stato dell'import, a cui si aggiunge la nota sui contorni chiusi d'ufficio. */
   let testoImport = '';
   /** Lo stato mostrato sotto il disegno (import + nota): sopravvive alla ricostruzione del pannello. */
   let statoContorno = '';
+  /** Cosa dire, dopo il salvataggio, del disegno dentro il DST. */
+  let notaDisegno = '';
   let lastSvg = '';
 
   const pz = hookPanZoom($('canvas'), $('layer'), (z) => { $('zoom').textContent = `zoom ${Math.round(z * 100)}%`; });
@@ -179,16 +193,16 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       <div class="rg-file-input rg-param-grid__wide">
         <label class="rg-file-input__control">
           <input type="file" id="boundaryFile" accept=".svg,.dxf,.dst" />
-          <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
+          <span class="rg-button rg-button--outline">Carica DXF, SVG o un DST di qui…</span>
         </label>
         <p class="rg-file-input__status" id="boundaryStatus" role="status">${boundaryModel ? statoContorno : 'Nessun contorno: il piano non viene ritagliato.'}</p>
       </div>
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Scala del file importato</span>
-        <select id="scaleMode" class="rg-select">${SCALE_MODES.map(([v, l]) => `<option value="${v}"${v === 'illustrator-72dpi' ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
+        <select id="scaleMode" class="rg-select">${SCALE_MODES.map(([v, l]) => `<option value="${v}"${v === scalaImport.scaleMode ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="rg-field"><span class="rg-field__label">Larghezza import</span>
-        <span class="rg-field-with-unit"><input id="customW" class="rg-input rg-input--numeric" type="number" min="0.001" step="0.1" value="100"><span>mm</span></span></label>
+        <span class="rg-field-with-unit"><input id="customW" class="rg-input rg-input--numeric" type="number" min="0.001" step="0.1" value="${scalaImport.customW}"><span>mm</span></span></label>
       <label class="rg-field"><span class="rg-field__label">Altezza import</span>
-        <span class="rg-field-with-unit"><input id="customH" class="rg-input rg-input--numeric" type="number" min="0.001" step="0.1" value="100"><span>mm</span></span></label>`;
+        <span class="rg-field-with-unit"><input id="customH" class="rg-input rg-input--numeric" type="number" min="0.001" step="0.1" value="${scalaImport.customH}"><span>mm</span></span></label>`;
     return box;
   }
 
@@ -299,9 +313,9 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
   function reparseBoundary() {
     if (!boundarySource) return;
     boundaryModel = parseImportedBoundarySource(boundarySource.text, boundarySource.name, {
-      scaleMode: ($('scaleMode') as HTMLSelectElement).value as ImportScaleMode,
-      customWidthMm: parseFloat(($('customW') as HTMLInputElement).value),
-      customHeightMm: parseFloat(($('customH') as HTMLInputElement).value),
+      scaleMode: scalaImport.scaleMode as ImportScaleMode,
+      customWidthMm: scalaImport.customW,
+      customHeightMm: scalaImport.customH,
     });
     // IL FORMATO COPRE TUTTO IL PEZZO (Lorenzo, 2026-10-02: «se inserisco un svg o dxf metti
     // automaticamente larghezza e altezza del pattern in modo che copra tutto il pezzo»). Il piano parte
@@ -455,15 +469,34 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       const reader = new FileReader();
       reader.onload = () => {
         try {
-          // Un .dst uscito da qui non è un contorno: è un PROGETTO. Si legge il footer dopo
-          // l'END e si rimettono i parametri, lasciando stare il contorno che c'è già.
+          // Un .dst uscito da qui non è un contorno: è un PROGETTO. Si legge il footer dopo l'END e si
+          // rimette tutto (Lorenzo, 2026-10-07: «caricare un dst e che si rigenerasse il programma»):
+          // parametri, e — se ci sta — il disegno coi suoi ruoli e la sua scala. Prima tornavano i soli
+          // parametri e il cartamodello restava quello che c'era (o nessuno).
           if (isDst) {
             const meta = readDstMetadata(new Uint8Array(reader.result as ArrayBuffer));
             if (meta?.rgProject === 'pattern-grammar' && meta.params) {
-              Object.assign(cfg, migratePreset(meta.params as PatternConfig));
+              const disegno = meta.drawing as DisegnoSalvato | undefined;
+              if (disegno?.text) {
+                boundarySource = { text: disegno.text, name: disegno.name || file.name };
+                Object.assign(scalaImport, disegno.scale ?? {});
+                for (const k of Object.keys(boundaryRoles)) delete boundaryRoles[k];
+                buildPanel();
+                reparseBoundary();
+                // i ruoli del file al posto di quello proposto dall'import (il confine sul contorno più grande)
+                for (const k of Object.keys(boundaryRoles)) delete boundaryRoles[k];
+                Object.assign(boundaryRoles, disegno.roles ?? {});
+                rebuildBoundary();
+              }
+              // i parametri per ultimi: formato e sagoma tornano quelli salvati, non quelli dell'import
+              const { importedBoundary: _sagoma, ...parametri } = migratePreset(meta.params as PatternConfig) as Record<string, unknown>;
+              Object.assign(cfg, parametri);
               buildPanel();
               render();
-              $('boundaryStatus').textContent = `${file.name}: parametri ripristinati dal DST`;
+              $('boundaryStatus').textContent = disegno?.text
+                ? `${file.name}: progetto riaperto — parametri, disegno «${boundarySource!.name}» e ruoli dei colori`
+                : `${file.name}: parametri ripristinati dal DST (il disegno non c'era: caricalo a parte)`;
+              statoContorno = $('boundaryStatus').textContent ?? statoContorno;
             } else {
               $('boundaryStatus').textContent = `${file.name}: nessun parametro di questo tool nel DST`;
             }
@@ -475,9 +508,13 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       };
       if (isDst) reader.readAsArrayBuffer(file); else reader.readAsText(file);
     });
-    $('scaleMode').addEventListener('change', reparseBoundary);
-    $('customW').addEventListener('change', reparseBoundary);
-    $('customH').addEventListener('change', reparseBoundary);
+    const leggiScala = () => {
+      scalaImport.scaleMode = ($('scaleMode') as HTMLSelectElement).value;
+      scalaImport.customW = parseFloat(($('customW') as HTMLInputElement).value) || scalaImport.customW;
+      scalaImport.customH = parseFloat(($('customH') as HTMLInputElement).value) || scalaImport.customH;
+      reparseBoundary();
+    };
+    for (const id of ['scaleMode', 'customW', 'customH']) $(id).addEventListener('change', leggiScala);
 
     $('savePreset').addEventListener('click', () => {
       const name = ($('presetName') as HTMLInputElement).value.trim();
@@ -601,13 +638,20 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
         id: 'pattern', color: '#005f27',
         polylines: final.visualPolylines.map((pl) => pl.map((p) => ({ x: p.x, y: p.y }))),
       };
-      // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge
-      // fino all'END e lo ignora, noi lo rileggiamo. Il contorno importato NON ci va: è
-      // l'unico pezzo pesante, e il tool lo tratta comunque come un file a parte.
+      // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge fino all'END
+      // e lo ignora, noi lo rileggiamo. Ci va anche il DISEGNO, come testo del file caricato, con la sua
+      // scala e i ruoli dei colori: così un DST riaperto rigenera il programma intero (2026-10-07). Sopra
+      // MAX_DRAWING_KB (come negli altri tool) restano i soli parametri, e lo si dice.
       const { importedBoundary, sourceAnalysis, reliefAreas, ...saved } = cfg as Record<string, unknown>;
+      const disegno: DisegnoSalvato | undefined = boundarySource && boundarySource.text.length / 1024 <= MAX_DRAWING_KB
+        ? { name: boundarySource.name, text: boundarySource.text, scale: { ...scalaImport }, roles: { ...boundaryRoles } }
+        : undefined;
+      notaDisegno = !boundarySource ? '' : disegno
+        ? ` · col disegno (${Math.round(boundarySource.text.length / 1024)} kB)`
+        : ` · disegno troppo pesante (${Math.round(boundarySource.text.length / 1024)} kB): nel file solo i parametri`;
       bytes = dstFromExportLayers([layer], {
         label: (base || 'PATTERN').toUpperCase().slice(0, 16),
-        metadata: { rgProject: 'pattern-grammar', version: '0.1.0', params: saved },
+        metadata: { rgProject: 'pattern-grammar', version: '0.1.0', params: saved, ...(disegno ? { drawing: disegno } : {}) },
       });
     } catch (e) {
       $('status').textContent = (e as Error).message;
@@ -615,7 +659,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     }
     const name = base ? `${base}-pattern.dst` : 'pattern.dst';
     const outcome = await saveBinaryFile(bytes, { suggestedName: name, ...DST_FILE });
-    $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${(bytes.length / 1024).toFixed(1)} KB`;
+    $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${(bytes.length / 1024).toFixed(1)} KB${notaDisegno}`;
   });
 
   buildPanel();
