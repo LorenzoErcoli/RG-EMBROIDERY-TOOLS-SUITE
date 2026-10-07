@@ -524,12 +524,21 @@ la V sta dentro la sua cella — dall'angolo in alto a sinistra alla punta a met
 e su all'angolo in alto a destra — quindi V e croce hanno la stessa misura e si mescolano. Si
 disegna a mano cella per cella, o si parte da un'immagine e la griglia si riempie da sola.
 
+**I passaggi della croce.** Fra le due stanghette di una X il filo deve fare un passo di lato (sul bordo
+della cella): i loro angoli stanno su due reti diverse e per diagonali non ci si arriva. Per non farlo a
+ogni croce, un blocco di croci si cuce in tre fasi: le stanghette di sotto di una rete, tutte quelle
+dell'altra, poi le stanghette di sopra rimaste. Il filo passa sulle stanghette (sotto quelle da fare o
+sopra quelle fatte) e fa solo **due passi di lato per blocco**. In cambio ripassa di più sulle
+stanghette già cucite.
+
 **Modificare: la barra sopra il disegno.** Sempre visibile, con gli strumenti, la grandezza del
 pennello, i fili e Annulla/Rifai.
 - **Sposta** (H): trascini la vista, il ricamo non si tocca. Rotella = ingrandisci.
 - **Pennello** (B): trascinando, i punti sotto il pennello passano al filo scelto — per pulire
-  l'interno di una scritta, bianco sopra il nero. Lavora a celle intere, una cella = un punto. Sulle celle vuote mette il punto
-  scelto nella barra, alla voce *Punto* (V, Croce, Diagonale; col clic destro Λ o «/»).
+  l'interno di una scritta, bianco sopra il nero. Lavora a celle intere, una cella = un punto. Mette il punto scelto nella
+  barra, alla voce *Punto* (V, Croce, Diagonale; col clic destro Λ o «/»), anche dove c'era già un
+  punto: una croce sopra la base a V diventa croce. Una croce va disegnata con un filo diverso da quello
+  della base: col filo della base la cella resta coperta dalla base, cioè a V.
 - **Riempi** (F): un clic passa al filo scelto tutta la zona COLLEGATA dello stesso colore. Attento:
   segue tutto quello che si tocca, quindi va usato su zone chiuse (l'interno di una lettera); per i
   ritocchi c'è il pennello.
@@ -571,7 +580,9 @@ proporzioni dell'immagine; se la scrivi a mano la proporzione si sblocca e l'imm
 Il **sormonto** è solo verticale: ogni riga sale dentro quella di sopra di quella percentuale
 dell'altezza, e le V si infilano una nell'altra; in orizzontale le V si toccano e basta. Per
 l'effetto maglia: celle più alte che larghe (per esempio 3 × 3,8 mm, sormonto 30%). Se ritocchi il disegno a mano,
-cambiando le misure non si rifà più dall'immagine: c'è *Rifai la maglia dall'immagine*.
+cambiando le misure non si rifà più dall'immagine: c'è **Maglia dall'immagine** (in *01 Immagine*), che
+rilegge l'immagine su tutto il ricamo. È anche il modo di lavorare **senza modulo**: se c'era un modulo,
+la maglia dall'immagine lo toglie (*Annulla* lo rimette).
 
 **Il punto della generazione.** In *01 Immagine*, *Punto*: V (la maglia, di partenza), Λ (la V
 capovolta), Croce, o la sola diagonale. Uno per cella, ognuno col suo filo. Per più dettaglio

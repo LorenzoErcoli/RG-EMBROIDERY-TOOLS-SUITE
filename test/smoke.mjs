@@ -5325,6 +5325,19 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     check('un tratto è un pezzo: numero sulle V e prima V del tratto', [modE.seq[1 * 4 + 2], modE.seq[1 * 4 + 3], modE.starts[3]], [3, 3, 1 * 4 + 2]);
   }
 
+  // LE CROCI A FASI (Lorenzo, 2026-10-07: «i passaggi del punto croce devono passare sulle stanghette
+  // della X, non possono andare in verticale»): un rombo di 41 croci sopra una base a V; il filo cambia
+  // rete (un passo di lato, l'unico modo) due volte sole, e passa per il resto sulle stanghette
+  {
+    const gX = { cols: 16, rows: 10, cellW: 2.4, cellH: 3.5, overlapPct: 30 };
+    const cXr = new Map();
+    for (let r = 0; r < 10; r++) for (let c = 0; c < 16; c++) if (Math.abs(r - 5) + Math.abs(c - 8) <= 4) cXr.set(r * 16 + c, { stitch: 'cross', color: 1 });
+    const resX = rg.csRouteCells(gX, cXr, { ...rg.CS_DEFAULT_ROUTE, base: { color: 0, stitch: 'v' } });
+    const sX = resX.colors.find((cr) => cr.color === 1).segs, WX = LW(gX);
+    const lato = sX.filter((sg) => sg.kind !== 'stitch' && sg.kind !== 'jump' && (sg.from % WX === sg.to % WX || Math.floor(sg.from / WX) === Math.floor(sg.to / WX))).length;
+    check('croci a fasi: 82 stanghette, 2 passi di lato soli, nessun salto', [sX.filter((sg) => sg.kind === 'stitch').length, lato, resX.metrics.jumps], [82, 2, 0]);
+  }
+
   // LE PASSATE IN AUTOMATICO (Lorenzo, 2026-10-02: «se metto pari di passate può essere lungo la riga, se
   // è dispari tutte sulla stessa V»): filo per filo, come se avessi scelto a mano per ciascuno
   {
@@ -5516,6 +5529,12 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   const cP = fill(gE2, ring);
   rg.csApplyEdits(gE2, cP, rg.csBrushEdits(gE2, cP, 3, 3, 1, 1, 'v', 'left', false));
   check('pennello bianco sul tratto dentro la lettera: sparisce solo lui, la V resta V', [nNero(cP), cP.get(3 * 7 + 3).stitch], [nNero(fill(gE2, ring)) - 1, 'v']);
+  // il punto scelto anche sopra un punto che c'era (Lorenzo, 2026-10-07: «sebbene seleziono punto croce
+  // mi mette le V»: su un modulo pieno di base a V il pennello ricolorava e la V restava)
+  const cX = fill(gE2, ring);
+  rg.csApplyEdits(gE2, cX, rg.csBrushEdits(gE2, cX, 3, 3, 1, 2, 'cross', 'left', false));
+  rg.csApplyEdits(gE2, cX, rg.csFillEdits(gE2, cX, 1, 1, 2, 'cross', 'left', false));
+  check('pennello e riempi croce sopra le V: diventano croci', [cX.get(3 * 7 + 3).stitch, cX.get(1 * 7 + 1).stitch, cX.get(2 * 7 + 2).stitch], ['cross', 'cross', 'cross']);
   check('pennello: un punto per cella, e con grandezza 2 due per due, per ogni punto', [rg.csBrushEdits(gE2, new Map(), 3, 3, 1, 0, 'cross', 'left', false).map((e) => e.c), rg.csBrushEdits(gE2, new Map(), 3, 3, 2, 0, 'v', 'left', false).length], [[3], 4]);
   // riempi col bianco il tratto staccato: solo lui (non tocca il contorno)
   const cF = fill(gE2, ring);

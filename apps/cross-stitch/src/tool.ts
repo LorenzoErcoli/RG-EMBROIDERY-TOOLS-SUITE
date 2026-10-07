@@ -39,7 +39,7 @@ type Mode = 'pan' | 'paint' | 'fill' | 'erase' | 'group' | 'cut' | 'image' | 'or
 
 const MODE_HELP: Record<Mode, string> = {
   pan: 'Sposta: trascina per muovere la vista, rotella per ingrandire. Il ricamo non si tocca.',
-  paint: 'Pennello: trascina per passare le V al filo scelto. Sulle celle vuote mette il punto scelto qui a fianco (V, croce, diagonale). Maiuscolo + trascina cancella.',
+  paint: 'Pennello: trascina per passare le V al filo scelto. Mette il punto scelto qui a fianco (V, croce, diagonale), anche dove c’era già un punto. Maiuscolo + trascina cancella.',
   fill: 'Riempi: un clic passa al filo scelto tutta la zona collegata dello stesso colore — per esempio l’interno di una lettera.',
   erase: 'Gomma: trascina per cancellare; lì non si cuce niente.',
   cut: 'Salti: clicca un passaggio e diventa un salto (la macchina taglia il filo); clicca un salto fatto a mano e torna passaggio. Si tolgono tutti in 04 Passaggi.',
@@ -107,6 +107,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="detailPct" type="text" inputmode="numeric" aria-describedby="h-soglia"><span>%</span></span>
             <span class="rg-field__help" id="h-soglia">Più bassa salva i tratti sottili</span></label>
           <div class="rg-cluster rg-param-grid__wide">
+            <span class="rg-tooltip"><button type="button" id="knitBtn" class="rg-button rg-button--outline rg-button--small" aria-describedby="tip-knit">Maglia dall’immagine</button><span class="rg-tooltip__text" role="tooltip" id="tip-knit">Il tool legge l’immagine e mette le V coi colori dei fili, su tutto il ricamo (senza modulo). I ritocchi a mano si perdono</span></span>
             <span class="rg-tooltip"><button type="button" id="editorBtn" class="rg-button rg-button--outline rg-button--small" aria-describedby="tip-editor">Editor modulo</button><span class="rg-tooltip__text" role="tooltip" id="tip-editor">Una schermata per fare il modulo che si ripete: griglia, immagine sotto, disegno</span></span>
             <span class="rg-tooltip"><button type="button" id="cropBtn" class="rg-button rg-button--outline rg-button--small" aria-pressed="false" aria-describedby="tip-crop">Ritaglia</button><span class="rg-tooltip__text" role="tooltip" id="tip-crop">Trascina un rettangolo sul disegno: la maglia si rifà su quel pezzo</span></span>
             <button type="button" id="uncropBtn" class="rg-button rg-button--ghost rg-button--small">Immagine intera</button>
@@ -123,9 +124,6 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <div class="rg-disclosure__content rg-param-grid">
               <label class="rg-field"><span class="rg-field__label">Opacità sotto la griglia</span>
                 <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="imageOpacity" type="text" inputmode="numeric" value="0"><span>%</span></span></label>
-              <div class="rg-cluster rg-param-grid__wide">
-                <span class="rg-tooltip"><button type="button" id="knitBtn" class="rg-button rg-button--outline rg-button--small" aria-describedby="tip-knit">Rifai la maglia dall’immagine</button><span class="rg-tooltip__text" role="tooltip" id="tip-knit">Rilegge l’immagine e ricalcola i colori dei fili: i ritocchi a mano si perdono</span></span>
-              </div>
             </div>
           </details>
         </div>
@@ -2229,6 +2227,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const order = pal.map((_, k) => k).sort((a, b) => shares[a] - shares[b]);
     const sorted = order.map((k) => pal[k]);
     pushUndo();
+    // LA MAGLIA DALL'IMMAGINE, SENZA MODULO (Lorenzo, 2026-10-07: «se non voglio usare un modulo come posso
+    // fare il ricalco immagine»): la maglia copre tutto il ricamo, quindi un modulo rimasto si toglie (prima
+    // restava, e teneva nascosta l'immagine e la maglia stessa sotto il percorso del modulo)
+    if (st.module) { st.module = null; syncModuleUI(); }
     // i colori nuovi, le passate di prima (per posizione)
     st.threads = sorted.map((c, i) => ({ hex: rgbToHex(c), passes: passesOf(i) }));
     st.cells = knitFromImage(st.grid, image.px, sorted, knitOpts());

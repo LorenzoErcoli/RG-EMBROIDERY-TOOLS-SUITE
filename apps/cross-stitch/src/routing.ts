@@ -244,6 +244,8 @@ interface Unit {
   /** La V: la seconda gamba, il vertice in comune (la punta) e i due capi liberi. */
   pair?: { leg2: number; mid: number; a: number; b: number };
   done: boolean;
+  /** Croce: la fase (0, 1, 2) in cui si può cucire, dentro il suo blocco (vedi LE CROCI A FASI). */
+  phase?: number;
 }
 
 // ------------------------------------------------------------
@@ -410,9 +412,23 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   }
   const baseRun: number[] = [];
   if (base) for (let row = 0; row < g.rows; row++) baseRun.push(addRun(row, 0, g.cols - 1));
+  // LE CROCI A FASI (Lorenzo, 2026-10-07: «i passaggi del punto croce devono passare sulle stanghette
+  // della X, non possono andare in verticale, si vedrebbe»). Gli angoli delle celle stanno su due reti
+  // (riga + colonna pari o dispari) e le due gambe di una X stanno una per rete: passando solo per
+  // diagonali non si va da una rete all'altra, e il filo fa un passo di lato (verticale, sul bordo della
+  // cella). Cucendo croce per croce lo faceva circa due volte per riga. Per blocco di croci, in tre fasi:
+  // 0 le gambe sotto di una rete, 1 tutte le gambe dell'altra (sotto e sopra: le loro gambe sotto sono
+  // della prima), 2 le gambe sopra rimaste. Dentro ogni fase il filo passa sulle stanghette (sotto
+  // quelle da fare o sopra quelle fatte) e cambia rete solo due volte per blocco.
+  const netOf = (v: number) => (Math.floor(v / W) + (v % W) / 2) % 2;
+  /** Blocco → la rete delle gambe che si cuciono per prime (quella della gamba sotto della prima croce). */
+  const firstNet = new Map<number, number>();
+  /** Blocco · 3 + fase → unità di croce ancora da fare. */
+  const phaseLeft = new Map<number, number>();
   let entryIndex = -1;
   for (const [k, m] of entries) {
     entryIndex++;
+    const unit0 = units.length;
     const block = entryIndex < nBase ? -1 : (blockOfCell.get(k) ?? -2);
     const run = entryIndex < nBase ? baseRun[Math.floor(k / g.cols)] : (runOfCell.get(k) ?? -2);
     const zone = entryIndex < nBase ? -1 : (zoneOfCell.get(k) ?? -2);
@@ -446,6 +462,16 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
         units.push({ leg: l1, fixedEntry: params.fixedDirection ? L1.a : -1, passes: reps, pair: { leg2: l2, mid: L1.b, a: L1.a, b: L2.b }, done: false });
       } else {
         for (const id of mine) units.push({ leg: id, fixedEntry: params.fixedDirection ? legs[id].a : -1, passes: reps, done: false });
+      }
+    }
+    if (isCross && block >= 0 && mine.length === 2) {
+      const net = netOf(legs[mine[0]].a);
+      if (!firstNet.has(block)) firstNet.set(block, net);
+      const first = net === firstNet.get(block);
+      for (let u = unit0; u < units.length; u++) {
+        const ph = units[u].leg === mine[0] ? (first ? 0 : 1) : (first ? 1 : 2);
+        units[u].phase = ph;
+        phaseLeft.set(block * 3 + ph, (phaseLeft.get(block * 3 + ph) ?? 0) + 1);
       }
     }
   }
@@ -501,6 +527,10 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       if (c < 0 || c >= g.cols) continue;
       for (const id of cellLegs.get(i * g.cols + c) ?? []) {
         const leg = legs[id];
+        // copre il verticale solo una V (gambe di mezza cella): la croce e la diagonale no, il filo
+        // attraverserebbe la X e si vedrebbe (Lorenzo, 2026-10-07: «i passaggi del punto croce devono
+        // passare sulle stanghette della X, non possono andare in verticale»)
+        if (Math.abs((leg.a % W) - (leg.b % W)) !== 1) continue;
         if (leg.color === k || (rank.get(leg.color) ?? 0) > (rank.get(k) ?? 0)) mineOrLater = true;
         else earlier = true;
       }
@@ -548,6 +578,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   const available = (id: number) => {
     const u = units[id];
     if (u.done) return false;
+    if (u.phase) { const b = legs[u.leg].block; for (let q = 0; q < u.phase; q++) if ((phaseLeft.get(b * 3 + q) ?? 0) > 0) return false; }
     const pre = legs[u.leg].prereq;
     return pre < 0 || legs[pre].remaining === 0;
   };
@@ -752,6 +783,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
         cur = to;
       }
       u.done = true;
+      if (u.phase !== undefined) { const key = legs[u.leg].block * 3 + u.phase; phaseLeft.set(key, (phaseLeft.get(key) ?? 1) - 1); }
       current = legs[u.leg].block;
       currentZone = legs[u.leg].zone;
       zoneLeft.set(currentZone, (zoneLeft.get(currentZone) ?? 1) - 1);

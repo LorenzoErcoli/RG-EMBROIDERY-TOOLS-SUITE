@@ -438,7 +438,7 @@ export function gridForSize(widthMm: number, heightMm: number, cellW: number, ce
 /** Il punto che il pennello mette su una cella vuota. */
 export type BrushStitch = 'v' | 'diag' | 'cross';
 
-/** Il punto nuovo per una cella vuota: V/Λ, «\»/«/», o croce, secondo il tasto. */
+/** Il punto del pennello: V/Λ, «\»/«/», o croce, secondo il tasto. */
 function freshStitch(stitch: BrushStitch, button: Button): Stitch {
   if (stitch === 'cross') return 'cross';
   if (stitch === 'diag') return button === 'left' ? 'down' : 'up';
@@ -459,14 +459,14 @@ export function brushArea(g: GridSpec, r: number, c: number, size: number): Arra
 }
 
 /**
- * Il pennello: ricolora col filo `color` quello che c'è sotto (il punto resta quello che è), e
- * sulle celle vuote mette il punto scelto. `erase` = gomma: svuota.
+ * Il pennello: mette il punto scelto col filo `color`, anche dove c'era già un punto (prima lo ricolorava
+ * soltanto e il punto restava: su un modulo pieno di base a V la croce usciva V — Lorenzo, 2026-10-07:
+ * «sebbene seleziono punto croce mi mette le V»). `erase` = gomma: svuota.
  */
 export function brushEdits(g: GridSpec, cells: Cells, r: number, c: number, size: number, color: number, stitch: BrushStitch, button: Button, erase: boolean): CellEdit[] {
   return brushArea(g, r, c, size).map(({ r: rr, c: cc }) => {
     if (erase) return { r: rr, c: cc, mark: null };
-    const old = cells.get(cellIndex(g, rr, cc));
-    return { r: rr, c: cc, mark: { stitch: old ? old.stitch : freshStitch(stitch, button), color } };
+    return { r: rr, c: cc, mark: { stitch: freshStitch(stitch, button), color } };
   });
 }
 
@@ -479,7 +479,8 @@ export function fillEdits(g: GridSpec, cells: Cells, r: number, c: number, color
   if (r < 0 || c < 0 || r >= g.rows || c >= g.cols) return [];
   const keyOf = (rr: number, cc: number) => cells.get(cellIndex(g, rr, cc))?.color ?? -1;
   const target = keyOf(r, c);
-  if (!erase && target === color) return [];
+  const put = freshStitch(stitch, button);
+  if (!erase && target === color && cells.get(cellIndex(g, r, c))?.stitch === put) return [];
   if (erase && target === -1) return [];
   const seen = new Uint8Array(g.rows * g.cols);
   const edits: CellEdit[] = [];
@@ -487,8 +488,7 @@ export function fillEdits(g: GridSpec, cells: Cells, r: number, c: number, color
   seen[r * g.cols + c] = 1;
   while (stack.length) {
     const [rr, cc] = stack.pop()!;
-    const old = cells.get(cellIndex(g, rr, cc));
-    edits.push({ r: rr, c: cc, mark: erase ? null : { stitch: old ? old.stitch : freshStitch(stitch, button), color } });
+    edits.push({ r: rr, c: cc, mark: erase ? null : { stitch: put, color } });
     for (const [nr, nc] of [[rr - 1, cc], [rr + 1, cc], [rr, cc - 1], [rr, cc + 1]] as Array<[number, number]>) {
       if (nr < 0 || nr >= g.rows || nc < 0 || nc >= g.cols || seen[nr * g.cols + nc]) continue;
       seen[nr * g.cols + nc] = 1;
