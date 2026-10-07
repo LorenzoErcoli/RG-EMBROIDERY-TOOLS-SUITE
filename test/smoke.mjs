@@ -49,6 +49,7 @@ export { segmentPoints as csSegmentPoints } from ${JSON.stringify(posix('apps/cr
 export { routeAll as csRouteAll, stripRanges as csStripRanges, routeModule as csRouteModule, entryRows as csEntryRows, routeBands as csRouteBands } from ${JSON.stringify(posix('apps/cross-stitch/src/strips.ts'))};
 export { findModule as csFindModule, tileModule as csTileModule, editsOnAllCopies as csEditsOnAllCopies, shiftModule as csShiftModule, seamShift as csSeamShift, resizeModule as csResizeModule, movePiece as csMovePiece, piecesOf as csPiecesOf, cellStep as csCellStep, bandsOf as csBandsOf, toggleBandBreak as csToggleBandBreak, moveBandBreak as csMoveBandBreak, bandCells as csBandCells, moveShapeBand as csMoveShapeBand } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
 export { zonesOf as csZonesOf } from ${JSON.stringify(posix('apps/cross-stitch/src/zones.ts'))};
+export { cellMask as csCellMask, autoRoles as csAutoRoles, normalizeContours as csNormalizeContours } from ${JSON.stringify(posix('apps/cross-stitch/src/shape.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
 export { reticoloDaZone, contornoDaZone, zoneDaModello, lineeDaModello } from ${JSON.stringify(posix('apps/cannage-rafia/src/reticolo.ts'))};
@@ -5412,6 +5413,27 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
       const segsS = (res) => JSON.stringify(res.colors.map((c) => [c.color, c.segs]));
       const tot = (res) => res.metrics.hiddenMm + res.metrics.retraceMm + res.metrics.visibleMm + res.metrics.verticalMm;
       check('ingrandisci: stesso percorso, filo più lungo del 20%', [segsS(r1) === segsS(r2), Math.abs(tot(r2) / tot(r1) - 1.2) < 0.01], [true, true]);
+    }
+    // LA FORMA DEL PEZZO (Lorenzo, 2026-10-07: «inserire un DXF o SVG per creare un riempimento dopo aver
+    // costruito un modulo»): un'ellisse con un buco quadrato; il modulo ripetuto si cuce solo dentro, base
+    // compresa, col percorso del modulo tagliato alla forma
+    {
+      const gF2 = { ...gB, cols: Cm * 4, rows: Rm * 2 };
+      const wF = gF2.cols * gF2.cellW, hF = rg.csGridHeight(gF2);
+      const ell = Array.from({ length: 120 }, (_, i) => ({ x: wF / 2 + (wF / 2) * Math.cos((2 * Math.PI * i) / 120), y: hF / 2 + (hF / 2) * Math.sin((2 * Math.PI * i) / 120) }));
+      const buco = [{ x: wF / 2 - 10, y: hF / 2 - 6 }, { x: wF / 2 + 10, y: hF / 2 - 6 }, { x: wF / 2 + 10, y: hF / 2 + 6 }, { x: wF / 2 - 10, y: hF / 2 + 6 }];
+      const contorni = [{ points: ell, closed: true, color: '#000000' }, { points: buco, closed: true, color: '#ff0000' }];
+      const forma = { contours: contorni, roles: rg.csAutoRoles(contorni) };
+      const maskF = rg.csCellMask(gF2, forma);
+      const cF3 = rg.csTileModule(gF2, modB);
+      const resF = rg.csRouteAll(gF2, cF3, { ...par, mask: maskF, modulePath: { cols: Cm, rows: Rm, marks: marksB, entryRow: {} } });
+      const WF = LW(gF2);
+      // la cella di un punto (V: mezza diagonale dalla riga i): fuori dalla forma?
+      let fuori = 0, base = 0;
+      for (const cr of resF.colors) for (const sg of cr.segs) if (sg.kind === 'stitch') { const i = Math.min(Math.floor(sg.from / WF), Math.floor(sg.to / WF)), c = Math.floor(Math.min(sg.from % WF, sg.to % WF) / 2); if (!maskF[i * gF2.cols + c]) fuori++; if (cr.color === 0) base++; }
+      const dentro = maskF.reduce((q, v) => q + v, 0);
+      const ref = rg.csRouteCells(gF2, cF3, { ...par, mask: maskF });
+      check('forma: ruoli (perimetro, area vuota); nessun punto fuori; base solo dentro; gli stessi punti del motore', [JSON.stringify(forma.roles), fuori, base, puntiDi(resF) === puntiDi(ref)], ['{"#000000":"outline","#ff0000":"void"}', 0, dentro * 2, true]);
     }
     // a mano: un confine tolto unisce, uno nuovo divide, uno trascinato si sposta
     const modE = { cols: Cm, rows: Rm, marks: marksB.map((m) => ({ ...m })) };

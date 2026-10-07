@@ -167,6 +167,11 @@ export interface RouteParams {
    * ordine; fra un punto e l'altro la strada più economica. Il resto del percorso non cambia.
    */
   forced?: Array<{ from: number; to: number; via: number[] }>;
+  /**
+   * LA FORMA DEL PEZZO (shape.ts): per cella, riga per riga, 1 = dentro. Fuori non si cuce niente, base
+   * compresa. Null o assente = tutta la griglia.
+   */
+  mask?: Uint8Array | null;
   /** Il percorso del modulo ripetuto (strips.ts, routeModuleTiled): con questo il ricamo è il modulo ripetuto. */
   modulePath?: { cols: number; rows: number; marks: Array<{ stitch: Stitch; color: number } | null>; pieceOf?: number[]; entryRow: Record<number, number>; cuts?: Array<[number, number]>; forced?: Array<{ from: number; to: number; via: number[] }> } | null;
   /** Il ricamo a strisce (strips.ts): righe per striscia e compensazione del ritiro. null = tutto insieme. */
@@ -326,8 +331,11 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   const entries: Array<[number, { stitch: Stitch; color: number }]> = [];
   /** Una cella col filo della base che la base copre (tutte, salvo la croce sopra una base non a croce). */
   const coveredByBase = (m: { stitch: Stitch; color: number }) => !!base && m.color === base.color && !(m.stitch === 'cross' && base.stitch !== 'cross');
-  if (base) for (let k = 0; k < g.rows * g.cols; k++) entries.push([k, { stitch: base.stitch, color: base.color }]);
+  const mask = params.mask && params.mask.length === g.rows * g.cols ? params.mask : null;
+  if (base) for (let k = 0; k < g.rows * g.cols; k++) if (!mask || mask[k]) entries.push([k, { stitch: base.stitch, color: base.color }]);
+  const nBase = entries.length; // le prime nBase voci sono la base
   for (const k of [...cells.keys()].sort((x, y) => x - y)) {
+    if (mask && !mask[k]) continue;
     const m = cells.get(k)!;
     // col filo della base è coperta dalla base, salvo una croce sopra una base che non è a croce: si cuce,
     // sopra (Lorenzo, 2026-10-07: «sistemiamo il punto croce con il filo della base»). Solo la croce: una V
@@ -398,7 +406,6 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       nb++;
     }
   }
-  const nBase = base ? g.rows * g.cols : 0; // le prime nBase voci sono la base
   // Tratti di riga: per il disegno, celle consecutive dello stesso colore; per la base, la riga
   // intera. Le estremità sono i quattro angoli esterni del tratto.
   const runOfCell = new Map<number, number>();

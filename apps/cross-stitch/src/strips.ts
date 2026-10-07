@@ -50,6 +50,7 @@ export function routeStrips(g: GridSpec, cells: Cells, params: RouteParams, opts
     const dy = r0 * pitch;
     const p: RouteParams = {
       ...params,
+      mask: params.mask ? params.mask.subarray(r0 * g.cols, r1 * g.cols) : params.mask,
       groups: params.groups?.map((q) => ({ ...q, y: q.y - dy })),
       cuts: params.cuts?.map(([a, b]) => [a - shift, b - shift] as [number, number]).filter(([a, b]) => a >= 0 && b >= 0 && a < (grid.rows + 1) * W && b < (grid.rows + 1) * W),
     };
@@ -115,7 +116,7 @@ export function routeModule(g: GridSpec, mp: ModulePath, params: RouteParams): R
     startAt[Number(c)] = vertexIndex(mg, rr, 0);
     endAt[Number(c)] = vertexIndex(mg, rr, 2 * mp.cols);
   }
-  return routeCells(mg, cells, { ...params, base: null, strips: null, modulePath: null, groups: [], cuts: mp.cuts ?? [], forced: mp.forced ?? [], pieceOf: mp.pieceOf, startAt, endAt });
+  return routeCells(mg, cells, { ...params, base: null, strips: null, modulePath: null, groups: [], mask: null, cuts: mp.cuts ?? [], forced: mp.forced ?? [], pieceOf: mp.pieceOf, startAt, endAt });
 }
 
 /** La riga d'ingresso proposta per ogni filo: quella dove comincia il suo primo pezzo (o la sua V più in alto). */
@@ -259,7 +260,7 @@ export function routeBands(g: GridSpec, mp: ModulePath, color: number, params: R
       [first, ...middle, ...(lastSh ? [lastSh] : [])].forEach((sh, k) => { for (const i of sh) pieceOf[at2(i)] = k + 1; });
     }
     const res = routeCells(g2, cells, {
-      ...params, base: null, strips: null, modulePath: null, groups: [],
+      ...params, base: null, strips: null, modulePath: null, groups: [], mask: null,
       cuts: (mp.cuts ?? []).map(([x, y]) => [fromMod(x), fromMod(y)] as [number, number]),
       forced: (mp.forced ?? []).map((q) => ({ from: fromMod(q.from), to: fromMod(q.to), via: q.via.map(fromMod) })),
       pieceOf, startAt: { [color]: v2(start) }, ...(joined ? { endAt: { [color]: v2(next) } } : {}),
@@ -344,14 +345,14 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
     const full = r1 - r0 === mp.rows;
     const grid: GridSpec = { ...g, rows: r1 - r0 };
     const shift = r0 * W, dy = r0 * rowPitch(g);
-    const stripParams: RouteParams = { ...params, strips: null, modulePath: null, groups: params.groups?.map((q) => ({ ...q, y: q.y - dy })), cuts: [] };
+    const stripParams: RouteParams = { ...params, strips: null, modulePath: null, groups: params.groups?.map((q) => ({ ...q, y: q.y - dy })), cuts: [], mask: params.mask ? params.mask.subarray(r0 * g.cols, r1 * g.cols) : params.mask };
     const toGlobal = (segs: RouteSeg[]) => segs.map((sg) => ({ kind: sg.kind, from: sg.from + shift, to: sg.to + shift }));
     // la base: il motore, sulla striscia intera, coi punti col filo della base sopra la base (le croci)
     if (baseC !== undefined) {
       const over: Cells = new Map();
       for (let rr = r0; rr < r1; rr++) for (let c = 0; c < g.cols; c++) {
         const m = cells.get(rr * g.cols + c);
-        if (m && m.color === baseC && m.stitch === 'cross' && params.base!.stitch !== 'cross') over.set((rr - r0) * g.cols + c, m);
+        if (m && m.color === baseC && m.stitch === 'cross' && params.base!.stitch !== 'cross' && (!params.mask || params.mask[rr * g.cols + c])) over.set((rr - r0) * g.cols + c, m);
       }
       const res = routeCells(grid, over, stripParams);
       addMetrics(metrics, res.metrics);
@@ -366,8 +367,19 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
     // percorso usciva dal bordo e rientrava, il filo salta.
     const nRows = r1 - r0;
     const lastK = g.cols > fullX * mp.cols ? fullX : fullX - 1; // l'ultima copia, intera o tagliata
-    const cut = (k: number) => !full || k === fullX;
+    const mask = params.mask && params.mask.length === g.rows * g.cols ? params.mask : null;
+    const cut = (k: number) => !!mask || !full || k === fullX;
     const inside = (q: ModVertex, k: number) => q[0] <= nRows && q[1] + 2 * mp.cols * k <= 2 * g.cols;
+    // con la forma: un tratto resta se la cella che attraversa (o una delle due che costeggia) è dentro
+    const cellIn = (i: number, c: number) => i >= 0 && i < nRows && c >= 0 && c < g.cols && mask![(r0 + i) * g.cols + c] === 1;
+    const segIn = (a: ModVertex, b: ModVertex, k: number) => {
+      if (!mask) return true;
+      const off = 2 * mp.cols * k, ja = a[1] + off, jb = b[1] + off, i = Math.min(a[0], b[0]);
+      if (ja === jb) return ja % 2 ? cellIn(i, (ja - 1) / 2) : cellIn(i, ja / 2 - 1) || cellIn(i, ja / 2);
+      const c = Math.floor(Math.min(ja, jb) / 2);
+      if (a[0] === b[0]) return cellIn(a[0] - 1, c) || cellIn(a[0], c);
+      return cellIn(i, c);
+    };
     // un vertice rispetto al modulo, nella copia k della striscia
     const at = (q: ModVertex, k: number) => (r0 + q[0]) * W + q[1] + 2 * mp.cols * k;
     for (const color of order) {
@@ -382,7 +394,7 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
           const runs: RouteSeg[][] = [];
           let cur: RouteSeg[] = [], kept = 0;
           for (const sg of src) {
-            if (inside(sg.from, k) && inside(sg.to, k)) { cur.push({ kind: sg.kind, from: at(sg.from, k), to: at(sg.to, k) }); if (sg.kind === 'stitch') kept++; }
+            if (inside(sg.from, k) && inside(sg.to, k) && segIn(sg.from, sg.to, k)) { cur.push({ kind: sg.kind, from: at(sg.from, k), to: at(sg.to, k) }); if (sg.kind === 'stitch') kept++; }
             else if (cur.length) { runs.push(cur); cur = []; }
           }
           if (cur.length) runs.push(cur);

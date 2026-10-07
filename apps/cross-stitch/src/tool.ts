@@ -3,6 +3,7 @@ import './cross-stitch.css';
 import {
   type ExportLayer,
   buildSvg, dstFromExportLayers, DST_FILE, readProjectMetadata, readDstMetadata, medianCutPalette, rgbToHex,
+  parseDxfToContours, parseSvgToContours, applyRealWidth, type ImportResult,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import ICONS from '../../../packages/design-system/icons/rg-icons.svg?url';
@@ -17,6 +18,7 @@ import {
   type RouteParams, type RouteResult, type RouteSeg, type SegKind, type StitchParams,
   DEFAULT_ROUTE, DEFAULT_STITCH, RETRACE_PRESETS, colorPolylines, routeCells, type RetracePreset,
 } from './routing';
+import { autoRoles, cellMask, normalizeContours, subMask, type PieceShape, type ShapeRole } from './shape';
 import { entryRows, routeAll, routeModuleBands, stripRanges, type BandRoute, type ModulePath } from './strips';
 import { bandsOf, cellStep, editsOnAllCopies, findModule, moveBandBreak, moveShapeBand, toggleBandBreak, movePiece, piecesOf, resizeModule, seamShift, shiftModule, tileModule, type KnitModule } from './module';
 import { DEFAULT_ZONES, type ZoneGroup } from './zones';
@@ -132,12 +134,26 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       <section class="rg-param-section" id="sec-misure">
         <div class="rg-param-section__header"><span class="rg-param-section__index">02</span><h3 class="rg-param-section__title">Misure del ricamo</h3></div>
         <div class="rg-param-grid">
+          <div class="rg-file-input rg-param-grid__wide">
+            <label class="rg-file-input__control">
+              <input type="file" id="shapeInput" accept=".svg,.dxf" />
+              <span class="rg-button rg-button--outline rg-button--small">Carica forma (DXF o SVG)…</span>
+            </label>
+            <p class="rg-file-input__status" id="shapeStatus" role="status">Nessuna forma: si ricama tutto il rettangolo.</p>
+          </div>
+          <div class="rg-param-grid rg-param-grid__wide" id="shapeBox" hidden>
+            <label class="rg-field"><span class="rg-field__label">Larghezza reale</span>
+              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="shapeRealW" type="text" inputmode="decimal" value="0" aria-describedby="h-realw"><span>mm</span></span>
+              <span class="rg-field__help" id="h-realw">0 = la misura letta dal file</span></label>
+            <ul class="rg-color-map rg-param-grid__wide" id="shapeRoles"></ul>
+            <div class="rg-cluster rg-param-grid__wide"><button type="button" id="shapeOffBtn" class="rg-button rg-button--ghost rg-button--small">Togli forma</button></div>
+          </div>
           <label class="rg-field"><span class="rg-field__label">Larghezza</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="sizeW" type="text" inputmode="decimal"><span>mm</span></span></label>
           <label class="rg-field"><span class="rg-field__label">Altezza</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="sizeH" type="text" inputmode="decimal"><span>mm</span></span></label>
           <label class="rg-toggle rg-param-grid__wide">
-            <input type="checkbox" id="keepRatio" checked><span class="rg-toggle__track"></span><span>Altezza in proporzione all’immagine</span>
+            <input type="checkbox" id="keepRatio" checked><span class="rg-toggle__track"></span><span>Altezza in proporzione (all’immagine o alla forma)</span>
           </label>
           <label class="rg-field"><span class="rg-field__label">Larghezza cella</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="cellW" type="text" inputmode="decimal"><span>mm</span></span></label>
@@ -513,6 +529,19 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $('status').textContent = k === 'Escape' ? 'Punti tolti. Clicca un passaggio da ridisegnare.' : k === 'Delete' || k === 'Backspace' ? 'Passaggio automatico. Clicca un altro passaggio da ridisegnare.' : 'Passaggio fissato. Clicca un altro passaggio da ridisegnare.';
     return true;
   }
+  // ---- LA FORMA DEL PEZZO (shape.ts; Lorenzo, 2026-10-07: «inserire un DXF o SVG per creare un
+  // riempimento dopo aver costruito un modulo»). Il file letto (per la larghezza reale), la forma in uso e
+  // la maschera delle celle, rifatta solo se cambiano griglia o forma. Nell'editor del modulo non vale.
+  let shapeSrc: { result: ImportResult; name: string } | null = null;
+  let pieceShape: PieceShape | null = null;
+  let shapeVersion = 0;
+  let maskCache: { key: string; mask: Uint8Array | null } | null = null;
+  const maskFor = (g: GridSpec): Uint8Array | null => {
+    if (!pieceShape || moduleView) return null;
+    const key = [g.cols, g.rows, g.cellW, g.cellH, g.overlapPct ?? 0, shapeVersion].join(':');
+    if (maskCache?.key !== key) maskCache = { key, mask: cellMask(g, pieceShape) };
+    return maskCache.mask;
+  };
   /** Il pezzo che si sta disegnando (editor), e quanti pezzi si sono già messi in ordine (strumento Ordine pezzi). */
   let currentPiece = 0;
   let orderClicks = 0;
@@ -594,7 +623,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       const ix = toIndex(grid, i0, j0);
       params.cuts = st.cuts.map(([i1, j1, i2, j2]) => [ix(i1, j1), ix(i2, j2)] as [number, number]).filter(([x, y]) => x >= 0 && y >= 0);
     };
-    if (!a) { withCuts(st.grid, 0, 0); return { grid: st.grid, cells, params, dx: 0, dy: 0 }; }
+    const mask = maskFor(st.grid);
+    if (!a) { withCuts(st.grid, 0, 0); params.mask = mask; return { grid: st.grid, cells, params, dx: 0, dy: 0 }; }
+    if (mask) params.mask = subMask(mask, st.grid.cols, a.r0, a.r1, a.c0, a.c1);
     const sub = subGrid(st.grid, cells, a);
     if (params.groups) params.groups = params.groups.map((q) => ({ ...q, x: q.x - sub.dx, y: q.y - sub.dy }));
     withCuts(sub.grid, a.r0, 2 * a.c0);
@@ -812,7 +843,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         for (let b = 0; b < BUCKETS; b++) { ctx.strokeStyle = orderColor(b / (BUCKETS - 1)); ctx.stroke(paths[b]); }
       }
     }
-    if (!byOrder && base) strokeLegs(base.color, (fn) => { for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) fn(r, c, base.stitch); });
+    const mask = maskFor(g);
+    if (!byOrder && base) strokeLegs(base.color, (fn) => { for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) if (!mask || mask[r * g.cols + c]) fn(r, c, base.stitch); });
     // LA GUIDA DEL MODULO (Lorenzo: «metto un'immagine sotto… disegno colore per colore il modulo»):
     // il pezzo d'immagine del modulo stirato su ogni copia, sopra la base (un modulo pieno di V la
     // copriva tutta) e SOTTO i fili disegnati: sopra, a metà trasparenza, velava i tratti chiari fino a
@@ -835,6 +867,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     }
     const byColor = new Map<number, number[]>();
     for (const [key, mark] of st.cells) {
+      if (mask && !mask[key]) continue; // fuori dalla forma
       if (base && mark.color === base.color && !(mark.stitch === 'cross' && base.stitch !== 'cross')) continue; // già coperta dalla base (salvo la croce sopra)
       const list = byColor.get(mark.color);
       if (list) list.push(key); else byColor.set(mark.color, [key]);
@@ -911,6 +944,15 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (area) {
       const pa = rowPitch(g);
       overlay.insertAdjacentHTML('beforeend', `<rect x="${f(area.c0 * g.cellW)}" y="${f(area.r0 * pa)}" width="${f((area.c1 - area.c0) * g.cellW)}" height="${f((area.r1 - 1 - area.r0) * pa + g.cellH)}" fill="none" style="stroke:var(--rg-color-focus)" stroke-width="2" vector-effect="non-scaling-stroke" pointer-events="none"/>`);
+    }
+    // la forma: i perimetri pieni, le aree vuote tratteggiate
+    if (pieceShape && !moduleView) {
+      const d = (pts: Array<{ x: number; y: number }>) => 'M' + pts.map((q) => f(q.x) + ' ' + f(q.y)).join('L') + 'Z';
+      for (const c of pieceShape.contours) {
+        const role = pieceShape.roles[c.color];
+        if (!role || !c.closed) continue;
+        overlay.insertAdjacentHTML('beforeend', `<path d="${d(c.points)}" fill="none" style="stroke:var(--rg-color-focus)" stroke-width="${role === 'outline' ? 2 : 1.5}" ${role === 'void' ? 'stroke-dasharray="5 4"' : ''} vector-effect="non-scaling-stroke" pointer-events="none"/>`);
+      }
     }
     if (!moduleView) drawGroups();
     drawAreaDrag();
@@ -1062,8 +1104,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   /** Con l'immagine e la proporzione bloccata, l'altezza del ricamo segue la larghezza. */
   function ratioHeight(w: number): number {
-    return image && $<HTMLInputElement>('keepRatio').checked ? (w * image.h) / image.w : target.h;
+    if (!$<HTMLInputElement>('keepRatio').checked) return target.h;
+    if (shapeDims) return (w * shapeDims.h) / shapeDims.w;
+    return image ? (w * image.h) / image.w : target.h;
   }
+  /** La misura della forma letta dal file (con la larghezza reale): la proporzione del ricamo. */
+  let shapeDims: { w: number; h: number } | null = null;
 
   /**
    * Le misure comandano la griglia (Lorenzo, 2026-09-24): larghezza e altezza del ricamo, cella e
@@ -1071,12 +1117,16 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
    * griglia nuova; se l'hai ritoccato a mano, si tiene com'è e si taglia/allarga.
    */
   function onSizeChange(ev?: Event): void {
-    if (moduleView) exitModuleView();
     const id = (ev?.target as HTMLElement | undefined)?.id;
     const w = Math.max(1, readNum('sizeW') || target.w);
     let h = Math.max(1, readNum('sizeH') || target.h);
     if (id !== 'sizeH') h = ratioHeight(w);
-    else if (image) $<HTMLInputElement>('keepRatio').checked = false; // l'altezza scritta a mano sblocca la proporzione
+    else if (image || shapeDims) $<HTMLInputElement>('keepRatio').checked = false; // l'altezza scritta a mano sblocca la proporzione
+    resizeTo(w, h);
+  }
+  /** Il ricamo a w × h mm: la griglia si rifà, col modulo, l'immagine o il disegno di prima. */
+  function resizeTo(w: number, h: number): void {
+    if (moduleView) exitModuleView();
     target = { w, h };
     const next = gridForSize(w, h, readNum('cellW') || st.grid.cellW, readNum('cellH') || st.grid.cellH, readNum('overlap') || 0);
     pushUndo();
@@ -1089,6 +1139,83 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     update();
   }
   for (const id of ['sizeW', 'sizeH', 'cellW', 'cellH', 'overlap']) num(id).addEventListener('change', onSizeChange);
+  // ---- la forma: caricare, ruoli, larghezza reale, togliere ----
+  /** La forma dal file letto, alla larghezza reale; i ruoli restano quelli scelti, salvo un file nuovo. */
+  function buildShape(fresh: boolean): void {
+    if (!shapeSrc) return;
+    const rw = readNum('shapeRealW');
+    const n = normalizeContours(applyRealWidth(shapeSrc.result, rw > 0 ? rw : null));
+    if (!n.contours.length) { $('shapeStatus').textContent = `${shapeSrc.name}: nessun contorno leggibile.`; return; }
+    pieceShape = { contours: n.contours, roles: fresh || !pieceShape ? autoRoles(n.contours) : pieceShape.roles, name: shapeSrc.name };
+    shapeDims = { w: n.w, h: n.h };
+    shapeVersion++;
+    $('shapeBox').hidden = false;
+    buildShapeRoles();
+    // il ricamo prende la misura della forma
+    $<HTMLInputElement>('keepRatio').checked = true;
+    resizeTo(n.w, n.h);
+    shapeNote();
+  }
+  function shapeNote(): void {
+    if (!pieceShape || !shapeDims) return;
+    const outlines = pieceShape.contours.filter((c) => c.closed && pieceShape!.roles[c.color] === 'outline').length;
+    const holes = pieceShape.contours.filter((c) => c.closed && pieceShape!.roles[c.color] === 'void').length;
+    const m = maskFor(st.grid), inside = m ? m.reduce((a, v) => a + v, 0) : 0;
+    $('shapeStatus').textContent = outlines
+      ? `${pieceShape.name}: ${fmtNum(Math.round(shapeDims.w))} × ${fmtNum(Math.round(shapeDims.h))} mm, ${outlines} perimetr${outlines === 1 ? 'o' : 'i'}${holes ? `, ${holes} aree vuote` : ''}; ${inside} celle su ${st.grid.cols * st.grid.rows} dentro.`
+      : `${pieceShape.name}: nessun perimetro chiuso. Scegli «Perimetro» per un colore qui sotto.`;
+  }
+  const ROLE_NAMES: Array<[ShapeRole | '', string]> = [['', '— (ignora)'], ['outline', 'Perimetro'], ['void', 'Area vuota']];
+  function buildShapeRoles(): void {
+    const host = $('shapeRoles');
+    host.innerHTML = '';
+    if (!pieceShape) return;
+    const counts = new Map<string, number>();
+    for (const c of pieceShape.contours) counts.set(c.color, (counts.get(c.color) ?? 0) + 1);
+    for (const [color, n] of counts) {
+      const row = document.createElement('li');
+      row.className = 'rg-color-map__row';
+      const sw = document.createElement('span');
+      sw.className = 'rg-color-map__swatch';
+      sw.style.setProperty('--swatch', color);
+      const code = document.createElement('span');
+      code.className = 'rg-color-map__code';
+      code.textContent = color.toUpperCase() + ' ';
+      const meta = document.createElement('span');
+      meta.className = 'rg-color-map__meta';
+      meta.textContent = `${n} contorn${n === 1 ? 'o' : 'i'}`;
+      code.appendChild(meta);
+      const sel = document.createElement('select');
+      sel.className = 'rg-select rg-color-map__target';
+      sel.setAttribute('aria-label', `Ruolo per ${color}`);
+      for (const [v, label] of ROLE_NAMES) { const o = document.createElement('option'); o.value = v; o.textContent = label; o.selected = (pieceShape.roles[color] ?? '') === v; sel.appendChild(o); }
+      sel.addEventListener('change', () => { if (!pieceShape) return; pieceShape.roles[color] = sel.value as ShapeRole | ''; shapeVersion++; update(); shapeNote(); });
+      row.append(sw, code, sel);
+      host.appendChild(row);
+    }
+  }
+  $<HTMLInputElement>('shapeInput').addEventListener('change', (ev) => {
+    const file = (ev.target as HTMLInputElement).files?.[0];
+    (ev.target as HTMLInputElement).value = '';
+    if (!file) return;
+    file.text().then((text) => {
+      try {
+        const result = /\.dxf$/i.test(file.name) ? parseDxfToContours(text) : parseSvgToContours(text);
+        shapeSrc = { result, name: file.name };
+        num('shapeRealW').value = '0';
+        buildShape(true);
+      } catch (err) {
+        $('shapeStatus').textContent = `${file.name}: non leggibile (${(err as Error).message}).`;
+      }
+    });
+  });
+  num('shapeRealW').addEventListener('change', () => buildShape(false));
+  $('shapeOffBtn').addEventListener('click', () => {
+    shapeSrc = null; pieceShape = null; shapeDims = null; shapeVersion++;
+    $('shapeBox').hidden = true;
+    $('shapeStatus').textContent = 'Nessuna forma: si ricama tutto il rettangolo.';
+    update();
+  });
   $<HTMLInputElement>('keepRatio').addEventListener('change', () => { if ($<HTMLInputElement>('keepRatio').checked) onSizeChange(); });
 
   num('jumpMm').addEventListener('change', () => { st.route.jumpMm = Math.max(0, readNum('jumpMm') || 0); syncFields(); update(); });
@@ -1164,6 +1291,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   function buildThreads(): void {
     const host = $('threads');
+    // LO SCROLL CHE SALTAVA (Lorenzo, 2026-10-07: «quando clicco i bottoni bassi dei colori mi scrolla in
+    // automatico in alto»): la lista si rifà da capo, per un attimo il pannello si accorcia e il browser lo
+    // riporta in cima, e il bottone cliccato sparisce col suo focus. Si tengono lo scroll e il focus.
+    const scrollers: Array<[HTMLElement, number]> = [];
+    for (let el: HTMLElement | null = host.parentElement; el; el = el.parentElement) if (el.scrollTop) scrollers.push([el, el.scrollTop]);
+    const winY = window.scrollY;
+    const focusables = () => [...host.querySelectorAll<HTMLElement>('button, input, select')];
+    const focusAt = document.activeElement instanceof HTMLElement && host.contains(document.activeElement) ? focusables().indexOf(document.activeElement) : -1;
     host.innerHTML = '';
     const used = new Map<number, number>();
     for (const m of st.cells.values()) used.set(m.color, (used.get(m.color) ?? 0) + 1);
@@ -1280,6 +1415,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     });
     buildEditThreads();
     syncBase();
+    for (const [el, top] of scrollers) el.scrollTop = top;
+    if (window.scrollY !== winY) window.scrollTo({ top: winY });
+    if (focusAt >= 0) focusables()[focusAt]?.focus({ preventScroll: true });
   }
 
   /** La scelta «Filo di base»: nessuna, o uno dei fili. */
@@ -2862,6 +3000,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       area: st.area,
       cuts: st.cuts,
       module: st.module,
+      shape: pieceShape ? { contours: pieceShape.contours, roles: pieceShape.roles, name: pieceShape.name } : null,
       knit,
       cells: moduleView && realDesign && st.module ? cellsToJson(realDesign.grid, tileModule(realDesign.grid, st.module)) : cellsToJson(st.grid, st.cells),
     };
@@ -2904,6 +3043,18 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           bandAt: m.bandAt && typeof m.bandAt === 'object' ? Object.fromEntries(Object.entries(m.bandAt).filter(([, v]) => v && typeof v === 'object').map(([k, v]) => [Number(k), Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([i, d]) => [Number(i), Number(d)]))])) : undefined }
         : null;
     }
+    {
+      // la forma salvata: già alla sua misura, coi suoi ruoli
+      const sh = meta.shape as PieceShape | null | undefined;
+      if (sh && Array.isArray(sh.contours) && sh.contours.length) {
+        const contours = sh.contours.filter((c) => c && Array.isArray(c.points)).map((c) => ({ points: c.points.map((q) => ({ x: Number(q.x), y: Number(q.y) })), closed: !!c.closed, color: String(c.color) }));
+        const n = normalizeContours(contours);
+        pieceShape = { contours: n.contours, roles: sh.roles && typeof sh.roles === 'object' ? { ...sh.roles } : autoRoles(n.contours), name: String(sh.name ?? 'forma') };
+        shapeDims = { w: n.w, h: n.h };
+        shapeSrc = { result: { contours: n.contours, widthMm: n.w, heightMm: n.h, method: 'declared' }, name: pieceShape.name ?? 'forma' };
+      } else { pieceShape = null; shapeDims = null; shapeSrc = null; }
+      shapeVersion++;
+    }
     st.cuts = Array.isArray(meta.cuts) ? (meta.cuts as unknown[]).filter((c): c is [number, number, number, number] => Array.isArray(c) && c.length === 4 && c.every((x) => Number.isInteger(x))) : [];
     // Fino a 0.3.0 la V occupava due colonne: si converte a «un punto per colonna».
     if (typeof meta.version === 'string' && ['0.1.0', '0.2.0', '0.3.0'].includes(meta.version)) {
@@ -2918,6 +3069,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   function afterLoad(): void {
     if (moduleView) { moduleView = false; realDesign = null; }
+    $('shapeBox').hidden = !pieceShape;
+    num('shapeRealW').value = '0';
+    buildShapeRoles();
+    if (!pieceShape) $('shapeStatus').textContent = 'Nessuna forma: si ricama tutto il rettangolo.';
     target = { w: st.grid.cols * st.grid.cellW, h: gridHeight(st.grid) };
     syncFields();
     buildThreads();

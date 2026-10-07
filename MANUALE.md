@@ -585,6 +585,16 @@ cambiando le misure non si rifà più dall'immagine: c'è **Maglia dall'immagine
 rilegge l'immagine su tutto il ricamo. È anche il modo di lavorare **senza modulo**: se c'era un modulo,
 la maglia dall'immagine lo toglie (*Annulla* lo rimette).
 
+**La forma del pezzo (DXF o SVG).** In *02 Misure del ricamo*, **Carica forma (DXF o SVG)…**: il ricamo
+prende la misura della forma (con *Larghezza reale* la scali; 0 = la misura del file) e si cuciono solo
+le celle col centro **dentro il perimetro e fuori dalle aree vuote**, base compresa: fuori non si cuce
+niente. Come negli altri tool, il contorno chiuso più grande è il **perimetro** e i contorni chiusi di un
+altro colore dentro di lui sono **aree vuote**; sotto, una riga per colore col suo ruolo (*Perimetro*,
+*Area vuota*, *ignora*) per correggere. Sulla tela il perimetro è il contorno pieno, le aree vuote
+tratteggiate. È il modo di riempire una forma con un modulo: il modulo ripetuto resta quello, e il suo
+percorso (fasce, passaggi a mano) si taglia alla forma, come alle copie tagliate dal bordo; dove esce e
+rientra, il filo salta. La forma va e torna col file del progetto. *Togli forma* torna al rettangolo.
+
 **Il punto della generazione.** In *01 Immagine*, *Punto*: V (la maglia, di partenza), Λ (la V
 capovolta), Croce, o la sola diagonale. Uno per cella, ognuno col suo filo. Per più dettaglio
 in orizzontale si stringe la cella.
