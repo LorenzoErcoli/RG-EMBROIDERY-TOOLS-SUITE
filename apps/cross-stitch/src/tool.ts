@@ -181,7 +181,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           <label class="rg-field"><span class="rg-field__label">Ingrandisci</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edScale" type="text" inputmode="decimal" value="100" aria-describedby="h-edscale"><span>%</span></span></label>
           <div class="rg-field"><span class="rg-field__label">&nbsp;</span><button type="button" id="edScaleBtn" class="rg-button rg-button--outline rg-button--small">Applica</button></div>
-          <span class="rg-field__help rg-param-grid__wide" id="h-edscale">Celle, immagine e disegno insieme, coi passaggi: il ricamo cresce allo stesso modo (stesse copie). 100 = com’è; sotto 100 rimpicciolisce.</span>
+          <span class="rg-field__help rg-param-grid__wide" id="h-edscale">Celle, immagine e disegno insieme, coi passaggi: il ricamo cresce allo stesso modo (stesse copie). 100 = com’è; sotto 100 rimpicciolisce. Invio o Applica.</span>
+          <output class="rg-technical rg-param-grid__wide" id="edScaleInfo" aria-live="polite"></output>
           <span class="rg-field__help rg-param-grid__wide">L'immagine si aggancia alla griglia: quanti pixel è una V, e dove comincia il modulo. Si sposta anche trascinandola con «Sposta immagine».</span>
           <label class="rg-field"><span class="rg-field__label">Una V nell'immagine</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edVpx" type="text" inputmode="decimal"><span>px</span></span></label>
@@ -2714,6 +2715,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (editorOpen) return;
     editorSnap = { grid: { ...st.grid }, cells: cloneCells(st.cells), module: cloneModule(st.module), threads: st.threads.map((t) => ({ ...t })), route: JSON.parse(JSON.stringify(st.route)), changed: false };
     editorOpen = true;
+    $('edScaleInfo').textContent = '';
     if (!st.module) { newModule(); buildThreads(); syncFields(); }
     for (const id of ['sec-immagine', 'sec-misure', 'sec-passaggi', 'sec-macchina', 'sec-carica']) $(id).hidden = true;
     for (const id of ['ed-immagine', 'ed-griglia']) $(id).hidden = false;
@@ -2803,10 +2805,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   // com'è compreso di passaggi»; il ricamo «cresce col modulo»). Le celle si allargano della percentuale:
   // colonne, righe, disegno e passaggi (in V e vertici, non in mm) restano quelli, l'immagine è agganciata
   // al modulo e lo segue, il ricamo cresce allo stesso modo con le stesse copie.
-  $('edScaleBtn').addEventListener('click', () => {
+  const applyScale = () => {
     const pct = readNum('edScale');
     if (!(pct > 0) || Math.abs(pct - 100) < 1e-9) { num('edScale').value = '100'; return; }
-    const k = pct / 100, g0 = realGrid();
+    const k = pct / 100, g0 = realGrid(), before = { cw: g0.cellW, ch: g0.cellH, w: target.w, h: target.h };
     pushUndo();
     const r3 = (v: number) => Math.round(v * 1000) / 1000;
     const next: GridSpec = { ...g0, cellW: r3(g0.cellW * k), cellH: r3(g0.cellH * k) };
@@ -2816,8 +2818,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     num('sizeW').value = fmtNum(Math.round(target.w * 10) / 10); num('sizeH').value = fmtNum(Math.round(target.h * 10) / 10);
     num('edScale').value = '100';
     refreshEditorView();
-    $('edImageInfo').textContent = `Ingrandito del ${fmtNum(pct)}%: una V è ${fmtNum(next.cellW)} × ${fmtNum(next.cellH)} mm, il ricamo ${fmtNum(Math.round(target.w))} × ${fmtNum(Math.round(target.h))} mm.`;
-  });
+    // la conferma qui sotto, prima e dopo: la tela si riadatta alla finestra e il modulo sembra uguale
+    $('edScaleInfo').textContent = `${fmtNum(pct)}%: una V da ${fmtNum(before.cw)} × ${fmtNum(before.ch)} a ${fmtNum(next.cellW)} × ${fmtNum(next.cellH)} mm; il ricamo da ${fmtNum(Math.round(before.w))} × ${fmtNum(Math.round(before.h))} a ${fmtNum(Math.round(target.w))} × ${fmtNum(Math.round(target.h))} mm. Annulla per tornare indietro.`;
+  };
+  $('edScaleBtn').addEventListener('click', applyScale);
+  num('edScale').addEventListener('change', applyScale);
   const edSize = () => {
     if (!st.module) return;
     const c = Math.max(2, Math.round(readNum('edCols') || st.module.cols)), rr = Math.max(2, Math.round(readNum('edRows') || st.module.rows));
