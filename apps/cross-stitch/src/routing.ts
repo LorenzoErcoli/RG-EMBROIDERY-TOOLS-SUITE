@@ -246,6 +246,8 @@ interface Unit {
   done: boolean;
   /** Croce: la fase (0, 1, 2) in cui si può cucire, dentro il suo blocco (vedi LE CROCI A FASI). */
   phase?: number;
+  /** Un punto col filo della base sopra la base: si cuce dopo tutta la base (sta sopra). */
+  overBase?: boolean;
 }
 
 // ------------------------------------------------------------
@@ -322,10 +324,16 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   // della base, che sono già coperte).
   const base = params.base ?? null;
   const entries: Array<[number, { stitch: Stitch; color: number }]> = [];
+  /** Una cella col filo della base che la base copre (tutte, salvo la croce sopra una base non a croce). */
+  const coveredByBase = (m: { stitch: Stitch; color: number }) => !!base && m.color === base.color && !(m.stitch === 'cross' && base.stitch !== 'cross');
   if (base) for (let k = 0; k < g.rows * g.cols; k++) entries.push([k, { stitch: base.stitch, color: base.color }]);
   for (const k of [...cells.keys()].sort((x, y) => x - y)) {
     const m = cells.get(k)!;
-    if (base && m.color === base.color) continue;
+    // col filo della base è coperta dalla base, salvo una croce sopra una base che non è a croce: si cuce,
+    // sopra (Lorenzo, 2026-10-07: «sistemiamo il punto croce con il filo della base»). Solo la croce: una V
+    // col filo della base sopra una base a croce, o la maglia dall'immagine con la base a un altro punto,
+    // si cucirebbero due volte
+    if (coveredByBase(m)) continue;
     entries.push([k, m]);
   }
   // le zone di ogni colore del disegno (un numero unico per tutta la griglia)
@@ -372,7 +380,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   {
     let nb = 0;
     for (const [k0, m0] of cells) {
-      if (blockOfCell.has(k0) || (base && m0.color === base.color)) continue;
+      if (blockOfCell.has(k0) || coveredByBase(m0)) continue;
       const stack = [k0];
       blockOfCell.set(k0, nb);
       while (stack.length) {
@@ -382,6 +390,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
           if (r2 < 0 || c2 < 0 || r2 >= g.rows || c2 >= g.cols) continue;
           const y = r2 * g.cols + c2;
           if (blockOfCell.has(y) || cells.get(y)?.color !== m0.color || zoneOfCell.get(y) !== zoneOfCell.get(k0)) continue;
+          if (coveredByBase(cells.get(y)!)) continue; // la base non fa blocco
           blockOfCell.set(y, nb);
           stack.push(y);
         }
@@ -402,7 +411,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     let c = 0;
     while (c < g.cols) {
       const m0 = cells.get(row * g.cols + c);
-      if (!m0 || (base && m0.color === base.color)) { c++; continue; }
+      if (!m0 || coveredByBase(m0)) { c++; continue; }
       let c1 = c;
       while (c1 + 1 < g.cols) { const n = cells.get(row * g.cols + c1 + 1); if (!n || n.color !== m0.color || zoneOfCell.get(row * g.cols + c1 + 1) !== zoneOfCell.get(row * g.cols + c)) break; c1++; }
       const id = addRun(row, c, c1);
@@ -464,6 +473,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
         for (const id of mine) units.push({ leg: id, fixedEntry: params.fixedDirection ? legs[id].a : -1, passes: reps, done: false });
       }
     }
+    if (base && entryIndex >= nBase && m.color === base.color) for (let u = unit0; u < units.length; u++) units[u].overBase = true;
     if (isCross && block >= 0 && mine.length === 2) {
       const net = netOf(legs[mine[0]].a);
       if (!firstNet.has(block)) firstNet.set(block, net);
@@ -575,9 +585,13 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   };
 
   const pt = (v: number) => { const i = Math.floor(v / W); return { x: (v - i * W) * half, y: i * g.cellH }; };
+  /** Le unità della base ancora da fare: i punti col filo della base sopra la base aspettano. */
+  let baseLeft = 0;
+  for (const u of units) if (legs[u.leg].block === -1) baseLeft++;
   const available = (id: number) => {
     const u = units[id];
     if (u.done) return false;
+    if (u.overBase && baseLeft > 0) return false;
     if (u.phase) { const b = legs[u.leg].block; for (let q = 0; q < u.phase; q++) if ((phaseLeft.get(b * 3 + q) ?? 0) > 0) return false; }
     const pre = legs[u.leg].prereq;
     return pre < 0 || legs[pre].remaining === 0;
@@ -783,6 +797,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
         cur = to;
       }
       u.done = true;
+      if (legs[u.leg].block === -1) baseLeft--;
       if (u.phase !== undefined) { const key = legs[u.leg].block * 3 + u.phase; phaseLeft.set(key, (phaseLeft.get(key) ?? 1) - 1); }
       current = legs[u.leg].block;
       currentZone = legs[u.leg].zone;

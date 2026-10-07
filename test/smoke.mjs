@@ -5338,6 +5338,20 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     check('croci a fasi: 82 stanghette, 2 passi di lato soli, nessun salto', [sX.filter((sg) => sg.kind === 'stitch').length, lato, resX.metrics.jumps], [82, 2, 0]);
   }
 
+  // LA CROCE COL FILO DELLA BASE (Lorenzo, 2026-10-07: «sistemiamo il punto croce con il filo della base»):
+  // prima la cella restava coperta dalla base, cioè a V. Un modulo tutto base con un rombo di 13 croci della
+  // base, ripetuto 3 volte: 39 croci, cucite nello stop della base dopo tutte le sue V (stanno sopra)
+  {
+    const C2 = 12, R2 = 8;
+    const marksX = Array.from({ length: C2 * R2 }, (_, i) => { const r = Math.floor(i / C2), c = i % C2; return Math.abs(r - 4) + Math.abs(c - 5) <= 2 ? { stitch: 'cross', color: 0 } : r === 1 ? { stitch: 'v', color: 1 } : { stitch: 'v', color: 0 }; });
+    const gX2 = { cols: C2 * 3, rows: R2, cellW: 2.4, cellH: 3.5, overlapPct: 30 };
+    const resB = rg.csRouteAll(gX2, rg.csTileModule(gX2, { cols: C2, rows: R2, marks: marksX }), { ...rg.CS_DEFAULT_ROUTE, base: { color: 0, stitch: 'v' }, modulePath: { cols: C2, rows: R2, marks: marksX, entryRow: {} } });
+    const WB = LW(gX2), stB = resB.colors.find((cr) => cr.color === 0).segs.filter((sg) => sg.kind === 'stitch');
+    const croce = (sg) => Math.abs((sg.from % WB) - (sg.to % WB)) === 2;
+    const ultimaV = stB.map(croce).lastIndexOf(false), primaX = stB.findIndex(croce);
+    check('croce col filo della base: cucita, sopra la base (dopo le sue V)', [stB.filter(croce).length, primaX > ultimaV], [78, true]);
+  }
+
   // LE PASSATE IN AUTOMATICO (Lorenzo, 2026-10-02: «se metto pari di passate può essere lungo la riga, se
   // è dispari tutte sulla stessa V»): filo per filo, come se avessi scelto a mano per ciascuno
   {
@@ -5387,6 +5401,17 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
       const intera = ordine(0), tagliata = ordine(2);
       let q = 0; for (const x of intera) if (q < tagliata.length && x === tagliata[q]) q++;
       check('copie tagliate: lo stesso percorso del modulo, tagliato al bordo; gli stessi punti del ricamo', [tagliata.length > 0 && tagliata.length < intera.length, q === tagliata.length, puntiDi(resC) === puntiDi(rg.csRouteAll(gC, cC, par))], [true, true, true]);
+    }
+    // INGRANDISCI (Lorenzo, 2026-10-07: «un ingrandimento in percentuale che allarga tutto… lasciando tutto
+    // disegnato com'è compreso di passaggi»): celle più grandi del 20%, stesse colonne e righe; il percorso
+    // (in vertici) è lo stesso, solo più lungo
+    {
+      const gS = { ...gB, cellW: gB.cellW * 1.2, cellH: gB.cellH * 1.2 };
+      const mpS = { cols: Cm, rows: Rm, marks: marksB, entryRow: {} };
+      const r1 = rg.csRouteAll(gB, cB, { ...par, modulePath: mpS }), r2 = rg.csRouteAll(gS, cB, { ...par, modulePath: mpS });
+      const segsS = (res) => JSON.stringify(res.colors.map((c) => [c.color, c.segs]));
+      const tot = (res) => res.metrics.hiddenMm + res.metrics.retraceMm + res.metrics.visibleMm + res.metrics.verticalMm;
+      check('ingrandisci: stesso percorso, filo più lungo del 20%', [segsS(r1) === segsS(r2), Math.abs(tot(r2) / tot(r1) - 1.2) < 0.01], [true, true]);
     }
     // a mano: un confine tolto unisce, uno nuovo divide, uno trascinato si sposta
     const modE = { cols: Cm, rows: Rm, marks: marksB.map((m) => ({ ...m })) };

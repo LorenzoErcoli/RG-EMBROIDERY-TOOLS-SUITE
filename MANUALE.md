@@ -537,8 +537,9 @@ pennello, i fili e Annulla/Rifai.
 - **Pennello** (B): trascinando, i punti sotto il pennello passano al filo scelto — per pulire
   l'interno di una scritta, bianco sopra il nero. Lavora a celle intere, una cella = un punto. Mette il punto scelto nella
   barra, alla voce *Punto* (V, Croce, Diagonale; col clic destro Λ o «/»), anche dove c'era già un
-  punto: una croce sopra la base a V diventa croce. Una croce va disegnata con un filo diverso da quello
-  della base: col filo della base la cella resta coperta dalla base, cioè a V.
+  punto: una croce sopra la base a V diventa croce. Anche col filo della base: la croce si cuce nello
+  stop della base, dopo tutte le sue V, e sta sopra (solo la croce: gli altri punti col filo della base
+  restano coperti dalla base, per non cucirli due volte).
 - **Riempi** (F): un clic passa al filo scelto tutta la zona COLLEGATA dello stesso colore. Attento:
   segue tutto quello che si tocca, quindi va usato su zone chiuse (l'interno di una lettera); per i
   ritocchi c'è il pennello.
@@ -699,7 +700,10 @@ calcolano**, così ogni tocco è immediato: si vedono tornando al ricamo.
   i bordi: la sfumatura fra due colori) vengono tolti. *Colori dall'immagine* propone i fili dal pezzo
   d'immagine del modulo (la base è il più diffuso, poi dal chiaro allo scuro). *Opacità immagine*.
 - **02 Griglia**: la cella (larghezza, altezza, sormonto) e la misura del modulo in V (colonne, righe:
-  cambiandole il modulo si allarga o si accorcia e quello che hai disegnato resta). Poi l'**immagine
+  cambiandole il modulo si allarga o si accorcia e quello che hai disegnato resta). **Ingrandisci** (%,
+  poi *Applica*) allarga tutto insieme: celle, immagine e disegno, coi passaggi uguali (sono in V, non
+  in mm); il ricamo cresce della stessa percentuale con le stesse copie. Sotto 100 rimpicciolisce;
+  *Torna al ricamo* annulla anche questo. Poi l'**immagine
   agganciata alla griglia**: quanti pixel è *una V* e *una riga* nell'immagine, e dove comincia il
   modulo (*Inizio x, y*). Si regola anche col nuovo strumento **Sposta immagine** (tasto M):
   trascinando, l'immagine scorre sotto la griglia finché il motivo cade giusto sulle V.

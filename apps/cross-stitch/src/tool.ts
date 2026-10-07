@@ -178,6 +178,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edCols" type="text" inputmode="numeric"><span>V</span></span></label>
           <label class="rg-field"><span class="rg-field__label">Righe del modulo</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edRows" type="text" inputmode="numeric"><span>V</span></span></label>
+          <label class="rg-field"><span class="rg-field__label">Ingrandisci</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edScale" type="text" inputmode="decimal" value="100" aria-describedby="h-edscale"><span>%</span></span></label>
+          <div class="rg-field"><span class="rg-field__label">&nbsp;</span><button type="button" id="edScaleBtn" class="rg-button rg-button--outline rg-button--small">Applica</button></div>
+          <span class="rg-field__help rg-param-grid__wide" id="h-edscale">Celle, immagine e disegno insieme, coi passaggi: il ricamo cresce allo stesso modo (stesse copie). 100 = com’è; sotto 100 rimpicciolisce.</span>
           <span class="rg-field__help rg-param-grid__wide">L'immagine si aggancia alla griglia: quanti pixel è una V, e dove comincia il modulo. Si sposta anche trascinandola con «Sposta immagine».</span>
           <label class="rg-field"><span class="rg-field__label">Una V nell'immagine</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edVpx" type="text" inputmode="decimal"><span>px</span></span></label>
@@ -830,7 +834,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     }
     const byColor = new Map<number, number[]>();
     for (const [key, mark] of st.cells) {
-      if (base && mark.color === base.color) continue; // già coperta dalla base
+      if (base && mark.color === base.color && !(mark.stitch === 'cross' && base.stitch !== 'cross')) continue; // già coperta dalla base (salvo la croce sopra)
       const list = byColor.get(mark.color);
       if (list) list.push(key); else byColor.set(mark.color, [key]);
     }
@@ -2760,6 +2764,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       // si torna com'era all'apertura
       moduleView = false; realDesign = null;
       st.grid = editorSnap.grid; st.cells = editorSnap.cells; st.module = editorSnap.module; st.threads = editorSnap.threads; st.route = editorSnap.route;
+      target = { w: st.grid.cols * st.grid.cellW, h: gridHeight(st.grid) }; // anche le misure (Ingrandisci)
       syncFields(); buildThreads(); syncModuleUI(); update();
       requestAnimationFrame(() => pz.fit());
     }
@@ -2793,6 +2798,26 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     refreshEditorView();
   };
   for (const id of ['edCellW', 'edCellH', 'edOverlap']) num(id).addEventListener('change', edCells);
+  // INGRANDISCI (Lorenzo, 2026-10-07: «ho disegnato un modulo ma ora vorrei che fosse più grande… un
+  // ingrandimento in percentuale che allarga tutto, la griglia e l'immagine, lasciando tutto disegnato
+  // com'è compreso di passaggi»; il ricamo «cresce col modulo»). Le celle si allargano della percentuale:
+  // colonne, righe, disegno e passaggi (in V e vertici, non in mm) restano quelli, l'immagine è agganciata
+  // al modulo e lo segue, il ricamo cresce allo stesso modo con le stesse copie.
+  $('edScaleBtn').addEventListener('click', () => {
+    const pct = readNum('edScale');
+    if (!(pct > 0) || Math.abs(pct - 100) < 1e-9) { num('edScale').value = '100'; return; }
+    const k = pct / 100, g0 = realGrid();
+    pushUndo();
+    const r3 = (v: number) => Math.round(v * 1000) / 1000;
+    const next: GridSpec = { ...g0, cellW: r3(g0.cellW * k), cellH: r3(g0.cellH * k) };
+    if (moduleView && realDesign) realDesign.grid = next; else st.grid = next;
+    target = { w: target.w * k, h: target.h * k };
+    num('cellW').value = fmtNum(next.cellW); num('cellH').value = fmtNum(next.cellH);
+    num('sizeW').value = fmtNum(Math.round(target.w * 10) / 10); num('sizeH').value = fmtNum(Math.round(target.h * 10) / 10);
+    num('edScale').value = '100';
+    refreshEditorView();
+    $('edImageInfo').textContent = `Ingrandito del ${fmtNum(pct)}%: una V è ${fmtNum(next.cellW)} × ${fmtNum(next.cellH)} mm, il ricamo ${fmtNum(Math.round(target.w))} × ${fmtNum(Math.round(target.h))} mm.`;
+  });
   const edSize = () => {
     if (!st.module) return;
     const c = Math.max(2, Math.round(readNum('edCols') || st.module.cols)), rr = Math.max(2, Math.round(readNum('edRows') || st.module.rows));

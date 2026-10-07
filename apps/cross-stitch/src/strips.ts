@@ -108,7 +108,7 @@ export function routeModule(g: GridSpec, mp: ModulePath, params: RouteParams): R
   const mg: GridSpec = { ...g, cols: mp.cols, rows: mp.rows };
   const baseColor = params.base?.color;
   const cells: Cells = new Map();
-  mp.marks.forEach((m, i) => { if (m && m.color !== baseColor) cells.set(i, { ...m }); });
+  mp.marks.forEach((m, i) => { if (m && (m.color !== baseColor || (m.stitch === 'cross' && params.base?.stitch !== 'cross'))) cells.set(i, { ...m }); });
   const startAt: Record<number, number> = {}, endAt: Record<number, number> = {};
   for (const [c, row] of Object.entries(mp.entryRow)) {
     const rr = Math.max(0, Math.min(mp.rows - 1, row));
@@ -346,9 +346,14 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
     const shift = r0 * W, dy = r0 * rowPitch(g);
     const stripParams: RouteParams = { ...params, strips: null, modulePath: null, groups: params.groups?.map((q) => ({ ...q, y: q.y - dy })), cuts: [] };
     const toGlobal = (segs: RouteSeg[]) => segs.map((sg) => ({ kind: sg.kind, from: sg.from + shift, to: sg.to + shift }));
-    // la base: il motore, sulla striscia intera
+    // la base: il motore, sulla striscia intera, coi punti col filo della base sopra la base (le croci)
     if (baseC !== undefined) {
-      const res = routeCells(grid, new Map(), stripParams);
+      const over: Cells = new Map();
+      for (let rr = r0; rr < r1; rr++) for (let c = 0; c < g.cols; c++) {
+        const m = cells.get(rr * g.cols + c);
+        if (m && m.color === baseC && m.stitch === 'cross' && params.base!.stitch !== 'cross') over.set((rr - r0) * g.cols + c, m);
+      }
+      const res = routeCells(grid, over, stripParams);
       addMetrics(metrics, res.metrics);
       const bc = res.colors.find((cr) => cr.color === baseC);
       if (bc) colors.push({ color: baseC, strip, segs: toGlobal(bc.segs) });
