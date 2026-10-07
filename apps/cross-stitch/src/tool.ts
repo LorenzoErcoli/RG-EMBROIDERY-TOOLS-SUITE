@@ -148,6 +148,19 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <ul class="rg-color-map rg-param-grid__wide" id="shapeRoles"></ul>
             <div class="rg-cluster rg-param-grid__wide"><button type="button" id="shapeOffBtn" class="rg-button rg-button--ghost rg-button--small">Togli forma</button></div>
           </div>
+          <div class="rg-field rg-param-grid__wide" id="patternPosBox" hidden>
+            <span class="rg-field__label" id="lbl-ppos">Posizione del pattern</span>
+            <div class="rg-cluster">
+              <div class="rg-action-group" role="group" aria-labelledby="lbl-ppos">
+                <span class="rg-tooltip rg-tooltip--below"><button type="button" class="rg-icon-button rg-icon-button--full" data-pmove="left" aria-labelledby="tip-pm-left"><svg class="rg-icon" aria-hidden="true" focusable="false"><use href="${ICONS}#rg-icon-indietro"></use></svg></button><span class="rg-tooltip__text" role="tooltip" id="tip-pm-left">A sinistra di una V</span></span>
+                <span class="rg-tooltip rg-tooltip--below"><button type="button" class="rg-icon-button rg-icon-button--full" data-pmove="right" aria-labelledby="tip-pm-right"><svg class="rg-icon" aria-hidden="true" focusable="false"><use href="${ICONS}#rg-icon-avanti"></use></svg></button><span class="rg-tooltip__text" role="tooltip" id="tip-pm-right">A destra di una V</span></span>
+                <span class="rg-tooltip rg-tooltip--below"><button type="button" class="rg-icon-button rg-icon-button--full" data-pmove="up" aria-labelledby="tip-pm-up"><svg class="rg-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M12 20V5M6 11l6-6 6 6"/></svg></button><span class="rg-tooltip__text" role="tooltip" id="tip-pm-up">Su di una riga</span></span>
+                <span class="rg-tooltip rg-tooltip--below"><button type="button" class="rg-icon-button rg-icon-button--full" data-pmove="down" aria-labelledby="tip-pm-down"><svg class="rg-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M12 4v15M6 13l6 6 6-6"/></svg></button><span class="rg-tooltip__text" role="tooltip" id="tip-pm-down">Giù di una riga</span></span>
+              </div>
+              <span class="rg-tooltip"><button type="button" id="centerPatternBtn" class="rg-button rg-button--outline rg-button--small" aria-describedby="tip-center">Centra</button><span class="rg-tooltip__text" role="tooltip" id="tip-center">Il centro del modulo al centro della forma (o del ricamo)</span></span>
+            </div>
+            <span class="rg-field__help" id="patternPosInfo">Sposta le copie del modulo sul pezzo, una V alla volta: il modulo non cambia.</span>
+          </div>
           <label class="rg-field"><span class="rg-field__label">Larghezza</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="sizeW" type="text" inputmode="decimal"><span>mm</span></span></label>
           <label class="rg-field"><span class="rg-field__label">Altezza</span>
@@ -589,7 +602,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
    * da 0; i gruppi, in mm, si spostano con lei).
    */
   /** Il modulo come percorso: pezzi e riga d'ingresso di ogni filo (il primo pezzo dice dove). */
-  const modulePathOf = (m: KnitModule): ModulePath => ({ cols: m.cols, rows: m.rows, marks: m.marks, pieceOf: m.seq, entryRow: entryRows({ cols: m.cols, marks: m.marks, pieceOf: m.seq, starts: m.starts }), cuts: m.cuts, forced: m.forced, bands: m.bands, bandAt: m.bandAt, ordered: m.ordered });
+  const modulePathOf = (m: KnitModule): ModulePath => ({ cols: m.cols, rows: m.rows, marks: m.marks, pieceOf: m.seq, entryRow: entryRows({ cols: m.cols, marks: m.marks, pieceOf: m.seq, starts: m.starts }), cuts: m.cuts, forced: m.forced, bands: m.bands, bandAt: m.bandAt, ordered: m.ordered, offset: m.offset });
   /** Il ricamo è proprio il modulo ripetuto (nessuna V ritoccata su una copia sola)? */
   const designIsTiled = (): boolean => {
     const m = st.module; if (!m) return false;
@@ -992,7 +1005,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const m = result.metrics;
     if (!m.legs) { $('status').textContent = 'Griglia vuota: disegna con il clic.'; return; }
     const mm = (x: number) => `${Math.round(x)} mm`;
-    const nStrips = st.route.strips ? stripRanges(routeGeom.grid, st.route.strips.rows).length : 0;
+    // le strisce del risultato (spostando il pattern ce n'è una tagliata anche in alto)
+    const nStrips = st.route.strips ? new Set(result.colors.map((c) => c.strip ?? 0)).size : 0;
     const stops = result.colors.length;
     $('status').textContent = (nStrips > 1 ? `${nStrips} strisce, ${stops} stop · ` : '') + `${m.legs} diagonali · passaggi in vista ${mm(m.visibleMm)} · ripassi ${mm(m.retraceMm)} · vertice-vertice ${mm(m.verticalMm)} · nascosti ${mm(m.hiddenMm)} · ${m.jumps} salt${m.jumps === 1 ? 'o' : 'i'}`;
   }
@@ -1215,6 +1229,47 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $('shapeBox').hidden = true;
     $('shapeStatus').textContent = 'Nessuna forma: si ricama tutto il rettangolo.';
     update();
+  });
+  // ---- SPOSTA E CENTRA (Lorenzo, 2026-10-07: «spostare dx/sx alto/basso il ricalcolo del pattern composto
+  // dei moduli per fare i centraggi»): la griglia delle copie si sposta sul pezzo, una V o una riga alla
+  // volta; il modulo resta quello (Inizio, nella vista modulo, invece lo ruota).
+  const patternPosNote = () => {
+    const m = st.module;
+    if (!m) return;
+    const sgn = (v: number, n: number) => (v > n / 2 ? v - n : v);
+    const dc = sgn(m.offset?.dc ?? 0, m.cols), dr = sgn(m.offset?.dr ?? 0, m.rows);
+    $('patternPosInfo').textContent = !dc && !dr
+      ? 'Il modulo comincia nell’angolo in alto a sinistra del ricamo.'
+      : `Spostato di ${Math.abs(dc)} V ${dc < 0 ? 'a sinistra' : 'a destra'} e ${Math.abs(dr)} righe ${dr < 0 ? 'in su' : 'in giù'} (${fmtNum(Math.round(dc * st.grid.cellW * 10) / 10)} × ${fmtNum(Math.round(dr * rowPitch(st.grid) * 10) / 10)} mm).`;
+  };
+  const setPatternOffset = (dr: number, dc: number) => {
+    const m = st.module;
+    if (!m) return;
+    if (moduleView) exitModuleView();
+    pushUndo();
+    m.offset = { dr: ((Math.round(dr) % m.rows) + m.rows) % m.rows, dc: ((Math.round(dc) % m.cols) + m.cols) % m.cols };
+    st.cells = tileModule(st.grid, m);
+    update();
+    patternPosNote();
+  };
+  root.querySelectorAll<HTMLButtonElement>('#patternPosBox [data-pmove]').forEach((b) => b.addEventListener('click', () => {
+    const m = st.module;
+    if (!m) return;
+    const d = b.dataset.pmove, o = m.offset ?? { dr: 0, dc: 0 };
+    setPatternOffset(o.dr + (d === 'down' ? 1 : d === 'up' ? -1 : 0), o.dc + (d === 'right' ? 1 : d === 'left' ? -1 : 0));
+  }));
+  $('centerPatternBtn').addEventListener('click', () => {
+    const m = st.module;
+    if (!m) return;
+    // il centro della forma (le celle dentro) o del ricamo, in celle
+    const g = st.grid, mask = maskFor(g);
+    let c0 = 0, c1 = g.cols - 1, r0 = 0, r1 = g.rows - 1;
+    if (mask) {
+      c0 = g.cols; c1 = -1; r0 = g.rows; r1 = -1;
+      for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) if (mask[r * g.cols + c]) { c0 = Math.min(c0, c); c1 = Math.max(c1, c); r0 = Math.min(r0, r); r1 = Math.max(r1, r); }
+      if (c1 < 0) { c0 = 0; c1 = g.cols - 1; r0 = 0; r1 = g.rows - 1; }
+    }
+    setPatternOffset(Math.round((r0 + r1 + 1) / 2 - m.rows / 2), Math.round((c0 + c1 + 1) / 2 - m.cols / 2));
   });
   $<HTMLInputElement>('keepRatio').addEventListener('change', () => { if ($<HTMLInputElement>('keepRatio').checked) onSizeChange(); });
 
@@ -1518,7 +1573,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   const snapshot = () => (moduleView && realDesign && st.module
     ? { grid: { ...realDesign.grid }, cells: tileModule(realDesign.grid, st.module), module: cloneModule(st.module) }
     : { grid: { ...st.grid }, cells: cloneCells(st.cells), module: cloneModule(st.module) });
-  const cloneModule = (m: KnitModule | null): KnitModule | null => (m ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x ? { ...x } : null)), guide: m.guide ? { ...m.guide } : m.guide, drawn: m.drawn, seq: m.seq ? [...m.seq] : m.seq, starts: m.starts ? { ...m.starts } : m.starts, cuts: m.cuts ? m.cuts.map((q) => [q[0], q[1]] as [number, number]) : m.cuts, forced: m.forced ? m.forced.map((q) => ({ from: q.from, to: q.to, via: [...q.via] })) : m.forced, bands: m.bands ? Object.fromEntries(Object.entries(m.bands).map(([k, v]) => [k, [...v]])) : m.bands, bandAt: m.bandAt ? Object.fromEntries(Object.entries(m.bandAt).map(([k, v]) => [k, { ...v }])) : m.bandAt, ordered: m.ordered ? [...m.ordered] : m.ordered } : null);
+  const cloneModule = (m: KnitModule | null): KnitModule | null => (m ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x ? { ...x } : null)), guide: m.guide ? { ...m.guide } : m.guide, drawn: m.drawn, seq: m.seq ? [...m.seq] : m.seq, starts: m.starts ? { ...m.starts } : m.starts, cuts: m.cuts ? m.cuts.map((q) => [q[0], q[1]] as [number, number]) : m.cuts, forced: m.forced ? m.forced.map((q) => ({ from: q.from, to: q.to, via: [...q.via] })) : m.forced, bands: m.bands ? Object.fromEntries(Object.entries(m.bands).map(([k, v]) => [k, [...v]])) : m.bands, bandAt: m.bandAt ? Object.fromEntries(Object.entries(m.bandAt).map(([k, v]) => [k, { ...v }])) : m.bandAt, ordered: m.ordered ? [...m.ordered] : m.ordered, offset: m.offset ? { ...m.offset } : m.offset } : null);
   function pushUndo(): void {
     undo.push(snapshot());
     if (undo.length > 100) undo.shift();
@@ -1531,7 +1586,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (moduleView) {
       // in vista modulo: il ricamo vero torna da parte, la tela si rifà dal modulo
       if (!st.module) { moduleView = false; syncModuleUI(); }
-      else { realDesign = { grid: snap.grid, cells: snap.cells }; st.grid = viewGridOf(snap.grid, st.module); st.cells = tileModule(st.grid, st.module); draw(); return; }
+      else { realDesign = { grid: snap.grid, cells: snap.cells }; st.grid = viewGridOf(snap.grid, st.module); st.cells = tileModule(st.grid, st.module, null); draw(); return; }
     }
     target = { w: st.grid.cols * st.grid.cellW, h: gridHeight(st.grid) };
     syncFields();
@@ -1625,7 +1680,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   function applyUserEdits(edits: CellEdit[]): boolean {
     if (editorSnap) editorSnap.changed = true;
     const all = st.module && (moduleView || $<HTMLInputElement>('editAllCopies').checked);
-    return applyEdits(st.grid, st.cells, all ? editsOnAllCopies(st.grid, st.module!, edits, editorOpen ? currentPiece : 0) : edits);
+    return applyEdits(st.grid, st.cells, all ? editsOnAllCopies(st.grid, st.module!, edits, editorOpen ? currentPiece : 0, moduleView ? null : st.module!.offset ?? null) : edits);
   }
 
   /** Il pennello (o la gomma) su una cella; vero se ha cambiato qualcosa. */
@@ -2433,7 +2488,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (!st.module || moduleView) return;
     realDesign = { grid: st.grid, cells: st.cells };
     st.grid = viewGridOf(st.grid, st.module);
-    st.cells = tileModule(st.grid, st.module);
+    st.cells = tileModule(st.grid, st.module, null); // nella vista il modulo sta al centro, senza spostamento
     moduleView = true;
     result = null;
     showModulePasses();
@@ -2457,7 +2512,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   /** Il modulo è cambiato (spostato): la tela si rifà. */
   function moduleChanged(): void {
     if (!st.module) return;
-    if (moduleView) { st.cells = tileModule(st.grid, st.module); update(); } // update in vista: ricalcola il ricamo vero
+    if (moduleView) { st.cells = tileModule(st.grid, st.module, null); update(); } // update in vista: ricalcola il ricamo vero
     else { st.cells = tileModule(st.grid, st.module); update(); }
   }
   root.querySelectorAll<HTMLButtonElement>('#moduleViewSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => {
@@ -2498,6 +2553,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   function syncModuleUI(): void {
     const m = st.module;
     $('moduleBox').hidden = !m;
+    $('patternPosBox').hidden = !m;
+    if (m) patternPosNote();
     $('moduleEditGroup').hidden = !m;
     $('moduleStartGroup').hidden = !m || !moduleView;
     root.querySelectorAll<HTMLButtonElement>('#moduleViewSel .rg-segmented__item').forEach((b) => {
@@ -2829,7 +2886,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (!st.module) return;
     if (!moduleView) { enterModuleView(); return; }
     st.grid = viewGridOf(realDesign!.grid, st.module);
-    st.cells = tileModule(st.grid, st.module);
+    st.cells = tileModule(st.grid, st.module, null);
     syncEditorFields();
     update();
     if (editorSnap) editorSnap.changed = true;
@@ -3040,6 +3097,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           forced: Array.isArray(m.forced) ? m.forced.filter((q) => q && Array.isArray(q.via)).map((q) => ({ from: Number(q.from), to: Number(q.to), via: q.via.map(Number) })) : undefined,
           bands: m.bands && typeof m.bands === 'object' ? Object.fromEntries(Object.entries(m.bands).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [Number(k), (v as unknown[]).map(Number)])) : undefined,
           ordered: Array.isArray(m.ordered) ? m.ordered.map(Number) : undefined,
+          offset: m.offset && typeof m.offset === 'object' ? { dr: Math.round(Number(m.offset.dr) || 0), dc: Math.round(Number(m.offset.dc) || 0) } : undefined,
           bandAt: m.bandAt && typeof m.bandAt === 'object' ? Object.fromEntries(Object.entries(m.bandAt).filter(([, v]) => v && typeof v === 'object').map(([k, v]) => [Number(k), Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([i, d]) => [Number(i), Number(d)]))])) : undefined }
         : null;
     }

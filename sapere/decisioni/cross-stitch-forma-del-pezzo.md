@@ -21,6 +21,13 @@ il disegno solo dentro. Le celle del disegno NON si tolgono: così il ricamo res
 copie tagliate dal bordo (un tratto resta se la cella che attraversa, o una delle due che costeggia, è
 dentro). Togliendo le celle il tool sarebbe tornato al copia per copia.
 
+**Sposta e centra** (stesso giorno; Lorenzo: «spostare dx/sx alto/basso il pattern composto dei moduli per
+fare i centraggi»). Lo spostamento è del modulo (offset {dr, dc} in V, sempre a V intere per restare sulla
+griglia), non ruota il modulo come *Inizio*: tileModule ed editsOnAllCopies lo leggono dal modulo, la vista
+modulo dell'editor lo ignora (il modulo sta al centro), il motore fa partire copie e strisce da lì con
+copie e strisce tagliate anche a sinistra e in alto. Centra = centro del modulo sul centro delle celle
+dentro la forma (o del ricamo).
+
 **Come si applica:** un'altra «zona dove non si cuce» (per esempio un'area di prova a forma libera) va
 fatta come maschera nel motore, non togliendo celle dal disegno. Vedi
 [le copie tagliate dal bordo](cross-stitch-fair-isle-strisce.md).

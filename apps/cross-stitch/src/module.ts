@@ -468,6 +468,12 @@ export interface KnitModule {
    * fasce; per gli altri decide il tool (Lorenzo, 2026-10-02: «decide il tool dentro le fasce»).
    */
   ordered?: number[];
+  /**
+   * SPOSTA PATTERN (Lorenzo, 2026-10-07: «spostare dx/sx alto/basso il pattern composto dei moduli per fare
+   * i centraggi»): dove sta il modulo sul ricamo, la sua V (0, 0) è la V (dr, dc) del ricamo. Il modulo non
+   * cambia (a differenza di Inizio, che lo ruota): si sposta la griglia delle copie.
+   */
+  offset?: { dr: number; dc: number };
 }
 
 /**
@@ -595,10 +601,11 @@ export function moveShapeBand(mod: KnitModule, color: number, cell: number, dir:
 }
 
 /** Il ricamo = il modulo ripetuto su tutta la griglia, a partire dall'angolo in alto a sinistra. */
-export function tileModule(g: GridSpec, mod: KnitModule): Cells {
+export function tileModule(g: GridSpec, mod: KnitModule, offset: { dr: number; dc: number } | null = mod.offset ?? null): Cells {
   const out: Cells = new Map();
+  const R = mod.rows, C = mod.cols, dr = offset?.dr ?? 0, dc = offset?.dc ?? 0;
   for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) {
-    const m = mod.marks[(r % mod.rows) * mod.cols + (c % mod.cols)];
+    const m = mod.marks[((((r - dr) % R) + R) % R) * C + ((((c - dc) % C) + C) % C)];
     if (m) out.set(r * g.cols + c, { ...m });
   }
   return out;
@@ -609,11 +616,12 @@ export function tileModule(g: GridSpec, mod: KnitModule): Cells {
  * sola): ogni cella toccata si ripete in ogni copia, e il modulo stesso cambia, così resta vero anche
  * se poi si cambiano le misure del ricamo.
  */
-export function editsOnAllCopies(g: GridSpec, mod: KnitModule, edits: CellEdit[], piece = 0): CellEdit[] {
+export function editsOnAllCopies(g: GridSpec, mod: KnitModule, edits: CellEdit[], piece = 0, offset: { dr: number; dc: number } | null = mod.offset ?? null): CellEdit[] {
   const out: CellEdit[] = [];
   const seen = new Set<number>();
+  const dr = offset?.dr ?? 0, dc = offset?.dc ?? 0;
   for (const e of edits) {
-    const mr = ((e.r % mod.rows) + mod.rows) % mod.rows, mc = ((e.c % mod.cols) + mod.cols) % mod.cols;
+    const mr = (((e.r - dr) % mod.rows) + mod.rows) % mod.rows, mc = (((e.c - dc) % mod.cols) + mod.cols) % mod.cols;
     if (seen.has(mr * mod.cols + mc)) continue;
     seen.add(mr * mod.cols + mc);
     mod.marks[mr * mod.cols + mc] = e.mark ? { ...e.mark } : null;
@@ -623,7 +631,7 @@ export function editsOnAllCopies(g: GridSpec, mod: KnitModule, edits: CellEdit[]
       mod.seq[mr * mod.cols + mc] = e.mark ? piece : 0;
       if (e.mark && piece > 0) { if (!mod.starts) mod.starts = {}; if (mod.starts[piece] === undefined) mod.starts[piece] = mr * mod.cols + mc; }
     }
-    for (let r = mr; r < g.rows; r += mod.rows) for (let c = mc; c < g.cols; c += mod.cols) out.push({ r, c, mark: e.mark ? { ...e.mark } : null });
+    for (let r = (mr + dr) % mod.rows; r < g.rows; r += mod.rows) for (let c = (mc + dc) % mod.cols; c < g.cols; c += mod.cols) out.push({ r, c, mark: e.mark ? { ...e.mark } : null });
   }
   return out;
 }
@@ -644,7 +652,7 @@ export function shiftModule(mod: KnitModule, dr: number, dc: number): KnitModule
   const seq = mod.seq ? marks.map((_, i) => mod.seq![((Math.floor(i / C) + sr) % R) * C + ((i % C) + sc) % C]) : mod.seq;
   const starts = mod.starts ? Object.fromEntries(Object.entries(mod.starts).map(([k, v]) => [k, newIdx(v)])) : mod.starts;
   // le fasce a mano non si spostano (una fascia scavalcherebbe il bordo): tornano automatiche
-  return { cols: C, rows: R, marks, guide, drawn: mod.drawn, seq, starts, ordered: mod.ordered };
+  return { cols: C, rows: R, marks, guide, drawn: mod.drawn, seq, starts, ordered: mod.ordered, offset: mod.offset };
 }
 
 /**
@@ -663,7 +671,7 @@ export function resizeModule(mod: KnitModule, cols: number, rows: number, fill: 
   const starts = mod.starts ? Object.fromEntries(Object.entries(mod.starts).filter(([, v]) => Math.floor(v / mod.cols) < rows && v % mod.cols < cols).map(([k, v]) => [k, Math.floor(v / mod.cols) * cols + (v % mod.cols)])) : mod.starts;
   const bands = mod.bands ? Object.fromEntries(Object.entries(mod.bands).map(([k, v]) => [k, v.filter((r) => r < rows)])) : mod.bands;
   const bandAt = mod.bandAt ? Object.fromEntries(Object.entries(mod.bandAt).map(([k, v]) => [k, Object.fromEntries(Object.entries(v).filter(([i, rr]) => Math.floor(Number(i) / mod.cols) < rows && Number(i) % mod.cols < cols && rr < rows).map(([i, rr]) => [Math.floor(Number(i) / mod.cols) * cols + (Number(i) % mod.cols), rr]))])) : mod.bandAt;
-  return { cols, rows, marks, guide: mod.guide, drawn: mod.drawn, seq: mod.seq ? seq : undefined, starts, bands, bandAt, ordered: mod.ordered };
+  return { cols, rows, marks, guide: mod.guide, drawn: mod.drawn, seq: mod.seq ? seq : undefined, starts, bands, bandAt, ordered: mod.ordered, offset: mod.offset };
 }
 
 /**

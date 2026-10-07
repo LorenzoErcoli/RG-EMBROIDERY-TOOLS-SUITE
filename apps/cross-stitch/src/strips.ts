@@ -102,6 +102,8 @@ export interface ModulePath {
   bandAt?: Record<number, Record<number, number>>;
   /** I fili coi pezzi messi in ordine a mano (Ordine pezzi): solo lì l'ordine dei pezzi vale nelle fasce. */
   ordered?: number[];
+  /** Dove sta il modulo sul pezzo: la sua V (0, 0) è la V (dr, dc) del ricamo (Sposta pattern). */
+  offset?: { dr: number; dc: number };
 }
 
 /** Il percorso di ogni filo sul modulo da solo (la base, se c'è, non è nel modulo: va sotto tutto). */
@@ -331,28 +333,36 @@ function trimLongTravel(g: GridSpec, segs: RouteSeg[], maxV: number): RouteSeg[]
 
 /** Il ricamo = il modulo ripetuto: per ogni striscia la base, poi ogni filo a fasce, a serpentina. */
 export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams, mp: ModulePath): RouteResult {
-  const W = 2 * g.cols + 1;
+  const W = 2 * g.cols + 1, C = mp.cols, Rm = mp.rows;
   const colors: ColorRoute[] = [];
   const metrics = emptyMetrics();
-  const fullX = Math.floor(g.cols / mp.cols);
   const baseC = params.base?.color;
   const order = [...new Set([...(baseC !== undefined ? [baseC] : []), ...[...cells.values()].map((m) => m.color)])]
     .sort((a, b) => (a === baseC ? -1 : b === baseC ? 1 : a - b));
   // le fasce di ogni filo, una volta sola
   const bandsBy = new Map<number, BandRoute[]>();
   for (const color of order) if (color !== baseC) bandsBy.set(color, routeBands(g, mp, color, params));
-  stripRanges(g, mp.rows).forEach(([r0, r1], strip) => {
-    const full = r1 - r0 === mp.rows;
-    const grid: GridSpec = { ...g, rows: r1 - r0 };
-    const shift = r0 * W, dy = r0 * rowPitch(g);
-    const stripParams: RouteParams = { ...params, strips: null, modulePath: null, groups: params.groups?.map((q) => ({ ...q, y: q.y - dy })), cuts: [], mask: params.mask ? params.mask.subarray(r0 * g.cols, r1 * g.cols) : params.mask };
+  // SPOSTA PATTERN (Lorenzo, 2026-10-07: «spostare dx/sx alto/basso il pattern composto dei moduli per fare
+  // i centraggi»): il modulo comincia alla V (dr, dc) del ricamo; prima di lì, a sinistra e in alto, ci sono
+  // copie e una striscia tagliate. Strisce e copie partono da lì, un modulo alla volta.
+  const dr = ((Math.round(mp.offset?.dr ?? 0) % Rm) + Rm) % Rm, dc = ((Math.round(mp.offset?.dc ?? 0) % C) + C) % C;
+  const colOrigins: number[] = [];
+  for (let oc = dc > 0 ? dc - C : 0; oc < g.cols; oc += C) colOrigins.push(oc);
+  const rowOrigins: number[] = [];
+  for (let or = dr > 0 ? dr - Rm : 0; or < g.rows; or += Rm) rowOrigins.push(or);
+  const mask = params.mask && params.mask.length === g.rows * g.cols ? params.mask : null;
+  rowOrigins.forEach((o, strip) => {
+    const s0 = Math.max(0, o), s1 = Math.min(g.rows, o + Rm);
+    const grid: GridSpec = { ...g, rows: s1 - s0 };
+    const shift = s0 * W, dy = s0 * rowPitch(g);
+    const stripParams: RouteParams = { ...params, strips: null, modulePath: null, groups: params.groups?.map((q) => ({ ...q, y: q.y - dy })), cuts: [], mask: mask ? mask.subarray(s0 * g.cols, s1 * g.cols) : null };
     const toGlobal = (segs: RouteSeg[]) => segs.map((sg) => ({ kind: sg.kind, from: sg.from + shift, to: sg.to + shift }));
     // la base: il motore, sulla striscia intera, coi punti col filo della base sopra la base (le croci)
     if (baseC !== undefined) {
       const over: Cells = new Map();
-      for (let rr = r0; rr < r1; rr++) for (let c = 0; c < g.cols; c++) {
+      for (let rr = s0; rr < s1; rr++) for (let c = 0; c < g.cols; c++) {
         const m = cells.get(rr * g.cols + c);
-        if (m && m.color === baseC && m.stitch === 'cross' && params.base!.stitch !== 'cross' && (!params.mask || params.mask[rr * g.cols + c])) over.set((rr - r0) * g.cols + c, m);
+        if (m && m.color === baseC && m.stitch === 'cross' && params.base!.stitch !== 'cross' && (!mask || mask[rr * g.cols + c])) over.set((rr - s0) * g.cols + c, m);
       }
       const res = routeCells(grid, over, stripParams);
       addMetrics(metrics, res.metrics);
@@ -360,28 +370,27 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
       if (bc) colors.push({ color: baseC, strip, segs: toGlobal(bc.segs) });
     }
     // LE COPIE TAGLIATE DAL BORDO (Lorenzo, 2026-10-02: «se cambio le misure a partire da un modulo i
-    // passaggi si rovinano nel finale e cambiano, quando in realtà dovrebbero rimanere uguali»): la copia
-    // tagliata a destra e la striscia tagliata in fondo usano lo stesso percorso del modulo, tagliato al
-    // bordo: si cuce quello che sta dentro, nello stesso ordine e coi passaggi a mano del modulo. Prima
-    // le rifaceva il motore da capo (e i passaggi ridisegnati e i salti a mano lì sparivano). Dove il
-    // percorso usciva dal bordo e rientrava, il filo salta.
-    const nRows = r1 - r0;
-    const lastK = g.cols > fullX * mp.cols ? fullX : fullX - 1; // l'ultima copia, intera o tagliata
-    const mask = params.mask && params.mask.length === g.rows * g.cols ? params.mask : null;
-    const cut = (k: number) => !!mask || !full || k === fullX;
-    const inside = (q: ModVertex, k: number) => q[0] <= nRows && q[1] + 2 * mp.cols * k <= 2 * g.cols;
+    // passaggi si rovinano nel finale e cambiano, quando in realtà dovrebbero rimanere uguali»): le copie
+    // tagliate (dal bordo, dalla forma, o spostando il pattern) usano lo stesso percorso del modulo,
+    // tagliato: si cuce quello che sta dentro, nello stesso ordine e coi passaggi a mano del modulo. Dove il
+    // percorso usciva e rientrava, il filo salta.
+    const fullRows = o >= 0 && o + Rm <= g.rows;
+    const cut = (k: number) => !!mask || !fullRows || colOrigins[k] < 0 || colOrigins[k] + C > g.cols;
+    // un vertice rispetto al modulo, nella copia k della striscia (riga e colonna del reticolo del ricamo)
+    const gi = (q: ModVertex) => o + q[0];
+    const gj = (q: ModVertex, k: number) => q[1] + 2 * colOrigins[k];
+    const at = (q: ModVertex, k: number) => gi(q) * W + gj(q, k);
+    const inside = (q: ModVertex, k: number) => gi(q) >= s0 && gi(q) <= s1 && gj(q, k) >= 0 && gj(q, k) <= 2 * g.cols;
     // con la forma: un tratto resta se la cella che attraversa (o una delle due che costeggia) è dentro
-    const cellIn = (i: number, c: number) => i >= 0 && i < nRows && c >= 0 && c < g.cols && mask![(r0 + i) * g.cols + c] === 1;
-    const segIn = (a: ModVertex, b: ModVertex, k: number) => {
+    const cellIn = (r: number, c: number) => r >= s0 && r < s1 && c >= 0 && c < g.cols && mask![r * g.cols + c] === 1;
+    const segIn = (p: ModVertex, q: ModVertex, k: number) => {
       if (!mask) return true;
-      const off = 2 * mp.cols * k, ja = a[1] + off, jb = b[1] + off, i = Math.min(a[0], b[0]);
+      const ja = gj(p, k), jb = gj(q, k), i = Math.min(gi(p), gi(q));
       if (ja === jb) return ja % 2 ? cellIn(i, (ja - 1) / 2) : cellIn(i, ja / 2 - 1) || cellIn(i, ja / 2);
       const c = Math.floor(Math.min(ja, jb) / 2);
-      if (a[0] === b[0]) return cellIn(a[0] - 1, c) || cellIn(a[0], c);
+      if (p[0] === q[0]) return cellIn(gi(p) - 1, c) || cellIn(gi(p), c);
       return cellIn(i, c);
     };
-    // un vertice rispetto al modulo, nella copia k della striscia
-    const at = (q: ModVertex, k: number) => (r0 + q[0]) * W + q[1] + 2 * mp.cols * k;
     for (const color of order) {
       if (color === baseC) continue;
       const segs: RouteSeg[] = [];
@@ -401,8 +410,8 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
           if (total) addMetrics(metrics, band.metrics, kept / total);
           return runs.filter((run) => run.some((sg) => sg.kind === 'stitch'));
         };
-        const ks: number[] = [];
-        if (band.dir > 0) for (let k = 0; k <= lastK; k++) ks.push(k); else for (let k = lastK; k >= 0; k--) ks.push(k);
+        const ks = colOrigins.map((_, k) => k);
+        if (band.dir < 0) ks.reverse();
         ks.forEach((k, n) => { for (const run of copy(k, n < ks.length - 1)) join(g, segs, run, metrics); });
       }
       if (segs.length) colors.push({ color, strip, segs });

@@ -5435,6 +5435,23 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
       const ref = rg.csRouteCells(gF2, cF3, { ...par, mask: maskF });
       check('forma: ruoli (perimetro, area vuota); nessun punto fuori; base solo dentro; gli stessi punti del motore', [JSON.stringify(forma.roles), fuori, base, puntiDi(resF) === puntiDi(ref)], ['{"#000000":"outline","#ff0000":"void"}', 0, dentro * 2, true]);
     }
+    // SPOSTA PATTERN (Lorenzo, 2026-10-07: «spostare dx/sx alto/basso il pattern composto dei moduli per fare
+    // i centraggi»): il modulo comincia alla V (3, 5) del ricamo; copie e strisce tagliate anche a sinistra e
+    // in alto, col percorso del modulo tagliato; gli stessi punti del motore, il filo non si rompe
+    {
+      const off = { dr: 3, dc: 5 };
+      const modO = { cols: Cm, rows: Rm, marks: marksB, offset: off };
+      const gO = { ...gB, cols: Cm * 3, rows: Rm * 2 };
+      const cO = rg.csTileModule(gO, modO);
+      const prima = cO.get(off.dr * gO.cols + off.dc), modello = marksB[0];
+      const resO = rg.csRouteAll(gO, cO, { ...par, strips: { rows: Rm }, modulePath: { cols: Cm, rows: Rm, marks: marksB, entryRow: {}, offset: off } });
+      let rotture = 0; for (const cr of resO.colors) for (let i = 1; i < cr.segs.length; i++) if (cr.segs[i].from !== cr.segs[i - 1].to) rotture++;
+      const strisce = new Set(resO.colors.map((c) => c.strip)).size;
+      // una V cambiata su tutte le copie: cade nella V del modulo giusta, anche spostato
+      const modE2 = { cols: Cm, rows: Rm, marks: marksB.map((m) => ({ ...m })), offset: off };
+      rg.csEditsOnAllCopies(gO, modE2, [{ r: off.dr + 2, c: off.dc + 1, mark: { stitch: 'cross', color: 1 } }]);
+      check('sposta pattern: la V (3, 5) è la prima del modulo; stessi punti, filo intero, 3 strisce; ritocco nella V giusta', [prima.color === modello.color && prima.stitch === modello.stitch, puntiDi(resO) === puntiDi(rg.csRouteCells(gO, cO, par)), rotture, strisce, modE2.marks[2 * Cm + 1].stitch], [true, true, 0, 3, 'cross']);
+    }
     // a mano: un confine tolto unisce, uno nuovo divide, uno trascinato si sposta
     const modE = { cols: Cm, rows: Rm, marks: marksB.map((m) => ({ ...m })) };
     rg.csToggleBandBreak(modE, 1, 5);

@@ -595,6 +595,13 @@ tratteggiate. È il modo di riempire una forma con un modulo: il modulo ripetuto
 percorso (fasce, passaggi a mano) si taglia alla forma, come alle copie tagliate dal bordo; dove esce e
 rientra, il filo salta. La forma va e torna col file del progetto. *Togli forma* torna al rettangolo.
 
+**Posizione del pattern** (in *02 Misure del ricamo*, con un modulo). Le frecce spostano le copie del modulo
+sul pezzo di una V a destra o a sinistra, o di una riga in su o in giù: il modulo non cambia (a
+differenza di *Inizio* nella vista modulo, che lo ruota). **Centra** mette il centro del modulo al
+centro della forma (o del ricamo, senza forma). Sotto, di quanto è spostato, in V e in mm. Le copie e le
+strisce che restano tagliate, anche a sinistra e in alto, usano il percorso del modulo tagliato; le
+strisce partono dalla prima riga del modulo, quindi spostando in giù ne compare una corta in alto.
+
 **Il punto della generazione.** In *01 Immagine*, *Punto*: V (la maglia, di partenza), Λ (la V
 capovolta), Croce, o la sola diagonale. Uno per cella, ognuno col suo filo. Per più dettaglio
 in orizzontale si stringe la cella.
