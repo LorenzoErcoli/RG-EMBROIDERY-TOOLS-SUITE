@@ -144,6 +144,7 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
           verticalZigzagWidth: grammar.verticalZigzagWidth * sc,
           strokeTiltDeg: campo.angolo(ax, ay),
         };
+        forma.horizontalZigzagPasses = campo.movimenti(ax, column, blocchi.length, grammar.horizontalZigzagPasses);
         blocchi.push({ y, altezza: passo * rapporto, forma, dx: 0 });
         y += passo;
       }

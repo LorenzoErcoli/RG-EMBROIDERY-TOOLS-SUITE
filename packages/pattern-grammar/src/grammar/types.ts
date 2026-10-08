@@ -158,6 +158,13 @@ export type PatternConfig = {
    */
   voidStitchMm?: number;
   /**
+   * I PASSAGGI DEL FILO dello zig-zag orizzontale, contati ogni andata e ogni ritorno sul tratto (Lorenzo,
+   * 2026-10-08: «uno zig-zag altezza 0 ma che passa 4 volte»). Se è più di 0 vale questo, a qualunque
+   * altezza, e l'interlinea non conta: 2 = un'andata e un ritorno, 4 = due e due. Il tratto finisce sempre
+   * sulla colonna, quindi i passaggi sono pari (un dispari si arrotonda). 0 = dall'interlinea, come prima.
+   */
+  horizontalZigzagPassCount?: number;
+  /**
    * LE VARIAZIONI NELL'AREA (Lorenzo, 2026-10-06): le misure del modulo cambiano da sinistra a destra.
    * Misura ai lati e al centro in % del pattern (100 = com'è): tratto, distanza fra le colonne e fra i
    * tratti scalano insieme, con una sfumatura continua. Tutti a 100 e il resto a 0 = pattern di sempre.
@@ -170,6 +177,14 @@ export type PatternConfig = {
   strokeAngleJitterDeg?: number;
   /** Quale disegno casuale: a parità di valori, un altro numero dà un'altra pelle. */
   variationSeed?: number;
+  /**
+   * I PASSAGGI DEL FILO che cambiano nell'area (Lorenzo, 2026-10-08: «al centro più passaggi, per esempio 4,
+   * e ai lati solo due… non uno stacco netto ma fasce di colonne in cui a volte sono 2 a volte 4, prima più
+   * 2 che 4, poi più 4 che 2, e alla fine solo 4»). Contati come `horizontalZigzagPassCount`; 0 = come il
+   * pattern. Fra i due, ogni tratto si sorteggia fra le due misure vicine con una probabilità che scorre.
+   */
+  variationPassCountSides?: number;
+  variationPassCountCenter?: number;
   exportCompatibilityMode?: ExportCompatibilityMode;
   sourceAnalysis?: PatternAnalysis;
 };

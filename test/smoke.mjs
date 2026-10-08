@@ -2552,7 +2552,7 @@ console.log('\noblique — routing + orchestratore (2d)');
     // (2026-10-02, Lorenzo: «il preset tocchi tutto tranne larghezza e altezza») anche il formato resta
     check('caricare un preset non tocca formato, sagoma di ritaglio e cartamodello',
       [caricamento.includes('const restano = { totalWidth: cfg.totalWidth, totalHeight: cfg.totalHeight, shapeType: cfg.shapeType, importedBoundary: cfg.importedBoundary };'),
-        caricamento.includes('Object.assign(cfg, neutre, migratePreset(preset.config), restano);'),
+        caricamento.includes('Object.assign(cfg, NEUTRI, migratePreset(preset.config), restano);'),
         Object.values(JSON.parse(readFileSync(join(root, 'apps/pattern-grammar/src/presets.shared.json'), 'utf8'))).some((p) => p.shapeType === 'none')],
       [true, true, true]);
     // e importare un SVG o un DXF porta il formato a coprire tutto il pezzo (Lorenzo, 2026-10-02)
@@ -2615,10 +2615,75 @@ console.log('\noblique — routing + orchestratore (2d)');
     // senza variazioni il generatore va per la strada di sempre: a valori neutri, identico al millesimo
     check('a valori neutri il pattern è identico a quello senza variazioni',
       firma({ ...classico, variationSidesPercent: 100, variationCenterPercent: 100, variationIrregularityPercent: 0, strokeAngleJitterDeg: 0, variationSeed: 9 }) === firma(classico), true);
+    // I PASSAGGI CHE CAMBIANO NELL'AREA (Lorenzo, 2026-10-08): 4 al centro, 2 ai lati, e in mezzo «fasce di
+    // colonne in cui a volte sono 2 a volte 4, prima più 2 che 4, poi più 4 che 2». Si conta, per fasce di
+    // 10 mm, la parte di tratti su cui il filo passa 4 volte.
+    const fasceA4 = (cfg) => {
+      const fasce = Array.from({ length: 12 }, () => ({ due: 0, quattro: 0 }));
+      for (const l of rg.generateFinalPatternPoints(cfg).visualPolylines) {
+        const orizz = (k) => Math.abs(l[k].y - l[k - 1].y) < 0.3 * Math.abs(l[k].x - l[k - 1].x) && Math.abs(l[k].x - l[k - 1].x) > 0.8;
+        let i = 1;
+        while (i < l.length) {
+          if (!orizz(i)) { i++; continue; }
+          let n = 0, xs = 0; const y0 = l[i - 1].y;
+          while (i < l.length && orizz(i) && Math.abs(l[i].y - y0) < 1.2) { n++; xs += l[i].x + l[i - 1].x; i++; }
+          const f = fasce[Math.min(11, Math.max(0, Math.floor(xs / (2 * n) / 10)))];
+          if (n >= 4) f.quattro++; else if (n >= 2) f.due++;
+        }
+      }
+      return fasce.map((f) => (f.due + f.quattro ? f.quattro / (f.due + f.quattro) : 0));
+    };
+    const quattroDue = fasceA4({ ...classico, totalHeight: 60, variationPassCountCenter: 4, variationPassCountSides: 2 });
+    const miste = quattroDue.filter((v) => v > 0.1 && v < 0.9).length;
+    check('passaggi 4 al centro e 2 ai lati: ai bordi solo 2, al centro solo 4, in mezzo fasce miste che crescono piano',
+      [quattroDue[0], quattroDue[11], quattroDue[5] === 1 && quattroDue[6] === 1, miste >= 3, quattroDue[2] < quattroDue[3] && quattroDue[3] < quattroDue[4]],
+      [0, 0, true, true, true]);
+    check('senza i passaggi variati nessun tratto passa 4 volte', fasceA4({ ...classico, totalHeight: 60 }).every((v) => v === 0), true);
     // il preset a squame è nella libreria, e caricare un preset rimette neutre le variazioni che non dice
     const sorgente = readFileSync(join(root, 'apps/pattern-grammar/src/tool.ts'), 'utf8');
     check('caricare un preset senza variazioni le rimette neutre',
-      sorgente.includes('Object.assign(cfg, neutre, migratePreset(preset.config), restano);'), true);
+      sorgente.includes('Object.assign(cfg, NEUTRI, migratePreset(preset.config), restano);'), true);
+  }
+
+  // INTERLINEA FILO E PASSAGGI DEL FILO (Lorenzo, 2026-10-08): «iniziamo a chiamarla interlinea filo… e
+  // poter indicare questo valore in base al numero di passaggi, indipendentemente dall'altezza: uno
+  // zig-zag altezza 0 ma che passa 4 volte». I passaggi contano ogni andata e ogni ritorno sul tratto.
+  console.log('\npattern-grammar — interlinea filo e passaggi del filo');
+  {
+    const condivisi = JSON.parse(readFileSync(join(root, 'apps/pattern-grammar/src/presets.shared.json'), 'utf8'));
+    const nastro = { ...condivisi['RG-PUNTO NASTRO CLASSICO'], totalWidth: 30, totalHeight: 20 };
+    // quante volte il filo passa sul primo tratto orizzontale: i segmenti orizzontali di fila
+    const passi = (cfg) => {
+      const l = rg.generateFinalPatternPoints(cfg).visualPolylines[0];
+      const orizzontale = (i) => Math.abs(l[i].y - l[i - 1].y) < 1e-6 && Math.abs(l[i].x - l[i - 1].x) > 1;
+      let i = 1;
+      while (i < l.length && !orizzontale(i)) i++;
+      let n = 0;
+      while (i < l.length && orizzontale(i)) { n++; i++; }
+      return n;
+    };
+    check('altezza 0: il filo passa sul tratto quante volte si chiede (2 = il punto nastro classico; un dispari si arrotonda)',
+      [passi(nastro), passi({ ...nastro, horizontalZigzagPassCount: 2 }), passi({ ...nastro, horizontalZigzagPassCount: 4 }),
+        passi({ ...nastro, horizontalZigzagPassCount: 6 }), passi({ ...nastro, horizontalZigzagPassCount: 3 })],
+      [2, 2, 4, 6, 4]);
+    const rete = { ...condivisi['Base rete'], totalWidth: 30, totalHeight: 30 };
+    const g = (cfg) => rg.generateFinalPatternPoints(cfg).grammar;
+    check('con un\'altezza i passaggi vincono sull\'interlinea (Base rete: 17 movimenti dall\'interlinea, 4 con 8 passaggi)',
+      [g(rete).horizontalZigzagPasses, g({ ...rete, horizontalZigzagPassCount: 8 }).horizontalZigzagPasses,
+        Number(g({ ...rete, horizontalZigzagPassCount: 8 }).horizontalZigzagInterline.toFixed(3))], [17, 4, 1.075]);
+    const firma = (cfg) => JSON.stringify(rg.generateFinalPatternPoints(cfg).visualPolylines.flat().map((p) => [p.x.toFixed(3), p.y.toFixed(3)]));
+    check('a 0 passaggi vale l\'interlinea, identico a prima', firma({ ...rete, horizontalZigzagPassCount: 0 }) === firma(rete), true);
+    // il nome nuovo, uguale nei due tool (R28), e il campo passaggi anche in Pattern a zone
+    const generatore = readFileSync(join(root, 'apps/pattern-grammar/src/fields.ts'), 'utf8');
+    const zone = readFileSync(join(root, 'apps/zone-pattern/src/fields.ts'), 'utf8');
+    check('«Interlinea filo» al posto di «distanza tra i fili», e i passaggi del filo, nei due tool',
+      [/istanza tra i fili/.test(generatore + zone), (generatore.match(/Interlinea filo/g) ?? []).length, (zone.match(/interlinea filo/g) ?? []).length,
+        generatore.includes("name: 'horizontalZigzagPassCount'"), zone.includes("name: 'horizontalZigzagPassCount'")],
+      [false, 2, 2, true, true]);
+    const tool = readFileSync(join(root, 'apps/pattern-grammar/src/tool.ts'), 'utf8');
+    check('un preset o un DST di prima, che non dicono i passaggi, li rimettono a 0',
+      [tool.includes('horizontalZigzagPassCount: 0,'), tool.includes('Object.assign(cfg, NEUTRI, migratePreset(preset.config), restano);'), tool.includes('Object.assign(cfg, NEUTRI, parametri);')],
+      [true, true, true]);
   }
 
   // IL DST RIAPRE IL PROGRAMMA INTERO (Lorenzo, 2026-10-07: «caricare un dst e che si rigenerasse il
@@ -2635,7 +2700,7 @@ console.log('\noblique — routing + orchestratore (2d)');
         salva.includes('MAX_DRAWING_KB'), salva.includes("...(disegno ? { drawing: disegno } : {})")], [true, true, true]);
     check('riaprendo: prima il disegno, poi i ruoli salvati, per ultimi i parametri',
       [riapri.indexOf('reparseBoundary()') > 0, riapri.indexOf('Object.assign(boundaryRoles, disegno.roles') > riapri.indexOf('reparseBoundary()'),
-        riapri.indexOf('Object.assign(cfg, parametri)') > riapri.indexOf('Object.assign(boundaryRoles, disegno.roles')], [true, true, true]);
+        riapri.indexOf('Object.assign(cfg, NEUTRI, parametri)') > riapri.indexOf('Object.assign(boundaryRoles, disegno.roles')], [true, true, true]);
     // la scala d'import non torna più al default quando il pannello si ricostruisce (preset, riapertura)
     check('la scala d\'import sopravvive alla ricostruzione del pannello',
       sorgente.includes("v === scalaImport.scaleMode ? ' selected' : ''"), true);

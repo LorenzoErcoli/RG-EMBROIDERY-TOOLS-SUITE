@@ -25,8 +25,9 @@ export const CORPO: Group[] = [
   {
     title: 'Zig-zag orizzontale', collapsible: true, open: true, fields: [
       { kind: 'num', name: 'horizontalZigzagWidth', label: 'Larghezza', unit: 'mm', min: 0.5, step: 0.1, value: 5.5 },
-      { kind: 'num', name: 'horizontalZigzagHeight', label: 'Altezza', unit: 'mm', min: 0.1, step: 0.1, value: 4.3 },
-      { kind: 'num', name: 'horizontalZigzagInterline', label: 'Distanza tra i fili', unit: 'mm', min: 0.05, step: 0.01, value: 0.25 },
+      { kind: 'num', name: 'horizontalZigzagHeight', label: 'Altezza', unit: 'mm', min: 0, step: 0.1, value: 4.3 },
+      { kind: 'num', name: 'horizontalZigzagInterline', label: 'Interlinea filo', unit: 'mm', min: 0.05, step: 0.01, value: 0.25 },
+      { kind: 'num', name: 'horizontalZigzagPassCount', label: 'Passaggi del filo', min: 0, step: 2, value: 0, help: 'conta ogni andata e ogni ritorno sul tratto: 2 = un’andata e un ritorno, 4 = due e due; a qualunque altezza, anche 0, e l’interlinea non conta. 0 = dall’interlinea' },
       { kind: 'num', name: 'horizontalZigzagOffsetX', label: 'Spostamento dal centro', unit: 'mm', step: 0.1, value: 0 },
       { kind: 'num', name: 'horizontalZigzagSpacing', label: 'Distanza tra gli zig-zag', unit: 'mm', min: 1, step: 0.1, value: 12 },
     ],
@@ -34,7 +35,7 @@ export const CORPO: Group[] = [
   {
     title: 'Zig-zag verticale', collapsible: true, open: false, fields: [
       { kind: 'num', name: 'verticalZigzagWidth', label: 'Larghezza', unit: 'mm', min: 0.1, step: 0.1, value: 1.2 },
-      { kind: 'num', name: 'verticalZigzagInterline', label: 'Distanza tra i fili', unit: 'mm', min: 0.05, step: 0.01, value: 0.25 },
+      { kind: 'num', name: 'verticalZigzagInterline', label: 'Interlinea filo', unit: 'mm', min: 0.05, step: 0.01, value: 0.25 },
       { kind: 'num', name: 'verticalConnectorDiagonalOffsetY', label: 'Inclinazione del raccordo', unit: 'mm', min: 0, step: 0.1, value: 0 },
       { kind: 'num', name: 'stepX', label: 'Distanza tra le colonne', unit: 'mm', min: 0.5, step: 0.1, value: 5.2 },
       { kind: 'num', name: 'offsetY', label: 'Sfasamento tra colonne', unit: 'mm', min: 0, step: 0.1, value: 6 },
@@ -57,6 +58,8 @@ export const CORPO: Group[] = [
       { kind: 'num', name: 'variationCenterPercent', label: 'Misura al centro', unit: '%', min: 10, step: 5, value: 100, help: 'lo stesso al centro; in mezzo la misura sfuma da sola, senza stacchi' },
       { kind: 'num', name: 'variationIrregularityPercent', label: 'Irregolarità', unit: '%', min: 0, step: 10, value: 0, help: 'le colonne ondeggiano e le distanze respirano, in modo morbido, in tutte le direzioni; 0 = niente' },
       { kind: 'num', name: 'strokeAngleJitterDeg', label: 'Inclinazione variabile del tratto', unit: '°', min: 0, step: 0.5, value: 0, help: 'di quanto al massimo il tratto orizzontale si inclina, a zone; 0 = sempre dritto' },
+      { kind: 'num', name: 'variationPassCountSides', label: 'Passaggi del filo ai lati', min: 0, step: 2, value: 0, help: 'come «Passaggi del filo» dello zig-zag orizzontale, ma solo ai lati; 0 = come il pattern' },
+      { kind: 'num', name: 'variationPassCountCenter', label: 'Passaggi del filo al centro', min: 0, step: 2, value: 0, help: 'lo stesso al centro; in mezzo c’è una fascia in cui ogni tratto ne ha a volte di più a volte di meno, sempre più vicino al centro' },
       { kind: 'num', name: 'variationSeed', label: 'Variante', min: 1, step: 1, value: 1, help: 'un altro numero dà un’altra disposizione con gli stessi valori' },
     ],
   },

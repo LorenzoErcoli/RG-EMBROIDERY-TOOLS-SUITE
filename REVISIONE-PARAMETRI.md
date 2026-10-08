@@ -66,7 +66,8 @@ I punti che richiedono una tua decisione sono marcati **①②③…** e raccolt
 |---|---|---|---|
 | `Larghezza` | Larghezza dello zig-zag orizzontale | `horizontalZigzagWidth` | **Larghezza** (il gruppo dà già il contesto) |
 | `Altezza esatta` | Altezza dello zig-zag, **limitata dall'altezza del modulo** | `horizontalZigzagHeight` | **Altezza** — "esatta" non aggiunge niente e non è nemmeno vero: viene tagliata al modulo |
-| `Interlinea fili` | Distanza tra i fili affiancati | `horizontalZigzagInterline` | **Distanza tra i fili** |
+| `Interlinea fili` | Distanza tra i fili affiancati | `horizontalZigzagInterline` | ~~Distanza tra i fili~~ → **Interlinea filo** (Lorenzo, 2026-10-08: «così è chiaro a livello di ricamo») |
+| — | Passaggi al posto dell'interlinea, a qualunque altezza | `horizontalZigzagPassCount` | **Passaggi del filo** (2026-10-08: ogni andata e ogni ritorno; 0 = dall'interlinea) |
 | `Offset X a sinistra` | Sposta l'origine dello zig-zag a sinistra del centro | `horizontalZigzagOffsetX` | **Spostamento dal centro** ← |
 | `Distanza centro-centro` | Passo tra uno zig-zag e il successivo | `horizontalZigzagSpacing` | **Distanza tra gli zig-zag** |
 
@@ -75,7 +76,7 @@ I punti che richiedono una tua decisione sono marcati **①②③…** e raccolt
 | Etichetta oggi | Cosa fa davvero | Nome interno | Proposta |
 |---|---|---|---|
 | `Larghezza` | Larghezza dello zig-zag verticale | `verticalZigzagWidth` | **Larghezza** |
-| `Interlinea fili` | Distanza tra i fili affiancati | `verticalZigzagInterline` | **Distanza tra i fili** |
+| `Interlinea fili` | Distanza tra i fili affiancati | `verticalZigzagInterline` | ~~Distanza tra i fili~~ → **Interlinea filo** (2026-10-08) |
 | `Diagonale connector` | Inclina il raccordo verticale abbassandone il capo di metà valore | `verticalConnectorDiagonalOffsetY` | **Inclinazione del raccordo** — "connector" è inglese |
 | `Distanza colonne` | Passo orizzontale tra colonne | `stepX` | **Distanza tra le colonne** |
 | `Sfasamento Y` | Sfasamento verticale tra colonne; default = mezzo passo | `offsetY` | **Sfasamento tra colonne** |

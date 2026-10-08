@@ -64,10 +64,18 @@ export function resolvePatternGrammar(config: PatternConfig): ResolvedPatternGra
   const scaled = (value: number) => value * parameterScale;
   const horizontalZigzagWidth = scaled(config.horizontalZigzagWidth ?? config.horizontalCordWidth ?? 5.5);
   const horizontalZigzagHeight = scaled(config.horizontalZigzagHeight ?? 4.3);
-  const horizontalZigzagPasses = config.horizontalZigzagInterline !== undefined
-    ? passesFromLinearInterline(horizontalZigzagHeight, config.horizontalZigzagInterline)
-    : Math.max(1, Math.floor(config.horizontalZigzagPasses ?? config.horizontalZigzagCount ?? config.density ?? 4));
-  const horizontalZigzagInterline = config.horizontalZigzagInterline
+  // un «movimento» del motore è un'andata e un ritorno: i passaggi del filo sono il doppio
+  const passaggiDati = Number.isFinite(config.horizontalZigzagPassCount) && config.horizontalZigzagPassCount! > 0
+    ? Math.max(1, Math.round(config.horizontalZigzagPassCount! / 2))
+    : 0;
+  const horizontalZigzagPasses = passaggiDati > 0
+    ? passaggiDati
+    : config.horizontalZigzagInterline !== undefined
+      ? passesFromLinearInterline(horizontalZigzagHeight, config.horizontalZigzagInterline)
+      : Math.max(1, Math.floor(config.horizontalZigzagPasses ?? config.horizontalZigzagCount ?? config.density ?? 4));
+  const horizontalZigzagInterline = passaggiDati > 0
+    ? horizontalZigzagHeight / passaggiDati
+    : config.horizontalZigzagInterline
     ?? (horizontalZigzagPasses > 0 ? horizontalZigzagHeight / horizontalZigzagPasses : horizontalZigzagHeight);
   const horizontalZigzagSpacing = scaled(config.horizontalZigzagSpacing ?? config.cellHeight ?? config.moduleHeight
     ?? analysis?.estimatedGrid.stepY ?? 12);
@@ -152,6 +160,8 @@ export function resolvePatternGrammar(config: PatternConfig): ResolvedPatternGra
       irregolarita: Math.max(0, (Number.isFinite(config.variationIrregularityPercent) ? config.variationIrregularityPercent! : 0) / 100),
       angoloMaxDeg: Math.max(0, Number.isFinite(config.strokeAngleJitterDeg) ? config.strokeAngleJitterDeg! : 0),
       seme: Number.isFinite(config.variationSeed) ? config.variationSeed! : 1,
+      passaggiLati: Math.max(0, Number.isFinite(config.variationPassCountSides) ? config.variationPassCountSides! : 0),
+      passaggiCentro: Math.max(0, Number.isFinite(config.variationPassCountCenter) ? config.variationPassCountCenter! : 0),
     },
     exportCompatibilityMode: config.exportCompatibilityMode ?? "normal"
   };

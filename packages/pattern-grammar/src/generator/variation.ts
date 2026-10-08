@@ -32,6 +32,9 @@ export type VariationParams = {
   /** Di quanto al massimo si inclina il tratto, gradi (±). */
   angoloMaxDeg: number;
   seme: number;
+  /** Passaggi del filo ai lati e al centro (andate e ritorni); 0 = come il pattern. */
+  passaggiLati?: number;
+  passaggiCentro?: number;
 };
 
 export type VariationField = {
@@ -44,16 +47,36 @@ export type VariationField = {
   passoColonne(x: number): number;
   /** L'inclinazione del tratto in quel punto, gradi. */
   angolo(x: number, y: number): number;
+  /**
+   * I movimenti (andata e ritorno) del tratto della colonna `colonna`, riga `riga`, alla posizione x.
+   * `base` = quelli del pattern, per il capo che dice 0.
+   */
+  movimenti(x: number, colonna: number, riga: number, base: number): number;
   params: VariationParams;
 };
 
 /** Le variazioni sono spente quando ogni valore è neutro: il generatore va per la strada di sempre. */
 export function variationActive(p: VariationParams): boolean {
-  return Math.abs(p.lati - 1) > 1e-9 || Math.abs(p.centro - 1) > 1e-9 || p.irregolarita > 0 || p.angoloMaxDeg > 0;
+  return Math.abs(p.lati - 1) > 1e-9 || Math.abs(p.centro - 1) > 1e-9 || p.irregolarita > 0 || p.angoloMaxDeg > 0
+    || (p.passaggiLati ?? 0) > 0 || (p.passaggiCentro ?? 0) > 0;
 }
 
 const smooth = (t: number) => t * t * (3 - 2 * t);
 const lerp = (a: number, b: number, t: number) => a + (b - a) * t;
+
+/**
+ * Dove sta la FASCIA MISTA dei passaggi, come frazione della mezza larghezza dal centro: prima è tutto la
+ * misura del centro, dopo tutto quella dei lati, in mezzo i tratti si sorteggiano.
+ */
+export const FASCIA_PASSAGGI = [0.25, 0.75] as const;
+
+/** Un numero in [0, 1) fisso per seme, colonna e riga: il sorteggio di un tratto. */
+function sorteggio(seme: number, colonna: number, riga: number): number {
+  let n = (colonna * 73856093) ^ (riga * 19349663) ^ (seme * 83492791);
+  n = Math.imul(n ^ (n >>> 15), 2246822507);
+  n = Math.imul(n ^ (n >>> 13), 3266489909);
+  return ((n ^ (n >>> 16)) >>> 0) / 4294967296;
+}
 
 /** Rumore morbido 2D (value noise, due ottave), valori in [-1, 1], deterministico per seme. */
 function rumore(seme: number): (x: number, y: number) => number {
@@ -88,5 +111,15 @@ export function variationField(params: VariationParams, larghezza: number, passo
     larghezza: (x, y) => nLarghezza(x / (9 * k), y / (9 * k)),
     passoColonne: (x) => nPasso(x / (5 * k), 40),
     angolo: (x, y) => params.angoloMaxDeg * nAngolo(x / (16 * k), y / (16 * k)),
+    movimenti: (x, colonna, riga, base) => {
+      const centro = (params.passaggiCentro ?? 0) > 0 ? params.passaggiCentro! / 2 : base;
+      const lati = (params.passaggiLati ?? 0) > 0 ? params.passaggiLati! / 2 : base;
+      // pieno al centro fino a un quarto, pieno ai lati dall'ultimo quarto, in mezzo la fascia mista
+      const t = Math.min(1, Math.abs(x - meta) / meta);
+      const voluto = lerp(centro, lati, smooth(Math.min(1, Math.max(0, (t - FASCIA_PASSAGGI[0]) / (FASCIA_PASSAGGI[1] - FASCIA_PASSAGGI[0])))));
+      // ogni tratto si sorteggia fra le due misure intere vicine: la frazione è la probabilità della più alta
+      const giu = Math.floor(voluto), su = voluto - giu;
+      return Math.max(1, su > 1e-9 && sorteggio(seme, colonna, riga) < su ? giu + 1 : giu);
+    },
   };
 }

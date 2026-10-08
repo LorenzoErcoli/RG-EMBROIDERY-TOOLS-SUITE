@@ -24,6 +24,15 @@ type DisegnoSalvato = {
   scale?: { scaleMode?: string; customW?: number; customH?: number };
   roles?: Record<string, BoundaryRole>;
 };
+/**
+ * I valori che un preset o un DST di prima non dicono, perché quei campi sono nati dopo: tornano neutri,
+ * cioè il pattern di sempre. Senza, restava addosso quello che c'era nel pannello.
+ */
+const NEUTRI = {
+  variationSidesPercent: 100, variationCenterPercent: 100, variationIrregularityPercent: 0, strokeAngleJitterDeg: 0, variationSeed: 1,
+  horizontalZigzagPassCount: 0, variationPassCountSides: 0, variationPassCountCenter: 0,
+};
+
 /** Tetto al disegno incorporato nel DST, come negli altri tool: oltre, il file porta i soli parametri. */
 const MAX_DRAWING_KB = 256;
 
@@ -490,7 +499,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
               }
               // i parametri per ultimi: formato e sagoma tornano quelli salvati, non quelli dell'import
               const { importedBoundary: _sagoma, ...parametri } = migratePreset(meta.params as PatternConfig) as Record<string, unknown>;
-              Object.assign(cfg, parametri);
+              Object.assign(cfg, NEUTRI, parametri);
               buildPanel();
               render();
               $('boundaryStatus').textContent = disegno?.text
@@ -534,10 +543,9 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       // dentro formato e `shapeType` («Nessuna» in tutti quelli condivisi): caricandone uno la sagoma
       // importata si spegneva in silenzio, e con lei ritaglio e aree vuote.
       const restano = { totalWidth: cfg.totalWidth, totalHeight: cfg.totalHeight, shapeType: cfg.shapeType, importedBoundary: cfg.importedBoundary };
-      // le VARIAZIONI che il preset non dice tornano neutre: i preset di prima non le hanno, e caricandone
-      // uno dopo un preset a squame le squame restavano addosso al pattern classico
-      const neutre = { variationSidesPercent: 100, variationCenterPercent: 100, variationIrregularityPercent: 0, strokeAngleJitterDeg: 0, variationSeed: 1 };
-      Object.assign(cfg, neutre, migratePreset(preset.config), restano);
+      // le VARIAZIONI e i PASSAGGI che il preset non dice tornano neutri: i preset di prima non li hanno, e
+      // caricandone uno dopo un preset a squame le squame restavano addosso al pattern classico
+      Object.assign(cfg, NEUTRI, migratePreset(preset.config), restano);
       buildPanel();          // ricostruisce coi valori del preset (e ricollega gli eventi)
       refreshPresetList();
       render();
