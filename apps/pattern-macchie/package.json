@@ -1,0 +1,21 @@
+{
+  "name": "pattern-macchie",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Pattern a macchie: un pannello col suo pattern di base e, dentro le macchie del disegno, un raso con sopra lo stesso punto della base. Output SVG/DST.",
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview"
+  },
+  "dependencies": {
+    "@rg/core": "*",
+    "@rg/pattern-grammar": "*"
+  },
+  "devDependencies": {
+    "@types/node": "^26.1.1",
+    "typescript": "^5.7.2",
+    "vite": "^6.0.7"
+  }
+}

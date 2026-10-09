@@ -23,6 +23,7 @@ export default defineConfig(({ command }) => ({
       '@app/cross-stitch': fileURLToPath(new URL('../cross-stitch/src/tool.ts', import.meta.url)),
       '@app/razza': fileURLToPath(new URL('../razza/src/tool.ts', import.meta.url)),
       '@app/cannage-rafia': fileURLToPath(new URL('../cannage-rafia/src/tool.ts', import.meta.url)),
+      '@app/pattern-macchie': fileURLToPath(new URL('../pattern-macchie/src/tool.ts', import.meta.url)),
       '@rg/pattern-grammar': fileURLToPath(new URL('../../packages/pattern-grammar/src/index.ts', import.meta.url)),
     },
   },

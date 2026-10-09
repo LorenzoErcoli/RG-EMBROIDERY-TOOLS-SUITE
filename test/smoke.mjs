@@ -58,12 +58,13 @@ export { sagomaDaZone, sagomaDaAnello, sagomaDaAnelli } from ${JSON.stringify(po
 export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordatura, stratiProgramma, conPuntoMinimo, unisciTratti } from ${JSON.stringify(posix('apps/cannage-rafia/src/programma.ts'))};
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
+export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_PARAMETRI } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
 await esbuild.build({
   entryPoints: [entry], bundle: true, format: 'esm', platform: 'neutral', outfile: bundle,
-  alias: { '@rg/core': posix('packages/core/src/index.ts') },
+  alias: { '@rg/core': posix('packages/core/src/index.ts'), '@rg/pattern-grammar': posix('packages/pattern-grammar/src/index.ts') },
   logLevel: 'error',
 });
 
@@ -964,7 +965,7 @@ check('S/s: stessa area della C esplicita', Math.round(Math.abs(rg.polygonArea(p
 console.log('\nsuite — ogni tool scrive i parametri nel .dst e li sa rileggere (R27)');
 for (const [tool, id] of [['net-45', 'net-45'], ['pattern-grammar', 'pattern-grammar'],
   ['interlace', 'interlace'], ['striatura', 'striatura'], ['oblique', 'oblique'],
-  ['bitmap', 'bitmap'], ['zone-pattern', 'zone-pattern'], ['cannage-rafia', 'cannage-rafia'], ['cross-stitch', 'cross-stitch']]) {
+  ['bitmap', 'bitmap'], ['zone-pattern', 'zone-pattern'], ['cannage-rafia', 'cannage-rafia'], ['cross-stitch', 'cross-stitch'], ['pattern-macchie', 'pattern-macchie']]) {
   const src = readFileSync(join(root, `apps/${tool}/src/tool.ts`), 'utf8');
   const call = src.indexOf('dstFromExportLayers(');
   const blocco = call >= 0 ? src.slice(call, call + 600) : '';
@@ -5813,6 +5814,67 @@ console.log('\nrazza — il ricamo rispetta le sue regole');
   check('un file di un altro tool non viene scambiato per un progetto razza', rg.rzLeggiProgetto({ rgProject: 'net-45', params: {} }), null);
   check('un progetto con parametri di tipo sbagliato non li prende', rg.rzLeggiProgetto({ rgProject: 'razza', params: { gapMm: 'tanto' } }).params.gapMm, rg.RZ_PARAMETRI.gapMm);
   check('export: un solo tracciato continuo', [rg.rzStrati(rf).length, rg.rzStrati(rf)[0].polylines.length], [1, 1]);
+}
+
+// pattern-macchie — il pannello di prova di Lorenzo (TEST-PIAZZEMENTO CON MACCHIE.svg, 2026-10-08): contorno
+// rosso, 84 macchie gialle, base a punto nastro a squame. Tre stop: la base, il raso delle macchie, sopra lo
+// STESSO punto della base; mai un punto fra una macchia e l'altra, il punto sopra mai fuori dalla macchia.
+console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, niente fuori dalle macchie');
+{
+  const pm = rg.parseImportedBoundarySource(readFileSync(join(here, 'fixtures/macchie-pannello.svg'), 'utf8'), 'macchie.svg', { scaleMode: 'illustrator-72dpi' });
+  const pannello = pm.choices.find((c) => c.color === '#e52521').boundary.paths[0].points;
+  const macchie = pm.choices.find((c) => c.color === '#ede300').boundary.paths.map((p) => p.points);
+  const squame = JSON.parse(readFileSync(join(root, 'apps/pattern-grammar/src/presets.shared.json'), 'utf8'))['RG-PUNTO NASTRO — SQUAME'];
+  check('il disegno: 84 macchie dentro il pannello', macchie.length, 84);
+  const r = rg.pmCostruisci(pannello, macchie, squame);
+  // la base intera (Lorenzo: «per ora non bucare la base, lasciala tutta intera»): un tratto, nessun salto
+  check('la base è intera: nessun buco, nessun salto', [r.buchi.length, r.base.salti], [0, 0]);
+  const formato = { totalWidth: Math.ceil(Math.max(...pannello.map((p) => p.x))) + 1, totalHeight: Math.ceil(Math.max(...pannello.map((p) => p.y))) + 1 };
+  const intera = rg.generateFinalPatternPoints({ ...squame, ...formato, shapeType: 'imported', voidStitchMm: 0, importedBoundary: { id: 'p', sourceFileName: 'p', sourceType: 'svg', paths: [{ id: 'p', points: pannello, closed: true }], bounds: { minX: 0, minY: 0, maxX: formato.totalWidth, maxY: formato.totalHeight } } }).visualPolylines;
+  check('...ed è la base del Generatore, punto per punto', r.base.punti, intera.reduce((t, l) => t + l.length, 0));
+  // quanto un punto è fuori dalle macchie (0 se è dentro)
+  const fuoriDa = (p, forme) => (forme.some((m) => rg.pointInPolygon(p, m)) ? 0 : Math.min(...forme.map((m) => rg.distanceToBoundary(p, m))));
+  const peggiore = (linee, forme) => { let w = 0; for (const t of linee) for (let i = 1; i < t.length; i++) w = Math.max(w, fuoriDa({ x: (t[i - 1].x + t[i].x) / 2, y: (t[i - 1].y + t[i].y) / 2 }, forme)); return w; };
+  // «non ricamare tra una macchia e l'altra»: ogni punto delle macchie sta in una macchia (la sfrangiatura,
+  // metà verso fuori, porta le righe al più 0,5 mm oltre il bordo)
+  check('nessun punto fra una macchia e l’altra (entro la sfrangiatura di 0,5 mm)', peggiore([...r.raso.tratti, ...r.sopra.tratti], r.forme) <= 0.55, true);
+  // «fuori dalla macchia non deve mai andare»
+  check('il punto sopra non esce dalla macchia', peggiore(r.vista.sopra, r.forme) <= 0.05, true);
+  check('...e nemmeno i passaggi sotto il raso', peggiore(r.vista.sotto, r.forme) <= 0.05, true);
+  // fra una macchia e l'altra si salta (83 passaggi per 84 macchie, in tutti e due gli stop), dentro quasi mai
+  check('fra le macchie si salta: 83 salti nel raso e 83 nel punto sopra', [r.saltiFra.raso.length, r.saltiFra.sopra.length], [83, 83]);
+  check('dentro le macchie quasi nessun salto (misurati 0) e poco punto sopra tolto (10 mm)', [r.saltiDentro <= 3, r.tolto < 30], [true, true]);
+  // si entra dove conviene e si esce dal lato della macchia dopo: i salti sono quasi la distanza fra le macchie
+  const corti = (v) => v.filter((d) => d <= 5).length;
+  check('salti fra le macchie: nessuno oltre 25 mm, almeno 60 su 83 entro 5 mm (misurati 68 e 70)', [Math.max(...r.saltiFra.raso, ...r.saltiFra.sopra) <= 25, corti(r.saltiFra.raso) >= 60, corti(r.saltiFra.sopra) >= 60], [true, true, true]);
+  // il raso: nessun punto più lungo del punto massimo (il punto minimo può allungarne qualcuno di un niente)
+  let rasoMax = 0; for (const t of r.vista.raso) for (let i = 1; i < t.length; i++) rasoMax = Math.max(rasoMax, Math.hypot(t[i].x - t[i - 1].x, t[i].y - t[i - 1].y));
+  check('raso: nessun punto oltre il punto massimo (4 mm, più il punto minimo)', rasoMax <= 4.3, true);
+  // la sfrangiatura: senza, i capi delle righe stanno sul bordo; con, si spargono
+  const sulBordo = (rr) => { let n = 0, tot = 0; for (const t of rr.vista.raso) for (const q of t) { tot++; if (Math.min(...rr.forme.map((m) => rg.distanceToBoundary(q, m))) < 0.03) n++; } return n / tot; };
+  const netto = rg.pmCostruisci(pannello, macchie.slice(0, 12), squame, { ...rg.PM_PARAMETRI, sfrangiatura: 0 });
+  const sfr = rg.pmCostruisci(pannello, macchie.slice(0, 12), squame, { ...rg.PM_PARAMETRI, sfrangiatura: 1 });
+  check('sfrangiatura: senza, i capi delle righe sul bordo; con 1 mm, sparsi (sul bordo meno di un quinto)', sulBordo(sfr) < sulBordo(netto) / 5, true);
+  // i ponti: le macchie che si seguono a meno di 5 mm si uniscono, e il filo ci passa senza salto
+  const pt = rg.pmCostruisci(pannello, macchie, squame, { ...rg.PM_PARAMETRI, ponti: 5 });
+  check('ponti a 5 mm: almeno 70 ponti; salti da 83 a meno di 20 nel raso e nel punto sopra (misurati 17 e 16)', [pt.ponti >= 70, pt.raso.salti < 20, pt.sopra.salti < 20], [true, true, true]);
+  check('...e anche coi ponti nessun punto fuori dalle macchie (coi ponti)', [peggiore([...pt.raso.tratti, ...pt.sopra.tratti], pt.forme) <= 0.55, peggiore(pt.vista.sopra, pt.forme) <= 0.05], [true, true]);
+  check('stessi dati, stesso ricamo', rg.pmCostruisci(pannello, macchie, squame).sopra.punti, r.sopra.punti);
+  // il DST: tre stop (la base, il raso, il punto sopra) e il progetto nel footer (R27)
+  const strati = ['base', 'raso', 'sopra'].map((k, i) => ({ id: k, color: ['#8a6d4e', '#1f1a17', '#c8952e'][i], polylines: r[k].tratti }));
+  const dst = rg.dstFromExportLayers(strati, { label: 'MACCHIE', metadata: { rgProject: 'pattern-macchie', params: rg.PM_PARAMETRI } });
+  check('DST: tre aghi, la base, il raso, il punto sopra', [...new Set(rg.readDst(dst).blocks.map((b) => b.needle))], [1, 2, 3]);
+  check('DST: il progetto torna (R27)', rg.readDstMetadata(dst)?.rgProject, 'pattern-macchie');
+  // la rete: da un capo all'altro di due linee che si incrociano si passa dall'incrocio
+  const rete = rg.pmRete([[{ x: 0, y: 5 }, { x: 10, y: 5 }], [{ x: 5, y: 0 }, { x: 5, y: 10 }]]);
+  check('rete del punto: la strada passa dall’incrocio', rete.strade({ x: 0, y: 5 }, 30)({ x: 5, y: 10 })?.map((p) => [p.x, p.y]), [[0, 5], [5, 5], [5, 10]]);
+  check('...e oltre il massimo non c’è strada', rete.strade({ x: 0, y: 5 }, 5)({ x: 5, y: 10 }), null);
+  check('...e le due linee sono un gruppo solo; una linea staccata è un altro', (() => { const r2 = rg.pmRete([[{ x: 0, y: 5 }, { x: 10, y: 5 }], [{ x: 5, y: 0 }, { x: 5, y: 10 }], [{ x: 20, y: 0 }, { x: 20, y: 5 }]]); return [r2.gruppo({ x: 0, y: 5 }) === r2.gruppo({ x: 5, y: 10 }), r2.gruppo({ x: 0, y: 5 }) === r2.gruppo({ x: 20, y: 0 })]; })(), [true, false]);
+  // il taglio della base, pronto per quando servirà: la base si ferma 2 mm dentro la macchia
+  const bb = rg.pmRestringi([{ x: 0, y: 0 }, { x: 20, y: 0 }, { x: 20, y: 10 }, { x: 0, y: 10 }], 2).flat();
+  // (sulla griglia di 0,1 mm del calcolo: un decimo di tolleranza)
+  const scarto = Math.max(Math.abs(Math.min(...bb.map((p) => p.x)) - 2), Math.abs(Math.max(...bb.map((p) => p.x)) - 18), Math.abs(Math.min(...bb.map((p) => p.y)) - 2), Math.abs(Math.max(...bb.map((p) => p.y)) - 8));
+  check('restringi: un rettangolo 20 × 10 ristretto di 2 mm è 16 × 6 (entro 0,15 mm)', scarto <= 0.15, true);
 }
 
 rmSync(outDir, { recursive: true, force: true });

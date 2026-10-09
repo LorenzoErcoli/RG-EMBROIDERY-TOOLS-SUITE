@@ -1,0 +1,14 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "baseUrl": ".",
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "noEmit": true,
+    "paths": {
+      "@rg/core": ["../../packages/core/src/index.ts"],
+      "@rg/ui/*": ["../../packages/ui/src/*"],
+      "@rg/pattern-grammar": ["../../packages/pattern-grammar/src/index.ts"]
+    }
+  },
+  "include": ["src", "vite.config.ts"]
+}

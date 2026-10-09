@@ -1,0 +1,28 @@
+/* pattern-macchie — solo chrome app + sizing. Il layout lo fornisce il pattern rg-workspace del DS. */
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--rg-color-background);
+  color: var(--rg-color-text-primary);
+  font-family: var(--rg-font-body);
+}
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* Il workspace riempie lo spazio sotto la topbar (sizing d'app, come da doc del pattern). */
+.macchie-workspace { flex: 1 1 auto; min-height: 0; }
+
+/* L'anteprima riempie il layer; bordo e sfondo sono già sul __canvas del DS. */
+#layer svg { max-width: 100%; max-height: 100%; }
+
+/* Il campione del pattern della base: un'immagine nel pannello, non un componente DS (come in Pattern a zone). */
+.macchie-swatch svg { width: 100%; height: auto; display: block; background: var(--rg-color-surface-raised, #fff); }
+
+/* Il colore di un livello nella lista: lo stesso che ha in anteprima. Un campione, non un componente. */
+.macchie-ink {
+  display: inline-block;
+  width: 0.75em;
+  height: 0.75em;
+  margin-inline: 0.25em;
+  border-radius: 2px;
+  background: var(--ink);
+  vertical-align: middle;
+}

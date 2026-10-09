@@ -61,6 +61,10 @@ const ICONS: Record<string, string> = {
   razza:
     '<circle cx="16" cy="16" r="6.5"/><circle cx="6.5" cy="11" r="2.5"/><circle cx="6.5" cy="21" r="2.5"/><circle cx="25.5" cy="11" r="2.5"/><circle cx="25.5" cy="21" r="2.5"/><circle cx="16" cy="5" r="1.5"/><circle cx="16" cy="27" r="1.5"/>',
 
+  // Pattern a macchie: le righe della base e due macchie piene di raso.
+  'pattern-macchie':
+    '<path d="M4 6h24M4 12h24M4 18h24M4 24h24"/><path d="M8 9c3-3 8-1 7 3s-6 6-8 3-2-4 1-6Z"/><path d="M19 17c3-2 7 0 6 4s-5 4-7 2-2-4 1-6Z"/>',
+
   // Cross-Stitch: la griglia con le croci.
   'cross-stitch':
     '<path d="M4 4h24v24H4Z"/><path d="M16 4v24M4 16h24"/><path d="M7 7l6 6M13 7l-6 6M19 19l6 6M25 19l-6 6"/>',

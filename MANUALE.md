@@ -492,6 +492,24 @@ questa scala, spargere i passaggi costava tagli, e Lorenzo i tagli non li vuole.
 staccati. Il tool li raggruppa in zone e finisce una zona prima di cominciare la successiva, così i
 collegamenti restano corti e il taglio si paga solo per cambiare blocco.
 
+## Pattern a macchie (`pattern-macchie`)
+
+**A cosa serve.** Un pannello ricamato col suo **pattern di base** (per esempio il punto nastro a squame) e, dentro le **macchie** del disegno, un **raso** con sopra **lo stesso punto della base**, a registro: dentro la macchia il punto riprende esattamente il disegno di fuori, perché è la stessa base tagliata sul contorno della macchia. Tutto con lo stesso filo.
+
+**Come si usa.**
+1. **Disegno** — carica l'SVG o il DXF: un colore per il **contorno del pannello**, uno per le **macchie** (per esempio rosso e giallo). Il tool dà da solo il ruolo *Pannello* al colore più grande e *Macchie* agli altri; puoi cambiarli nella lista dei colori. Il ricamo si genera subito.
+2. **Pattern della base** — scegli il pattern fra quelli **condivisi** e quelli **salvati nel Generatore pattern** su questo computer. Il pattern si prepara là; qui si sceglie quale usare. Il quadretto sotto mostra com'è.
+3. **Raso delle macchie** — direzione (90° = verticale), interlinea, punto massimo e **sfrangiatura**: ogni riga finisce, a caso, un po' prima o un po' dopo il bordo, così il bordo della macchia non è una linea netta. *…di cui oltre il bordo* dice quanta parte va fuori, sulla base (0% = le righe si accorciano soltanto).
+4. **Punto sopra le macchie** — il punto sopra **non esce mai dalla macchia**. Da un pezzo all'altro il filo passa nascosto: sulle linee del punto, o nel verso del raso (si posa fra i fili del raso). *Passaggio nascosto fino a* è il limite oltre il quale si salta. I pezzi che non si raggiungono senza salto, se più corti di *Togli i pezzi staccati più corti di*, si tolgono: meglio un pezzo in meno che un filo fuori.
+5. **Macchie vicine** — *Unisci le macchie che si seguono e distano meno di*: fra due macchie consecutive così vicine nasce un **ponte di raso** (largo quanto *Larghezza del ponte*), e il filo passa dall'una all'altra senza salto, sia nel raso sia nel punto sopra. Cambia il disegno delle macchie: per vedere i ponti accendi *Il contorno delle macchie* in *Programma*. 0 = nessun ponte.
+6. **Programma** — i tre stop coi loro punti e salti, i salti fra una macchia e l'altra (quanti corti, quanti lunghi) e le caselle per accendere e spegnere i fili nell'anteprima: base, raso, punto sopra, **passaggi sotto il raso** (blu) e **salti** (rosso tratteggiato).
+
+**L'ordine del ricamo.** Stop 1 la **base** su tutto il pannello (intera: non si buca sotto le macchie). Stop 2 il **raso** di tutte le macchie; stop 3 il **punto sopra** di tutte, nello stesso ordine. Fra una macchia e l'altra **non si ricama mai**: si salta, salvo dove le macchie si toccano o le unisce un ponte. L'ordine delle macchie è quello che rende i salti più corti; in ogni macchia il raso comincia dove conviene (ci si arriva con un passaggio **sotto** il raso, che lo copre) e finisce dal lato della macchia che viene dopo; anche il punto sopra esce da quel lato. Nelle macchie a C o a S il raso si cuce a **parti**: una parte intera, poi la successiva, senza attraversare il raso già fatto.
+
+**Simula** cuce il DST sullo schermo, punto per punto (lo stesso simulatore del Pettine). **Esporta DST** e **Scarica SVG** portano dentro il progetto: **Riapri un progetto** li rimette com'erano, disegno compreso. Sul pannello di prova il calcolo prende qualche secondo, durante i quali la pagina non risponde.
+
+---
+
 ## Pelle di razza (`razza`)
 
 **A cosa serve.** Riempie una sagoma di **pallini di cordoncino**, **piccoli ai bordi e grandi verso il centro**, come la pelle di razza (galuchat). Ogni pallino è un cordoncino che parte stretto, si allarga al centro e torna stretto. I passaggi da un pallino al successivo sono **piccoli e nascosti**: passano dentro il pallino appena cucito e sotto il prossimo, quindi in vista resta solo il vuoto fra i due.

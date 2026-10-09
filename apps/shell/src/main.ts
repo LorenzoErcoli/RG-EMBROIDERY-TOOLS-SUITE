@@ -15,6 +15,7 @@ import { mountPettine } from '@app/pettine';
 import { mountCannageRafia } from '@app/cannage-rafia';
 import { mountCrossStitch } from '@app/cross-stitch';
 import { mountRazza } from '@app/razza';
+import { mountPatternMacchie } from '@app/pattern-macchie';
 
 const app = document.getElementById('app')!;
 
@@ -34,6 +35,7 @@ function route(): void {
   else if (hash === '#/cannage-rafia') mountCannageRafia(app, { backHref: '#/' });
   else if (hash === '#/cross-stitch') mountCrossStitch(app, { backHref: '#/' });
   else if (hash === '#/razza') mountRazza(app, { backHref: '#/' });
+  else if (hash === '#/pattern-macchie') mountPatternMacchie(app, { backHref: '#/' });
   else if (hash === '#/sviluppo') renderHome(app, 'sviluppo');
   else renderHome(app);
 }

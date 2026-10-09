@@ -28,6 +28,7 @@ export const TOOLS: ToolDef[] = [
   { id: 'sfrangiatura', name: 'Sfrangiatura', description: 'Aggiunge frange che si intrecciano a X sui capi dei rasi di un DST già cucito, solo dove marchi col pennello. Il ricamo di partenza non si tocca.', status: 'live', section: 'sviluppo' },
   { id: 'pettine', name: 'Punto pettine sfrangiato', description: 'Da un SVG a gruppi e da una fotografia: linee di base a passo fisso con sopra un pettine di denti rivolti verso il chiaro, col ritaglio per provare uno swatch prima del pannello.', status: 'live', section: 'suite' },
   { id: 'razza', name: 'Pelle di razza', description: 'Riempie una sagoma di pallini di cordoncino, piccoli ai bordi e grandi verso il centro, con pallini fissi e linee di sfumatura a scelta. Passaggi corti e coperti. Export SVG e DST.', status: 'live', section: 'sviluppo' },
+  { id: 'pattern-macchie', name: 'Pattern a macchie', description: 'Un pannello col suo pattern di base e, dentro le macchie del disegno, un raso sfrangiato con sopra lo stesso punto della base, a registro. Mai un punto fra una macchia e l’altra; ponti facoltativi fra macchie vicine. Export SVG e DST in tre stop.', status: 'live', section: 'sviluppo' },
   { id: 'pittorico', name: 'Punto Pittorico', description: 'Da immagine a ricamo pittorico: il punto attraversa il passaggio di colore, degradé col frastaglio dei bordi dove il colore sfuma, taglio secco dove stacca.', status: 'live', section: 'sviluppo' },
 ];
 
