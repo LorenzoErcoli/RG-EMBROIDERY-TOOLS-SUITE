@@ -16,7 +16,7 @@ import {
 } from './model';
 import {
   type RouteParams, type RouteResult, type RouteSeg, type SegKind, type StitchParams,
-  DEFAULT_ROUTE, DEFAULT_STITCH, RETRACE_PRESETS, colorPolylines, routeCells, type RetracePreset,
+  DEFAULT_ROUTE, DEFAULT_STITCH, RETRACE_PRESETS, colorPolylines, colorPolylinesTrim, routeCells, type RetracePreset,
 } from './routing';
 import { autoRoles, cellMask, normalizeContours, subMask, type PieceShape, type ShapeRole } from './shape';
 import { entryRows, routeAll, routeModuleBands, stripRanges, type BandRoute, type ModulePath } from './strips';
@@ -3203,11 +3203,13 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const shift = inp.params.strips?.shiftMm ?? 0;
     return res.colors.map((cr) => {
       const dy = (cr.strip ?? 0) * shift;
-      const polylines = colorPolylines(inp.grid, cr, st.stitch).map((pl) => (dy ? pl.map((q) => ({ x: q.x, y: q.y + dy })) : pl));
+      const pt = colorPolylinesTrim(inp.grid, cr, st.stitch);
+      const polylines = pt.polylines.map((pl) => (dy ? pl.map((q) => ({ x: q.x, y: q.y + dy })) : pl));
       return {
         id: cr.strip === undefined ? `filo-${cr.color + 1}` : `striscia-${cr.strip + 1}-filo-${cr.color + 1}`,
         color: st.threads[cr.color]?.hex ?? '#000000',
         polylines,
+        trims: pt.trims, // i salti a mano: nel DST col taglio
         strokeMm: threadWidth(cr.color),
       };
     });

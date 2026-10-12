@@ -42,7 +42,7 @@ export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
 export { costruisci as rzCostruisci, pezzoDa as rzPezzoDa, rettangolo as rzRettangolo, stratiDaRisultato as rzStrati, stratiPerDst as rzStratiPerDst, progetto as rzProgetto, leggiProgetto as rzLeggiProgetto, daDiPassaggio as rzDaDiPassaggio, PARAMETRI_RAZZA as RZ_PARAMETRI } from ${JSON.stringify(posix('apps/razza/src/motore.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
-export { routeCells as csRouteCells, colorPolylines as csColorPolylines, DEFAULT_ROUTE as CS_DEFAULT_ROUTE, RETRACE_PRESETS as CS_RETRACE_PRESETS } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
+export { routeCells as csRouteCells, colorPolylines as csColorPolylines, colorPolylinesTrim as csColorPolylinesTrim, DEFAULT_ROUTE as CS_DEFAULT_ROUTE, RETRACE_PRESETS as CS_RETRACE_PRESETS } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
 export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight, knitFromImage as csKnitFromImage, refinePalette as csRefinePalette, brushEdits as csBrushEdits, fillEdits as csFillEdits, applyEdits as csApplyEdits, fromTwoColumnV as csFromTwoColumnV } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { subGrid as csSubGrid, areaFromMm as csAreaFromMm, clampArea as csClampArea } from ${JSON.stringify(posix('apps/cross-stitch/src/area.ts'))};
 export { segmentPoints as csSegmentPoints } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
@@ -5635,6 +5635,17 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     const gT = { ...gF, cols: Cm * 3, rows: Rm };
     const tiled = rg.csRouteAll(gT, rg.csTileModule(gT, { cols: Cm, rows: Rm, marks: marksF }), { ...par, modulePath: { ...mpF, cuts: [[inMezzo.from, inMezzo.to]] } });
     check('salto del modulo: si ripete in ogni copia', tiled.colors.filter((c) => c.color === 1).reduce((n, c) => n + c.segs.filter((sg) => sg.kind === 'jump').length, 0), 3);
+    // I SALTI A MANO COL TAGLIO (Lorenzo, 2026-10-12: «i salti messi a mano non devono avere collegamento»):
+    // ogni copia porta il segno del taglio, e nel DST ci sono i tre salti minimi del taglio (9 byte) prima di
+    // ogni salto a mano, e solo lì
+    {
+      const fili = tiled.colors.filter((c) => c.color === 1);
+      const aMano = fili.reduce((n, c) => n + c.segs.filter((sg) => sg.kind === 'jump' && sg.trim).length, 0);
+      const strati = (conTagli) => fili.map((c) => { const t = rg.csColorPolylinesTrim(gT, c, { maxStitchMm: 7, travelStitchMm: 2.5 }); return { id: 'f', color: '#000', polylines: t.polylines, trims: conTagli ? t.trims : undefined }; });
+      const tagli = strati(true).reduce((n, l) => n + l.trims.filter(Boolean).length, 0);
+      const conT = rg.dstFromExportLayers(strati(true), { label: 'T' }), senzaT = rg.dstFromExportLayers(strati(false), { label: 'T' });
+      check('salti a mano: col segno del taglio in ogni copia; nel DST 9 byte di taglio per salto, stessi blocchi', [aMano, tagli, conT.length - senzaT.length, rg.readDst(conT).blocks.length === rg.readDst(senzaT).blocks.length], [3, 3, 27, true]);
+    }
   }
 
   // SALTI A MANO (Lorenzo: «eliminare i passaggi, farli diventare salti»). Un passaggio scelto

@@ -47,6 +47,11 @@ export interface ExportLayer {
   strokeMm?: number;
   /** true = solo contorno/forma (rasi come forme), false = punti cuciti */
   shapeOnly?: boolean;
+  /**
+   * Per polilinea: true = prima di lei il filo si TAGLIA (nel DST il taglio, non un salto collegato).
+   * Assente = salto semplice fra le polilinee, come sempre.
+   */
+  trims?: boolean[];
 }
 
 /**

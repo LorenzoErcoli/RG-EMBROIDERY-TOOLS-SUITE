@@ -11,6 +11,12 @@ export interface DstPath {
   needle?: number;
   /** Punti in millimetri ASSOLUTI. */
   points_mm: Array<[number, number]>;
+  /**
+   * true = prima di questo blocco il filo si taglia: nel DST, prima del salto, la sequenza di taglio dei
+   * DST Tajima (tre salti minimi che si annullano: +0,2 / −0,4 / +0,2 mm), che macchina e programmi di
+   * ricamo leggono come taglio. Assente = salto semplice (il programma decide se collegare o tagliare).
+   */
+  trim?: boolean;
 }
 export interface DstProgram {
   label?: string;
@@ -92,7 +98,7 @@ export function buildDst(program: DstProgram): Uint8Array {
   const paths = (program.paths || []).map((item, idx) => {
     const pts = item.points_mm;
     if (!Array.isArray(pts) || pts.length < 2) throw new Error(`paths[${idx}] deve avere almeno 2 punti.`);
-    return { needle: item.needle, points: pts.map((p) => toPoint(p, coord)) };
+    return { needle: item.needle, points: pts.map((p) => toPoint(p, coord)), trim: !!item.trim };
   });
   if (!paths.length) throw new Error('Programma DST vuoto: serve almeno un path.');
 
@@ -110,6 +116,8 @@ export function buildDst(program: DstProgram): Uint8Array {
   const stitched: Array<[number, number]> = [];
   for (const seg of paths) {
     if (prevNeedle !== undefined && seg.needle !== prevNeedle) { push(encodeRecord(0, 0, 'color_change')); colorChanges++; }
+    // il taglio (solo fra due blocchi dello stesso ago: il cambio colore taglia già)
+    if (seg.trim && stitchCount > 0 && seg.needle === prevNeedle) for (const [tx, ty] of [[2, 2], [-4, -4], [2, 2]] as const) push(encodeRecord(tx, ty, 'jump'));
     prevNeedle = seg.needle;
     addMove(current, seg.points[0], 'jump'); current = seg.points[0];
     for (let i = 1; i < seg.points.length; i++) { stitchCount += addMove(current, seg.points[i], 'stitch'); current = seg.points[i]; stitched.push(current); }
@@ -221,10 +229,10 @@ export function dstFromExportLayers(layers: ExportLayer[], opts: DstFromLayersOp
   const cx = center ? (minX + maxX) / 2 : 0, cy = center ? (minY + maxY) / 2 : 0;
   const paths: DstPath[] = [];
   stroked.forEach((l, i) => {
-    for (const pl of l.polylines) {
-      if (pl.length < 2) continue;
-      paths.push({ needle: i + 1, points_mm: pl.map((p) => [p.x - cx, p.y - cy] as [number, number]) });
-    }
+    l.polylines.forEach((pl, k) => {
+      if (pl.length < 2) return;
+      paths.push({ needle: i + 1, points_mm: pl.map((p) => [p.x - cx, p.y - cy] as [number, number]), trim: !!l.trims?.[k] });
+    });
   });
   return buildDst({ label: opts.label, coordinate_system: opts.coordinateSystem || 'svg', paths, metadata: opts.metadata });
 }

@@ -565,7 +565,9 @@ pennello, i fili e Annulla/Rifai.
   ritocchi c'è il pennello.
 - **Gomma** (E): cancella, lì non si cuce niente. Con qualunque strumento, Maiuscolo cancella.
 - **Salti** (T): clicca un passaggio sull'anteprima e diventa un **salto**: la macchina taglia il filo
-  lì, invece di cucire il passaggio. I punti e il loro ordine non cambiano. Il salto a mano si vede
+  lì, invece di cucire il passaggio. Nel DST il salto a mano porta il **taglio** (la sequenza di taglio dei
+  DST Tajima): nel programma di ricamo i due pezzi arrivano staccati, senza collegamento; i salti messi
+  dal tool restano salti semplici. I punti e il loro ordine non cambiano. Il salto a mano si vede
   come una linea tratteggiata azzurra dritta fra i due punti: cliccandola torna passaggio. In *04
   Passaggi* c'è quanti sono, e *Togli tutti* (chiede conferma). Si salvano nel progetto. Se il
   disegno cambia e quel passaggio non c'è più, il salto semplicemente non si applica.

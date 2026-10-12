@@ -201,7 +201,8 @@ export const DEFAULT_ROUTE: RouteParams = { repetitions: 1, fixedDirection: fals
 
 /** Un tratto del percorso fra due vertici del reticolo. */
 export type SegKind = 'stitch' | 'hidden' | 'retrace' | 'vertical' | 'visible' | 'jump';
-export interface RouteSeg { kind: SegKind; from: number; to: number; }
+/** `trim`: un salto messo a mano (strumento Salti): nel DST col taglio, senza collegamento. */
+export interface RouteSeg { kind: SegKind; from: number; to: number; trim?: boolean; }
 
 /** I passaggi di un filo; con le strisce (strips.ts), quale striscia. */
 export interface ColorRoute { color: number; segs: RouteSeg[]; strip?: number; }
@@ -1047,7 +1048,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
           const a = pt(from), b = pt(to);
           metrics.jumps++;
           metrics.jumpMm += Math.hypot(b.x - a.x, b.y - a.y);
-          out.push({ kind: 'jump', from, to });
+          out.push({ kind: 'jump', from, to, trim: true }); // a mano: col taglio
         } else for (let q = i; q < j; q++) out.push(segs[q]);
         i = j;
       }
@@ -1087,20 +1088,32 @@ function subdivide(out: { x: number; y: number }[], a: { x: number; y: number },
  * diagonali sono spezzate al punto massimo, i passaggi al punto dei passaggi.
  */
 export function colorPolylines(g: GridSpec, route: ColorRoute, sp: StitchParams): { x: number; y: number }[][] {
+  return colorPolylinesTrim(g, route, sp).polylines;
+}
+
+/**
+ * Le polilinee di un filo e, per ognuna, se prima di lei c'è un salto a mano (Lorenzo, 2026-10-12: «i salti
+ * messi a mano non devono avere collegamento»): l'export DST ci mette il taglio.
+ */
+export function colorPolylinesTrim(g: GridSpec, route: ColorRoute, sp: StitchParams): { polylines: { x: number; y: number }[][]; trims: boolean[] } {
   const out: { x: number; y: number }[][] = [];
+  const trims: boolean[] = [];
   let cur: { x: number; y: number }[] = [];
+  let trimNext = false, curTrim = false;
   for (const s of route.segs) {
     if (s.kind === 'jump') {
-      if (cur.length > 1) out.push(cur);
+      if (cur.length > 1) { out.push(cur); trims.push(curTrim); }
       cur = [];
+      trimNext = trimNext || !!s.trim;
       continue;
     }
+    if (!cur.length) { curTrim = trimNext; trimNext = false; }
     const [a, b] = segmentPoints(g, s.from, s.to);
     // col sormonto un tratto può partire un filo più in là di dove è finito il precedente
     const last = cur[cur.length - 1];
     if (!last || Math.hypot(last.x - a.x, last.y - a.y) > 1e-9) cur.push(a);
     subdivide(cur, a, b, s.kind === 'stitch' ? sp.maxStitchMm : sp.travelStitchMm);
   }
-  if (cur.length > 1) out.push(cur);
-  return out;
+  if (cur.length > 1) { out.push(cur); trims.push(curTrim); }
+  return { polylines: out, trims };
 }

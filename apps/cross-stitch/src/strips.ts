@@ -58,7 +58,7 @@ export function routeStrips(g: GridSpec, cells: Cells, params: RouteParams, opts
       cuts: params.cuts?.map(([a, b]) => [a - shift, b - shift] as [number, number]).filter(([a, b]) => a >= 0 && b >= 0 && a < (grid.rows + 1) * W && b < (grid.rows + 1) * W),
     };
     const res = routeCells(grid, sub, p);
-    for (const cr of res.colors) colors.push({ color: cr.color, strip, segs: cr.segs.map((s) => ({ kind: s.kind, from: s.from + shift, to: s.to + shift })) });
+    for (const cr of res.colors) colors.push({ color: cr.color, strip, segs: cr.segs.map((s) => ({ ...s, from: s.from + shift, to: s.to + shift })) });
     const m = res.metrics;
     metrics.legs += m.legs; metrics.visibleMm += m.visibleMm; metrics.retraceMm += m.retraceMm; metrics.verticalMm += m.verticalMm;
     metrics.hiddenMm += m.hiddenMm; metrics.jumps += m.jumps; metrics.jumpMm += m.jumpMm; metrics.maxExtra = Math.max(metrics.maxExtra, m.maxExtra);
@@ -195,9 +195,9 @@ export interface BandRoute {
   cells: number[];
   dir: 1 | -1;
   /** I punti della fascia, dall'ingresso all'ultima V. */
-  body: Array<{ kind: RouteSeg['kind']; from: ModVertex; to: ModVertex }>;
+  body: Array<{ kind: RouteSeg['kind']; from: ModVertex; to: ModVertex; trim?: boolean }>;
   /** Il passaggio dall'ultima V all'uscita (vuoto se fra le copie si salta). */
-  tail: Array<{ kind: RouteSeg['kind']; from: ModVertex; to: ModVertex }>;
+  tail: Array<{ kind: RouteSeg['kind']; from: ModVertex; to: ModVertex; trim?: boolean }>;
   /** Vero = entra da un bordo ed esce dall'altro alla stessa riga: le copie si concatenano. */
   joined: boolean;
   start: ModVertex;
@@ -290,7 +290,7 @@ export function routeBands(g: GridSpec, mp: ModulePath, color: number, params: R
     const segs = res.colors.find((cr) => cr.color === color)?.segs ?? [];
     let last = segs.length - 1;
     while (last >= 0 && segs[last].kind !== 'stitch') last--;
-    const toMod = (sg: RouteSeg) => ({ kind: sg.kind, from: back(sg.from), to: back(sg.to) });
+    const toMod = (sg: RouteSeg) => ({ ...sg, from: back(sg.from), to: back(sg.to) });
     const body = segs.slice(0, last + 1).map(toMod);
     const end: ModVertex = joined ? next : body.length ? body[body.length - 1].to : start;
     return { rows: band.rows, cells: band.cells, dir, body, tail: joined ? segs.slice(last + 1).map(toMod) : [], joined, start, end, next, metrics: res.metrics };
@@ -313,7 +313,7 @@ export function routeModuleBands(g: GridSpec, mp: ModulePath, params: RouteParam
     const br = routeBands(g, mp, color, params);
     bands.set(color, br);
     for (const band of br) {
-      const segs: RouteSeg[] = [...band.body, ...band.tail].map((sg) => ({ kind: sg.kind, from: v3(sg.from), to: v3(sg.to) }));
+      const segs: RouteSeg[] = [...band.body, ...band.tail].map((sg) => ({ ...sg, from: v3(sg.from), to: v3(sg.to) }));
       if (!band.joined) { segs.push({ kind: 'jump', from: v3(band.end), to: v3(band.next) }); metrics.jumps++; }
       addMetrics(metrics, band.metrics);
       if (segs.length) colors.push({ color, segs });
@@ -379,7 +379,7 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
     const grid: GridSpec = { ...g, rows: s1 - s0 };
     const shift = s0 * W, dy = s0 * rowPitch(g);
     const stripParams: RouteParams = { ...params, strips: null, modulePath: null, groups: params.groups?.map((q) => ({ ...q, y: q.y - dy })), cuts: [], mask: mask ? mask.subarray(s0 * g.cols, s1 * g.cols) : null };
-    const toGlobal = (segs: RouteSeg[]) => segs.map((sg) => ({ kind: sg.kind, from: sg.from + shift, to: sg.to + shift }));
+    const toGlobal = (segs: RouteSeg[]) => segs.map((sg) => ({ ...sg, from: sg.from + shift, to: sg.to + shift }));
     // la base: il motore, sulla striscia intera, coi punti col filo della base sopra la base (le croci)
     if (baseC !== undefined && !whole) {
       const over: Cells = new Map();
@@ -421,12 +421,12 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
         const total = band.body.filter((sg) => sg.kind === 'stitch').length;
         const copy = (k: number, withTail: boolean) => {
           const src = [...band.body, ...(withTail ? band.tail : [])];
-          if (!cut(k)) { addMetrics(metrics, band.metrics); return [src.map((sg) => ({ kind: sg.kind, from: at(sg.from, k), to: at(sg.to, k) }))]; }
+          if (!cut(k)) { addMetrics(metrics, band.metrics); return [src.map((sg) => ({ ...sg, from: at(sg.from, k), to: at(sg.to, k) }))]; }
           // tagliata: i tratti che restano dentro, ognuno con almeno un punto
           const runs: RouteSeg[][] = [];
           let cur: RouteSeg[] = [], kept = 0;
           for (const sg of src) {
-            if (inside(sg.from, k) && inside(sg.to, k) && segIn(sg.from, sg.to, k)) { cur.push({ kind: sg.kind, from: at(sg.from, k), to: at(sg.to, k) }); if (sg.kind === 'stitch') kept++; }
+            if (inside(sg.from, k) && inside(sg.to, k) && segIn(sg.from, sg.to, k)) { cur.push({ ...sg, from: at(sg.from, k), to: at(sg.to, k) }); if (sg.kind === 'stitch') kept++; }
             else if (cur.length) { runs.push(cur); cur = []; }
           }
           if (cur.length) runs.push(cur);
@@ -466,7 +466,7 @@ function applyCuts(g: GridSpec, res: RouteResult, cuts: Array<[number, number]>)
           if (t.kind === 'hidden') m.hiddenMm -= l; else if (t.kind === 'vertical') m.verticalMm -= l; else if (t.kind === 'retrace') m.retraceMm -= l; else m.visibleMm -= l;
         }
         m.jumps++;
-        out.push({ kind: 'jump', from: cr.segs[i].from, to: cr.segs[j - 1].to });
+        out.push({ kind: 'jump', from: cr.segs[i].from, to: cr.segs[j - 1].to, trim: true }); // a mano: col taglio
       } else for (let q = i; q < j; q++) out.push(cr.segs[q]);
       i = j;
     }
