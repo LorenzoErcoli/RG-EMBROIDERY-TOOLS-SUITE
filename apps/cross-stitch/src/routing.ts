@@ -182,6 +182,12 @@ export interface RouteParams {
    * cuce una volta sola su tutto il ricamo, prima di tutte le strisce (default); false = una per striscia.
    */
   baseWhole?: boolean;
+  /**
+   * IL TAGLIO A OGNI SALTO (Lorenzo, 2026-10-12, sul suo DST: «ancora sono uniti, vorrei oggetti separati»):
+   * nel DST ogni salto, anche quelli del tool (fra copie, fasce, strisce), porta il taglio, e nel programma
+   * di ricamo i pezzi arrivano staccati (default). false = solo i salti messi a mano. Lo usa solo l'export.
+   */
+  trimJumps?: boolean;
   /** Mai passaggi sopra un gruppo già finito, se c'è un'altra strada (default vero). */
   avoidDone?: boolean;
   /** Il recinto della zona: i passaggi restano nella zona finché non è finita (default vero). */
