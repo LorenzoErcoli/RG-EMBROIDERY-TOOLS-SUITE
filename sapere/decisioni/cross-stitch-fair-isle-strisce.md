@@ -178,6 +178,12 @@ tratto e l'altro (dove il percorso usciva e rientrava) un salto. Sul RIF-01 a 17
 moduli): stessi punti, filo in vista 18,5 m contro 20,2, salti 542 contro 490; a misure multiple del
 modulo (168 × 185) identico a prima.
 
+**La base in un solo stop** (2026-10-12; Lorenzo: «quando esporto un DST la base, se è tutta piena, viene
+divisa come gli altri stop; invece voglio che la base sia tutta piena unica»). Cambia la scelta iniziale
+(base per striscia): di default la base è uno stop solo su tutto il ricamo, cucito per primo, poi le
+strisce degli altri fili; la base non si sposta col ritiro. L'interruttore *Base in un solo stop* (in
+*Macchina*) spento rimette la base per striscia. Sul RIF-01: da 34 a 29 stop, stessi punti.
+
 **Ancora aperto:** il 67% del filo in vista sta nei passaggi oltre 12 mm (32 su 116 per striscia di
 2 moduli). Farli diventare salti col taglio lo porterebbe a circa un terzo, con più tagli in macchina:
 da decidere con Lorenzo.

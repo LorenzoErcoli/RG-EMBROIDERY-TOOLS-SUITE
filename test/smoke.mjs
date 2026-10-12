@@ -5278,7 +5278,9 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   const gSt = { rows: 12, cols: 16, cellW: 2.4, cellH: 3.5, overlapPct: 30 };
   const cSt = fill(gSt, (r, c) => ({ stitch: 'v', color: (r * 3 + c * 5) % 7 < 2 ? 1 : (r + 2 * c) % 9 === 0 ? 2 : 0 }));
   const parSt = { ...rg.CS_DEFAULT_ROUTE, base: { color: 0, stitch: 'v' } };
-  const conSt = rg.csRouteAll(gSt, cSt, { ...parSt, strips: { rows: 4 } });
+  // la base per striscia (interruttore spento); di default la base è in un solo stop, prima (sotto)
+  const conSt = rg.csRouteAll(gSt, cSt, { ...parSt, strips: { rows: 4 }, baseWhole: false });
+  const unica = rg.csRouteAll(gSt, cSt, { ...parSt, strips: { rows: 4 } });
   const senzaSt = rg.csRouteAll(gSt, cSt, parSt);
   const W2 = LW(gSt);
   const fuori = conSt.colors.reduce((n, cr) => n + cr.segs.filter((sg) => { const r0 = cr.strip * 4; const i1 = Math.floor(sg.from / W2), i2 = Math.floor(sg.to / W2); return sg.kind !== 'jump' && (Math.min(i1, i2) < r0 || Math.max(i1, i2) > r0 + 4); }).length, 0);
@@ -5286,6 +5288,11 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   check('strisce: base e colori per striscia, nessun passaggio fuori dalla sua, gli stessi punti',
     [conSt.colors.map((cr) => cr.strip + '/' + cr.color).join(' '), fuori, punti(conSt) === punti(senzaSt), conSt.metrics.legs === senzaSt.metrics.legs],
     ['0/0 0/1 0/2 1/0 1/1 1/2 2/0 2/1 2/2', 0, true, true]);
+  // LA BASE IN UN SOLO STOP (Lorenzo, 2026-10-12: «voglio che la base sia tutta piena unica»): uno stop per la
+  // base, per primo, poi le strisce degli altri fili; gli stessi punti
+  check('strisce: la base in un solo stop, per prima, poi i fili striscia per striscia; gli stessi punti',
+    [unica.colors.map((cr) => (cr.strip ?? '-') + '/' + cr.color).join(' '), punti(unica) === punti(senzaSt)],
+    ['-/0 0/1 0/2 1/1 1/2 2/1 2/2', true]);
 
   // RICAVA MODULO (Lorenzo, 2026-10-01, Fair Isle: «in primis definire il modulo»). Un'immagine
   // sintetica: un modulo 12 × 8 V di 3 colori, V da 6 × 6 px, ripetuto 5 × 4; dentro, un quarto
@@ -5401,7 +5408,7 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     const libero = rg.csRouteAll(gT2, cT2, par);
     let rotture = 0; for (const cr of tiled.colors) for (let i = 1; i < cr.segs.length; i++) if (cr.segs[i].from !== cr.segs[i - 1].to) rotture++;
     const puntiDi = (res) => res.colors.flatMap((cr) => cr.segs.filter((sg) => sg.kind === 'stitch').map((sg) => cr.color + ':' + Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to))).sort().join('|');
-    check('modulo ripetuto: filo continuo fra le copie, stessi punti del ricamo, base e fili per striscia', [rotture, puntiDi(tiled) === puntiDi(libero), tiled.colors.map((c) => c.strip + '/' + c.color).join(' ')], [0, true, '0/0 0/1 0/2 1/0 1/1 1/2']);
+    check('modulo ripetuto: filo continuo fra le copie, stessi punti del ricamo, base in un solo stop, poi i fili per striscia', [rotture, puntiDi(tiled) === puntiDi(libero), tiled.colors.map((c) => (c.strip ?? '-') + '/' + c.color).join(' ')], [0, true, '-/0 0/1 0/2 1/1 1/2']);
     // riordinare: il pezzo cliccato diventa il primo; i pezzi di un filo in ordine
     const modR = { cols: Cm, rows: Rm, marks: marksP.map((m) => ({ ...m })), seq: [...pieceA], starts: { 1: 2 * Cm + 1, 2: 5 * Cm + 7 } };
     rg.csMovePiece(modR, 5 * Cm + 8, 1);
@@ -5532,7 +5539,7 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
       const prima = cO.get(off.dr * gO.cols + off.dc), modello = marksB[0];
       const resO = rg.csRouteAll(gO, cO, { ...par, strips: { rows: Rm }, modulePath: { cols: Cm, rows: Rm, marks: marksB, entryRow: {}, offset: off } });
       let rotture = 0; for (const cr of resO.colors) for (let i = 1; i < cr.segs.length; i++) if (cr.segs[i].from !== cr.segs[i - 1].to) rotture++;
-      const strisce = new Set(resO.colors.map((c) => c.strip)).size;
+      const strisce = new Set(resO.colors.filter((c) => c.strip !== undefined).map((c) => c.strip)).size;
       // una V cambiata su tutte le copie: cade nella V del modulo giusta, anche spostato
       const modE2 = { cols: Cm, rows: Rm, marks: marksB.map((m) => ({ ...m })), offset: off };
       rg.csEditsOnAllCopies(gO, modE2, [{ r: off.dr + 2, c: off.dc + 1, mark: { stitch: 'cross', color: 1 } }]);

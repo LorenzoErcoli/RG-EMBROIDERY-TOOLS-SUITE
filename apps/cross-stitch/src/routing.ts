@@ -176,6 +176,12 @@ export interface RouteParams {
   modulePath?: { cols: number; rows: number; marks: Array<{ stitch: Stitch; color: number } | null>; pieceOf?: number[]; entryRow: Record<number, number>; cuts?: Array<[number, number]>; forced?: Array<{ from: number; to: number; via: number[] }> } | null;
   /** Il ricamo a strisce (strips.ts): righe per striscia e compensazione del ritiro. null = tutto insieme. */
   strips?: { rows: number; shiftMm?: number } | null;
+  /**
+   * LA BASE IN UN SOLO STOP (Lorenzo, 2026-10-12: «quando esporto un DST la base, se è tutta piena, viene
+   * divisa come gli altri stop; invece voglio che la base sia tutta piena unica»). A strisce, la base si
+   * cuce una volta sola su tutto il ricamo, prima di tutte le strisce (default); false = una per striscia.
+   */
+  baseWhole?: boolean;
   /** Mai passaggi sopra un gruppo già finito, se c'è un'altra strada (default vero). */
   avoidDone?: boolean;
   /** Il recinto della zona: i passaggi restano nella zona finché non è finita (default vero). */

@@ -763,8 +763,8 @@ in vista per modulo. Per cambiare l'ordine: strumento **Ordine pezzi**, poi clic
 in cui vuoi cucirli (il primo clic è il primo pezzo; cambiando filo si ricomincia da 1).
 
 **Le fasce** (la sequenza nel ricamo). Ogni filo si cuce **a fasce orizzontali**: le righe del modulo
-dove il filo compare, a gruppi separati da righe vuote (automatiche). Per ogni striscia: prima la base
-intera, poi filo per filo (dal chiaro allo scuro) le sue fasce **dall'alto**, **a serpentina**: la prima
+dove il filo compare, a gruppi separati da righe vuote (automatiche). La base è un solo stop pieno, prima di tutto
+(o, con *Base in un solo stop* spento, la base della striscia); poi, per ogni striscia, filo per filo (dal chiaro allo scuro) le sue fasce **dall'alto**, **a serpentina**: la prima
 da sinistra a destra lungo tutte le copie della striscia, la seconda da destra a sinistra, e così via.
 Poi lo stop del filo dopo. Il percorso di una fascia si calcola sul modulo e si ripete identico in ogni
 copia. Una fascia che passa da una copia all'altra (al più 4 V di vuoto attraverso la giuntura) **entra
@@ -833,12 +833,15 @@ salto vale in ogni copia. Se le copie si alternano, il salto si applica solo dov
 cioè una copia sì e una no.
 
 **Strisce** (in *04 Passaggi*): il ricamo si fa a strisce orizzontali di *Strisce* righe. Ogni striscia
-ha la sua base e i suoi colori, e i passaggi non escono dalla striscia; poi si scende alla striscia
+ha i suoi colori, e i passaggi non escono dalla striscia; poi si scende alla striscia
 dopo e si ricomincia. Serve al **registro**: con i ritiri della macchina, cucendo tutto un colore e poi
 tutto un altro le parti non tornano più a posto. Nel DST gli stop si ripetono per ogni striscia
 (nella barra di stato: quante strisce e quanti stop). *Ritiro fra strisce* sposta ogni striscia nel
 file esportato (la seconda di 1 volta il valore, la terza di 2…): positivo le allontana, negativo le
 avvicina. L'anteprima mostra il disegno com'è, senza lo spostamento. 0 righe = tutto insieme.
+**Base in un solo stop** (acceso di partenza): la base si cuce una volta sola, piena su tutto il ricamo,
+come primo stop, e poi vengono le strisce degli altri fili; la base non si sposta col ritiro. Spento:
+ogni striscia ha la sua base, prima dei suoi colori.
 
 **Stop accesi e spenti.** Nella riga di ogni filo, **Vedi** accende o spegne quello stop
 nell'anteprima (punti e passaggi), per guardare un colore alla volta. Uno stop spento **non va

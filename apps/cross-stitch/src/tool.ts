@@ -280,10 +280,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <span class="rg-field__help" id="h-jump">Oltre, salto con taglio</span></label>
           <label class="rg-field"><span class="rg-field__label">Strisce</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="stripRows" type="text" inputmode="numeric" aria-describedby="h-stripRows"><span>righe</span></span>
-            <span class="rg-field__help" id="h-stripRows">Ogni striscia: base e colori, poi la dopo. 0 = tutto insieme</span></label>
+            <span class="rg-field__help" id="h-stripRows">Ogni striscia: i suoi colori, poi la dopo. 0 = tutto insieme</span></label>
           <label class="rg-field"><span class="rg-field__label">Ritiro fra strisce</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="stripShift" type="text" inputmode="decimal" aria-describedby="h-stripShift"><span>mm</span></span>
             <span class="rg-field__help" id="h-stripShift">Sposta ogni striscia nel file: + allontana, − avvicina</span></label>
+          <label class="rg-toggle rg-param-grid__wide">
+            <input type="checkbox" id="baseWhole" checked aria-describedby="h-baseWhole"><span class="rg-toggle__track"></span><span>Base in un solo stop</span>
+          </label>
+          <span class="rg-field__help rg-param-grid__wide" id="h-baseWhole">A strisce: la base intera per prima, poi le strisce degli altri fili. Spento: una base per striscia</span>
           <label class="rg-toggle rg-param-grid__wide">
             <input type="checkbox" id="byBlocks" checked aria-describedby="h-blocks"><span class="rg-toggle__track"></span><span>Per blocchi di colore</span>
           </label>
@@ -1086,6 +1090,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     num('travelStitch').value = fmtNum(st.stitch.travelStitchMm);
     $<HTMLInputElement>('fixedDir').checked = st.route.fixedDirection;
     $<HTMLInputElement>('byBlocks').checked = st.route.blocks !== false;
+    $<HTMLInputElement>('baseWhole').checked = st.route.baseWhole !== false;
     num('zoneGap').value = fmtNum(st.route.zones?.gapMm ?? DEFAULT_ZONES.gapMm);
     num('zoneMax').value = fmtNum(st.route.zones?.maxMm ?? DEFAULT_ZONES.maxMm);
     num('stripRows').value = String(st.route.strips?.rows ?? 0);
@@ -1276,6 +1281,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   num('jumpMm').addEventListener('change', () => { st.route.jumpMm = Math.max(0, readNum('jumpMm') || 0); syncFields(); update(); });
   num('maxStitch').addEventListener('change', () => { st.stitch.maxStitchMm = Math.min(12, Math.max(1, readNum('maxStitch') || DEFAULT_STITCH.maxStitchMm)); syncFields(); });
   num('travelStitch').addEventListener('change', () => { st.stitch.travelStitchMm = Math.min(12, Math.max(0.5, readNum('travelStitch') || DEFAULT_STITCH.travelStitchMm)); syncFields(); });
+  $<HTMLInputElement>('baseWhole').addEventListener('change', (e) => { st.route.baseWhole = (e.target as HTMLInputElement).checked; syncFields(); update(); });
   $<HTMLInputElement>('byBlocks').addEventListener('change', (e) => { st.route.blocks = (e.target as HTMLInputElement).checked; syncFields(); update(); });
   const setZones = () => {
     st.route.zones = {

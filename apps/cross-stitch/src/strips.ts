@@ -42,6 +42,9 @@ export function routeStrips(g: GridSpec, cells: Cells, params: RouteParams, opts
   const pitch = rowPitch(g);
   const colors: ColorRoute[] = [];
   const metrics: RouteMetrics = { legs: 0, visibleMm: 0, retraceMm: 0, verticalMm: 0, hiddenMm: 0, jumps: 0, jumpMm: 0, maxExtra: 0 };
+  // la base in un solo stop, su tutto il ricamo, prima delle strisce; nelle strisce niente base
+  const whole = baseWholeRoute(g, cells, params);
+  if (whole) { colors.push(whole.route); addMetrics(metrics, whole.metrics); params = { ...params, base: null }; cells = whole.rest; }
   stripRanges(g, opts.rows).forEach(([r0, r1], strip) => {
     const grid: GridSpec = { ...g, rows: r1 - r0 };
     const sub: Cells = new Map();
@@ -61,6 +64,23 @@ export function routeStrips(g: GridSpec, cells: Cells, params: RouteParams, opts
     metrics.hiddenMm += m.hiddenMm; metrics.jumps += m.jumps; metrics.jumpMm += m.jumpMm; metrics.maxExtra = Math.max(metrics.maxExtra, m.maxExtra);
   });
   return { colors, metrics };
+}
+
+/**
+ * La base in un solo stop (baseWhole, di default): il motore la cuce su tutto il ricamo, con le croci col
+ * filo della base sopra di lei. Torna anche le celle senza il filo della base, per le strisce. null = no.
+ */
+function baseWholeRoute(g: GridSpec, cells: Cells, params: RouteParams): { route: ColorRoute; metrics: RouteMetrics; rest: Cells } | null {
+  const base = params.base;
+  if (!base || params.baseWhole === false) return null;
+  const over: Cells = new Map(), rest: Cells = new Map();
+  for (const [k, m] of cells) {
+    if (m.color !== base.color) rest.set(k, m);
+    else if (m.stitch === 'cross' && base.stitch !== 'cross') over.set(k, m);
+  }
+  const res = routeCells(g, over, { ...params, strips: null, modulePath: null, cuts: [] });
+  const bc = res.colors.find((cr) => cr.color === base.color);
+  return bc ? { route: { color: base.color, segs: bc.segs }, metrics: res.metrics, rest } : null;
 }
 
 /** I passaggi: a strisce se richiesto, altrimenti tutto il ricamo insieme. */
@@ -351,6 +371,9 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
   const rowOrigins: number[] = [];
   for (let or = dr > 0 ? dr - Rm : 0; or < g.rows; or += Rm) rowOrigins.push(or);
   const mask = params.mask && params.mask.length === g.rows * g.cols ? params.mask : null;
+  // la base in un solo stop, su tutto il ricamo, prima delle strisce
+  const whole = baseWholeRoute(g, cells, params);
+  if (whole) { colors.push(whole.route); addMetrics(metrics, whole.metrics); }
   rowOrigins.forEach((o, strip) => {
     const s0 = Math.max(0, o), s1 = Math.min(g.rows, o + Rm);
     const grid: GridSpec = { ...g, rows: s1 - s0 };
@@ -358,7 +381,7 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
     const stripParams: RouteParams = { ...params, strips: null, modulePath: null, groups: params.groups?.map((q) => ({ ...q, y: q.y - dy })), cuts: [], mask: mask ? mask.subarray(s0 * g.cols, s1 * g.cols) : null };
     const toGlobal = (segs: RouteSeg[]) => segs.map((sg) => ({ kind: sg.kind, from: sg.from + shift, to: sg.to + shift }));
     // la base: il motore, sulla striscia intera, coi punti col filo della base sopra la base (le croci)
-    if (baseC !== undefined) {
+    if (baseC !== undefined && !whole) {
       const over: Cells = new Map();
       for (let rr = s0; rr < s1; rr++) for (let c = 0; c < g.cols; c++) {
         const m = cells.get(rr * g.cols + c);
