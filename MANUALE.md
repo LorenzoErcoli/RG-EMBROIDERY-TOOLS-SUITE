@@ -609,6 +609,15 @@ cambiando le misure non si rifà più dall'immagine: c'è **Maglia dall'immagine
 rilegge l'immagine su tutto il ricamo. È anche il modo di lavorare **senza modulo**: se c'era un modulo,
 la maglia dall'immagine lo toglie (*Annulla* lo rimette).
 
+**I colori scelti da te.** Scegli quanti fili vuoi (*Aggiungi filo*, e il cestino per toglierne) e il filo di
+base. Per ogni filo, il **contagocce** (l'icona nella riga del filo, quando c'è un'immagine): sulla tela
+l'immagine si vede intera, clicchi il colore che vuoi e il filo lo prende (la media di un quadratino a
+piena risoluzione; Esc annulla). Poi **Maglia coi miei colori** (in *01 Immagine*) rilegge l'immagine con
+questi fili, senza ricalcolarli: ogni V va al filo più vicino **come lo vede l'occhio** (Lab: fra blu
+vicini sbaglia meno dell'RGB), e il fondo è il filo di base. **Dal chiaro allo scuro** (sotto i fili)
+li mette in ordine di cucitura: la base per prima, poi dal più chiaro. Riordinare i fili (anche con la
+freccia su) sposta tutto con loro, modulo compreso.
+
 **La forma del pezzo (DXF o SVG).** In *02 Misure del ricamo*, **Carica forma (DXF o SVG)…**: il ricamo
 prende la misura della forma (con *Larghezza reale* la scali; 0 = la misura del file) e si cuciono solo
 le celle col centro **dentro il perimetro e fuori dalle aree vuote**, base compresa: fuori non si cuce

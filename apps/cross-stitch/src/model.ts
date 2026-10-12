@@ -354,6 +354,8 @@ export interface KnitOptions {
    * non occupi almeno `detailPct` della sua area. Di solito è quello che copre di più.
    */
   background: number;
+  /** Il filo più vicino in Lab (come lo vede l'occhio) invece che in RGB. */
+  lab?: boolean;
   /**
    * La soglia del dettaglio, in %: basta questa parte di nero in una cella per farla nera. Col 50%
    * è la maggioranza; più basso salva i tratti sottili (le lettere del giornale), più alto li perde.
@@ -379,9 +381,35 @@ export const DEFAULT_KNIT: Omit<KnitOptions, 'background'> = { detailPct: 35, st
  *
  * `palette` = i fili in RGB, nell'ordine della tavolozza.
  */
+/** RGB → Lab (D65): la distanza fra due colori come la vede l'occhio. */
+function labOf(r: number, g: number, b: number): Rgb3 {
+  const f = (u: number) => { u /= 255; return u <= 0.04045 ? u / 12.92 : ((u + 0.055) / 1.055) ** 2.4; };
+  const R = f(r), G = f(g), B = f(b);
+  let X = (R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047, Y = R * 0.2126 + G * 0.7152 + B * 0.0722, Z = (R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883;
+  const h = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+  X = h(X); Y = h(Y); Z = h(Z);
+  return [116 * Y - 16, 500 * (X - Y), 200 * (Y - Z)];
+}
+
 export function knitFromImage(g: GridSpec, img: Pixels, palette: Rgb3[], opts: Partial<KnitOptions> = {}): Cells {
   const out: Cells = new Map();
   if (!palette.length || img.width < 1 || img.height < 1) return out;
+  // LA LETTURA ACCURATA PER COLORE (Lorenzo, 2026-10-12: «la lettura accurata per colore: dico che voglio 4
+  // colori e posso fare il picker dei 3 blu che voglio»): con `lab` ogni pixel va al filo più vicino come lo
+  // vede l'occhio (Lab), non in RGB: fra blu vicini l'RGB sbaglia di più. Il colore di ogni pixel si legge
+  // una volta sola.
+  const labPal = opts.lab ? palette.map((c) => labOf(c[0], c[1], c[2])) : null;
+  const pixPal = labPal ? new Int16Array(img.width * img.height).fill(-1) : null;
+  const nearestPx = (i: number): number => {
+    if (!labPal || !pixPal) return nearest(img.rgba[i], img.rgba[i + 1], img.rgba[i + 2], palette);
+    const p = i / 4;
+    if (pixPal[p] >= 0) return pixPal[p];
+    const q = labOf(img.rgba[i], img.rgba[i + 1], img.rgba[i + 2]);
+    let best = 0, bestD = Infinity;
+    for (let k = 0; k < labPal.length; k++) { const d = (q[0] - labPal[k][0]) ** 2 + (q[1] - labPal[k][1]) ** 2 + (q[2] - labPal[k][2]) ** 2; if (d < bestD) { bestD = d; best = k; } }
+    pixPal[p] = best;
+    return best;
+  };
   const background = Math.min(palette.length - 1, Math.max(0, opts.background ?? 0));
   const detail = Math.min(100, Math.max(1, opts.detailPct ?? DEFAULT_KNIT.detailPct)) / 100;
   const stitch: Stitch = opts.stitch ?? DEFAULT_KNIT.stitch;
@@ -393,7 +421,7 @@ export function knitFromImage(g: GridSpec, img: Pixels, palette: Rgb3[], opts: P
     let n = 0;
     for (let y = y0; y < y1; y++) for (let x = x0; x < x1; x++) {
       const i = (y * img.width + x) * 4;
-      count[nearest(img.rgba[i], img.rgba[i + 1], img.rgba[i + 2], palette)]++;
+      count[nearestPx(i)]++;
       n++;
     }
     let best = background, bestN = -1;

@@ -5111,6 +5111,16 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   const col = (cells) => [...cells.values()].map((m) => m.color);
   const kinds = (cells) => [...cells.values()].map((m) => m.stitch);
   check('soglia 35%: il tratto sottile fa nera la sua cella (e quella accanto resta bianca)', col(rg.csKnitFromImage(gK, img1, bw, { background: 1, detailPct: 35 })), [0, 1, 1, 1]);
+  // LA LETTURA ACCURATA PER COLORE (Lorenzo, 2026-10-12: «io dico che voglio 4 colori… posso fare il picker
+  // dei 3 blu che voglio»): col filo più vicino in Lab un grigio-blu (60, 79, 95) va al filo che l'occhio vede
+  // più vicino (95, 105, 128), mentre in RGB andava al blu scuro (55, 72, 110)
+  {
+    const imgL = { rgba: new Uint8ClampedArray(4 * 4 * 4), width: 4, height: 4 };
+    for (let i = 0; i < 16; i++) imgL.rgba.set([60, 79, 95, 255], i * 4);
+    const palL = [[240, 235, 225], [55, 72, 110], [95, 105, 128]];
+    const gL = { rows: 1, cols: 1, cellW: 3, cellH: 3.8 };
+    check('lettura in Lab: il grigio-blu va al filo che l’occhio vede più vicino', [col(rg.csKnitFromImage(gL, imgL, palL, { background: 0 }))[0], col(rg.csKnitFromImage(gL, imgL, palL, { background: 0, lab: true }))[0]], [1, 2]);
+  }
   check('soglia 50%: lo stesso tratto si perde', col(rg.csKnitFromImage(gK, img1, bw, { background: 1, detailPct: 50 })), [1, 1, 1, 1]);
   // (4) Il PUNTO della generazione (Lorenzo: «cambiare il punto della generazione da immagine»):
   // uno per cella, qualunque sia.

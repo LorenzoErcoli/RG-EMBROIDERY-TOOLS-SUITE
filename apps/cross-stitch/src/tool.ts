@@ -110,6 +110,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <span class="rg-field__help" id="h-soglia">Più bassa salva i tratti sottili</span></label>
           <div class="rg-cluster rg-param-grid__wide">
             <span class="rg-tooltip"><button type="button" id="knitBtn" class="rg-button rg-button--outline rg-button--small" aria-describedby="tip-knit">Maglia dall’immagine</button><span class="rg-tooltip__text" role="tooltip" id="tip-knit">Il tool legge l’immagine e mette le V coi colori dei fili, su tutto il ricamo (senza modulo). I ritocchi a mano si perdono</span></span>
+            <span class="rg-tooltip"><button type="button" id="knitMineBtn" class="rg-button rg-button--outline rg-button--small" aria-describedby="tip-knitmine">Maglia coi miei colori</button><span class="rg-tooltip__text" role="tooltip" id="tip-knitmine">Rilegge l’immagine coi colori dei fili che hai scelto (col contagocce o a mano), senza ricalcolarli. Il fondo è il filo di base</span></span>
             <span class="rg-tooltip"><button type="button" id="editorBtn" class="rg-button rg-button--outline rg-button--small" aria-describedby="tip-editor">Editor modulo</button><span class="rg-tooltip__text" role="tooltip" id="tip-editor">Una schermata per fare il modulo che si ripete: griglia, immagine sotto, disegno</span></span>
             <span class="rg-tooltip"><button type="button" id="cropBtn" class="rg-button rg-button--outline rg-button--small" aria-pressed="false" aria-describedby="tip-crop">Ritaglia</button><span class="rg-tooltip__text" role="tooltip" id="tip-crop">Trascina un rettangolo sul disegno: la maglia si rifà su quel pezzo</span></span>
             <button type="button" id="uncropBtn" class="rg-button rg-button--ghost rg-button--small">Immagine intera</button>
@@ -230,6 +231,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         <div class="rg-param-grid">
           <div class="rg-cluster rg-param-grid__wide">
             <button type="button" id="addThread" class="rg-button rg-button--outline rg-button--small"><svg class="rg-icon" aria-hidden="true" focusable="false"><use href="${ICONS}#rg-icon-aggiungi"></use></svg>Aggiungi filo</button>
+            <button type="button" id="lightToDarkBtn" class="rg-button rg-button--ghost rg-button--small">Dal chiaro allo scuro</button>
           </div>
           <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Filo di base</span>
             <select class="rg-select" id="baseSel" aria-describedby="h-base"></select>
@@ -954,6 +956,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       }
     }
 
+    // il contagocce: l'immagine intera, piena, sopra tutto (si sceglie il colore vero)
+    if (eyedrop >= 0 && source && !moduleView) {
+      const cr = crop ?? { x: 0, y: 0, w: source.img.naturalWidth, h: source.img.naturalHeight };
+      ctx.save();
+      ctx.imageSmoothingQuality = 'high';
+      ctx.drawImage(source.img, cr.x, cr.y, cr.w, cr.h, X(0), Y(0), w * k, h * k);
+      ctx.restore();
+    }
     // --- l'SVG sopra: solo la griglia (il pennello e il ritaglio ci si aggiungono) ---
     const pitch = rowPitch(g);
     overlay.setAttribute('viewBox', `${f(-m)} ${f(-m)} ${f(w + 2 * m)} ${f(h + 2 * m)}`);
@@ -1004,6 +1014,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   }
   /** I numeri dei passaggi nella barra di stato (o che si stanno calcolando). */
   function showStatus(): void {
+    if (eyedrop >= 0) { $('status').textContent = `Clicca sull’immagine il colore del filo ${eyedrop + 1} (Esc annulla). L’immagine si vede intera mentre scegli.`; return; }
     if (editorOpen && st.module && mode === 'pick') { $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V. Trascina un riquadro intorno a un modulo dell’immagine: si aggancia alle V che trova.`; return; }
     if (editorOpen && st.module && reroute) { $('status').textContent = `Ridisegni un passaggio (filo in vista ${Math.round(editorVisible)} mm per modulo): clicca i punti da cui deve passare, in ordine. Invio o Spazio lo fissano, Esc toglie i punti messi, Canc rimette il passaggio automatico.`; return; }
     if (editorOpen && st.module) { const g0 = realGrid(); const nP = piecesOf(st.module, activeThread).length; $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V · ${fmtNum(Math.round(st.module.cols * g0.cellW))} × ${fmtNum(Math.round(st.module.rows * rowPitch(g0)))} mm · filo in vista ${Math.round(editorVisible)} mm per modulo · filo scelto: ${nP} pezz${nP === 1 ? 'o' : 'i'}, ${bandNote()}; pieno = ingresso, anello = dove finire`; return; }
@@ -1466,6 +1477,13 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         grp.appendChild(wrap);
         return grp;
       };
+      if (source) {
+        // IL CONTAGOCCE (Lorenzo: «posso fare il picker dei 3 colori blu che voglio»): un clic sull'immagine
+        // e il filo prende quel colore. Icona disegnata come quelle del DS (24, 1.5, squadrata).
+        aside.appendChild(iconBtn(`Prendi il colore del filo ${i + 1} dall’immagine`, `tip-drop-${i}`,
+          '<svg class="rg-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M14 4l6 6M12 6l6 6M15 9L6 18H4v-2l9-9"/></svg>',
+          false, () => startEyedrop(i)));
+      }
       if (i > 0) {
         // la freccia su non c'è nello sprite del DS: tratto disegnato come le sue icone (24, 1.5, squadrato)
         aside.appendChild(iconBtn(`Cuci prima il filo ${i + 1}`, `tip-su-${i}`,
@@ -1487,6 +1505,44 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (focusAt >= 0) focusables()[focusAt]?.focus({ preventScroll: true });
   }
 
+  // ---- il contagocce ----
+  let eyedrop = -1;
+  let eyeCanvas: { img: HTMLImageElement; ctx: CanvasRenderingContext2D } | null = null;
+  function startEyedrop(i: number): void {
+    if (!source) return;
+    if (moduleView) exitModuleView();
+    eyedrop = i;
+    $('canvas').classList.add('cs-crop');
+    $('status').textContent = `Clicca sull’immagine il colore del filo ${i + 1} (Esc annulla). L’immagine si vede intera mentre scegli.`;
+    draw();
+  }
+  function stopEyedrop(): void {
+    eyedrop = -1;
+    $('canvas').classList.remove('cs-crop');
+    draw();
+  }
+  /** Il colore dell'immagine sotto un punto (mm della tela): la media di un quadratino a piena risoluzione. */
+  function sampleImage(p: { x: number; y: number }): string | null {
+    if (!source) return null;
+    const img = source.img;
+    if (!eyeCanvas || eyeCanvas.img !== img) {
+      const c = document.createElement('canvas');
+      c.width = img.naturalWidth; c.height = img.naturalHeight;
+      const ctx = c.getContext('2d', { willReadFrequently: true })!;
+      ctx.drawImage(img, 0, 0);
+      eyeCanvas = { img, ctx };
+    }
+    const { w, h } = sizeMm();
+    const cr = crop ?? { x: 0, y: 0, w: img.naturalWidth, h: img.naturalHeight };
+    const px = cr.x + (p.x / w) * cr.w, py = cr.y + (p.y / h) * cr.h;
+    if (px < 0 || py < 0 || px >= img.naturalWidth || py >= img.naturalHeight) return null;
+    const rad = Math.max(1, Math.round((cr.w / st.grid.cols) * 0.3));
+    const x0 = Math.max(0, Math.round(px) - rad), y0 = Math.max(0, Math.round(py) - rad);
+    const d = eyeCanvas.ctx.getImageData(x0, y0, Math.min(2 * rad + 1, img.naturalWidth - x0), Math.min(2 * rad + 1, img.naturalHeight - y0)).data;
+    const s = [0, 0, 0]; let n = 0;
+    for (let k = 0; k < d.length; k += 4) { s[0] += d[k]; s[1] += d[k + 1]; s[2] += d[k + 2]; n++; }
+    return n ? rgbToHex(s.map((v) => Math.round(v / n)) as [number, number, number]) : null;
+  }
   /** La scelta «Filo di base»: nessuna, o uno dei fili. */
   function syncBase(): void {
     const base = st.route.base ?? null;
@@ -1547,14 +1603,43 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   /** Scambia due aghi: cambia l'ordine di cucitura, non il disegno. */
   function swapThreads(a: number, b: number): void {
-    [st.threads[a], st.threads[b]] = [st.threads[b], st.threads[a]];
-    for (const m of st.cells.values()) m.color = m.color === a ? b : m.color === b ? a : m.color;
-    if (activeThread === a) activeThread = b; else if (activeThread === b) activeThread = a;
-    const bc = st.route.base?.color;
-    if (st.route.base && (bc === a || bc === b)) st.route.base = { ...st.route.base, color: bc === a ? b : a };
+    const order = st.threads.map((_, i) => i);
+    [order[a], order[b]] = [order[b], order[a]];
+    permuteThreads(order);
+  }
+  /**
+   * I fili in un altro ordine: `order[nuovo] = vecchio`. Tutto segue il filo: celle, modulo (V, fasce, forme
+   * spostate, pezzi in ordine), base, filo del pennello. Prima lo scambio rimappava solo le celle, e col
+   * modulo il ricamo, rifatto dal modulo, tornava ai colori di prima.
+   */
+  function permuteThreads(order: number[]): void {
+    const re = new Map(order.map((old, nw) => [old, nw]));
+    const to = (c: number) => re.get(c) ?? c;
+    st.threads = order.map((o) => st.threads[o]);
+    for (const m of st.cells.values()) m.color = to(m.color);
+    if (realDesign) for (const m of realDesign.cells.values()) m.color = to(m.color);
+    const mod = st.module;
+    if (mod) {
+      for (const mk of mod.marks) if (mk) mk.color = to(mk.color);
+      const keys = <V,>(o: Record<number, V> | undefined) => (o ? Object.fromEntries(Object.entries(o).map(([k, v]) => [to(Number(k)), v])) as Record<number, V> : o);
+      mod.bands = keys(mod.bands); mod.bandAt = keys(mod.bandAt);
+      if (mod.ordered) mod.ordered = mod.ordered.map(to);
+    }
+    activeThread = to(activeThread);
+    if (st.route.base) st.route.base = { ...st.route.base, color: to(st.route.base.color) };
     buildThreads();
     update();
   }
+  /** DAL CHIARO ALLO SCURO (Lorenzo: «posso andare a lavorare dal chiaro a scuro»): la base per prima, poi gli altri dal più chiaro. */
+  $('lightToDarkBtn').addEventListener('click', () => {
+    const lum = (hex: string) => { const h = asHex6(hex); return 0.3 * parseInt(h.slice(1, 3), 16) + 0.59 * parseInt(h.slice(3, 5), 16) + 0.11 * parseInt(h.slice(5, 7), 16); };
+    const base = st.route.base?.color;
+    const rest = st.threads.map((_, i) => i).filter((i) => i !== base).sort((a, b) => lum(st.threads[b].hex) - lum(st.threads[a].hex));
+    const order = base !== undefined ? [base, ...rest] : rest;
+    if (order.every((o, i) => o === i)) { $('status').textContent = 'I fili sono già dal chiaro allo scuro.'; return; }
+    pushUndo();
+    permuteThreads(order);
+  });
 
   function removeThread(i: number): void {
     pushUndo();
@@ -1733,6 +1818,19 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   // In cattura: il gesto di modifica è nostro, il pan/zoom non lo deve nemmeno vedere. Restano al
   // pan lo strumento Sposta, il tasto centrale e lo spazio + trascina.
   canvas.addEventListener('pointerdown', (e) => {
+    if (eyedrop >= 0) {
+      const p = mmAt(e);
+      e.stopPropagation(); e.preventDefault();
+      const hex = p ? sampleImage(p) : null;
+      if (hex && st.threads[eyedrop]) {
+        pushUndo();
+        st.threads[eyedrop].hex = hex;
+        $('status').textContent = `Filo ${eyedrop + 1}: ${hex.toUpperCase()}. Poi «Maglia coi miei colori» rilegge l’immagine con questi fili.`;
+        buildThreads();
+      }
+      stopEyedrop();
+      return;
+    }
     if (spaceDown || (e.button !== 0 && e.button !== 2)) return;
     if (areaPicking) {
       const p = mmAt(e);
@@ -2002,6 +2100,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (!root.isConnected) { window.removeEventListener('keydown', onKeyDown); window.removeEventListener('keyup', onKeyUp); return; }
     if (isTyping(e.target)) return;
     // ridisegnando un passaggio, Invio e Spazio lo fissano (lo Spazio qui non sposta la tela)
+    if (eyedrop >= 0 && e.key === 'Escape') { e.preventDefault(); stopEyedrop(); showStatus(); return; }
     if (mode === 'reroute' && reroute && !e.ctrlKey && !e.metaKey && !e.altKey && rerouteKey(e.key)) { e.preventDefault(); return; }
     if (e.code === 'Space') { spaceDown = true; canvas.classList.add('cs-pan'); e.preventDefault(); }
     const k = e.key.toLowerCase();
@@ -2383,13 +2482,15 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   });
   /** Le opzioni della lettura: il fondo è l'ultimo filo, quello che sta sopra. */
   function knitOpts() {
-    return { ...knit, background: st.threads.length - 1 };
+    // il fondo della lettura: la base, se c'è (prima era l'ultimo filo), e il filo più vicino in Lab
+    return { ...knit, background: st.route.base?.color ?? st.threads.length - 1, lab: true };
   }
 
   /** Rilegge l'immagine coi fili che ci sono (senza ricalcolarne i colori). */
   function reknit(): void {
     if (!image) return;
     pushUndo();
+    if (st.module) { st.module = null; syncModuleUI(); } // la maglia copre tutto il ricamo: il modulo si toglie
     st.cells = knitFromImage(st.grid, image.px, threadRgb(), knitOpts());
     fromImage = true;
     buildThreads();
@@ -2449,6 +2550,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     update();
   }
   $('knitBtn').addEventListener('click', knitNow);
+  $('knitMineBtn').addEventListener('click', () => { if (!image) { $('imageStatus').textContent = 'Carica prima un’immagine.'; return; } reknit(); });
 
   // ---- ricava modulo (module.ts) ----------------------------------------------
   // ---- la VISTA MODULO (Lorenzo, 2026-10-01: «un editor del modulo… si riverbera su tutto») ----
