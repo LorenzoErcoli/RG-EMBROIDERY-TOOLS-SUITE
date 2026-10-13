@@ -1930,6 +1930,26 @@ agente claude, ok d4»*): **D1** id dei parametri in inglese camelCase, etichett
 note nel repo → fatto, `sapere/` · **D3** l'agente è un agente di Claude Code, la suite resta senza
 server · **D4** i concetti misurati in due modi si decidono caso per caso, col ricamo in mano.
 
+### U — Un'interfaccia sola per tutti i tool
+
+> Chiesto da Lorenzo nella chat globale il **2026-10-13**: *«vorrei anche che a livello estetico e di
+> interfaccia tutto sia simile tra i vari tools»*. **Il piano, con la ricognizione misurata nel browser
+> sui 15 tool, è in [`AVVIO-INTERFACCIA-COMUNE.md`](AVVIO-INTERFACCIA-COMUNE.md).** In breve: lo scheletro
+> del design system è già comune a tutti; divergono nomi, ordine e comportamenti — 9 combinazioni di
+> bottoni nell'anteprima per 15 tool, l'export chiamato in tre modi, *Simula* in 3 tool su 15, 5 modi di
+> riaprire un progetto, 7 nomi per la sezione 01, due tipi di campo numerico.
+> **Decisioni di Lorenzo (2026-10-13):** *Esporta SVG · Esporta DST* col DST pieno · un campo numerico
+> solo che accetta virgola e punto · la sezione 01 si chiama *Cartamodello* (o *Immagine*, o *Ricamo di
+> partenza*) · *Genera* ovunque con *Ricalcola da solo*.
+
+| # | Fase | Stato |
+|---|---|---|
+| **U1** | **I componenti comuni in `@rg/ui`** (campo numerico, sezione 01, barra dell'anteprima, sezione Progetto, barra di stato) + il **cricchetto**: un test che fallisce se un tool li riscrive a mano. | **Pronta a partire**, in un ramo suo. |
+| **U2** | **Migrare i tool all'anatomia**, uno alla volta, dai più lontani (cross-stitch, pittorico, pettine, razza, pattern-macchie). | Dopo U1. Un tool su cui lavora un'altra chat si migra per ultimo. |
+| **U3** | **Simula in tutti i tool** — chiude P1. | Dopo U1. |
+| **U4** | **Un esempio pronto in ogni tool** (oggi 7 su 15). | Dopo U1. |
+| **U5** | **Le etichette dal registro dei parametri** — chiude A5. | Dopo K1. |
+
 ### In progettazione
 
 | # | Cosa | Stato |
