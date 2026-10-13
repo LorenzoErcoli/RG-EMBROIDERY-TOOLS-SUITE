@@ -1,0 +1,5329 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "RG Tools — parametri del ricamo",
+  "description": "GENERATO da packages/cervello/src/parametri.ts (npm run genera:schema): non si modifica a mano. Per ogni tool, i parametri che salva nel file di progetto, col nome con cui li salva (la chiave), il default e la definizione comune in $defs.",
+  "type": "object",
+  "properties": {
+    "net-45": {
+      "type": "object",
+      "properties": {
+        "squareSizeMm": {
+          "$ref": "#/$defs/squareSize",
+          "default": 11,
+          "x-id": "squareSize"
+        },
+        "angleADeg": {
+          "$ref": "#/$defs/angleA",
+          "default": 45,
+          "x-id": "angleA"
+        },
+        "angleBDeg": {
+          "$ref": "#/$defs/angleB",
+          "default": -45,
+          "x-id": "angleB"
+        },
+        "netInsetMm": {
+          "$ref": "#/$defs/netInset",
+          "default": 0,
+          "x-id": "netInset"
+        },
+        "netOffsetXMm": {
+          "$ref": "#/$defs/netOffsetX",
+          "default": 0,
+          "x-id": "netOffsetX"
+        },
+        "netOffsetYMm": {
+          "$ref": "#/$defs/netOffsetY",
+          "default": 0,
+          "x-id": "netOffsetY"
+        },
+        "rasoBandMm": {
+          "$ref": "#/$defs/satinBand",
+          "default": 8,
+          "x-id": "satinBand"
+        },
+        "rasoDownwardOnly": {
+          "$ref": "#/$defs/satinDownwardOnly",
+          "default": 1,
+          "x-id": "satinDownwardOnly"
+        },
+        "cordWidthMm": {
+          "$ref": "#/$defs/cordWidth",
+          "default": 1.8,
+          "x-id": "cordWidth"
+        },
+        "cordInterlineMm": {
+          "$ref": "#/$defs/cordInterline",
+          "default": 0.4,
+          "x-id": "cordInterline"
+        },
+        "travelStitchMm": {
+          "$ref": "#/$defs/travelStitch",
+          "default": 3,
+          "x-id": "travelStitch"
+        },
+        "minStitchMm": {
+          "$ref": "#/$defs/minStitch",
+          "default": 1,
+          "x-id": "minStitch"
+        },
+        "realWidthMm": {
+          "$ref": "#/$defs/realWidth",
+          "default": 0,
+          "x-id": "realWidth"
+        }
+      }
+    },
+    "pattern-grammar": {
+      "type": "object",
+      "properties": {
+        "minStitchMm": {
+          "$ref": "#/$defs/minStitch",
+          "default": 0,
+          "description": "Lunghezza minima del punto.",
+          "minimum": 0,
+          "x-id": "minStitch"
+        },
+        "totalWidth": {
+          "$ref": "#/$defs/totalWidth",
+          "default": 120
+        },
+        "totalHeight": {
+          "$ref": "#/$defs/totalHeight",
+          "default": 160
+        },
+        "parameterScalePercent": {
+          "$ref": "#/$defs/parameterScalePercent",
+          "default": 100
+        },
+        "horizontalZigzagWidth": {
+          "$ref": "#/$defs/horizontalZigzagWidth",
+          "default": 5.5
+        },
+        "horizontalZigzagHeight": {
+          "$ref": "#/$defs/horizontalZigzagHeight",
+          "default": 4.3
+        },
+        "horizontalZigzagInterline": {
+          "$ref": "#/$defs/horizontalZigzagInterline",
+          "default": 0.25
+        },
+        "horizontalZigzagPassCount": {
+          "$ref": "#/$defs/horizontalZigzagPassCount",
+          "default": 0
+        },
+        "horizontalZigzagOffsetX": {
+          "$ref": "#/$defs/horizontalZigzagOffsetX",
+          "default": 0
+        },
+        "horizontalZigzagSpacing": {
+          "$ref": "#/$defs/horizontalZigzagSpacing",
+          "default": 12
+        },
+        "verticalZigzagWidth": {
+          "$ref": "#/$defs/verticalZigzagWidth",
+          "default": 1.2
+        },
+        "verticalZigzagInterline": {
+          "$ref": "#/$defs/verticalZigzagInterline",
+          "default": 0.25
+        },
+        "verticalConnectorDiagonalOffsetY": {
+          "$ref": "#/$defs/verticalConnectorDiagonalOffsetY",
+          "default": 0
+        },
+        "stepX": {
+          "$ref": "#/$defs/stepX",
+          "default": 5.2
+        },
+        "offsetY": {
+          "$ref": "#/$defs/offsetY",
+          "default": 6
+        },
+        "horizontalAngleDeg": {
+          "$ref": "#/$defs/horizontalAngleDeg",
+          "default": 0
+        },
+        "columnWaveAmplitude": {
+          "$ref": "#/$defs/columnWaveAmplitude",
+          "default": 0
+        },
+        "columnWaveLengthMm": {
+          "$ref": "#/$defs/columnWaveLength",
+          "default": 60,
+          "x-id": "columnWaveLength"
+        },
+        "columnWavePhaseDeg": {
+          "$ref": "#/$defs/columnWavePhase",
+          "default": 0,
+          "x-id": "columnWavePhase"
+        },
+        "alternateHorizontalAngle": {
+          "$ref": "#/$defs/alternateHorizontalAngle",
+          "default": false
+        },
+        "variationSidesPercent": {
+          "$ref": "#/$defs/variationSidesPercent",
+          "default": 100
+        },
+        "variationCenterPercent": {
+          "$ref": "#/$defs/variationCenterPercent",
+          "default": 100
+        },
+        "variationIrregularityPercent": {
+          "$ref": "#/$defs/variationIrregularityPercent",
+          "default": 0
+        },
+        "strokeAngleJitterDeg": {
+          "$ref": "#/$defs/strokeAngleJitterDeg",
+          "default": 0
+        },
+        "variationPassCountSides": {
+          "$ref": "#/$defs/variationPassCountSides",
+          "default": 0
+        },
+        "variationPassCountCenter": {
+          "$ref": "#/$defs/variationPassCountCenter",
+          "default": 0
+        },
+        "variationSeed": {
+          "$ref": "#/$defs/variationSeed",
+          "default": 1
+        },
+        "repeatBack": {
+          "$ref": "#/$defs/repeatBack",
+          "default": false
+        },
+        "maxStitchMm": {
+          "$ref": "#/$defs/maxStitch",
+          "default": 0,
+          "x-id": "maxStitch"
+        },
+        "constructionStroke": {
+          "$ref": "#/$defs/constructionStroke",
+          "default": 0.3
+        },
+        "boundaryCleanupMode": {
+          "$ref": "#/$defs/boundaryCleanupMode",
+          "default": "adjust-then-delete"
+        },
+        "maxBoundaryAdjustment": {
+          "$ref": "#/$defs/maxBoundaryAdjustment",
+          "default": 0
+        },
+        "reliefPercent": {
+          "$ref": "#/$defs/reliefPercent",
+          "default": 50
+        },
+        "voidStitchMm": {
+          "$ref": "#/$defs/voidStitchMm",
+          "default": 0
+        },
+        "exportCompatibilityMode": {
+          "$ref": "#/$defs/exportCompatibilityMode",
+          "default": "illustrator-safe"
+        },
+        "shapeType": {
+          "$ref": "#/$defs/shapeType",
+          "default": "none"
+        }
+      }
+    },
+    "interlace": {
+      "type": "object",
+      "properties": {
+        "minStitchMm": {
+          "$ref": "#/$defs/minStitch",
+          "default": 6,
+          "description": "lunghezza minima di un passaggio",
+          "x-id": "minStitch"
+        },
+        "realWidthMm": {
+          "$ref": "#/$defs/realWidth",
+          "default": 0,
+          "x-id": "realWidth"
+        },
+        "maxStitchMm": {
+          "$ref": "#/$defs/maxStitch",
+          "default": 15,
+          "description": "i passaggi non superano questa misura",
+          "x-id": "maxStitch"
+        },
+        "densitySpacingMm": {
+          "$ref": "#/$defs/density",
+          "default": 2,
+          "x-id": "density"
+        },
+        "voidClearanceMm": {
+          "$ref": "#/$defs/voidClearance",
+          "default": 0.6,
+          "x-id": "voidClearance"
+        },
+        "seed": {
+          "$ref": "#/$defs/seed",
+          "default": 1
+        },
+        "paletteCycles": {
+          "$ref": "#/$defs/paletteCycles",
+          "default": 1
+        },
+        "clusterMode": {
+          "$ref": "#/$defs/clusterMode",
+          "default": false
+        },
+        "clusterStrength": {
+          "$ref": "#/$defs/clusterStrength",
+          "default": 60
+        },
+        "zoneOverlapMm": {
+          "$ref": "#/$defs/zoneOverlap",
+          "x-id": "zoneOverlap"
+        },
+        "maxStitchesPerMm2": {
+          "$ref": "#/$defs/maxStitchesPerArea",
+          "x-id": "maxStitchesPerArea"
+        },
+        "excludeBackground": {
+          "$ref": "#/$defs/excludeBackground",
+          "default": false
+        },
+        "backgroundColor": {
+          "$ref": "#/$defs/backgroundColor",
+          "default": "#ffffff"
+        },
+        "backgroundToleranceRgb": {
+          "$ref": "#/$defs/backgroundTolerance",
+          "default": 30,
+          "x-id": "backgroundTolerance"
+        }
+      }
+    },
+    "oblique": {
+      "type": "object",
+      "properties": {
+        "formatWidth": {
+          "$ref": "#/$defs/panelWidth",
+          "default": 100,
+          "x-id": "panelWidth"
+        },
+        "formatHeight": {
+          "$ref": "#/$defs/panelHeight",
+          "default": 100,
+          "x-id": "panelHeight"
+        },
+        "formatOriginX": {
+          "$ref": "#/$defs/panelOriginX",
+          "default": 0,
+          "x-id": "panelOriginX"
+        },
+        "formatOriginY": {
+          "$ref": "#/$defs/panelOriginY",
+          "default": 0,
+          "x-id": "panelOriginY"
+        },
+        "realWidthMm": {
+          "$ref": "#/$defs/realWidthMm",
+          "default": 0
+        },
+        "overflowMarginMm": {
+          "$ref": "#/$defs/overflowMarginMm",
+          "default": 80
+        },
+        "vectorAX": {
+          "$ref": "#/$defs/gridVectorAX",
+          "default": 18.5,
+          "x-id": "gridVectorAX"
+        },
+        "vectorAY": {
+          "$ref": "#/$defs/gridVectorAY",
+          "default": -14.8,
+          "x-id": "gridVectorAY"
+        },
+        "vectorBX": {
+          "$ref": "#/$defs/gridVectorBX",
+          "default": -8.45,
+          "x-id": "gridVectorBX"
+        },
+        "vectorBY": {
+          "$ref": "#/$defs/gridVectorBY",
+          "default": 54.8,
+          "x-id": "gridVectorBY"
+        },
+        "horizontalGap": {
+          "$ref": "#/$defs/horizontalGap",
+          "default": 0
+        },
+        "verticalGap": {
+          "$ref": "#/$defs/verticalGap",
+          "default": 0
+        },
+        "horizontalOverlap": {
+          "$ref": "#/$defs/horizontalOverlap",
+          "default": 0
+        },
+        "verticalOverlap": {
+          "$ref": "#/$defs/verticalOverlap",
+          "default": 0
+        },
+        "rowShiftX": {
+          "$ref": "#/$defs/rowShiftX",
+          "default": 0
+        },
+        "rowShiftY": {
+          "$ref": "#/$defs/rowShiftY",
+          "default": 0
+        },
+        "startOffsetX": {
+          "$ref": "#/$defs/gridStartOffsetX",
+          "default": 2.8,
+          "x-id": "gridStartOffsetX"
+        },
+        "startOffsetY": {
+          "$ref": "#/$defs/gridStartOffsetY",
+          "default": 27.5,
+          "x-id": "gridStartOffsetY"
+        },
+        "rotation": {
+          "$ref": "#/$defs/rotation",
+          "default": 0
+        },
+        "autoFillDiagonals": {
+          "$ref": "#/$defs/autoFillDiagonals",
+          "default": true
+        },
+        "autoModulesPerDiagonal": {
+          "$ref": "#/$defs/autoModulesPerDiagonal",
+          "default": true
+        },
+        "diagonalCount": {
+          "$ref": "#/$defs/diagonalCount",
+          "default": 23
+        },
+        "modulesPerDiagonal": {
+          "$ref": "#/$defs/modulesPerDiagonal",
+          "default": 35
+        },
+        "moduleScale": {
+          "$ref": "#/$defs/moduleScale",
+          "default": 1
+        },
+        "anchorMode": {
+          "$ref": "#/$defs/anchorMode",
+          "default": "bbox_center"
+        },
+        "manualAnchorX": {
+          "$ref": "#/$defs/manualAnchorX",
+          "default": 0
+        },
+        "manualAnchorY": {
+          "$ref": "#/$defs/manualAnchorY",
+          "default": 0
+        },
+        "level0OffsetX": {
+          "$ref": "#/$defs/level0OffsetX",
+          "default": -6
+        },
+        "level0OffsetY": {
+          "$ref": "#/$defs/level0OffsetY",
+          "default": 7.9
+        },
+        "level0Scale": {
+          "$ref": "#/$defs/level0Scale",
+          "default": 1
+        },
+        "level0AnchorX": {
+          "$ref": "#/$defs/level0AnchorX",
+          "default": 0
+        },
+        "level0AnchorY": {
+          "$ref": "#/$defs/level0AnchorY",
+          "default": 0
+        },
+        "level1OffsetX": {
+          "$ref": "#/$defs/level1OffsetX",
+          "default": 2.2
+        },
+        "level1OffsetY": {
+          "$ref": "#/$defs/level1OffsetY",
+          "default": 4.8
+        },
+        "level2OffsetX": {
+          "$ref": "#/$defs/level2OffsetX",
+          "default": 0
+        },
+        "level2OffsetY": {
+          "$ref": "#/$defs/level2OffsetY",
+          "default": 0
+        },
+        "holesOffsetX": {
+          "$ref": "#/$defs/holesOffsetX",
+          "default": -0.4
+        },
+        "holesOffsetY": {
+          "$ref": "#/$defs/holesOffsetY",
+          "default": 6.7
+        },
+        "holesScale": {
+          "$ref": "#/$defs/holesScale",
+          "default": 1
+        },
+        "holesAnchorX": {
+          "$ref": "#/$defs/holesAnchorX",
+          "default": 0
+        },
+        "holesAnchorY": {
+          "$ref": "#/$defs/holesAnchorY",
+          "default": 0
+        },
+        "globalPatternOffsetX": {
+          "$ref": "#/$defs/globalPatternOffsetX",
+          "default": 0
+        },
+        "globalPatternOffsetY": {
+          "$ref": "#/$defs/globalPatternOffsetY",
+          "default": 0
+        },
+        "patternBorderOffset": {
+          "$ref": "#/$defs/patternBorderOffset",
+          "default": 0
+        },
+        "holesMargin": {
+          "$ref": "#/$defs/holesMargin",
+          "default": 0
+        },
+        "enableHolesLayer": {
+          "$ref": "#/$defs/enableHolesLayer",
+          "default": true
+        },
+        "holePerimeterToleranceMm": {
+          "$ref": "#/$defs/holePerimeterToleranceMm",
+          "default": 2
+        },
+        "pruneFeaturesWithoutHoles": {
+          "$ref": "#/$defs/pruneFeaturesWithoutHoles",
+          "default": false
+        },
+        "trimDiagonalsToHoles": {
+          "$ref": "#/$defs/trimDiagonalsToHoles",
+          "default": false
+        },
+        "holeMatchTolerance": {
+          "$ref": "#/$defs/holeMatchTolerance",
+          "default": 0.5
+        },
+        "enableLevel0": {
+          "$ref": "#/$defs/enableLevel0",
+          "default": true
+        },
+        "enableLevel05": {
+          "$ref": "#/$defs/enableLevel05",
+          "default": false
+        },
+        "level05StitchLength": {
+          "$ref": "#/$defs/level05StitchLength",
+          "default": 3
+        },
+        "enableExclusionAreas": {
+          "$ref": "#/$defs/enableExclusionAreas",
+          "default": true
+        },
+        "reconnectVoidBorders": {
+          "$ref": "#/$defs/reconnectVoidBorders",
+          "default": false
+        },
+        "cleanupMode": {
+          "$ref": "#/$defs/cleanupMode",
+          "default": "strict_clip"
+        },
+        "cleanupTolerance": {
+          "$ref": "#/$defs/cleanupTolerance",
+          "default": 0.25
+        },
+        "snapToEdgeDistance": {
+          "$ref": "#/$defs/snapToEdgeDistance",
+          "default": 0.5
+        },
+        "perimeterCloseTolerance": {
+          "$ref": "#/$defs/perimeterCloseTolerance",
+          "default": 0.1
+        },
+        "level0ClipMode": {
+          "$ref": "#/$defs/level0ClipMode",
+          "default": "strict_clip"
+        },
+        "level1ClipMode": {
+          "$ref": "#/$defs/level1ClipMode",
+          "default": "strict_clip"
+        },
+        "travelPathMode": {
+          "$ref": "#/$defs/travelPathMode",
+          "default": "Border Following"
+        },
+        "travelRoutingStrategy": {
+          "$ref": "#/$defs/travelRoutingStrategy",
+          "default": "shortest_valid"
+        },
+        "travelSideStrategy": {
+          "$ref": "#/$defs/travelSideStrategy",
+          "default": "auto"
+        },
+        "allowInternalShortcuts": {
+          "$ref": "#/$defs/allowInternalShortcuts",
+          "default": false
+        },
+        "perimeterLaneWidth": {
+          "$ref": "#/$defs/perimeterLaneWidth",
+          "default": 0
+        },
+        "perimeterLaneTolerance": {
+          "$ref": "#/$defs/perimeterLaneTolerance",
+          "default": 1
+        },
+        "technicalMaxTravelMm": {
+          "$ref": "#/$defs/technicalMaxTravelMm",
+          "default": 0
+        },
+        "technicalGapBreakFactor": {
+          "$ref": "#/$defs/technicalGapBreakFactor",
+          "default": 2.5
+        },
+        "routeAroundVoidsEnabled": {
+          "$ref": "#/$defs/routeAroundVoidsEnabled",
+          "default": false
+        },
+        "minimumTravelStitchLength": {
+          "$ref": "#/$defs/minimumTravelStitchLength",
+          "default": 2.25
+        },
+        "minimumSegmentLength": {
+          "$ref": "#/$defs/minimumSegmentLength",
+          "default": 1
+        },
+        "cutBorderStitchLength": {
+          "$ref": "#/$defs/cutBorderStitchLength",
+          "default": 2.25
+        },
+        "startLockEnabled": {
+          "$ref": "#/$defs/startLockEnabled",
+          "default": true
+        },
+        "startLockStitchMm": {
+          "$ref": "#/$defs/startLockStitchMm",
+          "default": 2.25
+        }
+      }
+    },
+    "cross-stitch": {
+      "type": "object",
+      "properties": {
+        "grid.cols": {
+          "$ref": "#/$defs/gridCols",
+          "default": 24,
+          "x-id": "gridCols"
+        },
+        "grid.rows": {
+          "$ref": "#/$defs/gridRows",
+          "default": 16,
+          "x-id": "gridRows"
+        },
+        "grid.cellW": {
+          "$ref": "#/$defs/cellWidthMm",
+          "default": 5,
+          "x-id": "cellWidthMm"
+        },
+        "grid.cellH": {
+          "$ref": "#/$defs/cellHeightMm",
+          "default": 5,
+          "x-id": "cellHeightMm"
+        },
+        "grid.overlapPct": {
+          "$ref": "#/$defs/rowOverlapPct",
+          "default": 0,
+          "x-id": "rowOverlapPct"
+        },
+        "route.repetitions": {
+          "$ref": "#/$defs/passes",
+          "default": 1,
+          "x-id": "passes"
+        },
+        "route.fixedDirection": {
+          "$ref": "#/$defs/fixedDirection",
+          "default": false
+        },
+        "route.topLeg": {
+          "$ref": "#/$defs/topLeg",
+          "default": "down"
+        },
+        "route.jumpMm": {
+          "$ref": "#/$defs/jumpMm",
+          "default": 400
+        },
+        "route.passOrder": {
+          "$ref": "#/$defs/passOrder",
+          "default": "auto"
+        },
+        "route.blocks": {
+          "$ref": "#/$defs/byBlocks",
+          "default": true,
+          "x-id": "byBlocks"
+        },
+        "route.baseWhole": {
+          "$ref": "#/$defs/baseWhole",
+          "default": true
+        },
+        "route.trimJumps": {
+          "$ref": "#/$defs/trimJumps",
+          "default": true
+        },
+        "route.zones.gapMm": {
+          "$ref": "#/$defs/zoneGapMm",
+          "default": 5,
+          "x-id": "zoneGapMm"
+        },
+        "route.zones.maxMm": {
+          "$ref": "#/$defs/zoneMaxMm",
+          "default": 100,
+          "x-id": "zoneMaxMm"
+        },
+        "route.strips.rows": {
+          "$ref": "#/$defs/stripRows",
+          "default": 0,
+          "x-id": "stripRows"
+        },
+        "route.strips.shiftMm": {
+          "$ref": "#/$defs/stripShiftMm",
+          "default": 0,
+          "x-id": "stripShiftMm"
+        },
+        "route.costs.retrace": {
+          "$ref": "#/$defs/retraceCost",
+          "default": 0.1,
+          "x-id": "retraceCost"
+        },
+        "stitch.maxStitchMm": {
+          "$ref": "#/$defs/maxStitchMm",
+          "default": 7
+        },
+        "stitch.travelStitchMm": {
+          "$ref": "#/$defs/travelStitchMm",
+          "default": 2.5
+        },
+        "knit.detailPct": {
+          "$ref": "#/$defs/knitDetailPct",
+          "default": 35,
+          "x-id": "knitDetailPct"
+        },
+        "knit.stitch": {
+          "$ref": "#/$defs/knitStitch",
+          "default": "v",
+          "x-id": "knitStitch"
+        }
+      }
+    },
+    "bitmap": {
+      "type": "object",
+      "properties": {
+        "seed": {
+          "$ref": "#/$defs/seed",
+          "default": 1,
+          "description": "Stessa variante = stesso identico risultato (riproducibile)."
+        },
+        "excludeBackground": {
+          "$ref": "#/$defs/excludeBackground",
+          "default": true,
+          "title": "Escludi un colore di sfondo",
+          "description": "Toglie dalla selezione i pixel dei colori di sfondo."
+        },
+        "realWidthMm": {
+          "$ref": "#/$defs/realWidthMm",
+          "default": 0,
+          "title": "Larghezza reale (0 = auto)",
+          "description": "Larghezza reale della sagoma (0 = usa la stima dai dpi); fissa la scala mm/px."
+        },
+        "coverage": {
+          "$ref": "#/$defs/coverage",
+          "default": "selected"
+        },
+        "threshold": {
+          "$ref": "#/$defs/threshold",
+          "default": 200
+        },
+        "sampleToleranceRgb": {
+          "$ref": "#/$defs/sampleToleranceRgb",
+          "default": 24
+        },
+        "backgroundColors": {
+          "$ref": "#/$defs/backgroundColors",
+          "default": "#FFFFFF"
+        },
+        "backgroundToleranceRgb": {
+          "$ref": "#/$defs/backgroundToleranceRgb",
+          "default": 30
+        },
+        "paletteMode": {
+          "$ref": "#/$defs/paletteMode",
+          "default": "auto"
+        },
+        "colorCount": {
+          "$ref": "#/$defs/colorCount",
+          "default": 2
+        },
+        "densitySpacingMm": {
+          "$ref": "#/$defs/densitySpacingMm",
+          "default": 1.2
+        },
+        "minStitchMm": {
+          "$ref": "#/$defs/minStitchMm",
+          "default": 1
+        },
+        "reinsertionRounds": {
+          "$ref": "#/$defs/reinsertionRounds",
+          "default": 1
+        },
+        "maxPoints": {
+          "$ref": "#/$defs/maxPoints",
+          "default": 0
+        },
+        "targetDensityPct": {
+          "$ref": "#/$defs/targetDensityPct",
+          "default": 0
+        },
+        "style": {
+          "$ref": "#/$defs/style",
+          "default": "carpet"
+        },
+        "degradeDrop": {
+          "$ref": "#/$defs/degradeDrop",
+          "default": 0.3
+        },
+        "degradeJitterMm": {
+          "$ref": "#/$defs/degradeJitterMm",
+          "default": 0.4
+        },
+        "ordering": {
+          "$ref": "#/$defs/ordering",
+          "default": "scanline"
+        },
+        "scanlineBandMm": {
+          "$ref": "#/$defs/scanlineBandMm",
+          "default": 1.6
+        },
+        "serpentine": {
+          "$ref": "#/$defs/serpentine",
+          "default": true
+        },
+        "dpiEstimate": {
+          "$ref": "#/$defs/dpiEstimate",
+          "default": 96
+        },
+        "maxWidthPx": {
+          "$ref": "#/$defs/maxWidthPx",
+          "default": 1000
+        },
+        "chunkSize": {
+          "$ref": "#/$defs/chunkSize",
+          "default": 5000
+        }
+      }
+    },
+    "striatura": {
+      "type": "object",
+      "properties": {
+        "seed": {
+          "$ref": "#/$defs/seed",
+          "default": 1,
+          "description": "Stessa variante = stesso identico pattern; cambiala per una disposizione diversa (riproducibile)."
+        },
+        "realWidthMm": {
+          "$ref": "#/$defs/realWidthMm",
+          "default": 0,
+          "title": "Larghezza reale (0 = auto)",
+          "description": "0 = usa la misura letta dal file."
+        },
+        "maxStitchMm": {
+          "$ref": "#/$defs/maxStitchMm",
+          "default": 2,
+          "title": "Lunghezza del punto",
+          "description": "Passo lungo la striatura.",
+          "minimum": 0.5
+        },
+        "travelStitchMm": {
+          "$ref": "#/$defs/travelStitchMm",
+          "default": 3,
+          "title": "Punto degli spostamenti",
+          "description": "I tragitti non superano mai questa misura."
+        },
+        "densitySpacingMm": {
+          "$ref": "#/$defs/densitySpacingMm",
+          "default": 0.6,
+          "title": "Densità della macchia",
+          "description": "Passo tra le striature dentro la macchia: piccolo = più fitta.",
+          "minimum": 0.2
+        },
+        "minStitchMm": {
+          "$ref": "#/$defs/minStitchMm",
+          "default": 1,
+          "description": "Lunghezza minima del punto, imposta dopo il routing.",
+          "minimum": 0.2
+        },
+        "fillSpacingMm": {
+          "$ref": "#/$defs/fillSpacingMm",
+          "default": 8
+        },
+        "passaggioAmpMm": {
+          "$ref": "#/$defs/passaggioAmpMm",
+          "default": 10
+        },
+        "voidClearanceMm": {
+          "$ref": "#/$defs/voidClearanceMm",
+          "default": 0.5
+        },
+        "striaturaLengthMm": {
+          "$ref": "#/$defs/striaturaLengthMm",
+          "default": 18
+        },
+        "blobSizeMm": {
+          "$ref": "#/$defs/blobSizeMm",
+          "default": 22
+        },
+        "blobSpacingMm": {
+          "$ref": "#/$defs/blobSpacingMm",
+          "default": 5
+        },
+        "jaggedLengthMm": {
+          "$ref": "#/$defs/jaggedLengthMm",
+          "default": 8
+        },
+        "jaggedStartMm": {
+          "$ref": "#/$defs/jaggedStartMm",
+          "default": 4
+        },
+        "waveAmpMm": {
+          "$ref": "#/$defs/waveAmpMm",
+          "default": 0
+        },
+        "waveLenMm": {
+          "$ref": "#/$defs/waveLenMm",
+          "default": 80
+        },
+        "stitchMode": {
+          "$ref": "#/$defs/stitchMode",
+          "default": "retrace"
+        },
+        "color": {
+          "$ref": "#/$defs/color",
+          "default": "#1a1a1a"
+        }
+      }
+    },
+    "zone-pattern": {
+      "type": "object",
+      "properties": {
+        "travelStitchMm": {
+          "$ref": "#/$defs/travelStitch",
+          "default": 3,
+          "title": "Punto dei passaggi",
+          "description": "Lunghezza dei punti dei passaggi fra le zone.",
+          "minimum": 0.5,
+          "x-id": "travelStitch"
+        },
+        "A.minStitchMm": {
+          "$ref": "#/$defs/minStitch",
+          "default": 0.4,
+          "minimum": 0,
+          "x-id": "minStitch"
+        },
+        "A.parameterScalePercent": {
+          "$ref": "#/$defs/parameterScalePercent",
+          "default": 100,
+          "description": "Scala in percentuale tutti i parametri del pattern.",
+          "x-id": "parameterScalePercent"
+        },
+        "A.horizontalZigzagWidth": {
+          "$ref": "#/$defs/horizontalZigzagWidth",
+          "default": 5.5,
+          "description": "Larghezza dello zig-zag orizzontale.",
+          "x-id": "horizontalZigzagWidth"
+        },
+        "A.horizontalZigzagHeight": {
+          "$ref": "#/$defs/horizontalZigzagHeight",
+          "default": 4.3,
+          "description": "Altezza dello zig-zag orizzontale.",
+          "x-id": "horizontalZigzagHeight"
+        },
+        "A.horizontalZigzagInterline": {
+          "$ref": "#/$defs/horizontalZigzagInterline",
+          "default": 0.45,
+          "description": "Interlinea del filo nello zig-zag orizzontale.",
+          "x-id": "horizontalZigzagInterline"
+        },
+        "A.horizontalZigzagPassCount": {
+          "$ref": "#/$defs/horizontalZigzagPassCount",
+          "default": 0,
+          "description": "Conta ogni andata e ogni ritorno sul tratto: 2 = un’andata e un ritorno, 4 = due e due; a qualunque altezza, anche 0, e l’interlinea non conta. 0 = dall’interlinea.",
+          "x-id": "horizontalZigzagPassCount"
+        },
+        "A.horizontalZigzagOffsetX": {
+          "$ref": "#/$defs/horizontalZigzagOffsetX",
+          "default": 0,
+          "description": "Sposta lo zig-zag orizzontale rispetto al centro.",
+          "x-id": "horizontalZigzagOffsetX"
+        },
+        "A.horizontalZigzagSpacing": {
+          "$ref": "#/$defs/horizontalZigzagSpacing",
+          "default": 12,
+          "description": "Distanza tra uno zig-zag orizzontale e il successivo.",
+          "x-id": "horizontalZigzagSpacing"
+        },
+        "A.verticalZigzagWidth": {
+          "$ref": "#/$defs/verticalZigzagWidth",
+          "default": 1.2,
+          "x-id": "verticalZigzagWidth"
+        },
+        "A.verticalZigzagInterline": {
+          "$ref": "#/$defs/verticalZigzagInterline",
+          "default": 0.45,
+          "description": "Interlinea del filo nello zig-zag verticale.",
+          "x-id": "verticalZigzagInterline"
+        },
+        "A.verticalConnectorDiagonalOffsetY": {
+          "$ref": "#/$defs/verticalConnectorDiagonalOffsetY",
+          "default": 0,
+          "description": "Quanto il raccordo fra le colonne è inclinato (scostamento in verticale).",
+          "x-id": "verticalConnectorDiagonalOffsetY"
+        },
+        "A.stepX": {
+          "$ref": "#/$defs/stepX",
+          "default": 5.2,
+          "description": "Distanza orizzontale fra una colonna e la successiva.",
+          "x-id": "stepX"
+        },
+        "A.offsetY": {
+          "$ref": "#/$defs/offsetY",
+          "default": 6,
+          "description": "Sfasamento verticale fra colonne vicine.",
+          "x-id": "offsetY"
+        },
+        "A.horizontalAngleDeg": {
+          "$ref": "#/$defs/horizontalAngleDeg",
+          "default": 0,
+          "description": "Inclinazione dello zig-zag orizzontale.",
+          "x-id": "horizontalAngleDeg"
+        },
+        "A.columnWaveAmplitude": {
+          "$ref": "#/$defs/columnWaveAmplitude",
+          "default": 0,
+          "description": "Ampiezza dell’onda lungo le colonne.",
+          "x-id": "columnWaveAmplitude"
+        },
+        "A.columnWaveLengthMm": {
+          "$ref": "#/$defs/columnWaveLength",
+          "default": 60,
+          "x-id": "columnWaveLength"
+        },
+        "A.columnWavePhaseDeg": {
+          "$ref": "#/$defs/columnWavePhase",
+          "default": 0,
+          "description": "Fase dell’onda lungo le colonne.",
+          "x-id": "columnWavePhase"
+        },
+        "A.alternateHorizontalAngle": {
+          "$ref": "#/$defs/alternateHorizontalAngle",
+          "default": false,
+          "description": "Inverte il segno dell’inclinazione a colonne alterne.",
+          "x-id": "alternateHorizontalAngle"
+        },
+        "A.repeatBack": {
+          "$ref": "#/$defs/repeatBack",
+          "default": false,
+          "description": "Cuce le colonne in andata e ritorno, a serpentina.",
+          "x-id": "repeatBack"
+        },
+        "A.maxStitchMm": {
+          "$ref": "#/$defs/maxStitch",
+          "default": 6,
+          "description": "Lunghezza massima di un punto: oltre si suddivide.",
+          "x-id": "maxStitch"
+        },
+        "A.constructionStroke": {
+          "$ref": "#/$defs/constructionStroke",
+          "default": 0.3,
+          "x-id": "constructionStroke"
+        },
+        "A.boundaryCleanupMode": {
+          "$ref": "#/$defs/boundaryCleanupMode",
+          "default": "adjust-then-delete",
+          "description": "Cosa fare dei punti che cadono fuori dal contorno della zona.",
+          "x-id": "boundaryCleanupMode"
+        },
+        "A.maxBoundaryAdjustment": {
+          "$ref": "#/$defs/maxBoundaryAdjustment",
+          "default": 0,
+          "description": "Quanto un punto può essere tirato sul bordo prima di essere eliminato; 0 = usa il punto minimo.",
+          "x-id": "maxBoundaryAdjustment"
+        },
+        "A.reliefPercent": {
+          "$ref": "#/$defs/reliefPercent",
+          "default": 50,
+          "x-id": "reliefPercent"
+        },
+        "A.useConnectors": {
+          "$ref": "#/$defs/useConnectors",
+          "default": true,
+          "x-id": "useConnectors"
+        },
+        "marginMm": {
+          "$ref": "#/$defs/zoneMargin",
+          "default": 2,
+          "x-id": "zoneMargin"
+        },
+        "rowHeightMm": {
+          "$ref": "#/$defs/rowHeight",
+          "default": 0,
+          "x-id": "rowHeight"
+        },
+        "minAreaMm2": {
+          "$ref": "#/$defs/minArea",
+          "default": 0,
+          "x-id": "minArea"
+        },
+        "travelMode": {
+          "$ref": "#/$defs/travelMode",
+          "default": "edges"
+        },
+        "outerMarginMm": {
+          "$ref": "#/$defs/outerMargin",
+          "default": 0,
+          "x-id": "outerMargin"
+        },
+        "cleanupMinStitchMm": {
+          "$ref": "#/$defs/cleanupMinStitch",
+          "default": 0,
+          "x-id": "cleanupMinStitch"
+        }
+      }
+    },
+    "cannage-rafia": {
+      "type": "object",
+      "properties": {
+        "programma.puntoMinimo": {
+          "$ref": "#/$defs/minStitch",
+          "default": 0.5,
+          "description": "Vale per tutti gli stop: i punti più corti di così si tolgono; 0 = niente.",
+          "minimum": 0,
+          "x-id": "minStitch"
+        },
+        "basiParams.reliefPercent": {
+          "$ref": "#/$defs/reliefPercent",
+          "default": 50,
+          "description": "Dentro le tinte marcate «Area di scarico» le basi hanno meno passate: 50 = metà; 0 = niente."
+        },
+        "passateCordoncino": {
+          "$ref": "#/$defs/cordedPasses",
+          "default": 9,
+          "x-id": "cordedPasses"
+        },
+        "puntoMaxCordoncino": {
+          "$ref": "#/$defs/cordedMaxStitch",
+          "default": 0,
+          "x-id": "cordedMaxStitch"
+        },
+        "passateVerticali": {
+          "$ref": "#/$defs/ladderPasses",
+          "default": 11,
+          "x-id": "ladderPasses"
+        },
+        "puntoMaxCorsa": {
+          "$ref": "#/$defs/runMaxStitch",
+          "default": 10,
+          "x-id": "runMaxStitch"
+        },
+        "lunghezzaPezzo": {
+          "$ref": "#/$defs/cordedPieceLength",
+          "default": 8.4,
+          "x-id": "cordedPieceLength"
+        },
+        "lunghezzaMattoncino": {
+          "$ref": "#/$defs/brickLength",
+          "default": 7.5,
+          "x-id": "brickLength"
+        },
+        "sogliaOggetti": {
+          "$ref": "#/$defs/objectSplitThreshold",
+          "default": 50,
+          "x-id": "objectSplitThreshold"
+        },
+        "sporgenzaSinistra": {
+          "$ref": "#/$defs/overhangLeft",
+          "default": 1,
+          "x-id": "overhangLeft"
+        },
+        "sporgenzaDestra": {
+          "$ref": "#/$defs/overhangRight",
+          "default": 1,
+          "x-id": "overhangRight"
+        },
+        "allargamentoFinestre": {
+          "$ref": "#/$defs/windowWidening",
+          "default": 1,
+          "x-id": "windowWidening"
+        },
+        "margineVerticale": {
+          "$ref": "#/$defs/verticalMargin",
+          "default": 3,
+          "x-id": "verticalMargin"
+        },
+        "puntoPassaggioBordo": {
+          "$ref": "#/$defs/edgeTravelStitch",
+          "default": 2.5,
+          "x-id": "edgeTravelStitch"
+        },
+        "passateScarico": {
+          "$ref": "#/$defs/linesReliefPasses",
+          "default": 5,
+          "x-id": "linesReliefPasses"
+        },
+        "termogarze": {
+          "$ref": "#/$defs/thermoOutline",
+          "default": false,
+          "x-id": "thermoOutline"
+        },
+        "puntoTermogarze": {
+          "$ref": "#/$defs/thermoOutlineStitch",
+          "default": 4,
+          "x-id": "thermoOutlineStitch"
+        },
+        "stop.puntoContorno": {
+          "$ref": "#/$defs/outlineStitch",
+          "default": 4,
+          "x-id": "outlineStitch"
+        },
+        "stop.puntoGriglia": {
+          "$ref": "#/$defs/gridStitch",
+          "default": 3.5,
+          "x-id": "gridStitch"
+        },
+        "stop.rientroGriglia": {
+          "$ref": "#/$defs/gridInset",
+          "default": 6,
+          "x-id": "gridInset"
+        },
+        "stop.lineaMinima": {
+          "$ref": "#/$defs/gridMinLine",
+          "default": 45,
+          "x-id": "gridMinLine"
+        },
+        "cornice.passateOrizzontale": {
+          "$ref": "#/$defs/hookHorizontalPasses",
+          "default": 11,
+          "x-id": "hookHorizontalPasses"
+        },
+        "cornice.passateVerticale": {
+          "$ref": "#/$defs/hookVerticalPasses",
+          "default": 9,
+          "x-id": "hookVerticalPasses"
+        },
+        "cornice.lunghezzaOrizzontale": {
+          "$ref": "#/$defs/hookHorizontalLength",
+          "default": 5.4,
+          "x-id": "hookHorizontalLength"
+        },
+        "cornice.lunghezzaVerticale": {
+          "$ref": "#/$defs/hookVerticalLength",
+          "default": 4.3,
+          "x-id": "hookVerticalLength"
+        },
+        "cornice.irregolarita": {
+          "$ref": "#/$defs/hookIrregularity",
+          "default": 0.3,
+          "x-id": "hookIrregularity"
+        },
+        "cornice.rientro": {
+          "$ref": "#/$defs/frameInset",
+          "default": 1,
+          "x-id": "frameInset"
+        },
+        "cornice.sogliaUncini": {
+          "$ref": "#/$defs/hookSplitThreshold",
+          "default": 50,
+          "x-id": "hookSplitThreshold"
+        },
+        "cornice.puntoPassaggio": {
+          "$ref": "#/$defs/frameTravelStitch",
+          "default": 4,
+          "x-id": "frameTravelStitch"
+        },
+        "cornice.passateScarico": {
+          "$ref": "#/$defs/frameReliefPasses",
+          "default": 5,
+          "x-id": "frameReliefPasses"
+        },
+        "bordatura.uscita": {
+          "$ref": "#/$defs/borderOutset",
+          "default": 0.5,
+          "x-id": "borderOutset"
+        },
+        "bordatura.sporgenzaEstremi": {
+          "$ref": "#/$defs/borderEndOverhang",
+          "default": 1.5,
+          "x-id": "borderEndOverhang"
+        },
+        "bordatura.passoObliquo": {
+          "$ref": "#/$defs/obliqueSatinPitch",
+          "default": 1,
+          "x-id": "obliqueSatinPitch"
+        },
+        "bordatura.angoloObliquo": {
+          "$ref": "#/$defs/obliqueSatinAngle",
+          "default": 45,
+          "x-id": "obliqueSatinAngle"
+        },
+        "bordatura.sbordoDritto": {
+          "$ref": "#/$defs/straightSatinOverhang",
+          "default": 0.5,
+          "x-id": "straightSatinOverhang"
+        },
+        "bordatura.passoDritto": {
+          "$ref": "#/$defs/straightSatinPitch",
+          "default": 0.7,
+          "x-id": "straightSatinPitch"
+        },
+        "bordatura.altezzaCordoncino": {
+          "$ref": "#/$defs/cordHeight",
+          "default": 1.2,
+          "x-id": "cordHeight"
+        },
+        "bordatura.passoCordoncino": {
+          "$ref": "#/$defs/cordPitch",
+          "default": 0.5,
+          "x-id": "cordPitch"
+        },
+        "bordatura.primaLinea": {
+          "$ref": "#/$defs/firstLineOffset",
+          "default": 1.4,
+          "x-id": "firstLineOffset"
+        },
+        "bordatura.distanzaLinee": {
+          "$ref": "#/$defs/lineSpacing",
+          "default": 2,
+          "x-id": "lineSpacing"
+        },
+        "bordatura.passoFermi": {
+          "$ref": "#/$defs/tackPitch",
+          "default": 0,
+          "x-id": "tackPitch"
+        },
+        "bordatura.passateLinea": {
+          "$ref": "#/$defs/borderLinePasses",
+          "default": 11,
+          "x-id": "borderLinePasses"
+        },
+        "bordatura.altezzaFermo": {
+          "$ref": "#/$defs/tackHeight",
+          "default": 2.3,
+          "x-id": "tackHeight"
+        }
+      }
+    },
+    "broccato": {
+      "type": "object",
+      "properties": {
+        "realWidthMm": {
+          "$ref": "#/$defs/realWidthMm",
+          "default": 0,
+          "title": "Larghezza reale del ricamo",
+          "description": "0 = usa la stima al DPI di stima. Se maggiore di 0 è la fonte di verità e prevale su qualsiasi stima."
+        },
+        "maxStitchMm": {
+          "$ref": "#/$defs/maxStitchMm",
+          "default": 3,
+          "title": "Lunghezza del punto",
+          "description": "Passo massimo lungo la riga: oltre si suddivide.",
+          "minimum": 0.5
+        },
+        "travelStitchMm": {
+          "$ref": "#/$defs/travelStitchMm",
+          "default": 3,
+          "title": "Passo dei passaggi",
+          "description": "Passo dei punti di passaggio."
+        },
+        "paletteMode": {
+          "$ref": "#/$defs/paletteMode",
+          "default": "auto",
+          "title": "Da dove vengono le tinte",
+          "description": "Automatiche: le trova il sistema. Manuali: le scegli tu col contagocce, e non vengono più ricatturate.",
+          "enum": [
+            "auto",
+            "manuale"
+          ]
+        },
+        "colorCount": {
+          "$ref": "#/$defs/colorCount",
+          "default": 6,
+          "title": "Numero di colori",
+          "description": "Quante tinte, base compresa.",
+          "minimum": 4,
+          "maximum": 8
+        },
+        "minStitchMm": {
+          "$ref": "#/$defs/minStitchMm",
+          "default": 1,
+          "description": "Imposto alla fine, dopo i passaggi."
+        },
+        "maxWidthPx": {
+          "$ref": "#/$defs/maxWidthPx",
+          "default": 900,
+          "description": "L'immagine si analizza ridotta a questa larghezza.",
+          "minimum": 100
+        },
+        "voidClearanceMm": {
+          "$ref": "#/$defs/voidClearanceMm",
+          "default": 0.3,
+          "title": "Distanza di sicurezza",
+          "description": "Distanza di sicurezza dal bordo e dalle aree vuote."
+        },
+        "dpiDefault": {
+          "$ref": "#/$defs/dpiDefault",
+          "default": 96
+        },
+        "flattenLightMm": {
+          "$ref": "#/$defs/flattenLightMm",
+          "default": 15
+        },
+        "smoothMm": {
+          "$ref": "#/$defs/smoothMm",
+          "default": 0.9
+        },
+        "minBlobMm2": {
+          "$ref": "#/$defs/minBlobMm2",
+          "default": 20
+        },
+        "fillAngleDeg": {
+          "$ref": "#/$defs/fillAngleDeg",
+          "default": 0
+        },
+        "retraceOffsetMm": {
+          "$ref": "#/$defs/retraceOffsetMm",
+          "default": 0.1
+        },
+        "endLockCount": {
+          "$ref": "#/$defs/endLockCount",
+          "default": 4
+        },
+        "endLockMm": {
+          "$ref": "#/$defs/endLockMm",
+          "default": 0.3
+        }
+      }
+    },
+    "sfrangiatura": {
+      "type": "object",
+      "properties": {
+        "seme": {
+          "$ref": "#/$defs/seed",
+          "default": 1,
+          "description": "Stessa variante = stesso identico ricamo. Cambiala per un’altra estrazione di lunghezze e aperture.",
+          "maximum": 9999,
+          "x-id": "seed"
+        },
+        "lunghezzaMinMm": {
+          "$ref": "#/$defs/fringeLengthMin",
+          "default": 2,
+          "x-id": "fringeLengthMin"
+        },
+        "lunghezzaMaxMm": {
+          "$ref": "#/$defs/fringeLengthMax",
+          "default": 6,
+          "x-id": "fringeLengthMax"
+        },
+        "aperturaMinDeg": {
+          "$ref": "#/$defs/fringeOpeningMin",
+          "default": 10,
+          "x-id": "fringeOpeningMin"
+        },
+        "aperturaMaxDeg": {
+          "$ref": "#/$defs/fringeOpeningMax",
+          "default": 30,
+          "x-id": "fringeOpeningMax"
+        },
+        "sormontoMm": {
+          "$ref": "#/$defs/fringeOverlap",
+          "default": 0,
+          "x-id": "fringeOverlap"
+        },
+        "pennelloMm": {
+          "$ref": "#/$defs/brushWidth",
+          "default": 6,
+          "x-id": "brushWidth"
+        }
+      }
+    },
+    "pettine": {
+      "type": "object",
+      "properties": {
+        "par.basiMm": {
+          "$ref": "#/$defs/baseSpacing",
+          "default": 2,
+          "x-id": "baseSpacing"
+        },
+        "par.passoMm": {
+          "$ref": "#/$defs/toothSpacing",
+          "default": 1.5,
+          "x-id": "toothSpacing"
+        },
+        "par.denteMinMm": {
+          "$ref": "#/$defs/toothMinLength",
+          "default": 3,
+          "x-id": "toothMinLength"
+        },
+        "par.denteMaxMm": {
+          "$ref": "#/$defs/toothMaxLength",
+          "default": 5,
+          "x-id": "toothMaxLength"
+        },
+        "par.aperturaDeg": {
+          "$ref": "#/$defs/toothOpening",
+          "default": 40,
+          "x-id": "toothOpening"
+        },
+        "par.nettoMm": {
+          "$ref": "#/$defs/toothSharpEdgeMm",
+          "default": 2.5,
+          "x-id": "toothSharpEdgeMm"
+        },
+        "par.denti": {
+          "$ref": "#/$defs/teeth",
+          "default": true,
+          "x-id": "teeth"
+        },
+        "par.dst": {
+          "$ref": "#/$defs/buildDst",
+          "default": true,
+          "x-id": "buildDst"
+        },
+        "par.sormontoMm": {
+          "$ref": "#/$defs/tintOverlap",
+          "default": 4,
+          "x-id": "tintOverlap"
+        },
+        "par.sconfinaMm": {
+          "$ref": "#/$defs/blockBleed",
+          "default": 1,
+          "x-id": "blockBleed"
+        },
+        "par.passaggioMaxMm": {
+          "$ref": "#/$defs/passMaxMm",
+          "default": 30,
+          "x-id": "passMaxMm"
+        },
+        "par.passaggioNascostoMm": {
+          "$ref": "#/$defs/hiddenPassMaxMm",
+          "default": 400,
+          "x-id": "hiddenPassMaxMm"
+        },
+        "par.golaMm": {
+          "$ref": "#/$defs/gapCrossMm",
+          "default": 30,
+          "x-id": "gapCrossMm"
+        },
+        "par.senzaPassaggiUltimiColori": {
+          "$ref": "#/$defs/noPassLastColors",
+          "default": 0,
+          "x-id": "noPassLastColors"
+        },
+        "par.tintaMinimaMm": {
+          "$ref": "#/$defs/minTintRunMm",
+          "default": 6,
+          "x-id": "minTintRunMm"
+        },
+        "par.spianaMm": {
+          "$ref": "#/$defs/smoothFlattenMm",
+          "default": 5,
+          "x-id": "smoothFlattenMm"
+        },
+        "par.chiudiMm": {
+          "$ref": "#/$defs/smoothCloseMm",
+          "default": 3,
+          "x-id": "smoothCloseMm"
+        },
+        "par.addolcisciMm": {
+          "$ref": "#/$defs/smoothGrowth",
+          "default": 0.15,
+          "x-id": "smoothGrowth"
+        },
+        "par.lisciaMaxMm": {
+          "$ref": "#/$defs/smoothMaxMm",
+          "default": 8,
+          "x-id": "smoothMaxMm"
+        },
+        "par.traslaMaxMm2": {
+          "$ref": "#/$defs/translateMaxAreaMm2",
+          "default": 9000,
+          "x-id": "translateMaxAreaMm2"
+        },
+        "par.modo": {
+          "$ref": "#/$defs/buildMode",
+          "default": "auto",
+          "x-id": "buildMode"
+        },
+        "par.mostraNudi": {
+          "$ref": "#/$defs/showBare",
+          "default": false,
+          "x-id": "showBare"
+        },
+        "par.mostraPassaggi": {
+          "$ref": "#/$defs/showPasses",
+          "default": true,
+          "x-id": "showPasses"
+        }
+      }
+    },
+    "razza": {
+      "type": "object",
+      "properties": {
+        "seed": {
+          "$ref": "#/$defs/seed",
+          "default": 1,
+          "title": "Seme del caso",
+          "description": "stesso seme = stesso ricamo",
+          "minimum": 0,
+          "maximum": 99999
+        },
+        "modoPassaggio": {
+          "$ref": "#/$defs/travelMode",
+          "default": "scegli",
+          "title": "Passaggio fra i pallini",
+          "description": "Il meno visibile, dentro il pallino cucito, oppure dritto.",
+          "enum": [
+            "scegli",
+            "dentro",
+            "diretto"
+          ],
+          "x-id": "travelMode"
+        },
+        "diamMinMm": {
+          "$ref": "#/$defs/dotMinDiameter",
+          "default": 2.4,
+          "x-id": "dotMinDiameter"
+        },
+        "diamMaxMm": {
+          "$ref": "#/$defs/dotMaxDiameter",
+          "default": 8,
+          "x-id": "dotMaxDiameter"
+        },
+        "gapMm": {
+          "$ref": "#/$defs/dotGap",
+          "default": 0,
+          "x-id": "dotGap"
+        },
+        "aspetto": {
+          "$ref": "#/$defs/dotAspect",
+          "default": 1,
+          "x-id": "dotAspect"
+        },
+        "profilo": {
+          "$ref": "#/$defs/dotProfile",
+          "default": 2,
+          "x-id": "dotProfile"
+        },
+        "irregolarita": {
+          "$ref": "#/$defs/diameterIrregularity",
+          "default": 0.25,
+          "x-id": "diameterIrregularity"
+        },
+        "modoCampo": {
+          "$ref": "#/$defs/fieldMode",
+          "default": "bordo",
+          "x-id": "fieldMode"
+        },
+        "profonditaMm": {
+          "$ref": "#/$defs/edgeDepth",
+          "default": 0,
+          "x-id": "edgeDepth"
+        },
+        "curvaBordo": {
+          "$ref": "#/$defs/edgeCurve",
+          "default": 1,
+          "x-id": "edgeCurve"
+        },
+        "rumoreCampo": {
+          "$ref": "#/$defs/fieldNoise",
+          "default": 0.25,
+          "x-id": "fieldNoise"
+        },
+        "scalaCampoMm": {
+          "$ref": "#/$defs/fieldNoiseScale",
+          "default": 40,
+          "x-id": "fieldNoiseScale"
+        },
+        "pesoSfumature": {
+          "$ref": "#/$defs/gradientWeight",
+          "default": 1,
+          "x-id": "gradientWeight"
+        },
+        "influenzaFissiMm": {
+          "$ref": "#/$defs/fixedDotInfluence",
+          "default": 25,
+          "x-id": "fixedDotInfluence"
+        },
+        "densitySpacingMm": {
+          "$ref": "#/$defs/densitySpacing",
+          "default": 0.4,
+          "x-id": "densitySpacing"
+        },
+        "minStitchMm": {
+          "$ref": "#/$defs/minStitchLength",
+          "default": 0.8,
+          "x-id": "minStitchLength"
+        },
+        "maxStitchMm": {
+          "$ref": "#/$defs/maxStitchLength",
+          "default": 3,
+          "x-id": "maxStitchLength"
+        },
+        "modoAngolo": {
+          "$ref": "#/$defs/axisMode",
+          "default": "percorso",
+          "x-id": "axisMode"
+        },
+        "pesoSopra": {
+          "$ref": "#/$defs/overStitchedCost",
+          "default": 3,
+          "x-id": "overStitchedCost"
+        },
+        "margineMm": {
+          "$ref": "#/$defs/edgeMargin",
+          "default": 0.3,
+          "x-id": "edgeMargin"
+        },
+        "crescita": {
+          "$ref": "#/$defs/dotGrowth",
+          "default": 1.3,
+          "x-id": "dotGrowth"
+        },
+        "rapportoMinimo": {
+          "$ref": "#/$defs/dotMinRatio",
+          "default": 0.3,
+          "x-id": "dotMinRatio"
+        }
+      }
+    },
+    "pattern-macchie": {
+      "type": "object",
+      "properties": {
+        "rasoAngolo": {
+          "$ref": "#/$defs/satinAngle",
+          "default": 90,
+          "x-id": "satinAngle"
+        },
+        "rasoInterlinea": {
+          "$ref": "#/$defs/satinRowSpacing",
+          "default": 0.4,
+          "x-id": "satinRowSpacing"
+        },
+        "rasoPuntoMax": {
+          "$ref": "#/$defs/satinMaxStitch",
+          "default": 4,
+          "x-id": "satinMaxStitch"
+        },
+        "sfrangiatura": {
+          "$ref": "#/$defs/fringeAmount",
+          "default": 1,
+          "x-id": "fringeAmount"
+        },
+        "sfrangiaturaFuori": {
+          "$ref": "#/$defs/fringeOutsidePercent",
+          "default": 50,
+          "x-id": "fringeOutsidePercent"
+        },
+        "passaggioMax": {
+          "$ref": "#/$defs/hiddenPassMax",
+          "default": 100,
+          "x-id": "hiddenPassMax"
+        },
+        "pezzoMinimo": {
+          "$ref": "#/$defs/minDetachedPiece",
+          "default": 3,
+          "x-id": "minDetachedPiece"
+        },
+        "ponti": {
+          "$ref": "#/$defs/bridgeMaxGap",
+          "default": 0,
+          "x-id": "bridgeMaxGap"
+        },
+        "pontiLarghezza": {
+          "$ref": "#/$defs/bridgeWidth",
+          "default": 2,
+          "x-id": "bridgeWidth"
+        },
+        "bucaLaBase": {
+          "$ref": "#/$defs/cutBaseUnderSpots",
+          "default": false,
+          "x-id": "cutBaseUnderSpots"
+        },
+        "margineBase": {
+          "$ref": "#/$defs/baseCutMargin",
+          "default": 2,
+          "x-id": "baseCutMargin"
+        }
+      }
+    },
+    "pittorico": {
+      "type": "object",
+      "properties": {
+        "travelStitchMm": {
+          "$ref": "#/$defs/travelStitch",
+          "default": 2.5,
+          "title": "Passo dei punti di passaggio",
+          "description": "Lunghezza dei punti dei passaggi",
+          "x-id": "travelStitch"
+        },
+        "minStitchMm": {
+          "$ref": "#/$defs/minStitch",
+          "default": 1,
+          "description": "Si impone dopo il routing, mai prima",
+          "x-id": "minStitch"
+        },
+        "realWidthMm": {
+          "$ref": "#/$defs/realWidth",
+          "default": 0,
+          "title": "Larghezza reale del ricamo",
+          "description": "0 = un pixel vale un millimetro. È la misura che comanda: senza, le altre non significano niente",
+          "x-id": "realWidth"
+        },
+        "maxStitchMm": {
+          "$ref": "#/$defs/maxStitch",
+          "default": 3,
+          "title": "Punto massimo",
+          "description": "lungo il filo",
+          "minimum": 0.5,
+          "maximum": 8,
+          "x-id": "maxStitch"
+        },
+        "colorCount": {
+          "$ref": "#/$defs/colorCount",
+          "default": 4,
+          "title": "Quanti fili",
+          "description": "ogni tinta è un ago",
+          "minimum": 2,
+          "maximum": 8
+        },
+        "minAreaMm2": {
+          "$ref": "#/$defs/minPatchArea",
+          "default": 400,
+          "x-id": "minPatchArea"
+        },
+        "flattenLightMm": {
+          "$ref": "#/$defs/lightFlattening",
+          "default": 40,
+          "x-id": "lightFlattening"
+        },
+        "smoothMm": {
+          "$ref": "#/$defs/grainSmoothing",
+          "default": 1.5,
+          "x-id": "grainSmoothing"
+        },
+        "densitySpacingMm": {
+          "$ref": "#/$defs/rowSpacing",
+          "default": 0.3,
+          "x-id": "rowSpacing"
+        },
+        "maxInternalTravelMm": {
+          "$ref": "#/$defs/maxInternalTravel",
+          "default": 50,
+          "x-id": "maxInternalTravel"
+        },
+        "frangiaMm": {
+          "$ref": "#/$defs/fringeLength",
+          "default": 5,
+          "x-id": "fringeLength"
+        },
+        "lisciaBordiMm": {
+          "$ref": "#/$defs/outlineSmoothing",
+          "default": 0,
+          "x-id": "outlineSmoothing"
+        },
+        "sogliaSfumaturaMm": {
+          "$ref": "#/$defs/gradientThreshold",
+          "default": 1.5,
+          "x-id": "gradientThreshold"
+        },
+        "crescitaMm": {
+          "$ref": "#/$defs/gradientOverlap",
+          "default": 5,
+          "x-id": "gradientOverlap"
+        },
+        "sormontoMm": {
+          "$ref": "#/$defs/edgeOverlap",
+          "default": 1.5,
+          "x-id": "edgeOverlap"
+        },
+        "maxVisibleTravelMm": {
+          "$ref": "#/$defs/maxVisibleTravel",
+          "default": 400,
+          "x-id": "maxVisibleTravel"
+        },
+        "maxVisibleTravelUltimoMm": {
+          "$ref": "#/$defs/maxVisibleTravelLastNeedle",
+          "default": 5,
+          "x-id": "maxVisibleTravelLastNeedle"
+        },
+        "riempimentoContinuo": {
+          "$ref": "#/$defs/continuousFill",
+          "default": true,
+          "x-id": "continuousFill"
+        },
+        "metodoRiempimento": {
+          "$ref": "#/$defs/fillMethod",
+          "default": "fasce",
+          "x-id": "fillMethod"
+        },
+        "rotazioneMassimaGradi": {
+          "$ref": "#/$defs/maxAxisRotation",
+          "default": 70,
+          "x-id": "maxAxisRotation"
+        },
+        "larghezzaColonnaMm": {
+          "$ref": "#/$defs/maxColumnWidth",
+          "default": 24,
+          "x-id": "maxColumnWidth"
+        },
+        "derivaMassima": {
+          "$ref": "#/$defs/maxBandDrift",
+          "default": 0.2,
+          "x-id": "maxBandDrift"
+        },
+        "fasciaMm": {
+          "$ref": "#/$defs/bandReseed",
+          "default": 15,
+          "x-id": "bandReseed"
+        },
+        "viaPassaggi": {
+          "$ref": "#/$defs/travelRoute",
+          "default": "interno",
+          "x-id": "travelRoute"
+        },
+        "margineDalBordoMm": {
+          "$ref": "#/$defs/travelEdgeMargin",
+          "default": 2,
+          "x-id": "travelEdgeMargin"
+        },
+        "cuciPassaggi": {
+          "$ref": "#/$defs/sewTravel",
+          "default": true,
+          "x-id": "sewTravel"
+        }
+      }
+    }
+  },
+  "$defs": {
+    "squareSize": {
+      "type": "number",
+      "title": "Lato del quadrato",
+      "description": "Lato del quadrato della rete («larghezza rete»).",
+      "x-unita": "mm",
+      "x-passo": 0.5,
+      "x-concetto": "modulo"
+    },
+    "angleA": {
+      "type": "number",
+      "title": "Angolo diagonali principali",
+      "description": "Angolo della prima famiglia di diagonali della rete.",
+      "x-unita": "deg",
+      "x-passo": 1,
+      "x-concetto": "angolo"
+    },
+    "angleB": {
+      "type": "number",
+      "title": "Angolo diagonali secondarie",
+      "description": "Angolo della seconda famiglia di diagonali della rete.",
+      "x-unita": "deg",
+      "x-passo": 1,
+      "x-concetto": "angolo"
+    },
+    "netInset": {
+      "type": "number",
+      "title": "Rientro della rete dal bordo",
+      "description": "Inizio e fine della rete: rientro dal perimetro.",
+      "x-unita": "mm",
+      "x-passo": 0.5,
+      "x-concetto": "rientro"
+    },
+    "netOffsetX": {
+      "type": "number",
+      "title": "Sposta rete — orizzontale",
+      "description": "Spostamento orizzontale della griglia rispetto al disegno importato.",
+      "x-unita": "mm",
+      "x-passo": 1,
+      "x-concetto": "spostamento"
+    },
+    "netOffsetY": {
+      "type": "number",
+      "title": "Sposta rete — verticale",
+      "description": "Spostamento verticale della griglia rispetto al disegno importato.",
+      "x-unita": "mm",
+      "x-passo": 1,
+      "x-concetto": "spostamento"
+    },
+    "satinBand": {
+      "type": "number",
+      "title": "Spessore della fascia di raso",
+      "description": "Spessore della fascia di bordo dove le celle diventano raso (0 = nessuna).",
+      "x-unita": "mm",
+      "x-passo": 1,
+      "x-concetto": "rientro"
+    },
+    "satinDownwardOnly": {
+      "type": "integer",
+      "title": "Raso solo sui bordi bassi e laterali",
+      "description": "Il raso solo sui bordi rivolti in basso e ai lati, non in alto; spento = tutti i bordi. Salvato come 1/0.",
+      "minimum": 0,
+      "maximum": 1,
+      "x-passo": 1,
+      "x-concetto": "interruttore"
+    },
+    "cordWidth": {
+      "type": "number",
+      "title": "Larghezza del cordoncino",
+      "description": "Larghezza del cordoncino della rete.",
+      "x-unita": "mm",
+      "x-passo": 0.1,
+      "x-concetto": "larghezza-punto"
+    },
+    "cordInterline": {
+      "type": "number",
+      "title": "Interlinea del cordoncino",
+      "description": "Distanza tra un punto e il successivo lungo il filo.",
+      "x-unita": "mm",
+      "x-passo": 0.05,
+      "x-regole": [
+        "R30"
+      ],
+      "x-concetto": "interlinea"
+    },
+    "travelStitch": {
+      "type": "number",
+      "title": "Lunghezza del punto nei passaggi",
+      "description": "Lunghezza dei punti dei passaggi (travel).",
+      "x-unita": "mm",
+      "x-passo": 0.5,
+      "x-concetto": "punto-passaggio"
+    },
+    "minStitch": {
+      "type": "number",
+      "title": "Punto minimo",
+      "description": "Lunghezza minima di un punto.",
+      "x-unita": "mm",
+      "x-passo": 0.1,
+      "x-regole": [
+        "R3"
+      ],
+      "x-concetto": "punto-minimo"
+    },
+    "realWidth": {
+      "type": "number",
+      "title": "Larghezza reale (0 = auto)",
+      "description": "0 = usa la misura letta dal file.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-regole": [
+        "R11"
+      ],
+      "x-concetto": "misura-reale"
+    },
+    "totalWidth": {
+      "type": "number",
+      "title": "Larghezza totale",
+      "description": "Larghezza del piano del pattern.",
+      "x-unita": "mm",
+      "minimum": 10,
+      "x-passo": 1,
+      "x-concetto": "formato"
+    },
+    "totalHeight": {
+      "type": "number",
+      "title": "Altezza totale",
+      "description": "Altezza del piano del pattern.",
+      "x-unita": "mm",
+      "minimum": 10,
+      "x-passo": 1,
+      "x-concetto": "formato"
+    },
+    "parameterScalePercent": {
+      "type": "number",
+      "title": "Ingrandisci tutti i parametri",
+      "description": "Non cambia la dimensione totale del piano.",
+      "x-unita": "%",
+      "minimum": 1,
+      "x-passo": 1,
+      "x-concetto": "scala"
+    },
+    "horizontalZigzagWidth": {
+      "type": "number",
+      "title": "Zig-zag orizzontale: larghezza",
+      "description": "Larghezza di un modulo di zig-zag orizzontale.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "x-passo": 0.1,
+      "x-concetto": "modulo"
+    },
+    "horizontalZigzagHeight": {
+      "type": "number",
+      "title": "Zig-zag orizzontale: altezza",
+      "description": "Altezza di un modulo di zig-zag orizzontale.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-concetto": "modulo"
+    },
+    "horizontalZigzagInterline": {
+      "type": "number",
+      "title": "Zig-zag orizzontale: interlinea filo",
+      "description": "Distanza fra due passate adiacenti del filo del zig-zag orizzontale.",
+      "x-unita": "mm",
+      "minimum": 0.05,
+      "x-passo": 0.01,
+      "x-regole": [
+        "R30"
+      ],
+      "x-concetto": "interlinea"
+    },
+    "horizontalZigzagPassCount": {
+      "type": "integer",
+      "title": "Zig-zag orizzontale: passaggi del filo",
+      "description": "Conta ogni andata e ogni ritorno sul tratto: 2 = un’andata e un ritorno, 4 = due e due; a qualunque altezza, anche 0, e l’interlinea non conta. 0 = dall’interlinea",
+      "minimum": 0,
+      "x-passo": 2,
+      "x-concetto": "interlinea"
+    },
+    "horizontalZigzagOffsetX": {
+      "type": "number",
+      "title": "Spostamento dal centro",
+      "description": "Sposta a sinistra l’origine del zig-zag orizzontale rispetto alla sua colonna.",
+      "x-unita": "mm",
+      "x-passo": 0.1,
+      "x-concetto": "spostamento"
+    },
+    "horizontalZigzagSpacing": {
+      "type": "number",
+      "title": "Distanza tra gli zig-zag",
+      "description": "Distanza, centro a centro, fra zig-zag orizzontali consecutivi.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 0.1,
+      "x-concetto": "modulo"
+    },
+    "verticalZigzagWidth": {
+      "type": "number",
+      "title": "Zig-zag verticale: larghezza",
+      "description": "Larghezza dello zig-zag verticale.",
+      "x-unita": "mm",
+      "minimum": 0.1,
+      "x-passo": 0.1,
+      "x-concetto": "modulo"
+    },
+    "verticalZigzagInterline": {
+      "type": "number",
+      "title": "Zig-zag verticale: interlinea filo",
+      "description": "Distanza fra due passate adiacenti del filo del zig-zag verticale.",
+      "x-unita": "mm",
+      "minimum": 0.05,
+      "x-passo": 0.01,
+      "x-regole": [
+        "R30"
+      ],
+      "x-concetto": "interlinea"
+    },
+    "verticalConnectorDiagonalOffsetY": {
+      "type": "number",
+      "title": "Inclinazione del raccordo",
+      "description": "Rende diagonale il raccordo fra due blocchi verticali consecutivi.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-concetto": "modulo"
+    },
+    "stepX": {
+      "type": "number",
+      "title": "Distanza tra le colonne",
+      "description": "Distanza fra le colonne del pattern.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "x-passo": 0.1,
+      "x-concetto": "modulo"
+    },
+    "offsetY": {
+      "type": "number",
+      "title": "Sfasamento tra colonne",
+      "description": "Di quanto è sfasata in verticale una colonna rispetto alla vicina.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-concetto": "spostamento"
+    },
+    "horizontalAngleDeg": {
+      "type": "number",
+      "title": "Inclinazione dello zig-zag orizzontale",
+      "description": "Inclina lo zig-zag orizzontale.",
+      "x-unita": "deg",
+      "x-passo": 1,
+      "x-concetto": "angolo"
+    },
+    "columnWaveAmplitude": {
+      "type": "number",
+      "title": "Ampiezza dell’onda",
+      "description": "Ampiezza dell’onda con cui ondeggiano le colonne.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-concetto": "modulo"
+    },
+    "columnWaveLength": {
+      "type": "number",
+      "title": "Lunghezza d’onda",
+      "description": "Ogni quanti mm si ripete l’onda.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 1,
+      "x-concetto": "modulo"
+    },
+    "columnWavePhase": {
+      "type": "number",
+      "title": "Fase",
+      "description": "Fase dell’onda delle colonne.",
+      "x-unita": "deg",
+      "x-passo": 5,
+      "x-concetto": "angolo"
+    },
+    "alternateHorizontalAngle": {
+      "type": "boolean",
+      "title": "Inverti l’inclinazione a colonne alterne",
+      "description": "Inverte il verso dell’inclinazione dello zig-zag orizzontale una colonna sì e una no.",
+      "x-concetto": "interruttore"
+    },
+    "variationSidesPercent": {
+      "type": "number",
+      "title": "Misura ai lati",
+      "description": "Tratto, distanza fra le colonne e fra i tratti ai bordi destro e sinistro; 100 = come il pattern.",
+      "x-unita": "%",
+      "minimum": 10,
+      "x-passo": 5,
+      "x-concetto": "scala"
+    },
+    "variationCenterPercent": {
+      "type": "number",
+      "title": "Misura al centro",
+      "description": "Lo stesso al centro; in mezzo la misura sfuma da sola, senza stacchi.",
+      "x-unita": "%",
+      "minimum": 10,
+      "x-passo": 5,
+      "x-concetto": "scala"
+    },
+    "variationIrregularityPercent": {
+      "type": "number",
+      "title": "Irregolarità",
+      "description": "Le colonne ondeggiano e le distanze respirano, in modo morbido, in tutte le direzioni; 0 = niente.",
+      "x-unita": "%",
+      "minimum": 0,
+      "x-passo": 10,
+      "x-concetto": "variazione"
+    },
+    "strokeAngleJitterDeg": {
+      "type": "number",
+      "title": "Inclinazione variabile del tratto",
+      "description": "Di quanto al massimo il tratto orizzontale si inclina, a zone; 0 = sempre dritto.",
+      "x-unita": "deg",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "variazione"
+    },
+    "variationPassCountSides": {
+      "type": "integer",
+      "title": "Passaggi del filo ai lati",
+      "description": "Come «Passaggi del filo» dello zig-zag orizzontale, ma solo ai lati; 0 = come il pattern.",
+      "minimum": 0,
+      "x-passo": 2,
+      "x-concetto": "interlinea"
+    },
+    "variationPassCountCenter": {
+      "type": "integer",
+      "title": "Passaggi del filo al centro",
+      "description": "Lo stesso al centro; in mezzo c’è una fascia in cui ogni tratto ne ha a volte di più a volte di meno, sempre più vicino al centro.",
+      "minimum": 0,
+      "x-passo": 2,
+      "x-concetto": "interlinea"
+    },
+    "variationSeed": {
+      "type": "integer",
+      "title": "Variante",
+      "description": "Un altro numero dà un’altra disposizione con gli stessi valori.",
+      "minimum": 1,
+      "x-passo": 1,
+      "x-concetto": "seme"
+    },
+    "repeatBack": {
+      "type": "boolean",
+      "title": "Andata e ritorno (serpentina)",
+      "description": "Percorre le colonne a serpentina, in andata e ritorno, senza cambiare le coordinate del modulo.",
+      "x-concetto": "ordine-cucitura"
+    },
+    "maxStitch": {
+      "type": "number",
+      "title": "Lunghezza massima del punto",
+      "description": "Oltre questa lunghezza il punto si suddivide in punti uguali; 0 = non suddivide.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-regole": [
+        "R4"
+      ],
+      "x-concetto": "punto-massimo"
+    },
+    "constructionStroke": {
+      "type": "number",
+      "title": "Spessore di costruzione",
+      "description": "Regola rientri, margini e raccordi — non è il filo disegnato.",
+      "x-unita": "mm",
+      "minimum": 0.05,
+      "x-passo": 0.05,
+      "x-concetto": "altro"
+    },
+    "boundaryCleanupMode": {
+      "type": "string",
+      "title": "Punti fuori dal contorno",
+      "description": "Cosa fare dei punti che cadono fuori dal contorno.",
+      "enum": [
+        "adjust-then-delete",
+        "delete"
+      ],
+      "x-concetto": "tolleranza"
+    },
+    "maxBoundaryAdjustment": {
+      "type": "number",
+      "title": "Spostamento massimo verso il bordo",
+      "description": "Di quanto al massimo un punto fuori dal contorno viene avvicinato al bordo prima di eliminarlo.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.01,
+      "x-concetto": "tolleranza"
+    },
+    "reliefPercent": {
+      "type": "number",
+      "title": "Scarico nelle aree",
+      "description": "Dentro le tinte marcate «Area di scarico» i zig-zag verticali e orizzontali hanno meno passate: 50 = metà; 0 = niente.",
+      "x-unita": "%",
+      "minimum": 0,
+      "x-passo": 5,
+      "x-regole": [
+        "R28"
+      ],
+      "x-concetto": "aree-di-scarico"
+    },
+    "voidStitchMm": {
+      "type": "number",
+      "title": "Impuntura nelle aree vuote",
+      "description": "Dentro le tinte marcate «Area vuota» il pattern diventa un’impuntura dritta con questo punto, e riprende fuori; 0 = dentro non si cuce.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-regole": [
+        "R5"
+      ],
+      "x-concetto": "aree-vuote"
+    },
+    "exportCompatibilityMode": {
+      "type": "string",
+      "title": "Compatibilità export",
+      "description": "Come si scrive il file esportato: normale o sicuro per Illustrator.",
+      "enum": [
+        "normal",
+        "illustrator-safe"
+      ],
+      "x-concetto": "altro"
+    },
+    "shapeType": {
+      "type": "string",
+      "title": "Sagoma di ritaglio",
+      "description": "La sagoma che ritaglia il pattern: nessuna, rettangolo, cerchio, rombo o il contorno importato da DXF/SVG.",
+      "enum": [
+        "none",
+        "rectangle",
+        "circle",
+        "diamond",
+        "imported"
+      ],
+      "x-concetto": "altro"
+    },
+    "density": {
+      "type": "number",
+      "title": "Densità (distanza tra le file di filo)",
+      "description": "densità di ogni colore, ~0.8–4 mm: piccola = fitto; ~3 è il più rado ancora omogeneo (oltre si ammassa)",
+      "x-unita": "mm",
+      "x-passo": 0.1,
+      "x-regole": [
+        "R22"
+      ],
+      "x-concetto": "densita"
+    },
+    "voidClearance": {
+      "type": "number",
+      "title": "Distanza di sicurezza da bordi e vuoti",
+      "description": "distanza minima da bordi e aree vuote",
+      "x-unita": "mm",
+      "x-passo": 0.1,
+      "x-regole": [
+        "R5",
+        "R7"
+      ],
+      "x-concetto": "aree-vuote"
+    },
+    "seed": {
+      "type": "integer",
+      "title": "Variante",
+      "description": "stessa variante = stesso identico pattern; cambiala per una disposizione diversa (riproducibile, non casuale)",
+      "minimum": 1,
+      "x-passo": 1,
+      "x-concetto": "seme"
+    },
+    "paletteCycles": {
+      "type": "integer",
+      "title": "Ripetizioni della sequenza",
+      "description": "quante volte l’intera sequenza di colori si ripete lungo il tracciato (genera i cambi-ago)",
+      "minimum": 1,
+      "x-passo": 1,
+      "x-concetto": "colori"
+    },
+    "clusterMode": {
+      "type": "boolean",
+      "title": "Distribuzione dei colori",
+      "description": "Uniforme: mélange omogeneo. Agglomerati: ogni colore si addensa in zone → sfumature di colore.",
+      "x-concetto": "colori"
+    },
+    "clusterStrength": {
+      "type": "number",
+      "title": "Intensità agglomerati",
+      "description": "quanto i colori si separano in zone: basso = appena accennate, alto = molto marcate",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 100,
+      "x-passo": 5,
+      "x-concetto": "colori"
+    },
+    "zoneOverlap": {
+      "type": "number",
+      "title": "Sormonto ai bordi delle zone",
+      "description": "di quanto un filo sconfina oltre il bordo di una zona vietata, posandoci una passata, perché due colori testa a testa non lascino una fessura. Vuoto (null) = automatico: 0,6 × la densità, una fila di celle. 0 = confine netto.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-concetto": "sovrapposizione"
+    },
+    "maxStitchesPerArea": {
+      "type": "integer",
+      "title": "Tetto ai punti (buchi d’ago per mm²)",
+      "description": "quanti punti al massimo può prendere lo stesso millimetro quadro, contando tutti i colori insieme: è lì che il filo si spezza e l’ago soffre. Vuoto (null) = automatico. 0 = nessun tetto.",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "altro"
+    },
+    "excludeBackground": {
+      "type": "boolean",
+      "title": "Lascia lo sfondo senza ricamo",
+      "description": "i punti dell’immagine vicini al colore di sfondo restano tessuto a vista: nessun filo ci cuce e nessuno ci passa sopra.",
+      "x-concetto": "immagine"
+    },
+    "backgroundColor": {
+      "type": "string",
+      "title": "Colore dello sfondo",
+      "description": "il colore dei punti dell’immagine che restano senza ricamo (con “Lascia lo sfondo senza ricamo”).",
+      "x-concetto": "immagine"
+    },
+    "backgroundTolerance": {
+      "type": "number",
+      "title": "Tolleranza dello sfondo (distanza RGB)",
+      "description": "quanto è largo il raggio attorno al colore di sfondo.",
+      "minimum": 0,
+      "x-passo": 5,
+      "x-concetto": "immagine"
+    },
+    "panelWidth": {
+      "type": "number",
+      "title": "Pannello larghezza",
+      "description": "Larghezza del formato di lavoro; se c’è un cartamodello il formato nasce dal suo ingombro.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 1,
+      "x-concetto": "formato"
+    },
+    "panelHeight": {
+      "type": "number",
+      "title": "Pannello altezza",
+      "description": "Altezza del formato di lavoro; se c’è un cartamodello il formato nasce dal suo ingombro.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 1,
+      "x-concetto": "formato"
+    },
+    "panelOriginX": {
+      "type": "number",
+      "title": "Origine pannello X",
+      "description": "Origine X del formato pannello.",
+      "x-unita": "mm",
+      "x-concetto": "formato"
+    },
+    "panelOriginY": {
+      "type": "number",
+      "title": "Origine pannello Y",
+      "description": "Origine Y del formato pannello.",
+      "x-unita": "mm",
+      "x-concetto": "formato"
+    },
+    "realWidthMm": {
+      "type": "number",
+      "title": "Larghezza reale del cartamodello",
+      "description": "0 = usa la misura letta dal file. Se l’SVG non dichiara width/height la misura è una stima: scrivi qui la larghezza vera e comanda quella.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-regole": [
+        "R11"
+      ],
+      "x-concetto": "misura-reale"
+    },
+    "overflowMarginMm": {
+      "type": "number",
+      "title": "Margine di espansione della griglia",
+      "description": "Margine oltre il formato su cui si estende la griglia dei moduli (riempimento automatico).",
+      "x-unita": "mm",
+      "x-concetto": "rientro"
+    },
+    "gridVectorAX": {
+      "type": "number",
+      "title": "Vettore A, X",
+      "description": "Passo X del vettore A della griglia diagonale (da un modulo al successivo lungo la diagonale).",
+      "x-unita": "mm",
+      "x-concetto": "modulo"
+    },
+    "gridVectorAY": {
+      "type": "number",
+      "title": "Vettore A, Y",
+      "description": "Passo Y del vettore A della griglia diagonale.",
+      "x-unita": "mm",
+      "x-concetto": "modulo"
+    },
+    "gridVectorBX": {
+      "type": "number",
+      "title": "Vettore B, X",
+      "description": "Passo X del vettore B della griglia (da una diagonale alla successiva).",
+      "x-unita": "mm",
+      "x-concetto": "modulo"
+    },
+    "gridVectorBY": {
+      "type": "number",
+      "title": "Vettore B, Y",
+      "description": "Passo Y del vettore B della griglia.",
+      "x-unita": "mm",
+      "x-concetto": "modulo"
+    },
+    "horizontalGap": {
+      "type": "number",
+      "title": "Spazio orizzontale",
+      "description": "Si somma al passo X del vettore A (spazio fra moduli).",
+      "x-unita": "mm",
+      "x-concetto": "modulo"
+    },
+    "verticalGap": {
+      "type": "number",
+      "title": "Spazio verticale",
+      "description": "Si somma al passo Y del vettore A (spazio fra moduli).",
+      "x-unita": "mm",
+      "x-concetto": "modulo"
+    },
+    "horizontalOverlap": {
+      "type": "number",
+      "title": "Sovrapposizione orizzontale",
+      "description": "Si sottrae al passo X del vettore A (moduli che si sovrappongono).",
+      "x-unita": "mm",
+      "x-concetto": "sovrapposizione"
+    },
+    "verticalOverlap": {
+      "type": "number",
+      "title": "Sovrapposizione verticale",
+      "description": "Si sottrae al passo Y del vettore A (moduli che si sovrappongono).",
+      "x-unita": "mm",
+      "x-concetto": "sovrapposizione"
+    },
+    "rowShiftX": {
+      "type": "number",
+      "title": "Sfalsamento righe X",
+      "description": "Si somma al passo X del vettore B (sfalsa una diagonale dalla successiva).",
+      "x-unita": "mm",
+      "x-concetto": "spostamento"
+    },
+    "rowShiftY": {
+      "type": "number",
+      "title": "Sfalsamento righe Y",
+      "description": "Si somma al passo Y del vettore B (sfalsa una diagonale dalla successiva).",
+      "x-unita": "mm",
+      "x-concetto": "spostamento"
+    },
+    "gridStartOffsetX": {
+      "type": "number",
+      "title": "Partenza griglia X",
+      "description": "Spostamento X del primo modulo rispetto all’angolo della griglia espansa.",
+      "x-unita": "mm",
+      "x-concetto": "spostamento"
+    },
+    "gridStartOffsetY": {
+      "type": "number",
+      "title": "Partenza griglia Y",
+      "description": "Spostamento Y del primo modulo rispetto all’angolo della griglia espansa.",
+      "x-unita": "mm",
+      "x-concetto": "spostamento"
+    },
+    "rotation": {
+      "type": "number",
+      "title": "Rotazione moduli",
+      "description": "Rotazione di ogni modulo attorno alla sua ancora.",
+      "x-unita": "deg",
+      "x-concetto": "angolo"
+    },
+    "autoFillDiagonals": {
+      "type": "boolean",
+      "title": "Numero di diagonali automatico",
+      "description": "Se acceso il numero di diagonali si calcola per coprire il formato; se spento vale il numero di diagonali impostato.",
+      "x-concetto": "interruttore"
+    },
+    "autoModulesPerDiagonal": {
+      "type": "boolean",
+      "title": "Moduli per diagonale automatici",
+      "description": "Se acceso il numero di moduli per diagonale si calcola per coprire il formato; se spento vale il numero impostato.",
+      "x-concetto": "interruttore"
+    },
+    "diagonalCount": {
+      "type": "integer",
+      "title": "Numero di diagonali",
+      "description": "Quante diagonali di moduli (usato se il calcolo automatico è spento).",
+      "minimum": 1,
+      "x-concetto": "modulo"
+    },
+    "modulesPerDiagonal": {
+      "type": "integer",
+      "title": "Moduli per diagonale",
+      "description": "Quanti moduli per diagonale (usato se il calcolo automatico è spento).",
+      "minimum": 1,
+      "x-concetto": "modulo"
+    },
+    "moduleScale": {
+      "type": "number",
+      "title": "Scala moduli",
+      "description": "Fattore di scala dei moduli (vale per il Livello 1 e 2; Livello 0 e fori hanno la loro).",
+      "x-unita": "rapporto",
+      "x-concetto": "scala"
+    },
+    "anchorMode": {
+      "type": "string",
+      "title": "Ancora del modulo",
+      "description": "Punto del modulo che si appoggia sulla griglia: centro del suo ingombro, manuale o origine del viewBox.",
+      "enum": [
+        "bbox_center",
+        "manual",
+        "viewbox"
+      ],
+      "x-concetto": "modulo"
+    },
+    "manualAnchorX": {
+      "type": "number",
+      "title": "Ancora manuale X",
+      "description": "Ancora X del modulo, usata con ancora manuale.",
+      "x-unita": "mm",
+      "x-concetto": "modulo"
+    },
+    "manualAnchorY": {
+      "type": "number",
+      "title": "Ancora manuale Y",
+      "description": "Ancora Y del modulo, usata con ancora manuale.",
+      "x-unita": "mm",
+      "x-concetto": "modulo"
+    },
+    "level0OffsetX": {
+      "type": "number",
+      "title": "Livello 0, spostamento X",
+      "description": "Micro-calibrazione fra i livelli: spostamento X del piazzamento (Livello 0).",
+      "x-unita": "mm",
+      "x-concetto": "spostamento"
+    },
+    "level0OffsetY": {
+      "type": "number",
+      "title": "Livello 0, spostamento Y",
+      "description": "Micro-calibrazione fra i livelli: spostamento Y del piazzamento (Livello 0).",
+      "x-unita": "mm",
+      "x-concetto": "spostamento"
+    },
+    "level0Scale": {
+      "type": "number",
+      "title": "Livello 0, scala",
+      "description": "Scala dei moduli del piazzamento (Livello 0).",
+      "x-unita": "rapporto",
+      "x-concetto": "scala"
+    },
+    "level0AnchorX": {
+      "type": "number",
+      "title": "Livello 0, ancora X",
+      "description": "Ancora esplicita X del Livello 0 (opzionale).",
+      "x-unita": "mm",
+      "x-concetto": "modulo"
+    },
+    "level0AnchorY": {
+      "type": "number",
+      "title": "Livello 0, ancora Y",
+      "description": "Ancora esplicita Y del Livello 0 (opzionale).",
+      "x-unita": "mm",
+      "x-concetto": "modulo"
+    },
+    "level1OffsetX": {
+      "type": "number",
+      "title": "Livello 1, spostamento X",
+      "description": "Micro-calibrazione fra i livelli: spostamento X del fissaggio (Livello 1).",
+      "x-unita": "mm",
+      "x-concetto": "spostamento"
+    },
+    "level1OffsetY": {
+      "type": "number",
+      "title": "Livello 1, spostamento Y",
+      "description": "Micro-calibrazione fra i livelli: spostamento Y del fissaggio (Livello 1).",
+      "x-unita": "mm",
+      "x-concetto": "spostamento"
+    },
+    "level2OffsetX": {
+      "type": "number",
+      "title": "Livello 2, spostamento X",
+      "description": "Micro-calibrazione fra i livelli: spostamento X del ricamo oblique (Livello 2).",
+      "x-unita": "mm",
+      "x-concetto": "spostamento"
+    },
+    "level2OffsetY": {
+      "type": "number",
+      "title": "Livello 2, spostamento Y",
+      "description": "Micro-calibrazione fra i livelli: spostamento Y del ricamo oblique (Livello 2).",
+      "x-unita": "mm",
+      "x-concetto": "spostamento"
+    },
+    "holesOffsetX": {
+      "type": "number",
+      "title": "Fori, spostamento X",
+      "description": "Micro-calibrazione fra i livelli: spostamento X dei fori laser.",
+      "x-unita": "mm",
+      "x-concetto": "spostamento"
+    },
+    "holesOffsetY": {
+      "type": "number",
+      "title": "Fori, spostamento Y",
+      "description": "Micro-calibrazione fra i livelli: spostamento Y dei fori laser.",
+      "x-unita": "mm",
+      "x-concetto": "spostamento"
+    },
+    "holesScale": {
+      "type": "number",
+      "title": "Fori, scala",
+      "description": "Scala dei moduli dei fori laser.",
+      "x-unita": "rapporto",
+      "x-concetto": "scala"
+    },
+    "holesAnchorX": {
+      "type": "number",
+      "title": "Fori, ancora X",
+      "description": "Ancora esplicita X dei fori (opzionale).",
+      "x-unita": "mm",
+      "x-concetto": "modulo"
+    },
+    "holesAnchorY": {
+      "type": "number",
+      "title": "Fori, ancora Y",
+      "description": "Ancora esplicita Y dei fori (opzionale).",
+      "x-unita": "mm",
+      "x-concetto": "modulo"
+    },
+    "globalPatternOffsetX": {
+      "type": "number",
+      "title": "Offset X",
+      "description": "Posizione del pattern: spostamento, non scala.",
+      "x-unita": "mm",
+      "x-passo": 0.1,
+      "x-concetto": "spostamento"
+    },
+    "globalPatternOffsetY": {
+      "type": "number",
+      "title": "Offset Y",
+      "description": "Posizione del pattern: spostamento, non scala.",
+      "x-unita": "mm",
+      "x-passo": 0.1,
+      "x-concetto": "spostamento"
+    },
+    "patternBorderOffset": {
+      "type": "number",
+      "title": "Rientro taglio pattern",
+      "description": "Rientro del rettangolo entro cui si realizza il pattern.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "rientro"
+    },
+    "holesMargin": {
+      "type": "number",
+      "title": "Rientro taglio fori",
+      "description": "Rientro del rettangolo entro cui si realizzano fori, piazzamento e fissaggio.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "rientro"
+    },
+    "enableHolesLayer": {
+      "type": "boolean",
+      "title": "Fori laser",
+      "description": "Genera il livello dei fori laser (che filtrano piazzamento e fissaggio).",
+      "x-regole": [
+        "R7"
+      ],
+      "x-concetto": "fori-laser"
+    },
+    "holePerimeterToleranceMm": {
+      "type": "number",
+      "title": "Tolleranza foro dal perimetro",
+      "description": "Un foro resta se è dentro il boundary dei fori entro questa tolleranza.",
+      "x-unita": "mm",
+      "x-passo": 0.5,
+      "x-regole": [
+        "R7"
+      ],
+      "x-concetto": "tolleranza"
+    },
+    "pruneFeaturesWithoutHoles": {
+      "type": "boolean",
+      "title": "Cerchi/zig-zag solo dove c’è il foro",
+      "description": "Elimina dal pattern gli elementi che non hanno un foro corrispondente.",
+      "x-regole": [
+        "R12"
+      ],
+      "x-concetto": "fori-laser"
+    },
+    "trimDiagonalsToHoles": {
+      "type": "boolean",
+      "title": "Diagonali L0/L1 solo dove ci sono fori",
+      "description": "Limita le diagonali di piazzamento e fissaggio ai punti dove ci sono fori.",
+      "x-regole": [
+        "R12"
+      ],
+      "x-concetto": "fori-laser"
+    },
+    "holeMatchTolerance": {
+      "type": "number",
+      "title": "Tolleranza abbinamento foro",
+      "description": "Distanza entro cui un elemento si abbina al centro di un foro valido.",
+      "x-unita": "mm",
+      "x-concetto": "tolleranza"
+    },
+    "enableLevel0": {
+      "type": "boolean",
+      "title": "Livello 0 (piazzamento)",
+      "description": "Genera il livello di piazzamento.",
+      "x-concetto": "interruttore"
+    },
+    "enableLevel05": {
+      "type": "boolean",
+      "title": "Impuntura di fissaggio prima dei cerchi (Livello 0.5)",
+      "description": "Aggiunge l’impuntura di fissaggio prima dei cerchi.",
+      "x-concetto": "interruttore"
+    },
+    "level05StitchLength": {
+      "type": "number",
+      "title": "Lunghezza punto impuntura",
+      "description": "Lunghezza dei punti dell’impuntura di fissaggio (Livello 0.5).",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 0.5,
+      "x-concetto": "punto-corsa"
+    },
+    "enableExclusionAreas": {
+      "type": "boolean",
+      "title": "Aree di esclusione interne",
+      "description": "Le aree vuote interne al cartamodello non si ricamano.",
+      "x-regole": [
+        "R5"
+      ],
+      "x-concetto": "aree-vuote"
+    },
+    "reconnectVoidBorders": {
+      "type": "boolean",
+      "title": "Ricollega i bordi delle aree di esclusione",
+      "description": "Ricollega i bordi dei vuoti invece di sottrarre soltanto le aree.",
+      "x-regole": [
+        "R5"
+      ],
+      "x-concetto": "aree-vuote"
+    },
+    "cleanupMode": {
+      "type": "string",
+      "title": "Modalità di pulizia al perimetro",
+      "description": "Taglio netto (strict_clip) oppure sposta sul bordo i punti appena fuori (snap_to_edge, trim_and_close).",
+      "enum": [
+        "strict_clip",
+        "snap_to_edge",
+        "trim_and_close"
+      ],
+      "x-concetto": "ritaglio"
+    },
+    "cleanupTolerance": {
+      "type": "number",
+      "title": "Tolleranza di pulizia",
+      "description": "Tolleranza con cui un punto si considera dentro il perimetro.",
+      "x-unita": "mm",
+      "x-concetto": "tolleranza"
+    },
+    "snapToEdgeDistance": {
+      "type": "number",
+      "title": "Distanza di aggancio al bordo",
+      "description": "Distanza entro cui un punto fuori bordo si sposta sul bordo (modalità snap/trim).",
+      "x-unita": "mm",
+      "x-concetto": "tolleranza"
+    },
+    "perimeterCloseTolerance": {
+      "type": "number",
+      "title": "Tolleranza di chiusura del perimetro",
+      "description": "Tolleranza con cui si chiude il contorno del perimetro e si costruisce il suo grafo.",
+      "x-unita": "mm",
+      "x-concetto": "tolleranza"
+    },
+    "level0ClipMode": {
+      "type": "string",
+      "title": "Ritaglio Livello 0",
+      "description": "strict_clip taglia netto al perimetro; le altre modalità tengono o scartano il modulo intero.",
+      "enum": [
+        "strict_clip",
+        "keep_only_if_fully_inside",
+        "keep_if_intersects"
+      ],
+      "x-concetto": "ritaglio"
+    },
+    "level1ClipMode": {
+      "type": "string",
+      "title": "Ritaglio Livello 1",
+      "description": "strict_clip taglia netto al perimetro; le altre modalità tengono o scartano il modulo intero.",
+      "enum": [
+        "strict_clip",
+        "keep_only_if_fully_inside",
+        "keep_if_intersects"
+      ],
+      "x-concetto": "ritaglio"
+    },
+    "travelPathMode": {
+      "type": "string",
+      "title": "Percorso dei passaggi",
+      "description": "Border Following: i passaggi costeggiano il bordo; Straight: scorciatoie interne se consentite.",
+      "enum": [
+        "Border Following",
+        "Straight"
+      ],
+      "x-regole": [
+        "R26"
+      ],
+      "x-concetto": "instradamento-passaggi"
+    },
+    "travelRoutingStrategy": {
+      "type": "string",
+      "title": "Strategia del giro sul bordo",
+      "description": "Sceglie fra il giro orario e antiorario del bordo: il più corto valido, oppure forzato.",
+      "enum": [
+        "shortest_valid",
+        "clockwise",
+        "counter_clockwise"
+      ],
+      "x-regole": [
+        "R26"
+      ],
+      "x-concetto": "instradamento-passaggi"
+    },
+    "travelSideStrategy": {
+      "type": "string",
+      "title": "Lato preferito del giro",
+      "description": "Se nessun giro è valido o ci sono parità: auto, forzato orario/antiorario o preferenza per un lato (prefer_top/bottom/left/right).",
+      "x-regole": [
+        "R26"
+      ],
+      "x-concetto": "instradamento-passaggi"
+    },
+    "allowInternalShortcuts": {
+      "type": "boolean",
+      "title": "Scorciatoie interne",
+      "description": "Con percorso Straight permette ai passaggi di attraversare l’interno invece di costeggiare il bordo.",
+      "x-regole": [
+        "R26"
+      ],
+      "x-concetto": "instradamento-passaggi"
+    },
+    "perimeterLaneWidth": {
+      "type": "number",
+      "title": "Corsia sul perimetro",
+      "description": "Larghezza della corsia dei passaggi rispetto al formato; 0 = i passaggi restano sul bordo, dentro il formato.",
+      "x-unita": "mm",
+      "x-regole": [
+        "R26"
+      ],
+      "x-concetto": "instradamento-passaggi"
+    },
+    "perimeterLaneTolerance": {
+      "type": "number",
+      "title": "Tolleranza corsia sul perimetro",
+      "description": "Distanza dal bordo entro cui un passaggio si considera sulla corsia.",
+      "x-unita": "mm",
+      "x-regole": [
+        "R26"
+      ],
+      "x-concetto": "tolleranza"
+    },
+    "technicalMaxTravelMm": {
+      "type": "number",
+      "title": "Passaggio massimo tecnico",
+      "description": "Distanza oltre cui il filo continuo si spezza fra due moduli; 0 = si calcola dal fattore di rottura.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-regole": [
+        "R26"
+      ],
+      "x-concetto": "instradamento-passaggi"
+    },
+    "technicalGapBreakFactor": {
+      "type": "number",
+      "title": "Fattore di rottura del salto",
+      "description": "Moltiplicatore sul salto tipico fra moduli oltre il quale il filo si spezza (usato se il passaggio massimo è 0).",
+      "x-unita": "rapporto",
+      "minimum": 1,
+      "x-regole": [
+        "R26"
+      ],
+      "x-concetto": "instradamento-passaggi"
+    },
+    "routeAroundVoidsEnabled": {
+      "type": "boolean",
+      "title": "Aggira le aree vuote",
+      "description": "Devia i passaggi che attraversano un’area vuota lungo il suo bordo.",
+      "x-regole": [
+        "R5"
+      ],
+      "x-concetto": "instradamento-passaggi"
+    },
+    "minimumTravelStitchLength": {
+      "type": "number",
+      "title": "Lunghezza punti passaggi/bordi",
+      "description": "Lunghezza dei punti dei passaggi che costeggiano il bordo.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 0.05,
+      "x-concetto": "punto-passaggio"
+    },
+    "minimumSegmentLength": {
+      "type": "number",
+      "title": "Punto minimo globale",
+      "description": "Punto minimo di tutto il ricamo, applicato dopo il routing: accorpa i punti più corti.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 0.1,
+      "x-regole": [
+        "R3"
+      ],
+      "x-concetto": "punto-minimo"
+    },
+    "cutBorderStitchLength": {
+      "type": "number",
+      "title": "Punto minimo bordi da taglio",
+      "description": "Lunghezza dei punti sui bordi da taglio.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 0.1,
+      "x-concetto": "punto-minimo"
+    },
+    "startLockEnabled": {
+      "type": "boolean",
+      "title": "Partenza dal bordo (scarico filo)",
+      "description": "Fermatura del filo sul bordo a inizio e fine di ogni tratto.",
+      "x-regole": [
+        "R8"
+      ],
+      "x-concetto": "scarico-filo"
+    },
+    "startLockStitchMm": {
+      "type": "number",
+      "title": "Punto partenza/ingresso",
+      "description": "Lunghezza dei punti dello scarico filo e dell’ingresso.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "x-passo": 0.5,
+      "x-regole": [
+        "R8"
+      ],
+      "x-concetto": "scarico-filo"
+    },
+    "gridCols": {
+      "type": "integer",
+      "title": "Colonne",
+      "description": "Quante colonne di punti ha la griglia: una colonna = un punto. Si ricavano dalla larghezza del ricamo e dalla larghezza della cella.",
+      "minimum": 1,
+      "maximum": 1000,
+      "x-passo": 1,
+      "x-concetto": "formato"
+    },
+    "gridRows": {
+      "type": "integer",
+      "title": "Righe",
+      "description": "Quante righe ha la griglia. Si ricavano dall’altezza del ricamo, dall’altezza della cella e dal sormonto.",
+      "minimum": 1,
+      "maximum": 1000,
+      "x-passo": 1,
+      "x-concetto": "formato"
+    },
+    "cellWidthMm": {
+      "type": "number",
+      "title": "Larghezza cella",
+      "description": "Larghezza della cella = larghezza del punto.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "x-concetto": "larghezza-punto"
+    },
+    "cellHeightMm": {
+      "type": "number",
+      "title": "Altezza cella",
+      "description": "Altezza della cella.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "x-concetto": "formato"
+    },
+    "rowOverlapPct": {
+      "type": "number",
+      "title": "Sormonto righe",
+      "description": "Solo in verticale: le V si infilano. 0 = le righe si toccano, 40 = ogni riga sale del 40% dentro quella di sopra.",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 90,
+      "x-concetto": "sovrapposizione"
+    },
+    "passes": {
+      "type": "integer",
+      "title": "Passate su ogni diagonale",
+      "description": "Passate su ogni diagonale (avanti e indietro). Nel pannello le passate si scelgono per filo; questo vale dove il filo non ha le sue.",
+      "minimum": 1,
+      "x-passo": 1,
+      "x-concetto": "ordine-cucitura"
+    },
+    "fixedDirection": {
+      "type": "boolean",
+      "title": "Direzione fissa",
+      "description": "Ogni diagonale si cuce solo nel suo verso («\\» dall’alto, «/» dal basso), come nella vecchia app.",
+      "x-concetto": "ordine-cucitura"
+    },
+    "topLeg": {
+      "type": "string",
+      "title": "Gamba sopra nella croce",
+      "description": "La gamba che sta sopra nella croce.",
+      "enum": [
+        "down",
+        "up"
+      ],
+      "x-concetto": "ordine-cucitura"
+    },
+    "jumpMm": {
+      "type": "number",
+      "title": "Salta oltre",
+      "description": "Oltre questo costo di passaggio (circa mm in vista) si salta: taglio e ripartenza.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-concetto": "ordine-cucitura"
+    },
+    "passOrder": {
+      "type": "string",
+      "title": "Le passate",
+      "description": "Come si distribuiscono le passate. Lungo la riga: ogni passata è un pezzo a sé. Tutte sulla stessa V: tutte le passate sullo stesso punto prima del successivo. Automatico: per ogni filo, sulla stessa V con passate dispari, lungo la riga con pari.",
+      "enum": [
+        "row",
+        "stitch",
+        "auto"
+      ],
+      "x-concetto": "ordine-cucitura"
+    },
+    "byBlocks": {
+      "type": "boolean",
+      "title": "Per blocchi di colore",
+      "description": "Finisce ogni zona di un colore prima di passare alla successiva.",
+      "x-concetto": "ordine-cucitura"
+    },
+    "baseWhole": {
+      "type": "boolean",
+      "title": "Base in un solo stop",
+      "description": "A strisce: la base intera per prima, poi le strisce degli altri fili. Spento: una base per striscia.",
+      "x-concetto": "ordine-cucitura"
+    },
+    "trimJumps": {
+      "type": "boolean",
+      "title": "Taglio a ogni salto",
+      "description": "Nel DST ogni salto porta il taglio: nel programma di ricamo i pezzi arrivano separati. Spento: il taglio solo ai salti messi a mano.",
+      "x-concetto": "ordine-cucitura"
+    },
+    "zoneGapMm": {
+      "type": "number",
+      "title": "Vuoto che separa",
+      "description": "Vuoto minimo per tagliare una zona: più alto, zone più grandi.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-concetto": "ordine-cucitura"
+    },
+    "zoneMaxMm": {
+      "type": "number",
+      "title": "Zona massima",
+      "description": "Oltre questa misura una zona si taglia comunque, sulla linea meno piena.",
+      "x-unita": "mm",
+      "minimum": 10,
+      "x-concetto": "ordine-cucitura"
+    },
+    "stripRows": {
+      "type": "integer",
+      "title": "Strisce",
+      "description": "Righe per striscia: ogni striscia ha i suoi colori, poi la successiva. 0 = tutto insieme.",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "ordine-cucitura"
+    },
+    "stripShiftMm": {
+      "type": "number",
+      "title": "Ritiro fra strisce",
+      "description": "Compensazione del ritiro: la striscia k scende (o sale) di k volte questa misura nel file. Più allontana, meno avvicina.",
+      "x-unita": "mm",
+      "x-concetto": "spostamento"
+    },
+    "retraceCost": {
+      "type": "number",
+      "title": "Per spostarsi",
+      "description": "Costo di passare sopra una diagonale dello stesso colore già cucita. Nel pannello tre scelte: meno in vista (0,1), equilibrio (0,25), meno ripassi (0,4). Meno ripassi sui propri punti costano più filo in vista sugli altri colori.",
+      "minimum": 0,
+      "x-concetto": "ordine-cucitura"
+    },
+    "maxStitchMm": {
+      "type": "number",
+      "title": "Punto massimo",
+      "description": "Il punto più lungo che la macchina fa: oltre, la diagonale si spezza in punti uguali.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "maximum": 12,
+      "x-regole": [
+        "R4"
+      ],
+      "x-concetto": "punto-massimo"
+    },
+    "travelStitchMm": {
+      "type": "number",
+      "title": "Punto dei passaggi",
+      "description": "Il punto dei passaggi (corsa sotto il ricamo).",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "maximum": 12,
+      "x-concetto": "punto-passaggio"
+    },
+    "knitDetailPct": {
+      "type": "number",
+      "title": "Soglia del dettaglio",
+      "description": "Più bassa salva i tratti sottili.",
+      "x-unita": "%",
+      "minimum": 1,
+      "maximum": 100,
+      "x-concetto": "immagine"
+    },
+    "knitStitch": {
+      "type": "string",
+      "title": "Punto",
+      "description": "Il punto con cui la maglia dall’immagine riempie le celle (V, Λ, croce, diagonale discendente o ascendente).",
+      "enum": [
+        "v",
+        "lambda",
+        "cross",
+        "down",
+        "up"
+      ],
+      "x-concetto": "immagine"
+    },
+    "coverage": {
+      "type": "string",
+      "title": "Cosa punciare",
+      "description": "Solo i colori scelti: in automatico usa la soglia, in manuale i pixel vicini ai colori scelti. Tutta l'immagine: riempie tutto, ogni pixel col colore più vicino.",
+      "enum": [
+        "selected",
+        "all"
+      ],
+      "x-concetto": "immagine"
+    },
+    "threshold": {
+      "type": "integer",
+      "title": "Soglia di selezione",
+      "description": "Un pixel è scelto se più scuro della soglia (luminanza 0–255); più alta = include più pixel chiari.",
+      "minimum": 0,
+      "maximum": 255,
+      "x-passo": 5,
+      "x-concetto": "immagine"
+    },
+    "sampleToleranceRgb": {
+      "type": "number",
+      "title": "Tolleranza colore",
+      "description": "Tolleranza dei colori campionati, come distanza RGB euclidea.",
+      "minimum": 0,
+      "x-concetto": "immagine"
+    },
+    "backgroundColors": {
+      "type": "string",
+      "title": "Colori di sfondo",
+      "description": "Colori di sfondo da togliere dalla selezione (esadecimali separati da virgola).",
+      "x-concetto": "immagine"
+    },
+    "backgroundToleranceRgb": {
+      "type": "number",
+      "title": "Tolleranza sfondo",
+      "description": "Tolleranza dei colori di sfondo, come distanza RGB.",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "immagine"
+    },
+    "paletteMode": {
+      "type": "string",
+      "title": "Colori dei livelli",
+      "description": "Automatici: l'algoritmo sceglie i colori. Manuale: li prendi dall'immagine col contagocce, ognuno con la sua tolleranza; i pixel vicini ci rientrano.",
+      "enum": [
+        "auto",
+        "manual"
+      ],
+      "x-concetto": "colori"
+    },
+    "colorCount": {
+      "type": "integer",
+      "title": "Numero di colori (cambi-ago)",
+      "description": "In quante tinte separare l'immagine (quantizzazione); usato solo con colori automatici.",
+      "minimum": 1,
+      "maximum": 16,
+      "x-passo": 1,
+      "x-concetto": "colori"
+    },
+    "densitySpacingMm": {
+      "type": "number",
+      "title": "Distanza tra i punti",
+      "description": "Quanto sono distanti i punti: piccola = fitto (più punti), grande = rado (meno punti); 0 = piena risoluzione.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-regole": [
+        "R22"
+      ],
+      "x-concetto": "densita"
+    },
+    "minStitchMm": {
+      "type": "number",
+      "title": "Punto minimo",
+      "description": "Punto minimo, applicato dopo l'ordinamento.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-regole": [
+        "R3"
+      ],
+      "x-concetto": "punto-minimo"
+    },
+    "reinsertionRounds": {
+      "type": "integer",
+      "title": "Reinserimenti",
+      "description": "Tentativi di reinserire i punti troppo vicini.",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "punto-minimo"
+    },
+    "maxPoints": {
+      "type": "integer",
+      "title": "Tetto punti (0 = off)",
+      "description": "Tetto globale di punti (0 = nessun tetto).",
+      "minimum": 0,
+      "x-passo": 500,
+      "x-concetto": "altro"
+    },
+    "targetDensityPct": {
+      "type": "number",
+      "title": "Densità obiettivo (0 = off)",
+      "description": "Usa questa percentuale dei punti disponibili (0 = off).",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 100,
+      "x-passo": 1,
+      "x-concetto": "densita"
+    },
+    "style": {
+      "type": "string",
+      "title": "Distribuzione dei punti",
+      "description": "Regolare: griglia uniforme. Degradé: scarto e spostamento casuali per un effetto sfumato.",
+      "enum": [
+        "carpet",
+        "degrade"
+      ],
+      "x-concetto": "variazione"
+    },
+    "degradeDrop": {
+      "type": "number",
+      "title": "Scarto casuale",
+      "description": "Probabilità di scartare ciascun punto (solo degradé).",
+      "x-unita": "rapporto",
+      "minimum": 0,
+      "maximum": 1,
+      "x-passo": 0.05,
+      "x-concetto": "variazione"
+    },
+    "degradeJitterMm": {
+      "type": "number",
+      "title": "Spostamento casuale",
+      "description": "Ampiezza massima dello spostamento casuale (solo degradé).",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-concetto": "variazione"
+    },
+    "ordering": {
+      "type": "string",
+      "title": "Ordinamento del percorso",
+      "description": "A righe: veloce e regolare. Più vicino: percorso più corto ma pesante su molte migliaia di punti.",
+      "enum": [
+        "scanline",
+        "nearest"
+      ],
+      "x-concetto": "ordine-cucitura"
+    },
+    "scanlineBandMm": {
+      "type": "number",
+      "title": "Altezza banda (a righe)",
+      "description": "Altezza della banda dell'ordinamento a righe.",
+      "x-unita": "mm",
+      "minimum": 0.2,
+      "x-passo": 0.2,
+      "x-concetto": "ordine-cucitura"
+    },
+    "serpentine": {
+      "type": "boolean",
+      "title": "Righe a serpentina (alterna il verso)",
+      "description": "Con l'ordinamento a righe alterna il verso riga per riga (meno salti lunghi).",
+      "x-concetto": "ordine-cucitura"
+    },
+    "dpiEstimate": {
+      "type": "integer",
+      "title": "DPI di stima",
+      "description": "DPI di stima quando la larghezza reale è 0.",
+      "x-unita": "dpi",
+      "minimum": 1,
+      "x-passo": 1,
+      "x-concetto": "misura-reale"
+    },
+    "maxWidthPx": {
+      "type": "integer",
+      "title": "Risoluzione di lavoro",
+      "description": "L'immagine viene ridotta a questa larghezza per la resa (0 = nativa); più bassa = più veloce.",
+      "x-unita": "px",
+      "minimum": 0,
+      "x-passo": 50,
+      "x-concetto": "immagine"
+    },
+    "chunkSize": {
+      "type": "integer",
+      "title": "Punti massimi per tracciato",
+      "description": "Spezza i tracciati lunghi per Illustrator; 0 = nessun taglio.",
+      "minimum": 0,
+      "x-passo": 500,
+      "x-regole": [
+        "R6"
+      ],
+      "x-concetto": "altro"
+    },
+    "fillSpacingMm": {
+      "type": "number",
+      "title": "Densità dei passaggi",
+      "description": "Passo del raso tra le macchie: grande = meno passaggi.",
+      "x-unita": "mm",
+      "minimum": 0.4,
+      "x-passo": 0.1,
+      "x-concetto": "densita"
+    },
+    "passaggioAmpMm": {
+      "type": "number",
+      "title": "Ampiezza del passaggio",
+      "description": "Altezza del raso di passaggio: piccola = meno invadente.",
+      "x-unita": "mm",
+      "minimum": 2,
+      "x-passo": 1,
+      "x-concetto": "altro"
+    },
+    "voidClearanceMm": {
+      "type": "number",
+      "title": "Distanza di sicurezza da bordi e vuoti",
+      "description": "Distanza minima dei segmenti da bordi e aree vuote.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-regole": [
+        "R5",
+        "R7"
+      ],
+      "x-concetto": "aree-vuote"
+    },
+    "striaturaLengthMm": {
+      "type": "number",
+      "title": "Lunghezza della striatura",
+      "description": "Altezza dei trattini della macchia (la riga).",
+      "x-unita": "mm",
+      "minimum": 4,
+      "x-passo": 1,
+      "x-concetto": "modulo"
+    },
+    "blobSizeMm": {
+      "type": "number",
+      "title": "Grandezza delle macchie",
+      "description": "Grandezza media delle macchie maculate (diametro indicativo).",
+      "x-unita": "mm",
+      "minimum": 2,
+      "x-passo": 1,
+      "x-concetto": "altro"
+    },
+    "blobSpacingMm": {
+      "type": "number",
+      "title": "Distanza tra le macchie",
+      "description": "Distanza tra una macchia e l’altra.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "altro"
+    },
+    "jaggedLengthMm": {
+      "type": "number",
+      "title": "Frastaglio — variazione di lunghezza",
+      "description": "Frastaglio: variazione di lunghezza delle striature.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "variazione"
+    },
+    "jaggedStartMm": {
+      "type": "number",
+      "title": "Frastaglio — sfasamento delle partenze",
+      "description": "Frastaglio: sfasamento verticale delle partenze (non allineate).",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "variazione"
+    },
+    "waveAmpMm": {
+      "type": "number",
+      "title": "Movimento (ampiezza onda)",
+      "description": "0 = fasce dritte; alza per far ondulare le fasce delle macchie.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "altro"
+    },
+    "waveLenMm": {
+      "type": "number",
+      "title": "Lunghezza d’onda",
+      "description": "Ogni quanti mm si ripete l’ondulazione.",
+      "x-unita": "mm",
+      "minimum": 10,
+      "x-passo": 5,
+      "x-concetto": "altro"
+    },
+    "stitchMode": {
+      "type": "string",
+      "title": "Costruzione della striatura",
+      "description": "Ritorno al centro = trattino doppio/marcato (come il DST di riferimento). Passata singola = più magra.",
+      "enum": [
+        "retrace",
+        "boustrophedon"
+      ],
+      "x-regole": [
+        "R30"
+      ],
+      "x-concetto": "ordine-cucitura"
+    },
+    "color": {
+      "type": "string",
+      "title": "Colore del filo",
+      "description": "Filo unico (mono).",
+      "x-concetto": "colori"
+    },
+    "useConnectors": {
+      "type": "boolean",
+      "title": "Raccorda le colonne fra loro",
+      "description": "Raccorda le colonne fra loro.",
+      "x-concetto": "ordine-cucitura"
+    },
+    "zoneMargin": {
+      "type": "number",
+      "title": "Aria attorno alla zona",
+      "description": "Margine lasciato attorno a ogni zona.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "rientro"
+    },
+    "rowHeight": {
+      "type": "number",
+      "title": "Altezza della riga",
+      "description": "La fascia entro cui le zone contano come «stessa riga»; 0 = la ricava dal disegno.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "ordine-cucitura"
+    },
+    "minArea": {
+      "type": "number",
+      "title": "Ignora le zone sotto",
+      "description": "Le zone di area inferiore a questa si ignorano.",
+      "x-unita": "mm2",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "tolleranza"
+    },
+    "travelMode": {
+      "type": "string",
+      "title": "Passaggi fra le zone",
+      "description": "Come ci si sposta da una zona all’altra: impunture sui bordi dei rombi, oppure salto a filo alzato.",
+      "enum": [
+        "edges",
+        "none"
+      ],
+      "x-concetto": "passaggi-nascosti"
+    },
+    "outerMargin": {
+      "type": "number",
+      "title": "Margine sul bordo esterno",
+      "description": "Il ricamo deborda di tanto oltre il perimetro del disegno; i bordi fra un rombo e l’altro non si toccano.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "rientro"
+    },
+    "cleanupMinStitch": {
+      "type": "number",
+      "title": "Pulizia punti",
+      "description": "Toglie i punti più vicini di così, alla fine di tutto (passaggi compresi); 0 = non tocca niente.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.05,
+      "x-regole": [
+        "R3"
+      ],
+      "x-concetto": "punto-minimo"
+    },
+    "cordedPasses": {
+      "type": "integer",
+      "title": "Passate del cordoncino",
+      "description": "Passate di ogni pezzo di cordoncino orizzontale (dispari: il pezzo finisce dall’altra parte).",
+      "minimum": 1,
+      "x-passo": 2,
+      "x-concetto": "passate-pezzo"
+    },
+    "cordedMaxStitch": {
+      "type": "number",
+      "title": "Punto massimo nel cordoncino",
+      "description": "0 = un punto per passata",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-concetto": "punto-massimo"
+    },
+    "ladderPasses": {
+      "type": "integer",
+      "title": "Passate di scalette e meandri",
+      "description": "Passate dei pezzi verticali (scalette e meandri).",
+      "minimum": 1,
+      "x-passo": 2,
+      "x-concetto": "passate-pezzo"
+    },
+    "runMaxStitch": {
+      "type": "number",
+      "title": "Punto massimo del filo singolo",
+      "description": "Punto massimo delle corse (filo singolo sulle linee e nelle finestre).",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "x-passo": 0.5,
+      "x-concetto": "punto-massimo"
+    },
+    "cordedPieceLength": {
+      "type": "number",
+      "title": "Lunghezza di un pezzo di cordoncino",
+      "description": "Oltre questa, più la soglia, il pezzo diventa due (con un fermo in più).",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 0.1,
+      "x-concetto": "lunghezza-pezzo"
+    },
+    "brickLength": {
+      "type": "number",
+      "title": "Lunghezza di un mattoncino",
+      "description": "Lo stesso, per scalette e meandri.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 0.1,
+      "x-concetto": "lunghezza-pezzo"
+    },
+    "objectSplitThreshold": {
+      "type": "number",
+      "title": "Soglia per aggiungere oggetti",
+      "description": "Di quanto un oggetto può allungarsi col rombo prima di dividersi.",
+      "x-unita": "%",
+      "minimum": 0,
+      "x-passo": 5,
+      "x-concetto": "soglia-divisione"
+    },
+    "overhangLeft": {
+      "type": "number",
+      "title": "Sporgenza a sinistra",
+      "description": "Le linee partono fuori dal pezzo di tanto.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "sporgenza"
+    },
+    "overhangRight": {
+      "type": "number",
+      "title": "Sporgenza a destra",
+      "description": "Le linee arrivano fino in fondo e finiscono fuori dal pezzo di tanto, come a sinistra.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "sporgenza"
+    },
+    "windowWidening": {
+      "type": "number",
+      "title": "Allargamento delle finestre",
+      "description": "Dove la cornice attraversa la linea la finestra si allarga di tanto per parte: i fermi si allontanano e gli uncini ci stanno in mezzo; 0 = come nel DST M1404.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "altro"
+    },
+    "verticalMargin": {
+      "type": "number",
+      "title": "Margine in alto e in basso",
+      "description": "Scalette, meandri e barre si fermano a questa distanza dal bordo.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "rientro"
+    },
+    "edgeTravelStitch": {
+      "type": "number",
+      "title": "Punto dei passaggi sul bordo",
+      "description": "Punto dei passaggi sul bordo sinistro.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "x-passo": 0.5,
+      "x-concetto": "punto-passaggio"
+    },
+    "linesReliefPasses": {
+      "type": "integer",
+      "title": "Passate nelle aree di scarico",
+      "description": "Dentro le tinte marcate «Area di scarico» cordoncini, scalette, meandri e zig-zag (fermi e barre) si cuciono con queste passate invece di quelle sopra; 0 = come sopra.",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "aree-di-scarico"
+    },
+    "thermoOutline": {
+      "type": "boolean",
+      "title": "Contorno per le termogarze",
+      "description": "Il contorno ripassato a inizio fase, per le termogarze: può esserci o no.",
+      "x-concetto": "interruttore"
+    },
+    "thermoOutlineStitch": {
+      "type": "number",
+      "title": "Punto del contorno termogarze",
+      "description": "Punto del contorno per le termogarze.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "x-passo": 0.5,
+      "x-concetto": "punto-corsa"
+    },
+    "outlineStitch": {
+      "type": "number",
+      "title": "Punto del contorno a impunture",
+      "description": "Stop 1, e il contorno all’inizio dello stop 2.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 0.5,
+      "x-concetto": "punto-corsa"
+    },
+    "gridStitch": {
+      "type": "number",
+      "title": "Punto della griglia",
+      "description": "Punto della griglia che blocca i materiali (stop 2).",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 0.5,
+      "x-concetto": "punto-corsa"
+    },
+    "gridInset": {
+      "type": "number",
+      "title": "Rientro della griglia dal contorno",
+      "description": "La griglia si ferma a questa distanza dal bordo del pezzo; lì il filo passa da una linea all’altra.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "rientro"
+    },
+    "gridMinLine": {
+      "type": "number",
+      "title": "Linea di griglia più corta",
+      "description": "I pezzi di linea più corti di così, negli angoli, non si cuciono.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "altro"
+    },
+    "hookHorizontalPasses": {
+      "type": "integer",
+      "title": "Passate dell’orizzontale",
+      "description": "Passate dell’uncino orizzontale della cornice (stop 6).",
+      "minimum": 1,
+      "x-passo": 2,
+      "x-concetto": "passate-pezzo"
+    },
+    "hookVerticalPasses": {
+      "type": "integer",
+      "title": "Passate della verticale",
+      "description": "Passate dell’uncino verticale della cornice (stop 6).",
+      "minimum": 1,
+      "x-passo": 1,
+      "x-concetto": "passate-pezzo"
+    },
+    "hookHorizontalLength": {
+      "type": "number",
+      "title": "Lunghezza dell’orizzontale",
+      "description": "Metà nel pattern 1 e metà nel pattern 2: il centro sta sempre sul lato del rombo.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "x-passo": 0.1,
+      "x-concetto": "lunghezza-pezzo"
+    },
+    "hookVerticalLength": {
+      "type": "number",
+      "title": "Lunghezza della verticale",
+      "description": "Lunghezza dell’uncino verticale della cornice.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "x-passo": 0.1,
+      "x-concetto": "lunghezza-pezzo"
+    },
+    "hookIrregularity": {
+      "type": "number",
+      "title": "Irregolarità",
+      "description": "Di quanto al massimo un uncino è più lungo o più corto degli altri; 0 = tutti uguali.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-concetto": "variazione"
+    },
+    "frameInset": {
+      "type": "number",
+      "title": "Rientro dal bordo",
+      "description": "Distanza minima dal bordo del pezzo: un’orizzontale che ci arriva più vicino non si cuce, una verticale si accorcia.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "rientro"
+    },
+    "hookSplitThreshold": {
+      "type": "number",
+      "title": "Soglia per aggiungere uncini",
+      "description": "Di quanto il passo può allungarsi col rombo prima che gli uncini aumentino.",
+      "x-unita": "%",
+      "minimum": 0,
+      "x-passo": 5,
+      "x-concetto": "soglia-divisione"
+    },
+    "frameTravelStitch": {
+      "type": "number",
+      "title": "Punto dei passaggi",
+      "description": "Punto dei passaggi della cornice.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "x-passo": 0.5,
+      "x-concetto": "punto-passaggio"
+    },
+    "frameReliefPasses": {
+      "type": "integer",
+      "title": "Passate nelle aree di scarico",
+      "description": "Dentro le tinte marcate «Area di scarico» gli uncini si cuciono con queste passate invece di quelle sopra; 0 = come sopra.",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "aree-di-scarico"
+    },
+    "borderOutset": {
+      "type": "number",
+      "title": "Uscita oltre la linea",
+      "description": "La linea disegnata o scelta è il lato esterno: la bordatura esce di tanto verso fuori e cresce verso dentro.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-concetto": "sporgenza"
+    },
+    "borderEndOverhang": {
+      "type": "number",
+      "title": "Sporgenza ai capi",
+      "description": "Di quanto va oltre i capi di una linea aperta.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "sporgenza"
+    },
+    "obliqueSatinPitch": {
+      "type": "number",
+      "title": "Passo del raso obliquo",
+      "description": "Distanza fra due punti sullo stesso lato: densità bassa.",
+      "x-unita": "mm",
+      "minimum": 0.2,
+      "x-passo": 0.1,
+      "x-concetto": "interlinea"
+    },
+    "obliqueSatinAngle": {
+      "type": "number",
+      "title": "Inclinazione del raso obliquo",
+      "description": "Inclinazione del raso obliquo della bordatura.",
+      "x-unita": "deg",
+      "minimum": 10,
+      "x-passo": 5,
+      "x-concetto": "angolo"
+    },
+    "straightSatinOverhang": {
+      "type": "number",
+      "title": "Sbordo del raso dritto",
+      "description": "Di quanto il raso dritto esce oltre l’obliquo, verso fuori.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-concetto": "sporgenza"
+    },
+    "straightSatinPitch": {
+      "type": "number",
+      "title": "Passo del raso dritto",
+      "description": "Passo fra i punti del raso dritto della bordatura.",
+      "x-unita": "mm",
+      "minimum": 0.2,
+      "x-passo": 0.05,
+      "x-concetto": "interlinea"
+    },
+    "cordHeight": {
+      "type": "number",
+      "title": "Altezza del cordoncino",
+      "description": "A liscio sul bordo esterno.",
+      "x-unita": "mm",
+      "minimum": 0.3,
+      "x-passo": 0.1,
+      "x-concetto": "larghezza-punto"
+    },
+    "cordPitch": {
+      "type": "number",
+      "title": "Passo del cordoncino",
+      "description": "Passo fra i punti del cordoncino della bordatura.",
+      "x-unita": "mm",
+      "minimum": 0.2,
+      "x-passo": 0.05,
+      "x-concetto": "interlinea"
+    },
+    "firstLineOffset": {
+      "type": "number",
+      "title": "Prima linea dal bordo esterno",
+      "description": "Distanza della prima linea dal bordo esterno della bordatura.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-concetto": "rientro"
+    },
+    "lineSpacing": {
+      "type": "number",
+      "title": "Distanza fra le due linee",
+      "description": "Solo nella doppia: i fermi della seconda sono a metà passo.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "x-passo": 0.1,
+      "x-concetto": "altro"
+    },
+    "tackPitch": {
+      "type": "number",
+      "title": "Passo dei fermi",
+      "description": "0 = il pezzo più lungo delle linee orizzontali (stop 5); più alto per allargarli.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "altro"
+    },
+    "borderLinePasses": {
+      "type": "integer",
+      "title": "Passate delle linee",
+      "description": "Passate delle linee della bordatura.",
+      "minimum": 1,
+      "x-passo": 2,
+      "x-concetto": "passate-pezzo"
+    },
+    "tackHeight": {
+      "type": "number",
+      "title": "Altezza dei fermi",
+      "description": "Altezza dei fermi della bordatura.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "x-passo": 0.1,
+      "x-concetto": "altro"
+    },
+    "dpiDefault": {
+      "type": "integer",
+      "title": "DPI di stima",
+      "description": "DPI usato per stimare i mm quando la larghezza reale è 0.",
+      "x-unita": "dpi",
+      "minimum": 1,
+      "x-passo": 1,
+      "x-regole": [
+        "R11"
+      ],
+      "x-concetto": "immagine"
+    },
+    "flattenLightMm": {
+      "type": "number",
+      "title": "Pareggio della luce",
+      "description": "Toglie la variazione lenta di tono (illuminazione, sporco, invecchiamento) e lascia le differenze di disegno. 0 = spento. Tienilo fra un quinto e un terzo del motivo.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "immagine"
+    },
+    "smoothMm": {
+      "type": "number",
+      "title": "Attenuazione della grana",
+      "description": "Spiana il tratteggio senza sbavare i contorni. 0 = spenta.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.3,
+      "x-concetto": "immagine"
+    },
+    "minBlobMm2": {
+      "type": "number",
+      "title": "Macchia più piccola",
+      "description": "Sotto questa misura la macchia va al colore vicino.",
+      "x-unita": "mm2",
+      "minimum": 0,
+      "x-passo": 5,
+      "x-concetto": "immagine"
+    },
+    "fillAngleDeg": {
+      "type": "number",
+      "title": "Orientamento delle righe",
+      "description": "0 = orizzontale, uguale per tutti i colori.",
+      "x-unita": "deg",
+      "minimum": -90,
+      "maximum": 90,
+      "x-passo": 5,
+      "x-regole": [
+        "R24"
+      ],
+      "x-concetto": "angolo"
+    },
+    "retraceOffsetMm": {
+      "type": "number",
+      "title": "Sfalsamento del ritorno",
+      "description": "Solo a pettine: di quanto il ritorno evita i buchi dell'andata.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.05,
+      "x-concetto": "spostamento"
+    },
+    "endLockCount": {
+      "type": "integer",
+      "title": "Fermatura di uscita",
+      "description": "Quanti punti cortissimi in fondo a ogni ago, prima del cambio-colore. 0 = nessuna.",
+      "minimum": 0,
+      "maximum": 8,
+      "x-passo": 1,
+      "x-regole": [
+        "R8"
+      ],
+      "x-concetto": "scarico-filo"
+    },
+    "endLockMm": {
+      "type": "number",
+      "title": "Lunghezza dei punti di fermatura",
+      "description": "Lunghezza dei punti della fermatura di uscita.",
+      "x-unita": "mm",
+      "x-regole": [
+        "R8"
+      ],
+      "x-concetto": "scarico-filo"
+    },
+    "fringeLengthMin": {
+      "type": "number",
+      "title": "Lunghezza min",
+      "description": "Lunghezza della frangia: estratta a caso fra il minimo e il massimo.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 12,
+      "x-passo": 0.5,
+      "x-concetto": "variazione"
+    },
+    "fringeLengthMax": {
+      "type": "number",
+      "title": "Lunghezza max",
+      "description": "Lunghezza della frangia: estratta a caso fra il minimo e il massimo.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 12,
+      "x-passo": 0.5,
+      "x-concetto": "variazione"
+    },
+    "fringeOpeningMin": {
+      "type": "number",
+      "title": "Apertura min",
+      "description": "Di quanto la frangia si scosta dalla sua fila. Il verso alterna fra frange vicine: è così che nasce la X. A 0 restano parallele.",
+      "x-unita": "deg",
+      "minimum": 0,
+      "maximum": 80,
+      "x-passo": 1,
+      "x-concetto": "angolo"
+    },
+    "fringeOpeningMax": {
+      "type": "number",
+      "title": "Apertura max",
+      "description": "Di quanto la frangia si scosta dalla sua fila. Il verso alterna fra frange vicine: è così che nasce la X. A 0 restano parallele.",
+      "x-unita": "deg",
+      "minimum": 0,
+      "maximum": 80,
+      "x-passo": 1,
+      "x-concetto": "angolo"
+    },
+    "fringeOverlap": {
+      "type": "number",
+      "title": "Sormonto",
+      "description": "Quanto ogni frangia entra di sicuro nella macchia vicina: alza il minimo, non il massimo.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 10,
+      "x-passo": 0.5,
+      "x-concetto": "sovrapposizione"
+    },
+    "brushWidth": {
+      "type": "number",
+      "title": "Pennello",
+      "description": "È il raggio d’azione: si sfrangia solo dove passi.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "maximum": 40,
+      "x-passo": 0.5,
+      "x-concetto": "altro"
+    },
+    "baseSpacing": {
+      "type": "number",
+      "title": "Distanza tra le linee",
+      "description": "Di quanto una linea di base dista dalla successiva, misurata di traverso. Si devono sovrastare: a 2 mm i denti di una coprono la vicina.",
+      "x-unita": "mm",
+      "minimum": 0.8,
+      "maximum": 12,
+      "x-concetto": "densita"
+    },
+    "toothSpacing": {
+      "type": "number",
+      "title": "Densità del pettine",
+      "description": "Distanza fra un dente e il successivo lungo la linea di base. Non scende sotto 1.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "maximum": 8,
+      "x-concetto": "interlinea"
+    },
+    "toothMinLength": {
+      "type": "number",
+      "title": "Lunghezza minima",
+      "description": "Quanto è lungo un dente: si estrae fra la lunghezza minima e la massima, e quella è la lunghezza del punto.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "maximum": 20,
+      "x-concetto": "lunghezza-dente"
+    },
+    "toothMaxLength": {
+      "type": "number",
+      "title": "Lunghezza massima",
+      "description": "Quanto è lungo un dente: si estrae fra la lunghezza minima e la massima, e quella è la lunghezza del punto.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "maximum": 20,
+      "x-concetto": "lunghezza-dente"
+    },
+    "toothOpening": {
+      "type": "number",
+      "title": "Apertura",
+      "description": "Di quanto il dente si scosta, a caso, dal verso del chiaro. A 0 vanno tutti dritti.",
+      "x-unita": "deg",
+      "minimum": 0,
+      "maximum": 80,
+      "x-concetto": "angolo"
+    },
+    "toothSharpEdgeMm": {
+      "type": "number",
+      "title": "Bordo netto",
+      "description": "Sotto questa larghezza di transizione il bordo è netto e il dente si ferma.",
+      "x-unita": "mm",
+      "x-concetto": "tolleranza"
+    },
+    "teeth": {
+      "type": "boolean",
+      "title": "Metti i denti",
+      "description": "Senza denti escono solo le linee di base: si guarda la struttura in un attimo, e non si costruisce il DST.",
+      "x-concetto": "interruttore"
+    },
+    "buildDst": {
+      "type": "boolean",
+      "title": "Costruisci il DST",
+      "description": "Costruire anche il DST (costa qualche secondo in più). Il pannello lo tiene uguale a «Metti i denti».",
+      "x-concetto": "interruttore"
+    },
+    "tintOverlap": {
+      "type": "number",
+      "title": "Sormonto",
+      "description": "Se entro tanto, verso il chiaro, c'è una tinta più chiara, il dente si cuce anche con quella: prima, e sotto. È così che le tinte si mescolano dentro un gruppo.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 20,
+      "x-concetto": "sovrapposizione"
+    },
+    "blockBleed": {
+      "type": "number",
+      "title": "Sconfinamento fra blocchi",
+      "description": "Quanto le righe di un blocco entrano in quello accanto, perché la giunta non resti nuda. Alzandolo le righe dei due blocchi si affiancano e si vede una banda più fitta: a 2,5 mm sono il doppio che a 1.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 10,
+      "x-concetto": "sovrapposizione"
+    },
+    "passMaxMm": {
+      "type": "number",
+      "title": "Passaggio più lungo",
+      "description": "Fin dove un passaggio si cuce comunque, anche se un pezzetto si vedrà. Oltre questa misura il passaggio si fa lo stesso, ma solo se il cammino resta nascosto sotto ciò che verrà dopo e a vista ne resta meno di 3 mm. Negli ultimi due colori i passaggi lunghi non si fanno, perché lì non viene più nessuno a coprirli.",
+      "x-unita": "mm",
+      "minimum": 4,
+      "maximum": 250,
+      "x-concetto": "passaggi-nascosti"
+    },
+    "hiddenPassMaxMm": {
+      "type": "number",
+      "title": "Passaggio nascosto più lungo",
+      "description": "Fin dove si prova un passaggio che va oltre la misura del passaggio più lungo, e che quindi si fa solo se resta nascosto: nella banda di sovrapposizione fra il colore in corso e uno più scuro accanto, o sulla linea esatta di una base futura dello stesso colore.",
+      "x-unita": "mm",
+      "minimum": 4,
+      "maximum": 400,
+      "x-concetto": "passaggi-nascosti"
+    },
+    "gapCrossMm": {
+      "type": "number",
+      "title": "Gola attraversata",
+      "description": "Fin dove la riga più esterna di una fascia attraversa una gola senza spezzarsi: un tratto di tinta più chiara, già cucita, o troppo addossato alla riga prima, incastrato fra due tratti della stessa tinta. A 0 non lo fa mai.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 100,
+      "x-concetto": "ordine-cucitura"
+    },
+    "noPassLastColors": {
+      "type": "integer",
+      "title": "Ultimi colori senza passaggi liberi",
+      "description": "Quanti ultimi colori non fanno passaggi liberi: sotto di loro non viene più nessuno a coprire il filo, quindi lì un passaggio si fa solo se resta corto (60 mm) e se il cammino è tutto in zona ancora da ricamare.",
+      "minimum": 0,
+      "x-concetto": "passaggi-nascosti"
+    },
+    "minTintRunMm": {
+      "type": "number",
+      "title": "Tinta più corta",
+      "description": "Quanto deve durare una tinta lungo una riga per meritare un cambio di colore. Sotto, la riga tiene il colore che aveva: senza, restano pezzetti da 5 mm che il loro colore deve andarsi a prendere da lontano.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 40,
+      "x-concetto": "colori"
+    },
+    "smoothFlattenMm": {
+      "type": "number",
+      "title": "Spianatura",
+      "description": "Smussa le creste fra due fronti (spianatura della distanza). Spianatura e chiusura smussano gli spigoli.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "maximum": 20,
+      "x-concetto": "tolleranza"
+    },
+    "smoothCloseMm": {
+      "type": "number",
+      "title": "Chiusura",
+      "description": "Chiusura delle insenature nella crescita a passo fisso. Spianatura e chiusura smussano gli spigoli.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 20,
+      "x-concetto": "tolleranza"
+    },
+    "smoothGrowth": {
+      "type": "number",
+      "title": "Addolcimento",
+      "description": "Millimetri di lisciatura in più per ogni millimetro di distanza dal muro: cresce con la distanza dal muro.",
+      "x-unita": "rapporto",
+      "minimum": 0,
+      "maximum": 1,
+      "x-concetto": "scala"
+    },
+    "smoothMaxMm": {
+      "type": "number",
+      "title": "Tetto alla lisciatura",
+      "description": "Tetto alla lisciatura.",
+      "x-unita": "mm",
+      "x-concetto": "tolleranza"
+    },
+    "translateMaxAreaMm2": {
+      "type": "number",
+      "title": "Traslazione fino a",
+      "description": "I gruppi più piccoli della soglia si costruiscono spostando il muro chiaro senza deformarlo; i più grandi facendo crescere la macchia di un passo per volta.",
+      "x-unita": "mm2",
+      "minimum": 0,
+      "maximum": 200000,
+      "x-concetto": "altro"
+    },
+    "buildMode": {
+      "type": "string",
+      "title": "Come si costruiscono le righe",
+      "description": "Come si costruiscono le righe dentro un gruppo grande (i piccoli vanno sempre a traslazione). «auto» (uguale a «geodetica») rimisura a ogni giro la distanza dal fronte appena cucito; «crescita» dilata la macchia di un passo per volta; «livelli» segue le curve di livello della distanza dal muro.",
+      "enum": [
+        "auto",
+        "geodetica",
+        "crescita",
+        "livelli"
+      ],
+      "x-concetto": "ordine-cucitura"
+    },
+    "showBare": {
+      "type": "boolean",
+      "title": "Segna in rosa quello che resta scoperto",
+      "description": "Colorare di rosa, nell'anteprima, le celle a più di 0,75 mm da qualunque filo.",
+      "x-concetto": "interruttore"
+    },
+    "showPasses": {
+      "type": "boolean",
+      "title": "Disegna i passaggi",
+      "description": "I passaggi sono il filo che va da una riga all'altra invece di essere tagliato: nel disegno sono più sottili e trasparenti del ricamo, perché nel pannello finiscono sotto le righe che vengono dopo.",
+      "x-concetto": "interruttore"
+    },
+    "dotMinDiameter": {
+      "type": "number",
+      "title": "Pallino minimo",
+      "description": "sotto i 3 mm diventa uno zig-zag: ricamato sembra un pallino",
+      "x-unita": "mm",
+      "minimum": 1,
+      "maximum": 60,
+      "x-concetto": "pallino"
+    },
+    "dotMaxDiameter": {
+      "type": "number",
+      "title": "Pallino massimo",
+      "description": "oltre 8 mm il punto lungo si allenta",
+      "x-unita": "mm",
+      "minimum": 1,
+      "maximum": 60,
+      "x-concetto": "pallino"
+    },
+    "dotGap": {
+      "type": "number",
+      "title": "Distanza fra i pallini",
+      "description": "più è piccola, meno si vedono i passaggi; negativa = si sovrappongono un poco",
+      "x-unita": "mm",
+      "minimum": -1,
+      "maximum": 10,
+      "x-concetto": "pallino"
+    },
+    "dotAspect": {
+      "type": "number",
+      "title": "Larghezza / lunghezza",
+      "description": "1 = tondo",
+      "x-unita": "rapporto",
+      "minimum": 0.3,
+      "maximum": 1.5,
+      "x-concetto": "pallino"
+    },
+    "dotProfile": {
+      "type": "number",
+      "title": "Forma del profilo",
+      "description": "2 = ellisse, 1 = losanga, più alto = più squadrato",
+      "minimum": 1,
+      "maximum": 6,
+      "x-concetto": "pallino"
+    },
+    "diameterIrregularity": {
+      "type": "number",
+      "title": "Irregolarità",
+      "description": "caso per caso, attorno alla misura voluta",
+      "minimum": 0,
+      "maximum": 1,
+      "x-concetto": "variazione"
+    },
+    "fieldMode": {
+      "type": "string",
+      "title": "Misura dei pallini",
+      "description": "Piccoli ai bordi e grandi al centro, oppure tutti della stessa misura (la media).",
+      "enum": [
+        "bordo",
+        "uniforme"
+      ],
+      "x-concetto": "campo-misura"
+    },
+    "edgeDepth": {
+      "type": "number",
+      "title": "Distanza dal bordo del pallino massimo",
+      "description": "0 = automatico (quanto è profondo il pezzo)",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 500,
+      "x-concetto": "campo-misura"
+    },
+    "edgeCurve": {
+      "type": "number",
+      "title": "Curva della sfumatura",
+      "description": "1 = lineare; più alta = piccoli più a lungo vicino al bordo",
+      "minimum": 0.3,
+      "maximum": 4,
+      "x-concetto": "campo-misura"
+    },
+    "fieldNoise": {
+      "type": "number",
+      "title": "Chiazze",
+      "description": "0 = tutto regolare; più alto = macchie di grandi e piccoli",
+      "minimum": 0,
+      "maximum": 1,
+      "x-concetto": "campo-misura"
+    },
+    "fieldNoiseScale": {
+      "type": "number",
+      "title": "Dimensione delle chiazze",
+      "description": "Lunghezza d’onda delle chiazze.",
+      "x-unita": "mm",
+      "minimum": 5,
+      "maximum": 400,
+      "x-concetto": "campo-misura"
+    },
+    "gradientWeight": {
+      "type": "number",
+      "title": "Peso delle linee di sfumatura",
+      "description": "1 = comandano loro; 0 = le ignora e conta solo il bordo",
+      "x-unita": "peso",
+      "minimum": 0,
+      "maximum": 1,
+      "x-concetto": "campo-misura"
+    },
+    "fixedDotInfluence": {
+      "type": "number",
+      "title": "Raggio dei pallini fissi",
+      "description": "fin dove la misura di un fisso tira quella dei vicini",
+      "x-unita": "mm",
+      "minimum": 1,
+      "maximum": 500,
+      "x-concetto": "campo-misura"
+    },
+    "densitySpacing": {
+      "type": "number",
+      "title": "Spaziatura delle file",
+      "description": "tra una riga di filo e la successiva dentro il pallino",
+      "x-unita": "mm",
+      "minimum": 0.1,
+      "maximum": 2,
+      "x-regole": [
+        "R22"
+      ],
+      "x-concetto": "densita"
+    },
+    "minStitchLength": {
+      "type": "number",
+      "title": "Punto minimo",
+      "description": "Nessun punto più corto di così.",
+      "x-unita": "mm",
+      "minimum": 0.3,
+      "maximum": 3,
+      "x-regole": [
+        "R3"
+      ],
+      "x-concetto": "punto-minimo"
+    },
+    "maxStitchLength": {
+      "type": "number",
+      "title": "Punto massimo",
+      "description": "vale anche per i passaggi",
+      "x-unita": "mm",
+      "minimum": 1,
+      "maximum": 12.1,
+      "x-regole": [
+        "R4"
+      ],
+      "x-concetto": "punto-massimo"
+    },
+    "axisMode": {
+      "type": "string",
+      "title": "Asse del cordoncino",
+      "description": "Lungo il percorso (passaggi più nascosti) oppure a caso.",
+      "enum": [
+        "percorso",
+        "casuale"
+      ],
+      "x-concetto": "angolo"
+    },
+    "overStitchedCost": {
+      "type": "number",
+      "title": "Costo del filo sopra il cucito",
+      "description": "rispetto a 10 per un mm in vista",
+      "x-unita": "peso",
+      "minimum": 0,
+      "maximum": 20,
+      "x-concetto": "passaggi-nascosti"
+    },
+    "edgeMargin": {
+      "type": "number",
+      "title": "Margine dal bordo",
+      "description": "Margine dal bordo del pezzo.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 20,
+      "x-concetto": "rientro"
+    },
+    "dotGrowth": {
+      "type": "number",
+      "title": "Crescita oltre la misura voluta",
+      "description": "quanto un pallino può allargarsi per toccare i vicini",
+      "x-unita": "rapporto",
+      "minimum": 1,
+      "maximum": 3,
+      "x-concetto": "pallino"
+    },
+    "dotMinRatio": {
+      "type": "number",
+      "title": "Rimpicciolimento nei buchi",
+      "description": "quanto può restringersi per entrare dove non c’è posto",
+      "x-unita": "rapporto",
+      "minimum": 0.1,
+      "maximum": 1,
+      "x-concetto": "pallino"
+    },
+    "satinAngle": {
+      "type": "number",
+      "title": "Direzione del raso",
+      "description": "Direzione delle righe del raso, gradi (90 = verticale).",
+      "x-unita": "deg",
+      "minimum": -180,
+      "x-passo": 1,
+      "x-concetto": "angolo"
+    },
+    "satinRowSpacing": {
+      "type": "number",
+      "title": "Interlinea del raso",
+      "description": "Distanza fra le righe del raso.",
+      "x-unita": "mm",
+      "minimum": 0.1,
+      "x-passo": 0.05,
+      "x-concetto": "densita"
+    },
+    "satinMaxStitch": {
+      "type": "number",
+      "title": "Punto massimo del raso",
+      "description": "Le macchie larghe non fanno punti da bordo a bordo.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 0.5,
+      "x-concetto": "punto-massimo"
+    },
+    "fringeAmount": {
+      "type": "number",
+      "title": "Sfrangiatura",
+      "description": "Di quanto, a caso, ogni riga finisce prima o dopo il bordo: il bordo non è più netto. 0 = netto.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-concetto": "variazione"
+    },
+    "fringeOutsidePercent": {
+      "type": "number",
+      "title": "…di cui oltre il bordo",
+      "description": "0 = le righe si accorciano soltanto; 100 = si allungano soltanto, sulla base.",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 100,
+      "x-passo": 10,
+      "x-concetto": "variazione"
+    },
+    "hiddenPassMax": {
+      "type": "number",
+      "title": "Passaggio nascosto, fino a",
+      "description": "Da un pezzo all'altro sulle linee del punto o nel verso del raso: il filo non si vede. Oltre: salto.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 5,
+      "x-concetto": "passaggi-nascosti"
+    },
+    "minDetachedPiece": {
+      "type": "number",
+      "title": "Togli i pezzi staccati più corti di",
+      "description": "I pezzi che non si raggiungono senza salto: se sono corti si tolgono. Il punto sopra non esce mai dalla macchia.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "altro"
+    },
+    "bridgeMaxGap": {
+      "type": "number",
+      "title": "Unisci le macchie che si seguono e distano meno di",
+      "description": "Un ponte di raso fra le due: il filo passa senza salto. Cambia il disegno delle macchie. 0 = mai.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "altro"
+    },
+    "bridgeWidth": {
+      "type": "number",
+      "title": "Larghezza del ponte",
+      "description": "La larghezza del ponte fra due macchie vicine.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 0.5,
+      "x-concetto": "altro"
+    },
+    "cutBaseUnderSpots": {
+      "type": "boolean",
+      "title": "Buca la base sotto le macchie",
+      "description": "Se la base si buca sotto le macchie (fermandosi al margine dentro). Spento: la base resta tutta intera.",
+      "x-concetto": "interruttore"
+    },
+    "baseCutMargin": {
+      "type": "number",
+      "title": "Margine della base nella macchia",
+      "description": "Di quanto la base entra nella macchia quando si buca: il raso la copre.",
+      "x-unita": "mm",
+      "x-concetto": "rientro"
+    },
+    "minPatchArea": {
+      "type": "number",
+      "title": "Macchia più piccola",
+      "description": "Area minima di una macchia perché valga la pena cucirla",
+      "x-unita": "mm2",
+      "minimum": 0,
+      "x-passo": 10,
+      "x-concetto": "immagine"
+    },
+    "lightFlattening": {
+      "type": "number",
+      "title": "Pareggio della luce",
+      "description": "tienilo più grande del motivo (0 = spento)",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "immagine"
+    },
+    "grainSmoothing": {
+      "type": "number",
+      "title": "Attenuazione della grana",
+      "description": "Raggio dell’attenuazione della grana",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "immagine"
+    },
+    "rowSpacing": {
+      "type": "number",
+      "title": "Distanza fra le file",
+      "description": "quanto è fitto il pieno",
+      "x-unita": "mm",
+      "minimum": 0.1,
+      "maximum": 2,
+      "x-passo": 0.05,
+      "x-regole": [
+        "R22"
+      ],
+      "x-concetto": "densita"
+    },
+    "maxInternalTravel": {
+      "type": "number",
+      "title": "Passaggio scoperto massimo",
+      "description": "oltre, il filo si taglia invece di attraversare il disegno. Più basso = meno fili tesi, più rasafili",
+      "x-unita": "mm",
+      "minimum": 5,
+      "maximum": 400,
+      "x-passo": 5,
+      "x-concetto": "passaggi-nascosti"
+    },
+    "fringeLength": {
+      "type": "number",
+      "title": "Lunghezza della frangia",
+      "description": "tienila sotto la sovrapposizione, o si appiattisce",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 12,
+      "x-passo": 0.5,
+      "x-concetto": "sfumatura"
+    },
+    "outlineSmoothing": {
+      "type": "number",
+      "title": "Lisciatura del contorno",
+      "description": "0 = il contorno com’esce dalla tracciatura. Alzandola sparisce il dettaglio più piccolo di così",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 5,
+      "x-passo": 0.2,
+      "x-regole": [
+        "R30"
+      ],
+      "x-concetto": "immagine"
+    },
+    "gradientThreshold": {
+      "type": "number",
+      "title": "Da qui in su è una sfumatura",
+      "description": "sotto, il colore stacca netto",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 20,
+      "x-passo": 0.5,
+      "x-concetto": "sfumatura"
+    },
+    "gradientOverlap": {
+      "type": "number",
+      "title": "Sovrapposizione dove sfuma",
+      "description": "quanto il colore sotto entra sotto quello sopra",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 12,
+      "x-passo": 0.5,
+      "x-concetto": "sovrapposizione"
+    },
+    "edgeOverlap": {
+      "type": "number",
+      "title": "Sormonto dove stacca",
+      "description": "basta poco: serve a non far vedere la tela alla giunta",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 6,
+      "x-passo": 0.5,
+      "x-concetto": "sovrapposizione"
+    },
+    "maxVisibleTravel": {
+      "type": "number",
+      "title": "Tratto scoperto massimo",
+      "description": "Oltre questo tratto scoperto il filo si stacca. Tenuto alto apposta: il giro sul contorno si paga, il taglio del filo no",
+      "x-unita": "mm",
+      "x-regole": [
+        "R16"
+      ],
+      "x-concetto": "passaggi-nascosti"
+    },
+    "maxVisibleTravelLastNeedle": {
+      "type": "number",
+      "title": "Tratto scoperto massimo, ultimo ago",
+      "description": "Come il tratto scoperto massimo, ma per l’ultimo ago: sopra non c’è niente, ogni passaggio si vede. Sotto la soglia del rasafilo della macchina",
+      "x-unita": "mm",
+      "x-regole": [
+        "R16"
+      ],
+      "x-concetto": "passaggi-nascosti"
+    },
+    "continuousFill": {
+      "type": "boolean",
+      "title": "Riempimento continuo",
+      "description": "Cucire ogni macchia con un filo solo, in serpentina, invece di lasciare le corse sciolte al routing",
+      "x-concetto": "ordine-cucitura"
+    },
+    "fillMethod": {
+      "type": "string",
+      "title": "Metodo di riempimento",
+      "description": "Come si riempie una macchia: a colonne, a fasce, a curve di livello (iso) o tracciato (rotaia o distanza costante)",
+      "enum": [
+        "colonne",
+        "fasce",
+        "iso",
+        "tracciato"
+      ],
+      "x-concetto": "riempimento"
+    },
+    "maxAxisRotation": {
+      "type": "number",
+      "title": "Rotazione massima dell’asse",
+      "description": "Solo per «colonne»: quanto può ruotare l’asse dentro una colonna prima di un taglio",
+      "x-unita": "deg",
+      "x-concetto": "riempimento"
+    },
+    "maxColumnWidth": {
+      "type": "number",
+      "title": "Larghezza massima della colonna",
+      "description": "Solo per «colonne»: larghezza massima di una colonna; oltre, colonne parallele",
+      "x-unita": "mm",
+      "x-concetto": "riempimento"
+    },
+    "maxBandDrift": {
+      "type": "number",
+      "title": "Deriva massima della fascia",
+      "description": "Solo per «fasce»: la deriva massima ammessa dentro una fascia, |ln(spaziatura finale / iniziale)|; decide quante fasce servono",
+      "x-concetto": "riempimento"
+    },
+    "bandReseed": {
+      "type": "number",
+      "title": "Risemina della fascia",
+      "description": "Solo per «fasce»: ogni quanti mm di cammino si risemina il fronte a spaziatura esatta",
+      "x-unita": "mm",
+      "x-concetto": "riempimento"
+    },
+    "travelRoute": {
+      "type": "string",
+      "title": "Via dei passaggi",
+      "description": "Dove passa il filo di collegamento quando non può andare dritto: «interno» taglia dentro il riempimento, «contorno» costeggia il bordo",
+      "enum": [
+        "interno",
+        "contorno"
+      ],
+      "x-regole": [
+        "R30"
+      ],
+      "x-concetto": "passaggi-nascosti"
+    },
+    "travelEdgeMargin": {
+      "type": "number",
+      "title": "Margine dal bordo dei passaggi",
+      "description": "Quanto il passaggio deve stare lontano dal bordo. Zero = basta stare dentro",
+      "x-unita": "mm",
+      "x-concetto": "rientro"
+    },
+    "sewTravel": {
+      "type": "boolean",
+      "title": "Cuci i passaggi",
+      "description": "Cucire i passaggi, o lasciare le corse staccate. Serve a misurare; in produzione resta acceso",
+      "x-concetto": "passaggi-nascosti"
+    }
+  },
+  "x-concetti": {
+    "densita": {
+      "descrizione": "Spaziatura TRASVERSALE in mm fra file di filo adiacenti (R22).",
+      "parametri": [
+        "density",
+        "densitySpacingMm",
+        "targetDensityPct",
+        "fillSpacingMm",
+        "baseSpacing",
+        "densitySpacing",
+        "satinRowSpacing",
+        "rowSpacing"
+      ]
+    },
+    "interlinea": {
+      "descrizione": "Passo LONGITUDINALE fra due punti consecutivi lungo il filo, del cordoncino (R30).",
+      "parametri": [
+        "cordInterline",
+        "horizontalZigzagInterline",
+        "horizontalZigzagPassCount",
+        "verticalZigzagInterline",
+        "variationPassCountSides",
+        "variationPassCountCenter",
+        "obliqueSatinPitch",
+        "straightSatinPitch",
+        "cordPitch",
+        "toothSpacing"
+      ]
+    },
+    "punto-minimo": {
+      "descrizione": "Lunghezza minima di un punto; si applica dopo il routing (R3).",
+      "parametri": [
+        "minStitch",
+        "minimumSegmentLength",
+        "cutBorderStitchLength",
+        "minStitchMm",
+        "reinsertionRounds",
+        "cleanupMinStitch",
+        "minStitchLength"
+      ]
+    },
+    "punto-massimo": {
+      "descrizione": "Lunghezza massima di un punto: oltre si suddivide (R4).",
+      "parametri": [
+        "maxStitch",
+        "maxStitchMm",
+        "cordedMaxStitch",
+        "runMaxStitch",
+        "maxStitchLength",
+        "satinMaxStitch"
+      ]
+    },
+    "punto-passaggio": {
+      "descrizione": "Lunghezza dei punti di un passaggio/travel (visibile o nascosto).",
+      "parametri": [
+        "travelStitch",
+        "minimumTravelStitchLength",
+        "travelStitchMm",
+        "edgeTravelStitch",
+        "frameTravelStitch"
+      ]
+    },
+    "punto-corsa": {
+      "descrizione": "Passo longitudinale del punto corsa o dei punti di un riempimento.",
+      "parametri": [
+        "level05StitchLength",
+        "thermoOutlineStitch",
+        "outlineStitch",
+        "gridStitch"
+      ]
+    },
+    "larghezza-punto": {
+      "descrizione": "Larghezza di un punto pieno: cordoncino, raso, zig-zag, croce.",
+      "parametri": [
+        "cordWidth",
+        "cellWidthMm",
+        "cordHeight"
+      ]
+    },
+    "misura-reale": {
+      "descrizione": "Misura fisica del pezzo o della sagoma (larghezza reale, R11).",
+      "parametri": [
+        "realWidth",
+        "realWidthMm",
+        "dpiEstimate"
+      ]
+    },
+    "formato": {
+      "descrizione": "Misure del pannello/piano di lavoro (larghezza, altezza, origine).",
+      "parametri": [
+        "totalWidth",
+        "totalHeight",
+        "panelWidth",
+        "panelHeight",
+        "panelOriginX",
+        "panelOriginY",
+        "gridCols",
+        "gridRows",
+        "cellHeightMm"
+      ]
+    },
+    "scala": {
+      "descrizione": "Un fattore di scala (percentuale o rapporto) applicato a misure o moduli.",
+      "parametri": [
+        "parameterScalePercent",
+        "variationSidesPercent",
+        "variationCenterPercent",
+        "moduleScale",
+        "level0Scale",
+        "holesScale",
+        "smoothGrowth"
+      ]
+    },
+    "angolo": {
+      "descrizione": "Orientamento di righe, diagonali, tratti o moduli, in gradi.",
+      "parametri": [
+        "angleA",
+        "angleB",
+        "horizontalAngleDeg",
+        "columnWavePhase",
+        "rotation",
+        "obliqueSatinAngle",
+        "fillAngleDeg",
+        "fringeOpeningMin",
+        "fringeOpeningMax",
+        "toothOpening",
+        "axisMode",
+        "satinAngle"
+      ]
+    },
+    "rientro": {
+      "descrizione": "Distanza di un elemento dal bordo/contorno (inset, margine).",
+      "parametri": [
+        "netInset",
+        "satinBand",
+        "overflowMarginMm",
+        "patternBorderOffset",
+        "holesMargin",
+        "zoneMargin",
+        "outerMargin",
+        "verticalMargin",
+        "gridInset",
+        "frameInset",
+        "firstLineOffset",
+        "edgeMargin",
+        "baseCutMargin",
+        "travelEdgeMargin"
+      ]
+    },
+    "spostamento": {
+      "descrizione": "Traslazione di un elemento o di una griglia (offset).",
+      "parametri": [
+        "netOffsetX",
+        "netOffsetY",
+        "horizontalZigzagOffsetX",
+        "offsetY",
+        "rowShiftX",
+        "rowShiftY",
+        "gridStartOffsetX",
+        "gridStartOffsetY",
+        "level0OffsetX",
+        "level0OffsetY",
+        "level1OffsetX",
+        "level1OffsetY",
+        "level2OffsetX",
+        "level2OffsetY",
+        "holesOffsetX",
+        "holesOffsetY",
+        "globalPatternOffsetX",
+        "globalPatternOffsetY",
+        "stripShiftMm",
+        "retraceOffsetMm"
+      ]
+    },
+    "sovrapposizione": {
+      "descrizione": "Quanto due elementi si sovrappongono o si sormontano.",
+      "parametri": [
+        "zoneOverlap",
+        "horizontalOverlap",
+        "verticalOverlap",
+        "rowOverlapPct",
+        "fringeOverlap",
+        "tintOverlap",
+        "blockBleed",
+        "gradientOverlap",
+        "edgeOverlap"
+      ]
+    },
+    "tolleranza": {
+      "descrizione": "Soglia di geometria: pulizia, snap, dedup, chiusura, abbinamento.",
+      "parametri": [
+        "boundaryCleanupMode",
+        "maxBoundaryAdjustment",
+        "holePerimeterToleranceMm",
+        "holeMatchTolerance",
+        "cleanupTolerance",
+        "snapToEdgeDistance",
+        "perimeterCloseTolerance",
+        "perimeterLaneTolerance",
+        "minArea",
+        "toothSharpEdgeMm",
+        "smoothFlattenMm",
+        "smoothCloseMm",
+        "smoothMaxMm"
+      ]
+    },
+    "passaggi-nascosti": {
+      "descrizione": "Passaggi che si nascondono sotto il ricamo successivo (R16–R21): mappa di copertura, pesi, bypass.",
+      "parametri": [
+        "travelMode",
+        "passMaxMm",
+        "hiddenPassMaxMm",
+        "noPassLastColors",
+        "overStitchedCost",
+        "hiddenPassMax",
+        "maxInternalTravel",
+        "maxVisibleTravel",
+        "maxVisibleTravelLastNeedle",
+        "travelRoute",
+        "sewTravel"
+      ]
+    },
+    "scarico-filo": {
+      "descrizione": "Fermatura/scarico del filo a inizio e fine corsa (R8).",
+      "parametri": [
+        "startLockEnabled",
+        "startLockStitchMm",
+        "endLockCount",
+        "endLockMm"
+      ]
+    },
+    "tiraggio": {
+      "descrizione": "Compensazione del tiro: allunga le passate perché il filo si ritira (R19).",
+      "parametri": []
+    },
+    "aree-vuote": {
+      "descrizione": "Aree di esclusione e distanze da esse (R5).",
+      "parametri": [
+        "voidStitchMm",
+        "voidClearance",
+        "enableExclusionAreas",
+        "reconnectVoidBorders",
+        "voidClearanceMm"
+      ]
+    },
+    "seme": {
+      "descrizione": "Seme del caso: stesso seme, stesso ricamo.",
+      "parametri": [
+        "variationSeed",
+        "seed"
+      ]
+    },
+    "variazione": {
+      "descrizione": "Quanto un valore varia (irregolarità, jitter, gradiente) rispetto al regolare.",
+      "parametri": [
+        "variationIrregularityPercent",
+        "strokeAngleJitterDeg",
+        "style",
+        "degradeDrop",
+        "degradeJitterMm",
+        "jaggedLengthMm",
+        "jaggedStartMm",
+        "hookIrregularity",
+        "fringeLengthMin",
+        "fringeLengthMax",
+        "diameterIrregularity",
+        "fringeAmount",
+        "fringeOutsidePercent"
+      ]
+    },
+    "immagine": {
+      "descrizione": "Trattamento dell’immagine in ingresso: soglia, palette, colori, dettaglio.",
+      "parametri": [
+        "excludeBackground",
+        "backgroundColor",
+        "backgroundTolerance",
+        "knitDetailPct",
+        "knitStitch",
+        "coverage",
+        "threshold",
+        "sampleToleranceRgb",
+        "backgroundColors",
+        "backgroundToleranceRgb",
+        "maxWidthPx",
+        "dpiDefault",
+        "flattenLightMm",
+        "smoothMm",
+        "minBlobMm2",
+        "minPatchArea",
+        "lightFlattening",
+        "grainSmoothing",
+        "outlineSmoothing"
+      ]
+    },
+    "colori": {
+      "descrizione": "Numero, ordine o scelta dei colori/fili.",
+      "parametri": [
+        "paletteCycles",
+        "clusterMode",
+        "clusterStrength",
+        "paletteMode",
+        "colorCount",
+        "color",
+        "minTintRunMm"
+      ]
+    },
+    "ordine-cucitura": {
+      "descrizione": "In che ordine e verso si cuce: direzione, serpentina, ripassi, salti.",
+      "parametri": [
+        "repeatBack",
+        "passes",
+        "fixedDirection",
+        "topLeg",
+        "jumpMm",
+        "passOrder",
+        "byBlocks",
+        "baseWhole",
+        "trimJumps",
+        "zoneGapMm",
+        "zoneMaxMm",
+        "stripRows",
+        "retraceCost",
+        "ordering",
+        "scanlineBandMm",
+        "serpentine",
+        "stitchMode",
+        "useConnectors",
+        "rowHeight",
+        "gapCrossMm",
+        "buildMode",
+        "continuousFill"
+      ]
+    },
+    "modulo": {
+      "descrizione": "Forma e misure del modulo ripetuto di un pattern (zig-zag, rombo, cella).",
+      "parametri": [
+        "squareSize",
+        "horizontalZigzagWidth",
+        "horizontalZigzagHeight",
+        "horizontalZigzagSpacing",
+        "verticalZigzagWidth",
+        "verticalConnectorDiagonalOffsetY",
+        "stepX",
+        "columnWaveAmplitude",
+        "columnWaveLength",
+        "gridVectorAX",
+        "gridVectorAY",
+        "gridVectorBX",
+        "gridVectorBY",
+        "horizontalGap",
+        "verticalGap",
+        "diagonalCount",
+        "modulesPerDiagonal",
+        "anchorMode",
+        "manualAnchorX",
+        "manualAnchorY",
+        "level0AnchorX",
+        "level0AnchorY",
+        "holesAnchorX",
+        "holesAnchorY",
+        "striaturaLengthMm"
+      ]
+    },
+    "interruttore": {
+      "descrizione": "Un’opzione acceso/spento che non è una misura.",
+      "parametri": [
+        "satinDownwardOnly",
+        "alternateHorizontalAngle",
+        "autoFillDiagonals",
+        "autoModulesPerDiagonal",
+        "enableLevel0",
+        "enableLevel05",
+        "thermoOutline",
+        "teeth",
+        "buildDst",
+        "showBare",
+        "showPasses",
+        "cutBaseUnderSpots"
+      ]
+    },
+    "altro": {
+      "descrizione": "Non ancora raggruppato: da assegnare quando due tool lo condividono.",
+      "parametri": [
+        "constructionStroke",
+        "exportCompatibilityMode",
+        "shapeType",
+        "maxStitchesPerArea",
+        "maxPoints",
+        "chunkSize",
+        "passaggioAmpMm",
+        "blobSizeMm",
+        "blobSpacingMm",
+        "waveAmpMm",
+        "waveLenMm",
+        "windowWidening",
+        "gridMinLine",
+        "lineSpacing",
+        "tackPitch",
+        "tackHeight",
+        "brushWidth",
+        "translateMaxAreaMm2",
+        "minDetachedPiece",
+        "bridgeMaxGap",
+        "bridgeWidth"
+      ]
+    },
+    "fori-laser": {
+      "descrizione": "Fori laser: filtrano piazzamento e fissaggio (R7, R12); tolleranze e abbinamento ai moduli.",
+      "parametri": [
+        "enableHolesLayer",
+        "pruneFeaturesWithoutHoles",
+        "trimDiagonalsToHoles"
+      ]
+    },
+    "ritaglio": {
+      "descrizione": "Come il ricamo si taglia al perimetro: modalità di clip e di pulizia (R5).",
+      "parametri": [
+        "cleanupMode",
+        "level0ClipMode",
+        "level1ClipMode"
+      ]
+    },
+    "instradamento-passaggi": {
+      "descrizione": "Come i passaggi costeggiano il bordo tra le diagonali per tenere il filo continuo (R26).",
+      "parametri": [
+        "travelPathMode",
+        "travelRoutingStrategy",
+        "travelSideStrategy",
+        "allowInternalShortcuts",
+        "perimeterLaneWidth",
+        "technicalMaxTravelMm",
+        "technicalGapBreakFactor",
+        "routeAroundVoidsEnabled"
+      ]
+    },
+    "passate-pezzo": {
+      "descrizione": "Quante passate fa un pezzo cucito (cordoncino, scaletta, uncino, linea di bordatura).",
+      "parametri": [
+        "cordedPasses",
+        "ladderPasses",
+        "hookHorizontalPasses",
+        "hookVerticalPasses",
+        "borderLinePasses"
+      ]
+    },
+    "lunghezza-pezzo": {
+      "descrizione": "Lunghezza di riferimento di un pezzo (cordoncino, mattoncino, uncino): oltre si divide.",
+      "parametri": [
+        "cordedPieceLength",
+        "brickLength",
+        "hookHorizontalLength",
+        "hookVerticalLength"
+      ]
+    },
+    "soglia-divisione": {
+      "descrizione": "Di quanto un oggetto può allungarsi col rombo prima di dividersi o di aumentare di numero.",
+      "parametri": [
+        "objectSplitThreshold",
+        "hookSplitThreshold"
+      ]
+    },
+    "sporgenza": {
+      "descrizione": "Di quanto un elemento esce oltre il bordo o i capi del pezzo o della linea.",
+      "parametri": [
+        "overhangLeft",
+        "overhangRight",
+        "borderOutset",
+        "borderEndOverhang",
+        "straightSatinOverhang"
+      ]
+    },
+    "aree-di-scarico": {
+      "descrizione": "Aree di scarico: dentro le tinte marcate le passate si riducono (R28).",
+      "parametri": [
+        "reliefPercent",
+        "linesReliefPasses",
+        "frameReliefPasses"
+      ]
+    },
+    "lunghezza-dente": {
+      "descrizione": "Lunghezza dei denti del pettine: si estrae fra un minimo e un massimo, e quella è la lunghezza del punto.",
+      "parametri": [
+        "toothMinLength",
+        "toothMaxLength"
+      ]
+    },
+    "pallino": {
+      "descrizione": "Misura e forma dei pallini del Punto razza: diametro, vuoto fra loro, rapporto, profilo, crescita e rimpicciolimento.",
+      "parametri": [
+        "dotMinDiameter",
+        "dotMaxDiameter",
+        "dotGap",
+        "dotAspect",
+        "dotProfile",
+        "dotGrowth",
+        "dotMinRatio"
+      ]
+    },
+    "campo-misura": {
+      "descrizione": "Come la misura dei pallini cambia sul pezzo: dal bordo al centro, a chiazze, per linee di sfumatura e pallini fissi.",
+      "parametri": [
+        "fieldMode",
+        "edgeDepth",
+        "edgeCurve",
+        "fieldNoise",
+        "fieldNoiseScale",
+        "gradientWeight",
+        "fixedDotInfluence"
+      ]
+    },
+    "sfumatura": {
+      "descrizione": "Dove il colore sfuma invece di staccare netto: soglia, frangia, sovrapposizione fra tinte.",
+      "parametri": [
+        "fringeLength",
+        "gradientThreshold"
+      ]
+    },
+    "riempimento": {
+      "descrizione": "Come si riempie una macchia di raso: metodo e parametri del metodo (colonne, fasce).",
+      "parametri": [
+        "fillMethod",
+        "maxAxisRotation",
+        "maxColumnWidth",
+        "maxBandDrift",
+        "bandReseed"
+      ]
+    }
+  }
+}

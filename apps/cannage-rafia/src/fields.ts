@@ -44,6 +44,9 @@ export const PROGRAMMA_FIELDS: Field[] = [
   { kind: 'num', name: 'puntoMinimo', label: 'Punto minimo', unit: 'mm', min: 0, step: 0.1, help: 'vale per tutti gli stop: i punti più corti di così si tolgono; 0 = niente' },
 ];
 
+/** I valori di partenza del vincolo globale (il punto minimo di tutto il programma). */
+export const PROGRAMMA_VALORI: Valori = { puntoMinimo: 0.5 };
+
 /** I parametri degli stop 1 (contorno a impunture) e 2 (griglia che blocca i materiali). */
 export const STOP_FIELDS: Field[] = [
   { kind: 'num', name: 'puntoContorno', label: 'Punto del contorno a impunture', unit: 'mm', min: 1, step: 0.5, help: 'stop 1, e il contorno all’inizio dello stop 2' },
@@ -59,6 +62,9 @@ export const STOP_FIELDS: Field[] = [
 export const BASI_FIELDS: Field[] = [
   { kind: 'num', name: 'reliefPercent', label: 'Scarico nelle aree', unit: '%', min: 0, step: 5, help: 'dentro le tinte marcate «Area di scarico» le basi hanno meno passate: 50 = metà; 0 = niente' },
 ];
+
+/** I valori di partenza delle basi (scarico del 50% nelle aree di scarico). */
+export const BASI_VALORI: Valori = { reliefPercent: 50 };
 
 /**
  * Lo stop 6, la cornice. Anche qui la soglia è in % nel pannello e frazione nel motore: la conversione

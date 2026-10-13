@@ -1,0 +1,11 @@
+{
+  "name": "@rg/cervello",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Il cervello del ricamo: una lingua sola per i parametri di tutti i tool (registro, schema, cricchetto). Vedi AVVIO-CERVELLO-RICAMO.md.",
+  "exports": {
+    ".": "./src/index.ts",
+    "./*": "./src/*.ts"
+  }
+}

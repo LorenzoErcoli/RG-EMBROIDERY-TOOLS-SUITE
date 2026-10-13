@@ -5953,6 +5953,39 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   check('restringi: un rettangolo 20 × 10 ristretto di 2 mm è 16 × 6 (entro 0,15 mm)', scarto <= 0.15, true);
 }
 
+// ---- K1 — il registro dei parametri e il suo cricchetto ---------------------------------------------------------
+// packages/cervello descrive i parametri di tutti i tool; test/salvati/<tool>.ts dice cosa ogni tool SALVA davvero
+// (dai default del suo motore). Qui si confrontano. Il cricchetto: un tool non può salvare un parametro che il
+// registro non conosce, e il debito (packages/cervello/src/debito.ts) può solo scendere.
+{
+  console.log('\nK1 — il registro dei parametri: ogni parametro salvato è registrato, il debito può solo scendere');
+  const { caricaRegistro, toolDellaSuite, controllaRegistro, confronta } = await import('./registro.mjs');
+  const { testoSchema, FILE_SCHEMA } = await import('../packages/cervello/scripts/genera-schema.mjs');
+  const reg = await caricaRegistro('registro-smoke');
+
+  // Il debito di oggi. Si abbassa quando un parametro viene registrato, MAI si alza: se un tool nuovo salva
+  // un parametro, si dichiara nel registro (packages/cervello/src/tool/<tool>.ts), non si aggiunge in debito.ts.
+  const DEBITO_ATTUALE = 12;
+  const debito = Object.entries(reg.DEBITO).flatMap(([t, voci]) => Object.keys(voci).map((k) => `${t}:${k}`));
+  check(`il debito è ${DEBITO_ATTUALE} voci (può solo scendere: se è sceso, abbassa DEBITO_ATTUALE)`, debito.length, DEBITO_ATTUALE);
+
+  const tools = toolDellaSuite().sort();
+  check('ogni tool della suite ha la sua scheda e la sua lista di parametri salvati (e viceversa)',
+    [[...reg.ORDINE_TOOL].sort(), Object.keys(reg.SALVATI).sort()], [tools, tools]);
+  check('il registro è coerente (id camelCase, unità, concetti, regole, limiti, default nei limiti)', controllaRegistro(reg), []);
+
+  for (const t of reg.ORDINE_TOOL) {
+    const c = confronta(reg, t);
+    check(`${t}: salva ${Object.keys(c.salvati ?? {}).length} parametri; nessuno fuori dal registro (né dal debito)`, c.nonRegistrati, []);
+    check(`${t}: nessun parametro registrato che il tool non salva`, c.registratiMaNonSalvati, []);
+    check(`${t}: i default registrati sono quelli del codice`, c.defaultDiversi, []);
+    check(`${t}: il debito non ha voci già registrate o che il tool non salva più (tolgile)`, [...c.debitoSuperato, ...c.debitoVecchio], []);
+  }
+
+  check('params.schema.json coincide con quello generato dal registro (npm run genera:schema)',
+    readFileSync(FILE_SCHEMA, 'utf8').replace(/\r\n/g, '\n') === await testoSchema('schema-smoke'), true);
+}
+
 rmSync(outDir, { recursive: true, force: true });
 console.log(failed ? `\n${failed} test falliti\n` : '\nTutti i test passati\n');
 process.exit(failed ? 1 : 0);
