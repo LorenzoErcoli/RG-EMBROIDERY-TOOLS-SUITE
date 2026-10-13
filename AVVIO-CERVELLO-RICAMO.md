@@ -23,6 +23,11 @@
 | Simulatore | in `@rg/ui`, **usato da 2 tool** (pettine, cannage-rafia) | P1 è a metà: si è spostato, non si è diffuso. |
 | Dove sta la conoscenza di mestiere | Costituzione (31 regole), STATO (2.028 righe), REVISIONE-PARAMETRI, MANUALE, 6 briefing, il laboratorio di pettine, i DST di riferimento — **e 20 note nella memoria dell'assistente, fuori dal repo** | Decisioni preziose (*«densità = cella»*, *«ruota il piano, non il modulo»*, *«immagini, non vettori»*…) le vedeva **solo l'assistente**. **Portate in [`sapere/`](sapere/LEGGIMI.md) lo stesso giorno** (D2). |
 
+> **Aggiornamento 2026-10-13 — il debito cresce mentre il cervello aspetta.** In due settimane i tool
+> sono passati da **13 a 15** (*Pelle di razza*, *Pattern a macchie*) e i nomi di parametri fisici da
+> **211 a 226**; `packages/cervello` non esiste ancora. Ogni tool nuovo nasce con la sua lingua. Per
+> questo il cervello va **prima** dei prodotti per i clienti (§8), non dopo.
+
 **In una riga:** i tool hanno già un canale per parlarsi (il file riapribile) ma non una lingua
 comune per farlo, e la conoscenza che li ha fatti nascere è sparsa in dieci posti, uno dei quali
 fuori dal repo.
@@ -131,6 +136,33 @@ cosa prende (`svg`, `dxf`, `raster`, `dst`), cosa dà, quali **tecniche** della 
 fare, quali parametri usa (dal registro). È quello che permette all'agente — e alla home — di
 rispondere a *«ho una foto di un degradé, con cosa lo faccio?»*.
 
+### 3e. Il contratto del motore — quello che permette di *pilotare* i tool
+
+Un cervello che pilota tutti i tool ha bisogno di poterli **chiamare tutti nello stesso modo**. Misurato
+il 2026-10-13: **i 15 motori sono già tutti senza DOM** (nessun file fuori da `tool.ts` tocca
+`document` o `window`) — la buona notizia: sono pilotabili. Ma la porta d'ingresso ha **15 forme
+diverse**: `runPipeline` in tre tool, `buildPlan` nel broccato, `generaLinee`/`generaCornice`/
+`generaBordatura` nel cannage, `generateStitch` in bitmap, `costruisciPettine`, `costruisciMacchie`, `sfrangia`…; nel cross-stitch
+e nella razza il motore è un insieme di funzioni messe in fila dentro `tool.ts`.
+
+Il contratto, uguale per tutti, accanto al motore che c'è già (non al suo posto):
+
+```ts
+// apps/<tool>/src/motore.ts — il tool lo esporta, la shell e il cervello lo chiamano
+export const motore: Motore = {
+  id: 'razza',
+  scheda,                                   // 3d: ingressi, uscite, tecniche, parametri
+  async genera(ingresso: Ingresso, params: Params): Promise<Risultato>,
+};
+// Ingresso   = { sagoma?: Contour[], immagine?: Raster, dst?: Uint8Array, larghezzaMm? }
+// Risultato  = { strati: ExportLayer[], busta: Busta, misure: Referto, avvisi: string[] }
+```
+
+Con questo il pannello di ogni tool, il banco (K7), l'agente (K8) **e** i prodotti per i clienti (§8)
+chiamano la stessa funzione: un tool non ha più un motore per l'interfaccia e un altro per i test.
+Si fa **un tool alla volta**, avvolgendo quello che c'è; il segno che è fatto è un test che chiama
+`genera` su ogni tool registrato con una sagoma di prova e controlla che esca un DST e un referto.
+
 ---
 
 ## 4. Strato 2 — Una conoscenza sola (omogeneizzare le conoscenze)
@@ -212,7 +244,8 @@ supposizioni.
 
 | # | Fase | Fatto quando | Peso |
 |---|---|---|---|
-| **K1** | **Registro dei parametri** (`packages/cervello`) per tutti i 13 tool + generazione di `params.schema.json` + **il cricchetto** con la lista del debito | il test è verde, il debito è una lista scritta e può solo scendere | medio |
+| **K1** | **Registro dei parametri** (`packages/cervello`) per tutti i tool + generazione di `params.schema.json` + **il cricchetto** con la lista del debito | il test è verde, il debito è una lista scritta e può solo scendere | medio |
+| **K1b** | **Il contratto del motore** (§3e): ogni tool esporta `motore.genera(ingresso, params)` con la stessa forma, avvolgendo il motore che c'è | un test chiama `genera` su tutti i tool registrati e da ognuno esce un DST e un referto | medio |
 | **K2** | **La busta v1** + `leggiProgetto` nel core; ogni tool scrive la busta e legge i propri file vecchi; il primo interscambio vero (sorgente + misura + ruoli + fili da un file di qualunque tool) | un file di un tool si apre in un altro e porta con sé quello che ha senso | medio |
 | **K3** | **Il referto comune** (`misure` nella busta, calcolate dal DST con una funzione sola) | due tool diversi, stesso referto, stessi numeri sullo stesso DST | piccolo |
 | **K4** | **Le schede dei tool** in `tools.ts` (ingressi, uscite, tecniche R24, parametri) | la home e l'agente sanno cosa fa ogni tool senza leggere il codice | piccolo |
@@ -221,7 +254,9 @@ supposizioni.
 | **K7** | **Il banco** (`npm run cervello -- prova …`) su tutti i motori | ogni tool gira da riga di comando e dà busta + DST + PNG + referto | medio |
 | **K8** | **L'agente** `esperto-ricamo` | dato un brief, consegna un file di progetto provato e motivato | medio |
 
-**K1 è la prima e non aspetta nessuno.** K2–K4 si possono fare in qualunque ordine dopo K1. K5 è
+**K1 è la prima e non aspetta nessuno; K1b subito dopo** (aggiunta il 2026-10-13: senza una porta
+d'ingresso comune il cervello non può pilotare i tool, può solo descriverli). K2–K4 si possono fare in
+qualunque ordine dopo K1. K5 è
 partita (D2 decisa). K7 raccoglie P1 (simulatore) e P4 (laboratorio):
 quando il banco esiste, il simulatore e il laboratorio ne sono due viste.
 
@@ -241,3 +276,24 @@ nessun file vecchio smette di aprirsi. Tutto per aggiunta, un tool alla volta (r
 | **D2** | Le **20 note** che oggi stanno nella memoria dell'assistente: si portano nel repo? | **Sì.** Sono decisioni tue: oggi le vede solo l'assistente e solo da questa cartella; nel repo le vedi tu, ogni chat, e il test che le controlla. |
 | **D3** | Dove vive l'agente. | **Prima come agente di Claude Code** (come quello del design system): zero infrastruttura, e la suite resta senza server. Un pannello *Chiedi* dentro la suite è possibile dopo, perché il cervello sono dati — ma vuol dire un servizio e una chiave, ed è una scelta a parte. |
 | **D4** | Quando due tool misurano lo stesso concetto in due modi (la densità di interlace e quella di bitmap, C6), chi vince? | Nessuno d'ufficio: il registro le mette una accanto all'altra, e si decide caso per caso col ricamo in mano (regola 7). |
+
+---
+
+## 8. Cosa ci si costruisce sopra — le proposte per i clienti nuovi
+
+Nate nella chat globale il **2026-10-13**, alla domanda di Lorenzo *«cosa potremmo sviluppare che non
+esiste, da proporre a clienti nuovi?»*. E la sua risposta: *«prima di fare questo non dovrebbe esserci
+un cervello comune che pilota tutti i tools e che omogeneizza tutto?»* — sì: tutte e tre stanno in
+piedi **solo** sopra K1–K3, ed è per questo che sono qui e non in una voce a parte.
+
+| Proposta | Cosa vede il cliente | Di cosa ha bisogno |
+|---|---|---|
+| **Il campionario vivo** | un link privato: sceglie una tecnica RG sul **suo** cartamodello, muove 3–4 manopole, vede anteprima, cucitura simulata e stima (punti, filo, tempo macchina), invia la richiesta come file di progetto | K1b (`genera` uguale per tutti), K2 (busta), K3 (referto) + una versione *cliente* ridotta del tool, **senza DST in uscita**. Pilota proposto: la pelle di razza sulla Venere 85 |
+| **Il pezzo unico riproducibile** | ogni pezzo di una serie ha un ricamo diverso (macchie, pallini, intreccio dal caso) con la stessa resa e un numero — il seme — per ricucirlo identico | K1b + verificare che ogni motore sia deterministico a parità di seme + un generatore di serie che scarta le varianti fuori tolleranza col referto |
+| **Il ricamo che si adatta al pezzo** | un ricamo progettato una volta e rigenerato su tutte le taglie e tutti i pezzi (pallini della loro misura, nel cannage crescono gli oggetti, aree di scarico al montaggio) — non scalato | K1b + K2 + un passaggio unico per tutti i pezzi di un DXF, con una scheda che li confronta |
+
+**Due avvertenze prima di proporle:** che non esistano è detto da quello che si sa dei software di
+ricamo (Wilcom, Tajima, Pulse hanno anteprime realistiche e stime, ma per chi digitalizza, installati e
+su un file): **va controllato** prima di presentarle. E un motore che gira nel browser del cliente è
+codice leggibile: la versione cliente dà anteprima e stima, mai il DST, e solo i tool che si vogliono
+mostrare.

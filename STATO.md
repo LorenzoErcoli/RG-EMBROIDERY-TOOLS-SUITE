@@ -1916,6 +1916,7 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 | # | Fase | Stato |
 |---|---|---|
 | **K1** | **Registro dei parametri** (`packages/cervello`) per i 13 tool + `params.schema.json` generato + il **cricchetto**: un test che fallisce se un tool salva un parametro non registrato, con una lista del debito che può solo scendere. | **Pronta a partire**, non aspetta nessuno. |
+| **K1b** | **Il contratto del motore**: ogni tool esporta `motore.genera(ingresso, params)` con la stessa forma. I 15 motori sono già senza DOM, ma hanno 15 porte d'ingresso diverse. Aggiunta il 2026-10-13: senza, il cervello descrive i tool ma non li pilota. | Subito dopo K1. |
 | **K2** | **La busta di progetto v1** + `leggiProgetto` nel core: il file di un tool si apre in un altro e porta sorgente, misura reale, ruoli e fili. | Dopo K1. |
 | **K3** | **Il referto comune** (punti, metri di filo, salti, filo in vista) calcolato dal DST con una funzione sola e scritto nella busta. | Dopo K1. |
 | **K4** | **La scheda di ogni tool** in `tools.ts`: ingressi, uscite, tecniche R24, parametri. | Dopo K1. |
