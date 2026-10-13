@@ -26,18 +26,10 @@ import {
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { sfrangia, type FrangiaParams, type EsitoSfrangiatura } from './frange';
+import { sfrangia, defaultSfrangiaturaParams, type EsitoSfrangiatura } from './frange';
 import { riquadroDi, gruppoRicamo, gruppoFrange, gruppoZone, svgDocumento, TINTE, type Riquadro } from './vista';
 
-export const defaultSfrangiaturaParams: FrangiaParams & { pennelloMm: number } = {
-  lunghezzaMinMm: 2,
-  lunghezzaMaxMm: 6,
-  aperturaMinDeg: 10,
-  aperturaMaxDeg: 30,
-  sormontoMm: 0,
-  seme: 1,
-  pennelloMm: 6,
-};
+export { defaultSfrangiaturaParams };
 
 interface Campo { id: string; key: keyof typeof defaultSfrangiaturaParams; min?: number; max?: number; int?: boolean }
 const CAMPI: Campo[] = [

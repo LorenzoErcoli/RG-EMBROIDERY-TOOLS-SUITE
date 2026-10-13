@@ -63,6 +63,16 @@ export interface FrangiaParams extends LeggiRasoOptions {
   modo?: 'andata-ritorno' | 'sposta';
 }
 
+export const defaultSfrangiaturaParams: FrangiaParams & { pennelloMm: number } = {
+  lunghezzaMinMm: 2,
+  lunghezzaMaxMm: 6,
+  aperturaMinDeg: 10,
+  aperturaMaxDeg: 30,
+  sormontoMm: 0,
+  seme: 1,
+  pennelloMm: 6,
+};
+
 export interface EsitoSfrangiatura {
   /** I blocchi riscritti. Fuori dalle zone marcate sono gli stessi oggetti di prima. */
   blocchi: Array<{ needle: number; points_mm: Array<[number, number]> }>;

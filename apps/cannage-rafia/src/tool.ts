@@ -17,7 +17,7 @@ import { coloreStop, conPuntoMinimo, unisciTratti, stopBase, stopBordatura, stop
 import { reticoloDaZone, contornoDaZone, lineeDaModello, zoneDaModello, type LetturaReticolo, type LineaAperta, type Zona } from './reticolo';
 import { sagomaDaAnelli, sagomaDaZone, type Sagoma } from './sagoma';
 import {
-  BASI_FIELDS, BASI_PREDEFINITE, BORDATURA_FIELDS, CORNICE_FIELDS, LINEE_FIELDS, PRESET_LINEE, PROGRAMMA_FIELDS, SCALE_MODES, STOP_FIELDS,
+  BASI_FIELDS, BASI_PREDEFINITE, BASI_VALORI, PROGRAMMA_VALORI, BORDATURA_FIELDS, CORNICE_FIELDS, LINEE_FIELDS, PRESET_LINEE, PROGRAMMA_FIELDS, SCALE_MODES, STOP_FIELDS,
   parametriBordaturaDa, parametriCorniceDa, parametriDa, parametriStopDa, valoriCorniceDa, valoriDa, type Field, type Valori,
 } from './fields';
 
@@ -88,10 +88,10 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
   const $ = (id: string) => root.querySelector<HTMLElement>('#' + id)!;
   const cfg: Valori = valoriDa(PARAMETRI_DAVANTI);
   const cfgStop: Valori = { ...PARAMETRI_STOP };
-  const cfgBasi: Valori = { reliefPercent: 50 };
+  const cfgBasi: Valori = { ...BASI_VALORI };
   const cfgCornice: Valori = valoriCorniceDa(PARAMETRI_CORNICE);
   /** Il vincolo globale: il punto minimo di tutto il programma (Lorenzo, 16/09). */
-  const cfgProgramma: Valori = { puntoMinimo: 0.5 };
+  const cfgProgramma: Valori = { ...PROGRAMMA_VALORI };
   /** La bordatura, stop 7-10 (Lorenzo, 16/09): i valori del DST M1424. */
   const cfgBordatura: Valori = { ...PARAMETRI_BORDATURA };
   /**
