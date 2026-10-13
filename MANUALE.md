@@ -574,7 +574,17 @@ pennello, i fili e Annulla/Rifai.
   Passaggi* c'è quanti sono, e *Togli tutti* (chiede conferma). Si salvano nel progetto. Se il
   disegno cambia e quel passaggio non c'è più, il salto semplicemente non si applica.
 - **Gruppi** (G): trascina un rettangolo attorno a una parte del disegno che va cucita tutta insieme
-  (vedi *Gruppi* più sotto). Il ricamo non cambia, cambia l'ordine dei passaggi.
+  (vedi *Gruppi* più sotto), oppure **clicca i punti di un contorno**: Invio lo chiude, Backspace toglie
+  l'ultimo punto, Esc annulla. Il ricamo non cambia, cambia l'ordine dei passaggi: dentro ogni filo.
+- **Blocchi** (K): come i gruppi (rettangolo trascinato o contorno a clic), ma un **blocco di ricamo**
+  cuce **tutti i fili** prima di passare al blocco successivo. L'ordine è quello della lista *Blocchi di
+  ricamo* in *04 Passaggi* (la freccia su lo anticipa, il cestino lo toglie). Si cuce la base unica per
+  prima, poi blocco per blocco tutti i fili dal primo all'ultimo (coi gruppi dentro), poi il resto. Una
+  cella sta nel primo blocco che la contiene. Nel DST ogni blocco ha i suoi stop; la barra di stato dice
+  quanti blocchi e quanti stop. Coi blocchi il percorso del modulo non vale: decide il motore, blocco per
+  blocco.
+- **I punti sviluppati**: la barra di stato sotto il disegno comincia col numero dei punti come escono
+  nel DST (le diagonali e i passaggi divisi secondo il punto massimo).
 - **Vista**, a destra della barra: **Griglia** (accesa, le linee si vedono anche sopra il ricamo) e
   **Passaggi** (i passaggi colorati sull'anteprima). Sotto il disegno, la barra di stato dice cosa fa
   lo strumento scelto.

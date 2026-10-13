@@ -21,7 +21,7 @@ import {
 import { autoRoles, cellMask, normalizeContours, subMask, type PieceShape, type ShapeRole } from './shape';
 import { entryRows, routeAll, routeModuleBands, stripRanges, type BandRoute, type ModulePath } from './strips';
 import { bandsOf, cellStep, editsOnAllCopies, findModule, moveBandBreak, moveShapeBand, toggleBandBreak, movePiece, piecesOf, resizeModule, seamShift, shiftModule, tileModule, type KnitModule } from './module';
-import { DEFAULT_ZONES, type ZoneGroup } from './zones';
+import { DEFAULT_ZONES, shiftGroup, type ZoneGroup } from './zones';
 import { areaFromMm, clampArea, subGrid, type TestArea } from './area';
 
 // 0.4.0: un punto per colonna (la V dentro la sua cella). I progetti di prima si convertono.
@@ -37,7 +37,7 @@ const OLD_AUTOSAVE_KEY = 'rg-cross-stitch-autosave';
 const DEFAULT_THREADS: Thread[] = [{ hex: '#1a1a1a' }, { hex: '#b3261e' }];
 
 /** Gli strumenti della barra di modifica. */
-type Mode = 'pan' | 'paint' | 'fill' | 'erase' | 'group' | 'cut' | 'image' | 'order' | 'reroute' | 'pick' | 'bands';
+type Mode = 'pan' | 'paint' | 'fill' | 'erase' | 'group' | 'cut' | 'image' | 'order' | 'reroute' | 'pick' | 'bands' | 'area';
 
 const MODE_HELP: Record<Mode, string> = {
   pan: 'Sposta: trascina per muovere la vista, rotella per ingrandire. Il ricamo non si tocca.',
@@ -50,7 +50,8 @@ const MODE_HELP: Record<Mode, string> = {
   order: 'Ordine pezzi: clicca i pezzi del filo scelto nell’ordine in cui vuoi cucirli (il primo clic è il primo pezzo). Da quel momento, per quel filo, dentro ogni fascia vale il tuo ordine invece di quello del tool.',
   pick: 'Scegli modulo: sull’immagine intera trascina un riquadro intorno a un modulo. Il riquadro si aggancia alle V che trova; colonne e righe si correggono in «Griglia». Esc torna al pennello.',
   image: 'Sposta immagine: trascina l’immagine sotto la griglia finché il motivo cade giusto sulle V del modulo.',
-  group: 'Gruppi: trascina un rettangolo attorno a una parte (per esempio un titolo): il filo di ogni colore la cuce tutta insieme, prima del resto e nell’ordine della lista in 04 Passaggi.',
+  group: 'Gruppi: trascina un rettangolo, oppure clicca i punti di un contorno (Invio lo chiude, Backspace toglie l’ultimo punto, Esc annulla): dentro ogni filo quella parte si cuce tutta insieme, nell’ordine della lista in 04 Passaggi.',
+  area: 'Blocchi: trascina un rettangolo, oppure clicca i punti di un contorno (Invio lo chiude, Backspace toglie l’ultimo punto, Esc annulla). Ogni blocco cuce tutti i fili prima del successivo, nell’ordine della lista in 04 Passaggi; la base resta un solo stop, prima.',
 };
 
 /** Come si disegna ogni tipo di passaggio nell'anteprima (colori dai token del DS). */
@@ -316,6 +317,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <div class="rg-empty" id="groupEmpty">Nessun gruppo. Scegli «Gruppi» nella barra e trascina un rettangolo sul disegno: quella parte si cuce tutta insieme.</div>
             <button type="button" class="rg-button rg-button--small rg-button--ghost rg-button--danger" id="groupClear"><svg class="rg-icon" aria-hidden="true" focusable="false"><use href="${ICONS}#rg-icon-elimina"></use></svg>Togli tutti</button>
           </div>
+          <div class="rg-field rg-param-grid__wide cs-groups" id="areasBox">
+            <span class="rg-field__label">Blocchi di ricamo</span>
+            <ul class="rg-list" id="areaList" aria-label="Blocchi di ricamo"></ul>
+            <div class="rg-empty" id="areaEmpty">Nessun blocco. Scegli «Blocchi» nella barra e trascina un rettangolo o clicca i punti di un contorno: ogni blocco cuce tutti i fili prima del successivo.</div>
+            <button type="button" class="rg-button rg-button--small rg-button--ghost rg-button--danger" id="areaClear"><svg class="rg-icon" aria-hidden="true" focusable="false"><use href="${ICONS}#rg-icon-elimina"></use></svg>Togli tutti</button>
+          </div>
           <label class="rg-toggle rg-param-grid__wide">
             <input type="checkbox" id="fixedDir"><span class="rg-toggle__track"></span><span>Direzione fissa («\\» dall’alto, «/» dal basso)</span>
           </label>
@@ -367,6 +374,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <button type="button" class="rg-segmented__item" data-mode="fill" title="Riempi (F)">Riempi</button>
             <button type="button" class="rg-segmented__item" data-mode="erase" title="Gomma (E)">Gomma</button>
             <button type="button" class="rg-segmented__item" data-mode="group" title="Gruppi (G)">Gruppi</button>
+            <button type="button" class="rg-segmented__item" data-mode="area" title="Blocchi di ricamo (K)">Blocchi</button>
             <button type="button" class="rg-segmented__item" data-mode="cut" title="Salti (T)">Salti</button>
             <button type="button" class="rg-segmented__item" data-mode="pick" hidden>Scegli modulo</button>
             <button type="button" class="rg-segmented__item" data-mode="image" hidden>Sposta immagine</button>
@@ -492,6 +500,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   let cropDrag: { a: { x: number; y: number }; b: { x: number; y: number } } | null = null;
   /** Il rettangolo di un gruppo che si sta tirando (modalità Gruppi). */
   let groupDrag: { a: { x: number; y: number }; b: { x: number; y: number } } | null = null;
+  /** Il contorno che si sta disegnando a clic (Gruppi o Blocchi): i suoi punti in mm. */
+  let polyDraft: { kind: 'group' | 'area'; pts: Array<{ x: number; y: number }> } | null = null;
+  /** Il blocco sotto il mouse nella lista (-1 = nessuno). */
+  let areaHover = -1;
   /** Si sta scegliendo l'area di prova (il prossimo trascinamento la disegna). */
   let areaPicking = false;
   let areaDrag: { a: { x: number; y: number }; b: { x: number; y: number } } | null = null;
@@ -626,7 +638,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     // IL PERCORSO DEL MODULO RIPETUTO (strips.ts): con un modulo, senza gruppi a mano e senza area di
     // prova, ogni filo si calcola una volta sul modulo (ingresso a sinistra, uscita a destra alla stessa
     // altezza) e si ripete identico in ogni copia.
-    if (st.module && !(params.groups && params.groups.length) && !clampArea(st.grid, st.area) && designIsTiled()) {
+    if (st.module && !(params.groups && params.groups.length) && !(params.areas && params.areas.length) && !clampArea(st.grid, st.area) && designIsTiled()) {
       params.modulePath = modulePathOf(st.module);
     }
     // COPIA PER COPIA (Lorenzo, 2026-10-01: i passaggi del modulo). Con un modulo, ogni striscia si
@@ -650,7 +662,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (!a) { withCuts(st.grid, 0, 0); params.mask = mask; return { grid: st.grid, cells, params, dx: 0, dy: 0 }; }
     if (mask) params.mask = subMask(mask, st.grid.cols, a.r0, a.r1, a.c0, a.c1);
     const sub = subGrid(st.grid, cells, a);
-    if (params.groups) params.groups = params.groups.map((q) => ({ ...q, x: q.x - sub.dx, y: q.y - sub.dy }));
+    if (params.groups) params.groups = params.groups.map((q) => shiftGroup(q, sub.dx, sub.dy));
+    if (params.areas) params.areas = params.areas.map((q) => shiftGroup(q, sub.dx, sub.dy));
     withCuts(sub.grid, a.r0, 2 * a.c0);
     return { ...sub, params };
   };
@@ -1012,6 +1025,21 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const jumps = b.filter((q) => !q.joined).length;
     return `${b.length} fasc${b.length === 1 ? 'ia' : 'e'}${jumps ? ` (${jumps} con salti fra le copie)` : ''}`;
   }
+  /**
+   * I PUNTI SVILUPPATI (Lorenzo, 2026-10-12: «aggiungi anche sotto il numero dei punti sviluppati»): i punti
+   * come escono nel DST, cioè le diagonali e i passaggi divisi secondo il punto massimo e il punto dei
+   * passaggi. Contati una volta per risultato.
+   */
+  const stitchCounts = new WeakMap<RouteResult, number>();
+  function stitchCount(res: RouteResult): number {
+    let n = stitchCounts.get(res);
+    if (n === undefined) {
+      n = 0;
+      for (const cr of res.colors) for (const pl of colorPolylines(routeGeom.grid, cr, st.stitch)) n += Math.max(0, pl.length - 1);
+      stitchCounts.set(res, n);
+    }
+    return n;
+  }
   /** I numeri dei passaggi nella barra di stato (o che si stanno calcolando). */
   function showStatus(): void {
     if (eyedrop >= 0) { $('status').textContent = `Clicca sull’immagine il colore del filo ${eyedrop + 1} (Esc annulla). L’immagine si vede intera mentre scegli.`; return; }
@@ -1025,9 +1053,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (!m.legs) { $('status').textContent = 'Griglia vuota: disegna con il clic.'; return; }
     const mm = (x: number) => `${Math.round(x)} mm`;
     // le strisce del risultato (spostando il pattern ce n'è una tagliata anche in alto)
-    const nStrips = st.route.strips ? new Set(result.colors.map((c) => c.strip ?? 0)).size : 0;
+    const nAreas = (st.route.areas ?? []).length;
+    const nStrips = st.route.strips && !nAreas ? new Set(result.colors.map((c) => c.strip ?? 0)).size : 0;
     const stops = result.colors.length;
-    $('status').textContent = (nStrips > 1 ? `${nStrips} strisce, ${stops} stop · ` : '') + `${m.legs} diagonali · passaggi in vista ${mm(m.visibleMm)} · ripassi ${mm(m.retraceMm)} · vertice-vertice ${mm(m.verticalMm)} · nascosti ${mm(m.hiddenMm)} · ${m.jumps} salt${m.jumps === 1 ? 'o' : 'i'}`;
+    $('status').textContent = (nAreas ? `${nAreas} blocch${nAreas === 1 ? 'o' : 'i'}, ${stops} stop · ` : nStrips > 1 ? `${nStrips} strisce, ${stops} stop · ` : '') + `${stitchCount(result).toLocaleString('it-IT')} punti · ${m.legs} diagonali · passaggi in vista ${mm(m.visibleMm)} · ripassi ${mm(m.retraceMm)} · vertice-vertice ${mm(m.verticalMm)} · nascosti ${mm(m.hiddenMm)} · ${m.jumps} salt${m.jumps === 1 ? 'o' : 'i'}`;
   }
 
   // ---- I passaggi in un processo a parte (Web Worker) ----------------------------
@@ -1343,6 +1372,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if ((m === 'pick') !== (was === 'pick')) { pickDrag = null; draw(); }
     if (m === 'order') orderClicks = 0;
     if (m !== 'reroute') reroute = null;
+    if (m !== 'group' && m !== 'area') polyDraft = null; // un contorno lasciato a metà si annulla
     bandDrag = null;
     $('bandsAutoBtn').hidden = m !== 'bands';
     if (m === 'bands' || was === 'bands') drawEditorMarks();
@@ -1910,7 +1940,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
       return;
     }
-    if (mode === 'group') {
+    if (mode === 'group' || mode === 'area') {
       const p = mmAt(e);
       if (!p || e.button !== 0) return;
       e.stopPropagation(); e.preventDefault();
@@ -2073,13 +2103,18 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       groupDrag = null;
       try { canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
       const q: ZoneGroup = { x: Math.min(d.a.x, d.b.x), y: Math.min(d.a.y, d.b.y), w: Math.abs(d.b.x - d.a.x), h: Math.abs(d.b.y - d.a.y) };
-      // un clic senza trascinare non fa un gruppo: serve almeno una cella per lato
+      const kind = mode === 'area' ? 'area' : 'group';
+      // trascinato: un rettangolo (almeno una cella per lato); un clic: un punto del contorno
       if (q.w >= st.grid.cellW && q.h >= rowPitch(st.grid)) {
+        polyDraft = null;
         const r1 = (n: number) => Math.round(n * 10) / 10;
-        st.route.groups = [...(st.route.groups ?? []), { x: r1(q.x), y: r1(q.y), w: r1(q.w), h: r1(q.h) }];
-        buildGroups();
-        update();
-      } else drawGroups();
+        addZone(kind, { x: r1(q.x), y: r1(q.y), w: r1(q.w), h: r1(q.h) });
+      } else {
+        if (!polyDraft || polyDraft.kind !== kind) polyDraft = { kind, pts: [] };
+        polyDraft.pts.push({ x: Math.round(d.a.x * 10) / 10, y: Math.round(d.a.y * 10) / 10 });
+        $('status').textContent = `Contorno: ${polyDraft.pts.length} punt${polyDraft.pts.length === 1 ? 'o' : 'i'}. Invio lo chiude, Backspace toglie l’ultimo punto, Esc annulla.`;
+        drawGroups();
+      }
       return;
     }
     if (!painting) return;
@@ -2101,6 +2136,18 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (isTyping(e.target)) return;
     // ridisegnando un passaggio, Invio e Spazio lo fissano (lo Spazio qui non sposta la tela)
     if (eyedrop >= 0 && e.key === 'Escape') { e.preventDefault(); stopEyedrop(); showStatus(); return; }
+    if (polyDraft && (e.key === 'Enter' || e.key === 'Escape' || e.key === 'Backspace')) {
+      e.preventDefault();
+      if (e.key === 'Backspace') { polyDraft.pts.pop(); if (!polyDraft.pts.length) polyDraft = null; drawGroups(); return; }
+      const draft = polyDraft;
+      polyDraft = null;
+      if (e.key === 'Enter' && draft.pts.length >= 3) {
+        const xs = draft.pts.map((q) => q.x), ys = draft.pts.map((q) => q.y);
+        const x = Math.min(...xs), y = Math.min(...ys);
+        addZone(draft.kind, { x, y, w: Math.max(...xs) - x, h: Math.max(...ys) - y, poly: draft.pts });
+      } else { drawGroups(); showStatus(); }
+      return;
+    }
     if (mode === 'reroute' && reroute && !e.ctrlKey && !e.metaKey && !e.altKey && rerouteKey(e.key)) { e.preventDefault(); return; }
     if (e.code === 'Space') { spaceDown = true; canvas.classList.add('cs-pan'); e.preventDefault(); }
     const k = e.key.toLowerCase();
@@ -2113,6 +2160,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     else if (k === 'e') setMode('erase');
     else if (k === 'h') setMode('pan');
     else if (k === 'g') setMode('group');
+    else if (k === 'k') setMode('area');
     else if (k === 't') setMode('cut');
     else if (k === 'm' && editorOpen) setMode('image');
   };
@@ -2214,28 +2262,46 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (!svg) return;
     svg.querySelector('#cs-groups')?.remove();
     const groups = st.route.groups ?? [];
-    if ((mode !== 'group' && groupHover < 0) || (!groups.length && !groupDrag)) return;
+    const areas = st.route.areas ?? [];
+    const showG = mode === 'group' || groupHover >= 0, showA = mode === 'area' || areaHover >= 0;
+    if (!(showG && groups.length) && !(showA && areas.length) && !groupDrag && !polyDraft) return;
     const ns = 'http://www.w3.org/2000/svg';
     const layer = document.createElementNS(ns, 'g');
     layer.id = 'cs-groups';
     layer.setAttribute('pointer-events', 'none');
     const fs = Math.max(4, sizeMm().w / 45);
-    const box = (q: ZoneGroup, strong: boolean, label: string) => {
-      const rc = document.createElementNS(ns, 'rect');
-      rc.setAttribute('x', String(q.x)); rc.setAttribute('y', String(q.y));
-      rc.setAttribute('width', String(q.w)); rc.setAttribute('height', String(q.h));
+    const box = (q: ZoneGroup, strong: boolean, label: string, color = 'var(--rg-color-category-2)') => {
+      // un rettangolo, o il contorno disegnato
+      const rc = document.createElementNS(ns, q.poly && q.poly.length >= 3 ? 'path' : 'rect');
+      if (q.poly && q.poly.length >= 3) rc.setAttribute('d', 'M' + q.poly.map((pt) => pt.x + ' ' + pt.y).join('L') + 'Z');
+      else { rc.setAttribute('x', String(q.x)); rc.setAttribute('y', String(q.y)); rc.setAttribute('width', String(q.w)); rc.setAttribute('height', String(q.h)); }
       rc.setAttribute('vector-effect', 'non-scaling-stroke');
-      rc.setAttribute('style', `fill:none;stroke:var(--rg-color-category-2);stroke-width:${strong ? 3 : 2}`);
+      rc.setAttribute('style', `fill:none;stroke:${color};stroke-width:${strong ? 3 : 2}`);
       layer.appendChild(rc);
       if (!label) return;
       const t = document.createElementNS(ns, 'text');
       t.setAttribute('x', String(q.x + fs * 0.3)); t.setAttribute('y', String(q.y + fs * 1.05));
       t.setAttribute('font-size', String(fs));
-      t.setAttribute('style', 'fill:var(--rg-color-category-2);font-family:var(--rg-font-mono);paint-order:stroke;stroke:var(--rg-color-white);stroke-width:3px;stroke-linejoin:round');
+      t.setAttribute('style', `fill:${color};font-family:var(--rg-font-mono);paint-order:stroke;stroke:var(--rg-color-white);stroke-width:3px;stroke-linejoin:round`);
       t.textContent = label;
       layer.appendChild(t);
     };
-    groups.forEach((q, i) => { if (mode === 'group' || i === groupHover) box(q, i === groupHover, String(i + 1)); });
+    if (showG) groups.forEach((q, i) => { if (mode === 'group' || i === groupHover) box(q, i === groupHover, String(i + 1)); });
+    if (showA) areas.forEach((q, i) => { if (mode === 'area' || i === areaHover) box(q, i === areaHover, 'B' + (i + 1), 'var(--rg-color-category-3)'); });
+    if (polyDraft && polyDraft.pts.length) {
+      const pts = polyDraft.pts, col = polyDraft.kind === 'area' ? 'var(--rg-color-category-3)' : 'var(--rg-color-category-2)';
+      const pl = document.createElementNS(ns, 'path');
+      pl.setAttribute('d', 'M' + pts.map((pt) => pt.x + ' ' + pt.y).join('L') + (pts.length > 2 ? 'L' + pts[0].x + ' ' + pts[0].y : ''));
+      pl.setAttribute('vector-effect', 'non-scaling-stroke');
+      pl.setAttribute('style', `fill:none;stroke:${col};stroke-width:2;stroke-dasharray:6 4`);
+      layer.appendChild(pl);
+      for (const pt of pts) {
+        const c = document.createElementNS(ns, 'circle');
+        c.setAttribute('cx', String(pt.x)); c.setAttribute('cy', String(pt.y)); c.setAttribute('r', String(fs * 0.25));
+        c.setAttribute('style', `fill:${col}`);
+        layer.appendChild(c);
+      }
+    }
     if (groupDrag) {
       const d = groupDrag;
       box({ x: Math.min(d.a.x, d.b.x), y: Math.min(d.a.y, d.b.y), w: Math.abs(d.b.x - d.a.x), h: Math.abs(d.b.y - d.a.y) }, true, '');
@@ -2243,6 +2309,58 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     svg.appendChild(layer);
   }
 
+  /** Un gruppo o un blocco nuovo (rettangolo o contorno), in fondo alla sua lista. */
+  function addZone(kind: 'group' | 'area', q: ZoneGroup): void {
+    if (kind === 'area') { st.route.areas = [...(st.route.areas ?? []), q]; buildAreas(); }
+    else { st.route.groups = [...(st.route.groups ?? []), q]; buildGroups(); }
+    update();
+  }
+  /** La lista dei blocchi di ricamo nel pannello (04 Passaggi): l'ordine è quello di cucitura. */
+  function buildAreas(): void {
+    const areas = st.route.areas ?? [];
+    const list = $('areaList');
+    list.innerHTML = '';
+    list.hidden = !areas.length;
+    $('areaEmpty').hidden = areas.length > 0;
+    $('areaClear').hidden = !areas.length;
+    areas.forEach((q, i) => {
+      const li = document.createElement('li');
+      li.className = 'rg-list-row';
+      li.innerHTML = `<div class="rg-list-row__head"><span class="rg-list-row__title">Blocco ${i + 1}</span><span class="rg-mono">${q.poly ? 'contorno, ' : ''}${fmtNum(Math.round(q.w))} × ${fmtNum(Math.round(q.h))} mm</span>`
+        + `<span class="rg-list-row__actions">`
+        + (i > 0 ? `<span class="rg-tooltip rg-tooltip--end"><button type="button" class="rg-icon-button" data-up aria-labelledby="tip-aup-${i}">`
+          + '<svg class="rg-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M12 20V5M6 11l6-6 6 6"/></svg></button>'
+          + `<span class="rg-tooltip__text" role="tooltip" id="tip-aup-${i}">Cuci prima il blocco ${i + 1}</span></span>` : '')
+        + `<span class="rg-tooltip rg-tooltip--end"><button type="button" class="rg-icon-button rg-icon-button--danger" data-del aria-labelledby="tip-adel-${i}">`
+        + `<svg class="rg-icon" aria-hidden="true" focusable="false"><use href="${ICONS}#rg-icon-elimina"></use></svg></button>`
+        + `<span class="rg-tooltip__text" role="tooltip" id="tip-adel-${i}">Elimina Blocco ${i + 1}</span></span></span></div>`;
+      li.addEventListener('mouseenter', () => { areaHover = i; drawGroups(); });
+      li.addEventListener('mouseleave', () => { areaHover = -1; drawGroups(); });
+      li.querySelector('[data-up]')?.addEventListener('click', () => {
+        const next = [...areas];
+        [next[i - 1], next[i]] = [next[i], next[i - 1]];
+        st.route.areas = next;
+        areaHover = -1;
+        buildAreas();
+        update();
+      });
+      li.querySelector('[data-del]')!.addEventListener('click', () => {
+        st.route.areas = areas.filter((_, j) => j !== i);
+        areaHover = -1;
+        buildAreas();
+        update();
+      });
+      list.appendChild(li);
+    });
+    drawGroups();
+  }
+  $('areaClear').addEventListener('click', () => {
+    const n = (st.route.areas ?? []).length;
+    if (!n || !window.confirm(n === 1 ? 'Togliere il blocco?' : `Togliere tutti i ${n} blocchi?`)) return;
+    st.route.areas = [];
+    buildAreas();
+    update();
+  });
   /** La lista dei gruppi nel pannello (04 Passaggi). */
   function buildGroups(): void {
     const groups = st.route.groups ?? [];
@@ -2254,7 +2372,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     groups.forEach((q, i) => {
       const li = document.createElement('li');
       li.className = 'rg-list-row';
-      li.innerHTML = `<div class="rg-list-row__head"><span class="rg-list-row__title">Gruppo ${i + 1}</span><span class="rg-mono">${fmtNum(Math.round(q.w))} × ${fmtNum(Math.round(q.h))} mm</span>`
+      li.innerHTML = `<div class="rg-list-row__head"><span class="rg-list-row__title">Gruppo ${i + 1}</span><span class="rg-mono">${q.poly ? 'contorno, ' : ''}${fmtNum(Math.round(q.w))} × ${fmtNum(Math.round(q.h))} mm</span>`
         + `<span class="rg-list-row__actions">`
         + (i > 0 ? `<span class="rg-tooltip rg-tooltip--end"><button type="button" class="rg-icon-button" data-up aria-labelledby="tip-gup-${i}">`
           + '<svg class="rg-icon" viewBox="0 0 24 24" aria-hidden="true" focusable="false" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="square"><path d="M12 20V5M6 11l6-6 6 6"/></svg></button>'
@@ -2680,6 +2798,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (moduleView) all.checked = true;
     all.disabled = moduleView;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="group"]')!.disabled = moduleView;
+    root.querySelector<HTMLButtonElement>('#modeSel [data-mode="area"]')!.disabled = moduleView;
     $<HTMLButtonElement>('areaBtn').disabled = moduleView;
     if (!m) { $('moduleInfo').hidden = true; return; }
     if (editorOpen) syncEditorFields();
@@ -3037,6 +3156,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="order"]')!.hidden = false;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="bands"]')!.hidden = false;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="group"]')!.hidden = true;
+    root.querySelector<HTMLButtonElement>('#modeSel [data-mode="area"]')!.hidden = true;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="reroute"]')!.hidden = false;
     $('moduleViewSel').hidden = true;
     $('areaBtn').closest('.cs-editbar__group')!.setAttribute('hidden', '');
@@ -3065,7 +3185,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="order"]')!.hidden = true;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="bands"]')!.hidden = true;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="reroute"]')!.hidden = true;
-    for (const sel of ['[data-mode="group"]', '[data-mode="cut"]']) root.querySelector<HTMLButtonElement>('#modeSel ' + sel)!.hidden = false;
+    for (const sel of ['[data-mode="group"]', '[data-mode="area"]', '[data-mode="cut"]']) root.querySelector<HTMLButtonElement>('#modeSel ' + sel)!.hidden = false;
     $('moduleViewSel').hidden = false;
     $('areaBtn').closest('.cs-editbar__group')!.removeAttribute('hidden');
 
@@ -3249,6 +3369,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     syncFields();
     buildThreads();
     buildGroups();
+    buildAreas();
     syncModuleUI();
     update();
     requestAnimationFrame(() => pz.fit());

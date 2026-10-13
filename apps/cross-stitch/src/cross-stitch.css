@@ -95,3 +95,12 @@ body {
 .cs-viewctl { margin-left: auto; }
 /* Sei strumenti: con lo stage stretto il selettore va a capo invece di uscire dalla barra */
 .cs-editbar #modeSel { flex-wrap: wrap; max-width: 100%; }
+
+/* LA PAGINA CHE SALTAVA (Lorenzo, 2026-10-07 e 2026-10-12: «se clicco delle parti del pannello in basso scrolla
+   tutta la pagina»). Gli input veri di interruttori, quadratini del colore e file sono nascosti in posizione
+   assoluta, ma senza un antenato posizionato stavano rispetto alla pagina, a migliaia di pixel dal loro
+   bottone: al clic il browser dava il focus all'input e scorreva fin lì. Il bottone fa da riferimento, e
+   l'input nascosto sta sotto il dito. (Il difetto è del design system: qui solo il rimedio locale.) */
+.cs-workspace .rg-toggle,
+.cs-workspace .cs-thread__color,
+.cs-workspace .rg-file-input__control { position: relative; }

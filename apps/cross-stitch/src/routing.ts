@@ -188,6 +188,12 @@ export interface RouteParams {
    * di ricamo i pezzi arrivano staccati (default). false = solo i salti messi a mano. Lo usa solo l'export.
    */
   trimJumps?: boolean;
+  /**
+   * I BLOCCHI DI RICAMO (Lorenzo, 2026-10-12: «ogni blocco deve lavorare tutti i colori prima di passare al
+   * successivo»), in ordine: rettangoli o contorni disegnati. Si cuce la base unica, poi blocco per blocco
+   * tutti i fili, poi il resto. Diversi dai gruppi, che ordinano le zone dentro un filo.
+   */
+  areas?: ZoneGroup[] | null;
   /** Mai passaggi sopra un gruppo già finito, se c'è un'altra strada (default vero). */
   avoidDone?: boolean;
   /** Il recinto della zona: i passaggi restano nella zona finché non è finita (default vero). */

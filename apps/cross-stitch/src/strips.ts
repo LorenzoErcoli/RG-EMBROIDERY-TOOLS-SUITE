@@ -16,6 +16,7 @@ import type { Cells, GridSpec, Stitch } from './model';
 import { rowPitch, segmentPoints, vertexIndex } from './model';
 import { routeCells, type ColorRoute, type RouteMetrics, type RouteParams, type RouteResult, type RouteSeg } from './routing';
 import { bandCells } from './module';
+import { areaOfCell, shiftGroup } from './zones';
 
 /** Le strisce: quante righe ciascuna (l'ultima può essere più corta). */
 export interface StripOptions {
@@ -54,7 +55,7 @@ export function routeStrips(g: GridSpec, cells: Cells, params: RouteParams, opts
     const p: RouteParams = {
       ...params,
       mask: params.mask ? params.mask.subarray(r0 * g.cols, r1 * g.cols) : params.mask,
-      groups: params.groups?.map((q) => ({ ...q, y: q.y - dy })),
+      groups: params.groups?.map((q) => shiftGroup(q, 0, dy)),
       cuts: params.cuts?.map(([a, b]) => [a - shift, b - shift] as [number, number]).filter(([a, b]) => a >= 0 && b >= 0 && a < (grid.rows + 1) * W && b < (grid.rows + 1) * W),
     };
     const res = routeCells(grid, sub, p);
@@ -83,8 +84,36 @@ function baseWholeRoute(g: GridSpec, cells: Cells, params: RouteParams): { route
   return bc ? { route: { color: base.color, segs: bc.segs }, metrics: res.metrics, rest } : null;
 }
 
+/**
+ * I BLOCCHI DI RICAMO: la base unica per prima, poi blocco per blocco (nell'ordine della lista) tutti i fili
+ * dal primo all'ultimo, coi gruppi dentro, poi il resto del ricamo. Ogni cella va al primo blocco che la
+ * contiene. Nel DST ogni (blocco, filo) è uno stop.
+ */
+export function routeAreas(g: GridSpec, cells: Cells, params: RouteParams): RouteResult {
+  const colors: ColorRoute[] = [];
+  const metrics = emptyMetrics();
+  let p: RouteParams = { ...params, strips: null, modulePath: null, areas: null };
+  let rest = cells;
+  const whole = baseWholeRoute(g, cells, { ...params, baseWhole: true });
+  if (whole) { colors.push(whole.route); addMetrics(metrics, whole.metrics); rest = whole.rest; p = { ...p, base: null }; }
+  const areas = params.areas ?? [];
+  const buckets: Cells[] = Array.from({ length: areas.length + 1 }, () => new Map());
+  for (const [k, m] of rest) {
+    const a = areaOfCell(g, Math.floor(k / g.cols), k % g.cols, areas);
+    buckets[a < 0 ? areas.length : a].set(k, m);
+  }
+  buckets.forEach((sub, i) => {
+    if (!sub.size) return;
+    const res = routeCells(g, sub, p);
+    addMetrics(metrics, res.metrics);
+    for (const cr of res.colors) colors.push({ color: cr.color, strip: i, segs: cr.segs });
+  });
+  return { colors, metrics };
+}
+
 /** I passaggi: a strisce se richiesto, altrimenti tutto il ricamo insieme. */
 export function routeAll(g: GridSpec, cells: Cells, params: RouteParams): RouteResult {
+  if (params.areas && params.areas.length) return routeAreas(g, cells, params);
   if (params.modulePath && params.modulePath.cols <= g.cols) return routeModuleTiled(g, cells, params, params.modulePath);
   const s = params.strips;
   return s && s.rows > 0 && s.rows < g.rows ? routeStrips(g, cells, params, s) : routeCells(g, cells, params);
@@ -378,7 +407,7 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
     const s0 = Math.max(0, o), s1 = Math.min(g.rows, o + Rm);
     const grid: GridSpec = { ...g, rows: s1 - s0 };
     const shift = s0 * W, dy = s0 * rowPitch(g);
-    const stripParams: RouteParams = { ...params, strips: null, modulePath: null, groups: params.groups?.map((q) => ({ ...q, y: q.y - dy })), cuts: [], mask: mask ? mask.subarray(s0 * g.cols, s1 * g.cols) : null };
+    const stripParams: RouteParams = { ...params, strips: null, modulePath: null, groups: params.groups?.map((q) => shiftGroup(q, 0, dy)), cuts: [], mask: mask ? mask.subarray(s0 * g.cols, s1 * g.cols) : null };
     const toGlobal = (segs: RouteSeg[]) => segs.map((sg) => ({ ...sg, from: sg.from + shift, to: sg.to + shift }));
     // la base: il motore, sulla striscia intera, coi punti col filo della base sopra la base (le croci)
     if (baseC !== undefined && !whole) {

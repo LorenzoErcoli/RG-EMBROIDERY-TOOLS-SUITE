@@ -90,7 +90,29 @@ export function zonesOf(g: GridSpec, cells: Cells, color: number, opts: Partial<
 // dai gruppi resta il taglio automatico.
 
 /** Un gruppo: un rettangolo sul ricamo, in mm dall'angolo in alto a sinistra. */
-export interface ZoneGroup { x: number; y: number; w: number; h: number; }
+/**
+ * Un gruppo (o un blocco di ricamo): il rettangolo che lo contiene e, se è un CONTORNO disegnato a clic
+ * (Lorenzo, 2026-10-12: «il gruppo lavora su rettangoli; dovrà poter lavorare anche su contorni da me
+ * disegnati»), i suoi punti in mm. Senza `poly` è il rettangolo.
+ */
+export interface ZoneGroup { x: number; y: number; w: number; h: number; poly?: Array<{ x: number; y: number }>; }
+
+/** Il gruppo spostato di (dx, dy) mm all'indietro (per una striscia o un'area di prova). */
+export function shiftGroup(q: ZoneGroup, dx: number, dy: number): ZoneGroup {
+  return { ...q, x: q.x - dx, y: q.y - dy, poly: q.poly?.map((p) => ({ x: p.x - dx, y: p.y - dy })) };
+}
+
+/** Il punto (x, y) mm sta nel gruppo? (nel contorno, se c'è; altrimenti nel rettangolo) */
+export function inGroup(q: ZoneGroup, x: number, y: number): boolean {
+  if (x < q.x || x > q.x + q.w || y < q.y || y > q.y + q.h) return false;
+  const p = q.poly;
+  if (!p || p.length < 3) return true;
+  let inside = false;
+  for (let i = 0, j = p.length - 1; i < p.length; j = i++) {
+    if ((p[i].y > y) !== (p[j].y > y) && x < ((p[j].x - p[i].x) * (y - p[i].y)) / (p[j].y - p[i].y) + p[i].x) inside = !inside;
+  }
+  return inside;
+}
 
 /**
  * Il gruppo a cui appartiene la cella (r, c): quello che contiene il suo centro, e se sono più
@@ -98,9 +120,13 @@ export interface ZoneGroup { x: number; y: number; w: number; h: number; }
  */
 export function groupOfCell(g: GridSpec, r: number, c: number, groups: readonly ZoneGroup[]): number {
   const x = (c + 0.5) * g.cellW, y = r * rowPitch(g) + g.cellH / 2;
-  for (let i = groups.length - 1; i >= 0; i--) {
-    const q = groups[i];
-    if (x >= q.x && x <= q.x + q.w && y >= q.y && y <= q.y + q.h) return i;
-  }
+  for (let i = groups.length - 1; i >= 0; i--) if (inGroup(groups[i], x, y)) return i;
+  return -1;
+}
+
+/** Il blocco di ricamo della cella (r, c): il PRIMO della lista che contiene il suo centro. -1 = nessuno. */
+export function areaOfCell(g: GridSpec, r: number, c: number, areas: readonly ZoneGroup[]): number {
+  const x = (c + 0.5) * g.cellW, y = r * rowPitch(g) + g.cellH / 2;
+  for (let i = 0; i < areas.length; i++) if (inGroup(areas[i], x, y)) return i;
   return -1;
 }

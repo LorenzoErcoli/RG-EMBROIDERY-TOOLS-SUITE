@@ -48,7 +48,7 @@ export { subGrid as csSubGrid, areaFromMm as csAreaFromMm, clampArea as csClampA
 export { segmentPoints as csSegmentPoints } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { routeAll as csRouteAll, stripRanges as csStripRanges, routeModule as csRouteModule, entryRows as csEntryRows, routeBands as csRouteBands } from ${JSON.stringify(posix('apps/cross-stitch/src/strips.ts'))};
 export { findModule as csFindModule, tileModule as csTileModule, editsOnAllCopies as csEditsOnAllCopies, shiftModule as csShiftModule, seamShift as csSeamShift, resizeModule as csResizeModule, movePiece as csMovePiece, piecesOf as csPiecesOf, cellStep as csCellStep, bandsOf as csBandsOf, toggleBandBreak as csToggleBandBreak, moveBandBreak as csMoveBandBreak, bandCells as csBandCells, moveShapeBand as csMoveShapeBand } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
-export { zonesOf as csZonesOf } from ${JSON.stringify(posix('apps/cross-stitch/src/zones.ts'))};
+export { zonesOf as csZonesOf, groupOfCell as csGroupOfCell } from ${JSON.stringify(posix('apps/cross-stitch/src/zones.ts'))};
 export { cellMask as csCellMask, autoRoles as csAutoRoles, normalizeContours as csNormalizeContours } from ${JSON.stringify(posix('apps/cross-stitch/src/shape.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
@@ -5300,6 +5300,18 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     ['0/0 0/1 0/2 1/0 1/1 1/2 2/0 2/1 2/2', 0, true, true]);
   // LA BASE IN UN SOLO STOP (Lorenzo, 2026-10-12: «voglio che la base sia tutta piena unica»): uno stop per la
   // base, per primo, poi le strisce degli altri fili; gli stessi punti
+  // I BLOCCHI DI RICAMO E I CONTORNI (Lorenzo, 2026-10-12: «ogni blocco deve lavorare tutti i colori prima di
+  // passare al successivo»; «il gruppo dovrà poter lavorare anche su contorni da me disegnati»): un triangolo
+  // disegnato a clic prende le celle dentro di lui; due blocchi: la base unica, poi il blocco 1 coi suoi
+  // fili, poi il blocco 2, poi il resto; gli stessi punti
+  {
+    const tri = { x: 0, y: 0, w: 30, h: 30, poly: [{ x: 0, y: 0 }, { x: 30, y: 0 }, { x: 0, y: 30 }] };
+    const dentro = rg.csGroupOfCell(gSt, 1, 1, [tri]), fuori = rg.csGroupOfCell(gSt, 9, 9, [tri]);
+    const blocchi = rg.csRouteAll(gSt, cSt, { ...parSt, areas: [tri, { x: 20, y: 15, w: 18, h: 12 }] });
+    check('blocchi: il contorno prende le celle dentro; base unica, poi blocco per blocco tutti i fili, poi il resto; gli stessi punti',
+      [dentro, fuori, blocchi.colors.map((cr) => (cr.strip ?? '-') + '/' + cr.color).join(' '), punti(blocchi) === punti(senzaSt)],
+      [0, -1, '-/0 0/1 0/2 1/1 1/2 2/1 2/2', true]);
+  }
   check('strisce: la base in un solo stop, per prima, poi i fili striscia per striscia; gli stessi punti',
     [unica.colors.map((cr) => (cr.strip ?? '-') + '/' + cr.color).join(' '), punti(unica) === punti(senzaSt)],
     ['-/0 0/1 0/2 1/1 1/2 2/1 2/2', true]);
