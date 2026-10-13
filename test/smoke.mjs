@@ -5613,7 +5613,22 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     rg.csToggleBandBreak(modS, 1, 5);
     check('fasce per disegno: un confine nuovo non sposta né spezza la forma spostata', bInB(rg.csBandCells(modS, 1)).join('/'), '2/6');
     const una = rg.csRouteBands(gB, { cols: Cm, rows: Rm, marks: marksB, entryRow: {}, bands: { 1: [] } }, 1, par);
-    check('una fascia sola: entra a sinistra ed esce a destra, unita fra le copie', [una.length, una[0].joined, una[0].dir], [1, true, 1]);
+    // ANDATA E RITORNO (Lorenzo, 2026-10-13: «non sfrutta il fatto che le varie fasce sono consecutive: ne
+    // finisce una, magari tornando indietro nel modulo, poi ripassa sopra tutto e va avanti»): la fascia sola
+    // (la riga 1 continua fra le copie e il blocco della riga 5) si cuce in due passate: la riga all'andata,
+    // entrando a sinistra, il blocco al ritorno; senza il blocco, la riga sola resta una passata
+    const unaSola = rg.csRouteBands(gB, { cols: Cm, rows: Rm, marks: marksB.map((m, i) => (Math.floor(i / Cm) === 5 ? { ...m, color: 0 } : m)), entryRow: {}, bands: { 1: [] } }, 1, par);
+    check('una fascia: riga all\'andata (entra a sinistra, unita fra le copie), il blocco sotto al ritorno; la riga sola resta una passata',
+      [una.length, una[0].joined, una[0].dir, una[1].dir, una.map((b) => b.rows.join('-')).join(' '), unaSola.length],
+      [2, true, 1, -1, '1-1 5-5', 1]);
+    // GLI ELEMENTI ISOLATI (Lorenzo, 2026-10-13: «non partono e finiscono nei lati esterni o più vicini agli
+    // oggetti precedenti e successivi»): una barretta staccata (riga 3, colonne 3-7) entra dal suo capo a
+    // sinistra ed esce dal capo a destra, alla stessa riga: il salto alla copia accanto è dritto
+    {
+      const marksI = Array.from({ length: Cm * Rm }, (_, i) => ({ stitch: 'v', color: Math.floor(i / Cm) === 3 && i % Cm >= 3 && i % Cm <= 7 ? 1 : 0 }));
+      const iso = rg.csRouteBands(gB, { cols: Cm, rows: Rm, marks: marksI, entryRow: {} }, 1, par)[0];
+      check('elemento isolato: entra dal capo a sinistra, esce dal capo a destra, alla stessa riga', [iso.joined, JSON.stringify(iso.start), JSON.stringify(iso.end), iso.next[0]], [false, '[3,6]', '[3,16]', 3]);
+    }
     // INGRESSO E USCITA (Lorenzo, 2026-10-02: «per ogni fascia l'ingresso coincida con l'uscita del
     // precedente e quindi ingresso uscita ai lati rispettivi stessa altezza»): una diagonale che scende
     // dalla riga 1 alla 6 passa da una copia all'altra; entra a sinistra ed esce a destra alla stessa riga

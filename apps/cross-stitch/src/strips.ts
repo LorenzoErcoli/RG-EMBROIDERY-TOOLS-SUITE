@@ -316,10 +316,74 @@ function shapesOf(cells: number[], C: number): number[][] {
 
 /** Le fasce di un filo, già calcolate, a serpentina (la prima da sinistra). */
 export function routeBands(g: GridSpec, mp: ModulePath, color: number, params: RouteParams): BandRoute[] {
+  const C = mp.cols;
+  // ANDATA E RITORNO (Lorenzo, 2026-10-13: «quando il modulo si ripete non sfrutta il fatto che le varie
+  // fasce sono consecutive: ne finisce una, magari tornando anche indietro nel modulo, poi ripassa sopra
+  // tutto e va avanti»): una fascia che continua fra le copie si può cucire in due passate lungo tutta la
+  // striscia, divisa per righe: le righe sopra all'andata, quelle sotto al ritorno (o viceversa). Si tiene
+  // la divisione solo se costa meno (ripassi, filo in vista, salti) e se tutte e due le passate continuano
+  // fra le copie (almeno una; l'altra può andare a salti, e il salto si paga nel conto). I versi si alternano
+  // per passata: la serpentina resta giusta.
+  const out: BandRoute[] = [];
+  let dir: 1 | -1 = 1;
+  const score = (b: BandRoute) => b.metrics.retraceMm + 5 * b.metrics.visibleMm + 0.2 * b.metrics.verticalMm + 30 * b.metrics.jumps + (b.joined ? 0 : 60);
+  for (const band of bandCells(mp, color)) {
+    let best: BandRoute[] = [routeBand(g, mp, color, params, band, dir)];
+    // il verso opposto, se costa chiaramente meno (il motore non è simmetrico: una fascia può avere filo in
+    // vista in un verso e niente nell'altro); fra una fascia e l'altra si salta comunque
+    const alt = routeBand(g, mp, color, params, band, dir > 0 ? -1 : 1);
+    if (score(alt) + 15 + 0.05 * g.cols * g.cellW < score(best[0])) { best = [alt]; dir = alt.dir; }
+    const single = score(best[0]);
+    if (best[0].joined && best[0].metrics.retraceMm > 2 * g.cellW && !mp.ordered?.includes(color)) {
+      for (let split = band.rows[0] + 1; split <= band.rows[1]; split++) {
+        const top = band.cells.filter((i) => Math.floor(i / C) < split), bottom = band.cells.filter((i) => Math.floor(i / C) >= split);
+        if (!top.length || !bottom.length) continue;
+        for (const [a, b] of [[top, bottom], [bottom, top]]) {
+          const rowsOf = (cs: number[]): [number, number] => [Math.min(...cs.map((i) => Math.floor(i / C))), Math.max(...cs.map((i) => Math.floor(i / C)))];
+          const p1 = routeBand(g, mp, color, params, { rows: rowsOf(a), cells: a }, dir);
+          const p2 = routeBand(g, mp, color, params, { rows: rowsOf(b), cells: b }, dir > 0 ? -1 : 1);
+          if (!p1.joined && !p2.joined) continue;
+          const s = score(p1) + score(p2);
+          if (s < 0.7 * single && s < (best.length > 1 ? score(best[0]) + score(best[1]) : Infinity)) best = [p1, p2];
+        }
+      }
+    }
+    out.push(...best);
+    dir = best[best.length - 1].dir > 0 ? -1 : 1;
+  }
+  return out;
+}
+
+/** Il percorso di una fascia (o di una sua passata) nel verso `dir`. */
+function routeBand(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1): BandRoute {
+  const a = routeBandAt(g, mp, color, params, band, dir, true);
+  if (a.joined) return a;
+  // UN ELEMENTO ISOLATO: si provano alcuni ingressi sul lato da cui si arriva e alcune uscite sul lato verso la
+  // copia dopo (in cima, in fondo, a metà; e l'uscita libera, come prima) e si tiene la coppia che costa meno
+  // fra ripassi, filo in vista e metà del salto alla copia accanto (che entra dallo stesso ingresso)
+  const C = mp.cols;
+  const hi = Math.max(...band.cells.map((i) => i % C)), lo = Math.min(...band.cells.map((i) => i % C));
+  const pickRows = (cs: number[]) => { const rs = [...new Set(cs.map((i) => Math.floor(i / C)))].sort((x, y) => x - y); return [...new Set([rs[0], rs[rs.length - 1], rs[rs.length >> 1]])]; };
+  const sideV = (left: boolean): ModVertex[] => {
+    const cs = band.cells.filter((i) => (left ? i % C <= lo + 1 : i % C >= hi - 1));
+    return pickRows(cs).map((r) => { const row = cs.filter((i) => Math.floor(i / C) === r).map((i) => i % C); const c = left ? Math.min(...row) : Math.max(...row); return [r, left ? 2 * c : 2 * c + 2] as ModVertex; });
+  };
+  const entries = sideV(dir > 0), exits = sideV(dir < 0);
+  const mmOf = (p: ModVertex, q: ModVertex) => Math.hypot(((q[1] - p[1]) / 2) * g.cellW, (q[0] - p[0]) * rowPitch(g));
+  const cost = (b: BandRoute) => b.metrics.retraceMm + 5 * b.metrics.visibleMm + 0.5 * mmOf(b.end, b.next);
+  let best = routeBandAt(g, mp, color, params, band, dir, false), bc = cost(best);
+  for (const e of entries) for (const q of [null, ...exits]) {
+    const r = routeBandAt(g, mp, color, params, band, dir, q !== null, q ?? undefined, e);
+    const c = cost(r);
+    if (c < bc - 0.5) { best = r; bc = c; }
+  }
+  return best;
+}
+
+function routeBandAt(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1, sideExit: boolean, exitAt?: ModVertex, entryAt?: ModVertex): BandRoute {
   const C = mp.cols, R = mp.rows, Wm = 2 * C + 1, W2 = 4 * C + 1;
   const g2: GridSpec = { ...g, cols: 2 * C, rows: R };
-  return bandCells(mp, color).map((band, bi) => {
-    const dir: 1 | -1 = bi % 2 === 0 ? 1 : -1;
+  {
     // la fascia sta nella copia di sinistra (andata) o di destra (ritorno) di un modulo doppio
     const offC = dir > 0 ? 0 : C, off = 2 * offC;
     const cells: Cells = new Map();
@@ -334,15 +398,28 @@ export function routeBands(g: GridSpec, mp: ModulePath, color: number, params: R
     }
     const joined = C - 1 - hi + lo <= BAND_JOIN_V;
     let start: ModVertex;
+    let exitIso: ModVertex | null = null;
     if (joined) {
       // la riga dove il disegno è più vicino ai due bordi: lì si entra e si esce
       const row = [...rowLo].map(([rr, l]) => [rr, C - 1 - rowHi.get(rr)! + l] as [number, number]).sort((q, w) => q[1] - w[1] || q[0] - w[0])[0][0];
       start = [row, dir > 0 ? 0 : 2 * C];
     } else {
-      // la V più a sinistra (più a destra al ritorno); a parità di colonna, la più in alto
+      // GLI ELEMENTI ISOLATI (Lorenzo, 2026-10-13: «quando gli elementi sono isolati non partono e finiscono
+      // nei lati esterni o comunque più vicini agli oggetti precedenti e successivi»): si entra dal lato da
+      // cui si arriva (a sinistra all'andata) e si esce dal lato opposto, alle due quote più vicine fra loro:
+      // l'uscita di una copia e l'ingresso della copia accanto sono così il salto più corto
       const rc = band.cells.map((i) => [Math.floor(i / C), i % C] as [number, number]);
-      const pick = rc.reduce((q, w) => ((dir > 0 ? w[1] < q[1] : w[1] > q[1]) || (w[1] === q[1] && w[0] < q[0]) ? w : q));
-      start = dir > 0 ? [pick[0], 2 * pick[1]] : [pick[0], 2 * pick[1] + 2];
+      const L = rc.filter((q) => q[1] <= lo + 1), Rt = rc.filter((q) => q[1] >= hi - 1);
+      let bl = L[0], br = Rt[0], bc = Infinity;
+      for (const l of L) for (const r of Rt) { const c = Math.abs(l[0] - r[0]) + 0.5 * (l[1] - lo + hi - r[1]) + 0.01 * (l[0] + r[0]); if (c < bc) { bc = c; bl = l; br = r; } }
+      const leftV: ModVertex = [bl[0], 2 * bl[1]], rightV: ModVertex = [br[0], 2 * br[1] + 2];
+      start = entryAt ?? (dir > 0 ? leftV : rightV);
+      exitIso = exitAt ?? (dir > 0 ? rightV : leftV);
+      if (!sideExit && !entryAt) {
+        // come prima: la V più a sinistra (più a destra al ritorno); a parità di colonna, la più in alto
+        const pick = rc.reduce((q, w) => ((dir > 0 ? w[1] < q[1] : w[1] > q[1]) || (w[1] === q[1] && w[0] < q[0]) ? w : q));
+        start = dir > 0 ? [pick[0], 2 * pick[1]] : [pick[0], 2 * pick[1] + 2];
+      }
     }
     const next: ModVertex = [start[0], start[1] + dir * 2 * C];
     const v2 = (q: ModVertex) => q[0] * W2 + q[1] + off;
@@ -356,9 +433,9 @@ export function routeBands(g: GridSpec, mp: ModulePath, color: number, params: R
       const shapes = shapesOf(band.cells, C);
       // quanto una forma è vicina a un vertice del modulo (in V)
       const near = (sh: number[], q: ModVertex) => Math.min(...sh.map((i) => gapV([Math.floor(i / C), 2 * (i % C) + 1], q)));
-      const exit: ModVertex = joined ? [start[0], dir > 0 ? 2 * C : 0] : start;
+      const exit: ModVertex = joined ? [start[0], dir > 0 ? 2 * C : 0] : sideExit ? exitIso! : start;
       const first = shapes.reduce((q, w) => (near(w, start) < near(q, start) ? w : q));
-      const lastSh = joined ? shapes.filter((sh) => sh !== first).reduce<number[] | null>((q, w) => (!q || near(w, exit) < near(q, exit) ? w : q), null) : null;
+      const lastSh = (joined || sideExit) && shapes.length > 1 ? shapes.filter((sh) => sh !== first).reduce<number[] | null>((q, w) => (!q || near(w, exit) < near(q, exit) ? w : q), null) : null;
       const pos = (sh: number[]) => dir * sh.reduce((a2, i) => a2 + (i % C), 0) / sh.length;
       const middle = shapes.filter((sh) => sh !== first && sh !== lastSh).sort((q, w) => pos(q) - pos(w));
       [first, ...middle, ...(lastSh ? [lastSh] : [])].forEach((sh, k) => { for (const i of sh) pieceOf[at2(i)] = k + 1; });
@@ -367,16 +444,17 @@ export function routeBands(g: GridSpec, mp: ModulePath, color: number, params: R
       ...params, base: null, strips: null, modulePath: null, groups: [], mask: null,
       cuts: (mp.cuts ?? []).map(([x, y]) => [fromMod(x), fromMod(y)] as [number, number]),
       forced: (mp.forced ?? []).map((q) => ({ from: fromMod(q.from), to: fromMod(q.to), via: q.via.map(fromMod) })),
-      pieceOf, startAt: { [color]: v2(start) }, ...(joined ? { endAt: { [color]: v2(next) } } : {}),
+      pieceOf, startAt: { [color]: v2(start) }, ...(joined || sideExit ? { endAt: { [color]: v2(joined ? next : exitIso!) } } : {}),
     });
     const segs = res.colors.find((cr) => cr.color === color)?.segs ?? [];
     let last = segs.length - 1;
     while (last >= 0 && segs[last].kind !== 'stitch') last--;
     const toMod = (sg: RouteSeg) => ({ ...sg, from: back(sg.from), to: back(sg.to) });
     const body = segs.slice(0, last + 1).map(toMod);
-    const end: ModVertex = joined ? next : body.length ? body[body.length - 1].to : start;
-    return { rows: band.rows, cells: band.cells, dir, body, tail: joined ? segs.slice(last + 1).map(toMod) : [], joined, start, end, next, metrics: res.metrics };
-  });
+    const tail = joined || sideExit ? segs.slice(last + 1).map(toMod) : [];
+    const end: ModVertex = joined ? next : tail.length ? tail[tail.length - 1].to : body.length ? body[body.length - 1].to : start;
+    return { rows: band.rows, cells: band.cells, dir, body, tail, joined, start, end, next, metrics: res.metrics };
+  }
 }
 
 /**

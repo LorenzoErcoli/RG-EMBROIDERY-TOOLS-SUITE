@@ -798,8 +798,17 @@ Poi lo stop del filo dopo. Il percorso di una fascia si calcola sul modulo e si 
 copia. Una fascia che passa da una copia all'altra (al più 4 V di vuoto attraverso la giuntura) **entra
 da un bordo del modulo ed esce dall'altro alla stessa altezza**, sulla riga dove il disegno è più vicino a
 tutti e due i bordi: l'uscita di una copia è proprio l'ingresso della copia accanto. Una fascia di motivi
-isolati comincia dalla V più a sinistra (più a destra al ritorno), finisce sull'ultimo motivo e **salta**
-alla copia accanto: un salto corto. Si salta anche fra una fascia e la successiva. È un salto semplice,
+isolati **entra dal lato da cui arrivi ed esce dal lato verso la copia dopo** (a sinistra e a destra
+all'andata): il tool prova alcuni ingressi e alcune uscite sui due lati (in cima, in fondo, a metà) e
+tiene la coppia che costa meno fra ripassi, filo in vista e lunghezza del salto alla copia accanto; poi
+**salta** alla copia accanto: un salto corto. Se un motivo è un anello o ha dei rami, uscire dal lato
+può costare ripassi: allora esce dove finisce da solo. **Andata e ritorno**: una fascia che continua da
+una copia all'altra, se dentro il modulo dovrebbe tornare indietro e ripassare sopra quello che ha già
+cucito (per esempio una fila di V con sotto un'onda), si cuce in **due passate lungo tutta la striscia**:
+le righe di sopra all'andata e quelle di sotto al ritorno (o viceversa), ognuna sempre in avanti. Il tool
+lo fa da solo quando costa chiaramente meno; la serpentina continua dalla passata dopo. Allo stesso modo,
+se una fascia in un verso ha filo in vista e nell'altro no, la cuce nel verso migliore (fra una fascia e
+l'altra si salta comunque). Si salta anche fra una fascia e la successiva. È un salto semplice,
 senza taglio (il disegno si stacca e riparte), da pulire poi a mano se serve. Dentro la fascia l'ordine
 lo decide il tool **per forme**: le V del filo che si toccano (anche in diagonale) sono una forma, e ogni
 forma si cuce intera prima di passare alla successiva, nel verso della fascia (l'ordine dei pezzi vale
