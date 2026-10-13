@@ -57,6 +57,7 @@ export function routeStrips(g: GridSpec, cells: Cells, params: RouteParams, opts
       mask: params.mask ? params.mask.subarray(r0 * g.cols, r1 * g.cols) : params.mask,
       groups: params.groups?.map((q) => shiftGroup(q, 0, dy)),
       cuts: params.cuts?.map(([a, b]) => [a - shift, b - shift] as [number, number]).filter(([a, b]) => a >= 0 && b >= 0 && a < (grid.rows + 1) * W && b < (grid.rows + 1) * W),
+      forced: params.forced?.map((q) => ({ from: q.from - shift, to: q.to - shift, via: q.via.map((v) => v - shift) })).filter((q) => [q.from, q.to, ...q.via].every((v) => v >= 0 && v < (grid.rows + 1) * W)),
     };
     const res = routeCells(grid, sub, p);
     for (const cr of res.colors) colors.push({ color: cr.color, strip, segs: cr.segs.map((s) => ({ ...s, from: s.from + shift, to: s.to + shift })) });

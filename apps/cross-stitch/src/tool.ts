@@ -75,6 +75,11 @@ interface State {
   module: KnitModule | null;
   /** I salti a mano: passaggi fra due vertici (riga, colonna del reticolo del disegno intero). */
   cuts: Array<[number, number, number, number]>;
+  /**
+   * I passaggi ridisegnati a mano sul ricamo (senza modulo ripetuto): il passaggio fra `from` e `to` passa
+   * per i punti `via`, in ordine. Vertici (riga, colonna del reticolo del disegno intero), come i salti.
+   */
+  forced: Array<{ from: [number, number]; to: [number, number]; via: Array<[number, number]> }>;
   /** L'area di prova (area.ts): passaggi ed export solo lì, il disegno resta tutto. */
   area: TestArea | null;
 }
@@ -380,7 +385,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <button type="button" class="rg-segmented__item" data-mode="image" hidden>Sposta immagine</button>
             <button type="button" class="rg-segmented__item" data-mode="order" hidden>Ordine pezzi</button>
             <button type="button" class="rg-segmented__item" data-mode="bands" hidden>Fasce</button>
-            <button type="button" class="rg-segmented__item" data-mode="reroute" hidden>Ridisegna passaggio</button>
+            <button type="button" class="rg-segmented__item" data-mode="reroute">Ridisegna passaggio</button>
           </div>
           <div class="cs-editbar__group" id="moduleEditGroup" role="group" aria-labelledby="eb-mod" hidden><span class="rg-label" id="eb-mod">Modulo</span>
             <div class="rg-segmented" id="moduleViewSel" role="group" aria-label="Vista">
@@ -474,6 +479,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     stitch: { ...DEFAULT_STITCH },
     area: null,
     cuts: [],
+    forced: [],
     module: null,
   };
   let mode: Mode = 'paint';
@@ -525,40 +531,64 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     }
     return best;
   }
+  type Forced = { from: number; to: number; via: number[] };
+  /**
+   * Dove si ridisegna un passaggio. Nell'editor: il modulo (vale in ogni copia; vertici del modulo). Fuori
+   * (Lorenzo, 2026-10-13: «ridisegna passaggio anche nella modalità disegno normale e non solo nel
+   * modulo»): il ricamo, vertici del disegno intero (riga × (2·colonne + 1) + colonna). `fromView` porta un
+   * vertice del reticolo calcolato lì (-1 = fuori).
+   */
+  function rerouteSpace(): { list: Forced[]; fromView: (v: number) => number; save: (l: Forced[]) => void; outside: string } | null {
+    if (editorOpen) {
+      const m = st.module;
+      if (!m) return null;
+      return { list: m.forced ?? [], fromView: viewToMod, save: (l) => { m.forced = l; if (editorSnap) editorSnap.changed = true; }, outside: 'Il passaggio non è dentro il modulo al centro: cliccalo lì.' };
+    }
+    const Wf = 2 * st.grid.cols + 1, Wr = 2 * routeGeom.grid.cols + 1;
+    const enc = ([i, j]: [number, number]) => i * Wf + j;
+    const dec = (v: number): [number, number] => [Math.floor(v / Wf), v % Wf];
+    return {
+      list: st.forced.map((q) => ({ from: enc(q.from), to: enc(q.to), via: q.via.map(enc) })),
+      fromView: (v) => (v < 0 ? -1 : (Math.floor(v / Wr) + routeGeom.i0) * Wf + (v % Wr) + routeGeom.j0),
+      save: (l) => { st.forced = l.map((q) => ({ from: dec(q.from), to: dec(q.to), via: q.via.map(dec) })); },
+      outside: 'Il passaggio non è dentro il ricamo.',
+    };
+  }
   function rerouteClick(p: { x: number; y: number }): void {
-    const m = st.module;
-    if (!m) return;
+    // col modulo ripetuto il percorso è quello del modulo: si ridisegna lì
+    if (!editorOpen && routeInput().params.modulePath) { $('status').textContent = 'Il ricamo è il modulo ripetuto: i suoi passaggi si ridisegnano nel modulo (Modifica modulo), e valgono in ogni copia.'; return; }
+    const sp = rerouteSpace();
+    if (!sp) return;
+    const list = sp.list;
     if (!reroute) {
       const t = travelAt(p);
-      if (!t) { $('status').textContent = 'Clicca sopra una linea di passaggio del modulo al centro.'; return; }
-      const a = viewToMod(t.from), b = viewToMod(t.to);
-      if (a < 0 || b < 0) { $('status').textContent = 'Il passaggio non è dentro il modulo al centro: cliccalo lì.'; return; }
-      const f = (m.forced ?? []).find((q) => (q.from === a && q.to === b) || (q.from === b && q.to === a));
+      if (!t) { $('status').textContent = editorOpen ? 'Clicca sopra una linea di passaggio del modulo al centro.' : 'Clicca sopra una linea di passaggio.'; return; }
+      const a = sp.fromView(t.from), b = sp.fromView(t.to);
+      if (a < 0 || b < 0) { $('status').textContent = sp.outside; return; }
+      const f = list.find((q) => (q.from === a && q.to === b) || (q.from === b && q.to === a));
       reroute = { from: f ? f.from : a, to: f ? f.to : b, before: f ? [...f.via] : [] };
       update();
       return;
     }
-    const v = viewToMod(vertexNear(p));
-    if (v < 0) { $('status').textContent = 'Il punto deve stare nel modulo al centro.'; return; }
+    const v = sp.fromView(vertexNear(p));
+    if (v < 0) { $('status').textContent = editorOpen ? 'Il punto deve stare nel modulo al centro.' : 'Il punto deve stare nel ricamo.'; return; }
     pushUndo();
-    const list = m.forced ?? [];
     const cur = list.find((q) => q.from === reroute!.from && q.to === reroute!.to);
     if (cur) cur.via.push(v); else list.push({ from: reroute.from, to: reroute.to, via: [v] });
-    m.forced = list;
-    if (editorSnap) editorSnap.changed = true;
+    sp.save(list);
     update();
   }
   function rerouteKey(k: string): boolean {
-    const m = st.module;
-    if (!reroute || !m) return false;
-    const list = m.forced ?? [];
+    const sp = rerouteSpace();
+    if (!reroute || !sp) return false;
+    const list = sp.list;
     const idx = list.findIndex((q) => q.from === reroute!.from && q.to === reroute!.to);
     if (k === 'Escape') { pushUndo(); if (idx >= 0) { if (reroute.before.length) list[idx].via = [...reroute.before]; else list.splice(idx, 1); } }
     else if (k === 'Delete' || k === 'Backspace') { pushUndo(); if (idx >= 0) list.splice(idx, 1); }
     // Invio o Spazio: il passaggio resta così (Lorenzo, 2026-10-02: «se premo invio o spazio il passaggio
     // che sto modificando si blocca, altrimenti non posso andare a cambiare qualcos'altro»)
     else if (k !== 'Enter' && k !== ' ') return false;
-    m.forced = list;
+    sp.save(list);
     reroute = null;
     update();
     $('status').textContent = k === 'Escape' ? 'Punti tolti. Clicca un passaggio da ridisegnare.' : k === 'Delete' || k === 'Backspace' ? 'Passaggio automatico. Clicca un altro passaggio da ridisegnare.' : 'Passaggio fissato. Clicca un altro passaggio da ridisegnare.';
@@ -590,8 +620,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   let groupHover = -1;
   let result: RouteResult | null = null;
   let sourceName = '';
-  const undo: Array<{ grid: GridSpec; cells: Cells; module?: KnitModule | null }> = [];
-  const redo: Array<{ grid: GridSpec; cells: Cells; module?: KnitModule | null }> = [];
+  const undo: Array<{ grid: GridSpec; cells: Cells; module?: KnitModule | null; forced?: State['forced'] }> = [];
+  const redo: Array<{ grid: GridSpec; cells: Cells; module?: KnitModule | null; forced?: State['forced'] }> = [];
 
   // Le sezioni richiudibili si ricordano (solo l'aperto/chiuso: il lavoro no, si riparte puliti).
   for (const id of ['sec-passaggi', 'sec-macchina', 'sec-carica']) {
@@ -657,6 +687,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const withCuts = (grid: GridSpec, i0: number, j0: number) => {
       const ix = toIndex(grid, i0, j0);
       params.cuts = st.cuts.map(([i1, j1, i2, j2]) => [ix(i1, j1), ix(i2, j2)] as [number, number]).filter(([x, y]) => x >= 0 && y >= 0);
+      if (!params.modulePath) params.forced = st.forced.map((q) => ({ from: ix(...q.from), to: ix(...q.to), via: q.via.map((v) => ix(...v)) })).filter((q) => q.from >= 0 && q.to >= 0 && q.via.every((v) => v >= 0));
     };
     const mask = maskFor(st.grid);
     if (!a) { withCuts(st.grid, 0, 0); params.mask = mask; return { grid: st.grid, cells, params, dx: 0, dy: 0 }; }
@@ -1046,6 +1077,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (editorOpen && st.module && mode === 'pick') { $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V. Trascina un riquadro intorno a un modulo dell’immagine: si aggancia alle V che trova.`; return; }
     if (editorOpen && st.module && reroute) { $('status').textContent = `Ridisegni un passaggio (filo in vista ${Math.round(editorVisible)} mm per modulo): clicca i punti da cui deve passare, in ordine. Invio o Spazio lo fissano, Esc toglie i punti messi, Canc rimette il passaggio automatico.`; return; }
     if (editorOpen && st.module) { const g0 = realGrid(); const nP = piecesOf(st.module, activeThread).length; $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V · ${fmtNum(Math.round(st.module.cols * g0.cellW))} × ${fmtNum(Math.round(st.module.rows * rowPitch(g0)))} mm · filo in vista ${Math.round(editorVisible)} mm per modulo · filo scelto: ${nP} pezz${nP === 1 ? 'o' : 'i'}, ${bandNote()}; pieno = ingresso, anello = dove finire`; return; }
+    if (reroute && !editorOpen) { $('status').textContent = 'Ridisegni un passaggio: clicca i punti da cui deve passare, in ordine. Invio o Spazio lo fissano, Esc toglie i punti messi, Canc rimette il passaggio automatico.'; return; }
     if (routing) { $('status').textContent = 'Calcolo dei passaggi…'; return; }
     if (moduleView) { $('status').textContent = moduleCopyNote; return; }
     if (!result) return;
@@ -1698,17 +1730,19 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   function cloneCells(c: Cells): Cells { return new Map([...c].map(([k, m]) => [k, { ...m }])); }
   /** Cosa salva l'Annulla: il ricamo vero (in vista modulo è da parte), e il modulo. */
   const snapshot = () => (moduleView && realDesign && st.module
-    ? { grid: { ...realDesign.grid }, cells: tileModule(realDesign.grid, st.module), module: cloneModule(st.module) }
-    : { grid: { ...st.grid }, cells: cloneCells(st.cells), module: cloneModule(st.module) });
+    ? { grid: { ...realDesign.grid }, cells: tileModule(realDesign.grid, st.module), module: cloneModule(st.module), forced: cloneForced() }
+    : { grid: { ...st.grid }, cells: cloneCells(st.cells), module: cloneModule(st.module), forced: cloneForced() });
+  const cloneForced = () => st.forced.map((q) => ({ from: [...q.from] as [number, number], to: [...q.to] as [number, number], via: q.via.map((v) => [...v] as [number, number]) }));
   const cloneModule = (m: KnitModule | null): KnitModule | null => (m ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x ? { ...x } : null)), guide: m.guide ? { ...m.guide } : m.guide, drawn: m.drawn, seq: m.seq ? [...m.seq] : m.seq, starts: m.starts ? { ...m.starts } : m.starts, cuts: m.cuts ? m.cuts.map((q) => [q[0], q[1]] as [number, number]) : m.cuts, forced: m.forced ? m.forced.map((q) => ({ from: q.from, to: q.to, via: [...q.via] })) : m.forced, bands: m.bands ? Object.fromEntries(Object.entries(m.bands).map(([k, v]) => [k, [...v]])) : m.bands, bandAt: m.bandAt ? Object.fromEntries(Object.entries(m.bandAt).map(([k, v]) => [k, { ...v }])) : m.bandAt, ordered: m.ordered ? [...m.ordered] : m.ordered, offset: m.offset ? { ...m.offset } : m.offset } : null);
   function pushUndo(): void {
     undo.push(snapshot());
     if (undo.length > 100) undo.shift();
     redo.length = 0;
   }
-  function restore(snap: { grid: GridSpec; cells: Cells; module?: KnitModule | null }): void {
+  function restore(snap: { grid: GridSpec; cells: Cells; module?: KnitModule | null; forced?: State['forced'] }): void {
     st.grid = snap.grid;
     st.cells = snap.cells;
+    if (snap.forced) st.forced = snap.forced;
     if (snap.module !== undefined) { st.module = snap.module; syncModuleUI(); }
     if (moduleView) {
       // in vista modulo: il ricamo vero torna da parte, la tela si rifà dal modulo
@@ -2264,7 +2298,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const groups = st.route.groups ?? [];
     const areas = st.route.areas ?? [];
     const showG = mode === 'group' || groupHover >= 0, showA = mode === 'area' || areaHover >= 0;
-    if (!(showG && groups.length) && !(showA && areas.length) && !groupDrag && !polyDraft) return;
+    const rr = reroute && !editorOpen ? reroute : null;
+    if (!(showG && groups.length) && !(showA && areas.length) && !groupDrag && !polyDraft && !rr) return;
     const ns = 'http://www.w3.org/2000/svg';
     const layer = document.createElementNS(ns, 'g');
     layer.id = 'cs-groups';
@@ -2301,6 +2336,20 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         c.setAttribute('style', `fill:${col}`);
         layer.appendChild(c);
       }
+    }
+    if (rr) {
+      const Wf = 2 * st.grid.cols + 1;
+      const enc = ([i, j]: [number, number]) => i * Wf + j;
+      const f = st.forced.find((q) => enc(q.from) === rr.from && enc(q.to) === rr.to);
+      const pts = [rr.from, ...(f ? f.via.map(enc) : []), rr.to];
+      pts.forEach((v, n) => {
+        const pt = segmentPoints(st.grid, v, v)[0], end = n === 0 || n === pts.length - 1;
+        const c = document.createElementNS(ns, 'circle');
+        c.setAttribute('cx', String(pt.x)); c.setAttribute('cy', String(pt.y)); c.setAttribute('r', String(fs * (end ? 0.3 : 0.2)));
+        c.setAttribute('style', `fill:${end ? 'none' : 'var(--rg-color-focus)'};stroke:var(--rg-color-focus)`);
+        c.setAttribute('stroke-width', '2'); c.setAttribute('vector-effect', 'non-scaling-stroke');
+        layer.appendChild(c);
+      });
     }
     if (groupDrag) {
       const d = groupDrag;
@@ -2799,6 +2848,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     all.disabled = moduleView;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="group"]')!.disabled = moduleView;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="area"]')!.disabled = moduleView;
+    root.querySelector<HTMLButtonElement>('#modeSel [data-mode="reroute"]')!.disabled = moduleView && !editorOpen;
     $<HTMLButtonElement>('areaBtn').disabled = moduleView;
     if (!m) { $('moduleInfo').hidden = true; return; }
     if (editorOpen) syncEditorFields();
@@ -3184,12 +3234,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $('showNumsWrap').hidden = true;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="order"]')!.hidden = true;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="bands"]')!.hidden = true;
-    root.querySelector<HTMLButtonElement>('#modeSel [data-mode="reroute"]')!.hidden = true;
     for (const sel of ['[data-mode="group"]', '[data-mode="area"]', '[data-mode="cut"]']) root.querySelector<HTMLButtonElement>('#modeSel ' + sel)!.hidden = false;
     $('moduleViewSel').hidden = false;
     $('areaBtn').closest('.cs-editbar__group')!.removeAttribute('hidden');
 
     if (mode === 'image' || mode === 'order' || mode === 'reroute' || mode === 'pick' || mode === 'bands') setMode('paint');
+    reroute = null;
     if (apply) { exitModuleView(); }
     else if (editorSnap) {
       // si torna com'era all'apertura
@@ -3290,6 +3340,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       stitch: st.stitch,
       area: st.area,
       cuts: st.cuts,
+      forced: st.forced,
       module: st.module,
       shape: pieceShape ? { contours: pieceShape.contours, roles: pieceShape.roles, name: pieceShape.name } : null,
       knit,
@@ -3347,6 +3398,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       } else { pieceShape = null; shapeDims = null; shapeSrc = null; }
       shapeVersion++;
     }
+    const vx = (v: unknown): v is [number, number] => Array.isArray(v) && v.length === 2 && v.every((x) => Number.isInteger(x));
+    st.forced = Array.isArray(meta.forced) ? (meta.forced as Array<{ from: unknown; to: unknown; via: unknown }>).filter((q) => q && vx(q.from) && vx(q.to) && Array.isArray(q.via) && q.via.every(vx)) as State['forced'] : [];
     st.cuts = Array.isArray(meta.cuts) ? (meta.cuts as unknown[]).filter((c): c is [number, number, number, number] => Array.isArray(c) && c.length === 4 && c.every((x) => Number.isInteger(x))) : [];
     // Fino a 0.3.0 la V occupava due colonne: si converte a «un punto per colonna».
     if (typeof meta.version === 'string' && ['0.1.0', '0.2.0', '0.3.0'].includes(meta.version)) {

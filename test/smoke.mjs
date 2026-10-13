@@ -5312,6 +5312,19 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
       [dentro, fuori, blocchi.colors.map((cr) => (cr.strip ?? '-') + '/' + cr.color).join(' '), punti(blocchi) === punti(senzaSt)],
       [0, -1, '-/0 0/1 0/2 1/1 1/2 2/1 2/2', true]);
   }
+  // PASSAGGIO RIDISEGNATO SUL RICAMO, SENZA MODULO (Lorenzo, 2026-10-13: «ridisegna passaggio anche nella
+  // modalità disegno normale»): i vertici del disegno intero, anche a strisce (la striscia 2 comincia alla riga 4)
+  {
+    const segsOf = (res) => res.colors.find((cr) => cr.strip === 1 && cr.color === 1).segs;
+    const lib = segsOf(unica);
+    let run = null;
+    for (let i = 0; i < lib.length && !run; i++) { if (lib[i].kind === 'stitch' || lib[i].kind === 'jump') continue; let j = i; while (j < lib.length && lib[j].kind !== 'stitch' && lib[j].kind !== 'jump') j++; if (lib[i].from !== lib[j - 1].to) run = { from: lib[i].from, to: lib[j - 1].to, tocca: new Set(lib.slice(i, j).map((sg) => sg.to)) }; i = j - 1; }
+    let via = -1;
+    for (let v = 5 * W2; v < 8 * W2 && via < 0; v++) if (!run.tocca.has(v) && v !== run.from && Math.abs((v % W2) - (run.from % W2)) <= 4) via = v;
+    const forz = segsOf(rg.csRouteAll(gSt, cSt, { ...parSt, strips: { rows: 4 }, forced: [{ from: run.from, to: run.to, via: [via] }] }));
+    const pS = (segs) => segs.filter((sg) => sg.kind === 'stitch').map((sg) => sg.from + '-' + sg.to).join(' ');
+    check('passaggio ridisegnato sul ricamo a strisce: passa dal punto dato, stessi punti, filo continuo', [forz.some((sg) => sg.to === via), pS(forz) === pS(lib), forz.every((sg, i) => i === 0 || sg.from === forz[i - 1].to)], [true, true, true]);
+  }
   check('strisce: la base in un solo stop, per prima, poi i fili striscia per striscia; gli stessi punti',
     [unica.colors.map((cr) => (cr.strip ?? '-') + '/' + cr.color).join(' '), punti(unica) === punti(senzaSt)],
     ['-/0 0/1 0/2 1/1 1/2 2/1 2/2', true]);
