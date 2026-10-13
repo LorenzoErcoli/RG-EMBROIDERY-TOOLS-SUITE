@@ -5,6 +5,8 @@ tool: [cross-stitch]
 data: 2026-09-24
 ---
 
+**Il nome (2026-10-13).** Nella suite il tool si chiama **Punto croce** (Lorenzo l'ha rinominato, era «Cross-Stitch») e sta nella home con gli strumenti pronti, non più in «In sviluppo». L'id, la cartella `apps/cross-stitch` e il tipo di progetto salvato (`rgProject: 'cross-stitch'`) restano quelli: i DST e i progetti già fatti si riaprono.
+
 Il 2026-09-24 Lorenzo ha mostrato il bersaglio del tool Cross-Stitch: la foto di un lavoro a
 **maglia** (maglia rasata) con una montagna — **colonne di V impilate**, V strette e alte (cella
 ~1:2,5), due fili (panna e grigio scuro), il disegno dato **solo dal colore di ogni V**, le gambe piene

@@ -87,7 +87,7 @@ interface State {
 /** Monta il tool "Cross-Stitch" dentro `root`. `backHref` = link di ritorno alla home suite. */
 export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } = {}): void {
   root.innerHTML = `
-  ${topbar('Cross-Stitch', opts.backHref)}
+  ${topbar('Punto croce', opts.backHref)}
   <div class="rg-workspace cs-workspace">
     <aside class="rg-workspace__panel">
       <!-- La testa (01-03) resta sempre aperta; corpo (04-05) e coda (06) si richiudono e si ricordano. -->
@@ -3212,7 +3212,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     for (const id of ['ed-immagine', 'ed-griglia']) $(id).hidden = false;
     $('stageTitle').textContent = 'Modulo';
     $('stageActions').hidden = true; $('editorActions').hidden = false;
-    document.title = 'Modulo · Cross-Stitch';
+    document.title = 'Modulo · Punto croce';
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="image"]')!.hidden = false;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="pick"]')!.hidden = !source;
     $('showNumsWrap').hidden = false;
@@ -3241,7 +3241,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     for (const id of ['ed-immagine', 'ed-griglia']) $(id).hidden = true;
     $('stageTitle').textContent = 'Disegno';
     $('stageActions').hidden = false; $('editorActions').hidden = true;
-    document.title = 'Cross-Stitch — RG Tools';
+    document.title = 'Punto croce — RG Tools';
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="image"]')!.hidden = true;
     root.querySelector<HTMLButtonElement>('#modeSel [data-mode="pick"]')!.hidden = true;
     $('showNumsWrap').hidden = true;

@@ -510,7 +510,7 @@ collegamenti restano corti e il taglio si paga solo per cambiare blocco.
 
 ---
 
-## Pelle di razza (`razza`)
+## Punto razza (`razza`)
 
 **A cosa serve.** Riempie una sagoma di **pallini di cordoncino**, **piccoli ai bordi e grandi verso il centro**, come la pelle di razza (galuchat). Ogni pallino è un cordoncino che parte stretto, si allarga al centro e torna stretto. I passaggi da un pallino al successivo sono **piccoli e nascosti**: passano dentro il pallino appena cucito e sotto il prossimo, quindi in vista resta solo il vuoto fra i due.
 
@@ -536,7 +536,7 @@ collegamenti restano corti e il taglio si paga solo per cambiare blocco.
 
 ---
 
-## Cross-Stitch (`cross-stitch`)
+## Punto croce (`cross-stitch`)
 
 **A cosa serve.** A ricamare un disegno fatto di **diagonali in una griglia**: la diagonale
 singola, la **V** (il punto della **maglia**), la **Λ** e la **croce**. **Un punto per cella**:

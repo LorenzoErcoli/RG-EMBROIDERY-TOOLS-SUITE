@@ -119,8 +119,8 @@ graph TD
 | **striatura** (Punto Striato) | ✅ **live** — motore nuovo, nato dal DST di riferimento `PUNTO-STRIATURA.dst` |
 | **zone-pattern** (Pattern a zone) | ✅ **live** — riempie le zone colorate di un disegno col pattern del *Generatore pattern*, ruotato sulle perpendicolari di ogni zona (ruota il piano, non il modulo). Nato dal cannage Dior. |
 | **broccato** (Broccato) | ✅ **live** — da immagine a raso rado orizzontale coi passaggi nascosti sotto i colori successivi; nato dalla decodifica di `BROCCATO.dst` |
-| **cross-stitch** (Cross-Stitch) | ✅ **in sviluppo** — migrato da ThreadRoute Grid Lab con motore dei passaggi riscritto; bersaglio: l’effetto maglia |
-| **razza** (Pelle di razza) | ✅ **live in «sviluppo»** — pallini di cordoncino piccoli ai bordi e grandi al centro, fissi e sfumature a scelta; motore nuovo (`apps/razza/src`), girato in un Web Worker. Ha fatto correggere l'importatore DXF del core (blocchi e `INSERT`) |
+| **cross-stitch** (Punto croce, era Cross-Stitch) | ✅ **live nella suite** (dal 2026-10-13; prima in «sviluppo») — migrato da ThreadRoute Grid Lab con motore dei passaggi riscritto; bersaglio: l’effetto maglia |
+| **razza** (Punto razza, era Pelle di razza) | ✅ **live nella suite** (dal 2026-10-13; prima in «sviluppo») — pallini di cordoncino piccoli ai bordi e grandi al centro, fissi e sfumature a scelta; motore nuovo (`apps/razza/src`), girato in un Web Worker. Ha fatto correggere l'importatore DXF del core (blocchi e `INSERT`) |
 | 45-grid | da migrare quando lo tocchi (stesso schema) |
 | `bitmap_to_stitch` (repo Python) | satellite: contratti sì, codice no. Migrata la sola pipeline *immagine→punti→SVG*; il laboratorio DST/recipe con AI (CLIP/OpenAI) resta fuori scope |
 
@@ -149,7 +149,7 @@ RG Tools (monorepo)
 ├─ apps/striatura           "Punto Striato"
 ├─ apps/zone-pattern        "Pattern a zone"
 └─ apps/pittorico           "Punto Pittorico"  (input raster)
-   (… e `razza` "Pelle di razza", cross-stitch, pettine, cannage-rafia, sfrangiatura: l'elenco vivo è `TOOLS` in `packages/ui/src/tools.ts`)
+   (… e `razza` "Punto razza", `cross-stitch` "Punto croce", pettine, cannage-rafia, sfrangiatura: l'elenco vivo è `TOOLS` in `packages/ui/src/tools.ts`)
 ```
 
 **Come funziona:** `apps/shell` è l'unica app d'ingresso. Home (`#/`) = griglia di tool DS-styled;

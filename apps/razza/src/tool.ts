@@ -77,12 +77,12 @@ function pezzoDaContorni(contorni: ImportResult['contours']): { pezzo: Pezzo | n
   return { pezzo: pezzoDa(perimetro, vuoti), aperte, chiusi: chiusi.length };
 }
 
-/** Monta il tool "Pelle di razza" dentro `root`. `backHref` = link di ritorno alla home suite. */
+/** Monta il tool "Punto razza" dentro `root`. `backHref` = link di ritorno alla home suite. */
 export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}): void {
   const icona = (nome: string): string => `<svg class="rg-icon" aria-hidden="true" focusable="false"><use href="${ICONS}#rg-icon-${nome}"></use></svg>`;
   const campiHtml = (id: string): string => `<div id="${id}" class="rg-param-grid"></div>`;
   root.innerHTML = `
-  ${topbar('Pelle di razza', opts.backHref)}
+  ${topbar('Punto razza', opts.backHref)}
   <div class="rg-workspace razza-workspace">
     <aside class="rg-workspace__panel">
       <section class="rg-param-section">

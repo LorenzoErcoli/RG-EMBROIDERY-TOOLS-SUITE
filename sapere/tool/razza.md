@@ -5,7 +5,7 @@ tool: [razza]
 data: 2026-10-06
 ---
 
-**Stato: tool vero, in «In sviluppo» (2026-10-06).** `apps/razza/` (motore in `src/`, interfaccia in `src/tool.ts`, calcolo
+**Stato: tool vero, nella suite come «Punto razza» (dal 2026-10-13: Lorenzo l'ha rinominato, era «Pelle di razza», e spostato dalla pagina «In sviluppo» alla home). In «In sviluppo» dal 2026-10-06.** `apps/razza/` (motore in `src/`, interfaccia in `src/tool.ts`, calcolo
 in un Web Worker). Le simulazioni che l'hanno preceduto sono sotto, con le strade scartate. `scripts/sim.ts` resta come
 prova da riga di comando sulla sagoma vera: numeri, un PNG e un DST in `scripts/out/` (non tracciato).
 

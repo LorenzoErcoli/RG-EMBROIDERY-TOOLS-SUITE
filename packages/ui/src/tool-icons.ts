@@ -57,7 +57,7 @@ const ICONS: Record<string, string> = {
   pittorico:
     '<path d="M6 26C6 15 15 6 26 6"/><path d="M11 26c0-8 7-15 15-15"/><path d="M16 26c0-5 5-10 10-10"/><path d="M4 20l4-1M7 13l4 1M13 7l2 3"/>',
 
-  // Pelle di razza: pallini piccoli ai lati, grandi al centro.
+  // Punto razza: pallini piccoli ai lati, grandi al centro.
   razza:
     '<circle cx="16" cy="16" r="6.5"/><circle cx="6.5" cy="11" r="2.5"/><circle cx="6.5" cy="21" r="2.5"/><circle cx="25.5" cy="11" r="2.5"/><circle cx="25.5" cy="21" r="2.5"/><circle cx="16" cy="5" r="1.5"/><circle cx="16" cy="27" r="1.5"/>',
 
@@ -65,7 +65,7 @@ const ICONS: Record<string, string> = {
   'pattern-macchie':
     '<path d="M4 6h24M4 12h24M4 18h24M4 24h24"/><path d="M8 9c3-3 8-1 7 3s-6 6-8 3-2-4 1-6Z"/><path d="M19 17c3-2 7 0 6 4s-5 4-7 2-2-4 1-6Z"/>',
 
-  // Cross-Stitch: la griglia con le croci.
+  // Punto croce: la griglia con le croci.
   'cross-stitch':
     '<path d="M4 4h24v24H4Z"/><path d="M16 4v24M4 16h24"/><path d="M7 7l6 6M13 7l-6 6M19 19l6 6M25 19l-6 6"/>',
 };
