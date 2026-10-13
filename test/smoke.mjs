@@ -5328,6 +5328,14 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   check('strisce: la base in un solo stop, per prima, poi i fili striscia per striscia; gli stessi punti',
     [unica.colors.map((cr) => (cr.strip ?? '-') + '/' + cr.color).join(' '), punti(unica) === punti(senzaSt)],
     ['-/0 0/1 0/2 1/1 1/2 2/1 2/2', true]);
+  // LA BASE DALL'ALTO IN BASSO (Lorenzo, 2026-10-13: «la base deve sempre lavorare da sopra a sotto»): riga per
+  // riga, a serpentina, senza mai tornare su; ogni riga di filato: niente ripassi, niente passaggi in vista, niente salti
+  {
+    const bs = unica.colors[0].segs, W3 = LW(gSt);
+    let su = 0, max = 0; const tipi = new Set();
+    for (const sg of bs) { const r = Math.floor(Math.min(sg.from, sg.to) / W3); if (sg.kind === 'stitch') { if (r < max) su++; max = Math.max(max, r); } else tipi.add(sg.kind); }
+    check('base unica: dall\'alto in basso, senza ripassi, senza passaggi in vista né salti', [su, [...tipi].sort().join(',')], [0, 'vertical']);
+  }
 
   // RICAVA MODULO (Lorenzo, 2026-10-01, Fair Isle: «in primis definire il modulo»). Un'immagine
   // sintetica: un modulo 12 × 8 V di 3 colori, V da 6 × 6 px, ripetuto 5 × 4; dentro, un quarto

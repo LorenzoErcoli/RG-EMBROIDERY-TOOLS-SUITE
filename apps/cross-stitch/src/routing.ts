@@ -194,6 +194,8 @@ export interface RouteParams {
    * tutti i fili, poi il resto. Diversi dai gruppi, che ordinano le zone dentro un filo.
    */
   areas?: ZoneGroup[] | null;
+  /** Righe per fascia della base unica, cucita dall'alto in basso (default strips.BASE_BAND_ROWS). */
+  baseBandRows?: number;
   /** Mai passaggi sopra un gruppo già finito, se c'è un'altra strada (default vero). */
   avoidDone?: boolean;
   /** Il recinto della zona: i passaggi restano nella zona finché non è finita (default vero). */

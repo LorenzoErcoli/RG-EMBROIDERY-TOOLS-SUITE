@@ -868,7 +868,8 @@ tutto un altro le parti non tornano più a posto. Nel DST gli stop si ripetono p
 file esportato (la seconda di 1 volta il valore, la terza di 2…): positivo le allontana, negativo le
 avvicina. L'anteprima mostra il disegno com'è, senza lo spostamento. 0 righe = tutto insieme.
 **Base in un solo stop** (acceso di partenza): la base si cuce una volta sola, piena su tutto il ricamo,
-come primo stop, e poi vengono le strisce degli altri fili; la base non si sposta col ritiro. Spento:
+come primo stop, e poi vengono le strisce degli altri fili; la base non si sposta col ritiro. La base unica si cuce
+sempre **dall'alto in basso**, riga per riga a serpentina: ogni riga di V di filato, poi si scende all'angolo. Spento:
 ogni striscia ha la sua base, prima dei suoi colori.
 
 **Stop accesi e spenti.** Nella riga di ogni filo, **Vedi** accende o spegne quello stop

@@ -80,10 +80,62 @@ function baseWholeRoute(g: GridSpec, cells: Cells, params: RouteParams): { route
     if (m.color !== base.color) rest.set(k, m);
     else if (m.stitch === 'cross' && base.stitch !== 'cross') over.set(k, m);
   }
-  const res = routeCells(g, over, { ...params, strips: null, modulePath: null, cuts: [] });
-  const bc = res.colors.find((cr) => cr.color === base.color);
-  return bc ? { route: { color: base.color, segs: bc.segs }, metrics: res.metrics, rest } : null;
+  // DALL'ALTO IN BASSO (Lorenzo, 2026-10-13: «la base deve sempre lavorare da sopra a sotto»): fasce di
+  // BASE_BAND_ROWS righe, a serpentina (la prima da sinistra a destra, la seconda da destra a sinistra…);
+  // ogni fascia finisce sull'angolo in basso da cui parte la fascia dopo, così lo stop resta uno e continuo.
+  const W = 2 * g.cols + 1;
+  const mask = params.mask && params.mask.length === g.rows * g.cols ? params.mask : null;
+  const segs: RouteSeg[] = [];
+  const metrics = emptyMetrics();
+  /** Il vertice in basso della riga r, verso sinistra o verso destra, sul primo punto dentro la forma. */
+  const cornerOf = (r: number, right: boolean): number | null => {
+    for (let q = 0; q < g.cols; q++) {
+      const c = right ? g.cols - 1 - q : q;
+      if (!mask || mask[r * g.cols + c]) return (r + 1) * W + 2 * (right ? c + 1 : c);
+    }
+    return null;
+  };
+  let at = cornerOf(0, false) === null ? -1 : cornerOf(0, false)! - W; // in alto a sinistra
+  stripRanges(g, params.baseBandRows ?? BASE_BAND_ROWS).forEach(([r0, r1], n) => {
+    const grid: GridSpec = { ...g, rows: r1 - r0 };
+    const shift = r0 * W;
+    const sub: Cells = new Map(); // le croci col filo della base vengono dopo tutta la base (sotto)
+    const end = cornerOf(r1 - 1, n % 2 === 0);
+    const startLocal = at >= shift ? at - shift : -1;
+    const res = routeCells(grid, sub, {
+      ...params, strips: null, modulePath: null, areas: null, cuts: [], forced: [],
+      groups: params.groups?.map((q) => shiftGroup(q, 0, r0 * rowPitch(g))),
+      mask: mask ? mask.subarray(r0 * g.cols, r1 * g.cols) : null,
+      startAt: startLocal >= 0 ? { [base.color]: startLocal } : undefined,
+      endAt: end !== null ? { [base.color]: end - shift } : undefined,
+    });
+    const bc = res.colors.find((cr) => cr.color === base.color);
+    if (!bc || !bc.segs.length) return;
+    addMetrics(metrics, res.metrics);
+    const moved = bc.segs.map((s) => ({ ...s, from: s.from + shift, to: s.to + shift }));
+    if (segs.length && moved[0].from !== segs[segs.length - 1].to) segs.push({ kind: 'jump', from: segs[segs.length - 1].to, to: moved[0].from });
+    segs.push(...moved);
+    at = segs[segs.length - 1].to;
+  });
+  // le croci col filo della base: sopra tutta la base (la riga sotto, col sormonto, le coprirebbe), nello stesso stop
+  if (over.size) {
+    const res = routeCells(g, over, { ...params, base: null, strips: null, modulePath: null, areas: null, cuts: [], forced: [], startAt: at >= 0 ? { [base.color]: at } : undefined });
+    const bc = res.colors.find((cr) => cr.color === base.color);
+    if (bc && bc.segs.length) {
+      addMetrics(metrics, res.metrics);
+      if (segs.length && bc.segs[0].from !== segs[segs.length - 1].to) segs.push({ kind: 'jump', from: segs[segs.length - 1].to, to: bc.segs[0].from });
+      segs.push(...bc.segs);
+    }
+  }
+  return segs.length ? { route: { color: base.color, segs }, metrics, rest } : null;
 }
+
+/**
+ * Le righe di ogni fascia della base unica, cucita dall'alto in basso. Una: ogni riga di V si cuce di filato
+ * (giù, su, giù…) e si scende alla riga dopo dall'angolo; misurato sull'alpino 150 × 168 V: 0 ripassi, 0 salti,
+ * 0 in vista (con 4 righe per fascia 54 m di ripassi, con 2 righe 107 m).
+ */
+export const BASE_BAND_ROWS = 1;
 
 /**
  * I BLOCCHI DI RICAMO: la base unica per prima, poi blocco per blocco (nell'ordine della lista) tutti i fili
