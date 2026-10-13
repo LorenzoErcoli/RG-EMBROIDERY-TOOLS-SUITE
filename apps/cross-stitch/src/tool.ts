@@ -497,6 +497,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   let target = { w: st.grid.cols * st.grid.cellW, h: gridHeight(st.grid) };
   /** Vero finché il disegno è quello uscito dall'immagine: cambiando le misure si rifà. */
   let fromImage = false;
+  /** L'immagine caricata sopra un disegno già fatto: solo riferimento, niente maglia né misure nuove. */
+  let imageAsReference = false;
   /** Come si legge l'immagine: il punto e la soglia del dettaglio. */
   const knit = { ...DEFAULT_KNIT };
   /** L'immagine originale e il pezzo ritagliato (px dell'originale); null = tutta. */
@@ -2214,6 +2216,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       img.onload = () => {
         source = { img, name: file.name };
         crop = null;
+        // SOPRA UN DISEGNO GIÀ FATTO (Lorenzo, 2026-10-13: «una volta caricato il DST poter inserire l'immagine
+        // senza che il sistema mi ricalcoli tutto»): l'immagine è solo il riferimento, il ricamo resta com'è
+        imageAsReference = st.cells.size > 0 && !(editorOpen && st.module);
         applySource();
       };
       img.onerror = () => { $('imageStatus').textContent = `${file.name}: immagine non leggibile.`; };
@@ -2252,6 +2257,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     ctx.drawImage(img, cr.x, cr.y, cr.w, cr.h, 0, 0, cnv.width, cnv.height);
     const data = ctx.getImageData(0, 0, cnv.width, cnv.height);
     image = { url: cnv.toDataURL('image/png'), w: cr.w, h: cr.h, px: { rgba: data.data, width: cnv.width, height: cnv.height } };
+    if (imageAsReference) {
+      // solo il riferimento: misure, disegno, fili e passaggi restano; l'immagine si stende sul ricamo
+      draw();
+      $('imageStatus').textContent = `${source.name}: riferimento sopra il ricamo (il disegno non cambia; «Maglia dall’immagine» lo rifà dall’immagine).`;
+      return;
+    }
     $<HTMLInputElement>('keepRatio').checked = true;
     target = { w: target.w, h: ratioHeight(target.w) };
     st.grid = gridForSize(target.w, target.h, st.grid.cellW, st.grid.cellH, st.grid.overlapPct ?? 0);
@@ -2660,6 +2671,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (st.module) { st.module = null; syncModuleUI(); } // la maglia copre tutto il ricamo: il modulo si toglie
     st.cells = knitFromImage(st.grid, image.px, threadRgb(), knitOpts());
     fromImage = true;
+    imageAsReference = false;
     buildThreads();
     update();
   }
@@ -2713,6 +2725,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     st.threads = sorted.map((c, i) => ({ hex: rgbToHex(c), passes: passesOf(i) }));
     st.cells = knitFromImage(st.grid, image.px, sorted, knitOpts());
     fromImage = true;
+    imageAsReference = false;
     buildThreads();
     update();
   }

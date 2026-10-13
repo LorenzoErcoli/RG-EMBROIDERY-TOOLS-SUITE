@@ -619,6 +619,11 @@ cambiando le misure non si rifà più dall'immagine: c'è **Maglia dall'immagine
 rilegge l'immagine su tutto il ricamo. È anche il modo di lavorare **senza modulo**: se c'era un modulo,
 la maglia dall'immagine lo toglie (*Annulla* lo rimette).
 
+**L'immagine sopra un disegno già fatto.** Se il ricamo ha già un disegno (per esempio dopo aver aperto un
+DST o un progetto), *Carica immagine…* la mette solo come **riferimento**: si stende sul ricamo, sotto i punti,
+e misure, disegno, fili, blocchi, gruppi e passaggi restano quelli. Per rifare il disegno dall'immagine c'è
+**Maglia dall'immagine**. Con la griglia vuota, invece, l'immagine crea subito la maglia come sopra.
+
 **I colori scelti da te.** Scegli quanti fili vuoi (*Aggiungi filo*, e il cestino per toglierne) e il filo di
 base. Per ogni filo, il **contagocce** (l'icona nella riga del filo, quando c'è un'immagine): sulla tela
 l'immagine si vede intera, clicchi il colore che vuoi e il filo lo prende (la media di un quadratino a
