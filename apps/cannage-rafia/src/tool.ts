@@ -14,7 +14,8 @@ import { PARAMETRI_STOP } from './stop';
 import { PARAMETRI_CORNICE } from './cornice';
 import { PARAMETRI_BORDATURA, latiDelContorno, lineeDaLati, stessoLato, type LatoContorno, type LineaBordo, type Passaggio } from './bordatura';
 import { coloreStop, conPuntoMinimo, unisciTratti, stopBase, stopBordatura, stopContorno, stopCornice, stopGriglia, stopLinee, stratiProgramma, NOMI_BORDATURA, type Stop } from './programma';
-import { reticoloDaZone, contornoDaZone, lineeDaModello, zoneDaModello, type LetturaReticolo, type LineaAperta, type Zona } from './reticolo';
+import { contaRombi, leggiReticolo } from './curvo';
+import { contornoDaZone, lineeDaModello, zoneDaModello, type LetturaReticolo, type LineaAperta, type Zona } from './reticolo';
 import { sagomaDaAnelli, sagomaDaZone, type Sagoma } from './sagoma';
 import {
   BASI_FIELDS, BASI_PREDEFINITE, BASI_VALORI, PROGRAMMA_VALORI, BORDATURA_FIELDS, CORNICE_FIELDS, LINEE_FIELDS, PRESET_LINEE, PROGRAMMA_FIELDS, SCALE_MODES, STOP_FIELDS,
@@ -473,7 +474,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     for (const l of linee) aperte.set(l.color, (aperte.get(l.color) ?? 0) + 1);
     tinte = [...new Set([...conte.keys(), ...aperte.keys()])].map((color) => {
       let rombi = 0;
-      if (conte.has(color)) try { rombi = reticoloDaZone(zone, color).rombiInteri; } catch { /* nessun rombo intero di questa tinta */ }
+      if (conte.has(color)) rombi = contaRombi(zone, color);
       return { color, zone: conte.get(color) ?? 0, linee: aperte.get(color) ?? 0, rombi };
     });
     // al primo caricamento: le prime due tinte che hanno rombi interi diventano pattern 1 e pattern 2
@@ -513,7 +514,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     if (!st) return;
     if (!zone.length) { st.textContent = ''; return; }
     st.textContent = lettura
-      ? `Reticolo dal pattern 1: rombo ${fmt(2 * lettura.reticolo.a)} × ${fmt(2 * lettura.reticolo.b)} mm, misurato su ${lettura.rombiInteri} rombi interi.${avviso ? ' ' + avviso : ''}`
+      ? `Reticolo dal pattern 1: rombo ${fmt(2 * lettura.reticolo.a)} × ${fmt(2 * lettura.reticolo.b)} mm, misurato su ${lettura.rombiInteri} rombi interi.${lettura.curvo ? ` Cartamodello CURVO: linee, cornice e griglia seguono i vertici veri (${lettura.curvo.nodi} vertici, fino a ${fmt(lettura.curvo.scostamentoMax)} mm fuori da un reticolo dritto).` : ''}${avviso ? ' ' + avviso : ''}`
       : avviso;
   }
 
@@ -548,9 +549,9 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
       if (!p1) avviso = 'Scegli la tinta del pattern 1: griglia e linee seguono i suoi rombi.';
       else {
         try {
-          lettura = reticoloDaZone(zone, p1);
+          lettura = leggiReticolo(zone, p1);
           if (lettura.fuoriReticolo) avviso = `${lettura.fuoriReticolo} rombi non stanno sul reticolo: controlla il disegno.`;
-          stop.push(stopGriglia(lettura.reticolo, sagomaBordo(), parStop));
+          stop.push(stopGriglia(lettura.reticolo, sagomaBordo(), parStop, lettura.warp));
         } catch (e) {
           avviso = (e as Error).message;
         }
@@ -562,11 +563,11 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
         const sagoma = sagomaPezzo();
         const scarico = poligoniScarico();
         try {
-          const s5 = stopLinee(lettura.reticolo, sagoma, parametriDa(cfg), scarico, anelliContorno());
+          const s5 = stopLinee(lettura.reticolo, sagoma, parametriDa(cfg), scarico, anelliContorno(), lettura.warp);
           ingombri = s5.risultato.ingombri;
           stop.push(s5);
         } catch (e) { avviso = (e as Error).message; }
-        try { stop.push(stopCornice(lettura.reticolo, sagoma, parametriCorniceDa(cfgCornice), ingombri, scarico)); } catch (e) { avviso = (e as Error).message; }
+        try { stop.push(stopCornice(lettura.reticolo, sagoma, parametriCorniceDa(cfgCornice), ingombri, scarico, lettura.warp)); } catch (e) { avviso = (e as Error).message; }
       }
       // la bordatura, sui lati scelti: il passo dei fermi parte dal pezzo più lungo delle linee (stop 5)
       const daBordare = lineeBordatura();

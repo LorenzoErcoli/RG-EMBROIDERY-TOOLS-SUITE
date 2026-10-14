@@ -93,3 +93,27 @@ tutte negli stessi stop 7–10. In `bordatura.ts` (commit `6c1b724`).
 
 **Vincolo architetturale:** le app non si importano fra loro (P2); per riusare il motore di Pattern a
 zone lo si è portato in `@rg/pattern-grammar/src/zone`.
+
+## Il cartamodello curvo (14/10)
+
+Lorenzo, 14/10: sul cartamodello della borsa curva (`test/fixtures/cannage-rafia-curvo.svg`) i rombi non stanno
+su un reticolo dritto — le file di vertici si arcuano, i lati restano quasi dritti (freccia ≤ 0,7 mm) — e linee
+orizzontali e cornice devono seguirli. **Misurato:** un reticolo dritto sbaglierebbe fino a 13 mm sui vertici.
+
+**Decisioni di Lorenzo:** le linee seguono la *spline che passa per i vertici* di riga; **le linee finiscono
+sempre**, quindi si proiettano fino al bordo del cartamodello.
+
+**Come è fatto** (`curvo.ts`): linee, cornice e griglia restano scritti sul reticolo dritto «ideale» e girano su
+un pezzo ideale (il bordo vero riportato lì dalla deformazione inversa); quello che generano si porta sul pezzo
+vero con la deformazione (thin-plate spline, esatta sui vertici dei rombi interi di tutte e due le tinte). Si
+attiva da sola (`leggiReticolo`) quando i vertici stanno a più di 0,12 mezze diagonali dal reticolo dritto o il
+reticolo dritto non si legge: i cartamodelli dritti restano identici.
+
+**Lezioni:** (1) il pezzo ideale va fatto dai *lati* del bordo, non dagli *anelli* — l'anello è una catena che ai
+vertici dove due zone si toccano di punta prende scorciatoie; (2) i capi quasi coincidenti di zone diverse vanno
+saldati prima di riportarli (0,25 mm), se no fra due lati resta un varco di centesimi e il «dentro o fuori» di
+una riga sbaglia: la cornice usciva dal pezzo di decine di mm.
+
+**Aperto:** le orizzontali della cornice restano orizzontali *nel reticolo* (seguono l'andamento dei rombi), non
+sono perpendicolari al lato come Lorenzo ha risposto il 14/10: nel reticolo dritto i lati stanno a 45°, quindi
+«normale al lato» cambierebbe anche il disegno del DST. Da decidere con lui.

@@ -1,6 +1,7 @@
 // Il reticolo dei rombi letto da un SVG a zone: da dove la fase 3 prende tutte le sue misure.
 import type { ImportedBoundaryModel } from '@rg/pattern-grammar';
 import type { Punto, Reticolo } from './linee';
+import type { Warp } from './curvo';
 
 export type Zona = { color?: string; points: Punto[] };
 
@@ -41,6 +42,12 @@ export type LetturaReticolo = {
   rombiInteri: number;
   /** Rombi interi che NON cadono sul reticolo: se non è zero, il disegno non è un cannage regolare. */
   fuoriReticolo: number;
+  /**
+   * Solo sui cartamodelli curvi (vedi curvo.ts): `reticolo` è allora quello IDEALE, dritto, e `warp` lo porta
+   * sul disegno vero. Linee, cornice e griglia vanno cucite col warp.
+   */
+  warp?: Warp;
+  curvo?: { nodi: number; scostamentoMax: number; jacobianoMin: number };
 };
 
 const norm = (c?: string) => (c ?? '').trim().toLowerCase();

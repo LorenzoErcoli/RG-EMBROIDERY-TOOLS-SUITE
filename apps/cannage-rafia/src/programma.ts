@@ -14,7 +14,8 @@ import { generaLinee, type Ingombro, type ParametriLinee, type Punto, type Retic
 import { contornoImpunture, grigliaBloccaggio, type ParametriStop } from './stop';
 import { generaCornice, type ParametriCornice, type RisultatoCornice } from './cornice';
 import { generaBordatura, type LineaBordo, type ParametriBordatura, type RisultatoBordatura } from './bordatura';
-import type { Sagoma } from './sagoma';
+import { sagomaDaAnello, type Sagoma } from './sagoma';
+import { anelliIdeali, mappaBlocchi, sagomaIdeale, type Warp } from './curvo';
 import type { Zona } from './reticolo';
 
 export type Stop = { numero: number; nome: string; blocchi: Punto[][]; punti: number };
@@ -26,8 +27,21 @@ export function stopContorno(contorno: Punto[] | Sagoma, par: ParametriStop): St
   return { numero: 1, nome: 'Contorno a impunture', blocchi, punti: conta(blocchi) };
 }
 
-export function stopGriglia(ret: Reticolo, contorno: Punto[] | Sagoma, par: ParametriStop): Stop & { linee: number } {
-  const g = grigliaBloccaggio(ret, contorno, par);
+/**
+ * Il pezzo e i suoi accessori (aree di scarico, contorno delle termogarze) come li vede il motore: sul
+ * cartamodello curvo il motore lavora sul reticolo ideale, quindi tutto ci viene riportato (curvo.ts).
+ */
+function sulIdeale(contorno: Punto[] | Sagoma, warp: Warp | undefined): Punto[] | Sagoma {
+  if (!warp) return contorno;
+  return sagomaIdeale(Array.isArray(contorno) ? sagomaDaAnello(contorno) : contorno, warp);
+}
+
+export function stopGriglia(ret: Reticolo, contorno: Punto[] | Sagoma, par: ParametriStop, warp?: Warp): Stop & { linee: number } {
+  const g = grigliaBloccaggio(ret, sulIdeale(contorno, warp), par);
+  if (warp) {
+    g.contorno = mappaBlocchi(g.contorno, warp);
+    g.griglia = mappaBlocchi([g.griglia], warp)[0] ?? [];
+  }
   const blocchi = [...g.contorno, g.griglia].filter((b) => b.length > 1);
   // dal contorno alla griglia il filo non si stacca: pochi millimetri di impuntura sul bordo
   if (g.contorno.length === 1 && g.griglia.length > 1 && blocchi.length === 2) {
@@ -72,17 +86,22 @@ export function stopBase(numero: 3 | 4, zone: Zona[], colore: string, config: Pa
 
 export function stopLinee(
   ret: Reticolo, contorno: Punto[] | Sagoma, par: ParametriLinee,
-  scarico: Punto[][] = [], contornoTermogarze: Punto[][] = [],
+  scarico: Punto[][] = [], contornoTermogarze: Punto[][] = [], warp?: Warp,
 ): Stop & { risultato: RisultatoLinee } {
-  const risultato = generaLinee(ret, contorno, par, scarico, contornoTermogarze);
+  const ideali = (aree: Punto[][]) => (warp ? anelliIdeali(aree, warp) : aree);
+  let risultato = generaLinee(ret, sulIdeale(contorno, warp), par, ideali(scarico), ideali(contornoTermogarze));
+  // Sul cartamodello curvo i tratti nascono sul reticolo ideale e si portano sul disegno vero; gli ingombri
+  // di fermi e barre restano ideali, perché la cornice (che lavora lì) li vuole lì.
+  if (warp) risultato = { ...risultato, blocchi: mappaBlocchi(risultato.blocchi, warp) };
   return { numero: 5, nome: 'Linee orizzontali e verticali', blocchi: risultato.blocchi, punti: risultato.conteggi.punti, risultato };
 }
 
 /** Lo stop 6. `ingombri` sono fermi e barre dello stop 5: la cornice non ci passa sopra. */
 export function stopCornice(
-  ret: Reticolo, contorno: Punto[] | Sagoma, par: ParametriCornice, ingombri: Ingombro[] = [], scarico: Punto[][] = [],
+  ret: Reticolo, contorno: Punto[] | Sagoma, par: ParametriCornice, ingombri: Ingombro[] = [], scarico: Punto[][] = [], warp?: Warp,
 ): Stop & { risultato: RisultatoCornice } {
-  const risultato = generaCornice(ret, contorno, par, ingombri, scarico);
+  let risultato = generaCornice(ret, sulIdeale(contorno, warp), par, ingombri, warp ? anelliIdeali(scarico, warp) : scarico);
+  if (warp) risultato = { ...risultato, blocchi: mappaBlocchi(risultato.blocchi, warp) };
   return { numero: 6, nome: 'Cornice nei rombi', blocchi: risultato.blocchi, punti: risultato.conteggi.punti, risultato };
 }
 
