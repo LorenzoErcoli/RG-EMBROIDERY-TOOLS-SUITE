@@ -1,7 +1,7 @@
 // Il contratto del motore (K1b) per Oblique (Broderie Anglaise): avvolge `generateOblique`, senza cambiare niente.
 // Qui stanno anche i passi puri che tool.ts faceva prima di chiamarlo (confini dai ruoli, ingombro del cartamodello,
 // piazzamento che segue il pattern) e come i livelli diventano strati: tool.ts li chiama da qui.
-import { THREAD_STROKE_MM, SHAPE_STROKE_MM, type Contour, type ExportLayer } from '@rg/core';
+import { THREAD_STROKE_MM, SHAPE_STROKE_MM, type Contour, type ExportLayer, refertoDaStrati } from '@rg/core';
 import type { Ingresso, Motore } from '@rg/cervello';
 import {
   generateOblique, contourBoundary, rectBounds,
@@ -101,6 +101,7 @@ export const motore: Motore<IngressoOblique, ObliqueParams> = {
   id: 'oblique',
   async genera(ingresso, params) {
     const res = generaOblique(ingresso.moduli, ingresso.sagoma, ingresso.ruoli, params);
-    return { strati: exportLayersFor(res), avvisi: [] };
+    const strati = exportLayersFor(res);
+    return { strati, avvisi: [], misure: refertoDaStrati(strati) };
   },
 };

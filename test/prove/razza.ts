@@ -1,3 +1,4 @@
+import { dstFromExportLayers } from '@rg/core';
 import { PARAMETRI_RAZZA, costruisci, pezzoDa, stratiPerDst } from '../../apps/razza/src/motore';
 
 // La «C» dello smoke (apertura a sinistra, come il pezzo vero), con un pallino fisso e una sfumatura.
@@ -11,5 +12,7 @@ export async function prova() {
     params,
     // la strada di prima: quello che faceva tool.ts per il DST (Worker → costruisci, poi stratiPerDst)
     diretto: () => stratiPerDst(costruisci(pezzo, params, fissi, sfumature)).layers,
+    // il DST che il tool esporta davvero (tool.ts: center:false, perché gli strati sono già sulla griglia da 0,1 mm)
+    dst: () => dstFromExportLayers(stratiPerDst(costruisci(pezzo, params, fissi, sfumature)).layers, { label: 'RAZZA', center: false }),
   };
 }

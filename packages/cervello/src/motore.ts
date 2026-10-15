@@ -9,8 +9,10 @@
 //  - Quello che l'utente disegna a mano (celle del cross-stitch, zone pennellate della sfrangiatura, pallini
 //    fissi della razza, ruoli dei colori…) è INGRESSO, non parametri: ogni tool lo dichiara estendendo `Ingresso`.
 //  - Il motore gira in node: niente DOM, niente Worker. Se un tool usa un Worker, è il Worker che chiama `genera`.
-//  - `busta` e `misure` restano vuote: arrivano con la K2 (busta di progetto) e la K3 (referto comune).
-import type { Contour, ExportLayer } from '@rg/core';
+//  - `busta` resta vuota: arriva con la K2 (busta di progetto). `misure` è il referto comune (K3).
+import type { Contour, ExportLayer, Referto } from '@rg/core';
+
+export type { Referto, RefertoAgo } from '@rg/core';
 
 /** Un'immagine in ingresso: pixel RGBA, e quanti pixel fanno un millimetro (la misura reale, R11). */
 export interface Immagine {
@@ -39,8 +41,11 @@ export interface Risultato {
   avvisi: string[];
   /** K2: la busta di progetto. Vuota finché non c'è. */
   busta?: unknown;
-  /** K3: il referto comune. Vuoto finché non c'è. */
-  misure?: unknown;
+  /**
+   * K3: il referto comune, misurato dai byte del DST che il tool esporta davvero (`misuraDst`): sempre le stesse
+   * misure, calcolate allo stesso modo. Il filo in vista c'è solo per i tool che lo calcolano.
+   */
+  misure?: Referto;
 }
 
 export interface Motore<I extends Ingresso = Ingresso, P extends object = Record<string, unknown>> {

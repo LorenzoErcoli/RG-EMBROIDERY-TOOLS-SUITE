@@ -1,6 +1,6 @@
 // Il contratto del motore (K1b) per Broccato: avvolge la sequenza riduzione → tinte → `buildPlan`.
 // La sequenza stava dentro `analyze()` di tool.ts: ora è qui (`calcolaPiano`), pura, e tool.ts la chiama.
-import { reduceStable, type ReduceResult } from '@rg/core';
+import { reduceStable, type ReduceResult, refertoDaStrati } from '@rg/core';
 import type { Ingresso, Motore } from '@rg/cervello';
 import { colorsToPalette, mmPerPixel, paletteToColors, type BroccatoParams, type PixelImage } from './engine';
 import { buildPlan, type BroccatoPlan } from './pipeline';
@@ -46,6 +46,7 @@ export const motore: Motore<IngressoBroccato, BroccatoParams> = {
     if (!im) throw new Error('broccato: serve `ingresso.immagine`');
     const img: PixelImage = { rgba: im.pixel, width: im.larghezza, height: im.altezza };
     const { plan } = calcolaPiano(img, params, false);
-    return { strati: plan.exportLayers, avvisi: [] };
+    const strati = plan.exportLayers;
+    return { strati, avvisi: [], misure: refertoDaStrati(strati) };
   },
 };

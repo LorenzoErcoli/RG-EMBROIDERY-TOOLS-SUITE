@@ -1191,6 +1191,7 @@ function minimoDentro(linea: Polyline, minimo: number, macchia: Polyline): Polyl
 
 // ---------------------------------------------------------------------------------------------------
 // Il contratto del motore (K1b): avvolge `costruisciMacchie`, senza cambiare niente.
+import { refertoDaStrati } from '@rg/core';
 import type { Ingresso, Motore } from '@rg/cervello';
 import type { ExportLayer as StratoEsportato } from '@rg/core';
 
@@ -1213,6 +1214,6 @@ export const motore: Motore<IngressoMacchie, ParametriMacchie> = {
   async genera(ingresso, params) {
     const r = costruisciMacchie(ingresso.pannello, ingresso.macchie, ingresso.pattern, params);
     const strati: StratoEsportato[] = STOP_MACCHIE.map((l) => ({ id: l.chiave, color: l.colore, polylines: r[l.chiave].tratti }));
-    return { strati, avvisi: [] };
+    return { strati, avvisi: [], misure: refertoDaStrati(strati) };
   },
 };

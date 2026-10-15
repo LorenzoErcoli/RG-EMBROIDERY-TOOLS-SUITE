@@ -20,6 +20,7 @@ import type { Ingresso, Motore } from '@rg/cervello';
 import {
   type Point, type Polyline, type PixelImage, type ExportLayer,
   polygonArea, traceRegions, buildDst, type DstPath,
+  misuraDst, refertoVuoto,
 } from '@rg/core';
 import { parseSvgPolylines } from '@rg/pattern-grammar';
 // Tre primitive nate nel Punto Pittorico e usate qui tali e quali: la rasterizzazione di una
@@ -2668,6 +2669,11 @@ export const motore: Motore<IngressoMotorePettine, ParametriPettine> = {
       { testoSvg: ingresso.testoSvg, larghezzaRealeMm, foto, ritaglio: ingresso.ritaglio ?? null, progetto: ingresso.progetto ?? null },
       { ...params, dst: params.denti },
     );
-    return { strati: es.percorsi ? stratiDaPercorsi(es.percorsi, es.statistiche.colori) : [], avvisi: [] };
+    // il referto è dei byte VERI del DST (es.dst, quelli che il tool salva), non degli strati ricostruiti
+    return {
+      strati: es.percorsi ? stratiDaPercorsi(es.percorsi, es.statistiche.colori) : [],
+      avvisi: [],
+      misure: es.dst ? misuraDst(es.dst, { filoInVista: { mm: es.statistiche.passaggiScopertiM * 1000, origine: 'pettine: filo dei soli passaggi che cadono dove nessun colore successivo li copre (stima su griglia, durante la cucitura)' } }) : refertoVuoto(),
+    };
   },
 };

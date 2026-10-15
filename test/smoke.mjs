@@ -6062,6 +6062,102 @@ console.log('\ncannage-rafia — il cartamodello curvo: linee, cornice e griglia
   check('stop 2, 5 e 6 hanno punti', [s2.punti > 100, s5.punti > 5000, s6.punti > 5000], [true, true, true]);
 }
 
+// ---- K3 — il referto comune: misuraDst, le stesse misure per qualunque DST ------------------------------------------
+// Prima i DST costruiti apposta, con valori che si conoscono in anticipo; poi le due fixture vere, controllate contro
+// tutto quello che il file dice per conto suo (i record riletti da readDst, l'header: estensioni e cambi colore).
+{
+  console.log('\nK3 — misuraDst: punti, lunghezza cucita, salti, tagli, aghi, ingombro');
+  const r6 = (v) => Math.round(v * 1e6) / 1e6;
+  const dst = (paths) => rg.buildDst({ label: 'PROVA', paths });
+  const nRecord = (bytes) => (bytes.length - 512) / 3 - 1; // senza il record END
+
+  // tre punti da 3 mm di fila
+  const tre = dst([{ needle: 1, points_mm: [[0, 0], [3, 0], [6, 0], [9, 0]] }]);
+  const m3 = rg.misuraDst(tre);
+  check('tre punti da 3 mm: 3 punti, 9 mm = 0,009 m, niente salti né tagli, un ago',
+    [m3.punti, r6(m3.lunghezzaCucitaM), m3.salti, m3.trim, m3.aghi, m3.cambiAgo], [3, 0.009, 0, 0, 1, 0]);
+  check('...il più corto e il più lungo sono 3 mm; l’ingombro è 9 × 0 mm',
+    [m3.puntoPiuCortoMm, m3.puntoPiuLungoMm, m3.ingombro.larghezzaMm, m3.ingombro.altezzaMm], [3, 3, 9, 0]);
+  check('...il posizionamento iniziale (un record-salto prima del primo punto) non è un salto', rg.readDst(tre).stitchCount, 3);
+  // il disegno che parte lontano dall'origine: l'ago si porta lì con un salto da 7,07 mm, che non è un salto del ricamo
+  const lontano = rg.misuraDst(dst([{ needle: 1, points_mm: [[5, 5], [8, 5]] }]));
+  check('un ricamo che parte a (5, 5): il posizionamento iniziale non è un salto (0 salti, 0 mm), il punto è 1 da 3 mm',
+    [lontano.salti, lontano.saltiMm, lontano.punti, lontano.puntoPiuLungoMm], [0, 0, 1, 3]);
+
+  // un salto da 30 mm: il formato lo spezza in tre record (max 12,1 mm), ma è UN salto da 30 mm
+  const salto = dst([{ needle: 1, points_mm: [[0, 0], [3, 0]] }, { needle: 1, points_mm: [[33, 0], [36, 0]] }]);
+  const ms = rg.misuraDst(salto);
+  check('un salto da 30 mm scritto come tre record: i record sono 6 (1 posizionamento + 1 punto + 3 del salto + 1 punto)', nRecord(salto), 6);
+  check('...nel referto è UN salto, lungo 30 mm veri; i punti sono 2', [ms.salti, ms.saltiStessoAgo, r6(ms.saltiMm), r6(ms.saltoPiuLungoMm), ms.punti], [1, 1, 30, 30, 2]);
+
+  // un salto in diagonale: 30 mm in x e 40 in y = 50 mm veri, non la somma dei pezzi in cui il formato lo spezza
+  const diag = dst([{ needle: 1, points_mm: [[0, 0], [3, 0]] }, { needle: 1, points_mm: [[33, 40], [36, 40]] }]);
+  const md = rg.misuraDst(diag);
+  check('un salto di (30, 40) mm è lungo 50 mm veri', [md.salti, r6(md.saltiMm)], [1, 50]);
+
+  // un taglio: tre salti minimi che si annullano, poi il salto vero. Un taglio e un salto, non quattro salti.
+  const taglio = dst([{ needle: 1, points_mm: [[0, 0], [3, 0]] }, { needle: 1, trim: true, points_mm: [[13, 0], [16, 0]] }]);
+  const mt = rg.misuraDst(taglio);
+  check('un taglio seguito da un salto da 10 mm: 1 taglio, 1 salto, 10 mm', [mt.trim, mt.salti, r6(mt.saltiMm), mt.perAgo[0].trim], [1, 1, 10, 1]);
+  check('...il taglio non sposta niente: senza il flag trim il salto è lo stesso e i tagli sono 0',
+    (() => { const s = rg.misuraDst(dst([{ needle: 1, points_mm: [[0, 0], [3, 0]] }, { needle: 1, points_mm: [[13, 0], [16, 0]] }])); return [s.trim, s.salti, r6(s.saltiMm)]; })(), [0, 1, 10]);
+
+  // un cambio d'ago: 2 aghi, 1 cambio; lo spostamento dopo il cambio è un salto, ma non "sullo stesso ago"
+  const cambio = dst([{ needle: 1, points_mm: [[0, 0], [3, 0], [6, 0]] }, { needle: 2, points_mm: [[20, 0], [24, 0]] }]);
+  const mc = rg.misuraDst(cambio);
+  check('un cambio d’ago: 2 aghi, 1 cambio, 3 punti, 10 mm; per ago 2 punti da 6 mm e 1 punto da 4 mm',
+    [mc.aghi, mc.cambiAgo, mc.punti, r6(mc.lunghezzaCucitaM), mc.perAgo.map((a) => [a.ago, a.punti, r6(a.lunghezzaCucitaM)])], [2, 1, 3, 0.010, [[1, 2, 0.006], [2, 1, 0.004]]]);
+  check('...lo spostamento dopo il cambio è un salto da 14 mm ma non "sullo stesso ago"; è dell’ago 2',
+    [mc.salti, mc.saltiStessoAgo, r6(mc.saltiMm), mc.perAgo.map((a) => a.salti)], [1, 0, 14, [0, 1]]);
+
+  // la soglia: punti da 0,5 / 3 / 0,9 / 1 mm — sotto 1 mm ce ne sono due (1,0 non è sotto 1,0)
+  const corti = dst([{ needle: 1, points_mm: [[0, 0], [0.5, 0], [3.5, 0], [4.4, 0], [5.4, 0]] }]);
+  const mk = rg.misuraDst(corti);
+  check('punti da 0,5 / 3 / 0,9 / 1 mm: sotto la soglia di 1 mm ce ne sono 2; il più corto 0,5, il più lungo 3',
+    [mk.sottoSoglia, mk.puntoPiuCortoMm, mk.puntoPiuLungoMm], [{ sogliaMm: 1, punti: 2 }, 0.5, 3]);
+  check('...con soglia 0,6 ce n’è 1; con soglia 3,5 sono tutti e 4', [rg.misuraDst(corti, { sogliaMm: 0.6 }).sottoSoglia.punti, rg.misuraDst(corti, { sogliaMm: 3.5 }).sottoSoglia.punti], [1, 4]);
+
+  // un punto lungo: oltre 12,1 mm il formato lo spezza in più record, e la macchina ne cuce davvero più d'uno
+  const lungo = rg.misuraDst(dst([{ needle: 1, points_mm: [[0, 0], [30, 0]] }]));
+  check('un punto da 30 mm: il formato lo spezza in 3 record, che sono 3 punti (12,1 + 12,1 + 5,8) per 30 mm cuciti',
+    [lungo.punti, r6(lungo.lunghezzaCucitaM), lungo.puntoPiuLungoMm], [3, 0.03, 12.1]);
+
+  // niente da cucire
+  const vuoto = rg.refertoDaStrati([{ id: 'forme', color: '#000', polylines: [[{ x: 0, y: 0 }, { x: 5, y: 0 }]], shapeOnly: true }]);
+  check('solo forme (niente da cucire): referto vuoto, senza errori', [vuoto.punti, vuoto.aghi, vuoto.ingombro, vuoto.puntoPiuCortoMm], [0, 0, null, null]);
+  check('il filo in vista non si ricava dal DST: c’è solo se lo passa chi lo sa, con l’origine',
+    [m3.filoInVista, rg.misuraDst(tre, { filoInVista: { mm: 1200, origine: 'cross-stitch: passaggi sopra altri colori' } }).filoInVista],
+    [undefined, { mm: 1200, origine: 'cross-stitch: passaggi sopra altri colori' }]);
+  check('refertoDaStrati misura il DST di dstFromExportLayers',
+    (() => { const L = [{ id: 'a', color: '#f00', polylines: [[{ x: 0, y: 0 }, { x: 3, y: 0 }, { x: 6, y: 0 }]] }, { id: 'b', color: '#00f', polylines: [[{ x: 10, y: 0 }, { x: 14, y: 0 }]] }]; const a = rg.refertoDaStrati(L), b = rg.misuraDst(rg.dstFromExportLayers(L, { label: 'X' })); return [a.punti, a.aghi, JSON.stringify(a) === JSON.stringify(b)]; })(), [3, 2, true]);
+
+  // le fixture vere: M1404 (davanti, 4 aghi) e M1424 (orlatura, 5 aghi), controllate contro quello che dicono da sole
+  for (const [nome, aghi] of [['m1404-dav-stop.dst', 4], ['m1424-orlatura.dst', 5]]) {
+    const bytes = new Uint8Array(readFileSync(join(here, 'fixtures', nome)));
+    const m = rg.misuraDst(bytes), d = rg.readDst(bytes);
+    const head = Buffer.from(bytes.subarray(0, 512)).toString('latin1');
+    const campo = (k) => Number((head.match(new RegExp(`${k}:\\s*([+-]?\\s*\\d+)`)) ?? [])[1]?.replace(/\s/g, ''));
+    check(`${nome}: i punti sono quelli che readDst rilegge, i cambi d'ago quelli del campo CO dell'header, ${aghi} aghi`,
+      [m.punti, m.cambiAgo, m.aghi], [d.stitchCount, campo('CO'), aghi]);
+    check(`${nome}: l'ingombro è quello dell'header (estensioni +X/−X/+Y/−Y, in decimi di mm)`,
+      [r6(m.ingombro.larghezzaMm * 10), r6(m.ingombro.altezzaMm * 10)], [Math.abs(campo('\\+X')) + Math.abs(campo('-X')), Math.abs(campo('\\+Y')) + Math.abs(campo('-Y'))]);
+    // la lunghezza cucita, rifatta dai blocchi riletti con una strada diversa (distanza fra punti consecutivi)
+    let L = 0; for (const b of d.blocks) for (let i = 1; i < b.points_mm.length; i++) L += Math.hypot(b.points_mm[i][0] - b.points_mm[i - 1][0], b.points_mm[i][1] - b.points_mm[i - 1][1]);
+    check(`${nome}: la lunghezza cucita coincide con quella rifatta dai blocchi di readDst`, Math.abs(m.lunghezzaCucitaM - L / 1000) < 1e-9, true);
+    check(`${nome}: i punti per ago sommano ai punti totali, e la lunghezza per ago a quella totale`,
+      [m.perAgo.reduce((s, a) => s + a.punti, 0), Math.abs(m.perAgo.reduce((s, a) => s + a.lunghezzaCucitaM, 0) - m.lunghezzaCucitaM) < 1e-9], [m.punti, true]);
+    check(`${nome}: i salti non sono più dei blocchi raggiunti con un salto (readDst), e sono la somma dei salti per ago`,
+      [m.salti <= d.jumps.length, m.perAgo.reduce((s, a) => s + a.salti, 0)], [true, m.salti]);
+  }
+  const m1404 = rg.misuraDst(new Uint8Array(readFileSync(join(here, 'fixtures/m1404-dav-stop.dst'))));
+  const m1424 = rg.misuraDst(new Uint8Array(readFileSync(join(here, 'fixtures/m1424-orlatura.dst'))));
+  // numeri misurati il 2026-10-15 con questa stessa funzione (le due fixture non cambiano): se cambiano, è cambiata la misura
+  check('M1404: 46396 punti, 216,350 m cuciti, 17 salti (15 sullo stesso ago), 303 × 282,2 mm',
+    [m1404.punti, Math.round(m1404.lunghezzaCucitaM * 1000) / 1000, m1404.salti, m1404.saltiStessoAgo, m1404.ingombro.larghezzaMm, m1404.ingombro.altezzaMm], [46396, 216.35, 17, 15, 303, 282.2]);
+  check('M1424: 6988 punti (l’header dice 7102: conta tutti i record), 27,581 m cuciti, 5 salti, 488,5 × 302,1 mm',
+    [m1424.punti, Math.round(m1424.lunghezzaCucitaM * 1000) / 1000, m1424.salti, m1424.ingombro.larghezzaMm, m1424.ingombro.altezzaMm], [6988, 27.581, 5, 488.5, 302.1]);
+}
+
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).
 rmSync(outDir, { recursive: true, force: true });
 console.log(failed ? `\n${failed} test falliti\n` : '\nTutti i test passati\n');

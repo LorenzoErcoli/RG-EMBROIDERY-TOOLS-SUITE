@@ -1,4 +1,5 @@
 // Il contratto del motore (K1b) per il Punto Pittorico: avvolge `buildPittoricoPlan` + `pittoricoExportLayers`, senza cambiare niente.
+import { refertoDaStrati } from '@rg/core';
 import type { Ingresso, Motore } from '@rg/cervello';
 import type { Point } from '@rg/core';
 import { buildPittoricoPlan, pittoricoExportLayers, type PittoricoParams } from './pipeline';
@@ -28,6 +29,7 @@ export const motore: Motore<IngressoPittorico, ParamsPittorico> = {
       tagliRimossi: ingresso.tagliRimossi ?? [],
     };
     const piano = buildPittoricoPlan(img, p);
-    return { strati: pittoricoExportLayers(piano), avvisi: [] };
+    const strati = pittoricoExportLayers(piano);
+    return { strati, avvisi: [], misure: refertoDaStrati(strati) };
   },
 };

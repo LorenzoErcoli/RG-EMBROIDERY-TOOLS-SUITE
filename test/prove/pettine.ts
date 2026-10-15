@@ -15,5 +15,7 @@ export async function prova() {
       const es = costruisciPettine({ testoSvg, larghezzaRealeMm: 60, foto: null, ritaglio: null, progetto: null }, { ...params, dst: params.denti });
       return stratiDaPercorsi(es.percorsi ?? [], es.statistiche.colori);
     },
+    // il DST che il tool esporta davvero: i byte che costruisciPettine scrive (non gli strati ricostruiti)
+    dst: () => costruisciPettine({ testoSvg, larghezzaRealeMm: 60, foto: null, ritaglio: null, progetto: null }, { ...params, dst: params.denti }).dst!,
   };
 }

@@ -3,7 +3,7 @@
 // Il tool non ha ExportLayer propri: ne rilavora un DST e oggi esporta i blocchi riscritti direttamente
 // (`dstProgramFromBlocks`, in tool.ts). Gli strati del contratto sono quegli stessi blocchi, uno strato per
 // ago, ogni blocco una polilinea: stessi punti, nello stesso ordine.
-import { readDst, type ExportLayer, type Point } from '@rg/core';
+import { buildDst, dstProgramFromBlocks, misuraDst, readDst, type ExportLayer, type Point } from '@rg/core';
 import type { Ingresso, Motore } from '@rg/cervello';
 import { sfrangia, type FrangiaParams } from './frange';
 import { TINTE } from './vista';
@@ -34,6 +34,14 @@ export function blocchiAStrati(blocchi: Array<{ needle: number; points_mm: Array
   return [...perAgo.entries()].sort((a, b) => a[0] - b[0]).map(([, l]) => l);
 }
 
+/**
+ * I byte del DST che il tool salva (e su cui si misura il referto): i blocchi riscritti, a coordinate assolute, senza
+ * ricentrare (non è `dstFromExportLayers`, che centra all'origine). Un posto solo, usato da `tool.ts` e da `genera`.
+ */
+export function dstDaBlocchi(blocchi: Array<{ needle: number; points_mm: Array<[number, number]> }>, opts: { label?: string; metadata?: Record<string, unknown> } = {}): Uint8Array {
+  return buildDst(dstProgramFromBlocks(blocchi, opts));
+}
+
 export const motore: Motore<IngressoSfrangiatura, ParamsSfrangiatura> = {
   id: 'sfrangiatura',
   async genera(ingresso, params) {
@@ -41,6 +49,7 @@ export const motore: Motore<IngressoSfrangiatura, ParamsSfrangiatura> = {
     const letto = readDst(ingresso.dst);
     if (!letto.blocks.length) throw new Error('nessun blocco cucito');
     const esito = sfrangia(letto.blocks, ingresso.zone ?? [], { ...params, aghiEsclusi: [...(ingresso.aghiEsclusi ?? [])] });
-    return { strati: blocchiAStrati(esito.blocchi), avvisi: [] };
+    // il referto è dei byte veri del DST che il tool salva, non degli strati
+    return { strati: blocchiAStrati(esito.blocchi), avvisi: [], misure: misuraDst(dstDaBlocchi(esito.blocchi)) };
   },
 };

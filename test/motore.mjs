@@ -24,7 +24,7 @@ export async function caricaMotore(tool) {
     stdin: {
       contents: `export { motore } from ${JSON.stringify(posix(`apps/${tool}/src/motore.ts`))};
 export { prova } from ${JSON.stringify(posix(`test/prove/${tool}.ts`))};
-export { dstFromExportLayers, readDst } from ${JSON.stringify(posix('packages/core/src/index.ts'))};`,
+export { dstFromExportLayers, readDst, misuraDst } from ${JSON.stringify(posix('packages/core/src/index.ts'))};`,
       resolveDir: root, loader: 'ts',
     },
     bundle: true, format: 'esm', platform: 'neutral', outfile, logLevel: 'silent',
@@ -54,7 +54,7 @@ export async function controllaMotore(tool) {
   try { r = await m.motore.genera(p.ingresso, p.params); } catch (e) { return [`genera ha lanciato: ${String(e.message ?? e).split('\n')[0]}`]; }
   if (!Array.isArray(r?.strati)) return ['genera non ritorna `strati`'];
   if (!Array.isArray(r.avvisi)) guai.push('genera non ritorna `avvisi` (anche vuoto)');
-  if (r.busta !== undefined || r.misure !== undefined) guai.push('busta/misure devono restare vuote fino a K2/K3');
+  if (r.busta !== undefined) guai.push('la busta deve restare vuota fino alla K2');
   const n = puntiCuciti(r.strati);
   if (n === 0) return [...guai, 'gli strati sono vuoti: nessun punto cucito'];
   // Il DST che esce si rilegge con lo stesso numero di punti.
@@ -64,6 +64,19 @@ export async function controllaMotore(tool) {
     const rilet = letto.blocks.reduce((k, b) => k + b.points_mm.length, 0);
     if (rilet !== n) guai.push(`il DST rilegge ${rilet} punti, gli strati ne hanno ${n}`);
   } catch (e) { guai.push(`il DST non si fa: ${String(e.message ?? e).split('\n')[0]}`); }
+  // Il referto (K3): c'è, ed è quello dei byte del DST che il tool esporta davvero (non di una ricostruzione).
+  try {
+    if (!r.misure) guai.push('manca `misure`: il referto del DST (K3)');
+    else {
+      const vero = typeof p.dst === 'function' ? await p.dst() : m.dstFromExportLayers(r.strati, { label: tool.toUpperCase().slice(0, 16) });
+      const atteso = m.misuraDst(vero);
+      const { filoInVista, ...dato } = r.misure; // il filo in vista lo passa il tool: dal DST non si ricava
+      if (JSON.stringify(dato) !== JSON.stringify(atteso)) {
+        const chiavi = Object.keys(atteso).filter((k) => JSON.stringify(atteso[k]) !== JSON.stringify(dato[k]));
+        guai.push('misure diverse da misuraDst del DST del tool: ' + chiavi.join(', '));
+      }
+    }
+  } catch (e) { guai.push(`il referto non si confronta: ${String(e.message ?? e).split('\n')[0]}`); }
   // Lo stesso ricamo di prima dell'avvolgimento.
   if (typeof p.diretto === 'function') {
     const prima = await p.diretto();

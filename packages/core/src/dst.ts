@@ -361,3 +361,201 @@ export function dstProgramFromBlocks(blocks: DstBlock[], opts: { label?: string;
     metadata: opts.metadata,
   };
 }
+
+// ------------------------------------------------------------
+// IL REFERTO (K3 del cervello): le stesse misure, calcolate allo stesso modo, per qualunque DST.
+//
+// Si misura SOLO quello che il file dice. Convenzioni, dichiarate perché il formato non le dice:
+// - un **punto** è un record-punto (quello che conta il campo `ST:` dell'header): un punto più lungo di 12,1 mm
+//   per asse il formato lo spezza in più record, e la macchina ne cuce davvero più d'uno;
+// - la **lunghezza cucita** è la somma dei record-punto, salti esclusi;
+// - un **salto** è una serie di record-salto di fila: conta UNO, e la sua lunghezza è la distanza vera fra dove
+//   l'ago era e dove arriva (non la somma dei pezzi in cui il formato l'ha spezzato). Un salto che non sposta
+//   niente non è un salto, e il posizionamento iniziale (prima del primo punto) non è un salto;
+// - un **taglio** è la sequenza di tre salti minimi che si annullano (+0,2 / −0,4 / +0,2 mm) che scrive `buildDst`
+//   (e i DST Tajima): conta un taglio, non tre salti, e non sposta niente;
+// - i **cambi d'ago** sono i record di cambio-colore; gli **aghi** sono quelli che cuciono almeno un punto;
+// - l'**ingombro** è il rettangolo dei punti dove l'ago scende (non dei salti).
+// Quello che dal DST non si misura (il filo in vista, il consumo vero di filo, il tempo macchina) non c'è:
+// il filo in vista lo passa chi lo sa calcolare (`filoInVista`), con l'origine del numero.
+// ------------------------------------------------------------
+
+export interface RefertoAgo {
+  /** Ago progressivo (1 = primo), come in `readDst`. */
+  ago: number;
+  punti: number;
+  lunghezzaCucitaM: number;
+  /** Salti eseguiti con quest'ago (incluso lo spostamento che segue un cambio d'ago). */
+  salti: number;
+  saltiMm: number;
+  trim: number;
+}
+
+export interface Referto {
+  /** Da dove vengono i numeri: sempre dai byte di un DST. */
+  fonte: 'dst';
+  /** Punti cuciti (record-punto), come il campo `ST:` dell'header. */
+  punti: number;
+  /** Lunghezza cucita in metri: somma dei punti, salti esclusi. */
+  lunghezzaCucitaM: number;
+  /** Salti (spostamenti a vuoto), compresi quelli che seguono un cambio d'ago. */
+  salti: number;
+  /** Di cui: quelli fatti restando sullo stesso ago (esclusi gli spostamenti dopo un cambio d'ago). */
+  saltiStessoAgo: number;
+  /** Lunghezza totale dei salti, in mm (distanza vera di ciascuno). */
+  saltiMm: number;
+  saltoPiuLungoMm: number;
+  /** Tagli del filo (sequenza Tajima di tre salti minimi). */
+  trim: number;
+  cambiAgo: number;
+  /** Aghi che cuciono almeno un punto. */
+  aghi: number;
+  /** Rettangolo dei punti cuciti, in mm (Y verso il basso come `readDst`); null se non c'è nulla di cucito. */
+  ingombro: { larghezzaMm: number; altezzaMm: number; minX: number; minY: number; maxX: number; maxY: number } | null;
+  puntoPiuCortoMm: number | null;
+  puntoPiuLungoMm: number | null;
+  /** Punti più corti di `sogliaMm` (per controllare R3, il punto minimo). */
+  sottoSoglia: { sogliaMm: number; punti: number };
+  perAgo: RefertoAgo[];
+  /** Solo se lo passa chi lo sa calcolare (dal DST non si ricava: dipende da cosa copre cosa). */
+  filoInVista?: { mm: number; origine: string };
+}
+
+export interface MisuraDstOptions {
+  /** Soglia per `sottoSoglia` (default 1 mm: il punto minimo di R3). */
+  sogliaMm?: number;
+  /** Il filo in vista, se il tool lo calcola: il referto lo riporta com'è, con l'origine. */
+  filoInVista?: { mm: number; origine: string };
+}
+
+const TAGLIO_TAJIMA: ReadonlyArray<readonly [number, number]> = [[2, 2], [-4, -4], [2, 2]];
+
+/** Il referto di un DST vuoto (nessun punto cucito). */
+export function refertoVuoto(opts: MisuraDstOptions = {}): Referto {
+  return {
+    fonte: 'dst', punti: 0, lunghezzaCucitaM: 0, salti: 0, saltiStessoAgo: 0, saltiMm: 0, saltoPiuLungoMm: 0, trim: 0,
+    cambiAgo: 0, aghi: 0, ingombro: null, puntoPiuCortoMm: null, puntoPiuLungoMm: null,
+    sottoSoglia: { sogliaMm: opts.sogliaMm ?? 1, punti: 0 }, perAgo: [],
+    ...(opts.filoInVista ? { filoInVista: opts.filoInVista } : {}),
+  };
+}
+
+/**
+ * Misura un .dst: punti, lunghezza cucita, salti, tagli, aghi, ingombro, punto più corto e più lungo — sempre
+ * le stesse, calcolate allo stesso modo, qualunque tool (o software) abbia scritto il file.
+ * Legge i record con le stesse tabelle di `readDst`; non dipende dall'header (la verità è nei record).
+ */
+export function misuraDst(bytes: Uint8Array, opts: MisuraDstOptions = {}): Referto {
+  if (bytes.length < 512) throw new Error('File .dst troppo corto: manca l’header da 512 byte.');
+  const sogliaMm = opts.sogliaMm ?? 1;
+  // soglia in decimi, arrotondata (0,3 mm × 10 non deve diventare 3,0000000000000004), e confronto sui quadrati
+  const s = Math.round(sogliaMm * 10 * 1e6) / 1e6;
+  const s2 = s * s - 1e-9;
+
+  let x = 0, y = 0;
+  let needle = 1;
+  let punti = 0, lunghezza = 0, salti = 0, saltiStessoAgo = 0, saltiMm = 0, saltoMax = 0, trim = 0, cambi = 0, sotto = 0;
+  let corto = Infinity, lungo = -Infinity;
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  const ago = new Map<number, RefertoAgo>();
+  const dellAgo = (n: number): RefertoAgo => {
+    let a = ago.get(n);
+    if (!a) { a = { ago: n, punti: 0, lunghezzaCucitaM: 0, salti: 0, saltiMm: 0, trim: 0 }; ago.set(n, a); }
+    return a;
+  };
+  // serie di salti di fila in corso (record in decimi) e se subito prima c'era un cambio d'ago
+  let corsa: Array<[number, number]> = [];
+  let dopoCambio = false;
+  let precedenteEraPunto = false;
+  let haCucito = false;
+
+  const chiudiCorsa = (): void => {
+    if (!corsa.length) return;
+    // i tagli (tre salti minimi che si annullano) escono dalla serie: non spostano niente
+    const resto: Array<[number, number]> = [];
+    for (let i = 0; i < corsa.length; i++) {
+      if (i + 2 < corsa.length && TAGLIO_TAJIMA.every(([tx, ty], k) => corsa[i + k][0] === tx && corsa[i + k][1] === ty)) {
+        if (haCucito) { trim++; dellAgo(needle).trim++; }
+        i += 2;
+        continue;
+      }
+      resto.push(corsa[i]);
+    }
+    let dx = 0, dy = 0;
+    for (const [rx, ry] of resto) { dx += rx; dy += ry; }
+    if ((dx !== 0 || dy !== 0) && haCucito) {
+      const mm = Math.hypot(dx, dy) / 10;
+      salti++; saltiMm += mm; if (mm > saltoMax) saltoMax = mm;
+      if (!dopoCambio) saltiStessoAgo++;
+      const a = dellAgo(needle); a.salti++; a.saltiMm += mm;
+    }
+    corsa = [];
+  };
+
+  for (let i = 512; i + 2 < bytes.length; i += 3) {
+    const b0 = bytes[i], b1 = bytes[i + 1], b2 = bytes[i + 2];
+    if ((b2 & 0xf3) === 0xf3) break; // END
+    const trio = [b0, b1, b2];
+    let dx = 0, dy = 0;
+    for (const [b, bit, w] of DECODE_X) if (trio[b] & (1 << bit)) dx += w;
+    for (const [b, bit, w] of DECODE_Y) if (trio[b] & (1 << bit)) dy += w;
+
+    const isChange = (b2 & 0xc0) === 0xc0;
+    const isJump = !isChange && (b2 & 0x80) !== 0;
+
+    if (isJump) {
+      corsa.push([dx, dy]);
+      x += dx; y += dy;
+      precedenteEraPunto = false;
+      continue;
+    }
+    chiudiCorsa();
+    if (isChange) {
+      cambi++; needle++; x += dx; y += dy;
+      dopoCambio = true; precedenteEraPunto = false;
+      continue;
+    }
+    // record-punto
+    if (!precedenteEraPunto) {
+      // l'ago scende qui dopo uno spostamento: la posizione da cui parte il blocco fa parte dell'ingombro
+      const px = x / 10, py = -y / 10;
+      if (px < minX) minX = px; if (px > maxX) maxX = px; if (py < minY) minY = py; if (py > maxY) maxY = py;
+    }
+    const mm = Math.hypot(dx, dy) / 10;
+    x += dx; y += dy;
+    punti++; lunghezza += mm; haCucito = true; dopoCambio = false; precedenteEraPunto = true;
+    if (mm < corto) corto = mm;
+    if (mm > lungo) lungo = mm;
+    if (dx * dx + dy * dy < s2) sotto++;
+    const a = dellAgo(needle); a.punti++; a.lunghezzaCucitaM += mm / 1000;
+    const px = x / 10, py = -y / 10;
+    if (px < minX) minX = px; if (px > maxX) maxX = px; if (py < minY) minY = py; if (py > maxY) maxY = py;
+  }
+  chiudiCorsa();
+
+  const perAgo = [...ago.values()].filter((a) => a.punti > 0 || a.salti > 0 || a.trim > 0).sort((p, q) => p.ago - q.ago);
+  return {
+    fonte: 'dst',
+    punti,
+    lunghezzaCucitaM: lunghezza / 1000,
+    salti, saltiStessoAgo, saltiMm, saltoPiuLungoMm: saltoMax, trim,
+    cambiAgo: cambi,
+    aghi: perAgo.filter((a) => a.punti > 0).length,
+    ingombro: punti ? { larghezzaMm: maxX - minX, altezzaMm: maxY - minY, minX, minY, maxX, maxY } : null,
+    puntoPiuCortoMm: punti ? corto : null,
+    puntoPiuLungoMm: punti ? lungo : null,
+    sottoSoglia: { sogliaMm, punti: sotto },
+    perAgo,
+    ...(opts.filoInVista ? { filoInVista: opts.filoInVista } : {}),
+  };
+}
+
+/**
+ * Il referto del DST che `dstFromExportLayers(strati)` scrive: la strada dei tool che esportano dagli strati.
+ * Gli strati senza niente da cucire danno il referto vuoto (nessun errore).
+ */
+export function refertoDaStrati(layers: ExportLayer[], opts: MisuraDstOptions & { centra?: boolean } = {}): Referto {
+  const cuciti = (layers || []).some((l) => !l.shapeOnly && l.polylines?.some((pl) => pl.length >= 2));
+  if (!cuciti) return refertoVuoto(opts);
+  return misuraDst(dstFromExportLayers(layers, { label: 'REFERTO', center: opts.centra }), opts);
+}

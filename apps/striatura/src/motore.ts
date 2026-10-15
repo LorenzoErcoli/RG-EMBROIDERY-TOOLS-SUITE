@@ -1,5 +1,6 @@
 // Il contratto del motore (K1b) per Punto Striato: avvolge `runPipeline`, senza cambiare niente.
 // Gli strati sono quelli dell'export (DST/SVG): `exportLayers`, non quelli dell'anteprima.
+import { refertoDaStrati } from '@rg/core';
 import type { Ingresso, Motore } from '@rg/cervello';
 import { runPipeline, type RoleAssignment } from './pipeline';
 import type { StriaturaParams } from './engine';
@@ -13,6 +14,7 @@ export const motore: Motore<IngressoStriatura, StriaturaParams> = {
   id: 'striatura',
   async genera(ingresso, params) {
     const { exportLayers } = runPipeline(ingresso.sagoma ?? [], ingresso.ruoli, params);
-    return { strati: exportLayers, avvisi: [] };
+    const strati = exportLayers;
+    return { strati, avvisi: [], misure: refertoDaStrati(strati) };
   },
 };

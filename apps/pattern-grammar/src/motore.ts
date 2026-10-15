@@ -1,6 +1,7 @@
 // Il contratto del motore (K1b) per il Generatore pattern: avvolge `generateFinalPatternPoints`, senza cambiare niente.
 import { generateFinalPatternPoints, type PatternConfig } from '@rg/pattern-grammar';
 import type { ExportLayer } from '@rg/core';
+import { refertoDaStrati } from '@rg/core';
 import type { Ingresso, Motore } from '@rg/cervello';
 
 /** Quello che il tool salva in `params` nel file di progetto: la config del pannello, senza le parti d'ingresso. */
@@ -23,7 +24,8 @@ export const motore: Motore<IngressoPatternGrammar, ParamsPatternGrammar> = {
     if (ingresso.importedBoundary !== undefined) cfg.importedBoundary = ingresso.importedBoundary;
     if (ingresso.sourceAnalysis !== undefined) cfg.sourceAnalysis = ingresso.sourceAnalysis;
     if (ingresso.reliefAreas !== undefined) cfg.reliefAreas = ingresso.reliefAreas;
-    return { strati: [stratoPattern(cfg)], avvisi: [] };
+    const strati = [stratoPattern(cfg)];
+    return { strati, avvisi: [], misure: refertoDaStrati(strati) };
   },
 };
 

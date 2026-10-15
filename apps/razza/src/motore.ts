@@ -13,6 +13,7 @@
 //
 // Nessun DOM. Gira in un Web Worker (razza.worker.ts) perche' sul pezzo intero ci vogliono alcuni secondi.
 import type { ExportLayer, Point } from '@rg/core';
+import { refertoDaStrati } from '@rg/core';
 import type { Ingresso, Motore } from '@rg/cervello';
 import { creaCampo } from './campo';
 import { Griglia, MappaDistanze, areaPezzo, segmentoDentroPezzo } from './geo';
@@ -264,6 +265,7 @@ export const motore: Motore<IngressoRazza, ParametriRazza> = {
   id: 'razza',
   async genera(ingresso, params) {
     const r = costruisci(ingresso.pezzo, params, ingresso.fissi ?? [], ingresso.sfumature ?? []);
-    return { strati: stratiPerDst(r).layers, avvisi: [...r.avvisi] };
+    const strati = stratiPerDst(r).layers;
+    return { strati, avvisi: [...r.avvisi], misure: refertoDaStrati(strati, { centra: false, filoInVista: { mm: r.misure.vistaM * 1000, origine: 'razza: filo dei soli passaggi non coperto dai pallini (campionato a 0,05 mm contro l\'area dei pallini col profilo scelto)' } }) };
   },
 };

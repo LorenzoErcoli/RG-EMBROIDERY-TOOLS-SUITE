@@ -3,6 +3,7 @@
 // letto (zone, linee, ruoli, basi, lati scelti) e dalle sei chiavi di parametri escono gli stop e gli strati.
 // tool.ts chiama `programmaCannage`; `motore.genera` ne ricava gli strati (stratiProgramma), come l'export.
 import type { PatternConfig } from '@rg/pattern-grammar';
+import { refertoDaStrati } from '@rg/core';
 import type { Ingresso, Motore } from '@rg/cervello';
 import { pezzoPiuLungo, type Ingombro, type Punto } from './linee';
 import { latiDelContorno, lineeDaLati, stessoLato, type LatoContorno, type LineaBordo, type Passaggio } from './bordatura';
@@ -204,6 +205,7 @@ export const motore: Motore<IngressoCannage, ParamsCannage> = {
   id: 'cannage-rafia',
   async genera(ingresso, params) {
     const { stop, avvisi } = programmaCannage(ingresso, params);
-    return { strati: stratiProgramma(stop), avvisi };
+    const strati = stratiProgramma(stop);
+    return { strati, avvisi, misure: refertoDaStrati(strati) };
   },
 };

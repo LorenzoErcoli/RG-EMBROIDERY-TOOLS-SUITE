@@ -20,13 +20,14 @@
 import '@rg/ui/rg.css';
 import './sfrangiatura.css';
 import {
-  readDst, buildDst, dstProgramFromBlocks, DST_FILE,
+  readDst, DST_FILE,
   type DstBlock, type Point,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { sfrangia, defaultSfrangiaturaParams, type EsitoSfrangiatura } from './frange';
+import { dstDaBlocchi } from './motore';
 import { riquadroDi, gruppoRicamo, gruppoFrange, gruppoZone, svgDocumento, TINTE, type Riquadro } from './vista';
 
 export { defaultSfrangiaturaParams };
@@ -385,7 +386,7 @@ export function mountSfrangiatura(root: HTMLElement, opts: { backHref?: string }
 
   $('exportDstBtn').addEventListener('click', () => {
     if (!esito) return;
-    const bytes = buildDst(dstProgramFromBlocks(esito.blocchi, { label: etichetta || 'SFRANGIATO', metadata: metadata() }));
+    const bytes = dstDaBlocchi(esito.blocchi, { label: etichetta || 'SFRANGIATO', metadata: metadata() });
     const nome = nomeProposto('.dst');
     saveBinaryFile(bytes, { suggestedName: nome, ...DST_FILE }).then((r) => {
       $('status').textContent = saveOutcomeMessage(r, nome);
