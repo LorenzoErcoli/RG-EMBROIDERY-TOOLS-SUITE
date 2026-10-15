@@ -155,8 +155,15 @@ export const motore: Motore = {
   async genera(ingresso: Ingresso, params: Params): Promise<Risultato>,
 };
 // Ingresso   = { sagoma?: Contour[], immagine?: Raster, dst?: Uint8Array, larghezzaMm? }
-// Risultato  = { strati: ExportLayer[], busta: Busta, misure: Referto, avvisi: string[] }
+// Risultato  = { strati: ExportLayer[], busta: Busta, misure: Referto, avvisi: string[], vista?: V }
 ```
+
+**`vista`, lo spazio per il pannello** — decisione di Lorenzo del **2026-10-15** (strada A). Il pannello di un
+tool può aver bisogno di più del ricamo: la razza vuole il numero dei pallini, le percentuali, i dettagli
+dell'anteprima, e per questo il suo Worker chiamava `costruisci` invece di `genera`. Invece di lasciare due
+strade (il pannello la sua, il cervello `genera`: col tempo si separano senza che nessuno se ne accorga),
+il `Risultato` ha una parte `vista`, propria di ogni tool, che il pannello usa e il banco e l'agente
+ignorano. **Una chiamata sola per tutti.** Si aggiunge nella U2, quando i pannelli passano a `genera`.
 
 Con questo il pannello di ogni tool, il banco (K7), l'agente (K8) **e** i prodotti per i clienti (§8)
 chiamano la stessa funzione: un tool non ha più un motore per l'interfaccia e un altro per i test.

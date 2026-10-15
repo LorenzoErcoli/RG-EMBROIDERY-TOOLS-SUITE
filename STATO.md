@@ -1945,7 +1945,7 @@ server · **D4** i concetti misurati in due modi si decidono caso per caso, col 
 | # | Fase | Stato |
 |---|---|---|
 | **U1** | **I componenti comuni in `@rg/ui`** (campo numerico, sezione 01, barra dell'anteprima, sezione Progetto, barra di stato) + il **cricchetto**: un test che fallisce se un tool li riscrive a mano. | **Pronta a partire**, in un ramo suo. |
-| **U2** | **Migrare i tool all'anatomia**, uno alla volta, dai più lontani (cross-stitch, pittorico, pettine, razza, pattern-macchie). | Dopo U1. Un tool su cui lavora un'altra chat si migra per ultimo. |
+| **U2** | **Migrare i tool all'anatomia**, uno alla volta, dai più lontani (cross-stitch, pittorico, pettine, razza, pattern-macchie). **Qui i pannelli passano a `motore.genera`** (il bottone *Genera* della barra comune), e il `Risultato` riceve la parte **`vista`** per quello che serve solo al pannello: decisione di Lorenzo del 2026-10-15 (strada A, nata dalla razza, il cui Worker chiamava `costruisci`). | Dopo U1. Un tool su cui lavora un'altra chat si migra per ultimo. |
 | **U3** | **Simula in tutti i tool** — chiude P1. | Dopo U1. |
 | **U4** | **Un esempio pronto in ogni tool** (oggi 7 su 15). | Dopo U1. |
 | **U5** | **Le etichette dal registro dei parametri** — chiude A5. | Dopo K1. |
