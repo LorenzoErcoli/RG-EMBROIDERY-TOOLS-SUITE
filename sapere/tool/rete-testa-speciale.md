@@ -69,6 +69,12 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
   2. una punta che sfiora il bordo lasciava un pezzetto di rete appoggiato sul contorno fra due passate, e la passata
      spostata tornava sul bordo per raggiungerlo: se il pezzetto sta tutto entro lo spessore, si toglie;
   3. le linee della rete che arrivano su una passata spostata si fermano su di lei (non scavalcano).
+- **La lente è dove due linee si sono scambiate di posto**, non «due incroci di fila». La prima versione accoppiava
+  gli incroci a due a due nell'ordine lungo la linea: una lente tagliata dal bordo, con un incrocio solo, faceva
+  slittare tutte le coppie e la zona diventava il tratto FRA due lenti. Lorenzo l'ha visto stringendo il rombo
+  (7,5 × 14,5 sul pezzo 200 × 160: *«tutto diventa sovrapposizione»*; misurato: zone da 13,4 mm invece di 4,0); coi
+  rombi larghi non si vedeva perché una soglia di lunghezza scartava quelle coppie. Ogni linea sa la sua posizione
+  (lato sinistro / destro della colonna k): fra due incroci è lente se quella di sinistra è passata a destra dell'altra.
 - **Punto minimo e massimo insieme (R3, R4).** Togliere un punto corto allunga quello prima (misurati 2,75 mm con
   massimo 2,5): dopo il punto minimo i punti troppo lunghi si ridividono. `enforceMinStitch` tiene sempre l'ultimo
   punto anche se corto (misurati 0,25 mm con minimo 0,5): si toglie il penultimo.

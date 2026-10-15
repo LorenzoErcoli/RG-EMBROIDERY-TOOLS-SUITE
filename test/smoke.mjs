@@ -6116,6 +6116,27 @@ console.log('\nrete-testa-speciale — serpentine a rombi: lente da incrocio a i
   check('...e dentro la zona la linea sopra non supera il punto delle sovrapposizioni, sul pezzo col vuoto',
     r.blocchi.every((b) => b.every((q, i) => !i || !q.sopra || !b[i - 1].sopra || Math.hypot(q.x - b[i - 1].x, q.y - b[i - 1].y) <= P.overlapStitchMm + 1e-6)), true);
 
+  // rombi stretti (Lorenzo, 2026-10-15, rombo 7,5 × 14,5 su un pezzo 200 × 160: «se stringo il rombo tutto diventa
+  // sovrapposizione»): gli incroci si accoppiavano a due a due nell'ordine; una lente tagliata dal bordo, con un incrocio
+  // solo, faceva slittare le coppie e la zona diventava il tratto FRA due lenti (misurati 13,4 mm invece di 4,0). Ora la
+  // lente è dove le due linee si sono scambiate di posto. Spigoli vivi: 2 · 1 · √(4,75² + 7,25²)/4,75 = 3,65 mm.
+  const zoneSu = (pezzo, par) => {
+    const z = [];
+    for (const b of rg.rtsCostruisci(pezzo, [], { ...P, minStitchMm: 0, ...par }).blocchi) {
+      let cur = 0;
+      for (let i = 1; i <= b.length; i++) { const q = b[i]; if (q && q.sovrapposto) cur += Math.hypot(q.x - b[i - 1].x, q.y - b[i - 1].y); else if (cur) { z.push(cur); cur = 0; } }
+    }
+    return z;
+  };
+  const r200 = [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 160 }, { x: 0, y: 160 }];
+  const stretti = zoneSu(r200, { diamondWidthMm: 7.5, diamondHeightMm: 14.5 });
+  const strettiTondi = zoneSu(r200, { diamondWidthMm: 7.5, diamondHeightMm: 14.5, cornerRounding: 20 });
+  const lenteStretta = Math.round(2 * Math.hypot(4.75, 7.25) / 4.75 * 100) / 100;
+  check(`rombi stretti 7,5 × 14,5 sul pezzo 200 × 160: ogni zona è una lente (${lenteStretta} mm a spigoli vivi), anche arrotondata, mai il tratto fra due lenti`,
+    [stretti.length > 1000, Math.round(Math.min(...stretti) * 100) / 100, Math.round(Math.max(...stretti) * 100) / 100,
+      Math.max(...strettiTondi) - Math.min(...strettiTondi) < 0.02, Math.max(...strettiTondi) < 5],
+    [true, lenteStretta, lenteStretta, true, true]);
+
   // sotto e sopra (Lorenzo, 2026-10-15): in ogni lente la linea cucita prima sta SOTTO e tiene la lunghezza del punto
   // (se non se ne dà una apposta), quella che passa dopo sta SOPRA col punto delle sovrapposizioni. Sul rombo 12 × 16
   // la lente si divide sull'apice in due metà da 1,52 mm: sotto un punto per metà (1,52), sopra due (0,76).

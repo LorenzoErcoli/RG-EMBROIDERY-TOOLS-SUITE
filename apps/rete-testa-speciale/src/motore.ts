@@ -224,7 +224,11 @@ function fetta(pts: PuntoLato[], v0: number, v1: number): PuntoLato[] {
 // ------------------------------------------------------------------------------------------------ la rete
 
 /** Un punto della traccia (prima dei punti ago), in mm. `poly` = il contorno su cui sta, se ci sta. */
-interface PuntoTraccia extends Point { fisso: boolean; apice?: boolean; poly?: Polyline }
+interface PuntoTraccia extends Point {
+  fisso: boolean; apice?: boolean; poly?: Polyline;
+  /** Quale linea della rete: 2k = il lato sinistro della colonna k, 2k + 1 il destro. In ordine, da sinistra a destra. */
+  riga?: number;
+}
 
 type Pezzo =
   | { tipo: 'rete' | 'raccordo' | 'vuoto' | 'salto'; pts: PuntoTraccia[]; sid: number; blocco: number }
@@ -325,7 +329,7 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
 
   const pezzi: Pezzo[] = []; let sid = 0;
   const grande = Math.max(W, H);
-  const verso = (col: Colonna, q: PuntoLato): PuntoTraccia => ({ ...mondo(col.uc + q.u, q.v), fisso: q.fisso, apice: q.apice });
+  const verso = (col: Colonna, q: PuntoLato, riga: number): PuntoTraccia => ({ ...mondo(col.uc + q.u, q.v), fisso: q.fisso, apice: q.apice, riga });
   const ultimoPunto = (): PuntoTraccia => { const pc = pezzi[pezzi.length - 1]; return pc.tipo === 'bordo' ? pc.b : pc.pts[pc.pts.length - 1]; };
   const collega = (a: PuntoTraccia, b: PuntoTraccia, blocco: number, puoSaltare: boolean) => { // giro in fondo, raccordo in cima
     if (a.poly && a.poly === b.poly) {
@@ -338,8 +342,8 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
   // a dove è finita la parte prima.
   const lineeDelBlocco = (b: Blocco, dalBasso: boolean, versoSinistra: boolean): Tratto[][][] =>
     (versoSinistra ? [...b.cols].reverse() : b.cols).map((c) => {
-      const L = fetta(c.col.L, c.v0 - 0.5, c.v1 + 0.5).map((q) => verso(c.col, q));
-      const R = fetta(c.col.R, c.v0 - 0.5, c.v1 + 0.5).map((q) => verso(c.col, q));
+      const L = fetta(c.col.L, c.v0 - 0.5, c.v1 + 0.5).map((q) => verso(c.col, q, 2 * c.col.k));
+      const R = fetta(c.col.R, c.v0 - 0.5, c.v1 + 0.5).map((q) => verso(c.col, q, 2 * c.col.k + 1));
       const [andata, torna] = versoSinistra ? [R, L] : [L, R]; // si torna sul lato che guarda la colonna dopo
       const va = dalBasso ? andata.slice().reverse() : andata, ri = dalBasso ? torna : torna.slice().reverse();
       return [taglia(va), taglia(ri)].filter((ln) => ln.length);
@@ -489,25 +493,49 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
     }
   });
   type Zona = [number, number, boolean]; // da, a, sopra
+  // Una lente è dove due linee si sono SCAMBIATE di posto: quella che sta a sinistra (riga più bassa) passa a destra
+  // dell'altra. Accoppiare gli incroci a due a due nell'ordine non basta: se una lente è tagliata dal bordo e ha un
+  // incrocio solo, le coppie slittano di uno e la zona diventa il tratto FRA due lenti (Lorenzo, 2026-10-15, coi rombi
+  // 7,5 × 14,5 sul pezzo 200 × 160: zone da 13,4 mm invece di 4,0).
+  const locale = (q: Point) => { const dx = q.x - C.x, dy = q.y - C.y; return { u: dx * U.x + dy * U.y, v: dx * V.x + dy * V.y }; };
+  const rigaDi = (idx: number) => risolti[idx].pts.find((q) => q.riga !== undefined)?.riga;
+  const uDellaLinea = (idx: number, v: number): number | null => {
+    const q = risolti[idx].pts;
+    for (let i = 1; i < q.length; i++) {
+      const a = locale(q[i - 1]), b = locale(q[i]);
+      if ((a.v - v) * (b.v - v) <= 0 && a.v !== b.v) return a.u + (b.u - a.u) * (v - a.v) / (b.v - a.v);
+    }
+    return null;
+  };
+  const puntoA = (idx: number, s: number): Point => {
+    const q = risolti[idx].pts, c = cum[idx]; let k = 1; while (k < q.length - 1 && c[k] < s) k++;
+    return lerp(q[k - 1], q[k], Math.max(0, Math.min(1, (s - c[k - 1]) / ((c[k] - c[k - 1]) || 1))));
+  };
+  const eLente = (idx: number, altro: number, s1: number, s2: number): boolean => {
+    const ra = rigaDi(idx), rb = rigaDi(altro);
+    const m = locale(puntoA(idx, (s1 + s2) / 2)), ub = uDellaLinea(altro, m.v);
+    if (ra === undefined || rb === undefined || ra === rb || ub === null) return s2 - s1 < grande; // un raccordo: la regola di prima
+    return ra < rb ? m.u > ub : m.u < ub;
+  };
   const zone: Zona[][] = risolti.map((pc, idx) => {
     if (!contaNelleZone(pc)) return [];
-    const colpi = new Map<number, { dopo: boolean; s: number[] }>(); // sid dell'altra linea → ascisse degli incroci lungo questa
+    const colpi = new Map<number, { dopo: boolean; altro: number; s: number[] }>(); // sid dell'altra linea → ascisse degli incroci lungo questa
     for (let i = 1; i < pc.pts.length; i++) {
       const a = pc.pts[i - 1], b = pc.pts[i], visti = new Set<object>();
       celle(a, b, (k) => {
         for (const o of griglia.get(k) ?? []) {
           if (o.sid === pc.sid || Math.abs(o.idx - idx) <= 1 || visti.has(o)) continue; visti.add(o);
           const t = incrocio(a, b, o.a, o.b); if (t === null) continue;
-          let l = colpi.get(o.sid); if (!l) colpi.set(o.sid, (l = { dopo: idx > o.idx, s: [] }));
+          let l = colpi.get(o.sid); if (!l) colpi.set(o.sid, (l = { dopo: idx > o.idx, altro: o.idx, s: [] }));
           l.s.push(cum[idx][i - 1] + t * (cum[idx][i] - cum[idx][i - 1]));
         }
       });
     }
     const z: Zona[] = [];
-    for (const { dopo, s: arr } of colpi.values()) {
+    for (const { dopo, altro, s: arr } of colpi.values()) {
       arr.sort((x, y) => x - y);
       const u = arr.filter((s, i) => i === 0 || s - arr[i - 1] > 1e-4); // lo stesso incrocio visto da due segmenti
-      for (let i = 0; i + 1 < u.length; i++) if (u[i + 1] - u[i] < grande) { z.push([u[i] - p.overlapZoneMm, u[i + 1] + p.overlapZoneMm, dopo]); i++; }
+      for (let i = 0; i + 1 < u.length; i++) if (eLente(idx, altro, u[i], u[i + 1])) { z.push([u[i] - p.overlapZoneMm, u[i + 1] + p.overlapZoneMm, dopo]); i++; }
     }
     // linee che si toccano senza incrociarsi (sovrapposizione 0): la zona è l'ampiezza attorno al contatto
     if (p.overlapZoneMm > 0) pc.pts.forEach((q, i) => {
