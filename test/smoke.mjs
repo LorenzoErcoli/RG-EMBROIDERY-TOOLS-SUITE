@@ -5296,7 +5296,9 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
   const senzaSt = rg.csRouteAll(gSt, cSt, parSt);
   const W2 = LW(gSt);
   const fuori = conSt.colors.reduce((n, cr) => n + cr.segs.filter((sg) => { const r0 = cr.strip * 4; const i1 = Math.floor(sg.from / W2), i2 = Math.floor(sg.to / W2); return sg.kind !== 'jump' && (Math.min(i1, i2) < r0 || Math.max(i1, i2) > r0 + 4); }).length, 0);
-  const punti = (res) => res.colors.flatMap((cr) => cr.segs.filter((sg) => sg.kind === 'stitch').map((sg) => cr.color + ':' + Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to))).sort().join('|');
+  // gli stessi punti: le stesse diagonali coperte (punti o ripassi dello stesso filo); quante volte, lo dice la regola
+  // delle passate giuste (un va-e-torna in più sulla stessa diagonale si toglie)
+  const punti = (res) => [...new Set(res.colors.flatMap((cr) => cr.segs.filter((sg) => sg.kind === 'stitch' || sg.kind === 'retrace').map((sg) => cr.color + ':' + Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to))))].sort().join('|');
   check('strisce: base e colori per striscia, nessun passaggio fuori dalla sua, gli stessi punti',
     [conSt.colors.map((cr) => cr.strip + '/' + cr.color).join(' '), fuori, punti(conSt) === punti(senzaSt), conSt.metrics.legs === senzaSt.metrics.legs],
     ['0/0 0/1 0/2 1/0 1/1 1/2 2/0 2/1 2/2', 0, true, true]);
@@ -5337,6 +5339,32 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     let su = 0, max = 0; const tipi = new Set();
     for (const sg of bs) { const r = Math.floor(Math.min(sg.from, sg.to) / W3); if (sg.kind === 'stitch') { if (r < max) su++; max = Math.max(max, r); } else tipi.add(sg.kind); }
     check('base unica: dall\'alto in basso, senza ripassi, senza passaggi in vista né salti', [su, [...tipi].sort().join(',')], [0, 'vertical']);
+  }
+  // IL NUMERO GIUSTO DI PASSATE (Lorenzo, 2026-10-15: «se un colore ripassa sopra se stesso può togliere un passaggio
+  // del sotto, così rimane sempre il numero giusto»): nessuna diagonale ha due passate (o più) oltre quelle chieste
+  // dove il filo va e torna subito; nessuna ne ha meno
+  {
+    const r3 = rg.csRouteAll(gSt, cSt, { ...parSt, passesByColor: { 1: 3, 2: 3 } });
+    const conta = new Map();
+    for (const cr of r3.colors) if (cr.color) for (const sg of cr.segs) if ((sg.kind === 'stitch' || sg.kind === 'retrace') && Math.abs((sg.from % LW(gSt)) - (sg.to % LW(gSt))) === 1) { const kk = cr.color + ':' + Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to); conta.set(kk, (conta.get(kk) || 0) + 1); }
+    const vaetorna = r3.colors.filter((cr) => cr.color).reduce((n, cr) => n + cr.segs.filter((sg, i) => i > 0 && sg.from === cr.segs[i - 1].to && sg.to === cr.segs[i - 1].from && (sg.kind === 'stitch' || sg.kind === 'retrace') && (conta.get(cr.color + ':' + Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to)) ?? 0) >= 5).length, 0);
+    check('passate giuste: nessun va-e-torna dove le passate sono 2 in più; nessuna diagonale sotto 3', [vaetorna, [...conta.values()].filter((n) => n < 3).length], [0, 0]);
+  }
+  // OTTIMIZZA L'ORDINE (Lorenzo, 2026-10-15: «il percorso del filo torna troppe volte sulle stesse aree… non toccare il
+  // disegno, trova un modo per calcolare meglio il percorso di ogni filo»): un muro con finestre (buchi che lasciano
+  // indietro dei pezzi) e macchie sparse; ottimizzato: gli stessi punti, il filo continuo, niente in vista né salti
+  // in più, meno filo di passaggio
+  {
+    const gO = { rows: 30, cols: 40, cellW: 2.8, cellH: 4, overlapPct: 30 };
+    const cO = fill(gO, (r, c) => ({ stitch: 'v', color: (r % 7 === 3 && c % 6 > 1 && c % 6 < 5) ? 0 : (r * 7 + c * 3) % 11 < 3 ? 1 : 2 }));
+    const parO = { ...rg.CS_DEFAULT_ROUTE, base: { color: 0, stitch: 'v' }, costs: { over: 15, open: 15 }, jumpMm: 200 };
+    const r0 = rg.csRouteAll(gO, cO, parO), r1 = rg.csRouteAll(gO, cO, { ...parO, relocate: true });
+    const giro = (res) => res.colors.reduce((n, cr) => n + cr.segs.filter((sg) => sg.kind !== 'stitch' && sg.kind !== 'jump').length, 0);
+    const salti = (res) => res.colors.reduce((n, cr) => n + cr.segs.filter((sg) => sg.kind === 'jump').length, 0);
+    const continuo = (res) => res.colors.every((cr) => cr.segs.every((sg, i) => i === 0 || sg.from === cr.segs[i - 1].to));
+    check('ordine ottimizzato: gli stessi punti, filo continuo, niente in vista né salti in più, meno passaggi',
+      [punti(r1) === punti(r0), continuo(r1), r1.metrics.visibleMm <= r0.metrics.visibleMm + 0.01, salti(r1) <= salti(r0), giro(r1) < giro(r0)],
+      [true, true, true, true, true]);
   }
 
   // RICAVA MODULO (Lorenzo, 2026-10-01, Fair Isle: «in primis definire il modulo»). Un'immagine
@@ -5416,7 +5444,8 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     const gC = { cols: Cc * Nc, rows: Rc, cellW: 2.4, cellH: 3.5, overlapPct: 30 };
     const pC = 3.5 * 0.7;
     const copie = Array.from({ length: Nc }, (_, k) => ({ x: k * Cc * 2.4 + 0.01, y: -1, w: Cc * 2.4 - 0.02, h: Rc * pC + 5 }));
-    const resC = run(gC, rg.csTileModule(gC, modC), { base: { color: 0, stitch: 'v' }, groups: copie });
+    // (senza la regola delle passate giuste: qui si guarda l'ordine del motore, copia per copia)
+    const resC = run(gC, rg.csTileModule(gC, modC), { base: { color: 0, stitch: 'v' }, groups: copie, exactPasses: false });
     const W2 = LW(gC);
     const ritmo = resC.colors.filter((cr) => cr.color !== 0).map((cr) => {
       const lists = Array.from({ length: Nc }, () => []); let pend = [];
@@ -5452,7 +5481,7 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     const tiled = rg.csRouteAll(gT2, cT2, { ...par, modulePath: { cols: Cm, rows: Rm, marks: marksP, pieceOf: pieceA, entryRow: { 1: 2, 2: 0 }, bands: { 1: [], 2: [] } } });
     const libero = rg.csRouteAll(gT2, cT2, par);
     let rotture = 0; for (const cr of tiled.colors) for (let i = 1; i < cr.segs.length; i++) if (cr.segs[i].from !== cr.segs[i - 1].to) rotture++;
-    const puntiDi = (res) => res.colors.flatMap((cr) => cr.segs.filter((sg) => sg.kind === 'stitch').map((sg) => cr.color + ':' + Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to))).sort().join('|');
+    const puntiDi = (res) => [...new Set(res.colors.flatMap((cr) => cr.segs.filter((sg) => sg.kind === 'stitch' || sg.kind === 'retrace').map((sg) => cr.color + ':' + Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to))))].sort().join('|');
     check('modulo ripetuto: filo continuo fra le copie, stessi punti del ricamo, base in un solo stop, poi i fili per striscia', [rotture, puntiDi(tiled) === puntiDi(libero), tiled.colors.map((c) => (c.strip ?? '-') + '/' + c.color).join(' ')], [0, true, '-/0 0/1 0/2 1/1 1/2']);
     // riordinare: il pezzo cliccato diventa il primo; i pezzi di un filo in ordine
     const modR = { cols: Cm, rows: Rm, marks: marksP.map((m) => ({ ...m })), seq: [...pieceA], starts: { 1: 2 * Cm + 1, 2: 5 * Cm + 7 } };

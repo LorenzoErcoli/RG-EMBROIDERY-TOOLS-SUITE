@@ -914,6 +914,20 @@ come primo stop, e poi vengono le strisce degli altri fili; la base non si spost
 sempre **dall'alto in basso**, riga per riga a serpentina: ogni riga di V di filato, poi si scende all'angolo. Spento:
 ogni striscia ha la sua base, prima dei suoi colori.
 
+**Ottimizza l'ordine dei passaggi** (spento di partenza; in *04 Passaggi*, sotto *Taglio a ogni salto*). Il tool
+sceglie il pezzo dopo un passo alla volta, e a volte lascia indietro qualcosa (le croci di una finestra, un dente di
+muro) per tornarci alla fine con un giro lungo. Acceso, rilegge il percorso di ogni filo e sposta questi pezzi nel
+momento in cui l'ago passava lì vicino: meno filo di passaggio, meno punti, niente in vista o salti in più. **Il
+disegno non cambia.** È lento (sul retro delle Alpi, 150 × 168 V, circa 20 secondi): accendilo quando il disegno è
+finito, prima di esportare. Si salva nel progetto. Anche senza, un'isola piccola dello stesso colore (fino a 120
+diagonali) vicina al pezzo che si sta cucendo si fa subito, se ci si arriva quasi gratis, e poi si torna al pezzo.
+
+**Il numero giusto di passate** (sempre). Contando i punti e i ripassi del filo, una diagonale può avere più passate di
+quelle chieste (per esempio 5 invece di 3). Dove il filo va e torna subito sulla stessa diagonale e lì le passate sono
+almeno due in più, quel va-e-torna si toglie: la diagonale torna al numero giusto, il filo resta continuo, i punti
+sviluppati calano. Una sola passata in più (4 invece di 3) resta: toglierla farebbe finire il filo dall'altra parte
+della diagonale.
+
 **Stop accesi e spenti.** Nella riga di ogni filo, **Vedi** accende o spegne quello stop
 nell'anteprima (punti e passaggi), per guardare un colore alla volta. Uno stop spento **non va
 nell'export** (DST e SVG): i passaggi degli altri fili si ricalcolano come se non ci fosse.

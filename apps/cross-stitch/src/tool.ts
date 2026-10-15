@@ -302,6 +302,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           </label>
           <span class="rg-field__help rg-param-grid__wide" id="h-trimJumps">Nel DST ogni salto porta il taglio: nel programma di ricamo i pezzi arrivano separati. Spento: il taglio solo ai salti messi a mano</span>
           <label class="rg-toggle rg-param-grid__wide">
+            <input type="checkbox" id="relocate" aria-describedby="h-relocate"><span class="rg-toggle__track"></span><span>Ottimizza l’ordine dei passaggi</span>
+          </label>
+          <span class="rg-field__help rg-param-grid__wide" id="h-relocate">Rilegge il percorso di ogni filo e cuce i pezzi lasciati indietro quando l’ago passa lì vicino, invece di tornarci con un giro lungo: meno filo di passaggio e meno punti. Il disegno non cambia. È lento (fino a mezzo minuto): accendilo prima di esportare</span>
+          <label class="rg-toggle rg-param-grid__wide">
             <input type="checkbox" id="byBlocks" checked aria-describedby="h-blocks"><span class="rg-toggle__track"></span><span>Per blocchi di colore</span>
           </label>
           <span class="rg-field__help rg-param-grid__wide" id="h-blocks">Finisce ogni zona di un colore prima di passare alla successiva</span>
@@ -1138,6 +1142,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $<HTMLInputElement>('byBlocks').checked = st.route.blocks !== false;
     $<HTMLInputElement>('baseWhole').checked = st.route.baseWhole !== false;
     $<HTMLInputElement>('trimJumps').checked = st.route.trimJumps !== false;
+    $<HTMLInputElement>('relocate').checked = st.route.relocate === true;
     num('zoneGap').value = fmtNum(st.route.zones?.gapMm ?? DEFAULT_ZONES.gapMm);
     num('zoneMax').value = fmtNum(st.route.zones?.maxMm ?? DEFAULT_ZONES.maxMm);
     num('stripRows').value = String(st.route.strips?.rows ?? 0);
@@ -1329,6 +1334,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   num('maxStitch').addEventListener('change', () => { st.stitch.maxStitchMm = Math.min(12, Math.max(1, readNum('maxStitch') || DEFAULT_STITCH.maxStitchMm)); syncFields(); });
   num('travelStitch').addEventListener('change', () => { st.stitch.travelStitchMm = Math.min(12, Math.max(0.5, readNum('travelStitch') || DEFAULT_STITCH.travelStitchMm)); syncFields(); });
   $<HTMLInputElement>('trimJumps').addEventListener('change', (e) => { st.route.trimJumps = (e.target as HTMLInputElement).checked; syncFields(); });
+  $<HTMLInputElement>('relocate').addEventListener('change', (e) => { st.route.relocate = (e.target as HTMLInputElement).checked; syncFields(); update(); });
   $<HTMLInputElement>('baseWhole').addEventListener('change', (e) => { st.route.baseWhole = (e.target as HTMLInputElement).checked; syncFields(); update(); });
   $<HTMLInputElement>('byBlocks').addEventListener('change', (e) => { st.route.blocks = (e.target as HTMLInputElement).checked; syncFields(); update(); });
   const setZones = () => {
@@ -3575,7 +3581,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
    */
   function exportLayers(): ExportLayer[] {
     if (moduleView) exitModuleView(); // si esporta sempre il ricamo, non la vista del modulo
-    return stratiCross(statoCross(), maskFor);
+    // i passaggi già pronti dal worker, se valgono per tutto il ricamo (nessuno stop spento) e non sono in calcolo
+    const ready = !routing && !editorOpen && result && !st.threads.some((t) => t.hidden) ? result : null;
+    return stratiCross(statoCross(), maskFor, ready);
   }
 
   $('exportBtn').addEventListener('click', async () => {
