@@ -53,6 +53,7 @@ export { cellMask as csCellMask, autoRoles as csAutoRoles, normalizeContours as 
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
 export { reticoloDaZone, contornoDaZone, zoneDaModello, lineeDaModello } from ${JSON.stringify(posix('apps/cannage-rafia/src/reticolo.ts'))};
+export { leggiReticolo, reticoloCurvoDaZone, mappaBlocchi } from ${JSON.stringify(posix('apps/cannage-rafia/src/curvo.ts'))};
 export { PARAMETRI_STOP } from ${JSON.stringify(posix('apps/cannage-rafia/src/stop.ts'))};
 export { sagomaDaZone, sagomaDaAnello, sagomaDaAnelli } from ${JSON.stringify(posix('apps/cannage-rafia/src/sagoma.ts'))};
 export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordatura, stratiProgramma, conPuntoMinimo, unisciTratti } from ${JSON.stringify(posix('apps/cannage-rafia/src/programma.ts'))};
@@ -6009,3 +6010,58 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
 rmSync(outDir, { recursive: true, force: true });
 console.log(failed ? `\n${failed} test falliti\n` : '\nTutti i test passati\n');
 process.exit(failed ? 1 : 0);
+// ---------------------------------------------------------------------------
+// cannage-rafia — il cartamodello CURVO (Lorenzo, 14/10): i rombi non stanno su un reticolo dritto — le file
+// di vertici si arcuano — e linee, cornice e griglia li seguono. Fixture: la borsa curva
+// (CARTAMODELLO-CANNAGERAFIA-CURVO.svg): 35 zone, due tinte, bordo alto e fondo ad arco.
+// ---------------------------------------------------------------------------
+console.log('\ncannage-rafia — il cartamodello curvo: linee, cornice e griglia seguono i rombi');
+{
+  const modello = rg.parseImportedBoundarySource(readFileSync(join(here, 'fixtures/cannage-rafia-curvo.svg'), 'utf8'), 'curvo.svg', { scaleMode: 'illustrator-72dpi', paintPriority: 'fill' });
+  const zone = rg.zoneDaModello(modello);
+  const P1 = '#374395', CONTORNO = '#a6529a';
+  const lett = rg.leggiReticolo(zone, P1);
+  check('il reticolo è riconosciuto CURVO: ci sono i vertici veri e un reticolo dritto sbaglierebbe di più di 10 mm',
+    [!!lett.warp, lett.curvo.nodi >= 20, lett.curvo.scostamentoMax > 10, lett.curvo.jacobianoMin > 0.5], [true, true, true, true]);
+  // la deformazione passa ESATTA per i vertici (la curva delle linee passa per i vertici) e si inverte
+  const nodi = [{ x: 356.4, y: 227.0 }, { x: 556.0, y: 226.8 }, { x: 454.5, y: 324.1 }].map((p) => ({ x: p.x * 25.4 / 72, y: p.y * 25.4 / 72 }));
+  const tornano = nodi.every((p) => { const q = lett.warp.avanti(lett.warp.indietro(p)); return Math.hypot(q.x - p.x, q.y - p.y) < 0.001; });
+  check('la deformazione si inverte (reale → ideale → reale ricade sullo stesso punto)', tornano, true);
+  // un cartamodello dritto resta dritto: nessuna deformazione, stessa lettura di prima
+  const dritto = rg.zoneDaModello(rg.parseImportedBoundarySource(readFileSync(join(here, 'fixtures/cannage-rafia-m3641-zone.svg'), 'utf8'), 'm3641.svg', { scaleMode: 'illustrator-72dpi', paintPriority: 'fill' }));
+  const lettD = rg.leggiReticolo(dritto, '#e42320');
+  check('il cannage dritto M3641 non viene deformato: stesso reticolo di reticoloDaZone, nessun warp',
+    [lettD.warp, JSON.stringify(lettD.reticolo) === JSON.stringify(rg.reticoloDaZone(dritto, '#e42320').reticolo)], [undefined, true]);
+
+  const sagoma = rg.sagomaDaZone(zone, [CONTORNO]);
+  const s2 = rg.stopGriglia(lett.reticolo, sagoma, rg.PARAMETRI_STOP, lett.warp);
+  const s5 = rg.stopLinee(lett.reticolo, sagoma, rg.PARAMETRI_DAVANTI, [], [], lett.warp);
+  const s6 = rg.stopCornice(lett.reticolo, sagoma, rg.PARAMETRI_CORNICE, s5.risultato.ingombri, [], lett.warp);
+  const punti = (s) => s.blocchi.flat();
+  // griglia e cornice restano dentro il pezzo vero (la cornice «deve sempre passare dentro»)
+  const fuori = (s, tol) => punti(s).filter((p) => sagoma.distanza(p) < -tol).length;
+  check('griglia e cornice non escono dal pezzo vero (tolleranza 0,5 mm)', [fuori(s2, 0.5), fuori(s6, 0.5)], [0, 0]);
+  // le 4 linee di ogni gruppo passano a ±4,75·sy e ±6,7·sy dai VERTICI veri della riga, non dalla retta fra gli estremi
+  const MM = 25.4 / 72;
+  const sy = lett.reticolo.b / 30.3;
+  const attesi = [-6.7 * sy, -4.75 * sy, 4.75 * sy, 6.7 * sy];
+  const esito = [[356.4, 227.0], [556.0, 226.8], [349.9, 29.9], [754.5, 248.7], [367.0, 423.3], [545.2, 425.3]].map(([px, py]) => {
+    const v = { x: px * MM, y: py * MM };
+    // le quote y delle corse orizzontali (non verticali) vicino alla x del vertice, a meno di 2 mm di x
+    const ys = [];
+    for (const b of s5.blocchi) for (let i = 1; i < b.length; i++) {
+      const p = b[i - 1], q = b[i];
+      if (Math.abs(q.x - p.x) > 1 && Math.abs(q.y - p.y) < 0.4 * Math.abs(q.x - p.x) && Math.abs((p.x + q.x) / 2 - v.x) < 2) ys.push(((p.y + q.y) / 2) - v.y);
+    }
+    return attesi.every((a) => ys.some((y) => Math.abs(y - a) < 0.9));
+  });
+  check('le linee passano alle distanze giuste da sei vertici veri (due in alto, due al centro, due in basso)', esito, [true, true, true, true, true, true]);
+  // le linee finiscono sempre: una riga arriva a meno di 3 mm dal bordo vero a sinistra e a destra
+  const righe = new Map();
+  for (const b of s5.blocchi) for (const p of b) { const k = Math.round(p.y / 12); const r = righe.get(k) ?? { x0: Infinity, x1: -Infinity }; r.x0 = Math.min(r.x0, p.x); r.x1 = Math.max(r.x1, p.x); righe.set(k, r); }
+  const ing = sagoma.ingombro;
+  check('le linee arrivano fino al bordo del pezzo, a sinistra e a destra (ingombro del pezzo)',
+    [Math.min(...[...righe.values()].map((r) => r.x0)) - ing.x0 < 3, ing.x1 - Math.max(...[...righe.values()].map((r) => r.x1)) < 3], [true, true]);
+  check('stop 2, 5 e 6 hanno punti', [s2.punti > 100, s5.punti > 5000, s6.punti > 5000], [true, true, true]);
+}
+

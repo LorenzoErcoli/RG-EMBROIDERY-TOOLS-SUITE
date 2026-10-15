@@ -20,7 +20,8 @@ import {
   sagomaBordo as sagomaBordoDi, latiContorno as latiContornoDi, sceltaDi as sceltaDiDi,
   type IngressoCannage, type ParamsCannage, type Ruolo,
 } from './motore';
-import { reticoloDaZone, contornoDaZone, lineeDaModello, zoneDaModello, type LetturaReticolo, type LineaAperta, type Zona } from './reticolo';
+import { contaRombi } from './curvo';
+import { contornoDaZone, lineeDaModello, zoneDaModello, type LetturaReticolo, type LineaAperta, type Zona } from './reticolo';
 import {
   BASI_FIELDS, BASI_PREDEFINITE, BASI_VALORI, PROGRAMMA_VALORI, BORDATURA_FIELDS, CORNICE_FIELDS, LINEE_FIELDS, PRESET_LINEE, PROGRAMMA_FIELDS, SCALE_MODES, STOP_FIELDS,
   valoriCorniceDa, valoriDa, type Field, type Valori,
@@ -427,7 +428,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     for (const l of linee) aperte.set(l.color, (aperte.get(l.color) ?? 0) + 1);
     tinte = [...new Set([...conte.keys(), ...aperte.keys()])].map((color) => {
       let rombi = 0;
-      if (conte.has(color)) try { rombi = reticoloDaZone(zone, color).rombiInteri; } catch { /* nessun rombo intero di questa tinta */ }
+      if (conte.has(color)) rombi = contaRombi(zone, color);
       return { color, zone: conte.get(color) ?? 0, linee: aperte.get(color) ?? 0, rombi };
     });
     // al primo caricamento: le prime due tinte che hanno rombi interi diventano pattern 1 e pattern 2
@@ -466,7 +467,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     if (!st) return;
     if (!zone.length) { st.textContent = ''; return; }
     st.textContent = lettura
-      ? `Reticolo dal pattern 1: rombo ${fmt(2 * lettura.reticolo.a)} × ${fmt(2 * lettura.reticolo.b)} mm, misurato su ${lettura.rombiInteri} rombi interi.${avviso ? ' ' + avviso : ''}`
+      ? `Reticolo dal pattern 1: rombo ${fmt(2 * lettura.reticolo.a)} × ${fmt(2 * lettura.reticolo.b)} mm, misurato su ${lettura.rombiInteri} rombi interi.${lettura.curvo ? ` Cartamodello CURVO: linee, cornice e griglia seguono i vertici veri (${lettura.curvo.nodi} vertici, fino a ${fmt(lettura.curvo.scostamentoMax)} mm fuori da un reticolo dritto).` : ''}${avviso ? ' ' + avviso : ''}`
       : avviso;
   }
 

@@ -7,7 +7,8 @@ import type { Ingresso, Motore } from '@rg/cervello';
 import { pezzoPiuLungo, type Ingombro, type Punto } from './linee';
 import { latiDelContorno, lineeDaLati, stessoLato, type LatoContorno, type LineaBordo, type Passaggio } from './bordatura';
 import { conPuntoMinimo, unisciTratti, stopBase, stopBordatura, stopContorno, stopCornice, stopGriglia, stopLinee, stratiProgramma, NOMI_BORDATURA, type Stop } from './programma';
-import { reticoloDaZone, type LetturaReticolo, type LineaAperta, type Zona } from './reticolo';
+import { leggiReticolo } from './curvo';
+import { type LetturaReticolo, type LineaAperta, type Zona } from './reticolo';
 import { sagomaDaAnelli, sagomaDaZone, type Sagoma } from './sagoma';
 import { parametriBordaturaDa, parametriCorniceDa, parametriDa, parametriStopDa, type Valori } from './fields';
 
@@ -164,9 +165,9 @@ export function programmaCannage(ing: IngressoCannage, par: ParamsCannage, memo:
     if (!p1) avvisi.push('Scegli la tinta del pattern 1: griglia e linee seguono i suoi rombi.');
     else {
       try {
-        lettura = reticoloDaZone(zone, p1);
+        lettura = leggiReticolo(zone, p1);
         if (lettura.fuoriReticolo) avvisi.push(`${lettura.fuoriReticolo} rombi non stanno sul reticolo: controlla il disegno.`);
-        stop.push(stopGriglia(lettura.reticolo, sagomaBordo(ing, memo), parStop));
+        stop.push(stopGriglia(lettura.reticolo, sagomaBordo(ing, memo), parStop, lettura.warp));
       } catch (e) {
         avvisi.push((e as Error).message);
       }
@@ -178,11 +179,11 @@ export function programmaCannage(ing: IngressoCannage, par: ParamsCannage, memo:
       const sagoma = sagomaPezzo(ing, memo);
       const scarico = poligoniScarico(ing);
       try {
-        const s5 = stopLinee(lettura.reticolo, sagoma, parametriDa(par.params), scarico, anelliContorno(ing));
+        const s5 = stopLinee(lettura.reticolo, sagoma, parametriDa(par.params), scarico, anelliContorno(ing), lettura.warp);
         ingombri = s5.risultato.ingombri;
         stop.push(s5);
       } catch (e) { avvisi.push((e as Error).message); }
-      try { stop.push(stopCornice(lettura.reticolo, sagoma, parametriCorniceDa(par.cornice), ingombri, scarico)); } catch (e) { avvisi.push((e as Error).message); }
+      try { stop.push(stopCornice(lettura.reticolo, sagoma, parametriCorniceDa(par.cornice), ingombri, scarico, lettura.warp)); } catch (e) { avvisi.push((e as Error).message); }
     }
     // la bordatura, sui lati scelti: il passo dei fermi parte dal pezzo più lungo delle linee (stop 5)
     const daBordare = lineeBordatura(ing, memo);
