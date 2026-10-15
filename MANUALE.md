@@ -583,6 +583,12 @@ pennello, i fili e Annulla/Rifai.
   cella sta nel primo blocco che la contiene. Nel DST ogni blocco ha i suoi stop; la barra di stato dice
   quanti blocchi e quanti stop. Coi blocchi il percorso del modulo non vale: decide il motore, blocco per
   blocco.
+- **Modificare un gruppo o un blocco.** Con lo strumento Gruppi (o Blocchi), un clic **sul bordo** di un
+  gruppo (o blocco) lo seleziona: la sua riga nella lista si evidenzia e sul contorno compaiono le maniglie.
+  Trascina un **vertice** (pallino pieno) per spostarlo; trascina il **pallino vuoto a metà di un lato** per
+  aggiungere un vertice lì; **tasto destro** su un vertice per toglierlo (ne restano almeno tre); trascina
+  **dentro** il contorno per spostarlo tutto. Un rettangolo diventa un contorno a quattro vertici alla prima
+  modifica. Un clic fuori, o **Esc**, finisce. I passaggi si ricalcolano a ogni modifica.
 - **I punti sviluppati**: la barra di stato sotto il disegno comincia col numero dei punti come escono
   nel DST (le diagonali e i passaggi divisi secondo il punto massimo).
 - **Vista**, a destra della barra: **Griglia** (accesa, le linee si vedono anche sopra il ricamo) e
