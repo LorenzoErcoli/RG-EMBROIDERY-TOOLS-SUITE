@@ -30,6 +30,7 @@ export const TOOLS: ToolDef[] = [
   { id: 'razza', name: 'Punto razza', description: 'Riempie una sagoma di pallini di cordoncino, piccoli ai bordi e grandi verso il centro, con pallini fissi e linee di sfumatura a scelta. Passaggi corti e coperti. Export SVG e DST.', status: 'live', section: 'suite' },
   { id: 'pattern-macchie', name: 'Pattern a macchie', description: 'Un pannello col suo pattern di base e, dentro le macchie del disegno, un raso sfrangiato con sopra lo stesso punto della base, a registro. Mai un punto fra una macchia e l’altra; ponti facoltativi fra macchie vicine. Export SVG e DST in tre stop.', status: 'live', section: 'sviluppo' },
   { id: 'pittorico', name: 'Punto Pittorico', description: 'Da immagine a ricamo pittorico: il punto attraversa il passaggio di colore, degradé col frastaglio dei bordi dove il colore sfuma, taglio secco dove stacca.', status: 'live', section: 'sviluppo' },
+  { id: 'rete-testa-speciale', name: 'Rete testa speciale', description: 'Rete a rombi fatta di serpentine che scendono e risalgono a zig-zag: una sovrapposizione per ogni incrocio, punto più corto nelle sovrapposizioni, linee fino al bordo e filo spesso affiancato sul contorno, con le aree vuote. Per le teste speciali.', status: 'live', section: 'sviluppo' },
 ];
 
 /**

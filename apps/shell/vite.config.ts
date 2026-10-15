@@ -24,6 +24,7 @@ export default defineConfig(({ command }) => ({
       '@app/razza': fileURLToPath(new URL('../razza/src/tool.ts', import.meta.url)),
       '@app/cannage-rafia': fileURLToPath(new URL('../cannage-rafia/src/tool.ts', import.meta.url)),
       '@app/pattern-macchie': fileURLToPath(new URL('../pattern-macchie/src/tool.ts', import.meta.url)),
+      '@app/rete-testa-speciale': fileURLToPath(new URL('../rete-testa-speciale/src/tool.ts', import.meta.url)),
       '@rg/pattern-grammar': fileURLToPath(new URL('../../packages/pattern-grammar/src/index.ts', import.meta.url)),
     },
   },

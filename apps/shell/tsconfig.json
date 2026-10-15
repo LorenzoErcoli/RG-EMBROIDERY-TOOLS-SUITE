@@ -22,6 +22,7 @@
       "@app/razza": ["../razza/src/tool.ts"],
       "@app/cannage-rafia": ["../cannage-rafia/src/tool.ts"],
       "@app/pattern-macchie": ["../pattern-macchie/src/tool.ts"],
+      "@app/rete-testa-speciale": ["../rete-testa-speciale/src/tool.ts"],
       "@rg/pattern-grammar": ["../../packages/pattern-grammar/src/index.ts"]
     }
   },

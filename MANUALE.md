@@ -510,6 +510,28 @@ collegamenti restano corti e il taglio si paga solo per cambiare blocco.
 
 ---
 
+## Rete testa speciale (`rete-testa-speciale`)
+
+**A cosa serve.** Una **rete a rombi** per le teste speciali, fatta di **serpentine**: la linea scende a zig-zag e risale con lo stesso zig-zag sull'altro lato, e le due insieme formano una colonna di rombi. Le colonne vicine si toccano, o si accavallano, con le punte. Il filo delle teste speciali è spesso: dove due fili si incrociano il punto si accorcia, e sul contorno le passate si mettono una **accanto** all'altra, mai una sopra l'altra.
+
+**Come si usa.**
+1. **Cartamodello** — carica l'SVG o il DXF: un colore per il **contorno del cartamodello**, uno per le **aree vuote**. Il tool dà da solo il ruolo *Contorno* al colore più grande e *Area vuota* agli altri; puoi cambiarli nella lista dei colori. Se il contorno ha altri anelli chiusi dentro, valgono anche loro come aree vuote. Il ricamo si genera subito.
+2. **Rombo e serpentina** — **larghezza** e **altezza** del rombo, la **direzione** della serpentina (0° = scende in verticale, 90° = corre in orizzontale, o un angolo qualsiasi), la **sovrapposizione** e l'**arrotondamento**. La sovrapposizione è **una sola** per ogni incrocio: quanto si accavallano la discesa e la risalita alla rientranza, e quanto le punte di due colonne vicine. A 0 le linee si toccano, sotto 0 resta una luce. L'arrotondamento vale per punte e rientranze; larghezza e sovrapposizione restano misurate sulla curva vera, quindi arrotondare non stacca le linee. *Colonne sfalsate* sposta una colonna sì e una no di mezzo rombo.
+3. **Punti** — la **lunghezza del punto**: ogni tratto fra due punti fissi (le punte, gli apici, gli incroci) si divide in punti uguali, mai più lunghi di così. Il **punto nelle sovrapposizioni** vale dentro la **zona di sovrapposizione**, che va da un punto d'incrocio all'altro. L'**ampiezza** la allarga oltre gli incroci (positiva) o la stringe (negativa); se le linee si toccano soltanto, la zona è l'ampiezza attorno al punto di contatto. Lo **spessore del filo** è la distanza fra due passate affiancate sul contorno. Il **punto minimo** si impone alla fine; se togliere un punto corto ne allunga uno oltre la lunghezza del punto, quello si ridivide.
+4. **Aree vuote** — cosa fa la rete quando incontra un vuoto:
+   - **torna indietro, e la parte mancante si cuce dopo**: la serpentina risale e va avanti; la parte rimasta al di là del vuoto diventa una parte a sé, cucita alla fine con un salto;
+   - **gira sul contorno del vuoto** ed esce dall'altra parte;
+   - **lo attraversa con un'impuntura dritta**, al *punto dell'impuntura nel vuoto*.
+5. **Programma e vista** — punti, filo, punto più corto e più lungo, parti e salti, quante passate affiancate ci sono sul contorno; e le caselle per accendere e spegnere nell'anteprima la rete, i **punti nelle sovrapposizioni** (arancio), le **passate sul contorno** (grigio), l'**impuntura nei vuoti**, i **salti** (rosso tratteggiato) e i punti ago.
+
+**L'ordine del ricamo.** Un filo solo. Ogni colonna scende su un lato e risale sull'altro; il giro in fondo e il raccordo in cima corrono sul contorno. **Ogni linea arriva fino al suo bordo**, del pezzo o del vuoto: le due linee di una colonna non si tagliano alla stessa altezza. Dove una punta esce dal pezzo, la linea corre sul contorno fino a dove rientra. **Ogni parte nuova comincia dal contorno esterno del cartamodello**, dall'alto o dal basso, verso destra o verso sinistra: delle partenze sul contorno si sceglie quella più vicina a dove è finita la parte prima. Nell'anteprima un numero segna dove comincia ogni parte.
+
+**Sul contorno il filo non si sovrappone.** Dove una passata arriva su un tratto di contorno che ha già filo, quel tratto si sposta verso l'interno di uno *spessore del filo*, di due se le passate sono già due, e così via; il resto della passata resta sul bordo. Le linee della rete che arrivano lì si fermano sulla passata spostata, senza scavalcarla. Con due vuoti vicini o con *gira sul contorno del vuoto* le passate affiancate possono essere 4 o 5.
+
+**Simula** cuce il DST sullo schermo, punto per punto. **Esporta DST** e **Scarica SVG** portano dentro il progetto: **Riapri un progetto** li rimette com'erano, disegno compreso.
+
+---
+
 ## Punto razza (`razza`)
 
 **A cosa serve.** Riempie una sagoma di **pallini di cordoncino**, **piccoli ai bordi e grandi verso il centro**, come la pelle di razza (galuchat). Ogni pallino è un cordoncino che parte stretto, si allarga al centro e torna stretto. I passaggi da un pallino al successivo sono **piccoli e nascosti**: passano dentro il pallino appena cucito e sotto il prossimo, quindi in vista resta solo il vuoto fra i due.

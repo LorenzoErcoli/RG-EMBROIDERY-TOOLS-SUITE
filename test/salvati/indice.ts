@@ -16,6 +16,7 @@ import { salvati as pettine } from './pettine';
 import { salvati as razza } from './razza';
 import { salvati as patternMacchie } from './pattern-macchie';
 import { salvati as pittorico } from './pittorico';
+import { salvati as reteTestaSpeciale } from './rete-testa-speciale';
 
 export const SALVATI: Record<string, () => Record<string, Valore>> = {
   'net-45': net45,
@@ -33,4 +34,5 @@ export const SALVATI: Record<string, () => Record<string, Valore>> = {
   'razza': razza,
   'pattern-macchie': patternMacchie,
   'pittorico': pittorico,
+  'rete-testa-speciale': reteTestaSpeciale,
 };

@@ -1,0 +1,25 @@
+/* rete-testa-speciale — solo chrome app + sizing. Il layout lo fornisce il pattern rg-workspace del DS. */
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--rg-color-background);
+  color: var(--rg-color-text-primary);
+  font-family: var(--rg-font-body);
+}
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* Il workspace riempie lo spazio sotto la topbar (sizing d'app, come da doc del pattern). */
+.rete-workspace { flex: 1 1 auto; min-height: 0; }
+
+/* L'anteprima riempie il layer; bordo e sfondo sono già sul __canvas del DS. */
+#layer svg { max-width: 100%; max-height: 100%; }
+
+/* Il colore di un livello nella lista: lo stesso che ha in anteprima. Un campione, non un componente. */
+.rete-ink {
+  display: inline-block;
+  width: 0.75em;
+  height: 0.75em;
+  margin-inline: 0.25em;
+  border-radius: 2px;
+  background: var(--ink);
+  vertical-align: middle;
+}

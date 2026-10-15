@@ -1914,6 +1914,86 @@
           "x-id": "sewTravel"
         }
       }
+    },
+    "rete-testa-speciale": {
+      "type": "object",
+      "properties": {
+        "minStitchMm": {
+          "$ref": "#/$defs/minStitch",
+          "default": 0.5,
+          "description": "Si impone alla fine, dopo l’ordine di cucitura; un punto che si allunga oltre la lunghezza del punto si ridivide.",
+          "minimum": 0,
+          "maximum": 3,
+          "x-id": "minStitch"
+        },
+        "maxStitchMm": {
+          "$ref": "#/$defs/maxStitch",
+          "default": 2.5,
+          "title": "Lunghezza del punto",
+          "description": "Ogni tratto fra due punti fissi (punte, apici, incroci) si divide in punti uguali, non più lunghi di così.",
+          "minimum": 0.5,
+          "maximum": 12,
+          "x-id": "maxStitch"
+        },
+        "constructionStroke": {
+          "$ref": "#/$defs/constructionStroke",
+          "default": 1,
+          "title": "Spessore del filo",
+          "description": "Sul contorno le passate non si sovrappongono: dove c’è già filo la nuova passa accanto, verso l’interno, a questa distanza.",
+          "minimum": 0.1,
+          "maximum": 3
+        },
+        "voidStitchMm": {
+          "$ref": "#/$defs/voidStitchMm",
+          "default": 2,
+          "title": "Punto dell’impuntura nel vuoto",
+          "description": "Il punto della linea che gira sul bordo del vuoto o lo attraversa dritta.",
+          "minimum": 0.5,
+          "maximum": 12
+        },
+        "diamondWidthMm": {
+          "$ref": "#/$defs/diamondWidth",
+          "default": 12,
+          "x-id": "diamondWidth"
+        },
+        "diamondHeightMm": {
+          "$ref": "#/$defs/diamondHeight",
+          "default": 16,
+          "x-id": "diamondHeight"
+        },
+        "angleDeg": {
+          "$ref": "#/$defs/serpentineAngle",
+          "default": 0,
+          "x-id": "serpentineAngle"
+        },
+        "overlapMm": {
+          "$ref": "#/$defs/crossingOverlap",
+          "default": 2,
+          "x-id": "crossingOverlap"
+        },
+        "staggerColumns": {
+          "$ref": "#/$defs/staggerColumns",
+          "default": false
+        },
+        "cornerRounding": {
+          "$ref": "#/$defs/cornerRounding",
+          "default": 0
+        },
+        "overlapStitchMm": {
+          "$ref": "#/$defs/overlapStitch",
+          "default": 1.2,
+          "x-id": "overlapStitch"
+        },
+        "overlapZoneMm": {
+          "$ref": "#/$defs/overlapZone",
+          "default": 0,
+          "x-id": "overlapZone"
+        },
+        "voidMode": {
+          "$ref": "#/$defs/voidMode",
+          "default": "ritorno"
+        }
+      }
     }
   },
   "$defs": {
@@ -4796,6 +4876,94 @@
       "title": "Cuci i passaggi",
       "description": "Cucire i passaggi, o lasciare le corse staccate. Serve a misurare; in produzione resta acceso",
       "x-concetto": "passaggi-nascosti"
+    },
+    "diamondWidth": {
+      "type": "number",
+      "title": "Larghezza del rombo",
+      "description": "Da punta a punta di una colonna, misurata sulla linea vera.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 0.5,
+      "x-concetto": "modulo"
+    },
+    "diamondHeight": {
+      "type": "number",
+      "title": "Altezza del rombo",
+      "description": "Da una rientranza alla successiva, lungo la colonna.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 0.5,
+      "x-concetto": "modulo"
+    },
+    "serpentineAngle": {
+      "type": "number",
+      "title": "Direzione della serpentina",
+      "description": "0 = scende in verticale, 90 = corre in orizzontale.",
+      "x-unita": "deg",
+      "minimum": -90,
+      "maximum": 90,
+      "x-passo": 1,
+      "x-concetto": "angolo"
+    },
+    "crossingOverlap": {
+      "type": "number",
+      "title": "Sovrapposizione",
+      "description": "Una sola misura per ogni incrocio: discesa e risalita alla rientranza, e le punte di due colonne vicine. 0 = si toccano, negativo = resta una luce.",
+      "x-unita": "mm",
+      "minimum": -6,
+      "maximum": 10,
+      "x-passo": 0.25,
+      "x-concetto": "sovrapposizione"
+    },
+    "staggerColumns": {
+      "type": "boolean",
+      "title": "Colonne sfalsate di mezzo rombo",
+      "description": "Le colonne vicine spostate di mezzo rombo lungo la serpentina.",
+      "x-concetto": "modulo"
+    },
+    "cornerRounding": {
+      "type": "number",
+      "title": "Arrotondamento degli angoli",
+      "description": "0 = spigolo vivo. Vale per punte e rientranze; larghezza e sovrapposizione restano misurate sulla curva vera.",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 100,
+      "x-passo": 5,
+      "x-concetto": "modulo"
+    },
+    "overlapStitch": {
+      "type": "number",
+      "title": "Punto nelle sovrapposizioni",
+      "description": "La lunghezza del punto dentro le zone di sovrapposizione.",
+      "x-unita": "mm",
+      "minimum": 0.3,
+      "maximum": 12,
+      "x-passo": 0.1,
+      "x-concetto": "punto-massimo"
+    },
+    "overlapZone": {
+      "type": "number",
+      "title": "Ampiezza della zona di sovrapposizione",
+      "description": "0 = la zona va esattamente da un punto d’incrocio all’altro. Positivo la allarga oltre gli incroci, negativo la stringe; con le linee che si toccano soltanto è l’ampiezza attorno al contatto.",
+      "x-unita": "mm",
+      "minimum": -3,
+      "maximum": 3,
+      "x-passo": 0.1,
+      "x-concetto": "sovrapposizione"
+    },
+    "voidMode": {
+      "type": "string",
+      "title": "All’area vuota la rete",
+      "description": "ritorno = la serpentina torna indietro e la parte mancante si cuce dopo; bordo = gira sul contorno del vuoto; centro = lo attraversa con un’impuntura dritta.",
+      "enum": [
+        "ritorno",
+        "bordo",
+        "centro"
+      ],
+      "x-regole": [
+        "R5"
+      ],
+      "x-concetto": "aree-vuote"
     }
   },
   "x-concetti": {
@@ -4847,7 +5015,8 @@
         "cordedMaxStitch",
         "runMaxStitch",
         "maxStitchLength",
-        "satinMaxStitch"
+        "satinMaxStitch",
+        "overlapStitch"
       ]
     },
     "punto-passaggio": {
@@ -4925,7 +5094,8 @@
         "fringeOpeningMax",
         "toothOpening",
         "axisMode",
-        "satinAngle"
+        "satinAngle",
+        "serpentineAngle"
       ]
     },
     "rientro": {
@@ -4983,7 +5153,9 @@
         "tintOverlap",
         "blockBleed",
         "gradientOverlap",
-        "edgeOverlap"
+        "edgeOverlap",
+        "crossingOverlap",
+        "overlapZone"
       ]
     },
     "tolleranza": {
@@ -5040,7 +5212,8 @@
         "voidClearance",
         "enableExclusionAreas",
         "reconnectVoidBorders",
-        "voidClearanceMm"
+        "voidClearanceMm",
+        "voidMode"
       ]
     },
     "seme": {
@@ -5158,7 +5331,11 @@
         "level0AnchorY",
         "holesAnchorX",
         "holesAnchorY",
-        "striaturaLengthMm"
+        "striaturaLengthMm",
+        "diamondWidth",
+        "diamondHeight",
+        "staggerColumns",
+        "cornerRounding"
       ]
     },
     "interruttore": {

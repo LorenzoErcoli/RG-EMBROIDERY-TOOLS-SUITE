@@ -60,6 +60,7 @@ export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordat
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_PARAMETRI } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
+export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -966,7 +967,7 @@ check('S/s: stessa area della C esplicita', Math.round(Math.abs(rg.polygonArea(p
 console.log('\nsuite — ogni tool scrive i parametri nel .dst e li sa rileggere (R27)');
 for (const [tool, id] of [['net-45', 'net-45'], ['pattern-grammar', 'pattern-grammar'],
   ['interlace', 'interlace'], ['striatura', 'striatura'], ['oblique', 'oblique'],
-  ['bitmap', 'bitmap'], ['zone-pattern', 'zone-pattern'], ['cannage-rafia', 'cannage-rafia'], ['cross-stitch', 'cross-stitch'], ['pattern-macchie', 'pattern-macchie']]) {
+  ['bitmap', 'bitmap'], ['zone-pattern', 'zone-pattern'], ['cannage-rafia', 'cannage-rafia'], ['cross-stitch', 'cross-stitch'], ['pattern-macchie', 'pattern-macchie'], ['rete-testa-speciale', 'rete-testa-speciale']]) {
   const src = readFileSync(join(root, `apps/${tool}/src/tool.ts`), 'utf8');
   const call = src.indexOf('dstFromExportLayers(');
   const blocco = call >= 0 ? src.slice(call, call + 600) : '';
@@ -6060,6 +6061,105 @@ console.log('\ncannage-rafia — il cartamodello curvo: linee, cornice e griglia
   check('le linee arrivano fino al bordo del pezzo, a sinistra e a destra (ingombro del pezzo)',
     [Math.min(...[...righe.values()].map((r) => r.x0)) - ing.x0 < 3, ing.x1 - Math.max(...[...righe.values()].map((r) => r.x1)) < 3], [true, true]);
   check('stop 2, 5 e 6 hanno punti', [s2.punti > 100, s5.punti > 5000, s6.punti > 5000], [true, true, true]);
+}
+
+// ---------------------------------------------------------------------------
+// rete-testa-speciale — la rete a serpentine (Lorenzo, 2026-10-15, decisa sulla simulazione): la linea scende a
+// zig-zag e risale, una sola sovrapposizione per ogni incrocio, la zona di sovrapposizione da incrocio a incrocio,
+// le linee fino al bordo, sul bordo il filo accanto e mai sopra, ogni parte nuova dal contorno esterno.
+// ---------------------------------------------------------------------------
+console.log('\nrete-testa-speciale — serpentine a rombi: lente da incrocio a incrocio, linee al bordo, filo accanto sul contorno');
+{
+  const P = rg.RTS_PARAMETRI;
+  const cerchio = (cx, cy, r, n = 96) => Array.from({ length: n }, (_, i) => ({ x: cx + r * Math.cos(i / n * 2 * Math.PI), y: cy + r * Math.sin(i / n * 2 * Math.PI) }));
+  const rett = [{ x: 0, y: 0 }, { x: 140, y: 0 }, { x: 140, y: 180 }, { x: 0, y: 180 }];
+  // un davanti con lo scollo e un vuoto tondo al centro (la forma della simulazione)
+  const davanti = [{ x: 0, y: 25 }, { x: 38, y: 0 }];
+  for (let i = 1; i < 24; i++) davanti.push({ x: 38 + 64 * i / 24, y: 40 * Math.sin(Math.PI * i / 24) });
+  davanti.push({ x: 102, y: 0 }, { x: 140, y: 25 }, { x: 136, y: 185 }, { x: 4, y: 185 });
+  const vuoto = cerchio(70, 108, 24);
+  const dalContorno = (q, c) => Math.min(...c.map((_, i) => rg.distanceToSegment(q, c[i], c[(i + 1) % c.length])));
+  const tratti = (b) => b.slice(1).map((q, i) => Math.hypot(q.x - b[i].x, q.y - b[i].y));
+
+  const r = rg.rtsCostruisci(davanti, [vuoto], P);
+  const tutti = r.blocchi.flat();
+  check('nessun punto della rete fuori dal pezzo o dentro il vuoto',
+    tutti.filter((q) => q.tipo === 'rete' && (!rg.pointInPolygon(q, davanti) || rg.pointInPolygon(q, vuoto))).length, 0);
+  // la serpentina torna indietro al vuoto e riattacca dopo la parte mancante: due parti, un salto
+  check('il vuoto tondo: due parti, un salto', [r.blocchi.length, r.misure.salti], [2, 1]);
+  // «quando inserisci una parte nuova inizia sempre dal contorno esterno del cartamodello»
+  check('ogni parte comincia sul contorno esterno (entro 0,01 mm)', r.blocchi.map((b) => dalContorno(b[0], davanti) < 0.01), [true, true]);
+  // R3 e R4 dopo l'ordine: togliere un punto corto allungava quello prima fino a 2,75 mm (misurato), oltre il massimo
+  const lunghezze = r.blocchi.flatMap(tratti);
+  check('nessun punto oltre la lunghezza del punto (R4) né sotto il punto minimo (R3)',
+    [Math.max(...lunghezze) <= P.maxStitchMm + 1e-6, Math.min(...lunghezze) >= P.minStitchMm - 1e-6], [true, true]);
+
+  // «tutto ciò che sta dentro i 2 punti di incrocio»: con spigoli vivi e sovrapposizione 2 mm la lente sul rombo
+  // 12 × 16 è lunga 2 · 1 · √(7² + 8²)/7 = 3,04 mm lungo la linea; l'ampiezza aggiunge 1 mm per parte; con le
+  // linee che si toccano soltanto (sovrapposizione 0) la zona è l'ampiezza attorno al contatto.
+  const zonaMediana = (par) => {
+    const z = [];
+    for (const b of rg.rtsCostruisci(rett, [], { ...P, minStitchMm: 0, ...par }).blocchi) {
+      let cur = 0;
+      for (let i = 1; i < b.length; i++) {
+        if (b[i].sovrapposto) cur += Math.hypot(b[i].x - b[i - 1].x, b[i].y - b[i - 1].y);
+        else if (cur) { z.push(cur); cur = 0; }
+      }
+    }
+    z.sort((a, b) => a - b);
+    return Math.round((z[z.length >> 1] ?? 0) * 100) / 100;
+  };
+  const lente = Math.round(2 * Math.hypot(7, 8) / 7 * 100) / 100;
+  check(`la zona di sovrapposizione va da incrocio a incrocio (${lente} mm), l'ampiezza la allarga, al contatto è l'ampiezza`,
+    [zonaMediana({ overlapMm: 2, overlapZoneMm: 0 }), zonaMediana({ overlapMm: 2, overlapZoneMm: 1 }), zonaMediana({ overlapMm: 0, overlapZoneMm: 1 }), zonaMediana({ overlapMm: -1, overlapZoneMm: 1 })],
+    [lente, Math.round((lente + 2) * 100) / 100, 2, 0]);
+  check('...e dentro la zona i punti non superano la lunghezza del punto nelle sovrapposizioni',
+    r.blocchi.every((b) => b.every((q, i) => !i || !q.sovrapposto || !b[i - 1].sovrapposto || Math.hypot(q.x - b[i - 1].x, q.y - b[i - 1].y) <= P.overlapStitchMm + 1e-6)), true);
+
+  // «se c'è già qualcosa sotto il filo lo spostiamo dentro»: sul contorno nessuna passata sopra un'altra (oltre 1,5
+  // spessori dai capi), e il contorno non conta come sovrapposizione
+  const passate = [];
+  for (const b of r.blocchi) { let cur = null; for (let i = 1; i < b.length; i++) { if (b[i].tipo === 'bordo') { if (!cur) { cur = [b[i - 1]]; passate.push(cur); } cur.push(b[i]); } else cur = null; } }
+  const filo = P.constructionStroke, m = 1.5 * filo;
+  const conAscissa = passate.map((g) => { const c = [0]; for (let k = 1; k < g.length; k++) c.push(c[k - 1] + Math.hypot(g[k].x - g[k - 1].x, g[k].y - g[k - 1].y)); return { g, c, L: c[c.length - 1] }; });
+  let sopra = 0, campioni = 0;
+  conAscissa.forEach((A, ai) => A.g.forEach((q, k) => {
+    if (A.c[k] < m || A.L - A.c[k] < m) return;
+    campioni++;
+    if (conAscissa.some((B, bi) => bi !== ai && B.g.some((x, j) => j && B.c[j - 1] >= m && B.L - B.c[j] >= m && rg.distanceToSegment(q, B.g[j - 1], x) < 0.5 * filo))) sopra++;
+  }));
+  check('sul contorno il filo va accanto, mai sopra (misurati 0 su centinaia di punti); il contorno non è sovrapposizione',
+    [campioni > 100, sopra, tutti.filter((q) => q.tipo === 'bordo' && q.sovrapposto).length, r.misure.stratiMax >= 1], [true, 0, 0, true]);
+
+  // gli altri due modi del vuoto: si gira sul bordo del vuoto o lo si attraversa dritti, in un pezzo solo
+  const bordo = rg.rtsCostruisci(davanti, [vuoto], { ...P, voidMode: 'bordo' });
+  const centro = rg.rtsCostruisci(davanti, [vuoto], { ...P, voidMode: 'centro' });
+  check('vuoto «bordo» e «centro»: un pezzo solo, impuntura nel vuoto al suo punto',
+    [bordo.blocchi.length, centro.blocchi.length,
+      centro.blocchi.some((b) => b.some((q) => q.tipo === 'vuoto')) && bordo.blocchi.some((b) => b.some((q) => q.tipo === 'vuoto')),
+      centro.blocchi.every((b) => b.every((q, i) => !i || q.tipo !== 'vuoto' || b[i - 1].tipo !== 'vuoto' || Math.hypot(q.x - b[i - 1].x, q.y - b[i - 1].y) <= P.voidStitchMm + 1e-6))],
+    [1, 1, true, true]);
+
+  // il file vero: il pannello di Lorenzo (TEST-PIAZZEMENTO CON MACCHIE.svg) con le tre macchie più grandi come vuoti,
+  // a 30°: quello a cui non si è pensato (contorno vero, vuoti irregolari)
+  const pm = rg.parseImportedBoundarySource(readFileSync(join(here, 'fixtures/macchie-pannello.svg'), 'utf8'), 'macchie.svg', { scaleMode: 'illustrator-72dpi' });
+  const pannello = pm.choices.find((c) => c.color === '#e52521').boundary.paths[0].points;
+  const grandi = pm.choices.find((c) => c.color === '#ede300').boundary.paths.map((p) => p.points)
+    .sort((a, b) => rg.polygonArea(b) - rg.polygonArea(a)).slice(0, 3);
+  const v = rg.rtsCostruisci(pannello, grandi, { ...P, angleDeg: 30, cornerRounding: 30 });
+  const vt = v.blocchi.flat();
+  check('file vero: niente rete fuori dal pannello o nelle macchie-vuoto, ogni parte dal contorno, punti fra minimo e massimo',
+    [vt.filter((q) => q.tipo === 'rete' && (!rg.pointInPolygon(q, pannello) || grandi.some((g) => rg.pointInPolygon(q, g)))).length,
+      v.blocchi.every((b) => dalContorno(b[0], pannello) < 0.01),
+      Math.max(...v.blocchi.flatMap(tratti)) <= P.maxStitchMm + 1e-6, Math.min(...v.blocchi.flatMap(tratti)) >= P.minStitchMm - 1e-6,
+      vt.length > 1000], [0, true, true, true, true]);
+  console.log(`         (file vero: ${vt.length} punti, ${v.blocchi.length} parti, strati sul contorno fino a ${v.misure.stratiMax})`);
+
+  // l'export: un solo filo, un tratto per parte, il DST si rilegge coi parametri (R27, R31)
+  const strati = rg.rtsStrati(r);
+  const dst = rg.dstFromExportLayers(strati, { label: 'RETE', metadata: { rgProject: 'rete-testa-speciale', params: P } });
+  check('DST: un filo, un tratto per parte, il progetto torna (R27)',
+    [strati.length, strati[0].polylines.length, rg.readDstMetadata(dst)?.rgProject, rg.readDstMetadata(dst)?.params?.diamondWidthMm], [1, 2, 'rete-testa-speciale', 12]);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).
