@@ -6007,9 +6007,6 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   }
 }
 
-rmSync(outDir, { recursive: true, force: true });
-console.log(failed ? `\n${failed} test falliti\n` : '\nTutti i test passati\n');
-process.exit(failed ? 1 : 0);
 // ---------------------------------------------------------------------------
 // cannage-rafia — il cartamodello CURVO (Lorenzo, 14/10): i rombi non stanno su un reticolo dritto — le file
 // di vertici si arcuano — e linee, cornice e griglia li seguono. Fixture: la borsa curva
@@ -6065,3 +6062,7 @@ console.log('\ncannage-rafia — il cartamodello curvo: linee, cornice e griglia
   check('stop 2, 5 e 6 hanno punti', [s2.punti > 100, s5.punti > 5000, s6.punti > 5000], [true, true, true]);
 }
 
+// La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).
+rmSync(outDir, { recursive: true, force: true });
+console.log(failed ? `\n${failed} test falliti\n` : '\nTutti i test passati\n');
+process.exit(failed ? 1 : 0);
