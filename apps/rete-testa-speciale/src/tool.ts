@@ -6,7 +6,8 @@ import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { costruisciRete, pezzoAMisure, stratiRete, COLORE_RETE, PARAMETRI_RETE, type ParametriRete, type PuntoAgo, type RisultatoRete } from './motore';
+import { costruisciRete, costruisciReteRadiale, pezzoAMisure, stratiRete, COLORE_RETE, PARAMETRI_RETE, type ParametriRete, type PuntoAgo, type RisultatoRete } from './motore';
+import { angoloDelRombo, formaSacca, raggioMinimo, type Anelli } from './sacca';
 
 /** Il disegno nel file riapribile, se non pesa troppo (come negli altri tool). */
 const MAX_DRAWING_KB = 256;
@@ -27,10 +28,30 @@ const VISTE = [
   { chiave: 'sopra', nome: 'Sovrapposizioni: la linea sopra', colore: '#c0471b' },
   { chiave: 'bordo', nome: 'Passate sul contorno', colore: '#7d8681' },
   { chiave: 'vuoto', nome: 'Impuntura nelle aree vuote', colore: '#6f88a8' },
+  { chiave: 'fondo', nome: 'Fondo della sacca: spirale e legature', colore: '#8a6a1f' },
 ] as const;
 type ChiaveVista = typeof VISTE[number]['chiave'];
 
 type Campo = { nome: keyof ParametriRete; etichetta: string; unita: string; passo: number; min: number; max?: number; aiuto?: string; scelte?: Array<[string, string]> };
+const CAMPI_FORMA: Campo[] = [
+  { nome: 'netShape', etichetta: 'La rete', unita: '', passo: 1, min: 0,
+    scelte: [['colonne', 'a colonne, su un pezzo'], ['radiale', 'radiale: un disco che diventa una sacca']] },
+];
+const CAMPI_SACCA: Campo[] = [
+  { nome: 'radialCount', etichetta: 'Rombi per giro', unita: '', passo: 1, min: 3, max: 200 },
+  { nome: 'radialSideMm', etichetta: 'Lato del rombo', unita: 'mm', passo: 0.5, min: 2, max: 100,
+    aiuto: 'Tutti i lati uguali: è quello che fa diventare il disco una sacca.' },
+  { nome: 'bottomRadiusMm', etichetta: 'Raggio del fondo', unita: 'mm', passo: 1, min: 5, max: 300,
+    aiuto: 'Dove finisce la rete e comincia la spirale. Più è grande, più la sacca è larga e bassa.' },
+  { nome: 'maxAngleDeg', etichetta: 'Angolo massimo dei rombi in fuori', unita: '°', passo: 1, min: 60, max: 179,
+    aiuto: 'A 180° il rombo è piatto: è il limite teorico del disco.' },
+  { nome: 'fieldMm', etichetta: 'Campo macchina (lato)', unita: 'mm', passo: 10, min: 50, max: 1000 },
+  { nome: 'spiralPitchMm', etichetta: 'Passo della spirale del fondo', unita: 'mm', passo: 0.1, min: 0.3, max: 30,
+    aiuto: 'Uguale allo spessore del filo = giri affiancati, fondo pieno. Più largo = fondo rado, meno filo.' },
+  { nome: 'tieSpacingMm', etichetta: 'Distanza fra le legature del fondo', unita: 'mm', passo: 1, min: 2, max: 100,
+    aiuto: 'Le legature entrano nel fondo e lo tengono insieme; dove sarebbero più fitte di così, metà si ferma.' },
+  { nome: 'rimPass', etichetta: 'Un giro d’impuntura in cima, sulle punte esterne', unita: '', passo: 1, min: 0 },
+];
 const CAMPI_PEZZO: Campo[] = [
   { nome: 'pieceSource', etichetta: 'Il pezzo', unita: '', passo: 1, min: 0,
     scelte: [['cartamodello', 'dal cartamodello (SVG o DXF)'], ['misure', 'dalle mie misure (un rettangolo)']] },
@@ -108,7 +129,10 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   const ruoli: Record<string, Ruolo> = {};
   const par: ParametriRete = { ...PARAMETRI_RETE };
   let risultato: RisultatoRete | null = null;
-  const visibili: Record<ChiaveVista | 'salti' | 'punti', boolean> = { rete: true, sotto: true, sopra: true, bordo: true, vuoto: true, salti: true, punti: false };
+  const visibili: Record<ChiaveVista | 'salti' | 'punti', boolean> = { rete: true, sotto: true, sopra: true, bordo: true, vuoto: true, fondo: true, salti: true, punti: false };
+  /** Gli anelli dell'ultima sacca calcolata, per le sue misure. */
+  let anelliSacca: Anelli | null = null;
+  const radiale = () => par.netShape === 'radiale';
   let testoDisegno = 'Nessun disegno caricato.';
   let simulando = false;
   let simulatore: Simulatore | null = null;
@@ -118,6 +142,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
    * del colore del contorno (la convenzione di Illustrator: il più grande è il perimetro, gli altri sono buchi).
    */
   function geometria(): { contorno: Polyline | null; vuoti: Polyline[] } {
+    if (radiale()) { const c = par.fieldMm; return { contorno: [{ x: 0, y: 0 }, { x: c, y: 0 }, { x: c, y: c }, { x: 0, y: c }], vuoti: [] }; } // il campo macchina
     if (par.pieceSource === 'misure') return { contorno: pezzoAMisure(par), vuoti: [] };
     const anelli = (r: Ruolo) => (model?.choices ?? []).filter((c) => ruoli[c.id] === r)
       .flatMap((c) => c.boundary.paths.filter((p) => p.points.length >= 3).map((p) => p.points));
@@ -156,7 +181,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         for (const [v, l] of f.scelte) { const o = document.createElement('option'); o.value = v; o.textContent = l; o.selected = String(par[f.nome]) === v; sel.appendChild(o); }
         sel.addEventListener('change', () => {
           (par as Record<string, unknown>)[f.nome] = sel.value;
-          if (f.nome === 'pieceSource') { risultato = null; buildPanel(); disegnaContorni(); }
+          if (f.nome === 'pieceSource' || f.nome === 'netShape') { risultato = null; buildPanel(); disegnaContorni(); }
           genera();
         });
         lab.appendChild(sel);
@@ -193,7 +218,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         const v = parseFloat(inp.value);
         if (!Number.isFinite(v)) return;
         (par as Record<string, unknown>)[f.nome] = Math.min(f.max ?? Infinity, Math.max(f.min, v));
-        if (f.nome === 'totalWidth' || f.nome === 'totalHeight') disegnaContorni(); // il pezzo cambia: si riadatta la vista
+        if (f.nome === 'totalWidth' || f.nome === 'totalHeight' || f.nome === 'fieldMm') disegnaContorni(); // il pezzo cambia: si riadatta la vista
         genera();
       });
       const unit = document.createElement('span');
@@ -222,6 +247,12 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         </label>
         <p class="rg-file-input__status" id="reopenStatus" role="status">Un file uscito da qui torna com'era: pezzo, ruoli e parametri.</p>
       </div>`;
+    if (radiale()) {
+      box.append(...campi(CAMPI_FORMA).childNodes, ...campi(CAMPI_SACCA).childNodes);
+      box.insertAdjacentHTML('beforeend', `<small class="rg-field__help rg-param-grid__wide">Un disco di rombi coi lati tutti uguali, al centro del campo: tolto dal telaio i rombi ruotano e diventa una sacca. Le sue misure sono in «Programma e vista».</small>` + bloccoRiapri);
+      return box;
+    }
+    box.append(...campi(CAMPI_FORMA).childNodes);
     if (par.pieceSource === 'misure') {
       box.append(...campi(CAMPI_PEZZO).childNodes, ...campi(CAMPI_MISURE).childNodes);
       box.insertAdjacentHTML('beforeend', `<small class="rg-field__help rg-param-grid__wide">Un rettangolo di queste misure, senza aree vuote. Caricare un cartamodello lo sostituisce.</small>` + bloccoRiapri
@@ -289,10 +320,22 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
       : '';
     const caselle = VISTE.map((l) => `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-vista="${l.chiave}"${visibili[l.chiave] ? ' checked' : ''}>`
       + `<span class="rete-ink" style="--ink:${l.colore}"></span>${l.nome}</label>`).join('');
-    box.innerHTML = misure + caselle
+    box.innerHTML = misure + (radiale() ? misureSacca() : '') + caselle
       + `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-vista="salti"${visibili.salti ? ' checked' : ''}> I salti fra le parti, in rosso</label>`
       + `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-vista="punti"${visibili.punti ? ' checked' : ''}> I punti ago</label>`;
     return box;
+  }
+
+  /** Le misure della sacca: il disco, gli angoli, e la forma per alcune bocche (la più profonda che i lati permettono). */
+  function misureSacca(): string {
+    const A = anelliSacca;
+    if (!A || A.rho.length < 3) return '';
+    const n = A.rho.length - 1, L = par.radialSideMm, N = Math.round(par.radialCount), rMin = raggioMinimo(N, par.constructionStroke);
+    const fondo = 2 * A.rho[0], disco = 2 * A.rho[n];
+    const bocche = [fondo, (fondo + disco) / 2, fondo + (disco - fondo) * 0.75, fondo + (disco - fondo) * 0.9].filter((b) => b < disco - 1);
+    const righe = bocche.map((b) => { const s = formaSacca(A, L, b, rMin); return `<tr><td>Ø ${s.bocca.toFixed(0)} mm${Math.abs(b - fondo) < 0.5 ? ' (dritta)' : ''}</td><td>${s.possibile ? s.profondita.toFixed(0) + ' mm' : 'non si può'}</td><td>Ø ${s.larga.toFixed(0)} mm</td><td>${s.litri.toFixed(1)} l</td></tr>`; }).join('');
+    return `<p class="rg-field__help rg-param-grid__wide">Disco Ø ${disco.toFixed(0)} mm (limite teorico Ø ${(2 * A.rMaxPiatto).toFixed(0)}; ti ferma ${A.perche === 'campo' ? 'il campo' : 'l’angolo massimo'}) · ${n + 1} anelli · rombi da ${angoloDelRombo(A, L, 0).toFixed(0)}° al fondo a ${angoloDelRombo(A, L, Math.max(0, n - 2)).toFixed(0)}° in cima · fondo Ø ${fondo.toFixed(0)} mm</p>`
+      + `<table class="rg-param-grid__wide rete-tabella"><caption>La sacca, con la bocca che scegli tu (fondo fermo)</caption><thead><tr><th>Bocca</th><th>Profondità</th><th>Più larga</th><th>Capienza</th></tr></thead><tbody>${righe}</tbody></table>`;
   }
 
   function buildPanel() {
@@ -304,12 +347,19 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     const disegno = headSection('01', 'Il pezzo');
     disegno.appendChild(disegnoGrid());
     panel.appendChild(disegno);
-    const sezioni: Array<[string, string, HTMLElement]> = [
-      ['rombo', 'Rombo e serpentina', campi(CAMPI_ROMBO)],
-      ['punti', 'Punti', campi(CAMPI_PUNTI)],
-      ['vuoti', 'Aree vuote', campi(CAMPI_VUOTI)],
-      ['vista', 'Programma e vista', vistaGrid()],
-    ];
+    // nella sacca il rombo lo decidono gli anelli: restano la sovrapposizione e l'arrotondamento; i vuoti non ci sono
+    const sezioni: Array<[string, string, HTMLElement]> = radiale()
+      ? [
+        ['rombo', 'Incroci', campi(CAMPI_ROMBO.filter((c) => c.nome === 'overlapMm' || c.nome === 'cornerRounding'))],
+        ['punti', 'Punti', campi(CAMPI_PUNTI)],
+        ['vista', 'Programma e vista', vistaGrid()],
+      ]
+      : [
+        ['rombo', 'Rombo e serpentina', campi(CAMPI_ROMBO)],
+        ['punti', 'Punti', campi(CAMPI_PUNTI)],
+        ['vuoti', 'Aree vuote', campi(CAMPI_VUOTI)],
+        ['vista', 'Programma e vista', vistaGrid()],
+      ];
     sezioni.forEach(([chiave, titolo, corpo], k) => {
       const det = accordionSection(String(k + 2).padStart(2, '0'), titolo, corpo, primaVolta ? chiave === 'rombo' || chiave === 'vista' : aperti.has(chiave));
       det.dataset.sezione = chiave;
@@ -349,6 +399,16 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     $('status').textContent = 'Calcolo…';
     window.clearTimeout(attesa);
     attesa = window.setTimeout(() => {
+      if (radiale()) {
+        const r = costruisciReteRadiale(par);
+        anelliSacca = r.anelli;
+        risultato = r.blocchi.length ? r : null;
+        $('status').textContent = r.avviso ?? `Sacca: disco Ø ${(2 * r.anelli.rho[r.anelli.rho.length - 1]).toFixed(0)} mm · ${r.blocchi.length} parti · ${r.misure.salti} salti · ${r.misure.tempoMs} ms`;
+        $('points').textContent = r.blocchi.length ? ` · ${r.misure.punti.toLocaleString('it-IT')} punti` : '';
+        buildPanel();
+        disegna();
+        return;
+      }
       try {
         risultato = costruisciRete(contorno, vuoti, par);
       } catch (e) {
@@ -381,6 +441,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   /** Il disegno com'è arrivato: il contorno col tratto, le aree vuote in trasparenza. */
   function contorniSvg(opacita: number): string {
     const { contorno, vuoti } = geometria();
+    if (radiale()) return contorno ? `<polygon points="${d(contorno)}" fill="none" stroke="#9aa49e" stroke-width="0.4" stroke-dasharray="4 3"/>` : ''; // il campo macchina
     return (contorno ? `<polygon points="${d(contorno)}" fill="none" stroke="#c0392b" stroke-width="0.3"/>` : '')
       + vuoti.map((m) => `<polygon points="${d(m)}" fill="#9aa49e" fill-opacity="${opacita}" stroke="#7f8a83" stroke-width="0.15" stroke-dasharray="1 0.6"/>`).join('');
   }
@@ -391,7 +452,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     pz.fit();
   }
 
-  const vistaDi = (q: PuntoAgo): ChiaveVista => (q.tipo === 'vuoto' ? 'vuoto' : q.tipo === 'bordo' ? 'bordo' : q.sovrapposto ? (q.sopra ? 'sopra' : 'sotto') : 'rete');
+  const vistaDi = (q: PuntoAgo): ChiaveVista => (q.tipo === 'fondo' ? 'fondo' : q.tipo === 'vuoto' ? 'vuoto' : q.tipo === 'bordo' ? 'bordo' : q.sovrapposto ? (q.sopra ? 'sopra' : 'sotto') : 'rete');
 
   function disegna(adatta = false) {
     if (simulatore) { simulatore.distruggi(); simulatore = null; }
@@ -451,7 +512,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   let notaDisegno = '';
   function progetto(): Record<string, unknown> {
     const base = { rgProject: 'rete-testa-speciale', params: par, ruoli };
-    if (!source || par.pieceSource === 'misure') { notaDisegno = ''; return base; }
+    if (!source || par.pieceSource === 'misure' || radiale()) { notaDisegno = ''; return base; }
     const drawing = { name: source.name, text: source.text, scale: scala };
     const kb = JSON.stringify(drawing).length / 1024;
     if (kb > MAX_DRAWING_KB) {
@@ -486,7 +547,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   }
 
   function wirePanel() {
-    $('fileInput').addEventListener('change', (ev) => {
+    root.querySelector('#fileInput')?.addEventListener('change', (ev) => {
       const input = ev.target as HTMLInputElement;
       const file = input.files?.[0];
       if (!file) return;

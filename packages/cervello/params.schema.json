@@ -1963,6 +1963,48 @@
           "minimum": 0.5,
           "maximum": 12
         },
+        "netShape": {
+          "$ref": "#/$defs/netShape",
+          "default": "colonne"
+        },
+        "radialCount": {
+          "$ref": "#/$defs/radialCount",
+          "default": 48
+        },
+        "radialSideMm": {
+          "$ref": "#/$defs/radialSide",
+          "default": 15,
+          "x-id": "radialSide"
+        },
+        "bottomRadiusMm": {
+          "$ref": "#/$defs/bottomRadius",
+          "default": 100,
+          "x-id": "bottomRadius"
+        },
+        "maxAngleDeg": {
+          "$ref": "#/$defs/maxDiamondAngle",
+          "default": 165,
+          "x-id": "maxDiamondAngle"
+        },
+        "fieldMm": {
+          "$ref": "#/$defs/machineField",
+          "default": 450,
+          "x-id": "machineField"
+        },
+        "spiralPitchMm": {
+          "$ref": "#/$defs/spiralPitch",
+          "default": 5,
+          "x-id": "spiralPitch"
+        },
+        "tieSpacingMm": {
+          "$ref": "#/$defs/tieSpacing",
+          "default": 10,
+          "x-id": "tieSpacing"
+        },
+        "rimPass": {
+          "$ref": "#/$defs/rimPass",
+          "default": true
+        },
         "pieceSource": {
           "$ref": "#/$defs/pieceSource",
           "default": "cartamodello"
@@ -4898,6 +4940,91 @@
       "description": "Cucire i passaggi, o lasciare le corse staccate. Serve a misurare; in produzione resta acceso",
       "x-concetto": "passaggi-nascosti"
     },
+    "netShape": {
+      "type": "string",
+      "title": "La rete",
+      "description": "colonne = la rete a colonne su un pezzo; radiale = un disco di rombi coi lati uguali che, tolto dal telaio, diventa una sacca.",
+      "enum": [
+        "colonne",
+        "radiale"
+      ],
+      "x-concetto": "modulo"
+    },
+    "radialCount": {
+      "type": "integer",
+      "title": "Rombi per giro",
+      "description": "Sacca: quanti rombi in ogni anello del disco.",
+      "minimum": 3,
+      "maximum": 200,
+      "x-passo": 1,
+      "x-concetto": "modulo"
+    },
+    "radialSide": {
+      "type": "number",
+      "title": "Lato del rombo",
+      "description": "Sacca: tutti i lati uguali, è quello che fa diventare il disco una sacca.",
+      "x-unita": "mm",
+      "minimum": 2,
+      "maximum": 100,
+      "x-passo": 0.5,
+      "x-concetto": "modulo"
+    },
+    "bottomRadius": {
+      "type": "number",
+      "title": "Raggio del fondo",
+      "description": "Sacca: dove finisce la rete e comincia la spirale. Più è grande, più la sacca è larga e bassa.",
+      "x-unita": "mm",
+      "minimum": 5,
+      "maximum": 300,
+      "x-passo": 1,
+      "x-concetto": "formato"
+    },
+    "maxDiamondAngle": {
+      "type": "number",
+      "title": "Angolo massimo dei rombi in fuori",
+      "description": "Sacca: a 180° il rombo è piatto, il limite teorico del disco.",
+      "x-unita": "deg",
+      "minimum": 60,
+      "maximum": 179,
+      "x-passo": 1,
+      "x-concetto": "angolo"
+    },
+    "machineField": {
+      "type": "number",
+      "title": "Campo macchina (lato)",
+      "description": "Sacca: il disco ci deve stare, ed è centrato nel campo.",
+      "x-unita": "mm",
+      "minimum": 50,
+      "maximum": 1000,
+      "x-passo": 10,
+      "x-concetto": "formato"
+    },
+    "spiralPitch": {
+      "type": "number",
+      "title": "Passo della spirale del fondo",
+      "description": "Sacca: uguale allo spessore del filo = giri affiancati, fondo pieno; più largo = fondo rado, meno filo.",
+      "x-unita": "mm",
+      "minimum": 0.3,
+      "maximum": 30,
+      "x-passo": 0.1,
+      "x-concetto": "densita"
+    },
+    "tieSpacing": {
+      "type": "number",
+      "title": "Distanza fra le legature del fondo",
+      "description": "Sacca: le legature entrano nel fondo e lo tengono insieme; dove sarebbero più fitte di così, metà si ferma.",
+      "x-unita": "mm",
+      "minimum": 2,
+      "maximum": 100,
+      "x-passo": 1,
+      "x-concetto": "densita"
+    },
+    "rimPass": {
+      "type": "boolean",
+      "title": "Un giro d’impuntura in cima, sulle punte esterne",
+      "description": "Sacca: lega le punte dell’ultimo anello; non tiene aperta la bocca (il filo si arriccia, non si allunga).",
+      "x-concetto": "interruttore"
+    },
     "pieceSource": {
       "type": "string",
       "title": "Il pezzo",
@@ -5018,7 +5145,9 @@
         "baseSpacing",
         "densitySpacing",
         "satinRowSpacing",
-        "rowSpacing"
+        "rowSpacing",
+        "spiralPitch",
+        "tieSpacing"
       ]
     },
     "interlinea": {
@@ -5108,6 +5237,8 @@
         "gridCols",
         "gridRows",
         "cellHeightMm",
+        "bottomRadius",
+        "machineField",
         "pieceSource"
       ]
     },
@@ -5138,6 +5269,7 @@
         "toothOpening",
         "axisMode",
         "satinAngle",
+        "maxDiamondAngle",
         "serpentineAngle"
       ]
     },
@@ -5375,6 +5507,9 @@
         "holesAnchorX",
         "holesAnchorY",
         "striaturaLengthMm",
+        "netShape",
+        "radialCount",
+        "radialSide",
         "diamondWidth",
         "diamondHeight",
         "staggerColumns",
@@ -5395,7 +5530,8 @@
         "buildDst",
         "showBare",
         "showPasses",
-        "cutBaseUnderSpots"
+        "cutBaseUnderSpots",
+        "rimPass"
       ]
     },
     "altro": {

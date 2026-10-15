@@ -13,6 +13,12 @@ body {
 /* L'anteprima riempie il layer; bordo e sfondo sono già sul __canvas del DS. */
 #layer svg { max-width: 100%; max-height: 100%; }
 
+/* Le misure della sacca: una tabellina di numeri nel pannello, non un componente. */
+.rete-tabella { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: var(--rg-font-size-sm, 0.8125rem); }
+.rete-tabella caption { text-align: left; color: var(--rg-color-text-secondary); padding-bottom: 0.25rem; }
+.rete-tabella th, .rete-tabella td { text-align: right; padding: 0.15rem 0.35rem; border-bottom: 1px solid var(--rg-color-border); white-space: nowrap; }
+.rete-tabella th:first-child, .rete-tabella td:first-child { text-align: left; }
+
 /* Il colore di un livello nella lista: lo stesso che ha in anteprima. Un campione, non un componente. */
 .rete-ink {
   display: inline-block;

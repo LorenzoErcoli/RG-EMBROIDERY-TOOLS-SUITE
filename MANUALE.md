@@ -528,6 +528,15 @@ collegamenti restano corti e il taglio si paga solo per cambiare blocco.
 
 **Sul contorno il filo non si sovrappone.** Dove una passata arriva su un tratto di contorno che ha già filo, quel tratto si sposta verso l'interno di uno *spessore del filo*, di due se le passate sono già due, e così via; il resto della passata resta sul bordo. Le linee della rete che arrivano lì si fermano sulla passata spostata, senza scavalcarla. Con due vuoti vicini o con *gira sul contorno del vuoto* le passate affiancate possono essere 4 o 5.
 
+**La sacca a rete.** In cima al pannello, *La rete*: **radiale** fa un **disco di rombi coi lati tutti uguali**, al centro del campo macchina. Tolto dal telaio ogni nodo fa da cerniera: i rombi ruotano senza cambiare i lati e il disco diventa una **sacca**, senza cuciture. Si sceglie:
+- **Rombi per giro** e **lato del rombo**: gli anelli del disco li calcola il tool, tutti coi lati uguali. Verso il centro i rombi diventano stretti, verso fuori si appiattiscono;
+- **Raggio del fondo**: dove finisce la rete e comincia la **spirale** del fondo. Più è grande, più la sacca viene larga e bassa;
+- **Angolo massimo dei rombi in fuori** e **campo macchina**: il disco si ferma al primo dei due (a 180° i rombi sarebbero piatti);
+- **Passo della spirale** (uguale allo spessore del filo = fondo pieno; più largo = fondo rado, meno filo) e **distanza fra le legature**: le legature entrano nel fondo e lo tengono insieme, e verso il centro metà si ferma, così al centro non arrivano troppi fili;
+- **Un giro d'impuntura in cima**, sulle punte esterne.
+
+L'ordine: prima la spirale dal centro in fuori, poi ogni colonna esce dal fondo su un lato, gira in cima ed entra sull'altro lato, e una legatura entra nel fondo e torna fuori alla colonna dopo. Alla fine, con un salto, il giro in cima. Sovrapposizione, arrotondamento, punti (sotto e sopra) e spessore del filo valgono come nella rete a colonne. In *Programma e vista* ci sono le misure del disco e una tabella: per alcune **bocche** la sacca più profonda che i lati permettono, la parte più larga e la capienza. **Con la bocca larga quanto il disco la rete resta piatta**: la sacca si forma stringendo la bocca, e il giro in cima non la tiene aperta (il filo si arriccia, non si allunga).
+
 **Simula** cuce il DST sullo schermo, punto per punto. **Esporta DST** e **Scarica SVG** portano dentro il progetto: **Riapri un progetto** li rimette com'erano, disegno compreso.
 
 ---

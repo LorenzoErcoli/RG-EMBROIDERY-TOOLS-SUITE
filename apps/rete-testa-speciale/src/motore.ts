@@ -19,13 +19,34 @@
 //   vuoto, o attraversarlo con un'impuntura dritta (come nel Generatore pattern);
 // - «quando inserisci una parte nuova inizia sempre dal contorno esterno del cartamodello».
 import { distance, distanceToSegment, enforceMinStitch, lerp, pointInPolygon, type Point, type Polyline } from '@rg/core';
+import { anelliRadiali, type Anelli } from './sacca';
 
 export type ModoVuoto = 'ritorno' | 'bordo' | 'centro';
 /** Da dove viene il pezzo: il contorno del cartamodello caricato, o un rettangolo con le misure scritte a mano. */
 export type OrigineDelPezzo = 'cartamodello' | 'misure';
+/** La forma della rete: a colonne su un pezzo, o radiale in un disco che diventa una sacca. */
+export type FormaDellaRete = 'colonne' | 'radiale';
 
 /** I parametri, come il tool li salva nel file di progetto (nomi del registro K1). */
 export type ParametriRete = {
+  /** La rete: a colonne sul pezzo, o radiale (la sacca a rete, Lorenzo 2026-10-15). */
+  netShape: FormaDellaRete;
+  /** Sacca: rombi per giro. */
+  radialCount: number;
+  /** Sacca: lato del rombo, mm. Tutti i lati uguali: è quello che fa diventare il disco una sacca. */
+  radialSideMm: number;
+  /** Sacca: raggio del fondo, mm (dove finisce la rete e comincia la spirale). */
+  bottomRadiusMm: number;
+  /** Sacca: angolo massimo dei rombi in fuori, gradi (a 180 sono piatti). */
+  maxAngleDeg: number;
+  /** Sacca: lato del campo macchina, mm. Il disco ci deve stare. */
+  fieldMm: number;
+  /** Sacca: passo della spirale del fondo, mm (uguale allo spessore del filo = giri affiancati). */
+  spiralPitchMm: number;
+  /** Sacca: distanza minima fra le legature che entrano nel fondo, mm. */
+  tieSpacingMm: number;
+  /** Sacca: un giro d'impuntura in cima, sulle punte esterne. */
+  rimPass: boolean;
   /** Il pezzo: dal cartamodello, o dalle misure qui sotto (Lorenzo, 2026-10-15: «a partire da dimensioni mie»). */
   pieceSource: OrigineDelPezzo;
   /** Larghezza del pezzo quando lo si dà a misure, mm. */
@@ -66,6 +87,15 @@ export type ParametriRete = {
 };
 
 export const PARAMETRI_RETE: ParametriRete = {
+  netShape: 'colonne',
+  radialCount: 48,
+  radialSideMm: 15,
+  bottomRadiusMm: 100,
+  maxAngleDeg: 165,
+  fieldMm: 450,
+  spiralPitchMm: 5,
+  tieSpacingMm: 10,
+  rimPass: true,
   pieceSource: 'cartamodello',
   totalWidth: 120,
   totalHeight: 160,
@@ -85,8 +115,8 @@ export const PARAMETRI_RETE: ParametriRete = {
   minStitchMm: 0.5,
 };
 
-/** Che tratto di filo è un punto: la rete, una passata sul contorno, l'impuntura in un vuoto, un raccordo dritto. */
-export type TipoTratto = 'rete' | 'bordo' | 'vuoto' | 'raccordo';
+/** Che tratto di filo è un punto: la rete, una passata sul contorno, l'impuntura in un vuoto, un raccordo dritto, il fondo della sacca. */
+export type TipoTratto = 'rete' | 'bordo' | 'vuoto' | 'raccordo' | 'fondo';
 
 /** Un punto ago, con quello che serve all'anteprima. */
 export interface PuntoAgo extends Point {
@@ -102,6 +132,8 @@ export interface PuntoAgo extends Point {
 }
 
 export interface RisultatoRete {
+  /** Quello che non si è potuto fare, detto a parole (es. la sacca non ci sta). */
+  avviso?: string;
   /** Un tratto continuo per ogni blocco, in ordine di cucitura: fra due blocchi la macchina salta. */
   blocchi: PuntoAgo[][];
   misure: {
@@ -231,7 +263,7 @@ interface PuntoTraccia extends Point {
 }
 
 type Pezzo =
-  | { tipo: 'rete' | 'raccordo' | 'vuoto' | 'salto'; pts: PuntoTraccia[]; sid: number; blocco: number }
+  | { tipo: 'rete' | 'raccordo' | 'vuoto' | 'fondo' | 'salto'; pts: PuntoTraccia[]; sid: number; blocco: number }
   | { tipo: 'bordo'; poly: Polyline; a: PuntoTraccia; b: PuntoTraccia; daVuoto?: boolean; sid: number; blocco: number };
 
 type PezzoRisolto = { tipo: TipoTratto | 'salto'; pts: PuntoTraccia[]; sid: number; blocco: number; daVuoto?: boolean; strati?: number[] };
@@ -370,6 +402,32 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
     }));
   });
 
+  const locale = (q: Point) => { const dx = q.x - C.x, dy = q.y - C.y; return { u: dx * U.x + dy * U.y, v: dx * V.x + dy * V.y }; };
+  return cuci(pezzi, { contorno, vuoti, ritorno, nelVuotoI, grande, locale, ordine: (ra, rb) => rb - ra }, p, t0);
+}
+
+/**
+ * Come la geometria si legge per riconoscere le lenti: `locale` dà a ogni punto la sua posizione di traverso (u) e
+ * lungo le linee (v); le linee sono monotone in v. `ordine(ra, rb)` > 0 se la linea ra sta prima (a sinistra) di rb.
+ * `giro` = il periodo di u se è un angolo (la rete radiale): le differenze si prendono sul giro più corto.
+ */
+interface Geometria {
+  contorno: Polyline;
+  vuoti: Polyline[];
+  ritorno: boolean;
+  nelVuotoI: (q: Point) => number;
+  grande: number;
+  locale: (q: Point) => { u: number; v: number };
+  ordine: (ra: number, rb: number) => number;
+  giro?: number;
+}
+
+/**
+ * La cucitura, uguale per tutte le reti: i vuoti attraversati, le passate sul contorno affiancate, le zone di
+ * sovrapposizione (sotto e sopra), i punti ago, il punto minimo e massimo. Riceve i pezzi in ordine di cucitura.
+ */
+function cuci(pezzi: Pezzo[], g: Geometria, p: ParametriRete, t0: number): RisultatoRete {
+  const { contorno, vuoti, ritorno, nelVuotoI, grande } = g;
   // 4. vuoti attraversati (modi «bordo» e «centro»): dentro il vuoto la linea gira sul suo contorno o tira dritta.
   let fila: Pezzo[] = pezzi;
   if (!ritorno && vuoti.length) {
@@ -497,13 +555,14 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
   // dell'altra. Accoppiare gli incroci a due a due nell'ordine non basta: se una lente è tagliata dal bordo e ha un
   // incrocio solo, le coppie slittano di uno e la zona diventa il tratto FRA due lenti (Lorenzo, 2026-10-15, coi rombi
   // 7,5 × 14,5 sul pezzo 200 × 160: zone da 13,4 mm invece di 4,0).
-  const locale = (q: Point) => { const dx = q.x - C.x, dy = q.y - C.y; return { u: dx * U.x + dy * U.y, v: dx * V.x + dy * V.y }; };
+  const locale = g.locale;
+  const differenza = (ua: number, ub: number) => { let d = ub - ua; if (g.giro) { const G = g.giro; d = ((d % G) + G * 1.5) % G - G / 2; } return d; };
   const rigaDi = (idx: number) => risolti[idx].pts.find((q) => q.riga !== undefined)?.riga;
   const uDellaLinea = (idx: number, v: number): number | null => {
     const q = risolti[idx].pts;
     for (let i = 1; i < q.length; i++) {
       const a = locale(q[i - 1]), b = locale(q[i]);
-      if ((a.v - v) * (b.v - v) <= 0 && a.v !== b.v) return a.u + (b.u - a.u) * (v - a.v) / (b.v - a.v);
+      if ((a.v - v) * (b.v - v) <= 0 && a.v !== b.v) return a.u + differenza(a.u, b.u) * (v - a.v) / (b.v - a.v);
     }
     return null;
   };
@@ -515,8 +574,15 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
     const ra = rigaDi(idx), rb = rigaDi(altro);
     const m = locale(puntoA(idx, (s1 + s2) / 2)), ub = uDellaLinea(altro, m.v);
     if (ra === undefined || rb === undefined || ra === rb || ub === null) return s2 - s1 < grande; // un raccordo: la regola di prima
-    return ra < rb ? m.u > ub : m.u < ub;
+    const o = g.ordine(ra, rb);
+    if (o === 0) return s2 - s1 < grande;
+    return o > 0 ? differenza(m.u, ub) < 0 : differenza(m.u, ub) > 0;
   };
+  // Due pezzi consecutivi si toccano dove uno finisce e l'altro comincia: quello non è un incrocio. Fra pezzi
+  // consecutivi si ignora solo quel punto (la rete radiale ha discesa e risalita attaccate, e le lenti fra loro contano).
+  const attacco = (idx: number, altro: number): Point | null =>
+    altro === idx + 1 ? risolti[idx].pts[risolti[idx].pts.length - 1] : altro === idx - 1 ? risolti[idx].pts[0] : null;
+  const vicinoAllAttacco = (idx: number, altro: number, q: Point) => { if (Math.abs(altro - idx) > 1) return false; const j = attacco(idx, altro); return !j || distance(j, q) < 0.05; };
   const zone: Zona[][] = risolti.map((pc, idx) => {
     if (!contaNelleZone(pc)) return [];
     const colpi = new Map<number, { dopo: boolean; altro: number; s: number[] }>(); // sid dell'altra linea → ascisse degli incroci lungo questa
@@ -524,8 +590,8 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
       const a = pc.pts[i - 1], b = pc.pts[i], visti = new Set<object>();
       celle(a, b, (k) => {
         for (const o of griglia.get(k) ?? []) {
-          if (o.sid === pc.sid || Math.abs(o.idx - idx) <= 1 || visti.has(o)) continue; visti.add(o);
-          const t = incrocio(a, b, o.a, o.b); if (t === null) continue;
+          if (o.sid === pc.sid || visti.has(o)) continue; visti.add(o);
+          const t = incrocio(a, b, o.a, o.b); if (t === null || vicinoAllAttacco(idx, o.idx, lerp(a, b, t))) continue;
           let l = colpi.get(o.sid); if (!l) colpi.set(o.sid, (l = { dopo: idx > o.idx, altro: o.idx, s: [] }));
           l.s.push(cum[idx][i - 1] + t * (cum[idx][i] - cum[idx][i - 1]));
         }
@@ -543,7 +609,7 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
       const s = cum[idx][i];
       const gx = Math.floor(q.x / cella), gy = Math.floor(q.y / cella);
       for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const o of griglia.get((gx + dx) + ',' + (gy + dy)) ?? []) {
-        if (o.sid === pc.sid || Math.abs(o.idx - idx) <= 1) continue;
+        if (o.sid === pc.sid || vicinoAllAttacco(idx, o.idx, q)) continue;
         if (distanceToSegment(q, o.a, o.b) < 0.05 && !z.some((r) => s > r[0] && s < r[1])) z.push([s - p.overlapZoneMm, s + p.overlapZoneMm, idx > o.idx]);
       }
     });
@@ -623,6 +689,129 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
   };
 }
 
+// ------------------------------------------------------------------------------------------------ la sacca a rete
+
+/**
+ * Una linea per i suoi apici voluti T (i nodi, spostati della sovrapposizione), con gli angoli arrotondati: si cercano
+ * i vertici veri che danno quegli apici, come nella rete a colonne (apice = V·(1 − f/4) + f/8·(prima + dopo)).
+ */
+function lineaArrotondata(T: Point[], f: number, riga: number): PuntoTraccia[] {
+  const V = T.map((q) => ({ x: q.x, y: q.y }));
+  if (f > 0) for (let it = 0; it < 80; it++) for (let i = 1; i < V.length - 1; i++) {
+    V[i] = { x: (T[i].x - f / 8 * (V[i - 1].x + V[i + 1].x)) / (1 - f / 4), y: (T[i].y - f / 8 * (V[i - 1].y + V[i + 1].y)) / (1 - f / 4) };
+  }
+  const out: PuntoTraccia[] = [];
+  const push = (q: Point, fisso: boolean, apice: boolean) => out.push({ x: q.x, y: q.y, fisso, apice, riga });
+  const dritto = (a: Point, b: Point) => { const n = Math.max(1, Math.ceil(distance(a, b) / 0.25)); for (let i = 1; i < n; i++) push(lerp(a, b, i / n), false, false); };
+  let ultimo: Point | null = null;
+  for (let i = 0; i < V.length; i++) {
+    const v = V[i], pr = V[i - 1], nx = V[i + 1];
+    if (!pr || !nx || f === 0) { if (ultimo) dritto(ultimo, v); push(v, true, true); ultimo = v; continue; }
+    const A = lerp(v, pr, f / 2), B = lerp(v, nx, f / 2);
+    if (ultimo) dritto(ultimo, A);
+    const N = 16;
+    for (let k = 0; k <= N; k++) {
+      const s = k / N, m = 1 - s;
+      push({ x: m * m * A.x + 2 * m * s * v.x + s * s * B.x, y: m * m * A.y + 2 * m * s * v.y + s * s * B.y }, k === 0 || k === N || k === N / 2, k === N / 2);
+    }
+    ultimo = B;
+  }
+  return out;
+}
+
+/** Quanto dentro il fondo arriva la legatura k: la metà delle legature si ferma dove sarebbero più fitte di `passo`, poi la metà della metà… La legatura 0 arriva al centro. */
+function fondoDellaLegatura(k: number, N: number, passo: number, r0: number, minimo: number): number {
+  let livello = 0; if (k === 0) livello = 30; else while (k % 2 === 0) { k /= 2; livello++; }
+  return Math.max(minimo, Math.min(0.95 * r0, passo * N / (2 * Math.PI * Math.pow(2, livello))));
+}
+
+/**
+ * La SACCA A RETE: un disco di rombi coi lati tutti uguali (sacca.ts), centrato nel campo macchina. Ogni colonna è una
+ * serpentina come nella rete a colonne, ma lungo un raggio: esce dal fondo su un lato, gira in cima sul contorno ed
+ * entra sull'altro lato; poi una legatura entra nel fondo e torna fuori alla colonna dopo. Prima di tutto la spirale
+ * del fondo, dal centro in fuori; alla fine, se si vuole, un giro d'impuntura in cima.
+ */
+export function costruisciReteRadiale(par: ParametriRete): RisultatoRete & { anelli: Anelli; centro: Point } {
+  const t0 = Date.now();
+  const p: ParametriRete = { ...PARAMETRI_RETE, ...par };
+  const N = Math.max(3, Math.round(p.radialCount)), L = Math.max(1, p.radialSideMm);
+  const A = anelliRadiali({ N, L, r0: p.bottomRadiusMm, amax: p.maxAngleDeg, campo: p.fieldMm });
+  const centro = { x: p.fieldMm / 2, y: p.fieldMm / 2 };
+  const vuota = (avviso: string) => ({
+    blocchi: [], avviso, anelli: A, centro,
+    misure: { punti: 0, puntiSovrapposti: 0, puntiSopra: 0, filoMm: 0, puntoMinMm: 0, puntoMaxMm: 0, salti: 0, saltiMm: 0, stratiMax: 0, tempoMs: Date.now() - t0 },
+  });
+  if (A.impossibile) return vuota(`Con ${N} rombi di lato ${L} mm il fondo non può avere raggio ${p.bottomRadiusMm} mm: il limite è ${A.rMaxPiatto.toFixed(1)} mm.`);
+  if (A.rho.length < 3) return vuota('Fra il fondo e il limite non ci sta nemmeno un rombo: aumenta il lato, l’angolo massimo o il campo, o riduci il fondo.');
+  const n = A.rho.length - 1, rOut = A.rho[n], r0 = A.rho[0];
+  const pol = (r: number, f: number): Point => ({ x: centro.x + r * Math.cos(f), y: centro.y + r * Math.sin(f) });
+  const tangente = (f: number): Point => ({ x: -Math.sin(f), y: Math.cos(f) });
+  const fi = (k: number) => 2 * Math.PI * k / N;
+  const angoloNodo = (j: number, k: number) => fi(k) + (j % 2 ? Math.PI / N : 0);
+  // il contorno in cima: un cerchio con un vertice su ogni nodo dell'ultimo anello
+  const M = 2 * N * Math.ceil(360 / (2 * N));
+  const contorno: Polyline = Array.from({ length: M }, (_, i) => pol(rOut, 2 * Math.PI * i / M));
+
+  // le due linee della colonna k: B a sinistra (verso l'angolo minore), A a destra. Agli anelli pari si toccano fra
+  // loro (la rientranza), agli anelli dispari toccano le colonne vicine (le punte). La sovrapposizione le porta oltre
+  // il nodo di mezza misura, di traverso; i capi restano sui nodi.
+  const f = Math.max(0, Math.min(1, p.cornerRounding / 100)), mezza = p.overlapMm / 2;
+  const linea = (k: number, lato: -1 | 1): PuntoTraccia[] => {
+    const T: Point[] = [];
+    for (let j = 0; j <= n; j++) {
+      const kk = j % 2 && lato < 0 ? k - 1 : k, a = angoloNodo(j, kk), q = pol(A.rho[j], a);
+      if (j === 0 || j === n) { T.push(q); continue; }
+      const verso = j % 2 ? lato : -lato, t = tangente(a);
+      T.push({ x: q.x + t.x * mezza * verso, y: q.y + t.y * mezza * verso });
+    }
+    return lineaArrotondata(T, f, 2 * k + (lato > 0 ? 1 : 0));
+  };
+
+  const pezzi: Pezzo[] = []; let sid = 0;
+  // 1. il fondo: la spirale dal centro in fuori, che finisce sul nodo 0 dell'anello 0
+  const passo = Math.max(0.3, p.spiralPitchMm), giri = r0 / passo;
+  if (giri >= 1) {
+    const Th = 2 * Math.PI * giri, sp: PuntoTraccia[] = [];
+    for (let th = 0; th < Th; ) {
+      const r = passo * th / (2 * Math.PI);
+      sp.push({ ...pol(r, th - Th), fisso: sp.length === 0 });
+      th += 0.25 / Math.max(r, 0.5);
+    }
+    sp.push({ ...pol(r0, 0), fisso: true });
+    pezzi.push({ tipo: 'fondo', pts: sp, sid: sid++, blocco: 0 });
+  }
+  // 2. le colonne
+  const nodo0 = (k: number): PuntoTraccia => ({ ...pol(r0, fi(k)), fisso: true });
+  for (let k = 0; k < N; k++) {
+    const B = linea(k, -1), Ar = linea(k, 1).reverse();
+    pezzi.push({ tipo: 'rete', pts: B, sid: sid++, blocco: 0 });
+    const a = B[B.length - 1], b = Ar[0];
+    if (distance(a, b) > 1e-6) pezzi.push({ tipo: 'bordo', poly: contorno, a: { ...a, poly: contorno }, b: { ...b, poly: contorno }, sid: sid++, blocco: 0 });
+    pezzi.push({ tipo: 'rete', pts: Ar, sid: sid++, blocco: 0 });
+    // la legatura: dentro il fondo e fuori alla colonna dopo
+    const rs = fondoDellaLegatura(k, N, Math.max(passo, p.tieSpacingMm), r0, Math.min(passo, r0 / 2));
+    pezzi.push({ tipo: 'fondo', pts: [nodo0(k), { ...pol(rs, fi(k)), fisso: true }, nodo0(k + 1)], sid: sid++, blocco: 0 });
+  }
+  // 3. il giro in cima (un salto dal fondo fino alla bocca)
+  if (p.rimPass) {
+    const s0 = { ...pol(rOut, 0), fisso: true, poly: contorno };
+    pezzi.push({ tipo: 'salto', pts: [nodo0(0), s0], sid: sid++, blocco: 1 });
+    for (let i = 0; i < 3; i++) {
+      const a = { ...pol(rOut, 2 * Math.PI * i / 3), fisso: true, poly: contorno }, b = { ...pol(rOut, 2 * Math.PI * (i + 1) / 3), fisso: true, poly: contorno };
+      pezzi.push({ tipo: 'bordo', poly: contorno, a, b, sid: sid++, blocco: 1 });
+    }
+  }
+
+  const due = 2 * N;
+  const r = cuci(pezzi, {
+    contorno, vuoti: [], ritorno: false, nelVuotoI: () => -1, grande: 2 * L,
+    locale: (q) => ({ u: Math.atan2(q.y - centro.y, q.x - centro.x), v: Math.hypot(q.x - centro.x, q.y - centro.y) }),
+    ordine: (ra, rb) => { let d = (((rb - ra) % due) + due) % due; if (d > N) d -= due; return d; },
+    giro: 2 * Math.PI,
+  }, p, t0);
+  return { ...r, anelli: A, centro };
+}
+
 // ------------------------------------------------------------------------------------------------ il contratto (K1b)
 
 import type { Ingresso, Motore } from '@rg/cervello';
@@ -658,6 +847,10 @@ export function stratiRete(r: RisultatoRete): StratoEsportato[] {
 export const motore: Motore<IngressoRete, ParametriRete> = {
   id: 'rete-testa-speciale',
   async genera(ingresso, params) {
+    if (params.netShape === 'radiale') {
+      const r = costruisciReteRadiale(params);
+      return { strati: r.blocchi.length ? stratiRete(r) : [], avvisi: r.avviso ? [r.avviso] : [] };
+    }
     const pezzo = pezzoDellaRete({ ...PARAMETRI_RETE, ...params }, ingresso);
     if (!pezzo) return { strati: [], avvisi: ['Manca il contorno del cartamodello: caricalo, o scegli il pezzo a misure.'] };
     const r = costruisciRete(pezzo.contorno, pezzo.vuoti, params);

@@ -52,7 +52,34 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
    del Generatore pattern), senza vuoti. Caricare un disegno riporta il pezzo al cartamodello. È fatto come rettangolo
    perché è quello che Lorenzo ha chiesto: altre forme a misure (angoli arrotondati, ovale) non sono state chieste.
 
+10. **La sacca a rete** (2026-10-15): *«creare una borsa a rete che una volta uscita dalla macchina da ricamo è già una
+    sacca autonoma senza dover fare aggiunte o cuciture… uno schiacciamento del rombo dal centro a fuori in modo tale
+    che i lati rimangano sempre gli stessi»*; il centro *«una spirale del filo che fa da fondo»*. Con impunture, non
+    cordoncino (*«lascia stare cordoncino»*). Campo macchina circa 45 × 45 cm. Prima la simulazione
+    (https://claude.ai/artifact/LkTE3AX1QzEnkXp5BgpwjT), poi la scelta: **il secchiello dritto Ø 20 cm** (48 rombi da
+    15 mm, fondo Ø 200, disco Ø 449, profondo 190 mm, 5,25 litri).
+
+## La sacca: cosa si è capito (simulazione, 2026-10-15)
+- **La matematica**: anelli di nodi sfalsati di mezzo passo, lati lunghi L: ρ(j+1) = ρj·cos(π/N) + √(L² − ρj²·sin²(π/N)).
+  La prova di Lorenzo (15 rombi, fondo Ø 50, disco Ø 120) torna con lato 13 mm (2 rombi per raggio) e con lato 20 mm
+  (uno): la sua frase «2 per lato» non ha deciso quale, e non serve più.
+- **Il disco ha un raggio massimo, L / sin(π/N)**: lì i rombi sono piatti. La prova di Lorenzo era quasi al limite.
+- **Con la bocca larga quanto il disco la rete non si muove**: ogni rombo è già aperto al massimo. La sacca si forma
+  solo stringendo la bocca. Un giro d'impuntura in cima non tiene aperta la bocca: il filo si arriccia, non si allunga.
+  (Un primo conto con la bocca fissa dava 10 mm di profondità: erano lati allungati, impossibili; scoperto misurando.)
+- **La forma la decide il fondo**: rombi più piccoli o più grandi danno quasi la stessa sacca (36×20, 48×15, 60×12).
+  Nel campo da 45 cm si arriva a circa 8 litri; fondo grande = sacca larga e bassa, fondo piccolo = tubo alto.
+- **Aperto**: la bocca senza qualcosa di rigido non sta aperta; la spirale del fondo regge solo con le legature, e
+  dentro i 5 mm dal centro un giro resta sciolto; i nodi devono poter girare (punti corti nelle lenti = nodi rigidi).
+
 ## Com'è costruito (non ovvio dal solo codice)
+- **La cucitura è una sola per le due reti** (`cuci` in `motore.ts`): la geometria (a colonne o radiale) consegna i
+  pezzi in ordine di cucitura e dice come leggere le lenti (`locale`, `ordine`, `giro`); vuoti, filo affiancato sul
+  bordo, lenti sotto/sopra, punti e punto minimo/massimo sono gli stessi. Lo spostamento non ha cambiato un punto della
+  rete a colonne (impronta identica su cinque casi).
+- **Fra due pezzi consecutivi si ignora solo il punto dove si attaccano**, non tutti gli incroci: nella rete radiale
+  discesa e risalita di una colonna sono attaccate (con l'ultimo anello pari si toccano in cima), e ignorandole si
+  perdevano tutte le lenti alle rientranze (misurate 672 invece di 1248).
 - **Larghezza e sovrapposizione si misurano sull'apice della curva**, anche arrotondata: si risolvono i vertici veri
   che danno quegli apici. Così arrotondare non stacca le linee che si toccavano.
 - **Le colonne si spezzano dove nessuna delle due linee è dentro**, non dove una delle due esce. Sul bordo inclinato le

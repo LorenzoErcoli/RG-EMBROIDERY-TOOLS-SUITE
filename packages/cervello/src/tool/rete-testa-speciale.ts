@@ -6,6 +6,50 @@ import type { SchedaParametri } from '../tipi';
 export const scheda: SchedaParametri = {
   parametri: [
     {
+      id: 'netShape', etichetta: 'La rete',
+      aiuto: 'colonne = la rete a colonne su un pezzo; radiale = un disco di rombi coi lati uguali che, tolto dal telaio, diventa una sacca.',
+      tipo: 'enum', unita: '', opzioni: ['colonne', 'radiale'], predefinito: 'colonne', concetto: 'modulo',
+    },
+    {
+      id: 'radialCount', etichetta: 'Rombi per giro', aiuto: 'Sacca: quanti rombi in ogni anello del disco.',
+      tipo: 'int', unita: '', min: 3, max: 200, passo: 1, predefinito: 48, concetto: 'modulo',
+    },
+    {
+      id: 'radialSide', nome: 'radialSideMm', etichetta: 'Lato del rombo',
+      aiuto: 'Sacca: tutti i lati uguali, è quello che fa diventare il disco una sacca.',
+      tipo: 'num', unita: 'mm', min: 2, max: 100, passo: 0.5, predefinito: 15, concetto: 'modulo',
+    },
+    {
+      id: 'bottomRadius', nome: 'bottomRadiusMm', etichetta: 'Raggio del fondo',
+      aiuto: 'Sacca: dove finisce la rete e comincia la spirale. Più è grande, più la sacca è larga e bassa.',
+      tipo: 'num', unita: 'mm', min: 5, max: 300, passo: 1, predefinito: 100, concetto: 'formato',
+    },
+    {
+      id: 'maxDiamondAngle', nome: 'maxAngleDeg', etichetta: 'Angolo massimo dei rombi in fuori',
+      aiuto: 'Sacca: a 180° il rombo è piatto, il limite teorico del disco.',
+      tipo: 'num', unita: 'deg', min: 60, max: 179, passo: 1, predefinito: 165, concetto: 'angolo',
+    },
+    {
+      id: 'machineField', nome: 'fieldMm', etichetta: 'Campo macchina (lato)',
+      aiuto: 'Sacca: il disco ci deve stare, ed è centrato nel campo.',
+      tipo: 'num', unita: 'mm', min: 50, max: 1000, passo: 10, predefinito: 450, concetto: 'formato',
+    },
+    {
+      id: 'spiralPitch', nome: 'spiralPitchMm', etichetta: 'Passo della spirale del fondo',
+      aiuto: 'Sacca: uguale allo spessore del filo = giri affiancati, fondo pieno; più largo = fondo rado, meno filo.',
+      tipo: 'num', unita: 'mm', min: 0.3, max: 30, passo: 0.1, predefinito: 5, concetto: 'densita',
+    },
+    {
+      id: 'tieSpacing', nome: 'tieSpacingMm', etichetta: 'Distanza fra le legature del fondo',
+      aiuto: 'Sacca: le legature entrano nel fondo e lo tengono insieme; dove sarebbero più fitte di così, metà si ferma.',
+      tipo: 'num', unita: 'mm', min: 2, max: 100, passo: 1, predefinito: 10, concetto: 'densita',
+    },
+    {
+      id: 'rimPass', etichetta: 'Un giro d’impuntura in cima, sulle punte esterne',
+      aiuto: 'Sacca: lega le punte dell’ultimo anello; non tiene aperta la bocca (il filo si arriccia, non si allunga).',
+      tipo: 'bool', unita: '', predefinito: true, concetto: 'interruttore',
+    },
+    {
       id: 'pieceSource', etichetta: 'Il pezzo',
       aiuto: 'cartamodello = il contorno del disegno caricato, coi suoi vuoti; misure = un rettangolo di larghezza × altezza, senza vuoti.',
       tipo: 'enum', unita: '', opzioni: ['cartamodello', 'misure'], predefinito: 'cartamodello', concetto: 'formato',

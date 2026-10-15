@@ -60,7 +60,8 @@ export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordat
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_PARAMETRI } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
-export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
+export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
+export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -6241,6 +6242,54 @@ console.log('\nrete-testa-speciale — serpentine a rombi: lente da incrocio a i
   const dst = rg.dstFromExportLayers(strati, { label: 'RETE', metadata: { rgProject: 'rete-testa-speciale', params: P } });
   check('DST: un filo, un tratto per parte, il progetto torna (R27)',
     [strati.length, strati[0].polylines.length, rg.readDstMetadata(dst)?.rgProject, rg.readDstMetadata(dst)?.params?.diamondWidthMm], [1, 2, 'rete-testa-speciale', 12]);
+}
+
+// ---------------------------------------------------------------------------
+// rete-testa-speciale — la SACCA A RETE (Lorenzo, 2026-10-15): un disco di rombi coi lati tutti uguali, ricamato
+// piatto; tolto dal telaio i rombi ruotano e il disco diventa una sacca, senza cuciture. Riferimenti: la sua prova (15
+// rombi per giro, Ø 12 cm, buco Ø 5 cm) e il secchiello dritto Ø 20 cm scelto sulla simulazione.
+// ---------------------------------------------------------------------------
+console.log('\nrete-testa-speciale — la sacca a rete: anelli coi lati uguali, la sacca che ne esce, il disco nel campo');
+{
+  const P = { ...rg.RTS_PARAMETRI, netShape: 'radiale' };
+  // la prova di Lorenzo: con lato 13 mm gli anelli vanno da 25 a 59 mm, Ø 12 cm come la sua
+  const prova = rg.rtsAnelli({ N: 15, L: 13, r0: 25, amax: 150, campo: 450 });
+  check('la prova di Lorenzo (15 rombi da 13 mm, fondo Ø 50): anelli 25 → 36,4 → 46,1 → 53,9 → 59,3 mm',
+    prova.rho.map((r) => Math.round(r * 10) / 10), [25, 36.4, 46.1, 53.9, 59.3]);
+  // ogni lato è lungo L: fra un nodo e i due dell'anello dopo, a ±π/N
+  const s = rg.rtsAnelli({ N: 48, L: 15, r0: 100, amax: 165, campo: 450 });
+  let scarto = 0;
+  for (let j = 0; j + 1 < s.rho.length; j++) scarto = Math.max(scarto, Math.abs(Math.sqrt(s.rho[j] ** 2 + s.rho[j + 1] ** 2 - 2 * s.rho[j] * s.rho[j + 1] * Math.cos(Math.PI / 48)) - 15));
+  check('il secchiello (48 rombi da 15 mm, fondo Ø 200): 15 anelli, disco Ø 449 nel campo da 450, ogni lato lungo 15 mm', [s.rho.length, Math.round(2 * s.rho.at(-1)), scarto < 1e-9], [15, 449, true]);
+  // la sacca: con la bocca larga come il fondo è un secchiello dritto; con la bocca larga come il disco resta piatto
+  const rMin = rg.rtsRaggioMinimo(48, 1);
+  const dritto = rg.rtsFormaSacca(s, 15, 200, rMin), piatto = rg.rtsFormaSacca(s, 15, 2 * s.rho.at(-1), rMin);
+  check('la sacca dritta Ø 200: profonda 190 mm, 5,25 litri; con la bocca larga quanto il disco resta un disco (profondità 0)',
+    [dritto.possibile, Math.round(dritto.profondita), Math.round(dritto.litri * 100) / 100, Math.round(piatto.profondita)], [true, 190, 5.25, 0]);
+
+  // il ricamo
+  const r = rg.rtsRadiale(P), C = r.centro, n = r.anelli.rho.length - 1, rr = (q) => Math.hypot(q.x - C.x, q.y - C.y);
+  const tutti = r.blocchi.flat(), tratti = r.blocchi.flatMap((b) => b.slice(1).map((q, i) => Math.hypot(q.x - b[i].x, q.y - b[i].y)));
+  check('il ricamo: tutto nel campo, la rete fra il fondo e la bocca, punti fra minimo e massimo (R3, R4)',
+    [tutti.every((q) => q.x >= 0 && q.y >= 0 && q.x <= P.fieldMm && q.y <= P.fieldMm),
+      tutti.filter((q) => q.tipo === 'rete' && (rr(q) > r.anelli.rho[n] + 0.05 || rr(q) < r.anelli.rho[0] - 0.05)).length,
+      Math.min(...tratti) >= P.minStitchMm - 1e-6, Math.max(...tratti) <= P.maxStitchMm + 1e-6], [true, 0, true, true]);
+  check('un filo solo: la spirale, le 48 colonne con le loro legature, poi un salto e il giro in cima (senza giro: un pezzo)',
+    [r.blocchi.length, rg.rtsRadiale({ ...P, rimPass: false }).blocchi.length], [2, 1]);
+  // ogni nodo interno di ogni linea è una lente (discesa e risalita alle rientranze, colonne vicine alle punte): 13 per
+  // linea, 96 linee. Prima si perdevano tutte quelle alle rientranze (discesa e risalita sono pezzi attaccati: misurate 672)
+  const zone = [];
+  for (const b of r.blocchi) { let cur = 0; for (let i = 1; i <= b.length; i++) { const q = b[i]; if (q && q.sovrapposto) cur += Math.hypot(q.x - b[i - 1].x, q.y - b[i - 1].y); else if (cur) { zone.push(cur); cur = 0; } } }
+  check('le lenti: 13 per linea × 96 linee = 1248, nessuna più lunga di 4 mm', [zone.length, Math.max(...zone) < 4], [1248, true]);
+  // il fondo: nessuna legatura arriva al centro (troppi fili in un buco), e verso il centro si diradano
+  const punte = [];
+  for (const b of r.blocchi) for (let i = 1; i < b.length - 1; i++) if (b[i].tipo === 'fondo' && rr(b[i]) < rr(b[i - 1]) && rr(b[i]) <= rr(b[i + 1]) && rr(b[i]) < P.bottomRadiusMm - 1) punte.push(rr(b[i]));
+  check('il fondo: 48 legature, nessuna entro 3 mm dal centro, metà si ferma prima (24 oltre 50 mm dal centro)',
+    [punte.length, punte.filter((x) => x < 3).length, punte.filter((x) => x > 50).length], [48, 0, 24]);
+  // senza ingresso il motore fa la sacca; un fondo troppo grande lo dice invece di inventare
+  const viaMotore = await rg.rtsMotore.genera({}, P), troppo = await rg.rtsMotore.genera({}, { ...P, bottomRadiusMm: 300 });
+  check('il contratto: la sacca senza ingresso; un fondo oltre il limite dà un avviso e niente ricamo',
+    [viaMotore.strati.length, viaMotore.avvisi.length, troppo.strati.length, troppo.avvisi.length], [1, 0, 0, 1]);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).
