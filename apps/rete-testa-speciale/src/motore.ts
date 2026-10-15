@@ -21,9 +21,17 @@
 import { distance, distanceToSegment, enforceMinStitch, lerp, pointInPolygon, type Point, type Polyline } from '@rg/core';
 
 export type ModoVuoto = 'ritorno' | 'bordo' | 'centro';
+/** Da dove viene il pezzo: il contorno del cartamodello caricato, o un rettangolo con le misure scritte a mano. */
+export type OrigineDelPezzo = 'cartamodello' | 'misure';
 
 /** I parametri, come il tool li salva nel file di progetto (nomi del registro K1). */
 export type ParametriRete = {
+  /** Il pezzo: dal cartamodello, o dalle misure qui sotto (Lorenzo, 2026-10-15: «a partire da dimensioni mie»). */
+  pieceSource: OrigineDelPezzo;
+  /** Larghezza del pezzo quando lo si dà a misure, mm. */
+  totalWidth: number;
+  /** Altezza del pezzo quando lo si dà a misure, mm. */
+  totalHeight: number;
   /** Larghezza del rombo, mm: da punta a punta di una colonna, misurata sulla linea vera (anche arrotondata). */
   diamondWidthMm: number;
   /** Altezza del rombo, mm: da una rientranza alla successiva lungo la colonna. */
@@ -58,6 +66,9 @@ export type ParametriRete = {
 };
 
 export const PARAMETRI_RETE: ParametriRete = {
+  pieceSource: 'cartamodello',
+  totalWidth: 120,
+  totalHeight: 160,
   diamondWidthMm: 12,
   diamondHeightMm: 16,
   angleDeg: 0,
@@ -593,10 +604,22 @@ import type { ExportLayer as StratoEsportato } from '@rg/core';
 export const COLORE_RETE = '#1f4e79';
 
 export interface IngressoRete extends Ingresso {
-  /** Il contorno esterno del cartamodello (anello chiuso, mm). */
-  contorno: Polyline;
+  /** Il contorno esterno del cartamodello (anello chiuso, mm). Non serve col pezzo a misure. */
+  contorno?: Polyline;
   /** Le aree vuote (anelli chiusi, mm). */
-  vuoti: Polyline[];
+  vuoti?: Polyline[];
+}
+
+/** Il pezzo a misure: un rettangolo dall'origine, larghezza × altezza in mm. */
+export function pezzoAMisure(par: Pick<ParametriRete, 'totalWidth' | 'totalHeight'>): Polyline {
+  const w = Math.max(1, par.totalWidth), h = Math.max(1, par.totalHeight);
+  return [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }];
+}
+
+/** Il pezzo su cui si fa la rete: a misure (senza vuoti) o il cartamodello coi suoi vuoti. null = manca il cartamodello. */
+export function pezzoDellaRete(par: ParametriRete, ingresso: IngressoRete): { contorno: Polyline; vuoti: Polyline[] } | null {
+  if (par.pieceSource === 'misure') return { contorno: pezzoAMisure(par), vuoti: [] };
+  return ingresso.contorno ? { contorno: ingresso.contorno, vuoti: ingresso.vuoti ?? [] } : null;
 }
 
 /** Lo strato da cucire: un tratto continuo per blocco; fra due blocchi la macchina salta. */
@@ -607,7 +630,9 @@ export function stratiRete(r: RisultatoRete): StratoEsportato[] {
 export const motore: Motore<IngressoRete, ParametriRete> = {
   id: 'rete-testa-speciale',
   async genera(ingresso, params) {
-    const r = costruisciRete(ingresso.contorno, ingresso.vuoti, params);
+    const pezzo = pezzoDellaRete({ ...PARAMETRI_RETE, ...params }, ingresso);
+    if (!pezzo) return { strati: [], avvisi: ['Manca il contorno del cartamodello: caricalo, o scegli il pezzo a misure.'] };
+    const r = costruisciRete(pezzo.contorno, pezzo.vuoti, params);
     return { strati: stratiRete(r), avvisi: [] };
   },
 };

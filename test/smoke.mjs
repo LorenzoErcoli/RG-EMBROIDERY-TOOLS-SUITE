@@ -60,7 +60,7 @@ export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordat
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_PARAMETRI } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
-export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
+export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -6176,6 +6176,15 @@ console.log('\nrete-testa-speciale — serpentine a rombi: lente da incrocio a i
       Math.max(...v.blocchi.flatMap(tratti)) <= P.maxStitchMm + 1e-6, Math.min(...v.blocchi.flatMap(tratti)) >= P.minStitchMm - 1e-6,
       vt.length > 1000], [0, true, true, true, true]);
   console.log(`         (file vero: ${vt.length} punti, ${v.blocchi.length} parti, strati sul contorno fino a ${v.misure.stratiMax})`);
+
+  // il pezzo a misure (Lorenzo, 2026-10-15: «creare reti a partire da dimensioni mie e non solo da cartamodello»): un
+  // rettangolo larghezza × altezza, la stessa rete che col cartamodello di quel rettangolo; e senza cartamodello né
+  // misure il motore lo dice invece di inventare un pezzo
+  const aMisure = await rg.rtsMotore.genera({}, { ...P, pieceSource: 'misure', totalWidth: 140, totalHeight: 180 });
+  const daRett = rg.rtsStrati(rg.rtsCostruisci(rett, [], P));
+  const senzaPezzo = await rg.rtsMotore.genera({}, P);
+  check('pezzo a misure: la stessa rete del rettangolo 140 × 180 caricato; senza pezzo un avviso e niente ricamo',
+    [JSON.stringify(aMisure.strati) === JSON.stringify(daRett), senzaPezzo.strati.length, senzaPezzo.avvisi.length], [true, 0, 1]);
 
   // l'export: un solo filo, un tratto per parte, il DST si rilegge coi parametri (R27, R31)
   const strati = rg.rtsStrati(r);

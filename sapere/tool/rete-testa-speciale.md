@@ -47,6 +47,10 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
    prima è sotto (`underOverlapStitchMm`, 0 = la lunghezza del punto), quella che passa dopo è sopra
    (`overlapStitchMm`: il nome è di prima della divisione e resta, i file salvati lo usano). «Prima» e «dopo» sono
    l'ordine di cucitura vero, dopo le parti e i ritorni.
+9. **Il pezzo a misure**: *«dammi la possibilità di creare reti a partire da dimensioni mie e non solo da cartamodello»*.
+   `pieceSource` = `cartamodello` o `misure`; con le misure un rettangolo `totalWidth` × `totalHeight` (gli stessi id
+   del Generatore pattern), senza vuoti. Caricare un disegno riporta il pezzo al cartamodello. È fatto come rettangolo
+   perché è quello che Lorenzo ha chiesto: altre forme a misure (angoli arrotondati, ovale) non sono state chieste.
 
 ## Com'è costruito (non ovvio dal solo codice)
 - **Larghezza e sovrapposizione si misurano sull'apice della curva**, anche arrotondata: si risolvono i vertici veri

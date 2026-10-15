@@ -6,6 +6,21 @@ import type { SchedaParametri } from '../tipi';
 export const scheda: SchedaParametri = {
   parametri: [
     {
+      id: 'pieceSource', etichetta: 'Il pezzo',
+      aiuto: 'cartamodello = il contorno del disegno caricato, coi suoi vuoti; misure = un rettangolo di larghezza × altezza, senza vuoti.',
+      tipo: 'enum', unita: '', opzioni: ['cartamodello', 'misure'], predefinito: 'cartamodello', concetto: 'formato',
+    },
+    {
+      id: 'totalWidth', etichetta: 'Larghezza del pezzo',
+      aiuto: 'La larghezza del rettangolo quando il pezzo si dà a misure.',
+      tipo: 'num', unita: 'mm', min: 10, passo: 1, predefinito: 120, concetto: 'formato',
+    },
+    {
+      id: 'totalHeight', etichetta: 'Altezza del pezzo',
+      aiuto: 'L’altezza del rettangolo quando il pezzo si dà a misure.',
+      tipo: 'num', unita: 'mm', min: 10, passo: 1, predefinito: 160, concetto: 'formato',
+    },
+    {
       id: 'diamondWidth', nome: 'diamondWidthMm', etichetta: 'Larghezza del rombo',
       aiuto: 'Da punta a punta di una colonna, misurata sulla linea vera.',
       tipo: 'num', unita: 'mm', min: 1, passo: 0.5, predefinito: 12, concetto: 'modulo',

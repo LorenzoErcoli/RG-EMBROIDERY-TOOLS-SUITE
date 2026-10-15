@@ -6,7 +6,7 @@ import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { costruisciRete, stratiRete, COLORE_RETE, PARAMETRI_RETE, type ParametriRete, type PuntoAgo, type RisultatoRete } from './motore';
+import { costruisciRete, pezzoAMisure, stratiRete, COLORE_RETE, PARAMETRI_RETE, type ParametriRete, type PuntoAgo, type RisultatoRete } from './motore';
 
 /** Il disegno nel file riapribile, se non pesa troppo (come negli altri tool). */
 const MAX_DRAWING_KB = 256;
@@ -31,6 +31,14 @@ const VISTE = [
 type ChiaveVista = typeof VISTE[number]['chiave'];
 
 type Campo = { nome: keyof ParametriRete; etichetta: string; unita: string; passo: number; min: number; max?: number; aiuto?: string; scelte?: Array<[string, string]> };
+const CAMPI_PEZZO: Campo[] = [
+  { nome: 'pieceSource', etichetta: 'Il pezzo', unita: '', passo: 1, min: 0,
+    scelte: [['cartamodello', 'dal cartamodello (SVG o DXF)'], ['misure', 'dalle mie misure (un rettangolo)']] },
+];
+const CAMPI_MISURE: Campo[] = [
+  { nome: 'totalWidth', etichetta: 'Larghezza del pezzo', unita: 'mm', passo: 1, min: 10 },
+  { nome: 'totalHeight', etichetta: 'Altezza del pezzo', unita: 'mm', passo: 1, min: 10 },
+];
 const CAMPI_ROMBO: Campo[] = [
   { nome: 'diamondWidthMm', etichetta: 'Larghezza del rombo', unita: 'mm', passo: 0.5, min: 1, aiuto: 'Da punta a punta di una colonna, misurata sulla linea vera.' },
   { nome: 'diamondHeightMm', etichetta: 'Altezza del rombo', unita: 'mm', passo: 0.5, min: 1, aiuto: 'Da una rientranza alla successiva, lungo la colonna.' },
@@ -110,6 +118,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
    * del colore del contorno (la convenzione di Illustrator: il più grande è il perimetro, gli altri sono buchi).
    */
   function geometria(): { contorno: Polyline | null; vuoti: Polyline[] } {
+    if (par.pieceSource === 'misure') return { contorno: pezzoAMisure(par), vuoti: [] };
     const anelli = (r: Ruolo) => (model?.choices ?? []).filter((c) => ruoli[c.id] === r)
       .flatMap((c) => c.boundary.paths.filter((p) => p.points.length >= 3).map((p) => p.points));
     const contorni = anelli('contorno').sort((a, b) => Math.abs(polygonArea(b)) - Math.abs(polygonArea(a)));
@@ -145,7 +154,11 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         sel.className = 'rg-select';
         sel.id = 'f-' + f.nome;
         for (const [v, l] of f.scelte) { const o = document.createElement('option'); o.value = v; o.textContent = l; o.selected = String(par[f.nome]) === v; sel.appendChild(o); }
-        sel.addEventListener('change', () => { (par as Record<string, unknown>)[f.nome] = sel.value; genera(); });
+        sel.addEventListener('change', () => {
+          (par as Record<string, unknown>)[f.nome] = sel.value;
+          if (f.nome === 'pieceSource') { risultato = null; buildPanel(); disegnaContorni(); }
+          genera();
+        });
         lab.appendChild(sel);
         grid.appendChild(lab);
         continue;
@@ -178,7 +191,10 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
       inp.value = String(par[f.nome]);
       inp.addEventListener('change', () => {
         const v = parseFloat(inp.value);
-        if (Number.isFinite(v)) { (par as Record<string, unknown>)[f.nome] = Math.min(f.max ?? Infinity, Math.max(f.min, v)); genera(); }
+        if (!Number.isFinite(v)) return;
+        (par as Record<string, unknown>)[f.nome] = Math.min(f.max ?? Infinity, Math.max(f.min, v));
+        if (f.nome === 'totalWidth' || f.nome === 'totalHeight') disegnaContorni(); // il pezzo cambia: si riadatta la vista
+        genera();
       });
       const unit = document.createElement('span');
       unit.textContent = f.unita;
@@ -198,7 +214,23 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   function disegnoGrid(): HTMLElement {
     const box = document.createElement('div');
     box.className = 'rg-param-grid';
-    box.innerHTML = `
+    const bloccoRiapri = `
+      <div class="rg-file-input rg-param-grid__wide">
+        <label class="rg-file-input__control">
+          <input type="file" id="reopenFile" accept=".dst,.svg" />
+          <span class="rg-button rg-button--ghost">Riapri un progetto (DST o SVG)…</span>
+        </label>
+        <p class="rg-file-input__status" id="reopenStatus" role="status">Un file uscito da qui torna com'era: pezzo, ruoli e parametri.</p>
+      </div>`;
+    if (par.pieceSource === 'misure') {
+      box.append(...campi(CAMPI_PEZZO).childNodes, ...campi(CAMPI_MISURE).childNodes);
+      box.insertAdjacentHTML('beforeend', `<small class="rg-field__help rg-param-grid__wide">Un rettangolo di queste misure, senza aree vuote. Caricare un cartamodello lo sostituisce.</small>` + bloccoRiapri
+        + `<div class="rg-file-input rg-param-grid__wide"><label class="rg-file-input__control"><input type="file" id="fileInput" accept=".svg,.dxf" />`
+        + `<span class="rg-button rg-button--outline">Carica un cartamodello invece…</span></label></div>`);
+      return box;
+    }
+    box.append(...campi(CAMPI_PEZZO).childNodes);
+    box.insertAdjacentHTML('beforeend', `
       <div class="rg-file-input rg-param-grid__wide">
         <label class="rg-file-input__control">
           <input type="file" id="fileInput" accept=".svg,.dxf" />
@@ -208,14 +240,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
       </div>
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Scala del file</span>
         <select id="scaleMode" class="rg-select">${SCALE_MODES.map(([v, l]) => `<option value="${v}"${v === scala.scaleMode ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-      <ul class="rg-color-map rg-param-grid__wide" id="colori"></ul>
-      <div class="rg-file-input rg-param-grid__wide">
-        <label class="rg-file-input__control">
-          <input type="file" id="reopenFile" accept=".dst,.svg" />
-          <span class="rg-button rg-button--ghost">Riapri un progetto (DST o SVG)…</span>
-        </label>
-        <p class="rg-file-input__status" id="reopenStatus" role="status">Un file uscito da qui torna com'era: disegno, ruoli e parametri.</p>
-      </div>`;
+      <ul class="rg-color-map rg-param-grid__wide" id="colori"></ul>` + bloccoRiapri);
     return box;
   }
 
@@ -276,7 +301,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     const primaVolta = !panel.childElementCount;
     const scroll = panel.scrollTop;
     panel.innerHTML = '';
-    const disegno = headSection('01', 'Cartamodello');
+    const disegno = headSection('01', 'Il pezzo');
     disegno.appendChild(disegnoGrid());
     panel.appendChild(disegno);
     const sezioni: Array<[string, string, HTMLElement]> = [
@@ -299,6 +324,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   function reparse() {
     if (!source) return;
     model = parseImportedBoundarySource(source.text, source.name, { scaleMode: scala.scaleMode as ImportScaleMode });
+    par.pieceSource = 'cartamodello'; // un disegno caricato è il pezzo
     // i ruoli: quelli già dati restano; un disegno nuovo, il colore più grande fa il contorno e gli altri le aree vuote
     const nuovi = model.choices.filter((c) => !(c.id in ruoli));
     if (nuovi.length === model.choices.length) {
@@ -319,7 +345,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   let attesa = 0;
   function genera() {
     const { contorno, vuoti } = geometria();
-    if (!contorno) { $('status').textContent = model ? 'Dai a un colore il ruolo «Contorno del cartamodello».' : 'Carica prima un disegno.'; return; }
+    if (!contorno) { $('status').textContent = model ? 'Dai a un colore il ruolo «Contorno del cartamodello».' : 'Carica un cartamodello, o scegli il pezzo «dalle mie misure».'; return; }
     $('status').textContent = 'Calcolo…';
     window.clearTimeout(attesa);
     attesa = window.setTimeout(() => {
@@ -425,7 +451,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   let notaDisegno = '';
   function progetto(): Record<string, unknown> {
     const base = { rgProject: 'rete-testa-speciale', params: par, ruoli };
-    if (!source) return base;
+    if (!source || par.pieceSource === 'misure') { notaDisegno = ''; return base; }
     const drawing = { name: source.name, text: source.text, scale: scala };
     const kb = JSON.stringify(drawing).length / 1024;
     if (kb > MAX_DRAWING_KB) {
@@ -473,12 +499,12 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
           source = { text: String(text), name: file.name };
           reparse();
         } catch (e) {
-          $('fileStatus').textContent = 'Errore import: ' + (e as Error).message;
+          $('status').textContent = 'Errore import: ' + (e as Error).message;
         }
         input.value = '';
       });
     });
-    $('scaleMode').addEventListener('change', () => { scala.scaleMode = ($('scaleMode') as HTMLSelectElement).value; reparse(); });
+    root.querySelector('#scaleMode')?.addEventListener('change', () => { scala.scaleMode = ($('scaleMode') as HTMLSelectElement).value; reparse(); });
     $('reopenFile').addEventListener('change', (ev) => {
       const input = ev.target as HTMLInputElement;
       const file = input.files?.[0];

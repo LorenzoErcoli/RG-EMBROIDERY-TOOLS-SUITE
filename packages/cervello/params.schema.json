@@ -1926,6 +1926,18 @@
           "maximum": 3,
           "x-id": "minStitch"
         },
+        "totalWidth": {
+          "$ref": "#/$defs/totalWidth",
+          "default": 120,
+          "title": "Larghezza del pezzo",
+          "description": "La larghezza del rettangolo quando il pezzo si dà a misure."
+        },
+        "totalHeight": {
+          "$ref": "#/$defs/totalHeight",
+          "default": 160,
+          "title": "Altezza del pezzo",
+          "description": "L’altezza del rettangolo quando il pezzo si dà a misure."
+        },
         "maxStitchMm": {
           "$ref": "#/$defs/maxStitch",
           "default": 2.5,
@@ -1950,6 +1962,10 @@
           "description": "Il punto della linea che gira sul bordo del vuoto o lo attraversa dritta.",
           "minimum": 0.5,
           "maximum": 12
+        },
+        "pieceSource": {
+          "$ref": "#/$defs/pieceSource",
+          "default": "cartamodello"
         },
         "diamondWidthMm": {
           "$ref": "#/$defs/diamondWidth",
@@ -4882,6 +4898,16 @@
       "description": "Cucire i passaggi, o lasciare le corse staccate. Serve a misurare; in produzione resta acceso",
       "x-concetto": "passaggi-nascosti"
     },
+    "pieceSource": {
+      "type": "string",
+      "title": "Il pezzo",
+      "description": "cartamodello = il contorno del disegno caricato, coi suoi vuoti; misure = un rettangolo di larghezza × altezza, senza vuoti.",
+      "enum": [
+        "cartamodello",
+        "misure"
+      ],
+      "x-concetto": "formato"
+    },
     "diamondWidth": {
       "type": "number",
       "title": "Larghezza del rombo",
@@ -5081,7 +5107,8 @@
         "panelOriginY",
         "gridCols",
         "gridRows",
-        "cellHeightMm"
+        "cellHeightMm",
+        "pieceSource"
       ]
     },
     "scala": {
