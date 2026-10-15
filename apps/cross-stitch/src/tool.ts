@@ -21,7 +21,7 @@ import {
 import { autoRoles, cellMask, normalizeContours, subMask, type PieceShape, type ShapeRole } from './shape';
 import { entryRows, routeAll, routeModuleBands, stripRanges, type BandRoute, type ModulePath } from './strips';
 import { bandsOf, cellStep, editsOnAllCopies, findModule, moveBandBreak, moveShapeBand, toggleBandBreak, movePiece, piecesOf, resizeModule, seamShift, shiftModule, tileModule, type KnitModule } from './module';
-import { DEFAULT_ZONES, shiftGroup, type ZoneGroup } from './zones';
+import { DEFAULT_ZONES, inGroup, shiftGroup, type ZoneGroup } from './zones';
 import { areaFromMm, clampArea, subGrid, type TestArea } from './area';
 
 // 0.4.0: un punto per colonna (la V dentro la sua cella). I progetti di prima si convertono.
@@ -50,8 +50,8 @@ const MODE_HELP: Record<Mode, string> = {
   order: 'Ordine pezzi: clicca i pezzi del filo scelto nell’ordine in cui vuoi cucirli (il primo clic è il primo pezzo). Da quel momento, per quel filo, dentro ogni fascia vale il tuo ordine invece di quello del tool.',
   pick: 'Scegli modulo: sull’immagine intera trascina un riquadro intorno a un modulo. Il riquadro si aggancia alle V che trova; colonne e righe si correggono in «Griglia». Esc torna al pennello.',
   image: 'Sposta immagine: trascina l’immagine sotto la griglia finché il motivo cade giusto sulle V del modulo.',
-  group: 'Gruppi: trascina un rettangolo, oppure clicca i punti di un contorno (Invio lo chiude, Backspace toglie l’ultimo punto, Esc annulla): dentro ogni filo quella parte si cuce tutta insieme, nell’ordine della lista in 04 Passaggi.',
-  area: 'Blocchi: trascina un rettangolo, oppure clicca i punti di un contorno (Invio lo chiude, Backspace toglie l’ultimo punto, Esc annulla). Ogni blocco cuce tutti i fili prima del successivo, nell’ordine della lista in 04 Passaggi; la base resta un solo stop, prima.',
+  group: 'Gruppi: trascina un rettangolo, oppure clicca i punti di un contorno (Invio lo chiude, Backspace toglie l’ultimo punto, Esc annulla): dentro ogni filo quella parte si cuce tutta insieme, nell’ordine della lista in 04 Passaggi. Clic sul bordo di un gruppo: lo selezioni e ne modifichi il contorno.',
+  area: 'Blocchi: trascina un rettangolo, oppure clicca i punti di un contorno (Invio lo chiude, Backspace toglie l’ultimo punto, Esc annulla). Ogni blocco cuce tutti i fili prima del successivo, nell’ordine della lista in 04 Passaggi; la base resta un solo stop, prima. Clic sul bordo di un blocco: lo selezioni e ne modifichi il contorno.',
 };
 
 /** Come si disegna ogni tipo di passaggio nell'anteprima (colori dai token del DS). */
@@ -510,6 +510,13 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   let groupDrag: { a: { x: number; y: number }; b: { x: number; y: number } } | null = null;
   /** Il contorno che si sta disegnando a clic (Gruppi o Blocchi): i suoi punti in mm. */
   let polyDraft: { kind: 'group' | 'area'; pts: Array<{ x: number; y: number }> } | null = null;
+  /**
+   * IL CONTORNO SELEZIONATO (Lorenzo, 2026-10-15: «introduci la possibilità di modificare i contorni dei gruppi e
+   * dei blocchi se selezionati»): un clic sul bordo lo seleziona; i vertici si trascinano, il pallino a metà lato
+   * aggiunge un vertice, il tasto destro su un vertice lo toglie, trascinando dentro si sposta tutto. Esc finisce.
+   */
+  let zoneSel: { kind: 'group' | 'area'; i: number } | null = null;
+  let zoneEdit: { kind: 'group' | 'area'; i: number; v: number; from: { x: number; y: number }; orig: Array<{ x: number; y: number }> } | null = null;
   /** Il blocco sotto il mouse nella lista (-1 = nessuno). */
   let areaHover = -1;
   /** Si sta scegliendo l'area di prova (il prossimo trascinamento la disegna). */
@@ -1075,6 +1082,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   }
   /** I numeri dei passaggi nella barra di stato (o che si stanno calcolando). */
   function showStatus(): void {
+    if (zoneSel && (mode === 'group' || mode === 'area')) { $('status').textContent = `${zoneSel.kind === 'area' ? 'Blocco' : 'Gruppo'} ${zoneSel.i + 1} selezionato: trascina un vertice per spostarlo, il pallino a metà di un lato per aggiungerne uno, tasto destro su un vertice per toglierlo; trascina dentro per spostare tutto. Esc per finire.`; return; }
     if (eyedrop >= 0) { $('status').textContent = `Clicca sull’immagine il colore del filo ${eyedrop + 1} (Esc annulla). L’immagine si vede intera mentre scegli.`; return; }
     if (editorOpen && st.module && mode === 'pick') { $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V. Trascina un riquadro intorno a un modulo dell’immagine: si aggancia alle V che trova.`; return; }
     if (editorOpen && st.module && reroute) { $('status').textContent = `Ridisegni un passaggio (filo in vista ${Math.round(editorVisible)} mm per modulo): clicca i punti da cui deve passare, in ordine. Invio o Spazio lo fissano, Esc toglie i punti messi, Canc rimette il passaggio automatico.`; return; }
@@ -1407,6 +1415,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (m === 'order') orderClicks = 0;
     if (m !== 'reroute') reroute = null;
     if (m !== 'group' && m !== 'area') polyDraft = null; // un contorno lasciato a metà si annulla
+    if (zoneSel && zoneSel.kind !== m) { zoneSel = null; zoneEdit = null; }
     bandDrag = null;
     $('bandsAutoBtn').hidden = m !== 'bands';
     if (m === 'bands' || was === 'bands') drawEditorMarks();
@@ -1978,7 +1987,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     }
     if (mode === 'group' || mode === 'area') {
       const p = mmAt(e);
-      if (!p || e.button !== 0) return;
+      if (!p) return;
+      if (zonePointerDown(e, mode, p)) { e.stopPropagation(); e.preventDefault(); return; }
+      if (e.button !== 0) return;
       e.stopPropagation(); e.preventDefault();
       const { w, h } = sizeMm();
       const cl = { x: Math.min(w, Math.max(0, p.x)), y: Math.min(h, Math.max(0, p.y)) };
@@ -2070,6 +2081,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       draw();
       return;
     }
+    if (zoneEdit) {
+      e.stopPropagation();
+      const p = mmAt(e);
+      if (p) zonePointerMove(p);
+      return;
+    }
     if (groupDrag) {
       e.stopPropagation();
       const p = mmAt(e);
@@ -2133,6 +2150,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       try { canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
       return;
     }
+    if (zoneEdit) {
+      e.stopPropagation();
+      try { canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      zonePointerUp();
+      return;
+    }
     if (groupDrag) {
       e.stopPropagation();
       const d = groupDrag;
@@ -2184,6 +2207,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       } else { drawGroups(); showStatus(); }
       return;
     }
+    if (zoneSel && !polyDraft && e.key === 'Escape') { e.preventDefault(); selectZone(null); return; }
     if (mode === 'reroute' && reroute && !e.ctrlKey && !e.metaKey && !e.altKey && rerouteKey(e.key)) { e.preventDefault(); return; }
     if (e.code === 'Space') { spaceDown = true; canvas.classList.add('cs-pan'); e.preventDefault(); }
     const k = e.key.toLowerCase();
@@ -2302,6 +2326,88 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
    * I gruppi sopra l'anteprima (in modalità Gruppi, o quello evidenziato dalla lista): un
    * rettangolo continuo nel colore di categoria col suo numero, diverso dal ritaglio tratteggiato.
    */
+  const zonesOfKind = (kind: 'group' | 'area'): ZoneGroup[] => (kind === 'area' ? st.route.areas : st.route.groups) ?? [];
+  /** I vertici di un gruppo o blocco: il contorno, o i quattro angoli del rettangolo. */
+  const polyOf = (q: ZoneGroup) => (q.poly && q.poly.length >= 3 ? q.poly : [{ x: q.x, y: q.y }, { x: q.x + q.w, y: q.y }, { x: q.x + q.w, y: q.y + q.h }, { x: q.x, y: q.y + q.h }]);
+  const r01 = (n: number) => Math.round(n * 10) / 10;
+  const zoneFromPoly = (pts: Array<{ x: number; y: number }>): ZoneGroup => {
+    const poly = pts.map((p) => ({ x: r01(p.x), y: r01(p.y) }));
+    const xs = poly.map((p) => p.x), ys = poly.map((p) => p.y), x = Math.min(...xs), y = Math.min(...ys);
+    return { x, y, w: r01(Math.max(...xs) - x), h: r01(Math.max(...ys) - y), poly };
+  };
+  /** Quanti mm della tela fa un pixel dello schermo (per la tolleranza del clic). */
+  const mmPerPx = () => { const { w } = sizeMm(); return (w + 2 * margin()) / ($('layer').querySelector('svg')!.getBoundingClientRect().width || 1); };
+  const segDist = (p: { x: number; y: number }, a: { x: number; y: number }, b: { x: number; y: number }) => {
+    const vx = b.x - a.x, vy = b.y - a.y, L = vx * vx + vy * vy, t = L ? Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.y - a.y) * vy) / L)) : 0;
+    return Math.hypot(a.x + t * vx - p.x, a.y + t * vy - p.y);
+  };
+  /** Il gruppo (o blocco) il cui bordo passa vicino al punto: l'ultimo disegnato vince. -1 = nessuno. */
+  function zoneAtBorder(kind: 'group' | 'area', p: { x: number; y: number }): number {
+    const tol = 8 * mmPerPx(), zs = zonesOfKind(kind);
+    for (let i = zs.length - 1; i >= 0; i--) { const pts = polyOf(zs[i]); for (let k = 0; k < pts.length; k++) if (segDist(p, pts[k], pts[(k + 1) % pts.length]) <= tol) return i; }
+    return -1;
+  }
+  /** Sul contorno selezionato: un vertice (v >= 0) o il pallino a metà di un lato (mid = indice del lato). */
+  function zoneHandleAt(p: { x: number; y: number }): { v: number; mid: boolean } | null {
+    if (!zoneSel) return null;
+    const q = zonesOfKind(zoneSel.kind)[zoneSel.i]; if (!q) return null;
+    const pts = polyOf(q), tol = 9 * mmPerPx();
+    // la maniglia più vicina al clic, vertice o pallino (sui contorni fitti sono vicini)
+    let best: { v: number; mid: boolean; d: number } | null = null;
+    for (let k = 0; k < pts.length; k++) {
+      const b = pts[(k + 1) % pts.length];
+      const dv = Math.hypot(pts[k].x - p.x, pts[k].y - p.y), dm = Math.hypot((pts[k].x + b.x) / 2 - p.x, (pts[k].y + b.y) / 2 - p.y);
+      if (dv <= tol && (!best || dv < best.d)) best = { v: k, mid: false, d: dv };
+      if (dm <= tol && (!best || dm < best.d)) best = { v: k, mid: true, d: dm };
+    }
+    return best ? { v: best.v, mid: best.mid } : null;
+  }
+  function setZone(kind: 'group' | 'area', i: number, q: ZoneGroup): void {
+    const zs = [...zonesOfKind(kind)]; zs[i] = q;
+    if (kind === 'area') st.route.areas = zs; else st.route.groups = zs;
+  }
+  function selectZone(sel: { kind: 'group' | 'area'; i: number } | null): void {
+    zoneSel = sel; zoneEdit = null;
+    buildGroups(); buildAreas(); showStatus();
+  }
+  /** Il clic con lo strumento Gruppi o Blocchi, prima di disegnare: true = l'ha usato la modifica del contorno. */
+  function zonePointerDown(e: PointerEvent, kind: 'group' | 'area', p: { x: number; y: number }): boolean {
+    if (polyDraft) return false;
+    if (zoneSel && zoneSel.kind === kind) {
+      const q = zonesOfKind(kind)[zoneSel.i];
+      if (!q) { selectZone(null); return true; }
+      const h = zoneHandleAt(p), pts = polyOf(q).map((pt) => ({ ...pt }));
+      if (e.button === 2) {
+        // il tasto destro su un vertice lo toglie (ne restano almeno tre)
+        if (h && !h.mid && pts.length > 3) { pts.splice(h.v, 1); setZone(kind, zoneSel.i, zoneFromPoly(pts)); buildGroups(); buildAreas(); update(); }
+        return true;
+      }
+      if (e.button !== 0) return true;
+      if (h) {
+        let v = h.v;
+        if (h.mid) { const b = pts[(h.v + 1) % pts.length]; pts.splice(h.v + 1, 0, { x: (pts[h.v].x + b.x) / 2, y: (pts[h.v].y + b.y) / 2 }); v = h.v + 1; }
+        zoneEdit = { kind, i: zoneSel.i, v, from: p, orig: pts };
+      } else if (inGroup(q, p.x, p.y)) zoneEdit = { kind, i: zoneSel.i, v: -1, from: p, orig: pts };
+      else { const hit = zoneAtBorder(kind, p); selectZone(hit >= 0 ? { kind, i: hit } : null); return true; }
+      try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
+      return true;
+    }
+    if (e.button !== 0) return false;
+    const hit = zoneAtBorder(kind, p);
+    if (hit < 0) return false;
+    selectZone({ kind, i: hit });
+    return true;
+  }
+  function zonePointerMove(p: { x: number; y: number }): void {
+    const ed = zoneEdit!; const { w, h } = sizeMm();
+    const dx = p.x - ed.from.x, dy = p.y - ed.from.y;
+    const clamp = (pt: { x: number; y: number }) => ({ x: Math.min(w, Math.max(0, pt.x)), y: Math.min(h, Math.max(0, pt.y)) });
+    const pts = ed.v >= 0 ? ed.orig.map((pt, k) => (k === ed.v ? clamp({ x: pt.x + dx, y: pt.y + dy }) : pt)) : ed.orig.map((pt) => clamp({ x: pt.x + dx, y: pt.y + dy }));
+    setZone(ed.kind, ed.i, zoneFromPoly(pts));
+    drawGroups();
+  }
+  function zonePointerUp(): void { zoneEdit = null; buildGroups(); buildAreas(); update(); }
+
   function drawGroups(): void {
     const svg = $('layer').querySelector('svg');
     if (!svg) return;
@@ -2310,7 +2416,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const areas = st.route.areas ?? [];
     const showG = mode === 'group' || groupHover >= 0, showA = mode === 'area' || areaHover >= 0;
     const rr = reroute && !editorOpen ? reroute : null;
-    if (!(showG && groups.length) && !(showA && areas.length) && !groupDrag && !polyDraft && !rr) return;
+    if (!(showG && groups.length) && !(showA && areas.length) && !groupDrag && !polyDraft && !rr && !zoneSel) return;
     const ns = 'http://www.w3.org/2000/svg';
     const layer = document.createElementNS(ns, 'g');
     layer.id = 'cs-groups';
@@ -2332,8 +2438,22 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       t.textContent = label;
       layer.appendChild(t);
     };
-    if (showG) groups.forEach((q, i) => { if (mode === 'group' || i === groupHover) box(q, i === groupHover, String(i + 1)); });
-    if (showA) areas.forEach((q, i) => { if (mode === 'area' || i === areaHover) box(q, i === areaHover, 'B' + (i + 1), 'var(--rg-color-category-3)'); });
+    if (showG) groups.forEach((q, i) => { if (mode === 'group' || i === groupHover) box(q, i === groupHover || (zoneSel?.kind === 'group' && zoneSel.i === i), String(i + 1)); });
+    if (showA) areas.forEach((q, i) => { if (mode === 'area' || i === areaHover) box(q, i === areaHover || (zoneSel?.kind === 'area' && zoneSel.i === i), 'B' + (i + 1), 'var(--rg-color-category-3)'); });
+    // il contorno selezionato: i vertici pieni (si trascinano), a metà di ogni lato un pallino vuoto (aggiunge un vertice)
+    const sq = zoneSel ? zonesOfKind(zoneSel.kind)[zoneSel.i] : null;
+    if (zoneSel && sq) {
+      const col = zoneSel.kind === 'area' ? 'var(--rg-color-category-3)' : 'var(--rg-color-category-2)', pts = polyOf(sq);
+      const dot = (x: number, y: number, r: number, fill: boolean) => {
+        const c = document.createElementNS(ns, 'circle');
+        c.setAttribute('cx', String(x)); c.setAttribute('cy', String(y)); c.setAttribute('r', String(r));
+        c.setAttribute('style', `fill:${fill ? col : 'var(--rg-color-white)'};stroke:${fill ? 'var(--rg-color-white)' : col}`);
+        c.setAttribute('stroke-width', '2'); c.setAttribute('vector-effect', 'non-scaling-stroke');
+        layer.appendChild(c);
+      };
+      pts.forEach((pt, k) => { const b = pts[(k + 1) % pts.length]; dot((pt.x + b.x) / 2, (pt.y + b.y) / 2, fs * 0.2, false); });
+      pts.forEach((pt) => dot(pt.x, pt.y, fs * 0.3, true));
+    }
     if (polyDraft && polyDraft.pts.length) {
       const pts = polyDraft.pts, col = polyDraft.kind === 'area' ? 'var(--rg-color-category-3)' : 'var(--rg-color-category-2)';
       const pl = document.createElementNS(ns, 'path');
@@ -2385,7 +2505,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $('areaClear').hidden = !areas.length;
     areas.forEach((q, i) => {
       const li = document.createElement('li');
-      li.className = 'rg-list-row';
+      li.className = 'rg-list-row' + (zoneSel?.kind === 'area' && zoneSel.i === i ? ' is-selected' : '');
       li.innerHTML = `<div class="rg-list-row__head"><span class="rg-list-row__title">Blocco ${i + 1}</span><span class="rg-mono">${q.poly ? 'contorno, ' : ''}${fmtNum(Math.round(q.w))} × ${fmtNum(Math.round(q.h))} mm</span>`
         + `<span class="rg-list-row__actions">`
         + (i > 0 ? `<span class="rg-tooltip rg-tooltip--end"><button type="button" class="rg-icon-button" data-up aria-labelledby="tip-aup-${i}">`
@@ -2401,12 +2521,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         [next[i - 1], next[i]] = [next[i], next[i - 1]];
         st.route.areas = next;
         areaHover = -1;
+        zoneSel = null;
         buildAreas();
         update();
       });
       li.querySelector('[data-del]')!.addEventListener('click', () => {
         st.route.areas = areas.filter((_, j) => j !== i);
         areaHover = -1;
+        zoneSel = null;
         buildAreas();
         update();
       });
@@ -2418,6 +2540,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const n = (st.route.areas ?? []).length;
     if (!n || !window.confirm(n === 1 ? 'Togliere il blocco?' : `Togliere tutti i ${n} blocchi?`)) return;
     st.route.areas = [];
+    zoneSel = null;
     buildAreas();
     update();
   });
@@ -2431,7 +2554,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $('groupClear').hidden = !groups.length;
     groups.forEach((q, i) => {
       const li = document.createElement('li');
-      li.className = 'rg-list-row';
+      li.className = 'rg-list-row' + (zoneSel?.kind === 'group' && zoneSel.i === i ? ' is-selected' : '');
       li.innerHTML = `<div class="rg-list-row__head"><span class="rg-list-row__title">Gruppo ${i + 1}</span><span class="rg-mono">${q.poly ? 'contorno, ' : ''}${fmtNum(Math.round(q.w))} × ${fmtNum(Math.round(q.h))} mm</span>`
         + `<span class="rg-list-row__actions">`
         + (i > 0 ? `<span class="rg-tooltip rg-tooltip--end"><button type="button" class="rg-icon-button" data-up aria-labelledby="tip-gup-${i}">`
@@ -2447,12 +2570,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         [next[i - 1], next[i]] = [next[i], next[i - 1]];
         st.route.groups = next;
         groupHover = -1;
+        zoneSel = null;
         buildGroups();
         update();
       });
       li.querySelector('[data-del]')!.addEventListener('click', () => {
         st.route.groups = groups.filter((_, j) => j !== i);
         groupHover = -1;
+        zoneSel = null;
         buildGroups();
         update();
       });
@@ -2464,6 +2589,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const n = (st.route.groups ?? []).length;
     if (!n || !window.confirm(n === 1 ? 'Togliere il gruppo?' : `Togliere tutti i ${n} gruppi?`)) return;
     st.route.groups = [];
+    zoneSel = null;
     buildGroups();
     update();
   });
