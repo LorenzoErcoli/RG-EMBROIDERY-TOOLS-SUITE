@@ -5986,6 +5986,26 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     readFileSync(FILE_SCHEMA, 'utf8').replace(/\r\n/g, '\n') === await testoSchema('schema-smoke'), true);
 }
 
+// ---- K1b — il contratto del motore e il suo cricchetto -----------------------------------------------------------
+// Ogni tool esporta da apps/<tool>/src/motore.ts un `motore` con `genera(ingresso, params)`. Qui lo si chiama, in node
+// (senza DOM, senza Worker), su un ingresso di prova (test/prove/<tool>.ts) coi valori di partenza, e si controlla che
+// esca un ricamo vero: strati non vuoti, un DST che si rilegge con gli stessi punti, strati IDENTICI a quelli della
+// strada diretta di prima. I tool non ancora avvolti stanno in packages/cervello/src/debito-motori.ts, che può solo scendere.
+{
+  console.log('\nK1b — il contratto del motore: ogni tool si chiama allo stesso modo, il debito può solo scendere');
+  const { caricaRegistro } = await import('./registro.mjs');
+  const { controllaMotore } = await import('./motore.mjs');
+  const reg = await caricaRegistro('registro-motori');
+  const DEBITO_MOTORI_ATTUALE = 0;
+  check(`il debito dei motori è ${DEBITO_MOTORI_ATTUALE} tool su ${reg.ORDINE_TOOL.length} (può solo scendere: se è sceso, abbassa DEBITO_MOTORI_ATTUALE)`, Object.keys(reg.DEBITO_MOTORI).length, DEBITO_MOTORI_ATTUALE);
+  check('il debito dei motori nomina solo tool della suite', Object.keys(reg.DEBITO_MOTORI).filter((t) => !reg.ORDINE_TOOL.includes(t)), []);
+  for (const t of reg.ORDINE_TOOL) {
+    const guai = await controllaMotore(t);
+    if (t in reg.DEBITO_MOTORI) check(`${t}: ancora nel debito (non avvolto)`, guai.length > 0, true);
+    else check(`${t}: motore.genera su un ingresso di prova → ricamo vero, DST che si rilegge, identico alla strada diretta`, guai, []);
+  }
+}
+
 rmSync(outDir, { recursive: true, force: true });
 console.log(failed ? `\n${failed} test falliti\n` : '\nTutti i test passati\n');
 process.exit(failed ? 1 : 0);

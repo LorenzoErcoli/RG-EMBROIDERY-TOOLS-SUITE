@@ -23,6 +23,7 @@ import {
 import { reduceStable, type ReduceResult } from '@rg/core';
 import { buildPlan, type BroccatoPlan } from './pipeline';
 import { sampleImage } from './sample';
+import { calcolaPiano } from './motore';
 
 // Icona contagocce (pipette, stile Lucide): la stessa di `apps/bitmap`, cosi' il gesto e' quello
 // che Lorenzo conosce gia' dal punto tappeto.
@@ -499,23 +500,11 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
 
   function analyze(ricattura: boolean): void {
     const img = source.pixelsAt(params.maxWidthPx);
-    const mmpp = mmPerPixel(img.width, params);
     // In manuale le tinte sono di Lorenzo e non si toccano; si ricattura solo se non ce n'e' nessuna.
     const nuova = (ricattura || !params.colors.length) && (params.paletteMode === 'auto' || !params.colors.length);
     const t0 = performance.now();
-    const res = reduceStable(img, {
-      colorCount: params.colorCount,
-      flattenLightMm: params.flattenLightMm,
-      smoothMm: params.smoothMm,
-      minBlobMm2: params.minBlobMm2,
-      mmPerPx: mmpp,
-      palette: nuova ? undefined : colorsToPalette(params.colors),
-    });
-    if (nuova) params.colors = paletteToColors(res.palette, params.colors);
-    const plan = buildPlan(res, params, mmpp, {
-      widthMm: img.width * mmpp,
-      heightMm: img.height * mmpp,
-    });
+    const { res, mmpp, plan, colors } = calcolaPiano(img, params, ricattura);
+    if (nuova) params.colors = colors;
     ultimo = { res, img, mmpp, plan };
     if (nuova) buildPaletteUI();
     paint(performance.now() - t0);

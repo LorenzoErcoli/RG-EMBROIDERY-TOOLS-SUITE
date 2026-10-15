@@ -13,6 +13,7 @@ import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { runPipeline, type RoleAssignment } from './pipeline';
 import { defaultInterlaceParams, type InterlaceParams } from './engine';
 import { sampleContours } from './sample';
+import { campionatoreImmagine } from './motore';
 
 /** Un campo numerico del gruppo "Riempimento". L'unità va nello slot del DS, mai nell'etichetta. */
 interface Field { key: keyof InterlaceParams; label: string; unit: string; step: number; help?: string; }
@@ -228,31 +229,9 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   const contourColors = () => imported.contours.map((c) => c.color);
   const uniqueColors = () => [...new Set(contourColors())];
 
-  /** Bounding box del disegno (mm) su cui mappare l'immagine. */
-  function designBounds() {
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const c of currentContours()) for (const p of c.points) {
-      if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
-      if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
-    }
-    return { minX, minY, maxX, maxY };
-  }
-
   /** Campionatore colore immagine per gli agglomerati (mm → RGB), o undefined se non c'è immagine/agglomerati. */
   function imageSampler() {
-    if (!refImage || !params.clusterMode) return undefined;
-    const { data, w, h } = refImage;
-    const b = designBounds();
-    const dw = b.maxX - b.minX || 1, dh = b.maxY - b.minY || 1;
-    return (x: number, y: number): [number, number, number] | null => {
-      const u = (x - b.minX) / dw, v = (y - b.minY) / dh;
-      if (u < 0 || u > 1 || v < 0 || v > 1) return null;
-      const px = Math.min(w - 1, Math.max(0, Math.floor(u * w)));
-      const py = Math.min(h - 1, Math.max(0, Math.floor(v * h)));
-      const i = (py * w + px) * 4;
-      if (data[i + 3] < 128) return null; // trasparente
-      return [data[i], data[i + 1], data[i + 2]];
-    };
+    return campionatoreImmagine(refImage ? { pixel: refImage.data, larghezza: refImage.w, altezza: refImage.h } : undefined, currentContours(), params.clusterMode);
   }
 
   /**

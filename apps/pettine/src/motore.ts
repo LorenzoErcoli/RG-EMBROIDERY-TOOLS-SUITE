@@ -16,8 +16,9 @@
 // serve per gli swatch di prova, che si cuciono in pochi minuti invece che in ore. Le coordinate
 // restano quelle del disegno (la foto continua a combaciare); il DST esce traslato a partire da 0,0.
 
+import type { Ingresso, Motore } from '@rg/cervello';
 import {
-  type Point, type Polyline, type PixelImage,
+  type Point, type Polyline, type PixelImage, type ExportLayer,
   polygonArea, traceRegions, buildDst, type DstPath,
 } from '@rg/core';
 import { parseSvgPolylines } from '@rg/pattern-grammar';
@@ -213,6 +214,8 @@ export interface EsitoPettine {
   svgVerifica: string;
   /** Il file per la macchina, con l'origine nell'angolo del ritaglio. */
   dst: Uint8Array | null;
+  /** I blocchi cuciti (mm, origine nell'angolo del ritaglio) da cui esce il DST: ne escono gli strati del contratto. */
+  percorsi: DstPath[] | null;
   statistiche: StatistichePettine;
   /** i casi del laboratorio, se `casiStudio` > 0 */
   casi: CasoStudio[];
@@ -1437,6 +1440,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
   };
 
   let dst: Uint8Array | null = null;
+  let percorsi: DstPath[] | null = null;
   let statDst = { punti: 0, filoM: 0, blocchi: 0, salti: 0, saltiM: 0, passaggi: 0, passaggiM: 0, puntiCorti: 0, passaggiScopertiM: 0, righeFuoriOrdine: 0, copertureFraColori: 0, righeInglobate: 0, passaggioPiuLungoMm: 0, corridoiM: 0 };
   // --- 7. il DST ---------------------------------------------------------------------------------------------
   // Lorenzo (2026-09-09): «possiamo procedere per costruire il dst? e di conseguenza i passaggi?
@@ -2555,6 +2559,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     }
     // l'origine del DST è l'angolo del riquadro: uno swatch parte da (0,0), non da dov'era nel pannello
     for (const pa of paths) for (const q of pa.points_mm) { q[0] -= X0; q[1] -= Y0; }
+    percorsi = paths;
     dst = buildDst({ label: 'PETTINE', coordinate_system: 'svg', paths, metadata: ing.progetto ?? undefined });
     {
       const v = [...lunghezzePassaggi].sort((a, b) => a - b);
@@ -2604,6 +2609,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       svg: svgPettine || svgVerifica,
       svgVerifica,
       dst,
+      percorsi,
       casi,
       statistiche: {
         larghezzaMm: WM, altezzaMm: HM, riquadro: RQ, colori,
@@ -2624,3 +2630,44 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
       note,
     };
   }
+// ---- il contratto del motore (K1b) ------------------------------------------------------------------------
+/** Oltre a quello che c'è: il disegno a gruppi (`sagoma` non serve), la fotografia, il ritaglio e la larghezza reale. */
+export interface IngressoMotorePettine extends Ingresso {
+  /** Il contenuto del file SVG coi gruppi (un `<g id="...">` per gruppo). */
+  testoSvg: string;
+  /** Il ritaglio in mm del disegno: senza, tutto il pannello. */
+  ritaglio?: Riquadro | null;
+  /** Il progetto da mettere dentro le uscite (R9/R27); non cambia i punti. */
+  progetto?: Record<string, unknown> | null;
+}
+
+/** I blocchi cuciti → strati: un strato per ogni serie di blocchi di fila sullo stesso ago (colore della tinta). */
+export function stratiDaPercorsi(percorsi: DstPath[], colori: string[]): ExportLayer[] {
+  const strati: ExportLayer[] = [];
+  let ago = -1;
+  for (const pa of percorsi) {
+    if (pa.needle !== ago || !strati.length) {
+      ago = pa.needle ?? 1;
+      strati.push({ id: `ago-${strati.length + 1}`, color: colori[ago - 1] ?? '#000000', polylines: [], trims: [] });
+    }
+    const l = strati[strati.length - 1];
+    l.polylines.push(pa.points_mm.map(([x, y]) => ({ x, y })));
+    l.trims!.push(!!pa.trim);
+  }
+  return strati;
+}
+
+export const motore: Motore<IngressoMotorePettine, ParametriPettine> = {
+  id: 'pettine',
+  async genera(ingresso, params) {
+    const larghezzaRealeMm = ingresso.larghezzaMm ?? 0;
+    const foto: PixelImage | null = ingresso.immagine
+      ? { width: ingresso.immagine.larghezza, height: ingresso.immagine.altezza, rgba: ingresso.immagine.pixel }
+      : null;
+    const es = costruisciPettine(
+      { testoSvg: ingresso.testoSvg, larghezzaRealeMm, foto, ritaglio: ingresso.ritaglio ?? null, progetto: ingresso.progetto ?? null },
+      { ...params, dst: params.denti },
+    );
+    return { strati: es.percorsi ? stratiDaPercorsi(es.percorsi, es.statistiche.colori) : [], avvisi: [] };
+  },
+};

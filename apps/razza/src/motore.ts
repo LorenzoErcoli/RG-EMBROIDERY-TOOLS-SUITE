@@ -13,6 +13,7 @@
 //
 // Nessun DOM. Gira in un Web Worker (razza.worker.ts) perche' sul pezzo intero ci vogliono alcuni secondi.
 import type { ExportLayer, Point } from '@rg/core';
+import type { Ingresso, Motore } from '@rg/cervello';
 import { creaCampo } from './campo';
 import { Griglia, MappaDistanze, areaPezzo, segmentoDentroPezzo } from './geo';
 import { areaTondino, dentro, puntiCordoncino, puntoSullaGriglia, sullaGriglia } from './pallino';
@@ -248,3 +249,21 @@ export function leggiProgetto(meta: Record<string, unknown> | null): ProgettoRaz
   return { rgProject: 'razza', version: String(meta.version ?? ''), params, fissi, sfumature, contorno, vuoti };
 }
 
+
+// ---------------------------------------------------------------- il contratto del motore (K1b)
+
+/** Oltre al pezzo (contorno + vuoti = la sagoma), quello che l'utente mette a mano: i pallini fissi e le linee di sfumatura. */
+export interface IngressoRazza extends Ingresso {
+  pezzo: Pezzo;
+  fissi?: Fisso[];
+  sfumature?: Sfumatura[];
+}
+
+/** Avvolge `costruisci`; gli strati sono quelli del DST (`stratiPerDst`: sulla griglia da 0,1 mm). Misure e anteprima restano nel `Risultato` interno. */
+export const motore: Motore<IngressoRazza, ParametriRazza> = {
+  id: 'razza',
+  async genera(ingresso, params) {
+    const r = costruisci(ingresso.pezzo, params, ingresso.fissi ?? [], ingresso.sfumature ?? []);
+    return { strati: stratiPerDst(r).layers, avvisi: [...r.avvisi] };
+  },
+};

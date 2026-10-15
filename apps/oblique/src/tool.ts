@@ -9,10 +9,12 @@ import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import {
-  generateOblique, defaultObliqueParams, moduleFromPolylines, parseModuleSvg, contourBoundary, rectBounds,
-  type ObliqueParams, type ObliqueModule, type ObliqueSources, type RoleBoundaries, type Boundary,
-  type Stroke, type RawPolyline, type ObliqueResult,
+  defaultObliqueParams, moduleFromPolylines, parseModuleSvg,
+  type ObliqueParams, type ObliqueModule, type ObliqueResult,
 } from './engine';
+import {
+  LAYER_COLOR, strokesToLayer, holesToLayer, exportLayersFor, generaOblique, type ObliqueRole,
+} from './motore';
 
 // I 4 moduli built-in del motivo oblique (asset fissi: nell'easy l'utente dà solo il pannello).
 import level0Svg from './modules/level0.svg?raw';
@@ -20,14 +22,7 @@ import level1Svg from './modules/level1.svg?raw';
 import level2Svg from './modules/level2.svg?raw';
 import holesSvg from './modules/holes.svg?raw';
 
-type ObliqueRole = 'MASTER_OUTLINE' | 'PATTERN_REFERENCE' | 'LASER_REFERENCE' | 'PLACEMENT_REFERENCE';
 const ROLE_ORDER: ObliqueRole[] = ['MASTER_OUTLINE', 'PATTERN_REFERENCE', 'LASER_REFERENCE', 'PLACEMENT_REFERENCE'];
-
-// Colori di anteprima per livello (la preview è una vista, il filo si disegna sottile — R15).
-const LAYER_COLOR: Record<string, string> = {
-  level0: '#1a9e5f', level05: '#12b5b5', level1: '#2277cc', level2: '#111111',
-  holes: '#e52421', travel: '#c98a2b', boundary: '#9aa0a6',
-};
 
 const isIllustrator = (text: string): boolean => /Adobe Illustrator|Illustrator/i.test(text) || /id="Livello_/i.test(text);
 
@@ -275,50 +270,10 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
   }
 
   function colorOf(role: ObliqueRole): string | null { return roleColor[role] || null; }
-  function roleBoundary(role: ObliqueRole): Boundary | undefined {
-    if (!panel) return undefined;
-    const color = colorOf(role);
-    if (!color) return undefined;
-    const pts = panelScaled.filter((c) => c.color === color).map((c) => c.points);
-    return contourBoundary(pts, role.toLowerCase(), params.perimeterCloseTolerance) ?? undefined;
-  }
-  /**
-   * Contorno più grande del cartamodello, ricavato da TUTTI i suoi tracciati (porting di
-   * sourceContourBoundary sul pannello intero). È il gradino di mezzo dell'originale: finché
-   * l'utente non assegna il colore "Pannello" si lavora comunque sulla sagoma vera, non sul
-   * rettangolo che la contiene.
-   */
-  function panelContour(): Boundary | undefined {
-    if (!panel) return undefined;
-    return contourBoundary(panelScaled.map((c) => c.points), 'pattern', params.perimeterCloseTolerance) ?? undefined;
-  }
-  function buildRoles(): RoleBoundaries {
-    return { master: roleBoundary('MASTER_OUTLINE'), pattern: roleBoundary('PATTERN_REFERENCE'), laser: roleBoundary('LASER_REFERENCE'), placement: roleBoundary('PLACEMENT_REFERENCE') };
-  }
-  function panelBounds(): ObliqueSources['panelBounds'] {
-    if (!panel) return undefined;
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    for (const c of panelScaled) for (const p of c.points) {
-      if (p.x < minX) minX = p.x; if (p.y < minY) minY = p.y; if (p.x > maxX) maxX = p.x; if (p.y > maxY) maxY = p.y;
-    }
-    return Number.isFinite(minX) ? rectBounds(minX, minY, maxX - minX, maxY - minY) : undefined;
-  }
 
   // ---- Generazione + preview ----
-  function currentSources(): ObliqueSources {
-    return { level0: modules.level0, level1: modules.level1, level2: modules.level2, holes: modules.holes, panelBounds: panelBounds() };
-  }
-  const strokesToLayer = (id: string, strokes: Stroke[]): ExportLayer => ({ id, color: LAYER_COLOR[id] || '#111', polylines: strokes.map((s) => s.points), strokeMm: THREAD_STROKE_MM });
-  const holesToLayer = (holes: RawPolyline[]): ExportLayer => ({ id: 'holes', color: LAYER_COLOR.holes, polylines: holes.map((h) => h.points), strokeMm: SHAPE_STROKE_MM, shapeOnly: true });
-  function exportLayersFor(res: ObliqueResult): ExportLayer[] {
-    const layers: ExportLayer[] = [];
-    if (res.level0.length) layers.push(strokesToLayer('level0', res.level0));
-    if (res.level05.length) layers.push(strokesToLayer('level05', res.level05));
-    if (res.level1.length) layers.push(strokesToLayer('level1', res.level1));
-    if (res.level2.length) layers.push(strokesToLayer('level2', res.level2));
-    if (res.holes.length) layers.push(holesToLayer(res.holes));
-    return layers;
-  }
+  // La sequenza che dà il ricamo (confini dai ruoli, ingombro, generateOblique) sta in motore.ts, uguale per tutti.
+  const generate = (): ObliqueResult => generaOblique(modules, panelScaled, roleColor, params);
 
   let lastResult: ObliqueResult | null = null;
   function render(): void {
@@ -326,8 +281,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
     refreshRoleSelects();
     updatePanelStatus();
     try {
-      const placementFollows = colorOf('PLACEMENT_REFERENCE') !== null && colorOf('PLACEMENT_REFERENCE') === colorOf('PATTERN_REFERENCE');
-      const res = generateOblique(currentSources(), params, { roles: buildRoles(), panelContour: panelContour(), placementFollowsPattern: placementFollows });
+      const res = generate();
       lastResult = res;
       const layers: ExportLayer[] = [];
       if (panel && ui.showPanelShapeOverlay) layers.push({ id: 'panel-overlay', color: ui.panelShapeOverlayColor, strokeMm: SHAPE_STROKE_MM, shapeOnly: true, polylines: panelScaled.map((c) => c.points) });
@@ -404,7 +358,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
   // ---- Export ----
   async function doExportSvg(): Promise<void> {
     readParams();
-    const res = lastResult ?? generateOblique(currentSources(), params, { roles: buildRoles(), panelContour: panelContour() });
+    const res = lastResult ?? generate();
     const layers = exportLayersFor(res);
     const metadata = { rgProject: 'oblique', version: '0.1.0', params, roles: roleColor };
     let svg: string;
@@ -415,7 +369,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
   }
   async function doExportDst(): Promise<void> {
     readParams();
-    const res = lastResult ?? generateOblique(currentSources(), params, { roles: buildRoles(), panelContour: panelContour() });
+    const res = lastResult ?? generate();
     // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina lo ignora, noi lo
     // rileggiamo. Senza, il .dst era l'unico file della suite che non sapeva da dove veniva.
     const bytes = dstFromExportLayers(exportLayersFor(res), {

@@ -11,10 +11,11 @@ import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 // Il motore delle zone vive in @rg/pattern-grammar: lo usa anche Cannage rafia per le basi.
 import {
   readZones, resolveZoneAngles, zonesFromShapes, boundsOfPoints, type Zone, type ZoneShape,
-  buildZonePlan, exportSequenceLayers, threadMetres, travelMetres, inkFor, normalizeRole,
+  exportSequenceLayers, threadMetres, travelMetres, inkFor, normalizeRole,
   patternChoices, patternKeysInUse, RELIEF_ROLE, type PatternKey, type ZonePlan, type ZoneRole,
 } from '@rg/pattern-grammar';
 import { readPatternSvg, migrateLegacyNames } from './analyze';
+import { patternOf, pianoDelleZone } from './motore';
 import { generateFinalPatternPoints } from '@rg/pattern-grammar';
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';
 import { PATTERN_FIELDS, ZONE_GROUP, patternGroup, SCALE_MODES, type Field, type Group } from './fields';
@@ -26,15 +27,6 @@ function initialConfig(): Flat {
   const cfg: Flat = {};
   for (const field of ZONE_GROUP.fields) cfg[field.name] = field.value;
   return cfg;
-}
-
-/** Estrae il `PatternConfig` di un ago dalle chiavi prefissate (`C.stepX` → `stepX`). */
-function patternOf(cfg: Flat, key: PatternKey): PatternConfig {
-  const out: Record<string, unknown> = {};
-  for (const [name, value] of Object.entries(cfg)) {
-    if (name.startsWith(`${key}.`)) out[name.slice(key.length + 1)] = value;
-  }
-  return out as PatternConfig;
 }
 
 /**
@@ -561,16 +553,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     }
     refreshZones();
     try {
-      plan = buildZonePlan(zones, {
-        roles,
-        patterns: Object.fromEntries(keys.map((key) => [key, patternOf(cfg, key)])),
-        marginMm: Number(cfg.marginMm),
-        rowHeightMm: Number(cfg.rowHeightMm),
-        travelMode: cfg.travelMode === 'none' ? 'none' : 'edges',
-        travelStitchMm: Number(cfg.travelStitchMm),
-        cleanupMinStitchMm: Number(cfg.cleanupMinStitchMm),
-        outerMarginMm: Number(cfg.outerMarginMm),
-      });
+      plan = pianoDelleZone(zones, roles, cfg);
     } catch (e) {
       $('status').textContent = 'Errore: ' + (e as Error).message;
       console.error(e);

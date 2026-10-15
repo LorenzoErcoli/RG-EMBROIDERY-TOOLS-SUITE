@@ -9,6 +9,7 @@ import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { FORMATO, CORPO, ALL_FIELD_GROUPS, SCALE_MODES, type Field, type Group } from './fields';
+import { stratoPattern } from './motore';
 import sharedPresetsRaw from './presets.shared.json?raw';
 
 const PRESET_KEY = 'pattern-grammar-engine-presets';
@@ -641,11 +642,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     const base = boundarySource?.name.replace(/\.[^.]+$/, '');
     let bytes: Uint8Array;
     try {
-      const final = generateFinalPatternPoints(cfg as PatternConfig);
-      const layer: ExportLayer = {
-        id: 'pattern', color: '#005f27',
-        polylines: final.visualPolylines.map((pl) => pl.map((p) => ({ x: p.x, y: p.y }))),
-      };
+      const layer: ExportLayer = stratoPattern(cfg as PatternConfig);
       // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge fino all'END
       // e lo ignora, noi lo rileggiamo. Ci va anche il DISEGNO, come testo del file caricato, con la sua
       // scala e i ruoli dei colori: così un DST riaperto rigenera il programma intero (2026-10-07). Sopra

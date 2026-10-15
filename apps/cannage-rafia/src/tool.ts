@@ -9,25 +9,23 @@ import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 // La libreria dei pattern è quella del Generatore pattern, letta dal suo file (come fa Pattern a zone):
 // un preset pubblicato lì è subito disponibile per le basi, senza un doppione da tenere allineato.
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';
-import { PARAMETRI_DAVANTI, pezzoPiuLungo, type Ingombro, type Punto } from './linee';
+import { PARAMETRI_DAVANTI, type Punto } from './linee';
 import { PARAMETRI_STOP } from './stop';
 import { PARAMETRI_CORNICE } from './cornice';
-import { PARAMETRI_BORDATURA, latiDelContorno, lineeDaLati, stessoLato, type LatoContorno, type LineaBordo, type Passaggio } from './bordatura';
-import { coloreStop, conPuntoMinimo, unisciTratti, stopBase, stopBordatura, stopContorno, stopCornice, stopGriglia, stopLinee, stratiProgramma, NOMI_BORDATURA, type Stop } from './programma';
+import { PARAMETRI_BORDATURA, stessoLato, type LatoContorno, type Passaggio } from './bordatura';
+import { coloreStop, stratiProgramma, type Stop } from './programma';
+// Il programma a stop (la sequenza che costruisce gli strati) sta in motore.ts, senza DOM: qui lo si chiama.
+import {
+  programmaCannage, nuovaMemoria, passaggioDi, NOMI_STOP, conRuolo as conRuoloDi,
+  sagomaBordo as sagomaBordoDi, latiContorno as latiContornoDi, sceltaDi as sceltaDiDi,
+  type IngressoCannage, type ParamsCannage, type Ruolo,
+} from './motore';
 import { reticoloDaZone, contornoDaZone, lineeDaModello, zoneDaModello, type LetturaReticolo, type LineaAperta, type Zona } from './reticolo';
-import { sagomaDaAnelli, sagomaDaZone, type Sagoma } from './sagoma';
 import {
   BASI_FIELDS, BASI_PREDEFINITE, BASI_VALORI, PROGRAMMA_VALORI, BORDATURA_FIELDS, CORNICE_FIELDS, LINEE_FIELDS, PRESET_LINEE, PROGRAMMA_FIELDS, SCALE_MODES, STOP_FIELDS,
-  parametriBordaturaDa, parametriCorniceDa, parametriDa, parametriStopDa, valoriCorniceDa, valoriDa, type Field, type Valori,
+  valoriCorniceDa, valoriDa, type Field, type Valori,
 } from './fields';
 
-/**
- * Cosa fa una tinta del disegno: il pattern 1 comanda griglia e linee e fa lo stop 3, il pattern 2 lo
- * stop 4; le aree di scarico (anche più di una tinta) alleggeriscono basi, linee e cornice dentro i loro
- * contorni; il contorno del pezzo è la linea che seguono bordo, griglia e termogarze; le due bordature sono
- * il lato esterno da bordare (una linea aperta o chiusa), doppia o singola.
- */
-type Ruolo = '' | 'pattern1' | 'pattern2' | 'scarico' | 'contorno' | 'bordaturaDoppia' | 'bordaturaSingola';
 const RUOLI: [Ruolo, string][] = [
   ['', '— (ignora)'],
   ['pattern1', 'Pattern 1 — griglia e linee seguono questi rombi'],
@@ -37,19 +35,6 @@ const RUOLI: [Ruolo, string][] = [
   ['bordaturaDoppia', 'Bordatura doppia — la linea è il lato esterno'],
   ['bordaturaSingola', 'Bordatura singola — la linea è il lato esterno'],
 ];
-
-/** Il passaggio di una tinta di bordatura, o null se la tinta non borda. */
-const passaggioDi = (r: Ruolo | undefined): Passaggio | null => (r === 'bordaturaDoppia' ? 'doppia' : r === 'bordaturaSingola' ? 'singola' : null);
-
-const NOMI_STOP: Record<number, string> = {
-  1: 'Contorno a impunture',
-  2: 'Griglia che blocca i materiali',
-  3: 'Base pattern 1',
-  4: 'Base pattern 2',
-  5: 'Linee orizzontali e verticali',
-  6: 'Cornice nei rombi',
-  ...NOMI_BORDATURA,
-};
 
 const PRESETS: Record<string, PatternConfig> = (() => {
   try { return JSON.parse(sharedPresetsRaw) as Record<string, PatternConfig>; } catch { return {}; }
@@ -100,7 +85,6 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
    */
   let latiScelti: (Punto & { passaggio: Passaggio })[] = [];
   let scegliLati = false;
-  let cacheLati: { chiave: string; lati: LatoContorno[] } | null = null;
   const primoPreset = Object.keys(PRESETS)[0] ?? '';
   const basi = {
     p1: BASI_PREDEFINITE.p1 in PRESETS ? BASI_PREDEFINITE.p1 : primoPreset,
@@ -122,13 +106,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
    * Le basi sono lo stop che costa (qualche decimo di secondo su un pezzo intero): si rifanno solo se
    * cambiano disegno, tinta, pattern o scarico — non quando si tocca un parametro delle linee.
    */
-  const cacheBasi = new Map<string, Stop>();
-  /**
-   * La sagoma del pezzo: l'unione delle zone, non il rettangolo. Linee e cornice si fermano dove finisce
-   * il cannage (Lorenzo, 16/09). Si ricava una volta per disegno, non a ogni ridisegno.
-   */
-  let cacheSagoma: { chiave: string; sagoma: Sagoma } | null = null;
-  let versioneZone = 0;
+  const memoria = nuovaMemoria();
   let zoneStatusText = 'Nessun disegno caricato.';
   /** Il simulatore (lo stesso del Pettine): al posto dell'anteprima, il DST che si cuce sullo schermo. */
   let simulando = false;
@@ -137,39 +115,15 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
 
   const pz = hookPanZoom($('canvas'), $('layer'), (z) => { $('zoom').textContent = `zoom ${Math.round(z * 100)}%`; });
   const fmt = (v: number) => v.toLocaleString('it-IT', { maximumFractionDigits: 1 });
-  const conRuolo = (r: Ruolo) => Object.keys(ruoli).find((c) => ruoli[c] === r) ?? '';
-  const areeScarico = () => Object.keys(ruoli).filter((c) => ruoli[c] === 'scarico').sort();
-  /** I contorni delle aree di scarico, per alleggerire linee e cornice dentro di loro. */
-  const poligoniScarico = () => zone.filter((z) => ruoli[(z.color ?? '')] === 'scarico').map((z) => z.points);
-  /** La linea di contorno scelta nel disegno: la seguono bordo, griglia e termogarze. */
-  const anelliContorno = () => zone.filter((z) => ruoli[(z.color ?? '')] === 'contorno').map((z) => z.points);
-  const sagomaBordo = () => {
-    const anelli = anelliContorno();
-    return anelli.length ? sagomaDaAnelli(anelli) : sagomaPezzo();
-  };
-  const sagomaPezzo = () => {
-    // il pezzo è il cannage: le zone dei due pattern. Finché non sono scelti tutti e due, tutte le zone
-    // tranne le aree di scarico (che sono contorni sopra il disegno, non pezzo).
-    const pattern = [conRuolo('pattern1'), conRuolo('pattern2')].filter(Boolean);
-    const fuoriPezzo = Object.keys(ruoli).filter((c) => ruoli[c] === 'scarico' || ruoli[c] === 'contorno' || passaggioDi(ruoli[c]) !== null).sort();
-    const escludi = pattern.length === 2 ? tinte.map((t) => t.color).filter((c) => !pattern.includes(c)) : fuoriPezzo;
-    const chiave = `${versioneZone}|${escludi.join(',')}`;
-    if (cacheSagoma?.chiave !== chiave) cacheSagoma = { chiave, sagoma: sagomaDaZone(zone, escludi) };
-    return cacheSagoma.sagoma;
-  };
+  /** L'ingresso del motore: il disegno letto e le scelte a mano (ruoli, basi, lati). */
+  const ingresso = (): IngressoCannage => ({ zone, linee, ruoli, basi, presets: PRESETS, latiScelti });
+  /** Le sei chiavi che il file di progetto salva. */
+  const parametri = (): ParamsCannage => ({ params: cfg, stop: cfgStop, basiParams: cfgBasi, cornice: cfgCornice, programma: cfgProgramma, bordatura: cfgBordatura });
+  const conRuolo = (r: Ruolo) => conRuoloDi(ruoli, r);
+  const sagomaBordo = () => sagomaBordoDi(ingresso(), memoria);
   /** I lati del contorno che si possono scegliere in anteprima: quelli della linea che segue il bordo. */
-  const latiContorno = (): LatoContorno[] => {
-    const chiave = `${versioneZone}|${JSON.stringify(ruoli)}`;
-    if (cacheLati?.chiave !== chiave) cacheLati = { chiave, lati: zone.length ? latiDelContorno(sagomaBordo().anelli) : [] };
-    return cacheLati.lati;
-  };
-  const sceltaDi = (l: LatoContorno): Passaggio | null => latiScelti.find((k) => stessoLato(l, k))?.passaggio ?? null;
-  /** Le linee da bordare: quelle col ruolo nel disegno e i lati scelti in anteprima. */
-  const lineeBordatura = (): LineaBordo[] => [
-    ...linee.filter((l) => passaggioDi(ruoli[l.color])).map((l) => ({ punti: l.points, chiusa: false, passaggio: passaggioDi(ruoli[l.color])! })),
-    ...zone.filter((z) => passaggioDi(ruoli[z.color ?? ''])).map((z) => ({ punti: z.points, chiusa: true, passaggio: passaggioDi(ruoli[z.color ?? ''])! })),
-    ...(latiScelti.length ? lineeDaLati(latiContorno(), sceltaDi) : []),
-  ];
+  const latiContorno = (): LatoContorno[] => latiContornoDi(ingresso(), memoria);
+  const sceltaDi = (l: LatoContorno): Passaggio | null => sceltaDiDi(ingresso(), l);
 
   // ---- un campo, reso coi componenti DS; il valore mostrato è SEMPRE quello della config corrente ----
   function fieldEl(f: Field, store: Valori, onChange: () => void, prefisso = ''): HTMLElement {
@@ -482,8 +436,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
       const presi = Object.values(ruoli);
       ruoli[t.color] = t.rombi > 0 && !presi.includes('pattern1') ? 'pattern1' : t.rombi > 0 && !presi.includes('pattern2') ? 'pattern2' : '';
     }
-    versioneZone++;
-    cacheBasi.clear();
+    memoria.basi.clear();
   }
 
   function reparse() {
@@ -517,69 +470,12 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
       : avviso;
   }
 
-  function base(numero: 3 | 4, colore: string, preset: string): Stop {
-    const colori = areeScarico();
-    const percento = Number(cfgBasi.reliefPercent) || 0;
-    const chiave = `${numero}|${colore}|${preset}|${colori.join(',')}|${percento}|${versioneZone}`;
-    let s = cacheBasi.get(chiave);
-    if (!s) {
-      const config = PRESETS[preset];
-      try {
-        s = colore && config ? stopBase(numero, zone, colore, config, { colori, percento }) : { numero, nome: NOMI_STOP[numero], blocchi: [], punti: 0 };
-      } catch (e) {
-        avviso = `Stop ${numero}: ${(e as Error).message}`;
-        s = { numero, nome: NOMI_STOP[numero], blocchi: [], punti: 0 };
-      }
-      cacheBasi.set(chiave, s);
-    }
-    return s;
-  }
-
   function aggiorna(adatta = false) {
-    lettura = null;
-    avviso = '';
-    stop = [];
-    if (zone.length) {
-      const contorno = contornoDaZone(zone);
-      const parStop = parametriStopDa(cfgStop);
-      // contorno e griglia seguono la sagoma vera del pezzo, non il rettangolo (Lorenzo, 16/09)
-      stop.push(stopContorno(sagomaBordo(), parStop));
-      const p1 = conRuolo('pattern1');
-      if (!p1) avviso = 'Scegli la tinta del pattern 1: griglia e linee seguono i suoi rombi.';
-      else {
-        try {
-          lettura = reticoloDaZone(zone, p1);
-          if (lettura.fuoriReticolo) avviso = `${lettura.fuoriReticolo} rombi non stanno sul reticolo: controlla il disegno.`;
-          stop.push(stopGriglia(lettura.reticolo, sagomaBordo(), parStop));
-        } catch (e) {
-          avviso = (e as Error).message;
-        }
-      }
-      stop.push(base(3, p1, basi.p1), base(4, conRuolo('pattern2'), basi.p2));
-      if (lettura) {
-        // la cornice non passa sopra fermi e barre delle linee: glieli passa lo stop 5
-        let ingombri: Ingombro[] = [];
-        const sagoma = sagomaPezzo();
-        const scarico = poligoniScarico();
-        try {
-          const s5 = stopLinee(lettura.reticolo, sagoma, parametriDa(cfg), scarico, anelliContorno());
-          ingombri = s5.risultato.ingombri;
-          stop.push(s5);
-        } catch (e) { avviso = (e as Error).message; }
-        try { stop.push(stopCornice(lettura.reticolo, sagoma, parametriCorniceDa(cfgCornice), ingombri, scarico)); } catch (e) { avviso = (e as Error).message; }
-      }
-      // la bordatura, sui lati scelti: il passo dei fermi parte dal pezzo più lungo delle linee (stop 5)
-      const daBordare = lineeBordatura();
-      if (daBordare.length) {
-        try {
-          const passo = lettura ? pezzoPiuLungo(lettura.reticolo, parametriDa(cfg)) : undefined;
-          stop.push(...stopBordatura(daBordare, parametriBordaturaDa(cfgBordatura), sagomaBordo(), passo).stop);
-        } catch (e) { avviso = `Bordatura: ${(e as Error).message}`; }
-      }
-    }
-    // i tratti che si toccano diventano uno (niente salti da 0 mm nel DST), poi il punto minimo per tutti
-    const minimo = Number(cfgProgramma.puntoMinimo) || 0;
-    stop = stop.map((s) => conPuntoMinimo(unisciTratti(s), minimo));
+    // il programma a stop lo costruisce il motore (motore.ts); qui si tiene quello che il pannello mostra
+    const prog = programmaCannage(ingresso(), parametri(), memoria);
+    lettura = prog.lettura;
+    avviso = prog.avvisi.at(-1) ?? '';
+    stop = prog.stop;
     scriviReticolo();
     scriviStop();
     scriviLati();
@@ -712,7 +608,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
       misuraTinte();
       zoneStatusText = `${source.name} (riaperto): ${zone.length} zone, ${tinte.length} tinte`;
     }
-    cacheBasi.clear();
+    memoria.basi.clear();
     buildPanel();
     aggiorna(true);
     return true;

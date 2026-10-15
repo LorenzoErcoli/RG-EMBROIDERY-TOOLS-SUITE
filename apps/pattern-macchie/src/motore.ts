@@ -1188,3 +1188,31 @@ function minimoDentro(linea: Polyline, minimo: number, macchia: Polyline): Polyl
   out.push(linea[linea.length - 1]);
   return out;
 }
+
+// ---------------------------------------------------------------------------------------------------
+// Il contratto del motore (K1b): avvolge `costruisciMacchie`, senza cambiare niente.
+import type { Ingresso, Motore } from '@rg/cervello';
+import type { ExportLayer as StratoEsportato } from '@rg/core';
+
+/** Oltre ai parametri: la sagoma del pannello, le macchie (i poligoni scelti dai ruoli dei colori) e il pattern della base. */
+export interface IngressoMacchie extends Ingresso {
+  pannello: Polyline;
+  macchie: Polyline[];
+  pattern: PatternConfig;
+}
+
+/** I tre stop come li esporta il tool: base, raso delle macchie, punto sopra (stessi id e colori di tool.ts). */
+const STOP_MACCHIE = [
+  { chiave: 'base', colore: '#8a6d4e' },
+  { chiave: 'raso', colore: '#1f1a17' },
+  { chiave: 'sopra', colore: '#c8952e' },
+] as const;
+
+export const motore: Motore<IngressoMacchie, ParametriMacchie> = {
+  id: 'pattern-macchie',
+  async genera(ingresso, params) {
+    const r = costruisciMacchie(ingresso.pannello, ingresso.macchie, ingresso.pattern, params);
+    const strati: StratoEsportato[] = STOP_MACCHIE.map((l) => ({ id: l.chiave, color: l.colore, polylines: r[l.chiave].tratti }));
+    return { strati, avvisi: [] };
+  },
+};

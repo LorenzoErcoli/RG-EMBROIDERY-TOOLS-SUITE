@@ -23,6 +23,7 @@ import { entryRows, routeAll, routeModuleBands, stripRanges, type BandRoute, typ
 import { bandsOf, cellStep, editsOnAllCopies, findModule, moveBandBreak, moveShapeBand, toggleBandBreak, movePiece, piecesOf, resizeModule, seamShift, shiftModule, tileModule, type KnitModule } from './module';
 import { DEFAULT_ZONES, shiftGroup, type ZoneGroup } from './zones';
 import { areaFromMm, clampArea, subGrid, type TestArea } from './area';
+import { passesDi, larghezzaFilo, paramsRoute, modulePathOf, ingressoPassaggi, stratiCross, type StatoCross } from './motore';
 
 // 0.4.0: un punto per colonna (la V dentro la sua cella). I progetti di prima si convertono.
 const VERSION = '0.4.0';
@@ -646,60 +647,19 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
    * era un capello (0,13 della cella): su 450 mm di giornale le lettere sembravano perse anche
    * dove c'erano, perché il filo non copriva niente.
    */
-  const threadWidth = (color = 0) => Math.min(st.grid.cellW / 2, st.grid.cellH) * Math.min(0.9, 0.5 * (1 + 0.15 * (passesOf(color) - 1)));
+  const threadWidth = (color = 0) => larghezzaFilo(st.grid, passesOf(color));
   /** Le passate di un filo: le sue, o quelle generali dei progetti di prima. */
-  const passesOf = (color: number) => Math.max(1, Math.round(st.threads[color]?.passes ?? st.route.repetitions ?? 1));
+  const passesOf = (color: number) => passesDi(st, color);
   /** I parametri del routing con le passate di ogni filo. */
-  const routeParams = (): RouteParams => ({ ...st.route, passesByColor: Object.fromEntries(st.threads.map((_, i) => [i, passesOf(i)])) });
+  const routeParams = (): RouteParams => paramsRoute(st);
   /**
    * Cosa si passa al motore: tutto il disegno, o solo l'area di prova (una griglia a sé che parte
    * da 0; i gruppi, in mm, si spostano con lei).
    */
-  /** Il modulo come percorso: pezzi e riga d'ingresso di ogni filo (il primo pezzo dice dove). */
-  const modulePathOf = (m: KnitModule): ModulePath => ({ cols: m.cols, rows: m.rows, marks: m.marks, pieceOf: m.seq, entryRow: entryRows({ cols: m.cols, marks: m.marks, pieceOf: m.seq, starts: m.starts }), cuts: m.cuts, forced: m.forced, bands: m.bands, bandAt: m.bandAt, ordered: m.ordered, offset: m.offset });
-  /** Il ricamo è proprio il modulo ripetuto (nessuna V ritoccata su una copia sola)? */
-  const designIsTiled = (): boolean => {
-    const m = st.module; if (!m) return false;
-    const t = tileModule(st.grid, m);
-    if (t.size !== st.cells.size) return false;
-    for (const [k, v] of t) { const c = st.cells.get(k); if (!c || c.color !== v.color || c.stitch !== v.stitch) return false; }
-    return true;
-  };
-  const routeInput = (cells: Cells = st.cells) => {
-    const params = routeParams();
-    // IL PERCORSO DEL MODULO RIPETUTO (strips.ts): con un modulo, senza gruppi a mano e senza area di
-    // prova, ogni filo si calcola una volta sul modulo (ingresso a sinistra, uscita a destra alla stessa
-    // altezza) e si ripete identico in ogni copia.
-    if (st.module && !(params.groups && params.groups.length) && !(params.areas && params.areas.length) && !clampArea(st.grid, st.area) && designIsTiled()) {
-      params.modulePath = modulePathOf(st.module);
-    }
-    // COPIA PER COPIA (Lorenzo, 2026-10-01: i passaggi del modulo). Con un modulo, ogni striscia si
-    // cuce una copia alla volta, da sinistra a destra: dopo 2-3 copie il motore ripete da solo lo
-    // stesso giro in ogni copia (misurato sul Fair Isle: copie identiche fino al bordo). Costa +8%
-    // di filo in vista sulla striscia libera. Se ci sono gruppi disegnati a mano, valgono quelli.
-    if (st.module && !params.modulePath && !(params.groups && params.groups.length)) {
-      const C = st.module.cols, n = Math.ceil(st.grid.cols / C), h = gridHeight(st.grid);
-      params.groups = Array.from({ length: n }, (_, k) => ({ x: k * C * st.grid.cellW + 0.01, y: -1, w: C * st.grid.cellW - 0.02, h: h + 2 }));
-    }
-    const a = clampArea(st.grid, st.area);
-    const toIndex = (grid: GridSpec, i0: number, j0: number) => (i: number, j: number) => {
-      const ii = i - i0, jj = j - j0;
-      return ii < 0 || ii > grid.rows || jj < 0 || jj > 2 * grid.cols ? -1 : ii * (2 * grid.cols + 1) + jj;
-    };
-    const withCuts = (grid: GridSpec, i0: number, j0: number) => {
-      const ix = toIndex(grid, i0, j0);
-      params.cuts = st.cuts.map(([i1, j1, i2, j2]) => [ix(i1, j1), ix(i2, j2)] as [number, number]).filter(([x, y]) => x >= 0 && y >= 0);
-      if (!params.modulePath) params.forced = st.forced.map((q) => ({ from: ix(...q.from), to: ix(...q.to), via: q.via.map((v) => ix(...v)) })).filter((q) => q.from >= 0 && q.to >= 0 && q.via.every((v) => v >= 0));
-    };
-    const mask = maskFor(st.grid);
-    if (!a) { withCuts(st.grid, 0, 0); params.mask = mask; return { grid: st.grid, cells, params, dx: 0, dy: 0 }; }
-    if (mask) params.mask = subMask(mask, st.grid.cols, a.r0, a.r1, a.c0, a.c1);
-    const sub = subGrid(st.grid, cells, a);
-    if (params.groups) params.groups = params.groups.map((q) => shiftGroup(q, sub.dx, sub.dy));
-    if (params.areas) params.areas = params.areas.map((q) => shiftGroup(q, sub.dx, sub.dy));
-    withCuts(sub.grid, a.r0, 2 * a.c0);
-    return { ...sub, params };
-  };
+  /** Lo stato da cui nascono i passaggi (motore.ts): i campi di `st` e la forma del pezzo. */
+  const statoCross = (): StatoCross => ({ ...st, shape: pieceShape });
+  /** Cosa si passa al motore (motore.ts `ingressoPassaggi`): tutto il disegno, o solo l'area di prova. */
+  const routeInput = (cells: Cells = st.cells) => ingressoPassaggi(statoCross(), cells, maskFor);
 
   // ---- L'anteprima --------------------------------------------------------------
   //
@@ -3489,26 +3449,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
    */
   function exportLayers(): ExportLayer[] {
     if (moduleView) exitModuleView(); // si esporta sempre il ricamo, non la vista del modulo
-    const on = (color: number) => !st.threads[color]?.hidden;
-    const cells: Cells = new Map([...st.cells].filter(([, m]) => on(m.color)));
-    const inp = routeInput(cells);
-    if (inp.params.base && !on(inp.params.base.color)) inp.params.base = null;
-    const res = routeAll(inp.grid, inp.cells, inp.params);
-    // la compensazione del ritiro: la striscia k scende (o sale) di k × shiftMm
-    const shift = inp.params.strips?.shiftMm ?? 0;
-    return res.colors.map((cr) => {
-      const dy = (cr.strip ?? 0) * shift;
-      const pt = colorPolylinesTrim(inp.grid, cr, st.stitch);
-      const polylines = pt.polylines.map((pl) => (dy ? pl.map((q) => ({ x: q.x, y: q.y + dy })) : pl));
-      return {
-        id: cr.strip === undefined ? `filo-${cr.color + 1}` : `striscia-${cr.strip + 1}-filo-${cr.color + 1}`,
-        color: st.threads[cr.color]?.hex ?? '#000000',
-        polylines,
-        // il taglio: a ogni salto (di partenza), o solo ai salti a mano
-        trims: st.route.trimJumps === false ? pt.trims : pt.trims.map((t, k) => t || k > 0),
-        strokeMm: threadWidth(cr.color),
-      };
-    });
+    return stratiCross(statoCross(), maskFor);
   }
 
   $('exportBtn').addEventListener('click', async () => {
