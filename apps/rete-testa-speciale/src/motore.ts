@@ -10,6 +10,8 @@
 // - la zona di sovrapposizione è «tutto ciò che sta dentro i 2 punti di incrocio» (la lente che due linee fanno
 //   incrociandosi), col suo punto; l'ampiezza la allarga o la stringe, e con le linee che si toccano soltanto la
 //   zona è l'ampiezza attorno al punto di contatto;
+// - nella zona la linea cucita prima sta SOTTO e tiene la lunghezza del punto (se non se ne dà una apposta), quella
+//   che passa dopo sta SOPRA col punto delle sovrapposizioni;
 // - le linee «devono toccare il bordo sempre», del pezzo e delle aree vuote: ogni linea va fino al SUO bordo;
 // - sul bordo il filo non si sovrappone: «se c'è già qualcosa sotto il filo lo spostiamo dentro», di uno spessore
 //   di filo per ogni passata già posata (gli strati impilati vanno bene);
@@ -36,8 +38,13 @@ export type ParametriRete = {
   cornerRounding: number;
   /** Lunghezza del punto, mm (ogni tratto fra due punti fissi si divide in punti uguali, non più lunghi di così). */
   maxStitchMm: number;
-  /** Lunghezza del punto dentro le zone di sovrapposizione, mm. */
+  /**
+   * Lunghezza del punto dentro le zone di sovrapposizione, per la linea che sta SOPRA (quella che passa dopo), mm.
+   * (Il nome viene da prima della divisione sotto/sopra, 2026-10-15: si tiene, i file salvati lo usano.)
+   */
   overlapStitchMm: number;
+  /** Lunghezza del punto nelle sovrapposizioni per la linea che sta SOTTO (cucita prima), mm; 0 = la lunghezza del punto. */
+  underOverlapStitchMm: number;
   /** Di quanto la zona di sovrapposizione esce dai due punti d'incrocio (negativo: rientra), mm. */
   overlapZoneMm: number;
   /** Spessore del filo, mm: sul contorno una passata nuova va accanto a quella già posata, a questa distanza. */
@@ -59,6 +66,7 @@ export const PARAMETRI_RETE: ParametriRete = {
   cornerRounding: 0,
   maxStitchMm: 2.5,
   overlapStitchMm: 1.2,
+  underOverlapStitchMm: 0,
   overlapZoneMm: 0,
   constructionStroke: 1,
   voidMode: 'ritorno',
@@ -74,6 +82,8 @@ export interface PuntoAgo extends Point {
   tipo: TipoTratto;
   /** Dentro una zona di sovrapposizione. */
   sovrapposto: boolean;
+  /** Nella zona, è la linea che passa DOPO (sta sopra); false = sta sotto, o fuori dalle zone. */
+  sopra: boolean;
   /** Il blocco (la parte) a cui appartiene, in ordine di cucitura. */
   blocco: number;
   /** Strato sul contorno (0 = sul bordo, n = n spessori di filo verso l'interno). Solo per i punti 'bordo'. */
@@ -86,6 +96,8 @@ export interface RisultatoRete {
   misure: {
     punti: number;
     puntiSovrapposti: number;
+    /** Di questi, quelli della linea che sta sopra. */
+    puntiSopra: number;
     filoMm: number;
     puntoMinMm: number;
     puntoMaxMm: number;
@@ -448,7 +460,8 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
 
   // 6. le zone di sovrapposizione: dove due linee della rete si incrociano fanno una lente; la zona è il tratto di
   //    linea fra i due punti d'incrocio, allargato (o stretto) dell'ampiezza. Il contorno non conta: lì il filo
-  //    non si sovrappone (passo 5).
+  //    non si sovrappone (passo 5). In ogni lente la linea cucita prima sta SOTTO e quella che passa dopo SOPRA
+  //    (Lorenzo, 2026-10-15): ognuna col suo punto.
   const cella = 2, griglia = new Map<string, Array<{ a: Point; b: Point; sid: number; idx: number }>>();
   const cum = risolti.map((pc) => { const c = [0]; for (let i = 1; i < pc.pts.length; i++) c.push(c[i - 1] + distance(pc.pts[i - 1], pc.pts[i])); return c; });
   const celle = (a: Point, b: Point, fn: (k: string) => void) => {
@@ -464,25 +477,26 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
       celle(a, b, (k) => { let l = griglia.get(k); if (!l) griglia.set(k, (l = [])); l.push({ a, b, sid: pc.sid, idx }); });
     }
   });
-  const zone: Array<Array<[number, number]>> = risolti.map((pc, idx) => {
+  type Zona = [number, number, boolean]; // da, a, sopra
+  const zone: Zona[][] = risolti.map((pc, idx) => {
     if (!contaNelleZone(pc)) return [];
-    const colpi = new Map<number, number[]>(); // sid dell'altra linea → ascisse degli incroci lungo questa
+    const colpi = new Map<number, { dopo: boolean; s: number[] }>(); // sid dell'altra linea → ascisse degli incroci lungo questa
     for (let i = 1; i < pc.pts.length; i++) {
       const a = pc.pts[i - 1], b = pc.pts[i], visti = new Set<object>();
       celle(a, b, (k) => {
         for (const o of griglia.get(k) ?? []) {
           if (o.sid === pc.sid || Math.abs(o.idx - idx) <= 1 || visti.has(o)) continue; visti.add(o);
           const t = incrocio(a, b, o.a, o.b); if (t === null) continue;
-          let l = colpi.get(o.sid); if (!l) colpi.set(o.sid, (l = []));
-          l.push(cum[idx][i - 1] + t * (cum[idx][i] - cum[idx][i - 1]));
+          let l = colpi.get(o.sid); if (!l) colpi.set(o.sid, (l = { dopo: idx > o.idx, s: [] }));
+          l.s.push(cum[idx][i - 1] + t * (cum[idx][i] - cum[idx][i - 1]));
         }
       });
     }
-    const z: Array<[number, number]> = [];
-    for (const arr of colpi.values()) {
+    const z: Zona[] = [];
+    for (const { dopo, s: arr } of colpi.values()) {
       arr.sort((x, y) => x - y);
       const u = arr.filter((s, i) => i === 0 || s - arr[i - 1] > 1e-4); // lo stesso incrocio visto da due segmenti
-      for (let i = 0; i + 1 < u.length; i++) if (u[i + 1] - u[i] < grande) { z.push([u[i] - p.overlapZoneMm, u[i + 1] + p.overlapZoneMm]); i++; }
+      for (let i = 0; i + 1 < u.length; i++) if (u[i + 1] - u[i] < grande) { z.push([u[i] - p.overlapZoneMm, u[i + 1] + p.overlapZoneMm, dopo]); i++; }
     }
     // linee che si toccano senza incrociarsi (sovrapposizione 0): la zona è l'ampiezza attorno al contatto
     if (p.overlapZoneMm > 0) pc.pts.forEach((q, i) => {
@@ -491,7 +505,7 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
       const gx = Math.floor(q.x / cella), gy = Math.floor(q.y / cella);
       for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const o of griglia.get((gx + dx) + ',' + (gy + dy)) ?? []) {
         if (o.sid === pc.sid || Math.abs(o.idx - idx) <= 1) continue;
-        if (distanceToSegment(q, o.a, o.b) < 0.05 && !z.some((r) => s > r[0] && s < r[1])) z.push([s - p.overlapZoneMm, s + p.overlapZoneMm]);
+        if (distanceToSegment(q, o.a, o.b) < 0.05 && !z.some((r) => s > r[0] && s < r[1])) z.push([s - p.overlapZoneMm, s + p.overlapZoneMm, idx > o.idx]);
       }
     });
     return z.filter((r) => r[1] - r[0] > 1e-6);
@@ -505,8 +519,8 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
     const q = pc.pts;
     if (pc.tipo === 'salto') { cur = null; return; }
     const tipo: TipoTratto = pc.tipo === 'bordo' && pc.daVuoto ? 'vuoto' : pc.tipo;
-    if (!cur) { cur = [{ x: q[0].x, y: q[0].y, tipo, sovrapposto: false, blocco: pc.blocco, strato: pc.strati?.[0] }]; blocchiOut.push(cur); }
-    const zs = zone[idx], inZona = (s: number) => zs.some((r) => s > r[0] && s < r[1]);
+    if (!cur) { cur = [{ x: q[0].x, y: q[0].y, tipo, sovrapposto: false, sopra: false, blocco: pc.blocco, strato: pc.strati?.[0] }]; blocchiOut.push(cur); }
+    const zs = zone[idx], inZona = (s: number) => zs.find((r) => s > r[0] && s < r[1]);
     let da = 0;
     for (let i = 1; i < q.length; i++) {
       if (!(q[i].fisso || i === q.length - 1)) continue;
@@ -518,16 +532,17 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
         return { pt: lerp(q[k - 1], q[k], Math.max(0, Math.min(1, t))), k };
       };
       const tagli = [0, tot];
-      for (const r of zs) for (const e of r) if (e - base > 1e-6 && e - base < tot - 1e-6) tagli.push(e - base);
+      for (const r of zs) for (const e of [r[0], r[1]]) if (e - base > 1e-6 && e - base < tot - 1e-6) tagli.push(e - base);
       tagli.sort((x, y) => x - y);
       for (let k = 1; k < tagli.length; k++) {
         const s0 = tagli[k - 1], len = tagli[k] - s0; if (len < 1e-6) continue;
-        const sovrapposto = inZona(base + s0 + len / 2);
-        const lp = tipo === 'vuoto' ? p.voidStitchMm : sovrapposto ? p.overlapStitchMm : p.maxStitchMm;
+        const zona = inZona(base + s0 + len / 2), sovrapposto = !!zona, sopra = !!zona?.[2];
+        const sotto = p.underOverlapStitchMm > 0 ? p.underOverlapStitchMm : p.maxStitchMm;
+        const lp = tipo === 'vuoto' ? p.voidStitchMm : !zona ? p.maxStitchMm : sopra ? p.overlapStitchMm : sotto;
         const n = Math.max(1, Math.ceil(len / Math.max(0.1, lp) - 1e-9));
         for (let m = 1; m <= n; m++) {
           const { pt, k: kk } = a(s0 + len * m / n);
-          (cur as PuntoAgo[]).push({ x: pt.x, y: pt.y, tipo, sovrapposto, blocco: pc.blocco, strato: pc.strati?.[kk] });
+          (cur as PuntoAgo[]).push({ x: pt.x, y: pt.y, tipo, sovrapposto, sopra, blocco: pc.blocco, strato: pc.strati?.[kk] });
         }
       }
     }
@@ -535,7 +550,7 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
 
   // 8. il punto minimo (R3), alla fine: enforceMinStitch tiene gli stessi oggetti, coi loro segni. Togliendo un
   //    punto corto, quello prima si allunga e può passare il massimo (R4): si ridivide in punti uguali.
-  const massimo = Math.max(0.1, p.maxStitchMm, p.voidStitchMm);
+  const massimo = Math.max(0.1, p.maxStitchMm, p.voidStitchMm, p.underOverlapStitchMm);
   const finali = blocchiOut.map((b) => {
     const tenuti = enforceMinStitch(b, p.minStitchMm) as PuntoAgo[];
     // enforceMinStitch tiene sempre l'ultimo punto: se è troppo vicino, si toglie il penultimo
@@ -549,12 +564,13 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
     return out;
   }).filter((b) => b.length > 1);
 
-  let punti = 0, sovr = 0, filo = 0, mn = Infinity, mx = 0, saltiMm = 0, stratiMax = 0;
+  let punti = 0, sovr = 0, sopra = 0, filo = 0, mn = Infinity, mx = 0, saltiMm = 0, stratiMax = 0;
   finali.forEach((b, i) => {
     if (i) saltiMm += distance(finali[i - 1][finali[i - 1].length - 1], b[0]);
     punti += b.length;
     b.forEach((q, k) => {
       if (q.sovrapposto) sovr++;
+      if (q.sopra) sopra++;
       stratiMax = Math.max(stratiMax, q.strato ?? 0);
       if (k) { const d = distance(b[k - 1], q); filo += d; mn = Math.min(mn, d); mx = Math.max(mx, d); }
     });
@@ -562,7 +578,7 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
   return {
     blocchi: finali,
     misure: {
-      punti, puntiSovrapposti: sovr, filoMm: filo, puntoMinMm: Number.isFinite(mn) ? mn : 0, puntoMaxMm: mx,
+      punti, puntiSovrapposti: sovr, puntiSopra: sopra, filoMm: filo, puntoMinMm: Number.isFinite(mn) ? mn : 0, puntoMaxMm: mx,
       salti: Math.max(0, finali.length - 1), saltiMm, stratiMax, tempoMs: Date.now() - t0,
     },
   };

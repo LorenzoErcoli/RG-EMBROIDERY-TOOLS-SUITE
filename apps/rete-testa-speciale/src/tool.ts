@@ -23,7 +23,8 @@ const SCALE_MODES: Array<[string, string]> = [
 /** I tratti dell'anteprima: il filo è uno solo, i colori dicono che cosa fa ogni pezzo. */
 const VISTE = [
   { chiave: 'rete', nome: 'La rete', colore: COLORE_RETE },
-  { chiave: 'sovrapposto', nome: 'Punti nelle sovrapposizioni', colore: '#d4701c' },
+  { chiave: 'sotto', nome: 'Sovrapposizioni: la linea sotto', colore: '#e0a458' },
+  { chiave: 'sopra', nome: 'Sovrapposizioni: la linea sopra', colore: '#c0471b' },
   { chiave: 'bordo', nome: 'Passate sul contorno', colore: '#7d8681' },
   { chiave: 'vuoto', nome: 'Impuntura nelle aree vuote', colore: '#6f88a8' },
 ] as const;
@@ -43,7 +44,10 @@ const CAMPI_ROMBO: Campo[] = [
 const CAMPI_PUNTI: Campo[] = [
   { nome: 'maxStitchMm', etichetta: 'Lunghezza del punto', unita: 'mm', passo: 0.1, min: 0.5, max: 12,
     aiuto: 'Ogni tratto fra due punti fissi (punte, apici, incroci) si divide in punti uguali, non più lunghi di così.' },
-  { nome: 'overlapStitchMm', etichetta: 'Punto nelle sovrapposizioni', unita: 'mm', passo: 0.1, min: 0.3, max: 12, aiuto: 'La lunghezza del punto dentro le zone di sovrapposizione.' },
+  { nome: 'underOverlapStitchMm', etichetta: 'Punto nelle sovrapposizioni, linea sotto', unita: 'mm', passo: 0.1, min: 0, max: 12,
+    aiuto: 'La linea cucita prima, che nella lente sta sotto. 0 = la lunghezza del punto.' },
+  { nome: 'overlapStitchMm', etichetta: 'Punto nelle sovrapposizioni, linea sopra', unita: 'mm', passo: 0.1, min: 0.3, max: 12,
+    aiuto: 'La linea che passa dopo, e nella lente sta sopra.' },
   { nome: 'overlapZoneMm', etichetta: 'Ampiezza della zona di sovrapposizione', unita: 'mm', passo: 0.1, min: -3, max: 3,
     aiuto: '0 = la zona va esattamente da un punto d’incrocio all’altro. Positivo la allarga oltre gli incroci, negativo la stringe; con le linee che si toccano soltanto è l’ampiezza attorno al contatto.' },
   { nome: 'constructionStroke', etichetta: 'Spessore del filo', unita: 'mm', passo: 0.1, min: 0.1, max: 3,
@@ -96,7 +100,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   const ruoli: Record<string, Ruolo> = {};
   const par: ParametriRete = { ...PARAMETRI_RETE };
   let risultato: RisultatoRete | null = null;
-  const visibili: Record<ChiaveVista | 'salti' | 'punti', boolean> = { rete: true, sovrapposto: true, bordo: true, vuoto: true, salti: true, punti: false };
+  const visibili: Record<ChiaveVista | 'salti' | 'punti', boolean> = { rete: true, sotto: true, sopra: true, bordo: true, vuoto: true, salti: true, punti: false };
   let testoDisegno = 'Nessun disegno caricato.';
   let simulando = false;
   let simulatore: Simulatore | null = null;
@@ -254,7 +258,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     box.className = 'rg-param-grid';
     const r = risultato;
     const misure = r
-      ? `<p class="rg-field__help rg-param-grid__wide">${r.misure.punti.toLocaleString('it-IT')} punti, di cui ${r.misure.puntiSovrapposti.toLocaleString('it-IT')} nelle sovrapposizioni · filo ${(r.misure.filoMm / 1000).toFixed(2)} m`
+      ? `<p class="rg-field__help rg-param-grid__wide">${r.misure.punti.toLocaleString('it-IT')} punti, di cui ${r.misure.puntiSovrapposti.toLocaleString('it-IT')} nelle sovrapposizioni (${r.misure.puntiSopra.toLocaleString('it-IT')} sopra) · filo ${(r.misure.filoMm / 1000).toFixed(2)} m`
         + ` · punto da ${r.misure.puntoMinMm.toFixed(2)} a ${r.misure.puntoMaxMm.toFixed(2)} mm · ${r.blocchi.length} parti, ${r.misure.salti} salti (${(r.misure.saltiMm / 10).toFixed(1)} cm)`
         + (r.misure.stratiMax ? ` · sul contorno fino a ${r.misure.stratiMax} passate affiancate` : '') + '</p>'
       : '';
@@ -361,7 +365,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     pz.fit();
   }
 
-  const vistaDi = (q: PuntoAgo): ChiaveVista => (q.tipo === 'vuoto' ? 'vuoto' : q.tipo === 'bordo' ? 'bordo' : q.sovrapposto ? 'sovrapposto' : 'rete');
+  const vistaDi = (q: PuntoAgo): ChiaveVista => (q.tipo === 'vuoto' ? 'vuoto' : q.tipo === 'bordo' ? 'bordo' : q.sovrapposto ? (q.sopra ? 'sopra' : 'sotto') : 'rete');
 
   function disegna(adatta = false) {
     if (simulatore) { simulatore.distruggi(); simulatore = null; }
@@ -377,7 +381,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     }
     const colore = Object.fromEntries(VISTE.map((l) => [l.chiave, l.colore])) as Record<ChiaveVista, string>;
     const fili = pezzi.filter((t) => visibili[t.vista])
-      .map((t) => `<polyline points="${d(t.pts)}" fill="none" stroke="${colore[t.vista]}" stroke-width="${t.vista === 'sovrapposto' ? 0.22 : 0.16}" stroke-linejoin="round"/>`).join('');
+      .map((t) => `<polyline points="${d(t.pts)}" fill="none" stroke="${colore[t.vista]}" stroke-width="${t.vista === 'sopra' ? 0.24 : t.vista === 'sotto' ? 0.2 : 0.16}" stroke-linejoin="round"/>`).join('');
     const salti = visibili.salti
       ? r.blocchi.slice(1).map((b, i) => {
         const a = r.blocchi[i][r.blocchi[i].length - 1], c = b[0];
@@ -385,7 +389,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
       }).join('')
       : '';
     const punti = visibili.punti
-      ? r.blocchi.flat().map((q) => `<circle cx="${q.x.toFixed(2)}" cy="${q.y.toFixed(2)}" r="0.12" fill="${q.sovrapposto ? colore.sovrapposto : '#1f1a17'}"/>`).join('')
+      ? r.blocchi.flat().map((q) => `<circle cx="${q.x.toFixed(2)}" cy="${q.y.toFixed(2)}" r="0.12" fill="${q.sovrapposto ? colore[q.sopra ? 'sopra' : 'sotto'] : '#1f1a17'}"/>`).join('')
       : '';
     // dove comincia ogni parte: il numero, nell'ordine di cucitura
     const inizi = r.blocchi.map((b, i) => `<circle cx="${b[0].x.toFixed(2)}" cy="${b[0].y.toFixed(2)}" r="1.6" fill="#ffffff" stroke="#d62020" stroke-width="0.3"/>`

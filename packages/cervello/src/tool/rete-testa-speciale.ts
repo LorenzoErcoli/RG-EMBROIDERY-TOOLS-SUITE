@@ -41,9 +41,14 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: 0.5, max: 12, passo: 0.1, predefinito: 2.5, regole: ['R4'], concetto: 'punto-massimo',
     },
     {
-      id: 'overlapStitch', nome: 'overlapStitchMm', etichetta: 'Punto nelle sovrapposizioni',
-      aiuto: 'La lunghezza del punto dentro le zone di sovrapposizione.',
+      id: 'overlapStitch', nome: 'overlapStitchMm', etichetta: 'Punto nelle sovrapposizioni, linea sopra',
+      aiuto: 'La linea che passa dopo, e nella lente sta sopra.',
       tipo: 'num', unita: 'mm', min: 0.3, max: 12, passo: 0.1, predefinito: 1.2, concetto: 'punto-massimo',
+    },
+    {
+      id: 'underOverlapStitch', nome: 'underOverlapStitchMm', etichetta: 'Punto nelle sovrapposizioni, linea sotto',
+      aiuto: 'La linea cucita prima, che nella lente sta sotto. 0 = la lunghezza del punto.',
+      tipo: 'num', unita: 'mm', min: 0, max: 12, passo: 0.1, predefinito: 0, concetto: 'punto-massimo',
     },
     {
       id: 'overlapZone', nome: 'overlapZoneMm', etichetta: 'Ampiezza della zona di sovrapposizione',

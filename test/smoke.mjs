@@ -6113,8 +6113,30 @@ console.log('\nrete-testa-speciale — serpentine a rombi: lente da incrocio a i
   check(`la zona di sovrapposizione va da incrocio a incrocio (${lente} mm), l'ampiezza la allarga, al contatto è l'ampiezza`,
     [zonaMediana({ overlapMm: 2, overlapZoneMm: 0 }), zonaMediana({ overlapMm: 2, overlapZoneMm: 1 }), zonaMediana({ overlapMm: 0, overlapZoneMm: 1 }), zonaMediana({ overlapMm: -1, overlapZoneMm: 1 })],
     [lente, Math.round((lente + 2) * 100) / 100, 2, 0]);
-  check('...e dentro la zona i punti non superano la lunghezza del punto nelle sovrapposizioni',
-    r.blocchi.every((b) => b.every((q, i) => !i || !q.sovrapposto || !b[i - 1].sovrapposto || Math.hypot(q.x - b[i - 1].x, q.y - b[i - 1].y) <= P.overlapStitchMm + 1e-6)), true);
+  check('...e dentro la zona la linea sopra non supera il punto delle sovrapposizioni, sul pezzo col vuoto',
+    r.blocchi.every((b) => b.every((q, i) => !i || !q.sopra || !b[i - 1].sopra || Math.hypot(q.x - b[i - 1].x, q.y - b[i - 1].y) <= P.overlapStitchMm + 1e-6)), true);
+
+  // sotto e sopra (Lorenzo, 2026-10-15): in ogni lente la linea cucita prima sta SOTTO e tiene la lunghezza del punto
+  // (se non se ne dà una apposta), quella che passa dopo sta SOPRA col punto delle sovrapposizioni. Sul rombo 12 × 16
+  // la lente si divide sull'apice in due metà da 1,52 mm: sotto un punto per metà (1,52), sopra due (0,76).
+  const latiDelleLenti = (par) => {
+    const z = { sotto: [], sopra: [] };
+    for (const b of rg.rtsCostruisci(rett, [], { ...P, minStitchMm: 0, ...par }).blocchi) {
+      let lato = null, tratti = [];
+      for (let i = 1; i <= b.length; i++) {
+        const q = b[i];
+        if (q && q.sovrapposto) { lato = q.sopra ? 'sopra' : 'sotto'; tratti.push(Math.hypot(q.x - b[i - 1].x, q.y - b[i - 1].y)); }
+        else if (tratti.length) { z[lato].push(tratti); tratti = []; }
+      }
+    }
+    return z;
+  };
+  const lenti = latiDelleLenti({});
+  const piuLungo = (zz) => Math.round(Math.max(...zz.flat()) * 100) / 100;
+  check('ogni lente ha una linea sotto e una sopra; sotto il punto globale (1,52 per mezza lente), sopra quello delle sovrapposizioni (0,76)',
+    [lenti.sotto.length === lenti.sopra.length && lenti.sotto.length > 100, piuLungo(lenti.sotto), piuLungo(lenti.sopra)], [true, 1.52, 0.76]);
+  check('...e il punto sotto, se lo si dà, vale solo per la linea sotto',
+    [piuLungo(latiDelleLenti({ underOverlapStitchMm: 0.5 }).sotto), piuLungo(latiDelleLenti({ underOverlapStitchMm: 0.5 }).sopra)], [0.38, 0.76]);
 
   // «se c'è già qualcosa sotto il filo lo spostiamo dentro»: sul contorno nessuna passata sopra un'altra (oltre 1,5
   // spessori dai capi), e il contorno non conta come sovrapposizione

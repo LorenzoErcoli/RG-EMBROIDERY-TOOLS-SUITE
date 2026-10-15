@@ -41,6 +41,12 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
 6. **Tre comportamenti all'area vuota**: passaggio intorno al bordo, impuntura dritta al centro (come nel Generatore
    pattern), e soprattutto **la serpentina che torna indietro e riattacca dopo l'area mancante**.
 7. **«Quando inserisci una parte nuova inizia sempre dal contorno esterno del cartamodello»**, se si può.
+8. **Sotto e sopra nelle sovrapposizioni** (dopo il primo commit): *«dividiamo i punti di sovrapposizione tra quelli che
+   stanno sotto e quelli che stanno sopra, nel senso la curva che passa dopo. nella prima di def o se non c'è specificato
+   niente lunghezza punto rimane come quella globale, mentre la seconda va specificata»*. In ogni lente la linea cucita
+   prima è sotto (`underOverlapStitchMm`, 0 = la lunghezza del punto), quella che passa dopo è sopra
+   (`overlapStitchMm`: il nome è di prima della divisione e resta, i file salvati lo usano). «Prima» e «dopo» sono
+   l'ordine di cucitura vero, dopo le parti e i ritorni.
 
 ## Com'è costruito (non ovvio dal solo codice)
 - **Larghezza e sovrapposizione si misurano sull'apice della curva**, anche arrotondata: si risolvono i vertici veri
@@ -64,7 +70,8 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
   punto anche se corto (misurati 0,25 mm con minimo 0,5): si toglie il penultimo.
 
 ## Le misure (test/smoke.mjs)
-Lente 2 · 1 · √(7² + 8²)/7 = 3,04 mm sul rombo 12 × 16 con sovrapposizione 2; nessun punto della rete fuori dal pezzo o
+Lente 2 · 1 · √(7² + 8²)/7 = 3,04 mm sul rombo 12 × 16 con sovrapposizione 2, una linea sotto e una sopra per ogni
+lente (sotto un punto per mezza lente, 1,52 mm; sopra due, 0,76); nessun punto della rete fuori dal pezzo o
 nei vuoti; col vuoto tondo 2 parti e 1 salto; ogni parte parte sul contorno esterno; nessun filo sopra filo sul
 contorno; punti fra minimo e massimo; sul pannello vero di Pattern a macchie (contorno di Lorenzo, le tre macchie più
 grandi come vuoti, a 30°) le stesse regole.

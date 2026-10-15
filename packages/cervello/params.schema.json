@@ -1984,6 +1984,11 @@
           "default": 1.2,
           "x-id": "overlapStitch"
         },
+        "underOverlapStitchMm": {
+          "$ref": "#/$defs/underOverlapStitch",
+          "default": 0,
+          "x-id": "underOverlapStitch"
+        },
         "overlapZoneMm": {
           "$ref": "#/$defs/overlapZone",
           "default": 0,
@@ -4933,10 +4938,20 @@
     },
     "overlapStitch": {
       "type": "number",
-      "title": "Punto nelle sovrapposizioni",
-      "description": "La lunghezza del punto dentro le zone di sovrapposizione.",
+      "title": "Punto nelle sovrapposizioni, linea sopra",
+      "description": "La linea che passa dopo, e nella lente sta sopra.",
       "x-unita": "mm",
       "minimum": 0.3,
+      "maximum": 12,
+      "x-passo": 0.1,
+      "x-concetto": "punto-massimo"
+    },
+    "underOverlapStitch": {
+      "type": "number",
+      "title": "Punto nelle sovrapposizioni, linea sotto",
+      "description": "La linea cucita prima, che nella lente sta sotto. 0 = la lunghezza del punto.",
+      "x-unita": "mm",
+      "minimum": 0,
       "maximum": 12,
       "x-passo": 0.1,
       "x-concetto": "punto-massimo"
@@ -5016,7 +5031,8 @@
         "runMaxStitch",
         "maxStitchLength",
         "satinMaxStitch",
-        "overlapStitch"
+        "overlapStitch",
+        "underOverlapStitch"
       ]
     },
     "punto-passaggio": {
