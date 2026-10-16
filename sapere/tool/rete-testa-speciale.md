@@ -70,6 +70,11 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
     un'opzione, **spenta di partenza**.
 13. **Il cordone a strozzo, al montaggio**: *«un cordone che passa a zig zag nei buchi dell'ultima fila dell'intreccio e
     che possiamo stringerlo… si chiude a strozzo»*. Solo nella vista 3D (non è ricamo).
+15. (2026-10-16, guardando la vista) *«il cordone non tocca gli apici dell'ultimo rombo, si blocca prima. Poi il fondo nel
+    simulatore non prende quello parametrizzato»*: il cordone passava per i nodi dei lati (anello n − 1), ora sugli apici
+    dell'ultimo anello; il fondo era una ragnatela fissa (4 giri, 8 raggi), ora sono i giri della spirale al passo del
+    ricamo (al più 12 anelli nel modello) uniti dal filo della spirale e dalle legature fino alla loro profondità — la
+    regola `fondoDellaLegatura` è una sola, in `sacca.ts`, per il ricamo e per il 3D.
 14. **Il fondo come appoggio**: *«se la base di filo a spirale è ben progettata diventa un appoggio perché il filo si
     unisce tra le varie linee di spirale e quindi funziona da base rigida… ovviamente con morbidezza»*.
 
@@ -101,6 +106,9 @@ morbido. Una bocca fissa più stretta del disco si ottiene solo da fuori: il cor
 - **Le ancore**: appesa da pochi punti, gli errori dei vincoli si sommano lungo la catena (fili «allungati» fino
   all'86%). Ogni nodo ha la sua distanza più corta, lungo i fili, dal punto di presa, e più in là non va: un vincolo vero
   (il filo non si allunga). Il cordone, che regge tutto con pochi tratti, si corregge più volte (prima: 9%).
+- **Il fondo vero pesa sul calcolo**: i giri pendono da poche legature e gli errori si sommavano (fili «allungati» fino
+  al 17%); si correggono più volte i fili del fondo (3) e del cordone (8). Con 25 anelli nel modello appesa per i capi
+  serviva 150 s: ora al più 12 anelli e smorzamento 0,94 (la forma finale non cambia): 2–12 s.
 - **Vuota non sta in piedi**: appoggiata, le pareti ricadono sul fondo (alta 14–23 mm anche col fondo rigido). Appesa per
   i capi, morbida, pende chiusa come un fagotto (larga ~11 cm); col fondo rigido tiene la larghezza del fondo.
 - **Con la bocca larga quanto il disco i fili dovrebbero allungarsi del 5%**: la vista dice che non si può, invece di

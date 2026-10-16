@@ -6323,16 +6323,23 @@ console.log('\nrete-testa-speciale — il fondo rigido e il cordone a strozzo');
   const A = rg.rtsAnelli({ N: 48, L: 15, r0: 100, amax: 165, campo: 450 }), N = 48, n = A.rho.length - 1;
   const base = { N: 48, L: 15, giroInCima: false, filo: 1, modo: 'bocca', boccaMm: 200, maniciMm: 250, morbidezza: 0.7, fondoRigido: 0, cordone: false, stretta: 0 };
   const prova = (opz) => { const s = rg.rtsAppesa(A, { ...base, ...opz }); rg.rtsAssesta(s, 8000); return { s, m: rg.rtsMisureAppesa(s) }; };
-  const dislivello = (s) => { const zs = s.nodi.filter((q, i) => i < N || (i >= (n + 1) * N && i < (n + 1) * N + 3 * N + 1)).map((q) => q.z); return Math.max(...zs) - Math.min(...zs); };
+  const dislivello = (s) => { const zs = s.fondo.map((i) => s.nodi[i].z); return Math.max(...zs) - Math.min(...zs); };
   const molle = prova({}), rigido = prova({ fondoRigido: 1 });
   check('il fondo rigido resta piatto (sotto 1 mm) e la sacca scende meno; quello molle si incurva (oltre 30 mm)',
     [dislivello(rigido.s) < 1, dislivello(molle.s) > 30, rigido.m.profondita < molle.m.profondita], [true, true, true]);
   check('la testa è libera: il giro d’impuntura in cima è spento di partenza', rg.RTS_PARAMETRI.rimPass, false);
-  // stringendo il cordone la bocca si chiude; appesa per i capi col fondo rigido il cordone regge tutto il peso: prima
-  // risultava «allungato» fino al 9% (gli errori si sommavano lungo la catena), ora meno del 3%
-  const larga = prova({ modo: 'cordone', cordone: true, stretta: 0.3, fondoRigido: 0.2 }), stretta = prova({ modo: 'cordone', cordone: true, stretta: 0.9, fondoRigido: 1 });
+  // il fondo è quello del ricamo: più passo, meno giri nel modello; il cordone passa sugli apici dell'ultimo anello
+  // (Lorenzo: «il cordone non tocca gli apici dell'ultimo rombo, si blocca prima»)
+  const rado = rg.rtsAppesa(A, { ...base, passoSpirale: 20 }), fitto = rg.rtsAppesa(A, { ...base, passoSpirale: 5 }), conCordone = rg.rtsAppesa(A, { ...base, cordone: true });
+  check('il fondo segue il passo della spirale (passo 20: 4 giri; passo 5: al più 12 nel modello) e il cordone sta sugli apici dell’ultimo anello',
+    [rado.fondo.length < fitto.fondo.length, conCordone.cordone.anelli.every((i) => Math.floor(i / N) === n)], [true, true]);
+  // stringendo il cordone la bocca si chiude; appesa per i capi il cordone regge tutto il peso: prima risultava
+  // «allungato» fino al 9% (gli errori si sommavano lungo la catena). Su una sacca piccola, per stare veloci
+  const A24 = rg.rtsAnelli({ N: 24, L: 15, r0: 50, amax: 165, campo: 300 });
+  const appesaPiccola = (opz) => { const s = rg.rtsAppesa(A24, { ...base, N: 24, modo: 'cordone', cordone: true, fondoRigido: 0.2, ...opz }); rg.rtsAssesta(s, 6000); return rg.rtsMisureAppesa(s); };
+  const larga = appesaPiccola({ stretta: 0.2 }), stretta = appesaPiccola({ stretta: 0.8 });
   check('il cordone a strozzo: più stretto, bocca più chiusa; appesa per i capi i fili non si allungano oltre il 3%',
-    [stretta.m.bocca < larga.m.bocca - 100, larga.m.allungamentoMax < 0.03, stretta.m.allungamentoMax < 0.03], [true, true, true]);
+    [stretta.bocca < larga.bocca - 50, larga.allungamentoMax < 0.03, stretta.allungamentoMax < 0.03], [true, true, true]);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).

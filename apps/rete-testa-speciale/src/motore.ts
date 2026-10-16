@@ -19,7 +19,7 @@
 //   vuoto, o attraversarlo con un'impuntura dritta (come nel Generatore pattern);
 // - «quando inserisci una parte nuova inizia sempre dal contorno esterno del cartamodello».
 import { distance, distanceToSegment, enforceMinStitch, lerp, pointInPolygon, type Point, type Polyline } from '@rg/core';
-import { anelliRadiali, type Anelli } from './sacca';
+import { anelliRadiali, fondoDellaLegatura, type Anelli } from './sacca';
 
 export type ModoVuoto = 'ritorno' | 'bordo' | 'centro';
 /** Da dove viene il pezzo: il contorno del cartamodello caricato, o un rettangolo con le misure scritte a mano. */
@@ -722,11 +722,6 @@ function lineaArrotondata(T: Point[], f: number, riga: number): PuntoTraccia[] {
   return out;
 }
 
-/** Quanto dentro il fondo arriva la legatura k: la metà delle legature si ferma dove sarebbero più fitte di `passo`, poi la metà della metà… La legatura 0 arriva al centro. */
-function fondoDellaLegatura(k: number, N: number, passo: number, r0: number, minimo: number): number {
-  let livello = 0; if (k === 0) livello = 30; else while (k % 2 === 0) { k /= 2; livello++; }
-  return Math.max(minimo, Math.min(0.95 * r0, passo * N / (2 * Math.PI * Math.pow(2, livello))));
-}
 
 /**
  * La SACCA A RETE: un disco di rombi coi lati tutti uguali (sacca.ts), centrato nel campo macchina. Ogni colonna è una

@@ -61,6 +61,15 @@ export function angoloDelRombo(A: Anelli, L: number, j: number): number {
   return 2 * Math.asin(Math.min(1, A.rho[j + 1] * A.s / L)) * 180 / Math.PI;
 }
 
+/**
+ * Quanto dentro il fondo arriva la legatura k: la metà delle legature si ferma dove sarebbero più fitte di `passo`, poi
+ * la metà della metà… La legatura 0 arriva al centro. La usano il ricamo e la sacca in 3D: una regola sola.
+ */
+export function fondoDellaLegatura(k: number, N: number, passo: number, r0: number, minimo: number): number {
+  let livello = 0; if (k === 0) livello = 30; else while (k % 2 === 0) { k /= 2; livello++; }
+  return Math.max(minimo, Math.min(0.95 * r0, passo * N / (2 * Math.PI * Math.pow(2, livello))));
+}
+
 /** I nodi di un anello non si stringono oltre lo spessore del filo. */
 export function raggioMinimo(N: number, filo: number): number {
   return Math.max(N * filo / Math.PI, 0.5);

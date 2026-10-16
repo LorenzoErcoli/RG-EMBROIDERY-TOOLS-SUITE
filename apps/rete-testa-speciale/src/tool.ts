@@ -607,7 +607,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     if (!radiale() || !anelliSacca || anelliSacca.rho.length < 3) return;
     $('canvas').hidden = true; $('vista3d').hidden = false;
     $('sacca3dBtn').setAttribute('aria-pressed', 'true');
-    vista3d = montaVista3d($('vista3d'), { anelli: anelliSacca, N: Math.round(par.radialCount), L: par.radialSideMm, giroInCima: par.rimPass, filo: par.constructionStroke, passoSpirale: par.spiralPitchMm });
+    vista3d = montaVista3d($('vista3d'), { anelli: anelliSacca, N: Math.round(par.radialCount), L: par.radialSideMm, giroInCima: par.rimPass, filo: par.constructionStroke, passoSpirale: par.spiralPitchMm, legature: par.tieSpacingMm });
   }
   function chiudiVista3d() {
     if (vista3d) { vista3d.distruggi(); vista3d = null; }

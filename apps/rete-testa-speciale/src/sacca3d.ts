@@ -3,14 +3,14 @@
 // allenta (vincolo «al più L»), la gravità tira giù, e il calcolo lascia assestare tutto (Verlet + vincoli ripetuti).
 // La morbidezza è quanto il filo resiste a piegarsi su un nodo: a 1 cede del tutto, sotto tiene un po' la forma piatta.
 //
-// Il fondo a spirale è una ragnatela di fili (giri concentrici e raggi) con la sua rigidità: «se la base di filo a
+// Il fondo è quello del ricamo: i giri della spirale al loro passo e le legature con la loro profondità, con la sua rigidità: «se la base di filo a
 // spirale è ben progettata diventa un appoggio perché il filo si unisce tra le varie linee di spirale» — giri
 // affiancati = rigido. La testa NON si ricama («lascia stare la parte sopra, lasciamola libera»): la bocca si chiude al
 // montaggio con un CORDONE che passa a zig-zag nei buchi dell'ultima fila di rombi e si stringe a strozzo.
 //
 // Si tiene per la bocca (l'ultimo anello fermo su un cerchio), per due punti del bordo, per il nodo del cordone, o la
 // si appoggia sul fondo.
-import { altezze, profiloPiuProfondo, raggioMinimo, type Anelli } from './sacca';
+import { altezze, fondoDellaLegatura, profiloPiuProfondo, raggioMinimo, type Anelli } from './sacca';
 
 export type ModoAppesa = 'bocca' | 'manici' | 'cordone' | 'appoggiata';
 
@@ -36,6 +36,10 @@ export interface OpzioniAppesa {
   cordone: boolean;
   /** Quanto è stretto il cordone, 0..1: 0 = lungo quanto il giro del disco piatto, 1 = bocca chiusa. */
   stretta: number;
+  /** Il passo della spirale del fondo, mm (quello del ricamo; di partenza 5). */
+  passoSpirale?: number;
+  /** La distanza fra le legature del fondo, mm (quella del ricamo; di partenza 10). */
+  legature?: number;
 }
 
 export interface Nodo { x: number; y: number; z: number; px: number; py: number; pz: number; fermo: boolean }
@@ -60,6 +64,8 @@ export interface SaccaAppesa {
   forme: Forma[];
   /** L'indice dell'ultimo anello della rete (la bocca). */
   n: number;
+  /** I nodi del fondo (l'anello 0 della rete, i giri della spirale e il centro). */
+  fondo: number[];
   /**
    * Per ogni nodo libero, il punto di presa più vicino lungo i fili e quanto è lontano: più in là non può andare (un filo
    * non si allunga). Tiene ferma la catena quando tutto pende da pochi punti (il nodo del cordone, due punti del bordo):
@@ -67,12 +73,14 @@ export interface SaccaAppesa {
    */
   ancore: Array<{ i: number; p: number; d: number }>;
   /**
-   * Il cordone: i nodi dove passa (l'anello dei lati dell'ultima fila di rombi), il punto dove esce dal giro e la mano
+   * Il cordone: i nodi dove passa (gli apici dell'ultimo anello), il punto dove esce dal giro e la mano
    * che tiene i due capi; null senza cordone.
    */
   cordone: { anelli: number[]; uscita: number; mano: number; pieno: number; chiuso: number } | null;
-  /** I fili del cordone (e dei capi), per correggerli più spesso. */
+  /** I fili del cordone (e dei capi) e del fondo, per correggerli più spesso. */
   corde: Filo[];
+  /** I soli fili del cordone e dei capi (reggono tutto con pochi tratti: si correggono ancora più spesso). */
+  cordeCordone: Filo[];
   opz: OpzioniAppesa;
   /** Quanto si è mosso, in media, l'ultimo passo (mm): sotto qualche millesimo la sacca è ferma. */
   movimento: number;
@@ -106,18 +114,27 @@ export function creaSaccaAppesa(A: Anelli, opz: OpzioniAppesa): SaccaAppesa {
   for (let j = 0; j <= n; j++) for (let k = 0; k < N; k++) distanze.push({ a: indice(N, j, k), b: indice(N, j, k + 1), minimo: 2 * Math.max(0.1, opz.filo) });
   // il giro in cima, se c'è
   if (opz.giroInCima) for (let k = 0; k < N; k++) filo(indice(N, n, k), indice(N, n, k + 1), 'cima');
-  // il fondo: giri concentrici e raggi, una ragnatela di fili; i giri che si toccano lo fanno rigido
-  const GIRI = 4;
+  // il fondo, quello del ricamo (Lorenzo, 2026-10-16: «il fondo nel simulatore non prende quello parametrizzato»; prima
+  // era una ragnatela fissa di 4 giri e 8 raggi): i giri della spirale al loro passo (al più 12 anelli nel modello: se
+  // i giri veri sono di più, ogni anello ne rappresenta alcuni), uniti fra loro solo dal filo che passa da un giro al
+  // successivo e dalle LEGATURE, ognuna fino alla sua profondità (la stessa regola del ricamo)
+  const passo = Math.max(0.3, opz.passoSpirale ?? 5), spaziatura = Math.max(passo, opz.legature ?? 10);
+  const M = Math.max(2, Math.min(12, Math.floor(r0 / passo)));
+  const raggi = Array.from({ length: M - 1 }, (_, i) => r0 * (1 - (i + 1) / M));
+  const profonda = Array.from({ length: N }, (_, k) => fondoDellaLegatura(k, N, spaziatura, r0, Math.min(passo, r0 / 2)));
   const giri: number[][] = [Array.from({ length: N }, (_, k) => indice(N, 0, k))];
-  for (let g = GIRI - 1; g >= 1; g--) {
-    const r = r0 * g / GIRI, giro = Array.from({ length: N }, (_, k) => nodo(r * Math.cos(2 * Math.PI * k / N), r * Math.sin(2 * Math.PI * k / N), 0));
+  for (const r of raggi) {
+    const giro = Array.from({ length: N }, (_, k) => nodo(r * Math.cos(2 * Math.PI * k / N), r * Math.sin(2 * Math.PI * k / N), 0));
     const prima = giri[giri.length - 1];
-    for (let k = 0; k < N; k++) { filo(giro[k], giro[(k + 1) % N], 'fondo'); filo(prima[k], giro[k], 'fondo'); }
+    for (let k = 0; k < N; k++) filo(giro[k], giro[(k + 1) % N], 'fondo');
+    filo(prima[0], giro[0], 'fondo'); // la spirale passa da un giro al successivo
+    for (let k = 0; k < N; k++) if (r >= profonda[k] - 1e-6 && k !== 0) filo(prima[k], giro[k], 'fondo'); // la legatura k arriva fin qui
     giri.push(giro);
   }
   for (let k = 0; k < N; k++) filo(indice(N, 0, k), indice(N, 0, k + 1), 'fondo');
   const centro = nodo(0, 0, 0), interno = giri[giri.length - 1];
-  for (let k = 0; k < N; k += Math.max(1, Math.round(N / 8))) filo(interno[k], centro, 'fondo');
+  filo(interno[0], centro, 'fondo');
+  for (let k = 1; k < N; k++) if (profonda[k] <= raggi[raggi.length - 1] / 2) filo(interno[k], centro, 'fondo');
   // il disco del fondo si sposta e si inclina ma non si piega. La rigidità cresce ripida: una forma debole, ripetuta per
   // centinaia di passi, vince comunque sulla gravità (tarata: al 20% il fondo scende ancora di 41 mm, dal 60% è piatto)
   const rig = Math.max(0, Math.min(1, opz.fondoRigido)), fondo = [...giri.flat(), centro];
@@ -125,24 +142,25 @@ export function creaSaccaAppesa(A: Anelli, opz: OpzioniAppesa): SaccaAppesa {
     let cx = 0, cy = 0; for (const i of fondo) { cx += nodi[i].x; cy += nodi[i].y; } cx /= fondo.length; cy /= fondo.length;
     forme.push({ indici: fondo, riposo: fondo.map((i) => [nodi[i].x - cx, nodi[i].y - cy]), alfa: 1e-5 * Math.pow(5e4, rig) });
   }
-  // il cordone: passa a zig-zag nei buchi dell'ultima fila di rombi, cioè fra i nodi dei suoi lati (l'anello n − 1).
-  // Scorre nei buchi, quindi si tira uguale ovunque: fili uguali fra un nodo e l'altro. Il giro si chiude dove il
-  // cordone esce, e da lì i due capi salgono alla mano (CAPI mm). Il primo tentativo faceva passare la presa dentro il
-  // giro: tenuta per lì la bocca pendeva come un cappio invece di chiudersi a collo.
+  // il cordone: passa a zig-zag nei buchi dell'ultima fila di rombi e, tirato, punta sugli APICI dell'ultimo anello
+  // (Lorenzo, 2026-10-16: «il cordone non tocca gli apici dell'ultimo rombo, si blocca prima»: prima passava per i
+  // nodi dei lati, l'anello n − 1). Scorre nei buchi, quindi si tira uguale ovunque: fili uguali fra un nodo e l'altro.
+  // Il giro si chiude dove il cordone esce, e da lì i due capi salgono alla mano (CAPI mm). Il primo tentativo faceva
+  // passare la presa dentro il giro: tenuta per lì la bocca pendeva come un cappio invece di chiudersi a collo.
   const CAPI = 120;
   let cordone: SaccaAppesa['cordone'] = null;
   if (opz.cordone && n >= 2) {
-    const anelli = Array.from({ length: N }, (_, k) => indice(N, n - 1, k));
+    const anelli = Array.from({ length: N }, (_, k) => indice(N, n, k));
     const a0 = nodi[anelli[0]], aN = nodi[anelli[N - 1]];
-    const uscita = nodo((a0.x + aN.x) / 2, (a0.y + aN.y) / 2, 0), mano = nodo(nodi[uscita].x * (1 + CAPI / A.rho[n - 1]), nodi[uscita].y * (1 + CAPI / A.rho[n - 1]), 0);
-    const corda = 2 * A.rho[n - 1] * Math.sin(Math.PI / N);
+    const uscita = nodo((a0.x + aN.x) / 2, (a0.y + aN.y) / 2, 0), mano = nodo(nodi[uscita].x * (1 + CAPI / A.rho[n]), nodi[uscita].y * (1 + CAPI / A.rho[n]), 0);
+    const corda = 2 * A.rho[n] * Math.sin(Math.PI / N);
     cordone = { anelli, uscita, mano, pieno: (N + 1) * corda, chiuso: (N + 1) * 2 * Math.max(0.1, opz.filo) };
     for (let k = 0; k + 1 < N; k++) filo(anelli[k], anelli[k + 1], 'cordone', 0);
     filo(anelli[N - 1], uscita, 'cordone', 0); filo(uscita, anelli[0], 'cordone', 0);
     filo(uscita, mano, 'capi', CAPI);
   }
 
-  const s: SaccaAppesa = { nodi, fili, pieghe, distanze, forme, n, ancore: [], cordone, corde: fili.filter((f) => f.tipo === 'cordone' || f.tipo === 'capi'), opz: { ...opz, N }, movimento: Infinity, passi: 0 };
+  const s: SaccaAppesa = { nodi, fili, pieghe, distanze, forme, n, fondo, ancore: [], cordone, corde: fili.filter((f) => f.tipo === 'cordone' || f.tipo === 'capi' || f.tipo === 'fondo'), cordeCordone: fili.filter((f) => f.tipo === 'cordone' || f.tipo === 'capi'), opz: { ...opz, N }, movimento: Infinity, passi: 0 };
   stringi(s, opz.stretta);
   appendi(s, A);
   return s;
@@ -213,7 +231,7 @@ export function appendi(s: SaccaAppesa, A: Anelli): void {
  */
 export function avanza(s: SaccaAppesa, quanti = 1, ripetizioni = 24): void {
   const appoggiata = s.opz.modo === 'appoggiata';
-  const g = 0.05, smorza = 0.97, rigidita = (1 - Math.max(0, Math.min(1, s.opz.morbidezza))) * 0.004;
+  const g = 0.05, smorza = 0.94, rigidita = (1 - Math.max(0, Math.min(1, s.opz.morbidezza))) * 0.004;
   const sposta = (a: Nodo, b: Nodo, dx: number, dy: number, dz: number, c: number) => {
     const wa = a.fermo ? 0 : 1, wb = b.fermo ? 0 : 1, w = wa + wb; if (!w) return;
     a.x += dx * c * wa / w; a.y += dy * c * wa / w; a.z += dz * c * wa / w;
@@ -235,9 +253,9 @@ export function avanza(s: SaccaAppesa, quanti = 1, ripetizioni = 24): void {
         const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z, d = Math.hypot(dx, dy, dz);
         if (d > f.L) sposta(a, b, dx, dy, dz, (d - f.L) / d); // il filo allentato non tira
       }
-      // il cordone regge tutto il peso con pochi tratti in fila: lo si corregge più volte (costa poco). Senza, appesa
-      // per i capi col fondo rigido, il cordone risultava «allungato» fino al 9%
-      for (let c = 0; c < 8 && s.cordone; c++) for (const f of s.corde) {
+      // il cordone regge tutto il peso con pochi tratti in fila, e i giri del fondo pendono da poche legature: si
+      // correggono più volte (costano poco). Senza, il cordone risultava «allungato» fino al 9% e i giri fino al 17%
+      for (let c = 0; c < 8; c++) for (const f of c < 3 ? s.corde : s.cordeCordone) {
         const a = s.nodi[f.a], b = s.nodi[f.b];
         const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z, d = Math.hypot(dx, dy, dz);
         if (d > f.L) sposta(a, b, dx, dy, dz, (d - f.L) / d);
