@@ -7,7 +7,7 @@ import { hookPanZoom } from '@rg/ui/panzoom';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { costruisciRete, costruisciReteRadiale, pezzoAMisure, stratiRete, COLORE_RETE, PARAMETRI_RETE, type ParametriRete, type PuntoAgo, type RisultatoRete } from './motore';
-import { angoloDelRombo, formaSacca, raggioMinimo, type Anelli } from './sacca';
+import { angoloDelRombo, formaSacca, puntoDelNodo, raggioMinimo, type Anelli } from './sacca';
 import { montaVista3d } from './vista3d';
 
 /** Il disegno nel file riapribile, se non pesa troppo (come negli altri tool). */
@@ -49,6 +49,8 @@ const CAMPI_SACCA: Campo[] = [
   { nome: 'bottomWidthMm', etichetta: 'Larghezza del fondo', unita: 'mm', passo: 5, min: 10, max: 440 },
   { nome: 'bottomRoundEnds', etichetta: 'Teste a mezzo cerchio', unita: '%', passo: 5, min: 0, max: 100,
     aiuto: '0 = ovale. 100 = due mezzi cerchi uniti da tratti dritti. In mezzo, teste più tonde e lati più dritti.' },
+  { nome: 'sideBandMm', etichetta: 'Fascia sui lati lunghi', unita: 'mm', passo: 5, min: 0, max: 300,
+    aiuto: '0 = tutta la rete. Più corta: le colonne dei lati lunghi si fermano prima, le teste no. Va a scatti di due anelli: prende la più vicina. Chiusa col cordone, i lati lunghi restano tesi e le teste fanno pancia.' },
   { nome: 'bottomRadiusMm', etichetta: 'Raggio del fondo', unita: 'mm', passo: 1, min: 5, max: 300,
     aiuto: 'Dove finisce la rete e comincia la spirale. Più è grande, più la sacca è larga e bassa.' },
   { nome: 'maxAngleDeg', etichetta: 'Angolo massimo dei rombi in fuori', unita: '°', passo: 1, min: 60, max: 179,
@@ -144,7 +146,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   let risultato: RisultatoRete | null = null;
   const visibili: Record<ChiaveVista | 'salti' | 'punti', boolean> = { rete: true, sotto: true, sopra: true, bordo: true, vuoto: true, fondo: true, salti: true, punti: false };
   /** Gli anelli dell'ultima sacca calcolata, per le sue misure. */
-  let anelliSacca: Anelli | null = null;
+  let anelliSacca: Anelli | null = null, cimeSacca: number[] | null = null;
   const radiale = () => par.netShape === 'radiale';
   let testoDisegno = 'Nessun disegno caricato.';
   let simulando = false;
@@ -265,7 +267,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     if (radiale()) {
       // il fondo tondo ha il raggio, quello ovale lunghezza e larghezza
       const ovale = par.bottomShape === 'ovale';
-      const sacca = CAMPI_SACCA.filter((c) => (c.nome === 'bottomRadiusMm' ? !ovale : c.nome === 'bottomLengthMm' || c.nome === 'bottomWidthMm' || c.nome === 'bottomRoundEnds' ? ovale : true));
+      const sacca = CAMPI_SACCA.filter((c) => (c.nome === 'bottomRadiusMm' ? !ovale : c.nome === 'bottomLengthMm' || c.nome === 'bottomWidthMm' || c.nome === 'bottomRoundEnds' || c.nome === 'sideBandMm' ? ovale : true));
       box.append(...campi(CAMPI_FORMA).childNodes, ...campi(sacca).childNodes);
       box.insertAdjacentHTML('beforeend', `<small class="rg-field__help rg-param-grid__wide">Un disco di rombi coi lati tutti uguali, al centro del campo: tolto dal telaio i rombi ruotano e diventa una sacca. Le sue misure sono in «Programma e vista».</small>` + bloccoRiapri);
       return box;
@@ -349,17 +351,24 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     const A = anelliSacca;
     if (!A || A.rho.length < 3) return '';
     const n = A.rho.length - 1, L = par.radialSideMm, N = Math.round(par.radialCount), rMin = raggioMinimo(N, par.constructionStroke);
-    const fondo = 2 * A.rho[0], disco = 2 * A.rho[n];
+    const fondo = 2 * A.rho[0], disco = 2 * A.rho[n - (n % 2)]; // (la rete finisce su un anello pari)
     if (A.punti && A.ovale) {
-      // l'ovale: la tabella delle bocche vale solo per il fondo tondo (anelli che restano cerchi); qui le fasce
-      const xs = A.punti[n].map((q) => q.x), ys = A.punti[n].map((q) => q.y), W = Math.max(...xs) - Math.min(...xs), H = Math.max(...ys) - Math.min(...ys);
-      const testa = Math.max(...xs) - A.ovale.a, lato = Math.max(...ys) - A.ovale.b;
-      return `<p class="rg-field__help rg-param-grid__wide">Rete ${W.toFixed(0)} × ${H.toFixed(0)} mm (ti ferma ${A.perche === 'campo' ? 'il campo' : 'l’angolo massimo'}) · ${n + 1} anelli · fondo ${(2 * A.ovale.a).toFixed(0)} × ${(2 * A.ovale.b).toFixed(0)} mm`
-        + ` · fascia sui lati lunghi ${lato.toFixed(0)} mm, sulle teste ${testa.toFixed(0)} mm. Chiusa, la sacca fa pancia sui lati lunghi e tiene tese le teste: guardala in <b>Sacca 3D</b>.</p>`;
+      // l'ovale: la tabella delle bocche vale solo per il fondo tondo (anelli che restano cerchi); qui le fasce, misurate
+      // sulla cima di ogni colonna (con la fascia sui lati lunghi le colonne non finiscono tutte allo stesso anello)
+      const cime = cimeSacca, cima = Array.from({ length: N }, (_, k) => puntoDelNodo(A, N, cime ? cime[k] : n, k));
+      const xs = cima.map((q) => q.x), ys = cima.map((q) => q.y), W = Math.max(...xs) - Math.min(...xs), H = Math.max(...ys) - Math.min(...ys);
+      // le fasce: a metà del lato lungo (la colonna più vicina all'asse corto) e in punta alla testa (la colonna 0)
+      const fondo0 = Array.from({ length: N }, (_, k) => puntoDelNodo(A, N, 0, k));
+      const kLato = fondo0.reduce((m, q, k) => (q.y > fondo0[m].y ? k : m), 0);
+      const testa = Math.hypot(cima[0].x - fondo0[0].x, cima[0].y - fondo0[0].y), lato = Math.hypot(cima[kLato].x - fondo0[kLato].x, cima[kLato].y - fondo0[kLato].y);
+      const anelli = cime && Math.min(...cime) !== Math.max(...cime) ? `${Math.min(...cime)} anelli sui lati lunghi, ${Math.max(...cime)} sulle teste` : `${(cime ? cime[0] : n) + 1} anelli`;
+      const chiusa = lato > testa ? 'la sacca fa pancia sui lati lunghi e tiene tese le teste' : 'le teste fanno pancia e i lati lunghi restano tesi';
+      return `<p class="rg-field__help rg-param-grid__wide">Rete ${W.toFixed(0)} × ${H.toFixed(0)} mm (ti ferma ${A.perche === 'campo' ? 'il campo' : 'l’angolo massimo'}) · ${anelli} · fondo ${(2 * A.ovale.a).toFixed(0)} × ${(2 * A.ovale.b).toFixed(0)} mm`
+        + ` · fascia sui lati lunghi ${lato.toFixed(0)} mm, sulle teste ${testa.toFixed(0)} mm. Chiusa, ${chiusa}: guardala in <b>Sacca 3D</b>.</p>`;
     }
     const bocche = [fondo, (fondo + disco) / 2, fondo + (disco - fondo) * 0.75, fondo + (disco - fondo) * 0.9].filter((b) => b < disco - 1);
     const righe = bocche.map((b) => { const s = formaSacca(A, L, b, rMin); return `<tr><td>Ø ${s.bocca.toFixed(0)} mm${Math.abs(b - fondo) < 0.5 ? ' (dritta)' : ''}</td><td>${s.possibile ? s.profondita.toFixed(0) + ' mm' : 'non si può'}</td><td>Ø ${s.larga.toFixed(0)} mm</td><td>${s.litri.toFixed(1)} l</td></tr>`; }).join('');
-    return `<p class="rg-field__help rg-param-grid__wide">Disco Ø ${disco.toFixed(0)} mm (limite teorico Ø ${(2 * A.rMaxPiatto).toFixed(0)}; ti ferma ${A.perche === 'campo' ? 'il campo' : 'l’angolo massimo'}) · ${n + 1} anelli · rombi da ${angoloDelRombo(A, L, 0).toFixed(0)}° al fondo a ${angoloDelRombo(A, L, Math.max(0, n - 2)).toFixed(0)}° in cima · fondo Ø ${fondo.toFixed(0)} mm</p>`
+    return `<p class="rg-field__help rg-param-grid__wide">Disco Ø ${disco.toFixed(0)} mm (limite teorico Ø ${(2 * A.rMaxPiatto).toFixed(0)}; ti ferma ${A.perche === 'campo' ? 'il campo' : 'l’angolo massimo'}) · ${n - (n % 2) + 1} anelli · rombi da ${angoloDelRombo(A, L, 0).toFixed(0)}° al fondo a ${angoloDelRombo(A, L, Math.max(0, n - 2)).toFixed(0)}° in cima · fondo Ø ${fondo.toFixed(0)} mm</p>`
       + `<table class="rg-param-grid__wide rete-tabella"><caption>La sacca, con la bocca che scegli tu (fondo fermo)</caption><thead><tr><th>Bocca</th><th>Profondità</th><th>Più larga</th><th>Capienza</th></tr></thead><tbody>${righe}</tbody></table>`;
   }
 
@@ -428,10 +437,10 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     attesa = window.setTimeout(() => {
       if (radiale()) {
         const r = costruisciReteRadiale(par);
-        anelliSacca = r.anelli;
+        anelliSacca = r.anelli; cimeSacca = r.cime;
         risultato = r.blocchi.length ? r : null;
-        const ultimo = r.anelli.punti?.[r.anelli.punti.length - 1], larg = (f: (q: { x: number; y: number }) => number) => (ultimo ? Math.max(...ultimo.map(f)) - Math.min(...ultimo.map(f)) : 0);
-        const disco = ultimo ? `rete ${larg((q) => q.x).toFixed(0)} × ${larg((q) => q.y).toFixed(0)} mm` : `disco Ø ${(2 * r.anelli.rho[r.anelli.rho.length - 1]).toFixed(0)} mm`;
+        const N = Math.round(par.radialCount), ultimo = r.anelli.punti ? Array.from({ length: N }, (_, k) => puntoDelNodo(r.anelli, N, r.cime ? r.cime[k] : r.anelli.rho.length - 1, k)) : undefined, larg = (f: (q: { x: number; y: number }) => number) => (ultimo ? Math.max(...ultimo.map(f)) - Math.min(...ultimo.map(f)) : 0);
+        const nn = r.anelli.rho.length - 1, disco = ultimo ? `rete ${larg((q) => q.x).toFixed(0)} × ${larg((q) => q.y).toFixed(0)} mm` : `disco Ø ${(2 * r.anelli.rho[nn - (nn % 2)]).toFixed(0)} mm`;
         $('status').textContent = r.avviso ?? `Sacca: ${disco} · ${r.blocchi.length} parti · ${r.misure.salti} salti · ${r.misure.tempoMs} ms`;
         $('points').textContent = r.blocchi.length ? ` · ${r.misure.punti.toLocaleString('it-IT')} punti` : '';
         buildPanel();
@@ -629,7 +638,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     if (!radiale() || !anelliSacca || anelliSacca.rho.length < 3) return;
     $('canvas').hidden = true; $('vista3d').hidden = false;
     $('sacca3dBtn').setAttribute('aria-pressed', 'true');
-    vista3d = montaVista3d($('vista3d'), { anelli: anelliSacca, N: Math.round(par.radialCount), L: par.radialSideMm, giroInCima: par.rimPass, filo: par.constructionStroke, passoSpirale: par.spiralPitchMm, legature: par.tieSpacingMm, sovrapposizione: par.overlapMm, regola: par.overlapRule });
+    vista3d = montaVista3d($('vista3d'), { anelli: anelliSacca, N: Math.round(par.radialCount), L: par.radialSideMm, giroInCima: par.rimPass, filo: par.constructionStroke, passoSpirale: par.spiralPitchMm, legature: par.tieSpacingMm, sovrapposizione: par.overlapMm, regola: par.overlapRule, cime: cimeSacca });
   }
   function chiudiVista3d() {
     if (vista3d) { vista3d.distruggi(); vista3d = null; }

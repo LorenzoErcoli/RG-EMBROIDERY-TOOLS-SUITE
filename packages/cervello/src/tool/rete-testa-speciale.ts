@@ -40,6 +40,11 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: '%', min: 0, max: 100, passo: 5, predefinito: 0, concetto: 'formato',
     },
     {
+      id: 'sideBand', nome: 'sideBandMm', etichetta: 'Fascia sui lati lunghi',
+      aiuto: 'Sacca, fondo ovale: 0 = tutta la rete. Più corta: le colonne dei lati lunghi si fermano prima, le teste no (a scatti di due anelli: la più vicina); chiusa col cordone, i lati restano tesi e le teste fanno pancia.',
+      tipo: 'num', unita: 'mm', min: 0, max: 300, passo: 5, predefinito: 0, concetto: 'formato',
+    },
+    {
       id: 'bottomRadius', nome: 'bottomRadiusMm', etichetta: 'Raggio del fondo',
       aiuto: 'Sacca: dove finisce la rete e comincia la spirale. Più è grande, più la sacca è larga e bassa.',
       tipo: 'num', unita: 'mm', min: 5, max: 300, passo: 1, predefinito: 100, concetto: 'formato',

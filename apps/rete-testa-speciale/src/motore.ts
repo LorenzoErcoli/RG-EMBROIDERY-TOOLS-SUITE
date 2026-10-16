@@ -20,7 +20,7 @@
 // - «quando inserisci una parte nuova inizia sempre dal contorno esterno del cartamodello».
 import { distance, distanceToSegment, enforceMinStitch, lerp, pointInPolygon, type Point, type Polyline } from '@rg/core';
 import {
-  anelliOvali, anelliRadiali, fondoDellaLegatura, puntoDelFondo, puntoDelNodo, raggioDelFondo, sovrapposizioneAlNodo,
+  anelliOvali, anelliRadiali, cimeDellaRete, fondoDellaLegatura, siIncrociano, puntoDelFondo, puntoDelNodo, raggioDelFondo, sovrapposizioneAlNodo,
   tangenteAlNodo, versoIlCentro, type Anelli, type RegolaSovrapposizione,
 } from './sacca';
 
@@ -51,6 +51,11 @@ export type ParametriRete = {
   bottomWidthMm: number;
   /** Sacca, fondo ovale: quanto le teste sono mezzi cerchi, % (0 = ovale, 100 = mezzi cerchi uniti da tratti dritti). */
   bottomRoundEnds: number;
+  /**
+   * Sacca, fondo ovale: la fascia sui lati lunghi, mm (0 = tutta la rete). Le colonne dei lati si fermano prima, le teste
+   * no: meno rete sui lati lunghi, più sulle teste (Lorenzo, 2026-10-16), vedi `cimeDelleColonne`.
+   */
+  sideBandMm: number;
   /** Sacca: angolo massimo dei rombi in fuori, gradi (a 180 sono piatti). */
   maxAngleDeg: number;
   /** Sacca: lato del campo macchina, mm. Il disco ci deve stare. */
@@ -118,6 +123,7 @@ export const PARAMETRI_RETE: ParametriRete = {
   bottomLengthMm: 260,
   bottomWidthMm: 140,
   bottomRoundEnds: 0,
+  sideBandMm: 0,
   maxAngleDeg: 165,
   fieldMm: 450,
   spiralPitchMm: 5,
@@ -754,7 +760,7 @@ function lineaArrotondata(T: Point[], f: number, riga: number): PuntoTraccia[] {
  * entra sull'altro lato; poi una legatura entra nel fondo e torna fuori alla colonna dopo. Prima di tutto la spirale
  * del fondo, dal centro in fuori; alla fine, se si vuole, un giro d'impuntura in cima.
  */
-export function costruisciReteRadiale(par: ParametriRete): RisultatoRete & { anelli: Anelli; centro: Point } {
+export function costruisciReteRadiale(par: ParametriRete): RisultatoRete & { anelli: Anelli; centro: Point; cime: number[] | null } {
   const t0 = Date.now();
   const p: ParametriRete = { ...PARAMETRI_RETE, ...par };
   const N = Math.max(3, Math.round(p.radialCount)), L = Math.max(1, p.radialSideMm);
@@ -764,22 +770,26 @@ export function costruisciReteRadiale(par: ParametriRete): RisultatoRete & { ane
     : anelliRadiali({ N, L, r0: p.bottomRadiusMm, amax: p.maxAngleDeg, campo: p.fieldMm });
   const centro = { x: p.fieldMm / 2, y: p.fieldMm / 2 };
   const vuota = (avviso: string) => ({
-    blocchi: [], avviso, anelli: A, centro,
+    blocchi: [], avviso, anelli: A, centro, cime: null,
     misure: { punti: 0, puntiSovrapposti: 0, puntiSopra: 0, filoMm: 0, puntoMinMm: 0, puntoMaxMm: 0, salti: 0, saltiMm: 0, stratiMax: 0, tempoMs: Date.now() - t0 },
   });
   if (A.impossibile) return vuota(ovale
     ? `Con ${N} rombi di lato ${L} mm il fondo ovale ${p.bottomLengthMm} × ${p.bottomWidthMm} mm non ha posto nemmeno per un anello: aumenta i rombi o il lato, o riduci il fondo.`
     : `Con ${N} rombi di lato ${L} mm il fondo non può avere raggio ${p.bottomRadiusMm} mm: il limite è ${A.rMaxPiatto.toFixed(1)} mm.`);
   if (A.rho.length < 3) return vuota('Fra il fondo e il limite non ci sta nemmeno un rombo: aumenta il lato, l’angolo massimo o il campo, o riduci il fondo.');
-  const n = A.rho.length - 1, rOut = A.rho[n], r0 = A.rho[0];
+  // (ogni colonna finisce dove le sue due linee si incontrano: su un anello pari, `cimeDellaRete`)
+  const n = A.rho.length - 1, rOut = A.rho[n - (n % 2)], r0 = A.rho[0];
   const pol = (r: number, f: number): Point => ({ x: centro.x + r * Math.cos(f), y: centro.y + r * Math.sin(f) });
   const tangente = (f: number): Point => ({ x: -Math.sin(f), y: Math.cos(f) });
   const fi = (k: number) => 2 * Math.PI * k / N;
   const angoloNodo = (j: number, k: number) => fi(k) + (j % 2 ? Math.PI / N : 0);
   const nodoA = (j: number, k: number): Point => { const q = puntoDelNodo(A, N, j, k); return { x: centro.x + q.x, y: centro.y + q.y }; };
-  // il contorno in cima: un cerchio con un vertice su ogni nodo dell'ultimo anello (sull'ovale, i nodi dell'ultimo anello)
+  // le colonne dei lati lunghi che si fermano prima (fondo ovale, «Fascia sui lati lunghi»): ognuna col suo ultimo anello
+  const cime = cimeDellaRete(A, N, ovale ? p.sideBandMm : 0), cima = (k: number) => (cime ? cime[((k % N) + N) % N] : n);
+  // il contorno in cima: un cerchio con un vertice su ogni nodo dell'ultimo anello (sull'ovale, i nodi dell'ultimo anello;
+  // con le colonne tagliate, la cima di ogni colonna)
   const M = ovale ? N : 2 * N * Math.ceil(360 / (2 * N));
-  const contorno: Polyline = ovale ? Array.from({ length: N }, (_, k) => nodoA(n, k)) : Array.from({ length: M }, (_, i) => pol(rOut, 2 * Math.PI * i / M));
+  const contorno: Polyline = ovale ? Array.from({ length: N }, (_, k) => nodoA(cima(k), k)) : Array.from({ length: M }, (_, i) => pol(rOut, 2 * Math.PI * i / M));
 
   // le due linee della colonna k: B a sinistra (verso l'angolo minore), A a destra. Agli anelli pari si toccano fra
   // loro (la rientranza), agli anelli dispari toccano le colonne vicine (le punte). La sovrapposizione le porta oltre
@@ -787,10 +797,11 @@ export function costruisciReteRadiale(par: ParametriRete): RisultatoRete & { ane
   const f = Math.max(0, Math.min(1, p.cornerRounding / 100));
   const mezza = A.rho.map((_, j) => sovrapposizioneAlNodo(A, N, j, p.overlapMm, p.overlapRule, L) / 2);
   const linea = (k: number, lato: -1 | 1): PuntoTraccia[] => {
-    const T: Point[] = [];
-    for (let j = 0; j <= n; j++) {
+    const T: Point[] = [], cimaK = cima(k);
+    for (let j = 0; j <= cimaK; j++) {
       const kk = j % 2 && lato < 0 ? k - 1 : k, a = angoloNodo(j, kk), q = ovale ? nodoA(j, kk) : pol(A.rho[j], a);
-      if (j === 0 || j === n) { T.push(q); continue; }
+      // in cima, e dove l'altra linea non arriva (la colonna vicina è già finita), niente incrocio: il nodo resta dov'è
+      if (j === 0 || j === cimaK || !siIncrociano(cime, N, j, kk)) { T.push(q); continue; }
       // sull'ovale ogni nodo ha il suo incrocio, e lo spostamento va lungo il suo anello
       const verso = j % 2 ? lato : -lato, t = ovale ? tangenteAlNodo(A, N, j, kk) : tangente(a);
       const m = ovale ? sovrapposizioneAlNodo(A, N, j, p.overlapMm, p.overlapRule, L, kk) / 2 : mezza[j];
@@ -845,7 +856,7 @@ export function costruisciReteRadiale(par: ParametriRete): RisultatoRete & { ane
     ordine: (ra, rb) => { let d = (((rb - ra) % due) + due) % due; if (d > N) d -= due; return d; },
     giro: 2 * Math.PI,
   }, p, t0);
-  return { ...r, anelli: A, centro };
+  return { ...r, anelli: A, centro, cime };
 }
 
 // ------------------------------------------------------------------------------------------------ il contratto (K1b)

@@ -110,12 +110,22 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
 20. **Le teste a mezzo cerchio, con un parametro** (2026-10-16): *«mi piacerebbe però che il fondo possa essere con i
     finali più tondi volendo, più mezzi cerchi appunto, ma un parametro di controllo anche quello»* →
     `bottomRoundEnds` (0 = ovale, 100 = mezzi cerchi e tratti dritti).
+21. **La fascia sui lati lunghi nel tool** (2026-10-16): *«Fascia sui lati lunghi è importante che me lo metti dentro»* →
+    `sideBandMm` (0 = tutta la rete), nel ricamo, nel pannello e nella sacca 3D.
+22. **Nessuna cima volante** (2026-10-16, su un'anteprima con la cima di una colonna su un anello dispari): *«eliminiamo
+    queste situazioni qui, perché non è attaccato a niente rimarrebbe volante»*. Su un anello dispari le due linee della
+    colonna finiscono su due nodi diversi e il filo passava dall'una all'altra lungo il bordo, senza incrociare niente.
+    Ora ogni colonna finisce su un anello PARI, in una punta dove le sue due linee si incontrano; con gli anelli dispari
+    la rete si ferma all'ultimo pari (`cimeDellaRete`), anche sul tondo.
 
-## Le colonne dei lati che si fermano prima (2026-10-16, simulato)
+## Le colonne dei lati che si fermano prima (2026-10-16)
 - Ogni colonna ha il suo ultimo anello: sulle teste quello di tutta la rete, sui lati lunghi quello che dà la fascia
-  chiesta, in mezzo a scalare (sin² del parametro). Fra due colonne vicine al più un anello di differenza, così ogni
-  nodo ha sempre i suoi due nodi sotto e i rombi restano coi lati uguali. L'ultima fila sale e scende: il cordone passa
-  dal nodo più alto di ogni colonna.
+  chiesta, in mezzo a scalare (sin² del parametro). Sempre pari (le due linee si incontrano in punta: niente tratto da
+  ripassare), quindi a scatti di due anelli (64 rombi: 28, 56, 83, 109, 135 mm); fra colonne vicine al più due anelli.
+  Ogni tratto è di una linea sola (`ceIlTratto`): dove una colonna è già finita, la linea della vicina passa sul nodo
+  senza incrocio (`siIncrociano`) e lì non si sposta. Il cordone passa dalla punta di ogni colonna.
+- La prima versione (simulata) usava cime di ogni altezza e i tratti fra nodi che c'erano: su una cima dispari una
+  linea finiva un nodo più su dell'altra, e nel ricamo il filo avrebbe dovuto ripassare un tratto.
 - **In 3D l'effetto si rovescia davvero**: fondo 260 × 140, 64 rombi, lati fino a 60 mm (4 anelli contro 10), bocca
   stretta a Ø 90: le teste fanno pancia 24 mm (fili tesi al 77%) e i lati lunghi 4 mm (97%). Con tutti gli anelli era il
   contrario (teste 6, lati 16).

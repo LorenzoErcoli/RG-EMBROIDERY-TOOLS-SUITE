@@ -1994,6 +1994,11 @@
           "$ref": "#/$defs/bottomRoundEnds",
           "default": 0
         },
+        "sideBandMm": {
+          "$ref": "#/$defs/sideBand",
+          "default": 0,
+          "x-id": "sideBand"
+        },
         "bottomRadiusMm": {
           "$ref": "#/$defs/bottomRadius",
           "default": 100,
@@ -5031,6 +5036,16 @@
       "x-passo": 5,
       "x-concetto": "formato"
     },
+    "sideBand": {
+      "type": "number",
+      "title": "Fascia sui lati lunghi",
+      "description": "Sacca, fondo ovale: 0 = tutta la rete. Più corta: le colonne dei lati lunghi si fermano prima, le teste no (a scatti di due anelli: la più vicina); chiusa col cordone, i lati restano tesi e le teste fanno pancia.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 300,
+      "x-passo": 5,
+      "x-concetto": "formato"
+    },
     "bottomRadius": {
       "type": "number",
       "title": "Raggio del fondo",
@@ -5314,6 +5329,7 @@
         "bottomLength",
         "bottomWidth",
         "bottomRoundEnds",
+        "sideBand",
         "bottomRadius",
         "machineField",
         "pieceSource"

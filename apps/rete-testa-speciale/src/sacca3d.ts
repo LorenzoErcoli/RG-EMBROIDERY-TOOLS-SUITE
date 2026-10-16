@@ -11,7 +11,7 @@
 // Si tiene per la bocca (l'ultimo anello fermo su un cerchio), per due punti del bordo, per il nodo del cordone, o la
 // si appoggia sul fondo.
 import {
-  altezze, ceIlNodo, fondoDellaLegatura, lenteAlNodo, profiloPiuProfondo, puntoDelNodo, raggioDelFondo, raggioMinimo, versoIlCentro,
+  altezze, ceIlNodo, ceIlTratto, fondoDellaLegatura, lenteAlNodo, profiloPiuProfondo, puntoDelNodo, raggioDelFondo, raggioMinimo, versoIlCentro,
   type Anelli, type RegolaSovrapposizione,
 } from './sacca';
 
@@ -47,7 +47,7 @@ export interface OpzioniAppesa {
   sovrapposizione?: number;
   regola?: RegolaSovrapposizione;
   /** Fondo ovale: l'ultimo anello di ogni colonna (`cimeDelleColonne`), se le colonne dei lati si fermano prima. */
-  cime?: number[];
+  cime?: number[] | null;
 }
 
 export interface Nodo { x: number; y: number; z: number; px: number; py: number; pz: number; fermo: boolean }
@@ -122,8 +122,10 @@ export function creaSaccaAppesa(A: Anelli, opz: OpzioniAppesa): SaccaAppesa {
   for (let j = 0; j <= n; j++) for (let k = 0; k < N; k++) { const q = puntoDelNodo(A, N, j, k); nodo(q.x, q.y, 0); }
   // (le colonne che si fermano prima: solo i nodi che ci sono)
   const ce = (j: number, k: number) => ceIlNodo(opz.cime, N, j, k);
-  for (let j = 0; j < n; j++) for (let k = 0; k < N; k++) for (const kk of j % 2 ? [k, k + 1] : [k, k - 1]) if (ce(j, k) && ce(j + 1, kk)) filo(indice(N, j, k), indice(N, j + 1, kk), 'rete');
-  const bordo = Array.from({ length: N }, (_, k) => { let j = n; while (j > 0 && !ce(j, k)) j--; return indice(N, j, k); });
+  for (let j = 0; j < n; j++) for (let k = 0; k < N; k++) for (const kk of j % 2 ? [k, k + 1] : [k, k - 1]) if (ceIlTratto(opz.cime, N, j, k, kk)) filo(indice(N, j, k), indice(N, j + 1, kk), 'rete');
+  // l'ultima fila: dove il cordone passa. Con le colonne tagliate, la cima di ogni colonna (dove le sue due linee si
+  // incontrano); con tutti gli anelli, l'ultimo anello
+  const bordo = Array.from({ length: N }, (_, k) => indice(N, opz.cime ? opz.cime[k] : n, k));
   // le pieghe: sulle due linee di ogni colonna, il nodo prima e il nodo dopo; rigide quanto è lunga la lente sul nodo
   // (sull'ovale ogni nodo ha la sua lente)
   const lente = (j: number, k: number) => (j >= 1 && j < n ? lenteAlNodo(A, N, j, opz.sovrapposizione ?? 0, opz.regola ?? 'spostamento', opz.L, k) : 0);
@@ -133,7 +135,7 @@ export function creaSaccaAppesa(A: Anelli, opz: OpzioniAppesa): SaccaAppesa {
   for (let k = 0; k < N; k++) for (const lato of [0, 1]) {
     const col = (j: number) => (j % 2 ? (lato ? k : k - 1) : k);
     const linea = Array.from({ length: n + 1 }, (_, j) => indice(N, j, col(j)));
-    for (let j = 1; j < n; j++) if (ce(j + 1, col(j + 1))) pieghe.push({ a: linea[j - 1], b: linea[j + 1], L: lunghezza(linea[j - 1], linea[j + 1]), k: peso(j, col(j)) });
+    for (let j = 1; j < n; j++) if (!opz.cime || j + 1 <= opz.cime[k]) pieghe.push({ a: linea[j - 1], b: linea[j + 1], L: lunghezza(linea[j - 1], linea[j + 1]), k: peso(j, col(j)) });
   }
   // i nodi di un anello non si toccano
   for (let j = 0; j <= n; j++) for (let k = 0; k < N; k++) if (ce(j, k) && ce(j, k + 1)) distanze.push({ a: indice(N, j, k), b: indice(N, j, k + 1), minimo: 2 * Math.max(0.1, opz.filo) });

@@ -166,28 +166,63 @@ export function raggioDelFondo(A: Anelli): number {
 
 /**
  * LE COLONNE CHE SI FERMANO PRIMA (Lorenzo, 2026-10-16: «deve essere al contrario in realtà. meno nei lati lunghi e più
- * nei lati corti»). Sull'ovale la fascia viene da sola più corta sulle teste; per averla più corta sui lati lunghi le
- * colonne dei lati si fermano a un anello più basso. Ritorna, per ogni colonna k, l'ultimo anello: sulle teste quello di
- * tutta la rete, sui lati lunghi quello che dà la fascia più vicina a `fasciaLati` mm, in mezzo a scalare (sin² del
- * parametro). Fra due colonne vicine al più un anello di differenza: ogni nodo ha sempre i suoi due nodi sotto.
- * Un nodo (j, k) c'è se j ≤ cime[k] (anelli pari) o j ≤ min(cime[k], cime[k + 1]) (dispari: sta fra le due colonne).
+ * nei lati corti»; «Fascia sui lati lunghi è importante che me lo metti dentro»). Sull'ovale la fascia viene da sola più
+ * corta sulle teste; per averla più corta sui lati lunghi le colonne dei lati si fermano a un anello più basso.
+ * Ritorna, per ogni colonna k, il suo ultimo anello: sulle teste quello di tutta la rete, sui lati lunghi quello che dà la
+ * fascia più vicina a `fasciaLati` mm, in mezzo a scalare (sin² del parametro). Sempre un anello PARI: lì le due linee
+ * della colonna si incontrano sullo stesso nodo e il filo gira senza ripassare un tratto (su un anello dispari una linea
+ * finirebbe un nodo più su dell'altra). Fra colonne vicine al più due anelli di differenza. null = nessun taglio (fascia
+ * 0, o fondo tondo).
  */
-export function cimeDelleColonne(A: Anelli, N: number, fasciaLati: number): number[] {
+export function cimeDelleColonne(A: Anelli, N: number, fasciaLati: number): number[] | null {
   const n = A.rho.length - 1;
-  if (!A.punti || !A.ovale) return Array(N).fill(n);
-  const b = A.ovale.b, fascia = (j: number) => Math.max(...A.punti![j].map((q) => q.y)) - b;
-  let nLati = n, meglio = Infinity;
-  for (let j = 1; j <= n; j++) { const d = Math.abs(fascia(j) - fasciaLati); if (d < meglio) { meglio = d; nLati = j; } }
-  const cime = Array.from({ length: N }, (_, k) => { const s = Math.sin(parametroDelNodo(A, N, k)); return Math.round(nLati + (n - nLati) * (1 - s * s)); });
-  for (let giro = 0; giro < n; giro++) for (let k = 0; k < N; k++) cime[k] = Math.min(cime[k], cime[(k + 1) % N] + 1, cime[(k + N - 1) % N] + 1);
+  if (!A.punti || !A.ovale || !(fasciaLati > 0) || n < 2) return null;
+  const pari = n - (n % 2), b = A.ovale.b, fascia = (j: number) => Math.max(...A.punti![j].map((q) => q.y)) - b;
+  let nLati = pari, meglio = Infinity;
+  for (let j = 2; j <= pari; j += 2) { const d = Math.abs(fascia(j) - fasciaLati); if (d < meglio) { meglio = d; nLati = j; } }
+  const cime = Array.from({ length: N }, (_, k) => { const s = Math.sin(parametroDelNodo(A, N, k)); return 2 * Math.round((nLati + (pari - nLati) * (1 - s * s)) / 2); });
+  for (let giro = 0; giro < n; giro++) for (let k = 0; k < N; k++) cime[k] = Math.min(cime[k], cime[(k + 1) % N] + 2, cime[(k + N - 1) % N] + 2);
   return cime;
 }
 
-/** C'è il nodo (j, k), con le colonne che si fermano a `cime`? */
-export function ceIlNodo(cime: number[] | undefined, N: number, j: number, k: number): boolean {
+/**
+ * Le cime di tutta la rete radiale: quelle della fascia sui lati lunghi, se c'è; se no, quando gli anelli sono dispari,
+ * l'ultimo anello pari (Lorenzo, 2026-10-16, sulla cima di una colonna che finiva su un anello dispari: «eliminiamo queste
+ * situazioni qui, perché non è attaccato a niente rimarrebbe volante»: lì le due linee della colonna non si incontrano e
+ * il filo passava dall'una all'altra lungo il bordo, senza incrociare niente). null = tutti gli anelli, già pari.
+ */
+export function cimeDellaRete(A: Anelli, N: number, fasciaLati: number): number[] | null {
+  const tagliate = cimeDelleColonne(A, N, fasciaLati);
+  if (tagliate) return tagliate;
+  const n = A.rho.length - 1;
+  return n % 2 && n > 2 ? Array(N).fill(n - 1) : null;
+}
+
+/**
+ * C'è il nodo (j, k), con le colonne che si fermano a `cime`? I nodi pari stanno su una colonna sola; un nodo dispari sta
+ * fra la colonna k (la sua linea A) e la k + 1 (la sua linea B): c'è se ci passa almeno una delle due.
+ */
+export function ceIlNodo(cime: number[] | null | undefined, N: number, j: number, k: number): boolean {
   if (!cime) return true;
   const kk = ((k % N) + N) % N;
-  return j % 2 ? j <= Math.min(cime[kk], cime[(kk + 1) % N]) : j <= cime[kk];
+  return j % 2 ? j < Math.max(cime[kk], cime[(kk + 1) % N]) : j <= cime[kk];
+}
+
+/**
+ * C'è il tratto dal nodo (j, k) al nodo (j + 1, kk)? Ogni tratto è di una linea sola: agli anelli pari kk = k è la linea A
+ * della colonna k e kk = k − 1 la B della colonna k; ai dispari kk = k è la A della k e kk = k + 1 la B della k + 1.
+ */
+export function ceIlTratto(cime: number[] | null | undefined, N: number, j: number, k: number, kk: number): boolean {
+  if (!cime) return true;
+  const col = j % 2 ? (kk === k ? k : k + 1) : k;
+  return j < cime[((col % N) + N) % N];
+}
+
+/** Al nodo dispari (j, k) passano tutte e due le linee (A della colonna k e B della k + 1)? Solo allora s'incrociano. */
+export function siIncrociano(cime: number[] | null | undefined, N: number, j: number, k: number): boolean {
+  if (!cime || j % 2 === 0) return true;
+  const kk = ((k % N) + N) % N;
+  return j < Math.min(cime[kk], cime[(kk + 1) % N]);
 }
 
 /** L'angolo della punta interna del rombo che parte dall'anello j (le sue punte di lato stanno sull'anello j + 1). */

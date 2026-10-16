@@ -6446,16 +6446,30 @@ console.log('\nrete-testa-speciale — teste a mezzo cerchio; i lati lunghi che 
   check('il ricamo a mezzi cerchi: un filo solo, tutto nel campo, punti fra minimo e massimo; teste a 0 di partenza',
     [r.blocchi.length, tutti.every((q) => q.x >= 0 && q.y >= 0 && q.x <= 450 && q.y <= 450), Math.min(...tratti) >= rg.RTS_PARAMETRI.minStitchMm - 1e-6, Math.max(...tratti) <= rg.RTS_PARAMETRI.maxStitchMm + 1e-6, rg.RTS_PARAMETRI.bottomRoundEnds],
     [1, true, true, true, 0]);
-  // le colonne dei lati che si fermano prima (per ora solo nella simulazione 3D): fascia sui lati 60 mm, teste intere
+  // «Fascia sui lati lunghi»: le colonne dei lati si fermano prima. Ogni colonna finisce su un anello PARI (lì le sue
+  // due linee si incontrano: il filo gira senza ripassare un tratto); a scatti di due anelli
   const O = rg.rtsAnelliOvali({ N, L: 15, r0: 130, b: 70, amax: 165, campo: 450 }), m = O.rho.length - 1, cime = rg.rtsCimeDelleColonne(O, N, 60);
   let sotto = true; for (let j = 1; j <= m; j++) for (let k = 0; k < N; k++) if (rg.rtsCeIlNodo(cime, N, j, k)) for (const kk of j % 2 ? [k, k + 1] : [k - 1, k]) if (!rg.rtsCeIlNodo(cime, N, j - 1, kk)) sotto = false;
-  check('le cime delle colonne: 4 anelli sui lati lunghi, 10 sulle teste, al più uno di differenza fra vicine, ogni nodo coi suoi due sotto',
-    [Math.min(...cime), Math.max(...cime), cime.every((c, k) => Math.abs(c - cime[(k + 1) % N]) <= 1), sotto], [4, 10, true, true]);
+  check('le cime delle colonne: 4 anelli sui lati lunghi, 10 sulle teste, sempre pari, al più due di differenza fra vicine, ogni nodo coi suoi due sotto; a 0 nessun taglio',
+    [Math.min(...cime), Math.max(...cime), cime.every((c) => c % 2 === 0), cime.every((c, k) => Math.abs(c - cime[(k + 1) % N]) <= 2), sotto, rg.rtsCimeDelleColonne(O, N, 0), rg.RTS_PARAMETRI.sideBandMm],
+    [4, 10, true, true, true, null, 0]);
+  const rf = rg.rtsRadiale({ ...rg.RTS_PARAMETRI, netShape: 'radiale', bottomShape: 'ovale', radialCount: N, sideBandMm: 60 });
+  const lentiF = []; for (const bl of rf.blocchi) { let cur = 0; for (let i = 1; i <= bl.length; i++) { const q = bl[i]; if (q && q.sovrapposto) cur += Math.hypot(q.x - bl[i - 1].x, q.y - bl[i - 1].y); else if (cur) { lentiF.push(cur); cur = 0; } } }
+  const f0 = Array.from({ length: N }, (_, k) => rg.rtsPuntoDelNodo(O, N, 0, k)), kL = f0.reduce((mm, q, k) => (q.y > f0[mm].y ? k : mm), 0);
+  const fascia = (k) => { const p = rg.rtsPuntoDelNodo(O, N, rf.cime[k], k); return Math.round(Math.hypot(p.x - f0[k].x, p.y - f0[k].y)); };
+  // le lenti: dove passano tutte e due le linee (misurate 700 contro le 1152 della rete intera)
+  check('il ricamo con la fascia sui lati a 60: un filo solo, nessun salto, 700 lenti; fascia a metà del lato 56 mm (4 anelli), in punta alla testa 92 (10)',
+    [rf.blocchi.length, rf.misure.salti, lentiF.length, fascia(kL), fascia(0)], [1, 0, 700, 56, 92]);
   const s = rg.rtsAppesa(O, { N, L: 15, giroInCima: false, filo: 1, modo: 'bocca', boccaMm: 90, maniciMm: 60, morbidezza: 0.7, fondoRigido: 0.6, cordone: false, stretta: 0, passoSpirale: 5, legature: 10, cime });
   rg.rtsAssesta(s, 1500);
   const pancia = (k) => { const lin = []; for (let j = 0; j <= m; j++) if (rg.rtsCeIlNodo(cime, N, j, k)) lin.push(s.nodi[j * N + k]);
     const a = lin[0], b = lin[lin.length - 1], L = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z), ux = (b.x - a.x) / L, uy = (b.y - a.y) / L, uz = (b.z - a.z) / L;
     return Math.max(...lin.map((q) => { const dx = q.x - a.x, dy = q.y - a.y, dz = q.z - a.z, t = dx * ux + dy * uy + dz * uz; return Math.hypot(dx - t * ux, dy - t * uy, dz - t * uz); })); };
+  // anelli dispari: la colonna finirebbe con le due linee su due nodi diversi, unite da un tratto sul bordo che non
+  // incrocia niente («rimarrebbe volante»): la rete finisce sull'ultimo anello pari
+  const dispari = rg.rtsRadiale({ ...rg.RTS_PARAMETRI, netShape: 'radiale', radialCount: 40 });
+  check('anelli dispari (tondo, 40 rombi: 11): la rete finisce sull’anello 10, un filo solo, nessun tratto sul bordo',
+    [dispari.anelli.rho.length - 1, dispari.cime[0], dispari.blocchi.length, dispari.blocchi.flat().filter((q) => q.tipo === 'bordo').length], [11, 10, 1, 0]);
   check('in 3D, bocca stretta: ora la pancia la fanno le teste (oltre il triplo dei lati lunghi; misurati 24 e 4 mm)', pancia(0) > 3 * pancia(16), true);
 }
 
