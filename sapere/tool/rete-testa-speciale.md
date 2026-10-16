@@ -59,6 +59,23 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
     (https://claude.ai/artifact/LkTE3AX1QzEnkXp5BgpwjT), poi la scelta: **il secchiello dritto Ø 20 cm** (48 rombi da
     15 mm, fondo Ø 200, disco Ø 449, profondo 190 mm, 5,25 litri).
 
+11. **La sacca appesa in 3D** (2026-10-16): *«simulare una certa morbidezza del filo nel 3d… come se fosse un po'
+    appesa? in ogni caso solo con un bottone attivo non sempre… dentro il tools, ma un sotto programma a parte»*.
+    Sotto-programma in due file (`sacca3d.ts` la fisica, `vista3d.ts` la vista), acceso dal pulsante «Sacca 3D».
+
+## La sacca appesa: com'è fatta (2026-10-16)
+- **Fili che non si allungano ma si allentano** (vincolo «al più L», Verlet + vincoli ripetuti) e la gravità. Conta solo
+  la forma finale. Appesa per la bocca (ultimo anello fermo su un cerchio) o per due punti del bordo.
+- **Il fondo è una ragnatela di fili** (4 giri e i raggi), non un disco rigido: appesa per la bocca Ø 200 scende 261 mm
+  col filo morbido, più dei 190 della tabella (che tiene il fondo piatto). Le due cose sono vere insieme: dipende da
+  quanto il fondo a spirale cede davvero, ed è da vedere a macchina.
+- **La morbidezza è una piega nei due versi**: la prima versione resisteva solo a chiudersi, ma appendendo la rete le
+  linee si raddrizzano, e la morbidezza non cambiava niente (misurato: 261 mm con tutti i valori). Ora 0 → 202 mm,
+  0,5 → 219, 1 → 261 (scala 0,004 per ripetizione: con 0,08 tutto oltre 0,3 dava lo stesso risultato).
+- **I nodi di un anello non stanno più vicini di due spessori di filo**: senza, la sacca si stringeva fino a un punto.
+- **Con la bocca larga quanto il disco i fili dovrebbero allungarsi del 5%**: la vista dice che non si può, invece di
+  mostrare una forma finta (la stessa scoperta della simulazione: il disco teso non scende).
+
 ## La sacca: cosa si è capito (simulazione, 2026-10-15)
 - **La matematica**: anelli di nodi sfalsati di mezzo passo, lati lunghi L: ρ(j+1) = ρj·cos(π/N) + √(L² − ρj²·sin²(π/N)).
   La prova di Lorenzo (15 rombi, fondo Ø 50, disco Ø 120) torna con lato 13 mm (2 rombi per raggio) e con lato 20 mm

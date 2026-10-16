@@ -62,6 +62,7 @@ export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BO
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_PARAMETRI } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
+export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -6290,6 +6291,28 @@ console.log('\nrete-testa-speciale — la sacca a rete: anelli coi lati uguali, 
   const viaMotore = await rg.rtsMotore.genera({}, P), troppo = await rg.rtsMotore.genera({}, { ...P, bottomRadiusMm: 300 });
   check('il contratto: la sacca senza ingresso; un fondo oltre il limite dà un avviso e niente ricamo',
     [viaMotore.strati.length, viaMotore.avvisi.length, troppo.strati.length, troppo.avvisi.length], [1, 0, 0, 1]);
+}
+
+// ---------------------------------------------------------------------------
+// rete-testa-speciale — la SACCA APPESA (Lorenzo, 2026-10-16: «simulare una certa morbidezza del filo nel 3d… come se
+// fosse un po' appesa»): nodi legati da fili che non si allungano ma si allentano, la gravità, la morbidezza.
+// ---------------------------------------------------------------------------
+console.log('\nrete-testa-speciale — la sacca appesa: i fili non si allungano, la morbidezza conta, l’impossibile si vede');
+{
+  const A = rg.rtsAnelli({ N: 48, L: 15, r0: 100, amax: 165, campo: 450 });
+  const appesa = (opz) => { const s = rg.rtsAppesa(A, { N: 48, L: 15, giroInCima: true, filo: 1, modo: 'bocca', boccaMm: 200, maniciMm: 250, morbidezza: 1, ...opz }); rg.rtsAssesta(s, 6000); return { s, m: rg.rtsMisureAppesa(s) }; };
+  const morbida = appesa({}), rigida = appesa({ morbidezza: 0 }), piatta = appesa({ boccaMm: 449 }), manici = appesa({ modo: 'manici' });
+  // con la bocca da 200 mm e il filo che cede del tutto scende più della sacca col fondo rigido (190 mm): il fondo a
+  // ragnatela si incurva anche lui (misurati 261 mm); un filo meno morbido tiene lo zig-zag e scende meno (misurati 202)
+  check('appesa per la bocca Ø 200: si ferma, i fili non si allungano (sotto il 2%), scende più del fondo rigido (190 mm) e meno di 300',
+    [morbida.s.movimento < 0.002, morbida.m.allungamentoMax < 0.02, morbida.m.profondita > 190, morbida.m.profondita < 300, Math.round(morbida.m.larghezza)], [true, true, true, true, 200]);
+  check('la morbidezza conta: col filo rigido scende almeno 40 mm meno che col filo morbido',
+    morbida.m.profondita - rigida.m.profondita > 40, true);
+  // con la bocca larga quanto il disco la rete non può scendere: i fili dovrebbero allungarsi (la vista lo dice)
+  check('con la bocca larga quanto il disco i fili dovrebbero allungarsi oltre il 3%: la vista dice che non si può',
+    piatta.m.allungamentoMax > 0.03, true);
+  check('appesa per due punti: solo quei due nodi fermi, la sacca scende più che per la bocca',
+    [manici.s.nodi.filter((q) => q.fermo).length, manici.m.profondita > morbida.m.profondita], [2, true]);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).

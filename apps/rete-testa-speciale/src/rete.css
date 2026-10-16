@@ -29,3 +29,9 @@ body {
   background: var(--ink);
   vertical-align: middle;
 }
+
+/* La sacca appesa in 3D: prende il posto dell'anteprima finché il suo pulsante è acceso. */
+.rete-vista3d:not([hidden]) { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 0.5rem; padding: 0.5rem; }
+.rete-vista3d__controlli { flex-wrap: wrap; align-items: flex-end; }
+.rete-vista3d__tela { flex: 1 1 auto; min-height: 240px; width: 100%; cursor: grab; touch-action: none; background: var(--rg-color-surface-raised, transparent); border: 1px solid var(--rg-color-border); }
+.rete-vista3d__stato { margin: 0; }

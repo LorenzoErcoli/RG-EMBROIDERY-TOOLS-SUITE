@@ -8,6 +8,7 @@ import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { costruisciRete, costruisciReteRadiale, pezzoAMisure, stratiRete, COLORE_RETE, PARAMETRI_RETE, type ParametriRete, type PuntoAgo, type RisultatoRete } from './motore';
 import { angoloDelRombo, formaSacca, raggioMinimo, type Anelli } from './sacca';
+import { montaVista3d } from './vista3d';
 
 /** Il disegno nel file riapribile, se non pesa troppo (come negli altri tool). */
 const MAX_DRAWING_KB = 256;
@@ -101,6 +102,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
       <header class="rg-workspace__stage-header">
         <h2 class="rg-h3">Anteprima</h2>
         <div class="rg-cluster">
+          <button id="sacca3dBtn" class="rg-button rg-button--ghost rg-button--small" aria-pressed="false" hidden title="La sacca appesa, in 3D: la rete coi fili morbidi, tenuta per la bocca o per due punti">Sacca 3D</button>
           <button id="simulaBtn" class="rg-button rg-button--ghost rg-button--small" aria-pressed="false" title="Il simulatore: il filo si cuce sullo schermo nell'ordine del DST">Simula</button>
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
           <button id="genBtn" class="rg-button rg-button--secondary rg-button--small">Genera</button>
@@ -111,6 +113,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
       <div class="rg-workspace__canvas" id="canvas">
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
       </div>
+      <div id="vista3d" class="rete-vista3d" hidden></div>
       <div id="simControlli" class="sim-controlli" hidden></div>
       <footer class="rg-workspace__statusbar">
         <span><span id="status">Carica un SVG o DXF: un colore per il contorno del cartamodello, uno per le aree vuote.</span><span id="points" class="rg-mono"></span></span>
@@ -135,6 +138,8 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   const radiale = () => par.netShape === 'radiale';
   let testoDisegno = 'Nessun disegno caricato.';
   let simulando = false;
+  /** La sacca appesa in 3D: accesa dal suo pulsante, solo nel modo radiale. */
+  let vista3d: { distruggi: () => void } | null = null;
   let simulatore: Simulatore | null = null;
 
   /**
@@ -339,6 +344,8 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   }
 
   function buildPanel() {
+    $('sacca3dBtn').hidden = !radiale();
+    if (!radiale() && vista3d) chiudiVista3d();
     const panel = $('panel');
     const aperti = new Set([...panel.querySelectorAll<HTMLDetailsElement>('details[data-sezione]')].filter((x) => x.open).map((x) => x.dataset.sezione!));
     const primaVolta = !panel.childElementCount;
@@ -407,6 +414,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         $('points').textContent = r.blocchi.length ? ` · ${r.misure.punti.toLocaleString('it-IT')} punti` : '';
         buildPanel();
         disegna();
+        if (vista3d) apriVista3d(); // la sacca appesa segue i parametri nuovi
         return;
       }
       try {
@@ -592,6 +600,21 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
       inp.addEventListener('change', () => { visibili[inp.dataset.vista as ChiaveVista | 'salti' | 'punti'] = inp.checked; disegna(); });
     }
   }
+
+  // ---- la sacca appesa (sotto-programma a parte: vista3d.ts e sacca3d.ts) ----
+  function apriVista3d() {
+    chiudiVista3d();
+    if (!radiale() || !anelliSacca || anelliSacca.rho.length < 3) return;
+    $('canvas').hidden = true; $('vista3d').hidden = false;
+    $('sacca3dBtn').setAttribute('aria-pressed', 'true');
+    vista3d = montaVista3d($('vista3d'), { anelli: anelliSacca, N: Math.round(par.radialCount), L: par.radialSideMm, giroInCima: par.rimPass, filo: par.constructionStroke });
+  }
+  function chiudiVista3d() {
+    if (vista3d) { vista3d.distruggi(); vista3d = null; }
+    $('canvas').hidden = false; $('vista3d').hidden = true;
+    $('sacca3dBtn').setAttribute('aria-pressed', 'false');
+  }
+  $('sacca3dBtn').addEventListener('click', () => (vista3d ? chiudiVista3d() : apriVista3d()));
 
   // ---- azioni fisse ----
   $('fitBtn').addEventListener('click', () => pz.fit());
