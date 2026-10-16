@@ -2005,6 +2005,10 @@
           "$ref": "#/$defs/rimPass",
           "default": false
         },
+        "constantLens": {
+          "$ref": "#/$defs/constantLens",
+          "default": false
+        },
         "pieceSource": {
           "$ref": "#/$defs/pieceSource",
           "default": "cartamodello"
@@ -5025,6 +5029,12 @@
       "description": "Sacca: lega le punte dell’ultimo anello; non tiene aperta la bocca (il filo si arriccia, non si allunga).",
       "x-concetto": "interruttore"
     },
+    "constantLens": {
+      "type": "boolean",
+      "title": "Lente uguale in tutta la rete",
+      "description": "Sacca: verso il centro i rombi si stringono e la lente si allunga; acceso, la sovrapposizione cala verso il centro perché la lente resti quella in cima.",
+      "x-concetto": "sovrapposizione"
+    },
     "pieceSource": {
       "type": "string",
       "title": "Il pezzo",
@@ -5329,6 +5339,7 @@
         "blockBleed",
         "gradientOverlap",
         "edgeOverlap",
+        "constantLens",
         "crossingOverlap",
         "overlapZone"
       ]

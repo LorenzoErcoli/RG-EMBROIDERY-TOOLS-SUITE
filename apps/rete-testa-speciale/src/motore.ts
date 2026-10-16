@@ -19,7 +19,7 @@
 //   vuoto, o attraversarlo con un'impuntura dritta (come nel Generatore pattern);
 // - «quando inserisci una parte nuova inizia sempre dal contorno esterno del cartamodello».
 import { distance, distanceToSegment, enforceMinStitch, lerp, pointInPolygon, type Point, type Polyline } from '@rg/core';
-import { anelliRadiali, fondoDellaLegatura, type Anelli } from './sacca';
+import { anelliRadiali, fondoDellaLegatura, sovrapposizioneAlNodo, type Anelli } from './sacca';
 
 export type ModoVuoto = 'ritorno' | 'bordo' | 'centro';
 /** Da dove viene il pezzo: il contorno del cartamodello caricato, o un rettangolo con le misure scritte a mano. */
@@ -45,6 +45,12 @@ export type ParametriRete = {
   spiralPitchMm: number;
   /** Sacca: distanza minima fra le legature che entrano nel fondo, mm. */
   tieSpacingMm: number;
+  /**
+   * Sacca: la lente uguale in tutta la rete (Lorenzo, 2026-10-16). Con la sovrapposizione fissa la lente cresce verso il
+   * centro e i nodi del fondo girano con più fatica; acceso, la sovrapposizione si riduce verso il centro e la lente
+   * resta quella in cima.
+   */
+  constantLens: boolean;
   /**
    * Sacca: un giro d'impuntura in cima, sulle punte esterne. Spento di partenza: Lorenzo, 2026-10-16, «lascia stare la
    * parte sopra, lasciamola libera»; la bocca si chiude al montaggio con un cordone nei buchi dell'ultima fila.
@@ -98,6 +104,7 @@ export const PARAMETRI_RETE: ParametriRete = {
   fieldMm: 450,
   spiralPitchMm: 5,
   tieSpacingMm: 10,
+  constantLens: false,
   rimPass: false,
   pieceSource: 'cartamodello',
   totalWidth: 120,
@@ -752,15 +759,16 @@ export function costruisciReteRadiale(par: ParametriRete): RisultatoRete & { ane
 
   // le due linee della colonna k: B a sinistra (verso l'angolo minore), A a destra. Agli anelli pari si toccano fra
   // loro (la rientranza), agli anelli dispari toccano le colonne vicine (le punte). La sovrapposizione le porta oltre
-  // il nodo di mezza misura, di traverso; i capi restano sui nodi.
-  const f = Math.max(0, Math.min(1, p.cornerRounding / 100)), mezza = p.overlapMm / 2;
+  // il nodo di mezza misura, di traverso (anello per anello, se la lente dev'essere costante); i capi restano sui nodi.
+  const f = Math.max(0, Math.min(1, p.cornerRounding / 100));
+  const mezza = A.rho.map((_, j) => sovrapposizioneAlNodo(A, N, j, p.overlapMm, p.constantLens) / 2);
   const linea = (k: number, lato: -1 | 1): PuntoTraccia[] => {
     const T: Point[] = [];
     for (let j = 0; j <= n; j++) {
       const kk = j % 2 && lato < 0 ? k - 1 : k, a = angoloNodo(j, kk), q = pol(A.rho[j], a);
       if (j === 0 || j === n) { T.push(q); continue; }
       const verso = j % 2 ? lato : -lato, t = tangente(a);
-      T.push({ x: q.x + t.x * mezza * verso, y: q.y + t.y * mezza * verso });
+      T.push({ x: q.x + t.x * mezza[j] * verso, y: q.y + t.y * mezza[j] * verso });
     }
     return lineaArrotondata(T, f, 2 * k + (lato > 0 ? 1 : 0));
   };

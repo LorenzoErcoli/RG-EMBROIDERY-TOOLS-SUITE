@@ -77,6 +77,17 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
     regola `fondoDellaLegatura` è una sola, in `sacca.ts`, per il ricamo e per il 3D.
 14. **Il fondo come appoggio**: *«se la base di filo a spirale è ben progettata diventa un appoggio perché il filo si
     unisce tra le varie linee di spirale e quindi funziona da base rigida… ovviamente con morbidezza»*.
+16. **La lente costante, come opzione** (2026-10-16): *«man mano che ci si avvicina al centro noto che l'area di
+    sovrapposizione giustamente aumenta… sotto saranno molto più bloccati che sopra, mi sbaglio?»* Non sbaglia: la lente
+    vale sovrapposizione / sin(angolo d'incrocio / 2) e verso il centro l'incrocio è stretto (secchiello: da 2,07 a
+    4,05 mm). Con «Lente uguale in tutta la rete» la sovrapposizione cala verso il centro (lenti 1,92–2,07 mm), spento di
+    partenza. Nella vista 3D la rigidità dei nodi (le «pieghe») pesa la lente di ogni nodo rispetto alla media: la
+    morbidezza dice quanto, la lente dove. Il primo tentativo usava l'angolo della linea invece di quello d'incrocio e le
+    lenti «costanti» crescevano fino a 9,85 mm.
+    Misurato (N 24, morbidezza 0): appesa per due punti la rotazione degli anelli cambia (verso il fondo 35/40° → 39/47°
+    con la lente costante: i nodi interni girano di più); per la bocca o per i capi del cordone non cambia quasi niente,
+    lì la forma la fanno la bocca e il peso. Il peso è relativo: raddoppiare la sovrapposizione non irrigidisce tutto,
+    quello lo fa la morbidezza.
 
 ## Perché la testa rigida non può funzionare (2026-10-16, misurato)
 **Ogni anello tenuto alla sua misura del disco piatto blocca piatta tutta la rete dentro di lui.** Il lato fra un anello

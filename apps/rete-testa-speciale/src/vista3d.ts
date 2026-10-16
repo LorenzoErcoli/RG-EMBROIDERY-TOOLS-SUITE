@@ -5,7 +5,7 @@
 import type { Anelli } from './sacca';
 import { appendi, avanza, creaSaccaAppesa, misureAppesa, rigiditaDalPasso, stringi, type ModoAppesa, type SaccaAppesa } from './sacca3d';
 
-export interface DatiVista3d { anelli: Anelli; N: number; L: number; giroInCima: boolean; filo: number; passoSpirale: number; legature: number }
+export interface DatiVista3d { anelli: Anelli; N: number; L: number; giroInCima: boolean; filo: number; passoSpirale: number; legature: number; sovrapposizione: number; lenteCostante: boolean }
 
 const COLORI = { rete: '#1f4e79', fondo: '#8a6a1f', cima: '#7d8681', cordone: '#b8327a', capi: '#b8327a', fermo: '#c0392b' } as const;
 
@@ -49,7 +49,7 @@ export function montaVista3d(box: HTMLElement, dati: DatiVista3d): { distruggi: 
       N: dati.N, L: dati.L, giroInCima: dati.giroInCima, filo: dati.filo,
       modo: stato.modo, boccaMm: stato.bocca, maniciMm: stato.manici, morbidezza: stato.morbidezza / 100,
       fondoRigido: stato.fondo / 100, cordone: stato.cordone, stretta: stato.stretta / 100,
-      passoSpirale: dati.passoSpirale, legature: dati.legature,
+      passoSpirale: dati.passoSpirale, legature: dati.legature, sovrapposizione: dati.sovrapposizione, lenteCostante: dati.lenteCostante,
     });
   }
   /** Le scelte che cambiano com'è fatta (non solo dove la si tiene): si riparte dal disco. */

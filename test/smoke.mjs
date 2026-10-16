@@ -61,7 +61,7 @@ export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } f
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_PARAMETRI } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
-export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
+export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
 export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
@@ -6340,6 +6340,30 @@ console.log('\nrete-testa-speciale — il fondo rigido e il cordone a strozzo');
   const larga = appesaPiccola({ stretta: 0.2 }), stretta = appesaPiccola({ stretta: 0.8 });
   check('il cordone a strozzo: più stretto, bocca più chiusa; appesa per i capi i fili non si allungano oltre il 3%',
     [stretta.bocca < larga.bocca - 50, larga.allungamentoMax < 0.03, stretta.allungamentoMax < 0.03], [true, true, true]);
+}
+
+// rete-testa-speciale — la LENTE COSTANTE (Lorenzo, 2026-10-16: «man mano che ci si avvicina al centro… l'area di
+// sovrapposizione aumenta… sotto saranno molto più bloccati che sopra»): con la sovrapposizione fissa la lente cresce
+// verso il centro, dove i rombi sono stretti; accesa, la sovrapposizione cala perché la lente resti quella in cima.
+// La vista 3D fa i nodi più rigidi dove la lente è più lunga.
+console.log('\nrete-testa-speciale — la lente costante e la rigidità dei nodi dalla lente');
+{
+  const P = { ...rg.RTS_PARAMETRI, netShape: 'radiale' };
+  const lenti = (par) => {
+    const zone = [], r = rg.rtsRadiale(par);
+    for (const b of r.blocchi) { let cur = 0; for (let i = 1; i <= b.length; i++) { const q = b[i]; if (q && q.sovrapposto) cur += Math.hypot(q.x - b[i - 1].x, q.y - b[i - 1].y); else if (cur) { zone.push(cur); cur = 0; } } }
+    return zone;
+  };
+  const fissa = lenti(P), costante = lenti({ ...P, constantLens: true });
+  check('spenta di partenza; accesa, le lenti restano fra 1,8 e 2,2 mm (fissa vanno oltre 3,5 mm verso il centro), stesse 1248 lenti',
+    [rg.RTS_PARAMETRI.constantLens, costante.length, Math.min(...costante) > 1.8, Math.max(...costante) < 2.2, Math.max(...fissa) > 3.5], [false, 1248, true, true, true]);
+  const A = rg.rtsAnelli({ N: 48, L: 15, r0: 100, amax: 165, campo: 450 }), n = A.rho.length - 1;
+  check('la lente al nodo: fissa cresce verso il centro, costante è uguale ovunque',
+    [rg.rtsLenteAlNodo(A, 48, 1, 2, false) > 1.5 * rg.rtsLenteAlNodo(A, 48, n - 1, 2, false), Math.abs(rg.rtsLenteAlNodo(A, 48, 1, 2, true) - rg.rtsLenteAlNodo(A, 48, n - 1, 2, true)) < 1e-9], [true, true]);
+  const base = { N: 48, L: 15, giroInCima: false, filo: 1, modo: 'manici', boccaMm: 200, maniciMm: 250, morbidezza: 0, fondoRigido: 0.2, cordone: false, stretta: 0, sovrapposizione: 2 };
+  const peso = (s) => { const k = s.pieghe.map((p) => p.k); return Math.max(...k) / Math.min(...k); };
+  check('nella vista 3D i nodi con la lente lunga piegano con più fatica; con la lente costante tutti uguali',
+    [peso(rg.rtsAppesa(A, base)) > 1.5, peso(rg.rtsAppesa(A, { ...base, lenteCostante: true })) < 1.01], [true, true]);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).

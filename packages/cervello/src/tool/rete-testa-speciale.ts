@@ -50,6 +50,11 @@ export const scheda: SchedaParametri = {
       tipo: 'bool', unita: '', predefinito: false, concetto: 'interruttore',
     },
     {
+      id: 'constantLens', etichetta: 'Lente uguale in tutta la rete',
+      aiuto: 'Sacca: verso il centro i rombi si stringono e la lente si allunga; acceso, la sovrapposizione cala verso il centro perché la lente resti quella in cima.',
+      tipo: 'bool', unita: '', predefinito: false, concetto: 'sovrapposizione',
+    },
+    {
       id: 'pieceSource', etichetta: 'Il pezzo',
       aiuto: 'cartamodello = il contorno del disegno caricato, coi suoi vuoti; misure = un rettangolo di larghezza × altezza, senza vuoti.',
       tipo: 'enum', unita: '', opzioni: ['cartamodello', 'misure'], predefinito: 'cartamodello', concetto: 'formato',

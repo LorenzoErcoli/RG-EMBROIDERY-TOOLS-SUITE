@@ -10,7 +10,7 @@
 //
 // Si tiene per la bocca (l'ultimo anello fermo su un cerchio), per due punti del bordo, per il nodo del cordone, o la
 // si appoggia sul fondo.
-import { altezze, fondoDellaLegatura, profiloPiuProfondo, raggioMinimo, type Anelli } from './sacca';
+import { altezze, fondoDellaLegatura, lenteAlNodo, profiloPiuProfondo, raggioMinimo, type Anelli } from './sacca';
 
 export type ModoAppesa = 'bocca' | 'manici' | 'cordone' | 'appoggiata';
 
@@ -40,13 +40,20 @@ export interface OpzioniAppesa {
   passoSpirale?: number;
   /** La distanza fra le legature del fondo, mm (quella del ricamo; di partenza 10). */
   legature?: number;
+  /** La sovrapposizione del ricamo, mm, e se la lente è costante: dicono quanto è lunga la lente su ogni nodo. */
+  sovrapposizione?: number;
+  lenteCostante?: boolean;
 }
 
 export interface Nodo { x: number; y: number; z: number; px: number; py: number; pz: number; fermo: boolean }
 /** Un filo fra due nodi: lungo al più `L` (si allenta, non si allunga). `tipo` dice a cosa serve, per il disegno. */
 export interface Filo { a: number; b: number; L: number; tipo: 'rete' | 'fondo' | 'cima' | 'cordone' | 'capi' }
-/** Una «piega»: i due vicini di un nodo sulla stessa linea, alla distanza del disco piatto (molla debole, nei due versi). */
-interface Piega { a: number; b: number; L: number }
+/**
+ * Una «piega»: i due vicini di un nodo sulla stessa linea, alla distanza del disco piatto (molla debole, nei due versi).
+ * `k` = quanto è rigido quel nodo rispetto alla media: la lente più lunga (più filo sopra filo) lo fa girare con più
+ * fatica (Lorenzo, 2026-10-16: «sotto saranno molto più bloccati che sopra»).
+ */
+interface Piega { a: number; b: number; L: number; k: number }
 /** Due nodi vicini dello stesso anello: non più vicini di così (lo spessore dei fili che ci passano). */
 interface Distanza { a: number; b: number; minimo: number }
 /**
@@ -105,10 +112,13 @@ export function creaSaccaAppesa(A: Anelli, opz: OpzioniAppesa): SaccaAppesa {
   // la rete, piatta come esce dalla macchina
   for (let j = 0; j <= n; j++) for (let k = 0; k < N; k++) { const f = angolo(N, j, k); nodo(A.rho[j] * Math.cos(f), A.rho[j] * Math.sin(f), 0); }
   for (let j = 0; j < n; j++) for (let k = 0; k < N; k++) for (const kk of j % 2 ? [k, k + 1] : [k, k - 1]) filo(indice(N, j, k), indice(N, j + 1, kk), 'rete');
-  // le pieghe: sulle due linee di ogni colonna, il nodo prima e il nodo dopo
+  // le pieghe: sulle due linee di ogni colonna, il nodo prima e il nodo dopo; rigide quanto è lunga la lente sul nodo
+  const lenti = Array.from({ length: n + 1 }, (_, j) => (j >= 1 && j < n ? lenteAlNodo(A, N, j, opz.sovrapposizione ?? 0, !!opz.lenteCostante) : 0));
+  const interne = lenti.slice(1, n), media = interne.reduce((a, b) => a + b, 0) / Math.max(1, interne.length);
+  const peso = (j: number) => (media > 0 ? lenti[j] / media : 1);
   for (let k = 0; k < N; k++) for (const lato of [0, 1]) {
     const linea = Array.from({ length: n + 1 }, (_, j) => indice(N, j, j % 2 ? (lato ? k : k - 1) : k));
-    for (let j = 1; j < n; j++) pieghe.push({ a: linea[j - 1], b: linea[j + 1], L: lunghezza(linea[j - 1], linea[j + 1]) });
+    for (let j = 1; j < n; j++) pieghe.push({ a: linea[j - 1], b: linea[j + 1], L: lunghezza(linea[j - 1], linea[j + 1]), k: peso(j) });
   }
   // i nodi di un anello non si toccano
   for (let j = 0; j <= n; j++) for (let k = 0; k < N; k++) distanze.push({ a: indice(N, j, k), b: indice(N, j, k + 1), minimo: 2 * Math.max(0.1, opz.filo) });
@@ -263,7 +273,7 @@ export function avanza(s: SaccaAppesa, quanti = 1, ripetizioni = 24): void {
       if (rigidita > 0) for (const p of s.pieghe) {
         const a = s.nodi[p.a], b = s.nodi[p.b];
         const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z, d = Math.hypot(dx, dy, dz);
-        if (d > 0) sposta(a, b, dx, dy, dz, (d - p.L) / d * rigidita); // lo zig-zag non si raddrizza né si chiude del tutto
+        if (d > 0) sposta(a, b, dx, dy, dz, (d - p.L) / d * Math.min(0.5, rigidita * p.k)); // lo zig-zag non si raddrizza né si chiude del tutto
       }
       for (const a of s.ancore) {
         const q = s.nodi[a.i], p = s.nodi[a.p];

@@ -70,6 +70,37 @@ export function fondoDellaLegatura(k: number, N: number, passo: number, r0: numb
   return Math.max(minimo, Math.min(0.95 * r0, passo * N / (2 * Math.PI * Math.pow(2, livello))));
 }
 
+/**
+ * L'angolo d'incrocio sul nodo dell'anello j: fra le due linee che lì si incrociano (l'angolo del rombo), gradi. È il
+ * supplementare dell'angolo che la linea fa piegandosi sul nodo: verso il centro la linea è quasi dritta e l'incrocio è
+ * stretto. (Il primo tentativo usava l'angolo della linea, e la «lente costante» faceva crescere le lenti fino a 9,85 mm.)
+ */
+export function angoloAlNodo(A: Anelli, N: number, j: number): number {
+  const p = (jj: number) => { const f = jj % 2 ? Math.PI / N : 0; return { x: A.rho[jj] * Math.cos(f), y: A.rho[jj] * Math.sin(f) }; };
+  const q = p(j), a = p(j - 1), b = p(j + 1);
+  const ux = a.x - q.x, uy = a.y - q.y, vx = b.x - q.x, vy = b.y - q.y;
+  return 180 - Math.acos(Math.max(-1, Math.min(1, (ux * vx + uy * vy) / (Math.hypot(ux, uy) * Math.hypot(vx, vy))))) * 180 / Math.PI;
+}
+
+/**
+ * La sovrapposizione al nodo dell'anello j. Fissa, la lente (il tratto da un incrocio all'altro, lungo la linea:
+ * sovrapposizione / sin(angolo / 2)) cresce verso il centro, dove i rombi sono più stretti: sul secchiello da 2,07 a
+ * 4,05 mm, e i nodi del fondo girano con più fatica. Con `lenteCostante` (Lorenzo, 2026-10-16) la sovrapposizione si
+ * riduce verso il centro perché la lente resti quella in cima.
+ */
+export function sovrapposizioneAlNodo(A: Anelli, N: number, j: number, sovrapposizione: number, lenteCostante: boolean): number {
+  const n = A.rho.length - 1;
+  if (!lenteCostante || n < 2) return sovrapposizione;
+  const cima = Math.sin(angoloAlNodo(A, N, n - 1) * Math.PI / 360), qui = Math.sin(angoloAlNodo(A, N, Math.max(1, Math.min(n - 1, j))) * Math.PI / 360);
+  return sovrapposizione * qui / cima;
+}
+
+/** La lente al nodo dell'anello j, mm (0 se le linee non si incrociano). */
+export function lenteAlNodo(A: Anelli, N: number, j: number, sovrapposizione: number, lenteCostante: boolean): number {
+  const s = sovrapposizioneAlNodo(A, N, j, sovrapposizione, lenteCostante);
+  return s > 0 ? s / Math.sin(angoloAlNodo(A, N, j) * Math.PI / 360) : 0;
+}
+
 /** I nodi di un anello non si stringono oltre lo spessore del filo. */
 export function raggioMinimo(N: number, filo: number): number {
   return Math.max(N * filo / Math.PI, 0.5);
