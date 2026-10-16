@@ -45,7 +45,10 @@ export type ParametriRete = {
   spiralPitchMm: number;
   /** Sacca: distanza minima fra le legature che entrano nel fondo, mm. */
   tieSpacingMm: number;
-  /** Sacca: un giro d'impuntura in cima, sulle punte esterne. */
+  /**
+   * Sacca: un giro d'impuntura in cima, sulle punte esterne. Spento di partenza: Lorenzo, 2026-10-16, «lascia stare la
+   * parte sopra, lasciamola libera»; la bocca si chiude al montaggio con un cordone nei buchi dell'ultima fila.
+   */
   rimPass: boolean;
   /** Il pezzo: dal cartamodello, o dalle misure qui sotto (Lorenzo, 2026-10-15: «a partire da dimensioni mie»). */
   pieceSource: OrigineDelPezzo;
@@ -95,7 +98,7 @@ export const PARAMETRI_RETE: ParametriRete = {
   fieldMm: 450,
   spiralPitchMm: 5,
   tieSpacingMm: 10,
-  rimPass: true,
+  rimPass: false,
   pieceSource: 'cartamodello',
   totalWidth: 120,
   totalHeight: 160,

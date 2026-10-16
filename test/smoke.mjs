@@ -6275,8 +6275,8 @@ console.log('\nrete-testa-speciale — la sacca a rete: anelli coi lati uguali, 
     [tutti.every((q) => q.x >= 0 && q.y >= 0 && q.x <= P.fieldMm && q.y <= P.fieldMm),
       tutti.filter((q) => q.tipo === 'rete' && (rr(q) > r.anelli.rho[n] + 0.05 || rr(q) < r.anelli.rho[0] - 0.05)).length,
       Math.min(...tratti) >= P.minStitchMm - 1e-6, Math.max(...tratti) <= P.maxStitchMm + 1e-6], [true, 0, true, true]);
-  check('un filo solo: la spirale, le 48 colonne con le loro legature, poi un salto e il giro in cima (senza giro: un pezzo)',
-    [r.blocchi.length, rg.rtsRadiale({ ...P, rimPass: false }).blocchi.length], [2, 1]);
+  check('un filo solo: la spirale e le 48 colonne con le loro legature, in cima libera; col giro in cima un salto e un pezzo in più',
+    [r.blocchi.length, rg.rtsRadiale({ ...P, rimPass: true }).blocchi.length], [1, 2]);
   // ogni nodo interno di ogni linea è una lente (discesa e risalita alle rientranze, colonne vicine alle punte): 13 per
   // linea, 96 linee. Prima si perdevano tutte quelle alle rientranze (discesa e risalita sono pezzi attaccati: misurate 672)
   const zone = [];
@@ -6300,7 +6300,7 @@ console.log('\nrete-testa-speciale — la sacca a rete: anelli coi lati uguali, 
 console.log('\nrete-testa-speciale — la sacca appesa: i fili non si allungano, la morbidezza conta, l’impossibile si vede');
 {
   const A = rg.rtsAnelli({ N: 48, L: 15, r0: 100, amax: 165, campo: 450 });
-  const appesa = (opz) => { const s = rg.rtsAppesa(A, { N: 48, L: 15, giroInCima: true, filo: 1, modo: 'bocca', boccaMm: 200, maniciMm: 250, morbidezza: 1, ...opz }); rg.rtsAssesta(s, 6000); return { s, m: rg.rtsMisureAppesa(s) }; };
+  const appesa = (opz) => { const s = rg.rtsAppesa(A, { N: 48, L: 15, giroInCima: true, filo: 1, modo: 'bocca', boccaMm: 200, maniciMm: 250, morbidezza: 1, fondoRigido: 0, cordone: false, stretta: 0, ...opz }); rg.rtsAssesta(s, 6000); return { s, m: rg.rtsMisureAppesa(s) }; };
   const morbida = appesa({}), rigida = appesa({ morbidezza: 0 }), piatta = appesa({ boccaMm: 449 }), manici = appesa({ modo: 'manici' });
   // con la bocca da 200 mm e il filo che cede del tutto scende più della sacca col fondo rigido (190 mm): il fondo a
   // ragnatela si incurva anche lui (misurati 261 mm); un filo meno morbido tiene lo zig-zag e scende meno (misurati 202)
@@ -6313,6 +6313,26 @@ console.log('\nrete-testa-speciale — la sacca appesa: i fili non si allungano,
     piatta.m.allungamentoMax > 0.03, true);
   check('appesa per due punti: solo quei due nodi fermi, la sacca scende più che per la bocca',
     [manici.s.nodi.filter((q) => q.fermo).length, manici.m.profondita > morbida.m.profondita], [2, true]);
+}
+
+// il fondo e il cordone (Lorenzo, 2026-10-16): «se la base di filo a spirale è ben progettata diventa un appoggio»
+// (rigidità del fondo); la testa non si ricama, la bocca si chiude a strozzo con un cordone a zig-zag nei buchi
+// dell'ultima fila, montato dopo
+console.log('\nrete-testa-speciale — il fondo rigido e il cordone a strozzo');
+{
+  const A = rg.rtsAnelli({ N: 48, L: 15, r0: 100, amax: 165, campo: 450 }), N = 48, n = A.rho.length - 1;
+  const base = { N: 48, L: 15, giroInCima: false, filo: 1, modo: 'bocca', boccaMm: 200, maniciMm: 250, morbidezza: 0.7, fondoRigido: 0, cordone: false, stretta: 0 };
+  const prova = (opz) => { const s = rg.rtsAppesa(A, { ...base, ...opz }); rg.rtsAssesta(s, 8000); return { s, m: rg.rtsMisureAppesa(s) }; };
+  const dislivello = (s) => { const zs = s.nodi.filter((q, i) => i < N || (i >= (n + 1) * N && i < (n + 1) * N + 3 * N + 1)).map((q) => q.z); return Math.max(...zs) - Math.min(...zs); };
+  const molle = prova({}), rigido = prova({ fondoRigido: 1 });
+  check('il fondo rigido resta piatto (sotto 1 mm) e la sacca scende meno; quello molle si incurva (oltre 30 mm)',
+    [dislivello(rigido.s) < 1, dislivello(molle.s) > 30, rigido.m.profondita < molle.m.profondita], [true, true, true]);
+  check('la testa è libera: il giro d’impuntura in cima è spento di partenza', rg.RTS_PARAMETRI.rimPass, false);
+  // stringendo il cordone la bocca si chiude; appesa per i capi col fondo rigido il cordone regge tutto il peso: prima
+  // risultava «allungato» fino al 9% (gli errori si sommavano lungo la catena), ora meno del 3%
+  const larga = prova({ modo: 'cordone', cordone: true, stretta: 0.3, fondoRigido: 0.2 }), stretta = prova({ modo: 'cordone', cordone: true, stretta: 0.9, fondoRigido: 1 });
+  check('il cordone a strozzo: più stretto, bocca più chiusa; appesa per i capi i fili non si allungano oltre il 3%',
+    [stretta.m.bocca < larga.m.bocca - 100, larga.m.allungamentoMax < 0.03, stretta.m.allungamentoMax < 0.03], [true, true, true]);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).

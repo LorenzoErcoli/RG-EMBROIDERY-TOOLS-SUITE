@@ -63,6 +63,24 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
     appesa? in ogni caso solo con un bottone attivo non sempre… dentro il tools, ma un sotto programma a parte»*.
     Sotto-programma in due file (`sacca3d.ts` la fisica, `vista3d.ts` la vista), acceso dal pulsante «Sacca 3D».
 
+12. **La testa NON si ricama** (2026-10-16). Prima l'idea: più passate in cima per una testa che regge, poi una banda
+    rigida su un anello interno della misura della bocca, con la rete oltre che ricade come un colletto. Bocciate tutte e
+    due dai conti e dalla vista 3D, poi da Lorenzo: *«è impossibile questa strada. nel ricamo non posso farlo mi si
+    curcirebbe sopra e sotto. lascia stare la parte sopra. lasciamola libera»*. Il giro d'impuntura in cima resta
+    un'opzione, **spenta di partenza**.
+13. **Il cordone a strozzo, al montaggio**: *«un cordone che passa a zig zag nei buchi dell'ultima fila dell'intreccio e
+    che possiamo stringerlo… si chiude a strozzo»*. Solo nella vista 3D (non è ricamo).
+14. **Il fondo come appoggio**: *«se la base di filo a spirale è ben progettata diventa un appoggio perché il filo si
+    unisce tra le varie linee di spirale e quindi funziona da base rigida… ovviamente con morbidezza»*.
+
+## Perché la testa rigida non può funzionare (2026-10-16, misurato)
+**Ogni anello tenuto alla sua misura del disco piatto blocca piatta tutta la rete dentro di lui.** Il lato fra un anello
+fermo e quello prima si allungherebbe se il secondo si stringesse, e così via verso il centro: la rete scende solo
+stringendo gli anelli. Quindi una testa rigida sul bordo tiene la bocca alla misura del disco (Ø 449: la rete resta un
+disco), e una banda rigida su un anello interno (Ø 322) lascia dentro un piatto (scende 7–19 mm, e dove sembra di più i
+fili si allungherebbero del 5–20%) con il colletto che ricade 77 mm: un paralume, non una sacca. Vale anche col fondo
+morbido. Una bocca fissa più stretta del disco si ottiene solo da fuori: il cordone.
+
 ## La sacca appesa: com'è fatta (2026-10-16)
 - **Fili che non si allungano ma si allentano** (vincolo «al più L», Verlet + vincoli ripetuti) e la gravità. Conta solo
   la forma finale. Appesa per la bocca (ultimo anello fermo su un cerchio) o per due punti del bordo.
@@ -73,6 +91,18 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
   linee si raddrizzano, e la morbidezza non cambiava niente (misurato: 261 mm con tutti i valori). Ora 0 → 202 mm,
   0,5 → 219, 1 → 261 (scala 0,004 per ripetizione: con 0,08 tutto oltre 0,3 dava lo stesso risultato).
 - **I nodi di un anello non stanno più vicini di due spessori di filo**: senza, la sacca si stringeva fino a un punto.
+- **Il fondo rigido è una forma che tiene** (i nodi del disco del fondo tirati verso la loro forma piatta, spostata e
+  inclinata nel modo più vicino: la tecnica dei corpi rigidi). Le molle semplici non bastavano (il fondo «rigido» si
+  piegava più di quello molle: 78 contro 62 mm). Tarata ripida: al 20% scende ancora di 41 mm, dal 60% è piatto. Col
+  fondo rigido e la bocca Ø 200 la sacca scende 177 mm: torna col calcolo esatto, che col fondo piatto dà al più 190.
+- **Il cordone** passa fra i nodi dei lati dell'ultima fila (l'anello n − 1) con tratti uguali (scorre nei buchi), si
+  chiude dove esce e da lì i capi (120 mm) salgono alla mano. Il primo tentativo faceva passare la presa dentro il giro:
+  la bocca pendeva come un cappio invece di chiudersi a collo.
+- **Le ancore**: appesa da pochi punti, gli errori dei vincoli si sommano lungo la catena (fili «allungati» fino
+  all'86%). Ogni nodo ha la sua distanza più corta, lungo i fili, dal punto di presa, e più in là non va: un vincolo vero
+  (il filo non si allunga). Il cordone, che regge tutto con pochi tratti, si corregge più volte (prima: 9%).
+- **Vuota non sta in piedi**: appoggiata, le pareti ricadono sul fondo (alta 14–23 mm anche col fondo rigido). Appesa per
+  i capi, morbida, pende chiusa come un fagotto (larga ~11 cm); col fondo rigido tiene la larghezza del fondo.
 - **Con la bocca larga quanto il disco i fili dovrebbero allungarsi del 5%**: la vista dice che non si può, invece di
   mostrare una forma finta (la stessa scoperta della simulazione: il disco teso non scende).
 

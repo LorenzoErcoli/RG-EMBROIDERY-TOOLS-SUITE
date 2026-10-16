@@ -2003,7 +2003,7 @@
         },
         "rimPass": {
           "$ref": "#/$defs/rimPass",
-          "default": true
+          "default": false
         },
         "pieceSource": {
           "$ref": "#/$defs/pieceSource",

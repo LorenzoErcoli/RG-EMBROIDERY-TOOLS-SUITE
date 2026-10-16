@@ -47,7 +47,7 @@ export const scheda: SchedaParametri = {
     {
       id: 'rimPass', etichetta: 'Un giro d’impuntura in cima, sulle punte esterne',
       aiuto: 'Sacca: lega le punte dell’ultimo anello; non tiene aperta la bocca (il filo si arriccia, non si allunga).',
-      tipo: 'bool', unita: '', predefinito: true, concetto: 'interruttore',
+      tipo: 'bool', unita: '', predefinito: false, concetto: 'interruttore',
     },
     {
       id: 'pieceSource', etichetta: 'Il pezzo',
