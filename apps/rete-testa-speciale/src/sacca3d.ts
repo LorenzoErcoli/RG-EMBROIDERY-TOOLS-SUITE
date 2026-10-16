@@ -10,7 +10,10 @@
 //
 // Si tiene per la bocca (l'ultimo anello fermo su un cerchio), per due punti del bordo, per il nodo del cordone, o la
 // si appoggia sul fondo.
-import { altezze, fondoDellaLegatura, lenteAlNodo, profiloPiuProfondo, raggioMinimo, type Anelli, type RegolaSovrapposizione } from './sacca';
+import {
+  altezze, fondoDellaLegatura, lenteAlNodo, parametroDelNodo, profiloPiuProfondo, puntoDelFondo, puntoDelNodo, raggioDelFondo, raggioMinimo,
+  type Anelli, type RegolaSovrapposizione,
+} from './sacca';
 
 export type ModoAppesa = 'bocca' | 'manici' | 'cordone' | 'appoggiata';
 
@@ -104,21 +107,24 @@ const indice = (N: number, j: number, k: number) => j * N + (((k % N) + N) % N);
 const angolo = (N: number, j: number, k: number) => 2 * Math.PI * k / N + (j % 2 ? Math.PI / N : 0);
 
 export function creaSaccaAppesa(A: Anelli, opz: OpzioniAppesa): SaccaAppesa {
-  const N = Math.max(3, Math.round(opz.N)), n = A.rho.length - 1, r0 = A.rho[0];
+  const N = Math.max(3, Math.round(opz.N)), n = A.rho.length - 1, r0 = raggioDelFondo(A);
   const nodi: Nodo[] = [], fili: Filo[] = [], pieghe: Piega[] = [], distanze: Distanza[] = [], forme: Forma[] = [];
   const nodo = (x: number, y: number, z: number): number => { nodi.push({ x, y, z, px: x, py: y, pz: z, fermo: false }); return nodi.length - 1; };
   const lunghezza = (a: number, b: number) => { const p = nodi[a], q = nodi[b]; return Math.hypot(p.x - q.x, p.y - q.y, p.z - q.z); };
   const filo = (a: number, b: number, tipo: Filo['tipo'], L = lunghezza(a, b)) => fili.push({ a, b, L, tipo });
   // la rete, piatta come esce dalla macchina
-  for (let j = 0; j <= n; j++) for (let k = 0; k < N; k++) { const f = angolo(N, j, k); nodo(A.rho[j] * Math.cos(f), A.rho[j] * Math.sin(f), 0); }
+  for (let j = 0; j <= n; j++) for (let k = 0; k < N; k++) { const q = puntoDelNodo(A, N, j, k); nodo(q.x, q.y, 0); }
   for (let j = 0; j < n; j++) for (let k = 0; k < N; k++) for (const kk of j % 2 ? [k, k + 1] : [k, k - 1]) filo(indice(N, j, k), indice(N, j + 1, kk), 'rete');
   // le pieghe: sulle due linee di ogni colonna, il nodo prima e il nodo dopo; rigide quanto è lunga la lente sul nodo
-  const lenti = Array.from({ length: n + 1 }, (_, j) => (j >= 1 && j < n ? lenteAlNodo(A, N, j, opz.sovrapposizione ?? 0, opz.regola ?? 'spostamento', opz.L) : 0));
-  const interne = lenti.slice(1, n), media = interne.reduce((a, b) => a + b, 0) / Math.max(1, interne.length);
-  const peso = (j: number) => (media > 0 ? lenti[j] / media : 1);
+  // (sull'ovale ogni nodo ha la sua lente)
+  const lente = (j: number, k: number) => (j >= 1 && j < n ? lenteAlNodo(A, N, j, opz.sovrapposizione ?? 0, opz.regola ?? 'spostamento', opz.L, k) : 0);
+  const lenti = Array.from({ length: n + 1 }, (_, j) => Array.from({ length: A.punti ? N : 1 }, (_, k) => lente(j, k)));
+  const interne = lenti.slice(1, n).flat(), media = interne.reduce((a, b) => a + b, 0) / Math.max(1, interne.length);
+  const peso = (j: number, k: number) => (media > 0 ? lenti[j][A.punti ? ((k % N) + N) % N : 0] / media : 1);
   for (let k = 0; k < N; k++) for (const lato of [0, 1]) {
-    const linea = Array.from({ length: n + 1 }, (_, j) => indice(N, j, j % 2 ? (lato ? k : k - 1) : k));
-    for (let j = 1; j < n; j++) pieghe.push({ a: linea[j - 1], b: linea[j + 1], L: lunghezza(linea[j - 1], linea[j + 1]), k: peso(j) });
+    const col = (j: number) => (j % 2 ? (lato ? k : k - 1) : k);
+    const linea = Array.from({ length: n + 1 }, (_, j) => indice(N, j, col(j)));
+    for (let j = 1; j < n; j++) pieghe.push({ a: linea[j - 1], b: linea[j + 1], L: lunghezza(linea[j - 1], linea[j + 1]), k: peso(j, col(j)) });
   }
   // i nodi di un anello non si toccano
   for (let j = 0; j <= n; j++) for (let k = 0; k < N; k++) distanze.push({ a: indice(N, j, k), b: indice(N, j, k + 1), minimo: 2 * Math.max(0.1, opz.filo) });
@@ -134,7 +140,8 @@ export function creaSaccaAppesa(A: Anelli, opz: OpzioniAppesa): SaccaAppesa {
   const profonda = Array.from({ length: N }, (_, k) => fondoDellaLegatura(k, N, spaziatura, r0, Math.min(passo, r0 / 2)));
   const giri: number[][] = [Array.from({ length: N }, (_, k) => indice(N, 0, k))];
   for (const r of raggi) {
-    const giro = Array.from({ length: N }, (_, k) => nodo(r * Math.cos(2 * Math.PI * k / N), r * Math.sin(2 * Math.PI * k / N), 0));
+    // (col fondo ovale i giri sono gli ovali del fondo, come nel ricamo)
+    const giro = Array.from({ length: N }, (_, k) => { const q = puntoDelFondo(A, parametroDelNodo(A, N, k), r / r0); return nodo(q.x, q.y, 0); });
     const prima = giri[giri.length - 1];
     for (let k = 0; k < N; k++) filo(giro[k], giro[(k + 1) % N], 'fondo');
     filo(prima[0], giro[0], 'fondo'); // la spirale passa da un giro al successivo
@@ -162,9 +169,11 @@ export function creaSaccaAppesa(A: Anelli, opz: OpzioniAppesa): SaccaAppesa {
   if (opz.cordone && n >= 2) {
     const anelli = Array.from({ length: N }, (_, k) => indice(N, n, k));
     const a0 = nodi[anelli[0]], aN = nodi[anelli[N - 1]];
-    const uscita = nodo((a0.x + aN.x) / 2, (a0.y + aN.y) / 2, 0), mano = nodo(nodi[uscita].x * (1 + CAPI / A.rho[n]), nodi[uscita].y * (1 + CAPI / A.rho[n]), 0);
-    const corda = 2 * A.rho[n] * Math.sin(Math.PI / N);
-    cordone = { anelli, uscita, mano, pieno: (N + 1) * corda, chiuso: (N + 1) * 2 * Math.max(0.1, opz.filo) };
+    const uscita = nodo((a0.x + aN.x) / 2, (a0.y + aN.y) / 2, 0), ru = Math.hypot(nodi[uscita].x, nodi[uscita].y) || 1;
+    const mano = nodo(nodi[uscita].x * (1 + CAPI / ru), nodi[uscita].y * (1 + CAPI / ru), 0);
+    // il giro dell'ultimo anello piatto (sull'ovale i tratti non sono uguali: conta il giro)
+    let giroPiatto = 0; for (let k = 0; k < N; k++) giroPiatto += lunghezza(anelli[k], anelli[(k + 1) % N]);
+    cordone = { anelli, uscita, mano, pieno: giroPiatto * (N + 1) / N, chiuso: (N + 1) * 2 * Math.max(0.1, opz.filo) };
     for (let k = 0; k + 1 < N; k++) filo(anelli[k], anelli[k + 1], 'cordone', 0);
     filo(anelli[N - 1], uscita, 'cordone', 0); filo(uscita, anelli[0], 'cordone', 0);
     filo(uscita, mano, 'capi', CAPI);
@@ -210,8 +219,9 @@ export function appendi(s: SaccaAppesa, A: Anelli): void {
     // in piedi sul fondo, nella forma del secchiello dritto: poi la gravità dice quanto regge
     const R = profiloPiuProfondo(A, s.opz.L, A.rho[0], raggioMinimo(N, s.opz.filo)), z = altezze(R, A, s.opz.L);
     for (let j = 0; j <= n; j++) for (let k = 0; k < N; k++) {
-      const q = s.nodi[indice(N, j, k)], f = angolo(N, j, k);
-      q.x = q.px = R[j] * Math.cos(f); q.y = q.py = R[j] * Math.sin(f); q.z = q.pz = z[j];
+      // (sull'ovale ogni anello si stringe in proporzione, dalla sua forma piatta)
+      const q = s.nodi[indice(N, j, k)], p = puntoDelNodo(A, N, j, k), c = R[j] / A.rho[j];
+      q.x = q.px = p.x * c; q.y = q.py = p.y * c; q.z = q.pz = z[j];
     }
     for (let i = (n + 1) * N; i < s.nodi.length; i++) { const q = s.nodi[i]; q.z = q.pz = 0; q.px = q.x; q.py = q.y; }
     if (s.cordone) for (const c of [s.nodi[s.cordone.uscita], s.nodi[s.cordone.mano]]) { const a = s.nodi[s.cordone.anelli[0]]; c.x = c.px = a.x; c.y = c.py = a.y; c.z = c.pz = a.z; }

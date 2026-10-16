@@ -42,6 +42,11 @@ const CAMPI_SACCA: Campo[] = [
   { nome: 'radialCount', etichetta: 'Rombi per giro', unita: '', passo: 1, min: 3, max: 200 },
   { nome: 'radialSideMm', etichetta: 'Lato del rombo', unita: 'mm', passo: 0.5, min: 2, max: 100,
     aiuto: 'Tutti i lati uguali: è quello che fa diventare il disco una sacca.' },
+  { nome: 'bottomShape', etichetta: 'Il fondo', unita: '', passo: 1, min: 0,
+    scelte: [['tondo', 'tondo'], ['ovale', 'ovale']],
+    aiuto: 'Ovale: la rete diventa ovale anche lei; sulle teste la fascia viene più corta che sui lati lunghi, e chiusa col cordone la sacca fa pancia sui lati lunghi e tiene tese le teste.' },
+  { nome: 'bottomLengthMm', etichetta: 'Lunghezza del fondo', unita: 'mm', passo: 5, min: 20, max: 440 },
+  { nome: 'bottomWidthMm', etichetta: 'Larghezza del fondo', unita: 'mm', passo: 5, min: 10, max: 440 },
   { nome: 'bottomRadiusMm', etichetta: 'Raggio del fondo', unita: 'mm', passo: 1, min: 5, max: 300,
     aiuto: 'Dove finisce la rete e comincia la spirale. Più è grande, più la sacca è larga e bassa.' },
   { nome: 'maxAngleDeg', etichetta: 'Angolo massimo dei rombi in fuori', unita: '°', passo: 1, min: 60, max: 179,
@@ -189,7 +194,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         for (const [v, l] of f.scelte) { const o = document.createElement('option'); o.value = v; o.textContent = l; o.selected = String(par[f.nome]) === v; sel.appendChild(o); }
         sel.addEventListener('change', () => {
           (par as Record<string, unknown>)[f.nome] = sel.value;
-          if (f.nome === 'pieceSource' || f.nome === 'netShape') { risultato = null; buildPanel(); disegnaContorni(); }
+          if (f.nome === 'pieceSource' || f.nome === 'netShape' || f.nome === 'bottomShape') { risultato = null; buildPanel(); disegnaContorni(); }
           genera();
         });
         lab.appendChild(sel);
@@ -256,7 +261,10 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         <p class="rg-file-input__status" id="reopenStatus" role="status">Un file uscito da qui torna com'era: pezzo, ruoli e parametri.</p>
       </div>`;
     if (radiale()) {
-      box.append(...campi(CAMPI_FORMA).childNodes, ...campi(CAMPI_SACCA).childNodes);
+      // il fondo tondo ha il raggio, quello ovale lunghezza e larghezza
+      const ovale = par.bottomShape === 'ovale';
+      const sacca = CAMPI_SACCA.filter((c) => (c.nome === 'bottomRadiusMm' ? !ovale : c.nome === 'bottomLengthMm' || c.nome === 'bottomWidthMm' ? ovale : true));
+      box.append(...campi(CAMPI_FORMA).childNodes, ...campi(sacca).childNodes);
       box.insertAdjacentHTML('beforeend', `<small class="rg-field__help rg-param-grid__wide">Un disco di rombi coi lati tutti uguali, al centro del campo: tolto dal telaio i rombi ruotano e diventa una sacca. Le sue misure sono in «Programma e vista».</small>` + bloccoRiapri);
       return box;
     }
@@ -340,6 +348,13 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     if (!A || A.rho.length < 3) return '';
     const n = A.rho.length - 1, L = par.radialSideMm, N = Math.round(par.radialCount), rMin = raggioMinimo(N, par.constructionStroke);
     const fondo = 2 * A.rho[0], disco = 2 * A.rho[n];
+    if (A.punti && A.ovale) {
+      // l'ovale: la tabella delle bocche vale solo per il fondo tondo (anelli che restano cerchi); qui le fasce
+      const xs = A.punti[n].map((q) => q.x), ys = A.punti[n].map((q) => q.y), W = Math.max(...xs) - Math.min(...xs), H = Math.max(...ys) - Math.min(...ys);
+      const testa = Math.max(...xs) - A.ovale.a, lato = Math.max(...ys) - A.ovale.b;
+      return `<p class="rg-field__help rg-param-grid__wide">Rete ${W.toFixed(0)} × ${H.toFixed(0)} mm (ti ferma ${A.perche === 'campo' ? 'il campo' : 'l’angolo massimo'}) · ${n + 1} anelli · fondo ${(2 * A.ovale.a).toFixed(0)} × ${(2 * A.ovale.b).toFixed(0)} mm`
+        + ` · fascia sui lati lunghi ${lato.toFixed(0)} mm, sulle teste ${testa.toFixed(0)} mm. Chiusa, la sacca fa pancia sui lati lunghi e tiene tese le teste: guardala in <b>Sacca 3D</b>.</p>`;
+    }
     const bocche = [fondo, (fondo + disco) / 2, fondo + (disco - fondo) * 0.75, fondo + (disco - fondo) * 0.9].filter((b) => b < disco - 1);
     const righe = bocche.map((b) => { const s = formaSacca(A, L, b, rMin); return `<tr><td>Ø ${s.bocca.toFixed(0)} mm${Math.abs(b - fondo) < 0.5 ? ' (dritta)' : ''}</td><td>${s.possibile ? s.profondita.toFixed(0) + ' mm' : 'non si può'}</td><td>Ø ${s.larga.toFixed(0)} mm</td><td>${s.litri.toFixed(1)} l</td></tr>`; }).join('');
     return `<p class="rg-field__help rg-param-grid__wide">Disco Ø ${disco.toFixed(0)} mm (limite teorico Ø ${(2 * A.rMaxPiatto).toFixed(0)}; ti ferma ${A.perche === 'campo' ? 'il campo' : 'l’angolo massimo'}) · ${n + 1} anelli · rombi da ${angoloDelRombo(A, L, 0).toFixed(0)}° al fondo a ${angoloDelRombo(A, L, Math.max(0, n - 2)).toFixed(0)}° in cima · fondo Ø ${fondo.toFixed(0)} mm</p>`
@@ -413,7 +428,9 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         const r = costruisciReteRadiale(par);
         anelliSacca = r.anelli;
         risultato = r.blocchi.length ? r : null;
-        $('status').textContent = r.avviso ?? `Sacca: disco Ø ${(2 * r.anelli.rho[r.anelli.rho.length - 1]).toFixed(0)} mm · ${r.blocchi.length} parti · ${r.misure.salti} salti · ${r.misure.tempoMs} ms`;
+        const ultimo = r.anelli.punti?.[r.anelli.punti.length - 1], larg = (f: (q: { x: number; y: number }) => number) => (ultimo ? Math.max(...ultimo.map(f)) - Math.min(...ultimo.map(f)) : 0);
+        const disco = ultimo ? `rete ${larg((q) => q.x).toFixed(0)} × ${larg((q) => q.y).toFixed(0)} mm` : `disco Ø ${(2 * r.anelli.rho[r.anelli.rho.length - 1]).toFixed(0)} mm`;
+        $('status').textContent = r.avviso ?? `Sacca: ${disco} · ${r.blocchi.length} parti · ${r.misure.salti} salti · ${r.misure.tempoMs} ms`;
         $('points').textContent = r.blocchi.length ? ` · ${r.misure.punti.toLocaleString('it-IT')} punti` : '';
         buildPanel();
         disegna();

@@ -97,6 +97,32 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
     (`overlapRule`: spostamento, lente, aggancio; di partenza spostamento). Con l'aggancio la sovrapposizione scritta vale
     per un rombo quadrato (incrocio a 90°): con 2 mm l'aggancio è 1,29 ovunque, lo spostamento va da 1,57 a 6,58 e le lenti
     da 2,6 a 6,8. Lo spostamento si ferma a metà del lato.
+18. **Il fondo ovale** (2026-10-16): *«il centro non più per forza un cerchio ma può essere un ovale e di conseguenza
+    anche la tramatura diventa ovoidale. poi ancora più interessante è immaginare di poter avere l'ampiezza da centro
+    all'esterno più piccola rispetto al lato lungo. così poi quando vado a inserire il cordoncino alla fine i lati lunghi
+    saranno più morbidi e sembrerà molto di più una borsa e la tensione è tutta nei lati che rimangono rigidi»*. Provato
+    prima in 2D, poi in 3D (*«prima il 3D»*), poi portato nel tool (`bottomShape`, `bottomLengthMm`, `bottomWidthMm`).
+
+## Il fondo ovale: com'è fatto (2026-10-16, misurato)
+- **La regola degli anelli è una sola**: ogni nodo nuovo sta a distanza L dai due nodi vicini dell'anello prima (una rete
+  di Čebyšëv). Vale su qualunque fondo convesso; sul cerchio ridà gli stessi anelli di prima (scarto 0,00002 mm, dal
+  campionamento dell'ovale). Il fondo ha N nodi a passo uguale lungo l'ovale, il nodo 0 sulla testa.
+- **La fascia più corta sulle teste viene da sola**, senza un parametro: dove l'ovale curva di più i rombi si aprono in
+  fretta (in cima 146° sulle teste, 64° sui lati: fondo 260 × 140, 64 rombi) e gli anelli si fermano quando lì arrivano
+  all'angolo massimo o al campo. Fascia: lati lunghi 135 mm, teste 92. La rete finita è più tonda del fondo (443 × 410).
+  Con meno rombi la differenza cresce ma gli anelli calano (48 rombi: 112 contro 60, 9 anelli, teste a 170°).
+- **In 3D, bocca stretta a Ø 90** (morbidezza 70%, fondo rigido 60%): la parete dei lati lunghi fa pancia 15 mm e i suoi
+  fili sono tesi al 93%; le teste 5 mm e 97%. Sul cerchio 6 mm e 97% ovunque. Tenuta da un punto solo (i capi del
+  cordone) anche la sacca tonda pende storta: per confrontare lati e teste serve la bocca chiusa al centro.
+- **La spirale ovale**: i giri sono gli ovali di mezzi assi (a − b) + f·b e f·b, che restano alla stessa distanza
+  sull'asse lungo e su quello corto (un ovale in scala li avrebbe più radi sulle teste del rapporto a/b); al centro si
+  chiudono su un tratto dritto lungo 2·(a − b). Le legature entrano lungo questi ovali, la profondità misurata sul mezzo
+  asse corto.
+- **Gli incroci dell'ovale** si calcolano nodo per nodo (le due linee che passano dal nodo, la media): lente e aggancio
+  della regola scelta per ogni nodo, lo spostamento lungo il suo anello. Con «lente uguale» le lenti misurate vanno da
+  2,5 a 3,1 mm (sul cerchio 1,9–2,1): la media delle due linee non è esatta dove l'ovale è asimmetrico.
+- **Da sapere**: nella vista 3D la presa «per la bocca» mette la bocca su un cerchio e «appoggiata» parte da una forma
+  stretta in proporzione; la tabella delle bocche (`formaSacca`) è solo per il fondo tondo.
 
 ## Perché la testa rigida non può funzionare (2026-10-16, misurato)
 **Ogni anello tenuto alla sua misura del disco piatto blocca piatta tutta la rete dentro di lui.** Il lato fra un anello

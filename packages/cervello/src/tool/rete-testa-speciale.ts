@@ -20,6 +20,21 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: 2, max: 100, passo: 0.5, predefinito: 15, concetto: 'modulo',
     },
     {
+      id: 'bottomShape', etichetta: 'Il fondo',
+      aiuto: 'Sacca: tondo o ovale. Ovale: la rete diventa ovale; sulle teste la fascia è più corta che sui lati lunghi, e chiusa col cordone la sacca fa pancia sui lati lunghi e tiene tese le teste.',
+      tipo: 'enum', unita: '', opzioni: ['tondo', 'ovale'], predefinito: 'tondo', concetto: 'formato',
+    },
+    {
+      id: 'bottomLength', nome: 'bottomLengthMm', etichetta: 'Lunghezza del fondo',
+      aiuto: 'Sacca, fondo ovale: da testa a testa.',
+      tipo: 'num', unita: 'mm', min: 20, max: 440, passo: 5, predefinito: 260, concetto: 'formato',
+    },
+    {
+      id: 'bottomWidth', nome: 'bottomWidthMm', etichetta: 'Larghezza del fondo',
+      aiuto: 'Sacca, fondo ovale: da lato lungo a lato lungo.',
+      tipo: 'num', unita: 'mm', min: 10, max: 440, passo: 5, predefinito: 140, concetto: 'formato',
+    },
+    {
       id: 'bottomRadius', nome: 'bottomRadiusMm', etichetta: 'Raggio del fondo',
       aiuto: 'Sacca: dove finisce la rete e comincia la spirale. Più è grande, più la sacca è larga e bassa.',
       tipo: 'num', unita: 'mm', min: 5, max: 300, passo: 1, predefinito: 100, concetto: 'formato',

@@ -19,7 +19,10 @@
 //   vuoto, o attraversarlo con un'impuntura dritta (come nel Generatore pattern);
 // - «quando inserisci una parte nuova inizia sempre dal contorno esterno del cartamodello».
 import { distance, distanceToSegment, enforceMinStitch, lerp, pointInPolygon, type Point, type Polyline } from '@rg/core';
-import { anelliRadiali, fondoDellaLegatura, sovrapposizioneAlNodo, type Anelli, type RegolaSovrapposizione } from './sacca';
+import {
+  anelliOvali, anelliRadiali, fondoDellaLegatura, parametroDelNodo, puntoDelFondo, puntoDelNodo, raggioDelFondo, sovrapposizioneAlNodo,
+  tangenteAlNodo, type Anelli, type RegolaSovrapposizione,
+} from './sacca';
 
 export type ModoVuoto = 'ritorno' | 'bordo' | 'centro';
 /** Da dove viene il pezzo: il contorno del cartamodello caricato, o un rettangolo con le misure scritte a mano. */
@@ -37,6 +40,15 @@ export type ParametriRete = {
   radialSideMm: number;
   /** Sacca: raggio del fondo, mm (dove finisce la rete e comincia la spirale). */
   bottomRadiusMm: number;
+  /**
+   * Sacca: il fondo tondo o ovale (Lorenzo, 2026-10-16). Ovale: la rete cresce con le stesse regole e diventa ovale anche
+   * lei; sulle teste la fascia viene più corta che sui lati lunghi (i rombi lì si aprono prima), e chiusa col cordone la
+   * sacca fa pancia sui lati lunghi e tiene tese le teste.
+   */
+  bottomShape: 'tondo' | 'ovale';
+  /** Sacca, fondo ovale: lunghezza e larghezza, mm. */
+  bottomLengthMm: number;
+  bottomWidthMm: number;
   /** Sacca: angolo massimo dei rombi in fuori, gradi (a 180 sono piatti). */
   maxAngleDeg: number;
   /** Sacca: lato del campo macchina, mm. Il disco ci deve stare. */
@@ -100,6 +112,9 @@ export const PARAMETRI_RETE: ParametriRete = {
   radialCount: 48,
   radialSideMm: 15,
   bottomRadiusMm: 100,
+  bottomShape: 'tondo',
+  bottomLengthMm: 260,
+  bottomWidthMm: 140,
   maxAngleDeg: 165,
   fieldMm: 450,
   spiralPitchMm: 5,
@@ -740,22 +755,28 @@ export function costruisciReteRadiale(par: ParametriRete): RisultatoRete & { ane
   const t0 = Date.now();
   const p: ParametriRete = { ...PARAMETRI_RETE, ...par };
   const N = Math.max(3, Math.round(p.radialCount)), L = Math.max(1, p.radialSideMm);
-  const A = anelliRadiali({ N, L, r0: p.bottomRadiusMm, amax: p.maxAngleDeg, campo: p.fieldMm });
+  const ovale = p.bottomShape === 'ovale';
+  const A = ovale
+    ? anelliOvali({ N, L, r0: p.bottomLengthMm / 2, b: p.bottomWidthMm / 2, amax: p.maxAngleDeg, campo: p.fieldMm })
+    : anelliRadiali({ N, L, r0: p.bottomRadiusMm, amax: p.maxAngleDeg, campo: p.fieldMm });
   const centro = { x: p.fieldMm / 2, y: p.fieldMm / 2 };
   const vuota = (avviso: string) => ({
     blocchi: [], avviso, anelli: A, centro,
     misure: { punti: 0, puntiSovrapposti: 0, puntiSopra: 0, filoMm: 0, puntoMinMm: 0, puntoMaxMm: 0, salti: 0, saltiMm: 0, stratiMax: 0, tempoMs: Date.now() - t0 },
   });
-  if (A.impossibile) return vuota(`Con ${N} rombi di lato ${L} mm il fondo non può avere raggio ${p.bottomRadiusMm} mm: il limite è ${A.rMaxPiatto.toFixed(1)} mm.`);
+  if (A.impossibile) return vuota(ovale
+    ? `Con ${N} rombi di lato ${L} mm il fondo ovale ${p.bottomLengthMm} × ${p.bottomWidthMm} mm non ha posto nemmeno per un anello: aumenta i rombi o il lato, o riduci il fondo.`
+    : `Con ${N} rombi di lato ${L} mm il fondo non può avere raggio ${p.bottomRadiusMm} mm: il limite è ${A.rMaxPiatto.toFixed(1)} mm.`);
   if (A.rho.length < 3) return vuota('Fra il fondo e il limite non ci sta nemmeno un rombo: aumenta il lato, l’angolo massimo o il campo, o riduci il fondo.');
   const n = A.rho.length - 1, rOut = A.rho[n], r0 = A.rho[0];
   const pol = (r: number, f: number): Point => ({ x: centro.x + r * Math.cos(f), y: centro.y + r * Math.sin(f) });
   const tangente = (f: number): Point => ({ x: -Math.sin(f), y: Math.cos(f) });
   const fi = (k: number) => 2 * Math.PI * k / N;
   const angoloNodo = (j: number, k: number) => fi(k) + (j % 2 ? Math.PI / N : 0);
-  // il contorno in cima: un cerchio con un vertice su ogni nodo dell'ultimo anello
-  const M = 2 * N * Math.ceil(360 / (2 * N));
-  const contorno: Polyline = Array.from({ length: M }, (_, i) => pol(rOut, 2 * Math.PI * i / M));
+  const nodoA = (j: number, k: number): Point => { const q = puntoDelNodo(A, N, j, k); return { x: centro.x + q.x, y: centro.y + q.y }; };
+  // il contorno in cima: un cerchio con un vertice su ogni nodo dell'ultimo anello (sull'ovale, i nodi dell'ultimo anello)
+  const M = ovale ? N : 2 * N * Math.ceil(360 / (2 * N));
+  const contorno: Polyline = ovale ? Array.from({ length: N }, (_, k) => nodoA(n, k)) : Array.from({ length: M }, (_, i) => pol(rOut, 2 * Math.PI * i / M));
 
   // le due linee della colonna k: B a sinistra (verso l'angolo minore), A a destra. Agli anelli pari si toccano fra
   // loro (la rientranza), agli anelli dispari toccano le colonne vicine (le punte). La sovrapposizione le porta oltre
@@ -765,29 +786,33 @@ export function costruisciReteRadiale(par: ParametriRete): RisultatoRete & { ane
   const linea = (k: number, lato: -1 | 1): PuntoTraccia[] => {
     const T: Point[] = [];
     for (let j = 0; j <= n; j++) {
-      const kk = j % 2 && lato < 0 ? k - 1 : k, a = angoloNodo(j, kk), q = pol(A.rho[j], a);
+      const kk = j % 2 && lato < 0 ? k - 1 : k, a = angoloNodo(j, kk), q = ovale ? nodoA(j, kk) : pol(A.rho[j], a);
       if (j === 0 || j === n) { T.push(q); continue; }
-      const verso = j % 2 ? lato : -lato, t = tangente(a);
-      T.push({ x: q.x + t.x * mezza[j] * verso, y: q.y + t.y * mezza[j] * verso });
+      // sull'ovale ogni nodo ha il suo incrocio, e lo spostamento va lungo il suo anello
+      const verso = j % 2 ? lato : -lato, t = ovale ? tangenteAlNodo(A, N, j, kk) : tangente(a);
+      const m = ovale ? sovrapposizioneAlNodo(A, N, j, p.overlapMm, p.overlapRule, L, kk) / 2 : mezza[j];
+      T.push({ x: q.x + t.x * m * verso, y: q.y + t.y * m * verso });
     }
     return lineaArrotondata(T, f, 2 * k + (lato > 0 ? 1 : 0));
   };
 
   const pezzi: Pezzo[] = []; let sid = 0;
   // 1. il fondo: la spirale dal centro in fuori, che finisce sul nodo 0 dell'anello 0
-  const passo = Math.max(0.3, p.spiralPitchMm), giri = r0 / passo;
+  // (sull'ovale i giri sono gli ovali del fondo, `puntoDelFondo`: alla stessa distanza sui lati lunghi e sulle teste)
+  const R0 = raggioDelFondo(A), passo = Math.max(0.3, p.spiralPitchMm), giri = R0 / passo, dritto = A.ovale ? A.ovale.a - A.ovale.b : 0;
   if (giri >= 1) {
     const Th = 2 * Math.PI * giri, sp: PuntoTraccia[] = [];
     for (let th = 0; th < Th; ) {
-      const r = passo * th / (2 * Math.PI);
-      sp.push({ ...pol(r, th - Th), fisso: sp.length === 0 });
-      th += 0.25 / Math.max(r, 0.5);
+      const f = th / Th, q = puntoDelFondo(A, th - Th, f);
+      sp.push({ x: centro.x + q.x, y: centro.y + q.y, fisso: sp.length === 0 });
+      th += 0.25 / Math.max(dritto + f * R0, 0.5);
     }
-    sp.push({ ...pol(r0, 0), fisso: true });
+    sp.push({ ...nodoA(0, 0), fisso: true });
     pezzi.push({ tipo: 'fondo', pts: sp, sid: sid++, blocco: 0 });
   }
   // 2. le colonne
-  const nodo0 = (k: number): PuntoTraccia => ({ ...pol(r0, fi(k)), fisso: true });
+  const nodo0 = (k: number): PuntoTraccia => ({ ...(ovale ? nodoA(0, k) : pol(r0, fi(k))), fisso: true });
+  const dentro = (k: number, rs: number): Point => { const q = puntoDelFondo(A, parametroDelNodo(A, N, k), rs / R0); return { x: centro.x + q.x, y: centro.y + q.y }; };
   for (let k = 0; k < N; k++) {
     const B = linea(k, -1), Ar = linea(k, 1).reverse();
     pezzi.push({ tipo: 'rete', pts: B, sid: sid++, blocco: 0 });
@@ -795,15 +820,17 @@ export function costruisciReteRadiale(par: ParametriRete): RisultatoRete & { ane
     if (distance(a, b) > 1e-6) pezzi.push({ tipo: 'bordo', poly: contorno, a: { ...a, poly: contorno }, b: { ...b, poly: contorno }, sid: sid++, blocco: 0 });
     pezzi.push({ tipo: 'rete', pts: Ar, sid: sid++, blocco: 0 });
     // la legatura: dentro il fondo e fuori alla colonna dopo
-    const rs = fondoDellaLegatura(k, N, Math.max(passo, p.tieSpacingMm), r0, Math.min(passo, r0 / 2));
-    pezzi.push({ tipo: 'fondo', pts: [nodo0(k), { ...pol(rs, fi(k)), fisso: true }, nodo0(k + 1)], sid: sid++, blocco: 0 });
+    // (sull'ovale la profondità si misura sul mezzo asse corto, e la legatura entra lungo la forma del fondo)
+    const rs = fondoDellaLegatura(k, N, Math.max(passo, p.tieSpacingMm), R0, Math.min(passo, R0 / 2));
+    pezzi.push({ tipo: 'fondo', pts: [nodo0(k), { ...(ovale ? dentro(k, rs) : pol(rs, fi(k))), fisso: true }, nodo0(k + 1)], sid: sid++, blocco: 0 });
   }
   // 3. il giro in cima (un salto dal fondo fino alla bocca)
   if (p.rimPass) {
-    const s0 = { ...pol(rOut, 0), fisso: true, poly: contorno };
+    const sulBordo = (i: number) => (ovale ? contorno[Math.round(i * M / 3) % M] : pol(rOut, 2 * Math.PI * i / 3));
+    const s0 = { ...sulBordo(0), fisso: true, poly: contorno };
     pezzi.push({ tipo: 'salto', pts: [nodo0(0), s0], sid: sid++, blocco: 1 });
     for (let i = 0; i < 3; i++) {
-      const a = { ...pol(rOut, 2 * Math.PI * i / 3), fisso: true, poly: contorno }, b = { ...pol(rOut, 2 * Math.PI * (i + 1) / 3), fisso: true, poly: contorno };
+      const a = { ...sulBordo(i), fisso: true, poly: contorno }, b = { ...sulBordo(i + 1), fisso: true, poly: contorno };
       pezzi.push({ tipo: 'bordo', poly: contorno, a, b, sid: sid++, blocco: 1 });
     }
   }

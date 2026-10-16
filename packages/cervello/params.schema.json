@@ -1976,6 +1976,20 @@
           "default": 15,
           "x-id": "radialSide"
         },
+        "bottomShape": {
+          "$ref": "#/$defs/bottomShape",
+          "default": "tondo"
+        },
+        "bottomLengthMm": {
+          "$ref": "#/$defs/bottomLength",
+          "default": 260,
+          "x-id": "bottomLength"
+        },
+        "bottomWidthMm": {
+          "$ref": "#/$defs/bottomWidth",
+          "default": 140,
+          "x-id": "bottomWidth"
+        },
         "bottomRadiusMm": {
           "$ref": "#/$defs/bottomRadius",
           "default": 100,
@@ -4973,6 +4987,36 @@
       "x-passo": 0.5,
       "x-concetto": "modulo"
     },
+    "bottomShape": {
+      "type": "string",
+      "title": "Il fondo",
+      "description": "Sacca: tondo o ovale. Ovale: la rete diventa ovale; sulle teste la fascia è più corta che sui lati lunghi, e chiusa col cordone la sacca fa pancia sui lati lunghi e tiene tese le teste.",
+      "enum": [
+        "tondo",
+        "ovale"
+      ],
+      "x-concetto": "formato"
+    },
+    "bottomLength": {
+      "type": "number",
+      "title": "Lunghezza del fondo",
+      "description": "Sacca, fondo ovale: da testa a testa.",
+      "x-unita": "mm",
+      "minimum": 20,
+      "maximum": 440,
+      "x-passo": 5,
+      "x-concetto": "formato"
+    },
+    "bottomWidth": {
+      "type": "number",
+      "title": "Larghezza del fondo",
+      "description": "Sacca, fondo ovale: da lato lungo a lato lungo.",
+      "x-unita": "mm",
+      "minimum": 10,
+      "maximum": 440,
+      "x-passo": 5,
+      "x-concetto": "formato"
+    },
     "bottomRadius": {
       "type": "number",
       "title": "Raggio del fondo",
@@ -5252,6 +5296,9 @@
         "gridCols",
         "gridRows",
         "cellHeightMm",
+        "bottomShape",
+        "bottomLength",
+        "bottomWidth",
         "bottomRadius",
         "machineField",
         "pieceSource"

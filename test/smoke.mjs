@@ -61,7 +61,7 @@ export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } f
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_PARAMETRI } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
-export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
+export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm, anelliOvali as rtsAnelliOvali, puntoDelNodo as rtsPuntoDelNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
 export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
@@ -6371,6 +6371,61 @@ console.log('\nrete-testa-speciale — spostamento, lente o aggancio uguali; la 
   const peso = (s) => { const k = s.pieghe.map((p) => p.k); return Math.max(...k) / Math.min(...k); };
   check('nella vista 3D i nodi con la lente lunga piegano con più fatica; con la lente uguale tutti uguali',
     [peso(rg.rtsAppesa(A, base)) > 1.5, peso(rg.rtsAppesa(A, { ...base, regola: 'lente' })) < 1.01], [true, true]);
+}
+
+// rete-testa-speciale — il FONDO OVALE (Lorenzo, 2026-10-16: «il centro non più per forza un cerchio ma può essere
+// un ovale… l'ampiezza da centro all'esterno più piccola rispetto al lato lungo… i lati lunghi saranno più morbidi e
+// sembrerà molto di più una borsa e la tensione è tutta nei lati che rimangono rigidi»). Ogni anello nasce dal
+// precedente con triangoli di lati L: rombi coi lati uguali su qualunque fondo convesso. Sul cerchio è la stessa rete.
+console.log('\nrete-testa-speciale — il fondo ovale: lati uguali, fascia più corta sulle teste, pancia sui lati lunghi');
+{
+  const N = 64, O = rg.rtsAnelliOvali({ N, L: 15, r0: 130, b: 70, amax: 165, campo: 450 }), n = O.rho.length - 1;
+  const C = rg.rtsAnelli({ N: 48, L: 15, r0: 100, amax: 165, campo: 450 }), C2 = rg.rtsAnelliOvali({ N: 48, L: 15, r0: 100, b: 100, amax: 165, campo: 450 });
+  let lati = 0;
+  for (let j = 0; j < n; j++) for (let k = 0; k < N; k++) for (const kk of j % 2 ? [k, k + 1] : [k, k - 1]) {
+    const a = rg.rtsPuntoDelNodo(O, N, j, k), b = rg.rtsPuntoDelNodo(O, N, j + 1, kk); lati = Math.max(lati, Math.abs(Math.hypot(a.x - b.x, a.y - b.y) - 15));
+  }
+  const u = O.punti[n], testa = Math.max(...u.map((q) => q.x)) - 130, lato = Math.max(...u.map((q) => q.y)) - 70;
+  check('gli anelli dell’ovale: tutti i lati lunghi 15 mm; col fondo tondo gli stessi anelli del cerchio; 10 anelli, fascia sui lati lunghi (135) più lunga che sulle teste (92)',
+    [lati < 1e-9, C2.rho.length === C.rho.length && C.rho.every((r, j) => Math.abs(r - C2.rho[j]) < 0.01), n, Math.round(lato), Math.round(testa)], [true, true, 10, 135, 92]);
+  // il ricamo
+  const P = { ...rg.RTS_PARAMETRI, netShape: 'radiale', bottomShape: 'ovale', radialCount: N };
+  const r = rg.rtsRadiale(P), tutti = r.blocchi.flat(), tratti = r.blocchi.flatMap((b) => b.slice(1).map((q, i) => Math.hypot(q.x - b[i].x, q.y - b[i].y)));
+  const zone = []; for (const b of r.blocchi) { let cur = 0; for (let i = 1; i <= b.length; i++) { const q = b[i]; if (q && q.sovrapposto) cur += Math.hypot(q.x - b[i - 1].x, q.y - b[i - 1].y); else if (cur) { zone.push(cur); cur = 0; } } }
+  check('il ricamo ovale: un filo solo, tutto nel campo, punti fra minimo e massimo, una lente per nodo interno (9 per linea × 128 linee)',
+    [r.blocchi.length, tutti.every((q) => q.x >= 0 && q.y >= 0 && q.x <= P.fieldMm && q.y <= P.fieldMm), Math.min(...tratti) >= P.minStitchMm - 1e-6, Math.max(...tratti) <= P.maxStitchMm + 1e-6, zone.length],
+    [1, true, true, true, 1152]);
+  // la spirale del fondo: giri alla stessa distanza sui lati lunghi e sulle teste (sull'asse corto e su quello lungo)
+  const C0 = r.centro, primaRete = r.blocchi[0].findIndex((q) => q.tipo !== 'fondo'), sp = r.blocchi[0].slice(0, primaRete); // (la spirale: prima della prima colonna, senza legature)
+  // dove la spirale attraversa il semiasse (corto: x = centro, y sopra; lungo: y = centro, x a destra), e la distanza fra
+  // un attraversamento e il successivo, lontano dal centro
+  const passi = (asse) => {
+    const v = [];
+    for (let i = 1; i < sp.length; i++) {
+      const a = sp[i - 1], b = sp[i], ua = asse ? a.x - C0.x : a.y - C0.y, ub = asse ? b.x - C0.x : b.y - C0.y;
+      if (ua * ub > 0 || ua === ub) continue;
+      const t = ua / (ua - ub), w = asse ? a.y + t * (b.y - a.y) - C0.y : a.x + t * (b.x - a.x) - C0.x;
+      if (w > 30) v.push(w);
+    }
+    v.sort((x, y) => x - y);
+    const d = []; for (let i = 1; i < v.length; i++) d.push(v[i] - v[i - 1]); return d.reduce((x, y) => x + y, 0) / d.length;
+  };
+  check('la spirale ovale: il passo (5 mm) è lo stesso sui lati lunghi e sulle teste', [Math.round(passi(true)), Math.round(passi(false))], [5, 5]);
+  // la sacca 3D, con la bocca stretta a Ø 90: la parete dei lati lunghi fa pancia, quella delle teste resta tesa; sul
+  // cerchio tutte uguali (misurati 2026-10-16: ovale 15 e 5 mm, cerchio 6 e 6)
+  const pancia = (A, NN) => {
+    const s = rg.rtsAppesa(A, { N: NN, L: 15, giroInCima: false, filo: 1, modo: 'bocca', boccaMm: 90, maniciMm: 60, morbidezza: 0.7, fondoRigido: 0.6, cordone: false, stretta: 0, passoSpirale: 5, legature: 10 });
+    rg.rtsAssesta(s, 1500);
+    const nn = A.rho.length - 1, col = (k) => { const lin = Array.from({ length: nn + 1 }, (_, j) => s.nodi[j * NN + k]), a = lin[0], b = lin[nn];
+      const L = Math.hypot(b.x - a.x, b.y - a.y, b.z - a.z), ux = (b.x - a.x) / L, uy = (b.y - a.y) / L, uz = (b.z - a.z) / L;
+      return Math.max(...lin.map((q) => { const dx = q.x - a.x, dy = q.y - a.y, dz = q.z - a.z, t = dx * ux + dy * uy + dz * uz; return Math.hypot(dx - t * ux, dy - t * uy, dz - t * uz); })); };
+    const ang = (k) => { const q = rg.rtsPuntoDelNodo(A, NN, 0, k); return Math.abs(Math.atan2(q.y, q.x)) * 180 / Math.PI; };
+    const media = (f) => { const ks = Array.from({ length: NN }, (_, k) => k).filter((k) => f(ang(k))); return ks.reduce((t, k) => t + col(k), 0) / ks.length; };
+    return { teste: media((a) => a < 25 || a > 155), lati: media((a) => a > 65 && a < 115), m: rg.rtsMisureAppesa(s) };
+  };
+  const ov = pancia(O, N), ci = pancia(rg.rtsAnelli({ N, L: 15, r0: 100, amax: 165, campo: 450 }), N);
+  check('in 3D, bocca stretta: l’ovale fa pancia sui lati lunghi (oltre il doppio delle teste), il tondo è uguale ovunque; i fili non si allungano',
+    [ov.lati > 2 * ov.teste, Math.abs(ci.lati - ci.teste) < 2, ov.m.allungamentoMax < 0.03], [true, true, true]);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).
