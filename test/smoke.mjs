@@ -61,7 +61,7 @@ export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } f
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_PARAMETRI } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
-export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
+export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
 export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
@@ -6342,11 +6342,13 @@ console.log('\nrete-testa-speciale — il fondo rigido e il cordone a strozzo');
     [stretta.bocca < larga.bocca - 50, larga.allungamentoMax < 0.03, stretta.allungamentoMax < 0.03], [true, true, true]);
 }
 
-// rete-testa-speciale — la LENTE COSTANTE (Lorenzo, 2026-10-16: «man mano che ci si avvicina al centro… l'area di
-// sovrapposizione aumenta… sotto saranno molto più bloccati che sopra»): con la sovrapposizione fissa la lente cresce
-// verso il centro, dove i rombi sono stretti; accesa, la sovrapposizione cala perché la lente resti quella in cima.
+// rete-testa-speciale — CHE COSA RESTA UGUALE agli incroci (Lorenzo, 2026-10-16). L'angolo d'incrocio cambia da un
+// anello all'altro (59° verso il fondo, 149° in cima), quindi spostamento, lente e aggancio non possono restare uguali
+// insieme. Spostamento fisso: la lente cresce verso il centro («sotto saranno molto più bloccati che sopra») e in cima la
+// punta passa appena oltre l'altra linea. Lente uguale: la sovrapposizione cala verso il centro. Aggancio uguale («il
+// rischio sennò è che non si aggancia»): verso fuori lo spostamento cresce quanto serve.
 // La vista 3D fa i nodi più rigidi dove la lente è più lunga.
-console.log('\nrete-testa-speciale — la lente costante e la rigidità dei nodi dalla lente');
+console.log('\nrete-testa-speciale — spostamento, lente o aggancio uguali; la rigidità dei nodi dalla lente');
 {
   const P = { ...rg.RTS_PARAMETRI, netShape: 'radiale' };
   const lenti = (par) => {
@@ -6354,16 +6356,21 @@ console.log('\nrete-testa-speciale — la lente costante e la rigidità dei nodi
     for (const b of r.blocchi) { let cur = 0; for (let i = 1; i <= b.length; i++) { const q = b[i]; if (q && q.sovrapposto) cur += Math.hypot(q.x - b[i - 1].x, q.y - b[i - 1].y); else if (cur) { zone.push(cur); cur = 0; } } }
     return zone;
   };
-  const fissa = lenti(P), costante = lenti({ ...P, constantLens: true });
-  check('spenta di partenza; accesa, le lenti restano fra 1,8 e 2,2 mm (fissa vanno oltre 3,5 mm verso il centro), stesse 1248 lenti',
-    [rg.RTS_PARAMETRI.constantLens, costante.length, Math.min(...costante) > 1.8, Math.max(...costante) < 2.2, Math.max(...fissa) > 3.5], [false, 1248, true, true, true]);
+  const fissa = lenti(P), costante = lenti({ ...P, overlapRule: 'lente' }), aggancio = lenti({ ...P, overlapRule: 'aggancio' });
+  check('di partenza lo spostamento; con la lente uguale le lenti restano fra 1,8 e 2,2 mm (fisse vanno oltre 3,5 verso il centro); con l’aggancio uguale le lenti in cima si allungano (oltre 6 mm); sempre 1248 lenti',
+    [rg.RTS_PARAMETRI.overlapRule, Math.min(...costante) > 1.8, Math.max(...costante) < 2.2, Math.max(...fissa) > 3.5, Math.max(...aggancio) > 6, costante.length, aggancio.length],
+    ['spostamento', true, true, true, true, 1248, 1248]);
   const A = rg.rtsAnelli({ N: 48, L: 15, r0: 100, amax: 165, campo: 450 }), n = A.rho.length - 1;
-  check('la lente al nodo: fissa cresce verso il centro, costante è uguale ovunque',
-    [rg.rtsLenteAlNodo(A, 48, 1, 2, false) > 1.5 * rg.rtsLenteAlNodo(A, 48, n - 1, 2, false), Math.abs(rg.rtsLenteAlNodo(A, 48, 1, 2, true) - rg.rtsLenteAlNodo(A, 48, n - 1, 2, true)) < 1e-9], [true, true]);
+  const agg = (regola) => Array.from({ length: n - 1 }, (_, i) => rg.rtsSovrapposizioneAlNodo(A, 48, i + 1, 2, regola, 15) * rg.rtsAggancioPerMm(A, 48, i + 1));
+  const fissoAgg = agg('spostamento'), ugualeAgg = agg('aggancio');
+  check('l’aggancio: con lo spostamento fisso in cima la punta passa appena 0,4 mm (1,6 verso il fondo); con l’aggancio uguale 1,29 mm su ogni nodo',
+    [Math.round(fissoAgg.at(-1) * 10) / 10, Math.round(fissoAgg[0] * 10) / 10, Math.round(Math.min(...ugualeAgg) * 100) / 100, Math.round(Math.max(...ugualeAgg) * 100) / 100], [0.4, 1.6, 1.29, 1.29]);
+  check('la lente al nodo: con lo spostamento fisso cresce verso il centro, con la lente uguale è la stessa ovunque',
+    [rg.rtsLenteAlNodo(A, 48, 1, 2, 'spostamento') > 1.5 * rg.rtsLenteAlNodo(A, 48, n - 1, 2, 'spostamento'), Math.abs(rg.rtsLenteAlNodo(A, 48, 1, 2, 'lente') - rg.rtsLenteAlNodo(A, 48, n - 1, 2, 'lente')) < 1e-9], [true, true]);
   const base = { N: 48, L: 15, giroInCima: false, filo: 1, modo: 'manici', boccaMm: 200, maniciMm: 250, morbidezza: 0, fondoRigido: 0.2, cordone: false, stretta: 0, sovrapposizione: 2 };
   const peso = (s) => { const k = s.pieghe.map((p) => p.k); return Math.max(...k) / Math.min(...k); };
-  check('nella vista 3D i nodi con la lente lunga piegano con più fatica; con la lente costante tutti uguali',
-    [peso(rg.rtsAppesa(A, base)) > 1.5, peso(rg.rtsAppesa(A, { ...base, lenteCostante: true })) < 1.01], [true, true]);
+  check('nella vista 3D i nodi con la lente lunga piegano con più fatica; con la lente uguale tutti uguali',
+    [peso(rg.rtsAppesa(A, base)) > 1.5, peso(rg.rtsAppesa(A, { ...base, regola: 'lente' })) < 1.01], [true, true]);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).

@@ -53,8 +53,9 @@ const CAMPI_SACCA: Campo[] = [
     aiuto: 'Le legature entrano nel fondo e lo tengono insieme; dove sarebbero più fitte di così, metà si ferma.' },
   { nome: 'rimPass', etichetta: 'Un giro d’impuntura in cima, sulle punte esterne', unita: '', passo: 1, min: 0 },
 ];
-const CAMPO_LENTE: Campo = { nome: 'constantLens', etichetta: 'Lente uguale in tutta la rete', unita: '', passo: 1, min: 0,
-  aiuto: 'Spento: la sovrapposizione è la stessa ovunque, e verso il centro la lente si allunga (fino al doppio) e i nodi girano con più fatica. Acceso: la sovrapposizione si riduce verso il centro e la lente resta quella in cima.' };
+const CAMPO_LENTE: Campo = { nome: 'overlapRule', etichetta: 'Uguale in tutta la rete', unita: '', passo: 1, min: 0,
+  scelte: [['spostamento', 'lo spostamento (la sovrapposizione scritta)'], ['lente', 'la lente (quella in cima)'], ['aggancio', 'l’aggancio (quello del rombo quadrato)']],
+  aiuto: 'L’incrocio cambia angolo da un anello all’altro: le tre misure non possono restare uguali insieme. Spostamento: verso il centro la lente si allunga, in cima la punta passa appena oltre l’altra linea. Lente: la sovrapposizione cala verso il centro. Aggancio: la punta passa oltre l’altra linea della stessa misura ovunque; verso fuori spostamento e lente crescono.' };
 const CAMPI_PEZZO: Campo[] = [
   { nome: 'pieceSource', etichetta: 'Il pezzo', unita: '', passo: 1, min: 0,
     scelte: [['cartamodello', 'dal cartamodello (SVG o DXF)'], ['misure', 'dalle mie misure (un rettangolo)']] },
@@ -609,7 +610,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     if (!radiale() || !anelliSacca || anelliSacca.rho.length < 3) return;
     $('canvas').hidden = true; $('vista3d').hidden = false;
     $('sacca3dBtn').setAttribute('aria-pressed', 'true');
-    vista3d = montaVista3d($('vista3d'), { anelli: anelliSacca, N: Math.round(par.radialCount), L: par.radialSideMm, giroInCima: par.rimPass, filo: par.constructionStroke, passoSpirale: par.spiralPitchMm, legature: par.tieSpacingMm, sovrapposizione: par.overlapMm, lenteCostante: par.constantLens });
+    vista3d = montaVista3d($('vista3d'), { anelli: anelliSacca, N: Math.round(par.radialCount), L: par.radialSideMm, giroInCima: par.rimPass, filo: par.constructionStroke, passoSpirale: par.spiralPitchMm, legature: par.tieSpacingMm, sovrapposizione: par.overlapMm, regola: par.overlapRule });
   }
   function chiudiVista3d() {
     if (vista3d) { vista3d.distruggi(); vista3d = null; }

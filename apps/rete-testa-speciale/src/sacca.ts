@@ -83,21 +83,49 @@ export function angoloAlNodo(A: Anelli, N: number, j: number): number {
 }
 
 /**
- * La sovrapposizione al nodo dell'anello j. Fissa, la lente (il tratto da un incrocio all'altro, lungo la linea:
- * sovrapposizione / sin(angolo / 2)) cresce verso il centro, dove i rombi sono più stretti: sul secchiello da 2,07 a
- * 4,05 mm, e i nodi del fondo girano con più fatica. Con `lenteCostante` (Lorenzo, 2026-10-16) la sovrapposizione si
- * riduce verso il centro perché la lente resti quella in cima.
+ * Che cosa resta uguale in tutta la rete, dato che l'angolo d'incrocio cambia da un anello all'altro (sul secchiello da
+ * 59° verso il fondo a 149° in cima) e le tre misure non possono restare uguali insieme:
+ * - `spostamento`: di quanto ogni linea va oltre il nodo, di traverso (la sovrapposizione scritta, ovunque);
+ * - `lente`: il tratto da un incrocio all'altro, lungo la linea (Lorenzo, 2026-10-16: verso il centro si allungava);
+ * - `aggancio`: di quanto la punta di una linea passa oltre l'altra linea, misurato di traverso a quella (Lorenzo,
+ *   2026-10-16: «il rischio sennò è che non si aggancia»). Con lo spostamento fisso, in cima passa appena 0,38 mm.
  */
-export function sovrapposizioneAlNodo(A: Anelli, N: number, j: number, sovrapposizione: number, lenteCostante: boolean): number {
+export type RegolaSovrapposizione = 'spostamento' | 'lente' | 'aggancio';
+
+/** Di quanto la punta passa oltre l'altra linea al nodo dell'anello j, per ogni mm di spostamento (geometria del nodo). */
+export function aggancioPerMm(A: Anelli, N: number, j: number): number {
+  const d = Math.PI / N, r = A.rho[j], h = 0.5;
+  const pol = (rr: number, f: number) => ({ x: rr * Math.cos(f), y: rr * Math.sin(f) });
+  // il nodo sull'asse x: la linea passata ha i vicini a +d e la punta spinta a −h; l'altra ha la punta a +h
+  const punta = { x: r, y: h }, sua = { x: r, y: -h }, prima = pol(A.rho[j - 1], d), dopo = pol(A.rho[j + 1], d);
+  const dist = (a: { x: number; y: number }, b: { x: number; y: number }) =>
+    Math.abs((b.x - a.x) * (a.y - punta.y) - (a.x - punta.x) * (b.y - a.y)) / Math.hypot(b.x - a.x, b.y - a.y);
+  return Math.min(dist(prima, sua), dist(sua, dopo)) / (2 * h);
+}
+
+/**
+ * Lo spostamento al nodo dell'anello j, mm. Con `lente` la lente resta quella in cima. Con `aggancio` la sovrapposizione
+ * scritta è quella di un rombo quadrato (incrocio a 90°): ogni nodo ha l'aggancio che avrebbe lì, e verso fuori, dove
+ * l'incrocio si apre, lo spostamento cresce (al più metà del lato).
+ */
+export function sovrapposizioneAlNodo(A: Anelli, N: number, j: number, sovrapposizione: number, regola: RegolaSovrapposizione, L = Infinity): number {
   const n = A.rho.length - 1;
-  if (!lenteCostante || n < 2) return sovrapposizione;
-  const cima = Math.sin(angoloAlNodo(A, N, n - 1) * Math.PI / 360), qui = Math.sin(angoloAlNodo(A, N, Math.max(1, Math.min(n - 1, j))) * Math.PI / 360);
-  return sovrapposizione * qui / cima;
+  if (regola === 'spostamento' || n < 2) return sovrapposizione;
+  const jj = Math.max(1, Math.min(n - 1, j));
+  if (regola === 'lente') {
+    const cima = Math.sin(angoloAlNodo(A, N, n - 1) * Math.PI / 360), qui = Math.sin(angoloAlNodo(A, N, jj) * Math.PI / 360);
+    return sovrapposizione * qui / cima;
+  }
+  // l'aggancio a 90°: fra i due nodi a cavallo dei 90°, in proporzione (se la rete non ci arriva, il nodo più vicino)
+  const ang = Array.from({ length: n - 1 }, (_, i) => angoloAlNodo(A, N, i + 1)), rap = ang.map((_, i) => aggancioPerMm(A, N, i + 1));
+  let a90 = ang[0] >= 90 ? rap[0] : rap[rap.length - 1];
+  for (let i = 0; i + 1 < ang.length; i++) if (ang[i] <= 90 && ang[i + 1] >= 90) { const t = (90 - ang[i]) / (ang[i + 1] - ang[i] || 1); a90 = rap[i] + t * (rap[i + 1] - rap[i]); }
+  return Math.min(L / 2, sovrapposizione * a90 / aggancioPerMm(A, N, jj));
 }
 
 /** La lente al nodo dell'anello j, mm (0 se le linee non si incrociano). */
-export function lenteAlNodo(A: Anelli, N: number, j: number, sovrapposizione: number, lenteCostante: boolean): number {
-  const s = sovrapposizioneAlNodo(A, N, j, sovrapposizione, lenteCostante);
+export function lenteAlNodo(A: Anelli, N: number, j: number, sovrapposizione: number, regola: RegolaSovrapposizione, L = Infinity): number {
+  const s = sovrapposizioneAlNodo(A, N, j, sovrapposizione, regola, L);
   return s > 0 ? s / Math.sin(angoloAlNodo(A, N, j) * Math.PI / 360) : 0;
 }
 

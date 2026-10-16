@@ -88,6 +88,15 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
     con la lente costante: i nodi interni girano di più); per la bocca o per i capi del cordone non cambia quasi niente,
     lì la forma la fanno la bocca e il peso. Il peso è relativo: raddoppiare la sovrapposizione non irrigidisce tutto,
     quello lo fa la morbidezza.
+17. **L'aggancio uguale** (2026-10-16): *«anche lo spostamento cambia un po' più è vicino al centro. anche quello
+    dovrebbe essere uguale il rischio sennò è che non si aggancia sull'esterno»*. Spostamento, lente e aggancio (di quanto
+    la punta passa oltre l'altra linea, di traverso a quella) non possono restare uguali insieme: l'incrocio va da 59° a
+    149°. Misurato con 2 mm fissi: l'aggancio va da 1,64 verso il fondo a **0,39 in cima** — il rischio era vero, e
+    proprio fuori. Scelta di Lorenzo: *«teniamo uguale l'aggancio: lo spostamento cresce verso fuori quanto serve, anche
+    se le lenti degli ultimi anelli si allungano»*. L'interruttore della lente è diventato una scelta a tre
+    (`overlapRule`: spostamento, lente, aggancio; di partenza spostamento). Con l'aggancio la sovrapposizione scritta vale
+    per un rombo quadrato (incrocio a 90°): con 2 mm l'aggancio è 1,29 ovunque, lo spostamento va da 1,57 a 6,58 e le lenti
+    da 2,6 a 6,8. Lo spostamento si ferma a metà del lato.
 
 ## Perché la testa rigida non può funzionare (2026-10-16, misurato)
 **Ogni anello tenuto alla sua misura del disco piatto blocca piatta tutta la rete dentro di lui.** Il lato fra un anello

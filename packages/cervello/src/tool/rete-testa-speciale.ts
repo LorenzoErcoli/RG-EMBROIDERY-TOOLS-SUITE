@@ -50,9 +50,9 @@ export const scheda: SchedaParametri = {
       tipo: 'bool', unita: '', predefinito: false, concetto: 'interruttore',
     },
     {
-      id: 'constantLens', etichetta: 'Lente uguale in tutta la rete',
-      aiuto: 'Sacca: verso il centro i rombi si stringono e la lente si allunga; acceso, la sovrapposizione cala verso il centro perché la lente resti quella in cima.',
-      tipo: 'bool', unita: '', predefinito: false, concetto: 'sovrapposizione',
+      id: 'overlapRule', etichetta: 'Uguale in tutta la rete',
+      aiuto: 'Sacca: l’incrocio cambia angolo da un anello all’altro. spostamento = la sovrapposizione scritta ovunque; lente = la lente di quella in cima; aggancio = la punta passa oltre l’altra linea della stessa misura ovunque (quella del rombo quadrato).',
+      tipo: 'enum', unita: '', opzioni: ['spostamento', 'lente', 'aggancio'], predefinito: 'spostamento', concetto: 'sovrapposizione',
     },
     {
       id: 'pieceSource', etichetta: 'Il pezzo',

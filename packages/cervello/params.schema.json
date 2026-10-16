@@ -2005,9 +2005,9 @@
           "$ref": "#/$defs/rimPass",
           "default": false
         },
-        "constantLens": {
-          "$ref": "#/$defs/constantLens",
-          "default": false
+        "overlapRule": {
+          "$ref": "#/$defs/overlapRule",
+          "default": "spostamento"
         },
         "pieceSource": {
           "$ref": "#/$defs/pieceSource",
@@ -5029,10 +5029,15 @@
       "description": "Sacca: lega le punte dell’ultimo anello; non tiene aperta la bocca (il filo si arriccia, non si allunga).",
       "x-concetto": "interruttore"
     },
-    "constantLens": {
-      "type": "boolean",
-      "title": "Lente uguale in tutta la rete",
-      "description": "Sacca: verso il centro i rombi si stringono e la lente si allunga; acceso, la sovrapposizione cala verso il centro perché la lente resti quella in cima.",
+    "overlapRule": {
+      "type": "string",
+      "title": "Uguale in tutta la rete",
+      "description": "Sacca: l’incrocio cambia angolo da un anello all’altro. spostamento = la sovrapposizione scritta ovunque; lente = la lente di quella in cima; aggancio = la punta passa oltre l’altra linea della stessa misura ovunque (quella del rombo quadrato).",
+      "enum": [
+        "spostamento",
+        "lente",
+        "aggancio"
+      ],
       "x-concetto": "sovrapposizione"
     },
     "pieceSource": {
@@ -5339,7 +5344,7 @@
         "blockBleed",
         "gradientOverlap",
         "edgeOverlap",
-        "constantLens",
+        "overlapRule",
         "crossingOverlap",
         "overlapZone"
       ]

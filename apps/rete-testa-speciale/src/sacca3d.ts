@@ -10,7 +10,7 @@
 //
 // Si tiene per la bocca (l'ultimo anello fermo su un cerchio), per due punti del bordo, per il nodo del cordone, o la
 // si appoggia sul fondo.
-import { altezze, fondoDellaLegatura, lenteAlNodo, profiloPiuProfondo, raggioMinimo, type Anelli } from './sacca';
+import { altezze, fondoDellaLegatura, lenteAlNodo, profiloPiuProfondo, raggioMinimo, type Anelli, type RegolaSovrapposizione } from './sacca';
 
 export type ModoAppesa = 'bocca' | 'manici' | 'cordone' | 'appoggiata';
 
@@ -40,9 +40,9 @@ export interface OpzioniAppesa {
   passoSpirale?: number;
   /** La distanza fra le legature del fondo, mm (quella del ricamo; di partenza 10). */
   legature?: number;
-  /** La sovrapposizione del ricamo, mm, e se la lente è costante: dicono quanto è lunga la lente su ogni nodo. */
+  /** La sovrapposizione del ricamo, mm, e la sua regola: dicono quanto è lunga la lente su ogni nodo. */
   sovrapposizione?: number;
-  lenteCostante?: boolean;
+  regola?: RegolaSovrapposizione;
 }
 
 export interface Nodo { x: number; y: number; z: number; px: number; py: number; pz: number; fermo: boolean }
@@ -113,7 +113,7 @@ export function creaSaccaAppesa(A: Anelli, opz: OpzioniAppesa): SaccaAppesa {
   for (let j = 0; j <= n; j++) for (let k = 0; k < N; k++) { const f = angolo(N, j, k); nodo(A.rho[j] * Math.cos(f), A.rho[j] * Math.sin(f), 0); }
   for (let j = 0; j < n; j++) for (let k = 0; k < N; k++) for (const kk of j % 2 ? [k, k + 1] : [k, k - 1]) filo(indice(N, j, k), indice(N, j + 1, kk), 'rete');
   // le pieghe: sulle due linee di ogni colonna, il nodo prima e il nodo dopo; rigide quanto è lunga la lente sul nodo
-  const lenti = Array.from({ length: n + 1 }, (_, j) => (j >= 1 && j < n ? lenteAlNodo(A, N, j, opz.sovrapposizione ?? 0, !!opz.lenteCostante) : 0));
+  const lenti = Array.from({ length: n + 1 }, (_, j) => (j >= 1 && j < n ? lenteAlNodo(A, N, j, opz.sovrapposizione ?? 0, opz.regola ?? 'spostamento', opz.L) : 0));
   const interne = lenti.slice(1, n), media = interne.reduce((a, b) => a + b, 0) / Math.max(1, interne.length);
   const peso = (j: number) => (media > 0 ? lenti[j] / media : 1);
   for (let k = 0; k < N; k++) for (const lato of [0, 1]) {
