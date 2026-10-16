@@ -47,6 +47,8 @@ const CAMPI_SACCA: Campo[] = [
     aiuto: 'Ovale: la rete diventa ovale anche lei; sulle teste la fascia viene più corta che sui lati lunghi, e chiusa col cordone la sacca fa pancia sui lati lunghi e tiene tese le teste.' },
   { nome: 'bottomLengthMm', etichetta: 'Lunghezza del fondo', unita: 'mm', passo: 5, min: 20, max: 440 },
   { nome: 'bottomWidthMm', etichetta: 'Larghezza del fondo', unita: 'mm', passo: 5, min: 10, max: 440 },
+  { nome: 'bottomRoundEnds', etichetta: 'Teste a mezzo cerchio', unita: '%', passo: 5, min: 0, max: 100,
+    aiuto: '0 = ovale. 100 = due mezzi cerchi uniti da tratti dritti. In mezzo, teste più tonde e lati più dritti.' },
   { nome: 'bottomRadiusMm', etichetta: 'Raggio del fondo', unita: 'mm', passo: 1, min: 5, max: 300,
     aiuto: 'Dove finisce la rete e comincia la spirale. Più è grande, più la sacca è larga e bassa.' },
   { nome: 'maxAngleDeg', etichetta: 'Angolo massimo dei rombi in fuori', unita: '°', passo: 1, min: 60, max: 179,
@@ -263,7 +265,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     if (radiale()) {
       // il fondo tondo ha il raggio, quello ovale lunghezza e larghezza
       const ovale = par.bottomShape === 'ovale';
-      const sacca = CAMPI_SACCA.filter((c) => (c.nome === 'bottomRadiusMm' ? !ovale : c.nome === 'bottomLengthMm' || c.nome === 'bottomWidthMm' ? ovale : true));
+      const sacca = CAMPI_SACCA.filter((c) => (c.nome === 'bottomRadiusMm' ? !ovale : c.nome === 'bottomLengthMm' || c.nome === 'bottomWidthMm' || c.nome === 'bottomRoundEnds' ? ovale : true));
       box.append(...campi(CAMPI_FORMA).childNodes, ...campi(sacca).childNodes);
       box.insertAdjacentHTML('beforeend', `<small class="rg-field__help rg-param-grid__wide">Un disco di rombi coi lati tutti uguali, al centro del campo: tolto dal telaio i rombi ruotano e diventa una sacca. Le sue misure sono in «Programma e vista».</small>` + bloccoRiapri);
       return box;

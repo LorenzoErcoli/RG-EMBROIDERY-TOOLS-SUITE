@@ -20,8 +20,8 @@
 // - «quando inserisci una parte nuova inizia sempre dal contorno esterno del cartamodello».
 import { distance, distanceToSegment, enforceMinStitch, lerp, pointInPolygon, type Point, type Polyline } from '@rg/core';
 import {
-  anelliOvali, anelliRadiali, fondoDellaLegatura, parametroDelNodo, puntoDelFondo, puntoDelNodo, raggioDelFondo, sovrapposizioneAlNodo,
-  tangenteAlNodo, type Anelli, type RegolaSovrapposizione,
+  anelliOvali, anelliRadiali, fondoDellaLegatura, puntoDelFondo, puntoDelNodo, raggioDelFondo, sovrapposizioneAlNodo,
+  tangenteAlNodo, versoIlCentro, type Anelli, type RegolaSovrapposizione,
 } from './sacca';
 
 export type ModoVuoto = 'ritorno' | 'bordo' | 'centro';
@@ -49,6 +49,8 @@ export type ParametriRete = {
   /** Sacca, fondo ovale: lunghezza e larghezza, mm. */
   bottomLengthMm: number;
   bottomWidthMm: number;
+  /** Sacca, fondo ovale: quanto le teste sono mezzi cerchi, % (0 = ovale, 100 = mezzi cerchi uniti da tratti dritti). */
+  bottomRoundEnds: number;
   /** Sacca: angolo massimo dei rombi in fuori, gradi (a 180 sono piatti). */
   maxAngleDeg: number;
   /** Sacca: lato del campo macchina, mm. Il disco ci deve stare. */
@@ -115,6 +117,7 @@ export const PARAMETRI_RETE: ParametriRete = {
   bottomShape: 'tondo',
   bottomLengthMm: 260,
   bottomWidthMm: 140,
+  bottomRoundEnds: 0,
   maxAngleDeg: 165,
   fieldMm: 450,
   spiralPitchMm: 5,
@@ -757,7 +760,7 @@ export function costruisciReteRadiale(par: ParametriRete): RisultatoRete & { ane
   const N = Math.max(3, Math.round(p.radialCount)), L = Math.max(1, p.radialSideMm);
   const ovale = p.bottomShape === 'ovale';
   const A = ovale
-    ? anelliOvali({ N, L, r0: p.bottomLengthMm / 2, b: p.bottomWidthMm / 2, amax: p.maxAngleDeg, campo: p.fieldMm })
+    ? anelliOvali({ N, L, r0: p.bottomLengthMm / 2, b: p.bottomWidthMm / 2, tondo: p.bottomRoundEnds / 100, amax: p.maxAngleDeg, campo: p.fieldMm })
     : anelliRadiali({ N, L, r0: p.bottomRadiusMm, amax: p.maxAngleDeg, campo: p.fieldMm });
   const centro = { x: p.fieldMm / 2, y: p.fieldMm / 2 };
   const vuota = (avviso: string) => ({
@@ -812,7 +815,7 @@ export function costruisciReteRadiale(par: ParametriRete): RisultatoRete & { ane
   }
   // 2. le colonne
   const nodo0 = (k: number): PuntoTraccia => ({ ...(ovale ? nodoA(0, k) : pol(r0, fi(k))), fisso: true });
-  const dentro = (k: number, rs: number): Point => { const q = puntoDelFondo(A, parametroDelNodo(A, N, k), rs / R0); return { x: centro.x + q.x, y: centro.y + q.y }; };
+  const dentro = (k: number, rs: number): Point => { const q = versoIlCentro(A, N, k, rs / R0); return { x: centro.x + q.x, y: centro.y + q.y }; };
   for (let k = 0; k < N; k++) {
     const B = linea(k, -1), Ar = linea(k, 1).reverse();
     pezzi.push({ tipo: 'rete', pts: B, sid: sid++, blocco: 0 });

@@ -68,7 +68,7 @@ export function montaVista3d(box: HTMLElement, dati: DatiVista3d): { distruggi: 
     ctx.clearRect(0, 0, w, h);
     // si centra sulla sacca com'è adesso (appesa al nodo non sta sull'asse)
     let x0 = Infinity, x1 = -Infinity, y0 = Infinity, y1 = -Infinity, z0 = Infinity, z1 = -Infinity;
-    for (const q of sacca.nodi) { x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); z0 = Math.min(z0, q.z); z1 = Math.max(z1, q.z); }
+    for (const [i, q] of sacca.nodi.entries()) { if (sacca.assenti[i]) continue; x0 = Math.min(x0, q.x); x1 = Math.max(x1, q.x); y0 = Math.min(y0, q.y); y1 = Math.max(y1, q.y); z0 = Math.min(z0, q.z); z1 = Math.max(z1, q.z); }
     const mx = (x0 + x1) / 2, my = (y0 + y1) / 2, mz = (z0 + z1) / 2, raggio = Math.max(x1 - x0, y1 - y0, z1 - z0, 1) / 2;
     const scala = Math.min(w, h) / (2.3 * raggio);
     const cy = Math.cos(yaw), sy = Math.sin(yaw), cp = Math.cos(pitch), sp = Math.sin(pitch);
@@ -86,7 +86,7 @@ export function montaVista3d(box: HTMLElement, dati: DatiVista3d): { distruggi: 
       ctx.beginPath(); ctx.moveTo(pr[f.a][0], pr[f.a][1]); ctx.lineTo(pr[f.b][0], pr[f.b][1]); ctx.stroke();
     }
     ctx.globalAlpha = 1; ctx.fillStyle = COLORI.fermo;
-    sacca.nodi.forEach((q, i) => { if (q.fermo) { ctx.beginPath(); ctx.arc(pr[i][0], pr[i][1], 3, 0, 7); ctx.fill(); } });
+    sacca.nodi.forEach((q, i) => { if (q.fermo && !sacca.assenti[i]) { ctx.beginPath(); ctx.arc(pr[i][0], pr[i][1], 3, 0, 7); ctx.fill(); } });
     const m = misureAppesa(sacca);
     $('v3-stato').textContent = (m.allungamentoMax > 0.03
       ? `Così non si può: i fili dovrebbero allungarsi del ${(m.allungamentoMax * 100).toFixed(0)}%.`

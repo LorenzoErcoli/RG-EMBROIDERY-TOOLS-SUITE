@@ -35,6 +35,11 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: 10, max: 440, passo: 5, predefinito: 140, concetto: 'formato',
     },
     {
+      id: 'bottomRoundEnds', etichetta: 'Teste a mezzo cerchio',
+      aiuto: 'Sacca, fondo ovale: 0 = ovale; 100 = due mezzi cerchi uniti da tratti dritti; in mezzo, teste più tonde e lati più dritti.',
+      tipo: 'num', unita: '%', min: 0, max: 100, passo: 5, predefinito: 0, concetto: 'formato',
+    },
+    {
       id: 'bottomRadius', nome: 'bottomRadiusMm', etichetta: 'Raggio del fondo',
       aiuto: 'Sacca: dove finisce la rete e comincia la spirale. Più è grande, più la sacca è larga e bassa.',
       tipo: 'num', unita: 'mm', min: 5, max: 300, passo: 1, predefinito: 100, concetto: 'formato',

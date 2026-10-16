@@ -42,8 +42,8 @@ export interface Anelli {
    * cerchi: il nodo k dell'anello j sta all'angolo 2πk/N, mezzo passo più in là negli anelli dispari.
    */
   punti?: Array<Array<{ x: number; y: number }>>;
-  /** Con il fondo ovale, i suoi mezzi assi (a lungo, sull'asse x; b corto). */
-  ovale?: { a: number; b: number };
+  /** Con il fondo ovale, i suoi mezzi assi (a lungo, sull'asse x; b corto) e quanto le teste sono mezzi cerchi (0..1). */
+  ovale?: { a: number; b: number; tondo: number };
 }
 
 export function anelliRadiali(d: DatiAnelli): Anelli {
@@ -70,15 +70,17 @@ export function anelliRadiali(d: DatiAnelli): Anelli {
  * tutti uguali su qualunque fondo convesso (una rete di Čebyšëv). Sulle teste, dove l'ovale curva di più, i rombi si
  * aprono in fretta e la fascia viene corta; sui lati lunghi restano aperti e la fascia viene lunga. Le stesse regole
  * dei cerchi: il nodo k di un anello dispari sta fra i nodi k e k + 1 del pari prima, quello di un pari fra k − 1 e k.
- * `r0` = mezzo asse lungo (sull'asse x), `b` = mezzo asse corto.
+ * `r0` = mezzo asse lungo (sull'asse x), `b` = mezzo asse corto, `tondo` = quanto le teste sono mezzi cerchi (vedi
+ * `formaDelFondo`; 0 = l'ovale).
  */
-export function anelliOvali(d: DatiAnelli & { b: number }): Anelli {
+export function anelliOvali(d: DatiAnelli & { b: number; tondo?: number }): Anelli {
   const N = Math.max(3, Math.round(d.N)), s = Math.sin(Math.PI / N), c = Math.cos(Math.PI / N);
-  const a = Math.max(d.r0, d.b), b = Math.min(d.r0, d.b);
-  // il fondo: N nodi a passo uguale lungo l'ovale, il nodo 0 sulla testa (asse x), in verso antiorario
+  const a = Math.max(d.r0, d.b), b = Math.min(d.r0, d.b), tondo = Math.max(0, Math.min(1, d.tondo ?? 0));
+  // il fondo: N nodi a passo uguale lungo il bordo, il nodo 0 sulla testa (asse x), in verso antiorario (dove la forma
+  // salta, sui lati lunghi, il passo fra i due campioni è il tratto dritto)
   const M = 4096, P: Array<{ x: number; y: number }> = [], lungo = [0];
   for (let i = 0; i <= M; i++) {
-    const t = 2 * Math.PI * i / M; P.push({ x: a * Math.cos(t), y: b * Math.sin(t) });
+    const t = 2 * Math.PI * i / M; P.push(formaDelFondo(a, b, tondo, t, 1));
     if (i) lungo.push(lungo[i - 1] + Math.hypot(P[i].x - P[i - 1].x, P[i].y - P[i - 1].y));
   }
   const fondo: Array<{ x: number; y: number }> = [];
@@ -103,7 +105,7 @@ export function anelliOvali(d: DatiAnelli & { b: number }): Anelli {
     punti.push(nuovo);
   }
   const rMaxPiatto = d.L / s;
-  return { rho: punti.map(medio), s, c, rMaxPiatto, perche, impossibile: punti.length < 2, punti, ovale: { a, b } };
+  return { rho: punti.map(medio), s, c, rMaxPiatto, perche, impossibile: punti.length < 2, punti, ovale: { a, b, tondo } };
 }
 
 /** Dove sta il nodo k dell'anello j (cerchi o ovale). */
@@ -115,27 +117,77 @@ export function puntoDelNodo(A: Anelli, N: number, j: number, k: number): { x: n
 }
 
 /**
+ * La forma del fondo ovale (mezzi assi a, b), dal centro (f = 0) al bordo (f = 1), nel punto di parametro t. Le teste
+ * (Lorenzo, 2026-10-16: «il fondo possa essere con i finali più tondi volendo, più mezzi cerchi appunto, ma un parametro
+ * di controllo anche quello»): con `tondo` = 0 l'ovale, con 1 due mezzi cerchi di raggio b uniti da tratti dritti (lo
+ * «stadio»), in mezzo due mezzi ovali staccati di 2·(a − b)·tondo e uniti da tratti dritti. Dentro, i giri restano alla
+ * stessa distanza sui lati lunghi e sulle teste (mezzi assi (1 − tondo)·(a − b) + f·b e f·b; un ovale in scala li
+ * avrebbe più radi sulle teste), e al centro si chiudono su un tratto dritto lungo 2·(a − b). Dove cos t cambia segno la
+ * forma salta da una metà all'altra: congiunti, i due punti fanno il tratto dritto.
+ */
+export function formaDelFondo(a: number, b: number, tondo: number, t: number, f: number): Punto {
+  const c = a - b, cs = Math.cos(t);
+  return { x: c * tondo * Math.sign(cs) + ((1 - tondo) * c + f * b) * cs, y: f * b * Math.sin(t) };
+}
+
+/**
  * Il fondo, dentro l'anello 0: le forme concentriche dal centro (f = 0) al bordo (f = 1). Sul cerchio il cerchio di raggio
- * f·r0. Sull'ovale (mezzi assi a, b) l'ovale di mezzi assi (a − b) + f·b e f·b: i giri restano alla stessa distanza sui
- * lati lunghi e sulle teste (un ovale scalato li avrebbe più radi sulle teste), e al centro l'ovale si chiude su un tratto
- * dritto lungo 2·(a − b). `t` = il parametro del punto (l'angolo, sul cerchio).
+ * f·r0; sull'ovale `formaDelFondo`. `t` = il parametro del punto (l'angolo, sul cerchio).
  */
 export function puntoDelFondo(A: Anelli, t: number, f: number): Punto {
   if (!A.ovale) return { x: f * A.rho[0] * Math.cos(t), y: f * A.rho[0] * Math.sin(t) };
-  const { a, b } = A.ovale;
-  return { x: (a - b + f * b) * Math.cos(t), y: f * b * Math.sin(t) };
+  const { a, b, tondo } = A.ovale;
+  return formaDelFondo(a, b, tondo, t, f);
 }
 
-/** Il parametro del nodo k dell'anello 0 sulla forma del fondo (sul cerchio, il suo angolo). */
+/** Il parametro del nodo k dell'anello 0 sulla forma del fondo (sul cerchio, il suo angolo; sui tratti dritti ±90°). */
 export function parametroDelNodo(A: Anelli, N: number, k: number): number {
   if (!A.ovale) return 2 * Math.PI * k / N;
-  const q = puntoDelNodo(A, N, 0, k);
-  return Math.atan2(q.y / A.ovale.b, q.x / A.ovale.a);
+  const q = puntoDelNodo(A, N, 0, k), { a, b, tondo } = A.ovale, d = (a - b) * tondo;
+  if (Math.abs(q.x) <= d) return Math.sign(q.y) * Math.PI / 2;
+  return Math.atan2(q.y / b, (q.x - Math.sign(q.x) * d) / ((1 - tondo) * (a - b) + b));
+}
+
+/**
+ * Dal nodo k dell'anello 0 verso il centro, alla forma f del fondo: dove le legature entrano e dove stanno i giri. Sui
+ * tratti dritti si scende dritti (stessa x), sulle teste lungo il parametro.
+ */
+export function versoIlCentro(A: Anelli, N: number, k: number, f: number): Punto {
+  if (!A.ovale) return puntoDelFondo(A, parametroDelNodo(A, N, k), f);
+  const q = puntoDelNodo(A, N, 0, k), d = (A.ovale.a - A.ovale.b) * A.ovale.tondo;
+  if (d > 0 && Math.abs(q.x) <= d) return { x: q.x, y: q.y * f };
+  return puntoDelFondo(A, parametroDelNodo(A, N, k), f);
 }
 
 /** Quanto è «largo» il fondo per la spirale e le legature: il raggio, o il mezzo asse corto dell'ovale. */
 export function raggioDelFondo(A: Anelli): number {
   return A.ovale ? A.ovale.b : A.rho[0];
+}
+
+/**
+ * LE COLONNE CHE SI FERMANO PRIMA (Lorenzo, 2026-10-16: «deve essere al contrario in realtà. meno nei lati lunghi e più
+ * nei lati corti»). Sull'ovale la fascia viene da sola più corta sulle teste; per averla più corta sui lati lunghi le
+ * colonne dei lati si fermano a un anello più basso. Ritorna, per ogni colonna k, l'ultimo anello: sulle teste quello di
+ * tutta la rete, sui lati lunghi quello che dà la fascia più vicina a `fasciaLati` mm, in mezzo a scalare (sin² del
+ * parametro). Fra due colonne vicine al più un anello di differenza: ogni nodo ha sempre i suoi due nodi sotto.
+ * Un nodo (j, k) c'è se j ≤ cime[k] (anelli pari) o j ≤ min(cime[k], cime[k + 1]) (dispari: sta fra le due colonne).
+ */
+export function cimeDelleColonne(A: Anelli, N: number, fasciaLati: number): number[] {
+  const n = A.rho.length - 1;
+  if (!A.punti || !A.ovale) return Array(N).fill(n);
+  const b = A.ovale.b, fascia = (j: number) => Math.max(...A.punti![j].map((q) => q.y)) - b;
+  let nLati = n, meglio = Infinity;
+  for (let j = 1; j <= n; j++) { const d = Math.abs(fascia(j) - fasciaLati); if (d < meglio) { meglio = d; nLati = j; } }
+  const cime = Array.from({ length: N }, (_, k) => { const s = Math.sin(parametroDelNodo(A, N, k)); return Math.round(nLati + (n - nLati) * (1 - s * s)); });
+  for (let giro = 0; giro < n; giro++) for (let k = 0; k < N; k++) cime[k] = Math.min(cime[k], cime[(k + 1) % N] + 1, cime[(k + N - 1) % N] + 1);
+  return cime;
+}
+
+/** C'è il nodo (j, k), con le colonne che si fermano a `cime`? */
+export function ceIlNodo(cime: number[] | undefined, N: number, j: number, k: number): boolean {
+  if (!cime) return true;
+  const kk = ((k % N) + N) % N;
+  return j % 2 ? j <= Math.min(cime[kk], cime[(kk + 1) % N]) : j <= cime[kk];
 }
 
 /** L'angolo della punta interna del rombo che parte dall'anello j (le sue punte di lato stanno sull'anello j + 1). */

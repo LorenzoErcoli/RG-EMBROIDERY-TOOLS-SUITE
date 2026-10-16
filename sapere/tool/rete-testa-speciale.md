@@ -103,6 +103,32 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
     saranno più morbidi e sembrerà molto di più una borsa e la tensione è tutta nei lati che rimangono rigidi»*. Provato
     prima in 2D, poi in 3D (*«prima il 3D»*), poi portato nel tool (`bottomShape`, `bottomLengthMm`, `bottomWidthMm`).
 
+19. **Al contrario: meno fascia sui lati lunghi, più sulle teste** (2026-10-16): *«ho capito una cosa, deve essere al
+    contrario in realtà. meno nei lati lunghi e più nei lati corti»*. Le teste non possono crescere oltre (lì i rombi si
+    aprono per primi, e il campo le ferma): si fermano prima le colonne dei lati lunghi (`cimeDelleColonne`). Simulato
+    in 3D (*«mi sembra figo»*), non ancora nel ricamo.
+20. **Le teste a mezzo cerchio, con un parametro** (2026-10-16): *«mi piacerebbe però che il fondo possa essere con i
+    finali più tondi volendo, più mezzi cerchi appunto, ma un parametro di controllo anche quello»* →
+    `bottomRoundEnds` (0 = ovale, 100 = mezzi cerchi e tratti dritti).
+
+## Le colonne dei lati che si fermano prima (2026-10-16, simulato)
+- Ogni colonna ha il suo ultimo anello: sulle teste quello di tutta la rete, sui lati lunghi quello che dà la fascia
+  chiesta, in mezzo a scalare (sin² del parametro). Fra due colonne vicine al più un anello di differenza, così ogni
+  nodo ha sempre i suoi due nodi sotto e i rombi restano coi lati uguali. L'ultima fila sale e scende: il cordone passa
+  dal nodo più alto di ogni colonna.
+- **In 3D l'effetto si rovescia davvero**: fondo 260 × 140, 64 rombi, lati fino a 60 mm (4 anelli contro 10), bocca
+  stretta a Ø 90: le teste fanno pancia 24 mm (fili tesi al 77%) e i lati lunghi 4 mm (97%). Con tutti gli anelli era il
+  contrario (teste 6, lati 16).
+- **Il cordone non chiude più quanto prima**: i lati corti non arrivano al centro. Col cordone all'85% i fili dovrebbero
+  allungarsi del 6%; al 60% la bocca resta una fessura di circa 27 cm (fili entro il 3%). Al montaggio la bocca resta
+  allungata.
+
+## Le teste a mezzo cerchio (2026-10-16, misurato)
+- La forma: due mezzi ovali staccati di 2·(a − b)·tondo e uniti da tratti dritti (a 1 due mezzi cerchi di raggio b, lo
+  «stadio»). Dentro, i giri del fondo con lo stesso passo su lati e teste; sui tratti dritti le legature scendono dritte.
+- **Sui tratti dritti i rombi non si aprono mai** (l'anello dopo è l'anello prima spostato), e gli anelli li fermano le
+  teste: con 260 × 140 e 64 rombi, ovale 10 anelli (lati 135, teste 92), al 50% 9 (126, 93), al 100% 8 (112, 93).
+
 ## Il fondo ovale: com'è fatto (2026-10-16, misurato)
 - **La regola degli anelli è una sola**: ogni nodo nuovo sta a distanza L dai due nodi vicini dell'anello prima (una rete
   di Čebyšëv). Vale su qualunque fondo convesso; sul cerchio ridà gli stessi anelli di prima (scarto 0,00002 mm, dal
@@ -121,6 +147,11 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
 - **Gli incroci dell'ovale** si calcolano nodo per nodo (le due linee che passano dal nodo, la media): lente e aggancio
   della regola scelta per ogni nodo, lo spostamento lungo il suo anello. Con «lente uguale» le lenti misurate vanno da
   2,5 a 3,1 mm (sul cerchio 1,9–2,1): la media delle due linee non è esatta dove l'ovale è asimmetrico.
+- **La rigidità del filo nel 3D è troppo bassa** (Lorenzo: *«la borsa sta su molto di più perché il filo è più rigido
+  e resistente»*). Misurato: in piedi alta 14 mm con morbidezza 70%, 20 con 0%. Provati (e tolti): una parete che resiste
+  a uscire dal piano dei vicini (22 mm: la sacca crolla tutta intera a cupola, i rombi la lasciano scendere) e nodi molto
+  più rigidi (0–1 mm: si ripiega piatta sul fondo, perché la «piega» è una distanza e una linea ripiegata del tutto ha la
+  stessa distanza di una dritta). Serve una piegatura ad angolo, tarata su una misura del campione vero. Da fare.
 - **Da sapere**: nella vista 3D la presa «per la bocca» mette la bocca su un cerchio e «appoggiata» parte da una forma
   stretta in proporzione; la tabella delle bocche (`formaSacca`) è solo per il fondo tondo.
 

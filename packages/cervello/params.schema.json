@@ -1990,6 +1990,10 @@
           "default": 140,
           "x-id": "bottomWidth"
         },
+        "bottomRoundEnds": {
+          "$ref": "#/$defs/bottomRoundEnds",
+          "default": 0
+        },
         "bottomRadiusMm": {
           "$ref": "#/$defs/bottomRadius",
           "default": 100,
@@ -5017,6 +5021,16 @@
       "x-passo": 5,
       "x-concetto": "formato"
     },
+    "bottomRoundEnds": {
+      "type": "number",
+      "title": "Teste a mezzo cerchio",
+      "description": "Sacca, fondo ovale: 0 = ovale; 100 = due mezzi cerchi uniti da tratti dritti; in mezzo, teste più tonde e lati più dritti.",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 100,
+      "x-passo": 5,
+      "x-concetto": "formato"
+    },
     "bottomRadius": {
       "type": "number",
       "title": "Raggio del fondo",
@@ -5299,6 +5313,7 @@
         "bottomShape",
         "bottomLength",
         "bottomWidth",
+        "bottomRoundEnds",
         "bottomRadius",
         "machineField",
         "pieceSource"
