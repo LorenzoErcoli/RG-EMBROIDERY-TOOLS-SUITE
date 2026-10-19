@@ -1883,12 +1883,18 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       stopEyedrop();
       return;
     }
-    if (spaceDown || (e.button !== 0 && e.button !== 2)) return;
-    if (mode === 'stamp') {
+    // il timbro prima di tutto: si posa dove si clicca (anche senza aver mosso il mouse prima, e anche se il tasto
+    // Spazio è rimasto «premuto» per il browser)
+    if (mode === 'stamp' && stampSel && (e.button === 0 || e.button === -1)) {
       e.stopPropagation(); e.preventDefault();
-      if (e.button === 0) placeStamp();
+      const p = mmAt(e);
+      if (!p) { $('status').textContent = 'Il timbro: clicca sulla tela del disegno.'; return; }
+      stampSel.at = { r: Math.floor(p.y / rowPitch(st.grid)), c: Math.floor(p.x / st.grid.cellW) };
+      spaceDown = false; canvas.classList.remove('cs-pan');
+      placeStamp();
       return;
     }
+    if (spaceDown || (e.button !== 0 && e.button !== 2)) return;
     if (areaPicking) {
       const p = mmAt(e);
       if (!p || e.button !== 0) return;
@@ -2224,6 +2230,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   };
   window.addEventListener('keydown', onKeyDown);
   window.addEventListener('keyup', onKeyUp);
+  // se la finestra perde il fuoco con lo Spazio premuto (una finestra di file, un altro programma) il rilascio non
+  // arriva: lo Spazio restava «premuto» e ogni clic spostava la vista invece di disegnare o posare il timbro
+  window.addEventListener('blur', () => { spaceDown = false; canvas.classList.remove('cs-pan'); });
 
   // ---- immagine di riferimento -----------------------------------------------
   $<HTMLInputElement>('imageInput').addEventListener('change', (ev) => {
@@ -2762,7 +2771,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     pushUndo();
     // (Lorenzo, 2026-10-19: «quando clicco non funziona più»: il pezzo si posava, ma l'ombra restava sopra e la barra
     // non lo diceva) — posato, l'ombra sparisce finché il mouse non si sposta, e la barra conta i pezzi posati
-    if (!applyEdits(st.grid, st.cells, stampEdits(st.grid, stampSel.s, o.r, o.c, {}))) { undo.pop(); $('status').textContent = 'Qui il pezzo c’è già uguale: niente da posare.'; return; }
+    const edits = stampEdits(st.grid, stampSel.s, o.r, o.c, {});
+    if (!edits.length) { undo.pop(); $('status').textContent = 'Il pezzo cade tutto fuori dal disegno: clicca più all’interno.'; return; }
+    if (!applyEdits(st.grid, st.cells, edits)) { undo.pop(); $('status').textContent = 'Qui il pezzo c’è già uguale: niente da posare.'; return; }
     stampSel.placed++;
     stampSel.hidden = true;
     drawStamp();
