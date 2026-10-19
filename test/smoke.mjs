@@ -5370,6 +5370,14 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
       [st.rows + 'x' + st.cols, st.marks[0 * 4 + 0].color, st.marks[1 * 4 + 0].stitch, fl.marks[1 * 4 + 3].stitch, JSON.stringify(mappa), ed.length, ed.every((e) => e.r < 10 && e.c < 10), fit.exact, fit.stamp.cols + 'x' + fit.stamp.rows],
       ['3x4', 2, 'down', 'up', '{"1":{"to":2,"same":true},"2":{"to":1,"same":true}}', 4, true, false, '4x3']);
   }
+  // un colore che nel progetto non c'è va sul filo selezionato, mai sul fondo (Lorenzo: «sembra voler disegnare
+  // sull'ago 1 e non su quello selezionato»); col fondo selezionato, il più vicino fra gli altri
+  {
+    const dst = [{ hex: '#d9cdc4' }, { hex: '#4c5d6e' }, { hex: '#222a3f' }];
+    const sel = rg.csProposeColorMap([{ hex: '#ffffff' }, { hex: '#c8d4e0' }], dst, [1], { selected: 2, base: 0 });
+    const suFondo = rg.csProposeColorMap([{ hex: '#ffffff' }, { hex: '#c8d4e0' }], dst, [1], { selected: 0, base: 0 });
+    check('timbro: un colore assente va sul filo selezionato, mai sul fondo', [sel[1].to, suFondo[1].to !== 0], [2, true]);
+  }
   // OTTIMIZZA L'ORDINE (Lorenzo, 2026-10-15: «il percorso del filo torna troppe volte sulle stesse aree… non toccare il
   // disegno, trova un modo per calcolare meglio il percorso di ogni filo»): un muro con finestre (buchi che lasciano
   // indietro dei pezzi) e macchie sparse; ottimizzato: gli stessi punti, il filo continuo, niente in vista né salti

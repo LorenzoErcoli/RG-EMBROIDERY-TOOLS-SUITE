@@ -2683,14 +2683,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       return c1 - c0 >= 1 && r1 - r0 >= 1 ? { r0, r1, c0, c1 } : null;
     };
     const current = () => extractStamp(g, src.cells, sel ? sel.r0 : 0, sel ? sel.r1 : g.rows, sel ? sel.c0 : 0, sel ? sel.c1 : g.cols, q<HTMLInputElement>('#pickBase').checked ? null : src.base);
-    const proposal = () => proposeColorMap(src.threads, st.threads, stampColors(current()));
+    const proposal = () => proposeColorMap(src.threads, st.threads, stampColors(current()), { selected: activeThread, base: st.route.base?.color ?? null });
     const buildList = () => {
       const s0 = current(), used = stampColors(s0), prop = proposal(), host = q('#pickThreadsHost');
       if (!used.length) { host.innerHTML = '<p class="rg-color-map__empty">Nessun punto nel riquadro: allargalo o toglilo per prendere tutto.</p>'; return; }
       host.innerHTML = '<ul class="rg-color-map" id="pickThreads" aria-labelledby="pickThreadsTitle">' + used.map((k) => {
         const t = src.threads[k], lab = `Filo ${k + 1} · ${t.hex.toUpperCase()}`;
-        const opts = st.threads.map((d, i) => `<option value="${i}"${prop[k]?.to === i ? ' selected' : ''}>→ Filo ${i + 1} · ${d.hex.toUpperCase()}${prop[k]?.to === i && prop[k].same ? ' (stesso colore)' : ''}</option>`).join('')
-          + `<option value="new"${prop[k] && !prop[k].same && st.threads.length < 2 ? ' selected' : ''}>Aggiungi come filo nuovo</option>`;
+        const opts = st.threads.map((d, i) => `<option value="${i}"${prop[k]?.to === i ? ' selected' : ''}>→ Filo ${i + 1} · ${d.hex.toUpperCase()}${prop[k]?.to === i && prop[k].same ? ' (stesso colore)' : ''}${i === activeThread ? ' (selezionato)' : ''}${i === st.route.base?.color ? ' (fondo)' : ''}</option>`).join('')
+          + `<option value="new">Aggiungi come filo nuovo</option>`;
         return `<li class="rg-color-map__row"><span class="rg-color-map__swatch" style="--swatch:${t.hex}"></span><span class="rg-color-map__code">Filo ${k + 1} <span class="rg-color-map__meta">${t.hex.toUpperCase()}</span></span><select class="rg-select rg-color-map__target" data-src="${k}" aria-label="Destinazione per ${lab}">${opts}</select></li>`;
       }).join('') + '</ul>';
       const sz = s0.rows ? `Il pezzo: ${s0.cols} × ${s0.rows} V` : 'Il pezzo è vuoto';
@@ -2775,6 +2775,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (!edits.length) { undo.pop(); $('status').textContent = 'Il pezzo cade tutto fuori dal disegno: clicca più all’interno.'; return; }
     if (!applyEdits(st.grid, st.cells, edits)) { undo.pop(); $('status').textContent = 'Qui il pezzo c’è già uguale: niente da posare.'; return; }
     stampSel.placed++;
+    const baseC = st.route.base?.color;
+    if (baseC !== undefined && edits.every((e) => e.mark?.color === baseC)) $('stampStatus').textContent = 'Attenzione: il pezzo è tutto sul filo del fondo, sul disegno non si vede. Riprendilo e scegli un altro filo.';
     stampSel.hidden = true;
     drawStamp();
     fromImage = false;

@@ -83,14 +83,22 @@ export function colorDistance(a: string, b: string): number {
   return Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]);
 }
 
-/** La scelta proposta per ogni filo del pezzo: il filo del progetto con lo stesso colore (distanza < 3) o il più vicino. */
-export function proposeColorMap(src: Thread[], dst: Thread[], used: number[]): Record<number, { to: number; same: boolean }> {
+/**
+ * La scelta proposta per ogni filo del pezzo: il filo del progetto con lo stesso colore (distanza < 3); se non c'è,
+ * il filo selezionato nel tool (Lorenzo, 2026-10-19: «sembra voler disegnare sull'ago 1 e non su quello
+ * selezionato»: col colore più vicino un blu chiaro finiva sul fondo, e il pezzo posato non si vedeva). Mai il filo
+ * della base, se il colore non è proprio quello: se il selezionato è la base, il più vicino fra gli altri.
+ */
+export function proposeColorMap(src: Thread[], dst: Thread[], used: number[], opts: { selected?: number; base?: number | null } = {}): Record<number, { to: number; same: boolean }> {
   const out: Record<number, { to: number; same: boolean }> = {};
+  const base = opts.base ?? null, sel = opts.selected;
   for (const k of used) {
     const hex = src[k]?.hex ?? '#000000';
-    let best = 0, bd = Infinity;
-    dst.forEach((t, i) => { const d = colorDistance(hex, t.hex); if (d < bd) { bd = d; best = i; } });
-    out[k] = { to: best, same: bd < 3 };
+    let same = -1, sd = Infinity, near = -1, nd = Infinity;
+    dst.forEach((t, i) => { const d = colorDistance(hex, t.hex); if (d < sd) { sd = d; same = i; } if (i !== base && d < nd) { nd = d; near = i; } });
+    if (sd < 3) out[k] = { to: same, same: true };
+    else if (sel !== undefined && sel >= 0 && sel < dst.length && sel !== base) out[k] = { to: sel, same: false };
+    else out[k] = { to: near >= 0 ? near : same, same: false };
   }
   return out;
 }
