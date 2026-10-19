@@ -382,7 +382,7 @@ export const DEFAULT_KNIT: Omit<KnitOptions, 'background'> = { detailPct: 35, st
  * `palette` = i fili in RGB, nell'ordine della tavolozza.
  */
 /** RGB → Lab (D65): la distanza fra due colori come la vede l'occhio. */
-function labOf(r: number, g: number, b: number): Rgb3 {
+export function labOf(r: number, g: number, b: number): Rgb3 {
   const f = (u: number) => { u /= 255; return u <= 0.04045 ? u / 12.92 : ((u + 0.055) / 1.055) ** 2.4; };
   const R = f(r), G = f(g), B = f(b);
   let X = (R * 0.4124 + G * 0.3576 + B * 0.1805) / 0.95047, Y = R * 0.2126 + G * 0.7152 + B * 0.0722, Z = (R * 0.0193 + G * 0.1192 + B * 0.9505) / 1.08883;

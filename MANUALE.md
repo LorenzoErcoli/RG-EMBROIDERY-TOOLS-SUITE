@@ -970,6 +970,18 @@ valori e il disegno: in fondo al pannello, *06 Carica parametri*, li rimette com
 i progetti `.json` della vecchia app ThreadRoute. L'immagine di partenza non è nel file: se vuoi
 rifare la maglia, ricaricala.
 
+**Un pezzo da un altro progetto (il timbro).** In *06 Carica parametri*, **Inserisci un pezzo da DST o SVG…**
+apre un altro progetto fatto qui senza toccare quello aperto. Nella finestra trascini un riquadro attorno alla parte
+che ti serve (senza riquadro si prende tutto il ricamo); **Porta anche il fondo** spento (di partenza) lascia fuori le
+celle del colore di base del pezzo, così non copre il tuo disegno. Per ogni filo del pezzo scegli dove va: il tool
+propone il filo del progetto con lo stesso colore (o il più vicino); **Aggiungi come filo nuovo** lo mette in fondo
+alla tavolozza. **Prendi il pezzo**: si accende lo strumento **Timbro** e il pezzo segue il mouse, mezzo trasparente,
+col riquadro tratteggiato; un clic lo posa (anche più volte), le **frecce** lo spostano di una V, **X** lo mette a
+specchio, **Y** sottosopra (le diagonali e le V girano con lui), **Invio** lo posa dov'è, **Esc** finisce (il pezzo
+resta pronto nel pulsante Timbro). **Annulla** toglie l'ultimo pezzo posato. Se il pezzo ha una V di misura diversa,
+si riporta alle stesse misure in mm (la finestra lo dice): il disegno si deforma un po' e va ritoccato. Del pezzo
+si prendono solo i punti: gruppi, blocchi, salti e passaggi ridisegnati no.
+
 ## Se qualcosa non torna
 
 - **"Non vedo niente in anteprima."** Controlla di aver assegnato i **ruoli** ai colori (spesso manca l'area da riempire), e prova **Adatta**.

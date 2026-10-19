@@ -47,6 +47,7 @@ export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as 
 export { subGrid as csSubGrid, areaFromMm as csAreaFromMm, clampArea as csClampArea } from ${JSON.stringify(posix('apps/cross-stitch/src/area.ts'))};
 export { segmentPoints as csSegmentPoints } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { routeAll as csRouteAll, stripRanges as csStripRanges, routeModule as csRouteModule, entryRows as csEntryRows, routeBands as csRouteBands } from ${JSON.stringify(posix('apps/cross-stitch/src/strips.ts'))};
+export { extractStamp as csExtractStamp, fitStamp as csFitStamp, flipStamp as csFlipStamp, proposeColorMap as csProposeColorMap, stampEdits as csStampEdits } from ${JSON.stringify(posix('apps/cross-stitch/src/stamp.ts'))};
 export { findModule as csFindModule, tileModule as csTileModule, editsOnAllCopies as csEditsOnAllCopies, shiftModule as csShiftModule, seamShift as csSeamShift, resizeModule as csResizeModule, movePiece as csMovePiece, piecesOf as csPiecesOf, cellStep as csCellStep, bandsOf as csBandsOf, toggleBandBreak as csToggleBandBreak, moveBandBreak as csMoveBandBreak, bandCells as csBandCells, moveShapeBand as csMoveShapeBand } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
 export { zonesOf as csZonesOf, groupOfCell as csGroupOfCell } from ${JSON.stringify(posix('apps/cross-stitch/src/zones.ts'))};
 export { cellMask as csCellMask, autoRoles as csAutoRoles, normalizeContours as csNormalizeContours } from ${JSON.stringify(posix('apps/cross-stitch/src/shape.ts'))};
@@ -5351,6 +5352,23 @@ console.log('\ncross-stitch — passaggi: V, chevron, croci, più fili');
     for (const cr of r3.colors) if (cr.color) for (const sg of cr.segs) if ((sg.kind === 'stitch' || sg.kind === 'retrace') && Math.abs((sg.from % LW(gSt)) - (sg.to % LW(gSt))) === 1) { const kk = cr.color + ':' + Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to); conta.set(kk, (conta.get(kk) || 0) + 1); }
     const vaetorna = r3.colors.filter((cr) => cr.color).reduce((n, cr) => n + cr.segs.filter((sg, i) => i > 0 && sg.from === cr.segs[i - 1].to && sg.to === cr.segs[i - 1].from && (sg.kind === 'stitch' || sg.kind === 'retrace') && (conta.get(cr.color + ':' + Math.min(sg.from, sg.to) + ':' + Math.max(sg.from, sg.to)) ?? 0) >= 5).length, 0);
     check('passate giuste: nessun va-e-torna dove le passate sono 2 in più; nessuna diagonale sotto 3', [vaetorna, [...conta.values()].filter((n) => n < 3).length], [0, 0]);
+  }
+  // IL TIMBRO (Lorenzo, 2026-10-19: «una parte di grafica che voglio riprendere da un altro DST generato nel tool»):
+  // un pezzo preso senza il fondo e stretto alle sue celle; capovolto a specchio le diagonali girano; i colori sui
+  // fili del progetto (lo stesso o il più vicino); posato a (r0, c0) senza uscire dalla griglia; con V diverse le
+  // stesse misure in mm
+  {
+    const gT = { rows: 10, cols: 10, cellW: 2.8, cellH: 4, overlapPct: 30 };
+    const cT = fill(gT, (r, c) => (r >= 2 && r <= 4 && c >= 3 && c <= 6 ? { stitch: c === 3 ? 'down' : 'v', color: r === 2 ? 2 : 1 } : { stitch: 'v', color: 0 }));
+    const st = rg.csExtractStamp(gT, cT, 0, 10, 0, 10, 0);
+    const fl = rg.csFlipStamp(st, 'h');
+    const mappa = rg.csProposeColorMap([{ hex: '#ffffff' }, { hex: '#6a8eac' }, { hex: '#222a3f' }], [{ hex: '#d9cdc4' }, { hex: '#222a3f' }, { hex: '#6b8fad' }], [1, 2]);
+    const ed = rg.csStampEdits(gT, st, 8, 8, { 1: 2, 2: 1 });
+    const g2 = { rows: 20, cols: 20, cellW: 2.5, cellH: 3.5, overlapPct: 30 };
+    const fit = rg.csFitStamp(st, g2);
+    check('timbro: senza fondo e stretto; a specchio la «\\» diventa «/»; colori sui fili vicini; posato dentro la griglia; con V diverse stesse misure',
+      [st.rows + 'x' + st.cols, st.marks[0 * 4 + 0].color, st.marks[1 * 4 + 0].stitch, fl.marks[1 * 4 + 3].stitch, JSON.stringify(mappa), ed.length, ed.every((e) => e.r < 10 && e.c < 10), fit.exact, fit.stamp.cols + 'x' + fit.stamp.rows],
+      ['3x4', 2, 'down', 'up', '{"1":{"to":2,"same":true},"2":{"to":1,"same":true}}', 4, true, false, '4x3']);
   }
   // OTTIMIZZA L'ORDINE (Lorenzo, 2026-10-15: «il percorso del filo torna troppe volte sulle stesse aree… non toccare il
   // disegno, trova un modo per calcolare meglio il percorso di ogni filo»): un muro con finestre (buchi che lasciano

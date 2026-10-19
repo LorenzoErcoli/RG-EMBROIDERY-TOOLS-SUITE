@@ -22,6 +22,7 @@ import { autoRoles, cellMask, normalizeContours, subMask, type PieceShape, type 
 import { entryRows, routeAll, routeModuleBands, stripRanges, type BandRoute, type ModulePath } from './strips';
 import { bandsOf, cellStep, editsOnAllCopies, findModule, moveBandBreak, moveShapeBand, toggleBandBreak, movePiece, piecesOf, resizeModule, seamShift, shiftModule, tileModule, type KnitModule } from './module';
 import { DEFAULT_ZONES, inGroup, shiftGroup, type ZoneGroup } from './zones';
+import { extractStamp, fitStamp, flipStamp, proposeColorMap, stampColors, stampEdits, type Stamp } from './stamp';
 import { areaFromMm, clampArea, subGrid, type TestArea } from './area';
 import { passesDi, larghezzaFilo, paramsRoute, modulePathOf, ingressoPassaggi, stratiCross, type StatoCross } from './motore';
 
@@ -38,7 +39,7 @@ const OLD_AUTOSAVE_KEY = 'rg-cross-stitch-autosave';
 const DEFAULT_THREADS: Thread[] = [{ hex: '#1a1a1a' }, { hex: '#b3261e' }];
 
 /** Gli strumenti della barra di modifica. */
-type Mode = 'pan' | 'paint' | 'fill' | 'erase' | 'group' | 'cut' | 'image' | 'order' | 'reroute' | 'pick' | 'bands' | 'area';
+type Mode = 'pan' | 'paint' | 'fill' | 'erase' | 'group' | 'cut' | 'image' | 'order' | 'reroute' | 'pick' | 'bands' | 'area' | 'stamp';
 
 const MODE_HELP: Record<Mode, string> = {
   pan: 'Sposta: trascina per muovere la vista, rotella per ingrandire. Il ricamo non si tocca.',
@@ -52,6 +53,7 @@ const MODE_HELP: Record<Mode, string> = {
   pick: 'Scegli modulo: sull’immagine intera trascina un riquadro intorno a un modulo. Il riquadro si aggancia alle V che trova; colonne e righe si correggono in «Griglia». Esc torna al pennello.',
   image: 'Sposta immagine: trascina l’immagine sotto la griglia finché il motivo cade giusto sulle V del modulo.',
   group: 'Gruppi: trascina un rettangolo, oppure clicca i punti di un contorno (Invio lo chiude, Backspace toglie l’ultimo punto, Esc annulla): dentro ogni filo quella parte si cuce tutta insieme, nell’ordine della lista in 04 Passaggi. Clic sul bordo di un gruppo: lo selezioni e ne modifichi il contorno.',
+  stamp: 'Timbro: il pezzo preso da un altro progetto segue il mouse; un clic lo posa (anche più volte). Frecce: lo spostano di una V; X: a specchio; Y: sottosopra; Invio: lo posa dov’è; Esc: finisci.',
   area: 'Blocchi: trascina un rettangolo, oppure clicca i punti di un contorno (Invio lo chiude, Backspace toglie l’ultimo punto, Esc annulla). Ogni blocco cuce tutti i fili prima del successivo, nell’ordine della lista in 04 Passaggi; la base resta un solo stop, prima. Clic sul bordo di un blocco: lo selezioni e ne modifichi il contorno.',
 };
 
@@ -360,6 +362,13 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             </label>
             <p class="rg-file-input__status" id="projectStatus" role="status">Un file esportato da qui rimette valori e disegno.</p>
           </div>
+          <div class="rg-file-input rg-param-grid__wide">
+            <label class="rg-file-input__control">
+              <input type="file" id="stampInput" accept=".dst,.svg" />
+              <span class="rg-button rg-button--outline">Inserisci un pezzo da DST o SVG…</span>
+            </label>
+            <p class="rg-file-input__status" id="stampStatus" role="status">Da un altro progetto fatto qui: scegli la parte e posala sul disegno. Il progetto aperto resta.</p>
+          </div>
         </div>
       </details>
     </aside>
@@ -391,6 +400,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <button type="button" class="rg-segmented__item" data-mode="order" hidden>Ordine pezzi</button>
             <button type="button" class="rg-segmented__item" data-mode="bands" hidden>Fasce</button>
             <button type="button" class="rg-segmented__item" data-mode="reroute">Ridisegna passaggio</button>
+            <button type="button" class="rg-segmented__item" data-mode="stamp" title="Timbro" hidden>Timbro</button>
           </div>
           <div class="cs-editbar__group" id="moduleEditGroup" role="group" aria-labelledby="eb-mod" hidden><span class="rg-label" id="eb-mod">Modulo</span>
             <div class="rg-segmented" id="moduleViewSel" role="group" aria-label="Vista">
@@ -1002,7 +1012,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         overlay.insertAdjacentHTML('beforeend', `<path d="${d(c.points)}" fill="none" style="stroke:var(--rg-color-focus)" stroke-width="${role === 'outline' ? 2 : 1.5}" ${role === 'void' ? 'stroke-dasharray="5 4"' : ''} vector-effect="non-scaling-stroke" pointer-events="none"/>`);
       }
     }
-    if (!moduleView) drawGroups();
+    if (!moduleView) { drawGroups(); drawStamp(); }
     drawAreaDrag();
     $('orderScrub').hidden = !showOrder;
     if (showOrder) {
@@ -1046,6 +1056,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   }
   /** I numeri dei passaggi nella barra di stato (o che si stanno calcolando). */
   function showStatus(): void {
+    if (mode === 'stamp' && stampSel) { $('status').textContent = `Timbro «${stampSel.name}», ${stampSel.s.cols} × ${stampSel.s.rows} V: clic per posarlo (anche più volte). Frecce: una V; X: a specchio; Y: sottosopra; Invio: posa dov’è; Esc: finisci.`; return; }
     if (zoneSel && (mode === 'group' || mode === 'area')) { $('status').textContent = `${zoneSel.kind === 'area' ? 'Blocco' : 'Gruppo'} ${zoneSel.i + 1} selezionato: trascina un vertice per spostarlo, il pallino a metà di un lato per aggiungerne uno, tasto destro su un vertice per toglierlo; trascina dentro per spostare tutto. Esc per finire.`; return; }
     if (eyedrop >= 0) { $('status').textContent = `Clicca sull’immagine il colore del filo ${eyedrop + 1} (Esc annulla). L’immagine si vede intera mentre scegli.`; return; }
     if (editorOpen && st.module && mode === 'pick') { $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V. Trascina un riquadro intorno a un modulo dell’immagine: si aggancia alle V che trova.`; return; }
@@ -1387,7 +1398,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (m === 'bands' || was === 'bands') drawEditorMarks();
     // senza passaggi visibili non c'è niente da cliccare
     if (m === 'cut' && !showPaths) { showPaths = true; $<HTMLInputElement>('showPaths').checked = true; draw(); }
-    syncSegmented(); hideBrush(); drawGroups();
+    syncSegmented(); hideBrush(); drawGroups(); drawStamp(); showStatus();
   };
   root.querySelectorAll<HTMLButtonElement>('#modeSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => setMode(b.dataset.mode as Mode)));
   root.querySelectorAll<HTMLButtonElement>('#sizeSel .rg-segmented__item').forEach((b) => b.addEventListener('click', () => { brushSize = Number(b.dataset.size) || 1; syncSegmented(); }));
@@ -1873,6 +1884,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       return;
     }
     if (spaceDown || (e.button !== 0 && e.button !== 2)) return;
+    if (mode === 'stamp') {
+      e.stopPropagation(); e.preventDefault();
+      if (e.button === 0) placeStamp();
+      return;
+    }
     if (areaPicking) {
       const p = mmAt(e);
       if (!p || e.button !== 0) return;
@@ -2062,6 +2078,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       drawGroups();
       return;
     }
+    if (mode === 'stamp' && stampSel) {
+      const p = mmAt(e);
+      if (p) { stampSel.at = { r: Math.floor(p.y / rowPitch(st.grid)), c: Math.floor(p.x / st.grid.cellW) }; drawStamp(); }
+      return;
+    }
     if (!painting) { showBrush(spaceDown ? null : cellAt(e)); return; }
     e.stopPropagation();
     paintAt(e);
@@ -2174,6 +2195,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       return;
     }
     if (zoneSel && !polyDraft && e.key === 'Escape') { e.preventDefault(); selectZone(null); return; }
+    if (mode === 'stamp' && stampSel && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const step: Record<string, [number, number]> = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [-1, 0], ArrowDown: [1, 0] };
+      if (step[e.key]) { e.preventDefault(); stampSel.off = { r: stampSel.off.r + step[e.key][0], c: stampSel.off.c + step[e.key][1] }; drawStamp(); return; }
+      const kk = e.key.toLowerCase();
+      if (kk === 'x' || kk === 'y') { e.preventDefault(); stampSel.s = flipStamp(stampSel.s, kk === 'x' ? 'h' : 'v'); drawStamp(); return; }
+      if (e.key === 'Enter') { e.preventDefault(); placeStamp(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); setMode('paint'); return; }
+    }
     if (mode === 'reroute' && reroute && !e.ctrlKey && !e.metaKey && !e.altKey && rerouteKey(e.key)) { e.preventDefault(); return; }
     if (e.code === 'Space') { spaceDown = true; canvas.classList.add('cs-pan'); e.preventDefault(); }
     const k = e.key.toLowerCase();
@@ -2559,6 +2588,184 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     buildGroups();
     update();
   });
+
+  // ---- IL TIMBRO (stamp.ts; Lorenzo, 2026-10-19: «una parte di grafica che voglio riprendere da un altro DST») ----
+  /** Il pezzo pronto da posare: già alla misura delle V, coi fili del progetto. `off` = lo spostamento con le frecce. */
+  let stampSel: { s: Stamp; name: string; at: { r: number; c: number } | null; off: { r: number; c: number } } | null = null;
+  /** Il progetto da cui si prende: la griglia, le celle, i fili, il fondo. */
+  function readSource(meta: Record<string, unknown>): { grid: GridSpec; cells: Cells; threads: Thread[]; base: number | null } | null {
+    if (meta.rgProject !== 'cross-stitch') return null;
+    const g = meta.grid as Partial<GridSpec> | undefined;
+    if (!g || !g.cols || !g.rows || !g.cellW || !g.cellH) return null;
+    const grid: GridSpec = { cols: clampInt(g.cols, 1, 1000), rows: clampInt(g.rows, 1, 1000), cellW: Number(g.cellW), cellH: Number(g.cellH), overlapPct: Math.min(90, Math.max(0, Number(g.overlapPct) || 0)) };
+    const threads = Array.isArray(meta.threads) ? (meta.threads as Thread[]).map((t) => ({ hex: asHex6(String(t.hex)), passes: Math.max(1, Math.round(Number(t.passes) || 1)) })) : [];
+    if (!threads.length) return null;
+    const b = (meta.route as { base?: { color?: number } | null } | undefined)?.base;
+    return { grid, cells: cellsFromJson(grid, meta.cells), threads, base: b && Number.isInteger(b.color) ? Number(b.color) : null };
+  }
+  $<HTMLInputElement>('stampInput').addEventListener('change', (ev) => {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    const isDst = /\.dst$/i.test(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const meta = isDst ? readDstMetadata(new Uint8Array(reader.result as ArrayBuffer)) : readProjectMetadata(String(reader.result));
+        const src = meta ? readSource(meta) : null;
+        if (!src || !src.cells.size) { $('stampStatus').textContent = `${file.name}: non è un progetto Punto croce (o è vuoto).`; return; }
+        openStampDialog(src, file.name.replace(/\.[^.]+$/, '').replace(/-cross-stitch$/, ''));
+      } catch (e) { $('stampStatus').textContent = 'Errore: ' + (e as Error).message; }
+    };
+    if (isDst) reader.readAsArrayBuffer(file); else reader.readAsText(file);
+  });
+
+  /** La finestra: si sceglie la parte (riquadro sull'anteprima), il fondo sì o no, dove va ogni filo. */
+  function openStampDialog(src: { grid: GridSpec; cells: Cells; threads: Thread[]; base: number | null }, name: string): void {
+    if (editorOpen || moduleView) { $('stampStatus').textContent = 'Il pezzo si posa sul ricamo: esci prima dall’editor o dalla vista modulo.'; return; }
+    const esc = (t: string) => t.replace(/[&<>"]/g, (ch) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' } as Record<string, string>)[ch]);
+    const back = document.createElement('div');
+    back.className = 'rg-modal-backdrop is-open';
+    back.setAttribute('role', 'presentation');
+    back.innerHTML = `<div class="rg-modal rg-modal--lg" role="dialog" aria-modal="true" aria-labelledby="cs-pick-title">
+      <header class="rg-modal__header"><h2 class="rg-modal__title" id="cs-pick-title">Inserisci un pezzo da ${esc(name)}</h2><button class="rg-modal__close" type="button" aria-label="Chiudi" data-pick-close>×</button></header>
+      <div class="rg-modal__body rg-stack">
+        <div>
+          <div class="cs-pick__stage rg-u-border rg-u-border-strong"><canvas id="pickCanvas" tabindex="0" role="img" aria-label="Anteprima del ricamo da cui prendere il pezzo" aria-describedby="pickHelp"></canvas></div>
+          <p class="rg-small rg-u-muted rg-u-mt-2" id="pickHelp" aria-live="polite">Trascina un riquadro attorno alla parte da prendere; senza riquadro si prende tutto.</p>
+        </div>
+        <label class="rg-toggle"><input type="checkbox" id="pickBase"><span class="rg-toggle__track"></span><span>Porta anche il fondo</span></label>
+        <div><h3 class="rg-label" id="pickThreadsTitle">Fili del pezzo</h3><div id="pickThreadsHost"></div></div>
+      </div>
+      <footer class="rg-modal__footer"><button class="rg-button rg-button--ghost" type="button" data-pick-close>Annulla</button><button class="rg-button rg-button--primary" type="button" id="pickOk">Prendi il pezzo</button></footer>
+    </div>`;
+    document.body.appendChild(back);
+    const q = <T extends HTMLElement>(sel: string) => back.querySelector<T>(sel)!;
+    const cv = q<HTMLCanvasElement>('#pickCanvas');
+    const g = src.grid, pitch = rowPitch(g), Wmm = g.cols * g.cellW, Hmm = gridHeight(g);
+    let sel: { r0: number; r1: number; c0: number; c1: number } | null = null;
+    let drag: { x0: number; y0: number; x1: number; y1: number } | null = null;
+    const fit = () => { const box = cv.parentElement!.getBoundingClientRect(); const k = Math.min(box.width / Wmm, box.height / Hmm); return { k, ox: (box.width - Wmm * k) / 2, oy: (box.height - Hmm * k) / 2, w: box.width, h: box.height }; };
+    const tok = (n: string, d: string) => getComputedStyle(document.documentElement).getPropertyValue(n).trim() || d;
+    const paint = () => {
+      const f2 = fit(), dpr = window.devicePixelRatio || 1;
+      cv.width = Math.round(f2.w * dpr); cv.height = Math.round(f2.h * dpr);
+      const ctx = cv.getContext('2d')!;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.fillStyle = tok('--rg-color-white', '#fff'); ctx.fillRect(0, 0, f2.w, f2.h);
+      for (const [k, m] of src.cells) {
+        const r = Math.floor(k / g.cols), c = k % g.cols;
+        ctx.fillStyle = src.threads[m.color]?.hex ?? '#000';
+        ctx.fillRect(f2.ox + c * g.cellW * f2.k, f2.oy + r * pitch * f2.k, g.cellW * f2.k + 0.5, g.cellH * f2.k + 0.5);
+      }
+      const box = drag ? drag : sel ? { x0: f2.ox + sel.c0 * g.cellW * f2.k, y0: f2.oy + sel.r0 * pitch * f2.k, x1: f2.ox + sel.c1 * g.cellW * f2.k, y1: f2.oy + ((sel.r1 - 1) * pitch + g.cellH) * f2.k } : null;
+      if (box) {
+        ctx.setLineDash([6, 4]); ctx.lineWidth = 2; ctx.strokeStyle = tok('--rg-color-focus', '#000');
+        ctx.strokeRect(Math.min(box.x0, box.x1), Math.min(box.y0, box.y1), Math.abs(box.x1 - box.x0), Math.abs(box.y1 - box.y0));
+      }
+    };
+    /** Le celle del riquadro trascinato (in px dell'anteprima). */
+    const toCells = (d: { x0: number; y0: number; x1: number; y1: number }) => {
+      const f2 = fit(), mx = (x: number) => (x - f2.ox) / f2.k, my = (y: number) => (y - f2.oy) / f2.k;
+      const xa = Math.min(mx(d.x0), mx(d.x1)), xb = Math.max(mx(d.x0), mx(d.x1)), ya = Math.min(my(d.y0), my(d.y1)), yb = Math.max(my(d.y0), my(d.y1));
+      const c0 = Math.max(0, Math.floor(xa / g.cellW)), c1 = Math.min(g.cols, Math.ceil(xb / g.cellW));
+      const r0 = Math.max(0, Math.floor(ya / pitch)), r1 = Math.min(g.rows, Math.ceil(yb / pitch));
+      return c1 - c0 >= 1 && r1 - r0 >= 1 ? { r0, r1, c0, c1 } : null;
+    };
+    const current = () => extractStamp(g, src.cells, sel ? sel.r0 : 0, sel ? sel.r1 : g.rows, sel ? sel.c0 : 0, sel ? sel.c1 : g.cols, q<HTMLInputElement>('#pickBase').checked ? null : src.base);
+    const proposal = () => proposeColorMap(src.threads, st.threads, stampColors(current()));
+    const buildList = () => {
+      const s0 = current(), used = stampColors(s0), prop = proposal(), host = q('#pickThreadsHost');
+      if (!used.length) { host.innerHTML = '<p class="rg-color-map__empty">Nessun punto nel riquadro: allargalo o toglilo per prendere tutto.</p>'; return; }
+      host.innerHTML = '<ul class="rg-color-map" id="pickThreads" aria-labelledby="pickThreadsTitle">' + used.map((k) => {
+        const t = src.threads[k], lab = `Filo ${k + 1} · ${t.hex.toUpperCase()}`;
+        const opts = st.threads.map((d, i) => `<option value="${i}"${prop[k]?.to === i ? ' selected' : ''}>→ Filo ${i + 1} · ${d.hex.toUpperCase()}${prop[k]?.to === i && prop[k].same ? ' (stesso colore)' : ''}</option>`).join('')
+          + `<option value="new"${prop[k] && !prop[k].same && st.threads.length < 2 ? ' selected' : ''}>Aggiungi come filo nuovo</option>`;
+        return `<li class="rg-color-map__row"><span class="rg-color-map__swatch" style="--swatch:${t.hex}"></span><span class="rg-color-map__code">Filo ${k + 1} <span class="rg-color-map__meta">${t.hex.toUpperCase()}</span></span><select class="rg-select rg-color-map__target" data-src="${k}" aria-label="Destinazione per ${lab}">${opts}</select></li>`;
+      }).join('') + '</ul>';
+      const sz = s0.rows ? `Il pezzo: ${s0.cols} × ${s0.rows} V` : 'Il pezzo è vuoto';
+      const same = Math.abs(g.cellW - st.grid.cellW) < 1e-6 && Math.abs(g.cellH - st.grid.cellH) < 1e-6 && Math.abs((g.overlapPct ?? 0) - (st.grid.overlapPct ?? 0)) < 1e-6;
+      q('#pickHelp').textContent = `${sz}${sel ? '' : ' (tutto il ricamo)'}. ${same ? 'Stessa V del progetto aperto.' : `La V qui è ${fmtNum(g.cellW)} × ${fmtNum(g.cellH)} mm, nel progetto aperto ${fmtNum(st.grid.cellW)} × ${fmtNum(st.grid.cellH)}: il pezzo si riporta alle stesse misure in mm e si deforma un po’ (da ritoccare).`}`;
+    };
+    const close = () => { back.remove(); document.removeEventListener('keydown', onKey, true); $<HTMLInputElement>('stampInput').focus(); };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') { e.preventDefault(); e.stopPropagation(); close(); return; }
+      if (e.key === 'Tab') { // il focus resta nella finestra
+        const items = [...back.querySelectorAll<HTMLElement>('button, select, input, canvas[tabindex]')].filter((x) => !x.hasAttribute('disabled'));
+        const i = items.indexOf(document.activeElement as HTMLElement);
+        if (e.shiftKey && i <= 0) { e.preventDefault(); items[items.length - 1].focus(); } else if (!e.shiftKey && i === items.length - 1) { e.preventDefault(); items[0].focus(); }
+      }
+    };
+    document.addEventListener('keydown', onKey, true);
+    back.addEventListener('click', (e) => { const t = e.target as HTMLElement; if (t === back || t.closest('[data-pick-close]')) close(); });
+    cv.addEventListener('pointerdown', (e) => { const b = cv.getBoundingClientRect(); drag = { x0: e.clientX - b.left, y0: e.clientY - b.top, x1: e.clientX - b.left, y1: e.clientY - b.top }; cv.setPointerCapture(e.pointerId); paint(); });
+    cv.addEventListener('pointermove', (e) => {
+      if (!drag) return;
+      const b = cv.getBoundingClientRect(); drag.x1 = e.clientX - b.left; drag.y1 = e.clientY - b.top;
+      const c = toCells(drag); q('#pickHelp').textContent = c ? `Riquadro ${c.c1 - c.c0} × ${c.r1 - c.r0} V` : 'Trascina un riquadro attorno alla parte da prendere.';
+      paint();
+    });
+    cv.addEventListener('pointerup', () => { if (!drag) return; const c = Math.hypot(drag.x1 - drag.x0, drag.y1 - drag.y0) > 4 ? toCells(drag) : null; drag = null; sel = c; paint(); buildList(); });
+    q<HTMLInputElement>('#pickBase').addEventListener('change', buildList);
+    q('#pickOk').addEventListener('click', () => {
+      const s0 = current();
+      if (!s0.rows) { q('#pickHelp').textContent = 'Nessun punto nel riquadro: allargalo o toglilo per prendere tutto.'; return; }
+      // dove va ogni filo; i fili nuovi in fondo alla tavolozza
+      const map: Record<number, number> = {};
+      back.querySelectorAll<HTMLSelectElement>('select[data-src]').forEach((x) => {
+        const k = Number(x.dataset.src);
+        if (x.value === 'new') { st.threads.push({ hex: src.threads[k].hex, passes: src.threads[k].passes }); map[k] = st.threads.length - 1; }
+        else map[k] = Number(x.value);
+      });
+      const mapped: Stamp = { ...s0, marks: s0.marks.map((m) => (m ? { stitch: m.stitch, color: map[m.color] ?? 0 } : null)) };
+      const fitted = fitStamp(mapped, st.grid);
+      stampSel = { s: fitted.stamp, name, at: null, off: { r: 0, c: 0 } };
+      close();
+      buildThreads();
+      root.querySelector<HTMLButtonElement>('#modeSel [data-mode="stamp"]')!.hidden = false;
+      setMode('stamp');
+      $('stampStatus').textContent = `${name}: pezzo di ${fitted.stamp.cols} × ${fitted.stamp.rows} V pronto${fitted.exact ? '' : ' (riportato alla V del progetto: da ritoccare)'}. Clic sul disegno per posarlo.`;
+      showStatus();
+    });
+    paint(); buildList(); cv.focus(); requestAnimationFrame(paint);
+  }
+  /** Dove cade il pezzo: centrato sul mouse, più lo spostamento con le frecce. */
+  const stampOrigin = (): { r: number; c: number } | null => {
+    if (!stampSel?.at) return null;
+    return { r: stampSel.at.r - Math.floor(stampSel.s.rows / 2) + stampSel.off.r, c: stampSel.at.c - Math.floor(stampSel.s.cols / 2) + stampSel.off.c };
+  };
+  /** L'ombra del pezzo sulla tela: un tracciato per filo, mezzo trasparente, col bordo del riquadro. */
+  function drawStamp(): void {
+    const svg = $('layer').querySelector('svg');
+    if (!svg) return;
+    svg.querySelector('#cs-stamp')?.remove();
+    const o = stampOrigin();
+    if (mode !== 'stamp' || !stampSel || !o) return;
+    const ns = 'http://www.w3.org/2000/svg', g = st.grid, p = rowPitch(g), s0 = stampSel.s;
+    const layer = document.createElementNS(ns, 'g');
+    layer.id = 'cs-stamp';
+    layer.setAttribute('pointer-events', 'none');
+    const byColor = new Map<number, string[]>();
+    s0.marks.forEach((m, i) => { if (!m) return; const r = o.r + Math.floor(i / s0.cols), c = o.c + (i % s0.cols); if (r < 0 || c < 0 || r >= g.rows || c >= g.cols) return; const l = byColor.get(m.color) ?? []; l.push(`M${c * g.cellW} ${r * p}h${g.cellW}v${g.cellH}h${-g.cellW}z`); byColor.set(m.color, l); });
+    for (const [col, parts] of byColor) { const path = document.createElementNS(ns, 'path'); path.setAttribute('d', parts.join('')); path.setAttribute('style', `fill:${st.threads[col]?.hex ?? '#000'};fill-opacity:0.75`); layer.appendChild(path); }
+    const box = document.createElementNS(ns, 'rect');
+    box.setAttribute('x', String(o.c * g.cellW)); box.setAttribute('y', String(o.r * p)); box.setAttribute('width', String(s0.cols * g.cellW)); box.setAttribute('height', String((s0.rows - 1) * p + g.cellH));
+    box.setAttribute('vector-effect', 'non-scaling-stroke'); box.setAttribute('style', 'fill:none;stroke:var(--rg-color-focus);stroke-width:2;stroke-dasharray:6 4');
+    layer.appendChild(box);
+    svg.appendChild(layer);
+  }
+  /** Il pezzo posato dove si vede l'ombra. */
+  function placeStamp(): void {
+    const o = stampOrigin();
+    if (!stampSel || !o) return;
+    pushUndo();
+    if (!applyEdits(st.grid, st.cells, stampEdits(st.grid, stampSel.s, o.r, o.c, {}))) { undo.pop(); return; }
+    fromImage = false;
+    buildThreads();
+    update();
+    $('status').textContent = `Pezzo posato (${stampSel.s.cols} × ${stampSel.s.rows} V). Clic per posarne un altro, Esc per finire; Annulla lo toglie.`;
+  }
 
   /**
    * Il passaggio (o il salto a mano) più vicino al clic, entro 8 px sullo schermo: un passaggio
