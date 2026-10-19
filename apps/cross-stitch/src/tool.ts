@@ -1056,7 +1056,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   }
   /** I numeri dei passaggi nella barra di stato (o che si stanno calcolando). */
   function showStatus(): void {
-    if (mode === 'stamp' && stampSel) { $('status').textContent = `Timbro «${stampSel.name}», ${stampSel.s.cols} × ${stampSel.s.rows} V: clic per posarlo (anche più volte). Frecce: una V; X: a specchio; Y: sottosopra; Invio: posa dov’è; Esc: finisci.`; return; }
+    if (mode === 'stamp' && stampSel) { $('status').textContent = `${stampSel.placed ? `Posat${stampSel.placed === 1 ? 'o 1 pezzo' : `i ${stampSel.placed} pezzi`}${routing ? ' (calcolo dei passaggi…)' : ''}. ` : ''}Timbro «${stampSel.name}», ${stampSel.s.cols} × ${stampSel.s.rows} V: clic per posarlo (anche più volte). Frecce: una V; X: a specchio; Y: sottosopra; Invio: posa dov’è; Esc: finisci.`; return; }
     if (zoneSel && (mode === 'group' || mode === 'area')) { $('status').textContent = `${zoneSel.kind === 'area' ? 'Blocco' : 'Gruppo'} ${zoneSel.i + 1} selezionato: trascina un vertice per spostarlo, il pallino a metà di un lato per aggiungerne uno, tasto destro su un vertice per toglierlo; trascina dentro per spostare tutto. Esc per finire.`; return; }
     if (eyedrop >= 0) { $('status').textContent = `Clicca sull’immagine il colore del filo ${eyedrop + 1} (Esc annulla). L’immagine si vede intera mentre scegli.`; return; }
     if (editorOpen && st.module && mode === 'pick') { $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V. Trascina un riquadro intorno a un modulo dell’immagine: si aggancia alle V che trova.`; return; }
@@ -2080,7 +2080,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     }
     if (mode === 'stamp' && stampSel) {
       const p = mmAt(e);
-      if (p) { stampSel.at = { r: Math.floor(p.y / rowPitch(st.grid)), c: Math.floor(p.x / st.grid.cellW) }; drawStamp(); }
+      if (p) { const at = { r: Math.floor(p.y / rowPitch(st.grid)), c: Math.floor(p.x / st.grid.cellW) }; if (!stampSel.at || at.r !== stampSel.at.r || at.c !== stampSel.at.c) stampSel.hidden = false; stampSel.at = at; drawStamp(); }
       return;
     }
     if (!painting) { showBrush(spaceDown ? null : cellAt(e)); return; }
@@ -2591,7 +2591,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   // ---- IL TIMBRO (stamp.ts; Lorenzo, 2026-10-19: «una parte di grafica che voglio riprendere da un altro DST») ----
   /** Il pezzo pronto da posare: già alla misura delle V, coi fili del progetto. `off` = lo spostamento con le frecce. */
-  let stampSel: { s: Stamp; name: string; at: { r: number; c: number } | null; off: { r: number; c: number } } | null = null;
+  let stampSel: { s: Stamp; name: string; at: { r: number; c: number } | null; off: { r: number; c: number }; placed: number; hidden: boolean } | null = null;
   /** Il progetto da cui si prende: la griglia, le celle, i fili, il fondo. */
   function readSource(meta: Record<string, unknown>): { grid: GridSpec; cells: Cells; threads: Thread[]; base: number | null } | null {
     if (meta.rgProject !== 'cross-stitch') return null;
@@ -2720,7 +2720,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       });
       const mapped: Stamp = { ...s0, marks: s0.marks.map((m) => (m ? { stitch: m.stitch, color: map[m.color] ?? 0 } : null)) };
       const fitted = fitStamp(mapped, st.grid);
-      stampSel = { s: fitted.stamp, name, at: null, off: { r: 0, c: 0 } };
+      stampSel = { s: fitted.stamp, name, at: null, off: { r: 0, c: 0 }, placed: 0, hidden: false };
       close();
       buildThreads();
       root.querySelector<HTMLButtonElement>('#modeSel [data-mode="stamp"]')!.hidden = false;
@@ -2741,7 +2741,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (!svg) return;
     svg.querySelector('#cs-stamp')?.remove();
     const o = stampOrigin();
-    if (mode !== 'stamp' || !stampSel || !o) return;
+    if (mode !== 'stamp' || !stampSel || !o || stampSel.hidden) return;
     const ns = 'http://www.w3.org/2000/svg', g = st.grid, p = rowPitch(g), s0 = stampSel.s;
     const layer = document.createElementNS(ns, 'g');
     layer.id = 'cs-stamp';
@@ -2760,7 +2760,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const o = stampOrigin();
     if (!stampSel || !o) return;
     pushUndo();
-    if (!applyEdits(st.grid, st.cells, stampEdits(st.grid, stampSel.s, o.r, o.c, {}))) { undo.pop(); return; }
+    // (Lorenzo, 2026-10-19: «quando clicco non funziona più»: il pezzo si posava, ma l'ombra restava sopra e la barra
+    // non lo diceva) — posato, l'ombra sparisce finché il mouse non si sposta, e la barra conta i pezzi posati
+    if (!applyEdits(st.grid, st.cells, stampEdits(st.grid, stampSel.s, o.r, o.c, {}))) { undo.pop(); $('status').textContent = 'Qui il pezzo c’è già uguale: niente da posare.'; return; }
+    stampSel.placed++;
+    stampSel.hidden = true;
+    drawStamp();
     fromImage = false;
     buildThreads();
     update();
