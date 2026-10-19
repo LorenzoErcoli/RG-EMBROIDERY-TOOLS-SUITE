@@ -36,7 +36,7 @@
 // Nessun DOM.
 
 import type { Cells, GridSpec, Leg, Stitch } from './model';
-import { latticeWidth, segmentPoints, stitchLegs, vertexCount, vertexIndex } from './model';
+import { latticeWidth, pointInRow, rowPitch, segmentPoints, stitchLegs, vertexCount, vertexIndex } from './model';
 import { groupOfCell, zonesOf, type ZoneGroup, type ZoneOptions } from './zones';
 
 export interface TravelCosts {
@@ -1338,6 +1338,14 @@ export interface StitchParams {
   maxStitchMm: number;
   /** Il punto dei passaggi (corsa sotto il ricamo). */
   travelStitchMm: number;
+  /**
+   * I PASSAGGI NASCOSTI DRITTI (Lorenzo, 2026-10-19, una prova: «invece dello zig zag, linee a impuntura che passano
+   * perfettamente al centro delle V che passano sopra in copertura, al centro rispetto all'altezza; soprattutto i
+   * movimenti orizzontali»). Un passaggio nascosto che corre lungo una riga (a zig zag sulle gambe delle V che lo
+   * coprono) diventa una linea dritta a metà altezza della riga, coi punti al centro di ogni V. Solo il disegno dei
+   * punti cambia (anteprima, SVG, DST): il percorso no.
+   */
+  straightHidden?: boolean;
 }
 
 export const DEFAULT_STITCH: StitchParams = { maxStitchMm: 7, travelStitchMm: 2.5 };
@@ -1360,12 +1368,57 @@ export function colorPolylines(g: GridSpec, route: ColorRoute, sp: StitchParams)
  * Le polilinee di un filo e, per ognuna, se prima di lei c'è un salto a mano (Lorenzo, 2026-10-12: «i salti
  * messi a mano non devono avere collegamento»): l'export DST ci mette il taglio.
  */
+/**
+ * I tratti di passaggio nascosto che corrono lungo una riga, rifatti dritti (vedi `StitchParams.straightHidden`):
+ * indice del primo tratto → i punti in mm (dal capo di partenza a quello d'arrivo, passando per il centro di ogni V
+ * a metà altezza) e l'indice dopo l'ultimo tratto. Una corsa: almeno due tratti nascosti di fila, tutti diagonali
+ * di mezza V nella stessa riga e nello stesso verso.
+ */
+export function straightHiddenRuns(g: GridSpec, segs: RouteSeg[]): Map<number, { pts: { x: number; y: number }[]; end: number }> {
+  const W = latticeWidth(g), half = g.cellW / 2, out = new Map<number, { pts: { x: number; y: number }[]; end: number }>();
+  const info = (sg: RouteSeg) => {
+    if (sg.kind !== 'hidden') return null;
+    const i1 = Math.floor(sg.from / W), i2 = Math.floor(sg.to / W), j1 = sg.from - i1 * W, j2 = sg.to - i2 * W;
+    if (Math.abs(i1 - i2) !== 1 || Math.abs(j1 - j2) !== 1) return null;
+    return { r: Math.min(i1, i2), dir: Math.sign(j2 - j1) };
+  };
+  let i = 0;
+  while (i < segs.length) {
+    const a = info(segs[i]);
+    if (!a) { i++; continue; }
+    let j = i + 1;
+    while (j < segs.length) { const b = info(segs[j]); if (!b || b.r !== a.r || b.dir !== a.dir) break; j++; }
+    if (j - i >= 2) {
+      const r = a.r, ymid = r * rowPitch(g) + g.cellH / 2;
+      const j0 = segs[i].from % W, j1 = segs[j - 1].to % W;
+      const pts = [pointInRow(g, segs[i].from, r)];
+      for (let jj = j0; a.dir > 0 ? jj <= j1 : jj >= j1; jj += a.dir) if (jj % 2 === 1) pts.push({ x: jj * half, y: ymid });
+      pts.push(pointInRow(g, segs[j - 1].to, r));
+      out.set(i, { pts, end: j });
+    }
+    i = j;
+  }
+  return out;
+}
+
 export function colorPolylinesTrim(g: GridSpec, route: ColorRoute, sp: StitchParams): { polylines: { x: number; y: number }[][]; trims: boolean[] } {
   const out: { x: number; y: number }[][] = [];
   const trims: boolean[] = [];
   let cur: { x: number; y: number }[] = [];
   let trimNext = false, curTrim = false;
-  for (const s of route.segs) {
+  const straight = sp.straightHidden ? straightHiddenRuns(g, route.segs) : null;
+  for (let q = 0; q < route.segs.length; q++) {
+    const s = route.segs[q];
+    const run = straight?.get(q);
+    if (run) {
+      // la corsa dritta: dal capo di partenza al centro di ogni V, a metà altezza, al capo d'arrivo
+      if (!cur.length) { curTrim = trimNext; trimNext = false; }
+      const last = cur[cur.length - 1];
+      if (!last || Math.hypot(last.x - run.pts[0].x, last.y - run.pts[0].y) > 1e-9) cur.push(run.pts[0]);
+      for (let k = 1; k < run.pts.length; k++) subdivide(cur, run.pts[k - 1], run.pts[k], sp.travelStitchMm);
+      q = run.end - 1;
+      continue;
+    }
     if (s.kind === 'jump') {
       if (cur.length > 1) { out.push(cur); trims.push(curTrim); }
       cur = [];

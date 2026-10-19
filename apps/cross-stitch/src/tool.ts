@@ -16,7 +16,7 @@ import {
 } from './model';
 import {
   type RouteParams, type RouteResult, type RouteSeg, type SegKind, type StitchParams,
-  DEFAULT_ROUTE, DEFAULT_STITCH, RETRACE_PRESETS, colorPolylines, colorPolylinesTrim, routeCells, type RetracePreset,
+  DEFAULT_ROUTE, DEFAULT_STITCH, RETRACE_PRESETS, colorPolylines, colorPolylinesTrim, routeCells, straightHiddenRuns, type RetracePreset,
 } from './routing';
 import { autoRoles, cellMask, normalizeContours, subMask, type PieceShape, type ShapeRole } from './shape';
 import { entryRows, routeAll, routeModuleBands, stripRanges, type BandRoute, type ModulePath } from './strips';
@@ -349,6 +349,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <span class="rg-field__help" id="h-max">Oltre, la diagonale si spezza</span></label>
           <label class="rg-field"><span class="rg-field__label">Punto dei passaggi</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="travelStitch" type="text" inputmode="decimal"><span>mm</span></span></label>
+          <label class="rg-toggle rg-param-grid__wide">
+            <input type="checkbox" id="straightHidden" aria-describedby="h-straightHidden"><span class="rg-toggle__track"></span><span>Passaggi nascosti dritti (prova)</span>
+          </label>
+          <span class="rg-field__help rg-param-grid__wide" id="h-straightHidden">I passaggi nascosti che corrono lungo una riga, invece dello zig zag sulle gambe delle V che li coprono, diventano una linea dritta a metà altezza, coi punti al centro di ogni V. Cambia solo come sono cuciti, non il percorso</span>
         </div>
       </details>
 
@@ -955,7 +959,16 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         const upTo = byOrder ? Math.min(orderUpTo, orderTotal) : Infinity;
         for (const cr of result.colors) {
           if (st.threads[cr.color]?.hidden) continue;
-          for (const sg of cr.segs) {
+          // i passaggi nascosti dritti (prova): le corse lungo la riga, a metà altezza
+          const straight = st.stitch.straightHidden ? straightHiddenRuns(rg0, cr.segs) : null;
+          for (let qi = 0; qi < cr.segs.length; qi++) {
+            const sg = cr.segs[qi];
+            const run = straight?.get(qi);
+            if (run) {
+              if (kind === 'hidden' && n < upTo) { ctx.moveTo(X(run.pts[0].x + odx), Y(run.pts[0].y + ody)); for (const pt of run.pts.slice(1)) ctx.lineTo(X(pt.x + odx), Y(pt.y + ody)); }
+              qi = run.end - 1;
+              continue;
+            }
             if (sg.kind === 'stitch') { n++; continue; }
             if (n >= upTo) continue;
             const isCut = sg.kind === 'jump' && cutsNow.has(cutKeyOf(sg.from, sg.to));
@@ -1044,14 +1057,15 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
    * come escono nel DST, cioè le diagonali e i passaggi divisi secondo il punto massimo e il punto dei
    * passaggi. Contati una volta per risultato.
    */
-  const stitchCounts = new WeakMap<RouteResult, number>();
+  /** I punti sviluppati, ricontati se cambiano i parametri della macchina (punto massimo, passaggi, passaggi dritti). */
+  const stitchCounts = new WeakMap<RouteResult, { key: string; n: number }>();
   function stitchCount(res: RouteResult): number {
-    let n = stitchCounts.get(res);
-    if (n === undefined) {
-      n = 0;
-      for (const cr of res.colors) for (const pl of colorPolylines(routeGeom.grid, cr, st.stitch)) n += Math.max(0, pl.length - 1);
-      stitchCounts.set(res, n);
-    }
+    const key = JSON.stringify(st.stitch);
+    const c = stitchCounts.get(res);
+    if (c && c.key === key) return c.n;
+    let n = 0;
+    for (const cr of res.colors) for (const pl of colorPolylines(routeGeom.grid, cr, st.stitch)) n += Math.max(0, pl.length - 1);
+    stitchCounts.set(res, { key, n });
     return n;
   }
   /** I numeri dei passaggi nella barra di stato (o che si stanno calcolando). */
@@ -1149,6 +1163,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     num('jumpMm').value = fmtNum(st.route.jumpMm);
     num('maxStitch').value = fmtNum(st.stitch.maxStitchMm);
     num('travelStitch').value = fmtNum(st.stitch.travelStitchMm);
+    $<HTMLInputElement>('straightHidden').checked = st.stitch.straightHidden === true;
     $<HTMLInputElement>('fixedDir').checked = st.route.fixedDirection;
     $<HTMLInputElement>('byBlocks').checked = st.route.blocks !== false;
     $<HTMLInputElement>('baseWhole').checked = st.route.baseWhole !== false;
@@ -1343,6 +1358,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   num('jumpMm').addEventListener('change', () => { st.route.jumpMm = Math.max(0, readNum('jumpMm') || 0); syncFields(); update(); });
   num('maxStitch').addEventListener('change', () => { st.stitch.maxStitchMm = Math.min(12, Math.max(1, readNum('maxStitch') || DEFAULT_STITCH.maxStitchMm)); syncFields(); });
+  $<HTMLInputElement>('straightHidden').addEventListener('change', (e) => { st.stitch.straightHidden = (e.target as HTMLInputElement).checked; syncFields(); draw(); showStatus(); });
   num('travelStitch').addEventListener('change', () => { st.stitch.travelStitchMm = Math.min(12, Math.max(0.5, readNum('travelStitch') || DEFAULT_STITCH.travelStitchMm)); syncFields(); });
   $<HTMLInputElement>('trimJumps').addEventListener('change', (e) => { st.route.trimJumps = (e.target as HTMLInputElement).checked; syncFields(); });
   $<HTMLInputElement>('relocate').addEventListener('change', (e) => { st.route.relocate = (e.target as HTMLInputElement).checked; syncFields(); update(); });
