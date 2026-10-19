@@ -103,6 +103,19 @@ export interface SaccaAppesa {
   passi: number;
 }
 
+/**
+ * Quanto il filo resiste a piegarsi (per ripetizione), dalla morbidezza: una scala ripida, da 0,0005 (morbidezza 100%,
+ * cede del tutto) a 0,1 (0%, il più rigido che la simulazione regge: oltre, i fili «si allungano» del 3%). Prima era
+ * lineare fino a 0,004 e non bastava (Lorenzo, 2026-10-16: «la borsa sta su molto di più perché il filo è più rigido»).
+ * Misurata (2026-10-19, 48 rombi da 15, fondo Ø 200, fondo rigido 60%, cordone al 60%): appoggiata alta 0 mm al 100%,
+ * 28 al 70%, 39 al 30%, 69 a 0%; appesa per i capi scende 520, 505, 475, 445 mm. A riposo la rete è il disco piatto
+ * (Lorenzo: allentando il cordone «torna più o meno un disco piatto: la forma la tiene il cordone»): più il filo è rigido
+ * più la sacca stretta dal cordone sta su. Da tarare su una misura del campione vero.
+ */
+export function rigiditaDelFilo(morbidezza: number): number {
+  return 0.0005 * Math.pow(200, 1 - Math.max(0, Math.min(1, morbidezza)));
+}
+
 /** La rigidità del fondo che viene dal suo passo: giri affiancati (passo = spessore del filo) = rigido. */
 export function rigiditaDalPasso(passoMm: number, filoMm: number): number {
   return Math.max(0, Math.min(1, filoMm / Math.max(0.01, passoMm)));
@@ -136,6 +149,11 @@ export function creaSaccaAppesa(A: Anelli, opz: OpzioniAppesa): SaccaAppesa {
     const col = (j: number) => (j % 2 ? (lato ? k : k - 1) : k);
     const linea = Array.from({ length: n + 1 }, (_, j) => indice(N, j, col(j)));
     for (let j = 1; j < n; j++) if (!opz.cime || j + 1 <= opz.cime[k]) pieghe.push({ a: linea[j - 1], b: linea[j + 1], L: lunghezza(linea[j - 1], linea[j + 1]), k: peso(j, col(j)) });
+    // la torsione: ogni «V» della linea potrebbe girare attorno al tratto fra il nodo prima e quello dopo senza cambiarne
+    // la distanza, e la parete si accartocciava attorcigliando le linee. La distanza su tre tratti la tiene nel piano
+    // (Lorenzo, 2026-10-19: «la borsa sta su molto di più perché il filo è più rigido»; a riposo è il disco piatto,
+    // «la forma la tiene il cordone»)
+    for (let j = 1; j + 2 <= n; j++) if (!opz.cime || j + 2 <= opz.cime[k]) pieghe.push({ a: linea[j - 1], b: linea[j + 2], L: lunghezza(linea[j - 1], linea[j + 2]), k: peso(j, col(j)) });
   }
   // i nodi di un anello non si toccano
   for (let j = 0; j <= n; j++) for (let k = 0; k < N; k++) if (ce(j, k) && ce(j, k + 1)) distanze.push({ a: indice(N, j, k), b: indice(N, j, k + 1), minimo: 2 * Math.max(0.1, opz.filo) });
@@ -160,6 +178,12 @@ export function creaSaccaAppesa(A: Anelli, opz: OpzioniAppesa): SaccaAppesa {
     giri.push(giro);
   }
   for (let k = 0; k < N; k++) filo(indice(N, 0, k), indice(N, 0, k + 1), 'fondo');
+  // l'attacco della parete al fondo: anche lì il filo resiste a piegarsi (le linee escono dal fondo e ci rientrano). Senza,
+  // la parete girava libera sul bordo del fondo come su una cerniera e si sdraiava (2026-10-19)
+  if (giri.length > 1) for (let k = 0; k < N; k++) for (const kk of [k, k - 1]) {
+    const a = giri[1][k], b = indice(N, 1, kk);
+    if (ceIlNodo(opz.cime, N, 1, kk)) pieghe.push({ a, b, L: lunghezza(a, b), k: 1 });
+  }
   const centro = nodo(0, 0, 0), interno = giri[giri.length - 1];
   filo(interno[0], centro, 'fondo');
   for (let k = 1; k < N; k++) if (profonda[k] <= raggi[raggi.length - 1] / 2) filo(interno[k], centro, 'fondo');
@@ -265,7 +289,7 @@ export function appendi(s: SaccaAppesa, A: Anelli): void {
  */
 export function avanza(s: SaccaAppesa, quanti = 1, ripetizioni = 24): void {
   const appoggiata = s.opz.modo === 'appoggiata';
-  const g = 0.05, smorza = 0.94, rigidita = (1 - Math.max(0, Math.min(1, s.opz.morbidezza))) * 0.004;
+  const g = 0.05, smorza = 0.94, rigidita = rigiditaDelFilo(s.opz.morbidezza);
   const sposta = (a: Nodo, b: Nodo, dx: number, dy: number, dz: number, c: number) => {
     const wa = a.fermo ? 0 : 1, wb = b.fermo ? 0 : 1, w = wa + wb; if (!w) return;
     a.x += dx * c * wa / w; a.y += dy * c * wa / w; a.z += dz * c * wa / w;
@@ -282,6 +306,12 @@ export function avanza(s: SaccaAppesa, quanti = 1, ripetizioni = 24): void {
     for (let r = 0; r < ripetizioni; r++) {
       // prima la forma del fondo, poi i fili: così l'ultima parola è dei fili, che non si allungano
       for (const f of s.forme) tieniLaForma(s.nodi, f);
+      // le pieghe prima dei fili: con il filo rigido, se venivano dopo, i fili risultavano allungati oltre il 3%
+      if (rigidita > 0) for (const p of s.pieghe) {
+        const a = s.nodi[p.a], b = s.nodi[p.b];
+        const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z, d = Math.hypot(dx, dy, dz);
+        if (d > 0) sposta(a, b, dx, dy, dz, (d - p.L) / d * Math.min(0.5, rigidita * p.k)); // lo zig-zag non si raddrizza né si chiude del tutto
+      }
       for (const f of s.fili) {
         const a = s.nodi[f.a], b = s.nodi[f.b];
         const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z, d = Math.hypot(dx, dy, dz);
@@ -293,11 +323,6 @@ export function avanza(s: SaccaAppesa, quanti = 1, ripetizioni = 24): void {
         const a = s.nodi[f.a], b = s.nodi[f.b];
         const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z, d = Math.hypot(dx, dy, dz);
         if (d > f.L) sposta(a, b, dx, dy, dz, (d - f.L) / d);
-      }
-      if (rigidita > 0) for (const p of s.pieghe) {
-        const a = s.nodi[p.a], b = s.nodi[p.b];
-        const dx = b.x - a.x, dy = b.y - a.y, dz = b.z - a.z, d = Math.hypot(dx, dy, dz);
-        if (d > 0) sposta(a, b, dx, dy, dz, (d - p.L) / d * Math.min(0.5, rigidita * p.k)); // lo zig-zag non si raddrizza né si chiude del tutto
       }
       for (const a of s.ancore) {
         const q = s.nodi[a.i], p = s.nodi[a.p];

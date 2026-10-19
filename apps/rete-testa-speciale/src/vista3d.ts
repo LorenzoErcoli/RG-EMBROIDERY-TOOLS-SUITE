@@ -14,7 +14,7 @@ export function montaVista3d(box: HTMLElement, dati: DatiVista3d): { distruggi: 
   const rOut = dati.anelli.rho[dati.anelli.rho.length - 1];
   const stato = {
     modo: 'cordone' as ModoAppesa, cordone: true, stretta: 50,
-    bocca: Math.round(2 * dati.anelli.rho[0]), manici: Math.round(rOut), morbidezza: 70,
+    bocca: Math.round(2 * dati.anelli.rho[0]), manici: Math.round(rOut), morbidezza: 30, // (il filo vero è rigido: Lorenzo, 2026-10-16)
     fondo: Math.round(100 * rigiditaDalPasso(dati.passoSpirale, dati.filo)),
   };
   const numero = (id: string, etichetta: string, valore: number, min: number, max: number, passo: number, unita: string, nascosto = false) =>

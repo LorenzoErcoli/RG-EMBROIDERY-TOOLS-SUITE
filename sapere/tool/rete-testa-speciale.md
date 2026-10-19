@@ -157,11 +157,20 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
 - **Gli incroci dell'ovale** si calcolano nodo per nodo (le due linee che passano dal nodo, la media): lente e aggancio
   della regola scelta per ogni nodo, lo spostamento lungo il suo anello. Con «lente uguale» le lenti misurate vanno da
   2,5 a 3,1 mm (sul cerchio 1,9–2,1): la media delle due linee non è esatta dove l'ovale è asimmetrico.
-- **La rigidità del filo nel 3D è troppo bassa** (Lorenzo: *«la borsa sta su molto di più perché il filo è più rigido
-  e resistente»*). Misurato: in piedi alta 14 mm con morbidezza 70%, 20 con 0%. Provati (e tolti): una parete che resiste
-  a uscire dal piano dei vicini (22 mm: la sacca crolla tutta intera a cupola, i rombi la lasciano scendere) e nodi molto
-  più rigidi (0–1 mm: si ripiega piatta sul fondo, perché la «piega» è una distanza e una linea ripiegata del tutto ha la
-  stessa distanza di una dritta). Serve una piegatura ad angolo, tarata su una misura del campione vero. Da fare.
+- **Il filo rigido nel 3D** (Lorenzo: *«la borsa sta su molto di più perché il filo è più rigido e resistente»*; e,
+  chiesto: allentando il cordone *«torna più o meno un disco piatto: la forma la tiene il cordone»* — quindi il riposo è
+  il disco piatto, e la rigidità fa stare su la sacca stretta dal cordone, non le dà una memoria di forma).
+  Prima: in piedi alta 14 mm con morbidezza 70%, 20 con 0%. Provati e tolti: una parete che resiste a uscire dal piano
+  dei vicini (22 mm, crolla a cupola) e nodi molto più rigidi da soli (si sdraiano). Le due vere cause (2026-10-19):
+  1. **la parete era incernierata al fondo**: le pieghe partivano dall'anello 1, e sul bordo del fondo la parete girava
+     libera e si sdraiava → pieghe anche dal primo giro della spirale all'anello 1;
+  2. **le linee si attorcigliavano**: una «V» gira attorno al tratto fra il nodo prima e quello dopo senza cambiarne la
+     distanza → pieghe anche su tre tratti (dal nodo j − 1 al j + 2), che tengono la linea nel suo piano.
+  Poi la morbidezza su una scala ripida (`rigiditaDelFilo`: 0,0005 al 100%, 0,1 a 0%; oltre 0,1 instabile) e le pieghe
+  corrette PRIMA dei fili (dopo, col filo rigido i fili risultavano allungati oltre il 3%). Misurato (48 rombi da 15,
+  fondo Ø 200, fondo rigido 60%, cordone al 60%): appoggiata alta 0 / 28 / 39 / 69 mm con morbidezza 100 / 70 / 30 / 0%;
+  appesa per i capi scende 520 / 505 / 475 / 445, fili entro il 2%. Morbidezza di partenza nella vista: 30%.
+  **Da tarare** su una misura del campione vero (per esempio: col cordone stretto, appoggiata, quanto resta alta).
 - **Da sapere**: nella vista 3D la presa «per la bocca» mette la bocca su un cerchio e «appoggiata» parte da una forma
   stretta in proporzione; la tabella delle bocche (`formaSacca`) è solo per il fondo tondo.
 

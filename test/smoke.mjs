@@ -63,7 +63,7 @@ export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BO
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_PARAMETRI } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm, anelliOvali as rtsAnelliOvali, puntoDelNodo as rtsPuntoDelNodo, cimeDelleColonne as rtsCimeDelleColonne, ceIlNodo as rtsCeIlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
-export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
+export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, avanza as rtsAvanza, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -6497,6 +6497,23 @@ console.log('\nrete-testa-speciale — teste a mezzo cerchio; i lati lunghi che 
   check('anelli dispari (tondo, 40 rombi: 11): la rete finisce sull’anello 10, un filo solo, nessun tratto sul bordo',
     [dispari.anelli.rho.length - 1, dispari.cime[0], dispari.blocchi.length, dispari.blocchi.flat().filter((q) => q.tipo === 'bordo').length], [11, 10, 1, 0]);
   check('in 3D, bocca stretta: ora la pancia la fanno le teste (oltre il triplo dei lati lunghi; misurati 24 e 4 mm)', pancia(0) > 3 * pancia(16), true);
+}
+
+// rete-testa-speciale — IL FILO RIGIDO (Lorenzo, 2026-10-16: «la borsa sta su molto di più perché il filo è più rigido
+// e resistente»; 2026-10-19: allentando il cordone «torna più o meno un disco piatto: la forma la tiene il cordone»).
+// Prima il nodo era quasi una cerniera: la parete girava libera sul bordo del fondo e le linee si attorcigliavano (una
+// «V» gira attorno al tratto fra il nodo prima e quello dopo senza cambiarne la distanza); vuota, appoggiata, crollava
+console.log('\nrete-testa-speciale — il filo rigido: la sacca stretta dal cordone sta su');
+{
+  const A = rg.rtsAnelli({ N: 48, L: 15, r0: 100, amax: 165, campo: 450 });
+  const base = { N: 48, L: 15, giroInCima: false, filo: 1, modo: 'appoggiata', boccaMm: 200, maniciMm: 250, fondoRigido: 0.6, cordone: true, stretta: 0.6, passoSpirale: 5, legature: 10 };
+  const alta = (morbidezza) => { const s = rg.rtsAppesa(A, { ...base, morbidezza }); rg.rtsAssesta(s, 3000); rg.rtsAvanza(s, 1000); return rg.rtsMisureAppesa(s); };
+  const molle = alta(1), rigida = alta(0);
+  check('appoggiata col cordone al 60%: col filo molle si sdraia (sotto 10 mm), col filo rigido sta su (oltre 50; misurati 0 e 69); i fili non si allungano',
+    [molle.profondita < 10, rigida.profondita > 50, rigida.allungamentoMax < 0.03], [true, true, true]);
+  const A24 = rg.rtsAnelli({ N: 24, L: 15, r0: 50, amax: 165, campo: 300 });
+  const s = rg.rtsAppesa(A24, { ...base, N: 24, modo: 'cordone', morbidezza: 0, fondoRigido: 0.2, stretta: 0.8 }); rg.rtsAssesta(s, 4000);
+  check('appesa per i capi col filo più rigido: i fili restano entro il 3% (le pieghe si correggono prima dei fili)', rg.rtsMisureAppesa(s).allungamentoMax < 0.03, true);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).
