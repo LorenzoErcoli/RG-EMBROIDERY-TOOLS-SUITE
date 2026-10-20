@@ -1756,6 +1756,21 @@
           "default": 2,
           "x-id": "bridgeWidth"
         },
+        "daSinistra": {
+          "$ref": "#/$defs/leftToRightOrder",
+          "default": false,
+          "x-id": "leftToRightOrder"
+        },
+        "zone": {
+          "$ref": "#/$defs/stopZones",
+          "default": 1,
+          "x-id": "stopZones"
+        },
+        "zoneVerso": {
+          "$ref": "#/$defs/stopZonesDirection",
+          "default": "verticale",
+          "x-id": "stopZonesDirection"
+        },
         "bucaLaBase": {
           "$ref": "#/$defs/cutBaseUnderSpots",
           "default": false,
@@ -4760,6 +4775,31 @@
       "x-passo": 0.5,
       "x-concetto": "altro"
     },
+    "leftToRightOrder": {
+      "type": "boolean",
+      "title": "Le macchie da sinistra a destra",
+      "description": "L'ordine delle macchie da sinistra a destra, e il raso dentro le macchie da sinistra a destra dove può. Spento: l'ordine coi salti più corti.",
+      "x-concetto": "ordine-cucitura"
+    },
+    "stopZones": {
+      "type": "integer",
+      "title": "Dividi raso e punto sopra in zone",
+      "description": "1 = nessuna divisione. Con 2: base · raso della prima metà · punto sopra della prima metà · raso della seconda · punto sopra della seconda.",
+      "minimum": 1,
+      "maximum": 8,
+      "x-passo": 1,
+      "x-concetto": "ordine-cucitura"
+    },
+    "stopZonesDirection": {
+      "type": "string",
+      "title": "Le zone vanno",
+      "description": "verticale = strisce da sinistra a destra; orizzontale = dall'alto in basso.",
+      "enum": [
+        "verticale",
+        "orizzontale"
+      ],
+      "x-concetto": "ordine-cucitura"
+    },
     "cutBaseUnderSpots": {
       "type": "boolean",
       "title": "Buca la base sotto le macchie",
@@ -5570,6 +5610,9 @@
         "rowHeight",
         "gapCrossMm",
         "buildMode",
+        "leftToRightOrder",
+        "stopZones",
+        "stopZonesDirection",
         "continuousFill"
       ]
     },

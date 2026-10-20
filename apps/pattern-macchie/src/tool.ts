@@ -35,12 +35,8 @@ const SCALE_MODES: Array<[string, string]> = [
   ['viewbox-mm', 'ViewBox = mm'],
 ];
 
-/** I tre stop del DST (Lorenzo: la base, il raso delle macchie, il punto sopra), e i fili dell'anteprima. */
-const STOP = [
-  { chiave: 'base', nome: 'Base', colore: '#8a6d4e' },
-  { chiave: 'raso', nome: 'Raso delle macchie', colore: '#1f1a17' },
-  { chiave: 'sopra', nome: 'Punto sopra le macchie', colore: '#c8952e' },
-] as const;
+/** I colori degli stop: la base, il raso delle macchie, il punto sopra (con le zone, raso e punto sopra si ripetono). */
+const COLORI_STOP = { base: '#8a6d4e', raso: '#1f1a17', sopra: '#c8952e' } as const;
 const FILI = [
   { chiave: 'base', nome: 'Base', colore: '#8a6d4e' },
   { chiave: 'raso', nome: 'Raso', colore: '#1f1a17' },
@@ -49,8 +45,10 @@ const FILI = [
 ] as const;
 type ChiaveFilo = typeof FILI[number]['chiave'];
 
-type Campo = { nome: keyof ParametriMacchie; etichetta: string; unita: string; passo: number; min: number; max?: number; aiuto?: string };
+type Campo = { nome: keyof ParametriMacchie; etichetta: string; unita: string; passo: number; min: number; max?: number; aiuto?: string; scelte?: Array<[string, string]> };
 const CAMPI_RASO: Campo[] = [
+  { nome: 'daSinistra', etichetta: 'Le macchie da sinistra a destra', unita: '', passo: 1, min: 0,
+    aiuto: 'L’ordine delle macchie va da sinistra a destra (vale per il raso e per il punto sopra); dentro ogni macchia il raso va da sinistra a destra dove può. Senza: l’ordine coi salti più corti.' },
   { nome: 'rasoAngolo', etichetta: 'Direzione del raso', unita: '°', passo: 1, min: -180, aiuto: '90 = verticale.' },
   { nome: 'rasoInterlinea', etichetta: 'Interlinea del raso', unita: 'mm', passo: 0.05, min: 0.1 },
   { nome: 'rasoPuntoMax', etichetta: 'Punto massimo del raso', unita: 'mm', passo: 0.5, min: 1 },
@@ -64,6 +62,12 @@ const CAMPI_SOPRA: Campo[] = [
     aiuto: 'Da un pezzo all\'altro sulle linee del punto o nel verso del raso: il filo non si vede. Oltre: salto.' },
   { nome: 'pezzoMinimo', etichetta: 'Togli i pezzi staccati più corti di', unita: 'mm', passo: 0.5, min: 0,
     aiuto: 'I pezzi che non si raggiungono senza salto: se sono corti si tolgono. Il punto sopra non esce mai dalla macchia.' },
+];
+const CAMPI_ZONE: Campo[] = [
+  { nome: 'zone', etichetta: 'Dividi raso e punto sopra in zone', unita: '', passo: 1, min: 1, max: 8,
+    aiuto: '1 = nessuna divisione. Con 2: base · raso della prima metà · punto sopra della prima metà · raso della seconda · punto sopra della seconda.' },
+  { nome: 'zoneVerso', etichetta: 'Le zone vanno', unita: '', passo: 1, min: 0,
+    scelte: [['verticale', 'da sinistra a destra (strisce verticali)'], ['orizzontale', 'dall’alto in basso (strisce orizzontali)']] },
 ];
 const CAMPI_PONTI: Campo[] = [
   { nome: 'ponti', etichetta: 'Unisci le macchie che si seguono e distano meno di', unita: 'mm', passo: 0.5, min: 0,
@@ -146,6 +150,32 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     const grid = document.createElement('div');
     grid.className = 'rg-param-grid';
     for (const f of lista) {
+      if (f.scelte) {
+        const lab = document.createElement('label');
+        lab.className = 'rg-field rg-param-grid__wide';
+        lab.innerHTML = `<span class="rg-field__label">${f.etichetta}</span>`;
+        const sel = document.createElement('select');
+        sel.className = 'rg-select';
+        sel.id = 'f-' + f.nome;
+        for (const [v, l] of f.scelte) { const o = document.createElement('option'); o.value = v; o.textContent = l; o.selected = String(par[f.nome]) === v; sel.appendChild(o); }
+        sel.addEventListener('change', () => { (par as Record<string, unknown>)[f.nome] = sel.value; genera(); });
+        lab.appendChild(sel);
+        grid.appendChild(lab);
+        continue;
+      }
+      if (typeof par[f.nome] === 'boolean') {
+        const lab = document.createElement('label');
+        lab.className = 'rg-choice rg-param-grid__wide';
+        const inp = document.createElement('input');
+        inp.type = 'checkbox';
+        inp.id = 'f-' + f.nome;
+        inp.checked = Boolean(par[f.nome]);
+        inp.addEventListener('change', () => { (par as Record<string, unknown>)[f.nome] = inp.checked; genera(); });
+        lab.append(inp, document.createTextNode(' ' + f.etichetta));
+        grid.appendChild(lab);
+        if (f.aiuto) { const help = document.createElement('small'); help.className = 'rg-field__help rg-param-grid__wide'; help.textContent = f.aiuto; grid.appendChild(help); }
+        continue;
+      }
       const lab = document.createElement('label');
       lab.className = 'rg-field rg-param-grid__wide';
       lab.innerHTML = `<span class="rg-field__label">${f.etichetta}</span>`;
@@ -274,15 +304,12 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     const box = document.createElement('div');
     box.className = 'rg-param-grid';
     const r = risultato;
-    const stop = STOP.map((l, i) => {
-      const v = r?.[l.chiave];
-      return `<p class="rg-field__help rg-param-grid__wide">Stop ${i + 1}<span class="macchie-ink" style="--ink:${l.colore}"></span>${l.nome}`
-        + (v ? ` — ${v.punti.toLocaleString('it-IT')} punti, ${v.salti} salti` : '') + '</p>';
-    }).join('');
+    const stop = elencoStop().map((l, i) => `<p class="rg-field__help rg-param-grid__wide">Stop ${i + 1}<span class="macchie-ink" style="--ink:${l.colore}"></span>${l.nome}`
+      + (l.livello ? ` — ${l.livello.punti.toLocaleString('it-IT')} punti, ${l.livello.salti} salti` : '') + '</p>').join('');
     const descrivi = (v: number[]) => { const f = v.slice().sort((a, b) => a - b); return `${f.length}` + (f.length ? ` (fino a 5 mm ${f.filter((d) => d <= 5).length}, oltre 12 mm ${f.filter((d) => d > 12).length}, il più lungo ${f[f.length - 1].toFixed(1)} mm)` : ''); };
     const dettaglio = r
       ? `<p class="rg-field__help rg-param-grid__wide">Salti fra una macchia e l'altra — raso: ${descrivi(r.saltiFra.raso)}; punto sopra: ${descrivi(r.saltiFra.sopra)}`
-        + ` · dentro le macchie: ${r.saltiDentro}` + (r.ponti ? ` · ponti: ${r.ponti}` : '')
+        + ` · dentro le macchie: raso ${r.passaggiScoperti}, punto sopra ${r.saltiDentro}` + (r.ponti ? ` · ponti: ${r.ponti}` : '')
         + (r.tolto > 0.5 ? ` · punto sopra tolto: ${r.tolto.toFixed(0)} mm` : '') + '</p>'
       : '';
     const caselle = FILI.map((l) => `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-livello="${l.chiave}"${visibili[l.chiave] ? ' checked' : ''}>`
@@ -307,6 +334,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       ['raso', 'Raso delle macchie', campi(CAMPI_RASO)],
       ['sopra', 'Punto sopra le macchie', campi(CAMPI_SOPRA)],
       ['ponti', 'Macchie vicine', campi(CAMPI_PONTI)],
+      ['zone', 'Zone', campi(CAMPI_ZONE)],
       ['programma', 'Programma', livelliGrid()],
     ];
     sezioni.forEach(([chiave, titolo, corpo], k) => {
@@ -359,7 +387,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       }
       const r = risultato;
       const punti = r.base.punti + r.raso.punti + r.sopra.punti;
-      $('status').textContent = `${macchie.length} macchie · 3 stop · salti: raso ${r.raso.salti}, punto sopra ${r.sopra.salti}`
+      $('status').textContent = `${macchie.length} macchie · ${1 + r.stop.length} stop · salti: raso ${r.raso.salti}, punto sopra ${r.sopra.salti}`
         + (r.ponti ? ` · ${r.ponti} ponti` : '') + ` · ${(r.tempoMs / 1000).toFixed(1)} s`;
       $('points').textContent = ` · ${punti.toLocaleString('it-IT')} punti`;
       buildPanel();
@@ -413,10 +441,24 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     if (adatta) pz.fit();
   }
 
-  /** Gli strati da esportare: uno per livello, quindi uno stop ciascuno. */
+  /**
+   * Gli stop, in ordine: la base, poi per ogni zona il raso e il punto sopra. Senza risultato, quelli previsti dai
+   * parametri (per mostrarli nel programma).
+   */
+  function elencoStop(): Array<{ id: string; nome: string; colore: string; livello: RisultatoMacchie['base'] | null }> {
+    const r = risultato;
+    const n = r ? r.zone.filter((z) => z.length).length : Math.max(1, Math.round(par.zone || 1));
+    const zona = (z: number) => (n > 1 ? ` — zona ${z + 1} di ${n}` : '');
+    const out: Array<{ id: string; nome: string; colore: string; livello: RisultatoMacchie['base'] | null }> = [{ id: 'base', nome: 'Base', colore: COLORI_STOP.base, livello: r?.base ?? null }];
+    if (r) for (const st of r.stop) out.push({ id: `${st.tipo}-${st.zona + 1}`, nome: (st.tipo === 'raso' ? 'Raso delle macchie' : 'Punto sopra le macchie') + zona(st.zona), colore: COLORI_STOP[st.tipo], livello: st.livello });
+    else for (let z = 0; z < n; z++) out.push({ id: `raso-${z + 1}`, nome: 'Raso delle macchie' + zona(z), colore: COLORI_STOP.raso, livello: null }, { id: `sopra-${z + 1}`, nome: 'Punto sopra le macchie' + zona(z), colore: COLORI_STOP.sopra, livello: null });
+    return out;
+  }
+
+  /** Gli strati da esportare: uno per stop. */
   function strati(): ExportLayer[] {
     if (!risultato) return [];
-    return STOP.map((l) => ({ id: l.chiave, color: l.colore, polylines: risultato![l.chiave].tratti }));
+    return elencoStop().filter((l) => l.livello && l.livello.tratti.length).map((l) => ({ id: l.id, color: l.colore, polylines: l.livello!.tratti }));
   }
 
   const nomeBase = () => (source?.name.replace(/\.[^.]+$/, '') ?? 'macchie');
@@ -571,7 +613,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     }
     const name = `${nomeBase()}-macchie.dst`;
     const outcome = await saveBinaryFile(bytes, { suggestedName: name, ...DST_FILE });
-    $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${(bytes.length / 1024).toFixed(1)} KB · 3 stop` + notaDisegno;
+    $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${(bytes.length / 1024).toFixed(1)} KB · ${strati().length} stop` + notaDisegno;
   });
 
   buildPanel();
