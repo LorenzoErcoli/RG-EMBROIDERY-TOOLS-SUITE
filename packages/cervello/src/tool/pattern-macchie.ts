@@ -50,6 +50,21 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: 1, passo: 0.5, predefinito: 2, concetto: 'altro',
     },
     {
+      id: 'leftToRightOrder', nome: 'daSinistra', etichetta: 'Le macchie da sinistra a destra',
+      aiuto: 'L\'ordine delle macchie da sinistra a destra, e il raso dentro le macchie da sinistra a destra dove può. Spento: l\'ordine coi salti più corti.',
+      tipo: 'bool', unita: '', predefinito: false, concetto: 'ordine-cucitura',
+    },
+    {
+      id: 'stopZones', nome: 'zone', etichetta: 'Dividi raso e punto sopra in zone',
+      aiuto: '1 = nessuna divisione. Con 2: base · raso della prima metà · punto sopra della prima metà · raso della seconda · punto sopra della seconda.',
+      tipo: 'int', unita: '', min: 1, max: 8, passo: 1, predefinito: 1, concetto: 'ordine-cucitura',
+    },
+    {
+      id: 'stopZonesDirection', nome: 'zoneVerso', etichetta: 'Le zone vanno',
+      aiuto: 'verticale = strisce da sinistra a destra; orizzontale = dall\'alto in basso.',
+      tipo: 'enum', unita: '', opzioni: ['verticale', 'orizzontale'], predefinito: 'verticale', concetto: 'ordine-cucitura',
+    },
+    {
       id: 'cutBaseUnderSpots', nome: 'bucaLaBase', etichetta: 'Buca la base sotto le macchie',
       aiuto: 'Se la base si buca sotto le macchie (fermandosi al margine dentro). Spento: la base resta tutta intera.',
       tipo: 'bool', unita: '', predefinito: false, concetto: 'interruttore',

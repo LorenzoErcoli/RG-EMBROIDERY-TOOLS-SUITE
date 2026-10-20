@@ -24,6 +24,16 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
 5. **Sfrangiare il raso** per non avere bordi netti.
 6. **«Alterare le macchie per farle avvicinare»**, per avere meno rasafilo: i ponti, facoltativi.
 7. **Tre stop**: la base, il raso delle macchie, il punto sopra (*«ho bisogno che le macchie siano divise in 2 stop»*).
+8. (2026-10-09) **Da sinistra a destra**: le macchie e il raso dentro le macchie. **I passaggi sempre sotto il raso**:
+   *«in alcune situazioni ripassa sopra il raso già fatto di una parte della macchia per raggiungere l'altra parte.
+   Questo è un errore.»*
+9. (2026-10-12) **Ingresso e uscita nei punti più vicini alle macchie vicine**, *«lavorando a serpentina e lasciando
+   solo i salti quando è impossibile altrimenti»*. E il da-sinistra-a-destra era una prova: *«conviene lavorare
+   autonomamente sinistra-destra e viceversa (serpentina o qualsiasi altra forma) che permetta alle macchie di
+   muoversi meglio»* — spento di serie.
+10. (2026-10-12) **Dentro una macchia mai un salto**: *«i passaggi della macchia devono avvenire interni alla macchia
+   stessa, e poi essere coperti»*. E **le zone**: base intera, poi raso e punto sopra della prima zona, poi della
+   seconda (*«se voglio che ricami prima la prima metà e poi la seconda metà»*).
 
 ## Come è fatto, e perché
 - **Il punto sopra è la base stessa**, generata una volta e tagliata sulla macchia: a registro al millesimo.
@@ -38,11 +48,29 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
   dentro il ponte, cioè già dentro la macchia dopo. Messi nella macchia dopo, il raso non ci arrivava (83 → 67 salti
   invece di 83 → 17).
 
+- **Passaggi sotto il raso, davvero.** «Lontano dal bordo» non basta: un passaggio che va da una parte all'altra
+  della macchia deve correre dove il raso NON è ancora stato cucito, cioè dove lo coprirà. Due pezzi: il piano
+  (ordine e verso delle celle tali che, finita una, la prossima si raggiunga solo attraverso celle da cucire — una U
+  aperta a destra: un braccio verso la base, la base da sinistra, l'altro braccio) e la griglia «dove il raso
+  coprirà» (le fasce delle righe ancora da fare). Trappole trovate: la fine di una cella e la cella vicina possono
+  stare ai capi opposti della stessa riga (il piano deve guardare il PUNTO dove si finisce, non il lato); a 0,9 mm
+  di tolleranza il piano saltava sopra una riga cucita (0,55: solo la riga accanto); le righe sfrangiate in fuori
+  finiscono fuori dalla macchia, e la loro punta va lasciata percorrere; nelle rientranze la volta fra due righe
+  esce dalla macchia (lì la cella si divide). Dove una strada coperta non c'è: un salto, mai un filo sopra il raso.
+
+- **L'uscita su qualsiasi riga.** L'ingresso era già libero (si arriva sotto il raso); l'uscita no: il raso finiva
+  sull'ultima riga della serpentina, e il salto partiva da lì. La cella si cuce in due — un lato, poi l'altro dal
+  fondo verso la riga più vicina alla macchia dopo — e il passaggio fra le due parti corre dove il raso non c'è
+  ancora. Da 21 salti oltre 12 mm a 1 (che è la distanza vera fra due macchie isolate).
+
 ## Strade scartate
 - Passaggi fra le macchie sulle linee della base (27 salti in tutto): Lorenzo non vuole ricamo fra le macchie.
 - Raso e punto sopra di ogni macchia di seguito (una macchia finita, poi la successiva): Lorenzo vuole due stop.
 - Il pezzo d'uscita del punto sopra tenuto da parte a ogni costo: costringeva a tornare indietro con un salto in più;
   ora, se serve comunque un salto, la riserva cade.
+- Una griglia dei passaggi «a 0,8 mm dal bordo» con una fascia intorno ai capi per uscire dalla riga: chiudeva i
+  colli stretti e lasciava attraversare la riga di prima (13 incroci); sostituita dalla griglia di dove il raso coprirà.
+- Il piano a ricerca cieca con un tetto di passi: su una macchia di 8 parti non trovava l'ordine giusto.
 - Il punto minimo di 1 mm sul punto sopra: tagliava gli angoli fuori dalla macchia; ora 0,5 mm e solo dove la
   scorciatoia resta dentro.
 
