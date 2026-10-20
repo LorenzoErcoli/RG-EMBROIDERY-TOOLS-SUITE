@@ -42,6 +42,11 @@ export interface Tratto {
   strettoCoda?: Stretto;
   /** I punti di ricamo spostati a mano (strumento «Punti»). Valgono finché il cordoncino del tratto non cambia. */
   ritocchi?: Ritocchi;
+  /**
+   * Dove finisce il tratto. Assente = dove comincia (lato A in giù, ritorno su per il centro, lato B in giù, centro in
+   * su: l'ordine del campione). 'altroCapo' = all'altro capo: lato A in giù, lato B in su, centro in giù (niente ritorno).
+   */
+  fine?: 'altroCapo';
   /** Passate per gamba del centro solo per questo tratto (più leggero: 2); assente = quelle del cordoncino. */
   passateCentro?: number;
   /**
@@ -62,7 +67,11 @@ export interface Stretto {
 }
 
 /** Spostamenti a mano: `da` = dove il punto stava nel cordoncino calcolato, `a` = dove l'ha messo Lorenzo. */
-export interface Ritocchi { firma: string; spostati: Array<{ da: Pt; a: Pt }> }
+export interface Ritocchi {
+  firma: string; spostati: Array<{ da: Pt; a: Pt }>;
+  /** I buchi tolti a mano: il filo non ci passa più (le gambe che ci arrivavano spariscono). */
+  tolti?: Pt[];
+}
 
 export interface ParametriMaglia {
   /** Larghezza della V (una colonna), mm. */
@@ -284,7 +293,7 @@ export function righe(sp: Campionatore, par: ParametriMaglia = PARAMETRI_MAGLIA)
  * centro la saltano con un passaggio solo, che resta sotto il tratto sopra. `alContrario` = si comincia dall'altro
  * capo (le punte guardano sempre dalla stessa parte).
  */
-export function cordoncino(sp: Campionatore, colonne: Colonne | ((s: number) => Colonne), par: ParametriMaglia = PARAMETRI_MAGLIA, opz: { tenute?: boolean[]; alContrario?: boolean; senzaLato?: -1 | 1; passateCentro?: number } = {}): Cucitura {
+export function cordoncino(sp: Campionatore, colonne: Colonne | ((s: number) => Colonne), par: ParametriMaglia = PARAMETRI_MAGLIA, opz: { tenute?: boolean[]; alContrario?: boolean; senzaLato?: -1 | 1; passateCentro?: number; altroCapo?: boolean } = {}): Cucitura {
   const COL = par.larghezzaVMm, VH = par.altezzaVMm, HALF = COL / 2, OV = par.rientroMm;
   const PC = Math.max(2, Math.round((opz.passateCentro ?? par.passateCentro) / 2) * 2), PL = Math.max(1, Math.round(par.passateLati));
   const { s: S } = righe(sp, par);
@@ -302,7 +311,9 @@ export function cordoncino(sp: Campionatore, colonne: Colonne | ((s: number) => 
   if (opz.alContrario) ord.reverse();
   if (!ord.length) return { punti: [], tipi: [], righe: n, righeTolte: tolte, puntoMaxMm: 0, colonneRighe: C };
   // il centro va al contrario dei lati; nell'anello intero riparte dalla prima riga e gira all'indietro (come il campione)
-  const ordC = anello ? [ord[0], ...ord.slice(1).reverse()] : ord.slice().reverse();
+  // finire all'altro capo: il lato B torna su e il centro scende (solo con due lati e su un tratto che non gira)
+  const altroCapo = !!opz.altroCapo && !anello && !opz.senzaLato;
+  const ordC = anello ? [ord[0], ...ord.slice(1).reverse()] : altroCapo ? ord.slice() : ord.slice().reverse();
 
   const pt = (s: number, o: number): Pt => { const a = sp.at(s); return [a.x + a.nx * o, a.y + a.ny * o]; };
   const inner = (k: number): number => (C[k] * COL) / 2 - OV, outer = (k: number): number => inner(k) + HALF;
@@ -314,14 +325,15 @@ export function cordoncino(sp: Campionatore, colonne: Colonne | ((s: number) => 
   const legs = (a: Pt, b: Pt, passes: number): void => { go(a); for (let i = 0; i < passes; i++) { out.push(i % 2 ? a : b); tipi.push('lato'); } };
 
   // ---- i lati: sgn +1 = lato della mezza V (centro 1,5), sgn -1 = l'altro ----
-  const side = (sgn: number): void => {
-    for (const k of ord) {
+  const side = (sgn: number, righe: number[] = ord): void => {
+    for (const k of righe) {
       const s = S[k], flip = C[k] === 1.5 && sgn === 1;
       // la gamba parte e torna sempre al suo capo interno (il passaggio resta dentro)
       if (flip) legs(pt(s + VH, sgn * inner(k)), pt(s, sgn * outer(k)), PL); else legs(pt(s, sgn * inner(k)), pt(s + VH, sgn * outer(k)), PL);
     }
   };
   if (opz.senzaLato) side(opz.senzaLato === 1 ? -1 : 1); // un lato solo (il cerchio piccolo senza il lato interno): poi subito il centro
+  else if (altroCapo) { side(-1); side(1, ord.slice().reverse()); } // il passaggio da un lato all'altro resta in fondo, sotto il centro
   else {
     side(-1);
     // ritorno per il centro (sotto il centro che verrà cucito sopra): un punto per riga, sulle punte delle V del centro
@@ -380,12 +392,21 @@ export function firma(punti: Pt[]): string {
  */
 export function applicaRitocchi(c: Cucitura, r: Ritocchi | undefined): { cucitura: Cucitura; persi: boolean } {
   const orig = c.punti, base: Cucitura = { ...c, originali: orig, firma: firma(orig) };
-  if (!r?.spostati.length) return { cucitura: base, persi: false };
+  if (!r?.spostati.length && !r?.tolti?.length) return { cucitura: base, persi: false };
   if (r.firma !== base.firma) return { cucitura: base, persi: true };
-  const punti = orig.map((p): Pt => { const m = r.spostati.find((q) => Math.abs(q.da[0] - p[0]) < 0.005 && Math.abs(q.da[1] - p[1]) < 0.005); return m ? [m.a[0], m.a[1]] : p; });
+  const qui = (a: Pt, p: Pt): boolean => Math.abs(a[0] - p[0]) < 0.005 && Math.abs(a[1] - p[1]) < 0.005;
+  // i buchi tolti: via tutte le volte che il filo ci passava; `originali` resta allineato ai punti che restano
+  let punti: Pt[] = [], originali: Pt[] = [], tipi: TipoPunto[] = [];
+  orig.forEach((p, i) => {
+    if (r.tolti?.some((q) => qui(q, p))) return;
+    const m = r.spostati.find((q) => qui(q.da, p)); const nuovo: Pt = m ? [m.a[0], m.a[1]] : p;
+    const prima = punti.at(-1); if (prima && prima[0] === nuovo[0] && prima[1] === nuovo[1]) return; // due volte lo stesso buco di fila: un punto fermo, via
+    punti.push(nuovo); originali.push(p); tipi.push(c.tipi[i]);
+  });
+  if (!punti.length) { punti = []; originali = []; tipi = []; }
   let puntoMaxMm = 0;
   for (let i = 1; i < punti.length; i++) puntoMaxMm = Math.max(puntoMaxMm, Math.hypot(punti[i][0] - punti[i - 1][0], punti[i][1] - punti[i - 1][1]));
-  return { cucitura: { ...base, punti, puntoMaxMm }, persi: false };
+  return { cucitura: { ...base, punti, tipi, originali, puntoMaxMm }, persi: false };
 }
 
 // ---------------------------------------------------------------- gli incroci
@@ -455,7 +476,7 @@ export function cuci(tratti: Tratto[], par: ParametriMaglia = PARAMETRI_MAGLIA):
       const a = sp.at(0); // da che parte guarda la normale: verso il centro = +1
       if (via) senzaLato = (t.punti[0][0] - a.x) * a.nx + (t.punti[0][1] - a.y) * a.ny > 0 ? 1 : -1;
     }
-    const { cucitura, persi } = applicaRitocchi(cordoncino(sp, colonne, par, { tenute, alContrario: (t.inizio === 'coda') !== indietro, senzaLato, passateCentro: t.passateCentro }), t.ritocchi);
+    const { cucitura, persi } = applicaRitocchi(cordoncino(sp, colonne, par, { tenute, alContrario: (t.inizio === 'coda') !== indietro, senzaLato, passateCentro: t.passateCentro, altroCapo: t.fine === 'altroCapo' }), t.ritocchi);
     if (persi) avvisi.push(`«${t.nome}»: il cordoncino è cambiato, i punti spostati a mano non valgono più (tornano se annulli la modifica).`);
     if (!cucitura.righe) avvisi.push(`«${t.nome}» è più corto di una V (${par.altezzaVMm} mm): non si cuce.`);
     if (cucitura.puntoMaxMm > 12.1) avvisi.push(`«${t.nome}»: un punto di ${cucitura.puntoMaxMm.toFixed(1).replace('.', ',')} mm${t.ritocchi && !persi ? '' : ' (passaggio sotto un incrocio)'} — oltre 12,1 mm il DST lo spezza.`);
@@ -485,7 +506,8 @@ function leggiRitocchi(v: unknown): Ritocchi | undefined {
   if (!o || typeof o.firma !== 'string' || !Array.isArray(o.spostati)) return undefined;
   const spostati = (o.spostati as Array<Record<string, unknown>>).filter((q) => q && isPt(q.da) && isPt(q.a))
     .map((q) => ({ da: [(q.da as Pt)[0], (q.da as Pt)[1]] as Pt, a: [(q.a as Pt)[0], (q.a as Pt)[1]] as Pt }));
-  return spostati.length ? { firma: o.firma, spostati } : undefined;
+  const tolti = Array.isArray(o.tolti) ? (o.tolti as unknown[]).filter(isPt).map((q) => [q[0], q[1]] as Pt) : [];
+  return spostati.length || tolti.length ? { firma: o.firma, spostati, ...(tolti.length ? { tolti } : {}) } : undefined;
 }
 
 /** Rilegge un progetto (dai metadati di un SVG o di un DST usciti da qui); null se non è un progetto punto maglia. */
@@ -514,6 +536,7 @@ export function leggiProgetto(meta: Record<string, unknown> | null): { params: P
       ...(leggiRitocchi(t.ritocchi) ? { ritocchi: leggiRitocchi(t.ritocchi) } : {}),
       ...(isNum(t.passateCentro) ? { passateCentro: t.passateCentro } : {}),
       ...(typeof t.latoInterno === 'boolean' ? { latoInterno: t.latoInterno } : {}),
+      ...(t.fine === 'altroCapo' ? { fine: 'altroCapo' as const } : {}),
     });
   }
   return { params, tratti };

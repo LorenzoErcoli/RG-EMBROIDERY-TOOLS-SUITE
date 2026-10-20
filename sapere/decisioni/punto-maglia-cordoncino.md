@@ -112,3 +112,16 @@ lettera all'altra e di inizio e fine».
 - Nel file il **Margine negli incroci** era −3: la «i» sopra la barra della D non toglieva righe e i cordoncini si
   accavallavano. A 0 l'incrocio è pulito, ma il margine vale per tutti gli incroci: da decidere con Lorenzo se serve
   per tratto.
+
+## Togliere punti, scegliere inizio e fine (2026-10-20, quarta richiesta)
+
+Lorenzo: «posso eliminare dei punti se voglio, e anche decidere inizio e fine». Fatto sul ramo `punto-maglia`.
+
+- **Punti della linea**: «Elimina il punto scelto» (o Canc). **Punti di ricamo**: un buco si toglie (`ritocchi.tolti`)
+  con tutte le passate che ci passano; due punti di fila sullo stesso buco diventano uno (niente punti fermi).
+- **Inizio**: capo o coda (c'era); un tratto chiuso a mano comincia dal punto scelto («Comincia da questo punto»: i
+  punti ruotano); il cerchio dal quadratino.
+- **Fine** (`fine: 'altroCapo'`): l'ordine del campione finisce dove comincia (il centro sale). Per uscire dall'altro
+  capo: **lato A in giù, lato B in su, centro in giù**, senza il ritorno su per il centro; il passaggio da un lato
+  all'altro resta in fondo, sotto il centro. Le gambe sono le stesse, cambia solo l'ordine; ma non è cucito: da provare
+  (se il centro, cucito in giù, copre i lati come quello in su del campione).

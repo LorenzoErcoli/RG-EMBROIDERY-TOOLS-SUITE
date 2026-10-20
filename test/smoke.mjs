@@ -6601,6 +6601,15 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
     [pallino.punti.every((p) => Math.hypot(p[0], p[1]) > 0.7), pallinoPieno.punti.some((p) => Math.hypot(p[0], p[1]) < 0.5), o.punti.some((p) => Math.hypot(p[0], p[1]) < 3.5)], [true, true, true]);
   const leggero = rg.pmgCuci([T('p', [[0, 0], [0, -2.06]], { forma: 'cerchio', passateCentro: 2 })], rg.PMG_PARAMETRI).tratti[0].cucitura;
   check('passate del centro per tratto: 2 alleggeriscono il pallino', leggero.punti.length < pallino.punti.length, true);
+  // 2026-10-20, quarta richiesta: «eliminare dei punti» e «decidere inizio e fine»
+  const finQui = rg.pmgCuci([T('g', [[0, 0], [0, 30]])], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  const finLa = rg.pmgCuci([T('g', [[0, 0], [0, 30]], { fine: 'altroCapo' })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  check('finisce all’altro capo: comincia in cima e finisce in fondo (senza ritorno, meno punti); di serie finisce in cima',
+    [finLa.punti[0][1] < 1, finLa.punti.at(-1)[1] > 25, finQui.punti.at(-1)[1] < 5, finLa.punti.length < finQui.punti.length, finLa.puntoMaxMm <= 12.1], [true, true, true, true, true]);
+  const via = finQui.punti[5];
+  const senza = rg.pmgCuci([T('g', [[0, 0], [0, 30]], { ritocchi: { firma: finQui.firma, spostati: [], tolti: [via] } })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  check('punto di ricamo tolto: il filo non passa più da quel buco, e niente punti fermi',
+    [senza.punti.some((p) => p[0] === via[0] && p[1] === via[1]), senza.punti.every((p, i) => i === 0 || p[0] !== senza.punti[i - 1][0] || p[1] !== senza.punti[i - 1][1]), senza.originali.length === senza.punti.length], [false, true, true]);
   const src = readFileSync(join(root, 'apps/punto-maglia/src/tool.ts'), 'utf8');
   const call = src.indexOf('dstFromExportLayers(');
   check('tool: il DST esce coi parametri, sa rileggerli e accetta un .dst (R27)', [call >= 0 && /metadata:/.test(src.slice(call, call + 600)), /rgProject|progetto\(/.test(src), /readDstMetadata/.test(src), /accept="[^"]*\.dst/.test(src)], [true, true, true, true]);

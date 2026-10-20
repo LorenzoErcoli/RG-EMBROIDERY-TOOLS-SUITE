@@ -129,6 +129,11 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
                 <button type="button" class="rg-segmented__item" data-v="capo" aria-pressed="false">Capo</button>
                 <button type="button" class="rg-segmented__item" data-v="coda" aria-pressed="false">Coda</button>
               </div><span class="rg-field__help">il capo è il primo punto disegnato (quadrato)</span></div>
+            <div class="rg-field" id="rigaFine"><span class="rg-field__label" id="lblFine">Finisce</span>
+              <div class="rg-segmented" role="group" aria-labelledby="lblFine" data-fine>
+                <button type="button" class="rg-segmented__item" data-v="" aria-pressed="false">Dove comincia</button>
+                <button type="button" class="rg-segmented__item" data-v="altroCapo" aria-pressed="false">All’altro capo</button>
+              </div><span class="rg-field__help" id="aiutoFine"></span></div>
             <div class="rg-field" id="rigaMezza" hidden><span class="rg-field__label" id="lblMezza">Mezza colonna</span>
               <div class="rg-segmented" role="group" aria-labelledby="lblMezza" data-campo="mezza">
                 <button type="button" class="rg-segmented__item" data-v="destra" aria-pressed="false">Destra</button>
@@ -141,6 +146,10 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
               <span class="rg-field__help">sulla linea centrale; il quadratino dice dove si comincia</span>
             </label>
             <label class="rg-choice" id="rigaAngolo" hidden><input type="checkbox" id="puntoAngolo"><span>Punto scelto ad angolo</span></label>
+            <div class="rg-cluster" id="rigaPunto" hidden>
+              <button id="eliminaPunto" class="rg-button rg-button--ghost rg-button--small" type="button">Elimina il punto scelto</button>
+              <button id="cominciaQui" class="rg-button rg-button--ghost rg-button--small" type="button">Comincia da questo punto</button>
+            </div>
             <div id="righeStretto">
               ${['Capo', 'Coda'].map((c) => `<div class="rg-field pm-stretto"><span class="rg-field__label" id="lblStretto${c}">Al ${c.toLowerCase()} si stringe a</span>
                 <div class="rg-segmented" role="group" aria-labelledby="lblStretto${c}" data-stretto="${c}">
@@ -165,6 +174,9 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
                 <button type="button" class="rg-segmented__item" data-v="si" aria-pressed="false">Sì</button>
                 <button type="button" class="rg-segmented__item" data-v="no" aria-pressed="false">No</button>
               </div><span class="rg-field__help" id="aiutoInterno"></span></div>
+            <div class="rg-cluster" id="rigaNodo" hidden>
+              <button id="togliNodo" class="rg-button rg-button--ghost rg-button--small" type="button">Togli il punto di ricamo scelto</button>
+            </div>
             <div class="rg-cluster" id="rigaRitocchi" hidden>
               <span class="rg-field__help" id="contaRitocchi"></span>
               <button id="togliRitocchi" class="rg-button rg-button--ghost rg-button--small" type="button">Togli i ritocchi</button>
@@ -285,6 +297,8 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
     impostaSegmented($('strumenti'), m);
     $('aiutoStrumento').textContent = AIUTI[m];
     const cv = $('canvas'); cv.classList.toggle('pm-modo-nuovo', m === 'nuovo' || m === 'cerchio'); cv.classList.toggle('pm-modo-aggiungi', m === 'aggiungi');
+    if (m !== 'punti') selNodo = null;
+    costruisciTrattoSel(); // i bottoni del punto scelto cambiano con lo strumento
     disegna(); // le maniglie fuori da «Nuovo tratto»; i passaggi coi «Punti di ricamo»
   }
   $('strumenti').addEventListener('click', (e) => { const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-modo]'); if (b) impostaModo(b.dataset.modo as Modo); });
@@ -328,6 +342,14 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
     $('rigaRaggio').hidden = !cerchio;
     if (cerchio) ($('raggio') as HTMLInputElement).value = fmt(Math.round(raggioDi(t) * 100) / 100);
     $('rigaAngolo').hidden = !t || cerchio || selPunto < 0;
+    $('rigaPunto').hidden = !t || selPunto < 0 || modo === 'punti';
+    ($('eliminaPunto') as HTMLButtonElement).hidden = !t || cerchio || t.punti.length <= 2;
+    // da dove comincia: un tratto chiuso a mano da qualunque suo punto; il cerchio dal quadratino (trascinalo)
+    ($('cominciaQui') as HTMLButtonElement).hidden = !t || cerchio || !t.chiuso || selPunto <= 0;
+    $('rigaFine').hidden = !t || chiuso;
+    impostaSegmented(root.querySelector<HTMLElement>('[data-fine]')!, t?.fine ?? '');
+    $('aiutoFine').textContent = t?.fine === 'altroCapo' ? 'lato A in giù, lato B in su, centro in giù: niente ritorno, si esce dall’altro capo' : 'come il campione: lato A in giù, ritorno, lato B in giù, centro in su';
+    $('rigaNodo').hidden = !t || modo !== 'punti' || !selNodo;
     ($('puntoAngolo') as HTMLInputElement).checked = !!t?.angoli?.[selPunto];
     // il tratto che si stringe ai capi: solo sui tratti aperti
     $('righeStretto').hidden = !t || chiuso;
@@ -343,9 +365,10 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
       impostaSegmented(root.querySelector<HTMLElement>('[data-interno]')!, t.latoInterno === undefined ? '' : t.latoInterno ? 'si' : 'no');
       $('aiutoInterno').textContent = latoInternoCi(raggioDi(t), t.colonne, par) ? 'automatico: c’è posto, resta' : 'automatico: qui non ci sta (si ammucchierebbe al centro), si toglie';
     }
-    const nr = t?.ritocchi?.spostati.length ?? 0;
+    const nr = (t?.ritocchi?.spostati.length ?? 0) + (t?.ritocchi?.tolti?.length ?? 0);
     $('rigaRitocchi').hidden = !nr;
-    $('contaRitocchi').textContent = nr === 1 ? '1 punto spostato a mano' : `${nr} punti spostati a mano`;
+    const ns = t?.ritocchi?.spostati.length ?? 0, nt = t?.ritocchi?.tolti?.length ?? 0;
+    $('contaRitocchi').textContent = [ns ? `${ns} ${ns === 1 ? 'punto spostato' : 'punti spostati'}` : '', nt ? `${nt} ${nt === 1 ? 'punto tolto' : 'punti tolti'}` : ''].filter(Boolean).join(', ') + ' a mano';
   }
   const raggioDi = (t: Tratto): number => Math.hypot(t.punti[1][0] - t.punti[0][0], t.punti[1][1] - t.punti[0][1]);
   $('listaTratti').addEventListener('click', (e) => {
@@ -370,6 +393,7 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
   });
   $('trattoSel').addEventListener('click', (e) => {
     const b = (e.target as HTMLElement).closest<HTMLButtonElement>('[data-v]'); const t = tratti[sel];
+    if (b && t && b.closest('[data-fine]')) { ricorda(); if (b.dataset.v) t.fine = 'altroCapo'; else delete t.fine; ricalcola(); return; }
     if (b && t && b.closest('[data-passate]')) { ricorda(); if (b.dataset.v) t.passateCentro = Number(b.dataset.v); else delete t.passateCentro; ricalcola(); return; }
     if (b && t && b.closest('[data-interno]')) { ricorda(); if (b.dataset.v) t.latoInterno = b.dataset.v === 'si'; else delete t.latoInterno; ricalcola(); return; }
     const gs = b?.closest<HTMLElement>('[data-stretto]');
@@ -413,7 +437,36 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
     if (!Number.isNaN(v) && v >= 0) { ricorda(); st.mm = v; }
     ricalcola();
   });
-  $('togliRitocchi').addEventListener('click', () => { const t = tratti[sel]; if (!t?.ritocchi) return; ricorda(); delete t.ritocchi; ricalcola(); });
+  $('togliRitocchi').addEventListener('click', () => { const t = tratti[sel]; if (!t?.ritocchi) return; ricorda(); delete t.ritocchi; selNodo = null; ricalcola(); });
+  $('eliminaPunto').addEventListener('click', () => eliminaPunto());
+  $('cominciaQui').addEventListener('click', () => {
+    const t = tratti[sel]; if (!t || !t.chiuso || t.forma === 'cerchio' || selPunto <= 0) return;
+    ricorda();
+    t.punti = [...t.punti.slice(selPunto), ...t.punti.slice(0, selPunto)];
+    if (t.angoli) t.angoli = [...t.angoli.slice(selPunto), ...t.angoli.slice(0, selPunto)];
+    delete t.ritocchi; selPunto = 0; ricalcola();
+  });
+  $('togliNodo').addEventListener('click', () => togliNodo());
+
+  /** Toglie il punto scelto della linea (non il cerchio, e un tratto resta di almeno due punti). */
+  function eliminaPunto(): void {
+    const t = tratti[sel]; if (!t || selPunto < 0) return;
+    if (t.forma === 'cerchio') { $('status').textContent = 'Il cerchio ha il centro e il punto d’inizio: per toglierlo usa il cestino nella lista.'; return; }
+    if (t.punti.length <= 2) { $('status').textContent = 'Un tratto ha almeno due punti: per toglierlo usa il cestino nella lista.'; return; }
+    ricorda(); t.punti.splice(selPunto, 1); t.angoli?.splice(selPunto, 1); selPunto = -1; ricalcola();
+  }
+
+  /** Toglie il punto di ricamo scelto: il filo non passa più da quel buco (tutte le passate). */
+  function togliNodo(): void {
+    const t = tratti[sel], c = risultato?.tratti[sel]?.cucitura;
+    if (!t || !selNodo || !c?.firma) return;
+    ricorda();
+    const r = t.ritocchi?.firma === c.firma ? t.ritocchi : { firma: c.firma, spostati: [] };
+    const da = selNodo;
+    r.spostati = r.spostati.filter((q) => !(Math.abs(q.da[0] - da[0]) < 0.005 && Math.abs(q.da[1] - da[1]) < 0.005));
+    r.tolti = [...(r.tolti ?? []), [da[0], da[1]]];
+    t.ritocchi = r; selNodo = null; ricalcola();
+  }
 
   /** Un punto ad angolo o morbido (l'elenco degli angoli si crea solo quando serve). */
   function cambiaAngolo(t: Tratto, k: number, angolo: boolean): void {
@@ -508,7 +561,8 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
       c?.punti.forEach(([x, y], i) => {
         const k = `${x.toFixed(3)},${y.toFixed(3)}`; if (visti.has(k)) return; visti.add(k);
         const spostato = !!t.ritocchi?.spostati.some((q) => Math.abs(q.a[0] - x) < 0.005 && Math.abs(q.a[1] - y) < 0.005);
-        s += `<circle class="pm-nodo${spostato ? ' is-spostato' : ''}${i === trascinaNodo?.i ? ' is-sel' : ''}" data-hit="nodo:${i}" cx="${x}" cy="${y}" r="${r * 0.55}" />`;
+        const o = c.originali?.[i], scelto = !!(selNodo && o && Math.abs(o[0] - selNodo[0]) < 0.005 && Math.abs(o[1] - selNodo[1]) < 0.005);
+        s += `<circle class="pm-nodo${spostato ? ' is-spostato' : ''}${scelto ? ' is-sel' : ''}" data-hit="nodo:${i}" cx="${x}" cy="${y}" r="${r * (scelto ? 0.8 : 0.55)}" />`;
       });
     } else if (t && modo !== 'nuovo' && modo !== 'cerchio') {
       if (t.forma === 'cerchio' && t.punti.length >= 2) {
@@ -587,6 +641,8 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
   let spazio = false;
   let trascina: { k: number; mosso: boolean; da?: Pt[] } | null = null;
   let trascinaNodo: { i: number; mosso: boolean } | null = null;
+  /** Il punto di ricamo scelto (dove stava nel cordoncino calcolato), per toglierlo. */
+  let selNodo: Pt | null = null;
   window.addEventListener('keydown', (e) => {
     const inCampo = !!(e.target as HTMLElement).closest('input,select,textarea');
     if (e.code === 'Space' && !inCampo && !(e.target as HTMLElement).closest('button')) spazio = true;
@@ -594,6 +650,7 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
     if (e.key === 'Enter' && modo === 'nuovo' && !inCampo) { finisciBozza(); e.preventDefault(); }
     if (e.key === 'Escape') { if (bozza || cerchioBozza) { bozza = null; bozzaAngoli = []; cerchioBozza = null; disegnaSopra(); } else { selPunto = -1; impostaModo('modifica'); costruisciTrattoSel(); } }
     if ((e.key === 'z' || e.key === 'Z') && (e.ctrlKey || e.metaKey) && !inCampo) { annulla(); e.preventDefault(); }
+    if ((e.key === 'Delete' || e.key === 'Backspace') && !inCampo && modo === 'punti' && selNodo) { togliNodo(); e.preventDefault(); return; }
     if ((e.key === 'Delete' || e.key === 'Backspace') && !inCampo && tratti[sel] && selPunto >= 0 && modo !== 'punti') {
       const t = tratti[sel];
       if (t.forma === 'cerchio') $('status').textContent = 'Il cerchio ha il centro e il punto d’inizio: per toglierlo usa il cestino nella lista.';
@@ -683,7 +740,13 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
       } else { $('status').textContent = 'Trascina dal centro fino al raggio (almeno 2 mm).'; disegnaSopra(); }
       return;
     }
-    if (trascinaNodo) { const m = trascinaNodo.mosso; trascinaNodo = null; if (m) ricalcola(); else disegnaSopra(); return; }
+    if (trascinaNodo) {
+      const { i, mosso } = trascinaNodo; trascinaNodo = null;
+      const o = risultato?.tratti[sel]?.cucitura.originali?.[i];
+      selNodo = o ? [o[0], o[1]] : null; // il punto appena preso resta scelto: Canc o il bottone lo tolgono
+      if (mosso) ricalcola(); else { costruisciTrattoSel(); disegnaSopra(); }
+      return;
+    }
     if (!trascina) return;
     const t = trascina; trascina = null;
     if (t.mosso) ricalcola();
