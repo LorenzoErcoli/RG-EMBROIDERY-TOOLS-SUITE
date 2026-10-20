@@ -1842,6 +1842,10 @@ Tutti e sei gli strumenti girano end-to-end nel browser (import → parametri �
 
 ## 3. COSA C'È DA FARE — la lista operativa
 
+> **Dal 2026-10-20 le fasi K e U le porta avanti da sola la chat di conduzione** ([`CONDUZIONE.md`](CONDUZIONE.md)):
+> una voce alla volta, merge e push compresi. A che punto è, e cosa aspetta Lorenzo, sta in
+> [`CONDUZIONE-DIARIO.md`](CONDUZIONE-DIARIO.md).
+>
 > **Come si usa questa lista.** Ogni voce ha un codice (A1, B2, C3…): per far partire un lavoro basta
 > dire *"facciamo il C4"*. È ordinata per **chi deve muoversi**, non per argomento, perché è quello il
 > vero vincolo: **A** = serve Lorenzo col ricamo davanti · **B** = decisioni sul repo/DS, sempre di
