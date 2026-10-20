@@ -1,0 +1,34 @@
+<Project Sdk="Microsoft.NET.Sdk.WindowsDesktop">
+  <!--
+    RG Stilista Link: plugin minimo dentro Stilista 3.3 che fa da porta verso la suite.
+    Compila net48 x86 contro le DLL dell'installazione (come lo Stilista JSON Bridge, da cui
+    viene il codice in bridge/). Uso: scripts/build.ps1 e scripts/install.ps1.
+  -->
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <UseWindowsForms>true</UseWindowsForms>
+    <AssemblyName>StilistaLink</AssemblyName>
+    <RootNamespace>StilistaHostSkeleton</RootNamespace>
+    <LangVersion>latest</LangVersion>
+    <Platforms>x86</Platforms>
+    <PlatformTarget>x86</PlatformTarget>
+    <Prefer32Bit>true</Prefer32Bit>
+    <StilistaInstallDir Condition="'$(StilistaInstallDir)' == ''">C:\GMI\Stilista3.3</StilistaInstallDir>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <Reference Include="Emg2_IO">
+      <HintPath>$(StilistaInstallDir)\bin\Emg2_IO.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GmiGUI">
+      <HintPath>$(StilistaInstallDir)\bin\GmiGUI.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+    <Reference Include="GMICommons">
+      <HintPath>$(StilistaInstallDir)\bin\GMICommons.dll</HintPath>
+      <Private>false</Private>
+    </Reference>
+  </ItemGroup>
+</Project>

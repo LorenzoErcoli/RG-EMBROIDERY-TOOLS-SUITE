@@ -2699,11 +2699,14 @@ console.log('\noblique — routing + orchestratore (2d)');
   // bottone vive nel DOM. L'andata e ritorno dei byte è quella del core, già bloccata da R27.
   {
     const sorgente = readFileSync(join(root, 'apps/pattern-grammar/src/tool.ts'), 'utf8');
-    const salva = sorgente.slice(sorgente.indexOf("$('exportDstBtn')"), sorgente.indexOf('buildPanel();\n  render();\n}'));
+    // il DST si costruisce in un posto solo (2026-10-20): lo usano «Esporta DST» e «Invia a Stilista»
+    const salva = sorgente.slice(sorgente.indexOf('function costruisciDst()'), sorgente.indexOf("$('toStilistaBtn')"));
+    const bottoni = sorgente.slice(sorgente.indexOf("$('toStilistaBtn')"), sorgente.indexOf('buildPanel();\n  render();\n'));
     const riapri = sorgente.slice(sorgente.indexOf('if (isDst) {'), sorgente.indexOf("if (isDst) reader.readAsArrayBuffer(file)"));
     check('il DST del Generatore porta il disegno coi ruoli e la scala, entro un tetto',
       [salva.includes('{ name: boundarySource.name, text: boundarySource.text, scale: { ...scalaImport }, roles: { ...boundaryRoles } }'),
-        salva.includes('MAX_DRAWING_KB'), salva.includes("...(disegno ? { drawing: disegno } : {})")], [true, true, true]);
+        salva.includes('MAX_DRAWING_KB'), salva.includes("...(disegno ? { drawing: disegno } : {})"),
+        bottoni.split('costruisciDst()').length - 1], [true, true, true, 2]);
     check('riaprendo: prima il disegno, poi i ruoli salvati, per ultimi i parametri',
       [riapri.indexOf('reparseBoundary()') > 0, riapri.indexOf('Object.assign(boundaryRoles, disegno.roles') > riapri.indexOf('reparseBoundary()'),
         riapri.indexOf('Object.assign(cfg, NEUTRI, parametri)') > riapri.indexOf('Object.assign(boundaryRoles, disegno.roles')], [true, true, true]);
