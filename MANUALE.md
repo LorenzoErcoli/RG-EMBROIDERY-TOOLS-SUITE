@@ -988,6 +988,39 @@ resta pronto nel pulsante Timbro). **Annulla** toglie l'ultimo pezzo posato. Se 
 si riporta alle stesse misure in mm (la finestra lo dice): il disegno si deforma un po' e va ritoccato. Del pezzo
 si prendono solo i punti: gruppi, blocchi, salti e passaggi ridisegnati no.
 
+## Punto maglia (`punto-maglia`)
+
+**A cosa serve.** Disegni i tratti di un logo a mano — la **linea centrale** di ogni tratto — e il tool li trasforma in un **cordoncino a maglia**: le V girano morbide lungo le curve, come un logo lavorato a maglia (il riferimento è il logo Dior a maglia). Non lavora su una griglia di celle come il Punto croce: ogni tratto segue la sua curva.
+
+**Com'è fatto il cordoncino.** Ogni tratto ha un **centro rialzato** e una **mezza catena per lato**. La V è larga 2,5 mm e alta 3,5 mm, con una riga ogni 2,5 mm. Il disegno si proporziona alla V, non il contrario. Il centro può essere da **1**, **1,5** o **2** colonne di V. Ordine di cucitura: lato A in giù, ritorno su per il centro (poi coperto), lato B in giù, centro dal basso verso l'alto, sopra i lati. Le gambe del centro si cuciono 4 volte e quelle dei lati 2. **Ogni gamba e ogni passaggio è un punto solo**: nelle curve le gambe si allungano o si accorciano, ma non si spezzano mai.
+
+**Come si usa.**
+1. **Immagine di riferimento** — carica la foto o il disegno da ricalcare e scrivi la sua **Larghezza** vera in mm. L'**Opacità** la schiarisce sotto il disegno, **Mostra** la nasconde e **Togli** la toglie.
+2. **Disegno** — scegli lo strumento:
+   - **Nuovo tratto**: fai clic per mettere i punti della linea centrale. La curva passa morbida per tutti i punti. **Invio** o doppio clic finisce il tratto, **Esc** lo annulla.
+   - **Modifica**: trascina un punto per spostarlo, fai clic su un tratto per sceglierlo. **Canc** toglie il punto scelto. Per spostare la vista trascina lo sfondo, oppure tieni **Spazio** mentre trascini.
+   - **Aggiungi punto**: fai clic vicino al tratto scelto e il punto si aggiunge dove passa la curva.
+   - **Cerchio**: premi sul centro e trascina fino al raggio. Il cerchio è preciso, non disegnato a mano. Il punto dove lasci il mouse (quadratino) è dove comincia la cucitura. Il raggio si corregge dal campo **Raggio del cerchio**; trascinando la croce al centro si sposta tutto il cerchio.
+   - **Punti nuovi: Morbidi / Ad angolo**: come in Illustrator, un punto morbido fa passare la curva, un punto ad angolo fa uno spigolo, e fra due punti ad angolo la linea è dritta. **Alt+clic** mette l'altro tipo. Su un punto già messo, **Alt+clic** o doppio clic lo cambia, oppure c'è la casella **Punto scelto ad angolo**. Il punto ad angolo si vede come un rombo.
+   - **Punti di ricamo**: fa vedere i punti di ricamo del tratto scelto, uno per buco. Trascinandone uno lo sposti a mano: tutte le passate che passano da quel buco si spostano insieme. I punti spostati diventano rossi. Valgono finché il cordoncino del tratto non cambia: se sposti la linea o cambi un parametro, il tool avvisa che i ritocchi non valgono più (con **Annulla** tornano). **Togli i ritocchi** li cancella.
+   - **Annulla** (o Ctrl+Z) torna indietro di un passo. **Esempio** carica una «D», una «o» a cerchio, una «i» che si stringe ai capi e una «z» ad angoli.
+3. **Tratti** — la lista è anche l'**ordine di cucitura**. Un tratto più in basso nella lista si cuce dopo e **sta sopra** negli incroci: al tratto sotto si tolgono le **righe intere** di V dove passa quello sopra, e il filo salta il buco con un passaggio solo, coperto dal tratto sopra. Con le frecce cambi l'ordine. Per il tratto scelto decidi:
+   - **Centro**: 1, 1,5 o 2 colonne.
+   - **Punte delle V**: avanti = verso l'ultimo punto disegnato.
+   - **Si comincia da**: il capo (il primo punto, disegnato col quadratino) o la coda.
+   - **Mezza colonna**: solo col centro 1,5, da che parte stanno le mezze V.
+   - **Tratto chiuso**: per un anello disegnato a mano.
+   - **Al capo / Alla coda si stringe a**: il tratto si assottiglia verso il capo o la coda, fino a 1, 1,5 o 2 colonne. Nel campo mm scrivi a che distanza dal capo comincia a stringersi. Passa a mezza colonna per volta, in tratti uguali: per esempio, da 2 a 1 su 10 mm fa 5 mm a 1,5 e gli ultimi 5 a 1. **No** = non si stringe. **Secco** salta i passi: negli ultimi mm il tratto è tutto alla nuova larghezza (per esempio la «i» che finisce con una base da 2).
+   - **Passate del centro**: 2 alleggerisce un pezzo piccolo, 4 è quella del campione.
+   - **Lato verso il centro** (solo cerchi): nei cerchi piccoli la mezza catena dalla parte del centro non ci sta, e in automatico si toglie. Puoi anche tenerla o toglierla tu.
+4. **Cordoncino** — le misure della V, il passo, il rientro dei lati sotto il centro, le passate (quelle del centro sono sempre pari) e il **Margine negli incroci**.
+
+**Che cosa vedi.** Con **Schema a colori** i lati sono in ocra e il centro in blu; spento, il filo è tutto di un colore. **Mostra l’ordine** fa vedere come si cuce l'oggetto. Il cerchio verde col numero è dove comincia ogni tratto, il quadratino dove finisce. Il tratteggio verde è il salto, col taglio, al tratto successivo. «inizio» e «fine» segnano il primo e l'ultimo punto di tutto il ricamo. Fra una lettera e l'altra il filo si taglia sempre: i tratti non sono collegati. Nei tratti con i punti ad angolo, ogni pezzo dritto ha le sue V: nessuna V sta a cavallo di uno spigolo. **Mostra i passaggi** aggiunge in rosso i passaggi fra una gamba e l'altra. **Mostra le linee** fa vedere le linee centrali; quella del tratto scelto si vede sempre. Nella lista, accanto a ogni tratto, ci sono i suoi punti e quante righe ha perso sotto gli incroci; in basso c'è il totale dei punti. Se un tratto è più corto di una V, o se un passaggio sotto un incrocio supera i 12,1 mm (oltre quella misura il DST lo spezzerebbe), il tool lo segnala in basso.
+
+**Esportazione.** Il **DST** usa un ago solo: un tratto dopo l'altro nell'ordine della lista, con un taglio fra un tratto e il successivo. L'**SVG** contiene il filo e le linee centrali. Tutti e due si riaprono con **Apri progetto…**, che rimette tratti e parametri. L'immagine di riferimento non viene salvata nel file: va ricaricata.
+
+---
+
 ## Se qualcosa non torna
 
 - **"Non vedo niente in anteprima."** Controlla di aver assegnato i **ruoli** ai colori (spesso manca l'area da riempire), e prova **Adatta**.

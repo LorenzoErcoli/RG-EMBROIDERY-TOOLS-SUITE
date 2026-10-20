@@ -40,6 +40,7 @@ export { leggiRaso } from ${JSON.stringify(posix('apps/sfrangiatura/src/rasi.ts'
 export { sfrangia } from ${JSON.stringify(posix('apps/sfrangiatura/src/frange.ts'))};
 export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('apps/pittorico/src/primitives.ts'))};
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
+export { lineaTratto as pmgLinea, cordoncino as pmgCordoncino, cuci as pmgCuci, strati as pmgStrati, progetto as pmgProgetto, leggiProgetto as pmgLeggiProgetto, PARAMETRI_MAGLIA as PMG_PARAMETRI } from ${JSON.stringify(posix('apps/punto-maglia/src/motore.ts'))};
 export { costruisci as rzCostruisci, pezzoDa as rzPezzoDa, rettangolo as rzRettangolo, stratiDaRisultato as rzStrati, stratiPerDst as rzStratiPerDst, progetto as rzProgetto, leggiProgetto as rzLeggiProgetto, daDiPassaggio as rzDaDiPassaggio, PARAMETRI_RAZZA as RZ_PARAMETRI } from ${JSON.stringify(posix('apps/razza/src/motore.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 export { routeCells as csRouteCells, colorPolylines as csColorPolylines, colorPolylinesTrim as csColorPolylinesTrim, DEFAULT_ROUTE as CS_DEFAULT_ROUTE, RETRACE_PRESETS as CS_RETRACE_PRESETS } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
@@ -6514,6 +6515,95 @@ console.log('\nrete-testa-speciale — il filo rigido: la sacca stretta dal cord
   const A24 = rg.rtsAnelli({ N: 24, L: 15, r0: 50, amax: 165, campo: 300 });
   const s = rg.rtsAppesa(A24, { ...base, N: 24, modo: 'cordone', morbidezza: 0, fondoRigido: 0.2, stretta: 0.8 }); rg.rtsAssesta(s, 4000);
   check('appesa per i capi col filo più rigido: i fili restano entro il 3% (le pieghe si correggono prima dei fili)', rg.rtsMisureAppesa(s).allungamentoMax < 0.03, true);
+}
+
+// punto-maglia — il cordoncino a maglia (Lorenzo, 2026-10-19/20: sapere/decisioni/punto-maglia-cordoncino.md).
+// Il motore è l'algoritmo del campione cucito portato su curve qualsiasi: sugli stessi tracciati (dritti e cerchi) deve
+// dare GLI STESSI PUNTI del campione (fixture rigenerata da .lab/dior/campione.ts). Poi le regole di Lorenzo: le gambe
+// e i passaggi mai spezzati (un punto solo, sotto i 12,1 mm del DST), le passate pari del centro, l'ordine lati →
+// centro, le righe intere tolte al tratto sotto negli incroci, il progetto che si riapre dal DST (R27).
+console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gli incroci');
+{
+  const camp = JSON.parse(readFileSync(join(root, 'apps/punto-maglia/fixtures/campione-4.json'), 'utf8'));
+  const dritto = (x, y0, len) => ({ L: len, chiuso: false, at: (s) => ({ x, y: y0 + s, nx: -1, ny: 0 }) });
+  const anello = (cx, cy, r) => ({ L: 2 * Math.PI * r, chiuso: true, at: (s) => { const t = -Math.PI / 2 + s / r; const tx = -Math.sin(t), ty = Math.cos(t); return { x: cx + r * Math.cos(t), y: cy + r * Math.sin(t), nx: -ty, ny: tx }; } });
+  const miei = [rg.pmgCordoncino(dritto(0, 0, 40), 1), rg.pmgCordoncino(dritto(12, 0, 40), 1.5), rg.pmgCordoncino(dritto(25, 0, 40), 2), rg.pmgCordoncino(anello(48, 20, 9), 1), rg.pmgCordoncino(anello(78, 20, 11), 2)];
+  miei.forEach((m, i) => {
+    const r = camp[i].pts; let d = 0; for (let k = 0; k < r.length; k++) d = Math.max(d, Math.hypot(r[k][0] - m.punti[k][0], r[k][1] - m.punti[k][1]));
+    check(`campione «${camp[i].name}»: stessi ${r.length} punti del DST cucito`, [m.punti.length, d < 1e-9], [r.length, true]);
+  });
+  // dritto, centro 1: le gambe del centro 4 volte (pari: si torna sulla punta), quelle dei lati 2; prima i lati, poi il centro
+  const c1 = miei[0];
+  const lati = c1.punti.findIndex((p, i) => i > 0 && c1.tipi[i] === 'passaggio' && Math.abs(p[0]) < 1e-9 && i > c1.punti.length / 2);
+  check('centro 1: il centro (sull’asse) comincia dopo i due lati', lati > 0 && c1.punti.slice(lati).every((p) => Math.abs(p[0]) <= 1.25 + 1e-9), true);
+  const conta = new Map();
+  for (let i = 1; i < c1.punti.length; i++) if (c1.tipi[i] !== 'passaggio') { const a = c1.punti[i - 1], b = c1.punti[i]; const k = [a, b].map((p) => p.map((v) => v.toFixed(3)).join(',')).sort().join('|'); conta.set(k, (conta.get(k) ?? 0) + 1); }
+  check('centro 1: ogni gamba del centro 4 passate, ogni gamba dei lati 2', [...new Set([...conta.values()])].sort(), [2, 4]);
+
+  // la «D» di prova: la gamba (centro 2) sotto, l'arco (centro 1,5) che le passa sopra in cima e in fondo, e un anello
+  const T = (nome, punti, o = {}) => ({ nome, punti, chiuso: false, colonne: 1, versoV: 'avanti', inizio: 'capo', mezza: 'destra', ...o });
+  const D = [T('gamba', [[20, 5], [20, 45], [20, 85]], { colonne: 2 }), T('arco', [[5, 12], [45, 12], [75, 45], [45, 80], [5, 80]], { colonne: 1.5 }), T('o', [[100, 50], [110, 60], [100, 70], [90, 60]], { chiuso: true })];
+  const r = rg.pmgCuci(D, rg.PMG_PARAMETRI);
+  const lung = (t, tipo) => { const c = t.cucitura, v = []; for (let i = 1; i < c.punti.length; i++) if (tipo === 'passaggio' ? c.tipi[i] === tipo : c.tipi[i] !== 'passaggio') v.push(Math.hypot(c.punti[i][0] - c.punti[i - 1][0], c.punti[i][1] - c.punti[i - 1][1])); return v; };
+  check('D: la gamba perde le righe sotto l’arco (misurate 4), l’arco e l’anello nessuna', r.tratti.map((t) => t.cucitura.righeTolte), [4, 0, 0]);
+  check('D: mai spezzare — ogni gamba di V fra 2,4 e 4,8 mm (misurate 2,45–4,72), ogni passaggio sotto i 12,1 (misurato 7,5)',
+    r.tratti.every((t) => lung(t, 'gamba').every((d) => d >= 2.4 && d <= 4.8) && lung(t, 'passaggio').every((d) => d <= 12.1)), true);
+  check('D: nessun avviso', r.avvisi, []);
+  check('i lati ci sono: ogni tratto ha gambe del centro e gambe dei lati', r.tratti.map((t) => [t.cucitura.tipi.includes('gamba'), t.cucitura.tipi.includes('lato')]), [[true, true], [true, true], [true, true]]);
+  // si comincia dall'altro capo: stesso numero di punti, primo punto dalla parte opposta
+  const coda = rg.pmgCuci([T('g', [[0, 0], [0, 40]], { inizio: 'coda' })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  const capo = rg.pmgCuci([T('g', [[0, 0], [0, 40]])], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  check('inizio dalla coda: stessi punti, si parte dall’altro capo', [coda.punti.length === capo.punti.length, coda.punti[0][1] > 30, capo.punti[0][1] < 10], [true, true, true]);
+  check('un tratto più corto di una V non si cuce e lo dice', rg.pmgCuci([T('corto', [[0, 0], [0, 2]])], rg.PMG_PARAMETRI).avvisi.length, 1);
+
+  // il DST: un ago, un taglio per tratto, tutti i punti; il progetto torna (R27)
+  const strati = rg.pmgStrati(r);
+  const dst = rg.dstFromExportLayers(strati, { label: 'MAGLIA', metadata: rg.pmgProgetto(rg.PMG_PARAMETRI, D) });
+  const letto = rg.readDst(dst);
+  check('DST: tre blocchi (un tratto ciascuno), tutti i punti', [letto.blocks.length, letto.blocks.reduce((n, b) => n + b.points_mm.length, 0)], [3, r.punti]);
+  const torna = rg.pmgLeggiProgetto(rg.readDstMetadata(dst));
+  check('DST: il progetto torna coi suoi tratti', [torna?.tratti.length, torna?.tratti[1].colonne, torna?.tratti[2].chiuso, torna?.params.passateCentro], [3, 1.5, true, 4]);
+  check('un file di un altro tool non viene preso per un progetto punto maglia', rg.pmgLeggiProgetto({ rgProject: 'razza', params: {} }), null);
+  // 2026-10-20, seconda richiesta di Lorenzo: forme precise, tratti che si stringono, linee spezzate, ritocchi a mano
+  camp.slice(3).forEach((c, j) => {
+    const [cx, r, col] = [[48, 9, 1], [78, 11, 2]][j];
+    const m = rg.pmgCuci([T('c', [[cx, 20], [cx, 20 - r]], { forma: 'cerchio', colonne: col })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+    let d = 0; for (let k = 0; k < c.pts.length; k++) d = Math.max(d, Math.hypot(c.pts[k][0] - m.punti[k][0], c.pts[k][1] - m.punti[k][1]));
+    check(`cerchio preciso r ${r}: gli stessi ${c.pts.length} punti del «${c.name}» del campione (entro 0,01 mm; misurato 0,0001)`, [m.punti.length, d < 0.01], [c.pts.length, true]);
+  });
+  const stretto = rg.pmgCuci([T('i', [[0, 0], [0, 60]], { colonne: 2, strettoCapo: { colonne: 1, mm: 10 }, strettoCoda: { colonne: 1.5, mm: 6 } })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  check('si stringe: centro 2, al capo 1 negli ultimi 10 mm (passando da 1,5), alla coda 1,5 negli ultimi 6',
+    stretto.colonneRighe.join(' '), '1 1 1.5 1.5 ' + Array(17).fill(2).join(' ') + ' 1.5 1.5');
+  check('...e nessun punto spezzato o oltre il DST (misurato 6,0 mm al cambio)', stretto.puntoMaxMm <= 12.1, true);
+  const z = rg.pmgLinea(T('z', [[0, 0], [20, 0], [20, 20], [40, 20]], { angoli: [false, true, true, false] }));
+  check('punti ad angolo: fra due angoli la linea è dritta (a metà del secondo pezzo x = 20)', z.filter((p) => p[1] > 1 && p[1] < 19).every((p) => Math.abs(p[0] - 20) < 1e-9), true);
+  const base = rg.pmgCuci([T('g', [[0, 0], [0, 30]])], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  const da = base.punti[5], volte = base.punti.filter((p) => p[0] === da[0] && p[1] === da[1]).length;
+  const rit = rg.pmgCuci([T('g', [[0, 0], [0, 30]], { ritocchi: { firma: base.firma, spostati: [{ da, a: [da[0] + 0.5, da[1]] }] } })], rg.PMG_PARAMETRI);
+  check('ritocco a mano: il punto si sposta tutte le volte che il filo ci passa, gli altri no',
+    [rit.tratti[0].cucitura.punti.filter((p) => p[0] === da[0] + 0.5 && p[1] === da[1]).length, rit.tratti[0].cucitura.punti.filter((p, i) => (p[0] !== base.punti[i][0] || p[1] !== base.punti[i][1]) && !(p[0] === da[0] + 0.5 && p[1] === da[1])).length], [volte, 0]);
+  const perso = rg.pmgCuci([T('g', [[0, 0], [0, 35]], { ritocchi: { firma: base.firma, spostati: [{ da, a: [9, 9] }] } })], rg.PMG_PARAMETRI);
+  check('se il cordoncino cambia, i ritocchi non valgono e il tool lo dice', [perso.avvisi.length, perso.tratti[0].cucitura.punti.some((p) => p[0] === 9)], [1, false]);
+  const conTutto = [T('o', [[0, 0], [0, -9]], { forma: 'cerchio' }), T('z', [[0, 0], [20, 0], [20, 20]], { angoli: [false, true, false], strettoCapo: { colonne: 1.5, mm: 5 }, ritocchi: { firma: 'x', spostati: [{ da: [1, 1], a: [2, 2] }] } })];
+  const torna2 = rg.pmgLeggiProgetto(rg.readDstMetadata(rg.dstFromExportLayers(rg.pmgStrati(rg.pmgCuci(conTutto, rg.PMG_PARAMETRI)), { metadata: rg.pmgProgetto(rg.PMG_PARAMETRI, conTutto) })));
+  check('DST: tornano cerchio, angoli, stretto e ritocchi', [torna2.tratti[0].forma, torna2.tratti[1].angoli, torna2.tratti[1].strettoCapo, torna2.tratti[1].ritocchi.spostati.length], ['cerchio', [false, true, false], { colonne: 1.5, mm: 5 }, 1]);
+  // 2026-10-20, terza richiesta (il Dior disegnato da Lorenzo): «passasse secco da 1 a 2», la stanghetta «più pulita»,
+  // il pallino «alleggerito»
+  const secco = rg.pmgCuci([T('i', [[0, 0], [0, 30]], { strettoCoda: { colonne: 2, mm: 12, secco: true } })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  check('stretto secco: da 1 a 2 senza la riga a 1,5', [secco.colonneRighe.includes(1.5), secco.colonneRighe.filter((c) => c === 2).length >= 4], [false, true]);
+  const unci = rg.pmgCuci([T('i', [[0, 0], [5, -5], [5, 25]], { angoli: [false, true, false] })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  check('punti ad angolo: nessuna V a cavallo dello spigolo (le gambe dei due pezzi restano fra 3,4 e 3,8 mm)',
+    lung({ cucitura: unci }, 'gamba').every((d) => d >= 3.4 && d <= 3.8), true);
+  const pallino = rg.pmgCuci([T('p', [[0, 0], [0, -2.06]], { forma: 'cerchio' })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  const pallinoPieno = rg.pmgCuci([T('p', [[0, 0], [0, -2.06]], { forma: 'cerchio', latoInterno: true })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  const o = rg.pmgCuci([T('o', [[0, 0], [0, -5.3]], { forma: 'cerchio' })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  check('cerchio piccolo (r 2): senza il lato verso il centro nessun punto passa a meno di 0,7 mm dal centro (le V del centro arrivano a 0,8); la «o» (r 5,3) lo tiene',
+    [pallino.punti.every((p) => Math.hypot(p[0], p[1]) > 0.7), pallinoPieno.punti.some((p) => Math.hypot(p[0], p[1]) < 0.5), o.punti.some((p) => Math.hypot(p[0], p[1]) < 3.5)], [true, true, true]);
+  const leggero = rg.pmgCuci([T('p', [[0, 0], [0, -2.06]], { forma: 'cerchio', passateCentro: 2 })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  check('passate del centro per tratto: 2 alleggeriscono il pallino', leggero.punti.length < pallino.punti.length, true);
+  const src = readFileSync(join(root, 'apps/punto-maglia/src/tool.ts'), 'utf8');
+  const call = src.indexOf('dstFromExportLayers(');
+  check('tool: il DST esce coi parametri, sa rileggerli e accetta un .dst (R27)', [call >= 0 && /metadata:/.test(src.slice(call, call + 600)), /rgProject|progetto\(/.test(src), /readDstMetadata/.test(src), /accept="[^"]*\.dst/.test(src)], [true, true, true, true]);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).

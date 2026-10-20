@@ -25,6 +25,7 @@ import { scheda as razza } from './tool/razza';
 import { scheda as patternMacchie } from './tool/pattern-macchie';
 import { scheda as pittorico } from './tool/pittorico';
 import { scheda as reteTestaSpeciale } from './tool/rete-testa-speciale';
+import { scheda as puntoMaglia } from './tool/punto-maglia';
 
 /** Le schede dei tool, nell'ordine della suite (`TOOLS` in `packages/ui/src/tools.ts`). */
 export const SCHEDE: Record<string, SchedaParametri> = {
@@ -44,6 +45,7 @@ export const SCHEDE: Record<string, SchedaParametri> = {
   'pattern-macchie': patternMacchie,
   pittorico,
   'rete-testa-speciale': reteTestaSpeciale,
+  'punto-maglia': puntoMaglia,
 };
 
 export const ORDINE_TOOL = Object.keys(SCHEDE);
