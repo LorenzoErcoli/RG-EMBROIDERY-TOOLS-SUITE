@@ -12,7 +12,7 @@
 // Nato nel Pettine, qui in @rg/ui dal 2026-09-17: lo vuole anche Cannage rafia (Lorenzo: «mi inserisci la
 // simulazione nel pattern cannage?») e le app non si importano fra loro. `origine` e' l'angolo in alto a
 // sinistra del riquadro nelle coordinate del DST: il Pettine lo scrive da 0, l'export della suite lo centra.
-import { readDst } from '@rg/core';
+import { readDst, dstFromExportLayers, filiDaStrati, type ExportLayer } from '@rg/core';
 import './simulatore.css';
 
 export interface Simulatore {
@@ -163,4 +163,83 @@ export function montaSimulatore(
   slVel.addEventListener('input', () => { q('#simVelTxt').textContent = `${velocita()} punti/s`; });
   aggiorna();
   return { distruggi: () => { ferma(); controlli.innerHTML = ''; } };
+}
+
+// ---------------------------------------------------------------------------------------------------------
+// Il collegamento comune (U3): il bottone «Simula» di ogni tool
+// ---------------------------------------------------------------------------------------------------------
+
+/** Quello che serve a `montaSimulatore` per cucire un ricamo sullo schermo. */
+export interface DatiSimulazione {
+  dst: Uint8Array;
+  /** Il colore di ogni ago, in ordine (l'ago 1 è il primo). */
+  colori: string[];
+  larghezzaMm: number;
+  altezzaMm: number;
+  /** L'angolo in alto a sinistra del riquadro, nelle coordinate del DST. Default: lo zero. */
+  origine?: { x: number; y: number };
+}
+
+/**
+ * I dati della simulazione dagli strati che un tool esporta: lo stesso DST di «Esporta DST» (centrato sullo zero, come
+ * lo scrive la suite), con 5 mm di margine attorno. Ritorna null se non c'è niente da cucire.
+ */
+export function datiDaStrati(strati: ExportLayer[], opz: { label?: string; metadata?: Record<string, unknown> } = {}): DatiSimulazione | null {
+  const colori = filiDaStrati(strati).map((f) => f.colore);
+  if (!colori.length) return null;
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  // il riquadro è quello di ciò che si cuce: le forme di sola vista non sono nel DST
+  for (const l of strati) if (!l.shapeOnly) for (const pl of l.polylines) for (const p of pl) {
+    x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y);
+  }
+  if (!Number.isFinite(x0)) return null;
+  const margine = 5, w = x1 - x0 + 2 * margine, h = y1 - y0 + 2 * margine;
+  const dst = dstFromExportLayers(strati, { label: (opz.label ?? 'SIMULA').toUpperCase().slice(0, 16), ...(opz.metadata ? { metadata: opz.metadata } : {}) });
+  return { dst, colori, larghezzaMm: w, altezzaMm: h, origine: { x: -w / 2, y: -h / 2 } };
+}
+
+export interface OpzioniCollegaSimula {
+  pulsante: HTMLButtonElement;
+  /** Dove si cuce: il `#layer` della tela. */
+  host: HTMLElement;
+  /** Dove stanno i controlli (`#simControlli`, sotto la tela). */
+  controlli: HTMLElement;
+  stato: (s: string) => void;
+  /** Il ricamo di adesso, o null se non c'è ancora (può essere asincrono: il tool può generarlo al momento). */
+  dati: () => DatiSimulazione | null | Promise<DatiSimulazione | null>;
+  /** Cosa rimettere sulla tela quando si smette di simulare: il tool ridisegna la sua vista. */
+  ripristina: () => void;
+  /** Il messaggio quando non c'è niente da simulare. */
+  senzaDati?: string;
+}
+
+/**
+ * Collega il bottone «Simula»: un clic cuce il ricamo di adesso sullo schermo al posto della vista, un secondo clic
+ * rimette la vista. Il tool chiama `ferma()` quando ridisegna la tela per un'altra ragione (un parametro cambiato, un
+ * nuovo calcolo): la simulazione che mostra un ricamo vecchio si spegne, non resta a metà.
+ */
+export function collegaSimula(o: OpzioniCollegaSimula): { ferma(): void; attiva(): boolean } {
+  let sim: Simulatore | null = null;
+  let acceso = false;
+  let giro = 0;
+  const spegni = (): void => {
+    sim?.distruggi(); sim = null; acceso = false;
+    o.pulsante.setAttribute('aria-pressed', 'false');
+    o.controlli.hidden = true;
+  };
+  o.pulsante.setAttribute('aria-pressed', 'false');
+  o.pulsante.addEventListener('click', async () => {
+    if (acceso) { spegni(); o.ripristina(); return; }
+    const mio = ++giro;
+    o.pulsante.disabled = true;
+    let d: DatiSimulazione | null = null;
+    try { d = await o.dati(); } catch (e) { o.stato((e as Error).message); } finally { o.pulsante.disabled = false; }
+    if (mio !== giro) return; // nel frattempo il tool ha ridisegnato: questa simulazione è già vecchia
+    if (!d) { o.stato(o.senzaDati ?? 'Niente da simulare: prima genera il ricamo.'); return; }
+    acceso = true;
+    o.pulsante.setAttribute('aria-pressed', 'true');
+    o.controlli.hidden = false;
+    sim = montaSimulatore(o.host, o.controlli, d.dst, d.colori, d.larghezzaMm, d.altezzaMm, o.stato, d.origine);
+  });
+  return { ferma: () => { giro++; if (acceso) spegni(); }, attiva: () => acceso };
 }

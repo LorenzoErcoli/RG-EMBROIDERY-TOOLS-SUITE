@@ -45,6 +45,8 @@ export { costruisci as rzCostruisci, pezzoDa as rzPezzoDa, rettangolo as rzRetta
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 export * as ui from ${JSON.stringify(posix('packages/ui/src/anatomia.ts'))};
 export { DEBITO_ANATOMIA } from ${JSON.stringify(posix('packages/ui/src/debito-anatomia.ts'))};
+export { DEBITO_SIMULA, DEBITO_ESEMPIO } from ${JSON.stringify(posix('packages/ui/src/debito-simula-esempio.ts'))};
+export { datiDaStrati } from ${JSON.stringify(posix('packages/ui/src/simulatore.ts'))};
 export { TOOLS as ToolsDati } from ${JSON.stringify(posix('packages/ui/src/tools-dati.ts'))};
 export { routeCells as csRouteCells, colorPolylines as csColorPolylines, colorPolylinesTrim as csColorPolylinesTrim, DEFAULT_ROUTE as CS_DEFAULT_ROUTE, RETRACE_PRESETS as CS_RETRACE_PRESETS } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
 export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight, knitFromImage as csKnitFromImage, refinePalette as csRefinePalette, brushEdits as csBrushEdits, fillEdits as csFillEdits, applyEdits as csApplyEdits, fromTwoColumnV as csFromTwoColumnV } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
@@ -6890,6 +6892,32 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
     [...Object.entries(debito).flatMap(([t, v]) => v.filter((c) => !(aMano[t] ?? []).includes(c)).map((c) => `${t}: ${c}`)), ...Object.keys(debito).filter((t) => !tools.includes(t))], []);
   check('il tool di prova (net-45) usa i componenti: scheletro, sezione 01, campo numerico, e non ha niente nel debito',
     [/from '@rg\/ui\/anatomia'/.test(readFileSync(join(radice, 'apps/net-45/src/tool.ts'), 'utf8')), aMano['net-45'], debito['net-45']], [true, [], undefined]);
+
+  console.log('\nU3 e U4 — Simula e l\'esempio pronto: il cricchetto');
+  const sorgenteDi = (t) => readFileSync(join(radice, 'apps', t, 'src/tool.ts'), 'utf8');
+  const haSimula = (t) => /collegaSimula\(|montaSimulatore\(/.test(sorgenteDi(t));
+  const haEsempio = (t) => /\bdemo:\s*'|sampleContours|sampleImage|ESEMPIO_SVG|id="(demoBtn|sampleBtn|esempioBtn)"/.test(sorgenteDi(t));
+  const DEBITO_SIMULA_ATTUALE = 9;
+  const DEBITO_ESEMPIO_ATTUALE = 7;
+  check(`il debito di Simula è ${DEBITO_SIMULA_ATTUALE} tool su ${tools.length} (può solo scendere: se è sceso, abbassa DEBITO_SIMULA_ATTUALE)`, rg.DEBITO_SIMULA.length, DEBITO_SIMULA_ATTUALE);
+  check('chi non ha Simula è nel debito (un tool nuovo nasce con Simula), e chi ce l\'ha ne è fuori (la voce va tolta)',
+    [tools.filter((t) => !haSimula(t) && !rg.DEBITO_SIMULA.includes(t)), tools.filter((t) => haSimula(t) && rg.DEBITO_SIMULA.includes(t)), rg.DEBITO_SIMULA.filter((t) => !tools.includes(t))], [[], [], []]);
+  check(`il debito dell'esempio è ${DEBITO_ESEMPIO_ATTUALE} tool su ${tools.length} (può solo scendere: se è sceso, abbassa DEBITO_ESEMPIO_ATTUALE)`, rg.DEBITO_ESEMPIO.length, DEBITO_ESEMPIO_ATTUALE);
+  check('chi non ha un esempio è nel debito (un tool nuovo nasce con un esempio), e chi ce l\'ha ne è fuori (la voce va tolta)',
+    [tools.filter((t) => !haEsempio(t) && !rg.DEBITO_ESEMPIO.includes(t)), tools.filter((t) => haEsempio(t) && rg.DEBITO_ESEMPIO.includes(t)), rg.DEBITO_ESEMPIO.filter((t) => !tools.includes(t))], [[], [], []]);
+
+  // datiDaStrati: lo stesso DST di «Esporta DST», con il colore di ogni ago nell'ordine d'ago e 5 mm di margine
+  const stratiProva = [
+    { id: 'a', color: '#ff0000', polylines: [[{ x: 0, y: 0 }, { x: 3, y: 0 }, { x: 6, y: 0 }]] },
+    { id: 'forme', color: '#cccccc', polylines: [[{ x: 0, y: 0 }, { x: 9, y: 9 }]], shapeOnly: true },
+    { id: 'vuoto', color: '#00ff00', polylines: [] },
+    { id: 'b', color: '#0000ff', polylines: [[{ x: 10, y: 4 }, { x: 14, y: 4 }]] },
+  ];
+  const ds = rg.datiDaStrati(stratiProva, { label: 'prova' });
+  check('datiDaStrati: i colori sono quelli degli aghi (le forme e gli strati vuoti non contano), il riquadro ha 5 mm di margine e parte dal centro',
+    [ds.colori, ds.larghezzaMm, ds.altezzaMm, ds.origine], [['#ff0000', '#0000ff'], 24, 14, { x: -12, y: -7 }]);
+  check('...il DST è lo stesso che esporta il tool, e si rilegge con lo stesso numero di aghi', [rg.readDst(ds.dst).blocks.length, new TextDecoder().decode(ds.dst.slice(0, 3))], [2, 'LA:']);
+  check('...niente da cucire → null, non un DST vuoto', [rg.datiDaStrati([]), rg.datiDaStrati([{ id: 'v', color: '#000', polylines: [] }])], [null, null]);
 }
 
 // ---- K4 — la scheda di ogni tool: cosa prende, cosa dà, quali parametri usa ----------------------------------------

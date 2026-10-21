@@ -5,6 +5,8 @@
 
 ## Aspetta Lorenzo
 
+- **2026-10-21 — U4, il nome del bottone dell'esempio in Sfrangiatura.** Ogni tool deve avere un esempio pronto (bottone demo nella sezione 01: *Cartamodello demo*, *Immagine demo*…). Sfrangiatura parte da un DST, e per il suo esempio il nome naturale sarebbe **«Ricamo demo»** (come la sezione si chiama «Ricamo di partenza»): è un nome nuovo, quindi lo decidi tu. Fino ad allora Sfrangiatura resta senza esempio (nel debito del cricchetto); gli altri esempi vanno avanti. Rispondi anche solo «va bene» o con un altro nome.
+
 - **2026-10-21 — K4, le tecniche di punto di ogni tool.** La scheda di ogni tool ha un posto per le
   *tecniche* della tassonomia R24 (corsa · raso · cordoncino · catenella · zig-zag · tatami · croce), ma
   **quale tecnica fa quale tool è una tua mappa di mestiere**, non si legge dal codice: la voce K4 resta
@@ -40,6 +42,17 @@
   sul server: per misurarli vanno copiati in `test/fixtures/` (vedi `sapere/riferimenti/LEGGIMI.md`).
 
 ## Giri
+
+### 2026-10-21 — voce 6, primo giro di U3 e U4: Simula e l'esempio nei tool liberi
+
+- **Il collegamento comune.** In `@rg/ui/simulatore`: `datiDaStrati(strati, …)` prepara il DST di «Esporta DST» (centrato sullo zero, 5 mm di margine, colore di ogni ago) e `collegaSimula({ pulsante, host, controlli, dati, ripristina, … })` gestisce il bottone: un clic cuce il ricamo sullo schermo, un secondo rimette la vista; `ferma()` spegne la simulazione quando il tool ridisegna la tela (un parametro cambiato, un nuovo calcolo), perché non resti a metà con un ricamo vecchio. `scheletro()` mette da solo il contenitore dei controlli (`#simControlli`) quando il tool ha Simula; pettine, che lo inseriva a mano, ora usa quello.
+- **Simula in 4 tool, quelli liberi:** pittorico, bitmap, broccato, sfrangiatura. Bitmap genera il tracciato al momento se non c'è già (è lo stesso che va in «Esporta DST»). Sfrangiatura simula il DST rilavorato, con le tinte di riconoscimento degli aghi (R31: non sono i colori del filato) e il riquadro nelle coordinate del file di partenza. Ordine nella barra: Genera · **Simula** · Adatta · Esporta.
+- **Esempio in 1 tool:** pittorico, «Immagine demo» (quattro tinte nette: cerchio, rettangolo, triangolo; non dice niente su come il tool se la cava con una foto vera). Sfrangiatura **aspetta il nome del bottone**: domanda sopra, in «Aspetta Lorenzo».
+- **Il ricamo non cambia.** Pittorico: con l'immagine demo e 120 mm, stessa riga di stato di prima (4 macchie · 4 aghi · 27,9 m · 15.336 punti) e stessa impronta della cucitura del DST di master (il file pesa 8 byte in più solo perché il nome della sorgente è più lungo). Simula provata nel browser in tutti e quattro: si accende (controlli e tele), si spegne e rimette la vista; senza ricamo dice «Niente da simulare: prima premi Genera». In sfrangiatura il filo cade dentro il riquadro, coi salti tratteggiati in rosso. Nessun errore in console.
+- **Non provato nel browser:** la simulazione dopo aver marcato una zona in sfrangiatura (serve il trascinamento), la Simula di pettine dopo lo spostamento del contenitore (il codice è lo stesso di prima; la verifica automatica copre solo che il contenitore sia uno).
+- **Cricchetto.** Nuovo: «U3 e U4» (`packages/ui/src/debito-simula-esempio.ts`): un tool senza Simula o senza esempio deve stare nella lista, un tool che ce l'ha non può starci, e il conto può solo scendere (Simula: 9 tool su 17; esempio: 7 su 17). Test nuovi per `datiDaStrati`. Test, typecheck, build verdi.
+- **Dove sono ferma.** Restano senza Simula: cross-stitch, interlace, net-45, oblique, pattern-grammar, punto-maglia, razza, striatura, zone-pattern. Senza esempio: cannage-rafia, oblique, pattern-grammar, pattern-macchie, rete-testa-speciale, zone-pattern (+ sfrangiatura, che aspetta il nome). Sono tutti occupati da altre chat (o in attesa del nome): li riprendo quando si liberano.
+- **Prossima voce.** La 7 (U5, le etichette dal registro): per i nomi nuovi vale §5, quindi è una voce che dipende da Lorenzo; guardo cosa si può fare senza inventare nomi.
 
 ### 2026-10-21 — voce 5, quinto giro di U2: broccato all'anatomia, e il campo numerico compatto
 

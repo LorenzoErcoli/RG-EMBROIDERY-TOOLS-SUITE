@@ -26,6 +26,7 @@ import {
 import { topbar } from '@rg/ui/tools';
 import { scheletro, sezioneSorgente, sezione, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero } from '@rg/ui/anatomia';
 import { hookPanZoom } from '@rg/ui/panzoom';
+import { collegaSimula, datiDaStrati, type DatiSimulazione } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { sfrangia, defaultSfrangiaturaParams, type EsitoSfrangiatura } from './frange';
 import { dstDaBlocchi } from './motore';
@@ -104,9 +105,11 @@ export function mountSfrangiatura(root: HTMLElement, opts: { backHref?: string }
       }),
     ],
     // Il ricalcolo è continuo (ogni manopola rigenera le frange): niente Genera, niente «Ricalcola da solo».
-    anteprima: {},
+    anteprima: { simula: true },
   });
   attivaCampiNumero(root);
+  // la simulazione (U3): si collega più sotto, quando la tela e le viste esistono; fino ad allora non c'è niente da fermare
+  let sim: { ferma(): void } | null = null;
   root.querySelector('#status')!.textContent = 'Carica un DST per cominciare.';
 
   const $ = (id: string): HTMLElement => root.querySelector(`#${id}`) as HTMLElement;
@@ -124,6 +127,22 @@ export function mountSfrangiatura(root: HTMLElement, opts: { backHref?: string }
     $('zoom').textContent = `zoom ${Math.round(z * 100)}%`;
   });
   $('fitBtn').addEventListener('click', () => pz.fit());
+  sim = collegaSimula({
+    pulsante: $('simBtn') as HTMLButtonElement, host: $('layer'), controlli: $('simControlli'),
+    stato: (t) => { $('status').textContent = t; },
+    dati: (): DatiSimulazione | null => {
+      if (!esito) return null;
+      // il DST che esce da qui tiene le coordinate del file di partenza: il riquadro del simulatore parte dal suo angolo, con 5 mm di margine
+      const n = Math.max(1, ...esito.blocchi.map((b) => b.needle));
+      return {
+        dst: dstDaBlocchi(esito.blocchi, { label: etichetta || 'SFRANGIATO' }),
+        colori: Array.from({ length: n }, (_, i) => TINTE[i % TINTE.length]),
+        larghezzaMm: riquadro.larghezza + 10, altezzaMm: riquadro.altezza + 10, origine: { x: riquadro.minX - 5, y: riquadro.minY - 5 },
+      };
+    },
+    ripristina: () => { $('layer').innerHTML = svgDocumento(riquadro, `${gruppoRicamo(originali)}<g id="frange"></g><g id="zone"></g>`); ridisegna(); },
+    senzaDati: "Niente da simulare: carica un DST.",
+  });
 
   // ---- i campi ---------------------------------------------------------------
   for (const c of CAMPI) {
@@ -158,10 +177,12 @@ export function mountSfrangiatura(root: HTMLElement, opts: { backHref?: string }
   // Il ricamo di partenza si disegna UNA volta: è quello che non cambia mai. A ogni giro di manopola
   // si rifanno solo le frange e le zone, e su 188.000 punti è la differenza fra scattare e arrancare.
   const disegnaTutto = (): void => {
+    sim?.ferma();
     $('layer').innerHTML = svgDocumento(riquadro, `${gruppoRicamo(originali)}<g id="frange"></g><g id="zone"></g>`);
     pz.fit();
   };
   const ridisegna = (): void => {
+    sim?.ferma();
     const svg = $('layer').querySelector('svg');
     if (!svg) return;
     const gF = svg.querySelector('#frange');

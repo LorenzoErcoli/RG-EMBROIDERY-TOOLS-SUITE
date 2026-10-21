@@ -331,7 +331,7 @@ export function scheletro(o: OpzioniScheletro): string {
       <div class="rg-workspace__canvas" id="canvas">
         ${tela}
       </div>
-      ${barraStato()}
+      ${o.anteprima?.simula ? '<div id="simControlli" class="sim-controlli" hidden></div>\n      ' : ''}${barraStato()}
     </div>
   </div>`;
 }

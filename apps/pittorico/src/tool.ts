@@ -18,8 +18,10 @@ import {
   bounds, rgbToHex, type PixelImage,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
+import { disegnaDemo } from './demo';
 import { scheletro, sezioneSorgente, sezione, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero } from '@rg/ui/anatomia';
 import { hookPanZoom } from '@rg/ui/panzoom';
+import { collegaSimula, datiDaStrati, type DatiSimulazione } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import {
   buildPittoricoPlan, pittoricoExportLayers, defaultPittoricoParams,
@@ -92,7 +94,7 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
     pannello: [
       sezioneSorgente({
         tipo: 'immagine', accetta: 'image/*', statoIniziale: 'Nessuna immagine: caricane una per cominciare',
-        larghezzaReale: false, extra: campo('realWidth'),
+        larghezzaReale: false, extra: campo('realWidth'), demo: 'Immagine demo',
       }),
       sezioneCampi(2, 'Colori', ['colorCount', 'minAreaMm2', 'flattenLightMm', 'smoothMm'], `
     <div class="rg-param-grid__wide">
@@ -103,11 +105,13 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
       sezioneCampi(4, 'Bordi e sfumature', ['frangiaMm', 'lisciaBordiMm', 'sogliaSfumaturaMm', 'crescitaMm', 'sormontoMm']),
     ],
     anteprima: {
-      viste, genera: true, esportaSpenti: true,
+      viste, genera: true, simula: true, esportaSpenti: true,
       ricalcolaDaSolo: { acceso: false, aiuto: 'Su un disegno grande costa qualche secondo: di solito conviene premere Genera dopo aver messo la larghezza reale.' },
     },
   });
   attivaCampiNumero(root);
+  // la simulazione (U3): si collega più sotto, quando la tela e le viste esistono; fino ad allora non c'è niente da fermare
+  let sim: { ferma(): void } | null = null;
   root.querySelector('#status')!.textContent = "Carica un'immagine, poi premi Genera";
 
   const $ = (id: string): HTMLElement => root.querySelector(`#${id}`) as HTMLElement;
@@ -122,6 +126,13 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
     $('zoom').textContent = `zoom ${Math.round(z * 100)}%`;
   });
   $('fitBtn').addEventListener('click', () => pz.fit());
+  sim = collegaSimula({
+    pulsante: $('simBtn') as HTMLButtonElement, host: $('layer'), controlli: $('simControlli'),
+    stato: (t) => { $('status').textContent = t; },
+    dati: (): DatiSimulazione | null => (piano ? datiDaStrati(pittoricoExportLayers(piano), { label: 'PITTORICO' }) : null),
+    ripristina: () => disegna(),
+    senzaDati: "Niente da simulare: prima premi Genera.",
+  });
 
   // ---- i campi ---------------------------------------------------------------
   for (const c of CAMPI) {
@@ -143,16 +154,13 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
   };
 
   // ---- import: File → <img> → <canvas> → pixel (l'unico pezzo legato al DOM) ----
-  ($('fileInput') as HTMLInputElement).addEventListener('change', (ev) => {
-    const f = (ev.target as HTMLInputElement).files?.[0];
-    if (!f) return;
-    const url = URL.createObjectURL(f);
+  const apriImmagine = (url: string, nome: string, rilascia: boolean): void => {
     const el = new Image();
     el.onload = () => {
-      URL.revokeObjectURL(url);
-      nomeFile = f.name;
+      if (rilascia) URL.revokeObjectURL(url);
+      nomeFile = nome;
       sorgente = {
-        name: f.name,
+        name: nome,
         pixelsAt: (maxWidthPx: number) => {
           let w = el.naturalWidth || el.width;
           let h = el.naturalHeight || el.height;
@@ -167,7 +175,7 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
         },
       };
       const px = el.naturalWidth || el.width;
-      $('fileStatus').textContent = `${f.name} · ${px} × ${el.naturalHeight || el.height} px`;
+      $('fileStatus').textContent = `${nome} · ${px} × ${el.naturalHeight || el.height} px`;
       $('status').textContent = params.realWidthMm > 0
         ? 'Immagine caricata: premi Genera'
         : 'Immagine caricata. Metti la larghezza reale in mm, poi premi Genera';
@@ -177,9 +185,15 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
       mostraImmagine(el);
       pz.fit();
     };
-    el.onerror = () => { $('status').textContent = 'Immagine non leggibile'; URL.revokeObjectURL(url); };
+    el.onerror = () => { $('status').textContent = 'Immagine non leggibile'; if (rilascia) URL.revokeObjectURL(url); };
     el.src = url;
+  };
+  ($('fileInput') as HTMLInputElement).addEventListener('change', (ev) => {
+    const f = (ev.target as HTMLInputElement).files?.[0];
+    if (!f) return;
+    apriImmagine(URL.createObjectURL(f), f.name, true);
   });
+  $('demoBtn').addEventListener('click', () => apriImmagine(disegnaDemo().toDataURL('image/png'), 'immagine-demo.png', false));
 
   /** L'immagine appena caricata si VEDE subito: serve a capire se è entrata giusta. */
   function mostraImmagine(el: HTMLImageElement): void {
@@ -192,6 +206,7 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
 
   // ---- genera ----------------------------------------------------------------
   $('genBtn').addEventListener('click', () => {
+    sim?.ferma();
     if (!sorgente) { $('status').textContent = 'Prima carica un\'immagine'; return; }
     $('status').textContent = 'Calcolo il ricamo…';
     // un giro di rendering prima di bloccare il thread, così il messaggio si vede davvero
@@ -267,6 +282,7 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
    * dove il filo di passaggio finisce rispetto al riempimento.
    */
   function disegna(): void {
+    sim?.ferma();
     if (vista === 'originale') {
       if (immagine) mostraImmagine(immagine);
       return;

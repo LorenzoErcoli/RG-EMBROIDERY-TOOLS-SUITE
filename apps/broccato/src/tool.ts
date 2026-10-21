@@ -14,6 +14,7 @@ import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, readDstMetadata, rea
 import { topbar } from '@rg/ui/tools';
 import { scheletro, sezioneSorgente, sezione, campoNumero, campoNumeroInline, attivaCampiNumero, leggiCampo, impostaNumero, type OpzioniCampoNumero } from '@rg/ui/anatomia';
 import { hookPanZoom } from '@rg/ui/panzoom';
+import { collegaSimula, datiDaStrati, type DatiSimulazione } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import {
   type BroccatoParams, type BroccatoColorRole, type FillMode, type PixelImage,
@@ -135,6 +136,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
     ],
     // L'anteprima si rifà da sola a ogni cambio: niente Genera. Le quattro viste stanno a sinistra.
     anteprima: {
+      simula: true,
       viste: `<div>
         <div class="rg-segmented" role="group" aria-label="Cosa guardare">
           <button type="button" class="rg-segmented__item" data-vista="originale" aria-pressed="false">Originale</button>
@@ -146,6 +148,8 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
     },
   });
   attivaCampiNumero(root);
+  // la simulazione (U3): si collega più sotto, quando la tela e le viste esistono; fino ad allora non c'è niente da fermare
+  let sim: { ferma(): void } | null = null;
 
   const $ = (id: string) => root.querySelector<HTMLElement>(`#${id}`)!;
   const params: BroccatoParams = { ...defaultBroccatoParams, colors: [] };
@@ -159,6 +163,13 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
     $('zoom').textContent = `zoom ${Math.round(z * 100)}%`;
   });
   $('fitBtn').addEventListener('click', () => pz.fit());
+  sim = collegaSimula({
+    pulsante: $('simBtn') as HTMLButtonElement, host: $('layer'), controlli: $('simControlli'),
+    stato: (t) => { $('status').textContent = t; },
+    dati: (): DatiSimulazione | null => (ultimo ? datiDaStrati(ultimo.plan.exportLayers, { label: 'BROCCATO' }) : null),
+    ripristina: () => paint(),
+    senzaDati: "Niente da simulare: serve un'immagine con almeno un colore.",
+  });
 
   // ---- campi numerici ------------------------------------------------------
   for (const b of NUM_BINDS) {
@@ -443,6 +454,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
 
   // ---- anteprima ------------------------------------------------------------
   function paint(ms?: number): void {
+    sim?.ferma();
     if (!ultimo) return;
     const { res, img, mmpp, plan } = ultimo;
     const w = img.width, h = img.height;

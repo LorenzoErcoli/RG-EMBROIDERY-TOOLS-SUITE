@@ -209,10 +209,7 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
     },
   });
   attivaCampiNumero(root);
-  // i pezzi che il guscio comune non sa ancora: il controllo della simulazione sotto la tela, i bottoni spenti finché non c'è un esito
-  const simControlli = document.createElement('div');
-  simControlli.id = 'simControlli'; simControlli.className = 'sim-controlli'; simControlli.hidden = true;
-  (root.querySelector('#status')!.parentElement as HTMLElement).before(simControlli);
+  // i bottoni spenti finché non c'è un esito
   (root.querySelector('#genBtn') as HTMLButtonElement).disabled = true;
   (root.querySelector('#simBtn') as HTMLButtonElement).disabled = true;
   root.querySelector('#status')!.textContent = 'Carica i blocchi e la fotografia, poi premi «Genera».';

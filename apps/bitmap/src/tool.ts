@@ -4,6 +4,7 @@ import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, readDstMetadata, rea
 import { topbar } from '@rg/ui/tools';
 import { scheletro, sezioneSorgente, sezione, campoNumero, campoNumeroInline, attivaCampiNumero, leggiCampo, impostaNumero, type OpzioniCampoNumero } from '@rg/ui/anatomia';
 import { hookPanZoom } from '@rg/ui/panzoom';
+import { collegaSimula, datiDaStrati, type DatiSimulazione } from '@rg/ui/simulatore';
 import { pickSaveTarget, saveOutcomeMessage } from '@rg/ui/save';
 import { runBitmapPreview, bitmapPipelineSteps, PREVIEW_MAX_DOTS, type BitmapPreviewColor, type BitmapPipelineResult } from './pipeline';
 import { defaultBitmapParams, type BitmapParams, type StitchProgress } from './engine';
@@ -152,9 +153,11 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
       }),
     ],
     // Analizza (l'anteprima rapida) è di bitmap: sta a sinistra, fra le viste. L'anteprima si rifà già da sola a ogni cambio: niente «Ricalcola da solo».
-    anteprima: { viste: '<button id="analyzeBtn" class="rg-button rg-button--outline rg-button--small" type="button">Analizza</button>', genera: true },
+    anteprima: { viste: '<button id="analyzeBtn" class="rg-button rg-button--outline rg-button--small" type="button">Analizza</button>', genera: true, simula: true },
   });
   attivaCampiNumero(root);
+  // la simulazione (U3): si collega più sotto, quando la tela e le viste esistono; fino ad allora non c'è niente da fermare
+  let sim: { ferma(): void } | null = null;
   // i due pezzi che il guscio comune non ha: l'avviso sopra la tela e la barra di avanzamento sotto
   const avviso = document.createElement('div');
   avviso.className = 'bitmap-alert'; avviso.id = 'previewAlert'; avviso.setAttribute('role', 'status'); avviso.setAttribute('aria-live', 'polite');
@@ -195,7 +198,8 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
   // ---- FASE LEGGERA: preview (aggiornata in tempo reale, niente ordinamento). ----
   let currentPreviewColors: BitmapPreviewColor[] = [];   // colori dell'ultima preview (per ridisegnare le righe onlyColor)
   function renderPreview() {
-    if (busy) return;                 // durante la generazione la tela mostra il tracciato, non i puntini
+    if (busy) return;
+    sim?.ferma();                 // durante la generazione la tela mostra il tracciato, non i puntini
     try {
       const px = source.pixelsAt(params.maxWidthPx);
       const prev = runBitmapPreview(px.rgba, px.width, px.height, params, mmPerPx(px.width));
@@ -756,8 +760,23 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
     renderPreview(); updateFileStatus(); pz.fit();
   });
   $('analyzeBtn').addEventListener('click', () => { if (analyzeTimer !== undefined) clearTimeout(analyzeTimer); renderPreview(); });
-  $('genBtn').addEventListener('click', () => { void generate(); });
+  $('genBtn').addEventListener('click', () => { sim?.ferma(); void generate(); });
   $('fitBtn').addEventListener('click', () => pz.fit());
+  // Simula: il tracciato completo, generato al momento se non c'è già (è lo stesso che va in «Esporta DST»)
+  const mostraGenerato = (g: { res: BitmapPipelineResult; params: BitmapParams }): void => {
+    const cap = g.params.chunkSize > 0 ? g.params.chunkSize : 5000;
+    $('layer').innerHTML = buildSvg(g.res.layers, { bounds: g.res.bounds, marginMm: 4, maxPointsPerPath: cap });
+  };
+  sim = collegaSimula({
+    pulsante: $('simBtn') as HTMLButtonElement, host: $('layer'), controlli: $('simControlli'),
+    stato: (t) => { $('status').textContent = t; },
+    dati: async (): Promise<DatiSimulazione | null> => {
+      const gen = lastGenerated ?? await generate();
+      return gen ? datiDaStrati(gen.res.exportLayers, { label: sourceName || 'BITMAP' }) : null;
+    },
+    ripristina: () => { if (lastGenerated) mostraGenerato(lastGenerated); else renderPreview(); },
+    senzaDati: 'Niente da simulare: controlla soglia e colori.',
+  });
   $('exportBtn').addEventListener('click', async () => {
     if (busy) return;
     const name = sourceName ? `${sourceName}-bitmap.svg` : 'bitmap.svg';
