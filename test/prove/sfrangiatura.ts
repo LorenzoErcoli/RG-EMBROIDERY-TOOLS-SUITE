@@ -1,6 +1,6 @@
 import { buildParallelFill, buildDst, dstProgramFromBlocks, readDst } from '@rg/core';
 import { sfrangia, defaultSfrangiaturaParams } from '../../apps/sfrangiatura/src/frange';
-import { blocchiAStrati } from '../../apps/sfrangiatura/src/motore';
+import { blocchiAStrati, dstDaBlocchi } from '../../apps/sfrangiatura/src/motore';
 
 // Un raso sintetico 20x12 mm (come lo smoke), cucito in un DST; una zona sul bordo x=20; i valori di partenza del tool.
 export async function prova() {
@@ -15,5 +15,7 @@ export async function prova() {
     params,
     // la strada di prima: quello che faceva tool.ts (readDst, sfrangia sui blocchi letti) e poi i blocchi riscritti
     diretto: () => blocchiAStrati(sfrangia(readDst(dst).blocks, zone, { ...params, aghiEsclusi: [] }).blocchi),
+    // il DST che il tool esporta davvero: i blocchi riscritti, non ricentrati (la stessa funzione che usa tool.ts)
+    dst: () => dstDaBlocchi(sfrangia(readDst(dst).blocks, zone, { ...params, aghiEsclusi: [] }).blocchi),
   };
 }

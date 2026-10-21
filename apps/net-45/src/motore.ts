@@ -1,5 +1,6 @@
 // Il contratto del motore (K1b) per Rete 45°: avvolge `runPipeline`, senza cambiare niente.
 import type { NetParams } from '@rg/core';
+import { refertoDaStrati } from '@rg/core';
 import type { Ingresso, Motore } from '@rg/cervello';
 import { runPipeline, type RoleAssignment } from './pipeline';
 
@@ -12,6 +13,7 @@ export const motore: Motore<IngressoNet45, NetParams> = {
   id: 'net-45',
   async genera(ingresso, params) {
     const { layers } = runPipeline(ingresso.sagoma ?? [], ingresso.ruoli, params);
-    return { strati: layers, avvisi: [] };
+    const strati = layers;
+    return { strati, avvisi: [], misure: refertoDaStrati(strati) };
   },
 };

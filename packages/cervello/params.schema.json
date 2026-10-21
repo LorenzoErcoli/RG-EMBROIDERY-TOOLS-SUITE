@@ -2103,6 +2103,46 @@
           "default": "ritorno"
         }
       }
+    },
+    "punto-maglia": {
+      "type": "object",
+      "properties": {
+        "larghezzaVMm": {
+          "$ref": "#/$defs/knitVWidth",
+          "default": 2.5,
+          "x-id": "knitVWidth"
+        },
+        "altezzaVMm": {
+          "$ref": "#/$defs/knitVHeight",
+          "default": 3.5,
+          "x-id": "knitVHeight"
+        },
+        "passoMm": {
+          "$ref": "#/$defs/knitRowPitch",
+          "default": 2.5,
+          "x-id": "knitRowPitch"
+        },
+        "rientroMm": {
+          "$ref": "#/$defs/knitSideInset",
+          "default": 0.4,
+          "x-id": "knitSideInset"
+        },
+        "passateCentro": {
+          "$ref": "#/$defs/knitCenterPasses",
+          "default": 4,
+          "x-id": "knitCenterPasses"
+        },
+        "passateLati": {
+          "$ref": "#/$defs/knitSidePasses",
+          "default": 2,
+          "x-id": "knitSidePasses"
+        },
+        "margineIncrocioMm": {
+          "$ref": "#/$defs/crossingMargin",
+          "default": 0,
+          "x-id": "crossingMargin"
+        }
+      }
     }
   },
   "$defs": {
@@ -5270,6 +5310,69 @@
         "R5"
       ],
       "x-concetto": "aree-vuote"
+    },
+    "knitVWidth": {
+      "type": "number",
+      "title": "Larghezza della V",
+      "description": "Una colonna di V; il centro ne ha 1, 1,5 o 2.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "maximum": 6,
+      "x-concetto": "maglia-v"
+    },
+    "knitVHeight": {
+      "type": "number",
+      "title": "Altezza della V",
+      "description": "Lungo il tratto, dalla base alla punta.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "maximum": 8,
+      "x-concetto": "maglia-v"
+    },
+    "knitRowPitch": {
+      "type": "number",
+      "title": "Passo delle righe",
+      "description": "Fra una riga di V e la successiva.",
+      "x-unita": "mm",
+      "minimum": 0.5,
+      "maximum": 8,
+      "x-concetto": "interlinea"
+    },
+    "knitSideInset": {
+      "type": "number",
+      "title": "Rientro dei lati",
+      "description": "Quanto la gamba del lato parte sotto il bordo del centro.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 2,
+      "x-concetto": "rientro"
+    },
+    "knitCenterPasses": {
+      "type": "integer",
+      "title": "Passate del centro",
+      "description": "Per gamba; pari, così si torna sempre sulla punta.",
+      "minimum": 2,
+      "maximum": 8,
+      "x-passo": 2,
+      "x-concetto": "passate-pezzo"
+    },
+    "knitSidePasses": {
+      "type": "integer",
+      "title": "Passate dei lati",
+      "description": "Per gamba delle mezze catene ai lati (va e torna).",
+      "minimum": 1,
+      "maximum": 6,
+      "x-passo": 1,
+      "x-concetto": "passate-pezzo"
+    },
+    "crossingMargin": {
+      "type": "number",
+      "title": "Margine negli incroci",
+      "description": "Quanto oltre il bordo del tratto sopra si tolgono le righe di quello sotto.",
+      "x-unita": "mm",
+      "minimum": -3,
+      "maximum": 5,
+      "x-concetto": "sovrapposizione"
     }
   },
   "x-concetti": {
@@ -5300,7 +5403,8 @@
         "obliqueSatinPitch",
         "straightSatinPitch",
         "cordPitch",
-        "toothSpacing"
+        "toothSpacing",
+        "knitRowPitch"
       ]
     },
     "punto-minimo": {
@@ -5432,7 +5536,8 @@
         "firstLineOffset",
         "edgeMargin",
         "baseCutMargin",
-        "travelEdgeMargin"
+        "travelEdgeMargin",
+        "knitSideInset"
       ]
     },
     "spostamento": {
@@ -5474,7 +5579,8 @@
         "edgeOverlap",
         "overlapRule",
         "crossingOverlap",
-        "overlapZone"
+        "overlapZone",
+        "crossingMargin"
       ]
     },
     "tolleranza": {
@@ -5744,7 +5850,9 @@
         "ladderPasses",
         "hookHorizontalPasses",
         "hookVerticalPasses",
-        "borderLinePasses"
+        "borderLinePasses",
+        "knitCenterPasses",
+        "knitSidePasses"
       ]
     },
     "lunghezza-pezzo": {
@@ -5827,6 +5935,13 @@
         "maxColumnWidth",
         "maxBandDrift",
         "bandReseed"
+      ]
+    },
+    "maglia-v": {
+      "descrizione": "La V del Punto maglia: larghezza di una colonna e altezza lungo il tratto.",
+      "parametri": [
+        "knitVWidth",
+        "knitVHeight"
       ]
     }
   }

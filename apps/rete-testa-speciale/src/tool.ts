@@ -1,7 +1,7 @@
 import '@rg/ui/rg.css';
 import './rete.css';
 import { parseImportedBoundarySource, type BoundaryChoice, type ImportedBoundaryModel, type ImportScaleMode } from '@rg/pattern-grammar';
-import { buildSvg, dstFromExportLayers, DST_FILE, polygonArea, readDstMetadata, readProjectMetadata, type Polyline } from '@rg/core';
+import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, polygonArea, readDstMetadata, readProjectMetadata, type Polyline } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
@@ -592,6 +592,14 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     return { ...base, drawing };
   }
 
+  /** Da dove è partito il ricamo (busta K2): il cartamodello caricato, con la misura reale; nulla se il pezzo è a misure o radiale. */
+  function sorgenteBusta() {
+    if (!source || par.pieceSource === 'misure' || radiale()) return undefined;
+    const b = model?.source?.finalBoundsMm;
+    return { tipo: (/\.dxf$/i.test(source.name) ? 'dxf' : 'svg') as 'dxf' | 'svg', nome: source.name,
+      ...(b ? { larghezzaMm: b.maxX - b.minX, altezzaMm: b.maxY - b.minY } : {}) };
+  }
+
   function riapri(meta: Record<string, unknown>): void {
     const drawing = meta.drawing as { name?: string; text?: string; scale?: { scaleMode?: string } } | undefined;
     if (meta.params && typeof meta.params === 'object') Object.assign(par, PARAMETRI_RETE, meta.params);
@@ -693,7 +701,8 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     const { contorno } = geometria();
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const p of contorno ?? []) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
-    const svg = buildSvg(stratiRete(risultato), { bounds: { minX: x0, minY: y0, maxX: x1, maxY: y1 }, marginMm: 5, metadata: progetto() });
+    const strati = stratiRete(risultato);
+    const svg = buildSvg(strati, { bounds: { minX: x0, minY: y0, maxX: x1, maxY: y1 }, marginMm: 5, metadata: conBusta(progetto(), { strati, sorgente: sorgenteBusta() }) });
     const name = `${nomeBase()}-rete.svg`;
     const outcome = await saveTextFile(svg, { suggestedName: name, description: 'Immagine SVG' });
     $('status').textContent = saveOutcomeMessage(outcome, name) + notaDisegno;
@@ -701,7 +710,8 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
 
   // un filo solo: un tratto per parte, fra due parti la macchina salta. Lo usano «Esporta DST» e «Invia a Stilista».
   function costruisciDst(r: RisultatoRete): Uint8Array {
-    return dstFromExportLayers(stratiRete(r), { label: nomeBase().toUpperCase().slice(0, 16), metadata: progetto() });
+    const strati = stratiRete(r);
+    return dstFromExportLayers(strati, { label: nomeBase().toUpperCase().slice(0, 16), metadata: conBusta(progetto(), { strati, sorgente: sorgenteBusta() }) });
   }
 
   $('exportDstBtn').addEventListener('click', async () => {

@@ -20,6 +20,7 @@
       "@app/zone-pattern": ["../zone-pattern/src/tool.ts"],
       "@app/cross-stitch": ["../cross-stitch/src/tool.ts"],
       "@app/razza": ["../razza/src/tool.ts"],
+      "@app/punto-maglia": ["../punto-maglia/src/tool.ts"],
       "@app/cannage-rafia": ["../cannage-rafia/src/tool.ts"],
       "@app/pattern-macchie": ["../pattern-macchie/src/tool.ts"],
       "@app/rete-testa-speciale": ["../rete-testa-speciale/src/tool.ts"],

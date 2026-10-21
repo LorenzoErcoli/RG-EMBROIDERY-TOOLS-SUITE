@@ -2,7 +2,7 @@ import '@rg/ui/rg.css';
 import './oblique.css';
 import {
   parseSvgToContours, parseDxfToContours, buildSvg, buildSvgInSourceFrame, readProjectMetadata, readDstMetadata,
-  dstFromExportLayers, DST_FILE, THREAD_STROKE_MM, SHAPE_STROKE_MM, DPI_ILLUSTRATOR, applyRealWidth,
+  dstFromExportLayers, conBusta, DST_FILE, THREAD_STROKE_MM, SHAPE_STROKE_MM, DPI_ILLUSTRATOR, applyRealWidth,
   type ImportResult, type ExportLayer, type SvgImportOptions, type Contour,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
@@ -360,11 +360,14 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
   });
 
   // ---- Export ----
+  // Da cosa è partito il ricamo: il cartamodello caricato (misura REALE), niente se è a formato.
+  const sorgenteBusta = () => panel ? { tipo: /\.dxf$/i.test(panelName) ? 'dxf' as const : 'svg' as const, nome: panelName,
+    larghezzaMm: round1(panel.widthMm * realWidthFactor()), altezzaMm: round1(panel.heightMm * realWidthFactor()) } : undefined;
   async function doExportSvg(): Promise<void> {
     readParams();
     const res = lastResult ?? generate();
     const layers = exportLayersFor(res);
-    const metadata = { rgProject: 'oblique', version: '0.1.0', params, roles: roleColor };
+    const metadata = conBusta({ rgProject: 'oblique', version: '0.1.0', params, roles: roleColor }, { strati: layers, sorgente: sorgenteBusta() });
     let svg: string;
     if (panel?.frame) svg = buildSvgInSourceFrame(layers, { frame: panel.frame, realWidthFactor: realWidthFactor(), metadata });
     else { const b = res.boundaries.pattern; svg = buildSvg(layers, { bounds: { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY }, marginMm: 10, metadata }); }
@@ -377,9 +380,10 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
   function costruisciDst(): Uint8Array {
     readParams();
     const res = lastResult ?? generate();
-    return dstFromExportLayers(exportLayersFor(res), {
+    const layers = exportLayersFor(res);
+    return dstFromExportLayers(layers, {
       label: 'OBLIQUE',
-      metadata: { rgProject: 'oblique', version: '0.1.0', params, roles: roleColor },
+      metadata: conBusta({ rgProject: 'oblique', version: '0.1.0', params, roles: roleColor }, { strati: layers, sorgente: sorgenteBusta() }),
     });
   }
 

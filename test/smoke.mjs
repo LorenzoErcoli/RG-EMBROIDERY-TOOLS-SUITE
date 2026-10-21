@@ -1,7 +1,7 @@
 // Smoke test dell'ecosistema. Nessun framework: `node test/smoke.mjs`.
 // Serve a una cosa sola ma importante: accorgersi quando due tool rispondono
 // in modo diverso alla STESSA domanda geometrica (vedi COSTITUZIONE R28).
-import { readFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, rmSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -40,8 +40,12 @@ export { leggiRaso } from ${JSON.stringify(posix('apps/sfrangiatura/src/rasi.ts'
 export { sfrangia } from ${JSON.stringify(posix('apps/sfrangiatura/src/frange.ts'))};
 export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('apps/pittorico/src/primitives.ts'))};
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
+export { lineaTratto as pmgLinea, cordoncino as pmgCordoncino, cuci as pmgCuci, strati as pmgStrati, progetto as pmgProgetto, leggiProgetto as pmgLeggiProgetto, PARAMETRI_MAGLIA as PMG_PARAMETRI } from ${JSON.stringify(posix('apps/punto-maglia/src/motore.ts'))};
 export { costruisci as rzCostruisci, pezzoDa as rzPezzoDa, rettangolo as rzRettangolo, stratiDaRisultato as rzStrati, stratiPerDst as rzStratiPerDst, progetto as rzProgetto, leggiProgetto as rzLeggiProgetto, daDiPassaggio as rzDaDiPassaggio, PARAMETRI_RAZZA as RZ_PARAMETRI } from ${JSON.stringify(posix('apps/razza/src/motore.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
+export * as ui from ${JSON.stringify(posix('packages/ui/src/anatomia.ts'))};
+export { DEBITO_ANATOMIA } from ${JSON.stringify(posix('packages/ui/src/debito-anatomia.ts'))};
+export { TOOLS as ToolsDati } from ${JSON.stringify(posix('packages/ui/src/tools-dati.ts'))};
 export { routeCells as csRouteCells, colorPolylines as csColorPolylines, colorPolylinesTrim as csColorPolylinesTrim, DEFAULT_ROUTE as CS_DEFAULT_ROUTE, RETRACE_PRESETS as CS_RETRACE_PRESETS } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
 export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight, knitFromImage as csKnitFromImage, refinePalette as csRefinePalette, brushEdits as csBrushEdits, fillEdits as csFillEdits, applyEdits as csApplyEdits, fromTwoColumnV as csFromTwoColumnV } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { subGrid as csSubGrid, areaFromMm as csAreaFromMm, clampArea as csClampArea } from ${JSON.stringify(posix('apps/cross-stitch/src/area.ts'))};
@@ -982,7 +986,8 @@ for (const [tool, id] of [['net-45', 'net-45'], ['pattern-grammar', 'pattern-gra
   check(`${tool}: il DST esce coi parametri di "${id}"`,
     call >= 0 && /metadata:/.test(blocco) && new RegExp(`rgProject: '${id}'`).test(src), true);
   check(`${tool}: sa rileggere un .dst`, /readDstMetadata/.test(src), true);
-  check(`${tool}: accetta un .dst in ingresso`, /accept="[^"]*\.dst/.test(src), true);
+  // o è scritto a mano nel tool, o c'è il componente della sezione 01 (anatomia.ts), che ha sempre «Apri progetto o DST…»
+  check(`${tool}: accetta un .dst in ingresso`, /accept="[^"]*\.dst/.test(src) || (/sezioneSorgente\(/.test(src) && !/progetto:\s*false/.test(src)), true);
 }
 
 // interlace — RIAPRIRE un .dst non è solo rimettere i numeri. Il tool accettava già i .dst e ne
@@ -1370,6 +1375,42 @@ console.log('\noblique — routing + orchestratore (2d)');
   }
   check('simplifyLoop: una CURVA resta curva (scarto ≤ tolleranza 0.2mm)', worstCircle <= 0.2, true);
   check('simplifyLoop: e resta comunque leggera (un cerchio in ≤50 lati, non 262)', simpleCircle.length <= 50, true);
+}
+
+// oblique — dentro un vuoto non si cuce (R5), in nessun livello. Trovato il 2026-10-21 provando oblique su una
+// selezione di Stilista con un foro: il Livello 2 univa con una retta i due pezzi di diagonale che il vuoto aveva
+// staccato, e su una corona di 220 mm col foro di 123 mm cuciva 5 tratti per 254 mm DENTRO il foro (il DST li portava,
+// spezzati in punti da 12,1 mm). Con un foro decentrato anche il Livello 1 ci entrava, con l'ingresso della fermatura
+// (32 tratti, 66 mm). I salti fra un tratto e l'altro possono attraversarlo: un salto non è ago. Moduli VERI del tool.
+console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci girano attorno');
+{
+  const modulo = (f) => rg.parseModuleSvg(readFileSync(join(root, `apps/oblique/src/modules/${f}.svg`), 'utf8'));
+  const sources = { level0: modulo('level0'), level1: modulo('level1'), level2: modulo('level2'), holes: modulo('holes') };
+  const anello = (cx, cy, r) => {
+    const n = Math.round((2 * Math.PI * r) / 0.6), pts = [];
+    for (let i = 0; i <= n; i++) { const t = (i / n) * 2 * Math.PI; pts.push({ x: cx + Math.cos(t) * r, y: cy + Math.sin(t) * r }); }
+    return pts;
+  };
+  // mm di filo CUCITO (dentro una polilinea) più di 0,5 mm dentro il foro, campionando ogni segmento
+  const cucitoNelForo = (strokes, cx, cy, r) => {
+    let tratti = 0, mm = 0;
+    for (const s of strokes) for (let i = 1; i < s.points.length; i++) {
+      const a = s.points[i - 1], b = s.points[i], len = Math.hypot(b.x - a.x, b.y - a.y), k = Math.max(1, Math.ceil(len / 0.05));
+      let dentro = 0;
+      for (let j = 0; j < k; j++) { const t = (j + 0.5) / k; if (Math.hypot(a.x + (b.x - a.x) * t - cx, a.y + (b.y - a.y) * t - cy) < r - 0.5) dentro += len / k; }
+      if (dentro > 0) { tratti++; mm += dentro; }
+    }
+    return `${tratti} tratti, ${Math.round(mm)} mm`;
+  };
+  for (const [cx, cy, r, nome] of [[110, 110, 61.5, 'corona 220 mm col foro di 123 mm'], [80, 140, 25, 'foro di 50 mm decentrato']]) {
+    const panelContour = rg.contourBoundary([anello(110, 110, 110), anello(cx, cy, r)], 'pattern', 0.1);
+    const res = rg.generateOblique(sources, { ...rg.defaultObliqueParams(), enableExclusionAreas: true }, { roles: {}, panelContour });
+    check(`${nome}: il foro è letto come vuoto`, (panelContour.exclusions || []).length, 1);
+    check(`${nome}: livelli 0, 1 e 2 non cuciono nel foro`,
+      ['level0', 'level1', 'level2'].map((l) => `${l}: ${cucitoNelForo(res[l], cx, cy, r)}`),
+      ['level0: 0 tratti, 0 mm', 'level1: 0 tratti, 0 mm', 'level2: 0 tratti, 0 mm']);
+    check(`${nome}: il Livello 2 resta un filo solo (il raccordo gira sul bordo del foro, non salta)`, res.level2.length, 1);
+  }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -2773,7 +2814,10 @@ console.log('\noblique — routing + orchestratore (2d)');
     check('Stilista Link: «Prendi la selezione» e «Invia a Stilista» in tutti gli 11 tool col cartamodello',
       agganciati.filter((t) => {
         const s = readFileSync(join(root, `apps/${t}/src/tool.ts`), 'utf8');
-        return !(s.includes('collegaStilista(aggancio') && s.includes('BOTTONE_PRENDI_STILISTA()') && s.includes('BOTTONE_INVIA_STILISTA()'));
+        // i bottoni scritti nel tool, o chiesti all'anatomia comune (sezioneSorgente stilista, barraAnteprima inviaStilista)
+        const prendi = s.includes('BOTTONE_PRENDI_STILISTA()') || s.includes('stilista: true');
+        const invia = s.includes('BOTTONE_INVIA_STILISTA()') || s.includes('inviaStilista: true');
+        return !(s.includes('collegaStilista(aggancio') && prendi && invia);
       }), []);
     check('Stilista Link: un solo colore per oblique, e il colore dei fori diventa quello del filo',
       rg.svgUnSoloColore(svgStilista).match(/stroke="#[0-9A-Fa-f]{6}"/g), ['stroke="#FFF200"', 'stroke="#FFF200"']);
@@ -6291,6 +6335,102 @@ console.log('\ncannage-rafia — il cartamodello curvo: linee, cornice e griglia
   check('stop 2, 5 e 6 hanno punti', [s2.punti > 100, s5.punti > 5000, s6.punti > 5000], [true, true, true]);
 }
 
+// ---- K3 — il referto comune: misuraDst, le stesse misure per qualunque DST ------------------------------------------
+// Prima i DST costruiti apposta, con valori che si conoscono in anticipo; poi le due fixture vere, controllate contro
+// tutto quello che il file dice per conto suo (i record riletti da readDst, l'header: estensioni e cambi colore).
+{
+  console.log('\nK3 — misuraDst: punti, lunghezza cucita, salti, tagli, aghi, ingombro');
+  const r6 = (v) => Math.round(v * 1e6) / 1e6;
+  const dst = (paths) => rg.buildDst({ label: 'PROVA', paths });
+  const nRecord = (bytes) => (bytes.length - 512) / 3 - 1; // senza il record END
+
+  // tre punti da 3 mm di fila
+  const tre = dst([{ needle: 1, points_mm: [[0, 0], [3, 0], [6, 0], [9, 0]] }]);
+  const m3 = rg.misuraDst(tre);
+  check('tre punti da 3 mm: 3 punti, 9 mm = 0,009 m, niente salti né tagli, un ago',
+    [m3.punti, r6(m3.lunghezzaCucitaM), m3.salti, m3.trim, m3.aghi, m3.cambiAgo], [3, 0.009, 0, 0, 1, 0]);
+  check('...il più corto e il più lungo sono 3 mm; l’ingombro è 9 × 0 mm',
+    [m3.puntoPiuCortoMm, m3.puntoPiuLungoMm, m3.ingombro.larghezzaMm, m3.ingombro.altezzaMm], [3, 3, 9, 0]);
+  check('...il posizionamento iniziale (un record-salto prima del primo punto) non è un salto', rg.readDst(tre).stitchCount, 3);
+  // il disegno che parte lontano dall'origine: l'ago si porta lì con un salto da 7,07 mm, che non è un salto del ricamo
+  const lontano = rg.misuraDst(dst([{ needle: 1, points_mm: [[5, 5], [8, 5]] }]));
+  check('un ricamo che parte a (5, 5): il posizionamento iniziale non è un salto (0 salti, 0 mm), il punto è 1 da 3 mm',
+    [lontano.salti, lontano.saltiMm, lontano.punti, lontano.puntoPiuLungoMm], [0, 0, 1, 3]);
+
+  // un salto da 30 mm: il formato lo spezza in tre record (max 12,1 mm), ma è UN salto da 30 mm
+  const salto = dst([{ needle: 1, points_mm: [[0, 0], [3, 0]] }, { needle: 1, points_mm: [[33, 0], [36, 0]] }]);
+  const ms = rg.misuraDst(salto);
+  check('un salto da 30 mm scritto come tre record: i record sono 6 (1 posizionamento + 1 punto + 3 del salto + 1 punto)', nRecord(salto), 6);
+  check('...nel referto è UN salto, lungo 30 mm veri; i punti sono 2', [ms.salti, ms.saltiStessoAgo, r6(ms.saltiMm), r6(ms.saltoPiuLungoMm), ms.punti], [1, 1, 30, 30, 2]);
+
+  // un salto in diagonale: 30 mm in x e 40 in y = 50 mm veri, non la somma dei pezzi in cui il formato lo spezza
+  const diag = dst([{ needle: 1, points_mm: [[0, 0], [3, 0]] }, { needle: 1, points_mm: [[33, 40], [36, 40]] }]);
+  const md = rg.misuraDst(diag);
+  check('un salto di (30, 40) mm è lungo 50 mm veri', [md.salti, r6(md.saltiMm)], [1, 50]);
+
+  // un taglio: tre salti minimi che si annullano, poi il salto vero. Un taglio e un salto, non quattro salti.
+  const taglio = dst([{ needle: 1, points_mm: [[0, 0], [3, 0]] }, { needle: 1, trim: true, points_mm: [[13, 0], [16, 0]] }]);
+  const mt = rg.misuraDst(taglio);
+  check('un taglio seguito da un salto da 10 mm: 1 taglio, 1 salto, 10 mm', [mt.trim, mt.salti, r6(mt.saltiMm), mt.perAgo[0].trim], [1, 1, 10, 1]);
+  check('...il taglio non sposta niente: senza il flag trim il salto è lo stesso e i tagli sono 0',
+    (() => { const s = rg.misuraDst(dst([{ needle: 1, points_mm: [[0, 0], [3, 0]] }, { needle: 1, points_mm: [[13, 0], [16, 0]] }])); return [s.trim, s.salti, r6(s.saltiMm)]; })(), [0, 1, 10]);
+
+  // un cambio d'ago: 2 aghi, 1 cambio; lo spostamento dopo il cambio è un salto, ma non "sullo stesso ago"
+  const cambio = dst([{ needle: 1, points_mm: [[0, 0], [3, 0], [6, 0]] }, { needle: 2, points_mm: [[20, 0], [24, 0]] }]);
+  const mc = rg.misuraDst(cambio);
+  check('un cambio d’ago: 2 aghi, 1 cambio, 3 punti, 10 mm; per ago 2 punti da 6 mm e 1 punto da 4 mm',
+    [mc.aghi, mc.cambiAgo, mc.punti, r6(mc.lunghezzaCucitaM), mc.perAgo.map((a) => [a.ago, a.punti, r6(a.lunghezzaCucitaM)])], [2, 1, 3, 0.010, [[1, 2, 0.006], [2, 1, 0.004]]]);
+  check('...lo spostamento dopo il cambio è un salto da 14 mm ma non "sullo stesso ago"; è dell’ago 2',
+    [mc.salti, mc.saltiStessoAgo, r6(mc.saltiMm), mc.perAgo.map((a) => a.salti)], [1, 0, 14, [0, 1]]);
+
+  // la soglia: punti da 0,5 / 3 / 0,9 / 1 mm — sotto 1 mm ce ne sono due (1,0 non è sotto 1,0)
+  const corti = dst([{ needle: 1, points_mm: [[0, 0], [0.5, 0], [3.5, 0], [4.4, 0], [5.4, 0]] }]);
+  const mk = rg.misuraDst(corti);
+  check('punti da 0,5 / 3 / 0,9 / 1 mm: sotto la soglia di 1 mm ce ne sono 2; il più corto 0,5, il più lungo 3',
+    [mk.sottoSoglia, mk.puntoPiuCortoMm, mk.puntoPiuLungoMm], [{ sogliaMm: 1, punti: 2 }, 0.5, 3]);
+  check('...con soglia 0,6 ce n’è 1; con soglia 3,5 sono tutti e 4', [rg.misuraDst(corti, { sogliaMm: 0.6 }).sottoSoglia.punti, rg.misuraDst(corti, { sogliaMm: 3.5 }).sottoSoglia.punti], [1, 4]);
+
+  // un punto lungo: oltre 12,1 mm il formato lo spezza in più record, e la macchina ne cuce davvero più d'uno
+  const lungo = rg.misuraDst(dst([{ needle: 1, points_mm: [[0, 0], [30, 0]] }]));
+  check('un punto da 30 mm: il formato lo spezza in 3 record, che sono 3 punti (12,1 + 12,1 + 5,8) per 30 mm cuciti',
+    [lungo.punti, r6(lungo.lunghezzaCucitaM), lungo.puntoPiuLungoMm], [3, 0.03, 12.1]);
+
+  // niente da cucire
+  const vuoto = rg.refertoDaStrati([{ id: 'forme', color: '#000', polylines: [[{ x: 0, y: 0 }, { x: 5, y: 0 }]], shapeOnly: true }]);
+  check('solo forme (niente da cucire): referto vuoto, senza errori', [vuoto.punti, vuoto.aghi, vuoto.ingombro, vuoto.puntoPiuCortoMm], [0, 0, null, null]);
+  check('il filo in vista non si ricava dal DST: c’è solo se lo passa chi lo sa, con l’origine',
+    [m3.filoInVista, rg.misuraDst(tre, { filoInVista: { mm: 1200, origine: 'cross-stitch: passaggi sopra altri colori' } }).filoInVista],
+    [undefined, { mm: 1200, origine: 'cross-stitch: passaggi sopra altri colori' }]);
+  check('refertoDaStrati misura il DST di dstFromExportLayers',
+    (() => { const L = [{ id: 'a', color: '#f00', polylines: [[{ x: 0, y: 0 }, { x: 3, y: 0 }, { x: 6, y: 0 }]] }, { id: 'b', color: '#00f', polylines: [[{ x: 10, y: 0 }, { x: 14, y: 0 }]] }]; const a = rg.refertoDaStrati(L), b = rg.misuraDst(rg.dstFromExportLayers(L, { label: 'X' })); return [a.punti, a.aghi, JSON.stringify(a) === JSON.stringify(b)]; })(), [3, 2, true]);
+
+  // le fixture vere: M1404 (davanti, 4 aghi) e M1424 (orlatura, 5 aghi), controllate contro quello che dicono da sole
+  for (const [nome, aghi] of [['m1404-dav-stop.dst', 4], ['m1424-orlatura.dst', 5]]) {
+    const bytes = new Uint8Array(readFileSync(join(here, 'fixtures', nome)));
+    const m = rg.misuraDst(bytes), d = rg.readDst(bytes);
+    const head = Buffer.from(bytes.subarray(0, 512)).toString('latin1');
+    const campo = (k) => Number((head.match(new RegExp(`${k}:\\s*([+-]?\\s*\\d+)`)) ?? [])[1]?.replace(/\s/g, ''));
+    check(`${nome}: i punti sono quelli che readDst rilegge, i cambi d'ago quelli del campo CO dell'header, ${aghi} aghi`,
+      [m.punti, m.cambiAgo, m.aghi], [d.stitchCount, campo('CO'), aghi]);
+    check(`${nome}: l'ingombro è quello dell'header (estensioni +X/−X/+Y/−Y, in decimi di mm)`,
+      [r6(m.ingombro.larghezzaMm * 10), r6(m.ingombro.altezzaMm * 10)], [Math.abs(campo('\\+X')) + Math.abs(campo('-X')), Math.abs(campo('\\+Y')) + Math.abs(campo('-Y'))]);
+    // la lunghezza cucita, rifatta dai blocchi riletti con una strada diversa (distanza fra punti consecutivi)
+    let L = 0; for (const b of d.blocks) for (let i = 1; i < b.points_mm.length; i++) L += Math.hypot(b.points_mm[i][0] - b.points_mm[i - 1][0], b.points_mm[i][1] - b.points_mm[i - 1][1]);
+    check(`${nome}: la lunghezza cucita coincide con quella rifatta dai blocchi di readDst`, Math.abs(m.lunghezzaCucitaM - L / 1000) < 1e-9, true);
+    check(`${nome}: i punti per ago sommano ai punti totali, e la lunghezza per ago a quella totale`,
+      [m.perAgo.reduce((s, a) => s + a.punti, 0), Math.abs(m.perAgo.reduce((s, a) => s + a.lunghezzaCucitaM, 0) - m.lunghezzaCucitaM) < 1e-9], [m.punti, true]);
+    check(`${nome}: i salti non sono più dei blocchi raggiunti con un salto (readDst), e sono la somma dei salti per ago`,
+      [m.salti <= d.jumps.length, m.perAgo.reduce((s, a) => s + a.salti, 0)], [true, m.salti]);
+  }
+  const m1404 = rg.misuraDst(new Uint8Array(readFileSync(join(here, 'fixtures/m1404-dav-stop.dst'))));
+  const m1424 = rg.misuraDst(new Uint8Array(readFileSync(join(here, 'fixtures/m1424-orlatura.dst'))));
+  // numeri misurati il 2026-10-15 con questa stessa funzione (le due fixture non cambiano): se cambiano, è cambiata la misura
+  check('M1404: 46396 punti, 216,350 m cuciti, 17 salti (15 sullo stesso ago), 303 × 282,2 mm',
+    [m1404.punti, Math.round(m1404.lunghezzaCucitaM * 1000) / 1000, m1404.salti, m1404.saltiStessoAgo, m1404.ingombro.larghezzaMm, m1404.ingombro.altezzaMm], [46396, 216.35, 17, 15, 303, 282.2]);
+  check('M1424: 6988 punti (l’header dice 7102: conta tutti i record), 27,581 m cuciti, 5 salti, 488,5 × 302,1 mm',
+    [m1424.punti, Math.round(m1424.lunghezzaCucitaM * 1000) / 1000, m1424.salti, m1424.ingombro.larghezzaMm, m1424.ingombro.altezzaMm], [6988, 27.581, 5, 488.5, 302.1]);
+}
+
 // ---------------------------------------------------------------------------
 // rete-testa-speciale — la rete a serpentine (Lorenzo, 2026-10-15, decisa sulla simulazione): la linea scende a
 // zig-zag e risale, una sola sovrapposizione per ogni incrocio, la zona di sovrapposizione da incrocio a incrocio,
@@ -6699,6 +6839,332 @@ console.log('\nrete-testa-speciale — colonne intere nella larghezza: bordi lat
   check('51 colonne intere, rombo 9,985 mm; un filo solo dentro il pezzo; spenta di partenza',
     [r.colonneIntere.colonne, Math.round(r.colonneIntere.larghezzaRombo * 1000) / 1000, r.blocchi.length, Math.min(...xs) > -0.01, Math.max(...xs) < 420.01, rg.RTS_PARAMETRI.fitColumns, rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], P).colonneIntere],
     [51, 9.985, 1, true, true, false, undefined]);
+}
+
+// punto-maglia — il cordoncino a maglia (Lorenzo, 2026-10-19/20: sapere/decisioni/punto-maglia-cordoncino.md).
+// Il motore è l'algoritmo del campione cucito portato su curve qualsiasi: sugli stessi tracciati (dritti e cerchi) deve
+// dare GLI STESSI PUNTI del campione (fixture rigenerata da .lab/dior/campione.ts). Poi le regole di Lorenzo: le gambe
+// e i passaggi mai spezzati (un punto solo, sotto i 12,1 mm del DST), le passate pari del centro, l'ordine lati →
+// centro, le righe intere tolte al tratto sotto negli incroci, il progetto che si riapre dal DST (R27).
+console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gli incroci');
+{
+  const camp = JSON.parse(readFileSync(join(root, 'apps/punto-maglia/fixtures/campione-4.json'), 'utf8'));
+  const dritto = (x, y0, len) => ({ L: len, chiuso: false, at: (s) => ({ x, y: y0 + s, nx: -1, ny: 0 }) });
+  const anello = (cx, cy, r) => ({ L: 2 * Math.PI * r, chiuso: true, at: (s) => { const t = -Math.PI / 2 + s / r; const tx = -Math.sin(t), ty = Math.cos(t); return { x: cx + r * Math.cos(t), y: cy + r * Math.sin(t), nx: -ty, ny: tx }; } });
+  const miei = [rg.pmgCordoncino(dritto(0, 0, 40), 1), rg.pmgCordoncino(dritto(12, 0, 40), 1.5), rg.pmgCordoncino(dritto(25, 0, 40), 2), rg.pmgCordoncino(anello(48, 20, 9), 1), rg.pmgCordoncino(anello(78, 20, 11), 2)];
+  miei.forEach((m, i) => {
+    const r = camp[i].pts; let d = 0; for (let k = 0; k < r.length; k++) d = Math.max(d, Math.hypot(r[k][0] - m.punti[k][0], r[k][1] - m.punti[k][1]));
+    check(`campione «${camp[i].name}»: stessi ${r.length} punti del DST cucito`, [m.punti.length, d < 1e-9], [r.length, true]);
+  });
+  // dritto, centro 1: le gambe del centro 4 volte (pari: si torna sulla punta), quelle dei lati 2; prima i lati, poi il centro
+  const c1 = miei[0];
+  const lati = c1.punti.findIndex((p, i) => i > 0 && c1.tipi[i] === 'passaggio' && Math.abs(p[0]) < 1e-9 && i > c1.punti.length / 2);
+  check('centro 1: il centro (sull’asse) comincia dopo i due lati', lati > 0 && c1.punti.slice(lati).every((p) => Math.abs(p[0]) <= 1.25 + 1e-9), true);
+  const conta = new Map();
+  for (let i = 1; i < c1.punti.length; i++) if (c1.tipi[i] !== 'passaggio') { const a = c1.punti[i - 1], b = c1.punti[i]; const k = [a, b].map((p) => p.map((v) => v.toFixed(3)).join(',')).sort().join('|'); conta.set(k, (conta.get(k) ?? 0) + 1); }
+  check('centro 1: ogni gamba del centro 4 passate, ogni gamba dei lati 2', [...new Set([...conta.values()])].sort(), [2, 4]);
+
+  // la «D» di prova: la gamba (centro 2) sotto, l'arco (centro 1,5) che le passa sopra in cima e in fondo, e un anello
+  const T = (nome, punti, o = {}) => ({ nome, punti, chiuso: false, colonne: 1, versoV: 'avanti', inizio: 'capo', mezza: 'destra', ...o });
+  const D = [T('gamba', [[20, 5], [20, 45], [20, 85]], { colonne: 2 }), T('arco', [[5, 12], [45, 12], [75, 45], [45, 80], [5, 80]], { colonne: 1.5 }), T('o', [[100, 50], [110, 60], [100, 70], [90, 60]], { chiuso: true })];
+  const r = rg.pmgCuci(D, rg.PMG_PARAMETRI);
+  const lung = (t, tipo) => { const c = t.cucitura, v = []; for (let i = 1; i < c.punti.length; i++) if (tipo === 'passaggio' ? c.tipi[i] === tipo : c.tipi[i] !== 'passaggio') v.push(Math.hypot(c.punti[i][0] - c.punti[i - 1][0], c.punti[i][1] - c.punti[i - 1][1])); return v; };
+  check('D: la gamba perde le righe sotto l’arco (misurate 4), l’arco e l’anello nessuna', r.tratti.map((t) => t.cucitura.righeTolte), [4, 0, 0]);
+  check('D: mai spezzare — ogni gamba di V fra 2,4 e 4,8 mm (misurate 2,45–4,72), ogni passaggio sotto i 12,1 (misurato 7,5)',
+    r.tratti.every((t) => lung(t, 'gamba').every((d) => d >= 2.4 && d <= 4.8) && lung(t, 'passaggio').every((d) => d <= 12.1)), true);
+  check('D: nessun avviso', r.avvisi, []);
+  check('i lati ci sono: ogni tratto ha gambe del centro e gambe dei lati', r.tratti.map((t) => [t.cucitura.tipi.includes('gamba'), t.cucitura.tipi.includes('lato')]), [[true, true], [true, true], [true, true]]);
+  // si comincia dall'altro capo: stesso numero di punti, primo punto dalla parte opposta
+  const coda = rg.pmgCuci([T('g', [[0, 0], [0, 40]], { inizio: 'coda' })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  const capo = rg.pmgCuci([T('g', [[0, 0], [0, 40]])], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  check('inizio dalla coda: stessi punti, si parte dall’altro capo', [coda.punti.length === capo.punti.length, coda.punti[0][1] > 30, capo.punti[0][1] < 10], [true, true, true]);
+  check('un tratto più corto di una V non si cuce e lo dice', rg.pmgCuci([T('corto', [[0, 0], [0, 2]])], rg.PMG_PARAMETRI).avvisi.length, 1);
+
+  // il DST: un ago, un taglio per tratto, tutti i punti; il progetto torna (R27)
+  const strati = rg.pmgStrati(r);
+  const dst = rg.dstFromExportLayers(strati, { label: 'MAGLIA', metadata: rg.pmgProgetto(rg.PMG_PARAMETRI, D) });
+  const letto = rg.readDst(dst);
+  check('DST: tre blocchi (un tratto ciascuno), tutti i punti', [letto.blocks.length, letto.blocks.reduce((n, b) => n + b.points_mm.length, 0)], [3, r.punti]);
+  const torna = rg.pmgLeggiProgetto(rg.readDstMetadata(dst));
+  check('DST: il progetto torna coi suoi tratti', [torna?.tratti.length, torna?.tratti[1].colonne, torna?.tratti[2].chiuso, torna?.params.passateCentro], [3, 1.5, true, 4]);
+  check('un file di un altro tool non viene preso per un progetto punto maglia', rg.pmgLeggiProgetto({ rgProject: 'razza', params: {} }), null);
+  // 2026-10-20, seconda richiesta di Lorenzo: forme precise, tratti che si stringono, linee spezzate, ritocchi a mano
+  camp.slice(3).forEach((c, j) => {
+    const [cx, r, col] = [[48, 9, 1], [78, 11, 2]][j];
+    const m = rg.pmgCuci([T('c', [[cx, 20], [cx, 20 - r]], { forma: 'cerchio', colonne: col })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+    let d = 0; for (let k = 0; k < c.pts.length; k++) d = Math.max(d, Math.hypot(c.pts[k][0] - m.punti[k][0], c.pts[k][1] - m.punti[k][1]));
+    check(`cerchio preciso r ${r}: gli stessi ${c.pts.length} punti del «${c.name}» del campione (entro 0,01 mm; misurato 0,0001)`, [m.punti.length, d < 0.01], [c.pts.length, true]);
+  });
+  const stretto = rg.pmgCuci([T('i', [[0, 0], [0, 60]], { colonne: 2, strettoCapo: { colonne: 1, mm: 10 }, strettoCoda: { colonne: 1.5, mm: 6 } })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  check('si stringe: centro 2, al capo 1 negli ultimi 10 mm (passando da 1,5), alla coda 1,5 negli ultimi 6',
+    stretto.colonneRighe.join(' '), '1 1 1.5 1.5 ' + Array(17).fill(2).join(' ') + ' 1.5 1.5');
+  check('...e nessun punto spezzato o oltre il DST (misurato 6,0 mm al cambio)', stretto.puntoMaxMm <= 12.1, true);
+  const z = rg.pmgLinea(T('z', [[0, 0], [20, 0], [20, 20], [40, 20]], { angoli: [false, true, true, false] }));
+  check('punti ad angolo: fra due angoli la linea è dritta (a metà del secondo pezzo x = 20)', z.filter((p) => p[1] > 1 && p[1] < 19).every((p) => Math.abs(p[0] - 20) < 1e-9), true);
+  const base = rg.pmgCuci([T('g', [[0, 0], [0, 30]])], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  const da = base.punti[5], volte = base.punti.filter((p) => p[0] === da[0] && p[1] === da[1]).length;
+  const rit = rg.pmgCuci([T('g', [[0, 0], [0, 30]], { ritocchi: { firma: base.firma, spostati: [{ da, a: [da[0] + 0.5, da[1]] }] } })], rg.PMG_PARAMETRI);
+  check('ritocco a mano: il punto si sposta tutte le volte che il filo ci passa, gli altri no',
+    [rit.tratti[0].cucitura.punti.filter((p) => p[0] === da[0] + 0.5 && p[1] === da[1]).length, rit.tratti[0].cucitura.punti.filter((p, i) => (p[0] !== base.punti[i][0] || p[1] !== base.punti[i][1]) && !(p[0] === da[0] + 0.5 && p[1] === da[1])).length], [volte, 0]);
+  const perso = rg.pmgCuci([T('g', [[0, 0], [0, 35]], { ritocchi: { firma: base.firma, spostati: [{ da, a: [9, 9] }] } })], rg.PMG_PARAMETRI);
+  check('se il cordoncino cambia, i ritocchi non valgono e il tool lo dice', [perso.avvisi.length, perso.tratti[0].cucitura.punti.some((p) => p[0] === 9)], [1, false]);
+  const conTutto = [T('o', [[0, 0], [0, -9]], { forma: 'cerchio' }), T('z', [[0, 0], [20, 0], [20, 20]], { angoli: [false, true, false], strettoCapo: { colonne: 1.5, mm: 5 }, ritocchi: { firma: 'x', spostati: [{ da: [1, 1], a: [2, 2] }] } })];
+  const torna2 = rg.pmgLeggiProgetto(rg.readDstMetadata(rg.dstFromExportLayers(rg.pmgStrati(rg.pmgCuci(conTutto, rg.PMG_PARAMETRI)), { metadata: rg.pmgProgetto(rg.PMG_PARAMETRI, conTutto) })));
+  check('DST: tornano cerchio, angoli, stretto e ritocchi', [torna2.tratti[0].forma, torna2.tratti[1].angoli, torna2.tratti[1].strettoCapo, torna2.tratti[1].ritocchi.spostati.length], ['cerchio', [false, true, false], { colonne: 1.5, mm: 5 }, 1]);
+  // 2026-10-20, terza richiesta (il Dior disegnato da Lorenzo): «passasse secco da 1 a 2», la stanghetta «più pulita»,
+  // il pallino «alleggerito»
+  const secco = rg.pmgCuci([T('i', [[0, 0], [0, 30]], { strettoCoda: { colonne: 2, mm: 12, secco: true } })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  check('stretto secco: da 1 a 2 senza la riga a 1,5', [secco.colonneRighe.includes(1.5), secco.colonneRighe.filter((c) => c === 2).length >= 4], [false, true]);
+  const unci = rg.pmgCuci([T('i', [[0, 0], [5, -5], [5, 25]], { angoli: [false, true, false] })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  check('punti ad angolo: nessuna V a cavallo dello spigolo (le gambe dei due pezzi restano fra 3,4 e 3,8 mm)',
+    lung({ cucitura: unci }, 'gamba').every((d) => d >= 3.4 && d <= 3.8), true);
+  const pallino = rg.pmgCuci([T('p', [[0, 0], [0, -2.06]], { forma: 'cerchio' })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  const pallinoPieno = rg.pmgCuci([T('p', [[0, 0], [0, -2.06]], { forma: 'cerchio', latoInterno: true })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  const o = rg.pmgCuci([T('o', [[0, 0], [0, -5.3]], { forma: 'cerchio' })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  check('cerchio piccolo (r 2): senza il lato verso il centro nessun punto passa a meno di 0,7 mm dal centro (le V del centro arrivano a 0,8); la «o» (r 5,3) lo tiene',
+    [pallino.punti.every((p) => Math.hypot(p[0], p[1]) > 0.7), pallinoPieno.punti.some((p) => Math.hypot(p[0], p[1]) < 0.5), o.punti.some((p) => Math.hypot(p[0], p[1]) < 3.5)], [true, true, true]);
+  const leggero = rg.pmgCuci([T('p', [[0, 0], [0, -2.06]], { forma: 'cerchio', passateCentro: 2 })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  check('passate del centro per tratto: 2 alleggeriscono il pallino', leggero.punti.length < pallino.punti.length, true);
+  // 2026-10-20, quarta richiesta: «eliminare dei punti» e «decidere inizio e fine»
+  const finQui = rg.pmgCuci([T('g', [[0, 0], [0, 30]])], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  const finLa = rg.pmgCuci([T('g', [[0, 0], [0, 30]], { fine: 'altroCapo' })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  check('finisce all’altro capo: comincia in cima e finisce in fondo (senza ritorno, meno punti); di serie finisce in cima',
+    [finLa.punti[0][1] < 1, finLa.punti.at(-1)[1] > 25, finQui.punti.at(-1)[1] < 5, finLa.punti.length < finQui.punti.length, finLa.puntoMaxMm <= 12.1], [true, true, true, true, true]);
+  const via = finQui.punti[5];
+  const senza = rg.pmgCuci([T('g', [[0, 0], [0, 30]], { ritocchi: { firma: finQui.firma, spostati: [], tolti: [via] } })], rg.PMG_PARAMETRI).tratti[0].cucitura;
+  check('punto di ricamo tolto: il filo non passa più da quel buco, e niente punti fermi',
+    [senza.punti.some((p) => p[0] === via[0] && p[1] === via[1]), senza.punti.every((p, i) => i === 0 || p[0] !== senza.punti[i - 1][0] || p[1] !== senza.punti[i - 1][1]), senza.originali.length === senza.punti.length], [false, true, true]);
+  const src = readFileSync(join(root, 'apps/punto-maglia/src/tool.ts'), 'utf8');
+  const call = src.indexOf('dstFromExportLayers(');
+  check('tool: il DST esce coi parametri, sa rileggerli e accetta un .dst (R27)', [call >= 0 && /metadata:/.test(src.slice(call, call + 600)), /rgProject|progetto\(/.test(src), /readDstMetadata/.test(src), /accept="[^"]*\.dst/.test(src)], [true, true, true, true]);
+}
+
+// ---- U1 — l'anatomia di un tool RG: i componenti comuni e il loro cricchetto ---------------------------------------
+// packages/ui/src/anatomia.ts costruisce i pezzi uguali per tutti (campo numerico, sezione 01, intestazione
+// dell'anteprima, barra di stato). Prima si provano i componenti; poi il cricchetto legge i tool e fallisce se uno
+// scrive a mano un pezzo che dovrebbe usare il componente, con la lista del debito (debito-anatomia.ts) che può solo scendere.
+{
+  console.log('\nU1 — i numeri: virgola e punto, frecce, limiti');
+  const A = rg.ui;
+  check('0,4 e 0.4 sono lo stesso numero', [A.leggiNumero('0,4'), A.leggiNumero('0.4'), A.leggiNumero(' 0,4 ')], [0.4, 0.4, 0.4]);
+  check('negativi e senza zero davanti: -0,5 · .5 · ,5', [A.leggiNumero('-0,5'), A.leggiNumero('.5'), A.leggiNumero(',5')], [-0.5, 0.5, 0.5]);
+  check('migliaia: 1.000,5 e 1,000.5 fanno 1000,5', [A.leggiNumero('1.000,5'), A.leggiNumero('1,000.5')], [1000.5, 1000.5]);
+  check('quello che non è un numero è NaN: vuoto · abc · 1,2,3 · 1.2.3 · 12mm · 1,5,5', ['', 'abc', '1,2,3', '1.2.3', '12mm', '1.000,5,5'].map((t) => Number.isNaN(A.leggiNumero(t))), [true, true, true, true, true, true]);
+  check('si scrive con la virgola, senza zeri in coda e senza il rumore del floating point', [A.scriviNumero(0.4), A.scriviNumero(12), A.scriviNumero(0.1 + 0.2), A.scriviNumero(-0.0), A.scriviNumero(1.8)], ['0,4', '12', '0,3', '0', '1,8']);
+  check('↑ e ↓ sommano il passo senza errori di arrotondamento: 0,4 → 0,45 → 0,4 → 0,35 (passo 0,05)',
+    [A.passoNumero('0,4', 1, { passo: 0.05 }), A.passoNumero('0,45', -1, { passo: 0.05 }), A.passoNumero('0,4', -1, { passo: 0.05 })], ['0,45', '0,4', '0,35']);
+  check('0,3 − 0,1 fa 0,2 e non 0,19999999999999998', A.passoNumero('0,3', -1, { passo: 0.1 }), '0,2');
+  check('i limiti tengono: sotto il minimo si ferma, sopra il massimo si ferma', [A.passoNumero('0,05', -1, { passo: 0.1, min: 0 }), A.passoNumero('99,5', 1, { passo: 1, max: 100 })], ['0', '100']);
+  check('un campo vuoto o sbagliato parte dal minimo (o da 0)', [A.passoNumero('', 1, { passo: 1, min: 5 }), A.passoNumero('x', 1, { passo: 2 })], ['6', '2']);
+  check('senza passo le frecce non fanno niente', A.passoNumero('3', 1, {}), null);
+  check('limitaNumero', [A.limitaNumero(-4, { min: 0 }), A.limitaNumero(40, { max: 30 }), A.limitaNumero(7, { min: 0, max: 30 })], [0, 30, 7]);
+
+  console.log('\nU1 — i componenti');
+  const campo = A.campoNumero({ id: 'x', etichetta: 'Larghezza "vera"', unita: 'mm', valore: 0.4, passo: 0.05, min: 0, max: 5, aiuto: '0 = auto' });
+  check('campoNumero: testo con inputmode decimale (non number: il browser vorrebbe il punto), classi del DS, valore con la virgola',
+    [/type="text"/.test(campo), /inputmode="decimal"/.test(campo), /class="rg-input rg-input--numeric"/.test(campo), /value="0,4"/.test(campo)], [true, true, true, true]);
+  check('...passo, minimo e massimo nei data-, lo slot dell\'unità c\'è, l\'etichetta è senza l\'unità e senza virgolette rotte',
+    [/data-passo="0.05"/.test(campo), /data-min="0"/.test(campo), /data-max="5"/.test(campo), /<span>mm<\/span>/.test(campo), /Larghezza &quot;vera&quot;/.test(campo), /rg-field__label">[^<(]*<\/span>/.test(campo)], [true, true, true, true, true, true]);
+  check('...l\'aiuto sta sotto, collegato col aria-describedby, e il campo con l\'aiuto va a tutta riga', [/id="x-aiuto"/.test(campo), /aria-describedby="x-aiuto"/.test(campo), /rg-param-grid__wide/.test(campo)], [true, true, true]);
+  check('...senza unità lo slot c\'è lo stesso (vuoto)', /<span><\/span><\/span><\/label>$/.test(A.campoNumero({ id: 'n', etichetta: 'Semi', unita: '', valore: 1 })), true);
+
+  const sorg = (tipo, extra = {}) => A.sezioneSorgente({ tipo, accetta: '.svg', statoIniziale: 'niente', ...extra });
+  check('sezione 01: il nome dipende da cosa entra (U-D3): Cartamodello · Immagine · Ricamo di partenza',
+    ['cartamodello', 'immagine', 'dst'].map((t) => sorg(t).match(/__title">([^<]+)</)[1]), ['Cartamodello', 'Immagine', 'Ricamo di partenza']);
+  check('...ha sempre fileInput, fileStatus, progettoInput («Apri progetto o DST…») e la larghezza reale, tutti con id fissi',
+    ['fileInput', 'fileStatus', 'progettoInput', 'progettoStatus', 'realWidth'].map((id) => sorg('cartamodello').includes(`id="${id}"`)), [true, true, true, true, true]);
+  check('...il bottone dell\'esempio c\'è solo se il tool ne ha uno; il progetto e la larghezza si possono togliere',
+    [sorg('cartamodello').includes('demoBtn'), sorg('cartamodello', { demo: 'Cartamodello demo' }).includes('id="demoBtn"'), sorg('dst', { progetto: false }).includes('progettoInput'), sorg('dst', { larghezzaReale: false }).includes('realWidth')], [false, true, false, false]);
+  check('...nell\'etichetta della larghezza non c\'è «(0 = auto)»: sta nell\'aiuto (REVISIONE-PARAMETRI)', /Larghezza reale<\/span>/.test(sorg('cartamodello')) && /0 = usa la misura letta dal file/.test(sorg('cartamodello')), true);
+
+  const ordine = (html) => [...html.matchAll(/<(?:button|input)[^>]*id="(autoCalcolo|genBtn|simBtn|fitBtn|exportBtn|exportDstBtn)"/g)].map((m) => m[1]);
+  const tutto = A.barraAnteprima({ ricalcolaDaSolo: { acceso: true }, genera: true, simula: true });
+  check('l\'intestazione dell\'anteprima ha l\'ordine fisso (U-D1, U-D4): Ricalcola da solo · Genera · Simula · Adatta · Esporta SVG · Esporta DST',
+    ordine(tutto), ['autoCalcolo', 'genBtn', 'simBtn', 'fitBtn', 'exportBtn', 'exportDstBtn']);
+  check('...il bottone pieno è uno solo ed è il DST', [(tutto.match(/rg-button--primary/g) ?? []).length, /rg-button--primary[^>]*>Esporta DST/.test(tutto)], [1, true]);
+  check('...un tool che non ha una cosa lascia il posto vuoto, non riordina', [ordine(A.barraAnteprima({ genera: true })), ordine(A.barraAnteprima({ simula: true, adatta: false, esportaSvg: false }))], [['genBtn', 'fitBtn', 'exportBtn', 'exportDstBtn'], ['simBtn', 'exportDstBtn']]);
+  check('...«Ricalcola da solo» spunta quando è acceso e i due export possono partire spenti', [/id="autoCalcolo" checked/.test(tutto), /id="autoCalcolo">/.test(A.barraAnteprima({ ricalcolaDaSolo: { acceso: false } })), (A.barraAnteprima({ esportaSpenti: true }).match(/disabled/g) ?? []).length], [true, true, 2]);
+  check('barra di stato: messaggio, spazio del referto, zoom — in quest\'ordine', [...A.barraStato().matchAll(/id="(status|misure|zoom)"/g)].map((m) => m[1]), ['status', 'misure', 'zoom']);
+
+  const sez = A.sezione({ indice: 3, titolo: 'Parametri', contenuto: '<p>x</p>', apribile: true, aperta: true, id: 'par' });
+  check('sezione numerata: due cifre, apribile con details/open, chiusa se non lo è',
+    [/__index">03</.test(sez), /^<details[^>]* open>/.test(sez), /data-sez="par"/.test(sez), A.sezione({ indice: 2, titolo: 'A', contenuto: '' }).startsWith('<section')], [true, true, true, true]);
+  check('sezione Progetto: l\'ultima, i preset con gli id soliti', ['presetNome', 'presetLista', 'presetSalva', 'presetCarica', 'presetElimina', 'presetEsporta', 'presetImporta'].map((id) => A.sezioneProgetto({ indice: 6 }).includes(`id="${id}"`)), [true, true, true, true, true, true, true]);
+  const intero = A.scheletro({ topbar: '<header>TOPBAR</header>', classe: 'prova-workspace', pannello: [sorg('immagine'), A.sezione({ indice: 2, titolo: 'Due', contenuto: '' })], anteprima: { genera: true } });
+  check('lo scheletro: topbar, pannello, intestazione, tela, barra di stato — una volta ciascuno, nell\'ordine',
+    [intero.startsWith('<header>TOPBAR</header>'), ['rg-workspace__panel', 'rg-workspace__stage-header', 'id="canvas"', 'id="layer"', 'rg-workspace__statusbar'].map((c) => intero.indexOf(c)).every((v, i, a) => v > 0 && (i === 0 || v > a[i - 1])), /rg-workspace prova-workspace/.test(intero)], [true, true, true]);
+
+  console.log('\nU1 — il cricchetto: chi scrive a mano un pezzo che ha un componente');
+  const radice = join(here, '..');
+  const COSE = {
+    intestazione: (s) => s.includes('rg-workspace__stage-header'),
+    'campo-numerico': (s) => s.includes('rg-input--numeric'),
+    'sezione-01': (s) => /rg-param-section__index">\s*01\s*</.test(s),
+    'barra-stato': (s) => s.includes('rg-workspace__statusbar'),
+  };
+  const tools = readdirSync(join(radice, 'apps')).filter((d) => d !== 'shell' && existsSync(join(radice, 'apps', d, 'src/tool.ts'))).sort();
+  const aMano = Object.fromEntries(tools.map((t) => { const s = readFileSync(join(radice, 'apps', t, 'src/tool.ts'), 'utf8'); return [t, Object.entries(COSE).filter(([, f]) => f(s)).map(([n]) => n)]; }));
+  const DEBITO_ANATOMIA_ATTUALE = 44;
+  const debito = rg.DEBITO_ANATOMIA;
+  check(`il debito dell'interfaccia è ${DEBITO_ANATOMIA_ATTUALE} voci (può solo scendere: se è sceso, abbassa DEBITO_ANATOMIA_ATTUALE)`, Object.values(debito).reduce((n, v) => n + v.length, 0), DEBITO_ANATOMIA_ATTUALE);
+  check('nessun tool scrive a mano un pezzo che ha un componente, se non è nel debito (un tool nuovo deve usare anatomia.ts)',
+    tools.flatMap((t) => aMano[t].filter((c) => !(debito[t] ?? []).includes(c)).map((c) => `${t}: ${c}`)), []);
+  check('nessuna voce di debito che il tool non scrive più (va tolta) né tool che non esiste',
+    [...Object.entries(debito).flatMap(([t, v]) => v.filter((c) => !(aMano[t] ?? []).includes(c)).map((c) => `${t}: ${c}`)), ...Object.keys(debito).filter((t) => !tools.includes(t))], []);
+  check('il tool di prova (net-45) usa i componenti: scheletro, sezione 01, campo numerico, e non ha niente nel debito',
+    [/from '@rg\/ui\/anatomia'/.test(readFileSync(join(radice, 'apps/net-45/src/tool.ts'), 'utf8')), aMano['net-45'], debito['net-45']], [true, [], undefined]);
+}
+
+// ---- K4 — la scheda di ogni tool: cosa prende, cosa dà, quali parametri usa ----------------------------------------
+// packages/ui/src/tools-dati.ts dice per ogni tool cosa prende (`ingressi`) e cosa dà (`uscite`); i parametri vengono
+// dal registro (`parametriDelTool`). Quello che si dichiara si CONTROLLA contro i sorgenti: i file che il tool accetta
+// davvero e i bottoni di export che ha davvero. Le `tecniche` R24 sono una mappa di mestiere che aspetta Lorenzo.
+{
+  console.log('\nK4 — la scheda di ogni tool: cosa prende, cosa dà, quali parametri usa');
+  const { caricaRegistro } = await import('./registro.mjs');
+  const reg = await caricaRegistro('registro-k4');
+  const radice = join(here, '..');
+  const SCHEDE_TOOL = rg.ToolsDati;
+  const IN = ['svg', 'dxf', 'raster', 'dst'];
+  const OUT = ['svg', 'dst'];
+  const TECNICHE = ['corsa', 'raso', 'cordoncino', 'catenella', 'zigzag', 'tatami', 'croce'];
+  const sorgente = (id) => readFileSync(join(radice, 'apps', id, 'src/tool.ts'), 'utf8');
+
+  // cosa accetta un tool nei suoi file di caricamento (attributi `accept` scritti a mano, `accetta:` del componente)
+  const accettato = (src) => {
+    const acc = [...src.matchAll(/accept="([^"]*)"/g), ...src.matchAll(/accetta:\s*'([^']*)'/g), ...src.matchAll(/accept\s*=\s*'([^']*)'/g)].map((m) => m[1]).join(' ');
+    const conComponente = /sezioneSorgente\(/.test(src) && !/progetto:\s*false/.test(src); // «Apri progetto o DST…» accetta .svg e .dst
+    return new Set([
+      /\.svg|image\/svg/.test(acc) || conComponente ? 'svg' : null,
+      /\.dxf/.test(acc) ? 'dxf' : null,
+      /image\/(\*|png|jpe?g|webp|bmp|gif)/.test(acc) ? 'raster' : null,
+      /\.dst/.test(acc) || conComponente ? 'dst' : null,
+    ].filter(Boolean));
+  };
+  // quali export ha: il testo di un bottone («Esporta SVG», «Scarica SVG», «Salva DST») o l'intestazione comune
+  const prodotto = (src) => {
+    const comune = /(barraAnteprima|scheletro)\(/.test(src);
+    return new Set([
+      /(Esporta|Scarica|Salva)[^<>"'`]{0,12}SVG/.test(src) || (comune && !/esportaSvg:\s*false/.test(src)) ? 'svg' : null,
+      /(Esporta|Scarica|Salva)[^<>"'`]{0,12}DST/.test(src) || (comune && !/esportaDst:\s*false/.test(src)) ? 'dst' : null,
+    ].filter(Boolean));
+  };
+
+  check('la scheda ha un tool per ogni tool della suite, una volta sola, con nome e descrizione',
+    [SCHEDE_TOOL.map((t) => t.id).sort(), SCHEDE_TOOL.every((t) => t.name && t.description)], [[...reg.ORDINE_TOOL].sort(), true]);
+  check('ingressi: almeno uno, nomi validi (svg · dxf · raster · dst), senza doppioni',
+    SCHEDE_TOOL.filter((t) => !Array.isArray(t.ingressi) || !t.ingressi.length || t.ingressi.some((x) => !IN.includes(x)) || new Set(t.ingressi).size !== t.ingressi.length).map((t) => t.id), []);
+  check('uscite: nomi validi (svg · dst), senza doppioni, e il DST c\'è sempre (è il programma per la macchina)',
+    SCHEDE_TOOL.filter((t) => !Array.isArray(t.uscite) || t.uscite.some((x) => !OUT.includes(x)) || new Set(t.uscite).size !== t.uscite.length || !t.uscite.includes('dst')).map((t) => t.id), []);
+  check('quello che un tool dichiara di prendere lo accetta davvero (un file di caricamento lo ammette)',
+    SCHEDE_TOOL.flatMap((t) => t.ingressi.filter((x) => !accettato(sorgente(t.id)).has(x)).map((x) => `${t.id}: ${x}`)), []);
+  check('...e un tool che accetta un\'immagine o un DXF lo dichiara (svg e dst non contano: ogni tool riapre il proprio progetto)',
+    SCHEDE_TOOL.flatMap((t) => ['raster', 'dxf'].filter((x) => accettato(sorgente(t.id)).has(x) && !t.ingressi.includes(x)).map((x) => `${t.id}: ${x}`)), []);
+  check('uscite dichiarate = bottoni di export che il tool ha davvero',
+    SCHEDE_TOOL.filter((t) => JSON.stringify([...prodotto(sorgente(t.id))].sort()) !== JSON.stringify([...t.uscite].sort())).map((t) => t.id), []);
+  check('i parametri di ogni tool vengono dal registro: ce ne sono, e ognuno dice come il tool lo salva',
+    SCHEDE_TOOL.filter((t) => { const p = reg.parametriDelTool(t.id); return !p.length || p.some((x) => !x.tool[t.id]); }).map((t) => t.id), []);
+  check('le tecniche, quando ci sono, sono tecniche R24 (corsa · raso · cordoncino · catenella · zigzag · tatami · croce)',
+    SCHEDE_TOOL.filter((t) => t.tecniche && (!t.tecniche.length || t.tecniche.some((x) => !TECNICHE.includes(x)))).map((t) => t.id), []);
+  // Il debito delle tecniche: la mappa tool → tecniche è una decisione di mestiere di Lorenzo (diario della conduzione).
+  const DEBITO_TECNICHE_ATTUALE = 17;
+  check(`i tool senza la mappa delle tecniche R24 sono ${DEBITO_TECNICHE_ATTUALE} su ${SCHEDE_TOOL.length} (può solo scendere: se Lorenzo ne conferma, abbassa DEBITO_TECNICHE_ATTUALE)`,
+    SCHEDE_TOOL.filter((t) => !t.tecniche).length, DEBITO_TECNICHE_ATTUALE);
+}
+
+// ---- K2 — la busta di progetto: le chiavi comuni, scritte allo stesso modo, e leggiProgetto per qualunque tool -----
+// conBusta() AGGIUNGE le chiavi comuni ai metadati che un tool scrive già (rg, tool, toolVersion, ruoli, sorgente, fili,
+// misure) senza togliere niente; leggiProgetto() legge il file di qualunque tool, anche scritto prima della busta.
+{
+  console.log('\nK2 — la busta: si aggiunge, non si toglie');
+  const strati = [
+    { id: 'a', color: '#ff0000', polylines: [[{ x: 0, y: 0 }, { x: 3, y: 0 }, { x: 6, y: 0 }]] },
+    { id: 'forme', color: '#cccccc', polylines: [[{ x: 0, y: 0 }, { x: 9, y: 9 }, { x: 0, y: 9 }]], shapeOnly: true },
+    { id: 'vuoto', color: '#00ff00', polylines: [] },
+    { id: 'b', color: '#0000ff', polylines: [[{ x: 10, y: 0 }, { x: 14, y: 0 }]] },
+  ];
+  const vecchio = { rgProject: 'net-45', version: '0.1.0', params: { squareSizeMm: 11 }, roles: { '#e73433': 'MASTER_OUTLINE' }, generatedAt: 123 };
+  const b = rg.conBusta(vecchio, { strati, sorgente: { tipo: 'svg', nome: 'demo.svg', larghezzaMm: 170, altezzaMm: 135 } });
+  check('conBusta: le chiavi vecchie restano tutte, identiche (rgProject, version, params, roles, generatedAt)',
+    Object.keys(vecchio).map((k) => JSON.stringify(b[k]) === JSON.stringify(vecchio[k])), [true, true, true, true, true]);
+  check('...e ci sono quelle nuove: rg 1, tool, toolVersion, ruoli (dal vecchio roles), sorgente', [b.rg, b.tool, b.toolVersion, b.ruoli, b.sorgente.nome], [1, 'net-45', '0.1.0', { '#e73433': 'MASTER_OUTLINE' }, 'demo.svg']);
+  check('...i fili sono quelli che si cuciono, in ordine d\'ago: le forme e gli strati vuoti non contano', b.fili, [{ colore: '#ff0000' }, { colore: '#0000ff' }]);
+  check('...le misure sono il referto di quel DST (K3): 3 punti in 2 aghi', [b.misure.fonte, b.misure.punti, b.misure.aghi], ['dst', 3, 2]);
+  check('...non modifica l\'oggetto che riceve', Object.keys(vecchio).sort(), ['generatedAt', 'params', 'rgProject', 'roles', 'version']);
+  check('...un referto già calcolato dai byte veri (pettine, sfrangiatura) vince su quello degli strati', rg.conBusta(vecchio, { strati, misure: { ...b.misure, punti: 999 } }).misure.punti, 999);
+  check('...senza rgProject né tool lancia (un file senza padrone non esiste)', (() => { try { rg.conBusta({ params: {} }, {}); return 'nessun errore'; } catch (e) { return /manca l.id del tool/.test(e.message); } })(), true);
+  check('...con opz.tool funziona anche se i metadati non hanno rgProject', rg.conBusta({ params: {} }, { tool: 'x' }).tool, 'x');
+  check('...un file già con la busta si riscrive uguale (conBusta è idempotente)', JSON.stringify(rg.conBusta(b, { strati, sorgente: b.sorgente })) === JSON.stringify(b), true);
+
+  console.log('\nK2 — leggiProgetto: SVG, DST e file senza busta');
+  const svg = rg.buildSvg(strati, { bounds: { minX: 0, minY: 0, maxX: 20, maxY: 10 }, marginMm: 1, metadata: b });
+  const dalSvg = rg.leggiProgetto(svg);
+  check('da un SVG: origine busta, tool, versione, params, ruoli, sorgente, fili, misure', [dalSvg.origine, dalSvg.tool, dalSvg.versione, dalSvg.params, dalSvg.ruoli, dalSvg.sorgente.larghezzaMm, dalSvg.fili.length, dalSvg.misure.punti],
+    ['busta', 'net-45', '0.1.0', { squareSizeMm: 11 }, { '#e73433': 'MASTER_OUTLINE' }, 170, 2, 3]);
+  check('...le chiavi che sono solo del tool restano in `propri` (qui generatedAt) e non finiscono tra le comuni', [dalSvg.propri, 'rgProject' in dalSvg.propri, 'roles' in dalSvg.propri], [{ generatedAt: 123 }, false, false]);
+  const dst = rg.dstFromExportLayers(strati, { label: 'PROVA', metadata: b });
+  const dalDst = rg.leggiProgetto(dst);
+  check('da un DST: lo stesso progetto, e le misure sono quelle dei BYTE (la verità), non quelle scritte nel file',
+    [dalDst.tool, dalDst.fili.length, JSON.stringify(dalDst.misure) === JSON.stringify(rg.misuraDst(dst))], ['net-45', 2, true]);
+  const dstBugiardo = rg.dstFromExportLayers(strati, { label: 'PROVA', metadata: { ...b, misure: { ...b.misure, punti: 7777 } } });
+  check('...se il file dice 7777 punti ma i byte ne hanno 3, vale 3', rg.leggiProgetto(dstBugiardo).misure.punti, 3);
+  check('...il filo in vista scritto dal tool (non si ricava dai byte) viene conservato', rg.leggiProgetto(rg.dstFromExportLayers(strati, { metadata: { ...b, misure: { ...b.misure, filoInVista: { mm: 12, origine: 'prova' } } } })).misure.filoInVista, { mm: 12, origine: 'prova' });
+  check('...un SVG passato come byte si legge uguale', rg.leggiProgetto(new TextEncoder().encode(svg)).tool, 'net-45');
+  check('un file che non viene dalla suite non ha progetto: SVG senza metadati · DST senza metadati · testo qualunque · metadati senza tool',
+    [rg.leggiProgetto('<svg xmlns="http://www.w3.org/2000/svg"></svg>'), rg.leggiProgetto(rg.dstFromExportLayers(strati, { label: 'X' })), rg.leggiProgetto('ciao'), rg.leggiProgetto('<svg><metadata id="rg-project">{"params":{}}</metadata></svg>')], [null, null, null, null]);
+
+  console.log('\nK2 — i file di prima della busta, di tutti i tool, si leggono con gli stessi nomi');
+  // La forma che ogni tool salva oggi (dai sorgenti di apps/<tool>/src/tool.ts): `par` nel pettine, `roles` o `ruoli`, il
+  // disegno incorporato in `drawing`, le chiavi proprie (stop, fissi, zone…) che restano proprie.
+  const VECCHI = {
+    'net-45': [{ rgProject: 'net-45', version: '0.1.0', params: { a: 1 }, roles: { '#f00': 'NET_AREA' }, generatedAt: 1 }, { params: 1, ruoli: 1, propri: ['generatedAt'] }],
+    'pattern-grammar': [{ rgProject: 'pattern-grammar', version: '0.1.0', params: { a: 1 }, drawing: { name: 'sagoma.svg', text: '<svg/>' } }, { params: 1, sorgente: 'sagoma.svg', propri: ['drawing'] }],
+    interlace: [{ rgProject: 'interlace', version: '0.1.0', params: { a: 1 }, roles: { '#f00': 'MASTER_OUTLINE' } }, { params: 1, ruoli: 1, propri: [] }],
+    oblique: [{ rgProject: 'oblique', version: '0.1.0', params: { a: 1 }, roles: { level0: '#f00' } }, { params: 1, ruoli: 1, propri: [] }],
+    'cross-stitch': [{ rgProject: 'cross-stitch', version: '3', grid: { cols: 2, rows: 2 }, threads: [{ color: '#f00' }], route: {}, stitch: {}, cells: [] }, { propri: ['grid', 'threads', 'route', 'stitch', 'cells'] }],
+    bitmap: [{ rgProject: 'bitmap', version: '0.1.0', params: { a: 1 } }, { params: 1, propri: [] }],
+    striatura: [{ rgProject: 'striatura', version: '0.1.0', params: { a: 1 }, roles: { '#f00': 'MASTER_OUTLINE' } }, { params: 1, ruoli: 1, propri: [] }],
+    'zone-pattern': [{ rgProject: 'zone-pattern', params: { a: 1 }, roles: { '#f00': { pattern: 'A' } }, drawing: { name: 'cannage.svg', zones: [] } }, { params: 1, ruoli: 1, sorgente: 'cannage.svg', propri: ['drawing'] }],
+    'cannage-rafia': [{ rgProject: 'cannage-rafia', params: { a: 1 }, stop: {}, basi: {}, basiParams: {}, cornice: {}, programma: {}, bordatura: {}, ruoli: { '#f00': 'pattern1' }, drawing: { name: 'borsa.svg' } }, { params: 1, ruoli: 1, sorgente: 'borsa.svg', propri: ['stop', 'basi', 'basiParams', 'cornice', 'programma', 'bordatura', 'drawing'] }],
+    broccato: [{ rgProject: 'broccato', version: '0.1.0', params: { a: 1 } }, { params: 1, propri: [] }],
+    sfrangiatura: [{ rgProject: 'sfrangiatura', params: { a: 1 }, zone: [] }, { params: 1, propri: ['zone'] }],
+    pettine: [{ rgProject: 'pettine', versione: 5, par: { a: 1 }, blocchi: [], larghezzaRealeMm: 419.45, ritaglio: null }, { params: 1, propri: ['blocchi', 'larghezzaRealeMm', 'ritaglio'] }],
+    razza: [{ rgProject: 'razza', version: '0.1.0', params: { a: 1 }, fissi: [], sfumature: [], contorno: [], vuoti: [] }, { params: 1, propri: ['fissi', 'sfumature', 'contorno', 'vuoti'] }],
+    'pattern-macchie': [{ rgProject: 'pattern-macchie', params: { a: 1 }, pattern: { nome: 'squame' }, ruoli: { '#f00': 'pannello' } }, { params: 1, ruoli: 1, propri: ['pattern'] }],
+    pittorico: [{ rgProject: 'pittorico', version: '0.1.0', params: { a: 1 } }, { params: 1, propri: [] }],
+    'rete-testa-speciale': [{ rgProject: 'rete-testa-speciale', params: { a: 1 }, ruoli: { '#f00': 'contorno' } }, { params: 1, ruoli: 1, propri: [] }],
+    'punto-maglia': [{ rgProject: 'punto-maglia', params: { a: 1 }, tratti: [] }, { params: 1, propri: ['tratti'] }],
+  };
+  for (const [tool, [meta, atteso]] of Object.entries(VECCHI)) {
+    const l = rg.leggiProgetto(rg.buildSvg(strati, { bounds: { minX: 0, minY: 0, maxX: 20, maxY: 10 }, marginMm: 1, metadata: meta }));
+    check(`${tool}: file senza busta → origine «vecchio», tool giusto, ${atteso.params ? 'params' : 'niente params'}, ${atteso.ruoli ? 'ruoli' : 'niente ruoli'}, le chiavi proprie restano proprie`,
+      [l.origine, l.tool, !!l.params, !!l.ruoli, l.sorgente?.nome ?? null, Object.keys(l.propri).sort()],
+      ['vecchio', tool, !!atteso.params, !!atteso.ruoli, atteso.sorgente ?? null, [...atteso.propri].sort()]);
+  }
+  check('la versione si legge da `version`, `versione` o `toolVersion`', [rg.leggiProgetto(rg.buildSvg(strati, { bounds: { minX: 0, minY: 0, maxX: 1, maxY: 1 }, marginMm: 1, metadata: VECCHI.pettine[0] })).versione, dalSvg.versione], ['5', '0.1.0']);
+  check('un file vecchio passato per conBusta diventa un file con la busta senza perdere niente: tutte le chiavi di prima ci sono ancora',
+    Object.entries(VECCHI).every(([, [meta]]) => { const nuovo = rg.conBusta(meta, { strati }); return Object.keys(meta).every((k) => JSON.stringify(nuovo[k]) === JSON.stringify(meta[k])) && nuovo.rg === 1; }), true);
+}
+
+{
+  console.log('\nK2 — il cricchetto: ogni tool scrive la busta, il debito può solo scendere');
+  const { caricaRegistro, toolDellaSuite } = await import('./registro.mjs');
+  const reg = await caricaRegistro('registro-k2');
+  const radice = join(here, '..');
+  const DEBITO_BUSTA_ATTUALE = 0;
+  const debito = Object.keys(reg.DEBITO_BUSTA);
+  const tools = toolDellaSuite();
+  // Un tool scrive il progetto se `rgProject: '…'` compare nel suo tool.ts o nel suo motore.ts (razza e punto-maglia lo
+  // costruiscono nel motore); scrive la busta se in uno dei due il progetto passa da conBusta() (pettine e sfrangiatura la
+  // mettono nel motore, perché il referto lo vogliono dai byte veri del DST).
+  const sorgenti = (id) => ['tool.ts', 'motore.ts'].map((f) => { try { return readFileSync(join(radice, 'apps', id, 'src', f), 'utf8'); } catch { return ''; } }).join('\n');
+  const scrive = (id) => /\bconBusta\(/.test(sorgenti(id));
+  check('ogni tool della suite scrive un file di progetto (rgProject nel tool o nel suo motore): un tool che non lo fa non ha busta da avere', tools.filter((t) => !/rgProject:\s*'/.test(sorgenti(t))), []);
+  check(`il debito della busta è ${DEBITO_BUSTA_ATTUALE} tool su ${tools.length} (può solo scendere: se è sceso, abbassa DEBITO_BUSTA_ATTUALE)`, debito.length, DEBITO_BUSTA_ATTUALE);
+  check('il debito della busta nomina solo tool della suite', debito.filter((t) => !tools.includes(t)), []);
+  check('ogni tool che scrive un progetto passa da conBusta, se non è nel debito (un tool nuovo scrive la busta fin dall\'inizio)',
+    tools.filter((t) => !scrive(t) && !debito.includes(t)), []);
+  check('...e nessuno sta nel debito se la scrive già (la voce va tolta)', tools.filter((t) => scrive(t) && debito.includes(t)), []);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).

@@ -25,9 +25,9 @@ export async function caricaRegistro(nome = 'registro-' + process.pid) {
   return import(pathToFileURL(outfile).href + `?t=${Date.now()}`);
 }
 
-/** Gli id dei tool della suite, letti da `packages/ui/src/tools.ts` (il file tocca il DOM: non si importa, si legge). */
+/** Gli id dei tool della suite, letti da `packages/ui/src/tools-dati.ts` (i dati dei tool, senza DOM). */
 export function toolDellaSuite() {
-  const src = readFileSync(join(root, 'packages/ui/src/tools.ts'), 'utf8');
+  const src = readFileSync(join(root, 'packages/ui/src/tools-dati.ts'), 'utf8');
   const blocco = src.slice(src.indexOf('export const TOOLS'), src.indexOf('];', src.indexOf('export const TOOLS')));
   return [...blocco.matchAll(/\{\s*id:\s*'([^']+)'/g)].map((m) => m[1]);
 }

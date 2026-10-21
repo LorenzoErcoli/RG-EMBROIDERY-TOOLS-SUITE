@@ -1,5 +1,5 @@
 // Il contratto del motore (K1b) per Interlace: avvolge `runPipeline`, senza cambiare niente.
-import { applyRealWidth, type Contour } from '@rg/core';
+import { applyRealWidth, type Contour, refertoDaStrati } from '@rg/core';
 import type { Ingresso, Motore } from '@rg/cervello';
 import { runPipeline, type RoleAssignment } from './pipeline';
 import type { ImageColorAt, InterlaceParams } from './engine';
@@ -53,6 +53,7 @@ export const motore: Motore<IngressoInterlace, InterlaceParams> = {
     const contorni = applyRealWidth({ contours: sagoma, widthMm: wMm, heightMm: 0, method: 'declared' }, params.realWidthMm);
     const imageColorAt = campionatoreImmagine(ingresso.immagine, contorni, params.clusterMode);
     const { exportLayers } = runPipeline(contorni, ingresso.ruoli, params, { imageColorAt });
-    return { strati: exportLayers, avvisi: [] };
+    const strati = exportLayers;
+    return { strati, avvisi: [], misure: refertoDaStrati(strati) };
   },
 };

@@ -5,7 +5,7 @@ import {
   ROLE_LABELS, polygonArea, pointInPolygon,
   buildSvg, buildSvgInSourceFrame, dstFromExportLayers, DST_FILE,
   parseSvgToContours, parseDxfToContours, readProjectMetadata, readDstMetadata,
-  applyRealWidth, importResultFromContours, measureContours,
+  applyRealWidth, importResultFromContours, measureContours, conBusta,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
@@ -707,6 +707,13 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   }
 
   let sourceName = '';
+  let sourceIsDxf = false;
+  /** Il cartamodello da cui parte il ricamo (K2); niente per il demo e per l'oggetto pieno generato. */
+  function sorgenteProgetto() {
+    if (!sourceName || generated) return undefined;
+    const eff = measureContours(currentContours());
+    return { tipo: sourceIsDxf ? 'dxf' as const : 'svg' as const, nome: sourceName, larghezzaMm: eff.widthMm, altezzaMm: eff.heightMm };
+  }
 
   function updateFileStatus(label: string) {
     const eff = measureContours(currentContours());
@@ -806,6 +813,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
         const isDxf = /\.dxf$/i.test(file.name);
         const result = isDxf ? parseDxfToContours(text) : parseSvgToContours(text);
         sourceName = file.name.replace(/\.[^.]+$/, '');
+        sourceIsDxf = isDxf;
         generated = null; // da qui in poi la sagoma è quella del file, non una tavola generata
         // Se è un SVG esportato dalla suite, rileggi i parametri salvati PRIMA di caricare (così
         // realWidth/ruoli restaurati valgono già; autoAssign non sovrascrive i ruoli ripristinati).
@@ -1105,7 +1113,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     // Sotto try/catch: nessun export deve fallire in silenzio.
     try {
       const { exportLayers, bounds, stopCount } = runPipeline(currentContours(), roles, params, { imageColorAt: imageSampler() });
-      const metadata = projectMetadata();
+      const metadata = conBusta(projectMetadata(), { strati: exportLayers, sorgente: sorgenteProgetto() });
       let svg: string;
       if (imported.frame) {
         const r = params.realWidthMm > 0 && imported.widthMm > 0 ? params.realWidthMm / imported.widthMm : 1;
@@ -1130,7 +1138,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   function costruisciDst(exportLayers = esporta().exportLayers): Uint8Array {
     return dstFromExportLayers(exportLayers, {
       label: (sourceName || 'INTERLACE').toUpperCase().slice(0, 16),
-      metadata: projectMetadata(),
+      metadata: conBusta(projectMetadata(), { strati: exportLayers, sorgente: sorgenteProgetto() }),
     });
   }
 

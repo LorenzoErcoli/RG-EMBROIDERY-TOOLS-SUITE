@@ -1,37 +1,8 @@
 // Registro dei tool della suite RG Tools + chrome condiviso (topbar).
-export interface ToolDef {
-  id: string;
-  name: string;
-  description: string;
-  status: 'live' | 'soon';
-  /**
-   * In quale pagina sta il tool. `suite` = la home, gli strumenti pronti per il lavoro.
-   * `sviluppo` = la pagina a parte coi progetti non finiti: si aprono e si usano, ma non sono
-   * ancora strumenti su cui contare (decisione di Lorenzo, 2026-09-16).
-   */
-  section: 'suite' | 'sviluppo';
-  /** Link esterno: il tool vive fuori dalla suite (non ancora migrato) e si apre in una scheda nuova. */
-  href?: string;
-}
-
-export const TOOLS: ToolDef[] = [
-  { id: 'net-45', name: 'Rete 45°', description: 'Genera la rete di cordoncini a 45° su una sagoma DXF/SVG.', status: 'live', section: 'suite' },
-  { id: 'pattern-grammar', name: 'Generatore pattern', description: 'Genera pattern e basi ricamo da grammatica, con sagoma importabile.', status: 'live', section: 'suite' },
-  { id: 'interlace', name: 'Interlace', description: 'Riempimento a intreccio multicolore: passaggi brevi che si intrecciano, con aree vuote.', status: 'live', section: 'suite' },
-  { id: 'oblique', name: 'Oblique Pattern', description: 'Pattern obliqui a più livelli (Broderie Anglaise) con fori laser.', status: 'live', section: 'suite' },
-  { id: 'cross-stitch', name: 'Punto croce', description: 'Griglia di celle con diagonali, V e croci in più fili: i passaggi si calcolano da soli e finiscono sotto il ricamo che viene dopo. Export SVG e DST.', status: 'live', section: 'suite' },
-  { id: 'bitmap', name: 'Bitmap → Stitch', description: 'Da immagine raster a tracciato di ricamo: selezione pixel, colori e punti ordinati in SVG.', status: 'live', section: 'suite' },
-  { id: 'striatura', name: 'Punto Striato', description: 'Striature verticali a spola che formano macchie maculate su base di riempimento parallelo.', status: 'live', section: 'suite' },
-  { id: 'zone-pattern', name: 'Pattern a zone', description: 'Riempie ogni zona colorata di un disegno col suo pattern, ruotato sulle perpendicolari della zona.', status: 'live', section: 'suite' },
-  { id: 'cannage-rafia', name: 'Cannage rafia', description: 'Il programma di una borsa in cannage rafia da un SVG a zone. Per ora le linee orizzontali e verticali, agganciate ai rombi del pattern 1: cordoncini, fermi, scalette e meandri come nel DST di riferimento.', status: 'live', section: 'suite' },
-  { id: 'broccato', name: 'Broccato', description: 'Da immagine a ricamo: aree di colore riempite a raso rado orizzontale, a pettine o normale, coi passaggi nascosti sotto i colori successivi.', status: 'live', section: 'sviluppo' },
-  { id: 'sfrangiatura', name: 'Sfrangiatura', description: 'Aggiunge frange che si intrecciano a X sui capi dei rasi di un DST già cucito, solo dove marchi col pennello. Il ricamo di partenza non si tocca.', status: 'live', section: 'sviluppo' },
-  { id: 'pettine', name: 'Punto pettine sfrangiato', description: 'Da un SVG a gruppi e da una fotografia: linee di base a passo fisso con sopra un pettine di denti rivolti verso il chiaro, col ritaglio per provare uno swatch prima del pannello.', status: 'live', section: 'suite' },
-  { id: 'razza', name: 'Punto razza', description: 'Riempie una sagoma di pallini di cordoncino, piccoli ai bordi e grandi verso il centro, con pallini fissi e linee di sfumatura a scelta. Passaggi corti e coperti. Export SVG e DST.', status: 'live', section: 'suite' },
-  { id: 'pattern-macchie', name: 'Pattern a macchie', description: 'Un pannello col suo pattern di base e, dentro le macchie del disegno, un raso sfrangiato con sopra lo stesso punto della base, a registro. Mai un punto fra una macchia e l’altra; ponti facoltativi fra macchie vicine. Export SVG e DST in tre stop.', status: 'live', section: 'sviluppo' },
-  { id: 'pittorico', name: 'Punto Pittorico', description: 'Da immagine a ricamo pittorico: il punto attraversa il passaggio di colore, degradé col frastaglio dei bordi dove il colore sfuma, taglio secco dove stacca.', status: 'live', section: 'sviluppo' },
-  { id: 'rete-testa-speciale', name: 'Rete testa speciale', description: 'Rete a rombi fatta di serpentine che scendono e risalgono a zig-zag: una sovrapposizione per ogni incrocio, punto più corto nelle sovrapposizioni, linee fino al bordo e filo spesso affiancato sul contorno, con le aree vuote. Per le teste speciali.', status: 'live', section: 'sviluppo' },
-];
+// I DATI dei tool (nome, descrizione, cosa prendono e cosa danno) stanno in `tools-dati.ts`, senza DOM, così si
+// importano anche in node (test, banco, agente). Qui restano la topbar e la riesportazione: chi importava
+// `@rg/ui/tools` continua a funzionare.
+export * from './tools-dati';
 
 /**
  * Topbar dell'applicazione — componente DS `rg-topbar` variante `--app` (direttiva agente design-system).

@@ -3,6 +3,7 @@
 // alle tracce da cucire (`colorPolylinesTrim` per ogni filo). Funzioni pure: niente DOM, niente stato del tool;
 // tool.ts costruisce lo `StatoCross` dal suo `st` e chiama queste stesse funzioni (anche per l'anteprima).
 import type { ExportLayer } from '@rg/core';
+import { refertoDaStrati } from '@rg/core';
 import type { Ingresso, Motore } from '@rg/cervello';
 import { gridHeight, type Cells, type GridSpec, type Thread } from './model';
 import { colorPolylinesTrim, type RouteParams, type RouteResult, type StitchParams } from './routing';
@@ -151,6 +152,6 @@ export const motore: Motore<IngressoCrossStitch, ParamsCrossStitch> = {
       grid: params.grid, cells: ingresso.cells, threads: ingresso.threads, route: params.route, stitch: params.stitch,
       area: ingresso.area ?? null, cuts: ingresso.cuts ?? [], forced: ingresso.forced ?? [], module: ingresso.module ?? null, shape: ingresso.forma ?? null,
     });
-    return { strati, avvisi: [] };
+    return { strati, avvisi: [], misure: refertoDaStrati(strati) };
   },
 };

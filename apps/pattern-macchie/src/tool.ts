@@ -4,7 +4,7 @@ import {
   generateFinalPatternPoints, parseImportedBoundarySource,
   type BoundaryChoice, type ImportedBoundaryModel, type ImportScaleMode, type PatternConfig,
 } from '@rg/pattern-grammar';
-import { buildSvg, dstFromExportLayers, DST_FILE, polygonArea, readDstMetadata, readProjectMetadata, type ExportLayer, type Polyline } from '@rg/core';
+import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, polygonArea, readDstMetadata, readProjectMetadata, type ExportLayer, type Polyline } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
@@ -468,7 +468,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
 
   // tre strati → tre stop: la base, il raso delle macchie, il punto sopra (lo stesso filo).
   // Lo usano «Esporta DST» e «Invia a Stilista».
-  const costruisciDst = () => dstFromExportLayers(strati(), { label: nomeBase().toUpperCase().slice(0, 16), metadata: progetto() });
+  const costruisciDst = (layers = strati()) => dstFromExportLayers(layers, { label: nomeBase().toUpperCase().slice(0, 16), metadata: conBusta(progetto(), { strati: layers, sorgente: sorgenteBusta() }) });
 
   // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è il disegno — il colore più grande il
   // pannello, gli altri le macchie, come per un file. Le macchie non hanno aree vuote: i fori restano fuori.
@@ -529,6 +529,13 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     }
     notaDisegno = ` · col disegno (${Math.round(kb)} kB)`;
     return { ...base, drawing };
+  }
+  /** Il disegno caricato per la busta di progetto (K2): nome e misura reale in mm. */
+  function sorgenteBusta() {
+    if (!source) return undefined;
+    const b = model?.source?.finalBoundsMm;
+    return { tipo: /\.dxf$/i.test(source.name) ? 'dxf' as const : 'svg' as const, nome: source.name,
+      ...(b ? { larghezzaMm: b.maxX - b.minX, altezzaMm: b.maxY - b.minY } : {}) };
   }
 
   function riapri(meta: Record<string, unknown>): void {
@@ -629,7 +636,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     const { pannello } = geometria();
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const p of pannello ?? []) { x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y); }
-    const svg = buildSvg(strati(), { bounds: { minX: x0, minY: y0, maxX: x1, maxY: y1 }, marginMm: 5, metadata: progetto() });
+    const svg = buildSvg(strati(), { bounds: { minX: x0, minY: y0, maxX: x1, maxY: y1 }, marginMm: 5, metadata: conBusta(progetto(), { strati: strati(), sorgente: sorgenteBusta() }) });
     const name = `${nomeBase()}-macchie.svg`;
     const outcome = await saveTextFile(svg, { suggestedName: name, description: 'Immagine SVG' });
     $('status').textContent = saveOutcomeMessage(outcome, name) + notaDisegno;

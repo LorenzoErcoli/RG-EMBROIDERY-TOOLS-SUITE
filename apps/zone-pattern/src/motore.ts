@@ -1,5 +1,6 @@
 // Il contratto del motore (K1b) per Pattern a zone: avvolge `buildZonePlan`, senza cambiare niente.
 // La sequenza «zone → piano» sta qui (funzioni pure, niente DOM) e la chiama anche tool.ts.
+import { refertoDaStrati } from '@rg/core';
 import type { Ingresso, Motore } from '@rg/cervello';
 import {
   buildZonePlan, patternKeysInUse, resolveZoneAngles, zonesFromShapes,
@@ -49,6 +50,7 @@ export const motore: Motore<IngressoZone, ParamsZone> = {
   async genera(ingresso, params) {
     const piano = pianoDelleZone(zoneDaForme(ingresso.zone, params), ingresso.ruoli, params);
     // Gli strati sono quelli del DST: un layer per ago, in ordine.
-    return { strati: piano.layers, avvisi: [...piano.warnings] };
+    const strati = piano.layers;
+    return { strati, avvisi: [...piano.warnings], misure: refertoDaStrati(strati) };
   },
 };

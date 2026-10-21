@@ -5,7 +5,7 @@ import {
   ROLE_LABELS, polygonArea, pointInPolygon,
   buildSvg, buildSvgInSourceFrame, dstFromExportLayers, DST_FILE,
   parseSvgToContours, parseDxfToContours, readProjectMetadata, readDstMetadata,
-  applyRealWidth, importResultFromContours, measureContours,
+  applyRealWidth, importResultFromContours, measureContours, conBusta,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
@@ -313,6 +313,15 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
   }
 
   let sourceName = '';
+  /** Cartamodello caricato dall'utente (null = demo/oggetto pieno): serve alla busta di progetto. */
+  let sourceFile: { tipo: 'svg' | 'dxf'; nome: string } | null = null;
+  const sorgenteBusta = () => {
+    if (!sourceFile) return undefined;
+    // Misura REALE solo se nota: con method 'dpi' e senza larghezza reale la scala è indovinata.
+    const eff = measureContours(currentContours());
+    const nota = imported.method !== 'dpi' || params.realWidthMm > 0;
+    return nota ? { ...sourceFile, larghezzaMm: eff.widthMm, altezzaMm: eff.heightMm } : { ...sourceFile };
+  };
 
   function updateFileStatus(label: string) {
     const eff = measureContours(currentContours());
@@ -386,6 +395,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
         const isDxf = /\.dxf$/i.test(file.name);
         const result = isDxf ? parseDxfToContours(text) : parseSvgToContours(text);
         sourceName = file.name.replace(/\.[^.]+$/, '');
+        sourceFile = { tipo: isDxf ? 'dxf' : 'svg', nome: file.name };
         let restored = false;
         if (!isDxf) { const meta = readProjectMetadata(text); if (meta) restored = applyImportedProject(meta); }
         loadImport(result, file.name);
@@ -417,14 +427,14 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     render();
   });
 
-  $('sampleBtn').addEventListener('click', () => { roles = {}; sourceName = ''; loadImport(importResultFromContours(sampleContours()), 'Sagoma demo'); });
+  $('sampleBtn').addEventListener('click', () => { roles = {}; sourceName = ''; sourceFile = null; loadImport(importResultFromContours(sampleContours()), 'Sagoma demo'); });
 
   // Oggetto pieno: rettangolo largo×alto (mm) senza fori, da riempire subito (nessun file).
   $('objBtn').addEventListener('click', () => {
     const w = Math.max(1, parseFloat(($('objW') as HTMLInputElement).value) || 120);
     const h = Math.max(1, parseFloat(($('objH') as HTMLInputElement).value) || 150);
     const rect: Contour[] = [{ points: [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }], closed: true, color: '#2b6cb0' }];
-    roles = {}; sourceName = `oggetto-${w}x${h}`; params.realWidthMm = 0;
+    roles = {}; sourceName = `oggetto-${w}x${h}`; sourceFile = null; params.realWidthMm = 0;
     ($('realWidth') as HTMLInputElement).value = '0';
     loadImport(importResultFromContours(rect), `Oggetto pieno ${w}×${h} mm`);
   });
@@ -432,7 +442,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
 
   $('exportBtn').addEventListener('click', async () => {
     const { exportLayers, bounds, blockCount } = runPipeline(currentContours(), roles, params);
-    const metadata = { rgProject: 'striatura', version: '0.1.0', params, roles };
+    const metadata = conBusta({ rgProject: 'striatura', version: '0.1.0', params, roles }, { strati: exportLayers, sorgente: sorgenteBusta() });
     let svg: string;
     if (imported.frame) {
       const r = params.realWidthMm > 0 && imported.widthMm > 0 ? params.realWidthMm / imported.widthMm : 1;
@@ -451,7 +461,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
   function costruisciDst(exportLayers = runPipeline(currentContours(), roles, params).exportLayers): Uint8Array {
     return dstFromExportLayers(exportLayers, {
       label: (sourceName || 'STRIATURA').toUpperCase().slice(0, 16),
-      metadata: { rgProject: 'striatura', version: '0.1.0', params, roles },
+      metadata: conBusta({ rgProject: 'striatura', version: '0.1.0', params, roles }, { strati: exportLayers, sorgente: sorgenteBusta() }),
     });
   }
 

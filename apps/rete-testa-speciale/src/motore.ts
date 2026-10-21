@@ -879,7 +879,7 @@ export function costruisciReteRadiale(par: ParametriRete): RisultatoRete & { ane
 // ------------------------------------------------------------------------------------------------ il contratto (K1b)
 
 import type { Ingresso, Motore } from '@rg/cervello';
-import type { ExportLayer as StratoEsportato } from '@rg/core';
+import { refertoDaStrati, type ExportLayer as StratoEsportato } from '@rg/core';
 
 /** Il colore del filo nell'anteprima e nel file: uno solo, la rete è un filo. */
 export const COLORE_RETE = '#1f4e79';
@@ -913,11 +913,13 @@ export const motore: Motore<IngressoRete, ParametriRete> = {
   async genera(ingresso, params) {
     if (params.netShape === 'radiale') {
       const r = costruisciReteRadiale(params);
-      return { strati: r.blocchi.length ? stratiRete(r) : [], avvisi: r.avviso ? [r.avviso] : [] };
+      const st = r.blocchi.length ? stratiRete(r) : [];
+      return { strati: st, avvisi: r.avviso ? [r.avviso] : [], misure: refertoDaStrati(st) };
     }
     const pezzo = pezzoDellaRete({ ...PARAMETRI_RETE, ...params }, ingresso);
-    if (!pezzo) return { strati: [], avvisi: ['Manca il contorno del cartamodello: caricalo, o scegli il pezzo a misure.'] };
+    if (!pezzo) return { strati: [], avvisi: ['Manca il contorno del cartamodello: caricalo, o scegli il pezzo a misure.'], misure: refertoDaStrati([]) };
     const r = costruisciRete(pezzo.contorno, pezzo.vuoti, params);
-    return { strati: stratiRete(r), avvisi: [] };
+    const st = stratiRete(r);
+    return { strati: st, avvisi: [], misure: refertoDaStrati(st) };
   },
 };

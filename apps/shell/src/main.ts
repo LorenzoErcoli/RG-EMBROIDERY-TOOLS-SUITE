@@ -15,6 +15,7 @@ import { mountPettine } from '@app/pettine';
 import { mountCannageRafia } from '@app/cannage-rafia';
 import { mountCrossStitch } from '@app/cross-stitch';
 import { mountRazza } from '@app/razza';
+import { mountPuntoMaglia } from '@app/punto-maglia';
 import { mountPatternMacchie } from '@app/pattern-macchie';
 import { mountReteTestaSpeciale } from '@app/rete-testa-speciale';
 
@@ -36,6 +37,7 @@ function route(): void {
   else if (hash === '#/cannage-rafia') mountCannageRafia(app, { backHref: '#/' });
   else if (hash === '#/cross-stitch') mountCrossStitch(app, { backHref: '#/' });
   else if (hash === '#/razza') mountRazza(app, { backHref: '#/' });
+  else if (hash === '#/punto-maglia') mountPuntoMaglia(app, { backHref: '#/' });
   else if (hash === '#/pattern-macchie') mountPatternMacchie(app, { backHref: '#/' });
   else if (hash === '#/rete-testa-speciale') mountReteTestaSpeciale(app, { backHref: '#/' });
   else if (hash === '#/sviluppo') renderHome(app, 'sviluppo');

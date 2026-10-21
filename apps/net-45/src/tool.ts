@@ -5,14 +5,15 @@ import {
   ROLE_LABELS, defaultNetParams, buildSvg, buildSvgInSourceFrame,
   parseSvgToContours, parseDxfToContours, readProjectMetadata, readDstMetadata,
   applyRealWidth, importResultFromContours, measureContours,
-  dstFromExportLayers, DST_FILE,
+  dstFromExportLayers, DST_FILE, conBusta,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
+import { scheletro, sezioneSorgente, sezione, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero } from '@rg/ui/anatomia';
 import { runPipeline, type RoleAssignment } from './pipeline';
 import { sampleContours } from './sample';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { collegaStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
+import { collegaStilista, stratiCuciti, type AggancioStilista } from '@rg/ui/stilista';
 
 /** Un campo del gruppo "Parametri". `check` = sì/no (interno 1/0). `unit` va nello slot del DS, mai nell'etichetta (R-panello). */
 type Field =
@@ -38,59 +39,17 @@ const ROLE_OPTIONS: (Role | '')[] = ['', 'MASTER_OUTLINE', 'NET_AREA', 'SATIN_AR
 
 /** Monta il tool "Rete 45°" dentro `root`. `backHref` = link di ritorno alla home suite. */
 export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}): void {
-  root.innerHTML = `
-  ${topbar('Rete 45°', opts.backHref)}
-  <div class="rg-workspace net45-workspace">
-    <aside class="rg-workspace__panel">
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">01</span><h3 class="rg-param-section__title">Cartamodello</h3></div>
-        <div class="rg-param-grid">
-          <div class="rg-file-input rg-param-grid__wide">
-            <label class="rg-file-input__control">
-              <input type="file" id="fileInput" accept=".svg,.dxf,.dst" />
-              <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
-            </label>
-            <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file: uso il cartamodello demo.</p>
-          </div>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Larghezza reale (0 = auto)</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="realWidth" type="number" min="0" step="1" value="0"><span>mm</span></span>
-            <small class="rg-field__help">0 = usa la misura letta dal file.</small>
-          </label>
-          <div class="rg-cluster rg-param-grid__wide"><button id="sampleBtn" class="rg-button rg-button--ghost" type="button">Cartamodello demo</button>${BOTTONE_PRENDI_STILISTA()}</div>
-        </div>
-      </section>
-
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">02</span><h3 class="rg-param-section__title">Colori e ruoli</h3></div>
-        <ul class="rg-color-map" id="roles"></ul>
-      </section>
-
-      <details class="rg-param-section rg-disclosure" open>
-        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">03</span><span class="rg-param-section__title">Parametri</span></summary>
-        <div id="params" class="rg-param-grid"></div>
-      </details>
-    </aside>
-
-    <div class="rg-workspace__stage">
-      <header class="rg-workspace__stage-header">
-        <h2 class="rg-h3">Anteprima</h2>
-        <div class="rg-cluster">
-          <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
-          ${BOTTONE_INVIA_STILISTA()}
-          <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
-          <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Esporta SVG</button>
-        </div>
-      </header>
-      <div class="rg-workspace__canvas" id="canvas">
-        <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
-      </div>
-      <footer class="rg-workspace__statusbar">
-        <span id="status">Pronto</span>
-        <span id="zoom" class="rg-mono">zoom 100%</span>
-      </footer>
-    </div>
-  </div>`;
+  root.innerHTML = scheletro({
+    topbar: topbar('Rete 45°', opts.backHref),
+    classe: 'net45-workspace',
+    pannello: [
+      sezioneSorgente({ tipo: 'cartamodello', accetta: '.svg,.dxf,.dst', statoIniziale: 'Nessun file: uso il cartamodello demo.', demo: 'Cartamodello demo', stilista: true }),
+      sezione({ indice: 2, titolo: 'Colori e ruoli', contenuto: '<ul class="rg-color-map" id="roles"></ul>' }),
+      sezione({ indice: 3, titolo: 'Parametri', contenuto: '<div id="params" class="rg-param-grid"></div>', apribile: true, aperta: true }),
+    ],
+    anteprima: { inviaStilista: true },
+  });
+  attivaCampiNumero(root);
 
   const $ = (id: string) => root.querySelector<HTMLElement>('#' + id)!;
 
@@ -128,7 +87,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
       }
     }
     if (meta.roles && typeof meta.roles === 'object') roles = { ...(meta.roles as RoleAssignment) };
-    ($('realWidth') as HTMLInputElement).value = String(params.realWidthMm);
+    impostaNumero($('realWidth') as HTMLInputElement, params.realWidthMm);
     buildParamUI();
     buildRoleUI();
     return true;
@@ -149,33 +108,15 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
         host.appendChild(lab);
         continue;
       }
-      const lab = document.createElement('label');
-      lab.className = 'rg-field' + (f.help ? ' rg-param-grid__wide' : '');
-      const name = document.createElement('span');
-      name.className = 'rg-field__label';
-      name.textContent = f.label;
-      const wrap = document.createElement('span');
-      wrap.className = 'rg-field-with-unit';
-      const inp = document.createElement('input');
-      inp.type = 'number';
-      inp.className = 'rg-input rg-input--numeric';
-      inp.step = String(f.step);
-      inp.value = String(params[f.key]);
+      host.insertAdjacentHTML('beforeend', campoNumero({
+        id: 'p-' + f.key, etichetta: f.label, unita: f.unit, valore: params[f.key] as number, passo: f.step, aiuto: f.help,
+        attributi: 'data-param="' + f.key + '"',
+      }));
+      const inp = host.querySelector<HTMLInputElement>('[data-param="' + f.key + '"]')!;
       inp.addEventListener('change', () => {
-        const v = parseFloat(inp.value);
+        const v = leggiCampo(inp);
         if (!Number.isNaN(v)) { (params[f.key] as number) = v; render(); }
       });
-      const unit = document.createElement('span');
-      unit.textContent = f.unit;
-      wrap.append(inp, unit);
-      lab.append(name, wrap);
-      if (f.help) {
-        const help = document.createElement('small');
-        help.className = 'rg-field__help';
-        help.textContent = f.help;
-        lab.appendChild(help);
-      }
-      host.appendChild(lab);
     }
   }
 
@@ -235,6 +176,13 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
 
   /** Nome del file di partenza (senza estensione): serve a proporre un nome d'export sensato. */
   let sourceName = '';
+  let sourceTipo: 'svg' | 'dxf' = 'svg';
+  /** La sorgente per la busta di progetto: solo se c'è un file caricato; misura REALE (R11). */
+  const sorgenteBusta = () => {
+    if (!sourceName) return undefined;
+    const eff = measureContours(currentContours());
+    return { tipo: sourceTipo, nome: sourceName, larghezzaMm: eff.widthMm, altezzaMm: eff.heightMm };
+  };
 
   /** Aggiorna la riga di provenienza del file (nome, misura, metodo, quantità) — è lo status del componente Sagoma. */
   function updateFileStatus(label: string) {
@@ -253,7 +201,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     updateFileStatus(label);
   }
 
-  $('fileInput').addEventListener('change', (ev) => {
+  const apriFile = (ev: Event) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
     const isDst = /\.dst$/i.test(file.name);
@@ -274,6 +222,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
         const isDxf = /\.dxf$/i.test(file.name);
         const result = isDxf ? parseDxfToContours(text) : parseSvgToContours(text);
         sourceName = file.name.replace(/\.[^.]+$/, '');
+        sourceTipo = isDxf ? 'dxf' : 'svg';
         svgStilista = null;
         // Se l'SVG viene dalla suite, i parametri si rimettono PRIMA di caricare, così valgono
         // già quando il disegno entra (e l'assegnazione automatica non li sovrascrive).
@@ -287,21 +236,23 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
       }
     };
     if (isDst) reader.readAsArrayBuffer(file); else reader.readAsText(file);
-  });
+  };
+  $('fileInput').addEventListener('change', apriFile);
+  $('progettoInput').addEventListener('change', apriFile);
 
   $('realWidth').addEventListener('change', () => {
-    const v = parseFloat(($('realWidth') as HTMLInputElement).value);
+    const v = leggiCampo($('realWidth') as HTMLInputElement);
     params.realWidthMm = Number.isNaN(v) ? 0 : Math.max(0, v);
     render();
     updateFileStatus(sourceName || 'Cartamodello');
   });
 
-  $('sampleBtn').addEventListener('click', () => { roles = {}; sourceName = ''; svgStilista = null; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
+  $('demoBtn').addEventListener('click', () => { roles = {}; sourceName = ''; svgStilista = null; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
   $('fitBtn').addEventListener('click', () => pz.fit());
 
   $('exportBtn').addEventListener('click', async () => {
     const { layers, bounds } = runPipeline(currentContours(), roles, params);
-    const metadata = { rgProject: 'net-45', version: '0.1.0', params, roles, generatedAt: Date.now() };
+    const metadata = conBusta({ rgProject: 'net-45', version: '0.1.0', params, roles, generatedAt: Date.now() }, { strati: layers, sorgente: sorgenteBusta() });
     let svg: string;
     if (imported.frame) {
       const r = params.realWidthMm > 0 && imported.widthMm > 0 ? params.realWidthMm / imported.widthMm : 1;
@@ -322,7 +273,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     const { layers } = runPipeline(currentContours(), roles, params);
     return dstFromExportLayers(layers, {
       label: (sourceName || 'RETE45').toUpperCase().slice(0, 16),
-      metadata: { rgProject: 'net-45', version: '0.1.0', params, roles },
+      metadata: conBusta({ rgProject: 'net-45', version: '0.1.0', params, roles }, { strati: layers, sorgente: sorgenteBusta() }),
     });
   }
 
@@ -333,9 +284,10 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
       svgStilista = svg;
       // l'SVG dichiara le sue misure: una larghezza reale lo riscalerebbe e il ritorno non cadrebbe più al suo posto
       params.realWidthMm = 0;
-      ($('realWidth') as HTMLInputElement).value = '0';
+      impostaNumero($('realWidth') as HTMLInputElement, 0);
       roles = {};
       sourceName = nome.replace(/\.[^.]+$/, '');
+      sourceTipo = 'svg';
       loadImport(parseSvgToContours(svg), nome);
     },
     ruoli(fori) {

@@ -22,6 +22,7 @@ export default defineConfig(({ command }) => ({
       '@app/zone-pattern': fileURLToPath(new URL('../zone-pattern/src/tool.ts', import.meta.url)),
       '@app/cross-stitch': fileURLToPath(new URL('../cross-stitch/src/tool.ts', import.meta.url)),
       '@app/razza': fileURLToPath(new URL('../razza/src/tool.ts', import.meta.url)),
+      '@app/punto-maglia': fileURLToPath(new URL('../punto-maglia/src/tool.ts', import.meta.url)),
       '@app/cannage-rafia': fileURLToPath(new URL('../cannage-rafia/src/tool.ts', import.meta.url)),
       '@app/pattern-macchie': fileURLToPath(new URL('../pattern-macchie/src/tool.ts', import.meta.url)),
       '@app/rete-testa-speciale': fileURLToPath(new URL('../rete-testa-speciale/src/tool.ts', import.meta.url)),

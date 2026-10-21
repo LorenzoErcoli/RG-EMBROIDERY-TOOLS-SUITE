@@ -19,6 +19,7 @@ export * from './routing';
 export * from './imports';
 export * from './export';
 export * from './dst';
+export * from './progetto';
 export * from './io/normalize';
 export * from './io/transform';
 export { parseSvgToContours } from './io/svg';

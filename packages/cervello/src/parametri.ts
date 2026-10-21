@@ -25,6 +25,7 @@ import { scheda as razza } from './tool/razza';
 import { scheda as patternMacchie } from './tool/pattern-macchie';
 import { scheda as pittorico } from './tool/pittorico';
 import { scheda as reteTestaSpeciale } from './tool/rete-testa-speciale';
+import { scheda as puntoMaglia } from './tool/punto-maglia';
 
 /** Le schede dei tool, nell'ordine della suite (`TOOLS` in `packages/ui/src/tools.ts`). */
 export const SCHEDE: Record<string, SchedaParametri> = {
@@ -44,6 +45,7 @@ export const SCHEDE: Record<string, SchedaParametri> = {
   'pattern-macchie': patternMacchie,
   pittorico,
   'rete-testa-speciale': reteTestaSpeciale,
+  'punto-maglia': puntoMaglia,
 };
 
 export const ORDINE_TOOL = Object.keys(SCHEDE);
@@ -110,6 +112,11 @@ export const ELENCO_CONCETTI: Concetto[] = fuso.concetti;
 /** Il parametro che un tool salva con quel percorso (`nome` o `dove.nome`), se è registrato. */
 export function trova(tool: string, salvatoCome: string): Parametro | undefined {
   return REGISTRO.find((p) => p.tool[tool] && percorso(p.tool[tool]) === salvatoCome);
+}
+
+/** I parametri che un tool usa (K4: la parte «quali parametri» della scheda del tool), col come li salva e col suo default. */
+export function parametriDelTool(tool: string): Parametro[] {
+  return REGISTRO.filter((p) => p.tool[tool]);
 }
 
 /** I percorsi che un tool dichiara di salvare. */
