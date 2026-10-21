@@ -1,0 +1,64 @@
+/* Stili locali del tool "Punto maglia". Solo cio' che il design system (v1.19.1) non copre: il sizing d'app, il
+   contenimento dell'anteprima, lo slider dell'opacita' (il DS non ha un range), le icone su/giu' (arrivano col DS
+   1.20: fino ad allora indietro/avanti ruotate) e il disegno sopra l'anteprima. Direttiva dell'agente design-system,
+   2026-10-20. Colori solo da token. */
+
+html, body { height: 100%; margin: 0; }
+body { background: var(--rg-color-background); color: var(--rg-color-text-primary); font-family: var(--rg-font-body); }
+#app { display: flex; flex-direction: column; height: 100vh; }
+.pm-workspace { flex: 1 1 auto; min-height: 0; --rg-workspace-panel: 340px; }
+.pm-workspace #layer svg { max-width: 100%; max-height: 100%; }
+.pm-workspace .rg-param-grid { --rg-input-numeric-width: 10ch; }
+.pm-segmented { flex-wrap: wrap; }
+
+/* Il puntatore dice cosa fa il clic. */
+.pm-workspace .rg-workspace__canvas.pm-modo-nuovo,
+.pm-workspace .rg-workspace__canvas.pm-modo-aggiungi { cursor: crosshair; }
+
+/* Slider (il DS non ha un range) */
+.pm-range { display: flex; align-items: center; gap: var(--rg-space-3); }
+.pm-range input[type="range"] { flex: 1 1 auto; min-width: 0; min-height: 40px; accent-color: var(--rg-color-black); }
+.pm-range input[type="range"]:focus-visible { outline: var(--rg-border-strong) var(--rg-border-style) var(--rg-color-focus); outline-offset: 2px; }
+.pm-range output { min-width: 5ch; text-align: right; font-size: var(--rg-font-size-sm); font-variant-numeric: tabular-nums; }
+
+/* Lista dei tratti */
+.pm-workspace .rg-list-row { cursor: pointer; }
+.pm-workspace .rg-list-row__head { justify-content: flex-start; }
+.pm-tratto__num { min-width: 3ch; font-size: var(--rg-font-size-xs); color: var(--rg-color-text-secondary); font-variant-numeric: tabular-nums; }
+.pm-tratto__nome { flex: 1 1 auto; min-width: 0; }
+.pm-icona-su { transform: rotate(90deg); }  /* indietro → su, finche' il DS e' < 1.20 */
+.pm-icona-giu { transform: rotate(90deg); } /* avanti → giu' */
+.pm-empty { padding: var(--rg-space-4); }
+.pm-tratto-sel { display: grid; gap: var(--rg-space-3); margin: 0; padding: var(--rg-space-3) 0 0; border: 0; border-top: var(--rg-border-hairline) var(--rg-border-style) var(--rg-color-border); }
+.pm-tratto-sel:disabled { opacity: 0.45; }
+
+/* Il disegno sull'anteprima (SVG in mm). Le guide restano uguali allo zoom; la selezione cambia anche spessore e
+   tratteggio, non solo colore. */
+.pm-rif-img { pointer-events: none; }
+.pm-tela { fill: var(--rg-color-surface); stroke: var(--rg-color-border); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.pm-filo { fill: none; stroke: var(--rg-color-text-primary); stroke-width: 0.3; opacity: 0.6; } /* le passate si sommano: piu' scuro dove il filo ripassa */
+/* Lo schema a colori (come struttura-15b.png, approvata da Lorenzo il 2026-10-19): lati e centro si distinguono a colpo
+   d'occhio. Il DS non ha l'arancio e l'azzurro vivi: palette categoriale, ocra per i lati e blu per il centro, sopra. */
+.pm-schema .pm-filo { opacity: 1; stroke-width: 0.45; stroke-linecap: round; }
+.pm-schema .pm-filo--lati { stroke: var(--rg-color-category-4); }
+.pm-schema .pm-filo--centro { stroke: var(--rg-color-category-2); }
+.pm-passaggi { fill: none; stroke: var(--rg-color-danger); stroke-width: 0.3; stroke-dasharray: 1 0.8; }
+.pm-linea { fill: none; stroke: var(--rg-color-info); stroke-width: 1; stroke-dasharray: 4 3; vector-effect: non-scaling-stroke; pointer-events: none; }
+.pm-linea.is-sel { stroke: var(--rg-color-black); stroke-width: 2; stroke-dasharray: none; }
+.pm-hit { fill: none; stroke: transparent; stroke-width: 12; vector-effect: non-scaling-stroke; }
+#pmOver [data-hit] { pointer-events: all; cursor: grab; }
+.pm-maniglia { fill: var(--rg-color-white); stroke: var(--rg-color-info); stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.pm-maniglia.is-sel { fill: var(--rg-color-black); stroke: var(--rg-color-black); stroke-width: 2; }
+.pm-bozza { fill: none; stroke: var(--rg-color-info); stroke-width: 1; stroke-dasharray: 2 2; vector-effect: non-scaling-stroke; pointer-events: none; }
+.pm-maniglia--centro { fill: none; }
+/* I punti di ricamo (strumento «Punti di ricamo»): uno per buco; quelli spostati a mano pieni. */
+.pm-nodo { fill: var(--rg-color-white); stroke: var(--rg-color-black); stroke-width: 1; vector-effect: non-scaling-stroke; }
+.pm-nodo.is-spostato { fill: var(--rg-color-danger); stroke: var(--rg-color-danger); }
+.pm-nodo.is-sel { fill: var(--rg-color-black); }
+.pm-stretto .rg-field-with-unit { margin-top: var(--rg-space-2); }
+/* L'ordine di cucitura: inizio di ogni tratto col suo numero, fine col quadratino, salto col taglio tratteggiato. */
+.pm-salto { fill: none; stroke: var(--rg-color-success); stroke-width: 1.5; stroke-dasharray: 5 4; vector-effect: non-scaling-stroke; pointer-events: none; }
+.pm-inizio { fill: var(--rg-color-success); stroke: var(--rg-color-white); stroke-width: 1; vector-effect: non-scaling-stroke; pointer-events: none; }
+.pm-fine { fill: var(--rg-color-white); stroke: var(--rg-color-success); stroke-width: 1.5; vector-effect: non-scaling-stroke; pointer-events: none; }
+.pm-ordine-num { fill: var(--rg-color-white); text-anchor: middle; font-family: var(--rg-font-mono, monospace); font-weight: 600; pointer-events: none; user-select: none; }
+.pm-ordine-etichetta { fill: var(--rg-color-success); font-family: var(--rg-font-mono, monospace); pointer-events: none; user-select: none; }

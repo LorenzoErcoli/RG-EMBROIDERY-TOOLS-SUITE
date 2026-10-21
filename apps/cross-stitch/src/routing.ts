@@ -36,7 +36,7 @@
 // Nessun DOM.
 
 import type { Cells, GridSpec, Leg, Stitch } from './model';
-import { latticeWidth, segmentPoints, stitchLegs, vertexCount, vertexIndex } from './model';
+import { latticeWidth, pointInRow, rowPitch, segmentPoints, stitchLegs, vertexCount, vertexIndex } from './model';
 import { groupOfCell, zonesOf, type ZoneGroup, type ZoneOptions } from './zones';
 
 export interface TravelCosts {
@@ -136,6 +136,21 @@ export interface RouteParams {
    * filo faceva 2,5 volte il ripasso minimo: entrava nei tratti a metà e ci tornava.
    */
   runs?: boolean;
+  /**
+   * OTTIMIZZA L'ORDINE (spento di partenza: è lento). Rilettura del percorso di ogni filo: catene di gruppi di punti
+   * andati a prendere con un giro lungo si spostano dove l'ago passava vicino. relocateMm: sotto questo giro (mm)
+   * non si sposta niente (default 40); relocateMax: gruppi per catena (8); relocateMs: tempo per filo e blocco (2500).
+   */
+  relocate?: boolean;
+  /** Toglie i va-e-torna sulla stessa diagonale dove le passate (punti + ripassi) sono almeno due più di quelle chieste (default vero). */
+  exactPasses?: boolean;
+  relocateMm?: number;
+  relocateMax?: number;
+  relocateMs?: number;
+  /** Le isole vicine: un blocco di al più islandMax unità, a meno di islandMm dall'ago, si cuce subito se ci si arriva con costo ≤ islandCost (default 120, 15 mm, 6; islandMax 0 = no). */
+  islandMax?: number;
+  islandMm?: number;
+  islandCost?: number;
   /**
    * Le ZONE (zones.ts): il disegno di ogni colore tagliato lungo le strisce vuote, come
    * l'impaginazione di un giornale. Il filo finisce la zona prima di passare alla più vicina; dentro
@@ -641,6 +656,190 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   };
   const topLeft = (id: number) => Math.min(...endsOf(id));
 
+  /** Il passaggio fra due vertici: i suoi tratti, la lunghezza e il filo in vista (mm). null = nessuna strada. */
+  const travelPath = (a: number, b: number, k: number): { segs: RouteSeg[]; mm: number; vis: number } | null => {
+    if (a === b) return { segs: [], mm: 0, vis: 0 };
+    const p = shortestPath(a, b, k);
+    if (!p) return null;
+    const out: RouteSeg[] = [];
+    let from = a, mm = 0, vis = 0;
+    for (const v of p) { const e = edgeKind(from, v, k); out.push({ kind: e.kind, from, to: v }); mm += e.mm; if (e.kind === 'visible') vis += e.mm; from = v; }
+    return { segs: out, mm, vis };
+  };
+  // il passaggio più CORTO fra due vertici (non il più economico), senza filo in vista se c'è un'altra strada: A*
+  // in mm, il filo in vista pesa 200 volte; per la rilettura del percorso, che misura proprio i mm di passaggio
+  const dist2 = new Float64Array(V).fill(Infinity), prev2 = new Int32Array(V).fill(-1), touched2: number[] = [], heap2 = new MinHeap();
+  const shortPath = (a: number, b: number, k: number): { segs: RouteSeg[]; mm: number; vis: number } | null => {
+    if (a === b) return { segs: [], mm: 0, vis: 0 };
+    for (const t of touched2) { dist2[t] = Infinity; prev2[t] = -1; }
+    touched2.length = 0; heap2.clear();
+    const pb = pt(b), hh = (v: number) => { const p = pt(v); return Math.hypot(p.x - pb.x, p.y - pb.y); };
+    dist2[a] = 0; touched2.push(a); heap2.push(hh(a), a);
+    // oltre questo (mm) non si cerca: un giro così lungo non serve a nessuno spostamento
+    const bound = 2.5 * hh(a) + 40;
+    let found = false;
+    while (heap2.size) {
+      if (heap2.peekD() > bound) break;
+      const v = heap2.pop();
+      if (v === b) { found = true; break; }
+      const dv = dist2[v];
+      forEachNeighbour(v, k, (w) => {
+        const e = edgeKind(v, w, k);
+        const nd = dv + (e.kind === 'visible' ? e.mm * 200 : e.mm);
+        if (nd < dist2[w]) { if (dist2[w] === Infinity) touched2.push(w); dist2[w] = nd; prev2[w] = v; heap2.push(nd + hh(w), w); }
+      });
+    }
+    if (!found) return null;
+    const p: number[] = []; for (let v = b; v !== a && v >= 0; v = prev2[v]) p.push(v); p.reverse();
+    const out: RouteSeg[] = []; let from = a, mm = 0, vis = 0;
+    for (const v of p) { const e = edgeKind(from, v, k); out.push({ kind: e.kind, from, to: v }); mm += e.mm; if (e.kind === 'visible') vis += e.mm; from = v; }
+    return { segs: out, mm, vis };
+  };
+  const segMm = (s: RouteSeg) => { if (s.kind === 'jump') return 0; const [p, q] = segmentPoints(g, s.from, s.to); return Math.hypot(q.x - p.x, q.y - p.y); };
+  /** Vedi «I PEZZI ANDATI A PRENDERE» qui sotto, nel giro dei fili. */
+  const relocateDetours = (segs: RouteSeg[], k: number): void => {
+    if (params.fixedDirection) return;
+    // i gruppi di punti (in ordine) e i passaggi fra l'uno e l'altro
+    type Grp = { body: RouteSeg[] };
+    const grps: Grp[] = [];
+    const between: RouteSeg[][] = []; // between[i] = il passaggio dopo il gruppo i (fino al gruppo i+1)
+    const head: RouteSeg[] = [];
+    let i = 0;
+    while (i < segs.length && segs[i].kind !== 'stitch') head.push(segs[i++]);
+    while (i < segs.length) {
+      let j = i; while (j < segs.length && segs[j].kind === 'stitch') j++;
+      grps.push({ body: segs.slice(i, j) });
+      let a = j; while (a < segs.length && segs[a].kind !== 'stitch') a++;
+      between.push(segs.slice(j, a));
+      i = a;
+    }
+    const n = grps.length;
+    if (n < 3) return;
+    // solo i gruppi di V e mezze diagonali (niente croci: hanno un ordine fra le gambe)
+    const movable = grps.map((gp) => gp.body.every((s) => Math.abs((s.from % W) - (s.to % W)) === 1));
+    const st = (gp: Grp) => gp.body[0].from, en = (gp: Grp) => gp.body[gp.body.length - 1].to;
+    const flip = (gp: Grp): Grp => ({ body: [...gp.body].reverse().map((s) => ({ ...s, from: s.to, to: s.from })) });
+    const hasJump = (t: RouteSeg[]) => t.some((s) => s.kind === 'jump');
+    const lenOf = (t: RouteSeg[]) => { let mm = 0, vis = 0; for (const s of t) { const m = segMm(s); mm += m; if (s.kind === 'visible') vis += m; } return { mm, vis }; };
+    const cache = new Map<string, { segs: RouteSeg[]; mm: number; vis: number } | null>();
+    const path = (a: number, b: number) => { const key = a + ':' + b; if (!cache.has(key)) cache.set(key, shortPath(a, b, k)); return cache.get(key)!; };
+    const pt2 = (v: number) => { const ii = Math.floor(v / W); return { x: (v - ii * W) * (g.cellW / 2), y: ii * g.cellH }; };
+    const eu = (a: number, b: number) => { const p = pt2(a), q = pt2(b); return Math.hypot(p.x - q.x, p.y - q.y); };
+    // L'OR-OPT: una catena di 1..maxChain gruppi si toglie dal suo posto (prima e dopo si ricollegano) e si
+    // inserisce fra due gruppi vicini a lei, anche al rovescio. Si tiene se il filo dei passaggi si accorcia
+    // (almeno 5 mm) e non aumenta quello in vista. Le distanze in linea d'aria scartano i tentativi inutili.
+    const maxChain = params.relocateMax ?? 8, near = params.relocateMm ?? 40;
+    const t0 = Date.now(), budget = params.relocateMs ?? 2500;
+    let improved = true;
+    let order = grps.map((_, q) => q); // l'ordine corrente dei gruppi (indici in grps), e per ognuno il verso
+    let rev = grps.map(() => false);
+    const g_ = (q: number) => (rev[q] ? flip(grps[q]) : grps[q]);
+    // il passaggio corrente fra la posizione p e p+1 (ricalcolato se cambiato)
+    const link = new Map<string, { segs: RouteSeg[]; mm: number; vis: number }>();
+    for (let p = 0; p + 1 < n; p++) link.set(order[p] + '>' + order[p + 1], { segs: between[order[p]], ...lenOf(between[order[p]]) });
+    // per i conti sempre il passaggio più corto (così ogni spostamento accorcia davvero e non si gira in tondo);
+    // nella lista finale, dove due gruppi restano vicini come prima, il passaggio di prima
+    // senza una strada corta: il passaggio di prima, se i due gruppi erano vicini così; altrimenti niente (nei conti
+    // lo spostamento non si fa; nella lista finale il passaggio più economico del motore)
+    const linkOf = (a: number, b: number) => {
+      const l = !rev[a] && !rev[b] ? link.get(a + '>' + b) : undefined;
+      if (l && hasJump(l.segs)) return l;
+      return path(en(g_(a)), st(g_(b))) ?? l ?? null;
+    };
+    const linkOut = (a: number, b: number) => linkOf(a, b) ?? travelPath(en(g_(a)), st(g_(b)), k);
+    // dove finiscono i gruppi, a caselle di 10 mm: i posti dove inserire una catena si cercano lì vicino
+    const CELL = 10;
+    let posOf: number[] = [], bucket = new Map<number, number[]>();
+    const keyOf = (v: number) => { const p0 = pt2(v); return Math.floor(p0.x / CELL) * 100000 + Math.floor(p0.y / CELL); };
+    const reindex = () => {
+      posOf = []; bucket = new Map();
+      order.forEach((q, p0) => { posOf[q] = p0; const kk = keyOf(en(g_(q))); const l = bucket.get(kk); if (l) l.push(q); else bucket.set(kk, [q]); });
+    };
+    const around = (v: number, r: number): number[] => {
+      const p0 = pt2(v), out: number[] = [], rc = Math.ceil(r / CELL), bx = Math.floor(p0.x / CELL), by = Math.floor(p0.y / CELL);
+      for (let dx = -rc; dx <= rc; dx++) for (let dy = -rc; dy <= rc; dy++) for (const q of bucket.get((bx + dx) * 100000 + by + dy) ?? []) out.push(posOf[q]);
+      return out;
+    };
+    reindex();
+    while (improved && Date.now() - t0 < budget) {
+      improved = false;
+      for (let p = 1; p + 1 < order.length && Date.now() - t0 < budget; p++) {
+        for (let L = 1; L <= maxChain && p + L < order.length; L++) {
+          const chain = order.slice(p, p + L);
+          if (!chain.every((q) => movable[q])) break;
+          const before = linkOf(order[p - 1], order[p]), after = linkOf(order[p + L - 1], order[p + L]);
+          if (!before || !after || hasJump(before.segs) || hasJump(after.segs)) continue;
+          if (before.mm + after.mm < near) continue; // vicino a dove sta: niente da guadagnare
+          const bridge = linkOf(order[p - 1], order[p + L]);
+          if (!bridge || hasJump(bridge.segs)) continue;
+          const remGain = before.mm + after.mm - bridge.mm, remVis = before.vis + after.vis - bridge.vis;
+          if (remGain < 5) continue;
+          const cs0 = st(g_(chain[0])), ce0 = en(g_(chain[L - 1]));
+          let best: { at: number; flipped: boolean; add: number; vis: number } | null = null;
+          const R0 = Math.min(remGain, 80);
+          const cand = new Set([...around(cs0, R0), ...around(ce0, R0)]);
+          for (const q of cand) {
+            if (q + 1 >= order.length || (q >= p - 1 && q <= p + L - 1)) continue;
+            const a = order[q], b = order[q + 1];
+            const ea = en(g_(a)), sb = st(g_(b));
+            for (const fl of [false, true]) {
+              const s0 = fl ? ce0 : cs0, e0 = fl ? cs0 : ce0;
+              if (eu(ea, s0) + eu(e0, sb) - eu(ea, sb) >= remGain - 5) continue; // in linea d'aria già non conviene
+              const cur = linkOf(a, b); if (!cur || hasJump(cur.segs)) continue;
+              const x = path(ea, s0), y = path(e0, sb); if (!x || !y) continue;
+              const add = x.mm + y.mm - cur.mm, vis = x.vis + y.vis - cur.vis;
+              if (remGain - add >= 5 && vis <= remVis + 0.01 && (!best || add < best.add)) best = { at: q, flipped: fl, add, vis };
+            }
+          }
+          if (!best) continue;
+          // lo spostamento
+          const moved = best.flipped ? [...chain].reverse() : chain;
+          if (best.flipped) for (const q of chain) rev[q] = !rev[q];
+          const rest = [...order.slice(0, p), ...order.slice(p + L)];
+          const at = best.at < p ? best.at : best.at - L;
+          order = [...rest.slice(0, at + 1), ...moved, ...rest.slice(at + 1)];
+          reindex();
+          improved = true;
+          break;
+        }
+      }
+    }
+    // la lista dei punti, ricostruita
+    const out: RouteSeg[] = [...head];
+    for (let p = 0; p < order.length; p++) {
+      const q = order[p];
+      out.push(...g_(q).body);
+      if (p + 1 < order.length) { const l = linkOut(q, order[p + 1]); if (l) out.push(...l.segs); else out.push({ kind: 'jump', from: en(g_(q)), to: st(g_(order[p + 1])) }); }
+      else out.push(...between[q].filter(() => !rev[q] && q === grps.length - 1));
+    }
+    // le misure dei passaggi: via le vecchie, dentro le nuove
+    const tally = (list: RouteSeg[], sign: number) => { for (const t of list) { const mm = segMm(t) * sign; if (t.kind === 'hidden') metrics.hiddenMm += mm; else if (t.kind === 'vertical') metrics.verticalMm += mm; else if (t.kind === 'retrace') metrics.retraceMm += mm; else if (t.kind === 'visible') metrics.visibleMm += mm; } };
+    tally(segs, -1); tally(out, 1);
+    segs.length = 0;
+    for (const s of out) segs.push(s);
+  };
+
+  /** Vedi «IL NUMERO GIUSTO DI PASSATE» qui sotto, nel giro dei fili. */
+  const trimExtraPasses = (segs: RouteSeg[], k: number): void => {
+    const target = repsOf(k);
+    const onLeg = (x: RouteSeg) => (x.kind === 'stitch' || x.kind === 'retrace') && Math.abs((x.from % W) - (x.to % W)) === 1 && Math.floor(x.from / W) !== Math.floor(x.to / W);
+    const key = (x: RouteSeg) => (x.from < x.to ? x.from * 4194304 + x.to : x.to * 4194304 + x.from);
+    const count = new Map<number, number>();
+    for (const x of segs) if (onLeg(x)) count.set(key(x), (count.get(key(x)) ?? 0) + 1);
+    const out: RouteSeg[] = [];
+    for (const x of segs) {
+      const y = out[out.length - 1];
+      if (y && onLeg(x) && onLeg(y) && y.from === x.to && y.to === x.from && (count.get(key(x)) ?? 0) >= target + 2) {
+        out.pop();
+        count.set(key(x), count.get(key(x))! - 2);
+        for (const z of [x, y]) if (z.kind === 'retrace') { const [p, q] = segmentPoints(g, z.from, z.to); metrics.retraceMm -= Math.hypot(q.x - p.x, q.y - p.y); }
+        continue;
+      }
+      out.push(x);
+    }
+    if (out.length !== segs.length) { segs.length = 0; for (const x of out) segs.push(x); }
+  };
+
   let at = -1; // vertice dove si trova l'ago (-1 = non ancora partito)
   /** La strada più economica da a a b (i vertici dopo a, fino a b compreso); null se non c'è. */
   const shortestPath = (a: number, b: number, k: number): number[] | null => {
@@ -684,7 +883,22 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     const byBlocks = params.blocks !== false;
     const blockLeft = new Map<number, number>();
     for (const id of mine) { const b = legs[units[id].leg].block; blockLeft.set(b, (blockLeft.get(b) ?? 0) + 1); }
+    // LE ISOLE VICINE (Lorenzo, 2026-10-15: «il blu delle finestre della casa a sinistra: potrebbe farle quando fa
+    // la casa, invece torna in un punto già disegnato per finire delle cose e poi ritorna giù»). Un blocco grande (il
+    // blu scuro dell'alpino è quasi tutto un blocco solo) si finiva prima di passare a un altro: le croci delle
+    // finestre, staccate di un soffio, restavano per la fine e il filo ci tornava. Ora, cucendo un blocco grande,
+    // un'isola (un blocco piccolo) a meno di islandMm dall'ago si cuce subito, se ci si arriva quasi gratis (sui
+    // propri punti già fatti o sotto i fili dopo); poi si torna al blocco grande, lì accanto.
+    const islandMax = Math.max(0, params.islandMax ?? 120), islandMm = params.islandMm ?? 15, islandCost = params.islandCost ?? 6;
+    const blockSize = new Map(blockLeft);
+    const islandBox = new Map<number, [number, number, number, number]>();
+    if (byBlocks && islandMax > 0) for (const id of mine) {
+      const b = legs[units[id].leg].block;
+      if ((blockSize.get(b) ?? 0) > islandMax) continue;
+      for (const e of endsOf(id)) { const p = pt(e), bx = islandBox.get(b); if (!bx) islandBox.set(b, [p.x, p.y, p.x, p.y]); else { bx[0] = Math.min(bx[0], p.x); bx[1] = Math.min(bx[1], p.y); bx[2] = Math.max(bx[2], p.x); bx[3] = Math.max(bx[3], p.y); } }
+    }
     let current = -3; // nessun blocco ancora
+    let suspended = -3; // il blocco grande lasciato a metà per un'isola
     /** Si può prendere: se il blocco corrente non è finito, solo le sue unità. */
     const zoneLeft = new Map<number, number>();
     for (const id of mine) { const z = legs[units[id].leg].zone; zoneLeft.set(z, (zoneLeft.get(z) ?? 0) + 1); }
@@ -697,12 +911,20 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       while (groupZones.length && !(zoneLeft.get(groupZones[0]) ?? 0)) groupZones.shift();
       return groupZones[0];
     };
-    const inBlock = (id: number) => {
-      if (!byBlocks) return true;
+    const inZone = (id: number) => {
       const leg = legs[units[id].leg];
       if ((zoneLeft.get(currentZone) ?? 0) > 0 && leg.zone !== currentZone) return false;
       if ((zoneLeft.get(currentZone) ?? 0) === 0) { const gz = nextGroupZone(); if (gz !== undefined && leg.zone !== gz) return false; }
-      return (blockLeft.get(current) ?? 0) === 0 || leg.block === current;
+      return true;
+    };
+    const inBlock = (id: number) => {
+      if (!byBlocks) return true;
+      const leg = legs[units[id].leg];
+      if (!inZone(id)) return false;
+      if ((blockLeft.get(current) ?? 0) > 0) return leg.block === current;
+      // finita un'isola presa di passaggio, si torna al blocco lasciato a metà
+      if (suspended >= 0 && (blockLeft.get(suspended) ?? 0) > 0) return leg.block === suspended;
+      return true;
     };
     const byRuns = byBlocks && params.runs !== false;
     const runLeft = new Map<number, number>();
@@ -865,7 +1087,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     while (left > 0) {
       // --- Dijkstra dal vertice dell'ago, fermo alla soglia del salto ---
       const limit = params.jumpMm;
-      const search = (accept: (id: number, v: number) => boolean, box: { box: [number, number, number, number]; strict: boolean } | null = null, avoid: Set<number> | null = null) => {
+      const search = (accept: (id: number, v: number) => boolean, box: { box: [number, number, number, number]; strict: boolean } | null = null, avoid: Set<number> | null = null, maxD = limit) => {
         for (const t of touched) { dist[t] = Infinity; prevV[t] = -1; }
         touched.length = 0;
         heap.clear();
@@ -876,7 +1098,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
           const d = heap.peekD();
           const v = heap.pop();
           if (d > dist[v]) continue;
-          if (d > best + 1e-6 || d > limit) break;
+          if (d > best + 1e-6 || d > maxD) break;
           for (const id of byVertex.get(v) ?? []) {
             if (!available(id) || !accept(id, v) || !entriesOf(id).includes(v)) continue;
             found.push({ id, entry: v, d });
@@ -886,7 +1108,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
             if (avoid && overGroup(v, w, avoid)) return;
             if (box) { const wi = Math.floor(w / W), wj = w - wi * W; if ((wi < box.box[0] || wi > box.box[2] || wj < box.box[1] || wj > box.box[3]) && (box.strict || !settled(v, w))) return; }
             const nd = d + cost;
-            if (nd < dist[w] && nd <= limit) {
+            if (nd < dist[w] && nd <= maxD) {
               if (dist[w] === Infinity) touched.push(w);
               dist[w] = nd; prevV[w] = v; heap.push(nd, w);
             }
@@ -894,6 +1116,17 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
         }
         return { found, best };
       };
+      // le isole vicine, se ci si arriva quasi gratis
+      let islandCands: Array<{ id: number; entry: number; d: number }> = [], islandBest = Infinity;
+      if (islandBox.size && (blockSize.get(current) ?? 0) > islandMax && (blockLeft.get(current) ?? 0) > 0) {
+        const here = pt(at), near = new Set<number>();
+        for (const [b, bx] of islandBox) {
+          if (!((blockLeft.get(b) ?? 0) > 0)) continue;
+          const dx = Math.max(bx[0] - here.x, 0, here.x - bx[2]), dy = Math.max(bx[1] - here.y, 0, here.y - bx[3]);
+          if (Math.hypot(dx, dy) <= islandMm) near.add(b);
+        }
+        if (near.size) ({ found: islandCands, best: islandBest } = search((id) => near.has(legs[units[id].leg].block) && inZone(id), null, null, islandCost));
+      }
       // prima dentro il tratto (o da un'estremità di uno nuovo); se non si trova niente, il blocco
       const box = fence();
       const avoid = finishedGroups();
@@ -902,8 +1135,9 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       const tries: Array<[typeof box, Set<number> | null]> = [[box, avoid]];
       if (box) tries.push([null, avoid]);
       if (avoid) tries.push([null, null]);
-      let cands: Array<{ id: number; entry: number; d: number }> = [], bestD = Infinity;
-      for (const [b, a] of tries) {
+      let cands: Array<{ id: number; entry: number; d: number }> = islandCands, bestD = islandBest;
+      if (cands.length) suspended = current;
+      if (!cands.length) for (const [b, a] of tries) {
         ({ found: cands, best: bestD } = search((id, v) => inBlock(id) && inRun(id, v), b, a));
         if (!cands.length && byRuns) ({ found: cands, best: bestD } = search((id) => inBlock(id), b, a));
         if (cands.length) break;
@@ -963,6 +1197,23 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       segs.push({ kind: 'jump', from: at, to: best.entry });
       take(best.id, best.entry);
     }
+
+    // I PEZZI ANDATI A PRENDERE (Lorenzo, 2026-10-15: «un oggetto viene fatto in parte, poi il filo si sposta da
+    // un'altra parte per poi tornare lì… è un sacco di filo e di punti in più non necessari»). Il filo sceglie il
+    // pezzo dopo un passo alla volta: a volte lascia indietro una V (una croce di finestra, un dente di muro) e alla
+    // fine fa un giro lungo per tornarci. Rilettura del percorso: un gruppo di punti con un passaggio lungo prima e
+    // dopo si sposta in un momento in cui l'ago passava proprio dal suo capo (anche al rovescio); lì si cuce, si
+    // torna indietro sopra di lui, e il giro lungo sparisce. Si tiene lo spostamento solo se il filo dei passaggi
+    // si accorcia e non ne aggiunge in vista.
+    if (params.relocate === true && segs.length && !(base && k === base.color)) relocateDetours(segs, k);
+
+    // IL NUMERO GIUSTO DI PASSATE (Lorenzo, 2026-10-15: «se un colore ripassa sopra se stesso può togliere un
+    // passaggio del sotto, così rimane sempre il numero giusto»). Contando punti e ripassi, una diagonale può avere
+    // più passate di quelle chieste. Dove il filo va e torna subito sulla stessa diagonale (avanti-indietro, nei
+    // punti o fra un passaggio e un punto) e lì le passate sono almeno due in più, quel va-e-torna si toglie: il
+    // filo resta continuo e la diagonale torna al numero giusto. Una passata sola in più non si può togliere così
+    // (il filo finirebbe dall'altra parte).
+    if (params.exactPasses !== false && segs.length && !(base && k === base.color)) trimExtraPasses(segs, k);
 
     // l'arrivo: dall'ultimo punto all'uscita data (il percorso più economico; senza strada, salto)
     const endV = params.endAt?.[k];
@@ -1087,6 +1338,14 @@ export interface StitchParams {
   maxStitchMm: number;
   /** Il punto dei passaggi (corsa sotto il ricamo). */
   travelStitchMm: number;
+  /**
+   * I PASSAGGI NASCOSTI DRITTI (Lorenzo, 2026-10-19, una prova: «invece dello zig zag, linee a impuntura che passano
+   * perfettamente al centro delle V che passano sopra in copertura, al centro rispetto all'altezza; soprattutto i
+   * movimenti orizzontali»). Un passaggio nascosto che corre lungo una riga (a zig zag sulle gambe delle V che lo
+   * coprono) diventa una linea dritta a metà altezza della riga, coi punti al centro di ogni V. Solo il disegno dei
+   * punti cambia (anteprima, SVG, DST): il percorso no.
+   */
+  straightHidden?: boolean;
 }
 
 export const DEFAULT_STITCH: StitchParams = { maxStitchMm: 7, travelStitchMm: 2.5 };
@@ -1109,12 +1368,57 @@ export function colorPolylines(g: GridSpec, route: ColorRoute, sp: StitchParams)
  * Le polilinee di un filo e, per ognuna, se prima di lei c'è un salto a mano (Lorenzo, 2026-10-12: «i salti
  * messi a mano non devono avere collegamento»): l'export DST ci mette il taglio.
  */
+/**
+ * I tratti di passaggio nascosto che corrono lungo una riga, rifatti dritti (vedi `StitchParams.straightHidden`):
+ * indice del primo tratto → i punti in mm (dal capo di partenza a quello d'arrivo, passando per il centro di ogni V
+ * a metà altezza) e l'indice dopo l'ultimo tratto. Una corsa: almeno due tratti nascosti di fila, tutti diagonali
+ * di mezza V nella stessa riga e nello stesso verso.
+ */
+export function straightHiddenRuns(g: GridSpec, segs: RouteSeg[]): Map<number, { pts: { x: number; y: number }[]; end: number }> {
+  const W = latticeWidth(g), half = g.cellW / 2, out = new Map<number, { pts: { x: number; y: number }[]; end: number }>();
+  const info = (sg: RouteSeg) => {
+    if (sg.kind !== 'hidden') return null;
+    const i1 = Math.floor(sg.from / W), i2 = Math.floor(sg.to / W), j1 = sg.from - i1 * W, j2 = sg.to - i2 * W;
+    if (Math.abs(i1 - i2) !== 1 || Math.abs(j1 - j2) !== 1) return null;
+    return { r: Math.min(i1, i2), dir: Math.sign(j2 - j1) };
+  };
+  let i = 0;
+  while (i < segs.length) {
+    const a = info(segs[i]);
+    if (!a) { i++; continue; }
+    let j = i + 1;
+    while (j < segs.length) { const b = info(segs[j]); if (!b || b.r !== a.r || b.dir !== a.dir) break; j++; }
+    if (j - i >= 2) {
+      const r = a.r, ymid = r * rowPitch(g) + g.cellH / 2;
+      const j0 = segs[i].from % W, j1 = segs[j - 1].to % W;
+      const pts = [pointInRow(g, segs[i].from, r)];
+      for (let jj = j0; a.dir > 0 ? jj <= j1 : jj >= j1; jj += a.dir) if (jj % 2 === 1) pts.push({ x: jj * half, y: ymid });
+      pts.push(pointInRow(g, segs[j - 1].to, r));
+      out.set(i, { pts, end: j });
+    }
+    i = j;
+  }
+  return out;
+}
+
 export function colorPolylinesTrim(g: GridSpec, route: ColorRoute, sp: StitchParams): { polylines: { x: number; y: number }[][]; trims: boolean[] } {
   const out: { x: number; y: number }[][] = [];
   const trims: boolean[] = [];
   let cur: { x: number; y: number }[] = [];
   let trimNext = false, curTrim = false;
-  for (const s of route.segs) {
+  const straight = sp.straightHidden ? straightHiddenRuns(g, route.segs) : null;
+  for (let q = 0; q < route.segs.length; q++) {
+    const s = route.segs[q];
+    const run = straight?.get(q);
+    if (run) {
+      // la corsa dritta: dal capo di partenza al centro di ogni V, a metà altezza, al capo d'arrivo
+      if (!cur.length) { curTrim = trimNext; trimNext = false; }
+      const last = cur[cur.length - 1];
+      if (!last || Math.hypot(last.x - run.pts[0].x, last.y - run.pts[0].y) > 1e-9) cur.push(run.pts[0]);
+      for (let k = 1; k < run.pts.length; k++) subdivide(cur, run.pts[k - 1], run.pts[k], sp.travelStitchMm);
+      q = run.end - 1;
+      continue;
+    }
     if (s.kind === 'jump') {
       if (cur.length > 1) { out.push(cur); trims.push(curTrim); }
       cur = [];

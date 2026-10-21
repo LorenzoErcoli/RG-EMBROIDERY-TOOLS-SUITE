@@ -118,6 +118,30 @@
       "port": 5296,
       "autoPort": false,
       "url": "http://127.0.0.1:5296"
+    },
+    {
+      "name": "rete-testa-speciale-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--workspace",
+        "apps/rete-testa-speciale"
+      ],
+      "port": 5298
+    },
+    {
+      "name": "punto-maglia-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--workspace",
+        "apps/punto-maglia"
+      ],
+      "port": 5299,
+      "autoPort": false,
+      "url": "http://127.0.0.1:5299"
     }
   ]
 }

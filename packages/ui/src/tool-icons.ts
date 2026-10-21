@@ -65,6 +65,14 @@ const ICONS: Record<string, string> = {
   'pattern-macchie':
     '<path d="M4 6h24M4 12h24M4 18h24M4 24h24"/><path d="M8 9c3-3 8-1 7 3s-6 6-8 3-2-4 1-6Z"/><path d="M19 17c3-2 7 0 6 4s-5 4-7 2-2-4 1-6Z"/>',
 
+  // Rete testa speciale: due colonne di rombi, ognuna una linea che scende a zig-zag e risale sull'altro lato.
+  'rete-testa-speciale':
+    '<path d="M10 4l6 4-6 4 6 4-6 4 6 4-6 4"/><path d="M10 4l-6 4 6 4-6 4 6 4-6 4 6 4"/><path d="M22 4l6 4-6 4 6 4-6 4 6 4-6 4"/><path d="M22 4l-6 4 6 4-6 4 6 4-6 4 6 4"/>',
+
+  // Punto maglia: il cordoncino — le V del centro con le mezze catene ai lati.
+  'punto-maglia':
+    '<path d="M12 5l4 6 4-6M12 12l4 6 4-6M12 19l4 6 4-6"/><path d="M5 6l5 5M5 13l5 5M5 20l5 5M27 6l-5 5M27 13l-5 5M27 20l-5 5"/>',
+
   // Punto croce: la griglia con le croci.
   'cross-stitch':
     '<path d="M4 4h24v24H4Z"/><path d="M16 4v24M4 16h24"/><path d="M7 7l6 6M13 7l-6 6M19 19l6 6M25 19l-6 6"/>',

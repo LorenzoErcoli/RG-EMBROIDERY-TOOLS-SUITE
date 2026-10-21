@@ -499,14 +499,59 @@ collegamenti restano corti e il taglio si paga solo per cambiare blocco.
 **Come si usa.**
 1. **Disegno** — carica l'SVG o il DXF: un colore per il **contorno del pannello**, uno per le **macchie** (per esempio rosso e giallo). Il tool dà da solo il ruolo *Pannello* al colore più grande e *Macchie* agli altri; puoi cambiarli nella lista dei colori. Il ricamo si genera subito.
 2. **Pattern della base** — scegli il pattern fra quelli **condivisi** e quelli **salvati nel Generatore pattern** su questo computer. Il pattern si prepara là; qui si sceglie quale usare. Il quadretto sotto mostra com'è.
-3. **Raso delle macchie** — direzione (90° = verticale), interlinea, punto massimo e **sfrangiatura**: ogni riga finisce, a caso, un po' prima o un po' dopo il bordo, così il bordo della macchia non è una linea netta. *…di cui oltre il bordo* dice quanta parte va fuori, sulla base (0% = le righe si accorciano soltanto).
+3. **Raso delle macchie** — **Le macchie da sinistra a destra** (spento di serie): se lo accendi l'ordine delle macchie va da sinistra a destra e il raso dentro le macchie avanza da sinistra a destra dove può. Spento, l'ordine e il verso li sceglie il sistema: serpentina o qualunque giro dia i salti più corti. Poi direzione (90° = verticale), interlinea, punto massimo e **sfrangiatura**: ogni riga finisce, a caso, un po' prima o un po' dopo il bordo, così il bordo della macchia non è una linea netta. *…di cui oltre il bordo* dice quanta parte va fuori, sulla base (0% = le righe si accorciano soltanto).
 4. **Punto sopra le macchie** — il punto sopra **non esce mai dalla macchia**. Da un pezzo all'altro il filo passa nascosto: sulle linee del punto, o nel verso del raso (si posa fra i fili del raso). *Passaggio nascosto fino a* è il limite oltre il quale si salta. I pezzi che non si raggiungono senza salto, se più corti di *Togli i pezzi staccati più corti di*, si tolgono: meglio un pezzo in meno che un filo fuori.
 5. **Macchie vicine** — *Unisci le macchie che si seguono e distano meno di*: fra due macchie consecutive così vicine nasce un **ponte di raso** (largo quanto *Larghezza del ponte*), e il filo passa dall'una all'altra senza salto, sia nel raso sia nel punto sopra. Cambia il disegno delle macchie: per vedere i ponti accendi *Il contorno delle macchie* in *Programma*. 0 = nessun ponte.
-6. **Programma** — i tre stop coi loro punti e salti, i salti fra una macchia e l'altra (quanti corti, quanti lunghi) e le caselle per accendere e spegnere i fili nell'anteprima: base, raso, punto sopra, **passaggi sotto il raso** (blu) e **salti** (rosso tratteggiato).
+6. **Zone** — *Dividi raso e punto sopra in zone*: con 2 il programma diventa base · raso della prima metà · punto sopra della prima metà · raso della seconda metà · punto sopra della seconda metà (con 3, tre parti, e così via). *Le zone vanno* da sinistra a destra (strisce verticali) o dall'alto in basso. Ogni macchia sta nella zona dove cade il suo centro; i ponti non passano da una zona all'altra.
+7. **Programma** — gli stop coi loro punti e salti, i salti fra una macchia e l'altra (quanti corti, quanti lunghi) e le caselle per accendere e spegnere i fili nell'anteprima: base, raso, punto sopra, **passaggi sotto il raso** (blu) e **salti** (rosso tratteggiato).
 
-**L'ordine del ricamo.** Stop 1 la **base** su tutto il pannello (intera: non si buca sotto le macchie). Stop 2 il **raso** di tutte le macchie; stop 3 il **punto sopra** di tutte, nello stesso ordine. Fra una macchia e l'altra **non si ricama mai**: si salta, salvo dove le macchie si toccano o le unisce un ponte. L'ordine delle macchie è quello che rende i salti più corti; in ogni macchia il raso comincia dove conviene (ci si arriva con un passaggio **sotto** il raso, che lo copre) e finisce dal lato della macchia che viene dopo; anche il punto sopra esce da quel lato. Nelle macchie a C o a S il raso si cuce a **parti**: una parte intera, poi la successiva, senza attraversare il raso già fatto.
+**L'ordine del ricamo.** Stop 1 la **base** su tutto il pannello (intera: non si buca sotto le macchie). Stop 2 il **raso** di tutte le macchie; stop 3 il **punto sopra** di tutte, nello stesso ordine (con le zone, raso e punto sopra si ripetono per ogni zona). Fra una macchia e l'altra **non si ricama mai**: si salta, salvo dove le macchie si toccano o le unisce un ponte. L'ordine delle macchie è quello che rende i salti più corti (e i salti lunghi pesano di più). In ogni macchia il raso **entra** nel punto più vicino a dove è uscito dalla macchia prima (ci arriva con un passaggio **sotto** il raso, che lo copre) ed **esce** nel punto più vicino alla macchia dopo: se serve, cuce la sua parte in due, prima le righe da un lato e poi quelle dall'altro, verso la riga d'uscita. Anche il punto sopra entra ed esce così. Nelle macchie a C, a S o con rientranze il raso si cuce a **parti**: una parte intera, poi la successiva. **I passaggi da una parte all'altra stanno sempre sotto il raso**: corrono solo dove il raso non è ancora stato fatto (lo coprirà), mai sopra quello già cucito. Per riuscirci l'ordine delle parti si sceglie apposta (in una U aperta a destra: un braccio verso la base, poi la base da sinistra, poi l'altro braccio). Dove proprio non c'è una strada coperta, si salta.
 
 **Simula** cuce il DST sullo schermo, punto per punto (lo stesso simulatore del Pettine). **Esporta DST** e **Scarica SVG** portano dentro il progetto: **Riapri un progetto** li rimette com'erano, disegno compreso. Sul pannello di prova il calcolo prende qualche secondo, durante i quali la pagina non risponde.
+
+---
+
+## Rete testa speciale (`rete-testa-speciale`)
+
+**A cosa serve.** Una **rete a rombi** per le teste speciali, fatta di **serpentine**: la linea scende a zig-zag e risale con lo stesso zig-zag sull'altro lato, e le due insieme formano una colonna di rombi. Le colonne vicine si toccano, o si accavallano, con le punte. Il filo delle teste speciali è spesso: dove due fili si incrociano il punto si accorcia, e sul contorno le passate si mettono una **accanto** all'altra, mai una sopra l'altra.
+
+**Come si usa.**
+1. **Il pezzo** — scegli se la rete si fa **dal cartamodello** o **dalle mie misure**. Con le misure scrivi **larghezza** e **altezza**: la rete si fa su un rettangolo di quelle misure, senza aree vuote e senza caricare niente. Dal cartamodello carica l'SVG o il DXF: un colore per il **contorno del cartamodello**, uno per le **aree vuote**. Il tool dà da solo il ruolo *Contorno* al colore più grande e *Area vuota* agli altri; puoi cambiarli nella lista dei colori. Se il contorno ha altri anelli chiusi dentro, valgono anche loro come aree vuote. Il ricamo si genera subito.
+2. **Rombo e serpentina** — **larghezza** e **altezza** del rombo, la **direzione** della serpentina (0° = scende in verticale, 90° = corre in orizzontale, o un angolo qualsiasi), la **sovrapposizione** e l'**arrotondamento**. La sovrapposizione è **una sola** per ogni incrocio: quanto si accavallano la discesa e la risalita alla rientranza, e quanto le punte di due colonne vicine. A 0 le linee si toccano, sotto 0 resta una luce. L'arrotondamento vale per punte e rientranze; larghezza e sovrapposizione restano misurate sulla curva vera, quindi arrotondare non stacca le linee. *Colonne sfalsate* sposta una colonna sì e una no di mezzo rombo.
+3. **Punti** — la **lunghezza del punto**: ogni tratto fra due punti fissi (le punte, gli apici, gli incroci) si divide in punti uguali, mai più lunghi di così. Dentro la **zona di sovrapposizione**, che va da un punto d'incrocio all'altro, le due linee hanno ognuna il suo punto: la linea cucita **prima** sta **sotto** e tiene la lunghezza del punto (o il *punto nelle sovrapposizioni, linea sotto*, se gli dai un valore; 0 = la lunghezza del punto); quella che passa **dopo** sta **sopra** e usa il *punto nelle sovrapposizioni, linea sopra*. L'**ampiezza** la allarga oltre gli incroci (positiva) o la stringe (negativa); se le linee si toccano soltanto, la zona è l'ampiezza attorno al punto di contatto. Lo **spessore del filo** è la distanza fra due passate affiancate sul contorno. Il **punto minimo** si impone alla fine; se togliere un punto corto ne allunga uno oltre la lunghezza del punto, quello si ridivide.
+4. **Aree vuote** — cosa fa la rete quando incontra un vuoto:
+   - **torna indietro, e la parte mancante si cuce dopo**: la serpentina risale e va avanti; la parte rimasta al di là del vuoto diventa una parte a sé, cucita alla fine con un salto;
+   - **gira sul contorno del vuoto** ed esce dall'altra parte;
+   - **lo attraversa con un'impuntura dritta**, al *punto dell'impuntura nel vuoto*.
+5. **Programma e vista** — punti, filo, punto più corto e più lungo, parti e salti, quante passate affiancate ci sono sul contorno; e le caselle per accendere e spegnere nell'anteprima la rete, le sovrapposizioni divise in **linea sotto** (arancio chiaro) e **linea sopra** (arancio scuro), le **passate sul contorno** (grigio), l'**impuntura nei vuoti**, i **salti** (rosso tratteggiato) e i punti ago.
+
+**L'ordine del ricamo.** Un filo solo. Ogni colonna scende su un lato e risale sull'altro; il giro in fondo e il raccordo in cima corrono sul contorno. **Ogni linea arriva fino al suo bordo**, del pezzo o del vuoto: le due linee di una colonna non si tagliano alla stessa altezza. Dove una punta esce dal pezzo, la linea corre sul contorno fino a dove rientra. **Ogni parte nuova comincia dal contorno esterno del cartamodello**, dall'alto o dal basso, verso destra o verso sinistra: delle partenze sul contorno si sceglie quella più vicina a dove è finita la parte prima. Nell'anteprima un numero segna dove comincia ogni parte.
+
+**Sul contorno il filo non si sovrappone.** Dove una passata arriva su un tratto di contorno che ha già filo, quel tratto si sposta verso l'interno di uno *spessore del filo*, di due se le passate sono già due, e così via; il resto della passata resta sul bordo. Le linee della rete che arrivano lì si fermano sulla passata spostata, senza scavalcarla. Con due vuoti vicini o con *gira sul contorno del vuoto* le passate affiancate possono essere 4 o 5.
+
+**La sacca a rete.** In cima al pannello, *La rete*: **radiale** fa un **disco di rombi coi lati tutti uguali**, al centro del campo macchina. Tolto dal telaio ogni nodo fa da cerniera: i rombi ruotano senza cambiare i lati e il disco diventa una **sacca**, senza cuciture. Si sceglie:
+- **Rombi per giro** e **lato del rombo**: gli anelli del disco li calcola il tool, tutti coi lati uguali. Verso il centro i rombi diventano stretti, verso fuori si appiattiscono;
+- **Il fondo**: **tondo** o **ovale**. Tondo ha il suo **raggio**: dove finisce la rete e comincia la **spirale** del fondo; più è grande, più la sacca viene larga e bassa. Ovale ha **lunghezza** (da testa a testa) e **larghezza**: la rete cresce con le stesse regole, rombi coi lati tutti uguali, e diventa ovale anche lei. Sulle **teste**, dove l'ovale curva di più, i rombi si aprono prima e la fascia viene più corta che sui **lati lunghi** (fondo 260 × 140, 64 rombi: 92 mm contro 135). Chiusa col cordone, la sacca fa **pancia sui lati lunghi** e tiene **tese le teste**: la tensione sta lì, e sembra di più una borsa. **Teste a mezzo cerchio** (0–100%): a 0 l'ovale, a 100 due mezzi cerchi uniti da tratti dritti; in mezzo, teste più tonde e lati più dritti. Sui tratti dritti i rombi non si aprono mai, quindi più le teste sono tonde più la fascia sui lati lunghi si accorcia (260 × 140, 64 rombi: da 135 a 112 mm), mentre quella sulle teste resta di circa 93. **Fascia sui lati lunghi** (0 = tutta la rete): le colonne dei lati lunghi si fermano prima, le teste no, a scalare in mezzo; così c'è meno rete sui lati lunghi e più sulle teste, e chiusa col cordone i lati restano tesi e le teste fanno pancia. Va a scatti di due anelli e prende la misura più vicina (260 × 140, 64 rombi: 28, 56, 83, 109 o 135 mm). Col cordone i lati corti non arrivano al centro: la bocca resta allungata. *Programma e vista* dà le due fasce misurate a metà del lato lungo e in punta alla testa. **Ogni colonna finisce in una punta**, dove le sue due linee si incontrano: quando gli anelli sono dispari la rete si ferma all'ultimo anello pari, così in cima non c'è un tratto di filo che non incrocia niente. La spirale dell'ovale tiene lo stesso passo sui lati lunghi e sulle teste, e al centro si chiude su un tratto dritto. Col fondo ovale *Programma e vista* dà le due fasce invece della tabella delle bocche (che vale solo per il tondo);
+- **Angolo massimo dei rombi in fuori** e **campo macchina**: il disco si ferma al primo dei due (a 180° i rombi sarebbero piatti);
+- **Passo della spirale** (uguale allo spessore del filo = fondo pieno; più largo = fondo rado, meno filo) e **distanza fra le legature**: le legature entrano nel fondo e lo tengono insieme, e verso il centro metà si ferma, così al centro non arrivano troppi fili;
+- **Un giro d'impuntura in cima**, sulle punte esterne: spento di partenza, la testa resta libera (la bocca si chiude al montaggio col cordone, vedi *Sacca 3D*);
+- **Uguale in tutta la rete** (in *Incroci*): da un anello all'altro l'incrocio cambia angolo (sul secchiello da 59° verso il fondo a 149° in cima), e tre misure non possono restare uguali insieme. Si sceglie quale:
+  - **lo spostamento** (di partenza): ogni linea va oltre il nodo della sovrapposizione scritta. Verso il centro la lente (il tratto da un incrocio all'altro) si allunga, da 2 a 4 mm, e i nodi girano con più fatica; in cima la punta passa appena oltre l'altra linea (0,4 mm su 2 di sovrapposizione);
+  - **la lente**: la sovrapposizione cala verso il centro perché la lente resti quella in cima;
+  - **l'aggancio**: la punta di ogni linea passa oltre l'altra della stessa misura su tutti i nodi, quella che la sovrapposizione scritta darebbe su un rombo quadrato (1,3 mm con 2). Verso fuori lo spostamento cresce quanto serve (fino a 6,6 mm in cima, al più metà del lato) e le lenti degli ultimi anelli si allungano (fino a 6,8 mm). Se in cima viene troppo, abbassa la sovrapposizione.
+
+L'ordine: prima la spirale dal centro in fuori, poi ogni colonna esce dal fondo su un lato, gira in cima ed entra sull'altro lato, e una legatura entra nel fondo e torna fuori alla colonna dopo. Alla fine, con un salto, il giro in cima. Sovrapposizione, arrotondamento, punti (sotto e sopra) e spessore del filo valgono come nella rete a colonne. In *Programma e vista* ci sono le misure del disco e una tabella: per alcune **bocche** la sacca più profonda che i lati permettono, la parte più larga e la capienza. **Con la bocca larga quanto il disco la rete resta piatta**: la sacca si forma stringendo la bocca, e il giro in cima non la tiene aperta (il filo si arriccia, non si allunga).
+
+**Sacca 3D** (il pulsante compare solo con la rete radiale) mostra la sacca in 3D, coi fili morbidi: ogni filo non si allunga ma si può allentare, e la gravità tira giù. Trascina per girarla.
+- **Il cordone**: la bocca si chiude al montaggio con un **cordone che passa a zig-zag nei buchi dell'ultima fila** di rombi; tirato, punta sugli apici dell'ultimo anello. *Stringi il cordone* lo accorcia: la bocca si chiude a strozzo. Lo si può togliere per vedere la rete da sola.
+- **Tenuta**: **per i capi del cordone** (come un sacchetto tenuto in mano), **per la bocca** aperta del diametro che scegli, **per due punti del bordo**, o **appoggiata sul fondo**.
+- **Morbidezza del filo**: quanto il filo resiste a piegarsi sui nodi e attorcigliarsi; al 100% cede del tutto, a 0% è il più rigido. Di partenza 30%: il filo ricamato è rigido, e stretta dal cordone la sacca sta su (appoggiata col cordone al 60%, sacca da 48 rombi: alta 69 mm a 0%, 39 al 30%, si sdraia al 100%). Allentato il cordone la rete torna un disco piatto: la forma la tiene il cordone. Un nodo con la lente più lunga piega con più fatica: con la sovrapposizione fissa i nodi verso il centro sono più rigidi, con la *lente* uguale tutti uguali. Si vede soprattutto appesa per due punti; per la bocca o per i capi del cordone la forma la decidono la bocca e il peso.
+- **Il fondo** è quello del ricamo: i giri della spirale al loro passo e le legature con la loro profondità (con molti giri, nel 3D un anello ne rappresenta alcuni). Un fondo rado con poche legature cede al centro.
+- **Rigidità del fondo**: un fondo a spirale coi giri affiancati si lega e diventa una base rigida. Di partenza il valore viene dal passo della spirale rispetto allo spessore del filo (giri affiancati = 100%). Dal 60% in su il fondo resta piatto; molto sotto si incurva come una ragnatela.
+
+Sotto c'è quanto scende (o quanto è alta), la bocca e la larghezza; se la chiedi impossibile te lo dice. Da sapere: **vuota, la sacca non sta in piedi da sola** (appoggiata, le pareti di filo ricadono sul fondo), e **appesa per i capi una rete morbida pende chiusa come un fagotto**; col fondo rigido tiene la larghezza del fondo. Il calcolo gira solo finché la vista è aperta: un altro clic su **Sacca 3D** torna all'anteprima.
+
+**Simula** cuce il DST sullo schermo, punto per punto. **Esporta DST** e **Scarica SVG** portano dentro il progetto: **Riapri un progetto** li rimette com'erano, disegno compreso.
 
 ---
 
@@ -892,6 +937,26 @@ come primo stop, e poi vengono le strisce degli altri fili; la base non si spost
 sempre **dall'alto in basso**, riga per riga a serpentina: ogni riga di V di filato, poi si scende all'angolo. Spento:
 ogni striscia ha la sua base, prima dei suoi colori.
 
+**Ottimizza l'ordine dei passaggi** (spento di partenza; in *04 Passaggi*, sotto *Taglio a ogni salto*). Il tool
+sceglie il pezzo dopo un passo alla volta, e a volte lascia indietro qualcosa (le croci di una finestra, un dente di
+muro) per tornarci alla fine con un giro lungo. Acceso, rilegge il percorso di ogni filo e sposta questi pezzi nel
+momento in cui l'ago passava lì vicino: meno filo di passaggio, meno punti, niente in vista o salti in più. **Il
+disegno non cambia.** È lento (sul retro delle Alpi, 150 × 168 V, circa 20 secondi): accendilo quando il disegno è
+finito, prima di esportare. Si salva nel progetto. Anche senza, un'isola piccola dello stesso colore (fino a 120
+diagonali) vicina al pezzo che si sta cucendo si fa subito, se ci si arriva quasi gratis, e poi si torna al pezzo.
+
+**Il numero giusto di passate** (sempre). Contando i punti e i ripassi del filo, una diagonale può avere più passate di
+quelle chieste (per esempio 5 invece di 3). Dove il filo va e torna subito sulla stessa diagonale e lì le passate sono
+almeno due in più, quel va-e-torna si toglie: la diagonale torna al numero giusto, il filo resta continuo, i punti
+sviluppati calano. Una sola passata in più (4 invece di 3) resta: toglierla farebbe finire il filo dall'altra parte
+della diagonale.
+
+**Passaggi nascosti dritti (prova)** (spento di partenza; in *05 Macchina*). Un passaggio nascosto che corre lungo una
+riga, sotto le V di un filo che lo copre dopo, di solito segue le gambe di quelle V: uno zig zag. Acceso, diventa una
+**linea dritta a impuntura a metà altezza della riga**, coi punti al **centro di ogni V** che passa sopra. Valgono solo
+le corse orizzontali (almeno due mezze V di fila, nella stessa riga e nello stesso verso); il resto non cambia. Cambia
+solo come si cuce il passaggio (anteprima, SVG, DST, punti sviluppati), non il percorso. Si salva nel progetto.
+
 **Stop accesi e spenti.** Nella riga di ogni filo, **Vedi** accende o spegne quello stop
 nell'anteprima (punti e passaggi), per guardare un colore alla volta. Uno stop spento **non va
 nell'export** (DST e SVG): i passaggi degli altri fili si ricalcolano come se non ci fosse.
@@ -911,6 +976,54 @@ niente in memoria. Per riprendere un lavoro, SVG e DST esportati da qui portano 
 valori e il disegno: in fondo al pannello, *06 Carica parametri*, li rimette com'erano. Apre anche
 i progetti `.json` della vecchia app ThreadRoute. L'immagine di partenza non è nel file: se vuoi
 rifare la maglia, ricaricala.
+
+**Un pezzo da un altro progetto (il timbro).** In *06 Carica parametri*, **Inserisci un pezzo da DST o SVG…**
+apre un altro progetto fatto qui senza toccare quello aperto. Nella finestra trascini un riquadro attorno alla parte
+che ti serve (senza riquadro si prende tutto il ricamo); **Porta anche il fondo** spento (di partenza) lascia fuori le
+celle del colore di base del pezzo, così non copre il tuo disegno. Per ogni filo del pezzo scegli dove va: il tool
+propone il filo del progetto con lo stesso colore (o il più vicino); **Aggiungi come filo nuovo** lo mette in fondo
+alla tavolozza. **Prendi il pezzo**: si accende lo strumento **Timbro** e il pezzo segue il mouse, mezzo trasparente,
+col riquadro tratteggiato; un clic lo posa (anche più volte), le **frecce** lo spostano di una V, **X** lo mette a
+specchio, **Y** sottosopra (le diagonali e le V girano con lui), **Invio** lo posa dov'è, **Esc** finisce (il pezzo
+resta pronto nel pulsante Timbro). **Annulla** toglie l'ultimo pezzo posato. Se il pezzo ha una V di misura diversa,
+si riporta alle stesse misure in mm (la finestra lo dice): il disegno si deforma un po' e va ritoccato. Del pezzo
+si prendono solo i punti: gruppi, blocchi, salti e passaggi ridisegnati no.
+
+## Punto maglia (`punto-maglia`)
+
+**A cosa serve.** Disegni i tratti di un logo a mano — la **linea centrale** di ogni tratto — e il tool li trasforma in un **cordoncino a maglia**: le V girano morbide lungo le curve, come un logo lavorato a maglia (il riferimento è il logo Dior a maglia). Non lavora su una griglia di celle come il Punto croce: ogni tratto segue la sua curva.
+
+**Com'è fatto il cordoncino.** Ogni tratto ha un **centro rialzato** e una **mezza catena per lato**. La V è larga 2,5 mm e alta 3,5 mm, con una riga ogni 2,5 mm. Il disegno si proporziona alla V, non il contrario. Il centro può essere da **1**, **1,5** o **2** colonne di V. Ordine di cucitura: lato A in giù, ritorno su per il centro (poi coperto), lato B in giù, centro dal basso verso l'alto, sopra i lati. Le gambe del centro si cuciono 4 volte e quelle dei lati 2. **Ogni gamba e ogni passaggio è un punto solo**: nelle curve le gambe si allungano o si accorciano, ma non si spezzano mai.
+
+**Come si usa.**
+1. **Immagine di riferimento** — carica la foto o il disegno da ricalcare e scrivi la sua **Larghezza** vera in mm. L'**Opacità** la schiarisce sotto il disegno, **Mostra** la nasconde e **Togli** la toglie.
+2. **Disegno** — scegli lo strumento:
+   - **Nuovo tratto**: fai clic per mettere i punti della linea centrale. La curva passa morbida per tutti i punti. **Invio** o doppio clic finisce il tratto, **Esc** lo annulla.
+   - **Modifica**: trascina un punto per spostarlo, fai clic su un tratto per sceglierlo. **Canc** toglie il punto scelto. Per spostare la vista trascina lo sfondo, oppure tieni **Spazio** mentre trascini.
+   - **Aggiungi punto**: fai clic vicino al tratto scelto e il punto si aggiunge dove passa la curva.
+   - **Cerchio**: premi sul centro e trascina fino al raggio. Il cerchio è preciso, non disegnato a mano. Il punto dove lasci il mouse (quadratino) è dove comincia la cucitura. Il raggio si corregge dal campo **Raggio del cerchio**; trascinando la croce al centro si sposta tutto il cerchio.
+   - **Punti nuovi: Morbidi / Ad angolo**: come in Illustrator, un punto morbido fa passare la curva, un punto ad angolo fa uno spigolo, e fra due punti ad angolo la linea è dritta. **Alt+clic** mette l'altro tipo. Su un punto già messo, **Alt+clic** o doppio clic lo cambia, oppure c'è la casella **Punto scelto ad angolo**. Il punto ad angolo si vede come un rombo.
+   - **Punti di ricamo**: fa vedere i punti di ricamo del tratto scelto, uno per buco. Trascinandone uno lo sposti a mano: tutte le passate che passano da quel buco si spostano insieme. I punti spostati diventano rossi. Valgono finché il cordoncino del tratto non cambia: se sposti la linea o cambi un parametro, il tool avvisa che i ritocchi non valgono più (con **Annulla** tornano). **Togli i ritocchi** li cancella.
+   - **Togliere un punto della linea**: in **Modifica** fai clic sul punto e premi **Canc**, oppure usa **Elimina il punto scelto** nel pannello. Un tratto resta di almeno due punti.
+   - **Togliere un punto di ricamo**: in **Punti di ricamo** fai clic sul punto (si ingrandisce) e premi **Canc**, oppure usa **Togli il punto di ricamo scelto**. Il filo non passa più da quel buco, con tutte le sue passate; le gambe vicine si allungano fino al buco dopo.
+   - **Annulla** (o Ctrl+Z) torna indietro di un passo. **Esempio** carica una «D», una «o» a cerchio, una «i» che si stringe ai capi e una «z» ad angoli.
+3. **Tratti** — la lista è anche l'**ordine di cucitura**. Un tratto più in basso nella lista si cuce dopo e **sta sopra** negli incroci: al tratto sotto si tolgono le **righe intere** di V dove passa quello sopra, e il filo salta il buco con un passaggio solo, coperto dal tratto sopra. Con le frecce cambi l'ordine. Per il tratto scelto decidi:
+   - **Centro**: 1, 1,5 o 2 colonne.
+   - **Punte delle V**: avanti = verso l'ultimo punto disegnato.
+   - **Si comincia da**: il capo (il primo punto, disegnato col quadratino) o la coda. In un tratto chiuso disegnato a mano, scegli un punto e premi **Comincia da questo punto**. Nel cerchio si comincia dal quadratino: trascinalo dove vuoi.
+   - **Finisce**: **Dove comincia** è l'ordine del campione (lato A in giù, ritorno, lato B in giù, centro in su): il tratto finisce vicino a dove è cominciato. **All'altro capo**: lato A in giù, lato B in su, centro in giù, senza ritorno; il tratto finisce all'altro capo.
+   - **Mezza colonna**: solo col centro 1,5, da che parte stanno le mezze V.
+   - **Tratto chiuso**: per un anello disegnato a mano.
+   - **Al capo / Alla coda si stringe a**: il tratto si assottiglia verso il capo o la coda, fino a 1, 1,5 o 2 colonne. Nel campo mm scrivi a che distanza dal capo comincia a stringersi. Passa a mezza colonna per volta, in tratti uguali: per esempio, da 2 a 1 su 10 mm fa 5 mm a 1,5 e gli ultimi 5 a 1. **No** = non si stringe. **Secco** salta i passi: negli ultimi mm il tratto è tutto alla nuova larghezza (per esempio la «i» che finisce con una base da 2).
+   - **Passate del centro**: 2 alleggerisce un pezzo piccolo, 4 è quella del campione.
+   - **Lato verso il centro** (solo cerchi): nei cerchi piccoli la mezza catena dalla parte del centro non ci sta, e in automatico si toglie. Puoi anche tenerla o toglierla tu.
+4. **Cordoncino** — le misure della V, il passo, il rientro dei lati sotto il centro, le passate (quelle del centro sono sempre pari) e il **Margine negli incroci**.
+
+**Che cosa vedi.** Con **Schema a colori** i lati sono in ocra e il centro in blu; spento, il filo è tutto di un colore. **Mostra l’ordine** fa vedere come si cuce l'oggetto. Il cerchio verde col numero è dove comincia ogni tratto, il quadratino dove finisce. Il tratteggio verde è il salto, col taglio, al tratto successivo. «inizio» e «fine» segnano il primo e l'ultimo punto di tutto il ricamo. Fra una lettera e l'altra il filo si taglia sempre: i tratti non sono collegati. Nei tratti con i punti ad angolo, ogni pezzo dritto ha le sue V: nessuna V sta a cavallo di uno spigolo. **Mostra i passaggi** aggiunge in rosso i passaggi fra una gamba e l'altra. **Mostra le linee** fa vedere le linee centrali; quella del tratto scelto si vede sempre. Nella lista, accanto a ogni tratto, ci sono i suoi punti e quante righe ha perso sotto gli incroci; in basso c'è il totale dei punti. Se un tratto è più corto di una V, o se un passaggio sotto un incrocio supera i 12,1 mm (oltre quella misura il DST lo spezzerebbe), il tool lo segnala in basso.
+
+**Esportazione.** Il **DST** usa un ago solo: un tratto dopo l'altro nell'ordine della lista, con un taglio fra un tratto e il successivo. L'**SVG** contiene il filo e le linee centrali. Tutti e due si riaprono con **Apri progetto…**, che rimette tratti e parametri. L'immagine di riferimento non viene salvata nel file: va ricaricata.
+
+---
 
 ## Se qualcosa non torna
 

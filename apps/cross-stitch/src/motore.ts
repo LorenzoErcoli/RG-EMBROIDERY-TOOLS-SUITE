@@ -6,7 +6,7 @@ import type { ExportLayer } from '@rg/core';
 import { refertoDaStrati } from '@rg/core';
 import type { Ingresso, Motore } from '@rg/cervello';
 import { gridHeight, type Cells, type GridSpec, type Thread } from './model';
-import { colorPolylinesTrim, type RouteParams, type StitchParams } from './routing';
+import { colorPolylinesTrim, type RouteParams, type RouteResult, type StitchParams } from './routing';
 import { cellMask, subMask, type PieceShape } from './shape';
 import { entryRows, routeAll, type ModulePath } from './strips';
 import { tileModule, type KnitModule } from './module';
@@ -98,12 +98,14 @@ export function ingressoPassaggi(s: StatoCross, cells: Cells = s.cells, maskFor:
  * Le tracce da esportare (SVG e DST), in ordine d'ago: solo gli stop accesi (Vedi). Uno stop spento non esiste nel
  * file, e i passaggi degli altri si ricalcolano come se non ci fosse: quello che copriva non copre più.
  */
-export function stratiCross(s: StatoCross, maskFor?: (g: GridSpec) => Uint8Array | null): ExportLayer[] {
+export function stratiCross(s: StatoCross, maskFor?: (g: GridSpec) => Uint8Array | null, ready?: RouteResult | null): ExportLayer[] {
   const on = (color: number) => !s.threads[color]?.hidden;
   const cells: Cells = new Map([...s.cells].filter(([, m]) => on(m.color)));
   const inp = ingressoPassaggi(s, cells, maskFor);
   if (inp.params.base && !on(inp.params.base.color)) inp.params.base = null;
-  const res = routeAll(inp.grid, inp.cells, inp.params);
+  // `ready`: i passaggi già calcolati sugli stessi dati (il tool li ha dal worker; con «Ottimizza l'ordine» rifarli
+  // qui bloccherebbe la pagina per decine di secondi)
+  const res = ready ?? routeAll(inp.grid, inp.cells, inp.params);
   // la compensazione del ritiro: la striscia k scende (o sale) di k × shiftMm
   const shift = inp.params.strips?.shiftMm ?? 0;
   return res.colors.map((cr) => {

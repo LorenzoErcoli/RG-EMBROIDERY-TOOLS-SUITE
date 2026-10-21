@@ -1,0 +1,37 @@
+/* rete-testa-speciale — solo chrome app + sizing. Il layout lo fornisce il pattern rg-workspace del DS. */
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--rg-color-background);
+  color: var(--rg-color-text-primary);
+  font-family: var(--rg-font-body);
+}
+#app { display: flex; flex-direction: column; height: 100vh; }
+
+/* Il workspace riempie lo spazio sotto la topbar (sizing d'app, come da doc del pattern). */
+.rete-workspace { flex: 1 1 auto; min-height: 0; }
+
+/* L'anteprima riempie il layer; bordo e sfondo sono già sul __canvas del DS. */
+#layer svg { max-width: 100%; max-height: 100%; }
+
+/* Le misure della sacca: una tabellina di numeri nel pannello, non un componente. */
+.rete-tabella { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; font-size: var(--rg-font-size-sm, 0.8125rem); }
+.rete-tabella caption { text-align: left; color: var(--rg-color-text-secondary); padding-bottom: 0.25rem; }
+.rete-tabella th, .rete-tabella td { text-align: right; padding: 0.15rem 0.35rem; border-bottom: 1px solid var(--rg-color-border); white-space: nowrap; }
+.rete-tabella th:first-child, .rete-tabella td:first-child { text-align: left; }
+
+/* Il colore di un livello nella lista: lo stesso che ha in anteprima. Un campione, non un componente. */
+.rete-ink {
+  display: inline-block;
+  width: 0.75em;
+  height: 0.75em;
+  margin-inline: 0.25em;
+  border-radius: 2px;
+  background: var(--ink);
+  vertical-align: middle;
+}
+
+/* La sacca appesa in 3D: prende il posto dell'anteprima finché il suo pulsante è acceso. */
+.rete-vista3d:not([hidden]) { flex: 1 1 auto; min-height: 0; display: flex; flex-direction: column; gap: 0.5rem; padding: 0.5rem; }
+.rete-vista3d__controlli { flex-wrap: wrap; align-items: flex-end; }
+.rete-vista3d__tela { flex: 1 1 auto; min-height: 240px; width: 100%; cursor: grab; touch-action: none; background: var(--rg-color-surface-raised, transparent); border: 1px solid var(--rg-color-border); }
+.rete-vista3d__stato { margin: 0; }
