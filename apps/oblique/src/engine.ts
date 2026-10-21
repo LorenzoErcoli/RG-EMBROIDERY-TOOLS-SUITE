@@ -1551,7 +1551,55 @@ interface ConnectOptions {
   forceBorderRouting?: boolean;
   symmetricRouting?: boolean;
   routeBoundaryCutIntraDiagonal?: boolean;
+  /** Aree vuote (R5): un raccordo che le attraverserebbe gira sul loro bordo. */
+  voids?: Boundary[];
 }
+
+/**
+ * Il raccordo da `from` a `to` (fra due pezzi di una diagonale, o fra la fermatura sul bordo e il tratto),
+ * senza mai cucire in un vuoto (R5): dove la retta
+ * entrerebbe in un vuoto, il filo ne segue il bordo per la via più corta, al passo dei passaggi, e
+ * riprende la retta dove la retta ne esce. Senza vuoti sulla strada è la retta di sempre, `[from, to]`.
+ *
+ * DIVERGENZA VOLUTA dall'originale (misurata il 2026-10-21, bloccata da un test in `test/smoke.mjs`).
+ * `app.js` unisce i pezzi di una diagonale con una retta anche quando `subtractExclusions` li ha appena
+ * staccati sui due lati di un vuoto: su una corona di 220 mm col foro di 123 mm il Livello 2 cuciva
+ * 5 tratti per 254 mm DENTRO il foro (e il DST li portava, spezzati in punti da 12,1 mm). Il suo
+ * `routeAroundVoids` rimedierebbe, ma è spento di serie e devia anche i punti del disegno che toccano
+ * il bordo del vuoto: per questo il rimedio sta qui, solo sui raccordi.
+ */
+function raccordoFuoriDaiVuoti(from: Pt, to: Pt, voids: Boundary[] | undefined, stitch: number, closeTolerance = 0.1): Poly {
+  if (!voids || !voids.length) return [from, to];
+  const out: Pt[] = [from];
+  let a = from;
+  for (let guard = 0; guard < voids.length * 4 + 4; guard += 1) {
+    // il primo vuoto in cui entra la retta da `a` a `to`, con l'entrata e l'uscita sul suo bordo
+    let hit: { void: Boundary; entry: Pt; exit: Pt; along: number } | null = null;
+    for (const v of voids) {
+      if (Math.max(a.x, to.x) < v.minX || Math.min(a.x, to.x) > v.maxX || Math.max(a.y, to.y) < v.minY || Math.min(a.y, to.y) > v.maxY) continue;
+      const inside = clipSegmentToPolygon(a, to, v.points).filter((s) => distance(s.a, s.b) > 1e-3);
+      if (!inside.length) continue;
+      const along = distance(a, inside[0].a);
+      if (!hit || along < hit.along) hit = { void: v, entry: inside[0].a, exit: inside[inside.length - 1].b, along };
+    }
+    if (!hit) break;
+    const graph = perimeterGraph(hit.void.points, closeTolerance);
+    const pa = projectToPerimeterGraph(hit.entry, graph);
+    const pb = projectToPerimeterGraph(hit.exit, graph);
+    if (!pa || !pb) break;
+    const forward = walkPerimeterGraph(graph, pa, pb, true);
+    const backward = walkPerimeterGraph(graph, pa, pb, false);
+    const walk = resampleUniform(pathLength(forward) <= pathLength(backward) ? forward : backward, stitch);
+    for (const pt of [hit.entry, ...walk, hit.exit]) if (!samePt(out[out.length - 1], pt)) out.push(pt);
+    a = hit.exit;
+  }
+  if (!samePt(out[out.length - 1], to)) out.push(to);
+  return out;
+}
+
+/** Il raccordo di una diagonale, al passo dei passaggi (vedi `raccordoFuoriDaiVuoti`). */
+const raccordoDiagonale = (from: Pt, to: Pt, voids: Boundary[] | undefined, p: ObliqueParams): Poly =>
+  raccordoFuoriDaiVuoti(from, to, voids, Math.max(0.5, p.minimumTravelStitchLength || 3), p.perimeterCloseTolerance || 0.1);
 
 function connectDiagonalModules(items: RawPolyline[], layer: string, p: ObliqueParams, options: ConnectOptions): { points: Poly; intraDiagonalPolylines: Stroke[] } {
   const points: Pt[] = [];
@@ -1573,10 +1621,13 @@ function connectDiagonalModules(items: RawPolyline[], layer: string, p: ObliqueP
           intraDiagonalPolylines.push({ layer: `${layer}-cut-routing`, connectorType: 'cut-generated-intra-diagonal-border-connector', points: cutRoute });
         }
       } else {
-        if (previousItem && previousItem.index !== item.index) {
+        const via = raccordoDiagonale(from, to, options.voids, p);
+        if (via.length > 2) {
+          intraDiagonalPolylines.push({ layer: `${layer}-intra`, connectorType: 'void-border-connector', points: via });
+        } else if (previousItem && previousItem.index !== item.index) {
           intraDiagonalPolylines.push({ layer: `${layer}-intra`, connectorType: 'intra-diagonal-connector', points: [from, to] });
         }
-        points.push(to);
+        points.push(...via.slice(1));
       }
     }
     points.push(...item.points.slice(1));
@@ -1604,7 +1655,7 @@ function technicalGapBreakDistance(diagonals: RawPolyline[][], p: ObliqueParams)
 }
 
 /** Giunzione tecnica L0/L1: una polilinea per diagonale, spezzata sui salti grandi (porting di connectTechnicalDiagonals). */
-export function connectTechnicalDiagonals(polylines: RawPolyline[], layer: string, p: ObliqueParams): Connected {
+export function connectTechnicalDiagonals(polylines: RawPolyline[], layer: string, p: ObliqueParams, voids: Boundary[] = []): Connected {
   if (!polylines.length) return { polylines: [], routingPolylines: [], intraDiagonalPolylines: [] };
   const diagonals = groupByDiagonal(polylines);
   const breakDistance = technicalGapBreakDistance(diagonals, p);
@@ -1621,8 +1672,11 @@ export function connectTechnicalDiagonals(polylines: RawPolyline[], layer: strin
       const from = run[run.length - 1], to = item.points[0];
       if (samePt(from, to)) { run.push(...item.points.slice(1)); previousItem = item; continue; }
       if (distance(from, to) > breakDistance) { flush(); run.push(...item.points); previousItem = item; continue; }
-      if (previousItem && previousItem.index !== item.index) intraDiagonalPolylines.push({ layer: `${layer}-intra`, connectorType: 'intra-diagonal-connector', points: [from, to] });
-      run.push(to, ...item.points.slice(1));
+      // sotto la soglia del salto il filo prosegue, ma attorno ai vuoti (R5), mai dentro
+      const via = raccordoDiagonale(from, to, voids, p);
+      if (via.length > 2) intraDiagonalPolylines.push({ layer: `${layer}-intra`, connectorType: 'void-border-connector', points: via });
+      else if (previousItem && previousItem.index !== item.index) intraDiagonalPolylines.push({ layer: `${layer}-intra`, connectorType: 'intra-diagonal-connector', points: [from, to] });
+      run.push(...via.slice(1), ...item.points.slice(1));
       previousItem = item;
     }
     flush();
@@ -1640,7 +1694,7 @@ export function connectLayerContinuity(polylines: RawPolyline[], bounds: Boundar
   const longest = longestDiagonalIndex(diagonals);
   diagonals.forEach((diagonalItems, diagonalPosition) => {
     const diagonalPath = connectDiagonalModules(diagonalItems, layer, p, {
-      bounds, cutBoundary: options.cutBoundary || bounds, routeBoundaryCutConnectors: options.routeBoundaryCutIntraDiagonal,
+      bounds, cutBoundary: options.cutBoundary || bounds, routeBoundaryCutConnectors: options.routeBoundaryCutIntraDiagonal, voids: options.voids,
     });
     if (!diagonalPath.points.length) return;
     const current = connected[connected.length - 1];
@@ -1775,8 +1829,11 @@ function enforceMinimumStitchOnLayer(connected: Connected, minLength: number): v
   for (const polyline of connected.polylines) polyline.points = enforceMinimumStitch(polyline.points, minLength);
 }
 
-/** Scarico filo sul bordo (3 punti di lock + ingresso) a inizio e fine di ogni tratto (porting di addStartEndLock, R8). */
-export function addStartEndLock(connected: Connected, boundary: Boundary, stitch: number): void {
+/**
+ * Scarico filo sul bordo (3 punti di lock + ingresso) a inizio e fine di ogni tratto (porting di addStartEndLock, R8).
+ * L'ingresso e l'uscita fra il bordo e il tratto non tagliano i vuoti (R5): ci girano attorno come i raccordi.
+ */
+export function addStartEndLock(connected: Connected, boundary: Boundary, stitch: number, voids: Boundary[] = []): void {
   if (!boundary || !boundary.points.length) return;
   const s = Math.max(0.5, stitch || 3);
   const lockStep = Math.max(3, s);
@@ -1805,12 +1862,12 @@ export function addStartEndLock(connected: Connected, boundary: Boundary, stitch
     let out: Pt[];
     if (bStart) {
       const lock = lockAt(bStart);
-      const entry = resampleTravelPath([lock[lock.length - 1], start], s);
+      const entry = resampleTravelPath(raccordoFuoriDaiVuoti(lock[lock.length - 1], start, voids, s), s);
       out = lock.concat(entry.slice(1), pts.slice(1));
     } else out = pts.slice();
     if (bEnd) {
       const lock = lockAt(bEnd);
-      const exit = resampleTravelPath([end, lock[0]], s);
+      const exit = resampleTravelPath(raccordoFuoriDaiVuoti(end, lock[0], voids, s), s);
       out = out.concat(exit.slice(1), lock.slice(1));
     }
     polyline.points = out;
@@ -1855,14 +1912,16 @@ export function generateOblique(sources: ObliqueSources, p: ObliqueParams, optio
     : { validIds: new Set<string>(), validCenters: [], validHoles: [], polylines: [] };
 
   const routeOptions: ConnectOptions = { forceBorderRouting: true, symmetricRouting: true, routeBoundaryCutIntraDiagonal: true, cutBoundary: decorative };
+  // I vuoti di cui i raccordi devono fare il giro: gli stessi che `applyVoids` ha tolto dal ricamo.
+  const voidsOf = (b: Boundary): Boundary[] => (p.enableExclusionAreas ? b.exclusions || [] : []);
 
   const connectTechnical = (raw0: RawPolyline[], layer: string): Connected => {
     const filtered = filterLevelByHoles(raw0, p, laserExport, holesEnabled);
     const clipped = applyModuleClipMode(filtered, placement, layer === 'level0' ? p.level0ClipMode : p.level1ClipMode, p);
     const voided = applyVoids(clipped, placement.exclusions, p);
     const connected = placementFollows
-      ? connectLayerContinuity(voided, routingBounds, layer, p, routeOptions)
-      : connectTechnicalDiagonals(voided, layer, p);
+      ? connectLayerContinuity(voided, routingBounds, layer, p, { ...routeOptions, voids: voidsOf(placement) })
+      : connectTechnicalDiagonals(voided, layer, p, voidsOf(placement));
     routeAroundVoids(connected, placement.exclusions, p.minimumTravelStitchLength || 3, p);
     // Tolte le rosette senza foro restano i becucci che ci portavano: filo che non disegna niente.
     if (holesEnabled && p.pruneFeaturesWithoutHoles) removeIsolatedSpikes(connected, laserExport.validCenters);
@@ -1878,7 +1937,9 @@ export function generateOblique(sources: ObliqueSources, p: ObliqueParams, optio
     const pruned = pruneLayerFeaturesByHoles(raw.level1, [], p.holeMatchTolerance || 0.5);
     const clipped = applyModuleClipMode(pruned, placement, p.level1ClipMode, p);
     const voided = applyVoids(clipped, placement.exclusions, p);
-    level05Connected = placementFollows ? connectLayerContinuity(voided, routingBounds, 'level1', p, routeOptions) : connectTechnicalDiagonals(voided, 'level1', p);
+    level05Connected = placementFollows
+      ? connectLayerContinuity(voided, routingBounds, 'level1', p, { ...routeOptions, voids: voidsOf(placement) })
+      : connectTechnicalDiagonals(voided, 'level1', p, voidsOf(placement));
     routeAroundVoids(level05Connected, placement.exclusions, p.minimumTravelStitchLength || 3, p);
     // Il Livello 0.5 non disegna cerchi: ogni escursione d'ingresso è inutile (lista fori vuota
     // = nessuna guardia), resta solo la passata dell'impuntura.
@@ -1891,14 +1952,15 @@ export function generateOblique(sources: ObliqueSources, p: ObliqueParams, optio
   const l2Clean = cleanupPolylines(raw.level2, decorative, p);
   const l2Reconnect = reconnectCutFragmentsOnBoundary(l2Clean, decorative, p);
   const l2Voided = applyVoids(l2Reconnect, decorative.exclusions, p);
-  const level2Connected = connectLayerContinuity(l2Voided, routingBounds, 'level2', p, routeOptions);
+  const level2Connected = connectLayerContinuity(l2Voided, routingBounds, 'level2', p, { ...routeOptions, voids: voidsOf(decorative) });
   routeAroundVoids(level2Connected, decorative.exclusions, p.minimumTravelStitchLength || 3, p);
 
   // Pass finali: punto minimo globale (R3) + scarico filo sul bordo (R8).
   const minStitch = Math.max(0, p.minimumSegmentLength || 0);
   for (const c of [level0Connected, level05Connected, level1Connected, level2Connected]) enforceMinimumStitchOnLayer(c, minStitch);
   if (p.startLockEnabled) {
-    for (const c of [level0Connected, level05Connected, level1Connected, level2Connected]) addStartEndLock(c, pattern, p.startLockStitchMm || 3);
+    for (const c of [level0Connected, level05Connected, level1Connected]) addStartEndLock(c, pattern, p.startLockStitchMm || 3, voidsOf(placement));
+    addStartEndLock(level2Connected, pattern, p.startLockStitchMm || 3, voidsOf(decorative));
   }
 
   const travel: Stroke[] = [];

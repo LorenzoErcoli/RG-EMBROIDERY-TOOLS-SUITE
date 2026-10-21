@@ -1374,6 +1374,42 @@ console.log('\noblique — routing + orchestratore (2d)');
   check('simplifyLoop: e resta comunque leggera (un cerchio in ≤50 lati, non 262)', simpleCircle.length <= 50, true);
 }
 
+// oblique — dentro un vuoto non si cuce (R5), in nessun livello. Trovato il 2026-10-21 provando oblique su una
+// selezione di Stilista con un foro: il Livello 2 univa con una retta i due pezzi di diagonale che il vuoto aveva
+// staccato, e su una corona di 220 mm col foro di 123 mm cuciva 5 tratti per 254 mm DENTRO il foro (il DST li portava,
+// spezzati in punti da 12,1 mm). Con un foro decentrato anche il Livello 1 ci entrava, con l'ingresso della fermatura
+// (32 tratti, 66 mm). I salti fra un tratto e l'altro possono attraversarlo: un salto non è ago. Moduli VERI del tool.
+console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci girano attorno');
+{
+  const modulo = (f) => rg.parseModuleSvg(readFileSync(join(root, `apps/oblique/src/modules/${f}.svg`), 'utf8'));
+  const sources = { level0: modulo('level0'), level1: modulo('level1'), level2: modulo('level2'), holes: modulo('holes') };
+  const anello = (cx, cy, r) => {
+    const n = Math.round((2 * Math.PI * r) / 0.6), pts = [];
+    for (let i = 0; i <= n; i++) { const t = (i / n) * 2 * Math.PI; pts.push({ x: cx + Math.cos(t) * r, y: cy + Math.sin(t) * r }); }
+    return pts;
+  };
+  // mm di filo CUCITO (dentro una polilinea) più di 0,5 mm dentro il foro, campionando ogni segmento
+  const cucitoNelForo = (strokes, cx, cy, r) => {
+    let tratti = 0, mm = 0;
+    for (const s of strokes) for (let i = 1; i < s.points.length; i++) {
+      const a = s.points[i - 1], b = s.points[i], len = Math.hypot(b.x - a.x, b.y - a.y), k = Math.max(1, Math.ceil(len / 0.05));
+      let dentro = 0;
+      for (let j = 0; j < k; j++) { const t = (j + 0.5) / k; if (Math.hypot(a.x + (b.x - a.x) * t - cx, a.y + (b.y - a.y) * t - cy) < r - 0.5) dentro += len / k; }
+      if (dentro > 0) { tratti++; mm += dentro; }
+    }
+    return `${tratti} tratti, ${Math.round(mm)} mm`;
+  };
+  for (const [cx, cy, r, nome] of [[110, 110, 61.5, 'corona 220 mm col foro di 123 mm'], [80, 140, 25, 'foro di 50 mm decentrato']]) {
+    const panelContour = rg.contourBoundary([anello(110, 110, 110), anello(cx, cy, r)], 'pattern', 0.1);
+    const res = rg.generateOblique(sources, { ...rg.defaultObliqueParams(), enableExclusionAreas: true }, { roles: {}, panelContour });
+    check(`${nome}: il foro è letto come vuoto`, (panelContour.exclusions || []).length, 1);
+    check(`${nome}: livelli 0, 1 e 2 non cuciono nel foro`,
+      ['level0', 'level1', 'level2'].map((l) => `${l}: ${cucitoNelForo(res[l], cx, cy, r)}`),
+      ['level0: 0 tratti, 0 mm', 'level1: 0 tratti, 0 mm', 'level2: 0 tratti, 0 mm']);
+    check(`${nome}: il Livello 2 resta un filo solo (il raccordo gira sul bordo del foro, non salta)`, res.level2.length, 1);
+  }
+}
+
 // ---------------------------------------------------------------------------------------------
 // striatura (Punto Striato) — le invarianti conquistate a mano coi giri di feedback di Lorenzo,
 // bloccate qui perché il rework dei passaggi non le possa perdere di nascosto:
