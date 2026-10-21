@@ -1,5 +1,5 @@
 ---
-titolo: Una zona spenta dentro un'altra è un buco
+titolo: Zone dentro altre zone — spenta o della stessa tinta è un buco, di un'altra tinta è un secondo pattern (che può svuotare il primo)
 tipo: decisione
 tool: [zone-pattern, cannage-rafia]
 data: 2026-10-21
@@ -19,8 +19,20 @@ i raccordi ci girano attorno). In Pattern a zone ogni tinta senza pattern è spe
 per tutte quelle. Una tinta **senza ruolo** resta com'era: Cannage rafia passa al motore solo la tinta della
 sua base (e le aree di scarico), le altre non hanno ruolo e non cambiano niente.
 
-**Perché solo le spente.** Una zona dentro un'altra *con un altro pattern* non è stata decisa: per ora le due
-si sovrappongono come prima.
+**Il resto della regola** (Lorenzo, 2026-10-21, lo stesso giorno, guardando i due casi disegnati: *«se ha lo
+stesso colore è buco se è diverso è un secondo pattern. Importante però che il primo possa essere
+svuotato»*):
 
-**Come si applica.** Smoke: un quadrato col pattern A e uno spento dentro → nessun punto nel buco; senza ruolo
-→ ricamato come prima (col codice di prima: 93 punti nel buco).
+- **stessa tinta dentro la stessa tinta = buco.** Conta quante volte si è dentro zone della propria tinta:
+  dispari = buco (non si ricama, buca quella che lo contiene), pari = isola (si ricama). È la convenzione dei
+  tracciati composti, la stessa del Generatore pattern;
+- **tinta diversa = secondo pattern**, ricamato sopra il primo come prima;
+- **«Svuota sotto»** (`ZoneRole.svuota`, la casella nella riga della tinta in Pattern a zone): la zona di fuori
+  non si ricama sotto le zone delle altre tinte che porta dentro. Di serie spenta.
+
+Misurato sui due quadrati (60 mm, dentro 24 mm, canvas e nastro): tinta diversa 3.342 punti fuori + 517 dentro;
+con «Svuota sotto» 2.947 fuori (come col buco) + 517 dentro.
+
+**Come si applica.** Smoke: spenta dentro → nessun punto nel buco (col codice di prima 93); senza ruolo → come
+prima; stessa tinta → buco, e l'isola nel buco si ricama; tinta diversa → sopra; con «svuota» → sotto niente;
+`normalizeRole` conserva `svuota` riaprendo un progetto.

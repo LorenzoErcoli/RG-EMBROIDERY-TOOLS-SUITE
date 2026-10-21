@@ -344,6 +344,27 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
       unitWrap.append(angle, deg);
       aside.appendChild(unitWrap);
 
+      // SVUOTA (Lorenzo, 2026-10-21: «se è diverso è un secondo pattern. Importante però che il primo possa
+      // essere svuotato»): questa tinta non si ricama sotto le zone delle altre tinte che porta dentro.
+      // Solo per chi ha un pattern: le zone della stessa tinta dentro e quelle spente sono buchi comunque.
+      if (role.pattern !== 'off' && role.pattern !== RELIEF_ROLE) {
+        const svuota = document.createElement('label');
+        svuota.className = 'rg-choice';
+        svuota.title = 'Sotto le zone di altri colori che stanno dentro questa, il suo pattern non si ricama';
+        const box = document.createElement('input');
+        box.type = 'checkbox';
+        box.checked = role.svuota === true;
+        box.setAttribute('aria-label', `Svuota ${color.toUpperCase()} sotto le zone di altri colori`);
+        box.addEventListener('change', () => {
+          const { svuota: _, ...resto } = roles[color] ?? role;
+          roles[color] = box.checked ? { ...resto, svuota: true } : resto;
+        });
+        const testo = document.createElement('span');
+        testo.textContent = 'Svuota sotto';
+        svuota.append(box, testo);
+        aside.appendChild(svuota);
+      }
+
       row.append(sw, code, sel, aside);
       ul.appendChild(row);
     }

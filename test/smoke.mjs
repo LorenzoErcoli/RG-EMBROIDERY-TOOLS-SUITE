@@ -3167,6 +3167,27 @@ console.log('\noblique — routing + orchestratore (2d)');
     const senzaRuolo = pianoBuco(null);
     check('la zona spenta dentro resta vuota; una tinta senza ruolo no (come prima)',
       [nelBuco(spenta), nelBuco(senzaRuolo) > 0, spenta.stitches.length], [0, true, 1]);
+
+    // «se ha lo stesso colore è buco, se è diverso è un secondo pattern. Importante però che il primo possa
+    // essere svuotato» (Lorenzo, 2026-10-21)
+    const zoneStessa = rg.zonesFromShapes([
+      { id: 'fuori', color: '#aa0000', points: quadrato(0, 0, 60) },
+      { id: 'dentro', color: '#aa0000', points: quadrato(20, 20, 20) },
+      { id: 'isola', color: '#aa0000', points: quadrato(27, 27, 6) },
+    ], 0);
+    const stessa = rg.buildZonePlan(zoneStessa, { roles: { '#aa0000': { pattern: 'A', angleDeg: 0 } }, patterns: { A: config },
+      marginMm: 2, rowHeightMm: 0, travelMode: 'none', travelStitchMm: 3, cleanupMinStitchMm: 0, outerMarginMm: 0 });
+    const fraBucoEIsola = stessa.stitches.flatMap((s) => s.polylines.flat())
+      .filter((p) => p.x > 20.5 && p.x < 39.5 && p.y > 20.5 && p.y < 39.5 && !(p.x > 26.5 && p.x < 33.5 && p.y > 26.5 && p.y < 33.5)).length;
+    check('stessa tinta dentro = buco (non si ricama), e l\'isola nel buco sì',
+      [stessa.stitches.map((s) => s.zone.id).sort(), fraBucoEIsola], [['fuori', 'isola'], 0]);
+    const conB = (svuota) => rg.buildZonePlan(zoneBuco, {
+      roles: { '#aa0000': { pattern: 'A', angleDeg: 0, ...(svuota ? { svuota: true } : {}) }, '#ff00ff': { pattern: 'B', angleDeg: 0 } },
+      patterns: { A: config, B: config }, marginMm: 2, rowHeightMm: 0, travelMode: 'none', travelStitchMm: 3, cleanupMinStitchMm: 0, outerMarginMm: 0 });
+    check('tinta diversa = secondo pattern sopra; con «svuota» il primo sotto non c\'è',
+      [nelBuco(conB(false)) > 0, nelBuco(conB(true)), conB(true).stitches.length], [true, 0, 2]);
+    check('«svuota» si conserva riaprendo un progetto (normalizeRole)',
+      rg.normalizeRole({ pattern: 'A', angleDeg: 5, svuota: true }), { pattern: 'A', angleDeg: 5, svuota: true });
   }
 
   console.log('\nzone-pattern — il margine deborda fuori, non dentro');

@@ -39,7 +39,16 @@ function letterIndex(key: PatternKey): number {
  * 03/09 (rotazione misurata sulla zona, con correzione): la misura resta, ma solo come angolo
  * SUGGERITO nella mappa colori — non tocca più il ricamo.
  */
-export type ZoneRole = { pattern: PatternKey | 'off' | typeof RELIEF_ROLE; angleDeg: number };
+export type ZoneRole = {
+  pattern: PatternKey | 'off' | typeof RELIEF_ROLE;
+  angleDeg: number;
+  /**
+   * SVUOTA (Lorenzo, 2026-10-21: «importante però che il primo possa essere svuotato»): sotto le zone delle
+   * ALTRE tinte che stanno dentro questa, questo pattern non si ricama. Spento (di serie) i due pattern si
+   * sovrappongono. Le zone della stessa tinta dentro sono sempre buchi, quelle spente pure.
+   */
+  svuota?: boolean;
+};
 
 /**
  * Il ruolo delle AREE DI SCARICO. Una tinta così non si ricama e non è un ago: i suoi contorni
@@ -54,12 +63,13 @@ export const RELIEF_ROLE = 'scarico';
  * ritrova il pattern diritto — che è esattamente la regola nuova.
  */
 export function normalizeRole(raw: unknown): ZoneRole {
-  const r = (raw ?? {}) as { pattern?: unknown; angleDeg?: unknown; angleOffsetDeg?: unknown };
+  const r = (raw ?? {}) as { pattern?: unknown; angleDeg?: unknown; angleOffsetDeg?: unknown; svuota?: unknown };
   const angle = typeof r.angleDeg === 'number' ? r.angleDeg
     : typeof r.angleOffsetDeg === 'number' ? r.angleOffsetDeg : 0;
   return {
     pattern: typeof r.pattern === 'string' && r.pattern ? r.pattern : 'off',
     angleDeg: Number.isFinite(angle) ? angle : 0,
+    ...(r.svuota === true ? { svuota: true } : {}),
   };
 }
 
@@ -240,15 +250,30 @@ export function buildZonePlan(zones: Zone[], params: ZonePlanParams): ZonePlan {
   const solid = zones.filter((zone) => !isRelief(zone));
   let relievedZones = 0;
 
-  // UNA ZONA SPENTA DENTRO UN'ALTRA È UN BUCO (Lorenzo, 2026-10-21: «sì, una zona spenta dentro un'altra
-  // diventa un buco»). Prima la zona di fuori si riempiva intera, la spenta compresa: una selezione di
-  // Stilista con un foro tornava ricamata anche nel foro. Vale per le zone col ruolo DICHIARATO spento
-  // ('off'): una tinta senza ruolo (Cannage rafia passa solo la sua) resta com'era.
-  const spente = zones.filter((zone) => params.roles[zone.color]?.pattern === 'off');
-  const buchiDi = (zone: Zone, polygon: Point[]): Point[][] => spente
-    .filter((s) => s !== zone && s.points.length >= 3 && s.points.every((p) => pointInPolygon(p, polygon)))
-    .map((s) => s.points);
-
+  // ZONE DENTRO ALTRE ZONE (Lorenzo, 2026-10-21). Prima ogni zona si riempiva come un poligono pieno e
+  // una zona dentro un'altra non la bucava: una selezione di Stilista con un foro tornava ricamata nel foro.
+  // - «una zona spenta dentro un'altra diventa un buco»: col ruolo DICHIARATO 'off' (una tinta senza ruolo,
+  //   come in Cannage rafia che passa solo la sua, resta com'era);
+  // - «se ha lo stesso colore è buco, se è diverso è un secondo pattern»: dentro la stessa tinta conta quante
+  //   volte si è dentro (dispari = buco, pari = isola che si ricama: la convenzione dei tracciati composti);
+  //   una tinta diversa si ricama sopra, come prima;
+  // - «importante però che il primo possa essere svuotato»: col ruolo `svuota` la zona di fuori si buca
+  //   anche sotto le zone delle altre tinte che porta dentro.
+  const dentro = (fuori: Zone, z: Zone): boolean =>
+    fuori !== z && fuori.areaMm2 > z.areaMm2 && z.points.length >= 3
+    && boxesOverlap(z.points, fuori.points) && z.points.every((p) => pointInPolygon(p, fuori.points));
+  const profondita = new Map<Zone, number>();
+  for (const z of zones) profondita.set(z, zones.filter((f) => f.color === z.color && dentro(f, z)).length);
+  const eBuco = (z: Zone) => (profondita.get(z) ?? 0) % 2 === 1;
+  const buchiDi = (zone: Zone): Point[][] => {
+    const svuota = params.roles[zone.color]?.svuota === true;
+    const p0 = profondita.get(zone) ?? 0;
+    return zones.filter((s) => dentro(zone, s) && (
+      (s.color === zone.color && (profondita.get(s) ?? 0) === p0 + 1)          // il buco della stessa tinta
+      || params.roles[s.color]?.pattern === 'off'                             // una zona spenta
+      || (svuota && s.color !== zone.color && !isRelief(s) && !eBuco(s))      // sotto le altre tinte, se si svuota
+    )).map((s) => s.points);
+  };
   // Il MARGINE ESTERNO: le zone sul perimetro si allargano verso fuori prima di essere
   // riempite. Il contorno disegnato resta quello vero — deborda il ricamo, non la sagoma.
   const outer = params.outerMarginMm > 0 ? outerEdgeFlags(solid) : null;
@@ -260,7 +285,8 @@ export function buildZonePlan(zones: Zone[], params: ZonePlanParams): ZonePlan {
   }
 
   for (const key of order) {
-    const ofPattern = zones.filter((zone) => params.roles[zone.color]?.pattern === key);
+    // un buco della sua tinta non si ricama: buca la zona che lo contiene
+    const ofPattern = zones.filter((zone) => params.roles[zone.color]?.pattern === key && !eBuco(zone));
     for (const zone of orderZonesRaster(ofPattern, params.rowHeightMm)) {
       // L'angolo è quello scritto a mano per la tinta; l'inclinazione misurata della zona non
       // entra più nel ricamo (decisione di Lorenzo del 14/09, vedi `ZoneRole`).
@@ -272,7 +298,7 @@ export function buildZonePlan(zones: Zone[], params: ZonePlanParams): ZonePlan {
       }
       try {
         polylines = fillZone(zone, params.patterns[key] ?? {}, angleDeg, params.marginMm,
-          polygon, reliefRings, buchiDi(zone, zone.points)).filter((p) => p.length > 1);
+          polygon, reliefRings, buchiDi(zone)).filter((p) => p.length > 1);
       } catch (error) {
         warnings.push(`Zona ${zone.id}: ${(error as Error).message}`);
       }
