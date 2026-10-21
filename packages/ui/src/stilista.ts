@@ -74,6 +74,15 @@ export function origineStilista(svg: string): [number, number] | null {
   return m ? [Number(m[1]), Number(m[2])] : null;
 }
 
+/**
+ * Il colore con cui il plugin disegna i fori (le aree vuote dei riempimenti) nell'SVG della selezione
+ * (`data-rg-stilista-fori`, minuscolo come i colori dell'import); null se non ci sono fori.
+ */
+export function coloreForiStilista(svg: string): string | null {
+  const m = /data-rg-stilista-fori="(#[0-9a-fA-F]{6})"/.exec(svg.slice(0, 2000));
+  return m ? m[1].toLowerCase() : null;
+}
+
 /** Le polilinee di un ricamo (mm) come punti per Stilista: il primo punto di ogni polilinea dopo la prima è un salto. */
 export function puntiDaPolilinee(polilinee: Array<Array<{ x: number; y: number }>>): Array<[number, number, number]> {
   const punti: Array<[number, number, number]> = [];

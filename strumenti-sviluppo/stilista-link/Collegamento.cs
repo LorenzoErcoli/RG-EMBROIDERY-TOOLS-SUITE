@@ -180,6 +180,7 @@ namespace StilistaHostSkeleton
                 case "GET /selezione.svg": return conScelta(SelezioneSvg);
                 case "GET /selezione.json": return conScelta(SelezioneJson);
                 case "GET /sonda": return conScelta(Sonda);
+                case "GET /fori": return conScelta(Fori);
                 case "POST /dst": return RiceviDst(r);
                 case "POST /oggetti": return RiceviOggetti(r);
                 case "POST /punti": return RiceviPunti(r);
@@ -249,6 +250,12 @@ namespace StilistaHostSkeleton
         /// <summary>I punti di un percorso Stilista in µm, con il tag di ogni punto se c'è.</summary>
         private static List<int[]> PuntiConTag(object percorso)
         {
+            // di solito il percorso dà i suoi TAGGEDPOINT tutti insieme: veloce anche a 130.000 punti
+            if (FindMethodInHierarchy(percorso?.GetType(), "GetTaggedPoints", Type.EmptyTypes)?.Invoke(percorso, null) is GMICommons.SharedTypes.TAGGEDPOINT[] diretti)
+            {
+                return diretti.Select(p => new[] { p.X, p.Y, p.Tag }).ToList();
+            }
+            // altrimenti punto per punto, per riflessione (lento: decine di µs a punto)
             var punti = new List<int[]>();
             var grezzi = FindCoordinatePointArray(percorso);
             if (grezzi == null)
@@ -267,6 +274,13 @@ namespace StilistaHostSkeleton
             return punti;
         }
 
+        /// <summary>
+        /// Il colore dei fori nell'SVG: ogni foro è un tracciato a sé, con questo colore, e l'SVG lo dichiara
+        /// (data-rg-stilista-fori) così il tool gli dà il ruolo «area vuota». Se un filo selezionato ha già
+        /// questo colore se ne usa un altro.
+        /// </summary>
+        private static readonly string[] ColoriFori = { "#FF00FF", "#00FFFF", "#808080" };
+
         private object SelezioneSvg()
         {
             var selezionati = Selezionati();
@@ -274,33 +288,46 @@ namespace StilistaHostSkeleton
             {
                 return Risposta.Testo("{\"ok\":false,\"errore\":\"in Stilista non è selezionato niente\"}", stato: 409);
             }
-            var forme = new List<Tuple<string, List<int[]>, bool, string>>();
+            // (colore, punti, chiuso, titolo, foro)
+            var forme = new List<Tuple<string, List<int[]>, bool, string, bool>>();
             double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
             for (var i = 0; i < selezionati.Count; i++)
             {
                 var o = selezionati[i];
-                var punti = PuntiConTag(GetReadableMemberValue(o, "SourcePath"));
-                if (punti.Count < 2)
-                {
-                    continue;
-                }
                 ReadEmgObjectType(o, out var tipo, out _);
-                var primo = punti[0];
-                var ultimo = punti[punti.Count - 1];
-                var chiuso = string.Equals(tipo, "Fill", StringComparison.OrdinalIgnoreCase) ||
-                             Math.Abs(primo[0] - ultimo[0]) + Math.Abs(primo[1] - ultimo[1]) < 500;
                 var colore = ReadNativeThreadColor(o) ?? "#000000";
-                forme.Add(Tuple.Create(colore, punti, chiuso, (tipo ?? "?") + " " + (i + 1)));
-                foreach (var p in punti)
+                var fori = 0;
+                foreach (var anello in Anelli(o))
                 {
-                    minX = Math.Min(minX, p[0] / 1000.0); maxX = Math.Max(maxX, p[0] / 1000.0);
-                    minY = Math.Min(minY, p[1] / 1000.0); maxY = Math.Max(maxY, p[1] / 1000.0);
+                    var punti = anello.Punti;
+                    if (punti.Count < 2)
+                    {
+                        continue;
+                    }
+                    var primo = punti[0];
+                    var ultimo = punti[punti.Count - 1];
+                    var chiuso = anello.Foro || string.Equals(tipo, "Fill", StringComparison.OrdinalIgnoreCase) ||
+                                 Math.Abs(primo[0] - ultimo[0]) + Math.Abs(primo[1] - ultimo[1]) < 500;
+                    var titolo = (tipo ?? "?") + " " + (i + 1) + (anello.Foro ? ", foro " + (++fori) : "");
+                    forme.Add(Tuple.Create(colore, punti, chiuso, titolo, anello.Foro));
+                    if (anello.Foro)
+                    {
+                        continue; // un foro sta dentro il suo esterno: non allarga la selezione
+                    }
+                    foreach (var p in punti)
+                    {
+                        minX = Math.Min(minX, p[0] / 1000.0); maxX = Math.Max(maxX, p[0] / 1000.0);
+                        minY = Math.Min(minY, p[1] / 1000.0); maxY = Math.Max(maxY, p[1] / 1000.0);
+                    }
                 }
             }
-            if (forme.Count == 0)
+            if (forme.Count(f => !f.Item5) == 0)
             {
                 return Risposta.Testo("{\"ok\":false,\"errore\":\"gli oggetti selezionati non hanno un contorno\"}", stato: 409);
             }
+            var coloriFili = new HashSet<string>(forme.Where(f => !f.Item5).Select(f => f.Item1), StringComparer.OrdinalIgnoreCase);
+            var coloreFori = ColoriFori.FirstOrDefault(c => !coloriFili.Contains(c)) ?? ColoriFori[0];
+            var quantiFori = forme.Count(f => f.Item5);
             // lo 0,0 del tool è l'angolo della selezione meno un margine: il piano del Generatore parte da 0
             _agoSelezione = ReadNativeNeedleOneBased(selezionati[0]);
             _origineX = minX - MargineMm;
@@ -311,11 +338,13 @@ namespace StilistaHostSkeleton
             svg.Append("<svg xmlns=\"http://www.w3.org/2000/svg\" width=\"").Append(Json.Numero(larghezza)).Append("mm\" height=\"")
                .Append(Json.Numero(altezza)).Append("mm\" viewBox=\"0 0 ").Append(Json.Numero(larghezza)).Append(' ').Append(Json.Numero(altezza))
                .Append("\" data-rg-stilista-origine=\"").Append(Json.Numero(_origineX)).Append(' ').Append(Json.Numero(_origineY))
-               .Append("\" data-rg-stilista-ago=\"").Append(_agoSelezione?.ToString() ?? "").Append("\">\n");
-            svg.Append("<!-- da Stilista: ").Append(SicuroXml(_stilista?.Form?.Text)).Append(" · ").Append(forme.Count).Append(" oggetti -->\n");
+               .Append("\" data-rg-stilista-ago=\"").Append(_agoSelezione?.ToString() ?? "")
+               .Append("\" data-rg-stilista-fori=\"").Append(quantiFori > 0 ? coloreFori : "").Append("\">\n");
+            svg.Append("<!-- da Stilista: ").Append(SicuroXml(_stilista?.Form?.Text)).Append(" · ").Append(selezionati.Count)
+               .Append(" oggetti, ").Append(quantiFori).Append(" fori -->\n");
             foreach (var f in forme)
             {
-                svg.Append("<path fill=\"none\" stroke=\"").Append(f.Item1).Append("\" stroke-width=\"0.2\" d=\"");
+                svg.Append("<path fill=\"none\" stroke=\"").Append(f.Item5 ? coloreFori : f.Item1).Append("\" stroke-width=\"0.2\" d=\"");
                 for (var i = 0; i < f.Item2.Count; i++)
                 {
                     svg.Append(i == 0 ? "M" : " L").Append(Json.Numero(f.Item2[i][0] / 1000.0 - _origineX)).Append(' ')
@@ -324,10 +353,9 @@ namespace StilistaHostSkeleton
                 svg.Append(f.Item3 ? " Z" : "").Append("\"><title>").Append(SicuroXml(f.Item4)).Append("</title></path>\n");
             }
             svg.Append("</svg>\n");
-            Annota("Selezione data al tool: " + forme.Count + " oggetti, " + Json.Numero(larghezza) + " × " + Json.Numero(altezza) + " mm");
+            Annota("Selezione data al tool: " + selezionati.Count + " oggetti, " + quantiFori + " fori, " + Json.Numero(larghezza) + " × " + Json.Numero(altezza) + " mm");
             return Risposta.Testo(svg.ToString(), "image/svg+xml; charset=utf-8");
         }
-
         private static string SicuroXml(string testo)
         {
             return (testo ?? "").Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("--", "- -");

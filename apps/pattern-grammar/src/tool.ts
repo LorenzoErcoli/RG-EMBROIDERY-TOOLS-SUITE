@@ -10,7 +10,7 @@ import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import {
   trovaStilista, portaDaIndirizzo, nomeDocumento, selezioneDaStilista, dstAStilista,
-  origineStilista, puntiDaPolilinee, puntiAStilista,
+  origineStilista, coloreForiStilista, puntiDaPolilinee, puntiAStilista,
 } from '@rg/ui/stilista';
 import { FORMATO, CORPO, ALL_FIELD_GROUPS, SCALE_MODES, type Field, type Group } from './fields';
 import { stratoPattern } from './motore';
@@ -340,6 +340,14 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       for (const k of Object.keys(boundaryRoles)) delete boundaryRoles[k];
       buildPanel();
       reparseBoundary();
+      // I FORI (le aree vuote dei riempimenti di Stilista) arrivano col loro colore, dichiarato nell'SVG:
+      // quel colore è «Area vuota», ogni altro (il filo degli oggetti) «Confine di ritaglio».
+      const fori = coloreForiStilista(svg);
+      if (fori) {
+        for (const c of boundaryModel?.choices ?? []) boundaryRoles[c.id] = c.color?.toLowerCase() === fori ? 'vuoto' : 'confine';
+        rebuildBoundary();
+        renderColorMap();
+      }
     } catch (e) {
       $('boundaryStatus').textContent = 'Stilista: ' + (e as Error).message;
     }

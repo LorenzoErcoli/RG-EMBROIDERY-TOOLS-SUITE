@@ -29,6 +29,12 @@ con la sua lunghezza punto**. Provato e scartato:
 Un DST aperto in Stilista (`FunctionParamIndex` 3) tiene i punti (18.645 su 18.645) **solo perché nessuno lo
 ricalcola**: non è un tipo di oggetto «immune».
 
+**`OldPoints2StitchPath` non agisce sempre subito** (2026-10-21, corona di SH295, 26.486 punti): sul lineare
+appena creato non ha preso niente (restavano 2 punti; coi 773 delle macchie aveva funzionato), sul manuale non
+ancora inserito ne contava 0; inserito nel documento, sì. Quindi: il contorno del manuale si assegna
+(`SourcePath.CopyOfPoints`, scrivibile), i punti si riscrivono dopo l'inserimento, e l'esito si giudica solo
+alla fine, misurando l'oggetto vero finché due misure di fila danno i nostri punti (al più 4 s; ci vogliono ~3 s).
+
 **Come si applica.** Un ricamo calcolato fuori da Stilista entra come Manual e non va ricalcolato: chi lo
 ricalcola a mano in Stilista lo perde. Il colore: il codice del bridge che assegna l'ago **scrive il colore
 nella tavolozza del documento** (`TrySetNativeThreadColor`), quindi al ritorno si passa il colore che

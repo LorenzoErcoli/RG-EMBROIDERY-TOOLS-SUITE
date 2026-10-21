@@ -64,6 +64,7 @@ export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm, anelliOvali as rtsAnelliOvali, puntoDelNodo as rtsPuntoDelNodo, cimeDelleColonne as rtsCimeDelleColonne, ceIlNodo as rtsCeIlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
 export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, avanza as rtsAvanza, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
+export { origineStilista, coloreForiStilista, puntiDaPolilinee } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -2713,6 +2714,32 @@ console.log('\noblique — routing + orchestratore (2d)');
     // la scala d'import non torna più al default quando il pannello si ricostruisce (preset, riapertura)
     check('la scala d\'import sopravvive alla ricostruzione del pannello',
       sorgente.includes("v === scalaImport.scaleMode ? ' selected' : ''"), true);
+  }
+
+  // RG STILISTA LINK (ramo stilista-link, 2026-10-21): la selezione arriva come l'SVG del plugin
+  // (Collegamento.cs, SelezioneSvg) — mm dichiarati, un colore per il filo, i FORI a parte col colore
+  // dichiarato in data-rg-stilista-fori — e si legge con l'import di sempre. Il ricamo torna coi salti
+  // solo all'inizio delle polilinee dopo la prima.
+  {
+    const svgStilista = '<svg xmlns="http://www.w3.org/2000/svg" width="42mm" height="42mm" viewBox="0 0 42 42"'
+      + ' data-rg-stilista-origine="99.5 -3.25" data-rg-stilista-ago="7" data-rg-stilista-fori="#FF00FF">'
+      + '<path fill="none" stroke="#FFF200" stroke-width="0.2" d="M1 1 L41 1 L41 41 L1 41 Z"/>'
+      + '<path fill="none" stroke="#FF00FF" stroke-width="0.2" d="M11 11 L31 11 L31 31 L11 31 Z"/></svg>';
+    const modello = rg.parseImportedBoundarySource(svgStilista, 'prova-stilista.svg', { scaleMode: 'auto' });
+    const colori = modello.choices.map((c) => c.color?.toLowerCase()).sort();
+    const finoA = Object.fromEntries(modello.choices.map((c) => [c.color?.toLowerCase(), Math.round(c.bounds.maxX * 10) / 10]));
+    check('Stilista Link: l\'SVG della selezione dà due colori, il filo e i fori, in mm',
+      [colori, finoA, rg.coloreForiStilista(svgStilista), colori.includes(rg.coloreForiStilista(svgStilista))],
+      [['#ff00ff', '#fff200'], { '#fff200': 41, '#ff00ff': 31 }, '#ff00ff', true]);
+    check('Stilista Link: l\'origine si rilegge, e senza fori non c\'è colore dei fori',
+      [rg.origineStilista(svgStilista), rg.coloreForiStilista(svgStilista.replace(' data-rg-stilista-fori="#FF00FF"', '')), rg.origineStilista('<svg/>')],
+      [[99.5, -3.25], null, null]);
+    check('Stilista Link: il salto solo al primo punto delle polilinee dopo la prima',
+      rg.puntiDaPolilinee([[{ x: 0, y: 0 }, { x: 1, y: 0 }], [{ x: 5, y: 5 }, { x: 6, y: 5.0004 }]]),
+      [[0, 0, 0], [1, 0, 0], [5, 5, 1], [6, 5, 0]]);
+    const tool = readFileSync(join(root, 'apps/pattern-grammar/src/tool.ts'), 'utf8');
+    check('Stilista Link: nel Generatore il colore dei fori diventa «Area vuota», ogni altro «Confine»',
+      tool.includes("boundaryRoles[c.id] = c.color?.toLowerCase() === fori ? 'vuoto' : 'confine';"), true);
   }
 
   console.log('\nzone-pattern — le aree di scarico sul davanti di Lorenzo');

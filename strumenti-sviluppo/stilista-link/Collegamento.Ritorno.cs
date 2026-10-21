@@ -58,20 +58,50 @@ namespace StilistaHostSkeleton
                     p.Length >= 3 && p[2] != 0 ? TagSalto : 0))
                 .ToArray();
 
-            var rapporto = (string)NelFiloDiStilista(() => CreaOggettoAPunti(punti, ricamo));
-            var ok = rapporto.StartsWith("{\"ok\":true", StringComparison.Ordinal);
-            Annota(ok ? "Ricamo tornato nel documento: " + punti.Length + " punti" : "Ritorno del ricamo fallito: vedi il log");
-            return Risposta.Testo(rapporto, stato: ok ? 200 : 500);
+            var esito = (Ritorno)NelFiloDiStilista(() => CreaOggettoAPunti(punti, ricamo));
+            if (esito.Errore != null && !esito.Inserito)
+            {
+                Annota("Ritorno del ricamo fallito: " + esito.Errore);
+                return Risposta.Testo("{\"ok\":false,\"errore\":" + Json.Stringa(esito.Errore) + "}", stato: 500);
+            }
+            // Stilista ricalcola l'oggetto da sé poco dopo l'inserimento (~300 ms) e il guardiano rimette i
+            // punti: si misura da qui, ogni 300 ms fino a 4 s, finché due misure di fila dicono «i nostri»
+            Misura misura = null;
+            var buone = 0;
+            for (var i = 0; i < 14 && buone < 2; i++)
+            {
+                System.Threading.Thread.Sleep(300);
+                misura = (Misura)NelFiloDiStilista(() => Misura_(esito, punti));
+                buone = misura.Uguale ? buone + 1 : 0;
+            }
+            var ok = buone >= 2 && misura.OggettiOra == esito.PrimaDi + 1;
+            var sb = new StringBuilder("{\"ok\":").Append(ok ? "true" : "false");
+            if (!ok)
+            {
+                sb.Append(",\"errore\":").Append(Json.Stringa("il ricamo non e' tornato intero: punti " + misura?.Letti + " su " + punti.Length + " · " + esito.ComeManuale));
+            }
+            sb.Append(",\"indice\":").Append(esito.Posizione);
+            sb.Append(",\"tipo_prima\":").Append(Json.Stringa(esito.TipoPrima));
+            sb.Append(",\"tipo_dopo\":").Append(Json.Stringa(misura?.Tipo));
+            sb.Append(",\"manuale\":").Append(Json.Stringa(esito.ComeManuale));
+            sb.Append(",\"punti_chiesti\":").Append(punti.Length);
+            sb.Append(",\"punti_letti\":").Append(misura?.Letti ?? 0);
+            sb.Append(",\"punti_cuciti\":").Append(misura?.Cuciti ?? 0);
+            sb.Append(",\"salti\":").Append(misura?.Salti ?? 0);
+            sb.Append(",\"scarto_um\":").Append(misura == null || misura.ScartoUm == int.MaxValue ? -1 : misura.ScartoUm);
+            sb.Append(",\"ago\":").Append(Json.Stringa(misura?.Ago));
+            Annota(ok ? "Ricamo tornato nel documento: " + punti.Length + " punti" : "Ritorno del ricamo incompleto: vedi il log");
+            return Risposta.Testo(sb.Append('}').ToString(), stato: ok ? 200 : 500);
         }
 
-        private string CreaOggettoAPunti(TAGGEDPOINT[] punti, RicamoDiRitorno ricamo)
+        private Ritorno CreaOggettoAPunti(TAGGEDPOINT[] punti, RicamoDiRitorno ricamo)
         {
             const string log = "RGLink.Punti";
             var embroidery = Ricamo();
             var oggetti = GetReadableMemberValue(embroidery, "Objects");
             if (embroidery == null || oggetti == null)
             {
-                return "{\"ok\":false,\"errore\":\"nessun documento aperto\"}";
+                return new Ritorno { Errore = "nessun documento aperto" };
             }
             var primaDi = SnapshotObjects(oggetti).Count;
 
@@ -113,12 +143,12 @@ namespace StilistaHostSkeleton
             };
             if (!TryCreateRecalculableBatch(embroidery, oggetti, batch, null))
             {
-                return "{\"ok\":false,\"errore\":\"Stilista non ha creato l'oggetto di partenza\",\"log\":" + Json.Stringa(ProbeLog.PathOnDisk) + "}";
+                return new Ritorno { Errore = "Stilista non ha creato l'oggetto di partenza (log: " + ProbeLog.PathOnDisk + ")" };
             }
             var tutti = SnapshotObjects(oggetti);
             if (tutti.Count != primaDi + 1)
             {
-                return "{\"ok\":false,\"errore\":\"oggetti " + primaDi + " -> " + tutti.Count + "\"}";
+                return new Ritorno { Errore = "oggetti " + primaDi + " -> " + tutti.Count };
             }
             var lineare = tutti[tutti.Count - 1];
             var posizione = tutti.Count - 1;
@@ -128,7 +158,7 @@ namespace StilistaHostSkeleton
             var scrivi = FindMethodInHierarchy(lineare.GetType(), "OldPoints2StitchPath", new[] { typeof(TAGGEDPOINT[]) });
             if (scrivi == null)
             {
-                return "{\"ok\":false,\"errore\":\"OldPoints2StitchPath non trovato su " + lineare.GetType().FullName + "\"}";
+                return new Ritorno { Errore = "OldPoints2StitchPath non trovato su " + lineare.GetType().FullName };
             }
             scrivi.Invoke(lineare, new object[] { punti });
             var cucitiLineare = TryConvertToInt(GetReadableMemberValue(lineare, "GetTotalNumberOfStitches")).GetValueOrDefault();
@@ -162,6 +192,24 @@ namespace StilistaHostSkeleton
             {
                 comeManuale = "MergeToManualStitch: " + DescribeException(ex);
             }
+            // 3b. il manuale deve avere i NOSTRI punti, cuciti e di contorno. Sul lineare OldPoints2StitchPath
+            //     non sempre li prende (corona di SH295, 26.486 punti: restavano 2, mentre i 773 delle macchie
+            //     erano passati): allora si scrivono sul manuale, e il contorno si assegna (CopyOfPoints).
+            if (manuale != null)
+            {
+                if (ContaPunti(manuale) != punti.Length)
+                {
+                    scrivi.Invoke(manuale, new object[] { punti });
+                    comeManuale += " · punti riscritti sul manuale (" + ContaPunti(manuale) + ")";
+                }
+                var contorno = GetReadableMemberValue(manuale, "SourcePath");
+                var copia = contorno?.GetType().GetProperty("CopyOfPoints");
+                if (copia != null && copia.CanWrite && TryConvertToInt(GetReadableMemberValue(contorno, "Count")) != punti.Length)
+                {
+                    copia.SetValue(contorno, punti.Clone(), null);
+                    comeManuale += " · contorno assegnato (" + TryConvertToInt(GetReadableMemberValue(contorno, "Count")) + ")";
+                }
+            }
             ProbeLog.Write(log + ": " + comeManuale);
 
             // 4. il manuale prende il posto del lineare, nella stessa posizione della sequenza, COL LUCCHETTO.
@@ -193,42 +241,75 @@ namespace StilistaHostSkeleton
                     comeManuale += " · Remove/Insert non trovati";
                 }
             }
-            var ricalcolo = "lucchetto " + (lucchetto ? "messo" : "NON messo");
+            if (finale == manuale)
+            {
+                // i punti si scrivono anche ora che è nel documento: prima di inserirlo OldPoints2StitchPath non
+                // agisce (0 punti) e sul lineare non sempre; il guardiano fa il resto
+                scrivi.Invoke(manuale, new object[] { punti });
+                TrySetBoolMember(manuale, "NeedRestitching", false);
+            }
             TryRaiseObjectsRedrawNeeded(oggetti);
-            var tipoDopo = Tipo(finale);
-            var cuciti = TryConvertToInt(GetReadableMemberValue(finale, "GetTotalNumberOfStitches")).GetValueOrDefault();
-            var letti = (FindMethodInHierarchy(finale.GetType(), "Stitches", Type.EmptyTypes)?.Invoke(finale, null) as TAGGEDPOINT[]) ?? new TAGGEDPOINT[0];
-            var salti = letti.Count(p => (p.Tag & TagSalto) != 0);
-            var scarto = 0;
-            for (var i = 0; i < Math.Min(letti.Length, punti.Length); i++)
+            ProbeLog.Write(log + ": " + tipoPrima + " -> " + Tipo(finale) + " punti chiesti " + punti.Length +
+                " lineare " + cucitiLineare + " ora " + ContaPunti(finale) + " lucchetto " + lucchetto + " · " + comeManuale);
+            return new Ritorno
+            {
+                Finale = finale,
+                Inserito = manuale != null && finale == manuale,
+                Posizione = posizione,
+                PrimaDi = primaDi,
+                Oggetti = oggetti,
+                TipoPrima = tipoPrima,
+                ComeManuale = comeManuale,
+                Errore = manuale == null ? "MergeToManualStitch non ha dato un oggetto: " + comeManuale : null,
+            };
+        }
+
+        /// <summary>Quello che CreaOggettoAPunti ha fatto: l'oggetto da misurare finché i punti non sono i nostri.</summary>
+        private sealed class Ritorno
+        {
+            public object Finale;
+            public bool Inserito;
+            public int Posizione;
+            public int PrimaDi;
+            public object Oggetti;
+            public string TipoPrima;
+            public string ComeManuale;
+            public string Errore;
+        }
+
+        /// <summary>Com'è adesso l'oggetto tornato, rispetto ai punti mandati.</summary>
+        private sealed class Misura
+        {
+            public int Letti;
+            public int Cuciti;
+            public int Salti;
+            public int ScartoUm;
+            public int OggettiOra;
+            public string Tipo;
+            public string Ago;
+            public bool Uguale;
+        }
+
+        private static Misura Misura_(Ritorno esito, TAGGEDPOINT[] punti)
+        {
+            var letti = (FindMethodInHierarchy(esito.Finale.GetType(), "Stitches", Type.EmptyTypes)?.Invoke(esito.Finale, null) as TAGGEDPOINT[]) ?? new TAGGEDPOINT[0];
+            var scarto = letti.Length == punti.Length ? 0 : int.MaxValue;
+            for (var i = 0; i < Math.Min(letti.Length, punti.Length) && scarto != int.MaxValue; i++)
             {
                 scarto = Math.Max(scarto, Math.Max(Math.Abs(letti[i].X - punti[i].X), Math.Abs(letti[i].Y - punti[i].Y)));
             }
-            var oraNelDocumento = SnapshotObjects(oggetti).Count;
-            ProbeLog.Write(log + ": " + tipoPrima + " -> " + tipoDopo + " punti chiesti " + punti.Length +
-                " lineare " + cucitiLineare + " letti " + letti.Length + " cuciti " + cuciti + " salti " + salti +
-                " scarto " + scarto + "um ricalcolo " + ricalcolo + " oggetti " + primaDi + " -> " + oraNelDocumento);
-
-            var ok = manuale != null && finale == manuale && letti.Length == punti.Length && scarto <= 1 && oraNelDocumento == primaDi + 1;
-            var sb = new StringBuilder("{\"ok\":").Append(ok ? "true" : "false");
-            if (!ok)
+            return new Misura
             {
-                sb.Append(",\"errore\":").Append(Json.Stringa("il ricamo non e' tornato intero: " + comeManuale + ", punti " + letti.Length + " su " + punti.Length));
-            }
-            sb.Append(",\"indice\":").Append(posizione);
-            sb.Append(",\"tipo_prima\":").Append(Json.Stringa(tipoPrima));
-            sb.Append(",\"tipo_dopo\":").Append(Json.Stringa(tipoDopo));
-            sb.Append(",\"manuale\":").Append(Json.Stringa(comeManuale));
-            sb.Append(",\"ricalcolo\":").Append(Json.Stringa(ricalcolo));
-            sb.Append(",\"punti_chiesti\":").Append(punti.Length);
-            sb.Append(",\"punti_letti\":").Append(letti.Length);
-            sb.Append(",\"punti_cuciti\":").Append(cuciti);
-            sb.Append(",\"salti\":").Append(salti);
-            sb.Append(",\"scarto_um\":").Append(scarto);
-            sb.Append(",\"ago\":").Append(Json.Stringa("ago " + (ReadNativeNeedleOneBased(finale)?.ToString(CultureInfo.InvariantCulture) ?? "?") + " " + (ReadNativeThreadColor(finale) ?? "?")));
-            return sb.Append('}').ToString();
+                Letti = letti.Length,
+                Cuciti = TryConvertToInt(GetReadableMemberValue(esito.Finale, "GetTotalNumberOfStitches")).GetValueOrDefault(),
+                Salti = letti.Count(p => (p.Tag & TagSalto) != 0),
+                ScartoUm = scarto,
+                OggettiOra = SnapshotObjects(esito.Oggetti).Count,
+                Tipo = Tipo(esito.Finale),
+                Ago = "ago " + (ReadNativeNeedleOneBased(esito.Finale)?.ToString(CultureInfo.InvariantCulture) ?? "?") + " " + (ReadNativeThreadColor(esito.Finale) ?? "?"),
+                Uguale = letti.Length == punti.Length && scarto <= 1,
+            };
         }
-
         /// <summary>
         /// Il guardiano: per 15 s, ogni 300 ms, sul filo dell'interfaccia, se Stilista ha ricalcolato l'oggetto
         /// (i punti non sono più i nostri) li riscrive. Nel log: quante volte è dovuto intervenire, e quando.
@@ -269,6 +350,11 @@ namespace StilistaHostSkeleton
                 }
             };
             timer.Start();
+        }
+
+        private static int ContaPunti(object oggetto)
+        {
+            return (FindMethodInHierarchy(oggetto.GetType(), "Stitches", Type.EmptyTypes)?.Invoke(oggetto, null) as TAGGEDPOINT[])?.Length ?? 0;
         }
 
         /// <summary>Il tipo di un oggetto come si riesce a leggerlo: ObjectType, o il tipo della sua funzione.</summary>
