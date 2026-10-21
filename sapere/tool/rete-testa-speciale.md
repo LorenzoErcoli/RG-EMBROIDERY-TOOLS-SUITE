@@ -112,6 +112,15 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
     `bottomRoundEnds` (0 = ovale, 100 = mezzi cerchi e tratti dritti).
 21. **La fascia sui lati lunghi nel tool** (2026-10-16): *«Fascia sui lati lunghi è importante che me lo metti dentro»* →
     `sideBandMm` (0 = tutta la rete), nel ricamo, nel pannello e nella sacca 3D.
+23. **Colonne intere nella larghezza** (2026-10-21, Net bag Clover, DST «Rete 420x710»: *«se guardi i bordi laterali
+    sinistra e destra si creano delle curve strane. dovute anche al fatto che la rete viene appunto tagliata… serve una
+    curva migliore… mi serve una soluzione rapida»*). Causa: il passo delle colonne (rombo 10 − sovrapposizione 1,75 =
+    8,25) non divide la larghezza (420 / 8,25 = 50,9), quindi il bordo cade in un punto qualsiasi del rombo, diverso a
+    ogni colonna tagliata: tagli profondi, triangolini di decimi, scalini fra le due passate sul bordo. Rimedio
+    (`fitColumns`): un numero intero di colonne (51), il rombo ritoccato a 9,985 mm, la prima colonna a mezzo passo dal
+    bordo; il bordo cade a metà della sovrapposizione come una colonna vicina. Il DST nuovo («Rete 420x710 colonne
+    intere») è stato salvato accanto all'originale, che resta com'era. In alto e in basso il bordo taglia ancora il rombo
+    a caso (710 / 17 = 41,8 rombi): si potrebbe fare lo stesso con l'altezza.
 22. **Nessuna cima volante** (2026-10-16, su un'anteprima con la cima di una colonna su un anello dispari): *«eliminiamo
     queste situazioni qui, perché non è attaccato a niente rimarrebbe volante»*. Su un anello dispari le due linee della
     colonna finiscono su due nodi diversi e il filo passava dall'una all'altra lungo il bordo, senza incrociare niente.

@@ -2075,6 +2075,10 @@
           "$ref": "#/$defs/staggerColumns",
           "default": false
         },
+        "fitColumns": {
+          "$ref": "#/$defs/fitColumns",
+          "default": false
+        },
         "cornerRounding": {
           "$ref": "#/$defs/cornerRounding",
           "default": 0
@@ -5207,6 +5211,12 @@
       "description": "Le colonne vicine spostate di mezzo rombo lungo la serpentina.",
       "x-concetto": "modulo"
     },
+    "fitColumns": {
+      "type": "boolean",
+      "title": "Colonne intere nella larghezza",
+      "description": "Ritocca di poco la larghezza del rombo perché nella larghezza del pezzo stia un numero intero di colonne: sui bordi laterali ogni punta tocca il bordo nello stesso modo, senza tagli irregolari.",
+      "x-concetto": "modulo"
+    },
     "cornerRounding": {
       "type": "number",
       "title": "Arrotondamento degli angoli",
@@ -5650,6 +5660,7 @@
         "diamondWidth",
         "diamondHeight",
         "staggerColumns",
+        "fitColumns",
         "cornerRounding"
       ]
     },

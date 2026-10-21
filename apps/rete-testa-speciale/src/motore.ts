@@ -91,6 +91,14 @@ export type ParametriRete = {
   overlapMm: number;
   /** Le colonne sfalsate di mezzo rombo. */
   staggerColumns: boolean;
+  /**
+   * Colonne intere nella larghezza (Lorenzo, 2026-10-21, sulla Net bag Clover 420 × 710: «se guardi i bordi laterali
+   * sinistra e destra si creano delle curve strane… serve una curva migliore»). La larghezza del pezzo si divide in un
+   * numero intero di colonne, ritoccando di poco la larghezza del rombo: ogni bordo laterale cade a metà della
+   * sovrapposizione, come una colonna vicina, e ogni punta lo tocca con lo stesso piccolo aggancio. Senza, il bordo
+   * taglia il rombo in un punto qualsiasi: tagli profondi, triangolini di pochi decimi, scalini fra le passate.
+   */
+  fitColumns: boolean;
   /** Arrotondamento di punte e rientranze, %: 0 = spigolo vivo, 100 = curva piena. */
   cornerRounding: number;
   /** Lunghezza del punto, mm (ogni tratto fra due punti fissi si divide in punti uguali, non più lunghi di così). */
@@ -138,6 +146,7 @@ export const PARAMETRI_RETE: ParametriRete = {
   angleDeg: 0,
   overlapMm: 2,
   staggerColumns: false,
+  fitColumns: false,
   cornerRounding: 0,
   maxStitchMm: 2.5,
   overlapStitchMm: 1.2,
@@ -168,6 +177,8 @@ export interface PuntoAgo extends Point {
 export interface RisultatoRete {
   /** Quello che non si è potuto fare, detto a parole (es. la sacca non ci sta). */
   avviso?: string;
+  /** Con le colonne intere: quante colonne e la larghezza del rombo usata davvero, mm. */
+  colonneIntere?: { colonne: number; larghezzaRombo: number };
   /** Un tratto continuo per ogni blocco, in ordine di cucitura: fra due blocchi la macchina salta. */
   blocchi: PuntoAgo[][];
   misure: {
@@ -309,7 +320,7 @@ type PezzoRisolto = { tipo: TipoTratto | 'salto'; pts: PuntoTraccia[]; sid: numb
 export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: ParametriRete): RisultatoRete {
   const t0 = Date.now();
   const p: ParametriRete = { ...PARAMETRI_RETE, ...par };
-  const W = Math.max(1, p.diamondWidthMm), H = Math.max(1, p.diamondHeightMm);
+  let W = Math.max(1, p.diamondWidthMm); const H = Math.max(1, p.diamondHeightMm);
   p.diamondWidthMm = W; p.diamondHeightMm = H;
   const ang = p.angleDeg * Math.PI / 180;
   const U = { x: Math.cos(ang), y: Math.sin(ang) }, V = { x: -Math.sin(ang), y: Math.cos(ang) };
@@ -332,14 +343,20 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
   });
   const nelVuotoI = (q: Point) => vuoti.findIndex((v, i) => { const g = ingombri[i]; return q.x >= g.x0 && q.x <= g.x1 && q.y >= g.y0 && q.y <= g.y1 && pointInPolygon(q, v); });
   const dentro = (q: Point) => pointInPolygon(q, contorno) && (!ritorno || nelVuotoI(q) < 0);
-  const passo = Math.max(0.5, W - p.overlapMm);
+  let passo = Math.max(0.5, W - p.overlapMm), u0 = 0, colonneIntere: RisultatoRete['colonneIntere'];
+  if (p.fitColumns) {
+    // un numero intero di colonne nella larghezza: la prima a mezzo passo dal bordo (lì cadrebbe la colonna vicina)
+    const n = Math.max(1, Math.round((umax - umin) / passo));
+    passo = (umax - umin) / n; W = passo + p.overlapMm; p.diamondWidthMm = W; u0 = umin + passo / 2;
+    colonneIntere = { colonne: n, larghezzaRombo: W };
+  }
 
   // 1. le colonne e i loro tratti: basta che UNA delle due linee sia dentro, ognuna poi si ferma sul proprio bordo.
   //    Sul bordo inclinato le punte entrano ed escono: tratti separati da meno di un rombo sono la stessa colonna.
   interface Colonna { k: number; uc: number; L: PuntoLato[]; R: PuntoLato[]; tratti: Array<[number, number]> }
   const colonne: Colonna[] = [];
-  for (let k = Math.floor(umin / passo) - 1; k <= Math.ceil(umax / passo) + 1; k++) {
-    const uc = k * passo, fase = p.staggerColumns && (((k % 2) + 2) % 2) ? H / 2 : 0;
+  for (let k = Math.floor((umin - u0) / passo) - 1; k <= Math.ceil((umax - u0) / passo) + 1; k++) {
+    const uc = u0 + k * passo, fase = p.staggerColumns && (((k % 2) + 2) % 2) ? H / 2 : 0;
     const L = lato(p, -1, fase, vmin, vmax), R = lato(p, 1, fase, vmin, vmax);
     const corse: Array<[number, number]> = []; let inizio: number | null = null; const dv = 0.25;
     for (let v = vmin; v <= vmax + dv; v += dv) {
@@ -437,7 +454,7 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
   });
 
   const locale = (q: Point) => { const dx = q.x - C.x, dy = q.y - C.y; return { u: dx * U.x + dy * U.y, v: dx * V.x + dy * V.y }; };
-  return cuci(pezzi, { contorno, vuoti, ritorno, nelVuotoI, grande, locale, ordine: (ra, rb) => rb - ra }, p, t0);
+  return { ...cuci(pezzi, { contorno, vuoti, ritorno, nelVuotoI, grande, locale, ordine: (ra, rb) => rb - ra }, p, t0), colonneIntere };
 }
 
 /**

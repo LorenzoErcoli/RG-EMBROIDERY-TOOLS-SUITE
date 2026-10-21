@@ -83,6 +83,8 @@ const CAMPI_ROMBO: Campo[] = [
   { nome: 'cornerRounding', etichetta: 'Arrotondamento degli angoli', unita: '%', passo: 5, min: 0, max: 100,
     aiuto: '0 = spigolo vivo. Vale per punte e rientranze; larghezza e sovrapposizione restano misurate sulla curva vera.' },
   { nome: 'staggerColumns', etichetta: 'Colonne sfalsate di mezzo rombo', unita: '', passo: 1, min: 0 },
+  { nome: 'fitColumns', etichetta: 'Colonne intere nella larghezza', unita: '', passo: 1, min: 0,
+    aiuto: 'Ritocca di poco la larghezza del rombo perché nella larghezza del pezzo stia un numero intero di colonne: sui bordi laterali ogni punta tocca il bordo nello stesso modo, senza tagli irregolari.' },
 ];
 const CAMPI_PUNTI: Campo[] = [
   { nome: 'maxStitchMm', etichetta: 'Lunghezza del punto', unita: 'mm', passo: 0.1, min: 0.5, max: 12,
@@ -337,7 +339,8 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     box.className = 'rg-param-grid';
     const r = risultato;
     const misure = r
-      ? `<p class="rg-field__help rg-param-grid__wide">${r.misure.punti.toLocaleString('it-IT')} punti, di cui ${r.misure.puntiSovrapposti.toLocaleString('it-IT')} nelle sovrapposizioni (${r.misure.puntiSopra.toLocaleString('it-IT')} sopra) · filo ${(r.misure.filoMm / 1000).toFixed(2)} m`
+      ? (r.colonneIntere ? `<p class="rg-field__help rg-param-grid__wide">${r.colonneIntere.colonne} colonne intere: rombo largo ${r.colonneIntere.larghezzaRombo.toFixed(3).replace('.', ',')} mm.</p>` : '')
+        + `<p class="rg-field__help rg-param-grid__wide">${r.misure.punti.toLocaleString('it-IT')} punti, di cui ${r.misure.puntiSovrapposti.toLocaleString('it-IT')} nelle sovrapposizioni (${r.misure.puntiSopra.toLocaleString('it-IT')} sopra) · filo ${(r.misure.filoMm / 1000).toFixed(2)} m`
         + ` · punto da ${r.misure.puntoMinMm.toFixed(2)} a ${r.misure.puntoMaxMm.toFixed(2)} mm · ${r.blocchi.length} parti, ${r.misure.salti} salti (${(r.misure.saltiMm / 10).toFixed(1)} cm)`
         + (r.misure.stratiMax ? ` · sul contorno fino a ${r.misure.stratiMax} passate affiancate` : '') + '</p>'
       : '';

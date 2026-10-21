@@ -61,6 +61,7 @@ export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordat
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_PARAMETRI } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
+export { pezzoAMisure as rtsPezzoAMisure } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm, anelliOvali as rtsAnelliOvali, puntoDelNodo as rtsPuntoDelNodo, cimeDelleColonne as rtsCimeDelleColonne, ceIlNodo as rtsCeIlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
 export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, avanza as rtsAvanza, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
@@ -6640,6 +6641,20 @@ console.log('\nrete-testa-speciale — il filo rigido: la sacca stretta dal cord
   const A24 = rg.rtsAnelli({ N: 24, L: 15, r0: 50, amax: 165, campo: 300 });
   const s = rg.rtsAppesa(A24, { ...base, N: 24, modo: 'cordone', morbidezza: 0, fondoRigido: 0.2, stretta: 0.8 }); rg.rtsAssesta(s, 4000);
   check('appesa per i capi col filo più rigido: i fili restano entro il 3% (le pieghe si correggono prima dei fili)', rg.rtsMisureAppesa(s).allungamentoMax < 0.03, true);
+}
+
+// rete-testa-speciale — COLONNE INTERE NELLA LARGHEZZA (Lorenzo, 2026-10-21, Net bag Clover 420 × 710: «se guardi i
+// bordi laterali sinistra e destra si creano delle curve strane… serve una curva migliore»). Col passo 8,25 nella
+// larghezza 420 stavano 50,9 colonne e il bordo tagliava il rombo in un punto qualsiasi; con 51 colonne intere ogni
+// bordo cade a metà della sovrapposizione, come una colonna vicina
+console.log('\nrete-testa-speciale — colonne intere nella larghezza: bordi laterali regolari');
+{
+  const P = { ...rg.RTS_PARAMETRI, pieceSource: 'misure', totalWidth: 420, totalHeight: 120, diamondWidthMm: 10, diamondHeightMm: 17, overlapMm: 1.75, cornerRounding: 20, maxStitchMm: 1 };
+  const r = rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], { ...P, fitColumns: true });
+  const xs = r.blocchi.flat().map((q) => q.x);
+  check('51 colonne intere, rombo 9,985 mm; un filo solo dentro il pezzo; spenta di partenza',
+    [r.colonneIntere.colonne, Math.round(r.colonneIntere.larghezzaRombo * 1000) / 1000, r.blocchi.length, Math.min(...xs) > -0.01, Math.max(...xs) < 420.01, rg.RTS_PARAMETRI.fitColumns, rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], P).colonneIntere],
+    [51, 9.985, 1, true, true, false, undefined]);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).

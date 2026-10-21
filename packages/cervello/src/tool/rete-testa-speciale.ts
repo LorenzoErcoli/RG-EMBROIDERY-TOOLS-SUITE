@@ -120,6 +120,11 @@ export const scheda: SchedaParametri = {
       tipo: 'bool', unita: '', predefinito: false, concetto: 'modulo',
     },
     {
+      id: 'fitColumns', etichetta: 'Colonne intere nella larghezza',
+      aiuto: 'Ritocca di poco la larghezza del rombo perché nella larghezza del pezzo stia un numero intero di colonne: sui bordi laterali ogni punta tocca il bordo nello stesso modo, senza tagli irregolari.',
+      tipo: 'bool', unita: '', predefinito: false, concetto: 'modulo',
+    },
+    {
       id: 'cornerRounding', etichetta: 'Arrotondamento degli angoli',
       aiuto: '0 = spigolo vivo. Vale per punte e rientranze; larghezza e sovrapposizione restano misurate sulla curva vera.',
       tipo: 'num', unita: '%', min: 0, max: 100, passo: 5, predefinito: 0, concetto: 'modulo',
