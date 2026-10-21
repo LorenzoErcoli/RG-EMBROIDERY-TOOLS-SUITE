@@ -23,7 +23,7 @@
 
 import '@rg/ui/rg.css';
 import './pettine.css';
-import { DST_FILE, readDstMetadata, type PixelImage } from '@rg/core';
+import { DST_FILE, readDstMetadata, conBusta, type PixelImage } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
@@ -580,7 +580,7 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
    * sarebbero altri 300 kB dentro ogni swatch — e va ricaricata a mano: lo dice il pannello.
    */
   const MAX_SVG_DENTRO = 400_000;
-  const progetto = (): Record<string, unknown> => ({
+  const progetto = (): Record<string, unknown> => conBusta({
     rgProject: 'pettine',
     versione: 1,
     salvato: new Date().toISOString().slice(0, 10),
@@ -590,7 +590,7 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
     nomeSvg,
     nomeFoto,
     blocchi: testoSvg.length <= MAX_SVG_DENTRO ? testoSvg : null,
-  });
+  }, { sorgente: { tipo: 'svg', nome: nomeSvg || undefined, larghezzaMm: larghezzaRealeMm } });
   const riapri = (p: Record<string, unknown> | null, da: string): void => {
     if (!p || p.rgProject !== 'pettine') {
       $('statoProgetto').textContent = `${da} non porta dentro un progetto del punto pettine.`;

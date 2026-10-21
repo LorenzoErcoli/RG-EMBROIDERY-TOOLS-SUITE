@@ -381,12 +381,13 @@ export function mountSfrangiatura(root: HTMLElement, opts: { backHref?: string }
   canvas.addEventListener('pointercancel', chiudiTratto, true);
 
   // ---- esportazione ----------------------------------------------------------
+  // la busta (conBusta) la mette dstDaBlocchi: lì c'è il referto dei byte veri
   const metadata = (): Record<string, unknown> => ({ rgProject: 'sfrangiatura', params, zone });
   const nomeProposto = (est: string): string => `${nomeFile.replace(/\.dst$/i, '') || 'ricamo'}-sfrangiato${est}`;
 
   $('exportDstBtn').addEventListener('click', () => {
     if (!esito) return;
-    const bytes = dstDaBlocchi(esito.blocchi, { label: etichetta || 'SFRANGIATO', metadata: metadata() });
+    const bytes = dstDaBlocchi(esito.blocchi, { label: etichetta || 'SFRANGIATO', metadata: metadata(), sorgente: { tipo: 'dst', nome: nomeFile || undefined, larghezzaMm: riquadro.larghezza, altezzaMm: riquadro.altezza } });
     const nome = nomeProposto('.dst');
     saveBinaryFile(bytes, { suggestedName: nome, ...DST_FILE }).then((r) => {
       $('status').textContent = saveOutcomeMessage(r, nome);

@@ -1,7 +1,7 @@
 import '@rg/ui/rg.css';
 import './cannage.css';
 import { parseImportedBoundarySource, type ImportScaleMode, type PatternConfig } from '@rg/pattern-grammar';
-import { buildSvg, dstFromExportLayers, DST_FILE, readProjectMetadata, readDstMetadata } from '@rg/core';
+import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, readProjectMetadata, readDstMetadata } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
@@ -95,6 +95,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
   const visibili: Record<number, boolean> = { 1: true, 2: true, 3: true, 4: true, 5: true, 6: true, 7: true, 8: true, 9: true, 10: true };
   const importa = { scaleMode: 'illustrator-72dpi', paintPriority: 'fill', customW: 100, customH: 100 };
   let source: { text: string; name: string } | null = null;
+  let misuraMm: { w: number; h: number } | null = null; // misura reale del disegno caricato (K2)
   let zone: Zona[] = [];
   /** I tracciati aperti del disegno: servono solo alla bordatura. */
   let linee: LineaAperta[] = [];
@@ -452,6 +453,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     linee = lineeDaModello(model);
     misuraTinte();
     const b = model.source?.finalBoundsMm;
+    misuraMm = b ? { w: b.maxX - b.minX, h: b.maxY - b.minY } : null;
     const misura = b ? ` · ${fmt(b.maxX - b.minX)} × ${fmt(b.maxY - b.minY)} mm` : '';
     zoneStatusText = zone.length
       ? `${source.name}: ${zone.length} zone, ${tinte.length} tinte${misura}`
@@ -550,6 +552,13 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
       $('status').textContent = (e as Error).message;
       return false;
     }
+  }
+
+  /** La sorgente per la busta (K2): solo il disegno caricato adesso (non uno riaperto da progetto). */
+  function sorgenteBusta() {
+    if (!source || !source.text) return undefined;
+    const tipo = /\.dxf$/i.test(source.name) ? 'dxf' as const : 'svg' as const;
+    return { tipo, nome: source.name, ...(misuraMm ? { larghezzaMm: misuraMm.w, altezzaMm: misuraMm.h } : {}) };
   }
 
   // ---- progetto riapribile (R9/R27/R31): parametri, pattern delle basi, ruoli e — se ci sta — il disegno ----
@@ -740,7 +749,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     const svg = buildSvg(strati, {
       bounds: { minX: c[0].x, minY: c[0].y, maxX: c[2].x, maxY: c[2].y },
       marginMm: 5,
-      metadata: progetto(),
+      metadata: conBusta(progetto(), { strati, sorgente: sorgenteBusta() }),
     });
     const name = `${nomeBase()}-cannage.svg`;
     const outcome = await saveTextFile(svg, { suggestedName: name, description: 'Immagine SVG' });
@@ -753,7 +762,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     let bytes: Uint8Array;
     try {
       // Uno stop per ago, in ordine: contorno, griglia, base 1, base 2, linee, cornice, bordatura (R31).
-      bytes = dstFromExportLayers(strati, { label: nomeBase().toUpperCase().slice(0, 16), metadata: progetto() });
+      bytes = dstFromExportLayers(strati, { label: nomeBase().toUpperCase().slice(0, 16), metadata: conBusta(progetto(), { strati, sorgente: sorgenteBusta() }) });
     } catch (e) {
       $('status').textContent = (e as Error).message;
       return;

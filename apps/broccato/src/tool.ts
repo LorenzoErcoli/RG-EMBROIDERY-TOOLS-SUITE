@@ -10,7 +10,7 @@
 
 import '@rg/ui/rg.css';
 import './broccato.css';
-import { buildSvg, dstFromExportLayers, DST_FILE, readDstMetadata, readProjectMetadata } from '@rg/core';
+import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, readDstMetadata, readProjectMetadata } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
@@ -626,6 +626,17 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
   /** I parametri che vale la pena rimettere riaprendo il file: tutto tranne i pixel. */
   const paramsSalvabili = (): Record<string, unknown> => ({ ...params });
 
+  /** Da cosa è partito il ricamo (busta K2): l'immagine caricata; con l'immagine dimostrativa niente sorgente. */
+  const sorgenteBusta = () => {
+    if (!sourceName || !ultimo) return undefined;
+    const reale = params.realWidthMm > 0; // senza misura reale la larghezza sarebbe una stima a dpi: non la dichiaro
+    return {
+      tipo: 'raster' as const,
+      nome: sourceName,
+      ...(reale ? { larghezzaMm: ultimo.img.width * ultimo.mmpp, altezzaMm: ultimo.img.height * ultimo.mmpp } : {}),
+    };
+  };
+
   $('exportBtn').addEventListener('click', async () => {
     try {
       if (!ultimo) { $('status').textContent = 'Niente da esportare'; return; }
@@ -633,7 +644,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
       const svg = buildSvg(plan.exportLayers, {
         bounds: plan.bounds,
         marginMm: 2,
-        metadata: { rgProject: 'broccato', version: '0.1.0', params: paramsSalvabili() },
+        metadata: conBusta({ rgProject: 'broccato', version: '0.1.0', params: paramsSalvabili() }, { strati: plan.exportLayers, sorgente: sorgenteBusta() }),
       });
       const esito = await saveTextFile(svg, {
         suggestedName: `${nomeBase()}-broccato.svg`,
@@ -652,7 +663,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
       const bytes = dstFromExportLayers(ultimo.plan.exportLayers, {
         label: 'BROCCATO',
         // parametri riapribili dal .dst (R27): stanno DOPO l'END, la macchina li ignora
-        metadata: { rgProject: 'broccato', version: '0.1.0', params: paramsSalvabili() },
+        metadata: conBusta({ rgProject: 'broccato', version: '0.1.0', params: paramsSalvabili() }, { strati: ultimo.plan.exportLayers, sorgente: sorgenteBusta() }),
       });
       const esito = await saveBinaryFile(bytes, { suggestedName: `${nomeBase()}.dst`, ...DST_FILE });
       $('status').textContent = saveOutcomeMessage(esito, `${nomeBase()}.dst`);

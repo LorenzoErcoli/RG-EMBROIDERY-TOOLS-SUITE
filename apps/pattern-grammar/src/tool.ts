@@ -4,7 +4,7 @@ import {
   generatePattern, generateFinalPatternPoints, parseImportedBoundarySource,
   type PatternConfig, type ImportedBoundaryModel, type ImportScaleMode,
 } from '@rg/pattern-grammar';
-import { dstFromExportLayers, DST_FILE, readDstMetadata, type ExportLayer } from '@rg/core';
+import { conBusta, dstFromExportLayers, DST_FILE, readDstMetadata, type ExportLayer } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
@@ -656,7 +656,14 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
         : ` · disegno troppo pesante (${Math.round(boundarySource.text.length / 1024)} kB): nel file solo i parametri`;
       bytes = dstFromExportLayers([layer], {
         label: (base || 'PATTERN').toUpperCase().slice(0, 16),
-        metadata: { rgProject: 'pattern-grammar', version: '0.1.0', params: saved, ...(disegno ? { drawing: disegno } : {}) },
+        metadata: conBusta({ rgProject: 'pattern-grammar', version: '0.1.0', params: saved, ...(disegno ? { drawing: disegno } : {}) }, {
+          strati: [layer],
+          // il cartamodello caricato (misura reale in mm = il riquadro della sagoma scalata)
+          sorgente: boundarySource ? {
+            tipo: /\.dxf$/i.test(boundarySource.name) ? 'dxf' : 'svg', nome: boundarySource.name,
+            ...(importedBoundary ? { larghezzaMm: (importedBoundary as any).bounds.maxX - (importedBoundary as any).bounds.minX, altezzaMm: (importedBoundary as any).bounds.maxY - (importedBoundary as any).bounds.minY } : {}),
+          } : undefined,
+        }),
       });
     } catch (e) {
       $('status').textContent = (e as Error).message;

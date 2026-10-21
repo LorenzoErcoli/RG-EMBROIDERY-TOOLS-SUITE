@@ -1,6 +1,6 @@
 import '@rg/ui/rg.css';
 import './bitmap.css';
-import { buildSvg, dstFromExportLayers, DST_FILE, readDstMetadata, readProjectMetadata } from '@rg/core';
+import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, readDstMetadata, readProjectMetadata } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { pickSaveTarget, saveOutcomeMessage } from '@rg/ui/save';
@@ -836,7 +836,7 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
     const gen = lastGenerated ?? await generate();      // già generato? non si ricalcola niente
     if (!gen) return;
     // metadata riapribile (R27): riscrive l'SVG generato con il blocco rg-project
-    const withMeta = injectMetadata(gen.svg, { rgProject: 'bitmap', version: '0.1.0', params: gen.params });
+    const withMeta = injectMetadata(gen.svg, conBusta({ rgProject: 'bitmap', version: '0.1.0', params: gen.params }, { strati: gen.res.exportLayers, sorgente: sorgenteBusta(gen.params) }));
     const outcome = await target.write(withMeta);
     $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${gen.res.stopCount} stop in sequenza`;
   });
@@ -855,7 +855,7 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
     try {
       bytes = dstFromExportLayers(gen.res.exportLayers, {
         label: (sourceName || 'BITMAP').toUpperCase().slice(0, 16),
-        metadata: { rgProject: 'bitmap', version: '0.1.0', params: gen.params },   // parametri riapribili dal .dst (R27)
+        metadata: conBusta({ rgProject: 'bitmap', version: '0.1.0', params: gen.params }, { strati: gen.res.exportLayers, sorgente: sorgenteBusta(gen.params) }),   // parametri riapribili dal .dst (R27)
       });
     } catch (e) {
       $('status').textContent = (e as Error).message;   // niente da cucire → messaggio, non file vuoto
@@ -864,6 +864,12 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
     const outcome = await target.write(bytes);
     $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${gen.res.stopCount} stop · ${(bytes.length / 1024).toFixed(1)} KB`;
   });
+
+  /** Sorgente per la busta K2: l'immagine caricata (raster) con la larghezza reale se nota; nessuna per la demo. */
+  function sorgenteBusta(p: { realWidthMm?: number }) {
+    if (!sourceName) return undefined;
+    return { tipo: 'raster' as const, nome: sourceName, ...(p.realWidthMm && p.realWidthMm > 0 ? { larghezzaMm: p.realWidthMm } : {}) };
+  }
 
   /** Inserisce il metadata rg-project subito dopo il tag <svg> (R27), come fa buildSvg quando gli si passa metadata. */
   function injectMetadata(svg: string, meta: Record<string, unknown>): string {

@@ -2,7 +2,7 @@ import '@rg/ui/rg.css';
 import './oblique.css';
 import {
   parseSvgToContours, parseDxfToContours, buildSvg, buildSvgInSourceFrame, readProjectMetadata, readDstMetadata,
-  dstFromExportLayers, DST_FILE, THREAD_STROKE_MM, SHAPE_STROKE_MM, DPI_ILLUSTRATOR, applyRealWidth,
+  dstFromExportLayers, conBusta, DST_FILE, THREAD_STROKE_MM, SHAPE_STROKE_MM, DPI_ILLUSTRATOR, applyRealWidth,
   type ImportResult, type ExportLayer, type SvgImportOptions, type Contour,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
@@ -356,11 +356,14 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
   });
 
   // ---- Export ----
+  // Da cosa è partito il ricamo: il cartamodello caricato (misura REALE), niente se è a formato.
+  const sorgenteBusta = () => panel ? { tipo: /\.dxf$/i.test(panelName) ? 'dxf' as const : 'svg' as const, nome: panelName,
+    larghezzaMm: round1(panel.widthMm * realWidthFactor()), altezzaMm: round1(panel.heightMm * realWidthFactor()) } : undefined;
   async function doExportSvg(): Promise<void> {
     readParams();
     const res = lastResult ?? generate();
     const layers = exportLayersFor(res);
-    const metadata = { rgProject: 'oblique', version: '0.1.0', params, roles: roleColor };
+    const metadata = conBusta({ rgProject: 'oblique', version: '0.1.0', params, roles: roleColor }, { strati: layers, sorgente: sorgenteBusta() });
     let svg: string;
     if (panel?.frame) svg = buildSvgInSourceFrame(layers, { frame: panel.frame, realWidthFactor: realWidthFactor(), metadata });
     else { const b = res.boundaries.pattern; svg = buildSvg(layers, { bounds: { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY }, marginMm: 10, metadata }); }
@@ -372,9 +375,10 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
     const res = lastResult ?? generate();
     // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina lo ignora, noi lo
     // rileggiamo. Senza, il .dst era l'unico file della suite che non sapeva da dove veniva.
-    const bytes = dstFromExportLayers(exportLayersFor(res), {
+    const layers = exportLayersFor(res);
+    const bytes = dstFromExportLayers(layers, {
       label: 'OBLIQUE',
-      metadata: { rgProject: 'oblique', version: '0.1.0', params, roles: roleColor },
+      metadata: conBusta({ rgProject: 'oblique', version: '0.1.0', params, roles: roleColor }, { strati: layers, sorgente: sorgenteBusta() }),
     });
     const base = (panelName ? panelName.replace(/\.[^.]+$/, '') : 'oblique') + '.dst';
     setStatus(saveOutcomeMessage(await saveBinaryFile(bytes, { suggestedName: base, ...DST_FILE }), base));

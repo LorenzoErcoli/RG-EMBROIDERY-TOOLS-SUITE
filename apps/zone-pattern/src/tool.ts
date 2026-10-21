@@ -4,7 +4,7 @@ import {
   parseImportedBoundarySource,
   type ImportedBoundaryModel, type ImportScaleMode, type PatternConfig,
 } from '@rg/pattern-grammar';
-import { buildSvg, dstFromExportLayers, DST_FILE, readProjectMetadata, readDstMetadata } from '@rg/core';
+import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, readProjectMetadata, readDstMetadata } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
@@ -662,6 +662,16 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     return { ...base, drawing };
   }
 
+  /** Metadati di progetto + busta K2; sorgente solo se il disegno viene da un import (misura reale in mm). */
+  function projectBusta(strati: ReturnType<typeof exportSequenceLayers>): Record<string, unknown> {
+    const fb = model?.source?.finalBoundsMm;
+    const nome = source?.name;
+    const sorgente = fb && nome
+      ? { tipo: (/\.dxf$/i.test(nome) ? 'dxf' : 'svg') as 'dxf' | 'svg', nome, larghezzaMm: fb.maxX - fb.minX, altezzaMm: fb.maxY - fb.minY }
+      : undefined;
+    return conBusta(projectMetadata(), { strati, sorgente });
+  }
+
   /**
    * Rimette in piedi un progetto salvato: parametri, ruoli e — se c'è — il cartamodello.
    * Vale sia per un `.svg` che per un `.dst` usciti da qui: i metadati sono gli stessi.
@@ -760,7 +770,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     const svg = buildSvg(exportSequenceLayers(plan), {
       bounds: { minX: b.minX, minY: b.minY, maxX: b.maxX, maxY: b.maxY },
       marginMm: 5,
-      metadata: projectMetadata(),
+      metadata: projectBusta(plan.layers),
     });
     const name = `${base}-zone.svg`;
     const outcome = await saveTextFile(svg, { suggestedName: name, description: 'Immagine SVG' });
@@ -773,7 +783,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     let bytes: Uint8Array;
     try {
       // Un layer per ago, in ordine → i cambi-pattern diventano cambi-ago in sequenza (R31).
-      bytes = dstFromExportLayers(plan.layers, { label: base.toUpperCase().slice(0, 16), metadata: projectMetadata() });
+      bytes = dstFromExportLayers(plan.layers, { label: base.toUpperCase().slice(0, 16), metadata: projectBusta(plan.layers) });
     } catch (e) {
       $('status').textContent = (e as Error).message;
       return;

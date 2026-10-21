@@ -6907,6 +6907,101 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
     SCHEDE_TOOL.filter((t) => !t.tecniche).length, DEBITO_TECNICHE_ATTUALE);
 }
 
+// ---- K2 — la busta di progetto: le chiavi comuni, scritte allo stesso modo, e leggiProgetto per qualunque tool -----
+// conBusta() AGGIUNGE le chiavi comuni ai metadati che un tool scrive già (rg, tool, toolVersion, ruoli, sorgente, fili,
+// misure) senza togliere niente; leggiProgetto() legge il file di qualunque tool, anche scritto prima della busta.
+{
+  console.log('\nK2 — la busta: si aggiunge, non si toglie');
+  const strati = [
+    { id: 'a', color: '#ff0000', polylines: [[{ x: 0, y: 0 }, { x: 3, y: 0 }, { x: 6, y: 0 }]] },
+    { id: 'forme', color: '#cccccc', polylines: [[{ x: 0, y: 0 }, { x: 9, y: 9 }, { x: 0, y: 9 }]], shapeOnly: true },
+    { id: 'vuoto', color: '#00ff00', polylines: [] },
+    { id: 'b', color: '#0000ff', polylines: [[{ x: 10, y: 0 }, { x: 14, y: 0 }]] },
+  ];
+  const vecchio = { rgProject: 'net-45', version: '0.1.0', params: { squareSizeMm: 11 }, roles: { '#e73433': 'MASTER_OUTLINE' }, generatedAt: 123 };
+  const b = rg.conBusta(vecchio, { strati, sorgente: { tipo: 'svg', nome: 'demo.svg', larghezzaMm: 170, altezzaMm: 135 } });
+  check('conBusta: le chiavi vecchie restano tutte, identiche (rgProject, version, params, roles, generatedAt)',
+    Object.keys(vecchio).map((k) => JSON.stringify(b[k]) === JSON.stringify(vecchio[k])), [true, true, true, true, true]);
+  check('...e ci sono quelle nuove: rg 1, tool, toolVersion, ruoli (dal vecchio roles), sorgente', [b.rg, b.tool, b.toolVersion, b.ruoli, b.sorgente.nome], [1, 'net-45', '0.1.0', { '#e73433': 'MASTER_OUTLINE' }, 'demo.svg']);
+  check('...i fili sono quelli che si cuciono, in ordine d\'ago: le forme e gli strati vuoti non contano', b.fili, [{ colore: '#ff0000' }, { colore: '#0000ff' }]);
+  check('...le misure sono il referto di quel DST (K3): 3 punti in 2 aghi', [b.misure.fonte, b.misure.punti, b.misure.aghi], ['dst', 3, 2]);
+  check('...non modifica l\'oggetto che riceve', Object.keys(vecchio).sort(), ['generatedAt', 'params', 'rgProject', 'roles', 'version']);
+  check('...un referto già calcolato dai byte veri (pettine, sfrangiatura) vince su quello degli strati', rg.conBusta(vecchio, { strati, misure: { ...b.misure, punti: 999 } }).misure.punti, 999);
+  check('...senza rgProject né tool lancia (un file senza padrone non esiste)', (() => { try { rg.conBusta({ params: {} }, {}); return 'nessun errore'; } catch (e) { return /manca l.id del tool/.test(e.message); } })(), true);
+  check('...con opz.tool funziona anche se i metadati non hanno rgProject', rg.conBusta({ params: {} }, { tool: 'x' }).tool, 'x');
+  check('...un file già con la busta si riscrive uguale (conBusta è idempotente)', JSON.stringify(rg.conBusta(b, { strati, sorgente: b.sorgente })) === JSON.stringify(b), true);
+
+  console.log('\nK2 — leggiProgetto: SVG, DST e file senza busta');
+  const svg = rg.buildSvg(strati, { bounds: { minX: 0, minY: 0, maxX: 20, maxY: 10 }, marginMm: 1, metadata: b });
+  const dalSvg = rg.leggiProgetto(svg);
+  check('da un SVG: origine busta, tool, versione, params, ruoli, sorgente, fili, misure', [dalSvg.origine, dalSvg.tool, dalSvg.versione, dalSvg.params, dalSvg.ruoli, dalSvg.sorgente.larghezzaMm, dalSvg.fili.length, dalSvg.misure.punti],
+    ['busta', 'net-45', '0.1.0', { squareSizeMm: 11 }, { '#e73433': 'MASTER_OUTLINE' }, 170, 2, 3]);
+  check('...le chiavi che sono solo del tool restano in `propri` (qui generatedAt) e non finiscono tra le comuni', [dalSvg.propri, 'rgProject' in dalSvg.propri, 'roles' in dalSvg.propri], [{ generatedAt: 123 }, false, false]);
+  const dst = rg.dstFromExportLayers(strati, { label: 'PROVA', metadata: b });
+  const dalDst = rg.leggiProgetto(dst);
+  check('da un DST: lo stesso progetto, e le misure sono quelle dei BYTE (la verità), non quelle scritte nel file',
+    [dalDst.tool, dalDst.fili.length, JSON.stringify(dalDst.misure) === JSON.stringify(rg.misuraDst(dst))], ['net-45', 2, true]);
+  const dstBugiardo = rg.dstFromExportLayers(strati, { label: 'PROVA', metadata: { ...b, misure: { ...b.misure, punti: 7777 } } });
+  check('...se il file dice 7777 punti ma i byte ne hanno 3, vale 3', rg.leggiProgetto(dstBugiardo).misure.punti, 3);
+  check('...il filo in vista scritto dal tool (non si ricava dai byte) viene conservato', rg.leggiProgetto(rg.dstFromExportLayers(strati, { metadata: { ...b, misure: { ...b.misure, filoInVista: { mm: 12, origine: 'prova' } } } })).misure.filoInVista, { mm: 12, origine: 'prova' });
+  check('...un SVG passato come byte si legge uguale', rg.leggiProgetto(new TextEncoder().encode(svg)).tool, 'net-45');
+  check('un file che non viene dalla suite non ha progetto: SVG senza metadati · DST senza metadati · testo qualunque · metadati senza tool',
+    [rg.leggiProgetto('<svg xmlns="http://www.w3.org/2000/svg"></svg>'), rg.leggiProgetto(rg.dstFromExportLayers(strati, { label: 'X' })), rg.leggiProgetto('ciao'), rg.leggiProgetto('<svg><metadata id="rg-project">{"params":{}}</metadata></svg>')], [null, null, null, null]);
+
+  console.log('\nK2 — i file di prima della busta, di tutti i tool, si leggono con gli stessi nomi');
+  // La forma che ogni tool salva oggi (dai sorgenti di apps/<tool>/src/tool.ts): `par` nel pettine, `roles` o `ruoli`, il
+  // disegno incorporato in `drawing`, le chiavi proprie (stop, fissi, zone…) che restano proprie.
+  const VECCHI = {
+    'net-45': [{ rgProject: 'net-45', version: '0.1.0', params: { a: 1 }, roles: { '#f00': 'NET_AREA' }, generatedAt: 1 }, { params: 1, ruoli: 1, propri: ['generatedAt'] }],
+    'pattern-grammar': [{ rgProject: 'pattern-grammar', version: '0.1.0', params: { a: 1 }, drawing: { name: 'sagoma.svg', text: '<svg/>' } }, { params: 1, sorgente: 'sagoma.svg', propri: ['drawing'] }],
+    interlace: [{ rgProject: 'interlace', version: '0.1.0', params: { a: 1 }, roles: { '#f00': 'MASTER_OUTLINE' } }, { params: 1, ruoli: 1, propri: [] }],
+    oblique: [{ rgProject: 'oblique', version: '0.1.0', params: { a: 1 }, roles: { level0: '#f00' } }, { params: 1, ruoli: 1, propri: [] }],
+    'cross-stitch': [{ rgProject: 'cross-stitch', version: '3', grid: { cols: 2, rows: 2 }, threads: [{ color: '#f00' }], route: {}, stitch: {}, cells: [] }, { propri: ['grid', 'threads', 'route', 'stitch', 'cells'] }],
+    bitmap: [{ rgProject: 'bitmap', version: '0.1.0', params: { a: 1 } }, { params: 1, propri: [] }],
+    striatura: [{ rgProject: 'striatura', version: '0.1.0', params: { a: 1 }, roles: { '#f00': 'MASTER_OUTLINE' } }, { params: 1, ruoli: 1, propri: [] }],
+    'zone-pattern': [{ rgProject: 'zone-pattern', params: { a: 1 }, roles: { '#f00': { pattern: 'A' } }, drawing: { name: 'cannage.svg', zones: [] } }, { params: 1, ruoli: 1, sorgente: 'cannage.svg', propri: ['drawing'] }],
+    'cannage-rafia': [{ rgProject: 'cannage-rafia', params: { a: 1 }, stop: {}, basi: {}, basiParams: {}, cornice: {}, programma: {}, bordatura: {}, ruoli: { '#f00': 'pattern1' }, drawing: { name: 'borsa.svg' } }, { params: 1, ruoli: 1, sorgente: 'borsa.svg', propri: ['stop', 'basi', 'basiParams', 'cornice', 'programma', 'bordatura', 'drawing'] }],
+    broccato: [{ rgProject: 'broccato', version: '0.1.0', params: { a: 1 } }, { params: 1, propri: [] }],
+    sfrangiatura: [{ rgProject: 'sfrangiatura', params: { a: 1 }, zone: [] }, { params: 1, propri: ['zone'] }],
+    pettine: [{ rgProject: 'pettine', versione: 5, par: { a: 1 }, blocchi: [], larghezzaRealeMm: 419.45, ritaglio: null }, { params: 1, propri: ['blocchi', 'larghezzaRealeMm', 'ritaglio'] }],
+    razza: [{ rgProject: 'razza', version: '0.1.0', params: { a: 1 }, fissi: [], sfumature: [], contorno: [], vuoti: [] }, { params: 1, propri: ['fissi', 'sfumature', 'contorno', 'vuoti'] }],
+    'pattern-macchie': [{ rgProject: 'pattern-macchie', params: { a: 1 }, pattern: { nome: 'squame' }, ruoli: { '#f00': 'pannello' } }, { params: 1, ruoli: 1, propri: ['pattern'] }],
+    pittorico: [{ rgProject: 'pittorico', version: '0.1.0', params: { a: 1 } }, { params: 1, propri: [] }],
+    'rete-testa-speciale': [{ rgProject: 'rete-testa-speciale', params: { a: 1 }, ruoli: { '#f00': 'contorno' } }, { params: 1, ruoli: 1, propri: [] }],
+    'punto-maglia': [{ rgProject: 'punto-maglia', params: { a: 1 }, tratti: [] }, { params: 1, propri: ['tratti'] }],
+  };
+  for (const [tool, [meta, atteso]] of Object.entries(VECCHI)) {
+    const l = rg.leggiProgetto(rg.buildSvg(strati, { bounds: { minX: 0, minY: 0, maxX: 20, maxY: 10 }, marginMm: 1, metadata: meta }));
+    check(`${tool}: file senza busta → origine «vecchio», tool giusto, ${atteso.params ? 'params' : 'niente params'}, ${atteso.ruoli ? 'ruoli' : 'niente ruoli'}, le chiavi proprie restano proprie`,
+      [l.origine, l.tool, !!l.params, !!l.ruoli, l.sorgente?.nome ?? null, Object.keys(l.propri).sort()],
+      ['vecchio', tool, !!atteso.params, !!atteso.ruoli, atteso.sorgente ?? null, [...atteso.propri].sort()]);
+  }
+  check('la versione si legge da `version`, `versione` o `toolVersion`', [rg.leggiProgetto(rg.buildSvg(strati, { bounds: { minX: 0, minY: 0, maxX: 1, maxY: 1 }, marginMm: 1, metadata: VECCHI.pettine[0] })).versione, dalSvg.versione], ['5', '0.1.0']);
+  check('un file vecchio passato per conBusta diventa un file con la busta senza perdere niente: tutte le chiavi di prima ci sono ancora',
+    Object.entries(VECCHI).every(([, [meta]]) => { const nuovo = rg.conBusta(meta, { strati }); return Object.keys(meta).every((k) => JSON.stringify(nuovo[k]) === JSON.stringify(meta[k])) && nuovo.rg === 1; }), true);
+}
+
+{
+  console.log('\nK2 — il cricchetto: ogni tool scrive la busta, il debito può solo scendere');
+  const { caricaRegistro, toolDellaSuite } = await import('./registro.mjs');
+  const reg = await caricaRegistro('registro-k2');
+  const radice = join(here, '..');
+  const DEBITO_BUSTA_ATTUALE = 0;
+  const debito = Object.keys(reg.DEBITO_BUSTA);
+  const tools = toolDellaSuite();
+  // Un tool scrive il progetto se `rgProject: '…'` compare nel suo tool.ts o nel suo motore.ts (razza e punto-maglia lo
+  // costruiscono nel motore); scrive la busta se in uno dei due il progetto passa da conBusta() (pettine e sfrangiatura la
+  // mettono nel motore, perché il referto lo vogliono dai byte veri del DST).
+  const sorgenti = (id) => ['tool.ts', 'motore.ts'].map((f) => { try { return readFileSync(join(radice, 'apps', id, 'src', f), 'utf8'); } catch { return ''; } }).join('\n');
+  const scrive = (id) => /\bconBusta\(/.test(sorgenti(id));
+  check('ogni tool della suite scrive un file di progetto (rgProject nel tool o nel suo motore): un tool che non lo fa non ha busta da avere', tools.filter((t) => !/rgProject:\s*'/.test(sorgenti(t))), []);
+  check(`il debito della busta è ${DEBITO_BUSTA_ATTUALE} tool su ${tools.length} (può solo scendere: se è sceso, abbassa DEBITO_BUSTA_ATTUALE)`, debito.length, DEBITO_BUSTA_ATTUALE);
+  check('il debito della busta nomina solo tool della suite', debito.filter((t) => !tools.includes(t)), []);
+  check('ogni tool che scrive un progetto passa da conBusta, se non è nel debito (un tool nuovo scrive la busta fin dall\'inizio)',
+    tools.filter((t) => !scrive(t) && !debito.includes(t)), []);
+  check('...e nessuno sta nel debito se la scrive già (la voce va tolta)', tools.filter((t) => scrive(t) && debito.includes(t)), []);
+}
+
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).
 rmSync(outDir, { recursive: true, force: true });
 console.log(failed ? `\n${failed} test falliti\n` : '\nTutti i test passati\n');

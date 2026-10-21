@@ -5,7 +5,7 @@ import {
   ROLE_LABELS, defaultNetParams, buildSvg, buildSvgInSourceFrame,
   parseSvgToContours, parseDxfToContours, readProjectMetadata, readDstMetadata,
   applyRealWidth, importResultFromContours, measureContours,
-  dstFromExportLayers, DST_FILE,
+  dstFromExportLayers, DST_FILE, conBusta,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { scheletro, sezioneSorgente, sezione, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero } from '@rg/ui/anatomia';
@@ -174,6 +174,13 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
 
   /** Nome del file di partenza (senza estensione): serve a proporre un nome d'export sensato. */
   let sourceName = '';
+  let sourceTipo: 'svg' | 'dxf' = 'svg';
+  /** La sorgente per la busta di progetto: solo se c'è un file caricato; misura REALE (R11). */
+  const sorgenteBusta = () => {
+    if (!sourceName) return undefined;
+    const eff = measureContours(currentContours());
+    return { tipo: sourceTipo, nome: sourceName, larghezzaMm: eff.widthMm, altezzaMm: eff.heightMm };
+  };
 
   /** Aggiorna la riga di provenienza del file (nome, misura, metodo, quantità) — è lo status del componente Sagoma. */
   function updateFileStatus(label: string) {
@@ -213,6 +220,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
         const isDxf = /\.dxf$/i.test(file.name);
         const result = isDxf ? parseDxfToContours(text) : parseSvgToContours(text);
         sourceName = file.name.replace(/\.[^.]+$/, '');
+        sourceTipo = isDxf ? 'dxf' : 'svg';
         // Se l'SVG viene dalla suite, i parametri si rimettono PRIMA di caricare, così valgono
         // già quando il disegno entra (e l'assegnazione automatica non li sovrascrive).
         let restored = false;
@@ -241,7 +249,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
 
   $('exportBtn').addEventListener('click', async () => {
     const { layers, bounds } = runPipeline(currentContours(), roles, params);
-    const metadata = { rgProject: 'net-45', version: '0.1.0', params, roles, generatedAt: Date.now() };
+    const metadata = conBusta({ rgProject: 'net-45', version: '0.1.0', params, roles, generatedAt: Date.now() }, { strati: layers, sorgente: sorgenteBusta() });
     let svg: string;
     if (imported.frame) {
       const r = params.realWidthMm > 0 && imported.widthMm > 0 ? params.realWidthMm / imported.widthMm : 1;
@@ -264,7 +272,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
       // fino all'END e lo ignora, noi lo rileggiamo. Senza, il .dst non sapeva da dove veniva.
       bytes = dstFromExportLayers(layers, {
         label: (sourceName || 'RETE45').toUpperCase().slice(0, 16),
-        metadata: { rgProject: 'net-45', version: '0.1.0', params, roles },
+        metadata: conBusta({ rgProject: 'net-45', version: '0.1.0', params, roles }, { strati: layers, sorgente: sorgenteBusta() }),
       });
     } catch (e) {
       $('status').textContent = (e as Error).message;

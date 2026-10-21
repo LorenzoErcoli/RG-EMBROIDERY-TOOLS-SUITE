@@ -1,6 +1,6 @@
 import '@rg/ui/rg.css';
 import './punto-maglia.css';
-import { buildSvg, dstFromExportLayers, DST_FILE, readDstMetadata, readProjectMetadata, type ExportLayer } from '@rg/core';
+import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, readDstMetadata, readProjectMetadata, type ExportLayer } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import ICONS from '../../../packages/design-system/icons/rg-icons.svg?url';
 import { hookPanZoom } from '@rg/ui/panzoom';
@@ -810,6 +810,7 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
 
   // ---------------------------------------------------------------- export e progetto
   const datiProgetto = (): Record<string, unknown> => ({ ...progetto(par, tratti), immagine: rif.url ? { larghezzaMm: rif.larghezzaMm } : undefined }) as unknown as Record<string, unknown>;
+  const busta = (strati: ExportLayer[]): Record<string, unknown> => conBusta(datiProgetto(), { strati, sorgente: rif.url ? { tipo: 'raster', nome: nomeImmagine || undefined, larghezzaMm: rif.larghezzaMm, altezzaMm: Math.round(rif.larghezzaMm * rif.aspetto * 10) / 10 } : undefined });
   const nomeBase = (): string => nomeFile || 'punto-maglia';
 
   $('exportBtn').addEventListener('click', async () => {
@@ -818,7 +819,7 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
     const layers = [...strati(risultato), linee];
     let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
     for (const l of layers) for (const pl of l.polylines) for (const p of pl) { minX = Math.min(minX, p.x); minY = Math.min(minY, p.y); maxX = Math.max(maxX, p.x); maxY = Math.max(maxY, p.y); }
-    const svg = buildSvg(layers, { bounds: { minX, minY, maxX, maxY }, marginMm: 5, metadata: datiProgetto() });
+    const svg = buildSvg(layers, { bounds: { minX, minY, maxX, maxY }, marginMm: 5, metadata: busta(layers) });
     const name = `${nomeBase()}.svg`;
     const outcome = await saveTextFile(svg, { suggestedName: name, description: 'Immagine SVG' });
     $('status').textContent = saveOutcomeMessage(outcome, name);
@@ -829,7 +830,7 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
     // un ago, un tratto per blocco col taglio prima (come il campione); i parametri e i tratti nel footer (R27)
     let bytes: Uint8Array;
     try {
-      bytes = dstFromExportLayers(strati(risultato), { label: (nomeBase() || 'MAGLIA').toUpperCase().slice(0, 16), metadata: datiProgetto() });
+      bytes = dstFromExportLayers(strati(risultato), { label: (nomeBase() || 'MAGLIA').toUpperCase().slice(0, 16), metadata: busta(strati(risultato)) });
     } catch (e) { $('status').textContent = (e as Error).message; return; }
     const name = `${nomeBase()}.dst`;
     const outcome = await saveBinaryFile(bytes, { suggestedName: name, ...DST_FILE });

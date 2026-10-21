@@ -20,7 +20,7 @@ import type { Ingresso, Motore } from '@rg/cervello';
 import {
   type Point, type Polyline, type PixelImage, type ExportLayer,
   polygonArea, traceRegions, buildDst, type DstPath,
-  misuraDst, refertoVuoto,
+  misuraDst, refertoVuoto, conBusta, filiDaStrati,
 } from '@rg/core';
 import { parseSvgPolylines } from '@rg/pattern-grammar';
 // Tre primitive nate nel Punto Pittorico e usate qui tali e quali: la rasterizzazione di una
@@ -1319,7 +1319,7 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
   const nota = `<text x="8" y="14" font-family="Helvetica,Arial,sans-serif" font-size="3.6" fill="#222">livelli della distanza dal muro: ordine 1→6 dal chiaro allo scuro · ROSSO muro di partenza · BLU muro opposto · FRECCE verso del pettine · ARANCIO sovrapposizione · ROSA nudo · VERDE denso</text>`;
   const NL = String.fromCharCode(10);
   // `<metadata>` non si disegna: e' il posto dove l'SVG tiene il progetto, come il footer nel DST
-  const progettoSvg = ing.progetto ? `<metadata id="rg-progetto">${JSON.stringify(ing.progetto).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string))}</metadata>` + String.fromCharCode(10) : '';
+  let progettoSvg = ing.progetto ? `<metadata id="rg-progetto">${JSON.stringify(ing.progetto).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string))}</metadata>` + String.fromCharCode(10) : '';
   const svgVerifica = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${(X0 - MARG).toFixed(1)} ${(Y0 - 18 - MARG).toFixed(1)} ${(RQ.larghezza + 2 * MARG).toFixed(1)} ${(RQ.altezza + 18 + 2 * MARG).toFixed(1)}" width="${(RQ.larghezza + 2 * MARG).toFixed(1)}mm" height="${(RQ.altezza + 18 + 2 * MARG).toFixed(1)}mm">` + NL +
   progettoSvg + `<rect x="${(X0 - MARG).toFixed(1)}" y="${(Y0 - 18 - MARG).toFixed(1)}" width="${(RQ.larghezza + 2 * MARG).toFixed(1)}" height="${(RQ.altezza + 18 + 2 * MARG).toFixed(1)}" fill="#faf9f7"/>` + NL +
   `<rect x="${X0.toFixed(1)}" y="${Y0.toFixed(1)}" width="${RQ.larghezza.toFixed(1)}" height="${RQ.altezza.toFixed(1)}" fill="none" stroke="#333" stroke-width="0.3" stroke-dasharray="2 1"/>` + NL +
@@ -2561,7 +2561,13 @@ const spaziatura = { mediana: 0, decimo: 0, sottoMezzoPasso: 0, sottoMezzoPassoS
     // l'origine del DST è l'angolo del riquadro: uno swatch parte da (0,0), non da dov'era nel pannello
     for (const pa of paths) for (const q of pa.points_mm) { q[0] -= X0; q[1] -= Y0; }
     percorsi = paths;
-    dst = buildDst({ label: 'PETTINE', coordinate_system: 'svg', paths, metadata: ing.progetto ?? undefined });
+    if (ing.progetto) {
+      // la busta (K2) col referto dei byte veri: si cuce prima senza metadati, si misura, poi si riscrive col footer
+      const senza = buildDst({ label: 'PETTINE', coordinate_system: 'svg', paths });
+      const busta = conBusta(ing.progetto, { misure: misuraDst(senza), fili: filiDaStrati(stratiDaPercorsi(paths, colori)) });
+      dst = buildDst({ label: 'PETTINE', coordinate_system: 'svg', paths, metadata: busta });
+      progettoSvg = `<metadata id="rg-progetto">${JSON.stringify(busta).replace(/[<>&]/g, (c) => ({ '<': '&lt;', '>': '&gt;', '&': '&amp;' }[c] as string))}</metadata>` + String.fromCharCode(10);
+    } else dst = buildDst({ label: 'PETTINE', coordinate_system: 'svg', paths });
     {
       const v = [...lunghezzePassaggi].sort((a, b) => a - b);
       const q = (f: number): string => (v.length ? v[Math.floor(v.length * f)].toFixed(0) : '0');

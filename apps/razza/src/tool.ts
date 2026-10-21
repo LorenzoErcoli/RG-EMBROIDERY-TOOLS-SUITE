@@ -2,7 +2,7 @@ import '@rg/ui/rg.css';
 import './razza.css';
 import {
   type ImportResult, type Point, type Polyline,
-  applyRealWidth, buildSvg, buildSvgInSourceFrame, dstFromExportLayers, DST_FILE,
+  applyRealWidth, buildSvg, buildSvgInSourceFrame, conBusta, dstFromExportLayers, DST_FILE, refertoDaStrati,
   parseDxfToContours, parseSvgToContours, pointInPolygon, polygonArea, readDst, readDstMetadata, readProjectMetadata,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
@@ -212,6 +212,7 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
   let importato: ImportResult | null = null;
   let aperte: Polyline[] = [];
   let nomeFile = '';
+  let tipoSagoma: 'svg' | 'dxf' = 'svg';
   let larghezzaReale = 0;
   let fattoreScala = 1;
   /** Un DST fatto altrove, mostrato sotto il ricamo per confronto. Coordinate già portate sul pezzo. */
@@ -634,6 +635,7 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
         const testo = String(reader.result);
         // un SVG uscito da qui è un progetto, non una sagoma: lo si riapre (resta valido anche da questo campo)
         if (!isDxf) { const meta = readProjectMetadata(testo); if (meta && riapriProgetto(meta, file.name)) return; }
+        tipoSagoma = isDxf ? 'dxf' : 'svg';
         importato = isDxf ? parseDxfToContours(testo) : parseSvgToContours(testo);
         if (!importato.contours.length) { $('fileStatus').textContent = `${file.name}: nessun contorno letto${isDxf ? '' : ' (e non è un SVG di questa suite)'}`; return; }
         fattoreScala = importato.widthMm > 0 && larghezzaReale > 0 ? larghezzaReale / importato.widthMm : 1;
@@ -673,15 +675,21 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
   // ---------------------------------------------------------------- esportare
   const datiProgetto = () => progetto(par, pezzo, fissi, sfumature);
   const nomeBase = (): string => nomeFile || 'pelle-di-razza';
+  // La sagoma caricata, con la misura REALE in mm (R11); senza sagoma caricata (demo, progetto) non c'è sorgente da dichiarare.
+  const sorgenteProgetto = () => {
+    if (!importato) return undefined;
+    const f = importato.widthMm > 0 && larghezzaReale > 0 ? larghezzaReale / importato.widthMm : 1;
+    return { tipo: tipoSagoma, ...(nomeFile ? { nome: nomeFile } : {}), larghezzaMm: importato.widthMm * f, altezzaMm: importato.heightMm * f };
+  };
 
   $('exportBtn').addEventListener('click', async () => {
     if (!risultato || !risultato.punti.length) return;
     const chiusa = (p: Polyline): Polyline => [...p, p[0]];
     const layers = [...stratiDaRisultato(risultato), { id: 'sagoma', color: '#8a8a8a', polylines: [chiusa(pezzo.contorno), ...pezzo.vuoti.map(chiusa)], strokeMm: 0.3, shapeOnly: true }];
-    const metadata = datiProgetto();
+    const metadata = conBusta(datiProgetto() as unknown as Record<string, unknown>, { strati: layers, sorgente: sorgenteProgetto() });
     const svg = importato?.frame
-      ? buildSvgInSourceFrame(layers, { frame: importato.frame, realWidthFactor: importato.widthMm > 0 && larghezzaReale > 0 ? larghezzaReale / importato.widthMm : 1, metadata: metadata as unknown as Record<string, unknown> })
-      : buildSvg(layers, { bounds: { minX: pezzo.minX, minY: pezzo.minY, maxX: pezzo.maxX, maxY: pezzo.maxY }, marginMm: 8, metadata: metadata as unknown as Record<string, unknown> });
+      ? buildSvgInSourceFrame(layers, { frame: importato.frame, realWidthFactor: importato.widthMm > 0 && larghezzaReale > 0 ? larghezzaReale / importato.widthMm : 1, metadata })
+      : buildSvg(layers, { bounds: { minX: pezzo.minX, minY: pezzo.minY, maxX: pezzo.maxX, maxY: pezzo.maxY }, marginMm: 8, metadata });
     const name = `${nomeBase()}-razza.svg`;
     const outcome = await saveTextFile(svg, { suggestedName: name, description: 'Immagine SVG' });
     $('status').textContent = saveOutcomeMessage(outcome, name);
@@ -694,7 +702,7 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
     const { layers } = stratiPerDst(risultato);
     let bytes: Uint8Array;
     try {
-      bytes = dstFromExportLayers(layers, { label: (nomeBase() || 'RAZZA').toUpperCase().slice(0, 16), center: false, metadata: datiProgetto() as unknown as Record<string, unknown> });
+      bytes = dstFromExportLayers(layers, { label: (nomeBase() || 'RAZZA').toUpperCase().slice(0, 16), center: false, metadata: conBusta(datiProgetto() as unknown as Record<string, unknown>, { strati: layers, sorgente: sorgenteProgetto(), misure: refertoDaStrati(layers, { centra: false }) }) });
     } catch (e) { $('status').textContent = (e as Error).message; return; }
     const name = `${nomeBase()}-razza.dst`;
     const outcome = await saveBinaryFile(bytes, { suggestedName: name, ...DST_FILE });

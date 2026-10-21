@@ -2,7 +2,7 @@ import '@rg/ui/rg.css';
 import './cross-stitch.css';
 import {
   type ExportLayer,
-  buildSvg, dstFromExportLayers, DST_FILE, readProjectMetadata, readDstMetadata, medianCutPalette, rgbToHex,
+  buildSvg, dstFromExportLayers, conBusta, DST_FILE, readProjectMetadata, readDstMetadata, medianCutPalette, rgbToHex,
   parseDxfToContours, parseSvgToContours, applyRealWidth, type ImportResult,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
@@ -3827,13 +3827,22 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     return stratiCross(statoCross(), maskFor, ready);
   }
 
+  /** K2: da cosa è partito il ricamo (la forma del pezzo, o l'immagine); nulla se la griglia è disegnata da zero. */
+  function sorgenteProgetto(): { tipo: 'svg' | 'dxf' | 'raster'; nome?: string; larghezzaMm?: number; altezzaMm?: number } | undefined {
+    if (pieceShape) {
+      const nome = pieceShape.name;
+      return { tipo: /\.dxf$/i.test(nome || '') ? 'dxf' : 'svg', ...(nome ? { nome } : {}), ...(shapeDims ? { larghezzaMm: shapeDims.w, altezzaMm: shapeDims.h } : {}) };
+    }
+    return source ? { tipo: 'raster', nome: source.name } : undefined;
+  }
+
   $('exportBtn').addEventListener('click', async () => {
     const layers = exportLayers();
     if (!layers.length) { $('status').textContent = 'Niente da esportare: la griglia è vuota o gli stop sono spenti.'; return; }
     const a = clampArea(st.grid, st.area);
     const eg = a ? subGrid(st.grid, new Map(), a).grid : st.grid;
     const w = eg.cols * eg.cellW, h = gridHeight(eg);
-    const svg = buildSvg(layers, { bounds: { minX: 0, minY: 0, maxX: w, maxY: h }, marginMm: 5, metadata: projectMetadata() });
+    const svg = buildSvg(layers, { bounds: { minX: 0, minY: 0, maxX: w, maxY: h }, marginMm: 5, metadata: conBusta(projectMetadata(), { strati: layers, sorgente: sorgenteProgetto() }) });
     const name = `${sourceName || 'cross-stitch'}-cross-stitch.svg`;
     const outcome = await saveTextFile(svg, { suggestedName: name, mime: 'image/svg+xml', extension: '.svg', description: 'Immagine SVG' });
     $('status').textContent = saveOutcomeMessage(outcome, name);
@@ -3846,7 +3855,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       if (!layers.length) { $('status').textContent = 'Niente da esportare: la griglia è vuota o gli stop sono spenti.'; return; }
       bytes = dstFromExportLayers(layers, {
         label: (sourceName || 'CROSS-STITCH').toUpperCase().slice(0, 16),
-        metadata: projectMetadata(),
+        metadata: conBusta(projectMetadata(), { strati: layers, sorgente: sorgenteProgetto() }),
       });
     } catch (e) {
       $('status').textContent = (e as Error).message;

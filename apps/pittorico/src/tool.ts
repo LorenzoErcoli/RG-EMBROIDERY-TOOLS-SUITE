@@ -14,7 +14,7 @@
 import '@rg/ui/rg.css';
 import './pittorico.css';
 import {
-  buildSvg, dstFromExportLayers, DST_FILE, readDstMetadata, readProjectMetadata,
+  buildSvg, conBusta, dstFromExportLayers, DST_FILE, readDstMetadata, readProjectMetadata,
   bounds, rgbToHex, type PixelImage,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
@@ -431,6 +431,10 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
   // ---- esportazione ----------------------------------------------------------
   const nomeBase = (): string => (nomeFile ? nomeFile.replace(/\.[^.]+$/, '') : 'pittorico');
   const metadati = (): Record<string, unknown> => ({ rgProject: 'pittorico', version: '0.1.0', params: { ...params } });
+  /** La sorgente della busta: l'immagine caricata, con la larghezza reale se c'e'. Senza file, niente. */
+  const sorgenteBusta = () => (nomeFile
+    ? { tipo: 'raster' as const, nome: nomeFile, ...(params.realWidthMm > 0 ? { larghezzaMm: params.realWidthMm } : {}) }
+    : undefined);
 
   $('exportBtn').addEventListener('click', async () => {
     if (!piano) { $('status').textContent = 'Niente da esportare: premi Genera'; return; }
@@ -439,7 +443,7 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
       const svg = buildSvg(layers, {
         bounds: bounds(layers.flatMap((l) => l.polylines.flat())),
         marginMm: 4,
-        metadata: metadati(),
+        metadata: conBusta(metadati(), { strati: layers, sorgente: sorgenteBusta() }),
       });
       const esito = await saveTextFile(svg, { suggestedName: `${nomeBase()}-pittorico.svg`, description: 'Immagine SVG' });
       $('status').textContent = saveOutcomeMessage(esito, `${nomeBase()}-pittorico.svg`);
@@ -451,7 +455,8 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
   $('exportDstBtn').addEventListener('click', async () => {
     if (!piano) { $('status').textContent = 'Niente da esportare: premi Genera'; return; }
     try {
-      const bytes = dstFromExportLayers(pittoricoExportLayers(piano), { label: 'PITTORICO', metadata: metadati() });
+      const strati = pittoricoExportLayers(piano);
+      const bytes = dstFromExportLayers(strati, { label: 'PITTORICO', metadata: conBusta(metadati(), { strati, sorgente: sorgenteBusta() }) });
       const esito = await saveBinaryFile(bytes, { suggestedName: `${nomeBase()}.dst`, ...DST_FILE });
       $('status').textContent = saveOutcomeMessage(esito, `${nomeBase()}.dst`);
     } catch (e) {
