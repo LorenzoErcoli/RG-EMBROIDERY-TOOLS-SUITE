@@ -114,6 +114,11 @@ export function trova(tool: string, salvatoCome: string): Parametro | undefined 
   return REGISTRO.find((p) => p.tool[tool] && percorso(p.tool[tool]) === salvatoCome);
 }
 
+/** I parametri che un tool usa (K4: la parte «quali parametri» della scheda del tool), col come li salva e col suo default. */
+export function parametriDelTool(tool: string): Parametro[] {
+  return REGISTRO.filter((p) => p.tool[tool]);
+}
+
 /** I percorsi che un tool dichiara di salvare. */
 export function percorsiRegistrati(tool: string): string[] {
   return REGISTRO.filter((p) => p.tool[tool]).map((p) => percorso(p.tool[tool]));

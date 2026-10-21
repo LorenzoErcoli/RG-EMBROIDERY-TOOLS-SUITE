@@ -45,6 +45,7 @@ export { costruisci as rzCostruisci, pezzoDa as rzPezzoDa, rettangolo as rzRetta
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 export * as ui from ${JSON.stringify(posix('packages/ui/src/anatomia.ts'))};
 export { DEBITO_ANATOMIA } from ${JSON.stringify(posix('packages/ui/src/debito-anatomia.ts'))};
+export { TOOLS as ToolsDati } from ${JSON.stringify(posix('packages/ui/src/tools-dati.ts'))};
 export { routeCells as csRouteCells, colorPolylines as csColorPolylines, colorPolylinesTrim as csColorPolylinesTrim, DEFAULT_ROUTE as CS_DEFAULT_ROUTE, RETRACE_PRESETS as CS_RETRACE_PRESETS } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
 export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight, knitFromImage as csKnitFromImage, refinePalette as csRefinePalette, brushEdits as csBrushEdits, fillEdits as csFillEdits, applyEdits as csApplyEdits, fromTwoColumnV as csFromTwoColumnV } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { subGrid as csSubGrid, areaFromMm as csAreaFromMm, clampArea as csClampArea } from ${JSON.stringify(posix('apps/cross-stitch/src/area.ts'))};
@@ -6847,6 +6848,63 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
     [...Object.entries(debito).flatMap(([t, v]) => v.filter((c) => !(aMano[t] ?? []).includes(c)).map((c) => `${t}: ${c}`)), ...Object.keys(debito).filter((t) => !tools.includes(t))], []);
   check('il tool di prova (net-45) usa i componenti: scheletro, sezione 01, campo numerico, e non ha niente nel debito',
     [/from '@rg\/ui\/anatomia'/.test(readFileSync(join(radice, 'apps/net-45/src/tool.ts'), 'utf8')), aMano['net-45'], debito['net-45']], [true, [], undefined]);
+}
+
+// ---- K4 — la scheda di ogni tool: cosa prende, cosa dà, quali parametri usa ----------------------------------------
+// packages/ui/src/tools-dati.ts dice per ogni tool cosa prende (`ingressi`) e cosa dà (`uscite`); i parametri vengono
+// dal registro (`parametriDelTool`). Quello che si dichiara si CONTROLLA contro i sorgenti: i file che il tool accetta
+// davvero e i bottoni di export che ha davvero. Le `tecniche` R24 sono una mappa di mestiere che aspetta Lorenzo.
+{
+  console.log('\nK4 — la scheda di ogni tool: cosa prende, cosa dà, quali parametri usa');
+  const { caricaRegistro } = await import('./registro.mjs');
+  const reg = await caricaRegistro('registro-k4');
+  const radice = join(here, '..');
+  const SCHEDE_TOOL = rg.ToolsDati;
+  const IN = ['svg', 'dxf', 'raster', 'dst'];
+  const OUT = ['svg', 'dst'];
+  const TECNICHE = ['corsa', 'raso', 'cordoncino', 'catenella', 'zigzag', 'tatami', 'croce'];
+  const sorgente = (id) => readFileSync(join(radice, 'apps', id, 'src/tool.ts'), 'utf8');
+
+  // cosa accetta un tool nei suoi file di caricamento (attributi `accept` scritti a mano, `accetta:` del componente)
+  const accettato = (src) => {
+    const acc = [...src.matchAll(/accept="([^"]*)"/g), ...src.matchAll(/accetta:\s*'([^']*)'/g), ...src.matchAll(/accept\s*=\s*'([^']*)'/g)].map((m) => m[1]).join(' ');
+    const conComponente = /sezioneSorgente\(/.test(src) && !/progetto:\s*false/.test(src); // «Apri progetto o DST…» accetta .svg e .dst
+    return new Set([
+      /\.svg|image\/svg/.test(acc) || conComponente ? 'svg' : null,
+      /\.dxf/.test(acc) ? 'dxf' : null,
+      /image\/(\*|png|jpe?g|webp|bmp|gif)/.test(acc) ? 'raster' : null,
+      /\.dst/.test(acc) || conComponente ? 'dst' : null,
+    ].filter(Boolean));
+  };
+  // quali export ha: il testo di un bottone («Esporta SVG», «Scarica SVG», «Salva DST») o l'intestazione comune
+  const prodotto = (src) => {
+    const comune = /(barraAnteprima|scheletro)\(/.test(src);
+    return new Set([
+      /(Esporta|Scarica|Salva)[^<>"'`]{0,12}SVG/.test(src) || (comune && !/esportaSvg:\s*false/.test(src)) ? 'svg' : null,
+      /(Esporta|Scarica|Salva)[^<>"'`]{0,12}DST/.test(src) || (comune && !/esportaDst:\s*false/.test(src)) ? 'dst' : null,
+    ].filter(Boolean));
+  };
+
+  check('la scheda ha un tool per ogni tool della suite, una volta sola, con nome e descrizione',
+    [SCHEDE_TOOL.map((t) => t.id).sort(), SCHEDE_TOOL.every((t) => t.name && t.description)], [[...reg.ORDINE_TOOL].sort(), true]);
+  check('ingressi: almeno uno, nomi validi (svg · dxf · raster · dst), senza doppioni',
+    SCHEDE_TOOL.filter((t) => !Array.isArray(t.ingressi) || !t.ingressi.length || t.ingressi.some((x) => !IN.includes(x)) || new Set(t.ingressi).size !== t.ingressi.length).map((t) => t.id), []);
+  check('uscite: nomi validi (svg · dst), senza doppioni, e il DST c\'è sempre (è il programma per la macchina)',
+    SCHEDE_TOOL.filter((t) => !Array.isArray(t.uscite) || t.uscite.some((x) => !OUT.includes(x)) || new Set(t.uscite).size !== t.uscite.length || !t.uscite.includes('dst')).map((t) => t.id), []);
+  check('quello che un tool dichiara di prendere lo accetta davvero (un file di caricamento lo ammette)',
+    SCHEDE_TOOL.flatMap((t) => t.ingressi.filter((x) => !accettato(sorgente(t.id)).has(x)).map((x) => `${t.id}: ${x}`)), []);
+  check('...e un tool che accetta un\'immagine o un DXF lo dichiara (svg e dst non contano: ogni tool riapre il proprio progetto)',
+    SCHEDE_TOOL.flatMap((t) => ['raster', 'dxf'].filter((x) => accettato(sorgente(t.id)).has(x) && !t.ingressi.includes(x)).map((x) => `${t.id}: ${x}`)), []);
+  check('uscite dichiarate = bottoni di export che il tool ha davvero',
+    SCHEDE_TOOL.filter((t) => JSON.stringify([...prodotto(sorgente(t.id))].sort()) !== JSON.stringify([...t.uscite].sort())).map((t) => t.id), []);
+  check('i parametri di ogni tool vengono dal registro: ce ne sono, e ognuno dice come il tool lo salva',
+    SCHEDE_TOOL.filter((t) => { const p = reg.parametriDelTool(t.id); return !p.length || p.some((x) => !x.tool[t.id]); }).map((t) => t.id), []);
+  check('le tecniche, quando ci sono, sono tecniche R24 (corsa · raso · cordoncino · catenella · zigzag · tatami · croce)',
+    SCHEDE_TOOL.filter((t) => t.tecniche && (!t.tecniche.length || t.tecniche.some((x) => !TECNICHE.includes(x)))).map((t) => t.id), []);
+  // Il debito delle tecniche: la mappa tool → tecniche è una decisione di mestiere di Lorenzo (diario della conduzione).
+  const DEBITO_TECNICHE_ATTUALE = 17;
+  check(`i tool senza la mappa delle tecniche R24 sono ${DEBITO_TECNICHE_ATTUALE} su ${SCHEDE_TOOL.length} (può solo scendere: se Lorenzo ne conferma, abbassa DEBITO_TECNICHE_ATTUALE)`,
+    SCHEDE_TOOL.filter((t) => !t.tecniche).length, DEBITO_TECNICHE_ATTUALE);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).
