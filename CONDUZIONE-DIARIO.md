@@ -41,6 +41,14 @@
 
 ## Giri
 
+### 2026-10-21 — voce 4: K2, la busta di progetto · master `80f832d`
+
+- **Fatto.** `conBusta()` e `leggiProgetto()` in `packages/core/src/progetto.ts`. La busta aggiunge `rg, tool, toolVersion, ruoli, sorgente, fili, misure` ai metadati di prima senza togliere niente. I 17 tool la scrivono; `DEBITO_BUSTA` = 0.
+- **Provato rompendo apposta.** Tolto `conBusta` da bitmap: il test «ogni tool che scrive un progetto passa da conBusta» è diventato rosso. Ripristinato, test/typecheck/build verdi, nessun CRLF.
+- **Browser.** 10 tool esportati con pilota (net-45, pattern-grammar, interlace, oblique, striatura, razza, broccato, bitmap, punto-maglia, pattern-macchie): busta presente, punti di cucitura (FNV fino a END) identici a master, nessun errore in console. **Non verificati nel browser** (il pilota non è riuscito a farli esportare): cannage-rafia, zone-pattern, pittorico, rete-testa-speciale, cross-stitch, sfrangiatura, pettine. Li copre solo il test automatico.
+- **Limiti noti.** Il SVG di pattern-grammar non è nel formato rg-project (solo il DST ha la busta). `simula()` non scrive la busta. `sorgente` manca per demo e disegni a mano e non incorpora il contenuto. I nomi dei ruoli cambiano da tool a tool. Il filo in vista di pettine non è nella busta.
+- **Prossima voce.** 5, U2.
+
 ### 2026-10-21 — voce 3: K4, la scheda di ogni tool · master `53679de` (fatta in parte)
 
 **Fatto.** Ogni tool ha ora nella scheda **cosa prende** (`ingressi`: svg · dxf · raster · dst) e **cosa dà**
