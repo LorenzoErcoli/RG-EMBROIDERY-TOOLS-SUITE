@@ -35,7 +35,8 @@ namespace StilistaHostSkeleton
     {
         internal const int PrimaPorta = 5370; // fuori dalle porte dei server di sviluppo della suite (5270-5313)
         internal const int QuantePorte = 10;
-        private const string IndirizzoSuite = "http://localhost:5270/?stilista={0}#/pattern-grammar";
+        // la home della suite: ?stilista resta nell'indirizzo quando si apre un tool (#/…), che prende la selezione da solo
+        private const string IndirizzoSuite = "http://localhost:5270/?stilista={0}#/";
         private const double MargineMm = 1.0;
 
         // uno per processo, anche se Stilista creasse più schede
@@ -60,7 +61,7 @@ namespace StilistaHostSkeleton
         public CodexTab()
         {
             BackColor = Color.WhiteSmoke;
-            var apri = new Button { Dock = DockStyle.Top, Height = 40, Text = "Lavora la selezione con RG Tools (Generatore pattern)" };
+            var apri = new Button { Dock = DockStyle.Top, Height = 40, Text = "Lavora la selezione con RG Tools…" };
             apri.Click += (s, e) => ApriSuite();
             _stato = new Label { Dock = DockStyle.Top, Height = 40, TextAlign = ContentAlignment.MiddleLeft, Text = "RG Link: avvio…" };
             _ultima = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.TopLeft, Text = "" };
@@ -143,7 +144,7 @@ namespace StilistaHostSkeleton
             try
             {
                 Process.Start(new ProcessStartInfo(string.Format(IndirizzoSuite, _porta)) { UseShellExecute = true });
-                Annota("Aperto il Generatore pattern sulla selezione");
+                Annota("Aperta la suite: il tool che scegli prende la selezione");
             }
             catch (Exception ex)
             {

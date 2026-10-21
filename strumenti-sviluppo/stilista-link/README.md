@@ -8,7 +8,7 @@ appesantisca Stilista»*.
 ```
 Stilista                                   browser (suite, porta 5270)
 ┌──────────────────────────────┐           ┌──────────────────────────────┐
-│ scheda «RG_LINK»             │  apre →   │ Generatore pattern           │
+│ scheda «RG_LINK»             │  apre →   │ la home: scegli il tool      │
 │  [Lavora la selezione…]      │           │  ?stilista=<porta>           │
 │ server 127.0.0.1:5370…5379   │ ← GET ─── │  «Prendi la selezione…»      │
 │  /selezione.svg  /dst  …     │ ─ SVG mm →│  (import di sempre, ruoli)   │
@@ -95,7 +95,7 @@ nelle prove non è dovuta intervenire. Le strade scartate sono in
 `@rg/ui/stilista` ha l'**aggancio** (`AggancioStilista`): il tool dice come carica un SVG, come dà i ruoli
 (i fori → la sua area vuota, il resto → il suo contorno), quali strati ha cucito e come fa il DST; i due
 bottoni (`BOTTONE_PRENDI_STILISTA`, `BOTTONE_INVIA_STILISTA`) e `collegaStilista` fanno il resto. Con
-`?stilista=<porta>` nell'indirizzo il tool prende la selezione da solo.
+`?stilista=<porta>` nell'indirizzo il tool prende la selezione da solo: il pulsante «Lavora la selezione con RG Tools…» della scheda RG_LINK apre la HOME della suite con quel parametro, e il tool che scegli dalle schede lo tiene (i link sono `#/tool`).
 
 | tool | i fori | il ritorno | prova sulla corona di SH295 |
 |---|---|---|---|
