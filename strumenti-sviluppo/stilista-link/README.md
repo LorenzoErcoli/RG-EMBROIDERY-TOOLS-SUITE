@@ -113,7 +113,7 @@ bottoni (`BOTTONE_PRENDI_STILISTA`, `BOTTONE_INVIA_STILISTA`) e `collegaStilista
 
 Prende «Auto» come scala d'import chi l'aveva a Illustrator 72 dpi (rete, macchie, cannage, zone): l'SVG dichiara i mm.
 La larghezza reale torna a 0 (net-45, striatura, interlace, razza, oblique, cross-stitch).
-Tutti gli strati tornano sull'ago dell'oggetto selezionato.
+**Gli aghi** (Lorenzo, 2026-10-21): come nel DST ogni strato è un cambio ago — anche gli stop dello stesso filo — e gli aghi sono **consecutivi da quello dell'oggetto selezionato**, coi colori che hanno già nel documento (la tavolozza non si tocca; un ago che non c'era si aggiunge). Interlace sulla corona di SH295 (oggetto sull'ago 7): 4 oggetti sugli aghi 7, 8, 9, 10.
 ## I fori (2026-10-21)
 
 Un riempimento di Stilista tiene i fori nelle sue **aree vuote**: `DesignObject.EmptyAreaPaths`, un

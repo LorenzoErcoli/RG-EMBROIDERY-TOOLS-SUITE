@@ -74,6 +74,12 @@ export function origineStilista(svg: string): [number, number] | null {
   return m ? [Number(m[1]), Number(m[2])] : null;
 }
 
+/** L'ago dell'oggetto selezionato in Stilista (`data-rg-stilista-ago`), o null. */
+export function agoStilista(svg: string): number | null {
+  const m = /data-rg-stilista-ago="(\d+)"/.exec(svg.slice(0, 2000));
+  return m ? Number(m[1]) : null;
+}
+
 /**
  * Il colore con cui il plugin disegna i fori (le aree vuote dei riempimenti) nell'SVG della selezione
  * (`data-rg-stilista-fori`, minuscolo come i colori dell'import); null se non ci sono fori.
@@ -115,7 +121,7 @@ export interface EsitoRitorno {
 /** Il ricamo torna nel documento aperto in Stilista, al suo posto, come oggetto a punti fissi. */
 export async function puntiAStilista(
   f: FinestraStilista,
-  ricamo: { origine_mm: [number, number]; punti: Array<[number, number, number]>; nome?: string },
+  ricamo: { origine_mm: [number, number]; punti: Array<[number, number, number]>; nome?: string; ago?: number },
 ): Promise<EsitoRitorno> {
   const r = await fetch(`http://127.0.0.1:${f.porta}/punti`, {
     method: 'POST',
@@ -209,8 +215,12 @@ export async function prendiSelezioneStilista(a: AggancioStilista): Promise<void
 
 /**
  * Il ricamo in Stilista. Se il cartamodello è venuto da Stilista torna NEL suo documento, al suo posto,
- * a punti fissi, uno strato = un oggetto (sull'ago dell'oggetto selezionato); altrimenti Stilista apre
- * il DST in un documento nuovo.
+ * a punti fissi, uno strato = un oggetto; altrimenti Stilista apre il DST in un documento nuovo.
+ *
+ * GLI AGHI (Lorenzo, 2026-10-21: «tanti tools prevedono già la divisione in stop e aghi, i dst fanno questo
+ * appunto»): come nel DST ogni strato è un cambio ago — anche gli stop dello stesso filo, «come cambi ago» —
+ * e gli aghi sono CONSECUTIVI da quello dell'oggetto selezionato (7, 8, 9…), coi colori che hanno già nel
+ * documento.
  */
 export async function inviaAStilista(a: AggancioStilista): Promise<void> {
   a.stato('Invio a Stilista…');
@@ -222,16 +232,19 @@ export async function inviaAStilista(a: AggancioStilista): Promise<void> {
     if (origine) {
       const strati = a.strati().filter((s) => s.polylines.some((l) => l.length > 1));
       if (!strati.length) throw new Error('non c\'è niente da cucire');
+      const agoBase = agoStilista(testo!);
       let punti = 0, salti = 0, ago = '';
       for (const [i, s] of strati.entries()) {
         a.stato(`Invio a Stilista… strato ${i + 1} di ${strati.length}`);
         const esito = await puntiAStilista(finestra, {
           origine_mm: origine, punti: puntiDaPolilinee(s.polylines), nome: s.nome ?? `RG ${i + 1}`,
+          ...(agoBase ? { ago: agoBase + i } : {}),
         });
         punti += esito.punti_letti; salti += esito.salti; ago = esito.ago;
       }
       const quanti = strati.length > 1 ? `${strati.length} oggetti, ` : '';
-      a.stato(`Tornato in Stilista al suo posto: ${quanti}${punti.toLocaleString('it-IT')} punti (${salti} salti), ${ago}`);
+      const aghi = strati.length > 1 && agoBase ? `aghi ${agoBase}–${agoBase + strati.length - 1}` : ago;
+      a.stato(`Tornato in Stilista al suo posto: ${quanti}${punti.toLocaleString('it-IT')} punti (${salti} salti), ${aghi}`);
       return;
     }
     const dst = a.dst();

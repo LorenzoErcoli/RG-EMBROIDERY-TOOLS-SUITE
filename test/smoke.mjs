@@ -65,7 +65,7 @@ export { pezzoAMisure as rtsPezzoAMisure } from ${JSON.stringify(posix('apps/ret
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm, anelliOvali as rtsAnelliOvali, puntoDelNodo as rtsPuntoDelNodo, cimeDelleColonne as rtsCimeDelleColonne, ceIlNodo as rtsCeIlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
 export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, avanza as rtsAvanza, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
-export { origineStilista, coloreForiStilista, puntiDaPolilinee, svgUnSoloColore } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
+export { origineStilista, coloreForiStilista, puntiDaPolilinee, svgUnSoloColore, agoStilista } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -2732,6 +2732,8 @@ console.log('\noblique — routing + orchestratore (2d)');
     check('Stilista Link: l\'SVG della selezione dà due colori, il filo e i fori, in mm',
       [colori, finoA, rg.coloreForiStilista(svgStilista), colori.includes(rg.coloreForiStilista(svgStilista))],
       [['#ff00ff', '#fff200'], { '#fff200': 41, '#ff00ff': 31 }, '#ff00ff', true]);
+    check('Stilista Link: l\'ago dell\'oggetto selezionato si rilegge (gli strati tornano sugli aghi dopo)',
+      [rg.agoStilista(svgStilista), rg.agoStilista('<svg/>')], [7, null]);
     check('Stilista Link: l\'origine si rilegge, e senza fori non c\'è colore dei fori',
       [rg.origineStilista(svgStilista), rg.coloreForiStilista(svgStilista.replace(' data-rg-stilista-fori="#FF00FF"', '')), rg.origineStilista('<svg/>')],
       [[99.5, -3.25], null, null]);

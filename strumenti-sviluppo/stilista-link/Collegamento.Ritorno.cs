@@ -199,6 +199,14 @@ namespace StilistaHostSkeleton
                 togli.Invoke(oggetti, new[] { partenza });
             }
             metti.Invoke(oggetti, new object[] { posizione, manuale });
+            // L'AGO DELLO STRATO (Lorenzo, 2026-10-21: «tanti tools prevedono già la divisione in stop e aghi»):
+            // il tool chiede l'ago (consecutivi da quello dell'oggetto selezionato). Si cambia solo l'ago, coi
+            // colori che gli aghi hanno già nel documento: nessun colore passato = la tavolozza non si tocca.
+            if (ricamo.Ago.HasValue && ReadNativeNeedleOneBased(manuale) != ricamo.Ago.Value)
+            {
+                var cambiato = TryAssignNativeNeedle(GetReadableMemberValue(embroidery, "ListaFilati"), manuale, ricamo.Ago.Value, null, log + ".Ago");
+                comeManuale += " · ago " + ricamo.Ago.Value + (cambiato ? "" : " NON assegnato");
+            }
             // l'inserimento lo segna da ricucire, e Stilista lo ricalcola da sé ~300 ms dopo: i punti si
             // scrivono ora che è nel documento (prima non agisce), e la sentinella fa il resto
             TrySetBoolMember(manuale, "NeedRestitching", false);
@@ -262,7 +270,7 @@ namespace StilistaHostSkeleton
             // l'ago dell'oggetto da cui e' partita la selezione, col SUO colore: il bridge scrive il colore
             // nella tavolozza del documento, e un colore diverso ricolorerebbe tutto quell'ago
             var ago = ricamo.Ago ?? _agoSelezione ?? 1;
-            var colore = ricamo.Colore ?? ColoreDellAgo(embroidery, ago) ?? "#000000";
+            var colore = ricamo.Colore ?? ColoreDellAgo(embroidery, ago); // null = il colore dell'ago non si tocca
             var batch = new JsonBatchSpec
             {
                 Type = "batch",
