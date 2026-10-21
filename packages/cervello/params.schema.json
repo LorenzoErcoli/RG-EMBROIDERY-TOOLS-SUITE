@@ -2075,6 +2075,21 @@
           "$ref": "#/$defs/staggerColumns",
           "default": false
         },
+        "entryTailMm": {
+          "$ref": "#/$defs/entryTail",
+          "default": 10,
+          "x-id": "entryTail"
+        },
+        "spoolM": {
+          "$ref": "#/$defs/spool",
+          "default": 0,
+          "x-id": "spool"
+        },
+        "spoolMarginPct": {
+          "$ref": "#/$defs/spoolMargin",
+          "default": 5,
+          "x-id": "spoolMargin"
+        },
         "fitColumns": {
           "$ref": "#/$defs/fitColumns",
           "default": false
@@ -5251,6 +5266,35 @@
       "description": "Le colonne vicine spostate di mezzo rombo lungo la serpentina.",
       "x-concetto": "modulo"
     },
+    "entryTail": {
+      "type": "number",
+      "title": "Ingresso e uscita fuori sagoma",
+      "description": "Ogni parte comincia con una linea fuori sagoma lunga così e un salto uguale al primo punto, e finisce al contrario (salto fuori, linea), poi il cambio ago (stop). Fuori dal bordo esterno o dentro il foro. 0 = niente.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 30,
+      "x-passo": 1,
+      "x-concetto": "ordine-cucitura"
+    },
+    "spool": {
+      "type": "number",
+      "title": "Rocchetta del filo, metri",
+      "description": "Prima che finisca, il filo esce su un bordo (come a fine parte) e dopo il cambio ago riparte dallo stesso punto. 0 = nessun limite.",
+      "minimum": 0,
+      "maximum": 10000,
+      "x-passo": 5,
+      "x-concetto": "ordine-cucitura"
+    },
+    "spoolMargin": {
+      "type": "number",
+      "title": "Scarto sulla rocchetta",
+      "description": "Il filo della rocchetta che si tiene da parte.",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 50,
+      "x-passo": 1,
+      "x-concetto": "ordine-cucitura"
+    },
     "fitColumns": {
       "type": "boolean",
       "title": "Colonne intere nella larghezza",
@@ -5729,7 +5773,10 @@
         "leftToRightOrder",
         "stopZones",
         "stopZonesDirection",
-        "continuousFill"
+        "continuousFill",
+        "entryTail",
+        "spool",
+        "spoolMargin"
       ]
     },
     "modulo": {

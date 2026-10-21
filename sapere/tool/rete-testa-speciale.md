@@ -112,6 +112,25 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
     `bottomRoundEnds` (0 = ovale, 100 = mezzi cerchi e tratti dritti).
 21. **La fascia sui lati lunghi nel tool** (2026-10-16): *«Fascia sui lati lunghi è importante che me lo metti dentro»* →
     `sideBandMm` (0 = tutta la rete), nel ricamo, nel pannello e nella sacca 3D.
+24. **Aree vuote: sempre da sinistra a destra, cambio ago a ogni spezzatura** (2026-10-21): *«è importante che il filo
+    si muova sempre da sinistra a destra. Quindi in caso di aree vuote la parte sotto o sopra in base a quando si spezza
+    va fatto subito dopo la parte principale, per poi concludere con la parte senza buco laterale… Quando si spezza
+    facciamo un cambio ago»*; e, chiesto: da 2a a 2b non serve cambiare ago. Prima la parte oltre il vuoto si cuciva alla
+    fine con un salto e ogni parte sceglieva fra quattro partenze (anche da destra a sinistra).
+    Come si fa: i blocchi si assegnano colonna per colonna; dove un blocco si spezza continua sul ramo dal suo lato, gli
+    altri rami aprono blocchi nuovi (cuciti subito dopo); dove due rami si riuniscono continua il più nuovo. Un ramo
+    sotto un vuoto parte dal BASSO: la prima prova lo faceva partire dal bordo del vuoto e, per passare alla colonna oltre
+    il vuoto, il filo saltava attraverso il vuoto fino al bordo alto.
+25. **Ingressi e uscite fuori sagoma** (2026-10-21): *«Tutti gli inizi poi devono avere un ingresso fuori dalla reale
+    sagoma. Quindi fuori esterno o dentro interno in caso di foro, dove non va il ricamo, mettiamo un ingresso una linea
+    di circa 1cm poi un salto di nuovo da 1 centimetro»*; e, chiesto: alla fine di ogni parte l'uscita uguale. Il cambio
+    ago è uno stop (cambio colore) nel DST. `entryTailMm` (10); la coda va lungo la normale al bordo, verso fuori; se non
+    ci sta (foro piccolo) si accorcia fino al 30% o si gira di 30–60°.
+26. **La rocchetta** (2026-10-21): *«il filo deve spezzarsi in base alla lunghezza massima della rocchetta di filo
+    speciale… il sistema trova un punto esterno entro il quale fare l'uscita simile all'entrata»*. `spoolM` (0 = nessun
+    limite), `spoolMarginPct` (5%, chiesto: «si va bene con lo scarto inseribile»). Il filo si conta come lunghezza dei
+    punti più ingresso e uscita; il taglio cade sull'ultimo punto che corre sul bordo prima del limite. Ogni cambio ago
+    conta come rocchetta nuova (da verificare in produzione: se lo stesso ago torna dopo, la sua rocchetta è già usata).
 23. **Colonne intere nella larghezza** (2026-10-21, Net bag Clover, DST «Rete 420x710»: *«se guardi i bordi laterali
     sinistra e destra si creano delle curve strane. dovute anche al fatto che la rete viene appunto tagliata… serve una
     curva migliore… mi serve una soluzione rapida»*). Causa: il passo delle colonne (rombo 10 − sovrapposizione 1,75 =

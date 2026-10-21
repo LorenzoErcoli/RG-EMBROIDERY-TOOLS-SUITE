@@ -65,7 +65,7 @@ export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordat
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_PARAMETRI } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
-export { pezzoAMisure as rtsPezzoAMisure } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
+export { pezzoAMisure as rtsPezzoAMisure, stratiPerDst as rtsStratiPerDst } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm, anelliOvali as rtsAnelliOvali, puntoDelNodo as rtsPuntoDelNodo, cimeDelleColonne as rtsCimeDelleColonne, ceIlNodo as rtsCeIlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
 export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, avanza as rtsAvanza, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
@@ -6575,11 +6575,12 @@ console.log('\nrete-testa-speciale — serpentine a rombi: lente da incrocio a i
   check('pezzo a misure: la stessa rete del rettangolo 140 × 180 caricato; senza pezzo un avviso e niente ricamo',
     [JSON.stringify(aMisure.strati) === JSON.stringify(daRett), senzaPezzo.strati.length, senzaPezzo.avvisi.length], [true, 0, 1]);
 
-  // l'export: un solo filo, un tratto per parte, il DST si rilegge coi parametri (R27, R31)
+  // l'export: uno strato per parte (fra l'una e l'altra lo stop, il cambio ago: Lorenzo, 2026-10-21), ognuno con
+  // l'ingresso fuori sagoma, la cucitura e l'uscita; il DST si rilegge coi parametri (R27, R31)
   const strati = rg.rtsStrati(r);
   const dst = rg.dstFromExportLayers(strati, { label: 'RETE', metadata: { rgProject: 'rete-testa-speciale', params: P } });
-  check('DST: un filo, un tratto per parte, il progetto torna (R27)',
-    [strati.length, strati[0].polylines.length, rg.readDstMetadata(dst)?.rgProject, rg.readDstMetadata(dst)?.params?.diamondWidthMm], [1, 2, 'rete-testa-speciale', 12]);
+  check('DST: uno strato per parte (lo stop fra l’una e l’altra), ingresso, cucitura, uscita; il progetto torna (R27)',
+    [strati.length, strati[0].polylines.length, rg.readDst(dst).colorChanges, rg.readDstMetadata(dst)?.rgProject, rg.readDstMetadata(dst)?.params?.diamondWidthMm], [2, 3, 1, 'rete-testa-speciale', 12]);
 }
 
 // ---------------------------------------------------------------------------
@@ -7165,6 +7166,42 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
   check('ogni tool che scrive un progetto passa da conBusta, se non è nel debito (un tool nuovo scrive la busta fin dall\'inizio)',
     tools.filter((t) => !scrive(t) && !debito.includes(t)), []);
   check('...e nessuno sta nel debito se la scrive già (la voce va tolta)', tools.filter((t) => scrive(t) && debito.includes(t)), []);
+}
+
+// rete-testa-speciale — LE AREE VUOTE DA SINISTRA A DESTRA, GLI INGRESSI E LA ROCCHETTA (Lorenzo, 2026-10-21): «è
+// importante che il filo si muova sempre da sinistra a destra… la parte sotto o sopra… va fatta subito dopo la parte
+// principale, per poi concludere con la parte senza buco laterale… Quando si spezza facciamo un cambio ago. Tutti gli
+// inizi… un ingresso fuori dalla reale sagoma… una linea di circa 1cm poi un salto»; «il filo deve spezzarsi in base
+// alla lunghezza massima della rocchetta»
+console.log('\nrete-testa-speciale — aree vuote da sinistra a destra, ingressi e uscite fuori sagoma, rocchetta');
+{
+  const P = { ...rg.RTS_PARAMETRI, pieceSource: 'misure', totalWidth: 200, totalHeight: 140, diamondWidthMm: 10, diamondHeightMm: 17, overlapMm: 1.75, cornerRounding: 20, maxStitchMm: 1 };
+  const foro = Array.from({ length: 48 }, (_, i) => ({ x: 100 + 35 * Math.cos(2 * Math.PI * i / 48), y: 70 + 25 * Math.sin(2 * Math.PI * i / 48) }));
+  const nelForo = (q) => Math.hypot((q.x - 100) / 35, (q.y - 70) / 25) < 0.995;
+  const fuori = (q) => q.x < 0.01 || q.y < 0.01 || q.x > 199.99 || q.y > 139.99 || nelForo(q);
+  const r = rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [foro], P);
+  // da sinistra a destra: dentro una parte la x non torna mai indietro più di una colonna
+  const indietro = (pt) => { let mx = -Infinity, n = 0; for (const q of pt.tratti.flat()) { if (q.x < mx - 12) n++; mx = Math.max(mx, q.x); } return n; };
+  const [p1, p2] = r.parti, x = (pt) => pt.tratti.flat().map((q) => q.x), y = (pt) => pt.tratti.flat().map((q) => q.y);
+  check('due parti: la prima a sinistra e sopra il foro (finisce alla fine del foro), la seconda sotto il foro e poi fino in fondo a destra senza salti; nessuna torna indietro',
+    [r.parti.length, Math.round(Math.max(...x(p1))), Math.round(Math.min(...x(p2))), Math.round(Math.max(...x(p2))), p2.tratti.length, indietro(p1), indietro(p2), Math.round(p2.tratti[0][0].y)],
+    [2, 130, 70, 200, 1, 0, 0, 140]);
+  const code = r.parti.flatMap((pt) => [pt.ingresso, pt.uscita]);
+  const lungo = (pl) => pl.reduce((s, q, i) => (i ? s + Math.hypot(q.x - pl[i - 1].x, q.y - pl[i - 1].y) : 0), 0);
+  check('ingressi e uscite: linee di 10 mm tutte fuori sagoma, a 10 mm dal primo e dall’ultimo punto',
+    [code.every((c) => c && c.every(fuori)), code.every((c) => Math.abs(lungo(c) - 10) < 0.01),
+      r.parti.every((pt) => Math.abs(Math.hypot(pt.ingresso.at(-1).x - pt.tratti[0][0].x, pt.ingresso.at(-1).y - pt.tratti[0][0].y) - 10) < 0.01)], [true, true, true]);
+  // la rocchetta da 2 m (5% di scarto): sei parti, ognuna entro la rocchetta; i tagli cadono sul bordo, anche sul foro
+  const rr = rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [foro], { ...P, spoolM: 2 });
+  const sulBordo = (q) => q.x < 0.05 || q.y < 0.05 || q.x > 199.95 || q.y > 139.95 || Math.abs(Math.hypot((q.x - 100) / 35, (q.y - 70) / 25) - 1) < 0.02;
+  check('rocchetta da 2 m: 6 parti, ognuna sotto i 2 m, ogni taglio sul bordo (uno sul foro), con ingresso e uscita fuori sagoma',
+    [rr.parti.length, rr.parti.every((pt) => pt.filoMm < 2000), rr.parti.every((pt) => sulBordo(pt.tratti[0][0]) && sulBordo(pt.tratti.at(-1).at(-1))),
+      rr.parti.some((pt) => pt.perche === 'rocchetta' && nelForo({ x: pt.ingresso[0].x, y: pt.ingresso[0].y })), rr.parti.every((pt) => pt.ingresso.every(fuori) && pt.uscita.every(fuori))],
+    [6, true, true, true, true]);
+  // il DST: centrato sulla rete (le code fuori sagoma non spostano il centro), uno stop fra due parti
+  const d = rg.readDst(rg.dstFromExportLayers(rg.rtsStratiPerDst(rr), { label: 'RETE', center: false }));
+  const pts = d.blocks.flatMap((b) => b.points_mm), xs = pts.map((q) => q[0]);
+  check('DST: 5 stop per 6 parti; la rete centrata (da −100 a 100 mm in x)', [d.colorChanges, Math.round(Math.min(...xs) * 10) / 10 <= -100, Math.round(Math.max(...xs) * 10) / 10 >= 100], [5, true, true]);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).

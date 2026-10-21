@@ -7,7 +7,7 @@ import { hookPanZoom } from '@rg/ui/panzoom';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
-import { costruisciRete, costruisciReteRadiale, pezzoAMisure, stratiRete, COLORE_RETE, PARAMETRI_RETE, type ParametriRete, type PuntoAgo, type RisultatoRete } from './motore';
+import { costruisciRete, costruisciReteRadiale, pezzoAMisure, stratiPerDst, stratiRete, COLORE_RETE, PARAMETRI_RETE, type ParametriRete, type PuntoAgo, type RisultatoRete } from './motore';
 import { angoloDelRombo, formaSacca, puntoDelNodo, raggioMinimo, type Anelli } from './sacca';
 import { montaVista3d } from './vista3d';
 
@@ -102,9 +102,18 @@ const CAMPI_PUNTI: Campo[] = [
 ];
 const CAMPI_VUOTI: Campo[] = [
   { nome: 'voidMode', etichetta: 'All’area vuota la rete', unita: '', passo: 1, min: 0,
-    scelte: [['ritorno', 'torna indietro, e la parte mancante si cuce dopo'], ['bordo', 'gira sul contorno del vuoto'], ['centro', 'lo attraversa con un’impuntura dritta']] },
+    scelte: [['ritorno', 'si ferma: l’altro ramo si cuce subito dopo (cambio ago)'], ['bordo', 'gira sul contorno del vuoto'], ['centro', 'lo attraversa con un’impuntura dritta']] },
   { nome: 'voidStitchMm', etichetta: 'Punto dell’impuntura nel vuoto', unita: 'mm', passo: 0.1, min: 0.5, max: 12,
     aiuto: 'Il punto della linea che gira sul bordo del vuoto o lo attraversa dritta.' },
+];
+
+const CAMPI_FILO: Campo[] = [
+  { nome: 'entryTailMm', etichetta: 'Ingresso e uscita fuori sagoma', unita: 'mm', passo: 1, min: 0, max: 30,
+    aiuto: 'Ogni parte comincia con una linea fuori sagoma lunga così e un salto uguale al primo punto, e finisce al contrario (salto fuori, linea), poi il cambio ago. Fuori dal bordo esterno o dentro il foro. 0 = niente.' },
+  { nome: 'spoolM', etichetta: 'Rocchetta del filo', unita: 'm', passo: 5, min: 0, max: 10000,
+    aiuto: 'Prima che finisca, il filo esce su un bordo (come a fine parte) e dopo il cambio ago riparte dallo stesso punto. 0 = nessun limite.' },
+  { nome: 'spoolMarginPct', etichetta: 'Scarto sulla rocchetta', unita: '%', passo: 1, min: 0, max: 50,
+    aiuto: 'Il filo della rocchetta che si tiene da parte.' },
 ];
 
 /** Monta il tool "Rete testa speciale" dentro `root`. `backHref` = ritorno alla home suite. */
@@ -340,6 +349,8 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     const r = risultato;
     const misure = r
       ? (r.colonneIntere ? `<p class="rg-field__help rg-param-grid__wide">${r.colonneIntere.colonne} colonne intere: rombo largo ${r.colonneIntere.larghezzaRombo.toFixed(3).replace('.', ',')} mm.</p>` : '')
+        + (r.parti && r.parti.length ? `<p class="rg-field__help rg-param-grid__wide">${r.parti.length} ${r.parti.length === 1 ? 'parte' : 'parti, una per ago (stop fra l’una e l’altra)'}: `
+          + r.parti.map((pt, i) => `${i + 1}. ${(pt.filoMm / 1000).toFixed(1).replace('.', ',')} m${pt.perche === 'rocchetta' ? ' (rocchetta nuova)' : ''}`).join(' · ') + '</p>' : '')
         + `<p class="rg-field__help rg-param-grid__wide">${r.misure.punti.toLocaleString('it-IT')} punti, di cui ${r.misure.puntiSovrapposti.toLocaleString('it-IT')} nelle sovrapposizioni (${r.misure.puntiSopra.toLocaleString('it-IT')} sopra) · filo ${(r.misure.filoMm / 1000).toFixed(2)} m`
         + ` · punto da ${r.misure.puntoMinMm.toFixed(2)} a ${r.misure.puntoMaxMm.toFixed(2)} mm · ${r.blocchi.length} parti, ${r.misure.salti} salti (${(r.misure.saltiMm / 10).toFixed(1)} cm)`
         + (r.misure.stratiMax ? ` · sul contorno fino a ${r.misure.stratiMax} passate affiancate` : '') + '</p>'
@@ -400,6 +411,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         ['rombo', 'Rombo e serpentina', campi(CAMPI_ROMBO)],
         ['punti', 'Punti', campi(CAMPI_PUNTI)],
         ['vuoti', 'Aree vuote', campi(CAMPI_VUOTI)],
+        ['filo', 'Partenze e rocchetta', campi(CAMPI_FILO)],
         ['vista', 'Programma e vista', vistaGrid()],
       ];
     sezioni.forEach(([chiave, titolo, corpo], k) => {
@@ -463,7 +475,9 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         return;
       }
       const r = risultato;
-      $('status').textContent = `${vuoti.length} aree vuote · ${r.blocchi.length} parti · ${r.misure.salti} salti · ${r.misure.tempoMs} ms`;
+      const nParti = r.parti?.length ?? r.blocchi.length;
+      $('status').textContent = `${vuoti.length} aree vuote · ${nParti} ${nParti === 1 ? 'parte' : 'parti'} (${Math.max(0, nParti - 1)} stop) · ${r.misure.salti} salti · ${r.misure.tempoMs} ms`
+        + (r.avviso ? ` · ${r.avviso}` : '');
       $('points').textContent = ` · ${r.misure.punti.toLocaleString('it-IT')} punti`;
       buildPanel();
       disegna();
@@ -523,10 +537,13 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     const punti = visibili.punti
       ? r.blocchi.flat().map((q) => `<circle cx="${q.x.toFixed(2)}" cy="${q.y.toFixed(2)}" r="0.12" fill="${q.sovrapposto ? colore[q.sopra ? 'sopra' : 'sotto'] : '#1f1a17'}"/>`).join('')
       : '';
-    // dove comincia ogni parte: il numero, nell'ordine di cucitura
-    const inizi = r.blocchi.map((b, i) => `<circle cx="${b[0].x.toFixed(2)}" cy="${b[0].y.toFixed(2)}" r="1.6" fill="#ffffff" stroke="#d62020" stroke-width="0.3"/>`
-      + `<text x="${b[0].x.toFixed(2)}" y="${(b[0].y + 0.7).toFixed(2)}" font-size="2" text-anchor="middle" fill="#1f1a17">${i + 1}</text>`).join('');
-    $('layer').innerHTML = cornice(contorniSvg(0.18) + fili + salti + punti + inizi);
+    // dove comincia ogni parte: il numero, nell'ordine di cucitura (con le parti: una per ago, coi loro ingressi e uscite)
+    const partenze = r.parti?.length ? r.parti.map((pt) => pt.tratti[0][0]) : r.blocchi.map((b) => b[0]);
+    const inizi = partenze.map((q, i) => `<circle cx="${q.x.toFixed(2)}" cy="${q.y.toFixed(2)}" r="1.6" fill="#ffffff" stroke="#d62020" stroke-width="0.3"/>`
+      + `<text x="${q.x.toFixed(2)}" y="${(q.y + 0.7).toFixed(2)}" font-size="2" text-anchor="middle" fill="#1f1a17">${i + 1}</text>`).join('');
+    const code = (r.parti ?? []).flatMap((pt) => [pt.ingresso, pt.uscita]).filter((c): c is NonNullable<typeof c> => !!c)
+      .map((c) => `<polyline points="${d(c)}" fill="none" stroke="#d62020" stroke-width="0.35"/>`).join('');
+    $('layer').innerHTML = cornice(contorniSvg(0.18) + fili + salti + punti + code + inizi);
     if (adatta) pz.fit();
   }
 
@@ -559,7 +576,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   /** Il DST di adesso, cucito sullo schermo (lo stesso simulatore degli altri tool). */
   function simula(): boolean {
     if (!risultato) return false;
-    const layers = stratiRete(risultato);
+    const layers = stratiPerDst(risultato); // centrati sulla rete, come il DST
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const l of layers) for (const pl of l.polylines) for (const p of pl) {
       x0 = Math.min(x0, p.x); y0 = Math.min(y0, p.y); x1 = Math.max(x1, p.x); y1 = Math.max(y1, p.y);
@@ -567,9 +584,9 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     if (!Number.isFinite(x0)) return false;
     const margine = 5, w = x1 - x0 + 2 * margine, h = y1 - y0 + 2 * margine;
     try {
-      const bytes = dstFromExportLayers(layers, { label: nomeBase().toUpperCase().slice(0, 16), metadata: progetto() });
+      const bytes = dstFromExportLayers(layers, { label: nomeBase().toUpperCase().slice(0, 16), metadata: progetto(), center: false });
       simulatore = montaSimulatore($('layer'), $('simControlli'), bytes, layers.map((l) => l.color), w, h,
-        (t) => { $('status').textContent = t; }, { x: -w / 2, y: -h / 2 });
+        (t) => { $('status').textContent = t; }, { x: x0 - margine, y: y0 - margine });
       return true;
     } catch (e) {
       $('status').textContent = (e as Error).message;
@@ -708,10 +725,11 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     $('status').textContent = saveOutcomeMessage(outcome, name) + notaDisegno;
   });
 
-  // un filo solo: un tratto per parte, fra due parti la macchina salta. Lo usano «Esporta DST» e «Invia a Stilista».
+  // un filo solo: un tratto per parte, fra due parti la macchina salta (con le parti: uno stop, cioè il cambio ago).
+  // Centrato sulla rete: ingressi e uscite fuori sagoma non spostano il centro. Lo usano «Esporta DST» e «Invia a Stilista».
   function costruisciDst(r: RisultatoRete): Uint8Array {
     const strati = stratiRete(r);
-    return dstFromExportLayers(strati, { label: nomeBase().toUpperCase().slice(0, 16), metadata: conBusta(progetto(), { strati, sorgente: sorgenteBusta() }) });
+    return dstFromExportLayers(stratiPerDst(r), { center: false, label: nomeBase().toUpperCase().slice(0, 16), metadata: conBusta(progetto(), { strati, sorgente: sorgenteBusta() }) });
   }
 
   $('exportDstBtn').addEventListener('click', async () => {

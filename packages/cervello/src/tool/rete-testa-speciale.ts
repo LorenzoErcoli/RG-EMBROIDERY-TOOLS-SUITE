@@ -120,6 +120,21 @@ export const scheda: SchedaParametri = {
       tipo: 'bool', unita: '', predefinito: false, concetto: 'modulo',
     },
     {
+      id: 'entryTail', nome: 'entryTailMm', etichetta: 'Ingresso e uscita fuori sagoma',
+      aiuto: 'Ogni parte comincia con una linea fuori sagoma lunga così e un salto uguale al primo punto, e finisce al contrario (salto fuori, linea), poi il cambio ago (stop). Fuori dal bordo esterno o dentro il foro. 0 = niente.',
+      tipo: 'num', unita: 'mm', min: 0, max: 30, passo: 1, predefinito: 10, concetto: 'ordine-cucitura',
+    },
+    {
+      id: 'spool', nome: 'spoolM', etichetta: 'Rocchetta del filo, metri',
+      aiuto: 'Prima che finisca, il filo esce su un bordo (come a fine parte) e dopo il cambio ago riparte dallo stesso punto. 0 = nessun limite.',
+      tipo: 'num', unita: '', min: 0, max: 10000, passo: 5, predefinito: 0, concetto: 'ordine-cucitura',
+    },
+    {
+      id: 'spoolMargin', nome: 'spoolMarginPct', etichetta: 'Scarto sulla rocchetta',
+      aiuto: 'Il filo della rocchetta che si tiene da parte.',
+      tipo: 'num', unita: '%', min: 0, max: 50, passo: 1, predefinito: 5, concetto: 'ordine-cucitura',
+    },
+    {
       id: 'fitColumns', etichetta: 'Colonne intere nella larghezza',
       aiuto: 'Ritocca di poco la larghezza del rombo perché nella larghezza del pezzo stia un numero intero di colonne: sui bordi laterali ogni punta tocca il bordo nello stesso modo, senza tagli irregolari.',
       tipo: 'bool', unita: '', predefinito: false, concetto: 'modulo',

@@ -99,6 +99,20 @@ export type ParametriRete = {
    * taglia il rombo in un punto qualsiasi: tagli profondi, triangolini di pochi decimi, scalini fra le passate.
    */
   fitColumns: boolean;
+  /**
+   * Ingresso e uscita fuori sagoma, mm (0 = niente). Lorenzo, 2026-10-21: «Tutti gli inizi poi devono avere un ingresso
+   * fuori dalla reale sagoma… una linea di circa 1cm poi un salto di nuovo da 1 centimetro che permette di fissare preciso
+   * il filo»; alla fine di ogni parte l'uscita uguale (salto fuori, linea fuori), poi il cambio ago (stop). Fuori dal bordo
+   * esterno o dentro il foro, dove il ricamo non va.
+   */
+  entryTailMm: number;
+  /**
+   * La rocchetta del filo speciale, metri (0 = nessun limite). Prima che finisca il filo esce sul bordo (come a fine
+   * parte) e riparte dallo stesso punto dopo il cambio ago. Lorenzo, 2026-10-21.
+   */
+  spoolM: number;
+  /** Margine di scarto sulla rocchetta, %: il filo che si tiene da parte (di partenza 5). */
+  spoolMarginPct: number;
   /** Arrotondamento di punte e rientranze, %: 0 = spigolo vivo, 100 = curva piena. */
   cornerRounding: number;
   /** Lunghezza del punto, mm (ogni tratto fra due punti fissi si divide in punti uguali, non più lunghi di così). */
@@ -147,6 +161,9 @@ export const PARAMETRI_RETE: ParametriRete = {
   overlapMm: 2,
   staggerColumns: false,
   fitColumns: false,
+  entryTailMm: 10,
+  spoolM: 0,
+  spoolMarginPct: 5,
   cornerRounding: 0,
   maxStitchMm: 2.5,
   overlapStitchMm: 1.2,
@@ -179,6 +196,8 @@ export interface RisultatoRete {
   avviso?: string;
   /** Con le colonne intere: quante colonne e la larghezza del rombo usata davvero, mm. */
   colonneIntere?: { colonne: number; larghezzaRombo: number };
+  /** Le parti da cucire, una per ago (fra due parti c'è lo stop), con ingresso e uscita fuori sagoma. */
+  parti?: ParteCucita[];
   /** Un tratto continuo per ogni blocco, in ordine di cucitura: fra due blocchi la macchina salta. */
   blocchi: PuntoAgo[][];
   misure: {
@@ -370,16 +389,36 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
   }
 
   // 2. i blocchi: la serpentina va avanti finché il tratto della colonna dopo tocca il suo; i tratti che restano
-  //    fuori (sotto un vuoto, in un'insenatura) aprono un blocco che si cuce dopo.
-  interface Blocco { cols: Array<{ col: Colonna; v0: number; v1: number }>; ultimaK: number; ultimo: [number, number] }
+  //    fuori (sotto un vuoto, in un'insenatura) aprono un blocco che si cuce dopo. Il filo va SEMPRE da sinistra a
+  //    destra (Lorenzo, 2026-10-21): dove la rete si spezza attorno a un vuoto, la parte che si sta cucendo prosegue sul
+  //    ramo dal suo lato (parte dall'alto: il ramo di sopra) fino alla fine del vuoto e lì si ferma; subito dopo si cuce
+  //    l'altro ramo, che prosegue nella rete oltre il vuoto. Quindi dove due rami si riuniscono continua il blocco nato
+  //    per ultimo (si cuce dopo). Ogni blocco parte dal lato che sta sul contorno esterno: un ramo sotto un vuoto parte
+  //    dal basso (le sue colonne vanno su e tornano giù) e passa alla rete oltre il vuoto lungo il bordo di sotto; se
+  //    partisse dal bordo del vuoto, per arrivare alla colonna dopo il filo salterebbe attraverso il vuoto.
+  interface Blocco { cols: Array<{ col: Colonna; v0: number; v1: number }>; ultimaK: number; ultimo: [number, number]; dalBasso: boolean }
   const blocchi: Blocco[] = [], aperti: Blocco[] = [];
+  // il capo della colonna (in alto o in basso) cade sul bordo di un vuoto?
+  const capoSulVuoto = (col: Colonna, v: number) => { const q = mondo(col.uc, v); return pointInPolygon(q, contorno) && nelVuotoI(q) >= 0; };
   for (const col of colonne) {
-    const presi = new Set<Blocco>();
-    for (const I of col.tratti) {
-      let b = aperti.find((x) => x.ultimaK === col.k - 1 && !presi.has(x) && x.ultimo[0] < I[1] && I[0] < x.ultimo[1]);
-      if (!b) { b = { cols: [], ultimaK: col.k, ultimo: I }; blocchi.push(b); aperti.push(b); }
-      b.cols.push({ col, v0: I[0], v1: I[1] }); b.ultimo = I; b.ultimaK = col.k; presi.add(b);
-    }
+    // a ogni tratto il blocco che continua: se tocca più blocchi (rami che si riuniscono), il più nuovo
+    const chi = new Map<number, Blocco>();
+    col.tratti.forEach((I, ti) => {
+      const tocca = aperti.filter((x) => x.ultimaK === col.k - 1 && x.ultimo[0] < I[1] && I[0] < x.ultimo[1]);
+      if (tocca.length) chi.set(ti, tocca[tocca.length - 1]);
+    });
+    // un blocco che si spezza (toccato da più tratti) continua sul ramo dal suo lato; gli altri rami aprono blocchi nuovi
+    const rami = new Map<Blocco, number[]>();
+    chi.forEach((b, ti) => rami.set(b, [...(rami.get(b) ?? []), ti]));
+    rami.forEach((tis, b) => { const tiene = b.dalBasso ? tis[tis.length - 1] : tis[0]; for (const ti of tis) if (ti !== tiene) chi.delete(ti); });
+    col.tratti.forEach((I, ti) => {
+      let b = chi.get(ti);
+      if (!b) {
+        const dalBasso = ritorno && capoSulVuoto(col, I[0] - 0.6) && !capoSulVuoto(col, I[1] + 0.6);
+        b = { cols: [], ultimaK: col.k, ultimo: I, dalBasso }; blocchi.push(b); aperti.push(b);
+      }
+      b.cols.push({ col, v0: I[0], v1: I[1] }); b.ultimo = I; b.ultimaK = col.k;
+    });
     for (let i = aperti.length - 1; i >= 0; i--) if (aperti[i].ultimaK !== col.k) aperti.splice(i, 1);
   }
 
@@ -420,9 +459,9 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
       else pezzi.push({ tipo: 'bordo', poly: a.poly, a, b, sid: sid++, blocco });
     } else pezzi.push({ tipo: puoSaltare && distance(a, b) > 2.2 * grande ? 'salto' : 'raccordo', pts: [{ ...a, fisso: true }, { ...b, fisso: true }], sid: sid++, blocco });
   };
-  // Ogni parte nuova comincia, se può, dal contorno esterno del cartamodello: delle quattro partenze (dall'alto o
-  // dal basso, verso destra o verso sinistra) si tengono quelle che partono sul contorno, e fra queste la più vicina
-  // a dove è finita la parte prima.
+  // Ogni parte comincia in alto a sinistra e va verso destra, colonna dopo colonna (Lorenzo, 2026-10-21: «è
+  // importante che il filo si muova sempre da sinistra a destra… sempre nella stessa maniera»). Prima si sceglieva fra
+  // quattro partenze (dall'alto o dal basso, verso destra o verso sinistra) la più vicina a dove era finita la parte prima.
   const lineeDelBlocco = (b: Blocco, dalBasso: boolean, versoSinistra: boolean): Tratto[][][] =>
     (versoSinistra ? [...b.cols].reverse() : b.cols).map((c) => {
       const L = fetta(c.col.L, c.v0 - 0.5, c.v1 + 0.5).map((q) => verso(c.col, q, 2 * c.col.k));
@@ -435,7 +474,7 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
   blocchi.forEach((b, bi) => {
     const fine = pezzi.length ? ultimoPunto() : null;
     let meglio: { voto: number; cols: Tratto[][][] } | null = null;
-    for (const dalBasso of [false, true]) for (const versoSinistra of [false, true]) {
+    for (const dalBasso of [b.dalBasso]) for (const versoSinistra of [false]) {
       const cols = lineeDelBlocco(b, dalBasso, versoSinistra), prima = cols.flat()[0];
       if (!prima) continue;
       const s0 = inizioDi(prima);
@@ -454,7 +493,9 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
   });
 
   const locale = (q: Point) => { const dx = q.x - C.x, dy = q.y - C.y; return { u: dx * U.x + dy * U.y, v: dx * V.x + dy * V.y }; };
-  return { ...cuci(pezzi, { contorno, vuoti, ritorno, nelVuotoI, grande, locale, ordine: (ra, rb) => rb - ra }, p, t0), colonneIntere };
+  const r = cuci(pezzi, { contorno, vuoti, ritorno, nelVuotoI, grande, locale, ordine: (ra, rb) => rb - ra }, p, t0);
+  const { parti, avviso } = dividiInParti(r, contorno, vuoti, p);
+  return { ...r, colonneIntere, parti, avviso: r.avviso ?? avviso };
 }
 
 /**
@@ -905,7 +946,114 @@ export function pezzoDellaRete(par: ParametriRete, ingresso: IngressoRete): { co
 
 /** Lo strato da cucire: un tratto continuo per blocco; fra due blocchi la macchina salta. */
 export function stratiRete(r: RisultatoRete): StratoEsportato[] {
+  // con le parti: uno strato per parte, quindi uno stop fra l'una e l'altra; dentro, ingresso, salto, cucitura, salto, uscita
+  if (r.parti?.length) return r.parti.map((pt, i) => ({
+    id: `rete-${i + 1}`, color: COLORE_RETE,
+    polylines: [...(pt.ingresso ? [pt.ingresso] : []), ...pt.tratti, ...(pt.uscita ? [pt.uscita] : [])],
+  }));
   return [{ id: 'rete', color: COLORE_RETE, polylines: r.blocchi.map((b) => b.map((q) => ({ x: q.x, y: q.y }))) }];
+}
+
+/**
+ * Gli strati per il DST, col centro della RETE nell'origine: ingressi e uscite stanno fuori sagoma e non devono spostare
+ * il centro del ricamo (il DST si centra in macchina). Da usare con `center: false`.
+ */
+export function stratiPerDst(r: RisultatoRete): StratoEsportato[] {
+  let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+  for (const b of r.blocchi) for (const q of b) { x0 = Math.min(x0, q.x); y0 = Math.min(y0, q.y); x1 = Math.max(x1, q.x); y1 = Math.max(y1, q.y); }
+  const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2;
+  return stratiRete(r).map((l) => ({ ...l, polylines: l.polylines.map((pl) => pl.map((q) => ({ x: q.x - cx, y: q.y - cy }))) }));
+}
+
+// ------------------------------------------------------------------------------------- le parti, gli ingressi, la rocchetta
+
+/** Una parte da cucire con un ago: ingresso fuori sagoma, la cucitura (tratti separati da salti), uscita fuori sagoma. */
+export interface ParteCucita {
+  ingresso: Point[] | null;
+  tratti: Point[][];
+  uscita: Point[] | null;
+  /** Il filo della parte, mm (cucitura, ingresso e uscita). */
+  filoMm: number;
+  /** Perché comincia qui: la prima, dopo un vuoto (o un'altra parte staccata), o dopo una rocchetta finita. */
+  perche: 'inizio' | 'parte' | 'rocchetta';
+}
+
+/**
+ * Divide la cucitura in parti da un ago ciascuna (Lorenzo, 2026-10-21): una per blocco, e una nuova ogni volta che la
+ * rocchetta sta per finire. Ogni parte ha l'ingresso fuori sagoma (una linea di `entryTailMm`, poi un salto di
+ * `entryTailMm` al primo punto) e l'uscita uguale al contrario (salto fuori, linea). Il taglio per la rocchetta si fa
+ * sull'ultimo punto che corre sul bordo prima del limite (esterno o del foro: lì la rete tocca già il bordo), così
+ * l'uscita e il nuovo ingresso stanno fuori sagoma.
+ */
+function dividiInParti(r: RisultatoRete, contorno: Polyline, vuoti: Polyline[], p: ParametriRete): { parti: ParteCucita[]; avviso?: string } {
+  const coda = Math.max(0, p.entryTailMm), passoCoda = Math.max(0.5, p.maxStitchMm);
+  const fuori = (q: Point) => !pointInPolygon(q, contorno) || vuoti.some((v) => pointInPolygon(q, v));
+  const bordi = [contorno, ...vuoti];
+  // la direzione verso fuori (fuori dal bordo esterno, o dentro il foro) nel punto S del bordo
+  const versoFuori = (S: Point): Point | null => {
+    let meglio = Infinity, t = { x: 1, y: 0 };
+    for (const poly of bordi) for (let i = 0; i < poly.length; i++) {
+      const a = poly[i], b = poly[(i + 1) % poly.length], d = distanceToSegment(S, a, b);
+      if (d < meglio) { meglio = d; const l = Math.hypot(b.x - a.x, b.y - a.y) || 1; t = { x: (b.x - a.x) / l, y: (b.y - a.y) / l }; }
+    }
+    if (meglio > 1) return null; // non è sul bordo
+    const n = { x: -t.y, y: t.x };
+    return fuori({ x: S.x + n.x * 0.5, y: S.y + n.y * 0.5 }) ? n : { x: -n.x, y: -n.y };
+  };
+  const linea = (a: Point, b: Point): Point[] => {
+    const k = Math.max(1, Math.ceil(distance(a, b) / passoCoda));
+    return Array.from({ length: k + 1 }, (_, i) => lerp(a, b, i / k));
+  };
+  // la coda nel punto S: [vicino, lontano] fuori sagoma. Se lo spazio non basta (un foro piccolo) la si accorcia o gira
+  const codaIn = (S: Point): [Point, Point] | null => {
+    const n = versoFuori(S); if (!n || coda <= 0) return null;
+    for (const s of [1, 0.75, 0.5, 0.3]) for (const g of [0, 30, -30, 60, -60]) {
+      const c = Math.cos(g * Math.PI / 180), sn = Math.sin(g * Math.PI / 180), d = { x: n.x * c - n.y * sn, y: n.x * sn + n.y * c };
+      const A = { x: S.x + d.x * coda * s, y: S.y + d.y * coda * s }, B = { x: S.x + d.x * 2 * coda * s, y: S.y + d.y * 2 * coda * s };
+      let ok = true; for (let i = 1; i <= 20 && ok; i++) ok = fuori(lerp(S, B, i / 20));
+      if (ok && (d.x * n.x + d.y * n.y) > 0.4) return [A, B];
+    }
+    return null;
+  };
+  const lung = (pl: Point[]) => pl.reduce((s, q, i) => (i ? s + distance(pl[i - 1], q) : 0), 0);
+
+  // i blocchi di ogni parte, in ordine di cucitura
+  const gruppi: PuntoAgo[][][] = [], dove = new Map<number, number>();
+  for (const b of r.blocchi) {
+    if (!b.length) continue;
+    const id = b[0].blocco; if (!dove.has(id)) { dove.set(id, gruppi.length); gruppi.push([]); }
+    gruppi[dove.get(id)!].push(b);
+  }
+  // il filo che si può usare per parte: la rocchetta meno lo scarto, meno ingresso e uscita
+  const limite = p.spoolM > 0 ? p.spoolM * 1000 * (1 - Math.max(0, Math.min(90, p.spoolMarginPct)) / 100) - 4 * coda : Infinity;
+  const parti: ParteCucita[] = []; let forzati = 0;
+  const chiudi = (punti: Array<{ q: PuntoAgo; salto: boolean }>, perche: ParteCucita['perche']) => {
+    const tratti: Point[][] = [];
+    for (const { q, salto } of punti) { if (salto || !tratti.length) tratti.push([]); tratti[tratti.length - 1].push({ x: q.x, y: q.y }); }
+    const primo = tratti[0][0], ultimo = tratti[tratti.length - 1][tratti[tratti.length - 1].length - 1];
+    const ci = codaIn(primo), cu = codaIn(ultimo);
+    const ingresso = ci ? linea(ci[1], ci[0]) : null, uscita = cu ? linea(cu[0], cu[1]) : null;
+    const filoMm = tratti.reduce((s, pl) => s + lung(pl), 0) + (ingresso ? lung(ingresso) : 0) + (uscita ? lung(uscita) : 0);
+    parti.push({ ingresso, tratti: tratti.filter((pl) => pl.length > 1), uscita, filoMm, perche });
+  };
+  gruppi.forEach((g, gi) => {
+    const punti = g.flatMap((b) => b.map((q, i) => ({ q, salto: i === 0 })));
+    let inizio = 0, filo = 0, ultimoBordo = -1, perche: ParteCucita['perche'] = gi === 0 ? 'inizio' : 'parte';
+    for (let i = 1; i < punti.length; i++) {
+      if (!punti[i].salto) filo += distance(punti[i - 1].q, punti[i].q);
+      if (filo > limite && i - 1 > inizio) {
+        // si esce sull'ultimo punto di bordo prima del limite; se non c'è, qui (con l'uscita sul bordo più vicino)
+        let t = ultimoBordo > inizio ? ultimoBordo : i - 1;
+        if (t === i - 1 && ultimoBordo <= inizio) forzati++;
+        chiudi(punti.slice(inizio, t + 1), perche);
+        perche = 'rocchetta'; inizio = t; punti[t] = { ...punti[t], salto: false }; ultimoBordo = -1; filo = 0;
+        for (let k = t + 1; k <= i; k++) if (!punti[k].salto) filo += distance(punti[k - 1].q, punti[k].q);
+      }
+      if (punti[i].q.tipo === 'bordo' && !punti[i + 1]?.salto) ultimoBordo = i;
+    }
+    if (punti.length - inizio > 1) chiudi(punti.slice(inizio), perche);
+  });
+  return { parti, avviso: forzati ? `In ${forzati} punti la rocchetta finisce lontano dal bordo: l'uscita non è fuori sagoma. Aumenta la rocchetta o lo scarto.` : undefined };
 }
 
 export const motore: Motore<IngressoRete, ParametriRete> = {
