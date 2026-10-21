@@ -2737,6 +2737,33 @@ console.log('\noblique — routing + orchestratore (2d)');
     check('Stilista Link: il salto solo al primo punto delle polilinee dopo la prima',
       rg.puntiDaPolilinee([[{ x: 0, y: 0 }, { x: 1, y: 0 }], [{ x: 5, y: 5 }, { x: 6, y: 5.0004 }]]),
       [[0, 0, 0], [1, 0, 0], [5, 5, 1], [6, 5, 0]]);
+    // IL RACCORDO ATTORNO AI VUOTI (Lorenzo, 2026-10-21, pannello inclinato con due vuoti: «non è molto
+    // pulito»). Le colonne interrotte da un vuoto si raccordavano sul PERIMETRO: ventagli di filo dagli
+    // angoli del pezzo e tratti sopra i vuoti (punto canvas: 171 tagli fino a 118 mm, 295 mm di filo nei
+    // vuoti). Ora sullo stesso anello il filo gira sul suo bordo. Restano gli spigoli tagliati dal punto
+    // minimo (≤ 0,6 mm dentro).
+    const esterno = [[20, 58], [225, 25], [245, 150], [40, 180]];
+    const vuoti = [[[50, 74], [82, 69], [86, 84], [76, 104], [57, 107]], [[125, 88], [166, 70], [172, 113], [152, 103], [152, 113], [134, 110]]];
+    const dPoly = (pts) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x} ${y}`).join(' ') + ' Z';
+    const pannello = rg.parseImportedBoundarySource(`<svg xmlns="http://www.w3.org/2000/svg" width="260mm" height="200mm" viewBox="0 0 260 200">`
+      + `<path fill="none" stroke="#00aa00" d="${dPoly(esterno)}"/>` + vuoti.map((v) => `<path fill="none" stroke="#ff00ff" d="${dPoly(v)}"/>`).join('') + '</svg>',
+    'pannello.svg', { scaleMode: 'auto' });
+    const pathsVuoti = pannello.choices.flatMap((c) => c.boundary.paths.map((p) => ({ ...p, hole: c.color === '#ff00ff', closed: true })));
+    const canvas = JSON.parse(readFileSync(join(root, 'apps/pattern-grammar/src/presets.shared.json'), 'utf8'))['RG-PUNTO CANVAS CLASSICO'];
+    const fatto = rg.generateFinalPatternPoints({ ...canvas, shapeType: 'imported', totalWidth: 250, totalHeight: 185, voidStitchMm: 0,
+      importedBoundary: { ...pannello.choices[0].boundary, paths: pathsVuoti, bounds: { minX: 20, minY: 25, maxX: 245, maxY: 180 } } });
+    const anelliP = [esterno, ...vuoti].map((r) => r.map(([x, y]) => ({ x, y })));
+    const dSeg = (p, a, b) => { const dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy; const t = l ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l)) : 0; return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy); };
+    const dBordo = (p) => Math.min(...anelliP.map((r) => Math.min(...r.map((a, i) => dSeg(p, a, r[(i + 1) % r.length])))));
+    const inPoly = (p, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const a = poly[i], b = poly[j]; if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) c = !c; } return c; };
+    let tagli = 0, profondita = 0;
+    for (const l of fatto.visualPolylines) for (let i = 1; i < l.length; i++) {
+      const a = l[i - 1], b = l[i], len = Math.hypot(b.x - a.x, b.y - a.y);
+      if (len > 8 && dBordo({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }) > 0.5) tagli++;
+      for (let k = 1; k < 8; k++) { const q = { x: a.x + (b.x - a.x) * k / 8, y: a.y + (b.y - a.y) * k / 8 }; if (anelliP.slice(1).some((v) => inPoly(q, v))) profondita = Math.max(profondita, dBordo(q)); }
+    }
+    check('vuoti aggirati: niente raccordi che tagliano il pezzo, e nei vuoti al più lo spigolo del punto minimo',
+      [tagli, profondita <= 1], [0, true]);
     const tool = readFileSync(join(root, 'apps/pattern-grammar/src/tool.ts'), 'utf8');
     check('Stilista Link: nel Generatore il colore dei fori diventa «Area vuota», ogni altro «Confine»',
       tool.includes("boundaryRoles[c.id] = c.color?.toLowerCase() === fori ? 'vuoto' : 'confine';"), true);
