@@ -151,6 +151,11 @@ export interface AggancioStilista {
    * ce ne sono; ogni altro colore è il contorno da lavorare. Un tool senza ruoli per colore non lo passa.
    */
   ruoli?(fori: string | null): void;
+  /**
+   * Cosa diventano i fori nel tool: «vuoti» (aree da non ricamare, il caso normale) o «esclusi» (il tool non
+   * ha aree vuote: restano senza ruolo). Serve solo a dirlo giusto nella barra di stato.
+   */
+  fori?: 'vuoti' | 'esclusi';
   /** Il testo del cartamodello caricato adesso (per sapere se viene da Stilista e dov'era), o null. */
   sorgente(): string | null;
   /** Gli strati cuciti, nell'ordine di macchina: ognuno torna in Stilista come un oggetto. */
@@ -185,7 +190,7 @@ export async function prendiSelezioneStilista(a: AggancioStilista): Promise<void
     const documento = nomeDocumento(finestra).replace(/\.[^.]+$/, '');
     await a.carica(svg, `${documento}-stilista.svg`);
     a.ruoli?.(coloreForiStilista(svg));
-    const fori = coloreForiStilista(svg) ? ', coi fori come aree vuote' : '';
+    const fori = !coloreForiStilista(svg) ? '' : a.fori === 'esclusi' ? ' (i fori restano senza ruolo: qui non ci sono aree vuote)' : ', coi fori come aree vuote';
     a.stato(`Selezione presa da Stilista (${documento})${fori}`);
   } catch (e) {
     a.stato('Stilista: ' + (e as Error).message);

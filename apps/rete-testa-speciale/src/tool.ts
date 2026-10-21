@@ -6,6 +6,7 @@ import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
+import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import { costruisciRete, costruisciReteRadiale, pezzoAMisure, stratiRete, COLORE_RETE, PARAMETRI_RETE, type ParametriRete, type PuntoAgo, type RisultatoRete } from './motore';
 import { angoloDelRombo, formaSacca, puntoDelNodo, raggioMinimo, type Anelli } from './sacca';
 import { montaVista3d } from './vista3d';
@@ -118,6 +119,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
           <button id="simulaBtn" class="rg-button rg-button--ghost rg-button--small" aria-pressed="false" title="Il simulatore: il filo si cuce sullo schermo nell'ordine del DST">Simula</button>
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
           <button id="genBtn" class="rg-button rg-button--secondary rg-button--small">Genera</button>
+          ${BOTTONE_INVIA_STILISTA()}
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Scarica SVG</button>
         </div>
@@ -277,7 +279,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
       box.append(...campi(CAMPI_PEZZO).childNodes, ...campi(CAMPI_MISURE).childNodes);
       box.insertAdjacentHTML('beforeend', `<small class="rg-field__help rg-param-grid__wide">Un rettangolo di queste misure, senza aree vuote. Caricare un cartamodello lo sostituisce.</small>` + bloccoRiapri
         + `<div class="rg-file-input rg-param-grid__wide"><label class="rg-file-input__control"><input type="file" id="fileInput" accept=".svg,.dxf" />`
-        + `<span class="rg-button rg-button--outline">Carica un cartamodello invece…</span></label></div>`);
+        + `<span class="rg-button rg-button--outline">Carica un cartamodello invece…</span></label>${BOTTONE_PRENDI_STILISTA()}</div>`);
       return box;
     }
     box.append(...campi(CAMPI_PEZZO).childNodes);
@@ -287,6 +289,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
           <input type="file" id="fileInput" accept=".svg,.dxf" />
           <span class="rg-button rg-button--outline">Carica SVG o DXF…</span>
         </label>
+        ${BOTTONE_PRENDI_STILISTA()}
         <p class="rg-file-input__status" id="fileStatus" role="status">${testoDisegno}</p>
       </div>
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Scala del file</span>
@@ -526,6 +529,30 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
 
   const nomeBase = () => (source?.name.replace(/\.[^.]+$/, '') ?? 'rete');
 
+  // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è il cartamodello, i fori le aree vuote.
+  // Il testo caricato dice da solo se viene da Stilista (solo il suo SVG porta l'origine). Nel modo radiale la
+  // rete sta nel campo macchina, non nel cartamodello: lì il ricamo va in Stilista come DST, in un documento nuovo.
+  const aggancio: AggancioStilista = {
+    carica(svg, nome) {
+      for (const k of Object.keys(ruoli)) delete ruoli[k];
+      scala.scaleMode = 'auto'; // l'SVG del plugin dichiara width/height in mm (Illustrator 72 dpi lo scalerebbe)
+      source = { text: svg, name: nome };
+      reparse();
+    },
+    ruoli(fori) {
+      for (const c of model?.choices ?? []) ruoli[c.id] = c.color?.toLowerCase() === fori ? 'vuoto' : 'contorno';
+      disegnaContorni();
+      genera();
+    },
+    sorgente: () => (radiale() || par.pieceSource !== 'cartamodello' ? null : source?.text ?? null),
+    strati: () => (risultato ? stratiCuciti(stratiRete(risultato)) : []),
+    dst() {
+      if (!risultato) throw new Error('genera prima il ricamo');
+      return { bytes: costruisciDst(risultato), nome: `${nomeBase()}-rete` };
+    },
+    stato: (testo) => { $('status').textContent = testo; },
+  };
+
   /** Il DST di adesso, cucito sullo schermo (lo stesso simulatore degli altri tool). */
   function simula(): boolean {
     if (!risultato) return false;
@@ -586,6 +613,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   }
 
   function wirePanel() {
+    root.querySelector('#fromStilista')?.addEventListener('click', () => { void prendiSelezioneStilista(aggancio); });
     root.querySelector('#fileInput')?.addEventListener('change', (ev) => {
       const input = ev.target as HTMLInputElement;
       const file = input.files?.[0];
@@ -668,12 +696,16 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     $('status').textContent = saveOutcomeMessage(outcome, name) + notaDisegno;
   });
 
+  // un filo solo: un tratto per parte, fra due parti la macchina salta. Lo usano «Esporta DST» e «Invia a Stilista».
+  function costruisciDst(r: RisultatoRete): Uint8Array {
+    return dstFromExportLayers(stratiRete(r), { label: nomeBase().toUpperCase().slice(0, 16), metadata: progetto() });
+  }
+
   $('exportDstBtn').addEventListener('click', async () => {
     if (!risultato) { $('status').textContent = 'Genera prima il ricamo.'; return; }
     let bytes: Uint8Array;
     try {
-      // un filo solo: un tratto per parte, fra due parti la macchina salta
-      bytes = dstFromExportLayers(stratiRete(risultato), { label: nomeBase().toUpperCase().slice(0, 16), metadata: progetto() });
+      bytes = costruisciDst(risultato);
     } catch (e) {
       $('status').textContent = (e as Error).message;
       return;
@@ -684,4 +716,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   });
 
   buildPanel();
+  // «Invia a Stilista»; e aperto dal pulsante di Stilista (?stilista=…) la selezione si prende da sola.
+  // «Prendi la selezione» vive nel pannello, che si ricostruisce: lo ricollega wirePanel.
+  collegaStilista(aggancio, { invia: $('toStilistaBtn') });
 }

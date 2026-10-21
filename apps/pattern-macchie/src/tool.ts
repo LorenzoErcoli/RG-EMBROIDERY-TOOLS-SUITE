@@ -9,6 +9,7 @@ import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
+import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';
 import { costruisciMacchie, PARAMETRI_MACCHIE, type ParametriMacchie, type RisultatoMacchie } from './motore';
 
@@ -88,6 +89,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
           <button id="simulaBtn" class="rg-button rg-button--ghost rg-button--small" aria-pressed="false" title="Il simulatore: il filo si cuce sullo schermo nell'ordine del DST">Simula</button>
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
           <button id="genBtn" class="rg-button rg-button--secondary rg-button--small">Genera</button>
+          ${BOTTONE_INVIA_STILISTA()}
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Scarica SVG</button>
         </div>
@@ -216,6 +218,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
           <input type="file" id="fileInput" accept=".svg,.dxf" />
           <span class="rg-button rg-button--outline">Carica SVG o DXF…</span>
         </label>
+        ${BOTTONE_PRENDI_STILISTA()}
         <p class="rg-file-input__status" id="fileStatus" role="status">${testoDisegno}</p>
       </div>
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Scala del file</span>
@@ -463,6 +466,36 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
 
   const nomeBase = () => (source?.name.replace(/\.[^.]+$/, '') ?? 'macchie');
 
+  // tre strati → tre stop: la base, il raso delle macchie, il punto sopra (lo stesso filo).
+  // Lo usano «Esporta DST» e «Invia a Stilista».
+  const costruisciDst = () => dstFromExportLayers(strati(), { label: nomeBase().toUpperCase().slice(0, 16), metadata: progetto() });
+
+  // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è il disegno — il colore più grande il
+  // pannello, gli altri le macchie, come per un file. Le macchie non hanno aree vuote: i fori restano fuori.
+  // Ogni stop torna come un oggetto a sé, nell'ordine (base, raso, sopra…).
+  const aggancio: AggancioStilista = {
+    fori: 'esclusi',
+    carica(svg, nome) {
+      for (const k of Object.keys(ruoli)) delete ruoli[k];
+      scala.scaleMode = 'auto'; // l'SVG del plugin dichiara width/height in mm (Illustrator 72 dpi lo scalerebbe)
+      source = { text: svg, name: nome };
+      reparse();
+    },
+    ruoli(fori) {
+      if (!fori) return;
+      for (const c of model?.choices ?? []) if (c.color?.toLowerCase() === fori) ruoli[c.id] = '';
+      disegnaContorni();
+      genera();
+    },
+    sorgente: () => source?.text ?? null,
+    strati: () => stratiCuciti(strati()),
+    dst() {
+      if (!risultato) throw new Error('genera prima il ricamo');
+      return { bytes: costruisciDst(), nome: `${nomeBase()}-macchie` };
+    },
+    stato: (testo) => { $('status').textContent = testo; },
+  };
+
   /** Il DST di adesso, cucito sullo schermo (lo stesso simulatore del Pettine e di Cannage rafia). */
   function simula(): boolean {
     const layers = strati();
@@ -524,6 +557,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   }
 
   function wirePanel() {
+    root.querySelector('#fromStilista')?.addEventListener('click', () => { void prendiSelezioneStilista(aggancio); });
     $('fileInput').addEventListener('change', (ev) => {
       const input = ev.target as HTMLInputElement;
       const file = input.files?.[0];
@@ -605,8 +639,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     if (!risultato) { $('status').textContent = 'Genera prima il ricamo.'; return; }
     let bytes: Uint8Array;
     try {
-      // tre strati → tre stop: la base, il raso delle macchie, il punto sopra (lo stesso filo)
-      bytes = dstFromExportLayers(strati(), { label: nomeBase().toUpperCase().slice(0, 16), metadata: progetto() });
+      bytes = costruisciDst();
     } catch (e) {
       $('status').textContent = (e as Error).message;
       return;
@@ -617,4 +650,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   });
 
   buildPanel();
+  // «Invia a Stilista»; e aperto dal pulsante di Stilista (?stilista=…) la selezione si prende da sola.
+  // «Prendi la selezione» vive nel pannello, che si ricostruisce: lo ricollega wirePanel.
+  collegaStilista(aggancio, { invia: $('toStilistaBtn') });
 }

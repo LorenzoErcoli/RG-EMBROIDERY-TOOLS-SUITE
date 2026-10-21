@@ -8,6 +8,7 @@ import { buildSvg, dstFromExportLayers, DST_FILE, readProjectMetadata, readDstMe
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
+import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 // Il motore delle zone vive in @rg/pattern-grammar: lo usa anche Cannage rafia per le basi.
 import {
   readZones, resolveZoneAngles, zonesFromShapes, boundsOfPoints, type Zone, type ZoneShape,
@@ -74,6 +75,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
         <div class="rg-cluster">
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
           <button id="genBtn" class="rg-button rg-button--secondary rg-button--small">Genera</button>
+          ${BOTTONE_INVIA_STILISTA()}
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Scarica SVG</button>
         </div>
@@ -93,6 +95,9 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
   const roles: Record<string, ZoneRole> = {};
   let model: ImportedBoundaryModel | null = null;
   let source: { text: string; name: string } | null = null;
+  /** Come si è letto il disegno: il pannello si ricostruisce e i menu devono mostrare QUESTO (prima tornavano
+   *  al primo valore, Illustrator 72 dpi, e cambiando l'altro menu il disegno si rileggeva in quella scala). */
+  const lettura = { scaleMode: SCALE_MODES[0][0], paintPriority: 'fill' };
   let zones: Zone[] = [];
   /** La geometria grezza del cartamodello: UNICA fonte delle zone, sia che venga da un file
    *  importato sia che venga da un progetto riaperto. Le zone si ricalcolano da qui ogni
@@ -222,6 +227,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
           <input type="file" id="zoneFile" accept=".svg,.dxf" />
           <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
         </label>
+        ${BOTTONE_PRENDI_STILISTA()}
         <p class="rg-file-input__status" id="zoneStatus" role="status">${zoneStatusText}</p>
       </div>
       <div class="rg-file-input rg-param-grid__wide">
@@ -232,9 +238,9 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
         <p class="rg-file-input__status" id="reopenStatus" role="status">Un file uscito da qui torna com'era: parametri, ruoli e disegno.</p>
       </div>
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Scala del file importato</span>
-        <select id="scaleMode" class="rg-select">${SCALE_MODES.map(([v, l]) => `<option value="${v}">${l}</option>`).join('')}</select></label>
+        <select id="scaleMode" class="rg-select">${SCALE_MODES.map(([v, l]) => `<option value="${v}"${v === lettura.scaleMode ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">La zona è definita da</span>
-        <select id="paintPriority" class="rg-select"><option value="fill">Riempimento (zone piene)</option><option value="stroke">Tratto (contorni)</option></select></label>
+        <select id="paintPriority" class="rg-select"><option value="fill"${lettura.paintPriority === 'fill' ? ' selected' : ''}>Riempimento (zone piene)</option><option value="stroke"${lettura.paintPriority === 'stroke' ? ' selected' : ''}>Tratto (contorni)</option></select></label>
       <label class="rg-field"><span class="rg-field__label">Larghezza import</span>
         <span class="rg-field-with-unit"><input id="customW" class="rg-input rg-input--numeric" type="number" min="0.001" step="0.1" value="100"><span>mm</span></span></label>
       <label class="rg-field"><span class="rg-field__label">Altezza import</span>
@@ -511,6 +517,8 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
   // ---- import ----
   function reparse() {
     if (!source) return;
+    lettura.scaleMode = ($('scaleMode') as HTMLSelectElement).value;
+    lettura.paintPriority = ($('paintPriority') as HTMLSelectElement).value;
     model = parseImportedBoundarySource(source.text, source.name, {
       scaleMode: ($('scaleMode') as HTMLSelectElement).value as ImportScaleMode,
       paintPriority: ($('paintPriority') as HTMLSelectElement).value as 'fill' | 'stroke',
@@ -695,6 +703,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
   }
 
   function wirePanel() {
+    root.querySelector('#fromStilista')?.addEventListener('click', () => { void prendiSelezioneStilista(aggancio); });
     $('zoneFile').addEventListener('change', (ev) => {
       const file = (ev.target as HTMLInputElement).files?.[0];
       if (!file) return;
@@ -767,13 +776,46 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     $('status').textContent = saveOutcomeMessage(outcome, name) + drawingNote;
   });
 
+  // Un layer per ago, in ordine → i cambi-pattern diventano cambi-ago in sequenza (R31).
+  // Lo usano «Esporta DST» e «Invia a Stilista».
+  const nomeBase = () => source?.name.replace(/\.[^.]+$/, '') ?? 'zone';
+  function costruisciDst(p: ZonePlan): Uint8Array {
+    return dstFromExportLayers(p.layers, { label: nomeBase().toUpperCase().slice(0, 16), metadata: projectMetadata() });
+  }
+
+  // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è il disegno a zone, ogni colore del filo
+  // col pattern A (si cambia in 02), i fori spenti; e si genera subito. Ogni ago torna come un oggetto a sé.
+  const aggancio: AggancioStilista = {
+    fori: 'esclusi',
+    carica(svg, nome) {
+      for (const k of Object.keys(roles)) delete roles[k];
+      // la scala la legge reparse() dai menu: l'SVG del plugin dichiara width/height in mm, i contorni sono tratti
+      ($('scaleMode') as HTMLSelectElement).value = 'auto';
+      ($('paintPriority') as HTMLSelectElement).value = 'stroke';
+      source = { text: svg, name: nome };
+      reparse();
+    },
+    ruoli(fori) {
+      for (const c of Object.keys(roles)) roles[c] = c.toLowerCase() === fori ? { pattern: 'off', angleDeg: 0 } : { ...roles[c], pattern: 'A' as PatternKey };
+      buildPanel();
+      drawZones();
+      generate();
+    },
+    sorgente: () => source?.text ?? null,
+    strati: () => (plan ? stratiCuciti(plan.layers) : []),
+    dst() {
+      if (!plan) throw new Error('genera prima il ricamo');
+      return { bytes: costruisciDst(plan), nome: `${nomeBase()}-zone` };
+    },
+    stato: (testo) => { $('status').textContent = testo; },
+  };
+
   $('exportDstBtn').addEventListener('click', async () => {
     if (!plan) { $('status').textContent = 'Genera prima il ricamo.'; return; }
-    const base = source?.name.replace(/\.[^.]+$/, '') ?? 'zone';
+    const base = nomeBase();
     let bytes: Uint8Array;
     try {
-      // Un layer per ago, in ordine → i cambi-pattern diventano cambi-ago in sequenza (R31).
-      bytes = dstFromExportLayers(plan.layers, { label: base.toUpperCase().slice(0, 16), metadata: projectMetadata() });
+      bytes = costruisciDst(plan);
     } catch (e) {
       $('status').textContent = (e as Error).message;
       return;
@@ -785,4 +827,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
   });
 
   buildPanel();
+  // «Invia a Stilista»; e aperto dal pulsante di Stilista (?stilista=…) la selezione si prende da sola.
+  // «Prendi la selezione» vive nel pannello, che si ricostruisce: lo ricollega wirePanel.
+  collegaStilista(aggancio, { invia: $('toStilistaBtn') });
 }

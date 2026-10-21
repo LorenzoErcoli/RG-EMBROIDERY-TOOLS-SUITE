@@ -6,6 +6,7 @@ import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
+import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 // La libreria dei pattern è quella del Generatore pattern, letta dal suo file (come fa Pattern a zone):
 // un preset pubblicato lì è subito disponibile per le basi, senza un doppione da tenere allineato.
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';
@@ -56,6 +57,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
         <div class="rg-cluster">
           <button id="simulaBtn" class="rg-button rg-button--ghost rg-button--small" aria-pressed="false" title="Il simulatore: il filo si cuce sullo schermo nell'ordine del DST">Simula</button>
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
+          ${BOTTONE_INVIA_STILISTA()}
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Scarica SVG</button>
         </div>
@@ -201,6 +203,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
           <input type="file" id="zoneFile" accept=".svg,.dxf" />
           <span class="rg-button rg-button--outline">Carica SVG o DXF a zone…</span>
         </label>
+        ${BOTTONE_PRENDI_STILISTA()}
         <p class="rg-file-input__status" id="zoneStatus" role="status">${zoneStatusText}</p>
       </div>
       <div class="rg-file-input rg-param-grid__wide">
@@ -617,7 +620,38 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
 
   const nomeBase = () => source?.name.replace(/\.[^.]+$/, '') ?? 'cannage';
 
+  // Uno stop per ago, in ordine: contorno, griglia, base 1, base 2, linee, cornice, bordatura (R31).
+  // Lo usano «Esporta DST» e «Invia a Stilista».
+  const costruisciDst = (strati = stratiProgramma(stop)) =>
+    dstFromExportLayers(strati, { label: nomeBase().toUpperCase().slice(0, 16), metadata: progetto() });
+
+  // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è il disegno a zone, letto come un file
+  // (le tinte coi rombi interi diventano i pattern 1 e 2, come sempre). Cannage non ha aree vuote: i fori
+  // restano fuori. Ogni stop torna come un oggetto a sé, nell'ordine.
+  const aggancio: AggancioStilista = {
+    fori: 'esclusi',
+    carica(svg, nome) {
+      for (const k of Object.keys(ruoli)) delete ruoli[k];
+      importa.scaleMode = 'auto'; // l'SVG del plugin dichiara width/height in mm (Illustrator 72 dpi lo scalerebbe)
+      importa.paintPriority = 'stroke'; // i contorni di Stilista sono tratti, senza riempimento
+      source = { text: svg, name: nome };
+      buildPanel(); // i menu della scala mostrano quello che si usa
+      reparse();
+    },
+    ruoli(fori) {
+      if (!fori || !(fori in ruoli)) return;
+      ruoli[fori] = '';
+      renderColorMap();
+      aggiorna();
+    },
+    sorgente: () => source?.text ?? null,
+    strati: () => stratiCuciti(stratiProgramma(stop)),
+    dst: () => ({ bytes: costruisciDst(), nome: `${nomeBase()}-cannage` }),
+    stato: (testo) => { $('status').textContent = testo; },
+  };
+
   function wirePanel() {
+    root.querySelector('#fromStilista')?.addEventListener('click', () => { void prendiSelezioneStilista(aggancio); });
     $('zoneFile').addEventListener('change', (ev) => {
       const file = (ev.target as HTMLInputElement).files?.[0];
       if (!file) return;
@@ -752,8 +786,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     if (!strati.length) { $('status').textContent = 'Niente da esportare: carica il disegno e scegli i pattern.'; return; }
     let bytes: Uint8Array;
     try {
-      // Uno stop per ago, in ordine: contorno, griglia, base 1, base 2, linee, cornice, bordatura (R31).
-      bytes = dstFromExportLayers(strati, { label: nomeBase().toUpperCase().slice(0, 16), metadata: progetto() });
+      bytes = costruisciDst(strati);
     } catch (e) {
       $('status').textContent = (e as Error).message;
       return;
@@ -764,4 +797,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
   });
 
   buildPanel();
+  // «Invia a Stilista»; e aperto dal pulsante di Stilista (?stilista=…) la selezione si prende da sola.
+  // «Prendi la selezione» vive nel pannello, che si ricostruisce: lo ricollega wirePanel.
+  collegaStilista(aggancio, { invia: $('toStilistaBtn') });
 }
