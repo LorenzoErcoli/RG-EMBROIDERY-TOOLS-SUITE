@@ -124,6 +124,39 @@ export function campoNumero(o: OpzioniCampoNumero): string {
     + `</label>`;
 }
 
+export interface OpzioniCampoNumeroInline {
+  /** Cosa misura, per chi usa lo screen reader: il campo non ha un'etichetta visibile (sta in una riga di lista). */
+  aria: string;
+  /** Lo slot dell'unità c'è sempre: per un campo senza unità si passa `''`. */
+  unita: string;
+  valore: number | string;
+  passo?: number;
+  min?: number;
+  max?: number;
+  /** La larghezza del campo (`7ch`), se quella di default è troppo larga per la riga. */
+  larghezza?: string;
+  titolo?: string;
+  disabilitato?: boolean;
+}
+
+/**
+ * Il campo numerico compatto, per una riga di lista (la densità di un colore, la tolleranza di un campione): lo
+ * stesso comportamento di `campoNumero` (virgola o punto, frecce ↑↓, limiti — lo accende `attivaCampiNumero`, anche se la
+ * riga nasce dopo), senza etichetta e senza id. Ritorna HTML: si mette in una riga con `innerHTML`.
+ */
+export function campoNumeroInline(o: OpzioniCampoNumeroInline): string {
+  const valore = typeof o.valore === 'number' ? scriviNumero(o.valore) : o.valore;
+  const dati = [
+    'data-numero',
+    o.passo !== undefined ? `data-passo="${o.passo}"` : '',
+    o.min !== undefined ? `data-min="${o.min}"` : '',
+    o.max !== undefined ? `data-max="${o.max}"` : '',
+  ].filter(Boolean).join(' ');
+  return `<span class="rg-field-with-unit"${o.larghezza ? ` style="--rg-input-numeric-width: ${esc(o.larghezza)}"` : ''}>`
+    + `<input class="rg-input rg-input--numeric" type="text" inputmode="decimal" autocomplete="off" value="${esc(valore)}" aria-label="${esc(o.aria)}"${o.titolo ? ` title="${esc(o.titolo)}"` : ''}${o.disabilitato ? ' disabled' : ''} ${dati}>`
+    + `<span>${esc(o.unita)}</span></span>`;
+}
+
 export interface OpzioniSezione {
   /** Il numero della sezione (1, 2, 3…): si scrive a due cifre. */
   indice: number;

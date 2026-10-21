@@ -6857,6 +6857,12 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
   check('...«Ricalcola da solo» spunta quando è acceso e i due export possono partire spenti', [/id="autoCalcolo" checked/.test(tutto), /id="autoCalcolo">/.test(A.barraAnteprima({ ricalcolaDaSolo: { acceso: false } })), (A.barraAnteprima({ esportaSpenti: true }).match(/disabled/g) ?? []).length], [true, true, 2]);
   check('barra di stato: messaggio, spazio del referto, zoom — in quest\'ordine', [...A.barraStato().matchAll(/id="(status|misure|zoom)"/g)].map((m) => m[1]), ['status', 'misure', 'zoom']);
 
+  const inl = A.campoNumeroInline({ aria: 'Densità del colore 2', unita: 'mm', valore: 0.6, passo: 0.1, min: 0.2, max: 3, larghezza: '7ch', disabilitato: true });
+  check('il campo numerico compatto (per le righe di lista) è lo stesso campo: virgola nel valore, passo e limiti, unità nello slot, aria-label, niente id',
+    [/value="0,6"/.test(inl), /data-numero data-passo="0.1" data-min="0.2" data-max="3"/.test(inl), /<span>mm<\/span><\/span>$/.test(inl), /aria-label="Densità del colore 2"/.test(inl), /\sid=/.test(inl)],
+    [true, true, true, true, false]);
+  check('...può nascere spento e stretto, e un aria-label con virgolette non rompe l\'HTML', [/ disabled /.test(inl), /--rg-input-numeric-width: 7ch/.test(inl), A.campoNumeroInline({ aria: 'a"b', unita: '', valore: 1 }).includes('aria-label="a&quot;b"')], [true, true, true]);
+
   const sez = A.sezione({ indice: 3, titolo: 'Parametri', contenuto: '<p>x</p>', apribile: true, aperta: true, id: 'par' });
   check('sezione numerata: due cifre, apribile con details/open, chiusa se non lo è',
     [/__index">03</.test(sez), /^<details[^>]* open>/.test(sez), /data-sez="par"/.test(sez), A.sezione({ indice: 2, titolo: 'A', contenuto: '' }).startsWith('<section')], [true, true, true, true]);
@@ -6875,7 +6881,7 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
   };
   const tools = readdirSync(join(radice, 'apps')).filter((d) => d !== 'shell' && existsSync(join(radice, 'apps', d, 'src/tool.ts'))).sort();
   const aMano = Object.fromEntries(tools.map((t) => { const s = readFileSync(join(radice, 'apps', t, 'src/tool.ts'), 'utf8'); return [t, Object.entries(COSE).filter(([, f]) => f(s)).map(([n]) => n)]; }));
-  const DEBITO_ANATOMIA_ATTUALE = 44;
+  const DEBITO_ANATOMIA_ATTUALE = 39;
   const debito = rg.DEBITO_ANATOMIA;
   check(`il debito dell'interfaccia è ${DEBITO_ANATOMIA_ATTUALE} voci (può solo scendere: se è sceso, abbassa DEBITO_ANATOMIA_ATTUALE)`, Object.values(debito).reduce((n, v) => n + v.length, 0), DEBITO_ANATOMIA_ATTUALE);
   check('nessun tool scrive a mano un pezzo che ha un componente, se non è nel debito (un tool nuovo deve usare anatomia.ts)',

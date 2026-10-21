@@ -2,7 +2,7 @@ import '@rg/ui/rg.css';
 import './bitmap.css';
 import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, readDstMetadata, readProjectMetadata } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
-import { scheletro, sezioneSorgente, sezione, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero, type OpzioniCampoNumero } from '@rg/ui/anatomia';
+import { scheletro, sezioneSorgente, sezione, campoNumero, campoNumeroInline, attivaCampiNumero, leggiCampo, impostaNumero, type OpzioniCampoNumero } from '@rg/ui/anatomia';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { pickSaveTarget, saveOutcomeMessage } from '@rg/ui/save';
 import { runBitmapPreview, bitmapPipelineSteps, PREVIEW_MAX_DOTS, type BitmapPreviewColor, type BitmapPipelineResult } from './pipeline';
@@ -535,19 +535,20 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
       const tolPre = document.createElement('span');
       tolPre.className = 'bitmap-tol__pre';
       tolPre.textContent = '±';
-      const tol = document.createElement('input');
-      tol.type = 'number'; tol.min = '0'; tol.step = '5';
-      tol.className = 'rg-input rg-input--numeric bitmap-tol__input';
-      tol.value = String(params.manualTolerances[i]);
-      tol.setAttribute('aria-label', `Tolleranza colore ${i + 1} (raggio di cattura RGB)`);
-      tol.title = 'Tolleranza: quanto largo è il raggio di cattura di questo colore (distanza RGB)';
+      const modelloTol = document.createElement('template');
+      modelloTol.innerHTML = campoNumeroInline({
+        aria: `Tolleranza colore ${i + 1} (raggio di cattura RGB)`, unita: '', valore: params.manualTolerances[i], passo: 5, min: 0,
+        larghezza: '5ch', titolo: 'Tolleranza: quanto largo è il raggio di cattura di questo colore (distanza RGB)',
+      });
+      const tolCampo = modelloTol.content.firstElementChild as HTMLElement;
+      const tol = tolCampo.querySelector('input') as HTMLInputElement;
       tol.addEventListener('change', () => {
-        const v = parseFloat(tol.value);
+        const v = leggiCampo(tol);
         params.manualTolerances[i] = Number.isNaN(v) ? 30 : Math.max(0, v);
-        tol.value = String(params.manualTolerances[i]);
+        impostaNumero(tol, params.manualTolerances[i]);
         scheduleAnalyze();
       });
-      tolGroup.append(tolPre, tol);
+      tolGroup.append(tolPre, tolCampo);
 
       const pick = document.createElement('button');
       pick.type = 'button';
