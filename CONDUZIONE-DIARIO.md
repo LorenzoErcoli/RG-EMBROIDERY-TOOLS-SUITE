@@ -5,14 +5,43 @@
 
 ## Aspetta Lorenzo
 
-- **2026-10-20 — il lavoro fermo di pattern-macchie.** Nella cartella principale ci sono modifiche non
-  committate di pattern-macchie (motore, pannello, manuale, STATO, test) almeno dal 2026-10-13, più una
-  copia di sicurezza nello stash (`stash@{0}`, messa durante il merge del K1b). Quella chat le
-  committerà, o sono da buttare? Finché non si sa, pattern-macchie è un tool **occupato** (§3).
+- **2026-10-21 — lo stash di pattern-macchie (non urgente).** Il lavoro di pattern-macchie è stato committato (`fe8794c`), la cartella principale non ha più modifiche sue, quindi pattern-macchie non è più occupato per le modifiche non committate (resta la regola delle 48 ore). Rimane `stash@{0}` («pattern-macchie (chat operativa): lavoro non committato, messo da parte per il merge del K1b»): confrontato con master, i due file `tool.ts` e `sapere/tool/pattern-macchie.md` sono identici e il resto è lavoro arrivato dopo. **Posso toglierlo?** (Non l'ho creato io, quindi non lo tolgo senza il tuo sì.)
 - **2026-10-20 — K6, i riferimenti fuori dal repo.** `PUNTO-STRIATURA.dst` e `BROCCATO.dst` stanno solo
   sul server: per misurarli vanno copiati in `test/fixtures/` (vedi `sapere/riferimenti/LEGGIMI.md`).
 
 ## Giri
+
+### 2026-10-21 — voce 0 e voce 1: sincronizzare, merge del K3 · master `0848a9e`
+
+**Fatto.** Il K3 (il referto comune: `misuraDst`, `misure` in ogni `motore.genera`) è su master, unito col
+protocollo di §4. **17 tool su 17** con `misure`.
+
+**Trovato.**
+- Conflitto solo in `test/smoke.mjs`: il blocco del K3 contro i test nuovi di rete-testa-speciale e
+  punto-maglia, arrivati su master mentre il K3 era fermo sul suo ramo. Tenute tutte e due le parti.
+- Il cricchetto del K3 ha segnalato da solo i due tool nuovi (`manca misure`): una riga in `genera` ciascuno
+  (`misure: refertoDaStrati(strati)`; entrambi esportano con `dstFromExportLayers` senza opzioni). È il
+  motivo per cui i tool nuovi non possono entrare in master senza registro (K1), motore (K1b) e referto (K3).
+- Rotto apposta: punto-maglia senza `misure` → «manca `misure`: il referto del DST (K3)»; rimesso a posto.
+- Browser, ramo unito e master serviti in parallelo (porte mie, `launch.json` non toccato): tutti i 17 tool
+  aperti, nessun errore in console, testo di pagina e numeri identici (razza 619 pallini · 5915 punti · 17.1 m;
+  striatura 37.50 m · 1 salto; interlace 221.23 m). Cambia solo lo zoom, che dipende dalla finestra.
+- Fine riga: i 29 file cambiati sono LF (`git ls-files --eol`).
+
+**Per le altre chat.**
+- **Stilista Link** (cartella principale, ramo `stilista-link` a `1350fe2`): simulato il merge di master sopra
+  la sua punta. Un solo conflitto, in `STATO.md` (si tengono tutte e due le parti); `smoke.mjs` si unisce da
+  solo; dopo, `npm test` e `typecheck` verdi. Nessun lavoro non committato di quella chat è stato toccato (nel
+  frattempo ha committato: la cartella principale è pulita).
+- **Chi tocca `apps/punto-maglia/src/motore.ts` o `apps/rete-testa-speciale/src/motore.ts`**: c'è una riga
+  nuova in `genera` (`misure`). Se un vostro cambio ritorna strati in un altro punto, aggiungete `misure` anche lì.
+- **Chi crea un tool nuovo**: serve la scheda nel registro (`packages/cervello/src/tool/<id>.ts`), i suoi
+  `salvati`, `motore.ts` + `test/prove/<id>.ts` e il referto in `genera`; il cricchetto di `npm test` lo chiede.
+
+**Non cancellato (non è mio).** Il ramo `cervello/k3-referto` e la cartella `../RG-k3-referto` (creati dalla
+chat del K3, ora tutto in master): si possono togliere. Lo stash `stash@{0}` di pattern-macchie: confrontato
+con master, `tool.ts` e la nota in `sapere/` sono identici, il resto è lavoro arrivato dopo → è
+praticamente tutto committato (`fe8794c`); vedi la domanda in alto.
 
 ### 2026-10-20 — il mandato (chat globale)
 
