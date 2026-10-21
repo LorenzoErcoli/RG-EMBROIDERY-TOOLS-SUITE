@@ -46,6 +46,7 @@ export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 export * as ui from ${JSON.stringify(posix('packages/ui/src/anatomia.ts'))};
 export { DEBITO_ANATOMIA } from ${JSON.stringify(posix('packages/ui/src/debito-anatomia.ts'))};
 export { DEBITO_SIMULA, DEBITO_ESEMPIO } from ${JSON.stringify(posix('packages/ui/src/debito-simula-esempio.ts'))};
+export { DEBITO_ETICHETTE } from ${JSON.stringify(posix('packages/ui/src/debito-etichette.ts'))};
 export { datiDaStrati } from ${JSON.stringify(posix('packages/ui/src/simulatore.ts'))};
 export { TOOLS as ToolsDati } from ${JSON.stringify(posix('packages/ui/src/tools-dati.ts'))};
 export { routeCells as csRouteCells, colorPolylines as csColorPolylines, colorPolylinesTrim as csColorPolylinesTrim, DEFAULT_ROUTE as CS_DEFAULT_ROUTE, RETRACE_PRESETS as CS_RETRACE_PRESETS } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
@@ -6918,6 +6919,28 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
     [ds.colori, ds.larghezzaMm, ds.altezzaMm, ds.origine], [['#ff0000', '#0000ff'], 24, 14, { x: -12, y: -7 }]);
   check('...il DST è lo stesso che esporta il tool, e si rilegge con lo stesso numero di aghi', [rg.readDst(ds.dst).blocks.length, new TextDecoder().decode(ds.dst.slice(0, 3))], [2, 'LA:']);
   check('...niente da cucire → null, non un DST vuoto', [rg.datiDaStrati([]), rg.datiDaStrati([{ id: 'v', color: '#000', polylines: [] }])], [null, null]);
+
+  // ---- U5: le etichette dei pannelli sono quelle del registro ---------------------------------------------------
+  console.log('\nU5 — le etichette: quello che dice il pannello è quello che dice il registro');
+  const { caricaRegistro: caricaRegistroU5 } = await import('./registro.mjs');
+  const regU5 = await caricaRegistroU5('registro-u5');
+  const RE_TABELLA = /(?:etichetta|label):\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')/g;
+  const RE_HTML = /rg-field__label">([^<]+)</g;
+  const etichetteDi = (src) => [...new Set([
+    ...[...src.matchAll(RE_TABELLA)].map((m) => (m[1] ?? m[2]).split("\\'").join("'")),
+    ...[...src.matchAll(RE_HTML)].map((m) => m[1].trim()),
+  ])].filter((e) => /[a-zàèéìòù]/.test(e) && !e.includes('${') && !e.includes('&nbsp;'));
+  const delRegistro = (t) => new Set(regU5.parametriDelTool(t).flatMap((p) => [p.etichetta, p.tool[t]?.etichetta].filter(Boolean)));
+  const fuoriRegistro = Object.fromEntries(tools.map((t) => [t, etichetteDi(sorgenteDi(t)).filter((e) => !delRegistro(t).has(e))]));
+  const DEBITO_ETICHETTE_ATTUALE = 65;
+  const debitoEt = rg.DEBITO_ETICHETTE;
+  check(`il debito delle etichette è ${DEBITO_ETICHETTE_ATTUALE} (può solo scendere: se è sceso, abbassa DEBITO_ETICHETTE_ATTUALE)`, Object.values(debitoEt).reduce((n, v) => n + v.length, 0), DEBITO_ETICHETTE_ATTUALE);
+  check('un\'etichetta nel pannello che il registro non ha deve stare nel debito (le parole del pannello e del registro non si separano di nuovo)',
+    tools.flatMap((t) => fuoriRegistro[t].filter((e) => !(debitoEt[t] ?? []).includes(e)).map((e) => `${t}: «${e}»`)), []);
+  check('...e nel debito non c\'è un\'etichetta che il pannello non scrive più o che ora il registro ha (la voce va tolta), né un tool che non esiste',
+    [...Object.entries(debitoEt).flatMap(([t, v]) => v.filter((e) => !(fuoriRegistro[t] ?? []).includes(e)).map((e) => `${t}: «${e}»`)), ...Object.keys(debitoEt).filter((t) => !tools.includes(t))], []);
+  check('i tool passati all\'anatomia (U2) hanno nel pannello le etichette del registro, tranne i controlli che non sono parametri: net-45, bitmap e sfrangiatura (a parte lo strumento) non hanno niente fuori',
+    [fuoriRegistro['net-45'], fuoriRegistro['bitmap'], fuoriRegistro['sfrangiatura']], [[], [], ['Strumento']]);
 }
 
 // ---- K4 — la scheda di ogni tool: cosa prende, cosa dà, quali parametri usa ----------------------------------------

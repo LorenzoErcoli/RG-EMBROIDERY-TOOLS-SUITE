@@ -5,6 +5,11 @@
 
 ## Aspetta Lorenzo
 
+- **2026-10-21 — U5, le etichette dal registro: due scelte tue.** Ho misurato i pannelli contro il registro dei parametri (K1). Le **etichette** dei campi sono quasi sempre le stesse parole (net-45, bitmap e sfrangiatura: tutte; il registro è nato dai pannelli). Le **frasi di aiuto** invece no: il registro ha una frase per ogni parametro (presa dal pannello o dal commento nel codice), ma nei pannelli la frase c'è solo in una parte dei campi e spesso è diversa (frasi del registro per i campi numerici che non compaiono nel pannello: net-45 13, pittorico 16, bitmap 17, broccato 15, pettine 11, sfrangiatura 5). Per far prendere al pannello tutto dal registro, serve sapere:
+  1. **Quale frase vince, quando pannello e registro dicono cose diverse, o il pannello non dice niente?** (a) Vince il pannello com'è oggi: correggo il registro perché dica quello che il pannello dice; dove il pannello non dice niente, il campo resta senza aiuto. (b) Vince il registro: i pannelli mostrano le frasi del registro, e compaiono aiuti dove oggi non ci sono. La (a) non cambia niente di visibile; la (b) cambia i testi in 6 pannelli. Mia proposta: (a) adesso, e le frasi nuove si decidono tool per tool col processo REVISIONE-PARAMETRI.
+  2. **Le 65 etichette che il registro non ha.** Sono nella lista del debito (`packages/ui/src/debito-etichette.ts`). Circa la metà non sono parametri e non vanno nel registro (strumenti, nomi di preset, «Scala del file importato», «Larghezza import»…). Il resto sono parametri veri che il registro non descrive, o che descrive con un'altra etichetta: «Larghezza reale (0 = auto)» in razza contro «Larghezza reale del ricamo»/«del pannello»/«del cartamodello» negli altri; «Passo spostamento» (oblique); le misure di punto croce (Larghezza V, Altezza V, Passo). Ognuno è un nome da decidere: li elenco, non li battezzo io.
+  Il test che c'è da oggi impedisce solo che si allarghi la distanza; non sceglie al posto tuo.
+
 - **2026-10-21 — U4, il nome del bottone dell'esempio in Sfrangiatura.** Ogni tool deve avere un esempio pronto (bottone demo nella sezione 01: *Cartamodello demo*, *Immagine demo*…). Sfrangiatura parte da un DST, e per il suo esempio il nome naturale sarebbe **«Ricamo demo»** (come la sezione si chiama «Ricamo di partenza»): è un nome nuovo, quindi lo decidi tu. Fino ad allora Sfrangiatura resta senza esempio (nel debito del cricchetto); gli altri esempi vanno avanti. Rispondi anche solo «va bene» o con un altro nome.
 
 - **2026-10-21 — K4, le tecniche di punto di ogni tool.** La scheda di ogni tool ha un posto per le
@@ -42,6 +47,14 @@
   sul server: per misurarli vanno copiati in `test/fixtures/` (vedi `sapere/riferimenti/LEGGIMI.md`).
 
 ## Giri
+
+### 2026-10-21 — voce 7, primo giro di U5: la guardia delle etichette (il resto aspetta Lorenzo)
+
+- **Cosa ho trovato.** Misurando i pannelli contro il registro: le etichette dei campi coincidono quasi sempre (net-45, bitmap, sfrangiatura: del tutto); le frasi di aiuto no. Quindi U5, come è scritta («nessuna etichetta scritta a mano nei pannelli»), non è un lavoro meccanico: far leggere il registro ai pannelli cambierebbe i testi visibili, o i testi del registro. Per §5 (i nomi sono di Lorenzo) non l'ho fatto: due domande, in cima al diario.
+- **Un mio errore, corretto.** Migrando pittorico all'anatomia (giro di prima) avevo scritto «Larghezza reale» al posto di «Larghezza reale del ricamo»: un'etichetta cambiata senza che nessuno l'abbia scelto. La nuova guardia l'ha trovata subito; ripristinata.
+- **Cosa ho fatto, senza inventare nomi.** Un test («U5 — le etichette») ricava dai sorgenti dei 17 tool le etichette dei campi e le confronta con quelle del registro: un'etichetta nuova nel pannello che il registro non ha fa fallire il test, e la lista di quelle che oggi non ci sono (65, in `packages/ui/src/debito-etichette.ts`) può solo scendere. Per i tool già migrati il test dice che non c'è più niente fuori dal registro tranne i controlli che non sono parametri.
+- **Non fatto:** far leggere i testi al registro (dipende dalla scelta 1); chiudere le 65 (dipende dalla scelta 2). Nessun ricamo toccato: l'unica modifica a un tool è l'etichetta di pittorico, tornata com'era.
+- **Prossima voce.** La 8 (K5, il resto): le decisioni sparse in STATO portate in `sapere/decisioni/`, e il test di coerenza fra `sapere/` e il registro. Non dipende da Lorenzo.
 
 ### 2026-10-21 — voce 6, primo giro di U3 e U4: Simula e l'esempio nei tool liberi
 

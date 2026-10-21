@@ -47,7 +47,7 @@ interface Campo {
 }
 
 const CAMPI: Campo[] = [
-  { id: 'realWidth', key: 'realWidthMm', etichetta: 'Larghezza reale', unita: 'mm', passo: 1, min: 0, aiuto: '0 = un pixel vale un millimetro. È la misura che comanda: senza, le altre non significano niente' },
+  { id: 'realWidth', key: 'realWidthMm', etichetta: 'Larghezza reale del ricamo', unita: 'mm', passo: 1, min: 0, aiuto: '0 = un pixel vale un millimetro. È la misura che comanda: senza, le altre non significano niente' },
   { id: 'colorCount', key: 'colorCount', etichetta: 'Quanti fili', unita: '', passo: 1, int: true, min: 2, max: 8, aiuto: 'ogni tinta è un ago' },
   { id: 'densitySpacingMm', key: 'densitySpacingMm', etichetta: 'Distanza fra le file', unita: 'mm', passo: 0.05, min: 0.1, max: 2, aiuto: 'quanto è fitto il pieno' },
   { id: 'maxStitchMm', key: 'maxStitchMm', etichetta: 'Punto massimo', unita: 'mm', passo: 0.5, min: 0.5, max: 8, aiuto: 'lungo il filo' },
