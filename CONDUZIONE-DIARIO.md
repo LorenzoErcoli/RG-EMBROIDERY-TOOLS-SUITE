@@ -11,6 +11,35 @@
 
 ## Giri
 
+### 2026-10-21 — voce 2: U1, i componenti comuni dell'interfaccia · master `040462d`
+
+**Fatto.** `packages/ui/src/anatomia.ts` (campo numerico, sezione 01, sezione numerata, sezione Progetto,
+intestazione dell'anteprima, barra di stato, scheletro) e il suo cricchetto in `smoke.mjs`: un tool che scrive a
+mano un pezzo che ha un componente fa fallire `npm test`, salvo che stia nella lista del debito
+(`packages/ui/src/debito-anatomia.ts`, può solo scendere). **Debito di partenza: 59 voci su 16 tool.**
+Tool di prova: **net-45**, migrato per intero; nel browser, prima e dopo, stesso ricamo (20 tratti, SVG della
+stessa lunghezza).
+
+**Trovato.**
+- Il campo numerico comune è un campo di testo con `inputmode="decimal"` (non `type="number"`, che vuole il
+  punto): `0.5` e `0,5` danno lo stesso ricamo, ↑↓ fanno 0,55 e 0,45 senza il rumore del floating point, un testo
+  non valido torna all'ultimo valore buono, la larghezza reale non scende sotto 0. Non è servito nessun componente
+  nuovo nel design system (`rg-input--numeric` e `rg-field-with-unit` c'erano già).
+- Un test vecchio («accetta un .dst in ingresso») leggeva `accept="….dst` dal sorgente del tool: adattato, vale
+  anche l'uso di `sezioneSorgente` (che ha sempre «Apri progetto o DST…»).
+- Il cricchetto non vede la sezione 01 di 5 tool (cannage, pattern-grammar, pattern-macchie, rete-testa-speciale,
+  zone-pattern) perché la costruiscono con una funzione: lo dichiara, e quelle voci mancano dal debito finché
+  il tool non verrà migrato.
+- Rotto apposta in cinque modi, tutti rossi nel punto giusto (campo numerico a mano in net-45; un tool tolto dal
+  debito; un tool messo nel debito senza motivo; i due export scambiati; le frecce senza arrotondamento).
+
+**Per le altre chat.**
+- **Chi crea un tool nuovo**: usi `scheletro` e i componenti di `@rg/ui/anatomia`; scrivere a mano
+  l'intestazione, il campo numerico, la sezione 01 o la barra di stato fa fallire `npm test`.
+- **Chi lavora su un tool esistente** non è obbligato a migrarlo (la U2 lo farà un tool per giro, e i tool
+  occupati per ultimi), ma se lo fa deve togliere la sua riga dal debito, altrimenti il test lo dice.
+- Il DST è l'unico bottone pieno dell'anteprima (decisione U-D1): *Genera* sarà un bottone con il bordo.
+
 ### 2026-10-21 — voce 0 e voce 1: sincronizzare, merge del K3 · master `0848a9e`
 
 **Fatto.** Il K3 (il referto comune: `misuraDst`, `misure` in ogni `motore.genera`) è su master, unito col
