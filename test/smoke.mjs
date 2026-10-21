@@ -1,7 +1,7 @@
 // Smoke test dell'ecosistema. Nessun framework: `node test/smoke.mjs`.
 // Serve a una cosa sola ma importante: accorgersi quando due tool rispondono
 // in modo diverso alla STESSA domanda geometrica (vedi COSTITUZIONE R28).
-import { readFileSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, rmSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -43,6 +43,8 @@ export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(
 export { lineaTratto as pmgLinea, cordoncino as pmgCordoncino, cuci as pmgCuci, strati as pmgStrati, progetto as pmgProgetto, leggiProgetto as pmgLeggiProgetto, PARAMETRI_MAGLIA as PMG_PARAMETRI } from ${JSON.stringify(posix('apps/punto-maglia/src/motore.ts'))};
 export { costruisci as rzCostruisci, pezzoDa as rzPezzoDa, rettangolo as rzRettangolo, stratiDaRisultato as rzStrati, stratiPerDst as rzStratiPerDst, progetto as rzProgetto, leggiProgetto as rzLeggiProgetto, daDiPassaggio as rzDaDiPassaggio, PARAMETRI_RAZZA as RZ_PARAMETRI } from ${JSON.stringify(posix('apps/razza/src/motore.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
+export * as ui from ${JSON.stringify(posix('packages/ui/src/anatomia.ts'))};
+export { DEBITO_ANATOMIA } from ${JSON.stringify(posix('packages/ui/src/debito-anatomia.ts'))};
 export { routeCells as csRouteCells, colorPolylines as csColorPolylines, colorPolylinesTrim as csColorPolylinesTrim, DEFAULT_ROUTE as CS_DEFAULT_ROUTE, RETRACE_PRESETS as CS_RETRACE_PRESETS } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
 export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight, knitFromImage as csKnitFromImage, refinePalette as csRefinePalette, brushEdits as csBrushEdits, fillEdits as csFillEdits, applyEdits as csApplyEdits, fromTwoColumnV as csFromTwoColumnV } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
 export { subGrid as csSubGrid, areaFromMm as csAreaFromMm, clampArea as csClampArea } from ${JSON.stringify(posix('apps/cross-stitch/src/area.ts'))};
@@ -981,7 +983,8 @@ for (const [tool, id] of [['net-45', 'net-45'], ['pattern-grammar', 'pattern-gra
   check(`${tool}: il DST esce coi parametri di "${id}"`,
     call >= 0 && /metadata:/.test(blocco) && new RegExp(`rgProject: '${id}'`).test(src), true);
   check(`${tool}: sa rileggere un .dst`, /readDstMetadata/.test(src), true);
-  check(`${tool}: accetta un .dst in ingresso`, /accept="[^"]*\.dst/.test(src), true);
+  // o è scritto a mano nel tool, o c'è il componente della sezione 01 (anatomia.ts), che ha sempre «Apri progetto o DST…»
+  check(`${tool}: accetta un .dst in ingresso`, /accept="[^"]*\.dst/.test(src) || (/sezioneSorgente\(/.test(src) && !/progetto:\s*false/.test(src)), true);
 }
 
 // interlace — RIAPRIRE un .dst non è solo rimettere i numeri. Il tool accettava già i .dst e ne
@@ -6768,6 +6771,82 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
   const src = readFileSync(join(root, 'apps/punto-maglia/src/tool.ts'), 'utf8');
   const call = src.indexOf('dstFromExportLayers(');
   check('tool: il DST esce coi parametri, sa rileggerli e accetta un .dst (R27)', [call >= 0 && /metadata:/.test(src.slice(call, call + 600)), /rgProject|progetto\(/.test(src), /readDstMetadata/.test(src), /accept="[^"]*\.dst/.test(src)], [true, true, true, true]);
+}
+
+// ---- U1 — l'anatomia di un tool RG: i componenti comuni e il loro cricchetto ---------------------------------------
+// packages/ui/src/anatomia.ts costruisce i pezzi uguali per tutti (campo numerico, sezione 01, intestazione
+// dell'anteprima, barra di stato). Prima si provano i componenti; poi il cricchetto legge i tool e fallisce se uno
+// scrive a mano un pezzo che dovrebbe usare il componente, con la lista del debito (debito-anatomia.ts) che può solo scendere.
+{
+  console.log('\nU1 — i numeri: virgola e punto, frecce, limiti');
+  const A = rg.ui;
+  check('0,4 e 0.4 sono lo stesso numero', [A.leggiNumero('0,4'), A.leggiNumero('0.4'), A.leggiNumero(' 0,4 ')], [0.4, 0.4, 0.4]);
+  check('negativi e senza zero davanti: -0,5 · .5 · ,5', [A.leggiNumero('-0,5'), A.leggiNumero('.5'), A.leggiNumero(',5')], [-0.5, 0.5, 0.5]);
+  check('migliaia: 1.000,5 e 1,000.5 fanno 1000,5', [A.leggiNumero('1.000,5'), A.leggiNumero('1,000.5')], [1000.5, 1000.5]);
+  check('quello che non è un numero è NaN: vuoto · abc · 1,2,3 · 1.2.3 · 12mm · 1,5,5', ['', 'abc', '1,2,3', '1.2.3', '12mm', '1.000,5,5'].map((t) => Number.isNaN(A.leggiNumero(t))), [true, true, true, true, true, true]);
+  check('si scrive con la virgola, senza zeri in coda e senza il rumore del floating point', [A.scriviNumero(0.4), A.scriviNumero(12), A.scriviNumero(0.1 + 0.2), A.scriviNumero(-0.0), A.scriviNumero(1.8)], ['0,4', '12', '0,3', '0', '1,8']);
+  check('↑ e ↓ sommano il passo senza errori di arrotondamento: 0,4 → 0,45 → 0,4 → 0,35 (passo 0,05)',
+    [A.passoNumero('0,4', 1, { passo: 0.05 }), A.passoNumero('0,45', -1, { passo: 0.05 }), A.passoNumero('0,4', -1, { passo: 0.05 })], ['0,45', '0,4', '0,35']);
+  check('0,3 − 0,1 fa 0,2 e non 0,19999999999999998', A.passoNumero('0,3', -1, { passo: 0.1 }), '0,2');
+  check('i limiti tengono: sotto il minimo si ferma, sopra il massimo si ferma', [A.passoNumero('0,05', -1, { passo: 0.1, min: 0 }), A.passoNumero('99,5', 1, { passo: 1, max: 100 })], ['0', '100']);
+  check('un campo vuoto o sbagliato parte dal minimo (o da 0)', [A.passoNumero('', 1, { passo: 1, min: 5 }), A.passoNumero('x', 1, { passo: 2 })], ['6', '2']);
+  check('senza passo le frecce non fanno niente', A.passoNumero('3', 1, {}), null);
+  check('limitaNumero', [A.limitaNumero(-4, { min: 0 }), A.limitaNumero(40, { max: 30 }), A.limitaNumero(7, { min: 0, max: 30 })], [0, 30, 7]);
+
+  console.log('\nU1 — i componenti');
+  const campo = A.campoNumero({ id: 'x', etichetta: 'Larghezza "vera"', unita: 'mm', valore: 0.4, passo: 0.05, min: 0, max: 5, aiuto: '0 = auto' });
+  check('campoNumero: testo con inputmode decimale (non number: il browser vorrebbe il punto), classi del DS, valore con la virgola',
+    [/type="text"/.test(campo), /inputmode="decimal"/.test(campo), /class="rg-input rg-input--numeric"/.test(campo), /value="0,4"/.test(campo)], [true, true, true, true]);
+  check('...passo, minimo e massimo nei data-, lo slot dell\'unità c\'è, l\'etichetta è senza l\'unità e senza virgolette rotte',
+    [/data-passo="0.05"/.test(campo), /data-min="0"/.test(campo), /data-max="5"/.test(campo), /<span>mm<\/span>/.test(campo), /Larghezza &quot;vera&quot;/.test(campo), /rg-field__label">[^<(]*<\/span>/.test(campo)], [true, true, true, true, true, true]);
+  check('...l\'aiuto sta sotto, collegato col aria-describedby, e il campo con l\'aiuto va a tutta riga', [/id="x-aiuto"/.test(campo), /aria-describedby="x-aiuto"/.test(campo), /rg-param-grid__wide/.test(campo)], [true, true, true]);
+  check('...senza unità lo slot c\'è lo stesso (vuoto)', /<span><\/span><\/span><\/label>$/.test(A.campoNumero({ id: 'n', etichetta: 'Semi', unita: '', valore: 1 })), true);
+
+  const sorg = (tipo, extra = {}) => A.sezioneSorgente({ tipo, accetta: '.svg', statoIniziale: 'niente', ...extra });
+  check('sezione 01: il nome dipende da cosa entra (U-D3): Cartamodello · Immagine · Ricamo di partenza',
+    ['cartamodello', 'immagine', 'dst'].map((t) => sorg(t).match(/__title">([^<]+)</)[1]), ['Cartamodello', 'Immagine', 'Ricamo di partenza']);
+  check('...ha sempre fileInput, fileStatus, progettoInput («Apri progetto o DST…») e la larghezza reale, tutti con id fissi',
+    ['fileInput', 'fileStatus', 'progettoInput', 'progettoStatus', 'realWidth'].map((id) => sorg('cartamodello').includes(`id="${id}"`)), [true, true, true, true, true]);
+  check('...il bottone dell\'esempio c\'è solo se il tool ne ha uno; il progetto e la larghezza si possono togliere',
+    [sorg('cartamodello').includes('demoBtn'), sorg('cartamodello', { demo: 'Cartamodello demo' }).includes('id="demoBtn"'), sorg('dst', { progetto: false }).includes('progettoInput'), sorg('dst', { larghezzaReale: false }).includes('realWidth')], [false, true, false, false]);
+  check('...nell\'etichetta della larghezza non c\'è «(0 = auto)»: sta nell\'aiuto (REVISIONE-PARAMETRI)', /Larghezza reale<\/span>/.test(sorg('cartamodello')) && /0 = usa la misura letta dal file/.test(sorg('cartamodello')), true);
+
+  const ordine = (html) => [...html.matchAll(/<(?:button|input)[^>]*id="(autoCalcolo|genBtn|simBtn|fitBtn|exportBtn|exportDstBtn)"/g)].map((m) => m[1]);
+  const tutto = A.barraAnteprima({ ricalcolaDaSolo: { acceso: true }, genera: true, simula: true });
+  check('l\'intestazione dell\'anteprima ha l\'ordine fisso (U-D1, U-D4): Ricalcola da solo · Genera · Simula · Adatta · Esporta SVG · Esporta DST',
+    ordine(tutto), ['autoCalcolo', 'genBtn', 'simBtn', 'fitBtn', 'exportBtn', 'exportDstBtn']);
+  check('...il bottone pieno è uno solo ed è il DST', [(tutto.match(/rg-button--primary/g) ?? []).length, /rg-button--primary[^>]*>Esporta DST/.test(tutto)], [1, true]);
+  check('...un tool che non ha una cosa lascia il posto vuoto, non riordina', [ordine(A.barraAnteprima({ genera: true })), ordine(A.barraAnteprima({ simula: true, adatta: false, esportaSvg: false }))], [['genBtn', 'fitBtn', 'exportBtn', 'exportDstBtn'], ['simBtn', 'exportDstBtn']]);
+  check('...«Ricalcola da solo» spunta quando è acceso e i due export possono partire spenti', [/id="autoCalcolo" checked/.test(tutto), /id="autoCalcolo">/.test(A.barraAnteprima({ ricalcolaDaSolo: { acceso: false } })), (A.barraAnteprima({ esportaSpenti: true }).match(/disabled/g) ?? []).length], [true, true, 2]);
+  check('barra di stato: messaggio, spazio del referto, zoom — in quest\'ordine', [...A.barraStato().matchAll(/id="(status|misure|zoom)"/g)].map((m) => m[1]), ['status', 'misure', 'zoom']);
+
+  const sez = A.sezione({ indice: 3, titolo: 'Parametri', contenuto: '<p>x</p>', apribile: true, aperta: true, id: 'par' });
+  check('sezione numerata: due cifre, apribile con details/open, chiusa se non lo è',
+    [/__index">03</.test(sez), /^<details[^>]* open>/.test(sez), /data-sez="par"/.test(sez), A.sezione({ indice: 2, titolo: 'A', contenuto: '' }).startsWith('<section')], [true, true, true, true]);
+  check('sezione Progetto: l\'ultima, i preset con gli id soliti', ['presetNome', 'presetLista', 'presetSalva', 'presetCarica', 'presetElimina', 'presetEsporta', 'presetImporta'].map((id) => A.sezioneProgetto({ indice: 6 }).includes(`id="${id}"`)), [true, true, true, true, true, true, true]);
+  const intero = A.scheletro({ topbar: '<header>TOPBAR</header>', classe: 'prova-workspace', pannello: [sorg('immagine'), A.sezione({ indice: 2, titolo: 'Due', contenuto: '' })], anteprima: { genera: true } });
+  check('lo scheletro: topbar, pannello, intestazione, tela, barra di stato — una volta ciascuno, nell\'ordine',
+    [intero.startsWith('<header>TOPBAR</header>'), ['rg-workspace__panel', 'rg-workspace__stage-header', 'id="canvas"', 'id="layer"', 'rg-workspace__statusbar'].map((c) => intero.indexOf(c)).every((v, i, a) => v > 0 && (i === 0 || v > a[i - 1])), /rg-workspace prova-workspace/.test(intero)], [true, true, true]);
+
+  console.log('\nU1 — il cricchetto: chi scrive a mano un pezzo che ha un componente');
+  const radice = join(here, '..');
+  const COSE = {
+    intestazione: (s) => s.includes('rg-workspace__stage-header'),
+    'campo-numerico': (s) => s.includes('rg-input--numeric'),
+    'sezione-01': (s) => /rg-param-section__index">\s*01\s*</.test(s),
+    'barra-stato': (s) => s.includes('rg-workspace__statusbar'),
+  };
+  const tools = readdirSync(join(radice, 'apps')).filter((d) => d !== 'shell' && existsSync(join(radice, 'apps', d, 'src/tool.ts'))).sort();
+  const aMano = Object.fromEntries(tools.map((t) => { const s = readFileSync(join(radice, 'apps', t, 'src/tool.ts'), 'utf8'); return [t, Object.entries(COSE).filter(([, f]) => f(s)).map(([n]) => n)]; }));
+  const DEBITO_ANATOMIA_ATTUALE = 59;
+  const debito = rg.DEBITO_ANATOMIA;
+  check(`il debito dell'interfaccia è ${DEBITO_ANATOMIA_ATTUALE} voci (può solo scendere: se è sceso, abbassa DEBITO_ANATOMIA_ATTUALE)`, Object.values(debito).reduce((n, v) => n + v.length, 0), DEBITO_ANATOMIA_ATTUALE);
+  check('nessun tool scrive a mano un pezzo che ha un componente, se non è nel debito (un tool nuovo deve usare anatomia.ts)',
+    tools.flatMap((t) => aMano[t].filter((c) => !(debito[t] ?? []).includes(c)).map((c) => `${t}: ${c}`)), []);
+  check('nessuna voce di debito che il tool non scrive più (va tolta) né tool che non esiste',
+    [...Object.entries(debito).flatMap(([t, v]) => v.filter((c) => !(aMano[t] ?? []).includes(c)).map((c) => `${t}: ${c}`)), ...Object.keys(debito).filter((t) => !tools.includes(t))], []);
+  check('il tool di prova (net-45) usa i componenti: scheletro, sezione 01, campo numerico, e non ha niente nel debito',
+    [/from '@rg\/ui\/anatomia'/.test(readFileSync(join(radice, 'apps/net-45/src/tool.ts'), 'utf8')), aMano['net-45'], debito['net-45']], [true, [], undefined]);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).
