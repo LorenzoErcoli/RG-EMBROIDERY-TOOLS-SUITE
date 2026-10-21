@@ -41,6 +41,14 @@
 
 ## Giri
 
+### 2026-10-21 — voce 5, secondo giro di U2: sfrangiatura all'anatomia
+
+- **Perché sfrangiatura prima di pettine.** Entrambi liberi; sfrangiatura è la più piccola (435 righe contro 726) e non ha nessuna parte fuori dall'anatomia. Pettine resta il prossimo.
+- **Fatto.** `apps/sfrangiatura/src/tool.ts` costruisce topbar, sezione 01 (Ricamo di partenza), campi numerici, intestazione e barra di stato con `@rg/ui/anatomia`. Le sezioni «Frangia» e «Incrocio» restano apribili. Cambia in vista: i campi accettano la virgola e le frecce; l'export è «Esporta SVG · **Esporta DST**» con gli id comuni (`exportBtn`, `fileInput`). Il pennello, lo strumento Sposta/Marca/Cancella, le zone e il ricalcolo continuo sono come prima: senza «Genera» né «Ricalcola da solo», perché ogni manopola rigenera già le frange (U-D4 lascia il posto vuoto). Niente «Apri progetto» né larghezza reale: un progetto di sfrangiatura è un DST e il DST porta la sua misura. Il campo Variante è ora un campo numerico comune con il bottone Rigenera sotto, non più sulla stessa riga.
+- **Il ricamo non cambia.** Stesso DST di riferimento (m1404-dav-stop.dst), seme 7, nessuna zona: stesso stato, stessi aghi e ingombro, e il file esportato è identico a master byte per byte (141235 byte, stessa impronta sull'intero file). Nessun errore in console. **Non provato nel browser:** il disegno di una zona col pennello (serve il trascinamento sul canvas); quel codice non è stato toccato.
+- **Cricchetto.** Debito dell'anatomia da 55 a 51 voci. Test, typecheck e build verdi.
+- **Prossima voce.** Ancora U2: pettine.
+
 ### 2026-10-21 — voce 5, primo giro di U2: pittorico all'anatomia
 
 - **Perché pittorico.** È fra i più lontani indicati dal briefing ed è libero. Tool occupati da altre chat (non toccati): tutti quelli con commit di Stilista Link non ancora in master (net-45 escluso perché già fatto), oblique (ramo `claude/eloquent-ritchie`, commit di 20 minuti fa), punto-maglia (ramo suo), zone-pattern e pattern-grammar. Liberi per i prossimi giri: bitmap, broccato, pettine, sfrangiatura.

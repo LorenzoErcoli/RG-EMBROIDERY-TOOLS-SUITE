@@ -24,6 +24,7 @@ import {
   type DstBlock, type Point,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
+import { scheletro, sezioneSorgente, sezione, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero } from '@rg/ui/anatomia';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { sfrangia, defaultSfrangiaturaParams, type EsitoSfrangiatura } from './frange';
@@ -32,132 +33,81 @@ import { riquadroDi, gruppoRicamo, gruppoFrange, gruppoZone, svgDocumento, TINTE
 
 export { defaultSfrangiaturaParams };
 
-interface Campo { id: string; key: keyof typeof defaultSfrangiaturaParams; min?: number; max?: number; int?: boolean }
+interface Campo {
+  id: string; key: keyof typeof defaultSfrangiaturaParams; etichetta: string; unita: string; passo: number;
+  min?: number; max?: number; int?: boolean; aiuto?: string;
+}
 const CAMPI: Campo[] = [
-  { id: 'lunghezzaMinMm', key: 'lunghezzaMinMm', min: 0, max: 12 },
-  { id: 'lunghezzaMaxMm', key: 'lunghezzaMaxMm', min: 0, max: 12 },
-  { id: 'aperturaMinDeg', key: 'aperturaMinDeg', min: 0, max: 80 },
-  { id: 'aperturaMaxDeg', key: 'aperturaMaxDeg', min: 0, max: 80 },
-  { id: 'sormontoMm', key: 'sormontoMm', min: 0, max: 10 },
-  { id: 'pennelloMm', key: 'pennelloMm', min: 0.5, max: 40 },
-  { id: 'seme', key: 'seme', min: 1, max: 9999, int: true },
+  { id: 'lunghezzaMinMm', key: 'lunghezzaMinMm', etichetta: 'Lunghezza min', unita: 'mm', passo: 0.5, min: 0, max: 12 },
+  { id: 'lunghezzaMaxMm', key: 'lunghezzaMaxMm', etichetta: 'Lunghezza max', unita: 'mm', passo: 0.5, min: 0, max: 12 },
+  { id: 'aperturaMinDeg', key: 'aperturaMinDeg', etichetta: 'Apertura min', unita: '°', passo: 1, min: 0, max: 80 },
+  { id: 'aperturaMaxDeg', key: 'aperturaMaxDeg', etichetta: 'Apertura max', unita: '°', passo: 1, min: 0, max: 80 },
+  { id: 'sormontoMm', key: 'sormontoMm', etichetta: 'Sormonto', unita: 'mm', passo: 0.5, min: 0, max: 10, aiuto: 'quanto ogni frangia entra di sicuro nella macchia vicina: alza il minimo, non il massimo' },
+  { id: 'pennelloMm', key: 'pennelloMm', etichetta: 'Pennello', unita: 'mm', passo: 0.5, min: 0.5, max: 40, aiuto: "è il raggio d'azione: si sfrangia solo dove passi" },
+  { id: 'seme', key: 'seme', etichetta: 'Variante', unita: '#', passo: 1, min: 1, max: 9999, int: true, aiuto: "Stessa variante = stesso identico ricamo. Cambiala per un'altra estrazione di lunghezze e aperture." },
 ];
 
 const n1 = (v: number): string => v.toLocaleString('it-IT', { maximumFractionDigits: 1 });
 
 export function mountSfrangiatura(root: HTMLElement, opts: { backHref?: string } = {}): void {
-  root.innerHTML = `
-  ${topbar('Sfrangiatura', opts.backHref)}
-  <div class="rg-workspace sfr-workspace">
-    <aside class="rg-workspace__panel">
+  const campo = (id: string): string => {
+    const c = CAMPI.find((x) => x.id === id)!;
+    return campoNumero({ id: c.id, etichetta: c.etichetta, unita: c.unita, valore: defaultSfrangiaturaParams[c.key] as number, passo: c.passo, min: c.min, max: c.max, aiuto: c.aiuto });
+  };
+  const griglia = (ids: string[], dopo = ''): string =>
+    `<div class="rg-param-grid" style="--rg-input-numeric-width: 7ch">\n    ${ids.map(campo).join('\n    ')}${dopo}\n  </div>`;
 
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">01</span><h3 class="rg-param-section__title">Ricamo di partenza</h3></div>
-        <div class="rg-param-grid">
-          <div class="rg-file-input rg-param-grid__wide">
-            <label class="rg-file-input__control">
-              <input type="file" id="file" accept=".dst">
-              <span class="rg-button rg-button--outline">Carica un DST…</span>
-            </label>
-            <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file caricato.</p>
-          </div>
-          <dl class="rg-key-value rg-param-grid__wide" id="fileInfo" hidden></dl>
-        </div>
-      </section>
-
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">02</span><h3 class="rg-param-section__title">Aghi</h3></div>
-        <ul class="rg-color-map" id="aghi">
-          <li><p class="rg-color-map__empty">Nessun DST caricato: qui compariranno gli aghi del file.</p></li>
-        </ul>
-      </section>
-
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">03</span><h3 class="rg-param-section__title">Zone da sfrangiare</h3></div>
-        <div class="rg-param-grid">
-          <div class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Strumento</span>
-            <div class="rg-segmented" id="modo" role="group" aria-label="Strumento sull'anteprima">
-              <button type="button" class="rg-segmented__item rg-segmented__item--active" data-modo="sposta" aria-pressed="true">Sposta</button>
-              <button type="button" class="rg-segmented__item" data-modo="marca" aria-pressed="false">Marca</button>
-              <button type="button" class="rg-segmented__item" data-modo="cancella" aria-pressed="false">Cancella</button>
-            </div>
-            <span class="rg-field__help">Con «Sposta» il trascinamento muove la vista; con «Marca» disegna la zona.</span>
-          </div>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Pennello</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="pennelloMm" type="number" min="0.5" max="40" step="0.5"><span>mm</span></span>
-            <span class="rg-field__help">è il raggio d'azione: si sfrangia solo dove passi</span>
-          </label>
-          <dl class="rg-key-value rg-param-grid__wide"><dt>Zone marcate</dt><dd id="zoneCount">0</dd></dl>
-          <div class="rg-cluster rg-param-grid__wide">
-            <button type="button" id="puliBtn" class="rg-button rg-button--danger" disabled>Cancella tutte le zone</button>
-          </div>
-        </div>
-      </section>
-
-      <details class="rg-param-section rg-disclosure" open>
-        <summary class="rg-param-section__header"><span class="rg-param-section__index">04</span><h3 class="rg-param-section__title">Frangia</h3></summary>
-        <div class="rg-param-grid" style="--rg-input-numeric-width: 7ch">
-          <label class="rg-field">
-            <span class="rg-field__label">Lunghezza min</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="lunghezzaMinMm" type="number" min="0" max="12" step="0.5"><span>mm</span></span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Lunghezza max</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="lunghezzaMaxMm" type="number" min="0" max="12" step="0.5"><span>mm</span></span>
-          </label>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Sormonto</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="sormontoMm" type="number" min="0" max="10" step="0.5"><span>mm</span></span>
-            <span class="rg-field__help">quanto ogni frangia entra di sicuro nella macchia vicina: alza il minimo, non il massimo</span>
-          </label>
-        </div>
-      </details>
-
-      <details class="rg-param-section rg-disclosure" open>
-        <summary class="rg-param-section__header"><span class="rg-param-section__index">05</span><h3 class="rg-param-section__title">Incrocio</h3></summary>
-        <div class="rg-param-grid" style="--rg-input-numeric-width: 7ch">
-          <label class="rg-field">
-            <span class="rg-field__label">Apertura min</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="aperturaMinDeg" type="number" min="0" max="80" step="1"><span>°</span></span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Apertura max</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="aperturaMaxDeg" type="number" min="0" max="80" step="1"><span>°</span></span>
-          </label>
-          <p class="rg-field__help rg-param-grid__wide">Di quanto la frangia si scosta dalla sua fila. Il verso alterna fra frange vicine: è così che nasce la X. A 0 restano parallele.</p>
-          <div class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Variante</span>
-            <div class="rg-cluster">
-              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="seme" type="number" min="1" max="9999" step="1"><span>#</span></span>
-              <button type="button" id="rigeneraBtn" class="rg-button rg-button--outline rg-button--small">Rigenera</button>
-            </div>
-            <span class="rg-field__help">Stessa variante = stesso identico ricamo. Cambiala per un'altra estrazione di lunghezze e aperture.</span>
-          </div>
-        </div>
-      </details>
-
-    </aside>
-
-    <div class="rg-workspace__stage">
-      <header class="rg-workspace__stage-header">
-        <h2 class="rg-h3">Anteprima</h2>
-        <div class="rg-cluster">
-          <button class="rg-button rg-button--ghost rg-button--small" id="fitBtn" type="button">Adatta</button>
-          <button class="rg-button rg-button--outline rg-button--small" id="exportSvgBtn" type="button">Esporta SVG</button>
-          <button class="rg-button rg-button--primary rg-button--small" id="exportDstBtn" type="button">Esporta DST</button>
-        </div>
-      </header>
-      <div class="rg-workspace__canvas" id="canvas">
-        <div class="rg-workspace__layer" id="layer"></div>
+  root.innerHTML = scheletro({
+    topbar: topbar('Sfrangiatura', opts.backHref),
+    classe: 'sfr-workspace',
+    pannello: [
+      // Un DST porta già la sua misura e un progetto di qui è un DST: niente «Apri progetto» né larghezza reale.
+      sezioneSorgente({
+        tipo: 'dst', accetta: '.dst', etichettaCarica: 'Carica un DST…', statoIniziale: 'Nessun file caricato.',
+        progetto: false, larghezzaReale: false,
+        extra: '<dl class="rg-key-value rg-param-grid__wide" id="fileInfo" hidden></dl>',
+      }),
+      sezione({
+        indice: 2, titolo: 'Aghi',
+        contenuto: `<ul class="rg-color-map" id="aghi">
+    <li><p class="rg-color-map__empty">Nessun DST caricato: qui compariranno gli aghi del file.</p></li>
+  </ul>`,
+      }),
+      sezione({
+        indice: 3, titolo: 'Zone da sfrangiare',
+        contenuto: `<div class="rg-param-grid">
+    <div class="rg-field rg-param-grid__wide">
+      <span class="rg-field__label">Strumento</span>
+      <div class="rg-segmented" id="modo" role="group" aria-label="Strumento sull'anteprima">
+        <button type="button" class="rg-segmented__item rg-segmented__item--active" data-modo="sposta" aria-pressed="true">Sposta</button>
+        <button type="button" class="rg-segmented__item" data-modo="marca" aria-pressed="false">Marca</button>
+        <button type="button" class="rg-segmented__item" data-modo="cancella" aria-pressed="false">Cancella</button>
       </div>
-      <footer class="rg-workspace__statusbar">
-        <span id="status">Carica un DST per cominciare.</span>
-        <span class="rg-mono" id="zoom">zoom 100%</span>
-      </footer>
+      <span class="rg-field__help">Con «Sposta» il trascinamento muove la vista; con «Marca» disegna la zona.</span>
     </div>
-  </div>`;
+    ${campo('pennelloMm')}
+    <dl class="rg-key-value rg-param-grid__wide"><dt>Zone marcate</dt><dd id="zoneCount">0</dd></dl>
+    <div class="rg-cluster rg-param-grid__wide">
+      <button type="button" id="puliBtn" class="rg-button rg-button--danger" disabled>Cancella tutte le zone</button>
+    </div>
+  </div>`,
+      }),
+      sezione({ indice: 4, titolo: 'Frangia', apribile: true, aperta: true, contenuto: griglia(['lunghezzaMinMm', 'lunghezzaMaxMm', 'sormontoMm']) }),
+      sezione({
+        indice: 5, titolo: 'Incrocio', apribile: true, aperta: true,
+        contenuto: griglia(['aperturaMinDeg', 'aperturaMaxDeg'], `
+    <p class="rg-field__help rg-param-grid__wide">Di quanto la frangia si scosta dalla sua fila. Il verso alterna fra frange vicine: è così che nasce la X. A 0 restano parallele.</p>
+    ${campo('seme')}
+    <div class="rg-cluster rg-param-grid__wide">
+      <button type="button" id="rigeneraBtn" class="rg-button rg-button--outline rg-button--small">Rigenera</button>
+    </div>`),
+      }),
+    ],
+    // Il ricalcolo è continuo (ogni manopola rigenera le frange): niente Genera, niente «Ricalcola da solo».
+    anteprima: {},
+  });
+  attivaCampiNumero(root);
+  root.querySelector('#status')!.textContent = 'Carica un DST per cominciare.';
 
   const $ = (id: string): HTMLElement => root.querySelector(`#${id}`) as HTMLElement;
   const params = { ...defaultSfrangiaturaParams };
@@ -178,20 +128,20 @@ export function mountSfrangiatura(root: HTMLElement, opts: { backHref?: string }
   // ---- i campi ---------------------------------------------------------------
   for (const c of CAMPI) {
     const el = $(c.id) as HTMLInputElement;
-    el.value = String(params[c.key]);
+    impostaNumero(el, params[c.key] as number);
     el.addEventListener('change', () => {
-      let v = c.int ? Math.round(Number(el.value)) : Number(el.value);
+      let v = c.int ? Math.round(leggiCampo(el)) : leggiCampo(el);
       if (!Number.isFinite(v)) v = Number(defaultSfrangiaturaParams[c.key]);
       if (c.min !== undefined) v = Math.max(c.min, v);
       if (c.max !== undefined) v = Math.min(c.max, v);
       (params[c.key] as number) = v;
-      el.value = String(v);
+      impostaNumero(el, v);
       controllaIntervalli();
       rigenera();
     });
   }
   const rileggiCampi = (): void => {
-    for (const c of CAMPI) ($(c.id) as HTMLInputElement).value = String(params[c.key]);
+    for (const c of CAMPI) impostaNumero($(c.id) as HTMLInputElement, params[c.key] as number);
   };
   /** Un minimo sopra il massimo è un errore da dire, non da correggere di nascosto (regola DS). */
   const controllaIntervalli = (): void => {
@@ -293,7 +243,7 @@ export function mountSfrangiatura(root: HTMLElement, opts: { backHref?: string }
     if (!zone.length) $('status').textContent = 'Nessuna zona marcata: scegli «Marca» e passa il pennello dove vuoi le frange.';
   };
 
-  ($('file') as HTMLInputElement).addEventListener('change', (ev) => {
+  ($('fileInput') as HTMLInputElement).addEventListener('change', (ev) => {
     const f = (ev.target as HTMLInputElement).files?.[0];
     if (!f) return;
     f.arrayBuffer().then((buf) => {
@@ -393,7 +343,7 @@ export function mountSfrangiatura(root: HTMLElement, opts: { backHref?: string }
       $('status').textContent = saveOutcomeMessage(r, nome);
     });
   });
-  $('exportSvgBtn').addEventListener('click', () => {
+  $('exportBtn').addEventListener('click', () => {
     if (!esito) return;
     const nome = nomeProposto('.svg');
     saveTextFile(svgDocumento(riquadro, gruppoRicamo(esito.blocchi)), {
