@@ -41,6 +41,19 @@
 
 ## Giri
 
+### 2026-10-21 — voce 5, terzo giro di U2: pettine all'anatomia
+
+- **Fatto.** `apps/pettine/src/tool.ts` costruisce topbar, sezione 01, tutti i 20 campi numerici (i 15 parametri, la larghezza reale e i 4 del ritaglio), intestazione e barra di stato con `@rg/ui/anatomia`. I testi, le unità, i limiti e gli aiuti dei campi sono gli stessi di prima: li ho ricavati dal vecchio pannello per macchina, non riscritti. Cambia in vista:
+  - **Export:** «Salva SVG · Salva DST» diventa «Esporta SVG · **Esporta DST**» (il DST è il bottone pieno, **Genera** non lo è più), nell'ordine fisso Verifica · Ricalcola da solo · Genera · Simula · Adatta · Esporta. Verifica resta sua, a sinistra come vista.
+  - **Sezione 01:** si chiama **Cartamodello** (decisione U-D3 di Lorenzo) invece di «Blocchi e fotografia»; la fotografia resta lì dentro, sotto la larghezza reale. Il bottone «Usa il pannello di esempio» è il bottone demo comune, con la sua etichetta di prima. «Riapri un progetto…» diventa «Apri progetto o DST…», con la spiegazione di pettine («la fotografia va ricaricata») al posto di quella generica.
+  - **Campi:** accettano la virgola e le frecce; un testo non numerico torna all'ultimo valore buono invece che al valore di default.
+  - **Ricalcola da solo:** c'è, spento. Se acceso, ogni cambio che prima segnava «Parametri cambiati» rigenera subito.
+  - Le sezioni apribili si ricordano ancora come le hai lasciate (stessa chiave in localStorage).
+- **Il ricamo non cambia.** Pannello di esempio, ritaglio 100/50 di 60,5 × 40 mm, senza fotografia: stessa riga di stato (5530 punti · 17,46 m · 6 aghi), stessa tabella dell'esito, DST di 69527 byte con la stessa impronta, in master e nel ramo. Simulatore e Verifica provati nel ramo: si accendono. Nessun errore in console.
+- **Non provato nel browser:** il ritaglio tirato col mouse, la fotografia caricata, riaprire un progetto da DST/SVG. Il codice dietro (pointer, `leggiImmagine`, `riapri`) non è stato toccato, tranne il modo in cui scrive i numeri nei campi.
+- **Cricchetto.** Debito dell'anatomia da 51 a 47 voci. Test, typecheck, build verdi.
+- **Prossima voce.** Ancora U2: bitmap, poi broccato; poi, quando saranno liberi, i tool su cui lavorano altre chat.
+
 ### 2026-10-21 — voce 5, secondo giro di U2: sfrangiatura all'anatomia
 
 - **Perché sfrangiatura prima di pettine.** Entrambi liberi; sfrangiatura è la più piccola (435 righe contro 726) e non ha nessuna parte fuori dall'anatomia. Pettine resta il prossimo.

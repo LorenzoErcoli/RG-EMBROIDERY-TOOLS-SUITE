@@ -25,6 +25,7 @@ import '@rg/ui/rg.css';
 import './pettine.css';
 import { DST_FILE, readDstMetadata, conBusta, type PixelImage } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
+import { scheletro, sezioneSorgente, sezione, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero, type OpzioniCampoNumero } from '@rg/ui/anatomia';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
@@ -54,10 +55,33 @@ const CAMPI: Campo[] = [
   { id: 'traslazioneMm2', key: 'traslaMaxMm2', min: 0, max: 200000 },
 ];
 
+// Testi, unità e limiti dei campi numerici (le stesse parole di prima, ora costruite da campoNumero).
+const DATI_CAMPI: Record<string, Omit<OpzioniCampoNumero, 'id'>> = {
+  realWidth: {etichetta:"Larghezza reale del pannello",unita:"mm",valore:419.45,passo:1,min:10,aiuto:"Comanda la scala di tutto: i millimetri del ritaglio e dei punti sono misurati su questa.",largo:true},
+  ritaglioXMm: {etichetta:"Da sinistra",unita:"mm",valore:0,passo:1,min:0,attributi:"aria-describedby=\"aiutoRitaglio\""},
+  ritaglioYMm: {etichetta:"Dall'alto",unita:"mm",valore:0,passo:1,min:0,attributi:"aria-describedby=\"aiutoRitaglio\""},
+  ritaglioLarghezzaMm: {etichetta:"Larghezza",unita:"mm",valore:0,passo:1,min:0,attributi:"aria-describedby=\"aiutoRitaglio\""},
+  ritaglioAltezzaMm: {etichetta:"Altezza",unita:"mm",valore:0,passo:1,min:0,attributi:"aria-describedby=\"aiutoRitaglio\""},
+  densitySpacingMm: {etichetta:"Distanza tra le linee",unita:"mm",valore:2,passo:0.5,min:0.8,max:12,aiuto:"Di quanto una linea di base dista dalla successiva, misurata di traverso. Si devono sovrastare: a 2 mm i denti di una coprono la vicina."},
+  denteInterlineMm: {etichetta:"Densità del pettine",unita:"mm",valore:1.5,passo:0.1,min:1,max:8,aiuto:"Distanza fra un dente e il successivo lungo la linea di base. Non scende sotto 1."},
+  denteMinMm: {etichetta:"Lunghezza minima",unita:"mm",valore:3,passo:0.5,min:0.5,max:20,attributi:"aria-describedby=\"aiutoDente\""},
+  denteMaxMm: {etichetta:"Lunghezza massima",unita:"mm",valore:5,passo:0.5,min:0.5,max:20,attributi:"aria-describedby=\"aiutoDente\""},
+  aperturaDeg: {etichetta:"Apertura",unita:"°",valore:40,passo:1,min:0,max:80,aiuto:"Di quanto il dente si scosta, a caso, dal verso del chiaro. A 0 vanno tutti dritti."},
+  sormontoMm: {etichetta:"Sormonto",unita:"mm",valore:4,passo:0.5,min:0,max:20,aiuto:"Se entro tanto, verso il chiaro, c'è una tinta più chiara, il dente si cuce anche con quella: prima, e sotto. È così che le tinte si mescolano dentro un gruppo."},
+  sconfinamentoMm: {etichetta:"Sconfinamento fra blocchi",unita:"mm",valore:1,passo:0.5,min:0,max:10,aiuto:"Quanto le righe di un blocco entrano in quello accanto, perché la giunta non resti nuda. Alzandolo le righe dei due blocchi si affiancano e si vede una banda più fitta: a 2,5 mm sono il doppio che a 1."},
+  passaggioMaxMm: {etichetta:"Passaggio più lungo",unita:"mm",valore:30,passo:1,min:4,max:250,aiuto:"Fin dove un passaggio si cuce comunque, anche se un pezzetto si vedrà. Oltre questa misura il passaggio si fa lo stesso, ma solo se il cammino resta nascosto sotto ciò che verrà dopo e a vista ne resta meno di 3 mm: sul pannello a sei tinte i tagli passano da 424 a 168. Negli ultimi due colori i passaggi lunghi non si fanno, perché lì non viene più nessuno a coprirli."},
+  passaggioNascostoMm: {etichetta:"Passaggio nascosto più lungo",unita:"mm",valore:400,passo:5,min:4,max:400,aiuto:"Fin dove si prova un passaggio che va oltre la misura qui sopra, e che quindi si fa solo se resta nascosto. Nascosto vuol dire: nella banda di sovrapposizione fra il colore in corso e uno più scuro accanto, o sulla linea esatta di una base futura dello stesso colore. Dentro il proprio colore un passaggio si vede fra un dente e l’altro, e allora si taglia. Le macchie piccole non contano qui: per incastrarle in una riga grande il corridoio può arrivare a 15 cm."},
+  golaMm: {etichetta:"Gola attraversata",unita:"mm",valore:30,passo:1,min:0,max:100,aiuto:"Fin dove la riga più esterna di una fascia attraversa una gola senza spezzarsi: un tratto di tinta più chiara, già cucita, o troppo addossato alla riga prima, incastrato fra due tratti della stessa tinta. La riga dentata continua sopra e raggiunge l’altro pezzo, invece di lasciarlo orfano con un taglio. A 0 non lo fa mai."},
+  tintaMinimaMm: {etichetta:"Tinta più corta",unita:"mm",valore:6,passo:1,min:0,max:40,aiuto:"Quanto deve durare una tinta lungo una riga per meritare un cambio di colore. Sotto, la riga tiene il colore che aveva: senza, restano pezzetti da 5 mm che il loro colore deve andarsi a prendere da lontano."},
+  spianaturaMm: {etichetta:"Spianatura",unita:"mm",valore:5,passo:0.5,min:0.5,max:20},
+  chiusuraMm: {etichetta:"Chiusura",unita:"mm",valore:3,passo:0.5,min:0,max:20},
+  addolcimentoMmMm: {etichetta:"Addolcimento",unita:"mm/mm",valore:0.15,passo:0.05,min:0,max:1},
+  traslazioneMm2: {etichetta:"Traslazione fino a",unita:"mm²",valore:9000,passo:1000,min:0,max:200000},
+};
+
 /** I numeri si scrivono e si leggono all'italiana: 0,15 e 419,45. */
 const n1 = (v: number): string => v.toLocaleString('it-IT', { maximumFractionDigits: 2 });
 const n0 = (v: number): string => v.toLocaleString('it-IT', { maximumFractionDigits: 0 });
-const leggiNumero = (s: string): number => Number(s.trim().replace(/\s/g, '').replace(',', '.'));
 
 /** La foto, decodificata dal canvas del browser: è l'unico pezzo a DOM di tutta la catena. */
 async function leggiImmagine(file: File): Promise<PixelImage> {
@@ -75,248 +99,124 @@ async function leggiImmagine(file: File): Promise<PixelImage> {
 }
 
 export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}): void {
-  root.innerHTML = `
-  ${topbar('Punto pettine sfrangiato', opts.backHref)}
-  <div class="rg-workspace pettine-workspace">
-    <aside class="rg-workspace__panel">
-
-      <section class="rg-param-section">
-        <div class="rg-param-section__header">
-          <span class="rg-param-section__index">01</span>
-          <h3 class="rg-param-section__title">Blocchi e fotografia</h3>
-        </div>
-        <div class="rg-param-grid">
-          <div class="rg-file-input rg-param-grid__wide">
-            <label class="rg-file-input__control">
-              <input type="file" id="fileBlocchi" accept=".svg,image/svg+xml">
-              <span class="rg-button rg-button--outline">Carica i blocchi…</span>
-            </label>
-            <p class="rg-file-input__status" id="statoBlocchi" role="status">Nessun file caricato. Serve l'SVG con i gruppi di colore.</p>
-            <button type="button" id="esempioBtn" class="rg-button rg-button--ghost" title="Il pannello a sei tinte con cui si lavora, senza fotografia">Usa il pannello di esempio</button>
-          </div>
+  const campo = (id: string): string => campoNumero({ id, ...DATI_CAMPI[id] });
+  root.innerHTML = scheletro({
+    topbar: topbar('Punto pettine sfrangiato', opts.backHref),
+    classe: 'pettine-workspace',
+    pannello: [
+      sezioneSorgente({
+        tipo: 'cartamodello', accetta: '.svg,image/svg+xml', etichettaCarica: 'Carica i blocchi…',
+        statoIniziale: "Nessun file caricato. Serve l'SVG con i gruppi di colore.",
+        demo: 'Usa il pannello di esempio', larghezzaReale: false,
+        extra: `${campo('realWidth')}
+          <dl class="rg-key-value rg-param-grid__wide" id="infoBlocchi" hidden></dl>
           <div class="rg-file-input rg-param-grid__wide">
             <label class="rg-file-input__control">
               <input type="file" id="fileFoto" accept="image/*,.bmp">
               <span class="rg-button rg-button--outline">Carica la fotografia…</span>
             </label>
             <p class="rg-file-input__status" id="statoFoto" role="status">Nessun file caricato. Senza, i denti attraversano ogni bordo invece di fermarsi dove la foto stacca.</p>
-          </div>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Larghezza reale del pannello</span>
-            <span class="rg-field-with-unit">
-              <input class="rg-input rg-input--numeric" id="realWidthMm" type="text" inputmode="decimal" value="419,45">
-              <span>mm</span>
-            </span>
-            <span class="rg-field__help">Comanda la scala di tutto: i millimetri del ritaglio e dei punti sono misurati su questa.</span>
-          </label>
-          <dl class="rg-key-value rg-param-grid__wide" id="infoBlocchi" hidden></dl>
-          <div class="rg-file-input rg-param-grid__wide">
-            <label class="rg-file-input__control">
-              <input type="file" id="fileProgetto" accept=".dst,.svg">
-              <span class="rg-button rg-button--ghost">Riapri un progetto…</span>
-            </label>
-            <p class="rg-file-input__status" id="statoProgetto" role="status">Un DST o un SVG usciti da qui riportano dentro i blocchi, il ritaglio e tutti i parametri. La fotografia no: va ricaricata.</p>
-          </div>
-        </div>
-      </section>
-
-      <section class="rg-param-section">
-        <div class="rg-param-section__header">
-          <span class="rg-param-section__index">02</span>
-          <h3 class="rg-param-section__title">Ritaglio</h3>
-        </div>
-        <div class="rg-param-grid">
-          <p class="rg-field__help rg-param-grid__wide" id="aiutoRitaglio">
-            Il rettangolo da generare, misurato sul pannello intero: «da sinistra» e «dall'alto» sono l'angolo
-            in alto a sinistra, gli stessi X e Y che leggi in Illustrator. A larghezza e altezza zero il
-            ritaglio è spento. Si può anche tirare col mouse sull'anteprima.
-          </p>
-          <div class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Strumento</span>
-            <div class="rg-segmented" id="modo" role="group" aria-label="Strumento sull'anteprima">
-              <button type="button" class="rg-segmented__item rg-segmented__item--active" data-modo="sposta" aria-pressed="true">Sposta</button>
-              <button type="button" class="rg-segmented__item" data-modo="ritaglia" aria-pressed="false">Ritaglia</button>
-            </div>
-          </div>
-          <label class="rg-field">
-            <span class="rg-field__label">Da sinistra</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="ritaglioXMm" type="text" inputmode="decimal" value="0" aria-describedby="aiutoRitaglio"><span>mm</span></span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Dall'alto</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="ritaglioYMm" type="text" inputmode="decimal" value="0" aria-describedby="aiutoRitaglio"><span>mm</span></span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Larghezza</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="ritaglioLarghezzaMm" type="text" inputmode="decimal" value="0" aria-describedby="aiutoRitaglio"><span>mm</span></span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Altezza</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="ritaglioAltezzaMm" type="text" inputmode="decimal" value="0" aria-describedby="aiutoRitaglio"><span>mm</span></span>
-          </label>
-          <p class="rg-field__help rg-param-grid__wide" id="statoRitaglio" role="status">Ritaglio spento: si genera tutto il pannello, e ci vuole qualche secondo.</p>
-          <div class="rg-cluster rg-param-grid__wide">
-            <button type="button" id="tuttoBtn" class="rg-button rg-button--outline" disabled>Tutto il pannello</button>
-          </div>
-        </div>
-      </section>
-
-      <details class="rg-param-section rg-disclosure" id="sezLinee" open>
-        <summary class="rg-param-section__header rg-disclosure__trigger">
-          <span class="rg-param-section__index">03</span>
-          <span class="rg-param-section__title">Linee</span>
-        </summary>
-        <div class="rg-param-grid">
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Distanza tra le linee</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="densitySpacingMm" type="text" inputmode="decimal" value="2"><span>mm</span></span>
-            <span class="rg-field__help">Di quanto una linea di base dista dalla successiva, misurata di traverso. Si devono sovrastare: a 2 mm i denti di una coprono la vicina.</span>
-          </label>
-        </div>
-      </details>
-
-      <details class="rg-param-section rg-disclosure" id="sezPettine" open>
-        <summary class="rg-param-section__header rg-disclosure__trigger">
-          <span class="rg-param-section__index">04</span>
-          <span class="rg-param-section__title">Pettine</span>
-        </summary>
-        <div class="rg-param-grid">
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Densità del pettine</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="denteInterlineMm" type="text" inputmode="decimal" value="1,5"><span>mm</span></span>
-            <span class="rg-field__help">Distanza fra un dente e il successivo lungo la linea di base. Non scende sotto 1.</span>
-          </label>
-          <label class="rg-field" id="campoDenteMin">
-            <span class="rg-field__label">Lunghezza minima</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="denteMinMm" type="text" inputmode="decimal" value="3" aria-describedby="aiutoDente"><span>mm</span></span>
-          </label>
-          <label class="rg-field" id="campoDenteMax">
-            <span class="rg-field__label">Lunghezza massima</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="denteMaxMm" type="text" inputmode="decimal" value="5" aria-describedby="aiutoDente"><span>mm</span></span>
-          </label>
-          <p class="rg-field__help rg-param-grid__wide" id="aiutoDente">Quanto è lungo un dente: si estrae fra questi due, e quella è la lunghezza del punto.</p>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Apertura</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="aperturaDeg" type="text" inputmode="decimal" value="40"><span>°</span></span>
-            <span class="rg-field__help">Di quanto il dente si scosta, a caso, dal verso del chiaro. A 0 vanno tutti dritti.</span>
-          </label>
-          <label class="rg-toggle rg-param-grid__wide">
-            <input type="checkbox" id="denti" checked><span class="rg-toggle__track"></span><span>Metti i denti</span>
-          </label>
-          <p class="rg-field__help rg-param-grid__wide">Senza denti escono solo le linee di base: si guarda la struttura in un attimo, e non si costruisce il DST.</p>
-        </div>
-      </details>
-
-      <details class="rg-param-section rg-disclosure" id="sezSormonto">
-        <summary class="rg-param-section__header rg-disclosure__trigger">
-          <span class="rg-param-section__index">05</span>
-          <span class="rg-param-section__title">Sovrapposizione</span>
-        </summary>
-        <div class="rg-param-grid">
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Sormonto</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="sormontoMm" type="text" inputmode="decimal" value="4"><span>mm</span></span>
-            <span class="rg-field__help">Se entro tanto, verso il chiaro, c'è una tinta più chiara, il dente si cuce anche con quella: prima, e sotto. È così che le tinte si mescolano dentro un gruppo.</span>
-          </label>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Sconfinamento fra blocchi</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="sconfinamentoMm" type="text" inputmode="decimal" value="1"><span>mm</span></span>
-            <span class="rg-field__help">Quanto le righe di un blocco entrano in quello accanto, perché la giunta non resti nuda. Alzandolo le righe dei due blocchi si affiancano e si vede una banda più fitta: a 2,5 mm sono il doppio che a 1.</span>
-          </label>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Passaggio più lungo</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="passaggioMaxMm" type="text" inputmode="decimal" value="30"><span>mm</span></span>
-            <span class="rg-field__help">Fin dove un passaggio si cuce comunque, anche se un pezzetto si vedrà. Oltre questa misura il passaggio si fa lo stesso, ma solo se il cammino resta nascosto sotto ciò che verrà dopo e a vista ne resta meno di 3 mm: sul pannello a sei tinte i tagli passano da 424 a 168. Negli ultimi due colori i passaggi lunghi non si fanno, perché lì non viene più nessuno a coprirli.</span>
-          </label>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Passaggio nascosto più lungo</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="passaggioNascostoMm" type="text" inputmode="decimal" value="400"><span>mm</span></span>
-            <span class="rg-field__help">Fin dove si prova un passaggio che va oltre la misura qui sopra, e che quindi si fa solo se resta nascosto. Nascosto vuol dire: nella banda di sovrapposizione fra il colore in corso e uno più scuro accanto, o sulla linea esatta di una base futura dello stesso colore. Dentro il proprio colore un passaggio si vede fra un dente e l’altro, e allora si taglia. Le macchie piccole non contano qui: per incastrarle in una riga grande il corridoio può arrivare a 15 cm.</span>
-          </label>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Gola attraversata</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="golaMm" type="text" inputmode="decimal" value="30"><span>mm</span></span>
-            <span class="rg-field__help">Fin dove la riga più esterna di una fascia attraversa una gola senza spezzarsi: un tratto di tinta più chiara, già cucita, o troppo addossato alla riga prima, incastrato fra due tratti della stessa tinta. La riga dentata continua sopra e raggiunge l’altro pezzo, invece di lasciarlo orfano con un taglio. A 0 non lo fa mai.</span>
-          </label>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Tinta più corta</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="tintaMinimaMm" type="text" inputmode="decimal" value="6"><span>mm</span></span>
-            <span class="rg-field__help">Quanto deve durare una tinta lungo una riga per meritare un cambio di colore. Sotto, la riga tiene il colore che aveva: senza, restano pezzetti da 5 mm che il loro colore deve andarsi a prendere da lontano.</span>
-          </label>
-        </div>
-      </details>
-
-      <details class="rg-param-section rg-disclosure" id="sezCurve">
-        <summary class="rg-param-section__header rg-disclosure__trigger">
-          <span class="rg-param-section__index">06</span>
-          <span class="rg-param-section__title">Curve</span>
-        </summary>
-        <div class="rg-param-grid">
-          <label class="rg-field">
-            <span class="rg-field__label">Spianatura</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="spianaturaMm" type="text" inputmode="decimal" value="5"><span>mm</span></span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Chiusura</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="chiusuraMm" type="text" inputmode="decimal" value="3"><span>mm</span></span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Addolcimento</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="addolcimentoMmMm" type="text" inputmode="decimal" value="0,15"><span>mm/mm</span></span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Traslazione fino a</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="traslazioneMm2" type="text" inputmode="decimal" value="9000"><span>mm²</span></span>
-          </label>
-          <p class="rg-field__help rg-param-grid__wide">I gruppi più piccoli della soglia si costruiscono spostando il muro chiaro senza deformarlo; i più grandi facendo crescere la macchia di un passo per volta. Spianatura e chiusura smussano gli spigoli; l'addolcimento cresce con la distanza dal muro.</p>
-        </div>
-      </details>
-
-      <details class="rg-param-section rg-disclosure" id="sezEsito">
-        <summary class="rg-param-section__header rg-disclosure__trigger">
-          <span class="rg-param-section__index">07</span>
-          <span class="rg-param-section__title">Esito</span>
-        </summary>
-        <div class="rg-param-grid">
-          <div class="rg-alert rg-alert--warning rg-param-grid__wide" id="esitoVecchio" hidden>
-            <p class="rg-alert__message">Parametri cambiati dopo l'ultima generazione: questi numeri sono di prima. Premi «Genera».</p>
-          </div>
-          <p class="rg-field__help rg-param-grid__wide" id="esitoVuoto">Nessuna generazione ancora: premi «Genera» e qui compaiono i numeri della cucitura.</p>
-          <dl class="rg-key-value rg-param-grid__wide" id="esito" hidden></dl>
-          <label class="rg-toggle rg-param-grid__wide">
-            <input type="checkbox" id="mostraNudi"><span class="rg-toggle__track"></span><span>Segna in rosa quello che resta scoperto</span>
-          </label>
-          <label class="rg-toggle rg-param-grid__wide">
-            <input type="checkbox" id="mostraPassaggi" checked><span class="rg-toggle__track"></span><span>Disegna i passaggi</span>
-          </label>
-          <p class="rg-field__help rg-param-grid__wide">I passaggi sono il filo che va da una riga all'altra invece di essere tagliato: nel disegno sono più sottili e trasparenti del ricamo, perché nel pannello finiscono sotto le righe che vengono dopo.</p>
-        </div>
-      </details>
-
-    </aside>
-
-    <div class="rg-workspace__stage">
-      <header class="rg-workspace__stage-header">
-        <h2 class="rg-h3">Anteprima</h2>
-        <div class="rg-cluster">
-          <button type="button" id="generaBtn" class="rg-button rg-button--primary" disabled>Genera</button>
-          <button type="button" id="salvaSvgBtn" class="rg-button rg-button--outline" disabled>Salva SVG</button>
-          <button type="button" id="salvaDstBtn" class="rg-button rg-button--outline" disabled>Salva DST</button>
-          <button type="button" id="vistaBtn" class="rg-button rg-button--ghost" aria-pressed="false" disabled>Verifica</button>
-          <button type="button" id="simulaBtn" class="rg-button rg-button--ghost" aria-pressed="false" disabled title="Il simulatore: il filo si cuce sullo schermo nell'ordine del DST">Simula</button>
-          <button type="button" id="fitBtn" class="rg-button rg-button--ghost">Adatta</button>
-        </div>
-      </header>
-      <div class="rg-workspace__canvas" id="canvas">
-        <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
+          </div>`,
+      }),
+      sezione({
+        indice: 2, titolo: "Ritaglio",
+        contenuto: `<div class="rg-param-grid">
+    <p class="rg-field__help rg-param-grid__wide" id="aiutoRitaglio">
+      Il rettangolo da generare, misurato sul pannello intero: «da sinistra» e «dall'alto» sono l'angolo
+      in alto a sinistra, gli stessi X e Y che leggi in Illustrator. A larghezza e altezza zero il
+      ritaglio è spento. Si può anche tirare col mouse sull'anteprima.
+    </p>
+    <div class="rg-field rg-param-grid__wide">
+      <span class="rg-field__label">Strumento</span>
+      <div class="rg-segmented" id="modo" role="group" aria-label="Strumento sull'anteprima">
+        <button type="button" class="rg-segmented__item rg-segmented__item--active" data-modo="sposta" aria-pressed="true">Sposta</button>
+        <button type="button" class="rg-segmented__item" data-modo="ritaglia" aria-pressed="false">Ritaglia</button>
       </div>
-      <div id="simControlli" class="sim-controlli" hidden></div>
-      <footer class="rg-workspace__statusbar">
-        <span id="status">Carica i blocchi e la fotografia, poi premi «Genera».</span>
-        <span class="rg-mono" id="zoom">zoom 100%</span>
-      </footer>
     </div>
-  </div>`;
+    ${campo('ritaglioXMm')}
+    ${campo('ritaglioYMm')}
+    ${campo('ritaglioLarghezzaMm')}
+    ${campo('ritaglioAltezzaMm')}
+    <p class="rg-field__help rg-param-grid__wide" id="statoRitaglio" role="status">Ritaglio spento: si genera tutto il pannello, e ci vuole qualche secondo.</p>
+    <div class="rg-cluster rg-param-grid__wide">
+      <button type="button" id="tuttoBtn" class="rg-button rg-button--outline" disabled>Tutto il pannello</button>
+    </div>
+  </div>`,
+      }),
+      sezione({
+        indice: 3, titolo: "Linee", id: 'sezLinee', apribile: true, aperta: true,
+        contenuto: `<div class="rg-param-grid">
+    ${campo('densitySpacingMm')}
+  </div>`,
+      }),
+      sezione({
+        indice: 4, titolo: "Pettine", id: 'sezPettine', apribile: true, aperta: true,
+        contenuto: `<div class="rg-param-grid">
+    ${campo('denteInterlineMm')}
+    ${campo('denteMinMm')}
+    ${campo('denteMaxMm')}
+    <p class="rg-field__help rg-param-grid__wide" id="aiutoDente">Quanto è lungo un dente: si estrae fra questi due, e quella è la lunghezza del punto.</p>
+    ${campo('aperturaDeg')}
+    <label class="rg-toggle rg-param-grid__wide">
+      <input type="checkbox" id="denti" checked><span class="rg-toggle__track"></span><span>Metti i denti</span>
+    </label>
+    <p class="rg-field__help rg-param-grid__wide">Senza denti escono solo le linee di base: si guarda la struttura in un attimo, e non si costruisce il DST.</p>
+  </div>`,
+      }),
+      sezione({
+        indice: 5, titolo: "Sovrapposizione", id: 'sezSormonto', apribile: true, aperta: false,
+        contenuto: `<div class="rg-param-grid">
+    ${campo('sormontoMm')}
+    ${campo('sconfinamentoMm')}
+    ${campo('passaggioMaxMm')}
+    ${campo('passaggioNascostoMm')}
+    ${campo('golaMm')}
+    ${campo('tintaMinimaMm')}
+  </div>`,
+      }),
+      sezione({
+        indice: 6, titolo: "Curve", id: 'sezCurve', apribile: true, aperta: false,
+        contenuto: `<div class="rg-param-grid">
+    ${campo('spianaturaMm')}
+    ${campo('chiusuraMm')}
+    ${campo('addolcimentoMmMm')}
+    ${campo('traslazioneMm2')}
+    <p class="rg-field__help rg-param-grid__wide">I gruppi più piccoli della soglia si costruiscono spostando il muro chiaro senza deformarlo; i più grandi facendo crescere la macchia di un passo per volta. Spianatura e chiusura smussano gli spigoli; l'addolcimento cresce con la distanza dal muro.</p>
+  </div>`,
+      }),
+      sezione({
+        indice: 7, titolo: "Esito", id: 'sezEsito', apribile: true, aperta: false,
+        contenuto: `<div class="rg-param-grid">
+    <div class="rg-alert rg-alert--warning rg-param-grid__wide" id="esitoVecchio" hidden>
+      <p class="rg-alert__message">Parametri cambiati dopo l'ultima generazione: questi numeri sono di prima. Premi «Genera».</p>
+    </div>
+    <p class="rg-field__help rg-param-grid__wide" id="esitoVuoto">Nessuna generazione ancora: premi «Genera» e qui compaiono i numeri della cucitura.</p>
+    <dl class="rg-key-value rg-param-grid__wide" id="esito" hidden></dl>
+    <label class="rg-toggle rg-param-grid__wide">
+      <input type="checkbox" id="mostraNudi"><span class="rg-toggle__track"></span><span>Segna in rosa quello che resta scoperto</span>
+    </label>
+    <label class="rg-toggle rg-param-grid__wide">
+      <input type="checkbox" id="mostraPassaggi" checked><span class="rg-toggle__track"></span><span>Disegna i passaggi</span>
+    </label>
+    <p class="rg-field__help rg-param-grid__wide">I passaggi sono il filo che va da una riga all'altra invece di essere tagliato: nel disegno sono più sottili e trasparenti del ricamo, perché nel pannello finiscono sotto le righe che vengono dopo.</p>
+  </div>`,
+      }),
+    ],
+    anteprima: {
+      viste: '<button type="button" id="vistaBtn" class="rg-button rg-button--ghost rg-button--small" aria-pressed="false" disabled>Verifica</button>',
+      ricalcolaDaSolo: { acceso: false, aiuto: 'Tutto il pannello costa qualche secondo: di solito conviene premere Genera dopo aver scelto il ritaglio.' },
+      genera: true, simula: true, esportaSpenti: true,
+    },
+  });
+  attivaCampiNumero(root);
+  // i pezzi che il guscio comune non sa ancora: il controllo della simulazione sotto la tela, i bottoni spenti finché non c'è un esito
+  const simControlli = document.createElement('div');
+  simControlli.id = 'simControlli'; simControlli.className = 'sim-controlli'; simControlli.hidden = true;
+  (root.querySelector('#status')!.parentElement as HTMLElement).before(simControlli);
+  (root.querySelector('#genBtn') as HTMLButtonElement).disabled = true;
+  (root.querySelector('#simBtn') as HTMLButtonElement).disabled = true;
+  root.querySelector('#status')!.textContent = 'Carica i blocchi e la fotografia, poi premi «Genera».';
+  root.querySelector('#progettoStatus')!.textContent = 'Un DST o un SVG usciti da qui riportano dentro i blocchi, il ritaglio e tutti i parametri. La fotografia no: va ricaricata.';
 
   const $ = (id: string): HTMLElement => root.querySelector(`#${id}`) as HTMLElement;
   const input = (id: string): HTMLInputElement => $(id) as HTMLInputElement;
@@ -344,7 +244,7 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
 
   // le sezioni richiudibili si ricordano come le hai lasciate
   for (const d of Array.from(root.querySelectorAll<HTMLDetailsElement>('details.rg-param-section'))) {
-    const chiave = `pettine:${d.id}`;
+    const chiave = `pettine:${d.dataset.sez ?? d.id}`;
     const salvato = localStorage.getItem(chiave);
     if (salvato !== null) d.open = salvato === '1';
     d.addEventListener('toggle', () => localStorage.setItem(chiave, d.open ? '1' : '0'));
@@ -353,8 +253,8 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
   // ---- i campi ---------------------------------------------------------------
   const controllaDente = (): void => {
     const rotto = par.denteMinMm > par.denteMaxMm;
-    for (const [campo, id] of [['campoDenteMin', 'denteMinMm'], ['campoDenteMax', 'denteMaxMm']] as const) {
-      $(campo).classList.toggle('is-error', rotto);
+    for (const id of ['denteMinMm', 'denteMaxMm']) {
+      input(id).closest('.rg-field')?.classList.toggle('is-error', rotto);
       input(id).setAttribute('aria-invalid', String(rotto));
     }
     $('aiutoDente').textContent = rotto
@@ -363,21 +263,21 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
   };
   for (const c of CAMPI) {
     const el = input(c.id);
-    el.value = n1(Number(par[c.key]));
+    impostaNumero(el, Number(par[c.key]));
     el.addEventListener('change', () => {
-      let v = leggiNumero(el.value);
+      let v = leggiCampo(el);
       if (!Number.isFinite(v)) v = Number(parametriPettineDefault[c.key]);
       v = Math.min(c.max, Math.max(c.min, v));
       (par[c.key] as number) = v;
-      el.value = n1(v);
+      impostaNumero(el, v);
       controllaDente();
       daRifare();
     });
   }
-  input('realWidthMm').addEventListener('change', () => {
-    const v = leggiNumero(input('realWidthMm').value);
+  input('realWidth').addEventListener('change', () => {
+    const v = leggiCampo(input('realWidth'));
     if (Number.isFinite(v) && v >= 10) { larghezzaRealeMm = v; misuraDisegno(); mostraRitaglio(); mostraDisegno(); }
-    input('realWidthMm').value = n1(larghezzaRealeMm);
+    impostaNumero(input('realWidth'), larghezzaRealeMm);
     daRifare();
   });
   for (const id of ['denti', 'mostraNudi', 'mostraPassaggi'] as const) {
@@ -391,10 +291,10 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
   const mostraRitaglio = (): void => {
     ritaglio = ritaglioDa();
     const r = ritaglio;
-    input('ritaglioXMm').value = n1(rit.x);
-    input('ritaglioYMm').value = n1(rit.y);
-    input('ritaglioLarghezzaMm').value = n1(rit.larghezza);
-    input('ritaglioAltezzaMm').value = n1(rit.altezza);
+    impostaNumero(input('ritaglioXMm'), rit.x);
+    impostaNumero(input('ritaglioYMm'), rit.y);
+    impostaNumero(input('ritaglioLarghezzaMm'), rit.larghezza);
+    impostaNumero(input('ritaglioAltezzaMm'), rit.altezza);
     $('statoRitaglio').textContent = r
       ? `Si genera un riquadro di ${n1(r.larghezza)} × ${n1(r.altezza)} mm a ${n1(r.x)} / ${n1(r.y)}.`
       : disegno.larghezza
@@ -405,7 +305,7 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
   };
   for (const id of CAMPI_RITAGLIO) {
     $(id).addEventListener('change', () => {
-      const v = CAMPI_RITAGLIO.map((k) => leggiNumero(input(k).value));
+      const v = CAMPI_RITAGLIO.map((k) => leggiCampo(input(k)));
       if (v.some((x) => !Number.isFinite(x))) { mostraRitaglio(); return; }
       [rit.x, rit.y, rit.larghezza, rit.altezza] = [Math.max(0, v[0]), Math.max(0, v[1]), Math.max(0, v[2]), Math.max(0, v[3])];
       mostraRitaglio(); daRifare();
@@ -476,29 +376,29 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
     misuraDisegno();
     rit.x = 0; rit.y = 0; rit.larghezza = 0; rit.altezza = 0;
     if (!gruppi || !disegno.larghezza) {
-      $('statoBlocchi').textContent = `${file.name} — non ci trovo gruppi con un id, o manca il viewBox.`;
-      $('statoBlocchi').parentElement?.classList.add('rg-file-input--error');
+      $('fileStatus').textContent = `${file.name} — non ci trovo gruppi con un id, o manca il viewBox.`;
+      $('fileStatus').parentElement?.classList.add('rg-file-input--error');
       return;
     }
-    $('statoBlocchi').parentElement?.classList.remove('rg-file-input--error');
-    $('statoBlocchi').textContent = `${file.name} — ${gruppi} gruppi`;
+    $('fileStatus').parentElement?.classList.remove('rg-file-input--error');
+    $('fileStatus').textContent = `${file.name} — ${gruppi} gruppi`;
     const info = $('infoBlocchi') as HTMLElement;
     info.hidden = false;
     info.innerHTML = `<dt>Misura</dt><dd>${n1(disegno.larghezza)} × ${n1(disegno.altezza)} mm</dd><dt>Gruppi</dt><dd>${gruppi}</dd>`;
-    ($('generaBtn') as HTMLButtonElement).disabled = false;
+    ($('genBtn') as HTMLButtonElement).disabled = false;
     $('status').textContent = 'Pronto: premi «Genera».';
     mostraRitaglio();
     mostraDisegno();
   };
-  $('fileBlocchi').addEventListener('change', async (e) => {
+  $('fileInput').addEventListener('change', async (e) => {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
     blocchiCaricati(await file.text(), file.name);
   });
-  $('esempioBtn').addEventListener('click', () => {
+  $('demoBtn').addEventListener('click', () => {
     fetch(ESEMPIO_SVG).then((r) => r.text()).then((t) => {
       larghezzaRealeMm = 419.45;
-      input('realWidthMm').value = '419,45';
+      impostaNumero(input('realWidth'), 419.45);
       blocchiCaricati(t, 'VETTORIALE-6-colori-v2-gruppo-blocchi.svg');
       $('status').textContent = 'Pannello di esempio caricato, senza fotografia: premi «Genera».';
     }).catch((err) => { $('status').textContent = `Non ho trovato il pannello di esempio: ${(err as Error).message}`; });
@@ -544,7 +444,7 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
     if (!esito) return;
     if (simulatore) { simulatore.distruggi(); simulatore = null; }
     ($('simControlli') as HTMLElement).hidden = vista !== 'simulatore';
-    $('simulaBtn').setAttribute('aria-pressed', String(vista === 'simulatore'));
+    $('simBtn').setAttribute('aria-pressed', String(vista === 'simulatore'));
     $('vistaBtn').setAttribute('aria-pressed', String(vista === 'verifica'));
     $('vistaBtn').textContent = vista === 'verifica' ? 'Ricamo' : 'Verifica';
     if (vista === 'simulatore' && esito.dst) {
@@ -561,13 +461,16 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
     vista = vista === 'verifica' ? 'pettine' : 'verifica';
     mostraEsito();
   });
-  $('simulaBtn').addEventListener('click', () => {
+  $('simBtn').addEventListener('click', () => {
     vista = vista === 'simulatore' ? 'pettine' : 'simulatore';
     mostraEsito();
   });
 
   /** I numeri mostrati sono di prima: lo si dice, non si cancellano. */
   const daRifare = (): void => {
+    const auto = $('autoCalcolo') as HTMLInputElement;
+    const genera = $('genBtn') as HTMLButtonElement;
+    if (auto.checked && testoSvg && !genera.disabled) { genera.click(); return; }
     if (!esito) return;
     ($('esitoVecchio') as HTMLElement).hidden = false;
     $('status').textContent = 'Parametri cambiati: premi «Genera».';
@@ -593,30 +496,30 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
   }, { sorgente: { tipo: 'svg', nome: nomeSvg || undefined, larghezzaMm: larghezzaRealeMm } });
   const riapri = (p: Record<string, unknown> | null, da: string): void => {
     if (!p || p.rgProject !== 'pettine') {
-      $('statoProgetto').textContent = `${da} non porta dentro un progetto del punto pettine.`;
-      $('statoProgetto').parentElement?.classList.add('rg-file-input--error');
+      $('progettoStatus').textContent = `${da} non porta dentro un progetto del punto pettine.`;
+      $('progettoStatus').parentElement?.classList.add('rg-file-input--error');
       return;
     }
-    $('statoProgetto').parentElement?.classList.remove('rg-file-input--error');
+    $('progettoStatus').parentElement?.classList.remove('rg-file-input--error');
     const sp = p.par as Partial<ParametriPettine> | undefined;
     if (sp) for (const c of CAMPI) {
       const v = sp[c.key];
-      if (typeof v === 'number' && Number.isFinite(v)) { (par[c.key] as number) = Math.min(c.max, Math.max(c.min, v)); input(c.id).value = n1(par[c.key] as number); }
+      if (typeof v === 'number' && Number.isFinite(v)) { (par[c.key] as number) = Math.min(c.max, Math.max(c.min, v)); impostaNumero(input(c.id), par[c.key] as number); }
     }
     if (sp && typeof sp.denti === 'boolean') { par.denti = sp.denti; input('denti').checked = sp.denti; }
     if (sp && typeof sp.mostraNudi === 'boolean') { par.mostraNudi = sp.mostraNudi; input('mostraNudi').checked = sp.mostraNudi; }
     if (sp && typeof sp.mostraPassaggi === 'boolean') { par.mostraPassaggi = sp.mostraPassaggi; input('mostraPassaggi').checked = sp.mostraPassaggi; }
-    if (typeof p.larghezzaRealeMm === 'number' && p.larghezzaRealeMm >= 10) { larghezzaRealeMm = p.larghezzaRealeMm; input('realWidthMm').value = n1(larghezzaRealeMm); }
+    if (typeof p.larghezzaRealeMm === 'number' && p.larghezzaRealeMm >= 10) { larghezzaRealeMm = p.larghezzaRealeMm; impostaNumero(input('realWidth'), larghezzaRealeMm); }
     if (typeof p.blocchi === 'string' && p.blocchi.length > 20) {
       testoSvg = p.blocchi;
       nomeSvg = typeof p.nomeSvg === 'string' ? p.nomeSvg : 'blocchi.svg';
       misuraDisegno();
       const gruppi = (testoSvg.match(/<g\s+id="/g) ?? []).length;
-      $('statoBlocchi').textContent = `${nomeSvg} — ${gruppi} gruppi (dal progetto)`;
+      $('fileStatus').textContent = `${nomeSvg} — ${gruppi} gruppi (dal progetto)`;
       const info = $('infoBlocchi') as HTMLElement;
       info.hidden = false;
       info.innerHTML = `<dt>Misura</dt><dd>${n1(disegno.larghezza)} × ${n1(disegno.altezza)} mm</dd><dt>Gruppi</dt><dd>${gruppi}</dd>`;
-      ($('generaBtn') as HTMLButtonElement).disabled = false;
+      ($('genBtn') as HTMLButtonElement).disabled = false;
     }
     const r = p.ritaglio as Riquadro | null | undefined;
     if (r && typeof r.larghezza === 'number') { rit.x = r.x; rit.y = r.y; rit.larghezza = r.larghezza; rit.altezza = r.altezza; }
@@ -625,10 +528,10 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
     mostraRitaglio();
     mostraDisegno();
     const senzaFoto = p.nomeFoto ? ` La fotografia («${String(p.nomeFoto)}») va ricaricata a mano.` : '';
-    $('statoProgetto').textContent = `Riaperto da ${da}${p.salvato ? `, salvato il ${String(p.salvato)}` : ''}.${senzaFoto}`;
+    $('progettoStatus').textContent = `Riaperto da ${da}${p.salvato ? `, salvato il ${String(p.salvato)}` : ''}.${senzaFoto}`;
     $('status').textContent = 'Progetto riaperto: premi «Genera».';
   };
-  $('fileProgetto').addEventListener('change', async (e) => {
+  $('progettoInput').addEventListener('change', async (e) => {
     const file = (e.target as HTMLInputElement).files?.[0];
     if (!file) return;
     if (/\.dst$/i.test(file.name)) {
@@ -645,9 +548,9 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
   });
 
   // ---- la generazione --------------------------------------------------------
-  $('generaBtn').addEventListener('click', () => {
+  $('genBtn').addEventListener('click', () => {
     if (!testoSvg) return;
-    const btn = $('generaBtn') as HTMLButtonElement;
+    const btn = $('genBtn') as HTMLButtonElement;
     btn.disabled = true;
     $('status').textContent = ritaglio ? 'Sto costruendo il ritaglio…' : 'Sto costruendo tutto il pannello: ci vuole qualche secondo…';
     // un giro di ridisegno prima di bloccare il thread col conto
@@ -682,12 +585,12 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
         dl.innerHTML = righe.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
         ($('esitoVuoto') as HTMLElement).hidden = true;
         ($('esitoVecchio') as HTMLElement).hidden = true;
-        ($('sezEsito') as HTMLDetailsElement).open = true;
+        (root.querySelector('[data-sez="sezEsito"]') as HTMLDetailsElement).open = true;
         mostraEsito();
-        ($('salvaSvgBtn') as HTMLButtonElement).disabled = false;
-        ($('salvaDstBtn') as HTMLButtonElement).disabled = !esito.dst;
+        ($('exportBtn') as HTMLButtonElement).disabled = false;
+        ($('exportDstBtn') as HTMLButtonElement).disabled = !esito.dst;
         ($('vistaBtn') as HTMLButtonElement).disabled = false;
-        ($('simulaBtn') as HTMLButtonElement).disabled = !esito.dst;
+        ($('simBtn') as HTMLButtonElement).disabled = !esito.dst;
         if (vista === 'simulatore' && !esito.dst) vista = 'pettine';
         $('status').textContent = s.punti
           ? `Fatto in ${n1(s.secondi)} s: ${n0(s.punti)} punti, ${n1(s.filoM)} m di filo, ${s.colori.length} aghi.`
@@ -706,14 +609,14 @@ export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}
     const r = ritaglio ? `-${n0(ritaglio.x)}_${n0(ritaglio.y)}-${n0(ritaglio.larghezza)}x${n0(ritaglio.altezza)}` : '';
     return `${base}-pettine${r}${est}`;
   };
-  $('salvaSvgBtn').addEventListener('click', () => {
+  $('exportBtn').addEventListener('click', () => {
     if (!esito) return;
     const nome = nomeProposto('.svg');
     saveTextFile(vista === 'verifica' ? esito.svgVerifica : esito.svg, {
       suggestedName: nome, mime: 'image/svg+xml', extension: '.svg', description: 'Disegno SVG',
     }).then((r) => { $('status').textContent = saveOutcomeMessage(r, nome); });
   });
-  $('salvaDstBtn').addEventListener('click', () => {
+  $('exportDstBtn').addEventListener('click', () => {
     if (!esito?.dst) return;
     const nome = nomeProposto('.dst');
     saveBinaryFile(esito.dst, { suggestedName: nome, ...DST_FILE }).then((r) => {
