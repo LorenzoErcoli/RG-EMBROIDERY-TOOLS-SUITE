@@ -64,17 +64,17 @@ namespace StilistaHostSkeleton
                 Annota("Ritorno del ricamo fallito: " + esito.Errore);
                 return Risposta.Testo("{\"ok\":false,\"errore\":" + Json.Stringa(esito.Errore) + "}", stato: 500);
             }
-            // Stilista ricalcola l'oggetto da sé poco dopo l'inserimento (~300 ms) e il guardiano rimette i
-            // punti: si misura da qui, ogni 300 ms fino a 4 s, finché due misure di fila dicono «i nostri»
+            // Stilista ricalcola l'oggetto da sé poco dopo l'inserimento (~300 ms) e la sentinella rimette i
+            // punti: si misura da qui, ogni 300 ms fino a 9 s, finché tre misure di fila dicono «i nostri»
             Misura misura = null;
             var buone = 0;
-            for (var i = 0; i < 14 && buone < 2; i++)
+            for (var i = 0; i < 30 && buone < 3; i++)
             {
                 System.Threading.Thread.Sleep(300);
                 misura = (Misura)NelFiloDiStilista(() => Misura_(esito, punti));
                 buone = misura.Uguale ? buone + 1 : 0;
             }
-            var ok = buone >= 2 && misura.OggettiOra == esito.PrimaDi + 1;
+            var ok = buone >= 3 && misura.OggettiOra == esito.PrimaDi + 1;
             var sb = new StringBuilder("{\"ok\":").Append(ok ? "true" : "false");
             if (!ok)
             {
@@ -105,7 +105,154 @@ namespace StilistaHostSkeleton
             }
             var primaDi = SnapshotObjects(oggetti).Count;
 
-            // 1. un oggetto lineare nativo dal primo all'ultimo punto, ago e colore come chiesto
+            // 1. l'oggetto di partenza. Di serie una COPIA dell'oggetto selezionato da cui è partito il lavoro:
+            //    ha già l'ago e il colore giusti, e non serve l'interfaccia. Prima si creava un lineare
+            //    «cliccando» btLinear1 nella barra di Stilista, che c'è solo se la barra mostra quella scheda
+            //    (2026-10-21: «native function selection failed», e il ritorno non partiva): resta di riserva.
+            object partenza = null;
+            var nelDocumento = false;
+            var posizione = primaDi;
+            var comeNato = "";
+            if (_modelloRitorno != null && SnapshotObjects(oggetti).Contains(_modelloRitorno))
+            {
+                partenza = Clona(_modelloRitorno, embroidery);
+                comeNato = partenza != null ? "copia dell'oggetto selezionato" : "copia non riuscita";
+            }
+            if (partenza == null)
+            {
+                partenza = LineareNativo(embroidery, oggetti, punti, ricamo);
+                if (partenza == null)
+                {
+                    return new Ritorno { Errore = "Stilista non ha creato l'oggetto di partenza (" + (comeNato == "" ? "nessun oggetto selezionato da copiare" : comeNato) + "; log: " + ProbeLog.PathOnDisk + ")" };
+                }
+                nelDocumento = true;
+                posizione = SnapshotObjects(oggetti).Count - 1;
+                comeNato = "lineare nativo";
+            }
+            var tipoPrima = Tipo(partenza) + " · " + comeNato;
+            var scrivi = FindMethodInHierarchy(partenza.GetType(), "OldPoints2StitchPath", new[] { typeof(TAGGEDPOINT[]) });
+            if (scrivi == null)
+            {
+                return new Ritorno { Errore = "OldPoints2StitchPath non trovato su " + partenza.GetType().FullName };
+            }
+
+            // 2. i punti cuciti diventano i nostri (non sempre agisce subito: si riscrivono anche dopo)
+            scrivi.Invoke(partenza, new object[] { punti });
+
+            // 3. un oggetto a punti manuali: una collezione con lui solo e DsgObjCollection.MergeToManualStitch()
+            object manuale = null;
+            string comeManuale;
+            try
+            {
+                // la collezione del documento è una EmbroideryDsgObjCollection, senza quel costruttore:
+                // si risale alla prima classe che ha .ctor(DesignObject) (DsgObjCollection)
+                var tipoCollezione = oggetti.GetType();
+                while (tipoCollezione != null && tipoCollezione.GetConstructor(new[] { partenza.GetType() }) == null)
+                {
+                    tipoCollezione = tipoCollezione.BaseType;
+                }
+                if (tipoCollezione == null)
+                {
+                    throw new MissingMethodException("nessuna collezione con .ctor(" + partenza.GetType().Name + ")");
+                }
+                var collezione = Activator.CreateInstance(tipoCollezione, partenza);
+                var risultato = FindMethodInHierarchy(tipoCollezione, "MergeToManualStitch", Type.EmptyTypes)?.Invoke(collezione, null);
+                var dentro = SnapshotObjects(risultato);
+                manuale = dentro.Count == 1 ? dentro[0] : null;
+                comeManuale = "MergeToManualStitch: " + dentro.Count + " oggetti";
+            }
+            catch (Exception ex)
+            {
+                comeManuale = "MergeToManualStitch: " + DescribeException(ex);
+            }
+            if (manuale == null)
+            {
+                if (nelDocumento)
+                {
+                    FindMethodInHierarchy(oggetti.GetType(), "Remove", new[] { partenza.GetType() })?.Invoke(oggetti, new[] { partenza });
+                }
+                return new Ritorno { Errore = "MergeToManualStitch non ha dato un oggetto: " + comeManuale };
+            }
+
+            // 3b. il CONTORNO del manuale sono i nostri punti (CopyOfPoints): è la regola della sentinella —
+            //     i punti cuciti di un oggetto RG Tools devono essere uguali al suo contorno — e lo segna come
+            //     nostro nella descrizione, così la sentinella lo riconosce anche dopo aver riaperto il file
+            var contorno = GetReadableMemberValue(manuale, "SourcePath");
+            var copia = contorno?.GetType().GetProperty("CopyOfPoints");
+            if (copia != null && copia.CanWrite)
+            {
+                copia.SetValue(contorno, punti.Clone(), null);
+            }
+            ImpostaDescrizione(manuale, PrefissoDescrizione + (ricamo.Nome ?? "ricamo"));
+            TrySetBoolMember(manuale, "LockRecalc", true);
+            TrySetBoolMember(manuale, "NeedRestitching", false);
+
+            // 4. nel documento: al posto del lineare, o in fondo (la copia non c'era)
+            var togli = FindMethodInHierarchy(oggetti.GetType(), "Remove", new[] { partenza.GetType() });
+            var metti = FindMethodInHierarchy(oggetti.GetType(), "Insert", new[] { typeof(int), partenza.GetType() });
+            if (metti == null || (nelDocumento && togli == null))
+            {
+                return new Ritorno { Errore = "Remove/Insert non trovati sulla collezione del documento" };
+            }
+            if (nelDocumento)
+            {
+                togli.Invoke(oggetti, new[] { partenza });
+            }
+            metti.Invoke(oggetti, new object[] { posizione, manuale });
+            // l'inserimento lo segna da ricucire, e Stilista lo ricalcola da sé ~300 ms dopo: i punti si
+            // scrivono ora che è nel documento (prima non agisce), e la sentinella fa il resto
+            TrySetBoolMember(manuale, "NeedRestitching", false);
+            TrySetBoolMember(manuale, "LockRecalc", true);
+            scrivi.Invoke(manuale, new object[] { punti });
+            AvviaSentinella();
+            TryRaiseObjectsRedrawNeeded(oggetti);
+            ProbeLog.Write(log + ": " + tipoPrima + " -> " + Tipo(manuale) + " punti chiesti " + punti.Length +
+                " ora " + ContaPunti(manuale) + " · " + comeManuale);
+            return new Ritorno
+            {
+                Finale = manuale,
+                Inserito = true,
+                Posizione = posizione,
+                PrimaDi = primaDi,
+                Oggetti = oggetti,
+                TipoPrima = tipoPrima,
+                ComeManuale = comeManuale,
+            };
+        }
+
+        /// <summary>Una copia dell'oggetto (DesignObject.Clone(EmbDesignData, bool)), fuori dal documento.</summary>
+        private static object Clona(object oggetto, object embroidery)
+        {
+            try
+            {
+                foreach (var m in oggetto.GetType().GetMethods(System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Instance))
+                {
+                    var p = m.GetParameters();
+                    // Clone(EmbDesignData, bool) dichiara un IBaseObject: si tiene se è davvero un DesignObject
+                    if (m.Name == "Clone" && p.Length == 2 && p[1].ParameterType == typeof(bool) && p[0].ParameterType.IsInstanceOfType(embroidery))
+                    {
+                        var copia = m.Invoke(oggetto, new[] { embroidery, (object)false });
+                        if (copia != null && oggetto.GetType().IsInstanceOfType(copia))
+                        {
+                            return copia;
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                ProbeLog.Write("RGLink.Clona: " + DescribeException(ex));
+            }
+            return null;
+        }
+
+        /// <summary>
+        /// Di riserva: un lineare nativo dal primo all'ultimo punto, col protocollo del bridge (clic su btLinear1
+        /// nella barra di Stilista). Restituisce l'oggetto, già in fondo al documento, o null.
+        /// </summary>
+        private object LineareNativo(object embroidery, object oggetti, TAGGEDPOINT[] punti, RicamoDiRitorno ricamo)
+        {
+            var primaDi = SnapshotObjects(oggetti).Count;
             var primo = punti[0];
             var ultimo = punti[punti.Length - 1];
             if (primo.X == ultimo.X && primo.Y == ultimo.Y)
@@ -143,127 +290,27 @@ namespace StilistaHostSkeleton
             };
             if (!TryCreateRecalculableBatch(embroidery, oggetti, batch, null))
             {
-                return new Ritorno { Errore = "Stilista non ha creato l'oggetto di partenza (log: " + ProbeLog.PathOnDisk + ")" };
+                return null;
             }
             var tutti = SnapshotObjects(oggetti);
-            if (tutti.Count != primaDi + 1)
-            {
-                return new Ritorno { Errore = "oggetti " + primaDi + " -> " + tutti.Count };
-            }
-            var lineare = tutti[tutti.Count - 1];
-            var posizione = tutti.Count - 1;
-            var tipoPrima = Tipo(lineare);
+            return tutti.Count == primaDi + 1 ? tutti[tutti.Count - 1] : null;
+        }
 
-            // 2. i punti cuciti diventano i nostri: OldPoints2StitchPath. L'ago e il colore li ha gia' messi il bridge.
-            var scrivi = FindMethodInHierarchy(lineare.GetType(), "OldPoints2StitchPath", new[] { typeof(TAGGEDPOINT[]) });
-            if (scrivi == null)
-            {
-                return new Ritorno { Errore = "OldPoints2StitchPath non trovato su " + lineare.GetType().FullName };
-            }
-            scrivi.Invoke(lineare, new object[] { punti });
-            var cucitiLineare = TryConvertToInt(GetReadableMemberValue(lineare, "GetTotalNumberOfStitches")).GetValueOrDefault();
-
-            // 3. subito, prima che Stilista lo ricalcoli dal suo contorno di due punti, diventa un oggetto a
-            //    punti manuali: una collezione con lui solo e DsgObjCollection.MergeToManualStitch()
-            //    (un lineare coi punti cambiati, lasciato com'e', Stilista lo ricalcola: 773 punti -> 2)
-            object manuale = null;
-            string comeManuale;
+        private static void ImpostaDescrizione(object oggetto, string testo)
+        {
             try
             {
-                // la collezione del documento è una EmbroideryDsgObjCollection, senza quel costruttore:
-                // si risale alla prima classe che ha .ctor(DesignObject) (DsgObjCollection)
-                var tipoCollezione = oggetti.GetType();
-                while (tipoCollezione != null && tipoCollezione.GetConstructor(new[] { lineare.GetType() }) == null)
+                var p = oggetto.GetType().GetProperty("Description");
+                if (p != null && p.CanWrite && p.PropertyType == typeof(string))
                 {
-                    tipoCollezione = tipoCollezione.BaseType;
+                    p.SetValue(oggetto, testo, null);
                 }
-                if (tipoCollezione == null)
-                {
-                    throw new MissingMethodException("nessuna collezione con .ctor(" + lineare.GetType().Name + ")");
-                }
-                var collezione = Activator.CreateInstance(tipoCollezione, lineare);
-                var unisci = FindMethodInHierarchy(tipoCollezione, "MergeToManualStitch", Type.EmptyTypes);
-                var risultato = unisci?.Invoke(collezione, null);
-                var dentro = SnapshotObjects(risultato);
-                manuale = dentro.Count == 1 ? dentro[0] : null;
-                comeManuale = "MergeToManualStitch: " + dentro.Count + " oggetti";
             }
             catch (Exception ex)
             {
-                comeManuale = "MergeToManualStitch: " + DescribeException(ex);
+                ProbeLog.Write("RGLink.Descrizione: " + ex.Message);
             }
-            // 3b. il manuale deve avere i NOSTRI punti, cuciti e di contorno. Sul lineare OldPoints2StitchPath
-            //     non sempre li prende (corona di SH295, 26.486 punti: restavano 2, mentre i 773 delle macchie
-            //     erano passati): allora si scrivono sul manuale, e il contorno si assegna (CopyOfPoints).
-            if (manuale != null)
-            {
-                if (ContaPunti(manuale) != punti.Length)
-                {
-                    scrivi.Invoke(manuale, new object[] { punti });
-                    comeManuale += " · punti riscritti sul manuale (" + ContaPunti(manuale) + ")";
-                }
-                var contorno = GetReadableMemberValue(manuale, "SourcePath");
-                var copia = contorno?.GetType().GetProperty("CopyOfPoints");
-                if (copia != null && copia.CanWrite && TryConvertToInt(GetReadableMemberValue(contorno, "Count")) != punti.Length)
-                {
-                    copia.SetValue(contorno, punti.Clone(), null);
-                    comeManuale += " · contorno assegnato (" + TryConvertToInt(GetReadableMemberValue(contorno, "Count")) + ")";
-                }
-            }
-            ProbeLog.Write(log + ": " + comeManuale);
-
-            // 4. il manuale prende il posto del lineare, nella stessa posizione della sequenza, COL LUCCHETTO.
-            //    Ogni ricalcolo di un oggetto manuale ripercorre il suo contorno (i nostri punti) con la sua
-            //    lunghezza punto, e dopo l'inserimento Stilista lo ricalcola da sé: 773 punti -> 346 in pochi
-            //    secondi (FunctionParamIndex 20, quello di MergeToManualStitch); con la 3 dei DST importati 251.
-            //    Il DST aperto in Stilista resta intatto solo perché nessuno lo ricalcola. Quindi: lucchetto
-            //    (LockRecalc, il «togliere il lucchetto?» di Stilista) e niente da ricucire, prima di inserirlo.
-            var finale = lineare;
-            var lucchetto = false;
-            if (manuale != null)
-            {
-                lucchetto = TrySetBoolMember(manuale, "LockRecalc", true);
-                TrySetBoolMember(manuale, "NeedRestitching", false);
-                var togli = FindMethodInHierarchy(oggetti.GetType(), "Remove", new[] { lineare.GetType() });
-                var metti = FindMethodInHierarchy(oggetti.GetType(), "Insert", new[] { typeof(int), lineare.GetType() });
-                if (togli != null && metti != null)
-                {
-                    togli.Invoke(oggetti, new[] { lineare });
-                    metti.Invoke(oggetti, new object[] { posizione, manuale });
-                    finale = manuale;
-                    // l'inserimento può averlo segnato da ricucire: di nuovo, dopo
-                    TrySetBoolMember(manuale, "NeedRestitching", false);
-                    TrySetBoolMember(manuale, "LockRecalc", true);
-                    Sorveglia(manuale, punti, scrivi, log);
-                }
-                else
-                {
-                    comeManuale += " · Remove/Insert non trovati";
-                }
-            }
-            if (finale == manuale)
-            {
-                // i punti si scrivono anche ora che è nel documento: prima di inserirlo OldPoints2StitchPath non
-                // agisce (0 punti) e sul lineare non sempre; il guardiano fa il resto
-                scrivi.Invoke(manuale, new object[] { punti });
-                TrySetBoolMember(manuale, "NeedRestitching", false);
-            }
-            TryRaiseObjectsRedrawNeeded(oggetti);
-            ProbeLog.Write(log + ": " + tipoPrima + " -> " + Tipo(finale) + " punti chiesti " + punti.Length +
-                " lineare " + cucitiLineare + " ora " + ContaPunti(finale) + " lucchetto " + lucchetto + " · " + comeManuale);
-            return new Ritorno
-            {
-                Finale = finale,
-                Inserito = manuale != null && finale == manuale,
-                Posizione = posizione,
-                PrimaDi = primaDi,
-                Oggetti = oggetti,
-                TipoPrima = tipoPrima,
-                ComeManuale = comeManuale,
-                Errore = manuale == null ? "MergeToManualStitch non ha dato un oggetto: " + comeManuale : null,
-            };
         }
-
         /// <summary>Quello che CreaOggettoAPunti ha fatto: l'oggetto da misurare finché i punti non sono i nostri.</summary>
         private sealed class Ritorno
         {
@@ -310,48 +357,6 @@ namespace StilistaHostSkeleton
                 Uguale = letti.Length == punti.Length && scarto <= 1,
             };
         }
-        /// <summary>
-        /// Il guardiano: per 15 s, ogni 300 ms, sul filo dell'interfaccia, se Stilista ha ricalcolato l'oggetto
-        /// (i punti non sono più i nostri) li riscrive. Nel log: quante volte è dovuto intervenire, e quando.
-        /// </summary>
-        private static void Sorveglia(object oggetto, TAGGEDPOINT[] punti, System.Reflection.MethodInfo scrivi, string log)
-        {
-            var leggi = FindMethodInHierarchy(oggetto.GetType(), "Stitches", Type.EmptyTypes);
-            var inizio = DateTime.UtcNow;
-            var interventi = 0;
-            var timer = new System.Windows.Forms.Timer { Interval = 300 };
-            timer.Tick += (s, e) =>
-            {
-                try
-                {
-                    var ora = (leggi?.Invoke(oggetto, null) as TAGGEDPOINT[]) ?? new TAGGEDPOINT[0];
-                    var uguali = ora.Length == punti.Length && ora.Length > 0 &&
-                                 ora[0].X == punti[0].X && ora[0].Y == punti[0].Y &&
-                                 ora[ora.Length - 1].X == punti[punti.Length - 1].X && ora[ora.Length - 1].Y == punti[punti.Length - 1].Y;
-                    if (!uguali)
-                    {
-                        interventi++;
-                        ProbeLog.Write(log + ".Guardiano: dopo " + (int)(DateTime.UtcNow - inizio).TotalMilliseconds +
-                            " ms i punti erano " + ora.Length + " su " + punti.Length + ": riscritti");
-                        scrivi.Invoke(oggetto, new object[] { punti });
-                        TrySetBoolMember(oggetto, "NeedRestitching", false);
-                    }
-                    if ((DateTime.UtcNow - inizio).TotalSeconds > 15)
-                    {
-                        timer.Stop();
-                        timer.Dispose();
-                        ProbeLog.Write(log + ".Guardiano: fine, " + interventi + " interventi");
-                    }
-                }
-                catch (Exception ex)
-                {
-                    timer.Stop();
-                    ProbeLog.Write(log + ".Guardiano: " + DescribeException(ex));
-                }
-            };
-            timer.Start();
-        }
-
         private static int ContaPunti(object oggetto)
         {
             return (FindMethodInHierarchy(oggetto.GetType(), "Stitches", Type.EmptyTypes)?.Invoke(oggetto, null) as TAGGEDPOINT[])?.Length ?? 0;

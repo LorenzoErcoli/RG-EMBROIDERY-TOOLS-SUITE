@@ -43,6 +43,7 @@ powershell -ExecutionPolicy Bypass -File strumenti-sviluppo\stilista-link\script
 | `POST /dst?nome=…` | un DST: Stilista lo apre in un documento nuovo (`IStilista3.LoadNewEmb`) |
 | `POST /oggetti` | un programma `stilista-bridge-batch-1`: oggetti nativi `fill`/`running` aggiunti al documento aperto |
 | `POST /punti` | **il ricamo di un tool torna nel documento aperto, al suo posto**, come oggetto a punti manuali: `{ origine_mm, punti: [[x, y, salto]…] }` in mm nel riferimento dell'SVG della selezione; ago e colore quelli del primo oggetto selezionato |
+| `POST /ricalcola?oggetti=…[&sblocca=1]` | per le prove: ricalcola quegli oggetti come Stilista (con `sblocca` senza lucchetto) e dice i punti prima e dopo |
 | `POST /salva-copia` | una copia del documento in `%TEMP%\rg-stilista-link\copia-*.emg3`, da rileggere col lettore offline (il file aperto non si tocca) |
 
 `?oggetti=0,3` sulle GET usa quegli oggetti del documento al posto della selezione (prove senza mouse; dal
@@ -62,29 +63,48 @@ legge le risposte solo da pagine `localhost`/`127.0.0.1`.
 
 ## Il ritorno al suo posto (`POST /punti`)
 
-«Invia a Stilista» nel Generatore: se il cartamodello è venuto da Stilista (l'SVG porta
-`data-rg-stilista-origine`), il ricamo torna **nel documento di partenza**; altrimenti il DST si apre in un
-documento nuovo. Nel plugin (`Collegamento.Ritorno.cs`):
+«Invia a Stilista» in un tool: se il cartamodello è venuto da Stilista (l'SVG porta
+`data-rg-stilista-origine`), il ricamo torna **nel documento di partenza**, uno strato = un oggetto;
+altrimenti il DST si apre in un documento nuovo. Nel plugin (`Collegamento.Ritorno.cs`):
 
-1. un oggetto lineare nativo dal primo all'ultimo punto, col protocollo del bridge (ago e colore giusti);
-2. `DesignObject.OldPoints2StitchPath(TAGGEDPOINT[])` coi nostri punti (`TAGGEDPOINT(x µm, y µm, tag)`:
-   tag 0 punto, bit 1 = 2 salto, bit 15 STOP);
-3. subito `new DsgObjCollection(lineare).MergeToManualStitch()`: un oggetto **Manual** (tipo nativo 1); il
-   suo contorno diventa i nostri punti (`SourcePath.CopyOfPoints`); prende il posto del lineare, col
-   lucchetto (`LockRecalc`), e i punti gli si riscrivono ora che è nel documento;
-4. un **guardiano** per 15 s: Stilista ricalcola l'oggetto una volta, ~300 ms dopo l'inserimento, e se i punti
-   non sono più i nostri li riscrive;
-5. la risposta aspetta (fino a 4 s) due misure di fila coi punti identici ai nostri: solo allora `ok`.
+1. l'oggetto di partenza è una **copia dell'oggetto selezionato** da cui è partito il lavoro
+   (`DesignObject.Clone(EmbDesignData, bool)`: ago e colore giusti, nessun clic nell'interfaccia). Solo se
+   quello non c'è più, di riserva, un lineare nativo «cliccando» `btLinear1` nella barra — che c'è solo se la
+   barra mostra quella scheda (2026-10-21: «native function selection failed», ritorno fermo);
+2. `OldPoints2StitchPath(TAGGEDPOINT[])` coi nostri punti (`TAGGEDPOINT(x µm, y µm, tag)`: tag 0 punto,
+   bit 1 = 2 salto, bit 15 STOP);
+3. `new DsgObjCollection(partenza).MergeToManualStitch()` dà un oggetto **Manual**; il suo contorno diventa i
+   nostri punti (`SourcePath.CopyOfPoints`), la descrizione «RG Tools · …», il lucchetto (`LockRecalc`);
+4. nel documento (in fondo; al posto del lineare se si è usata la riserva), poi i punti si riscrivono;
+5. la risposta aspetta (fino a 9 s) tre misure di fila coi punti identici ai nostri: solo allora `ok`.
 
-`OldPoints2StitchPath` non è affidabile prima che l'oggetto stia nel documento: sul lineare della corona
-(26.486 punti) non ha preso niente, sul manuale non ancora inserito ne contava 0 (sulle macchie, 773 punti,
-aveva funzionato). Per questo il controllo è alla fine, sull'oggetto vero.
+**La sentinella** (`Collegamento.Sentinella.cs`). Regola: in un oggetto la cui descrizione comincia per
+«RG Tools · » i punti cuciti sono uguali al contorno. Ogni secondo li controlla, e se Stilista li ha
+ricalcolati li rimette. Spostare o ruotare l'oggetto muove contorno e punti insieme, quindi non annulla niente;
+per modificarne i punti a mano si toglie «RG Tools» dalla descrizione. Vale anche su un file riaperto.
 
-**Misurato** (Generatore, 3 macchie di `macchie-84.emg3`, 2026-10-20): 773 punti mandati, nella copia salvata
-oggetto `manual`, ago 1 `#EDE300`, **773 punti identici al micron** a quelli mandati più l'origine; i 315 che
-cadono «fuori» dalla macchia sono sul contorno (≤ 1 µm). Le strade provate e scartate, e perché, sono in
+**Misurato** (2026-10-21, net-45 sulla corona di SH295): 17.201 punti tornati in 4 s; **ricalcolo forzato,
+anche senza lucchetto (`/ricalcola?sblocca=1`): 17.201 prima e dopo**. Col lineare di partenza di prima, lo
+stesso ricalcolo li riduceva (773 → 346, 2, 251) e Stilista lo ripeteva da sé (nel ritorno di Lorenzo delle
+09:49, 70.221 punti, a 0,3, 6,9 e 11 s): la causa era l'oggetto di partenza. La sentinella resta come rete;
+nelle prove non è dovuta intervenire. Le strade scartate sono in
 [`sapere/codice/stilista-oggetto-manuale.md`](../../sapere/codice/stilista-oggetto-manuale.md).
 
+## I tool agganciati
+
+`@rg/ui/stilista` ha l'**aggancio** (`AggancioStilista`): il tool dice come carica un SVG, come dà i ruoli
+(i fori → la sua area vuota, il resto → il suo contorno), quali strati ha cucito e come fa il DST; i due
+bottoni (`BOTTONE_PRENDI_STILISTA`, `BOTTONE_INVIA_STILISTA`) e `collegaStilista` fanno il resto. Con
+`?stilista=<porta>` nell'indirizzo il tool prende la selezione da solo.
+
+| tool | prova sulla corona di SH295 |
+|---|---|
+| Generatore pattern | 26.486 punti, nessuno nel foro, identici al micron nella copia salvata |
+| net-45 | 17.201 punti, ricalcolo forzato senza effetto |
+| striatura | 13.435 punti, 1 salto |
+| interlace | 4 oggetti (uno per stop), 19.060 punti |
+
+Tutti gli strati tornano sull'ago dell'oggetto selezionato.
 ## I fori (2026-10-21)
 
 Un riempimento di Stilista tiene i fori nelle sue **aree vuote**: `DesignObject.EmptyAreaPaths`, un

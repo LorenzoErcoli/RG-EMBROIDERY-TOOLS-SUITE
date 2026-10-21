@@ -8,7 +8,7 @@ data: 2026-10-20
 Misurato col plugin RG Stilista Link ([`strumenti-sviluppo/stilista-link/`](../../strumenti-sviluppo/stilista-link/README.md),
 `Collegamento.Ritorno.cs`), rimettendo nel documento i 773 punti del Generatore pattern.
 
-**La strada che funziona.** Un oggetto lineare nativo (il protocollo del bridge) → i suoi punti cuciti
+**La strada che funziona** (corretta il 2026-10-21, vedi sotto). ~~Un oggetto lineare nativo (il protocollo del bridge)~~ Una copia dell'oggetto selezionato → i suoi punti cuciti
 diventano i nostri con `DesignObject.OldPoints2StitchPath(TAGGEDPOINT[])` → **subito**
 `new DsgObjCollection(lineare).MergeToManualStitch()` dà un oggetto **Manual** (tipo nativo 1) il cui contorno
 sono i nostri punti → prende il posto del lineare → un guardiano riscrive i punti se Stilista li cambia.
@@ -34,6 +34,13 @@ appena creato non ha preso niente (restavano 2 punti; coi 773 delle macchie avev
 ancora inserito ne contava 0; inserito nel documento, sì. Quindi: il contorno del manuale si assegna
 (`SourcePath.CopyOfPoints`, scrivibile), i punti si riscrivono dopo l'inserimento, e l'esito si giudica solo
 alla fine, misurando l'oggetto vero finché due misure di fila danno i nostri punti (al più 4 s; ci vogliono ~3 s).
+
+**L'oggetto di partenza decide tutto** (2026-10-21). Col lineare nativo, il manuale che ne nasce viene
+ricalcolato da Stilista e ripercorso (anche più volte: 0,3, 6,9 e 11 s dopo, in un ritorno di 70.221 punti di
+Lorenzo). Partendo da una **copia dell'oggetto selezionato** (`Clone(EmbDesignData, bool)`) il manuale tiene i
+suoi punti: net-45 sulla corona di SH295, 17.201 punti, ricalcolo forzato anche senza lucchetto → 17.201.
+Il lineare resta solo di riserva (e richiede il pulsante `btLinear1` visibile nella barra di Stilista). In
+più, una sentinella rimette i punti uguali al contorno negli oggetti descritti «RG Tools · ».
 
 **Come si applica.** Un ricamo calcolato fuori da Stilista entra come Manual e non va ricalcolato: chi lo
 ricalcola a mano in Stilista lo perde. Il colore: il codice del bridge che assegna l'ago **scrive il colore

@@ -124,6 +124,10 @@ namespace StilistaHostSkeleton
                     }
                 }
             }
+            if (_server != null)
+            {
+                AvviaSentinella();
+            }
             _stato.Text = _server != null
                 ? "RG Link in ascolto su 127.0.0.1:" + _porta
                 : "RG Link spento: porte " + PrimaPorta + "–" + (PrimaPorta + QuantePorte - 1) + " tutte occupate";
@@ -185,6 +189,9 @@ namespace StilistaHostSkeleton
                 case "POST /oggetti": return RiceviOggetti(r);
                 case "POST /punti": return RiceviPunti(r);
                 case "POST /salva-copia": return (Risposta)NelFiloDiStilista(SalvaCopia);
+                case "POST /ricalcola":
+                    var sblocca = r.Query.ContainsKey("sblocca");
+                    return conScelta(() => { _sblocca = sblocca; try { return Ricalcola(); } finally { _sblocca = false; } });
                 default: return Risposta.Testo("{\"ok\":false,\"errore\":\"non so " + chiave.Replace("\"", "") + "\"}", stato: 404);
             }
         }
@@ -330,6 +337,7 @@ namespace StilistaHostSkeleton
             var quantiFori = forme.Count(f => f.Item5);
             // lo 0,0 del tool è l'angolo della selezione meno un margine: il piano del Generatore parte da 0
             _agoSelezione = ReadNativeNeedleOneBased(selezionati[0]);
+            _modelloRitorno = selezionati[0];
             _origineX = minX - MargineMm;
             _origineY = minY - MargineMm;
             var larghezza = maxX - minX + 2 * MargineMm;

@@ -128,3 +128,124 @@ export async function dstAStilista(f: FinestraStilista, dst: Uint8Array, nome: s
   const esito = await r.json().catch(() => null) as { ok?: boolean; errore?: string } | null;
   if (!r.ok || !esito?.ok) throw new Error(esito?.errore ?? `Stilista ha risposto ${r.status}`);
 }
+
+// ------------------------------------------------------------------------------------------------
+// L'AGGANCIO di un tool (2026-10-21): i due pulsanti, uguali in tutti i tool. Il tool dice solo come si
+// fa da lui quello che già fa — caricare un SVG come un file scelto, dare i ruoli, quali strati ha cucito,
+// fare il DST — e qui si decide il resto: quale finestra, i fori, il ritorno al suo posto o in un
+// documento nuovo. Il Generatore pattern è stato il primo; gli altri tool usano la stessa strada.
+// ------------------------------------------------------------------------------------------------
+
+export interface StratoPerStilista {
+  /** Il nome con cui l'oggetto entra in Stilista (es. «raso», «base»). */
+  nome?: string;
+  /** Le polilinee cucite in mm, nel riferimento del cartamodello importato. Fra una e l'altra: salto. */
+  polylines: Array<Array<{ x: number; y: number }>>;
+}
+
+export interface AggancioStilista {
+  /** Carica l'SVG della selezione esattamente come se l'utente l'avesse scelto col bottone del file. */
+  carica(svg: string, nome: string): void | Promise<void>;
+  /**
+   * Dà i ruoli ai colori appena caricati: `fori` è il colore delle aree vuote (minuscolo), o null se non
+   * ce ne sono; ogni altro colore è il contorno da lavorare. Un tool senza ruoli per colore non lo passa.
+   */
+  ruoli?(fori: string | null): void;
+  /** Il testo del cartamodello caricato adesso (per sapere se viene da Stilista e dov'era), o null. */
+  sorgente(): string | null;
+  /** Gli strati cuciti, nell'ordine di macchina: ognuno torna in Stilista come un oggetto. */
+  strati(): StratoPerStilista[];
+  /** Il DST del tool, per quando il cartamodello non viene da Stilista. */
+  dst(): { bytes: Uint8Array; nome: string };
+  /** Un messaggio nella barra di stato del tool. */
+  stato(testo: string): void;
+}
+
+const NON_RISPONDE = 'non risponde: è aperto, con RG Stilista Link installato?';
+
+/**
+ * Gli strati CUCITI di un export della suite (`ExportLayer[]`), come li cuce `dstFromExportLayers`: si
+ * saltano quelli di sola forma (`shapeOnly`) e quelli vuoti; uno strato = un oggetto in Stilista.
+ */
+export function stratiCuciti(
+  layers: Array<{ id: string; shapeOnly?: boolean; polylines: Array<Array<{ x: number; y: number }>> }>,
+): StratoPerStilista[] {
+  return layers
+    .filter((l) => !l.shapeOnly && l.polylines.some((p) => p.length > 1))
+    .map((l) => ({ nome: l.id, polylines: l.polylines }));
+}
+
+/** I contorni selezionati in Stilista diventano il cartamodello del tool. */
+export async function prendiSelezioneStilista(a: AggancioStilista): Promise<void> {
+  a.stato('Cerco Stilista…');
+  try {
+    const finestra = await trovaStilista();
+    if (!finestra) throw new Error(NON_RISPONDE);
+    const svg = await selezioneDaStilista(finestra);
+    const documento = nomeDocumento(finestra).replace(/\.[^.]+$/, '');
+    await a.carica(svg, `${documento}-stilista.svg`);
+    a.ruoli?.(coloreForiStilista(svg));
+    const fori = coloreForiStilista(svg) ? ', coi fori come aree vuote' : '';
+    a.stato(`Selezione presa da Stilista (${documento})${fori}`);
+  } catch (e) {
+    a.stato('Stilista: ' + (e as Error).message);
+  }
+}
+
+/**
+ * Il ricamo in Stilista. Se il cartamodello è venuto da Stilista torna NEL suo documento, al suo posto,
+ * a punti fissi, uno strato = un oggetto (sull'ago dell'oggetto selezionato); altrimenti Stilista apre
+ * il DST in un documento nuovo.
+ */
+export async function inviaAStilista(a: AggancioStilista): Promise<void> {
+  a.stato('Invio a Stilista…');
+  try {
+    const finestra = await trovaStilista();
+    if (!finestra) throw new Error(NON_RISPONDE);
+    const testo = a.sorgente();
+    const origine = testo ? origineStilista(testo) : null;
+    if (origine) {
+      const strati = a.strati().filter((s) => s.polylines.some((l) => l.length > 1));
+      if (!strati.length) throw new Error('non c\'è niente da cucire');
+      let punti = 0, salti = 0, ago = '';
+      for (const [i, s] of strati.entries()) {
+        a.stato(`Invio a Stilista… strato ${i + 1} di ${strati.length}`);
+        const esito = await puntiAStilista(finestra, {
+          origine_mm: origine, punti: puntiDaPolilinee(s.polylines), nome: s.nome ?? `RG ${i + 1}`,
+        });
+        punti += esito.punti_letti; salti += esito.salti; ago = esito.ago;
+      }
+      const quanti = strati.length > 1 ? `${strati.length} oggetti, ` : '';
+      a.stato(`Tornato in Stilista al suo posto: ${quanti}${punti.toLocaleString('it-IT')} punti (${salti} salti), ${ago}`);
+      return;
+    }
+    const dst = a.dst();
+    await dstAStilista(finestra, dst.bytes, dst.nome);
+    a.stato(`Inviato a Stilista (${(dst.bytes.length / 1024).toFixed(1)} KB): si apre in un documento nuovo`);
+  } catch (e) {
+    a.stato('Stilista: ' + (e as Error).message);
+  }
+}
+
+/**
+ * Collega i due pulsanti (già nel DOM del tool) all'aggancio; e se il tool è stato aperto dal pulsante di
+ * Stilista (`?stilista=<porta>`), prende subito la selezione. Restituisce la funzione «prendi» per chi
+ * ricostruisce il pannello e deve ricollegare il bottone.
+ */
+export function collegaStilista(
+  a: AggancioStilista,
+  pulsanti: { prendi?: HTMLElement | null; invia?: HTMLElement | null },
+  opzioni: { prendiSubito?: boolean } = {},
+): () => Promise<void> {
+  const prendi = () => prendiSelezioneStilista(a);
+  pulsanti.prendi?.addEventListener('click', () => { void prendi(); });
+  pulsanti.invia?.addEventListener('click', () => { void inviaAStilista(a); });
+  if ((opzioni.prendiSubito ?? true) && portaDaIndirizzo()) void prendi();
+  return prendi;
+}
+
+/** I due bottoni, con le classi del design system, da mettere accanto al file e all'export. */
+export const BOTTONE_PRENDI_STILISTA = (id = 'fromStilista') =>
+  `<button type="button" id="${id}" class="rg-button rg-button--ghost" title="I contorni degli oggetti selezionati in Stilista diventano il cartamodello (serve RG Stilista Link)">Prendi la selezione da Stilista</button>`;
+export const BOTTONE_INVIA_STILISTA = (id = 'toStilistaBtn') =>
+  `<button type="button" id="${id}" class="rg-button rg-button--outline rg-button--small" title="Il ricamo torna in Stilista: al suo posto se il cartamodello è venuto da lì, altrimenti in un documento nuovo (serve RG Stilista Link)">Invia a Stilista</button>`;

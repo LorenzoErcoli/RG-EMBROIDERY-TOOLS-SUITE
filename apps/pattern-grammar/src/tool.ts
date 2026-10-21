@@ -8,10 +8,7 @@ import { dstFromExportLayers, DST_FILE, readDstMetadata, type ExportLayer } from
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import {
-  trovaStilista, portaDaIndirizzo, nomeDocumento, selezioneDaStilista, dstAStilista,
-  origineStilista, coloreForiStilista, puntiDaPolilinee, puntiAStilista,
-} from '@rg/ui/stilista';
+import { collegaStilista, prendiSelezioneStilista, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import { FORMATO, CORPO, ALL_FIELD_GROUPS, SCALE_MODES, type Field, type Group } from './fields';
 import { stratoPattern } from './motore';
 import sharedPresetsRaw from './presets.shared.json?raw';
@@ -77,7 +74,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
         <h2 class="rg-h3">Anteprima</h2>
         <div class="rg-cluster">
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
-          <button id="toStilistaBtn" class="rg-button rg-button--outline rg-button--small" title="Il ricamo va in Stilista, in un documento nuovo (serve RG Stilista Link)">Invia a Stilista</button>
+          ${BOTTONE_INVIA_STILISTA()}
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Scarica SVG</button>
         </div>
@@ -210,7 +207,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
           <input type="file" id="boundaryFile" accept=".svg,.dxf,.dst" />
           <span class="rg-button rg-button--outline">Carica DXF, SVG o un DST di qui…</span>
         </label>
-        <button type="button" id="fromStilista" class="rg-button rg-button--ghost" title="I contorni degli oggetti selezionati in Stilista diventano il cartamodello (serve RG Stilista Link)">Prendi la selezione da Stilista</button>
+        ${BOTTONE_PRENDI_STILISTA()}
         <p class="rg-file-input__status" id="boundaryStatus" role="status">${boundaryModel ? statoContorno : 'Nessun contorno: il piano non viene ritagliato.'}</p>
       </div>
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Scala del file importato</span>
@@ -325,34 +322,34 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     return grid;
   }
 
-  // ---- contorno da Stilista (RG Stilista Link) ----
+  // ---- Stilista (RG Stilista Link, @rg/ui/stilista) ----
   // La selezione arriva come un SVG in mm, un colore per oggetto, e si legge come un file caricato:
-  // stessi ruoli per colore, stesso formato che copre il pezzo, e torna anche nel DST (R27).
-  async function prendiDaStilista() {
-    $('boundaryStatus').textContent = 'Cerco Stilista…';
-    try {
-      const finestra = await trovaStilista();
-      if (!finestra) throw new Error('non risponde: è aperto, con RG Stilista Link installato?');
-      const svg = await selezioneDaStilista(finestra);
-      const documento = nomeDocumento(finestra).replace(/\.[^.]+$/, '');
-      boundarySource = { text: svg, name: `${documento}-stilista.svg` };
+  // stessi ruoli per colore, stesso formato che copre il pezzo, e torna anche nel DST (R27). Il ricamo
+  // torna in Stilista al suo posto se il cartamodello è venuto da lì, altrimenti come DST.
+  const aggancio: AggancioStilista = {
+    carica(svg, nome) {
+      boundarySource = { text: svg, name: nome };
       scalaImport.scaleMode = 'auto'; // l'SVG del plugin dichiara width/height in mm
       for (const k of Object.keys(boundaryRoles)) delete boundaryRoles[k];
       buildPanel();
       reparseBoundary();
-      // I FORI (le aree vuote dei riempimenti di Stilista) arrivano col loro colore, dichiarato nell'SVG:
-      // quel colore è «Area vuota», ogni altro (il filo degli oggetti) «Confine di ritaglio».
-      const fori = coloreForiStilista(svg);
-      if (fori) {
-        for (const c of boundaryModel?.choices ?? []) boundaryRoles[c.id] = c.color?.toLowerCase() === fori ? 'vuoto' : 'confine';
-        rebuildBoundary();
-        renderColorMap();
-      }
-    } catch (e) {
-      $('boundaryStatus').textContent = 'Stilista: ' + (e as Error).message;
-    }
-  }
-
+    },
+    // I FORI (le aree vuote dei riempimenti di Stilista) arrivano col loro colore, dichiarato nell'SVG:
+    // quel colore è «Area vuota», ogni altro (il filo degli oggetti, anche più d'uno) «Confine di ritaglio».
+    ruoli(fori) {
+      for (const c of boundaryModel?.choices ?? []) boundaryRoles[c.id] = c.color?.toLowerCase() === fori ? 'vuoto' : 'confine';
+      rebuildBoundary();
+      renderColorMap();
+    },
+    sorgente: () => boundarySource?.text ?? null,
+    strati: () => [{ nome: 'RG pattern', polylines: stratoPattern(cfg as PatternConfig).polylines }],
+    dst() {
+      const { bytes, base } = costruisciDst();
+      return { bytes, nome: `${base || 'pattern'}-pattern` };
+    },
+    stato(testo) { $('status').textContent = testo; },
+  };
+  const prendiDaStilista = () => prendiSelezioneStilista(aggancio);
   // ---- contorno importato ----
   function reparseBoundary() {
     if (!boundarySource) return;
@@ -696,30 +693,6 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     return { bytes, base };
   }
 
-  // Il ricamo in Stilista. Se il cartamodello è venuto da Stilista, torna NEL suo documento, al suo
-  // posto, a punti fissi (Lorenzo, 2026-10-20: «fai tornare il ricamo nello stesso documento, al suo
-  // posto»); altrimenti Stilista apre il DST in un documento nuovo, come un file letto da disco.
-  $('toStilistaBtn').addEventListener('click', async () => {
-    const origine = boundarySource ? origineStilista(boundarySource.text) : null;
-    $('status').textContent = 'Invio a Stilista…';
-    try {
-      const finestra = await trovaStilista();
-      if (!finestra) throw new Error('non risponde: è aperto, con RG Stilista Link installato?');
-      if (origine) {
-        const punti = puntiDaPolilinee(stratoPattern(cfg as PatternConfig).polylines);
-        const esito = await puntiAStilista(finestra, { origine_mm: origine, punti, nome: 'RG pattern' });
-        $('status').textContent = `Tornato in Stilista al suo posto: ${esito.punti_letti.toLocaleString('it-IT')} punti`
-          + ` (${esito.salti} salti), ${esito.ago}`;
-        return;
-      }
-      const dst = costruisciDst();
-      await dstAStilista(finestra, dst.bytes, `${dst.base || 'pattern'}-pattern`);
-      $('status').textContent = `Inviato a Stilista (${(dst.bytes.length / 1024).toFixed(1)} KB): si apre in un documento nuovo`;
-    } catch (e) {
-      $('status').textContent = 'Stilista: ' + (e as Error).message;
-    }
-  });
-
   $('exportDstBtn').addEventListener('click', async () => {
     let bytes: Uint8Array;
     let base: string | undefined;
@@ -736,7 +709,8 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
 
   buildPanel();
   render();
-  // aperto dal pulsante di Stilista: la selezione si prende da sola
-  if (portaDaIndirizzo()) void prendiDaStilista();
+  // «Invia a Stilista»; e aperto dal pulsante di Stilista (?stilista=…) la selezione si prende da sola.
+  // «Prendi la selezione» vive nel pannello, che si ricostruisce: lo ricollega wirePanel.
+  collegaStilista(aggancio, { invia: $('toStilistaBtn') });
 }
 
