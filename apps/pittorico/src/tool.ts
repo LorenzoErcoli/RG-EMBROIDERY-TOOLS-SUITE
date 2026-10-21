@@ -18,6 +18,7 @@ import {
   bounds, rgbToHex, type PixelImage,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
+import { scheletro, sezioneSorgente, sezione, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero } from '@rg/ui/anatomia';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import {
@@ -38,185 +39,76 @@ type Vista = 'originale' | 'colori' | 'macchie' | 'ricamo' | 'passaggi';
 /** Sorgente pixel: rasterizzabile alla larghezza di lavoro. */
 interface Sorgente { name: string; pixelsAt: (maxWidthPx: number) => PixelImage; }
 
-interface Campo { id: string; key: keyof PittoricoParams; int?: boolean; min?: number; max?: number; }
+interface Campo {
+  id: string; key: keyof PittoricoParams; etichetta: string; unita: string; passo: number;
+  int?: boolean; min?: number; max?: number; aiuto?: string;
+}
 
 const CAMPI: Campo[] = [
-  { id: 'realWidthMm', key: 'realWidthMm', min: 0 },
-  { id: 'colorCount', key: 'colorCount', int: true, min: 2, max: 8 },
-  { id: 'densitySpacingMm', key: 'densitySpacingMm', min: 0.1, max: 2 },
-  { id: 'maxStitchMm', key: 'maxStitchMm', min: 0.5, max: 8 },
-  { id: 'frangiaMm', key: 'frangiaMm', min: 0, max: 12 },
-  { id: 'crescitaMm', key: 'crescitaMm', min: 0, max: 12 },
-  { id: 'sormontoMm', key: 'sormontoMm', min: 0, max: 6 },
-  { id: 'sogliaSfumaturaMm', key: 'sogliaSfumaturaMm', min: 0, max: 20 },
-  { id: 'lisciaBordiMm', key: 'lisciaBordiMm', min: 0, max: 5 },
-  { id: 'maxInternalTravelMm', key: 'maxInternalTravelMm', min: 5, max: 400 },
-  { id: 'flattenLightMm', key: 'flattenLightMm', min: 0 },
-  { id: 'smoothMm', key: 'smoothMm', min: 0 },
-  { id: 'minAreaMm2', key: 'minAreaMm2', min: 0 },
+  { id: 'realWidth', key: 'realWidthMm', etichetta: 'Larghezza reale', unita: 'mm', passo: 1, min: 0, aiuto: '0 = un pixel vale un millimetro. È la misura che comanda: senza, le altre non significano niente' },
+  { id: 'colorCount', key: 'colorCount', etichetta: 'Quanti fili', unita: '', passo: 1, int: true, min: 2, max: 8, aiuto: 'ogni tinta è un ago' },
+  { id: 'densitySpacingMm', key: 'densitySpacingMm', etichetta: 'Distanza fra le file', unita: 'mm', passo: 0.05, min: 0.1, max: 2, aiuto: 'quanto è fitto il pieno' },
+  { id: 'maxStitchMm', key: 'maxStitchMm', etichetta: 'Punto massimo', unita: 'mm', passo: 0.5, min: 0.5, max: 8, aiuto: 'lungo il filo' },
+  { id: 'frangiaMm', key: 'frangiaMm', etichetta: 'Lunghezza della frangia', unita: 'mm', passo: 0.5, min: 0, max: 12, aiuto: 'tienila sotto la sovrapposizione, o si appiattisce' },
+  { id: 'crescitaMm', key: 'crescitaMm', etichetta: 'Sovrapposizione dove sfuma', unita: 'mm', passo: 0.5, min: 0, max: 12, aiuto: 'quanto il colore sotto entra sotto quello sopra' },
+  { id: 'sormontoMm', key: 'sormontoMm', etichetta: 'Sormonto dove stacca', unita: 'mm', passo: 0.5, min: 0, max: 6, aiuto: 'basta poco: serve a non far vedere la tela alla giunta' },
+  { id: 'sogliaSfumaturaMm', key: 'sogliaSfumaturaMm', etichetta: 'Da qui in su è una sfumatura', unita: 'mm', passo: 0.5, min: 0, max: 20, aiuto: 'sotto, il colore stacca netto' },
+  { id: 'lisciaBordiMm', key: 'lisciaBordiMm', etichetta: 'Lisciatura del contorno', unita: 'mm', passo: 0.2, min: 0, max: 5, aiuto: "0 = il contorno com'esce dalla tracciatura. Alzandola sparisce il dettaglio più piccolo di così" },
+  { id: 'maxInternalTravelMm', key: 'maxInternalTravelMm', etichetta: 'Passaggio scoperto massimo', unita: 'mm', passo: 5, min: 5, max: 400, aiuto: 'oltre, il filo si taglia invece di attraversare il disegno. Più basso = meno fili tesi, più rasafili' },
+  { id: 'flattenLightMm', key: 'flattenLightMm', etichetta: 'Pareggio della luce', unita: 'mm', passo: 1, min: 0, aiuto: 'tienilo più grande del motivo' },
+  { id: 'smoothMm', key: 'smoothMm', etichetta: 'Attenuazione della grana', unita: 'mm', passo: 0.5, min: 0 },
+  { id: 'minAreaMm2', key: 'minAreaMm2', etichetta: 'Macchia più piccola', unita: 'mm²', passo: 10, min: 0 },
 ];
 
 /** Larghezza di lavoro in pixel: sopra i ~900 il calcolo si allunga senza aggiungere forma. */
 const MAX_WIDTH_PX = 900;
 
 export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = {}): void {
-  root.innerHTML = `
-  ${topbar('Punto Pittorico', opts.backHref)}
-  <div class="rg-workspace pittorico-workspace">
-    <aside class="rg-workspace__panel">
+  const campo = (id: string): string => {
+    const c = CAMPI.find((x) => x.id === id)!;
+    return campoNumero({ id: c.id, etichetta: c.etichetta, unita: c.unita, valore: defaultPittoricoParams[c.key] as number, passo: c.passo, min: c.min, max: c.max, aiuto: c.aiuto });
+  };
+  const sezioneCampi = (indice: number, titolo: string, ids: string[], dopo = ''): string =>
+    sezione({ indice, titolo, contenuto: `<div class="rg-param-grid">\n    ${ids.map(campo).join('\n    ')}${dopo}\n  </div>` });
 
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">01</span><h3 class="rg-param-section__title">Immagine</h3></div>
-        <div class="rg-param-grid">
-          <div class="rg-file-input rg-param-grid__wide">
-            <label class="rg-file-input__control">
-              <input type="file" id="file" accept="image/*">
-              <span class="rg-button rg-button--outline rg-button--small">Scegli un'immagine</span>
-            </label>
-            <p class="rg-file-input__status" id="fileStatus">Nessuna immagine: caricane una per cominciare</p>
+  // ECCEZIONE DICHIARATA (regola 12). Il segmented del DS e' documentato per 2-4 opzioni sorelle e qui ne porta 5.
+  // Sono le cinque tappe della catena, e fonderne due nasconderebbe proprio il passo che si vuole guardare: fra
+  // Colori e Macchie sta la tracciatura, ed e' li' che una linea netta si perde. Il controllo regge: il track e'
+  // inline-flex. Ambito: solo questo tool. Se un terzo tool chiedera' la stessa cosa, l'eccezione va promossa a
+  // variante documentata del DS. Il div attorno non e' decorativo: tiene il gruppo come UN solo item della barra.
+  const viste = `<div>
+          <div class="rg-segmented" role="group" aria-label="Cosa guardare">
+            <button type="button" class="rg-segmented__item" data-vista="originale" aria-pressed="false">Originale</button>
+            <button type="button" class="rg-segmented__item" data-vista="colori" aria-pressed="false">Colori</button>
+            <button type="button" class="rg-segmented__item" data-vista="macchie" aria-pressed="false">Macchie</button>
+            <button type="button" class="rg-segmented__item rg-segmented__item--active" data-vista="ricamo" aria-pressed="true">Ricamo</button>
+            <button type="button" class="rg-segmented__item" data-vista="passaggi" aria-pressed="false">Passaggi</button>
           </div>
-          <div class="rg-file-input rg-param-grid__wide">
-            <label class="rg-file-input__control">
-              <input type="file" id="reopen" accept=".svg,.dst">
-              <span class="rg-button rg-button--ghost rg-button--small">Riapri un progetto</span>
-            </label>
-            <p class="rg-file-input__status" id="reopenStatus">un .svg o .dst uscito da qui rimette i suoi parametri</p>
-          </div>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Larghezza reale del ricamo</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="realWidthMm" type="number" min="0" step="1"><span>mm</span></span>
-            <span class="rg-field__help">0 = un pixel vale un millimetro. È la misura che comanda: senza, le altre non significano niente</span>
-          </label>
-        </div>
-      </section>
+        </div>`;
 
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">02</span><h3 class="rg-param-section__title">Colori</h3></div>
-        <div class="rg-param-grid">
-          <label class="rg-field">
-            <span class="rg-field__label">Quanti fili</span>
-            <input class="rg-input rg-input--numeric" id="colorCount" type="number" min="2" max="8" step="1">
-            <span class="rg-field__help">ogni tinta è un ago</span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Macchia più piccola</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="minAreaMm2" type="number" min="0" step="10"><span>mm²</span></span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Pareggio della luce</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="flattenLightMm" type="number" min="0" step="1"><span>mm</span></span>
-            <span class="rg-field__help">tienilo più grande del motivo</span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Attenuazione della grana</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="smoothMm" type="number" min="0" step="0.5"><span>mm</span></span>
-          </label>
-          <div class="rg-param-grid__wide">
-            <p class="rg-field__label">Fili trovati, nell'ordine di cucitura</p>
-            <div class="pittorico-aghi" id="aghi"><p class="rg-field__help">carica un'immagine</p></div>
-          </div>
-        </div>
-      </section>
-
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">03</span><h3 class="rg-param-section__title">Punto</h3></div>
-        <div class="rg-param-grid">
-          <label class="rg-field">
-            <span class="rg-field__label">Distanza fra le file</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="densitySpacingMm" type="number" min="0.1" max="2" step="0.05"><span>mm</span></span>
-            <span class="rg-field__help">quanto è fitto il pieno</span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Passaggio scoperto massimo</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="maxInternalTravelMm" type="number" min="5" max="400" step="5"><span>mm</span></span>
-            <span class="rg-field__help">oltre, il filo si taglia invece di attraversare il disegno. Più basso = meno fili tesi, più rasafili</span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Punto massimo</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="maxStitchMm" type="number" min="0.5" max="8" step="0.5"><span>mm</span></span>
-            <span class="rg-field__help">lungo il filo</span>
-          </label>
-        </div>
-      </section>
-
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">04</span><h3 class="rg-param-section__title">Bordi e sfumature</h3></div>
-        <div class="rg-param-grid">
-          <label class="rg-field">
-            <span class="rg-field__label">Lunghezza della frangia</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="frangiaMm" type="number" min="0" max="12" step="0.5"><span>mm</span></span>
-            <span class="rg-field__help">tienila sotto la sovrapposizione, o si appiattisce</span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Lisciatura del contorno</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="lisciaBordiMm" type="number" min="0" max="5" step="0.2"><span>mm</span></span>
-            <span class="rg-field__help">0 = il contorno com'esce dalla tracciatura. Alzandola sparisce il dettaglio più piccolo di così</span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Da qui in su è una sfumatura</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="sogliaSfumaturaMm" type="number" min="0" max="20" step="0.5"><span>mm</span></span>
-            <span class="rg-field__help">sotto, il colore stacca netto</span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Sovrapposizione dove sfuma</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="crescitaMm" type="number" min="0" max="12" step="0.5"><span>mm</span></span>
-            <span class="rg-field__help">quanto il colore sotto entra sotto quello sopra</span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Sormonto dove stacca</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="sormontoMm" type="number" min="0" max="6" step="0.5"><span>mm</span></span>
-            <span class="rg-field__help">basta poco: serve a non far vedere la tela alla giunta</span>
-          </label>
-        </div>
-      </section>
-
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">05</span><h3 class="rg-param-section__title">Genera ed esporta</h3></div>
-        <div class="rg-param-grid">
-          <div class="rg-param-grid__wide rg-button-row">
-            <button class="rg-button rg-button--primary" id="genBtn" type="button">Genera</button>
-            <button class="rg-button rg-button--outline rg-button--small" id="exportBtn" type="button">Esporta SVG</button>
-            <button class="rg-button rg-button--outline rg-button--small" id="exportDstBtn" type="button">Esporta DST</button>
-          </div>
-          <p class="rg-field__help rg-param-grid__wide">Il ricamo non parte da solo: su un disegno grande costa qualche secondo, e conviene aver messo prima la larghezza reale.</p>
-        </div>
-      </section>
-
-    </aside>
-
-    <div class="rg-workspace__stage">
-      <header class="rg-workspace__stage-header">
-        <h2 class="rg-h3">Anteprima</h2>
-        <div class="rg-cluster">
-          <!-- ECCEZIONE DICHIARATA (regola 12). Il segmented del DS e' documentato per 2-4 opzioni
-               sorelle e qui ne porta 5. Sono le cinque tappe della catena, e fonderne due
-               nasconderebbe proprio il passo che si vuole guardare: fra Colori e Macchie sta la
-               tracciatura, ed e' li' che una linea netta si perde. Il controllo regge: il track e'
-               inline-flex, e sotto i 1300px il cluster manda a capo il blocco intero invece di
-               spezzarlo. Ambito: solo questo tool. Se un terzo tool chiedera' la stessa cosa,
-               l'eccezione va promossa a variante documentata del DS.
-               Il div attorno non e' decorativo: tiene il gruppo come UN solo item del cluster. -->
-          <div>
-            <div class="rg-segmented" role="group" aria-label="Cosa guardare">
-              <button type="button" class="rg-segmented__item" data-vista="originale" aria-pressed="false">Originale</button>
-              <button type="button" class="rg-segmented__item" data-vista="colori" aria-pressed="false">Colori</button>
-              <button type="button" class="rg-segmented__item" data-vista="macchie" aria-pressed="false">Macchie</button>
-              <button type="button" class="rg-segmented__item rg-segmented__item--active" data-vista="ricamo" aria-pressed="true">Ricamo</button>
-              <button type="button" class="rg-segmented__item" data-vista="passaggi" aria-pressed="false">Passaggi</button>
-            </div>
-          </div>
-          <button class="rg-button rg-button--ghost rg-button--small" id="fitBtn" type="button">Adatta</button>
-        </div>
-      </header>
-      <div class="rg-workspace__canvas" id="canvas">
-        <div class="rg-workspace__layer" id="layer"></div>
-      </div>
-      <footer class="rg-workspace__statusbar">
-        <span id="status">Carica un'immagine, poi premi Genera</span>
-        <span class="rg-mono" id="zoom">zoom 100%</span>
-      </footer>
-    </div>
-  </div>`;
+  root.innerHTML = scheletro({
+    topbar: topbar('Punto Pittorico', opts.backHref),
+    classe: 'pittorico-workspace',
+    pannello: [
+      sezioneSorgente({
+        tipo: 'immagine', accetta: 'image/*', statoIniziale: 'Nessuna immagine: caricane una per cominciare',
+        larghezzaReale: false, extra: campo('realWidth'),
+      }),
+      sezioneCampi(2, 'Colori', ['colorCount', 'minAreaMm2', 'flattenLightMm', 'smoothMm'], `
+    <div class="rg-param-grid__wide">
+      <p class="rg-field__label">Fili trovati, nell'ordine di cucitura</p>
+      <div class="pittorico-aghi" id="aghi"><p class="rg-field__help">carica un'immagine</p></div>
+    </div>`),
+      sezioneCampi(3, 'Punto', ['densitySpacingMm', 'maxInternalTravelMm', 'maxStitchMm']),
+      sezioneCampi(4, 'Bordi e sfumature', ['frangiaMm', 'lisciaBordiMm', 'sogliaSfumaturaMm', 'crescitaMm', 'sormontoMm']),
+    ],
+    anteprima: {
+      viste, genera: true, esportaSpenti: true,
+      ricalcolaDaSolo: { acceso: false, aiuto: 'Su un disegno grande costa qualche secondo: di solito conviene premere Genera dopo aver messo la larghezza reale.' },
+    },
+  });
+  attivaCampiNumero(root);
+  root.querySelector('#status')!.textContent = "Carica un'immagine, poi premi Genera";
 
   const $ = (id: string): HTMLElement => root.querySelector(`#${id}`) as HTMLElement;
   const params: PittoricoParams = { ...defaultPittoricoParams };
@@ -234,23 +126,24 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
   // ---- i campi ---------------------------------------------------------------
   for (const c of CAMPI) {
     const el = $(c.id) as HTMLInputElement;
-    el.value = String(params[c.key]);
+    impostaNumero(el, params[c.key] as number);
     el.addEventListener('change', () => {
-      let v = c.int ? Math.round(Number(el.value)) : Number(el.value);
+      let v = c.int ? Math.round(leggiCampo(el)) : leggiCampo(el);
       if (!Number.isFinite(v)) v = Number(defaultPittoricoParams[c.key]);
       if (c.min !== undefined) v = Math.max(c.min, v);
       if (c.max !== undefined) v = Math.min(c.max, v);
       (params[c.key] as number) = v;
-      el.value = String(v);
+      impostaNumero(el, v);
       $('status').textContent = 'Parametri cambiati: premi Genera';
+      if (($('autoCalcolo') as HTMLInputElement).checked && sorgente) $('genBtn').click();
     });
   }
   const rileggiCampi = (): void => {
-    for (const c of CAMPI) ($(c.id) as HTMLInputElement).value = String(params[c.key]);
+    for (const c of CAMPI) impostaNumero($(c.id) as HTMLInputElement, params[c.key] as number);
   };
 
   // ---- import: File → <img> → <canvas> → pixel (l'unico pezzo legato al DOM) ----
-  ($('file') as HTMLInputElement).addEventListener('change', (ev) => {
+  ($('fileInput') as HTMLInputElement).addEventListener('change', (ev) => {
     const f = (ev.target as HTMLInputElement).files?.[0];
     if (!f) return;
     const url = URL.createObjectURL(f);
@@ -314,6 +207,8 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
         segnaVista();
         disegna();
         mostraAghi(piano);
+        ($('exportBtn') as HTMLButtonElement).disabled = false;
+        ($('exportDstBtn') as HTMLButtonElement).disabled = false;
         const ms = Math.round(performance.now() - t0);
         const nasc = piano.saltoMm > 0
           ? Math.round((100 * piano.passaggiPerAgo.reduce((s, a) => s + a.passaggiCopertiMm, 0)) / piano.saltoMm)
@@ -404,7 +299,7 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
   }
 
   // ---- riapertura di un progetto ---------------------------------------------
-  ($('reopen') as HTMLInputElement).addEventListener('change', async (ev) => {
+  ($('progettoInput') as HTMLInputElement).addEventListener('change', async (ev) => {
     const f = (ev.target as HTMLInputElement).files?.[0];
     if (!f) return;
     try {
@@ -413,7 +308,7 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
         : readProjectMetadata(await f.text());
       const salvati = meta?.params as Partial<PittoricoParams> | undefined;
       if (!meta || meta.rgProject !== 'pittorico' || !salvati) {
-        $('reopenStatus').textContent = 'Questo file non viene dal Punto Pittorico';
+        $('progettoStatus').textContent = 'Questo file non viene dal Punto Pittorico';
         return;
       }
       for (const c of CAMPI) {
@@ -421,10 +316,10 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
         if (typeof v === 'number' && Number.isFinite(v)) (params[c.key] as number) = v;
       }
       rileggiCampi();
-      $('reopenStatus').textContent = `Parametri ripresi da ${f.name}`;
+      $('progettoStatus').textContent = `Parametri ripresi da ${f.name}`;
       $('status').textContent = 'Parametri ripresi: ricarica l\'immagine e premi Genera';
     } catch (e) {
-      $('reopenStatus').textContent = `Non riesco a leggerlo: ${(e as Error).message}`;
+      $('progettoStatus').textContent = `Non riesco a leggerlo: ${(e as Error).message}`;
     }
   });
 

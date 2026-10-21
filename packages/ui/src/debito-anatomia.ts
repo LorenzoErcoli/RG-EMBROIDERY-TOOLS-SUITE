@@ -21,7 +21,6 @@ export const DEBITO_ANATOMIA: Record<string, string[]> = {
   'pattern-grammar': ['intestazione', 'campo-numerico', 'barra-stato'],
   'pattern-macchie': ['intestazione', 'campo-numerico', 'barra-stato'],
   'pettine': ['intestazione', 'campo-numerico', 'sezione-01', 'barra-stato'],
-  'pittorico': ['intestazione', 'campo-numerico', 'sezione-01', 'barra-stato'],
   'punto-maglia': ['intestazione', 'campo-numerico', 'sezione-01', 'barra-stato'],
   'razza': ['intestazione', 'campo-numerico', 'sezione-01', 'barra-stato'],
   'rete-testa-speciale': ['intestazione', 'campo-numerico', 'barra-stato'],

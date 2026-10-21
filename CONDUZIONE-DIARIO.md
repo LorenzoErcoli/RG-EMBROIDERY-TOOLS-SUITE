@@ -41,6 +41,15 @@
 
 ## Giri
 
+### 2026-10-21 — voce 5, primo giro di U2: pittorico all'anatomia
+
+- **Perché pittorico.** È fra i più lontani indicati dal briefing ed è libero. Tool occupati da altre chat (non toccati): tutti quelli con commit di Stilista Link non ancora in master (net-45 escluso perché già fatto), oblique (ramo `claude/eloquent-ritchie`, commit di 20 minuti fa), punto-maglia (ramo suo), zone-pattern e pattern-grammar. Liberi per i prossimi giri: bitmap, broccato, pettine, sfrangiatura.
+- **Fatto.** `apps/pittorico/src/tool.ts` costruisce topbar, sezione 01 (Immagine), campi numerici, intestazione dell'anteprima e barra di stato con `@rg/ui/anatomia`. Cambia in vista: Genera e i due export passano dal pannello all'intestazione, nell'ordine fisso (Genera · Adatta · Esporta SVG · **Esporta DST**); i campi accettano la virgola e le frecce; compare «Ricalcola da solo» (spento: il calcolo costa secondi); gli export partono spenti finché non c'è un ricamo; «Riapri un progetto» diventa «Apri progetto o DST…». La sezione «Genera ed esporta» sparisce. Le cinque viste restano nell'intestazione, con la loro eccezione dichiarata.
+- **Il ricamo non cambia.** Stesso disegno di prova caricato in master e nel ramo, larghezza 120 mm: stessa riga di stato (4 macchie · 4 aghi · 27,9 m · 15.336 punti · passaggi 0,4 m · 1 salto), DST di 48157 byte con la stessa impronta della parte di cucitura. Nessun errore in console.
+- **Cricchetto.** Debito dell'anatomia da 59 a 55 voci (tolta la riga di pittorico), `DEBITO_ANATOMIA_ATTUALE` aggiornato. Test, typecheck, build verdi.
+- **Non fatto in questo giro.** Il passaggio del pannello a `motore.genera` e la parte `vista` del `Risultato` (decisione 2026-10-15): richiedono di aggiungere `vista` al contratto in `packages/cervello` e vanno fatti con un tool alla volta; li prendo dopo che l'anatomia è a posto. Le etichette restano quelle di prima (se ne occupa U5). La larghezza reale usa l'aiuto proprio di pittorico («0 = un pixel vale un millimetro»), non quello generico della sezione comune che direbbe una cosa sbagliata per un'immagine.
+- **Prossima voce.** Ancora U2: pettine.
+
 ### 2026-10-21 — voce 4: K2, la busta di progetto · master `80f832d`
 
 - **Fatto.** `conBusta()` e `leggiProgetto()` in `packages/core/src/progetto.ts`. La busta aggiunge `rg, tool, toolVersion, ruoli, sorgente, fili, misure` ai metadati di prima senza togliere niente. I 17 tool la scrivono; `DEBITO_BUSTA` = 0.
