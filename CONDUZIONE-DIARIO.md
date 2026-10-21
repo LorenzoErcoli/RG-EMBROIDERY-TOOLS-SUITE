@@ -5,11 +5,62 @@
 
 ## Aspetta Lorenzo
 
+- **2026-10-21 — K4, le tecniche di punto di ogni tool.** La scheda di ogni tool ha un posto per le
+  *tecniche* della tassonomia R24 (corsa · raso · cordoncino · catenella · zig-zag · tatami · croce), ma
+  **quale tecnica fa quale tool è una tua mappa di mestiere**, non si legge dal codice: la voce K4 resta
+  aperta su questo (debito 17 su 17). Serve per rispondere a *«ho una foto di un degradé, con cosa lo faccio?»*.
+  Sotto una **bozza mia, solo dalle descrizioni dei tool: da correggere**; dove ho scritto «?» non la so.
+  Rispondi anche solo «va bene», «togli X», «aggiungi Y a Z».
+
+  | Tool | Bozza (da correggere) |
+  |---|---|
+  | Rete 45° | cordoncino · raso (fascia) |
+  | Generatore pattern | zig-zag · corsa |
+  | Interlace | ? (intreccio di passaggi brevi) |
+  | Oblique | zig-zag · cordoncino |
+  | Punto croce | croce |
+  | Bitmap → Stitch | tatami |
+  | Punto Striato | tatami (base) + ? (striature a spola) |
+  | Pattern a zone | zig-zag · corsa |
+  | Cannage rafia | corsa · cordoncino · raso (bordatura) |
+  | Broccato | raso |
+  | Sfrangiatura | raso (frange sui capi) |
+  | Punto pettine sfrangiato | ? (linee di base + denti) |
+  | Punto razza | cordoncino (pallini) |
+  | Pattern a macchie | raso · (il punto della base) |
+  | Punto Pittorico | tatami |
+  | Rete testa speciale | ? (serpentine) |
+  | Punto maglia | ? (la V a maglia) |
+
+  Dove il tool fa un punto che la tassonomia **non nomina** (la V del Punto maglia, le striature, i denti del
+  pettine): lo aggiungiamo alla tassonomia (una regola nuova in Costituzione, R24) o lo lasciamo fuori?
+
 - **2026-10-21 — lo stash di pattern-macchie (non urgente).** Il lavoro di pattern-macchie è stato committato (`fe8794c`), la cartella principale non ha più modifiche sue, quindi pattern-macchie non è più occupato per le modifiche non committate (resta la regola delle 48 ore). Rimane `stash@{0}` («pattern-macchie (chat operativa): lavoro non committato, messo da parte per il merge del K1b»): confrontato con master, i due file `tool.ts` e `sapere/tool/pattern-macchie.md` sono identici e il resto è lavoro arrivato dopo. **Posso toglierlo?** (Non l'ho creato io, quindi non lo tolgo senza il tuo sì.)
 - **2026-10-20 — K6, i riferimenti fuori dal repo.** `PUNTO-STRIATURA.dst` e `BROCCATO.dst` stanno solo
   sul server: per misurarli vanno copiati in `test/fixtures/` (vedi `sapere/riferimenti/LEGGIMI.md`).
 
 ## Giri
+
+### 2026-10-21 — voce 3: K4, la scheda di ogni tool · master `53679de` (fatta in parte)
+
+**Fatto.** Ogni tool ha ora nella scheda **cosa prende** (`ingressi`: svg · dxf · raster · dst) e **cosa dà**
+(`uscite`), e i suoi parametri si leggono dal registro (`parametriDelTool(id)`). I dati dei tool sono in
+`packages/ui/src/tools-dati.ts`, senza DOM (si importano anche in node); `tools.ts` li riesporta, quindi
+`@rg/ui/tools` funziona come prima. **Quello che un tool dichiara si controlla contro i suoi sorgenti**: i file
+che accetta e i bottoni di export che ha.
+
+**Trovato.**
+- **Prendono immagini**: interlace, cross-stitch, bitmap, broccato, pettine, pittorico, punto-maglia (come foto da
+  ricalcare). **Solo un DST**: sfrangiatura. Tutti gli altri, un disegno vettoriale (SVG/DXF). **Tutti e 17 danno
+  SVG e DST** (anche sfrangiatura, che pareva non avere l'SVG).
+- Rotto apposta in cinque modi insieme, cinque rossi distinti (un DXF dichiarato e non accettato; un'immagine
+  accettata e non dichiarata; un SVG esportato e non dichiarato; una tecnica inesistente; una mappa di tecniche
+  senza abbassare il debito).
+- Home controllata nel browser: «Strumenti 11 · In sviluppo 6», si apre un tool e si torna, nessun errore.
+- La home **non mostra** ancora ingressi e uscite sulle carte: è una scelta di aspetto, non l'ho fatta.
+
+**Per le altre chat.** Un tool nuovo deve avere la sua riga in `tools-dati.ts` con `ingressi` e `uscite`
+(`npm test` lo verifica contro il sorgente di `tool.ts`).
 
 ### 2026-10-21 — voce 2: U1, i componenti comuni dell'interfaccia · master `040462d`
 
