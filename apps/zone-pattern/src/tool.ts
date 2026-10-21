@@ -784,9 +784,9 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
   }
 
   // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è il disegno a zone, ogni colore del filo
-  // col pattern A (si cambia in 02), i fori spenti; e si genera subito. Ogni ago torna come un oggetto a sé.
+  // col pattern A (si cambia in 02), i fori spenti — e una zona spenta dentro un'altra è un buco (2026-10-21) —;
+  // e si genera subito. Ogni ago torna come un oggetto a sé.
   const aggancio: AggancioStilista = {
-    fori: 'esclusi',
     carica(svg, nome) {
       for (const k of Object.keys(roles)) delete roles[k];
       // la scala la legge reparse() dai menu: l'SVG del plugin dichiara width/height in mm, i contorni sono tratti

@@ -9,7 +9,7 @@
 import { generateFinalPatternPoints } from '../generator/generatePattern.ts';
 import type { GeneratedPoint, ImportedBoundary, PatternConfig, Point } from '../grammar/types.ts';
 import { enforceMinStitch, type ExportLayer } from '@rg/core';
-import { boundsOfPoints, expandOuterEdges, orderZonesRaster, outerEdgeFlags, rotatePoints, type Zone } from './engine.ts';
+import { boundsOfPoints, expandOuterEdges, orderZonesRaster, outerEdgeFlags, pointInPolygon, rotatePoints, type Zone } from './engine.ts';
 import { buildEdgeGraph, travelAlongEdges } from './travel.ts';
 
 /**
@@ -177,6 +177,8 @@ export type ZonePlan = {
 export function fillZone(
   zone: Zone, config: PatternConfig, angleDeg: number, marginMm = 2, polygon = zone.points,
   reliefAreas: Point[][] = [],
+  /** I BUCHI della zona: le zone spente che ci stanno dentro (vedi `buildZonePlan`). Dentro non si ricama (R5). */
+  holes: Point[][] = [],
 ): Point[][] {
   const local = rotatePoints(polygon, -angleDeg, zone.centroid);
   const bounds = boundsOfPoints(local);
@@ -193,7 +195,11 @@ export function fillZone(
     sourceFileName: 'zona',
     sourceType: 'svg',
     color: zone.color,
-    paths: [{ id: zone.id, points: placed, closed: true }],
+    // i buchi si DICHIARANO (hole: true): il ritaglio del Generatore li toglie e i raccordi ci girano attorno
+    paths: [
+      { id: zone.id, points: placed, closed: true },
+      ...holes.map((ring, i) => ({ id: `${zone.id}-buco-${i}`, points: toLocal(ring), closed: true, hole: true })),
+    ],
     bounds: { minX: marginMm, minY: marginMm, maxX: marginMm + bounds.width, maxY: marginMm + bounds.height },
   };
 
@@ -234,6 +240,15 @@ export function buildZonePlan(zones: Zone[], params: ZonePlanParams): ZonePlan {
   const solid = zones.filter((zone) => !isRelief(zone));
   let relievedZones = 0;
 
+  // UNA ZONA SPENTA DENTRO UN'ALTRA È UN BUCO (Lorenzo, 2026-10-21: «sì, una zona spenta dentro un'altra
+  // diventa un buco»). Prima la zona di fuori si riempiva intera, la spenta compresa: una selezione di
+  // Stilista con un foro tornava ricamata anche nel foro. Vale per le zone col ruolo DICHIARATO spento
+  // ('off'): una tinta senza ruolo (Cannage rafia passa solo la sua) resta com'era.
+  const spente = zones.filter((zone) => params.roles[zone.color]?.pattern === 'off');
+  const buchiDi = (zone: Zone, polygon: Point[]): Point[][] => spente
+    .filter((s) => s !== zone && s.points.length >= 3 && s.points.every((p) => pointInPolygon(p, polygon)))
+    .map((s) => s.points);
+
   // Il MARGINE ESTERNO: le zone sul perimetro si allargano verso fuori prima di essere
   // riempite. Il contorno disegnato resta quello vero — deborda il ricamo, non la sagoma.
   const outer = params.outerMarginMm > 0 ? outerEdgeFlags(solid) : null;
@@ -257,7 +272,7 @@ export function buildZonePlan(zones: Zone[], params: ZonePlanParams): ZonePlan {
       }
       try {
         polylines = fillZone(zone, params.patterns[key] ?? {}, angleDeg, params.marginMm,
-          polygon, reliefRings).filter((p) => p.length > 1);
+          polygon, reliefRings, buchiDi(zone, zone.points)).filter((p) => p.length > 1);
       } catch (error) {
         warnings.push(`Zona ${zone.id}: ${(error as Error).message}`);
       }

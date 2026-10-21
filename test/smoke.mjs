@@ -3148,6 +3148,27 @@ console.log('\noblique — routing + orchestratore (2d)');
   // Lorenzo: «sui bordi esterni avrei bisogno di avere del margine». Il ricamo deve debordare
   // dal perimetro, MA non fra un rombo e l'altro: lì due zone allargate si sovrapporrebbero,
   // cioè filo doppio proprio dove il disegno è già pieno.
+  // UNA ZONA SPENTA DENTRO UN'ALTRA È UN BUCO (Lorenzo, 2026-10-21). Prima la zona di fuori si riempiva
+  // intera. Una tinta SENZA ruolo dentro (Cannage rafia passa solo la sua) resta com'era: ricamata sopra.
+  console.log('\nzone-pattern — una zona spenta dentro un\'altra è un buco');
+  {
+    // anelli CHIUSI, come le zone lette da un disegno (il pointInPolygon delle zone lo dà per scontato)
+    const quadrato = (x0, y0, l) => [{ x: x0, y: y0 }, { x: x0 + l, y: y0 }, { x: x0 + l, y: y0 + l }, { x: x0, y: y0 + l }, { x: x0, y: y0 }];
+    const zoneBuco = rg.zonesFromShapes([
+      { id: 'fuori', color: '#aa0000', points: quadrato(0, 0, 60) },
+      { id: 'dentro', color: '#ff00ff', points: quadrato(20, 20, 20) },
+    ], 0);
+    const pianoBuco = (ruoloDentro) => rg.buildZonePlan(zoneBuco, {
+      roles: { '#aa0000': { pattern: 'A', angleDeg: 0 }, ...(ruoloDentro ? { '#ff00ff': ruoloDentro } : {}) },
+      patterns: { A: config }, marginMm: 2, rowHeightMm: 0, travelMode: 'none', travelStitchMm: 3, cleanupMinStitchMm: 0, outerMarginMm: 0 });
+    const nelBuco = (piano) => piano.stitches.filter((s) => s.zone.color === '#aa0000')
+      .flatMap((s) => s.polylines.flat()).filter((p) => p.x > 20.5 && p.x < 39.5 && p.y > 20.5 && p.y < 39.5).length;
+    const spenta = pianoBuco({ pattern: 'off', angleDeg: 0 });
+    const senzaRuolo = pianoBuco(null);
+    check('la zona spenta dentro resta vuota; una tinta senza ruolo no (come prima)',
+      [nelBuco(spenta), nelBuco(senzaRuolo) > 0, spenta.stitches.length], [0, true, 1]);
+  }
+
   console.log('\nzone-pattern — il margine deborda fuori, non dentro');
   const flags = rg.outerEdgeFlags(zone);
   const latiEsterni = flags.flat().filter(Boolean).length;

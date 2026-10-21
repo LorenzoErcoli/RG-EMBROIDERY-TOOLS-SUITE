@@ -108,7 +108,7 @@ bottoni (`BOTTONE_PRENDI_STILISTA`, `BOTTONE_INVIA_STILISTA`) e `collegaStilista
 | oblique | anello interno del pannello (tutto a un colore) | al suo posto, un oggetto per livello | 3 oggetti, 35.833 punti — **ma level2 ha 4 punti cuciti che attraversano il foro (254 mm)**: è del tool, uguale nel suo DST |
 | pattern a macchie | senza ruolo (non ha aree vuote) | al suo posto, un oggetto per stop | corona + un oggetto grigio: 2 oggetti |
 | cannage rafia | senza ruolo | al suo posto, un oggetto per stop | 234 punti (senza rombi c'è poco da fare) |
-| pattern a zone | spenti, **ma la zona di fuori li ricama**: le zone non si bucano | al suo posto, un oggetto per ago | 25.360 punti |
+| pattern a zone | spenti, e una zona spenta dentro un'altra è un buco (2026-10-21) | al suo posto, un oggetto per ago | 19.980 punti, foro vuoto (prima 25.360, foro ricamato) |
 | cross-stitch | area vuota | **DST in un documento nuovo**: la griglia parte da 0,0 nell'angolo della forma | forma 220 × 220, 1.060 celle su 1.936 |
 
 Prende «Auto» come scala d'import chi l'aveva a Illustrator 72 dpi (rete, macchie, cannage, zone): l'SVG dichiara i mm.
