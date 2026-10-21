@@ -41,6 +41,20 @@
 
 ## Giri
 
+### 2026-10-21 — voce 5, quarto giro di U2: bitmap all'anatomia (quasi)
+
+- **Fatto.** `apps/bitmap/src/tool.ts` costruisce topbar, sezione 01, 16 campi numerici, intestazione e barra di stato con `@rg/ui/anatomia`. Testi, unità, limiti e passi dei campi sono quelli di prima, ricavati dal vecchio pannello per macchina; anche le etichette restano com'erano (compreso «(0 = auto)»: è lavoro di U5, non di questo giro). Cambia in vista:
+  - **Intestazione:** Analizza · Genera · Adatta · Esporta SVG · **Esporta DST** (pieno). Genera non è più il bottone pieno.
+  - **Sezione 01:** «Apri progetto o DST…» sostituisce la sezione senza numero «Carica parametri» (che sparisce): il file si riapre con gli stessi due formati, e anche il campo «Carica un'immagine…» accetta ancora .dst e .svg. L'esempio è il bottone demo comune («Immagine demo»).
+  - **Campi:** virgola e frecce; i campi che si nascondono a seconda della modalità (soglia, sfondo, numero di colori, degradé, banda) si nascondono come prima.
+  - L'avviso sopra la tela e la barra di avanzamento sotto sono ancora di bitmap, inseriti dopo il guscio comune.
+  - **Niente «Ricalcola da solo»:** l'anteprima si rifà già da sola a ogni cambio (è il suo «Analizza» automatico); Genera è il calcolo completo.
+- **Il ricamo non cambia.** Demo, soglia 120, 3 colori, 200 px, distanza 1,2 mm, larghezza 80 mm: stessa riga di stato («Generato: 2 stop · filo 1.77 m»), stessa riga del file, stesso DST byte per byte (5747 byte, metadati compresi) in master e nel ramo. Nessun errore in console. (Una prima prova mostrava 24 byte in più: veniva dal mio test, che cambiava stile e palette prima di generare, non dal codice.)
+- **Resta nel debito: `campo-numerico`.** La tolleranza di ogni colore della palette manuale (`± 30`) è un campo numerico creato riga per riga dal codice, e l'anatomia non ha un campo numerico compatto da mettere in una riga di lista. Non l'ho riscritto per aggirare il cricchetto: la voce resta, con questo motivo. Serve un componente in più in `@rg/ui` (e, se è un componente nuovo del design system, l'agente `design-system`).
+- **Non provato nel browser:** palette manuale con il contagocce, riapertura di un progetto da DST/SVG. Il codice dietro non è stato toccato, salvo il modo in cui i campi scrivono i numeri.
+- **Cricchetto.** Debito dell'anatomia da 47 a 44 voci (di bitmap resta una sola). Test, typecheck, build verdi.
+- **Prossima voce.** Ancora U2: broccato, l'ultimo tool libero.
+
 ### 2026-10-21 — voce 5, terzo giro di U2: pettine all'anatomia
 
 - **Fatto.** `apps/pettine/src/tool.ts` costruisce topbar, sezione 01, tutti i 20 campi numerici (i 15 parametri, la larghezza reale e i 4 del ritaglio), intestazione e barra di stato con `@rg/ui/anatomia`. I testi, le unità, i limiti e gli aiuti dei campi sono gli stessi di prima: li ho ricavati dal vecchio pannello per macchina, non riscritti. Cambia in vista:

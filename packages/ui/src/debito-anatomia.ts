@@ -12,7 +12,7 @@
 //   barra-stato     'rg-workspace__statusbar'      → barraStato() / scheletro()
 // La migrazione (U2) porta un tool alla volta e svuota la sua riga.
 export const DEBITO_ANATOMIA: Record<string, string[]> = {
-  'bitmap': ['intestazione', 'campo-numerico', 'sezione-01', 'barra-stato'],
+  'bitmap': ['campo-numerico'],
   'broccato': ['intestazione', 'campo-numerico', 'sezione-01', 'barra-stato'],
   'cannage-rafia': ['intestazione', 'campo-numerico', 'barra-stato'],
   'cross-stitch': ['intestazione', 'campo-numerico', 'sezione-01', 'barra-stato'],

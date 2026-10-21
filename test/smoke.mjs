@@ -6839,7 +6839,7 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
   };
   const tools = readdirSync(join(radice, 'apps')).filter((d) => d !== 'shell' && existsSync(join(radice, 'apps', d, 'src/tool.ts'))).sort();
   const aMano = Object.fromEntries(tools.map((t) => { const s = readFileSync(join(radice, 'apps', t, 'src/tool.ts'), 'utf8'); return [t, Object.entries(COSE).filter(([, f]) => f(s)).map(([n]) => n)]; }));
-  const DEBITO_ANATOMIA_ATTUALE = 47;
+  const DEBITO_ANATOMIA_ATTUALE = 44;
   const debito = rg.DEBITO_ANATOMIA;
   check(`il debito dell'interfaccia è ${DEBITO_ANATOMIA_ATTUALE} voci (può solo scendere: se è sceso, abbassa DEBITO_ANATOMIA_ATTUALE)`, Object.values(debito).reduce((n, v) => n + v.length, 0), DEBITO_ANATOMIA_ATTUALE);
   check('nessun tool scrive a mano un pezzo che ha un componente, se non è nel debito (un tool nuovo deve usare anatomia.ts)',
