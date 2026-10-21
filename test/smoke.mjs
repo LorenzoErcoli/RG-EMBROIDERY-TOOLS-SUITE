@@ -64,7 +64,7 @@ export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm, anelliOvali as rtsAnelliOvali, puntoDelNodo as rtsPuntoDelNodo, cimeDelleColonne as rtsCimeDelleColonne, ceIlNodo as rtsCeIlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
 export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, avanza as rtsAvanza, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
-export { origineStilista, coloreForiStilista, puntiDaPolilinee } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
+export { origineStilista, coloreForiStilista, puntiDaPolilinee, svgUnSoloColore } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -2764,6 +2764,16 @@ console.log('\noblique — routing + orchestratore (2d)');
     }
     check('vuoti aggirati: niente raccordi che tagliano il pezzo, e nei vuoti al più lo spigolo del punto minimo',
       [tagli, profondita <= 1], [0, true]);
+    // i due pulsanti in tutti i tool col cartamodello (2026-10-21): l'aggancio collegato e i due bottoni nel DOM
+    const agganciati = ['pattern-grammar', 'net-45', 'striatura', 'interlace', 'rete-testa-speciale', 'pattern-macchie',
+      'cannage-rafia', 'zone-pattern', 'razza', 'oblique', 'cross-stitch'];
+    check('Stilista Link: «Prendi la selezione» e «Invia a Stilista» in tutti gli 11 tool col cartamodello',
+      agganciati.filter((t) => {
+        const s = readFileSync(join(root, `apps/${t}/src/tool.ts`), 'utf8');
+        return !(s.includes('collegaStilista(aggancio') && s.includes('BOTTONE_PRENDI_STILISTA()') && s.includes('BOTTONE_INVIA_STILISTA()'));
+      }), []);
+    check('Stilista Link: un solo colore per oblique, e il colore dei fori diventa quello del filo',
+      rg.svgUnSoloColore(svgStilista).match(/stroke="#[0-9A-Fa-f]{6}"/g), ['stroke="#FFF200"', 'stroke="#FFF200"']);
     const tool = readFileSync(join(root, 'apps/pattern-grammar/src/tool.ts'), 'utf8');
     check('Stilista Link: nel Generatore il colore dei fori diventa «Area vuota», ogni altro «Confine»',
       tool.includes("boundaryRoles[c.id] = c.color?.toLowerCase() === fori ? 'vuoto' : 'confine';"), true);

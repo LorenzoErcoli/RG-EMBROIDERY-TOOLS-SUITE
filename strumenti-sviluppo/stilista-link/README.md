@@ -97,13 +97,22 @@ nelle prove non è dovuta intervenire. Le strade scartate sono in
 bottoni (`BOTTONE_PRENDI_STILISTA`, `BOTTONE_INVIA_STILISTA`) e `collegaStilista` fanno il resto. Con
 `?stilista=<porta>` nell'indirizzo il tool prende la selezione da solo.
 
-| tool | prova sulla corona di SH295 |
-|---|---|
-| Generatore pattern | 26.486 punti, nessuno nel foro, identici al micron nella copia salvata |
-| net-45 | 17.201 punti, ricalcolo forzato senza effetto |
-| striatura | 13.435 punti, 1 salto |
-| interlace | 4 oggetti (uno per stop), 19.060 punti |
+| tool | i fori | il ritorno | prova sulla corona di SH295 |
+|---|---|---|---|
+| Generatore pattern | area vuota | al suo posto | 26.486 punti, nessuno nel foro, identici al micron nella copia salvata |
+| net-45 | area vuota | al suo posto | 17.201 punti, ricalcolo forzato senza effetto |
+| striatura | area vuota | al suo posto | 13.435 punti, 1 salto |
+| interlace | area vuota | al suo posto, un oggetto per stop | 4 oggetti, 19.060 punti |
+| rete testa speciale | area vuota | al suo posto (nel modo radiale: DST) | 4.803 punti |
+| razza | area vuota (la decide la geometria) | al suo posto | 14.602 punti |
+| oblique | anello interno del pannello (tutto a un colore) | al suo posto, un oggetto per livello | 3 oggetti, 35.833 punti — **ma level2 ha 4 punti cuciti che attraversano il foro (254 mm)**: è del tool, uguale nel suo DST |
+| pattern a macchie | senza ruolo (non ha aree vuote) | al suo posto, un oggetto per stop | corona + un oggetto grigio: 2 oggetti |
+| cannage rafia | senza ruolo | al suo posto, un oggetto per stop | 234 punti (senza rombi c'è poco da fare) |
+| pattern a zone | spenti, **ma la zona di fuori li ricama**: le zone non si bucano | al suo posto, un oggetto per ago | 25.360 punti |
+| cross-stitch | area vuota | **DST in un documento nuovo**: la griglia parte da 0,0 nell'angolo della forma | forma 220 × 220, 1.060 celle su 1.936 |
 
+Prende «Auto» come scala d'import chi l'aveva a Illustrator 72 dpi (rete, macchie, cannage, zone): l'SVG dichiara i mm.
+La larghezza reale torna a 0 (net-45, striatura, interlace, razza, oblique, cross-stitch).
 Tutti gli strati tornano sull'ago dell'oggetto selezionato.
 ## I fori (2026-10-21)
 

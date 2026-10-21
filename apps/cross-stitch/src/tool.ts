@@ -9,6 +9,7 @@ import { topbar } from '@rg/ui/tools';
 import ICONS from '../../../packages/design-system/icons/rg-icons.svg?url';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
+import { collegaStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import {
   type Button, type CellEdit, type Cells, type GridSpec, type Leg, type Stitch, type Thread, type Tool,
   type Pixels, type BrushStitch, type KnitStitch, DEFAULT_GRID, applyEdits, brushArea, brushEdits, fillEdits, knitFromImage, gridForSize, refinePalette, paletteShares, DEFAULT_KNIT, cellIndex, cellsFromJson, cellsToJson, editsFor, fromThreadRoute, fromTwoColumnV, stitchLegs,
@@ -149,6 +150,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
               <input type="file" id="shapeInput" accept=".svg,.dxf" />
               <span class="rg-button rg-button--outline rg-button--small">Carica forma (DXF o SVG)…</span>
             </label>
+            ${BOTTONE_PRENDI_STILISTA()}
             <p class="rg-file-input__status" id="shapeStatus" role="status">Nessuna forma: si ricama tutto il rettangolo.</p>
           </div>
           <div class="rg-param-grid rg-param-grid__wide" id="shapeBox" hidden>
@@ -381,6 +383,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       <header class="rg-workspace__stage-header">
         <h2 class="rg-h3" id="stageTitle" tabindex="-1">Disegno</h2>
         <div class="rg-cluster" id="stageActions">
+          ${BOTTONE_INVIA_STILISTA()}
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Esporta SVG</button>
         </div>
@@ -3839,15 +3842,43 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $('status').textContent = saveOutcomeMessage(outcome, name);
   });
 
+  // Lo usano «Esporta DST» e «Invia a Stilista».
+  function costruisciDst(layers = exportLayers()): Uint8Array {
+    if (!layers.length) throw new Error('Niente da esportare: la griglia è vuota o gli stop sono spenti.');
+    return dstFromExportLayers(layers, {
+      label: (sourceName || 'CROSS-STITCH').toUpperCase().slice(0, 16),
+      metadata: projectMetadata(),
+    });
+  }
+
+  // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è la FORMA (il filo il perimetro, i fori le
+  // aree vuote), come col bottone «Carica forma». Il ricamo però sta sulla griglia, che parte da 0,0 nell'angolo
+  // della forma, quantizzata alle celle (e spostata da area di prova e strisce): non nel riferimento di Stilista.
+  // Per questo torna come DST, in un documento nuovo, e non al suo posto (sorgente → null).
+  const aggancio: AggancioStilista = {
+    carica(svg, nome) {
+      shapeSrc = { result: parseSvgToContours(svg), name: nome };
+      num('shapeRealW').value = '0'; // l'SVG dichiara le sue misure
+      buildShape(true);
+    },
+    ruoli(fori) {
+      if (!pieceShape) return;
+      for (const c of new Set(pieceShape.contours.map((k) => k.color))) pieceShape.roles[c] = c.toLowerCase() === fori ? 'void' : 'outline';
+      shapeVersion++;
+      buildShapeRoles();
+      update();
+      shapeNote();
+    },
+    sorgente: () => null,
+    strati: () => stratiCuciti(exportLayers()),
+    dst: () => ({ bytes: costruisciDst(), nome: `${sourceName || 'cross-stitch'}-cross-stitch` }),
+    stato: (testo) => { $('status').textContent = testo; },
+  };
+
   $('exportDstBtn').addEventListener('click', async () => {
     let bytes: Uint8Array;
     try {
-      const layers = exportLayers();
-      if (!layers.length) { $('status').textContent = 'Niente da esportare: la griglia è vuota o gli stop sono spenti.'; return; }
-      bytes = dstFromExportLayers(layers, {
-        label: (sourceName || 'CROSS-STITCH').toUpperCase().slice(0, 16),
-        metadata: projectMetadata(),
-      });
+      bytes = costruisciDst();
     } catch (e) {
       $('status').textContent = (e as Error).message;
       return;
@@ -3863,4 +3894,5 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   try { localStorage.removeItem(OLD_AUTOSAVE_KEY); } catch { /* browser senza memoria: niente da togliere */ }
   afterLoad();
   $('status').textContent = 'Griglia vuota: carica un’immagine (01) o disegna con la barra qui sopra.';
+  collegaStilista(aggancio, { prendi: $('fromStilista'), invia: $('toStilistaBtn') });
 }

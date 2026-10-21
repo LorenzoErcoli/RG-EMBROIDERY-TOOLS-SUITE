@@ -83,6 +83,16 @@ export function coloreForiStilista(svg: string): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 
+/**
+ * L'SVG della selezione con UN colore solo: quello del primo filo, sui contorni e sui fori. Per i tool che un
+ * ruolo lo danno a un colore solo, e i vuoti li riconoscono come anelli interni dello stesso colore (oblique).
+ */
+export function svgUnSoloColore(svg: string): string {
+  const fori = coloreForiStilista(svg);
+  const filo = [...svg.matchAll(/stroke="(#[0-9a-fA-F]{6})"/g)].map((m) => m[1]).find((c) => c.toLowerCase() !== fori);
+  return filo ? svg.replace(/stroke="#[0-9a-fA-F]{6}"/g, `stroke="${filo}"`) : svg;
+}
+
 /** Le polilinee di un ricamo (mm) come punti per Stilista: il primo punto di ogni polilinea dopo la prima è un salto. */
 export function puntiDaPolilinee(polilinee: Array<Array<{ x: number; y: number }>>): Array<[number, number, number]> {
   const punti: Array<[number, number, number]> = [];

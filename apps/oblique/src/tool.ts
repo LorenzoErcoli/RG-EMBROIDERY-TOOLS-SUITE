@@ -8,6 +8,7 @@ import {
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
+import { collegaStilista, stratiCuciti, svgUnSoloColore, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import {
   defaultObliqueParams, moduleFromPolylines, parseModuleSvg,
   type ObliqueParams, type ObliqueModule, type ObliqueResult,
@@ -89,6 +90,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
               <input type="file" id="panelInput" accept=".svg,.dxf,image/svg+xml">
               <span class="rg-button rg-button--outline">Carica SVG o DXF…</span>
             </label>
+            ${BOTTONE_PRENDI_STILISTA()}
             <p class="rg-file-input__status" id="panelStatus" role="status">Nessun cartamodello: uso il formato ${params.formatWidth}×${params.formatHeight} mm.</p>
           </div>
           <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Larghezza reale del cartamodello</span>
@@ -186,6 +188,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
         <h2 class="rg-h3">Anteprima</h2>
         <div class="rg-cluster">
           <button type="button" id="exportSvgBtn" class="rg-button rg-button--primary rg-button--small">Esporta SVG</button>
+          ${BOTTONE_INVIA_STILISTA()}
           <button type="button" id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
           <button type="button" id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
         </div>
@@ -302,6 +305,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
 
   // ---- Import cartamodello + riapri progetto ----
   function loadPanel(result: ImportResult, name: string): void {
+    svgStilista = null; // ogni caricamento: solo il caricamento da Stilista la rimette, subito dopo
     panel = result;
     panelName = name;
     refreshPanelScale();
@@ -367,15 +371,44 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
     const base = (panelName ? panelName.replace(/\.[^.]+$/, '') : 'oblique') + '-oblique.svg';
     setStatus(saveOutcomeMessage(await saveTextFile(svg, { suggestedName: base, description: 'Immagine SVG' }), base));
   }
-  async function doExportDst(): Promise<void> {
+  // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina lo ignora, noi lo
+  // rileggiamo. Senza, il .dst era l'unico file della suite che non sapeva da dove veniva.
+  // Lo usano «Esporta DST» e «Invia a Stilista».
+  function costruisciDst(): Uint8Array {
     readParams();
     const res = lastResult ?? generate();
-    // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina lo ignora, noi lo
-    // rileggiamo. Senza, il .dst era l'unico file della suite che non sapeva da dove veniva.
-    const bytes = dstFromExportLayers(exportLayersFor(res), {
+    return dstFromExportLayers(exportLayersFor(res), {
       label: 'OBLIQUE',
       metadata: { rgProject: 'oblique', version: '0.1.0', params, roles: roleColor },
     });
+  }
+
+  // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è il pannello. Qui un ruolo ha UN colore,
+  // e i vuoti sono gli anelli interni del pannello: contorni e fori si portano al colore del primo filo, che
+  // fa il Pannello da solo, e le aree di esclusione interne si accendono.
+  let svgStilista: string | null = null;
+  const aggancio: AggancioStilista = {
+    carica(svg, nome) {
+      const unColore = svgUnSoloColore(svg);
+      // l'SVG dichiara le sue misure: una larghezza reale lo riscalerebbe e il ritorno non cadrebbe più al suo posto
+      params.realWidthMm = 0;
+      params.enableExclusionAreas = true;
+      for (const k of ROLE_ORDER) delete roleColor[k];
+      applyParamsToControls();
+      loadPanel(parseSvgToContours(unColore), nome);
+      svgStilista = unColore;
+    },
+    sorgente: () => svgStilista,
+    strati() {
+      readParams();
+      return stratiCuciti(exportLayersFor(lastResult ?? generate()));
+    },
+    dst: () => ({ bytes: costruisciDst(), nome: (panelName ? panelName.replace(/\.[^.]+$/, '') : 'oblique') + '-oblique' }),
+    stato: (testo) => setStatus(testo),
+  };
+
+  async function doExportDst(): Promise<void> {
+    const bytes = costruisciDst();
     const base = (panelName ? panelName.replace(/\.[^.]+$/, '') : 'oblique') + '.dst';
     setStatus(saveOutcomeMessage(await saveBinaryFile(bytes, { suggestedName: base, ...DST_FILE }), base));
   }
@@ -412,4 +445,5 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
   applyParamsToControls();
   refreshRoleSelects();
   render();
+  collegaStilista(aggancio, { prendi: $('fromStilista'), invia: $('toStilistaBtn') });
 }
