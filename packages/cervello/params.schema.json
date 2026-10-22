@@ -1976,7 +1976,7 @@
           "title": "Punto dell’impuntura nel vuoto",
           "description": "Il punto della linea che gira sul bordo del vuoto o lo attraversa dritta.",
           "minimum": 0.5,
-          "maximum": 12
+          "maximum": 30
         },
         "netShape": {
           "$ref": "#/$defs/netShape",
@@ -2116,6 +2116,10 @@
         "voidMode": {
           "$ref": "#/$defs/voidMode",
           "default": "ritorno"
+        },
+        "voidEdgeStitchMm": {
+          "$ref": "#/$defs/voidEdgeStitchMm",
+          "default": 1
         }
       }
     },
@@ -5355,6 +5359,19 @@
       ],
       "x-concetto": "aree-vuote"
     },
+    "voidEdgeStitchMm": {
+      "type": "number",
+      "title": "Punti corti ai bordi del vuoto",
+      "description": "Attraversando il vuoto dritto: tre punti di questa lunghezza a ogni bordo, che segnano il foro; in mezzo i punti lunghi (fino a 30 mm). 0 = niente.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 5,
+      "x-passo": 0.1,
+      "x-regole": [
+        "R5"
+      ],
+      "x-concetto": "aree-vuote"
+    },
     "knitVWidth": {
       "type": "number",
       "title": "Larghezza della V",
@@ -5682,7 +5699,8 @@
         "enableExclusionAreas",
         "reconnectVoidBorders",
         "voidClearanceMm",
-        "voidMode"
+        "voidMode",
+        "voidEdgeStitchMm"
       ]
     },
     "seme": {

@@ -7204,6 +7204,20 @@ console.log('\nrete-testa-speciale — aree vuote da sinistra a destra, ingressi
   check('DST: 5 stop per 6 parti; la rete centrata (da −100 a 100 mm in x)', [d.colorChanges, Math.round(Math.min(...xs) * 10) / 10 <= -100, Math.round(Math.max(...xs) * 10) / 10 >= 100], [5, true, true]);
 }
 
+// rete-testa-speciale — IL VUOTO ATTRAVERSATO DRITTO (Lorenzo, 2026-10-22: «mettiamo 3 punti avvicinati che
+// delimitano l'area del foro. e poi dentro devo poter aumentare la lunghezza punto fino a 3cm»)
+console.log('\nrete-testa-speciale — vuoto attraversato: tre punti corti a ogni bordo, dentro fino a 30 mm');
+{
+  const P = { ...rg.RTS_PARAMETRI, pieceSource: 'misure', totalWidth: 200, totalHeight: 140, diamondWidthMm: 10, diamondHeightMm: 17, overlapMm: 1.75, cornerRounding: 20, maxStitchMm: 1, voidMode: 'centro', voidStitchMm: 30 };
+  const foro = Array.from({ length: 48 }, (_, i) => ({ x: 100 + 35 * Math.cos(2 * Math.PI * i / 48), y: 70 + 25 * Math.sin(2 * Math.PI * i / 48) }));
+  const r = rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [foro], P);
+  const corse = []; for (const b of r.blocchi) { let c = null; for (let i = 0; i < b.length; i++) { if (b[i].tipo === 'vuoto') { if (!c) { c = [b[i - 1] ?? b[i]]; corse.push(c); } c.push(b[i]); } else c = null; } }
+  const passi = corse.map((c) => c.slice(1).map((q, i) => Math.hypot(q.x - c[i].x, q.y - c[i].y)));
+  const tre = (s) => s.length >= 7 && s.slice(0, 3).every((v) => Math.abs(v - 1) < 0.05) && s.slice(-3).every((v) => Math.abs(v - 1) < 0.05);
+  check('18 traversate, tutte con tre punti da 1 mm a ogni bordo; in mezzo punti fino a 30 mm (il più lungo oltre 25); i punti corti di partenza 1 mm',
+    [corse.length, passi.every(tre), Math.max(...passi.flat()) <= 30 + 1e-6, Math.max(...passi.flat()) > 25, rg.RTS_PARAMETRI.voidEdgeStitchMm], [18, true, true, true, 1]);
+}
+
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).
 rmSync(outDir, { recursive: true, force: true });
 console.log(failed ? `\n${failed} test falliti\n` : '\nTutti i test passati\n');

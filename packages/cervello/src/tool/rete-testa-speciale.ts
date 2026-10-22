@@ -177,7 +177,12 @@ export const scheda: SchedaParametri = {
     {
       id: 'voidStitchMm', etichetta: 'Punto dell’impuntura nel vuoto',
       aiuto: 'Il punto della linea che gira sul bordo del vuoto o lo attraversa dritta.',
-      tipo: 'num', unita: 'mm', min: 0.5, max: 12, passo: 0.1, predefinito: 2, regole: ['R5'], concetto: 'aree-vuote',
+      tipo: 'num', unita: 'mm', min: 0.5, max: 30, passo: 0.1, predefinito: 2, regole: ['R5'], concetto: 'aree-vuote',
+    },
+    {
+      id: 'voidEdgeStitchMm', etichetta: 'Punti corti ai bordi del vuoto',
+      aiuto: 'Attraversando il vuoto dritto: tre punti di questa lunghezza a ogni bordo, che segnano il foro; in mezzo i punti lunghi (fino a 30 mm). 0 = niente.',
+      tipo: 'num', unita: 'mm', min: 0, max: 5, passo: 0.1, predefinito: 1, regole: ['R5'], concetto: 'aree-vuote',
     },
     {
       id: 'minStitch', nome: 'minStitchMm', etichetta: 'Punto minimo',

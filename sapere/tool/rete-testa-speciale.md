@@ -112,6 +112,11 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
     `bottomRoundEnds` (0 = ovale, 100 = mezzi cerchi e tratti dritti).
 21. **La fascia sui lati lunghi nel tool** (2026-10-16): *«Fascia sui lati lunghi è importante che me lo metti dentro»* →
     `sideBandMm` (0 = tutta la rete), nel ricamo, nel pannello e nella sacca 3D.
+27. **Il vuoto attraversato dritto: tre punti corti ai bordi, dentro fino a 3 cm** (2026-10-22): *«nella modalità aree
+    vuote che si attraversano con impuntura dritta, mettiamo 3 punti avvicinati che delimitano l'area del foro. e poi
+    dentro devo poter aumentare la lunghezza punto fino a 3cm»*. `voidEdgeStitchMm` (1 mm; tre punti a ogni bordo, dal
+    bordo verso dentro) e `voidStitchMm` fino a 30 (prima 12). Se la traversata è più corta di sei punti corti, è tutta a
+    punti corti.
 24. **Aree vuote: sempre da sinistra a destra, cambio ago a ogni spezzatura** (2026-10-21): *«è importante che il filo
     si muova sempre da sinistra a destra. Quindi in caso di aree vuote la parte sotto o sopra in base a quando si spezza
     va fatto subito dopo la parte principale, per poi concludere con la parte senza buco laterale… Quando si spezza

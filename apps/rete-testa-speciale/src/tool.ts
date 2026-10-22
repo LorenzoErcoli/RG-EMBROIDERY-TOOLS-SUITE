@@ -103,7 +103,9 @@ const CAMPI_PUNTI: Campo[] = [
 const CAMPI_VUOTI: Campo[] = [
   { nome: 'voidMode', etichetta: 'All’area vuota la rete', unita: '', passo: 1, min: 0,
     scelte: [['ritorno', 'si ferma: l’altro ramo si cuce subito dopo (cambio ago)'], ['bordo', 'gira sul contorno del vuoto'], ['centro', 'lo attraversa con un’impuntura dritta']] },
-  { nome: 'voidStitchMm', etichetta: 'Punto dell’impuntura nel vuoto', unita: 'mm', passo: 0.1, min: 0.5, max: 12,
+  { nome: 'voidEdgeStitchMm', etichetta: 'Punti corti ai bordi del vuoto', unita: 'mm', passo: 0.1, min: 0, max: 5,
+    aiuto: 'Attraversando il vuoto dritto: tre punti di questa lunghezza a ogni bordo, che segnano il foro; in mezzo i punti lunghi. 0 = niente.' },
+  { nome: 'voidStitchMm', etichetta: 'Punto dell’impuntura nel vuoto', unita: 'mm', passo: 0.1, min: 0.5, max: 30,
     aiuto: 'Il punto della linea che gira sul bordo del vuoto o lo attraversa dritta.' },
 ];
 

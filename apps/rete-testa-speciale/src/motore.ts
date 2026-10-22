@@ -130,8 +130,13 @@ export type ParametriRete = {
   constructionStroke: number;
   /** Cosa fa la rete a un'area vuota. */
   voidMode: ModoVuoto;
-  /** Punto dell'impuntura che attraversa un'area vuota o ci gira attorno, mm. */
+  /** Punto dell'impuntura che attraversa un'area vuota o ci gira attorno, mm (fino a 30). */
   voidStitchMm: number;
+  /**
+   * Nel vuoto attraversato dritto, i tre punti corti a ogni bordo, mm (0 = niente). Lorenzo, 2026-10-22: «mettiamo 3 punti
+   * avvicinati che delimitano l'area del foro. e poi dentro devo poter aumentare la lunghezza punto fino a 3cm».
+   */
+  voidEdgeStitchMm: number;
   /** Punto minimo, mm (R3): si impone alla fine, dopo l'ordine di cucitura. */
   minStitchMm: number;
 };
@@ -172,6 +177,7 @@ export const PARAMETRI_RETE: ParametriRete = {
   constructionStroke: 1,
   voidMode: 'ritorno',
   voidStitchMm: 2,
+  voidEdgeStitchMm: 1,
   minStitchMm: 0.5,
 };
 
@@ -736,9 +742,19 @@ function cuci(pezzi: Pezzo[], g: Geometria, p: ParametriRete, t0: number): Risul
         const zona = inZona(base + s0 + len / 2), sovrapposto = !!zona, sopra = !!zona?.[2];
         const sotto = p.underOverlapStitchMm > 0 ? p.underOverlapStitchMm : p.maxStitchMm;
         const lp = tipo === 'vuoto' ? p.voidStitchMm : !zona ? p.maxStitchMm : sopra ? p.overlapStitchMm : sotto;
-        const n = Math.max(1, Math.ceil(len / Math.max(0.1, lp) - 1e-9));
-        for (let m = 1; m <= n; m++) {
-          const { pt, k: kk } = a(s0 + len * m / n);
+        // dove: punti uguali; nel vuoto attraversato dritto, tre punti corti a ogni bordo e quelli lunghi in mezzo
+        const e = pc.tipo === 'vuoto' ? Math.max(0, p.voidEdgeStitchMm) : 0, dove: number[] = [];
+        if (e > 0 && len > 6 * e + 1e-9) {
+          const mezzo = len - 6 * e, nm = Math.max(1, Math.ceil(mezzo / Math.max(0.1, lp) - 1e-9));
+          dove.push(e, 2 * e, 3 * e);
+          for (let m = 1; m <= nm; m++) dove.push(3 * e + mezzo * m / nm);
+          dove.push(len - 2 * e, len - e, len);
+        } else {
+          const n = Math.max(1, Math.ceil(len / Math.max(0.1, e > 0 ? Math.min(e, lp) : lp) - 1e-9));
+          for (let m = 1; m <= n; m++) dove.push(len * m / n);
+        }
+        for (const s of dove) {
+          const { pt, k: kk } = a(s0 + s);
           (cur as PuntoAgo[]).push({ x: pt.x, y: pt.y, tipo, sovrapposto, sopra, blocco: pc.blocco, strato: pc.strati?.[kk] });
         }
       }
