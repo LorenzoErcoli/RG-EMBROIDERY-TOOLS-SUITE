@@ -65,6 +65,16 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: 0.3, max: 30, passo: 0.1, predefinito: 5, concetto: 'densita',
     },
     {
+      id: 'fullBottom', etichetta: 'Fondo pieno: la spirale a giri affiancati',
+      aiuto: 'Sacca: il passo della spirale del fondo è lo spessore del filo e lo segue (il passo scritto resta da parte); più filo e più punti, il fondo regge di più.',
+      tipo: 'bool', unita: '', predefinito: false, concetto: 'interruttore',
+    },
+    {
+      id: 'bottomEntry', nome: 'bottomEntryMm', etichetta: 'Le colonne entrano nel fondo di',
+      aiuto: 'Sacca: 0 = le colonne partono sul bordo del fondo; di più, ogni colonna comincia e finisce dentro il fondo e il primo rombo è cucito sopra la spirale (due passate). Al più metà del fondo.',
+      tipo: 'num', unita: 'mm', min: 0, max: 100, passo: 0.5, predefinito: 0, concetto: 'formato',
+    },
+    {
       id: 'tieSpacing', nome: 'tieSpacingMm', etichetta: 'Distanza fra le legature del fondo',
       aiuto: 'Sacca: le legature entrano nel fondo e lo tengono insieme; dove sarebbero più fitte di così, metà si ferma.',
       tipo: 'num', unita: 'mm', min: 2, max: 100, passo: 1, predefinito: 10, concetto: 'densita',

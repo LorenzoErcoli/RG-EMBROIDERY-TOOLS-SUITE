@@ -118,6 +118,29 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
     Ora ogni colonna finisce su un anello PARI, in una punta dove le sue due linee si incontrano; con gli anelli dispari
     la rete si ferma all'ultimo pari (`cimeDellaRete`), anche sul tondo.
 
+23. **Le basi piene** (2026-10-22). Chiesto che cosa volesse dire, con una simulazione di quattro fondi (A: oggi, spirale
+    rada + legature; B: spirale a giri affiancati; C: griglia incrociata sotto + spirale sopra; D: raggi + spirale), e
+    come attaccare la rete e in che ordine. Le sue scelte: **B, la spirale a giri affiancati**; **le colonne che entrano
+    nel fondo** (l'opzione proposta «Colonne dentro il fondo»: cominciano qualche mm dentro, così il primo rombo è cucito
+    sopra il pieno e non solo sul bordo); **il fondo prima, poi la rete**. Ha scelto fra le opzioni, senza parole sue. → `fullBottom` (il passo diventa lo spessore
+    del filo) e `bottomEntryMm`, spenti di partenza. La griglia (C) era la proposta per un fondo che si lega da solo:
+    non scelta.
+
+## Le basi piene: com'è fatto (2026-10-22)
+- **Il fondo pieno non è un passo nuovo, è il passo legato al filo**: «passo = spessore» si poteva già scrivere a mano,
+  ma cambiando il filo il fondo tornava rado o si accavallava. Con `fullBottom` il passo è `constructionStroke` (una
+  regola, `passoDellaSpirale`, usata dal ricamo e dalla vista 3D, dove dà la rigidità del fondo al 100%); il passo
+  scritto resta per quando si spegne.
+- **Misurato** (secchiello, filo 1 mm): fondo da 4.469 a 14.528 punti, filo da 33 a 58 m, calcolo da 0,1 a 0,45 s; i
+  giri a 1,00 mm misurati sul semiasse. Ovale 260 × 140: 13.000 punti di fondo.
+- **L'entrata**: le due linee della colonna partono dallo stesso punto dentro il fondo, lungo il suo raggio (sull'ovale
+  lungo `versoIlCentro`, come le legature), e la legatura parte e torna da lì; quella che non arriva oltre l'entrata va
+  dritta alla colonna dopo. Anche la spirale finisce lì, perché il filo sia uno. Le due passate sul tratto d'entrata
+  sono collineari: non fanno incroci, e le lenti restano 1248 (secchiello) e 672 (ovale) come senza. Al più metà del
+  fondo.
+- **Da vedere a macchina**: i giri affiancati si toccano ma non si incrociano, li tengono solo le legature (*«la spirale
+  del fondo regge solo con le legature»*, 2026-10-15). Se il fondo si sfoglia, la strada pronta è la griglia sotto (C).
+
 ## Le colonne dei lati che si fermano prima (2026-10-16)
 - Ogni colonna ha il suo ultimo anello: sulle teste quello di tutta la rete, sui lati lunghi quello che dà la fascia
   chiesta, in mezzo a scalare (sin² del parametro). Sempre pari (le due linee si incontrano in punta: niente tratto da

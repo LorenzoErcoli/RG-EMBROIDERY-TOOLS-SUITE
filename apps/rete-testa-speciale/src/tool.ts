@@ -6,7 +6,7 @@ import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { costruisciRete, costruisciReteRadiale, pezzoAMisure, stratiRete, COLORE_RETE, PARAMETRI_RETE, type ParametriRete, type PuntoAgo, type RisultatoRete } from './motore';
+import { costruisciRete, costruisciReteRadiale, passoDellaSpirale, pezzoAMisure, stratiRete, COLORE_RETE, PARAMETRI_RETE, type ParametriRete, type PuntoAgo, type RisultatoRete } from './motore';
 import { angoloDelRombo, formaSacca, puntoDelNodo, raggioMinimo, type Anelli } from './sacca';
 import { montaVista3d } from './vista3d';
 
@@ -58,6 +58,10 @@ const CAMPI_SACCA: Campo[] = [
   { nome: 'fieldMm', etichetta: 'Campo macchina (lato)', unita: 'mm', passo: 10, min: 50, max: 1000 },
   { nome: 'spiralPitchMm', etichetta: 'Passo della spirale del fondo', unita: 'mm', passo: 0.1, min: 0.3, max: 30,
     aiuto: 'Uguale allo spessore del filo = giri affiancati, fondo pieno. Più largo = fondo rado, meno filo.' },
+  { nome: 'fullBottom', etichetta: 'Fondo pieno: la spirale a giri affiancati', unita: '', passo: 1, min: 0,
+    aiuto: 'Il passo della spirale è lo spessore del filo, e lo segue se lo cambi. Più filo e più punti, e il fondo regge di più.' },
+  { nome: 'bottomEntryMm', etichetta: 'Le colonne entrano nel fondo di', unita: 'mm', passo: 0.5, min: 0, max: 100,
+    aiuto: '0 = partono sul bordo del fondo. Di più: ogni colonna comincia e finisce dentro il fondo, e il primo rombo è cucito sopra la spirale (due passate). Al più metà del fondo.' },
   { nome: 'tieSpacingMm', etichetta: 'Distanza fra le legature del fondo', unita: 'mm', passo: 1, min: 2, max: 100,
     aiuto: 'Le legature entrano nel fondo e lo tengono insieme; dove sarebbero più fitte di così, metà si ferma.' },
   { nome: 'rimPass', etichetta: 'Un giro d’impuntura in cima, sulle punte esterne', unita: '', passo: 1, min: 0 },
@@ -212,7 +216,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         inp.type = 'checkbox';
         inp.id = 'f-' + f.nome;
         inp.checked = Boolean(par[f.nome]);
-        inp.addEventListener('change', () => { (par as Record<string, unknown>)[f.nome] = inp.checked; genera(); });
+        inp.addEventListener('change', () => { (par as Record<string, unknown>)[f.nome] = inp.checked; if (f.nome === 'fullBottom') buildPanel(); genera(); });
         lab.append(inp, document.createTextNode(' ' + f.etichetta));
         grid.appendChild(lab);
         if (f.aiuto) { const help = document.createElement('small'); help.className = 'rg-field__help rg-param-grid__wide'; help.textContent = f.aiuto; grid.appendChild(help); }
@@ -267,7 +271,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     if (radiale()) {
       // il fondo tondo ha il raggio, quello ovale lunghezza e larghezza
       const ovale = par.bottomShape === 'ovale';
-      const sacca = CAMPI_SACCA.filter((c) => (c.nome === 'bottomRadiusMm' ? !ovale : c.nome === 'bottomLengthMm' || c.nome === 'bottomWidthMm' || c.nome === 'bottomRoundEnds' || c.nome === 'sideBandMm' ? ovale : true));
+      const sacca = CAMPI_SACCA.filter((c) => (c.nome === 'bottomRadiusMm' ? !ovale : c.nome === 'bottomLengthMm' || c.nome === 'bottomWidthMm' || c.nome === 'bottomRoundEnds' || c.nome === 'sideBandMm' ? ovale : c.nome === 'spiralPitchMm' ? !par.fullBottom : true));
       box.append(...campi(CAMPI_FORMA).childNodes, ...campi(sacca).childNodes);
       box.insertAdjacentHTML('beforeend', `<small class="rg-field__help rg-param-grid__wide">Un disco di rombi coi lati tutti uguali, al centro del campo: tolto dal telaio i rombi ruotano e diventa una sacca. Le sue misure sono in «Programma e vista».</small>` + bloccoRiapri);
       return box;
@@ -646,7 +650,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     if (!radiale() || !anelliSacca || anelliSacca.rho.length < 3) return;
     $('canvas').hidden = true; $('vista3d').hidden = false;
     $('sacca3dBtn').setAttribute('aria-pressed', 'true');
-    vista3d = montaVista3d($('vista3d'), { anelli: anelliSacca, N: Math.round(par.radialCount), L: par.radialSideMm, giroInCima: par.rimPass, filo: par.constructionStroke, passoSpirale: par.spiralPitchMm, legature: par.tieSpacingMm, sovrapposizione: par.overlapMm, regola: par.overlapRule, cime: cimeSacca });
+    vista3d = montaVista3d($('vista3d'), { anelli: anelliSacca, N: Math.round(par.radialCount), L: par.radialSideMm, giroInCima: par.rimPass, filo: par.constructionStroke, passoSpirale: passoDellaSpirale(par), legature: par.tieSpacingMm, sovrapposizione: par.overlapMm, regola: par.overlapRule, cime: cimeSacca });
   }
   function chiudiVista3d() {
     if (vista3d) { vista3d.distruggi(); vista3d = null; }

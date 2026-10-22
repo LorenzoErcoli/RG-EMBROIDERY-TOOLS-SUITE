@@ -2034,6 +2034,15 @@
           "default": 5,
           "x-id": "spiralPitch"
         },
+        "fullBottom": {
+          "$ref": "#/$defs/fullBottom",
+          "default": false
+        },
+        "bottomEntryMm": {
+          "$ref": "#/$defs/bottomEntry",
+          "default": 0,
+          "x-id": "bottomEntry"
+        },
         "tieSpacingMm": {
           "$ref": "#/$defs/tieSpacing",
           "default": 10,
@@ -5166,6 +5175,22 @@
       "x-passo": 0.1,
       "x-concetto": "densita"
     },
+    "fullBottom": {
+      "type": "boolean",
+      "title": "Fondo pieno: la spirale a giri affiancati",
+      "description": "Sacca: il passo della spirale del fondo è lo spessore del filo e lo segue (il passo scritto resta da parte); più filo e più punti, il fondo regge di più.",
+      "x-concetto": "interruttore"
+    },
+    "bottomEntry": {
+      "type": "number",
+      "title": "Le colonne entrano nel fondo di",
+      "description": "Sacca: 0 = le colonne partono sul bordo del fondo; di più, ogni colonna comincia e finisce dentro il fondo e il primo rombo è cucito sopra la spirale (due passate). Al più metà del fondo.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 100,
+      "x-passo": 0.5,
+      "x-concetto": "formato"
+    },
     "tieSpacing": {
       "type": "number",
       "title": "Distanza fra le legature del fondo",
@@ -5476,6 +5501,7 @@
         "sideBand",
         "bottomRadius",
         "machineField",
+        "bottomEntry",
         "pieceSource"
       ]
     },
@@ -5774,6 +5800,7 @@
         "showBare",
         "showPasses",
         "cutBaseUnderSpots",
+        "fullBottom",
         "rimPass"
       ]
     },
