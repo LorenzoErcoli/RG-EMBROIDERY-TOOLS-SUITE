@@ -69,7 +69,7 @@ export { pezzoAMisure as rtsPezzoAMisure, stratiPerDst as rtsStratiPerDst } from
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm, anelliOvali as rtsAnelliOvali, puntoDelNodo as rtsPuntoDelNodo, cimeDelleColonne as rtsCimeDelleColonne, ceIlNodo as rtsCeIlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
 export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, avanza as rtsAvanza, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
-export { origineStilista, coloreForiStilista, puntiDaPolilinee, svgUnSoloColore, agoStilista } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
+export { origineStilista, coloreForiStilista, puntiDaPolilinee, svgForiAiLoroColori, primoColoreStilista, agoStilista } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -2819,8 +2819,17 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
         const invia = s.includes('BOTTONE_INVIA_STILISTA()') || s.includes('inviaStilista: true');
         return !(s.includes('collegaStilista(aggancio') && prendi && invia);
       }), []);
-    check('Stilista Link: un solo colore per oblique, e il colore dei fori diventa quello del filo',
-      rg.svgUnSoloColore(svgStilista).match(/stroke="#[0-9A-Fa-f]{6}"/g), ['stroke="#FFF200"', 'stroke="#FFF200"']);
+    check('Stilista Link: per oblique i fori di un plugin vecchio (senza «di chi») vanno al colore del primo filo',
+      rg.svgForiAiLoroColori(svgStilista).match(/stroke="#[0-9A-Fa-f]{6}"/g), ['stroke="#FFF200"', 'stroke="#FFF200"']);
+    // stop diversi = colori diversi (2026-10-22): il plugin dà a ogni stop il suo colore, e dice di chi è ogni foro
+    const dueStop = '<svg xmlns="http://www.w3.org/2000/svg" width="42mm" height="42mm" viewBox="0 0 42 42"'
+      + ' data-rg-stilista-origine="0 0" data-rg-stilista-ago="1" data-rg-stilista-fori="#FF00FF">'
+      + '<path fill="none" stroke="#ED1C24" stroke-width="0.2" d="M1 1 L41 1 L41 41 L1 41 Z"/>'
+      + '<path fill="none" stroke="#F4777C" stroke-width="0.2" d="M5 5 L37 5 L37 37 L5 37 Z"/>'
+      + '<path fill="none" stroke="#FF00FF" data-rg-stilista-di="#F4777C" stroke-width="0.2" d="M11 11 L31 11 L31 31 L11 31 Z"/></svg>';
+    check('Stilista Link: per oblique ogni stop resta un colore, il foro torna al suo oggetto, il primo fa il Pannello',
+      [rg.svgForiAiLoroColori(dueStop).match(/stroke="#[0-9A-Fa-f]{6}"/g), rg.primoColoreStilista(dueStop)],
+      [['stroke="#ED1C24"', 'stroke="#F4777C"', 'stroke="#F4777C"'], '#ED1C24']);
     const tool = readFileSync(join(root, 'apps/pattern-grammar/src/tool.ts'), 'utf8');
     check('Stilista Link: nel Generatore il colore dei fori diventa «Area vuota», ogni altro «Confine»',
       tool.includes("boundaryRoles[c.id] = c.color?.toLowerCase() === fori ? 'vuoto' : 'confine';"), true);

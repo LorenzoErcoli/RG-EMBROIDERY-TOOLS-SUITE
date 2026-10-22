@@ -36,7 +36,7 @@ powershell -ExecutionPolicy Bypass -File strumenti-sviluppo\stilista-link\script
 | | |
 |---|---|
 | `GET /stato` | documento, oggetti, selezionati, quando la finestra è stata attivata |
-| `GET /selezione.svg` | i contorni degli oggetti selezionati, in mm: l'esterno col colore del filo, **ogni foro un tracciato a sé** col colore dichiarato in `data-rg-stilista-fori`; l'angolo della selezione meno 1 mm è lo 0,0, scritto in `data-rg-stilista-origine` |
+| `GET /selezione.svg` | i contorni degli oggetti selezionati, in mm: l'esterno col colore del filo, **un colore per ogni gruppo (stop, colore)** — un altro stop con lo stesso filo prende una variante più chiara o più scura, lo stop si conta lungo la sequenza a ogni cambio d'ago; **ogni foro un tracciato a sé** col colore dichiarato in `data-rg-stilista-fori` e quello del suo oggetto in `data-rg-stilista-di`; l'angolo della selezione meno 1 mm è lo 0,0, scritto in `data-rg-stilista-origine` |
 | `GET /selezione.json` | gli stessi oggetti come li legge il bridge (tipo, contorno, punti cuciti, parametri) |
 | `GET /fori` | per ogni oggetto con più di un anello (o per `?oggetti=…`): gli anelli, da dove vengono e quali sono fori — ricerca |
 | `GET /sonda` | campi, proprietà e metodi degli oggetti selezionati e dei loro percorsi: ricerca, sola lettura |
@@ -105,7 +105,7 @@ bottoni (`BOTTONE_PRENDI_STILISTA`, `BOTTONE_INVIA_STILISTA`) e `collegaStilista
 | interlace | area vuota | al suo posto, un oggetto per stop | 4 oggetti, 19.060 punti |
 | rete testa speciale | area vuota | al suo posto (nel modo radiale: DST) | 4.803 punti |
 | razza | area vuota (la decide la geometria) | al suo posto | 14.602 punti |
-| oblique | anello interno del pannello (tutto a un colore) | al suo posto, un oggetto per livello | 3 oggetti, 35.833 punti — **ma level2 ha 4 punti cuciti che attraversano il foro (254 mm)**: è del tool, uguale nel suo DST |
+| oblique | anello interno del suo oggetto (il foro torna al colore dell'oggetto; ogni stop resta un colore per i ruoli, il primo fa il Pannello) | al suo posto, un oggetto per livello | 3 oggetti, 35.833 punti — **ma level2 ha 4 punti cuciti che attraversano il foro (254 mm)**: è del tool, uguale nel suo DST |
 | pattern a macchie | senza ruolo (non ha aree vuote) | al suo posto, un oggetto per stop | corona + un oggetto grigio: 2 oggetti |
 | cannage rafia | senza ruolo | al suo posto, un oggetto per stop | 234 punti (senza rombi c'è poco da fare) |
 | pattern a zone | spenti, e una zona spenta dentro un'altra è un buco (2026-10-21) | al suo posto, un oggetto per ago | 19.980 punti, foro vuoto (prima 25.360, foro ricamato) |

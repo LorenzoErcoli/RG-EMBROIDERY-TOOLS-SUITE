@@ -89,14 +89,26 @@ export function coloreForiStilista(svg: string): string | null {
   return m ? m[1].toLowerCase() : null;
 }
 
-/**
- * L'SVG della selezione con UN colore solo: quello del primo filo, sui contorni e sui fori. Per i tool che un
- * ruolo lo danno a un colore solo, e i vuoti li riconoscono come anelli interni dello stesso colore (oblique).
- */
-export function svgUnSoloColore(svg: string): string {
+/** Il colore del primo oggetto della selezione (il primo tracciato che non è un foro), o null. */
+export function primoColoreStilista(svg: string): string | null {
   const fori = coloreForiStilista(svg);
-  const filo = [...svg.matchAll(/stroke="(#[0-9a-fA-F]{6})"/g)].map((m) => m[1]).find((c) => c.toLowerCase() !== fori);
-  return filo ? svg.replace(/stroke="#[0-9a-fA-F]{6}"/g, `stroke="${filo}"`) : svg;
+  return [...svg.matchAll(/stroke="(#[0-9a-fA-F]{6})"/g)].map((m) => m[1]).find((c) => c.toLowerCase() !== fori) ?? null;
+}
+
+/**
+ * L'SVG della selezione coi fori riportati al colore del loro oggetto (data-rg-stilista-di), e gli altri colori
+ * com'erano: ogni stop e ogni colore resta una riga a sé. Per i tool che i vuoti li riconoscono come anelli interni
+ * dello stesso colore (oblique). Da un plugin vecchio, che non dice di chi è il foro, il foro va al primo colore.
+ */
+export function svgForiAiLoroColori(svg: string): string {
+  const fori = coloreForiStilista(svg);
+  const primo = primoColoreStilista(svg);
+  if (!fori || !primo) return svg;
+  return svg.replace(/<path\b[^>]*>/g, (tag) => {
+    if (!new RegExp(`stroke="${fori}"`, 'i').test(tag)) return tag;
+    const di = /data-rg-stilista-di="(#[0-9a-fA-F]{6})"/.exec(tag)?.[1] ?? primo;
+    return tag.replace(/stroke="#[0-9a-fA-F]{6}"/, `stroke="${di}"`);
+  });
 }
 
 /** Le polilinee di un ricamo (mm) come punti per Stilista: il primo punto di ogni polilinea dopo la prima è un salto. */

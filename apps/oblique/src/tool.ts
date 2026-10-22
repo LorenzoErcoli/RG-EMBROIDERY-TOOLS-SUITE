@@ -8,7 +8,7 @@ import {
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { collegaStilista, stratiCuciti, svgUnSoloColore, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
+import { collegaStilista, stratiCuciti, svgForiAiLoroColori, primoColoreStilista, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import {
   defaultObliqueParams, moduleFromPolylines, parseModuleSvg,
   type ObliqueParams, type ObliqueModule, type ObliqueResult,
@@ -387,20 +387,22 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
     });
   }
 
-  // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è il pannello. Qui un ruolo ha UN colore,
-  // e i vuoti sono gli anelli interni del pannello: contorni e fori si portano al colore del primo filo, che
-  // fa il Pannello da solo, e le aree di esclusione interne si accendono.
+  // ---- Stilista (RG Stilista Link, @rg/ui/stilista): ogni stop e ogni colore della selezione arriva con un
+  // colore suo, da dare a Pannello, Pattern, Fori o Piazzamento. Il primo oggetto fa il Pannello; i vuoti sono
+  // gli anelli interni del loro oggetto: tornano al suo colore e le aree di esclusione interne si accendono.
   let svgStilista: string | null = null;
   const aggancio: AggancioStilista = {
     carica(svg, nome) {
-      const unColore = svgUnSoloColore(svg);
+      const coiFori = svgForiAiLoroColori(svg);
       // l'SVG dichiara le sue misure: una larghezza reale lo riscalerebbe e il ritorno non cadrebbe più al suo posto
       params.realWidthMm = 0;
       params.enableExclusionAreas = true;
       for (const k of ROLE_ORDER) delete roleColor[k];
+      const primo = primoColoreStilista(coiFori);
+      if (primo) roleColor.MASTER_OUTLINE = primo.toLowerCase();
       applyParamsToControls();
-      loadPanel(parseSvgToContours(unColore), nome);
-      svgStilista = unColore;
+      loadPanel(parseSvgToContours(coiFori), nome);
+      svgStilista = coiFori;
     },
     sorgente: () => svgStilista,
     strati() {

@@ -3,6 +3,7 @@ using System.Collections;
 using System.Collections.Generic;
 using System.Diagnostics;
 using System.Drawing;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Reflection;
@@ -296,6 +297,7 @@ namespace StilistaHostSkeleton
             {
                 return Risposta.Testo("{\"ok\":false,\"errore\":\"in Stilista non è selezionato niente\"}", stato: 409);
             }
+            var colori = ColoriDeiGruppi(selezionati, out var gruppi);
             // (colore, punti, chiuso, titolo, foro)
             var forme = new List<Tuple<string, List<int[]>, bool, string, bool>>();
             double minX = double.MaxValue, minY = double.MaxValue, maxX = double.MinValue, maxY = double.MinValue;
@@ -303,7 +305,7 @@ namespace StilistaHostSkeleton
             {
                 var o = selezionati[i];
                 ReadEmgObjectType(o, out var tipo, out _);
-                var colore = ReadNativeThreadColor(o) ?? "#000000";
+                var colore = colori[i];
                 var fori = 0;
                 foreach (var anello in Anelli(o))
                 {
@@ -316,7 +318,7 @@ namespace StilistaHostSkeleton
                     var ultimo = punti[punti.Count - 1];
                     var chiuso = anello.Foro || string.Equals(tipo, "Fill", StringComparison.OrdinalIgnoreCase) ||
                                  Math.Abs(primo[0] - ultimo[0]) + Math.Abs(primo[1] - ultimo[1]) < 500;
-                    var titolo = (tipo ?? "?") + " " + (i + 1) + (anello.Foro ? ", foro " + (++fori) : "");
+                    var titolo = (tipo ?? "?") + " " + (i + 1) + " · " + gruppi[i] + (anello.Foro ? ", foro " + (++fori) : "");
                     forme.Add(Tuple.Create(colore, punti, chiuso, titolo, anello.Foro));
                     if (anello.Foro)
                     {
@@ -353,7 +355,13 @@ namespace StilistaHostSkeleton
                .Append(" oggetti, ").Append(quantiFori).Append(" fori -->\n");
             foreach (var f in forme)
             {
-                svg.Append("<path fill=\"none\" stroke=\"").Append(f.Item5 ? coloreFori : f.Item1).Append("\" stroke-width=\"0.2\" d=\"");
+                svg.Append("<path fill=\"none\" stroke=\"").Append(f.Item5 ? coloreFori : f.Item1).Append('"');
+                if (f.Item5)
+                {
+                    // di quale oggetto è il foro: il tool che vuole i vuoti come anelli interni lo riporta a quel colore
+                    svg.Append(" data-rg-stilista-di=\"").Append(f.Item1).Append('"');
+                }
+                svg.Append(" stroke-width=\"0.2\" d=\"");
                 for (var i = 0; i < f.Item2.Count; i++)
                 {
                     svg.Append(i == 0 ? "M" : " L").Append(Json.Numero(f.Item2[i][0] / 1000.0 - _origineX)).Append(' ')
@@ -365,6 +373,81 @@ namespace StilistaHostSkeleton
             Annota("Selezione data al tool: " + selezionati.Count + " oggetti, " + quantiFori + " fori, " + Json.Numero(larghezza) + " × " + Json.Numero(altezza) + " mm");
             return Risposta.Testo(svg.ToString(), "image/svg+xml; charset=utf-8");
         }
+        /// <summary>
+        /// Un colore per ogni gruppo della selezione, e gruppi diversi hanno colori diversi: il gruppo è lo stop
+        /// (lungo la sequenza del documento uno stop nuovo a ogni cambio d'ago) e il colore dell'oggetto. Il primo
+        /// gruppo con un colore lo tiene; un altro stop con lo stesso filo ne prende una variante più chiara o più
+        /// scura, così nel tool sono due righe e due ruoli possibili.
+        /// </summary>
+        private string[] ColoriDeiGruppi(List<object> selezionati, out string[] nomi)
+        {
+            var tutti = SnapshotObjects(GetReadableMemberValue(Ricamo(), "Objects"));
+            var stopDi = new int[tutti.Count];
+            int stop = 1;
+            int? agoPrima = null;
+            for (var k = 0; k < tutti.Count; k++)
+            {
+                var ago = ReadNativeNeedleOneBased(tutti[k]);
+                if (ago.HasValue && agoPrima.HasValue && ago != agoPrima)
+                {
+                    stop++;
+                }
+                agoPrima = ago ?? agoPrima;
+                stopDi[k] = stop;
+            }
+            var colori = new string[selezionati.Count];
+            nomi = new string[selezionati.Count];
+            var deiGruppi = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            var usati = new HashSet<string>(ColoriFori, StringComparer.OrdinalIgnoreCase);
+            for (var i = 0; i < selezionati.Count; i++)
+            {
+                var o = selezionati[i];
+                var filo = (ReadNativeThreadColor(o) ?? "#000000").ToUpperInvariant();
+                var dove = tutti.FindIndex(t => ReferenceEquals(t, o));
+                var ago = ReadNativeNeedleOneBased(o);
+                var suo = dove >= 0 ? stopDi[dove] : 0;
+                nomi[i] = "ago " + (ago?.ToString(CultureInfo.InvariantCulture) ?? "?") + ", stop " + (suo > 0 ? suo.ToString(CultureInfo.InvariantCulture) : "?");
+                var chiave = suo + "|" + filo;
+                if (!deiGruppi.TryGetValue(chiave, out var colore))
+                {
+                    colore = Variante(filo, usati);
+                    usati.Add(colore);
+                    deiGruppi[chiave] = colore;
+                }
+                colori[i] = colore;
+            }
+            return colori;
+        }
+
+        /// <summary>Il colore stesso se è libero, se no il primo schiarito o scurito che non è già preso.</summary>
+        private static string Variante(string colore, HashSet<string> usati)
+        {
+            if (!usati.Contains(colore))
+            {
+                return colore;
+            }
+            var r = Convert.ToInt32(colore.Substring(1, 2), 16);
+            var g = Convert.ToInt32(colore.Substring(3, 2), 16);
+            var b = Convert.ToInt32(colore.Substring(5, 2), 16);
+            foreach (var t in new[] { 0.35, -0.35, 0.6, -0.6, 0.2, -0.2, 0.8, -0.8, 0.5, -0.5, 0.1, -0.1 })
+            {
+                Func<int, int> passo = c => (int)Math.Round(t > 0 ? c + (255 - c) * t : c * (1 + t));
+                var nuovo = "#" + passo(r).ToString("X2") + passo(g).ToString("X2") + passo(b).ToString("X2");
+                if (!usati.Contains(nuovo))
+                {
+                    return nuovo;
+                }
+            }
+            for (var n = 1; ; n++)
+            {
+                var nuovo = "#" + ((r + 37 * n) % 256).ToString("X2") + ((g + 91 * n) % 256).ToString("X2") + ((b + 53 * n) % 256).ToString("X2");
+                if (!usati.Contains(nuovo))
+                {
+                    return nuovo;
+                }
+            }
+        }
+
         private static string SicuroXml(string testo)
         {
             return (testo ?? "").Replace("&", "&amp;").Replace("<", "&lt;").Replace(">", "&gt;").Replace("--", "- -");
