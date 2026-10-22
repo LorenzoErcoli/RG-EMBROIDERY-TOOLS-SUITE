@@ -187,6 +187,9 @@ namespace StilistaHostSkeleton
                 case "GET /selezione.json": return conScelta(SelezioneJson);
                 case "GET /sonda": return conScelta(Sonda);
                 case "GET /fori": return conScelta(Fori);
+                case "GET /foglie":
+                    var livelli = r.Query.TryGetValue("livelli", out var l) && int.TryParse(l, out var n) ? Math.Min(n, 8) : 4;
+                    return conScelta(() => Foglie(livelli));
                 case "POST /dst": return RiceviDst(r);
                 case "POST /oggetti": return RiceviOggetti(r);
                 case "POST /punti": return RiceviPunti(r);
@@ -375,7 +378,8 @@ namespace StilistaHostSkeleton
         }
         /// <summary>
         /// Un colore per ogni gruppo della selezione, e gruppi diversi hanno colori diversi: il gruppo è lo stop
-        /// (lungo la sequenza del documento uno stop nuovo a ogni cambio d'ago) e il colore dell'oggetto. Il primo
+        /// (lungo la sequenza del documento uno stop nuovo a ogni cambio d'ago) e il colore dell'oggetto (il filo,
+        /// o per un laser il colore dei suoi parametri laser). Il primo
         /// gruppo con un colore lo tiene; un altro stop con lo stesso filo ne prende una variante più chiara o più
         /// scura, così nel tool sono due righe e due ruoli possibili.
         /// </summary>
@@ -402,11 +406,14 @@ namespace StilistaHostSkeleton
             for (var i = 0; i < selezionati.Count; i++)
             {
                 var o = selezionati[i];
-                var filo = (ReadNativeThreadColor(o) ?? "#000000").ToUpperInvariant();
+                // un laser si vede col colore dei suoi parametri laser: laser dello stesso stop possono averne di diversi
+                var laser = ColoreLaser(o);
+                var filo = (laser ?? ReadNativeThreadColor(o) ?? "#000000").ToUpperInvariant();
                 var dove = tutti.FindIndex(t => ReferenceEquals(t, o));
                 var ago = ReadNativeNeedleOneBased(o);
                 var suo = dove >= 0 ? stopDi[dove] : 0;
-                nomi[i] = "ago " + (ago?.ToString(CultureInfo.InvariantCulture) ?? "?") + ", stop " + (suo > 0 ? suo.ToString(CultureInfo.InvariantCulture) : "?");
+                nomi[i] = "ago " + (ago?.ToString(CultureInfo.InvariantCulture) ?? "?") + ", stop " + (suo > 0 ? suo.ToString(CultureInfo.InvariantCulture) : "?") +
+                          (laser != null ? ", laser " + laser : "");
                 var chiave = suo + "|" + filo;
                 if (!deiGruppi.TryGetValue(chiave, out var colore))
                 {

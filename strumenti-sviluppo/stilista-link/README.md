@@ -36,9 +36,10 @@ powershell -ExecutionPolicy Bypass -File strumenti-sviluppo\stilista-link\script
 | | |
 |---|---|
 | `GET /stato` | documento, oggetti, selezionati, quando la finestra è stata attivata |
-| `GET /selezione.svg` | i contorni degli oggetti selezionati, in mm: l'esterno col colore del filo, **un colore per ogni gruppo (stop, colore)** — un altro stop con lo stesso filo prende una variante più chiara o più scura, lo stop si conta lungo la sequenza a ogni cambio d'ago; **ogni foro un tracciato a sé** col colore dichiarato in `data-rg-stilista-fori` e quello del suo oggetto in `data-rg-stilista-di`; l'angolo della selezione meno 1 mm è lo 0,0, scritto in `data-rg-stilista-origine` |
+| `GET /selezione.svg` | i contorni degli oggetti selezionati, in mm: l'esterno col colore del filo (per un **laser** il colore dei suoi parametri laser, quello che si vede in Stilista), **un colore per ogni gruppo (stop, colore)** — un altro stop con lo stesso filo prende una variante più chiara o più scura, lo stop si conta lungo la sequenza a ogni cambio d'ago; **ogni foro un tracciato a sé** col colore dichiarato in `data-rg-stilista-fori` e quello del suo oggetto in `data-rg-stilista-di`; l'angolo della selezione meno 1 mm è lo 0,0, scritto in `data-rg-stilista-origine` |
 | `GET /selezione.json` | gli stessi oggetti come li legge il bridge (tipo, contorno, punti cuciti, parametri) |
 | `GET /fori` | per ogni oggetto con più di un anello (o per `?oggetti=…`): gli anelli, da dove vengono e quali sono fori — ricerca |
+| `GET /foglie` | i valori semplici (numeri, testi, enum, colori) raggiungibili dai campi degli oggetti selezionati, col percorso (`?livelli=4`, al più 8): confrontando due oggetti si vede dove sta quello che li distingue — ricerca, così si è trovato il colore laser |
 | `GET /sonda` | campi, proprietà e metodi degli oggetti selezionati e dei loro percorsi: ricerca, sola lettura |
 | `POST /dst?nome=…` | un DST: Stilista lo apre in un documento nuovo (`IStilista3.LoadNewEmb`) |
 | `POST /oggetti` | un programma `stilista-bridge-batch-1`: oggetti nativi `fill`/`running` aggiunti al documento aperto |
