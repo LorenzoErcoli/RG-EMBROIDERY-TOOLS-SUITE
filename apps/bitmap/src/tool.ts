@@ -2,6 +2,7 @@ import '@rg/ui/rg.css';
 import './bitmap.css';
 import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, readDstMetadata, readProjectMetadata } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
+import { testiCampo } from '@rg/cervello';
 import { scheletro, sezioneSorgente, sezione, campoNumero, campoNumeroInline, attivaCampiNumero, leggiCampo, impostaNumero, type OpzioniCampoNumero } from '@rg/ui/anatomia';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { collegaSimula, datiDaStrati, type DatiSimulazione } from '@rg/ui/simulatore';
@@ -19,24 +20,44 @@ interface Source {
 // Campi numerici cablati genericamente: id nel DOM ↔ chiave del parametro. Unità nello slot (mai nell'etichetta).
 interface NumBind { id: string; key: keyof BitmapParams; int?: boolean; min?: number; max?: number; }
 
+// Da quale parametro salvato (nel registro) prende i testi ogni campo; chi non è qui ha i testi nella tabella sotto.
+const CHIAVE_REGISTRO: Record<string, string> = {
+  realWidth: 'realWidthMm',
+  dpiEstimate: 'dpiEstimate',
+  maxWidthPx: 'maxWidthPx',
+  threshold: 'threshold',
+  backgroundTolerance: 'backgroundToleranceRgb',
+  colorCount: 'colorCount',
+  densitySpacingMm: 'densitySpacingMm',
+  minStitchMm: 'minStitchMm',
+  reinsertionRounds: 'reinsertionRounds',
+  maxPoints: 'maxPoints',
+  targetDensityPct: 'targetDensityPct',
+  degradeDrop: 'degradeDrop',
+  degradeJitter: 'degradeJitterMm',
+  seed: 'seed',
+  scanlineBandMm: 'scanlineBandMm',
+  chunkSize: 'chunkSize',
+};
+
 // Testi, unità e limiti dei campi numerici (le stesse parole di prima, ora costruite da campoNumero). Il valore parte dai default del motore.
-const DATI_CAMPI: Record<string, Omit<OpzioniCampoNumero, 'id' | 'valore'>> = {
-  realWidth: {etichetta:"Larghezza reale (0 = auto)",unita:"mm",passo:1,min:0},
-  dpiEstimate: {etichetta:"DPI di stima",unita:"dpi",passo:1,min:1},
-  maxWidthPx: {etichetta:"Risoluzione di lavoro",unita:"px",passo:50,min:0,aiuto:"l'immagine viene ridotta a questa larghezza per la resa (0 = nativa); più bassa = più veloce"},
-  threshold: {etichetta:"Soglia di selezione",unita:"lum",passo:5,min:0,max:255,aiuto:"un pixel è scelto se più scuro della soglia (0–255); più alta = include più pixel chiari"},
-  backgroundTolerance: {etichetta:"Tolleranza sfondo",unita:"rgb",passo:1,min:0},
-  colorCount: {etichetta:"Numero di colori (cambi-ago)",unita:"#",passo:1,min:1,max:16,aiuto:"in quante tinte separare l'immagine (quantizzazione)"},
-  densitySpacingMm: {etichetta:"Distanza tra i punti",unita:"mm",passo:0.1,min:0,aiuto:"quanto sono distanti i punti: piccola = fitto (più punti), grande = rado (meno punti); 0 = piena risoluzione"},
-  minStitchMm: {etichetta:"Punto minimo",unita:"mm",passo:0.5,min:0},
-  reinsertionRounds: {etichetta:"Reinserimenti",unita:"giri",passo:1,min:0},
-  maxPoints: {etichetta:"Tetto punti (0 = off)",unita:"#",passo:500,min:0},
-  targetDensityPct: {etichetta:"Densità obiettivo (0 = off)",unita:"%",passo:1,min:0,max:100},
-  degradeDrop: {etichetta:"Scarto casuale",unita:"0–1",passo:0.05,min:0,max:1},
-  degradeJitter: {etichetta:"Spostamento casuale",unita:"mm",passo:0.1,min:0},
-  seed: {etichetta:"Variante",unita:"#",passo:1,min:1,aiuto:"stessa variante = stesso identico risultato (riproducibile)"},
-  scanlineBandMm: {etichetta:"Altezza banda (a righe)",unita:"mm",passo:0.2,min:0.2},
-  chunkSize: {etichetta:"Punti massimi per tracciato",unita:"#",passo:500,min:0,aiuto:"spezza i tracciati lunghi per Illustrator (R6); 0 = nessun taglio"},
+const DATI_CAMPI: Record<string, Omit<OpzioniCampoNumero, 'id' | 'valore' | 'etichetta' | 'unita'> & Partial<Pick<OpzioniCampoNumero, 'etichetta' | 'unita'>>> = {
+  realWidth: {passo:1,min:0},
+  dpiEstimate: {passo:1,min:1},
+  maxWidthPx: {passo:50,min:0},
+  threshold: {passo:5,min:0,max:255},
+  backgroundTolerance: {passo:1,min:0},
+  colorCount: {passo:1,min:1,max:16},
+  densitySpacingMm: {passo:0.1,min:0},
+  minStitchMm: {passo:0.5,min:0},
+  reinsertionRounds: {passo:1,min:0},
+  maxPoints: {passo:500,min:0},
+  targetDensityPct: {passo:1,min:0,max:100},
+  degradeDrop: {passo:0.05,min:0,max:1},
+  degradeJitter: {passo:0.1,min:0},
+  seed: {passo:1,min:1},
+  scanlineBandMm: {passo:0.2,min:0.2},
+  chunkSize: {passo:500,min:0},
 };
 
 // Icona contagocce (pipette, stile Lucide) per il bottone "campiona" delle righe-colore manuali.
@@ -46,9 +67,10 @@ const EYEDROPPER_SVG =
   + '<path d="m15 6 3.4-3.4a2.1 2.1 0 1 1 3 3L18 9l.4.4a2.1 2.1 0 1 1-3 3l-3.8-3.8a2.1 2.1 0 1 1 3-3l.4.4Z"/></svg>';
 
 export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {}): void {
+  const T = (nome: string) => testiCampo('bitmap', nome);
   const CHIAVE: Record<string, string> = { realWidth: 'realWidthMm', backgroundTolerance: 'backgroundToleranceRgb', degradeJitter: 'degradeJitterMm' };
   const campo = (id: string): string =>
-    campoNumero({ id, ...DATI_CAMPI[id], valore: Number((defaultBitmapParams as unknown as Record<string, unknown>)[CHIAVE[id] ?? id]) });
+    campoNumero({ etichetta: '', unita: '', id, ...DATI_CAMPI[id], ...(CHIAVE_REGISTRO[id] ? (({ etichetta, unita, aiuto }) => ({ etichetta, unita, aiuto }))(testiCampo('bitmap', CHIAVE_REGISTRO[id])) : {}), valore: Number((defaultBitmapParams as unknown as Record<string, unknown>)[CHIAVE[id] ?? id]) });
   root.innerHTML = scheletro({
     topbar: topbar('Bitmap → Stitch', opts.backHref),
     classe: 'bitmap-workspace',
@@ -65,12 +87,12 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
         indice: 2, titolo: "Selezione dei pixel",
         contenuto: `<div class="rg-param-grid">
     <div class="rg-field rg-param-grid__wide">
-      <span class="rg-field__label">Cosa punciare</span>
-      <div><div class="rg-segmented" id="coverageMode" role="group" aria-label="Cosa punciare">
+      <span class="rg-field__label">${T('coverage').etichetta}</span>
+      <div><div class="rg-segmented" id="coverageMode" role="group" aria-label="${T('coverage').etichetta}">
         <button type="button" class="rg-segmented__item rg-segmented__item--active" data-coverage="selected" aria-pressed="true">Solo i colori scelti</button>
         <button type="button" class="rg-segmented__item" data-coverage="all" aria-pressed="false">Tutta l'immagine</button>
       </div></div>
-      <small class="rg-field__help">Solo i colori scelti: in automatico usa la soglia, in manuale i pixel vicini ai colori scelti. Tutta l'immagine: riempie tutto, ogni pixel col colore più vicino.</small>
+      <small class="rg-field__help">${T('coverage').aiuto ?? ''}</small>
     </div>
     <div id="thresholdField" class="rg-param-grid__wide">${campo('threshold')}</div>
     <label class="rg-choice rg-param-grid__wide" id="excludeBackgroundField">
@@ -78,7 +100,7 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
       <span>Escludi un colore di sfondo</span>
     </label>
     <label class="rg-field" id="bgColorsField">
-      <span class="rg-field__label">Colori di sfondo</span>
+      <span class="rg-field__label">${T('backgroundColors').etichetta}</span>
       <input class="rg-input" id="backgroundColors" type="text" placeholder="#ffffff" />
     </label>
     <div id="bgToleranceField" class="">${campo('backgroundTolerance')}</div>
@@ -88,12 +110,12 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
         indice: 3, titolo: "Colori",
         contenuto: `<div class="rg-param-grid">
     <div class="rg-field rg-param-grid__wide">
-      <span class="rg-field__label">Colori dei livelli</span>
-      <div><div class="rg-segmented" id="paletteMode" role="group" aria-label="Colori dei livelli">
+      <span class="rg-field__label">${T('paletteMode').etichetta}</span>
+      <div><div class="rg-segmented" id="paletteMode" role="group" aria-label="${T('paletteMode').etichetta}">
         <button type="button" class="rg-segmented__item rg-segmented__item--active" data-palette="auto" aria-pressed="true">Automatici</button>
         <button type="button" class="rg-segmented__item" data-palette="manual" aria-pressed="false">Manuale</button>
       </div></div>
-      <small class="rg-field__help">Automatici: l'algoritmo sceglie i colori. Manuale: li prendi dall'immagine col contagocce, ognuno con la sua tolleranza; i pixel vicini ci rientrano.</small>
+      <small class="rg-field__help">${T('paletteMode').aiuto ?? ''}</small>
     </div>
     <div id="colorCountField" class="rg-param-grid__wide">${campo('colorCount')}</div>
   </div>
@@ -119,24 +141,24 @@ export function mountBitmap(root: HTMLElement, opts: { backHref?: string } = {})
         indice: 5, titolo: "Stile e percorso", apribile: true, aperta: true,
         contenuto: `<div class="rg-param-grid">
     <div class="rg-field rg-param-grid__wide">
-      <span class="rg-field__label">Distribuzione dei punti</span>
-      <div><div class="rg-segmented" id="styleMode" role="group" aria-label="Distribuzione dei punti">
+      <span class="rg-field__label">${T('style').etichetta}</span>
+      <div><div class="rg-segmented" id="styleMode" role="group" aria-label="${T('style').etichetta}">
         <button type="button" class="rg-segmented__item rg-segmented__item--active" data-style="carpet" aria-pressed="true">Regolare</button>
         <button type="button" class="rg-segmented__item" data-style="degrade" aria-pressed="false">Degradé</button>
       </div></div>
-      <small class="rg-field__help">Regolare: griglia uniforme. Degradé: scarto e spostamento casuali per un effetto sfumato.</small>
+      <small class="rg-field__help">${T('style').aiuto ?? ''}</small>
     </div>
     <div id="degradeDropField" class="" hidden>${campo('degradeDrop')}</div>
     <div id="degradeJitterField" class="" hidden>${campo('degradeJitter')}</div>
     <div id="seedField" class="rg-param-grid__wide" hidden>${campo('seed')}
   <div class="rg-cluster"><button type="button" id="newSeedBtn" class="rg-button rg-button--outline rg-button--small">Nuova variante</button></div></div>
     <div class="rg-field rg-param-grid__wide">
-      <span class="rg-field__label">Ordinamento del percorso</span>
-      <div><div class="rg-segmented" id="orderMode" role="group" aria-label="Ordinamento del percorso">
+      <span class="rg-field__label">${T('ordering').etichetta}</span>
+      <div><div class="rg-segmented" id="orderMode" role="group" aria-label="${T('ordering').etichetta}">
         <button type="button" class="rg-segmented__item rg-segmented__item--active" data-order="scanline" aria-pressed="true">A righe</button>
         <button type="button" class="rg-segmented__item" data-order="nearest" aria-pressed="false">Più vicino</button>
       </div></div>
-      <small class="rg-field__help">A righe: veloce e regolare. Più vicino: percorso più corto ma pesante su molte migliaia di punti.</small>
+      <small class="rg-field__help">${T('ordering').aiuto ?? ''}</small>
     </div>
     <div id="scanlineBandField" class="">${campo('scanlineBandMm')}</div>
     <label class="rg-choice rg-param-grid__wide" id="serpentineField">

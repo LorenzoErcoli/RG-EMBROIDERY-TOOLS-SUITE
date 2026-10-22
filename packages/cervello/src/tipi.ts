@@ -40,6 +40,10 @@ export interface DichiarazioneParametro {
   concetto: string;
   /** Altri nomi con cui lo stesso parametro è comparso: per leggere i file vecchi. */
   sinonimi?: string[];
+  /** Solo per questo tool: il pannello non mostra la riga di aiuto sotto il campo (la frase resta per chi legge il registro). */
+  senzaAiuto?: boolean;
+  /** Solo per questo tool: il testo dello slot dell'unità nel pannello, se non è il simbolo di `unita` (`lum`, `giri`, `aghi`, `#`…). */
+  unitaTesto?: string;
 }
 
 /** Quello che un tool dice di un parametro: il nome con cui lo salva, il default e le differenze dalla descrizione comune. */
@@ -53,6 +57,8 @@ export interface UsoTool {
   max?: number;
   passo?: number;
   opzioni?: string[];
+  senzaAiuto?: boolean;
+  unitaTesto?: string;
 }
 
 /** Un parametro del registro: la descrizione comune + chi lo usa. */

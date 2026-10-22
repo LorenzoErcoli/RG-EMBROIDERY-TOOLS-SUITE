@@ -96,6 +96,8 @@ function fondi(): { parametri: Parametro[]; concetti: Concetto[] } {
         for (const r of d.regole ?? []) if (!p.regole.includes(r)) p.regole.push(r);
         for (const s of d.sinonimi ?? []) if (!p.sinonimi.includes(s)) p.sinonimi.push(s);
       }
+      if (d.senzaAiuto) uso.senzaAiuto = true;
+      if (d.unitaTesto !== undefined) uso.unitaTesto = d.unitaTesto;
       if (p.tool[t]) throw new Error(`Registro: «${d.id}» è dichiarato due volte nel tool ${t}.`);
       p.tool[t] = uso;
     }
@@ -129,4 +131,27 @@ export function perConcetto(): Record<string, { id: string; tool: string[] }[]> 
   const out: Record<string, { id: string; tool: string[] }[]> = {};
   for (const p of REGISTRO) (out[p.concetto] ??= []).push({ id: p.id, tool: Object.keys(p.tool) });
   return out;
+}
+
+const SIMBOLO_UNITA: Record<string, string> = { mm: 'mm', mm2: 'mm²', deg: '°', '%': '%', px: 'px', dpi: 'dpi', rapporto: '', peso: '', s: 's', '': '' };
+
+/** I testi di un campo di pannello: quello che si legge sopra, dentro e sotto il campo. */
+export interface TestiCampo {
+  etichetta: string;
+  /** La riga sotto il campo; assente se il pannello di quel tool non la mostra. */
+  aiuto?: string;
+  /** Il testo dello slot dell'unità (`mm`, `°`, `mm²`, `giri`…; vuoto se non c'è). */
+  unita: string;
+}
+
+/**
+ * I testi del campo di un tool che salva il parametro `nome` (U5: i pannelli prendono le parole dal registro, non le
+ * scrivono a mano). Lancia se il tool non ha quel parametro: un pannello che chiede un testo che non esiste è un errore, non un campo vuoto.
+ */
+export function testiCampo(tool: string, nome: string): TestiCampo {
+  const p = REGISTRO.find((x) => x.tool[tool]?.nome === nome);
+  if (!p) throw new Error(`Registro: il tool ${tool} non ha un parametro salvato come «${nome}».`);
+  const u = p.tool[tool];
+  const aiuto = u.senzaAiuto ? undefined : (u.aiuto ?? p.aiuto);
+  return { etichetta: u.etichetta ?? p.etichetta, ...(aiuto !== undefined ? { aiuto } : {}), unita: u.unitaTesto ?? SIMBOLO_UNITA[p.unita] ?? '' };
 }

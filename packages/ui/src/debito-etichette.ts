@@ -24,3 +24,10 @@ export const DEBITO_ETICHETTE: Record<string, string[]> = {
   'striatura': ["Oggetto pieno (senza fori)"],
   'zone-pattern': ["Scala del file importato", "La zona è definita da", "Larghezza import", "Altezza import", "Parti da un pattern esistente"],
 };
+
+// I tool che non prendono ancora i testi dei campi (etichetta, aiuto, unità) dal registro con `testiCampo(tool, nome)` (U5).
+// Un tool che passa a `testiCampo` esce da qui (la lista può solo scendere); un tool che non è qui deve usarlo e non può scrivere a mano un'etichetta del registro.
+export const DEBITO_TESTI_A_MANO: string[] = [
+  'cannage-rafia', 'cross-stitch', 'interlace', 'oblique', 'pattern-grammar', 'pattern-macchie', 'punto-maglia', 'razza',
+  'rete-testa-speciale', 'striatura', 'zone-pattern',
+];

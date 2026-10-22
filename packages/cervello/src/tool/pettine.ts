@@ -21,12 +21,12 @@ export const scheda: SchedaParametri = {
     {
       id: 'toothMinLength', nome: 'denteMinMm', dove: 'par', etichetta: 'Lunghezza minima',
       aiuto: 'Quanto è lungo un dente: si estrae fra la lunghezza minima e la massima, e quella è la lunghezza del punto.',
-      tipo: 'num', unita: 'mm', min: 0.5, max: 20, predefinito: 3, concetto: 'lunghezza-dente',
+      senzaAiuto: true, tipo: 'num', unita: 'mm', min: 0.5, max: 20, predefinito: 3, concetto: 'lunghezza-dente',
     },
     {
       id: 'toothMaxLength', nome: 'denteMaxMm', dove: 'par', etichetta: 'Lunghezza massima',
       aiuto: 'Quanto è lungo un dente: si estrae fra la lunghezza minima e la massima, e quella è la lunghezza del punto.',
-      tipo: 'num', unita: 'mm', min: 0.5, max: 20, predefinito: 5, concetto: 'lunghezza-dente',
+      senzaAiuto: true, tipo: 'num', unita: 'mm', min: 0.5, max: 20, predefinito: 5, concetto: 'lunghezza-dente',
     },
     {
       id: 'toothOpening', nome: 'aperturaDeg', dove: 'par', etichetta: 'Apertura',
@@ -60,17 +60,17 @@ export const scheda: SchedaParametri = {
     },
     {
       id: 'passMaxMm', nome: 'passaggioMaxMm', dove: 'par', etichetta: 'Passaggio più lungo',
-      aiuto: 'Fin dove un passaggio si cuce comunque, anche se un pezzetto si vedrà. Oltre questa misura il passaggio si fa lo stesso, ma solo se il cammino resta nascosto sotto ciò che verrà dopo e a vista ne resta meno di 3 mm. Negli ultimi due colori i passaggi lunghi non si fanno, perché lì non viene più nessuno a coprirli.',
+      aiuto: 'Fin dove un passaggio si cuce comunque, anche se un pezzetto si vedrà. Oltre questa misura il passaggio si fa lo stesso, ma solo se il cammino resta nascosto sotto ciò che verrà dopo e a vista ne resta meno di 3 mm: sul pannello a sei tinte i tagli passano da 424 a 168. Negli ultimi due colori i passaggi lunghi non si fanno, perché lì non viene più nessuno a coprirli.',
       tipo: 'num', unita: 'mm', min: 4, max: 250, predefinito: 30, concetto: 'passaggi-nascosti',
     },
     {
       id: 'hiddenPassMaxMm', nome: 'passaggioNascostoMm', dove: 'par', etichetta: 'Passaggio nascosto più lungo',
-      aiuto: 'Fin dove si prova un passaggio che va oltre la misura del passaggio più lungo, e che quindi si fa solo se resta nascosto: nella banda di sovrapposizione fra il colore in corso e uno più scuro accanto, o sulla linea esatta di una base futura dello stesso colore.',
+      aiuto: 'Fin dove si prova un passaggio che va oltre la misura qui sopra, e che quindi si fa solo se resta nascosto. Nascosto vuol dire: nella banda di sovrapposizione fra il colore in corso e uno più scuro accanto, o sulla linea esatta di una base futura dello stesso colore. Dentro il proprio colore un passaggio si vede fra un dente e l’altro, e allora si taglia. Le macchie piccole non contano qui: per incastrarle in una riga grande il corridoio può arrivare a 15 cm.',
       tipo: 'num', unita: 'mm', min: 4, max: 400, predefinito: 400, concetto: 'passaggi-nascosti',
     },
     {
       id: 'gapCrossMm', nome: 'golaMm', dove: 'par', etichetta: 'Gola attraversata',
-      aiuto: 'Fin dove la riga più esterna di una fascia attraversa una gola senza spezzarsi: un tratto di tinta più chiara, già cucita, o troppo addossato alla riga prima, incastrato fra due tratti della stessa tinta. A 0 non lo fa mai.',
+      aiuto: 'Fin dove la riga più esterna di una fascia attraversa una gola senza spezzarsi: un tratto di tinta più chiara, già cucita, o troppo addossato alla riga prima, incastrato fra due tratti della stessa tinta. La riga dentata continua sopra e raggiunge l’altro pezzo, invece di lasciarlo orfano con un taglio. A 0 non lo fa mai.',
       tipo: 'num', unita: 'mm', min: 0, max: 100, predefinito: 30, concetto: 'ordine-cucitura',
     },
     {
@@ -86,17 +86,17 @@ export const scheda: SchedaParametri = {
     {
       id: 'smoothFlattenMm', nome: 'spianaMm', dove: 'par', etichetta: 'Spianatura',
       aiuto: 'Smussa le creste fra due fronti (spianatura della distanza). Spianatura e chiusura smussano gli spigoli.',
-      tipo: 'num', unita: 'mm', min: 0.5, max: 20, predefinito: 5, concetto: 'tolleranza',
+      senzaAiuto: true, tipo: 'num', unita: 'mm', min: 0.5, max: 20, predefinito: 5, concetto: 'tolleranza',
     },
     {
       id: 'smoothCloseMm', nome: 'chiudiMm', dove: 'par', etichetta: 'Chiusura',
       aiuto: 'Chiusura delle insenature nella crescita a passo fisso. Spianatura e chiusura smussano gli spigoli.',
-      tipo: 'num', unita: 'mm', min: 0, max: 20, predefinito: 3, concetto: 'tolleranza',
+      senzaAiuto: true, tipo: 'num', unita: 'mm', min: 0, max: 20, predefinito: 3, concetto: 'tolleranza',
     },
     {
       id: 'smoothGrowth', nome: 'addolcisciMm', dove: 'par', etichetta: 'Addolcimento',
       aiuto: 'Millimetri di lisciatura in più per ogni millimetro di distanza dal muro: cresce con la distanza dal muro.',
-      tipo: 'num', unita: 'rapporto', min: 0, max: 1, predefinito: 0.15, concetto: 'scala',
+      senzaAiuto: true, unitaTesto: 'mm/mm', tipo: 'num', unita: 'rapporto', min: 0, max: 1, predefinito: 0.15, concetto: 'scala',
     },
     {
       id: 'smoothMaxMm', nome: 'lisciaMaxMm', dove: 'par', etichetta: 'Tetto alla lisciatura',
@@ -106,7 +106,7 @@ export const scheda: SchedaParametri = {
     {
       id: 'translateMaxAreaMm2', nome: 'traslaMaxMm2', dove: 'par', etichetta: 'Traslazione fino a',
       aiuto: 'I gruppi più piccoli della soglia si costruiscono spostando il muro chiaro senza deformarlo; i più grandi facendo crescere la macchia di un passo per volta.',
-      tipo: 'num', unita: 'mm2', min: 0, max: 200000, predefinito: 9000, concetto: 'altro',
+      senzaAiuto: true, tipo: 'num', unita: 'mm2', min: 0, max: 200000, predefinito: 9000, concetto: 'altro',
     },
     {
       id: 'buildMode', nome: 'modo', dove: 'par', etichetta: 'Come si costruiscono le righe',

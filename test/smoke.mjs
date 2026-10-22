@@ -46,7 +46,7 @@ export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 export * as ui from ${JSON.stringify(posix('packages/ui/src/anatomia.ts'))};
 export { DEBITO_ANATOMIA } from ${JSON.stringify(posix('packages/ui/src/debito-anatomia.ts'))};
 export { DEBITO_SIMULA, DEBITO_ESEMPIO } from ${JSON.stringify(posix('packages/ui/src/debito-simula-esempio.ts'))};
-export { DEBITO_ETICHETTE } from ${JSON.stringify(posix('packages/ui/src/debito-etichette.ts'))};
+export { DEBITO_ETICHETTE, DEBITO_TESTI_A_MANO } from ${JSON.stringify(posix('packages/ui/src/debito-etichette.ts'))};
 export { datiDaStrati } from ${JSON.stringify(posix('packages/ui/src/simulatore.ts'))};
 export { TOOLS as ToolsDati } from ${JSON.stringify(posix('packages/ui/src/tools-dati.ts'))};
 export { routeCells as csRouteCells, colorPolylines as csColorPolylines, colorPolylinesTrim as csColorPolylinesTrim, DEFAULT_ROUTE as CS_DEFAULT_ROUTE, RETRACE_PRESETS as CS_RETRACE_PRESETS } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
@@ -6939,6 +6939,24 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
     tools.flatMap((t) => fuoriRegistro[t].filter((e) => !(debitoEt[t] ?? []).includes(e)).map((e) => `${t}: «${e}»`)), []);
   check('...e nel debito non c\'è un\'etichetta che il pannello non scrive più o che ora il registro ha (la voce va tolta), né un tool che non esiste',
     [...Object.entries(debitoEt).flatMap(([t, v]) => v.filter((e) => !(fuoriRegistro[t] ?? []).includes(e)).map((e) => `${t}: «${e}»`)), ...Object.keys(debitoEt).filter((t) => !tools.includes(t))], []);
+
+  // ---- U5: i pannelli prendono i testi dal registro (testiCampo), non li scrivono a mano ---------------------------------
+  const DEBITO_TESTI_ATTUALE = 11;
+  const aManoSuRegistro = (t) => etichetteDi(sorgenteDi(t)).filter((e) => delRegistro(t).has(e));
+  const haTestiCampo = (t) => /testiCampo\(/.test(sorgenteDi(t));
+  check(`i tool che non prendono ancora i testi da testiCampo sono ${DEBITO_TESTI_ATTUALE} su ${tools.length} (può solo scendere: se è sceso, abbassa DEBITO_TESTI_ATTUALE)`, rg.DEBITO_TESTI_A_MANO.length, DEBITO_TESTI_ATTUALE);
+  check('chi non è nel debito usa testiCampo (un tool nuovo prende i testi dal registro); chi è nel debito non lo usa ancora (altrimenti la voce va tolta); chi lo usa non ha scritto a mano etichette del registro',
+    [tools.filter((t) => !rg.DEBITO_TESTI_A_MANO.includes(t) && !haTestiCampo(t)), rg.DEBITO_TESTI_A_MANO.filter((t) => haTestiCampo(t) || !tools.includes(t)), tools.filter((t) => haTestiCampo(t) && aManoSuRegistro(t).length)], [[], [], []]);
+  check('net-45, pittorico, sfrangiatura, pettine, bitmap e broccato prendono i testi da testiCampo e non hanno scritto a mano nessuna etichetta del registro',
+    ['net-45', 'pittorico', 'sfrangiatura', 'pettine', 'bitmap', 'broccato'].map((t) => [haTestiCampo(t), aManoSuRegistro(t)]), Array(6).fill([true, []]));
+
+  // testiCampo: etichetta, aiuto (se il pannello lo mostra) e testo dello slot dell'unità, dal registro
+  const tc = (t, n) => regU5.testiCampo(t, n);
+  check('testiCampo: etichetta e unità del registro, con l\'aiuto che il pannello mostra',
+    [tc('net-45', 'cordInterlineMm'), tc('bitmap', 'threshold').unita, tc('net-45', 'squareSizeMm').unita, tc('net-45', 'angleADeg').unita],
+    [{ etichetta: 'Interlinea del cordoncino', aiuto: 'distanza tra un punto e il successivo lungo il filo', unita: 'mm' }, 'lum', 'mm', '°']);
+  check('...dove il pannello non mostra l\'aiuto, testiCampo non lo dà (la frase resta nel registro)', ['aiuto' in tc('net-45', 'squareSizeMm'), regU5.parametriDelTool('net-45').find((p) => p.id === 'squareSize').aiuto.length > 0], [false, true]);
+  check('...un tool o un parametro che non esiste lancia: un pannello non mostra un campo vuoto', (() => { try { tc('net-45', 'nonEsiste'); return 'nessun errore'; } catch (e) { return /non ha un parametro salvato come/.test(e.message); } })(), true);
   check('i tool passati all\'anatomia (U2) hanno nel pannello le etichette del registro, tranne i controlli che non sono parametri: net-45, bitmap e sfrangiatura (a parte lo strumento) non hanno niente fuori',
     [fuoriRegistro['net-45'], fuoriRegistro['bitmap'], fuoriRegistro['sfrangiatura']], [[], [], ['Strumento']]);
 }

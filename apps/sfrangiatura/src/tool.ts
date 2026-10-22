@@ -24,6 +24,7 @@ import {
   type DstBlock, type Point,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
+import { testiCampo } from '@rg/cervello';
 import { scheletro, sezioneSorgente, sezione, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero } from '@rg/ui/anatomia';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { collegaSimula, datiDaStrati, type DatiSimulazione } from '@rg/ui/simulatore';
@@ -35,17 +36,17 @@ import { riquadroDi, gruppoRicamo, gruppoFrange, gruppoZone, svgDocumento, TINTE
 export { defaultSfrangiaturaParams };
 
 interface Campo {
-  id: string; key: keyof typeof defaultSfrangiaturaParams; etichetta: string; unita: string; passo: number;
-  min?: number; max?: number; int?: boolean; aiuto?: string;
+  id: string; key: keyof typeof defaultSfrangiaturaParams; passo: number;
+  min?: number; max?: number; int?: boolean;
 }
 const CAMPI: Campo[] = [
-  { id: 'lunghezzaMinMm', key: 'lunghezzaMinMm', etichetta: 'Lunghezza min', unita: 'mm', passo: 0.5, min: 0, max: 12 },
-  { id: 'lunghezzaMaxMm', key: 'lunghezzaMaxMm', etichetta: 'Lunghezza max', unita: 'mm', passo: 0.5, min: 0, max: 12 },
-  { id: 'aperturaMinDeg', key: 'aperturaMinDeg', etichetta: 'Apertura min', unita: '°', passo: 1, min: 0, max: 80 },
-  { id: 'aperturaMaxDeg', key: 'aperturaMaxDeg', etichetta: 'Apertura max', unita: '°', passo: 1, min: 0, max: 80 },
-  { id: 'sormontoMm', key: 'sormontoMm', etichetta: 'Sormonto', unita: 'mm', passo: 0.5, min: 0, max: 10, aiuto: 'quanto ogni frangia entra di sicuro nella macchia vicina: alza il minimo, non il massimo' },
-  { id: 'pennelloMm', key: 'pennelloMm', etichetta: 'Pennello', unita: 'mm', passo: 0.5, min: 0.5, max: 40, aiuto: "è il raggio d'azione: si sfrangia solo dove passi" },
-  { id: 'seme', key: 'seme', etichetta: 'Variante', unita: '#', passo: 1, min: 1, max: 9999, int: true, aiuto: "Stessa variante = stesso identico ricamo. Cambiala per un'altra estrazione di lunghezze e aperture." },
+  { id: 'lunghezzaMinMm', key: 'lunghezzaMinMm', passo: 0.5, min: 0, max: 12 },
+  { id: 'lunghezzaMaxMm', key: 'lunghezzaMaxMm', passo: 0.5, min: 0, max: 12 },
+  { id: 'aperturaMinDeg', key: 'aperturaMinDeg', passo: 1, min: 0, max: 80 },
+  { id: 'aperturaMaxDeg', key: 'aperturaMaxDeg', passo: 1, min: 0, max: 80 },
+  { id: 'sormontoMm', key: 'sormontoMm', passo: 0.5, min: 0, max: 10 },
+  { id: 'pennelloMm', key: 'pennelloMm', passo: 0.5, min: 0.5, max: 40 },
+  { id: 'seme', key: 'seme', passo: 1, min: 1, max: 9999, int: true },
 ];
 
 const n1 = (v: number): string => v.toLocaleString('it-IT', { maximumFractionDigits: 1 });
@@ -53,7 +54,8 @@ const n1 = (v: number): string => v.toLocaleString('it-IT', { maximumFractionDig
 export function mountSfrangiatura(root: HTMLElement, opts: { backHref?: string } = {}): void {
   const campo = (id: string): string => {
     const c = CAMPI.find((x) => x.id === id)!;
-    return campoNumero({ id: c.id, etichetta: c.etichetta, unita: c.unita, valore: defaultSfrangiaturaParams[c.key] as number, passo: c.passo, min: c.min, max: c.max, aiuto: c.aiuto });
+    const t = testiCampo('sfrangiatura', c.key as string);
+    return campoNumero({ id: c.id, etichetta: t.etichetta, unita: t.unita, valore: defaultSfrangiaturaParams[c.key] as number, passo: c.passo, min: c.min, max: c.max, aiuto: t.aiuto });
   };
   const griglia = (ids: string[], dopo = ''): string =>
     `<div class="rg-param-grid" style="--rg-input-numeric-width: 7ch">\n    ${ids.map(campo).join('\n    ')}${dopo}\n  </div>`;

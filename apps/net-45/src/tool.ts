@@ -8,6 +8,7 @@ import {
   dstFromExportLayers, DST_FILE, conBusta,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
+import { testiCampo } from '@rg/cervello';
 import { scheletro, sezioneSorgente, sezione, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero } from '@rg/ui/anatomia';
 import { runPipeline, type RoleAssignment } from './pipeline';
 import { sampleContours } from './sample';
@@ -16,23 +17,23 @@ import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 
 /** Un campo del gruppo "Parametri". `check` = sì/no (interno 1/0). `unit` va nello slot del DS, mai nell'etichetta (R-panello). */
 type Field =
-  | { key: keyof NetParams; label: string; unit: string; step: number; help?: string; kind?: 'num' }
-  | { key: keyof NetParams; label: string; kind: 'check' };
+  | { key: keyof NetParams; step: number; kind?: 'num' }
+  | { key: keyof NetParams; kind: 'check' };
 
 // Ordine e nomi decisi con Lorenzo (REVISIONE-PARAMETRI.md). `realWidthMm` sta nel gruppo Sagoma, non qui.
 const PARAMS: Field[] = [
-  { key: 'squareSizeMm', label: 'Lato del quadrato', unit: 'mm', step: 0.5 },
-  { key: 'angleADeg', label: 'Angolo diagonali principali', unit: '°', step: 1 },
-  { key: 'angleBDeg', label: 'Angolo diagonali secondarie', unit: '°', step: 1 },
-  { key: 'netInsetMm', label: 'Rientro della rete dal bordo', unit: 'mm', step: 0.5 },
-  { key: 'netOffsetXMm', label: 'Sposta rete — orizzontale', unit: 'mm', step: 1 },
-  { key: 'netOffsetYMm', label: 'Sposta rete — verticale', unit: 'mm', step: 1 },
-  { key: 'rasoBandMm', label: 'Spessore della fascia di raso', unit: 'mm', step: 1 },
-  { key: 'rasoDownwardOnly', label: 'Raso solo sui bordi bassi e laterali', kind: 'check' },
-  { key: 'cordWidthMm', label: 'Larghezza del cordoncino', unit: 'mm', step: 0.1 },
-  { key: 'cordInterlineMm', label: 'Interlinea del cordoncino', unit: 'mm', step: 0.05, help: 'distanza tra un punto e il successivo lungo il filo' },
-  { key: 'travelStitchMm', label: 'Lunghezza del punto nei passaggi', unit: 'mm', step: 0.5 },
-  { key: 'minStitchMm', label: 'Punto minimo', unit: 'mm', step: 0.1 },
+  { key: 'squareSizeMm', step: 0.5 },
+  { key: 'angleADeg', step: 1 },
+  { key: 'angleBDeg', step: 1 },
+  { key: 'netInsetMm', step: 0.5 },
+  { key: 'netOffsetXMm', step: 1 },
+  { key: 'netOffsetYMm', step: 1 },
+  { key: 'rasoBandMm', step: 1 },
+  { key: 'rasoDownwardOnly', kind: 'check' },
+  { key: 'cordWidthMm', step: 0.1 },
+  { key: 'cordInterlineMm', step: 0.05 },
+  { key: 'travelStitchMm', step: 0.5 },
+  { key: 'minStitchMm', step: 0.1 },
 ];
 const ROLE_OPTIONS: (Role | '')[] = ['', 'MASTER_OUTLINE', 'NET_AREA', 'SATIN_AREA', 'SQUARE_AREA', 'BORDER', 'EXCLUSION'];
 
@@ -95,6 +96,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     const host = $('params');
     host.innerHTML = '';
     for (const f of PARAMS) {
+      const testi = testiCampo('net-45', f.key);
       if (f.kind === 'check') {
         const lab = document.createElement('label');
         lab.className = 'rg-choice rg-param-grid__wide';
@@ -102,12 +104,12 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
         inp.type = 'checkbox';
         inp.checked = (params[f.key] as number) !== 0;
         inp.addEventListener('change', () => { (params[f.key] as number) = inp.checked ? 1 : 0; render(); });
-        lab.append(inp, document.createTextNode(' ' + f.label));
+        lab.append(inp, document.createTextNode(' ' + testi.etichetta));
         host.appendChild(lab);
         continue;
       }
       host.insertAdjacentHTML('beforeend', campoNumero({
-        id: 'p-' + f.key, etichetta: f.label, unita: f.unit, valore: params[f.key] as number, passo: f.step, aiuto: f.help,
+        id: 'p-' + f.key, etichetta: testi.etichetta, unita: testi.unita, valore: params[f.key] as number, passo: f.step, aiuto: testi.aiuto,
         attributi: 'data-param="' + f.key + '"',
       }));
       const inp = host.querySelector<HTMLInputElement>('[data-param="' + f.key + '"]')!;
