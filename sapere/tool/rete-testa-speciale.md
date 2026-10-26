@@ -112,6 +112,20 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
     `bottomRoundEnds` (0 = ovale, 100 = mezzi cerchi e tratti dritti).
 21. **La fascia sui lati lunghi nel tool** (2026-10-16): *«Fascia sui lati lunghi è importante che me lo metti dentro»* →
     `sideBandMm` (0 = tutta la rete), nel ricamo, nel pannello e nella sacca 3D.
+28. **La rete a linee dritte** (2026-10-26): *«dammi la possibilità di cambiare il modo di costruzione, non più zig zag,
+    ma prima tutte le linee orizzontali per un verso e poi quelle per l'altro verso. quindi una rete normale. che non dà
+    quindi punti tondi di sovrapposizione. fai delle prove prima»*; e, chiesto: niente punto sull'incrocio, le aree vuote
+    come oggi. `buildMode` (`zigzag` di partenza, `linee`; id di registro `netConstruction`, perché `buildMode` è già del
+    Pettine con un altro significato). Nel motore ogni retta è una «colonna» con una linea sola, le due famiglie una dopo
+    l'altra: blocchi, aree vuote, parti, ingressi e rocchetta sono quelli dello zig-zag; le lenti sono spente.
+    Lezioni: (1) la prima prova usava la larghezza del rombo come passo, ma nello zig-zag la maglia vera è larghezza meno
+    sovrapposizione (8,24 con 10 e 1,75): per confrontare va usata la stessa maglia (82,7 m contro 90,5 alla pari);
+    (2) una retta ha due punti, e il taglio sul bordo guarda i punti: va resa fitta (ogni 0,4 mm); (3) ogni linea finisce
+    dalla parte opposta a dove comincia: il ramo attorno a un vuoto si sceglie dal lato dove è il filo (con la parità
+    giù-su; scegliere il capo più vicino sbagliava sulle linee cortissime negli angoli), e dove il filo di un ramo resta sul
+    bordo del vuoto la rete oltre è una parte nuova invece di un salto volante; (4) il punto massimo finale si controlla
+    punto per punto (prima valeva il più grande fra punto, punto nel vuoto e punto nelle lenti, e passavano punti da 1,28
+    mm col punto a 1).
 27. **Il vuoto attraversato dritto: tre punti corti ai bordi, dentro fino a 3 cm** (2026-10-22): *«nella modalità aree
     vuote che si attraversano con impuntura dritta, mettiamo 3 punti avvicinati che delimitano l'area del foro. e poi
     dentro devo poter aumentare la lunghezza punto fino a 3cm»*. `voidEdgeStitchMm` (1 mm; tre punti a ogni bordo, dal

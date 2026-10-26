@@ -7227,6 +7227,41 @@ console.log('\nrete-testa-speciale — vuoto attraversato: tre punti corti a ogn
     [corse.length, passi.every(tre), Math.max(...passi.flat()) <= 30 + 1e-6, Math.max(...passi.flat()) > 25, rg.RTS_PARAMETRI.voidEdgeStitchMm], [18, true, true, true, 1]);
 }
 
+// rete-testa-speciale — LA RETE A LINEE DRITTE (Lorenzo, 2026-10-26: «non più zig zag, ma prima tutte le linee per
+// un verso e poi quelle per l'altro verso. quindi una rete normale. che non dà quindi punti tondi di sovrapposizione»;
+// chiesto: le linee si attraversano senza punto sull'incrocio; le aree vuote come oggi)
+console.log('\nrete-testa-speciale — rete a linee dritte: due versi, niente lenti, aree vuote come lo zig-zag');
+{
+  const P = { ...rg.RTS_PARAMETRI, pieceSource: 'misure', totalWidth: 200, totalHeight: 140, diamondWidthMm: 8.235, diamondHeightMm: 17, overlapMm: 1.75, cornerRounding: 20, maxStitchMm: 1, buildMode: 'linee' };
+  const r = rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], P);
+  const tutti = r.blocchi.flat(), tratti = r.blocchi.flatMap((b) => b.slice(1).map((q, i) => Math.hypot(q.x - b[i].x, q.y - b[i].y)));
+  // le linee: tratti di rete dritti; la pendenza dei due versi (larghezza/altezza della maglia), una per parte
+  const pendenze = [0, 1].map((parte) => {
+    const conta = new Map();
+    for (const bl of r.blocchi) for (let i = 1; i < bl.length; i++) if (bl[i].blocco === parte && bl[i].tipo === 'rete' && bl[i - 1].tipo === 'rete') {
+      const dy = bl[i].y - bl[i - 1].y; if (Math.abs(dy) < 0.3) continue;
+      const k = (Math.round((bl[i].x - bl[i - 1].x) / dy * 1000) / 1000).toFixed(3); conta.set(k, (conta.get(k) ?? 0) + 1);
+    }
+    return +[...conta.entries()].sort((x, y) => y[1] - x[1])[0][0];
+  });
+  check('due parti, una per verso (lo stop fra le due), linee con pendenza ±0,484; nessuna lente; punti fra minimo e massimo; zig-zag di partenza',
+    [r.parti.length, Math.abs(pendenze[0]), Math.abs(pendenze[1]), Math.sign(pendenze[0]) !== Math.sign(pendenze[1]), tutti.filter((q) => q.sovrapposto).length, Math.max(...tratti) <= P.maxStitchMm + 1e-6, Math.min(...tratti) >= P.minStitchMm - 1e-6, rg.RTS_PARAMETRI.buildMode],
+    [2, 0.484, 0.484, true, 0, true, true, 'zigzag']);
+  // col foro: «si ferma» divide ogni verso in tre parti (principale, ramo, resto) senza salti dentro le parti; «gira sul
+  // bordo» e «attraversa» restano a due parti; mai rete nel foro
+  const foro = Array.from({ length: 48 }, (_, i) => ({ x: 100 + 35 * Math.cos(2 * Math.PI * i / 48), y: 70 + 25 * Math.sin(2 * Math.PI * i / 48) }));
+  const nelForo = (q) => Math.hypot((q.x - 100) / 35, (q.y - 70) / 25) < 0.99;
+  const modi = ['ritorno', 'bordo', 'centro'].map((voidMode) => rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [foro], { ...P, voidMode }));
+  check('col foro: «si ferma» 6 parti e nessun salto dentro una parte; «gira sul bordo» e «attraversa» 2 parti; nessun punto di rete nel foro',
+    [modi[0].parti.length, modi[0].parti.every((pt) => pt.tratti.length === 1), modi[1].parti.length, modi[2].parti.length, modi.every((rr) => rr.blocchi.flat().every((q) => q.tipo !== 'rete' || !nelForo(q)))],
+    [6, true, 2, 2, true]);
+  // il filo: sulla Clover 420 × 710 con la maglia 10 × 17 a colonne intere, 71,5 m (lo zig-zag con la stessa larghezza di
+  // rombo, che però con la sovrapposizione fa la maglia larga 8,24, ne usa 90,5)
+  const C = rg.rtsCostruisci(rg.rtsPezzoAMisure({ ...P, totalWidth: 420, totalHeight: 710 }), [], { ...P, totalWidth: 420, totalHeight: 710, diamondWidthMm: 10, fitColumns: true });
+  const filo = C.blocchi.flatMap((b) => b.slice(1).map((q, i) => Math.hypot(q.x - b[i].x, q.y - b[i].y))).reduce((a, b) => a + b, 0);
+  check('la Clover a linee dritte: 2 parti, 71,5 m di filo', [C.parti.length, Math.round(filo / 100) / 10], [2, 71.5]);
+}
+
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).
 rmSync(outDir, { recursive: true, force: true });
 console.log(failed ? `\n${failed} test falliti\n` : '\nTutti i test passati\n');

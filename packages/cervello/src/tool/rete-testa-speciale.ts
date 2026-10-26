@@ -115,6 +115,11 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: -6, max: 10, passo: 0.25, predefinito: 2, concetto: 'sovrapposizione',
     },
     {
+      id: 'netConstruction', nome: 'buildMode', etichetta: 'Come si costruisce la rete',
+      aiuto: 'zigzag = serpentine che scendono e risalgono, con le lenti agli incroci; linee = due famiglie di linee dritte, prima tutte quelle di un verso poi le altre (cambio ago fra le due), che si attraversano senza lente. Il rombo è la maglia vera.',
+      tipo: 'enum', unita: '', opzioni: ['zigzag', 'linee'], predefinito: 'zigzag', concetto: 'modulo',
+    },
+    {
       id: 'staggerColumns', etichetta: 'Colonne sfalsate di mezzo rombo',
       aiuto: 'Le colonne vicine spostate di mezzo rombo lungo la serpentina.',
       tipo: 'bool', unita: '', predefinito: false, concetto: 'modulo',

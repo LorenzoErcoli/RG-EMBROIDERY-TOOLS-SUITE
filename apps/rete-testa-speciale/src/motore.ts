@@ -92,6 +92,15 @@ export type ParametriRete = {
   /** Le colonne sfalsate di mezzo rombo. */
   staggerColumns: boolean;
   /**
+   * Il modo di costruzione della rete a colonne (Lorenzo, 2026-10-26: «non più zig zag, ma prima tutte le linee per un
+   * verso e poi quelle per l'altro verso. quindi una rete normale. che non dà quindi punti tondi di sovrapposizione»).
+   * `zigzag`: le serpentine che scendono e risalgono, con le lenti agli incroci. `linee`: due famiglie di linee dritte
+   * parallele, prima tutte quelle di un verso (avanti e indietro, collegate sul bordo), poi lo stop e quelle dell'altro;
+   * agli incroci si attraversano, senza lente e senza punto sull'incrocio. Il rombo è la maglia vera (larghezza e
+   * altezza da punta a punta); la sovrapposizione non conta.
+   */
+  buildMode: 'zigzag' | 'linee';
+  /**
    * Colonne intere nella larghezza (Lorenzo, 2026-10-21, sulla Net bag Clover 420 × 710: «se guardi i bordi laterali
    * sinistra e destra si creano delle curve strane… serve una curva migliore»). La larghezza del pezzo si divide in un
    * numero intero di colonne, ritoccando di poco la larghezza del rombo: ogni bordo laterale cade a metà della
@@ -165,6 +174,7 @@ export const PARAMETRI_RETE: ParametriRete = {
   angleDeg: 0,
   overlapMm: 2,
   staggerColumns: false,
+  buildMode: 'zigzag',
   fitColumns: false,
   entryTailMm: 10,
   spoolM: 0,
@@ -368,21 +378,37 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
   });
   const nelVuotoI = (q: Point) => vuoti.findIndex((v, i) => { const g = ingombri[i]; return q.x >= g.x0 && q.x <= g.x1 && q.y >= g.y0 && q.y <= g.y1 && pointInPolygon(q, v); });
   const dentro = (q: Point) => pointInPolygon(q, contorno) && (!ritorno || nelVuotoI(q) < 0);
-  let passo = Math.max(0.5, W - p.overlapMm), u0 = 0, colonneIntere: RisultatoRete['colonneIntere'];
+  // a linee dritte la maglia è il rombo stesso: il passo fra due linee parallele è la sua larghezza
+  const lineeDritte = p.buildMode === 'linee', sovr = lineeDritte ? 0 : p.overlapMm;
+  let passo = Math.max(0.5, W - sovr), u0 = 0, colonneIntere: RisultatoRete['colonneIntere'];
   if (p.fitColumns) {
-    // un numero intero di colonne nella larghezza: la prima a mezzo passo dal bordo (lì cadrebbe la colonna vicina)
+    // un numero intero di colonne nella larghezza: la prima a mezzo passo dal bordo (lì cadrebbe la colonna vicina).
+    // A linee dritte le linee partono dal bordo: lì due linee dei due versi si incontrano in una punta
     const n = Math.max(1, Math.round((umax - umin) / passo));
-    passo = (umax - umin) / n; W = passo + p.overlapMm; p.diamondWidthMm = W; u0 = umin + passo / 2;
+    passo = (umax - umin) / n; W = passo + sovr; p.diamondWidthMm = W; u0 = lineeDritte ? umin : umin + passo / 2;
     colonneIntere = { colonne: n, larghezzaRombo: W };
   }
 
   // 1. le colonne e i loro tratti: basta che UNA delle due linee sia dentro, ognuna poi si ferma sul proprio bordo.
   //    Sul bordo inclinato le punte entrano ed escono: tratti separati da meno di un rombo sono la stessa colonna.
-  interface Colonna { k: number; uc: number; L: PuntoLato[]; R: PuntoLato[]; tratti: Array<[number, number]> }
+  interface Colonna { k: number; uc: number; L: PuntoLato[]; R: PuntoLato[]; tratti: Array<[number, number]>; famiglia: number }
   const colonne: Colonna[] = [];
-  for (let k = Math.floor((umin - u0) / passo) - 1; k <= Math.ceil((umax - u0) / passo) + 1; k++) {
+  // le colonne della serpentina; a linee dritte ogni «colonna» è una linea sola (L = R), le due famiglie una dopo l'altra:
+  // la famiglia +1 scende verso destra, la −1 verso sinistra. u = uc + pendenza·v, con pendenza = larghezza/altezza
+  const pendenza = W / H;
+  const famiglie = lineeDritte ? [1, -1] : [0];
+  for (const fam of famiglie) {
+  // a linee dritte servono le rette che attraversano tutto il pezzo: anche quelle che partono fuori dalla larghezza
+  const allarga = lineeDritte ? Math.ceil(pendenza * (vmax - vmin) / passo) + 1 : 0;
+  const kDa = Math.floor((umin - u0) / passo) - 1 - (fam > 0 ? allarga : 0), kA = Math.ceil((umax - u0) / passo) + 1 + (fam < 0 ? allarga : 0);
+  for (let k = kDa; k <= kA; k++) {
     const uc = u0 + k * passo, fase = p.staggerColumns && (((k % 2) + 2) % 2) ? H / 2 : 0;
-    const L = lato(p, -1, fase, vmin, vmax), R = lato(p, 1, fase, vmin, vmax);
+    // la retta come lato: due capi oltre il pezzo, e la colonna la attraversa in u da uc (in cima) in giù
+    const retta: PuntoLato[] = [
+      { u: fam * pendenza * (vmin - 1 - vmin), v: vmin - 1, fisso: true, apice: false },
+      { u: fam * pendenza * (vmax + 1 - vmin), v: vmax + 1, fisso: true, apice: false },
+    ];
+    const L = lineeDritte ? retta : lato(p, -1, fase, vmin, vmax), R = lineeDritte ? retta : lato(p, 1, fase, vmin, vmax);
     const corse: Array<[number, number]> = []; let inizio: number | null = null; const dv = 0.25;
     for (let v = vmin; v <= vmax + dv; v += dv) {
       const ok = v <= vmax && (dentro(mondo(uc + uA(L, v), v)) || dentro(mondo(uc + uA(R, v), v)));
@@ -391,7 +417,8 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
     }
     const tratti: Array<[number, number]> = [];
     for (const r of corse) { if (tratti.length && r[0] - tratti[tratti.length - 1][1] < H) tratti[tratti.length - 1][1] = r[1]; else tratti.push([r[0], r[1]]); }
-    colonne.push({ k, uc, L, R, tratti: tratti.filter(([a, b]) => b - a >= 0.5) });
+    colonne.push({ k, uc, L, R, tratti: tratti.filter(([a, b]) => b - a >= 0.5), famiglia: fam });
+  }
   }
 
   // 2. i blocchi: la serpentina va avanti finché il tratto della colonna dopo tocca il suo; i tratti che restano
@@ -402,27 +429,41 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
   //    per ultimo (si cuce dopo). Ogni blocco parte dal lato che sta sul contorno esterno: un ramo sotto un vuoto parte
   //    dal basso (le sue colonne vanno su e tornano giù) e passa alla rete oltre il vuoto lungo il bordo di sotto; se
   //    partisse dal bordo del vuoto, per arrivare alla colonna dopo il filo salterebbe attraverso il vuoto.
-  interface Blocco { cols: Array<{ col: Colonna; v0: number; v1: number }>; ultimaK: number; ultimo: [number, number]; dalBasso: boolean }
+  // `filoInBasso`: da che parte è il filo dopo l'ultima colonna. Nello zig-zag ogni colonna torna dal lato da cui parte;
+  // a linee dritte ogni linea finisce dall'altra parte, e dove il blocco si spezza attorno a un vuoto si prosegue sul ramo
+  // dal lato del filo (col ramo sbagliato il filo saltava dall'altro capo della linea al bordo del vuoto)
+  interface Blocco { cols: Array<{ col: Colonna; v0: number; v1: number }>; ultimaK: number; ultimo: [number, number]; dalBasso: boolean; famiglia: number; filoInBasso: boolean }
   const blocchi: Blocco[] = [], aperti: Blocco[] = [];
   // il capo della colonna (in alto o in basso) cade sul bordo di un vuoto?
-  const capoSulVuoto = (col: Colonna, v: number) => { const q = mondo(col.uc, v); return pointInPolygon(q, contorno) && nelVuotoI(q) >= 0; };
+  const capoSulVuoto = (col: Colonna, v: number) => { const q = mondo(col.uc + uA(col.L, v), v); return pointInPolygon(q, contorno) && nelVuotoI(q) >= 0; };
   for (const col of colonne) {
+    // una famiglia nuova (a linee dritte): nessun blocco continua da quella prima
+    if (aperti.length && aperti[0].famiglia !== col.famiglia) aperti.length = 0;
     // a ogni tratto il blocco che continua: se tocca più blocchi (rami che si riuniscono), il più nuovo
     const chi = new Map<number, Blocco>();
     col.tratti.forEach((I, ti) => {
       const tocca = aperti.filter((x) => x.ultimaK === col.k - 1 && x.ultimo[0] < I[1] && I[0] < x.ultimo[1]);
-      if (tocca.length) chi.set(ti, tocca[tocca.length - 1]);
+      if (!tocca.length) return;
+      const b = tocca[tocca.length - 1];
+      // a linee dritte, dove i rami si riuniscono il filo del ramo può essere sul bordo del vuoto, mentre la linea dopo
+      // comincia dal bordo esterno: invece di un salto volante, il ramo finisce lì e la rete oltre il vuoto è una parte
+      // nuova (cambio ago, ingresso fuori sagoma)
+      if (lineeDritte && tocca.length > 1) {
+        const ultima = b.cols[b.cols.length - 1];
+        if (capoSulVuoto(ultima.col, b.filoInBasso ? ultima.v1 + 0.6 : ultima.v0 - 0.6)) return;
+      }
+      chi.set(ti, b);
     });
     // un blocco che si spezza (toccato da più tratti) continua sul ramo dal suo lato; gli altri rami aprono blocchi nuovi
     const rami = new Map<Blocco, number[]>();
     chi.forEach((b, ti) => rami.set(b, [...(rami.get(b) ?? []), ti]));
-    rami.forEach((tis, b) => { const tiene = b.dalBasso ? tis[tis.length - 1] : tis[0]; for (const ti of tis) if (ti !== tiene) chi.delete(ti); });
+    rami.forEach((tis, b) => { const tiene = b.filoInBasso ? tis[tis.length - 1] : tis[0]; for (const ti of tis) if (ti !== tiene) chi.delete(ti); });
     col.tratti.forEach((I, ti) => {
       let b = chi.get(ti);
       if (!b) {
         const dalBasso = ritorno && capoSulVuoto(col, I[0] - 0.6) && !capoSulVuoto(col, I[1] + 0.6);
-        b = { cols: [], ultimaK: col.k, ultimo: I, dalBasso }; blocchi.push(b); aperti.push(b);
-      }
+        b = { cols: [], ultimaK: col.k, ultimo: I, dalBasso, famiglia: col.famiglia, filoInBasso: lineeDritte ? !dalBasso : dalBasso }; blocchi.push(b); aperti.push(b);
+      } else if (lineeDritte) b.filoInBasso = !b.filoInBasso;
       b.cols.push({ col, v0: I[0], v1: I[1] }); b.ultimo = I; b.ultimaK = col.k;
     });
     for (let i = aperti.length - 1; i >= 0; i--) if (aperti[i].ultimaK !== col.k) aperti.splice(i, 1);
@@ -469,7 +510,16 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
   // importante che il filo si muova sempre da sinistra a destra… sempre nella stessa maniera»). Prima si sceglieva fra
   // quattro partenze (dall'alto o dal basso, verso destra o verso sinistra) la più vicina a dove era finita la parte prima.
   const lineeDelBlocco = (b: Blocco, dalBasso: boolean, versoSinistra: boolean): Tratto[][][] =>
-    (versoSinistra ? [...b.cols].reverse() : b.cols).map((c) => {
+    (versoSinistra ? [...b.cols].reverse() : b.cols).map((c, ci) => {
+      if (lineeDritte) {
+        // una linea per colonna, avanti e indietro: la prima nel verso della partenza, la seconda al contrario, e così via
+        // (punti fitti lungo la retta: il taglio sul bordo e sui vuoti guarda i punti, e una retta ne ha solo due)
+        const v0 = c.v0 - 0.5, v1 = c.v1 + 0.5, nv = Math.max(2, Math.ceil((v1 - v0) / 0.4));
+        const fitta: PuntoLato[] = Array.from({ length: nv + 1 }, (_, i) => { const v = v0 + (v1 - v0) * i / nv; return { u: uA(c.col.L, v), v, fisso: i === 0 || i === nv, apice: false }; });
+        const ln = fitta.map((q) => verso(c.col, q, c.col.k + (c.col.famiglia < 0 ? 100000 : 0)));
+        const giu = (ci % 2 === 0) !== dalBasso;
+        return [taglia(giu ? ln : ln.slice().reverse()), taglia(giu ? ln.slice().reverse() : ln)].filter((t) => t.length);
+      }
       const L = fetta(c.col.L, c.v0 - 0.5, c.v1 + 0.5).map((q) => verso(c.col, q, 2 * c.col.k));
       const R = fetta(c.col.R, c.v0 - 0.5, c.v1 + 0.5).map((q) => verso(c.col, q, 2 * c.col.k + 1));
       const [andata, torna] = versoSinistra ? [R, L] : [L, R]; // si torna sul lato che guarda la colonna dopo
@@ -488,6 +538,10 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
       if (!meglio || voto < meglio.voto) meglio = { voto, cols };
     }
     if (!meglio) return;
+    // a linee dritte ogni «colonna» porta la linea nei due versi: si tiene quello della parità (giù, su, giù…), la stessa
+    // che decide il ramo dove il blocco si spezza attorno a un vuoto. (Scegliere il capo più vicino sbagliava con le linee
+    // cortissime negli angoli: invertiva la parità, e al vuoto il filo era dall'altra parte del ramo scelto.)
+    if (lineeDritte) meglio.cols = meglio.cols.map((due) => due.slice(0, 1));
     meglio.cols.forEach((linee, ci) => linee.forEach((ln, li) => {
       const primo = inizioDi(ln);
       if (pezzi.length) {
@@ -499,7 +553,7 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
   });
 
   const locale = (q: Point) => { const dx = q.x - C.x, dy = q.y - C.y; return { u: dx * U.x + dy * U.y, v: dx * V.x + dy * V.y }; };
-  const r = cuci(pezzi, { contorno, vuoti, ritorno, nelVuotoI, grande, locale, ordine: (ra, rb) => rb - ra }, p, t0);
+  const r = cuci(pezzi, { contorno, vuoti, ritorno, nelVuotoI, grande, locale, ordine: (ra, rb) => rb - ra, senzaLenti: lineeDritte }, p, t0);
   const { parti, avviso } = dividiInParti(r, contorno, vuoti, p);
   return { ...r, colonneIntere, parti, avviso: r.avviso ?? avviso };
 }
@@ -518,6 +572,8 @@ interface Geometria {
   locale: (q: Point) => { u: number; v: number };
   ordine: (ra: number, rb: number) => number;
   giro?: number;
+  /** Niente lenti: le linee si attraversano senza sovrapporsi (la rete a linee dritte). */
+  senzaLenti?: boolean;
 }
 
 /**
@@ -682,7 +738,7 @@ function cuci(pezzi: Pezzo[], g: Geometria, p: ParametriRete, t0: number): Risul
     altro === idx + 1 ? risolti[idx].pts[risolti[idx].pts.length - 1] : altro === idx - 1 ? risolti[idx].pts[0] : null;
   const vicinoAllAttacco = (idx: number, altro: number, q: Point) => { if (Math.abs(altro - idx) > 1) return false; const j = attacco(idx, altro); return !j || distance(j, q) < 0.05; };
   const zone: Zona[][] = risolti.map((pc, idx) => {
-    if (!contaNelleZone(pc)) return [];
+    if (!contaNelleZone(pc) || g.senzaLenti) return [];
     const colpi = new Map<number, { dopo: boolean; altro: number; s: number[] }>(); // sid dell'altra linea → ascisse degli incroci lungo questa
     for (let i = 1; i < pc.pts.length; i++) {
       const a = pc.pts[i - 1], b = pc.pts[i], visti = new Set<object>();
@@ -770,7 +826,11 @@ function cuci(pezzi: Pezzo[], g: Geometria, p: ParametriRete, t0: number): Risul
     if (tenuti.length > 2 && distance(tenuti[tenuti.length - 2], tenuti[tenuti.length - 1]) < p.minStitchMm) tenuti.splice(tenuti.length - 2, 1);
     const out: PuntoAgo[] = [tenuti[0]];
     for (let i = 1; i < tenuti.length; i++) {
-      const a = tenuti[i - 1], q = tenuti[i], n = Math.ceil(distance(a, q) / massimo - 1e-9);
+      // ogni punto col suo massimo: nel vuoto quello del vuoto, nelle zone quello delle zone (prima il più grande di
+      // tutti valeva ovunque, e fra bordo e rete passavano punti da 1,28 mm col punto a 1)
+      const a = tenuti[i - 1], q = tenuti[i];
+      const lim = Math.max(0.1, p.maxStitchMm, q.tipo === 'vuoto' || a.tipo === 'vuoto' ? p.voidStitchMm : 0, q.sovrapposto || a.sovrapposto ? Math.max(p.overlapStitchMm, p.underOverlapStitchMm) : 0);
+      const n = Math.ceil(distance(a, q) / Math.min(massimo, lim) - 1e-9);
       for (let k = 1; k < n; k++) out.push({ ...q, ...lerp(a, q, k / n) });
       out.push(q);
     }

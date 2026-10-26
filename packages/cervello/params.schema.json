@@ -2071,6 +2071,11 @@
           "default": 2,
           "x-id": "crossingOverlap"
         },
+        "buildMode": {
+          "$ref": "#/$defs/netConstruction",
+          "default": "zigzag",
+          "x-id": "netConstruction"
+        },
         "staggerColumns": {
           "$ref": "#/$defs/staggerColumns",
           "default": false
@@ -5264,6 +5269,16 @@
       "x-passo": 0.25,
       "x-concetto": "sovrapposizione"
     },
+    "netConstruction": {
+      "type": "string",
+      "title": "Come si costruisce la rete",
+      "description": "zigzag = serpentine che scendono e risalgono, con le lenti agli incroci; linee = due famiglie di linee dritte, prima tutte quelle di un verso poi le altre (cambio ago fra le due), che si attraversano senza lente. Il rombo è la maglia vera.",
+      "enum": [
+        "zigzag",
+        "linee"
+      ],
+      "x-concetto": "modulo"
+    },
     "staggerColumns": {
       "type": "boolean",
       "title": "Colonne sfalsate di mezzo rombo",
@@ -5830,6 +5845,7 @@
         "radialSide",
         "diamondWidth",
         "diamondHeight",
+        "netConstruction",
         "staggerColumns",
         "fitColumns",
         "cornerRounding"

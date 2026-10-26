@@ -74,6 +74,11 @@ const CAMPI_MISURE: Campo[] = [
   { nome: 'totalWidth', etichetta: 'Larghezza del pezzo', unita: 'mm', passo: 1, min: 10 },
   { nome: 'totalHeight', etichetta: 'Altezza del pezzo', unita: 'mm', passo: 1, min: 10 },
 ];
+const CAMPO_COSTRUZIONE: Campo = { nome: 'buildMode', etichetta: 'Come si costruisce la rete', unita: '', passo: 1, min: 0,
+  scelte: [['zigzag', 'a zig-zag: serpentine che scendono e risalgono (lenti agli incroci)'], ['linee', 'a linee dritte: prima tutte quelle di un verso, poi le altre']],
+  aiuto: 'A linee dritte agli incroci le linee si attraversano: niente lenti né sovrapposizione. Fra un verso e l’altro c’è il cambio ago.' };
+/** I campi che a linee dritte non contano (niente lenti, niente serpentina). */
+const SOLO_ZIGZAG = new Set(['overlapMm', 'cornerRounding', 'staggerColumns', 'underOverlapStitchMm', 'overlapStitchMm', 'overlapZoneMm']);
 const CAMPI_ROMBO: Campo[] = [
   { nome: 'diamondWidthMm', etichetta: 'Larghezza del rombo', unita: 'mm', passo: 0.5, min: 1, aiuto: 'Da punta a punta di una colonna, misurata sulla linea vera.' },
   { nome: 'diamondHeightMm', etichetta: 'Altezza del rombo', unita: 'mm', passo: 0.5, min: 1, aiuto: 'Da una rientranza alla successiva, lungo la colonna.' },
@@ -213,7 +218,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         for (const [v, l] of f.scelte) { const o = document.createElement('option'); o.value = v; o.textContent = l; o.selected = String(par[f.nome]) === v; sel.appendChild(o); }
         sel.addEventListener('change', () => {
           (par as Record<string, unknown>)[f.nome] = sel.value;
-          if (f.nome === 'pieceSource' || f.nome === 'netShape' || f.nome === 'bottomShape') { risultato = null; buildPanel(); disegnaContorni(); }
+          if (f.nome === 'pieceSource' || f.nome === 'netShape' || f.nome === 'bottomShape' || f.nome === 'buildMode') { risultato = null; buildPanel(); disegnaContorni(); }
           genera();
         });
         lab.appendChild(sel);
@@ -410,8 +415,8 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         ['vista', 'Programma e vista', vistaGrid()],
       ]
       : [
-        ['rombo', 'Rombo e serpentina', campi(CAMPI_ROMBO)],
-        ['punti', 'Punti', campi(CAMPI_PUNTI)],
+        ['rombo', 'Rombo e serpentina', campi([CAMPO_COSTRUZIONE, ...CAMPI_ROMBO.filter((c) => par.buildMode !== 'linee' || !SOLO_ZIGZAG.has(c.nome))])],
+        ['punti', 'Punti', campi(CAMPI_PUNTI.filter((c) => par.buildMode !== 'linee' || !SOLO_ZIGZAG.has(c.nome)))],
         ['vuoti', 'Aree vuote', campi(CAMPI_VUOTI)],
         ['filo', 'Partenze e rocchetta', campi(CAMPI_FILO)],
         ['vista', 'Programma e vista', vistaGrid()],
