@@ -7260,6 +7260,16 @@ console.log('\nrete-testa-speciale — rete a linee dritte: due versi, niente le
   const C = rg.rtsCostruisci(rg.rtsPezzoAMisure({ ...P, totalWidth: 420, totalHeight: 710 }), [], { ...P, totalWidth: 420, totalHeight: 710, diamondWidthMm: 10, fitColumns: true });
   const filo = C.blocchi.flatMap((b) => b.slice(1).map((q, i) => Math.hypot(q.x - b[i].x, q.y - b[i].y))).reduce((a, b) => a + b, 0);
   check('la Clover a linee dritte: 2 parti, 71,5 m di filo', [C.parti.length, Math.round(filo / 100) / 10], [2, 71.5]);
+  // senza stop fra i versi (Lorenzo, 2026-10-26: «possiamo anche dire non spezzare e fa un passaggio esterno al contorno
+  // con il filo»): una parte sola, il passaggio cucito fuori sagoma alla distanza dell'ingresso (10 mm)
+  const F = rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], { ...P, lineLink: 'fuori' }), pass = F.passaggi[0];
+  const fuoriR = (q) => q.x < -0.01 || q.y < -0.01 || q.x > 200.01 || q.y > 140.01;
+  // (i due tratti che escono e rientrano attraversano la fascia vicino al bordo: si guarda il passaggio oltre 11 mm dai capi)
+  const lontano = pass.slice(1, -1).filter((q) => Math.hypot(q.x - pass.at(-1).x, q.y - pass.at(-1).y) > 11 && Math.hypot(q.x - pass[0].x, q.y - pass[0].y) > 11);
+  const passi = pass.slice(1).map((q, i) => Math.hypot(q.x - pass[i].x, q.y - pass[i].y));
+  check('senza stop fra i versi: una parte, un passaggio tutto fuori sagoma (a 10 mm dal bordo), punti entro il massimo; di partenza lo stop',
+    [F.parti.length, F.passaggi.length, lontano.every(fuoriR), Math.round(Math.min(...lontano.map((q) => Math.max(-q.x, -q.y, q.x - 200, q.y - 140)))), Math.max(...passi) <= 1 + 1e-6, rg.RTS_PARAMETRI.lineLink],
+    [1, 1, true, 10, true, 'stop']);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).

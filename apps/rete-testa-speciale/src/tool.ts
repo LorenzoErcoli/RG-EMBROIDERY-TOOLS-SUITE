@@ -76,7 +76,10 @@ const CAMPI_MISURE: Campo[] = [
 ];
 const CAMPO_COSTRUZIONE: Campo = { nome: 'buildMode', etichetta: 'Come si costruisce la rete', unita: '', passo: 1, min: 0,
   scelte: [['zigzag', 'a zig-zag: serpentine che scendono e risalgono (lenti agli incroci)'], ['linee', 'a linee dritte: prima tutte quelle di un verso, poi le altre']],
-  aiuto: 'A linee dritte agli incroci le linee si attraversano: niente lenti né sovrapposizione. Fra un verso e l’altro c’è il cambio ago.' };
+  aiuto: 'A linee dritte agli incroci le linee si attraversano: niente lenti né sovrapposizione.' };
+const CAMPO_FRA_VERSI: Campo = { nome: 'lineLink', etichetta: 'Fra un verso e l’altro', unita: '', passo: 1, min: 0,
+  scelte: [['stop', 'cambio ago, con uscita e ingresso fuori sagoma'], ['fuori', 'senza fermarsi: passaggio cucito fuori sagoma']],
+  aiuto: 'Senza fermarsi, il filo esce alla distanza dell’ingresso, corre cucito fuori dal contorno (nella parte che si rifila) e rientra all’inizio dell’altro verso.' };
 /** I campi che a linee dritte non contano (niente lenti, niente serpentina). */
 const SOLO_ZIGZAG = new Set(['overlapMm', 'cornerRounding', 'staggerColumns', 'underOverlapStitchMm', 'overlapStitchMm', 'overlapZoneMm']);
 const CAMPI_ROMBO: Campo[] = [
@@ -415,7 +418,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         ['vista', 'Programma e vista', vistaGrid()],
       ]
       : [
-        ['rombo', 'Rombo e serpentina', campi([CAMPO_COSTRUZIONE, ...CAMPI_ROMBO.filter((c) => par.buildMode !== 'linee' || !SOLO_ZIGZAG.has(c.nome))])],
+        ['rombo', 'Rombo e serpentina', campi([CAMPO_COSTRUZIONE, ...(par.buildMode === 'linee' ? [CAMPO_FRA_VERSI] : []), ...CAMPI_ROMBO.filter((c) => par.buildMode !== 'linee' || !SOLO_ZIGZAG.has(c.nome))])],
         ['punti', 'Punti', campi(CAMPI_PUNTI.filter((c) => par.buildMode !== 'linee' || !SOLO_ZIGZAG.has(c.nome)))],
         ['vuoti', 'Aree vuote', campi(CAMPI_VUOTI)],
         ['filo', 'Partenze e rocchetta', campi(CAMPI_FILO)],
@@ -483,7 +486,9 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
       }
       const r = risultato;
       const nParti = r.parti?.length ?? r.blocchi.length;
-      $('status').textContent = `${vuoti.length} aree vuote · ${nParti} ${nParti === 1 ? 'parte' : 'parti'} (${Math.max(0, nParti - 1)} stop) · ${r.misure.salti} salti · ${r.misure.tempoMs} ms`
+      // (con le parti, i salti sono quelli dentro le parti: fra una parte e l'altra c'è lo stop, o il passaggio fuori sagoma)
+      const salti = r.parti ? r.parti.reduce((s, pt) => s + pt.tratti.length - 1, 0) : r.misure.salti;
+      $('status').textContent = `${vuoti.length} aree vuote · ${nParti} ${nParti === 1 ? 'parte' : 'parti'} (${Math.max(0, nParti - 1)} stop) · ${salti} salti · ${r.misure.tempoMs} ms`
         + (r.avviso ? ` · ${r.avviso}` : '');
       $('points').textContent = ` · ${r.misure.punti.toLocaleString('it-IT')} punti`;
       buildPanel();
@@ -535,11 +540,12 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     const colore = Object.fromEntries(VISTE.map((l) => [l.chiave, l.colore])) as Record<ChiaveVista, string>;
     const fili = pezzi.filter((t) => visibili[t.vista])
       .map((t) => `<polyline points="${d(t.pts)}" fill="none" stroke="${colore[t.vista]}" stroke-width="${t.vista === 'sopra' ? 0.24 : t.vista === 'sotto' ? 0.2 : 0.16}" stroke-linejoin="round"/>`).join('');
+    // i salti: con le parti, solo quelli dentro una parte (fra due parti c'è lo stop, o il passaggio fuori sagoma)
+    const coppie: Array<[{ x: number; y: number }, { x: number; y: number }]> = r.parti
+      ? r.parti.flatMap((pt) => pt.tratti.slice(1).map((pl, i): [{ x: number; y: number }, { x: number; y: number }] => [pt.tratti[i][pt.tratti[i].length - 1], pl[0]]))
+      : r.blocchi.slice(1).map((b, i) => [r.blocchi[i][r.blocchi[i].length - 1], b[0]]);
     const salti = visibili.salti
-      ? r.blocchi.slice(1).map((b, i) => {
-        const a = r.blocchi[i][r.blocchi[i].length - 1], c = b[0];
-        return `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${c.x.toFixed(2)}" y2="${c.y.toFixed(2)}" stroke="#d62020" stroke-width="0.3" stroke-dasharray="1 0.6"/>`;
-      }).join('')
+      ? coppie.map(([a, c]) => `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${c.x.toFixed(2)}" y2="${c.y.toFixed(2)}" stroke="#d62020" stroke-width="0.3" stroke-dasharray="1 0.6"/>`).join('')
       : '';
     const punti = visibili.punti
       ? r.blocchi.flat().map((q) => `<circle cx="${q.x.toFixed(2)}" cy="${q.y.toFixed(2)}" r="0.12" fill="${q.sovrapposto ? colore[q.sopra ? 'sopra' : 'sotto'] : '#1f1a17'}"/>`).join('')
@@ -548,7 +554,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     const partenze = r.parti?.length ? r.parti.map((pt) => pt.tratti[0][0]) : r.blocchi.map((b) => b[0]);
     const inizi = partenze.map((q, i) => `<circle cx="${q.x.toFixed(2)}" cy="${q.y.toFixed(2)}" r="1.6" fill="#ffffff" stroke="#d62020" stroke-width="0.3"/>`
       + `<text x="${q.x.toFixed(2)}" y="${(q.y + 0.7).toFixed(2)}" font-size="2" text-anchor="middle" fill="#1f1a17">${i + 1}</text>`).join('');
-    const code = (r.parti ?? []).flatMap((pt) => [pt.ingresso, pt.uscita]).filter((c): c is NonNullable<typeof c> => !!c)
+    const code = [...(r.parti ?? []).flatMap((pt) => [pt.ingresso, pt.uscita]), ...(r.passaggi ?? [])].filter((c): c is NonNullable<typeof c> => !!c)
       .map((c) => `<polyline points="${d(c)}" fill="none" stroke="#d62020" stroke-width="0.35"/>`).join('');
     $('layer').innerHTML = cornice(contorniSvg(0.18) + fili + salti + punti + code + inizi);
     if (adatta) pz.fit();

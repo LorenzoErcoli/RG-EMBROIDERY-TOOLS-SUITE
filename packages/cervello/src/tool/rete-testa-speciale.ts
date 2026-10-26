@@ -120,6 +120,11 @@ export const scheda: SchedaParametri = {
       tipo: 'enum', unita: '', opzioni: ['zigzag', 'linee'], predefinito: 'zigzag', concetto: 'modulo',
     },
     {
+      id: 'lineLink', etichetta: 'Fra un verso e l’altro',
+      aiuto: 'A linee dritte: stop = cambio ago, con uscita e ingresso fuori sagoma; fuori = senza fermarsi, il filo esce alla distanza dell’ingresso, corre cucito fuori dal contorno e rientra all’inizio dell’altro verso.',
+      tipo: 'enum', unita: '', opzioni: ['stop', 'fuori'], predefinito: 'stop', concetto: 'ordine-cucitura',
+    },
+    {
       id: 'staggerColumns', etichetta: 'Colonne sfalsate di mezzo rombo',
       aiuto: 'Le colonne vicine spostate di mezzo rombo lungo la serpentina.',
       tipo: 'bool', unita: '', predefinito: false, concetto: 'modulo',

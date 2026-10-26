@@ -112,6 +112,12 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
     `bottomRoundEnds` (0 = ovale, 100 = mezzi cerchi e tratti dritti).
 21. **La fascia sui lati lunghi nel tool** (2026-10-16): *«Fascia sui lati lunghi è importante che me lo metti dentro»* →
     `sideBandMm` (0 = tutta la rete), nel ricamo, nel pannello e nella sacca 3D.
+29. **Fra i due versi: stop o passaggio fuori** (2026-10-26): chiesto perché nella simulazione la trama si spezza in due
+    (lo stop fra i versi: il primo finisce a destra, il secondo riparte da sinistra), *«normalmente spezzi, con allora
+    sempre entrata e uscita prima. ma possiamo anche dire non spezzare e fa un passaggio esterno al contorno con il
+    filo»*. `lineLink` (`stop` di partenza, `fuori`): il passaggio segue il contorno spostato in fuori della distanza
+    dell'ingresso (sui vertici lungo la bisettrice), parte e arriva sulla proiezione dei capi (il secondo verso comincia
+    spesso sulla passata affiancata del bordo, 1 mm dentro). Clover: 0,47 m di passaggio lungo il bordo alto.
 28. **La rete a linee dritte** (2026-10-26): *«dammi la possibilità di cambiare il modo di costruzione, non più zig zag,
     ma prima tutte le linee orizzontali per un verso e poi quelle per l'altro verso. quindi una rete normale. che non dà
     quindi punti tondi di sovrapposizione. fai delle prove prima»*; e, chiesto: niente punto sull'incrocio, le aree vuote

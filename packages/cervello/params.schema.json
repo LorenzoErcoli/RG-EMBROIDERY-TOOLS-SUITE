@@ -2076,6 +2076,10 @@
           "default": "zigzag",
           "x-id": "netConstruction"
         },
+        "lineLink": {
+          "$ref": "#/$defs/lineLink",
+          "default": "stop"
+        },
         "staggerColumns": {
           "$ref": "#/$defs/staggerColumns",
           "default": false
@@ -5279,6 +5283,16 @@
       ],
       "x-concetto": "modulo"
     },
+    "lineLink": {
+      "type": "string",
+      "title": "Fra un verso e l’altro",
+      "description": "A linee dritte: stop = cambio ago, con uscita e ingresso fuori sagoma; fuori = senza fermarsi, il filo esce alla distanza dell’ingresso, corre cucito fuori dal contorno e rientra all’inizio dell’altro verso.",
+      "enum": [
+        "stop",
+        "fuori"
+      ],
+      "x-concetto": "ordine-cucitura"
+    },
     "staggerColumns": {
       "type": "boolean",
       "title": "Colonne sfalsate di mezzo rombo",
@@ -5807,6 +5821,7 @@
         "stopZones",
         "stopZonesDirection",
         "continuousFill",
+        "lineLink",
         "entryTail",
         "spool",
         "spoolMargin"

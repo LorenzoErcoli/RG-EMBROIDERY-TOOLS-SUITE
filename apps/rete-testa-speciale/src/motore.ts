@@ -101,6 +101,13 @@ export type ParametriRete = {
    */
   buildMode: 'zigzag' | 'linee';
   /**
+   * A linee dritte, fra un verso e l'altro (Lorenzo, 2026-10-26: «normalmente spezzi, con allora sempre entrata e
+   * uscita… ma possiamo anche dire non spezzare e fa un passaggio esterno al contorno con il filo»). `stop`: cambio ago,
+   * con uscita e ingresso fuori sagoma. `fuori`: niente stop; il filo esce, corre cucito fuori dal contorno (alla
+   * distanza dell'ingresso, nella parte che si rifila) e rientra all'inizio dell'altro verso.
+   */
+  lineLink: 'stop' | 'fuori';
+  /**
    * Colonne intere nella larghezza (Lorenzo, 2026-10-21, sulla Net bag Clover 420 × 710: «se guardi i bordi laterali
    * sinistra e destra si creano delle curve strane… serve una curva migliore»). La larghezza del pezzo si divide in un
    * numero intero di colonne, ritoccando di poco la larghezza del rombo: ogni bordo laterale cade a metà della
@@ -175,6 +182,7 @@ export const PARAMETRI_RETE: ParametriRete = {
   overlapMm: 2,
   staggerColumns: false,
   buildMode: 'zigzag',
+  lineLink: 'stop',
   fitColumns: false,
   entryTailMm: 10,
   spoolM: 0,
@@ -214,6 +222,8 @@ export interface RisultatoRete {
   colonneIntere?: { colonne: number; larghezzaRombo: number };
   /** Le parti da cucire, una per ago (fra due parti c'è lo stop), con ingresso e uscita fuori sagoma. */
   parti?: ParteCucita[];
+  /** I passaggi cuciti fuori sagoma (a linee dritte, fra un verso e l'altro senza stop). */
+  passaggi?: Point[][];
   /** Un tratto continuo per ogni blocco, in ordine di cucitura: fra due blocchi la macchina salta. */
   blocchi: PuntoAgo[][];
   misure: {
@@ -554,8 +564,10 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
 
   const locale = (q: Point) => { const dx = q.x - C.x, dy = q.y - C.y; return { u: dx * U.x + dy * U.y, v: dx * V.x + dy * V.y }; };
   const r = cuci(pezzi, { contorno, vuoti, ritorno, nelVuotoI, grande, locale, ordine: (ra, rb) => rb - ra, senzaLenti: lineeDritte }, p, t0);
-  const { parti, avviso } = dividiInParti(r, contorno, vuoti, p);
-  return { ...r, colonneIntere, parti, avviso: r.avviso ?? avviso };
+  // a linee dritte senza stop fra i versi: la prima parte dell'altro verso si attacca all'ultima del primo
+  const unisci = lineeDritte && p.lineLink === 'fuori' ? blocchi.findIndex((b) => b.famiglia < 0) : -1;
+  const { parti, avviso, passaggi } = dividiInParti(r, contorno, vuoti, p, unisci);
+  return { ...r, colonneIntere, parti, passaggi, avviso: r.avviso ?? avviso };
 }
 
 /**
@@ -1061,7 +1073,7 @@ export interface ParteCucita {
  * sull'ultimo punto che corre sul bordo prima del limite (esterno o del foro: lì la rete tocca già il bordo), così
  * l'uscita e il nuovo ingresso stanno fuori sagoma.
  */
-function dividiInParti(r: RisultatoRete, contorno: Polyline, vuoti: Polyline[], p: ParametriRete): { parti: ParteCucita[]; avviso?: string } {
+function dividiInParti(r: RisultatoRete, contorno: Polyline, vuoti: Polyline[], p: ParametriRete, unisci = -1): { parti: ParteCucita[]; avviso?: string; passaggi: Point[][] } {
   const coda = Math.max(0, p.entryTailMm), passoCoda = Math.max(0.5, p.maxStitchMm);
   const fuori = (q: Point) => !pointInPolygon(q, contorno) || vuoti.some((v) => pointInPolygon(q, v));
   const bordi = [contorno, ...vuoti];
@@ -1100,6 +1112,39 @@ function dividiInParti(r: RisultatoRete, contorno: Polyline, vuoti: Polyline[], 
     const id = b[0].blocco; if (!dove.has(id)) { dove.set(id, gruppi.length); gruppi.push([]); }
     gruppi[dove.get(id)!].push(b);
   }
+  // senza stop fra i due versi: dalla fine della parte prima al primo punto di `unisci` il filo corre cucito fuori dal
+  // contorno, alla distanza dell'ingresso (solo se tutti e due i capi stanno sul contorno esterno)
+  const passaggi: Point[][] = [];
+  const gi = unisci >= 0 ? gruppi.findIndex((g) => g[0][0].blocco === unisci) : -1;
+  if (gi > 0) {
+    const prima = gruppi[gi - 1], ultimo = prima[prima.length - 1], P = ultimo[ultimo.length - 1], S = gruppi[gi][0][0];
+    // (anche sulle passate affiancate del bordo, un paio di spessori di filo dentro)
+    const sulContornoEsterno = (q: Point) => proietta(q, contorno).d < 0.5 + 3 * Math.max(0.1, p.constructionStroke);
+    if (sulContornoEsterno(P) && sulContornoEsterno(S)) {
+      // la via sul contorno parte e arriva sulla proiezione dei due capi (il capo può essere su una passata affiancata)
+      const sulBordo = (q: Point): Point => { const pr = proietta(q, contorno), a = contorno[pr.i], b = contorno[(pr.i + 1) % contorno.length]; return lerp(a, b, pr.t); };
+      const d = coda > 0 ? coda : 5, via = sulContorno(contorno, sulBordo(P), sulBordo(S));
+      // ogni punto della via spostato fuori: sui vertici lungo la bisettrice (al più il doppio, negli angoli stretti)
+      const fuoriDi = (i: number): Point => {
+        const q = via[i], a = via[Math.max(0, i - 1)], b = via[Math.min(via.length - 1, i + 1)];
+        const nn = (u: Point, w: Point) => { const l = Math.hypot(w.x - u.x, w.y - u.y) || 1; return { x: -(w.y - u.y) / l, y: (w.x - u.x) / l }; };
+        let n1 = i > 0 ? nn(a, q) : nn(q, b), n2 = i < via.length - 1 ? nn(q, b) : n1;
+        let m = { x: n1.x + n2.x, y: n1.y + n2.y }; const lm = Math.hypot(m.x, m.y) || 1; m = { x: m.x / lm, y: m.y / lm };
+        const c = Math.max(0.5, m.x * n1.x + m.y * n1.y);
+        if (!fuori({ x: q.x + m.x * 0.5, y: q.y + m.y * 0.5 })) { m = { x: -m.x, y: -m.y }; n1 = { x: -n1.x, y: -n1.y }; n2 = n1; }
+        return { x: q.x + m.x * d / c, y: q.y + m.y * d / c };
+      };
+      const giro = [P, ...via.map((_, i) => fuoriDi(i)), S];
+      const pts: Point[] = [];
+      for (let i = 1; i < giro.length; i++) pts.push(...linea(giro[i - 1], giro[i]).slice(1));
+      pts.pop(); // S è il primo punto dell'altro verso
+      passaggi.push([P, ...pts, S]);
+      const marca = (q: Point): PuntoAgo => ({ x: q.x, y: q.y, tipo: 'raccordo', sovrapposto: false, sopra: false, blocco: ultimo[0].blocco });
+      prima[prima.length - 1] = [...ultimo, ...pts.map(marca), ...gruppi[gi][0]];
+      prima.push(...gruppi[gi].slice(1));
+      gruppi.splice(gi, 1);
+    }
+  }
   // il filo che si può usare per parte: la rocchetta meno lo scarto, meno ingresso e uscita
   const limite = p.spoolM > 0 ? p.spoolM * 1000 * (1 - Math.max(0, Math.min(90, p.spoolMarginPct)) / 100) - 4 * coda : Infinity;
   const parti: ParteCucita[] = []; let forzati = 0;
@@ -1129,7 +1174,7 @@ function dividiInParti(r: RisultatoRete, contorno: Polyline, vuoti: Polyline[], 
     }
     if (punti.length - inizio > 1) chiudi(punti.slice(inizio), perche);
   });
-  return { parti, avviso: forzati ? `In ${forzati} punti la rocchetta finisce lontano dal bordo: l'uscita non è fuori sagoma. Aumenta la rocchetta o lo scarto.` : undefined };
+  return { parti, passaggi, avviso: forzati ? `In ${forzati} punti la rocchetta finisce lontano dal bordo: l'uscita non è fuori sagoma. Aumenta la rocchetta o lo scarto.` : undefined };
 }
 
 export const motore: Motore<IngressoRete, ParametriRete> = {
