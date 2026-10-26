@@ -6117,6 +6117,13 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   // (sulla griglia di 0,1 mm del calcolo: un decimo di tolleranza)
   const scarto = Math.max(Math.abs(Math.min(...bb.map((p) => p.x)) - 2), Math.abs(Math.max(...bb.map((p) => p.x)) - 18), Math.abs(Math.min(...bb.map((p) => p.y)) - 2), Math.abs(Math.max(...bb.map((p) => p.y)) - 8));
   check('restringi: un rettangolo 20 × 10 ristretto di 2 mm è 16 × 6 (entro 0,15 mm)', scarto <= 0.15, true);
+  // il calcolo in un Web Worker (2026-10-26): coi ponti ci vogliono alcuni secondi, e nella pagina la bloccavano. Il
+  // worker non gira in node: si controlla il sorgente (il calcolo nel worker, gli export fermi finché il ricamo non è
+  // quello dei parametri di adesso)
+  const pmTool = readFileSync(join(root, 'apps/pattern-macchie/src/tool.ts'), 'utf8');
+  const pmWorker = readFileSync(join(root, 'apps/pattern-macchie/src/macchie.worker.ts'), 'utf8');
+  check('il calcolo gira in un Web Worker, che chiama il motore', [/new Worker\(new URL\('\.\/macchie\.worker\.ts'/.test(pmTool), /costruisciMacchie\(/.test(pmWorker)], [true, true]);
+  check('...e durante il calcolo gli export sono fermi', /exportPronti\(false\)[\s\S]*worker\.postMessage/.test(pmTool), true);
 }
 
 // ---- K1 — il registro dei parametri e il suo cricchetto ---------------------------------------------------------

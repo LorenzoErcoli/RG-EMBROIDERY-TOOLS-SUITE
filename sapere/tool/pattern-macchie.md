@@ -37,6 +37,7 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
 11. (2026-10-26) **Coi ponti, niente salti dentro le macchie e niente tagli sul raso**: *«togli i 7 salti dentro le
    macchie e i 2 passaggi che tagliano la punta di una riga»*. La regola 10 vale anche per le macchie allungate dal
    ponte, e quella del 2026-10-09 (mai sopra il raso già cucito) vale anche per le punte delle righe.
+12. (2026-10-26) **Il calcolo in un Web Worker**: *«passa al calcolo nel Web Worker, così la pagina non si blocca»*.
 
 ## Come è fatto, e perché
 - **Il punto sopra è la base stessa**, generata una volta e tagliata sulla macchia: a registro al millesimo.
@@ -78,6 +79,12 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
   riga da cui si esce dalla macchia prima vale come solco di partenza (come l'ultima riga cucita dentro una macchia), e
   prima della ricerca su griglia si prova il filo dritto: la griglia va da centro a centro di cella (0,2 mm) e fra le
   righe fitte del ponte tagliava una riga che la volta dritta di mezzo millimetro non tocca.
+
+- **Il calcolo nel worker** (`macchie.worker.ts`, come la razza). Due cose che nascono dal non bloccare più la pagina:
+  gli export si spengono finché il ricamo non è quello dei parametri di adesso (se no il DST porterebbe il ricamo
+  vecchio coi parametri nuovi nel progetto); e a calcolo finito si rifà solo il *Programma*, perché rifare tutto il
+  pannello cancellava quello che si stava scrivendo in un campo. Un parametro cambiato a metà calcolo chiude il worker
+  e ne apre un altro: il calcolo vecchio non si aspetta.
 
 ## Strade scartate
 - Passaggi fra le macchie sulle linee della base (27 salti in tutto): Lorenzo non vuole ricamo fra le macchie.

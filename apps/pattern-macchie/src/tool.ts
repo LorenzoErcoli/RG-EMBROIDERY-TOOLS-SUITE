@@ -367,32 +367,66 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     genera();
   }
 
-  // ---- il calcolo ----
-  let attesa = 0;
+  // ---- il calcolo, in un processo a parte (Web Worker): la pagina resta libera ----
+  let worker: Worker | null = null;
+  /** Se il worker sta calcolando: un calcolo nuovo butta via quello vecchio invece di aspettarlo. */
+  let occupato = false;
+  /** Se il worker non parte (il browser non lo carica): si calcola nella pagina, come prima. */
+  let senzaWorker = false;
+  let idCalcolo = 0, attesa = 0, tick = 0;
+  /** Gli export valgono solo col ricamo dei parametri di adesso: mentre si calcola, si fermano. */
+  function exportPronti(si: boolean) {
+    for (const id of ['exportBtn', 'exportDstBtn']) ($(id) as HTMLButtonElement).disabled = !si;
+  }
   function genera() {
     const { pannello, macchie } = geometria();
     if (!pannello) { $('status').textContent = model ? 'Dai a un colore il ruolo «Pannello».' : 'Carica prima un disegno.'; return; }
     if (!macchie.length) { $('status').textContent = 'Dai a un colore il ruolo «Macchie».'; return; }
-    $('status').textContent = 'Calcolo…';
-    // un attimo perché la riga di stato si veda: il calcolo blocca la pagina per un secondo o due
+    const mioId = ++idCalcolo;
     window.clearTimeout(attesa);
-    attesa = window.setTimeout(() => {
-      try {
-        risultato = costruisciMacchie(pannello, macchie, pattern.config, par);
-      } catch (e) {
-        risultato = null;
-        $('status').textContent = 'Errore: ' + (e as Error).message;
-        console.error(e);
-        return;
-      }
-      const r = risultato;
+    if (occupato) { worker?.terminate(); worker = null; occupato = false; }
+    if (!worker && !senzaWorker) {
+      try { worker = new Worker(new URL('./macchie.worker.ts', import.meta.url), { type: 'module' }); } catch { worker = null; }
+    }
+    exportPronti(false);
+    const inizio = Date.now();
+    window.clearInterval(tick);
+    $('status').textContent = 'Calcolo…';
+    tick = window.setInterval(() => { $('status').textContent = `Calcolo… ${Math.round((Date.now() - inizio) / 1000)} s`; }, 500);
+    const finito = (r: RisultatoMacchie | null, errore?: string) => {
+      window.clearInterval(tick);
+      occupato = false;
+      exportPronti(true);
+      risultato = r;
+      if (!r) { $('status').textContent = 'Errore: ' + errore; return; }
       const punti = r.base.punti + r.raso.punti + r.sopra.punti;
       $('status').textContent = `${macchie.length} macchie · ${1 + r.stop.length} stop · salti: raso ${r.raso.salti}, punto sopra ${r.sopra.salti}`
         + (r.ponti ? ` · ${r.ponti} ponti` : '') + ` · ${(r.tempoMs / 1000).toFixed(1)} s`;
       $('points').textContent = ` · ${punti.toLocaleString('it-IT')} punti`;
-      buildPanel();
+      aggiornaProgramma();
       disegna();
-    }, 30);
+    };
+    if (!worker) {
+      // senza worker si calcola qui, come prima (un attimo perché la riga di stato si veda: la pagina si blocca)
+      attesa = window.setTimeout(() => {
+        if (mioId !== idCalcolo) return;
+        try { finito(costruisciMacchie(pannello, macchie, pattern.config, par)); } catch (e) { console.error(e); finito(null, (e as Error).message); }
+      }, 30);
+      return;
+    }
+    occupato = true;
+    worker.onmessage = (e: MessageEvent<{ id: number; result?: RisultatoMacchie; error?: string }>) => {
+      if (e.data.id !== mioId) return;
+      finito(e.data.result ?? null, e.data.error);
+    };
+    // (gli errori del calcolo tornano nel messaggio: qui arriva solo un worker che non è partito)
+    worker.onerror = (e) => {
+      console.error(e);
+      worker?.terminate(); worker = null; occupato = false;
+      senzaWorker = true;
+      if (mioId === idCalcolo) genera();
+    };
+    worker.postMessage({ id: mioId, pannello, macchie, pattern: pattern.config, par: { ...par } });
   }
 
   // ---- l'anteprima ----
@@ -582,9 +616,24 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       buildPanel();
       genera();
     });
-    for (const inp of root.querySelectorAll<HTMLInputElement>('input[data-livello]')) {
+    wireLivelli(root);
+  }
+  function wireLivelli(dove: ParentNode) {
+    for (const inp of dove.querySelectorAll<HTMLInputElement>('input[data-livello]')) {
       inp.addEventListener('change', () => { visibili[inp.dataset.livello as ChiaveFilo | 'salti' | 'contorni'] = inp.checked; disegna(); });
     }
+  }
+  /**
+   * A calcolo finito si rifà solo il Programma: il resto del pannello resta com'è (col calcolo nel worker si può
+   * scrivere in un campo mentre si calcola, e rifare tutto il pannello lo cancellerebbe).
+   */
+  function aggiornaProgramma() {
+    const det = $('panel').querySelector<HTMLDetailsElement>('details[data-sezione="programma"]');
+    const vecchia = det?.querySelector(':scope > .rg-param-grid');
+    if (!det || !vecchia) { buildPanel(); return; }
+    const nuova = livelliGrid();
+    vecchia.replaceWith(nuova);
+    wireLivelli(nuova);
   }
 
   // ---- azioni fisse ----
