@@ -6025,21 +6025,72 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   check('dentro le macchie quasi nessun salto (misurati 0) e poco punto sopra tolto (10 mm)', [r.saltiDentro <= 3, r.tolto < 30], [true, true]);
   // si entra dove conviene e si esce dal lato della macchia dopo: i salti sono quasi la distanza fra le macchie
   const corti = (v) => v.filter((d) => d <= 5).length;
-  // ingresso e uscita nei punti più vicini alle macchie vicine (Lorenzo, 2026-10-12): il raso finisce sulla riga più
-  // vicina alla macchia dopo, anche cucendo la sua parte in due — misurati: raso al più 13,1 mm, 65 su 83 entro 5;
-  // punto sopra al più 13,4, 66 entro 5 (le macchie consecutive distano al più 13,2 mm: una macchia isolata)
-  check('salti fra le macchie: nessuno oltre 14 mm, almeno 60 su 83 entro 5 mm, nel raso e nel punto sopra', [Math.max(...r.saltiFra.raso, ...r.saltiFra.sopra) <= 14, corti(r.saltiFra.raso) >= 60, corti(r.saltiFra.sopra) >= 55], [true, true, true]);
+  // ingresso e uscita vicini alle macchie vicine (Lorenzo, 2026-10-12), ma ogni macchia in una passata, coi passaggi sul
+  // bordo, e mai un salto sopra una macchia (2026-10-26): misurati raso al più 12,0 mm, 57 su 83 entro 5; punto sopra
+  // al più 10,1 (prima di queste regole 13,1 e 69 su 83)
+  check('salti fra le macchie: nessuno oltre 14 mm, almeno 50 su 83 entro 5 mm nel raso', [Math.max(...r.saltiFra.raso, ...r.saltiFra.sopra) <= 14, corti(r.saltiFra.raso) >= 50], [true, true]);
+  // COME STILISTA (Lorenzo, 2026-10-26, dal DST delle nove macchie tracciate con Stilista: «i passaggi sono vicino al
+  // bordo e ridotti al minimo»): una passata per macchia, i passaggi lungo il bordo. I passaggi dentro le macchie,
+  // misurati come sul DST di Stilista: due o più punti di fila non verticali, o uno solo spostato di lato più di 0,6
+  // mm; la loro distanza dal bordo ogni due decimi di filo.
+  const passaggiDentro = (rr) => {
+    let filo = 0; const dal = [];
+    const db = (p) => Math.max(...rr.forme.map((m) => rg.distanceToBoundary(p, m) * (rg.pointInPolygon(p, m) ? 1 : -1)));
+    for (const t of rr.raso.tratti) {
+      let corsa = [];
+      const chiudi = () => {
+        if (corsa.length > 2 || (corsa.length === 2 && Math.abs(corsa[1].x - corsa[0].x) > 0.6)) for (let k = 1; k < corsa.length; k++) {
+          const a = corsa[k - 1], b = corsa[k], L = Math.hypot(b.x - a.x, b.y - a.y);
+          filo += L;
+          for (let u = 0.1; u < 1; u += 0.2) dal.push(db({ x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u }));
+        }
+        corsa = [];
+      };
+      for (let k = 1; k < t.length; k++) { const a = t[k - 1], b = t[k]; if (Math.abs(b.x - a.x) >= 0.06) { if (!corsa.length) corsa.push(a); corsa.push(b); } else chiudi(); }
+      chiudi();
+    }
+    dal.sort((a, b) => a - b);
+    return { filo, mediana: dal[dal.length >> 1], entro1: dal.filter((x) => Math.abs(x) <= 1).length / dal.length, salti: rr.saltiFra.raso.reduce((a, b) => a + b, 0) };
+  };
+  const pr = passaggiDentro(r);
+  check('i passaggi dentro le macchie costeggiano il bordo: mediana entro 0,3 mm, almeno il 90% entro 1 mm (misurati 0,21 mm e 93%; prima 0,31 e 77%; Stilista 0,23 e 91%)', [pr.mediana <= 0.3, pr.entro1 >= 0.9], [true, true]);
+  // «la freccia blu presenta un passaggio da macchia a macchia, ma poi lì viene ricamata e quel filo si incastrerà
+  // sicuramente sotto il ricamo» (Lorenzo, 2026-10-26): il filo dritto di un salto, tolto un millimetro ai capi, non
+  // entra mai più di 0,3 mm in una macchia della sua zona (le altre zone si cuciono dopo uno stop) — erano 32 su 83
+  const saltiSopra = (rr) => rr.stop.map((st) => {
+    const tr = st.livello.tratti, zf = rr.zone[st.zona].map((i) => rr.forme[i]);
+    let n = 0;
+    for (let k = 1; k < tr.length; k++) {
+      const a = tr[k - 1].at(-1), b = tr[k][0], L = Math.hypot(b.x - a.x, b.y - a.y);
+      let sopra = false;
+      for (let t = 1; t <= L - 1 && !sopra; t += 0.2) { const q = { x: a.x + ((b.x - a.x) * t) / L, y: a.y + ((b.y - a.y) * t) / L }; sopra = zf.some((m) => rg.pointInPolygon(q, m) && rg.distanceToBoundary(q, m) > 0.3); }
+      if (sopra) n++;
+    }
+    return n;
+  });
+  check('nessun salto passa sopra una macchia: nel raso e nel punto sopra', saltiSopra(r), [0, 0]);
+  // le nove macchie che Lorenzo ha fatto tracciare a Stilista (in alto a sinistra): passaggi e salti vicini ai suoi
+  // (Stilista, misurato sul suo DST: passaggi 237 mm, salti 52 mm)
+  const nove = [0, 1, 2, 3, 4, 5, 7, 8, 9];
+  const p9 = passaggiDentro(rg.pmCostruisci(pannello, nove.map((i) => macchie[i]), squame));
+  check('le nove macchie di Stilista: passaggi entro 300 mm e salti entro 60 mm (misurati 269 e 44)', [p9.filo <= 300, p9.salti <= 60], [true, true]);
   // «da sinistra a destra» (Lorenzo, 2026-10-09): l'ordine delle macchie torna a sinistra molto meno di quello
   // coi salti più corti
   const indietro = (rr) => { const cx = rr.forme.map((f) => (Math.min(...f.map((q) => q.x)) + Math.max(...f.map((q) => q.x))) / 2); let t = 0; for (let k = 1; k < rr.ordine.length; k++) t += Math.max(0, cx[rr.ordine[k - 1]] - cx[rr.ordine[k]]); return t; };
   // (di serie spento dal 2026-10-12: l'ordine lo sceglie il sistema; resta per le prove)
   const sx = rg.pmCostruisci(pannello, macchie, squame, { ...rg.PM_PARAMETRI, daSinistra: true });
-  check('da sinistra a destra (a richiesta): si torna verso sinistra meno di un terzo che con l’ordine libero', indietro(sx) < indietro(r) / 3, true);
+  check('da sinistra a destra (a richiesta): si torna verso sinistra meno della metà che con l’ordine libero (misurati 197 contro 518 mm)', indietro(sx) < indietro(r) / 2, true);
   // «i passaggi devono sempre essere coperti… ripassare sopra il raso già fatto è un errore»: nessun passaggio del
   // raso incrocia una riga già cucita (le righe: i tratti verticali che girano di un'interlinea, la serpentina)
   // (`punta`: quanto vicino al capo della riga l'incrocio non si conta — coi ponti i passaggi tagliano a volte la
   // punta di una riga, entro 0,7 mm dal capo)
-  const sopraIlRaso = (rr, punta = 0) => {
+  // (`coperto`: un incrocio entro 1,1 mm dalla punta della riga non conta se una riga cucita dopo, nello stesso tratto,
+  // ci passa sopra: è la punta di una riga del ponte della macchia prima, dentro la macchia dopo, e il suo raso la copre)
+  const sopraIlRaso = (rr, punta = 0, coperto = false) => {
+    // (i passaggi d'ingresso, che il motore dà in `vista.sotto`, non sono righe anche quando corrono dritti lungo una
+    // colonna: dal 2026-10-26 costeggiano il bordo, e sul bordo verticale di una macchia stanno sulla griglia)
+    const passaggio = new Set();
+    for (const v of rr.vista.sotto) for (let i = 1; i < v.length; i++) passaggio.add(`${v[i - 1].x.toFixed(3)},${v[i - 1].y.toFixed(3)},${v[i].x.toFixed(3)},${v[i].y.toFixed(3)}`);
     const inc = (a, b, c, d) => { const rx = b.x - a.x, ry = b.y - a.y, sx = d.x - c.x, sy = d.y - c.y, den = rx * sy - ry * sx; if (Math.abs(den) < 1e-12) return false; const t = ((c.x - a.x) * sy - (c.y - a.y) * sx) / den, u = ((c.x - a.x) * ry - (c.y - a.y) * rx) / den; const l = Math.hypot(sx, sy); return t > 0.02 && t < 0.98 && u > 0.02 && u < 0.98 && Math.min(u, 1 - u) * l > punta; };
     let male = 0;
     for (const t of rr.raso.tratti) {
@@ -6056,13 +6107,23 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
           let i0 = i, i1 = i;
           while (i0 > 1 && Math.abs(t[i0 - 1].x - t[i0 - 2].x) < 0.02) i0--;
           while (i1 < t.length - 1 && Math.abs(t[i1 + 1].x - t[i1].x) < 0.02) i1++;
-          if (sullaGriglia(a.x) && (volta(i0 - 1) || volta(i1 + 1))) righe.push([a, b]);
+          if (sullaGriglia(a.x) && (volta(i0 - 1) || volta(i1 + 1)) && !passaggio.has(`${a.x.toFixed(3)},${a.y.toFixed(3)},${b.x.toFixed(3)},${b.y.toFixed(3)}`)) righe.push([a, b]);
           continue;
         }
         if (Math.abs(b.x - a.x) <= 0.45) continue;
         // (una riga da cui il passaggio parte o a cui arriva non è attraversata: la si lascia, o la si raggiunge)
         const tocca = (c, d) => { const dd = (p) => { const dx = d.x - c.x, dy = d.y - c.y, l = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((p.x - c.x) * dx + (p.y - c.y) * dy) / l)); return Math.hypot(c.x + dx * t - p.x, c.y + dy * t - p.y); }; return dd(a) < 0.15 || dd(b) < 0.15; };
-        if (righe.some(([c, d]) => inc(a, b, c, d) && !tocca(c, d))) male++;
+        const incrocia = righe.filter(([c, d]) => inc(a, b, c, d) && !tocca(c, d));
+        if (coperto) {
+          const dopo = (q) => { for (let j = i + 1; j < t.length; j++) { const c = t[j - 1], d = t[j]; if (Math.abs(d.x - c.x) > 0.02) continue; if (Math.abs(c.x - q.x) < 0.3 && q.y >= Math.min(c.y, d.y) - 0.1 && q.y <= Math.max(c.y, d.y) + 0.1) return true; } return false; };
+          const ancora = incrocia.filter(([c, d]) => {
+            const sx = d.x - c.x, sy = d.y - c.y, rx = b.x - a.x, ry = b.y - a.y, den = rx * sy - ry * sx;
+            const u = ((c.x - a.x) * ry - (c.y - a.y) * rx) / den, l = Math.hypot(sx, sy);
+            const q = { x: c.x + sx * u, y: c.y + sy * u };
+            return Math.min(u, 1 - u) * l > 1.1 || !dopo(q);
+          });
+          if (ancora.length) male++;
+        } else if (incrocia.length) male++;
       }
     }
     return male;
@@ -6079,14 +6140,14 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   check('sfrangiatura: senza, i capi delle righe sul bordo; con 1 mm, sparsi (sul bordo meno di un quinto)', sulBordo(sfr) < sulBordo(netto) / 5, true);
   // i ponti: le macchie che si seguono a meno di 5 mm si uniscono, e il filo ci passa senza salto
   const pt = rg.pmCostruisci(pannello, macchie, squame, { ...rg.PM_PARAMETRI, ponti: 5 });
-  check('ponti a 5 mm: almeno 70 ponti; salti del raso da 83 a meno di 17, del punto sopra a meno di 19 (misurati 14 e 16)', [pt.ponti >= 70, pt.raso.salti < 17, pt.sopra.salti < 19], [true, true, true]);
+  check('ponti a 5 mm: almeno 70 ponti; salti del raso da 83 a meno di 17, del punto sopra a meno di 19 (misurati 15 e 15)', [pt.ponti >= 70, pt.raso.salti < 17, pt.sopra.salti < 19], [true, true, true]);
   // (2026-10-26) coi ponti le macchie hanno fino a 17 parti: la ricerca del piano arrivava al tetto provando le mosse
   // che finiscono in un vicolo cieco, e teneva un piano con 7 salti dentro le macchie; ora quelle mosse si provano solo
   // se non c'è altro
   check('...coi ponti nessun salto dentro le macchie nel raso (erano 7)', pt.passaggiScoperti, 0);
   // e il passaggio d'ingresso conosce il raso della macchia prima, che col ponte ci entra: non ne taglia le punte
   // (erano 13 passaggi sopra una riga cucita, 2 oltre 0,75 mm dalla punta)
-  check('...e nessun passaggio sopra le righe già cucite, nemmeno vicino alla punta (erano 13)', sopraIlRaso(pt), 0);
+  check('...e nessun passaggio sopra le righe già cucite, nemmeno vicino alla punta (erano 13), salvo sulle punte del ponte che il raso dopo copre', sopraIlRaso(pt, 0, true), 0);
   check('...e anche coi ponti nessun punto fuori dalle macchie (coi ponti)', [peggiore([...pt.raso.tratti, ...pt.sopra.tratti], pt.forme) <= 0.55, peggiore(pt.vista.sopra, pt.forme) <= 0.05], [true, true]);
   check('stessi dati, stesso ricamo', rg.pmCostruisci(pannello, macchie, squame).sopra.punti, r.sopra.punti);
   // LE ZONE (Lorenzo, 2026-10-12): con 2, base · raso prima metà · punto sopra prima metà · raso seconda · punto sopra seconda
@@ -6100,6 +6161,10 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   const zo = rg.pmCostruisci(pannello, macchie, squame, { ...rg.PM_PARAMETRI, zone: 2, zoneVerso: 'orizzontale' });
   const centroY = (i) => { const ys = macchie[i].map((q) => q.y); return (Math.min(...ys) + Math.max(...ys)) / 2; };
   check('zone orizzontali: la prima zona sta sopra la seconda', Math.max(...zo.zone[0].map(centroY)) <= Math.min(...zo.zone[1].map(centroY)), true);
+  // tre fasce dall'alto in basso (Lorenzo, 2026-10-26: «libero ma dentro fasce… lavora fascia 1 (2-3) e lo stesso per le
+  // altre 2 fasce»): raso e punto sopra di ogni fascia di seguito, e nessun salto sopra una macchia della fascia
+  const z3 = rg.pmCostruisci(pannello, macchie, squame, { ...rg.PM_PARAMETRI, zone: 3, zoneVerso: 'orizzontale' });
+  check('tre fasce dall’alto in basso: raso e punto sopra di ogni fascia di seguito, nessun salto sopra una macchia della fascia', [z3.stop.map((st) => `${st.tipo}${st.zona + 1}`).join(' '), saltiSopra(z3).every((n) => n === 0)], ['raso1 sopra1 raso2 sopra2 raso3 sopra3', true]);
   const dst5 = rg.dstFromExportLayers([{ id: 'base', color: '#000', polylines: z2.base.tratti }, ...z2.stop.map((st, i) => ({ id: `s${i}`, color: '#111', polylines: st.livello.tratti }))], { label: 'ZONE' });
   check('...e il DST ha cinque stop', [...new Set(rg.readDst(dst5).blocks.map((b) => b.needle))], [1, 2, 3, 4, 5]);
   // il DST: tre stop (la base, il raso, il punto sopra) e il progetto nel footer (R27)

@@ -250,7 +250,7 @@ const ingombro = (m: Polyline): Ingombro => {
   return { x0, y0, x1, y1 };
 };
 
-export function ordinaMacchie(macchie: Polyline[], partenza?: Point, senzaSalto = 0.05, daSinistra = false): number[] {
+export function ordinaMacchie(macchie: Polyline[], partenza?: Point, senzaSalto = 0.05, daSinistra = false, tutte: Polyline[] = macchie): number[] {
   const N = macchie.length;
   if (N < 2) return macchie.map((_, i) => i);
   const bb = macchie.map(ingombro);
@@ -258,14 +258,25 @@ export function ordinaMacchie(macchie: Polyline[], partenza?: Point, senzaSalto 
   for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
     const a = bb[i], b = bb[j];
     let d = Math.hypot(Math.max(0, a.x0 - b.x1, b.x0 - a.x1), Math.max(0, a.y0 - b.y1, b.y0 - a.y1));
-    d = d < 25 ? distanzaFra(macchie[i], macchie[j]) : d + 5;
+    // (fra due macchie con un'altra in mezzo il filo del salto passerebbe sopra quella, e il suo ricamo lo imprigiona:
+    // Lorenzo, 2026-10-26 — metterle in fila costa come 200 mm di salto in più)
+    let inMezzo = false;
+    if (d < 25) {
+      if (distanzaFra(macchie[i], macchie[j]) === 0) d = 0;
+      else {
+        const [p, q, dd] = piuVicini(macchie[i], macchie[j]);
+        d = dd;
+        inMezzo = sopraAltre(p, q, tutte, macchie[i], macchie[j]);
+      }
+    } else d += 5;
     // ogni salto costa; e un salto lungo (oltre 8 mm, il filo resta lungo sul ricamo) costa il triplo per il di più
-    D[i][j] = D[j][i] = d + (d > senzaSalto ? 5 : 0) + 2 * Math.max(0, d - 8);
+    D[i][j] = D[j][i] = d + (d > senzaSalto ? 5 : 0) + 2 * Math.max(0, d - 8) + (inMezzo ? 200 : 0);
   }
   // DA SINISTRA A DESTRA (Lorenzo, 2026-10-09): tornare indietro verso sinistra costa quanto si torna indietro,
   // in più della distanza. Il costo non è più lo stesso nei due versi: si confrontano gli ordini interi.
   const cx = bb.map((q) => (q.x0 + q.x1) / 2);
   const C = (a: number, b: number) => D[a][b] + (daSinistra ? Math.max(0, cx[a] - cx[b]) : 0);
+  const asimmetrico = daSinistra;
   // si parte dalla macchia più vicina a dove finisce la base (o la prima a sinistra)
   let primo = 0;
   if (daSinistra) { for (let i = 1; i < N; i++) if (bb[i].x0 < bb[primo].x0) primo = i; }
@@ -287,7 +298,7 @@ export function ordinaMacchie(macchie: Polyline[], partenza?: Point, senzaSalto 
     // 2-opt: si gira un tratto della fila (la prima macchia resta la prima)
     for (let i = 1; i < N - 1; i++) for (let j = i + 1; j < N; j++) {
       const a = ord[i - 1], b = ord[i], cc = ord[j], d = ord[j + 1];
-      const tratto = ord.slice(i, j + 1), girato = daSinistra ? dentro(tratto.slice().reverse()) - dentro(tratto) : 0;
+      const tratto = ord.slice(i, j + 1), girato = asimmetrico ? dentro(tratto.slice().reverse()) - dentro(tratto) : 0;
       if (c(a, cc) + c(b, d) + girato < c(a, b) + c(cc, d) - 1e-6) { ord = [...ord.slice(0, i), ...ord.slice(i, j + 1).reverse(), ...ord.slice(j + 1)]; meglio = true; }
     }
     // or-opt: un gruppo di 1–3 macchie tolto da dov'è e messo dove costa meno (anche girato)
@@ -300,7 +311,7 @@ export function ordinaMacchie(macchie: Polyline[], partenza?: Point, senzaSalto 
         const a = resto[j], b = resto[j + 1];
         for (const rev of [false, true]) {
           const g0 = rev ? gruppo[L - 1] : gruppo[0], g1 = rev ? gruppo[0] : gruppo[L - 1];
-          const metti = c(a, g0) + c(g1, b) - c(a, b) + (rev && daSinistra ? dentro(gruppo.slice().reverse()) - dentro(gruppo) : 0);
+          const metti = c(a, g0) + c(g1, b) - c(a, b) + (rev && asimmetrico ? dentro(gruppo.slice().reverse()) - dentro(gruppo) : 0);
           if (togli - metti > bestGain) { bestGain = togli - metti; bestJ = j; bestRev = rev; }
         }
       }
@@ -312,6 +323,27 @@ export function ordinaMacchie(macchie: Polyline[], partenza?: Point, senzaSalto 
     }
   }
   return ord;
+}
+
+/**
+ * Se il filo dritto da `p` a `q` (tolti 0,8 mm ai capi) passa sopra una delle `tutte` le macchie (della zona: quelle
+ * delle altre zone si cuciono dopo uno stop, quando il filo del salto è già tagliato) diversa da `a` e da `b`.
+ */
+function sopraAltre(p: Point, q: Point, tutte: Polyline[], a: Polyline, b: Polyline): boolean {
+  const L = Math.hypot(q.x - p.x, q.y - p.y);
+  if (L <= 1.6) return false;
+  const x0 = Math.min(p.x, q.x), x1 = Math.max(p.x, q.x), y0 = Math.min(p.y, q.y), y1 = Math.max(p.y, q.y);
+  const altre = tutte.filter((f) => {
+    if (f === a || f === b) return false;
+    const k = ingombro(f);
+    return k.x1 >= x0 && k.x0 <= x1 && k.y1 >= y0 && k.y0 <= y1;
+  });
+  if (!altre.length) return false;
+  for (let s = 0.8; s <= L - 0.8; s += 0.2) {
+    const r = { x: p.x + ((q.x - p.x) * s) / L, y: p.y + ((q.y - p.y) * s) / L };
+    for (const f of altre) if (pointInPolygon(r, f) && distanceToBoundary(r, f) > 0.2) return true;
+  }
+  return false;
 }
 
 /** La distanza fra i contorni di due macchie (0 se si toccano o si sovrappongono). */
@@ -648,6 +680,9 @@ function rasterizza(poligoni: Polyline[], g: number, ox: number, oy: number, W: 
   return dentro;
 }
 
+/** Quanto costa, per ogni passo della griglia dei passaggi, ogni millimetro di distanza dal bordo (fino a 2 mm). */
+const PESO_BORDO = 5;
+
 /**
  * DOVE IL RASO COPRIRÀ: una griglia fine sulla macchia, e per ogni cella quante righe di raso ANCORA DA CUCIRE ci
  * passano sopra (la riga e una fascia di due decimi per parte: a 0,4 mm d'interlinea le fasce si toccano). Un
@@ -676,12 +711,17 @@ class SottoIlRaso {
     // solo dentro la macchia: dove la sfrangiatura porta il raso oltre il bordo, il passaggio non ci va
     const dentro = rasterizza([macchia], g, this.ox, this.oy, this.W, this.H);
     this.dentro = dentro;
+    const d2 = distanzeAlQuadrato(dentro, this.W, this.H);
+    this.bordo = new Float32Array(this.W * this.H);
+    for (let k = 0; k < d2.length; k++) this.bordo[k] = dentro[k] ? Math.max(0, Math.sqrt(d2[k]) - 0.5) * g : 0;
     this.ovunque = new Int32Array(this.W * this.H);
     this.fascia(righe, (k) => { if (dentro[k]) this.daCucire[k]++; this.ovunque[k]++; });
   }
   /** Come `daCucire` ma anche fuori dalla macchia (le punte sfrangiate in fuori): vale solo vicino ai capi della strada. */
   private readonly ovunque: Int32Array;
   private readonly dentro: Uint8Array;
+  /** Quanto ogni cella è lontana dal bordo della macchia, mm (0 fuori). */
+  private readonly bordo: Float32Array;
 
   /** Le celle della fascia di una riga (la riga e una cella per parte). */
   private fascia(righe: Polyline[], fai: (k: number, riga: number) => void): void {
@@ -704,9 +744,16 @@ class SottoIlRaso {
   }
 
   /** I tratti delle righe cucite, per il controllo esatto che un passaggio non le attraversi (griglia di 2 mm). */
-  private readonly cucite: Array<{ a: Point; b: Point; id: number }> = [];
+  /** (`dalCapo`: dove comincia il tratto lungo la sua riga; `lunga`: la riga intera, mm) */
+  private readonly cucite: Array<{ a: Point; b: Point; id: number; dalCapo: number; lunga: number }> = [];
   private readonly indice = new Map<string, number[]>();
-  /** Se il tratto p-q incrocia una riga già cucita (non l'ultima, da cui si riparte). */
+  /**
+   * Le righe delle macchie cucite prima (`giaCucite`, compresa quella da cui si è usciti) si possono scavalcare entro
+   * tanto dalla loro punta, mm (di solito 0).
+   */
+  puntaAltrui = 0;
+
+  /** Se il tratto p-q incrocia una riga già cucita (l'ultima, da cui si riparte, solo a metà: i capi si toccano). */
   attraversa(p: Point, q: Point): boolean {
     const G = 2, ultima = this.righeCucite, visti = new Set<number>();
     for (let gx = Math.floor(Math.min(p.x, q.x) / G); gx <= Math.floor(Math.max(p.x, q.x) / G); gx++)
@@ -714,20 +761,30 @@ class SottoIlRaso {
         for (const z of this.indice.get(`${gx},${gy}`) ?? []) {
           if (visti.has(z)) continue;
           visti.add(z);
-          const { a, b, id } = this.cucite[z];
-          if (id === ultima) continue;
+          const { a, b, id, dalCapo, lunga } = this.cucite[z];
           const rx = q.x - p.x, ry = q.y - p.y, sx = b.x - a.x, sy = b.y - a.y, den = rx * sy - ry * sx;
           if (Math.abs(den) < 1e-12) continue;
           const t = ((a.x - p.x) * sy - (a.y - p.y) * sx) / den, u = ((a.x - p.x) * ry - (a.y - p.y) * rx) / den;
-          if (t > 1e-6 && t < 1 - 1e-6 && u > -1e-6 && u < 1 + 1e-6) return true;
+          if (!(t > 1e-6 && t < 1 - 1e-6 && u > -1e-6 && u < 1 + 1e-6)) continue;
+          // l'ultima riga cucita è il solco da cui si riparte: la si può toccare vicino ai suoi capi (da lì si esce), ma
+          // non riattraversare a metà — sarebbe un filo sopra il raso appena fatto
+          if (id === ultima || (id <= 0 && this.puntaAltrui > 0)) {
+            const sulla = dalCapo + u * Math.hypot(sx, sy), tolto = id === ultima ? 0.05 : this.puntaAltrui;
+            if (sulla < tolto || lunga - sulla < tolto) continue;
+          }
+          return true;
         }
     return false;
   }
 
   private registra(r: Polyline, id: number): void {
+    let lunga = 0;
+    for (let k = 1; k < r.length; k++) lunga += Math.hypot(r[k].x - r[k - 1].x, r[k].y - r[k - 1].y);
+    let dalCapo = 0;
     for (let k = 1; k < r.length; k++) {
       const a = r[k - 1], b = r[k], n = this.cucite.length;
-      this.cucite.push({ a, b, id });
+      this.cucite.push({ a, b, id, dalCapo, lunga });
+      dalCapo += Math.hypot(b.x - a.x, b.y - a.y);
       for (let gx = Math.floor(Math.min(a.x, b.x) / 2); gx <= Math.floor(Math.max(a.x, b.x) / 2); gx++)
         for (let gy = Math.floor(Math.min(a.y, b.y) / 2); gy <= Math.floor(Math.max(a.y, b.y) / 2); gy++) {
           const c = this.indice.get(`${gx},${gy}`);
@@ -780,11 +837,18 @@ class SottoIlRaso {
     const sx = s0 % W, sy = Math.floor(s0 / W), qx = t0 % W, qy = Math.floor(t0 / W);
     const aiCapi = (v: number) => { const x = v % W, y = Math.floor(v / W); return Math.max(Math.abs(x - sx), Math.abs(y - sy)) <= 5 || Math.max(Math.abs(x - qx), Math.abs(y - qy)) <= 5; };
     const passa = (v: number) => this.daCucire[v] > 0 || v === t0 || v === s0 || (ultima > 0 && this.marca[v] === ultima) || (this.ovunque[v] > 0 && aiCapi(v));
-    /** Se il filo dritto da p a q resta coperto e non attraversa righe cucite. */
+    /**
+     * Se il filo dritto da p a q resta coperto, non attraversa righe cucite e non entra nella macchia più dei suoi due
+     * capi (più tre decimi): tirando dritta una strada che costeggia il bordo, non si taglia per l'interno.
+     */
     const libero = (p: Point, q: Point) => {
       if (this.cucite.length > 0 && this.attraversa(p, q)) return false;
+      const limite = Math.max(this.bordo[this.qui(p)], this.bordo[this.qui(q)]) + 0.3;
       const m = Math.max(1, Math.ceil(Math.hypot(q.x - p.x, q.y - p.y) / (this.g / 3)));
-      for (let t = 0; t <= m; t++) if (!passa(this.qui({ x: p.x + ((q.x - p.x) * t) / m, y: p.y + ((q.y - p.y) * t) / m }))) return false;
+      for (let t = 0; t <= m; t++) {
+        const k = this.qui({ x: p.x + ((q.x - p.x) * t) / m, y: p.y + ((q.y - p.y) * t) / m });
+        if (!passa(k) || this.bordo[k] > limite) return false;
+      }
       return true;
     };
     // prima il filo dritto: la griglia va da centro a centro di cella (0,2 mm) e, fra righe fitte, può tagliare una
@@ -813,7 +877,9 @@ class SottoIlRaso {
         const v = vy * W + vx;
         if (!passa(v) || chiuso[v]) continue;
         if (this.cucite.length > 0 && this.attraversa(this.centro(u), this.centro(v))) continue;
-        const nd = gcost[u] + 1;
+        // (2026-10-26, dal DST di Stilista) I PASSAGGI COSTEGGIANO IL BORDO: un passo costa di più quanto più è lontano
+        // dal bordo, così la strada corre nella fascia che le punte delle righe coprono, non in mezzo alla macchia
+        const nd = gcost[u] + 1 + PESO_BORDO * Math.min(2, this.bordo[v]);
         if (nd < gcost[v]) { gcost[v] = nd; prev[v] = u; heap.push([nd + h(v), v]); su(heap.length - 1); }
       }
     }
@@ -920,6 +986,88 @@ function celleDelRaso(righe: Polyline[], u: Point, interlinea: number, macchia?:
   return { celle: celle.map((c) => c.righe.map((x) => x.r)), lati };
 }
 
+/**
+ * LA STRADA VERA DI UN PASSAGGIO, per il piano: quanto è lungo andare da `a` a `b` dentro la macchia costeggiando il
+ * bordo (lo stesso costo della griglia dei passaggi: vicino al bordo un millimetro vale uno, in mezzo alla macchia di
+ * più). In linea d'aria il piano sbagliava: attorno al buco di una macchia a C quattro millimetri diventano dieci.
+ * Una mappa delle distanze per ogni punto di partenza (Dijkstra su una griglia di un quarto di millimetro), tenuta.
+ * (Griglie più grosse, da 0,4–0,5 mm, sono più svelte ma i passaggi crescevano di un sesto: provate e lasciate.)
+ */
+const STRADA_MAX = 150;
+const STRADA_BANDA = 2;
+
+function stradaVera(macchia: Polyline): (a: Point, b: Point) => number {
+  const g = 0.25, b0 = ingombro(macchia);
+  const W = Math.ceil((b0.x1 - b0.x0) / g) + 5, H = Math.ceil((b0.y1 - b0.y0) / g) + 5, ox = b0.x0 - 2 * g, oy = b0.y0 - 2 * g;
+  const tutta = rasterizza([macchia], g, ox, oy, W, H);
+  const d2 = distanzeAlQuadrato(tutta, W, H);
+  // solo la fascia entro 2 mm dal bordo: i passaggi la costeggiano, e così le mappe costano un terzo (sul pannello di
+  // prova stessi passaggi, 2.001 mm contro 1.989 con la macchia intera; 2,6 s invece di 7,9)
+  const dentro = new Uint8Array(W * H);
+  for (let k = 0; k < W * H; k++) dentro[k] = tutta[k] && (Math.sqrt(d2[k]) - 0.5) * g <= STRADA_BANDA ? 1 : 0;
+  const vicinoAlBordo = 1 + PESO_BORDO * 0.2;
+  const peso = new Float32Array(W * H);
+  for (let k = 0; k < W * H; k++) peso[k] = dentro[k] ? (1 + PESO_BORDO * Math.min(2, Math.max(0, Math.sqrt(d2[k]) - 0.5) * g)) / vicinoAlBordo : 0;
+  /** La cella dentro più vicina a p (i capi delle righe sfrangiate stanno anche mezzo millimetro fuori). */
+  const cella = (p: Point): number => {
+    const i0 = Math.floor((p.x - ox) / g), j0 = Math.floor((p.y - oy) / g);
+    let best = -1, bd = Infinity;
+    for (let r = 0; r <= 3 && best < 0; r++) for (let j = j0 - r; j <= j0 + r; j++) for (let i = i0 - r; i <= i0 + r; i++) {
+      if (i < 0 || j < 0 || i >= W || j >= H || !dentro[j * W + i]) continue;
+      const dd = (i - i0) ** 2 + (j - j0) ** 2;
+      if (dd < bd) { bd = dd; best = j * W + i; }
+    }
+    return best;
+  };
+  const mappe = new Map<number, Float32Array>();
+  const DX = [1, -1, 0, 0, 1, 1, -1, -1], DY = [0, 0, 1, -1, 1, -1, 1, -1], DL = [1, 1, 1, 1, Math.SQRT2, Math.SQRT2, Math.SQRT2, Math.SQRT2];
+  // la coda di priorità, una sola per tutte le mappe (array tipizzati: è la parte che conta nel tempo)
+  let hk = new Float64Array(1024), hv = new Int32Array(1024), n = 0;
+  const metti = (key: number, v: number) => {
+    if (n === hk.length) { const k2 = new Float64Array(n * 2), v2 = new Int32Array(n * 2); k2.set(hk); v2.set(hv); hk = k2; hv = v2; }
+    let i = n++;
+    while (i > 0) { const q = (i - 1) >> 1; if (hk[q] <= key) break; hk[i] = hk[q]; hv[i] = hv[q]; i = q; }
+    hk[i] = key; hv[i] = v;
+  };
+  const togli = () => {
+    const key = hk[--n], v = hv[n];
+    let i = 0;
+    for (;;) { const l = 2 * i + 1; if (l >= n) break; const m = l + 1 < n && hk[l + 1] < hk[l] ? l + 1 : l; if (hk[m] >= key) break; hk[i] = hk[m]; hv[i] = hv[m]; i = m; }
+    hk[i] = key; hv[i] = v;
+  };
+  const mappa = (s0: number): Float32Array => {
+    let dist = mappe.get(s0);
+    if (dist) return dist;
+    dist = new Float32Array(W * H).fill(Infinity);
+    dist[s0] = 0;
+    n = 0; metti(0, s0);
+    while (n) {
+      const du = hk[0], u = hv[0];
+      togli();
+      if (du > dist[u]) continue;
+      if (du > STRADA_MAX) break;        // (più lontano un passaggio non conviene mai: lì vale la linea d'aria per tre)
+      const ux = u % W, uy = (u - ux) / W;
+      for (let t = 0; t < 8; t++) {
+        const vx = ux + DX[t], vy = uy + DY[t];
+        if (vx < 0 || vy < 0 || vx >= W || vy >= H) continue;
+        const v = vy * W + vx;
+        if (!dentro[v]) continue;
+        const nd = du + DL[t] * g * (peso[u] + peso[v]) / 2;
+        if (nd < dist[v]) { dist[v] = nd; metti(nd, v); }
+      }
+    }
+    mappe.set(s0, dist);
+    return dist;
+  };
+  return (a, b) => {
+    const sa = cella(a), sb = cella(b);
+    if (sa < 0 || sb < 0) return Math.hypot(b.x - a.x, b.y - a.y);
+    // (dalla mappa della partenza o dell'arrivo, se è già pronta: la strada è la stessa nei due versi)
+    const v = (mappe.get(sb) ?? mappa(sa))[mappe.has(sb) ? sa : sb];
+    return Number.isFinite(v) ? v : Math.hypot(b.x - a.x, b.y - a.y) * 3;
+  };
+}
+
 /** Il piano di riserva: dalla cella più vicina, poi la più vicina a dove si è finiti. */
 function pianoVicino(celle: Polyline[][], ingresso: Point, meta: Point | null): Polyline[][] {
   const capiDi = (c: Polyline[]) => [c[0][0], c[0][c[0].length - 1], c[c.length - 1][0], c[c.length - 1][c[c.length - 1].length - 1]];
@@ -958,15 +1106,48 @@ function pianoVicino(celle: Polyline[][], ingresso: Point, meta: Point | null): 
  * sinistra a destra. Ogni millimetro fra la fine del raso e la macchia dopo costa come due celle cucite da destra.
  */
 const PESO_USCITA = 100;
+/**
+ * (2026-10-26, dal DST di Stilista) CON LE PASSATE I PASSAGGI COSTANO: ogni millimetro di passaggio dentro la macchia,
+ * misurato sulla strada vera lungo il bordo (`stradaVera`), costa 5; ogni millimetro di salto, all'ingresso e
+ * all'uscita, 20 — non più 100 l'uscita e quasi niente i passaggi. Lorenzo: «accetto salti un po' più lunghi fra le
+ * macchie». La macchia si cuce così in una passata dal lato d'ingresso a quello d'uscita, e dove la forma si divide si
+ * torna all'altro ramo col passaggio più corto. Pesi scelti misurando sulle nove macchie tracciate con Stilista.
+ */
+const PESO_PASSAGGIO = 5;
+const PESO_SALTO_MM = 20;
+/**
+ * IL FILO DI UN SALTO NON PASSA MAI SOPRA UNA MACCHIA (Lorenzo, 2026-10-26: «la freccia blu presenta un passaggio da
+ * macchia a macchia, ma poi lì viene ricamata e quel filo si incastrerà sicuramente sotto il ricamo; questo è da
+ * evitare, conviene spostare il punto di ingresso»): il raso o il punto sopra che vengono dopo lo imprigionano, e non
+ * si taglia più. Un ingresso così costa quanto dieci metri di passaggio: si sceglie solo se non ce n'è un altro.
+ */
+const COSTO_SALTO_SOPRA = 5e4;
 /** Un salto dentro la macchia, dove nessun passaggio coperto arriva: costa come 6 mm di uscita lontana. */
 const COSTO_SALTO = 1e6;
 const PENALE_SINISTRA = 50;
 
 function pianoDelRaso(
   celle: Polyline[][], lati: Array<[number, number]>, ingresso: Point, meta: Point | null, ponte: boolean, u: Point,
-  daSinistra = false,
+  daSinistra = false, passate = false, ingressoCucito = false, strada?: (a: Point, b: Point) => number,
+  saltoSopra?: (a: Point, b: Point) => boolean, ingressoVicino?: Point, versoDopo?: Point,
 ): Polyline[][] | null {
+  // i passaggi dentro la macchia si misurano sulla strada vera (lungo il bordo); il salto d'ingresso in linea d'aria
+  const lungo = (primo: boolean, a: Point, b: Point) => (strada && !(primo && !ingressoCucito) ? strada(a, b) : d(a, b));
   const PENALE_INDIETRO = daSinistra ? PENALE_SINISTRA : 0;
+  // con le passate: l'uscita lontana costa come un salto più lungo, e ogni passaggio costa; si arriva alla prima riga
+  // col salto (o, se la macchia è unita alla prima, con un passaggio)
+  const pesoUscita = passate ? PESO_SALTO_MM : PESO_USCITA;
+  const pesoVia = (primo: boolean) => (!passate ? 0.01 : primo && !ingressoCucito ? PESO_SALTO_MM : PESO_PASSAGGIO);
+  // IL SALTO D'INGRESSO (con le passate): dritto all'inizio della prima riga, se il suo filo non passa sopra una macchia
+  // (il ricamo che viene dopo lo imprigionerebbe); se no al punto del bordo più vicino all'uscita, e da lì un passaggio
+  // sotto il raso fino alle righe. Il piano prende il meno caro dei due.
+  const ingressoDiretto = (da: Point, b: Point) => {
+    const dritto = PESO_SALTO_MM * d(da, b) + (saltoSopra?.(da, b) ? COSTO_SALTO_SOPRA : 0);
+    const dalBordo = ingressoVicino ? PESO_SALTO_MM * d(da, ingressoVicino) + PESO_PASSAGGIO * (strada ? strada(ingressoVicino, b) : d(ingressoVicino, b)) : Infinity;
+    return Math.min(dritto, dalBordo);
+  };
+  const conIngresso = (primo: boolean) => passate && primo && !ingressoCucito;
+  const viaCosto = (primo: boolean, via: number, da: Point, b: Point) => (conIngresso(primo) ? ingressoDiretto(da, b) : via * lungo(primo, da, b));
   const N = celle.length;
   if (!N) return [];
   // il verso «da sinistra a destra»: perpendicolare alle righe, con la x che cresce
@@ -986,12 +1167,13 @@ function pianoDelRaso(
   // i blocchi girati si preparano una volta sola (la ricerca ne prova migliaia di combinazioni)
   const cache = new Map<string, Polyline[]>();
   const girato = (chiave: string, fai: () => Polyline[]) => { let b = cache.get(chiave); if (!b) { b = fai(); cache.set(chiave, b); } return b; };
-  const mosse = (c: number, da: Point, ultima: boolean): Mossa[] => {
+  const mosse = (c: number, da: Point, ultima: boolean, primo: boolean): Mossa[] => {
+    const via = pesoVia(primo);
     const out: Mossa[] = [];
     for (const dir of [0, 1]) {
       const righe = girato(`r${c}:${dir}`, () => (dir === 0 ? celle[c] : celle[c].slice().reverse()));
       const girate = [false, true].map((g) => girato(`s${c}:${dir}:${g}`, () => serp(righe, g)));
-      for (const b of girate) out.push({ blocchi: [b], fine: fineDi(b), lato: dir === 0 ? 'fine' : 'inizio', costo: PENALE_INDIETRO * indietro(righe) + 0.01 * d(b[0][0], da) });
+      for (const b of girate) out.push({ blocchi: [b], fine: fineDi(b), lato: dir === 0 ? 'fine' : 'inizio', costo: PENALE_INDIETRO * indietro(righe) + viaCosto(primo, via, da, b[0][0]) });
     }
     // l'ultima cella, col ponte: la riga del ponte per ultima — prima le righe da una parte, poi quelle
     // dall'altra partendo dal fondo, verso di lei (il passaggio fra le due parti corre dove il raso non c'è ancora)
@@ -1010,8 +1192,8 @@ function pianoDelRaso(
           const g0 = girato(`A${c}:${variante}:0`, () => serp(A, false)), g1 = girato(`A${c}:${variante}:1`, () => serp(A, true));
           const bA = d(g0[0][0], da) <= d(g1[0][0], da) ? g0 : g1;      // dopo la parte A si attraversa la cella stessa
           blocchi.push(bA);
-          costo += PENALE_INDIETRO * indietro(A) + 0.01 * d(bA[0][0], da);
-        } else costo += 0.01 * d(bB[0][0], da);
+          costo += PENALE_INDIETRO * indietro(A) + viaCosto(primo, via, da, bA[0][0]) + (passate ? PESO_PASSAGGIO * lungo(false, fineDi(bA), bB[0][0]) : 0);
+        } else costo += viaCosto(primo, via, da, bB[0][0]);
         blocchi.push(bB);
         out.push({ blocchi, fine: fineDi(bB), lato: 'fine', costo });
       }
@@ -1056,7 +1238,10 @@ function pianoDelRaso(
     if (fatte.size === N) {
       if (!meta) return { costo: 0, blocchi: [], dopo: null };
       const x = d(qui, meta);
-      return { costo: PESO_USCITA * x - (ponte && x < 1 ? BONUS : 0), blocchi: [], dopo: null };
+      // (e se da dove si finisce il salto verso la macchia dopo passa sopra una macchia — quasi sempre questa: si esce
+      // dal lato lontano — costa come un ingresso così)
+      const sopraUscendo = !ponte && versoDopo && saltoSopra?.(qui, versoDopo) ? COSTO_SALTO_SOPRA : 0;
+      return { costo: pesoUscita * x - (ponte && x < 1 ? BONUS : 0) + sopraUscendo, blocchi: [], dopo: null };
     }
     const chiave = chiaveFatte() + '|' + chiaveQui;
     if (memo.has(chiave)) return memo.get(chiave)!;
@@ -1088,7 +1273,7 @@ function pianoDelRaso(
     // costano un salto dopo: si provano solo se non ce n'è un'altra. Un piano senza salti c'è quasi sempre (si cuce
     // una cella che non divide il resto, finendo dal lato del resto), ma nelle macchie coi ponti, a 13–17 celle,
     // provando anche i vicoli ciechi la ricerca arrivava al tetto prima di trovarlo, e teneva un piano coi salti.
-    let candidate = libere.flatMap((t) => mosse(t, qui, ultima).map((m, mi) => ({ t, m, mi })));
+    let candidate = libere.flatMap((t) => mosse(t, qui, ultima, cur < 0).map((m, mi) => ({ t, m, mi })));
     if (!salto && !ultima) {
       const aperte = candidate.filter(({ t, m }) => {
         fatte.add(t);
@@ -1297,6 +1482,32 @@ export function costruisciMacchie(
     return pointInPolygon(dentroA, m) ? dentroA : pa;
   };
   /** Si passa dalla macchia di prima senza salto solo se il passaggio resta tutto dentro questa (si toccano, o c'è un ponte). */
+  /**
+   * Se il filo dritto di un salto da `a` a `b` passa sopra una macchia della zona (quella dove si entra, quella da cui
+   * si esce, le altre: tutte avranno sopra il raso o il punto sopra della zona, prima dello stop; quelle delle altre
+   * zone si cuciono dopo uno stop, quando il filo del salto è già tagliato): tolti 0,8 mm ai due capi, che stanno sul
+   * bordo o appena dentro (le righe sfrangiate), nessun punto più di due decimi dentro una macchia.
+   */
+  const bbF = forme.map(ingombro);
+  const memoSopra = new Map<string, boolean>();
+  let zonaOra = 0;
+  const saltoSopra = (a: Point, b: Point): boolean => {
+    const chiave = `${zonaOra}|${a.x.toFixed(3)},${a.y.toFixed(3)},${b.x.toFixed(3)},${b.y.toFixed(3)}`;
+    const v0 = memoSopra.get(chiave);
+    if (v0 !== undefined) return v0;
+    const L = Math.hypot(b.x - a.x, b.y - a.y);
+    let esito = false;
+    if (L > 1.6) {
+      const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
+      const vicine = ordini[zonaOra].filter((k) => bbF[k].x1 >= x0 && bbF[k].x0 <= x1 && bbF[k].y1 >= y0 && bbF[k].y0 <= y1).map((k) => forme[k]);
+      for (let s = 0.8; s <= L - 0.8 && !esito; s += 0.2) {
+        const p = { x: a.x + ((b.x - a.x) * s) / L, y: a.y + ((b.y - a.y) * s) / L };
+        for (const f of vicine) if (pointInPolygon(p, f) && distanceToBoundary(p, f) > 0.2) { esito = true; break; }
+      }
+    }
+    memoSopra.set(chiave, esito);
+    return esito;
+  };
   const unitoA = (da: Point | undefined, a: Point, m: Polyline) =>
     !!da && (pointInPolygon(da, m) || distanceToBoundary(da, m) < 0.05) && restaDentro(da, a, m);
 
@@ -1306,6 +1517,7 @@ export function costruisciMacchie(
   let fineStop: Point | undefined = fineBase;
   ordini.forEach((ordine, zona) => {
   if (!ordine.length) return;
+  zonaOra = zona;
 
   // ---- STOP 2: IL RASO (della zona) ----
   const stopRaso = livelloCucito();
@@ -1331,17 +1543,27 @@ export function costruisciMacchie(
     interno.giaCucite(rasoCucito.filter((r) => { const b = ingombro(r); return b.x1 > bm.x0 - 1 && b.x0 < bm.x1 + 1 && b.y1 > bm.y0 - 1 && b.y0 < bm.y1 + 1; }), uscita);
     // L'INGRESSO: il punto più vicino a dove si è usciti fra quelli che il raso coprirà. Se il passaggio da lì resta
     // dentro la macchia (le macchie si toccano, o c'è un ponte) si continua; se no è un salto.
+    // (con le PASSATE — sempre, salvo «da sinistra a destra»: se non si è uniti alla macchia prima si salta dritti
+    // all'inizio della prima riga, che il piano mette dal lato da cui si arriva — nessun passaggio dentro la macchia
+    // per arrivarci, se il filo del salto non passa sopra una macchia)
+    const passate = par.daSinistra !== true;
     const ingresso = uscita ? interno.vicino(uscita) : interno.vicino(m[0]);
     const unito = k > 0 && unitoA(uscita, ingresso, m);
-    if (k > 0 && uscita && !unito) saltiFra.raso.push(Math.hypot(ingresso.x - uscita.x, ingresso.y - uscita.y));
     const catenaRaso: Polyline = [];
     let sotto: Polyline = [ingresso];
     let senzaSotto = false;
     let fin: Point = ingresso;
-    // IL PIANO: da sinistra a destra, e ogni passaggio sotto il raso che verrà (vedi `pianoDelRaso`). Se non ce
-    // n'è uno (non è mai successo sul pannello di prova), il vecchio modo: la cella più vicina.
-    const pianoTrovato = pianoDelRaso(celle, divise.lati, ingresso, meta, asse.has(i), verso, par.daSinistra === true);
-    let blocchi = pianoTrovato ?? pianoVicino(celle.filter((c) => c.length), ingresso, meta);
+    // IL PIANO: ogni passaggio sotto il raso che verrà (vedi `pianoDelRaso`). Se non ce n'è uno (non è mai successo
+    // sul pannello di prova), il vecchio modo: la cella più vicina.
+    const daDove = passate && uscita ? uscita : ingresso;
+    const pianoTrovato = pianoDelRaso(celle, divise.lati, daDove, meta, asse.has(i), verso, par.daSinistra === true, passate, unito, passate ? stradaVera(m) : undefined, passate ? saltoSopra : undefined, uscita ? ingresso : undefined,
+      passate && k + 1 < ordine.length ? piuVicini(m, forme[ordine[k + 1]])[1] : undefined);
+    let blocchi = pianoTrovato ?? pianoVicino(celle.filter((c) => c.length), daDove, meta);
+    const primaRiga = blocchi.find((b) => b.length)?.[0]?.[0] ?? ingresso;
+    // (dritti all'inizio della prima riga solo se il filo del salto non passa sopra una macchia: se no si entra dal punto
+    // del bordo più vicino, e sotto il raso fino alle righe)
+    const saltoDritto = passate && !unito && !(uscita && saltoSopra(uscita, primaRiga));
+    if (k > 0 && uscita && !unito) { const a = saltoDritto ? primaRiga : ingresso; saltiFra.raso.push(Math.hypot(a.x - uscita.x, a.y - uscita.y)); }
     // i pezzi di raso separati da un salto (dove fra una parte e l'altra non c'è strada sotto il raso)
     const pezziRaso: Polyline[] = [catenaRaso];
     let catena = catenaRaso;
@@ -1365,10 +1587,19 @@ export function costruisciMacchie(
       if (pezziRaso.length === 1 && !catena.length) {
         // sotto il raso, fino alle righe; se una strada coperta non c'è, si salta direttamente all'inizio delle righe
         // (unite alla macchia prima, si parte da dove quella è finita: anche il primo tratto resta sotto)
-        const via = (unito && uscita ? interno.strada(uscita, righe[0][0]) : null) ?? interno.strada(ingresso, righe[0][0]);
+        const via = saltoDritto ? [righe[0][0]] : (unito && uscita ? interno.strada(uscita, righe[0][0]) : null) ?? interno.strada(ingresso, righe[0][0]);
         if (via) sotto = via; else { sotto = [righe[0][0]]; senzaSotto = true; }
       } else {
         let via = passaggio(fin, righe);
+        if (!via) {
+          // il ponte della macchia prima entra in questa fino a un millimetro (mezzo di ponte, mezzo di sfrangiatura), e
+          // le punte delle sue righe possono chiudere la strada verso il blocco previsto; il piano non le conosce. Prima
+          // di cambiare blocco o verso le si scavalca, entro 1,1 mm dalla punta: stanno dentro questa macchia, e il suo
+          // raso le copre subito dopo.
+          interno.puntaAltrui = 1.1;
+          via = passaggio(fin, righe);
+          interno.puntaAltrui = 0;
+        }
         if (!via) {
           // la strada coperta per il blocco previsto non c'è (la griglia è più severa del piano): un altro blocco, o
           // lo stesso in un altro verso, che si raggiunga coperto — prima di arrendersi al salto
@@ -1409,7 +1640,7 @@ export function costruisciMacchie(
       vista.raso.push(raso);
       uscita = raso[raso.length - 1];
     });
-    if (!pezziRaso.some((pz) => pz.length >= 2)) uscita = ingresso;
+    if (!pezziRaso.some((pz) => pz.length >= 2)) uscita = sotto[sotto.length - 1];
   });
 
   // ---- STOP 3: IL PUNTO SOPRA, sempre dentro la macchia ----
@@ -1469,7 +1700,7 @@ export function costruisciMacchie(
           const capo = giu ? p[p.length - 1] : p[0];
           if (p === riservato && capo !== (capoRis === p[0] ? p[p.length - 1] : p[0])) continue;   // si entra dall'altro capo
           const v = strade(capo);
-          const c = v ? lunghezza(v) : 1e6 + (qui ? Math.hypot(capo.x - qui.x, capo.y - qui.y) : 0);
+          const c = v ? lunghezza(v) : 1e6 + (qui ? Math.hypot(capo.x - qui.x, capo.y - qui.y) + (saltoSopra(qui, capo) ? COSTO_SALTO_SOPRA : 0) : 0);
           if (c < costo) { costo = c; best = p; rovescia = giu; via = v; }
         }
       }

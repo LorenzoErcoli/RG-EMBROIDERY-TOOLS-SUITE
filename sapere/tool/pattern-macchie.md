@@ -38,6 +38,22 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    macchie e i 2 passaggi che tagliano la punta di una riga»*. La regola 10 vale anche per le macchie allungate dal
    ponte, e quella del 2026-10-09 (mai sopra il raso già cucito) vale anche per le punte delle righe.
 12. (2026-10-26) **Il calcolo in un Web Worker**: *«passa al calcolo nel Web Worker, così la pagina non si blocca»*.
+13. (2026-10-26) **Come Stilista: una passata per macchia, passaggi sul bordo.** Lorenzo ha fatto tracciare a Stilista
+   (software di ricamo) le nove macchie in alto a sinistra del pannello di prova (`MACCHIE-DST-GESTIONE-PASSAGGI.dst`):
+   *«la divisione e i passaggi mi sembrano più precisi di quelli che il sistema crea. Soprattutto i passaggi sono vicino
+   al bordo e ridotti al minimo»*. Poi: *«Sì: una passata per macchia nel verso del giro, passaggi sul bordo, ~~ordine a
+   serpentina per fasce~~. Accetto salti un po' più lunghi fra le macchie»* (la serpentina è superata dalla 15). Questo
+   cambia la 9: ingresso e uscita restano vicini alle macchie vicine, ma non a costo di passaggi lunghi dentro.
+14. (2026-10-26) **Il filo di un salto non passa mai sopra una macchia**: *«la freccia blu presenta un passaggio da
+   macchia a macchia, ma poi lì viene ricamata e quel filo si incastrerà sicuramente sotto il ricamo; questo è da
+   evitare, conviene spostare il punto di ingresso»*. Vale per la macchia dove si entra, quella da cui si esce e quelle
+   in mezzo, nel raso e nel punto sopra — della stessa zona: le altre zone vengono dopo uno stop, e *«i fili li taglio
+   a ogni stop»* (Lorenzo, stesso giorno).
+15. (2026-10-26) **Libero, ma dentro fasce: le zone.** *«ti chiederò probabilmente di fare libero ma dentro fasce di tot
+   centimetri, perché devo essere sicuro che lo stop 3 combaci con lo stop 2 e se poi ritira è un casino… lavora fascia
+   1 (2-3) e lo stesso per le altre 2 fasce. Dentro queste fasce può lavorare in maniera libera»*. Sono le zone della
+   10, dall'alto in basso: raso e punto sopra di ogni fascia di seguito, l'ordine libero dentro. L'ordine a serpentina
+   per fasce (13) è tolto.
 
 ## Come è fatto, e perché
 - **Il punto sopra è la base stessa**, generata una volta e tagliata sulla macchia: a registro al millesimo.
@@ -86,6 +102,37 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
   pannello cancellava quello che si stava scrivendo in un campo. Un parametro cambiato a metà calcolo chiude il worker
   e ne apre un altro: il calcolo vecchio non si aspetta.
 
+- **Il DST di Stilista, letto** (2026-10-26; allineato al nostro SVG con una traslazione: l'87% dei punti cade dentro
+  le macchie, il resto sono le punte oltre il bordo). Un blocco solo, 2.502 punti, nessun salto né stop: fra una macchia
+  e l'altra punti lunghi da 3 a 11 mm (7, 52 mm), che a macchina si tagliano. Ordine 0 → 1 → 2 → 4 (in alto, da sinistra
+  a destra), 5 → 3 → 9 → 7 → 8 (in basso, da destra a sinistra). Il riempimento è un raso spezzato: colonne verticali a
+  0,25 mm cucite su e giù, punti da 3 mm sfalsati, il cambio di colonna con un punto obliquo (noi: 0,4 mm e fino a 4 mm,
+  non toccato). Ogni macchia in poche parti grandi (la 1: 30, 14 e 31 colonne), nel verso del giro; dove la forma si
+  divide, un ramo e poi l'altro, col passaggio **lungo il bordo**. Misurati coi nostri stessi conti: passaggi 237 mm, a
+  una mediana di 0,23 mm dal bordo, il 91% entro 1 mm, mai oltre 1,7; **nessun passaggio sopra una colonna già
+  cucita** (zero incroci): la regola del 2026-10-09 vale anche per Stilista.
+- **Come lo fa il motore.** (1) **La passata**: se non è unita alla macchia prima, si salta dritti all'inizio della
+  prima riga, che il piano mette dal lato da cui si arriva; il piano paga ogni millimetro di passaggio dentro 5 e ogni
+  millimetro di salto, all'ingresso e all'uscita, 20 (prima l'uscita 100 e i passaggi quasi niente). (2) I passaggi il
+  piano li misura sulla **strada vera** (`stradaVera`: la più corta lungo il bordo, su una griglia di 0,25 mm entro 2 mm
+  dal bordo): in linea d'aria, attorno al buco di una macchia a C, quattro millimetri diventano dieci. (3) La griglia
+  dei passaggi costa di più quanto più ci si allontana dal bordo (`PESO_BORDO`), e la linea dritta non entra nella
+  macchia più dei suoi capi: la strada costeggia il bordo, nella fascia che le punte delle righe coprono. (4) L'ultima
+  riga cucita, il solco da cui si riparte, si tocca solo ai capi (con i passaggi sul bordo un passaggio la
+  riattraversava a metà). (5) **Il salto non passa sopra una macchia** (`saltoSopra`, le macchie della zona): l'ingresso
+  dritto che ci passerebbe costa 50.000, e allora si entra dal punto del bordo più vicino all'uscita con un passaggio
+  sotto il raso fino alle righe; l'uscita da cui la macchia dopo non si raggiunge pulita costa lo stesso; l'ordine fa
+  pagare 200 mm alle coppie di macchie con un'altra in mezzo (`sopraAltre`); nel punto sopra un salto così costa di più.
+  (6) Le punte delle righe del ponte della macchia prima (dentro la macchia dopo fino a 1 mm) si possono scavalcare
+  entro 1,1 mm prima di cambiare parte o verso: il raso della macchia dopo le copre (`puntaAltrui`).
+- **Numeri** (pannello di prova, 84 macchie, senza ponti). Prima: passaggi dentro 2.875 mm, mediana 0,31 mm dal bordo,
+  77% entro 1 mm; salti 274 mm, il più lungo 13,1; 1 salto sopra una macchia nel raso e 1 nel punto sopra. Dopo:
+  passaggi **2.741 mm**, mediana **0,21**, **93%** entro 1 mm; salti **349 mm**, il più lungo **12,0**; **nessun salto
+  sopra una macchia**. Con 3 fasce dall'alto in basso: passaggi 2.681 mm, salti 458 mm (il più lungo 29,7), nessun
+  salto sopra una macchia della fascia. Sulle nove macchie di Stilista: passaggi 269 mm (Stilista 237), salti 44 mm
+  (Stilista 52). Coi ponti a 5 mm: 75 ponti, raso 15 salti e punto sopra 15, nessun salto dentro le macchie nel raso.
+  Il calcolo: circa 3,6 s in Node.
+
 ## Strade scartate
 - Passaggi fra le macchie sulle linee della base (27 salti in tutto): Lorenzo non vuole ricamo fra le macchie.
 - Raso e punto sopra di ogni macchia di seguito (una macchia finita, poi la successiva): Lorenzo vuole due stop.
@@ -97,8 +144,22 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
 - Il punto minimo di 1 mm sul punto sopra: tagliava gli angoli fuori dalla macchia; ora 0,5 mm e solo dove la
   scorciatoia resta dentro.
 
+- **L'ordine a serpentina per fasce** (la prima da sinistra a destra, la seconda da destra a sinistra, ogni macchia nel
+  verso della sua fascia; provato il 2026-10-26). Sulle nove macchie di Stilista dava il suo stesso ordine, ma sul
+  pannello intero le macchie alte stanno a cavallo di due fasce: salti fino a 41 mm (fascia per fascia, 51), 808 mm in
+  tutto contro 349 dell'ordine libero, e al cambio di fascia un salto sopra due macchie che nessun ingresso evitava.
+  Lorenzo: libero, dentro le zone.
+- La strada vera in linea d'aria: il piano sottostimava i passaggi attorno ai buchi. Su griglie da 0,4–0,5 mm, o solo
+  entro 1 mm dal bordo: più svelta, ma i passaggi crescevano del 10–15%. Su tutta la macchia: stessi passaggi della
+  fascia di 2 mm, ma tre volte più lenta.
+- Il salto d'ingresso sempre dritto all'inizio della prima riga: 32 salti su 83 passavano sopra la macchia (fino a
+  4,8 mm dentro), perché la prima riga che il piano sceglie sta spesso dall'altra parte.
+- Vietare il salto anche sopra le macchie delle altre zone: con tre zone dall'alto in basso le macchie di una fascia
+  sono incastrate con quelle delle altre, e l'ordine faceva salti fino a 89 mm.
+
 ## Da guardare a macchina
 - la sfrangiatura (1 mm, metà fuori) e se il bordo così è quello che serve;
 - i ponti: se il disegno li regge, e la larghezza (2 mm);
 - il filo del punto sopra posato nel verso del raso;
-- la copertura del raso sopra la base intera.
+- la copertura del raso sopra la base intera;
+- i passaggi lungo il bordo (a una mediana di 0,2 mm): che le punte delle righe li coprano davvero.
