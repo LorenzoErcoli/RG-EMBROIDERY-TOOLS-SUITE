@@ -724,20 +724,33 @@ class SottoIlRaso {
     return false;
   }
 
+  private registra(r: Polyline, id: number): void {
+    for (let k = 1; k < r.length; k++) {
+      const a = r[k - 1], b = r[k], n = this.cucite.length;
+      this.cucite.push({ a, b, id });
+      for (let gx = Math.floor(Math.min(a.x, b.x) / 2); gx <= Math.floor(Math.max(a.x, b.x) / 2); gx++)
+        for (let gy = Math.floor(Math.min(a.y, b.y) / 2); gy <= Math.floor(Math.max(a.y, b.y) / 2); gy++) {
+          const c = this.indice.get(`${gx},${gy}`);
+          if (c) c.push(n); else this.indice.set(`${gx},${gy}`, [n]);
+        }
+    }
+  }
+
+  /**
+   * Il raso delle macchie cucite prima che entra in questa: il ponte della macchia prima ci arriva dentro di mezzo
+   * millimetro (più la sfrangiatura), e il passaggio d'ingresso non deve tagliarne le punte. Solo per `attraversa`:
+   * qui sopra il raso di questa macchia è ancora tutto da fare. La riga che finisce in `partenza` (dove la macchia
+   * prima è uscita) è il solco da cui si parte, come l'ultima riga cucita: finché qui non si cuce, non si conta.
+   */
+  giaCucite(righe: Polyline[], partenza?: Point): void {
+    const da = (r: Polyline) => !!partenza && [r[0], r[r.length - 1]].some((q) => Math.hypot(q.x - partenza.x, q.y - partenza.y) < 1e-6);
+    for (const r of righe) this.registra(r, da(r) ? 0 : -1);
+  }
+
   /** Le righe appena cucite: le loro celle non sono più da cucire; l'ultima resta il solco da cui si riparte. */
   occupa(righe: Polyline[]): void {
     const base = this.righeCucite;
-    righe.forEach((r, z) => {
-      for (let k = 1; k < r.length; k++) {
-        const a = r[k - 1], b = r[k], n = this.cucite.length;
-        this.cucite.push({ a, b, id: base + z + 1 });
-        for (let gx = Math.floor(Math.min(a.x, b.x) / 2); gx <= Math.floor(Math.max(a.x, b.x) / 2); gx++)
-          for (let gy = Math.floor(Math.min(a.y, b.y) / 2); gy <= Math.floor(Math.max(a.y, b.y) / 2); gy++) {
-            const c = this.indice.get(`${gx},${gy}`);
-            if (c) c.push(n); else this.indice.set(`${gx},${gy}`, [n]);
-          }
-      }
-    });
+    righe.forEach((r, z) => this.registra(r, base + z + 1));
     this.fascia(righe, (k, z) => { if (this.daCucire[k] > 0 && this.dentro[k]) this.daCucire[k]--; if (this.ovunque[k] > 0) this.ovunque[k]--; this.marca[k] = base + z + 1; });
     this.righeCucite = base + righe.length;
   }
@@ -763,11 +776,20 @@ class SottoIlRaso {
   strada(a: Point, b: Point): Polyline | null {
     const W = this.W, n = this.daCucire.length, ultima = this.righeCucite;
     const s0 = this.qui(a), t0 = this.qui(b);
-    if (s0 === t0) return [a, b];
     // vicino ai capi (le righe sfrangiate finiscono anche mezzo millimetro fuori) vale anche il raso fuori dal bordo
     const sx = s0 % W, sy = Math.floor(s0 / W), qx = t0 % W, qy = Math.floor(t0 / W);
     const aiCapi = (v: number) => { const x = v % W, y = Math.floor(v / W); return Math.max(Math.abs(x - sx), Math.abs(y - sy)) <= 5 || Math.max(Math.abs(x - qx), Math.abs(y - qy)) <= 5; };
     const passa = (v: number) => this.daCucire[v] > 0 || v === t0 || v === s0 || (ultima > 0 && this.marca[v] === ultima) || (this.ovunque[v] > 0 && aiCapi(v));
+    /** Se il filo dritto da p a q resta coperto e non attraversa righe cucite. */
+    const libero = (p: Point, q: Point) => {
+      if (this.cucite.length > 0 && this.attraversa(p, q)) return false;
+      const m = Math.max(1, Math.ceil(Math.hypot(q.x - p.x, q.y - p.y) / (this.g / 3)));
+      for (let t = 0; t <= m; t++) if (!passa(this.qui({ x: p.x + ((q.x - p.x) * t) / m, y: p.y + ((q.y - p.y) * t) / m }))) return false;
+      return true;
+    };
+    // prima il filo dritto: la griglia va da centro a centro di cella (0,2 mm) e, fra righe fitte, può tagliare una
+    // riga che il filo dritto non tocca (la volta di mezzo millimetro dal ponte della macchia prima alla riga dopo)
+    if (libero(a, b)) return [a, b];
     const gcost = new Float64Array(n).fill(Infinity), prev = new Int32Array(n).fill(-1), chiuso = new Uint8Array(n);
     const tx = t0 % W, ty = Math.floor(t0 / W);
     const h = (k: number) => { const dx = Math.abs((k % W) - tx), dy = Math.abs(Math.floor(k / W) - ty); return Math.max(dx, dy) + 0.4142 * Math.min(dx, dy); };
@@ -790,7 +812,7 @@ class SottoIlRaso {
         if (vx < 0 || vy < 0 || vx >= W || vy >= this.H) continue;
         const v = vy * W + vx;
         if (!passa(v) || chiuso[v]) continue;
-        if (ultima > 0 && this.attraversa(this.centro(u), this.centro(v))) continue;
+        if (this.cucite.length > 0 && this.attraversa(this.centro(u), this.centro(v))) continue;
         const nd = gcost[u] + 1;
         if (nd < gcost[v]) { gcost[v] = nd; prev[v] = u; heap.push([nd + h(v), v]); su(heap.length - 1); }
       }
@@ -800,19 +822,13 @@ class SottoIlRaso {
     for (let k = t0; k !== -1; k = prev[k]) celle.push(this.centro(k));
     celle.reverse();
     // tirata dritta: dall'ultimo punto tenuto, il più lontano che si raggiunge restando coperti
-    const libero = (p: Point, q: Point) => {
-      if (ultima > 0 && this.attraversa(p, q)) return false;
-      const m = Math.max(1, Math.ceil(Math.hypot(q.x - p.x, q.y - p.y) / (this.g / 3)));
-      for (let t = 0; t <= m; t++) if (!passa(this.qui({ x: p.x + ((q.x - p.x) * t) / m, y: p.y + ((q.y - p.y) * t) / m }))) return false;
-      return true;
-    };
     const out: Polyline = [a];
     let i = 0;
     const tutte = [a, ...celle.slice(1, -1), b];
     while (i < tutte.length - 1) {
       let j = tutte.length - 1;
       while (j > i + 1 && !libero(tutte[i], tutte[j])) j--;
-      if (j === i + 1 && ultima > 0 && this.attraversa(tutte[i], tutte[j])) return null;
+      if (j === i + 1 && this.cucite.length > 0 && this.attraversa(tutte[i], tutte[j])) return null;
       out.push(tutte[j]);
       i = j;
     }
@@ -1068,14 +1084,28 @@ function pianoDelRaso(
       return visti.size < resto.length;
     };
     if (!salto) { const intere = libere.filter((t) => !spezza(t)); if (intere.length) libere = intere; }
+    // Le mosse che finiscono in un vicolo cieco (cucita la cella, nessuna cella da cucire accanto alla sua ultima riga)
+    // costano un salto dopo: si provano solo se non ce n'è un'altra. Un piano senza salti c'è quasi sempre (si cuce
+    // una cella che non divide il resto, finendo dal lato del resto), ma nelle macchie coi ponti, a 13–17 celle,
+    // provando anche i vicoli ciechi la ricerca arrivava al tetto prima di trovarlo, e teneva un piano coi salti.
+    let candidate = libere.flatMap((t) => mosse(t, qui, ultima).map((m, mi) => ({ t, m, mi })));
+    if (!salto && !ultima) {
+      const aperte = candidate.filter(({ t, m }) => {
+        fatte.add(t);
+        const ok = raggiungibili(t, ultimaRiga(m)).size > 0;
+        fatte.delete(t);
+        return ok;
+      });
+      if (aperte.length) candidate = aperte;
+    }
     let meglio: Resto = null;
-    for (const t of libere) mosse(t, qui, ultima).forEach((m, mi) => {
+    for (const { t, m, mi } of candidate) {
       fatte.add(t); maschera |= 1n << BigInt(t);
       const resto = risolvi(t, `${t}:${mi}`, m.fine, ultimaRiga(m));
       fatte.delete(t); maschera &= ~(1n << BigInt(t));
       const costo = m.costo + (salto ? COSTO_SALTO + 10 * d(qui, m.blocchi[0][0][0]) : 0);
       if (resto && (!meglio || costo + resto.costo < meglio.costo)) meglio = { costo: costo + resto.costo, blocchi: m.blocchi, dopo: resto };
-    });
+    }
     if (!troppi) memo.set(chiave, meglio);
     return meglio;
   };
@@ -1279,6 +1309,8 @@ export function costruisciMacchie(
 
   // ---- STOP 2: IL RASO (della zona) ----
   const stopRaso = livelloCucito();
+  /** Le righe di raso già cucite in questo stop (per non tagliarle entrando nelle macchie dopo). */
+  const rasoCucito: Polyline[] = [];
   let uscita: Point | undefined = fineStop;
   ordine.forEach((i, k) => {
     const m = forme[i];
@@ -1295,6 +1327,8 @@ export function costruisciMacchie(
     const celle = divise.celle
       .map((c) => c.map((r) => sfrangia(r, i, n++, dentroSfr, fuori)).filter((r): r is Polyline => !!r && r.length >= 2).map((r) => apasso(r, par.rasoPuntoMax)));
     const interno = new SottoIlRaso(m, celle.flat());
+    const bm = ingombro(m);
+    interno.giaCucite(rasoCucito.filter((r) => { const b = ingombro(r); return b.x1 > bm.x0 - 1 && b.x0 < bm.x1 + 1 && b.y1 > bm.y0 - 1 && b.y0 < bm.y1 + 1; }), uscita);
     // L'INGRESSO: il punto più vicino a dove si è usciti fra quelli che il raso coprirà. Se il passaggio da lì resta
     // dentro la macchia (le macchie si toccano, o c'è un ponte) si continua; se no è un salto.
     const ingresso = uscita ? interno.vicino(uscita) : interno.vicino(m[0]);
@@ -1330,7 +1364,8 @@ export function costruisciMacchie(
       let righe = restano.shift()!;
       if (pezziRaso.length === 1 && !catena.length) {
         // sotto il raso, fino alle righe; se una strada coperta non c'è, si salta direttamente all'inizio delle righe
-        const via = interno.strada(ingresso, righe[0][0]);
+        // (unite alla macchia prima, si parte da dove quella è finita: anche il primo tratto resta sotto)
+        const via = (unito && uscita ? interno.strada(uscita, righe[0][0]) : null) ?? interno.strada(ingresso, righe[0][0]);
         if (via) sotto = via; else { sotto = [righe[0][0]]; senzaSotto = true; }
       } else {
         let via = passaggio(fin, righe);
@@ -1361,8 +1396,10 @@ export function costruisciMacchie(
       fin = catenaRaso[catenaRaso.length - 1];
       interno.occupa(righe);
     }
+    rasoCucito.push(...celle.flat());
     const sottoCucito = enforceMinStitch(apasso(sotto, 3), RASO_PUNTO_MIN);
     const unisci = unito && !senzaSotto;
+    if (unito && senzaSotto) passaggiScoperti++;      // (unita alla macchia prima, ma all'inizio delle righe si salta)
     stopRaso.attacca(unisci && uscita ? [uscita, ...sottoCucito] : sottoCucito, !unisci);
     vista.sotto.push(sottoCucito);
     pezziRaso.forEach((pz, z) => {

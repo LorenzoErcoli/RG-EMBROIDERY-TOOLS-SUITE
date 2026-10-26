@@ -6079,10 +6079,14 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   check('sfrangiatura: senza, i capi delle righe sul bordo; con 1 mm, sparsi (sul bordo meno di un quinto)', sulBordo(sfr) < sulBordo(netto) / 5, true);
   // i ponti: le macchie che si seguono a meno di 5 mm si uniscono, e il filo ci passa senza salto
   const pt = rg.pmCostruisci(pannello, macchie, squame, { ...rg.PM_PARAMETRI, ponti: 5 });
-  check('ponti a 5 mm: almeno 70 ponti; salti del raso da 89 a meno di 42, del punto sopra da 83 a meno di 22 (misurati 37 e 19)', [pt.ponti >= 70, pt.raso.salti < 42, pt.sopra.salti < 22], [true, true, true]);
-  // LIMITE NOTO (2026-10-12): nelle strisce dei ponti, dove le righe sono corte, restano un paio di passaggi che
-  // tagliano una riga a circa un millimetro dalla punta. Da sistemare col lavoro sui ponti; qui si blocca che crescano.
-  check('...coi ponti, passaggi sopra le righe già cucite (oltre 0,75 mm dalla punta): al più 2', sopraIlRaso(pt, 0.75) <= 2, true);
+  check('ponti a 5 mm: almeno 70 ponti; salti del raso da 83 a meno di 17, del punto sopra a meno di 19 (misurati 14 e 16)', [pt.ponti >= 70, pt.raso.salti < 17, pt.sopra.salti < 19], [true, true, true]);
+  // (2026-10-26) coi ponti le macchie hanno fino a 17 parti: la ricerca del piano arrivava al tetto provando le mosse
+  // che finiscono in un vicolo cieco, e teneva un piano con 7 salti dentro le macchie; ora quelle mosse si provano solo
+  // se non c'è altro
+  check('...coi ponti nessun salto dentro le macchie nel raso (erano 7)', pt.passaggiScoperti, 0);
+  // e il passaggio d'ingresso conosce il raso della macchia prima, che col ponte ci entra: non ne taglia le punte
+  // (erano 13 passaggi sopra una riga cucita, 2 oltre 0,75 mm dalla punta)
+  check('...e nessun passaggio sopra le righe già cucite, nemmeno vicino alla punta (erano 13)', sopraIlRaso(pt), 0);
   check('...e anche coi ponti nessun punto fuori dalle macchie (coi ponti)', [peggiore([...pt.raso.tratti, ...pt.sopra.tratti], pt.forme) <= 0.55, peggiore(pt.vista.sopra, pt.forme) <= 0.05], [true, true]);
   check('stessi dati, stesso ricamo', rg.pmCostruisci(pannello, macchie, squame).sopra.punti, r.sopra.punti);
   // LE ZONE (Lorenzo, 2026-10-12): con 2, base · raso prima metà · punto sopra prima metà · raso seconda · punto sopra seconda

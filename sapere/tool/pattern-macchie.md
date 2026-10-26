@@ -34,6 +34,9 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
 10. (2026-10-12) **Dentro una macchia mai un salto**: *«i passaggi della macchia devono avvenire interni alla macchia
    stessa, e poi essere coperti»*. E **le zone**: base intera, poi raso e punto sopra della prima zona, poi della
    seconda (*«se voglio che ricami prima la prima metà e poi la seconda metà»*).
+11. (2026-10-26) **Coi ponti, niente salti dentro le macchie e niente tagli sul raso**: *«togli i 7 salti dentro le
+   macchie e i 2 passaggi che tagliano la punta di una riga»*. La regola 10 vale anche per le macchie allungate dal
+   ponte, e quella del 2026-10-09 (mai sopra il raso già cucito) vale anche per le punte delle righe.
 
 ## Come è fatto, e perché
 - **Il punto sopra è la base stessa**, generata una volta e tagliata sulla macchia: a registro al millesimo.
@@ -62,6 +65,19 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
   sull'ultima riga della serpentina, e il salto partiva da lì. La cella si cuce in due — un lato, poi l'altro dal
   fondo verso la riga più vicina alla macchia dopo — e il passaggio fra le due parti corre dove il raso non c'è
   ancora. Da 21 salti oltre 12 mm a 1 (che è la distanza vera fra due macchie isolate).
+
+- **Coi ponti, le macchie hanno molte parti** (fino a 17 sul pannello di prova) e la ricerca del piano arrivava al
+  tetto di 60.000 stati: perdeva il tempo sulle mosse che finiscono in un vicolo cieco (una parte cucita senza raso
+  da fare accanto alla sua ultima riga: costano un salto subito dopo) e teneva il piano coi salti trovato fin lì. Ma un
+  piano senza salti c'è quasi sempre: si cuce una parte che non divide il resto, finendo dal lato del resto. Quindi i
+  vicoli ciechi si provano solo se non c'è altro. 7 salti → 0, nessuna macchia arriva più al tetto (la più grande
+  18.000 stati), e il calcolo coi ponti a 5 mm scende da 6,2 a 3,4 s in Node.
+- **Il ponte entra nella macchia dopo**, di mezzo millimetro più la sfrangiatura: le sue ultime righe sono già cucite
+  quando la macchia dopo comincia. La griglia dei passaggi di una macchia deve conoscere il raso già cucito nello stop
+  attorno a lei, se no il passaggio d'ingresso ne taglia le punte (erano 13 tagli, 2 oltre 0,75 mm dalla punta). La
+  riga da cui si esce dalla macchia prima vale come solco di partenza (come l'ultima riga cucita dentro una macchia), e
+  prima della ricerca su griglia si prova il filo dritto: la griglia va da centro a centro di cella (0,2 mm) e fra le
+  righe fitte del ponte tagliava una riga che la volta dritta di mezzo millimetro non tocca.
 
 ## Strade scartate
 - Passaggi fra le macchie sulle linee della base (27 salti in tutto): Lorenzo non vuole ricamo fra le macchie.
