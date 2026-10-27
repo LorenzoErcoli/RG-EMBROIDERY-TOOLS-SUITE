@@ -112,6 +112,18 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
     `bottomRoundEnds` (0 = ovale, 100 = mezzi cerchi e tratti dritti).
 21. **La fascia sui lati lunghi nel tool** (2026-10-16): *«Fascia sui lati lunghi è importante che me lo metti dentro»* →
     `sideBandMm` (0 = tutta la rete), nel ricamo, nel pannello e nella sacca 3D.
+30. **La travetta della testa speciale** (2026-10-27): *«quando vado a ricamare la macchina sostituisce il punto con una
+    travetta orizzontale… La travetta serve per fissare un filo più grande con la testa speciale. Lavorando però andata e
+    ritorno a serpentina questo porta ad avere quadrati più piccoli e più grandi… devo poter avere delle compensazioni che
+    mi portano ad avere il mio cordone da 5… fissato sempre al centro»*. Poi, sulla simulazione: *«il sistema vale solo
+    per le linee dirette, non per lo zig zag»*, *«le travette le fa a sinistra e non a destra»* (salendo a sinistra,
+    scendendo a destra), compensare anche i bordi verticali, non i tratti orizzontali; e i punti ripetuti: *«se c'è 1 punto
+    la travetta è di un passaggio… se ne metto 2 ne fa due»*, anche uno sopra l'altro, solo su linee e incroci.
+    `tackWidthMm` (0), `tackRepeat` (1). Compensazione fatta in `dividiInParti` sulle parti (il file da cucire); il verso
+    di ogni punto dai suoi vicini (|dy| sotto il 30% = orizzontale). Verificata simulando la macchina dai punti del file:
+    95% dei centri sul disegno; restano scarti fino a 2 mm sulle punte dove la linea arriva al bordo e cambia verso.
+    Lezione: la verifica va fatta come distanza dalla linea del disegno, non accoppiando i punti per indice (nel disegno ci
+    sono punti doppi dove due pezzi si toccano, e l'indice si sfasa).
 29. **Fra i due versi: stop o passaggio fuori** (2026-10-26): chiesto perché nella simulazione la trama si spezza in due
     (lo stop fra i versi: il primo finisce a destra, il secondo riparte da sinistra), *«normalmente spezzi, con allora
     sempre entrata e uscita prima. ma possiamo anche dire non spezzare e fa un passaggio esterno al contorno con il

@@ -108,6 +108,17 @@ export type ParametriRete = {
    */
   lineLink: 'stop' | 'fuori';
   /**
+   * A linee dritte: la travetta della testa speciale, mm (0 = niente). Lorenzo, 2026-10-27: la macchina fa di ogni punto
+   * una travetta orizzontale che parte dal punto e va a SINISTRA se la linea sale, a DESTRA se scende; il cordone si
+   * fissa al centro. Andando avanti e indietro le linee si spostavano di mezza travetta da una parte e dall'altra, e
+   * le maglie venivano doppie. Compensazione: ogni punto che sale va a destra di mezza travetta, ogni punto che scende a
+   * sinistra (bordi verticali, ingressi e passaggi compresi); i tratti orizzontali restano dove sono. Solo nel file da
+   * cucire: l'anteprima mostra il disegno, cioè dove andrà il cordone.
+   */
+  tackWidthMm: number;
+  /** A linee dritte: quante volte si ripete ogni punto delle linee (anche sugli incroci): ogni punto, un passaggio di travetta. */
+  tackRepeat: number;
+  /**
    * Colonne intere nella larghezza (Lorenzo, 2026-10-21, sulla Net bag Clover 420 × 710: «se guardi i bordi laterali
    * sinistra e destra si creano delle curve strane… serve una curva migliore»). La larghezza del pezzo si divide in un
    * numero intero di colonne, ritoccando di poco la larghezza del rombo: ogni bordo laterale cade a metà della
@@ -183,6 +194,8 @@ export const PARAMETRI_RETE: ParametriRete = {
   staggerColumns: false,
   buildMode: 'zigzag',
   lineLink: 'stop',
+  tackWidthMm: 0,
+  tackRepeat: 1,
   fitColumns: false,
   entryTailMm: 10,
   spoolM: 0,
@@ -1141,6 +1154,7 @@ function dividiInParti(r: RisultatoRete, contorno: Polyline, vuoti: Polyline[], 
       passaggi.push([P, ...pts, S]);
       const marca = (q: Point): PuntoAgo => ({ x: q.x, y: q.y, tipo: 'raccordo', sovrapposto: false, sopra: false, blocco: ultimo[0].blocco });
       prima[prima.length - 1] = [...ultimo, ...pts.map(marca), ...gruppi[gi][0]];
+      // (il passaggio, nella compensazione della travetta, è un tratto come gli altri)
       prima.push(...gruppi[gi].slice(1));
       gruppi.splice(gi, 1);
     }
@@ -1148,12 +1162,34 @@ function dividiInParti(r: RisultatoRete, contorno: Polyline, vuoti: Polyline[], 
   // il filo che si può usare per parte: la rocchetta meno lo scarto, meno ingresso e uscita
   const limite = p.spoolM > 0 ? p.spoolM * 1000 * (1 - Math.max(0, Math.min(90, p.spoolMarginPct)) / 100) - 4 * coda : Infinity;
   const parti: ParteCucita[] = []; let forzati = 0;
+  // la travetta della testa speciale (solo a linee dritte): mezza travetta a destra se sale, a sinistra se scende
+  const travetta = p.buildMode === 'linee' ? Math.max(0, p.tackWidthMm) : 0, ripeti = p.buildMode === 'linee' ? Math.max(1, Math.round(p.tackRepeat)) : 1;
+  const sposta = (pl: Point[]): Point[] => {
+    if (!travetta) return pl;
+    return pl.map((q, i) => {
+      const a = pl[Math.max(0, i - 1)], c = pl[Math.min(pl.length - 1, i + 1)], dx = c.x - a.x, dy = c.y - a.y;
+      if (Math.abs(dy) < 0.3 * Math.hypot(dx, dy) || Math.hypot(dx, dy) < 1e-9) return q; // orizzontale: la travetta cade lungo il tratto
+      return { x: q.x + (dy < 0 ? 1 : -1) * travetta / 2, y: q.y }; // (in SVG y cresce verso il basso: dy < 0 = sale)
+    });
+  };
   const chiudi = (punti: Array<{ q: PuntoAgo; salto: boolean }>, perche: ParteCucita['perche']) => {
-    const tratti: Point[][] = [];
-    for (const { q, salto } of punti) { if (salto || !tratti.length) tratti.push([]); tratti[tratti.length - 1].push({ x: q.x, y: q.y }); }
+    const tratti: Point[][] = [], reti: boolean[][] = [];
+    for (const { q, salto } of punti) {
+      if (salto || !tratti.length) { tratti.push([]); reti.push([]); }
+      tratti[tratti.length - 1].push({ x: q.x, y: q.y }); reti[reti.length - 1].push(q.tipo === 'rete');
+    }
     const primo = tratti[0][0], ultimo = tratti[tratti.length - 1][tratti[tratti.length - 1].length - 1];
     const ci = codaIn(primo), cu = codaIn(ultimo);
-    const ingresso = ci ? linea(ci[1], ci[0]) : null, uscita = cu ? linea(cu[0], cu[1]) : null;
+    let ingresso = ci ? linea(ci[1], ci[0]) : null, uscita = cu ? linea(cu[0], cu[1]) : null;
+    // compensazione e ripetizioni (ogni punto delle linee, anche sugli incroci, `ripeti` volte nello stesso posto)
+    if (travetta || ripeti > 1) {
+      for (let k = 0; k < tratti.length; k++) {
+        const sp = sposta(tratti[k]);
+        tratti[k] = sp.flatMap((q, i) => (reti[k][i] && ripeti > 1 ? Array.from({ length: ripeti }, () => ({ ...q })) : [q]));
+      }
+      if (ingresso) ingresso = sposta(ingresso);
+      if (uscita) uscita = sposta(uscita);
+    }
     const filoMm = tratti.reduce((s, pl) => s + lung(pl), 0) + (ingresso ? lung(ingresso) : 0) + (uscita ? lung(uscita) : 0);
     parti.push({ ingresso, tratti: tratti.filter((pl) => pl.length > 1), uscita, filoMm, perche });
   };

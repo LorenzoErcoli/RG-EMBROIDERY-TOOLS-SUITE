@@ -77,6 +77,12 @@ const CAMPI_MISURE: Campo[] = [
 const CAMPO_COSTRUZIONE: Campo = { nome: 'buildMode', etichetta: 'Come si costruisce la rete', unita: '', passo: 1, min: 0,
   scelte: [['zigzag', 'a zig-zag: serpentine che scendono e risalgono (lenti agli incroci)'], ['linee', 'a linee dritte: prima tutte quelle di un verso, poi le altre']],
   aiuto: 'A linee dritte agli incroci le linee si attraversano: niente lenti né sovrapposizione.' };
+const CAMPI_TRAVETTA: Campo[] = [
+  { nome: 'tackWidthMm', etichetta: 'Travetta della testa speciale', unita: 'mm', passo: 0.5, min: 0, max: 20,
+    aiuto: 'La macchina fa di ogni punto una travetta che va a sinistra se la linea sale, a destra se scende; il cordone si fissa al centro. I punti si spostano di mezza travetta al contrario (salendo a destra, scendendo a sinistra, bordi verticali compresi) così il cordone cade sul disegno. 0 = niente.' },
+  { nome: 'tackRepeat', etichetta: 'Passaggi della travetta per punto', unita: '', passo: 1, min: 1, max: 10,
+    aiuto: 'Ogni punto delle linee (anche sugli incroci) ripetuto nello stesso posto: ogni ripetizione, un passaggio di travetta.' },
+];
 const CAMPO_FRA_VERSI: Campo = { nome: 'lineLink', etichetta: 'Fra un verso e l’altro', unita: '', passo: 1, min: 0,
   scelte: [['stop', 'cambio ago, con uscita e ingresso fuori sagoma'], ['fuori', 'senza fermarsi: passaggio cucito fuori sagoma']],
   aiuto: 'Senza fermarsi, il filo esce alla distanza dell’ingresso, corre cucito fuori dal contorno (nella parte che si rifila) e rientra all’inizio dell’altro verso.' };
@@ -418,7 +424,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         ['vista', 'Programma e vista', vistaGrid()],
       ]
       : [
-        ['rombo', 'Rombo e serpentina', campi([CAMPO_COSTRUZIONE, ...(par.buildMode === 'linee' ? [CAMPO_FRA_VERSI] : []), ...CAMPI_ROMBO.filter((c) => par.buildMode !== 'linee' || !SOLO_ZIGZAG.has(c.nome))])],
+        ['rombo', 'Rombo e serpentina', campi([CAMPO_COSTRUZIONE, ...(par.buildMode === 'linee' ? [CAMPO_FRA_VERSI, ...CAMPI_TRAVETTA] : []), ...CAMPI_ROMBO.filter((c) => par.buildMode !== 'linee' || !SOLO_ZIGZAG.has(c.nome))])],
         ['punti', 'Punti', campi(CAMPI_PUNTI.filter((c) => par.buildMode !== 'linee' || !SOLO_ZIGZAG.has(c.nome)))],
         ['vuoti', 'Aree vuote', campi(CAMPI_VUOTI)],
         ['filo', 'Partenze e rocchetta', campi(CAMPI_FILO)],
@@ -490,7 +496,9 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
       const salti = r.parti ? r.parti.reduce((s, pt) => s + pt.tratti.length - 1, 0) : r.misure.salti;
       $('status').textContent = `${vuoti.length} aree vuote · ${nParti} ${nParti === 1 ? 'parte' : 'parti'} (${Math.max(0, nParti - 1)} stop) · ${salti} salti · ${r.misure.tempoMs} ms`
         + (r.avviso ? ` · ${r.avviso}` : '');
-      $('points').textContent = ` · ${r.misure.punti.toLocaleString('it-IT')} punti`;
+      // i punti del file da cucire: con le parti contano anche ingressi, uscite, passaggi e i punti ripetuti della travetta
+      const nPunti = r.parti ? r.parti.reduce((s, pt) => s + (pt.ingresso?.length ?? 0) + (pt.uscita?.length ?? 0) + pt.tratti.reduce((u, pl) => u + pl.length, 0), 0) : r.misure.punti;
+      $('points').textContent = ` · ${nPunti.toLocaleString('it-IT')} punti`;
       buildPanel();
       disegna();
     }, 30);

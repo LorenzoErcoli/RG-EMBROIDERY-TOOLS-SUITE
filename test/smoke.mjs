@@ -7435,6 +7435,35 @@ console.log('\nrete-testa-speciale — rete a linee dritte: due versi, niente le
     [1, 1, true, 10, true, 'stop']);
 }
 
+// rete-testa-speciale — LA TRAVETTA DELLA TESTA SPECIALE, a linee dritte (Lorenzo, 2026-10-27): la macchina fa di ogni
+// punto una travetta orizzontale che parte dal punto e va a sinistra se la linea sale, a destra se scende; il cordone si
+// fissa al centro. Compensazione: salendo il punto va a destra di mezza travetta, scendendo a sinistra (bordi verticali
+// compresi, i tratti orizzontali no). Ogni punto delle linee ripetuto: un passaggio di travetta per ripetizione
+console.log('\nrete-testa-speciale — travetta della testa speciale: compensazione e punti ripetuti');
+{
+  const P = { ...rg.RTS_PARAMETRI, pieceSource: 'misure', totalWidth: 70, totalHeight: 60, diamondWidthMm: 10, diamondHeightMm: 17, maxStitchMm: 3, minStitchMm: 0.5, buildMode: 'linee', tackWidthMm: 5, tackRepeat: 2 };
+  const r = rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], P);
+  const segs = []; for (const b of r.blocchi) for (let i = 1; i < b.length; i++) segs.push([b[i - 1], b[i]]);
+  const dSeg = (p, a, b) => { const dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l)); return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy); };
+  // la macchina simulata: dove si fissa il cordone, dai punti del file
+  const scarti = (rr) => {
+    const e = [];
+    for (const pt of rr.parti) for (const pl0 of pt.tratti) {
+      const pl = pl0.filter((q, i) => !i || Math.hypot(q.x - pl0[i - 1].x, q.y - pl0[i - 1].y) > 1e-9);
+      pl.forEach((q, i) => { const a = pl[Math.max(0, i - 1)], c = pl[Math.min(pl.length - 1, i + 1)], dx = c.x - a.x, dy = c.y - a.y; const s = Math.abs(dy) < 0.3 * Math.hypot(dx, dy) ? 0 : dy < 0 ? -1 : 1; e.push(Math.min(...segs.map(([u, v]) => dSeg({ x: q.x + s * 2.5, y: q.y }, u, v)))); });
+    }
+    return e.sort((a, b) => a - b);
+  };
+  const con = scarti(r), senza = scarti(rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], { ...P, tackWidthMm: 0 }));
+  check('con la compensazione il cordone cade sul disegno (95% dei punti entro 0,05 mm; senza, la metà oltre 1 mm)',
+    [con[Math.floor(con.length * 0.95)] < 0.05, senza[senza.length >> 1] > 1], [true, true]);
+  const conta = (rr) => rr.parti.reduce((s, pt) => s + pt.tratti.reduce((u, pl) => u + pl.length, 0), 0);
+  const r1 = rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], { ...P, tackRepeat: 1 }), reti = r1.blocchi.flat().filter((q) => q.tipo === 'rete').length;
+  const zz = (extra) => JSON.stringify(rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], { ...P, buildMode: 'zigzag', ...extra }).parti.map((pt) => pt.tratti));
+  check('2 passaggi: ogni punto delle linee due volte (i bordi no); lo zig-zag non cambia; di partenza travetta 0 e 1 passaggio',
+    [conta(r) - conta(r1) === reti, zz({}) === zz({ tackWidthMm: 0, tackRepeat: 1 }), rg.RTS_PARAMETRI.tackWidthMm, rg.RTS_PARAMETRI.tackRepeat], [true, true, 0, 1]);
+}
+
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).
 rmSync(outDir, { recursive: true, force: true });
 console.log(failed ? `\n${failed} test falliti\n` : '\nTutti i test passati\n');

@@ -120,6 +120,16 @@ export const scheda: SchedaParametri = {
       tipo: 'enum', unita: '', opzioni: ['zigzag', 'linee'], predefinito: 'zigzag', concetto: 'modulo',
     },
     {
+      id: 'tackWidth', nome: 'tackWidthMm', etichetta: 'Travetta della testa speciale',
+      aiuto: 'A linee dritte: la macchina fa di ogni punto una travetta che va a sinistra se la linea sale, a destra se scende; il cordone si fissa al centro. I punti si spostano di mezza travetta al contrario (bordi verticali compresi, i tratti orizzontali no). 0 = niente.',
+      tipo: 'num', unita: 'mm', min: 0, max: 20, passo: 0.5, predefinito: 0, concetto: 'spostamento',
+    },
+    {
+      id: 'tackRepeat', etichetta: 'Passaggi della travetta per punto',
+      aiuto: 'A linee dritte: ogni punto delle linee (anche sugli incroci) ripetuto nello stesso posto; ogni ripetizione, un passaggio di travetta.',
+      tipo: 'int', unita: '', min: 1, max: 10, passo: 1, predefinito: 1, concetto: 'densita',
+    },
+    {
       id: 'lineLink', etichetta: 'Fra un verso e l’altro',
       aiuto: 'A linee dritte: stop = cambio ago, con uscita e ingresso fuori sagoma; fuori = senza fermarsi, il filo esce alla distanza dell’ingresso, corre cucito fuori dal contorno e rientra all’inizio dell’altro verso.',
       tipo: 'enum', unita: '', opzioni: ['stop', 'fuori'], predefinito: 'stop', concetto: 'ordine-cucitura',

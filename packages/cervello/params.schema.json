@@ -2081,6 +2081,15 @@
           "default": "zigzag",
           "x-id": "netConstruction"
         },
+        "tackWidthMm": {
+          "$ref": "#/$defs/tackWidth",
+          "default": 0,
+          "x-id": "tackWidth"
+        },
+        "tackRepeat": {
+          "$ref": "#/$defs/tackRepeat",
+          "default": 1
+        },
         "lineLink": {
           "$ref": "#/$defs/lineLink",
           "default": "stop"
@@ -5297,6 +5306,25 @@
       ],
       "x-concetto": "modulo"
     },
+    "tackWidth": {
+      "type": "number",
+      "title": "Travetta della testa speciale",
+      "description": "A linee dritte: la macchina fa di ogni punto una travetta che va a sinistra se la linea sale, a destra se scende; il cordone si fissa al centro. I punti si spostano di mezza travetta al contrario (bordi verticali compresi, i tratti orizzontali no). 0 = niente.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 20,
+      "x-passo": 0.5,
+      "x-concetto": "spostamento"
+    },
+    "tackRepeat": {
+      "type": "integer",
+      "title": "Passaggi della travetta per punto",
+      "description": "A linee dritte: ogni punto delle linee (anche sugli incroci) ripetuto nello stesso posto; ogni ripetizione, un passaggio di travetta.",
+      "minimum": 1,
+      "maximum": 10,
+      "x-passo": 1,
+      "x-concetto": "densita"
+    },
     "lineLink": {
       "type": "string",
       "title": "Fra un verso e l’altro",
@@ -5492,7 +5520,8 @@
         "satinRowSpacing",
         "rowSpacing",
         "spiralPitch",
-        "tieSpacing"
+        "tieSpacing",
+        "tackRepeat"
       ]
     },
     "interlinea": {
@@ -5667,7 +5696,8 @@
         "globalPatternOffsetX",
         "globalPatternOffsetY",
         "stripShiftMm",
-        "retraceOffsetMm"
+        "retraceOffsetMm",
+        "tackWidth"
       ]
     },
     "sovrapposizione": {
