@@ -40,6 +40,11 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 3, concetto: 'altro',
     },
     {
+      id: 'overlayMinStitch', nome: 'sopraPuntoMin', etichetta: 'Punto minimo del punto sopra',
+      aiuto: 'Al bordo della macchia la linea si ferma all’ago prima invece di lasciare un puntino; dentro, gli aghi si ridistribuiscono lungo la linea. Più alto per i fili spessi.',
+      tipo: 'num', unita: 'mm', min: 0.3, passo: 0.1, predefinito: 1, concetto: 'punto-minimo',
+    },
+    {
       id: 'bridgeMaxGap', nome: 'ponti', etichetta: 'Unisci le macchie che si seguono e distano meno di',
       aiuto: 'Un ponte di raso fra le due: il filo passa senza salto. Cambia il disegno delle macchie. 0 = mai.',
       tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 0, concetto: 'altro',

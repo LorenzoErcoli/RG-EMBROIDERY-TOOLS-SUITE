@@ -12,7 +12,10 @@ import '@rg/ui/rg.css';
 import './broccato.css';
 import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, readDstMetadata, readProjectMetadata } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
+import { testiCampo } from '@rg/cervello';
+import { scheletro, sezioneSorgente, sezione, campoNumero, campoNumeroInline, attivaCampiNumero, leggiCampo, impostaNumero, type OpzioniCampoNumero } from '@rg/ui/anatomia';
 import { hookPanZoom } from '@rg/ui/panzoom';
+import { collegaSimula, datiDaStrati, type DatiSimulazione } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import {
   type BroccatoParams, type BroccatoColorRole, type FillMode, type PixelImage,
@@ -43,8 +46,41 @@ type Vista = 'originale' | 'preparata' | 'ridotta' | 'ricamo';
 
 interface NumBind { id: string; key: keyof BroccatoParams; int?: boolean; min?: number; max?: number; }
 
+// Da quale parametro salvato (nel registro) prende i testi ogni campo; chi non è qui ha i testi nella tabella sotto.
+const CHIAVE_REGISTRO: Record<string, string> = {
+  realWidth: 'realWidthMm',
+  dpiDefault: 'dpiDefault',
+  maxWidthPx: 'maxWidthPx',
+  flattenLightMm: 'flattenLightMm',
+  smoothMm: 'smoothMm',
+  minBlobMm2: 'minBlobMm2',
+  fillAngleDeg: 'fillAngleDeg',
+  maxStitchMm: 'maxStitchMm',
+  retraceOffsetMm: 'retraceOffsetMm',
+  minStitchMm: 'minStitchMm',
+  endLockCount: 'endLockCount',
+  colorCount: 'colorCount',
+};
+
+// Testi, unità e limiti dei campi numerici (le stesse parole di prima, ora costruite da campoNumero). Il valore parte dai default del motore.
+const DATI_CAMPI: Record<string, Omit<OpzioniCampoNumero, 'id' | 'valore' | 'etichetta' | 'unita'> & Partial<Pick<OpzioniCampoNumero, 'etichetta' | 'unita'>>> = {
+  realWidth: {passo:1,min:0,largo:false},
+  dpiDefault: {passo:1,min:1,largo:false},
+  maxWidthPx: {passo:50,min:100,largo:false},
+  flattenLightMm: {passo:1,min:0,largo:false},
+  smoothMm: {passo:0.3,min:0,largo:false},
+  minBlobMm2: {passo:5,min:0,largo:false},
+  fillAngleDeg: {passo:5,min:-90,max:90,largo:false},
+  maxStitchMm: {passo:0.1,min:0.5,largo:false},
+  retraceOffsetMm: {passo:0.05,min:0,largo:false},
+  minStitchMm: {passo:0.1,min:0,largo:false},
+  endLockCount: {passo:1,min:0,max:8,largo:false},
+  colorCount: { passo: 1, min: MIN_COLORS, max: MAX_COLORS, largo: false },
+  densityAll: { etichetta: 'Stessa densità per tutti', unita: 'mm', passo: 0.1, min: 0.2, max: 3, aiuto: 'poi ritocca le righe che vuoi diverse', largo: true },
+};
+
 const NUM_BINDS: NumBind[] = [
-  { id: 'realWidthMm', key: 'realWidthMm', min: 0 },
+  { id: 'realWidth', key: 'realWidthMm', min: 0 },
   { id: 'dpiDefault', key: 'dpiDefault', int: true, min: 1 },
   { id: 'maxWidthPx', key: 'maxWidthPx', int: true, min: 100 },
   { id: 'flattenLightMm', key: 'flattenLightMm', min: 0 },
@@ -58,157 +94,81 @@ const NUM_BINDS: NumBind[] = [
 ];
 
 export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {}): void {
-  root.innerHTML = `
-  ${topbar('Broccato', opts.backHref)}
-  <div class="rg-workspace broccato-workspace">
-    <aside class="rg-workspace__panel">
-
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">01</span><h3 class="rg-param-section__title">Immagine</h3></div>
-        <div class="rg-param-grid">
-          <div class="rg-file-input rg-param-grid__wide">
-            <label class="rg-file-input__control">
-              <input type="file" id="file" accept="image/*">
-              <span class="rg-button rg-button--outline rg-button--small">Scegli un'immagine</span>
-            </label>
-            <p class="rg-file-input__status" id="fileStatus">Immagine dimostrativa</p>
-          </div>
-          <div class="rg-file-input rg-param-grid__wide">
-            <label class="rg-file-input__control">
-              <input type="file" id="reopen" accept=".svg,.dst">
-              <span class="rg-button rg-button--ghost rg-button--small">Riapri un progetto</span>
-            </label>
-            <p class="rg-file-input__status" id="reopenStatus">un .svg o .dst esportato da qui rimette i suoi parametri</p>
-          </div>
-          <label class="rg-field">
-            <span class="rg-field__label">Larghezza reale del ricamo</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="realWidthMm" type="number" min="0" step="1"><span>mm</span></span>
-            <span class="rg-field__help">0 = usa la stima al DPI qui sotto</span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">DPI di stima</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="dpiDefault" type="number" min="1" step="1"><span>dpi</span></span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Risoluzione di lavoro</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="maxWidthPx" type="number" min="100" step="50"><span>px</span></span>
-            <span class="rg-field__help">l'immagine si analizza ridotta a questa larghezza</span>
-          </label>
-        </div>
-      </section>
-
-      <details class="rg-param-section rg-disclosure" open>
-        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">02</span><span class="rg-param-section__title">Preparazione</span></summary>
-        <div class="rg-param-grid">
-          <p class="rg-field__help rg-param-grid__wide">Serve a far cadere sugli stessi aghi lo stesso motivo ripetuto in punti diversi del tessuto, dove la luce cambia.</p>
-          <label class="rg-field">
-            <span class="rg-field__label">Pareggio della luce</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="flattenLightMm" type="number" min="0" step="1"><span>mm</span></span>
-            <span class="rg-field__help">0 = spento. Tienilo fra un quinto e un terzo del motivo</span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Attenuazione della grana</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="smoothMm" type="number" min="0" step="0.3"><span>mm</span></span>
-            <span class="rg-field__help">spiana il tratteggio senza sbavare i contorni</span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Macchia più piccola</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="minBlobMm2" type="number" min="0" step="5"><span>mm²</span></span>
-            <span class="rg-field__help">sotto questa misura la macchia va al colore vicino</span>
-          </label>
-        </div>
-      </details>
-
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">03</span><h3 class="rg-param-section__title">Colori</h3></div>
-        <div class="rg-param-grid">
-          <label class="rg-field">
-            <span class="rg-field__label">Numero di colori</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="colorCount" type="number" min="${MIN_COLORS}" max="${MAX_COLORS}" step="1"><span>aghi</span></span>
-            <span class="rg-field__help">da ${MIN_COLORS} a ${MAX_COLORS}, base compresa</span>
-          </label>
-          <div class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Da dove vengono le tinte</span>
-            <div><div class="rg-segmented" id="paletteMode" role="group" aria-label="Da dove vengono le tinte">
-              <button type="button" class="rg-segmented__item rg-segmented__item--active" data-palette="auto" aria-pressed="true">Automatiche</button>
-              <button type="button" class="rg-segmented__item" data-palette="manuale" aria-pressed="false">Manuali</button>
-            </div></div>
-            <span class="rg-field__help">Automatiche: le trova il sistema. Manuali: le scegli tu col contagocce, e non vengono più ricatturate.</span>
-          </div>
-          <div class="rg-field">
-            <span class="rg-field__label">Cattura dall'immagine</span>
-            <button type="button" id="captureBtn" class="rg-button rg-button--outline rg-button--small">Cattura colori</button>
-          </div>
-          <ul class="rg-color-map rg-param-grid__wide" id="paletteList"></ul>
-          <div class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Stessa densità per tutti</span>
-            <span class="rg-cluster">
-              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="densityAll" type="number" min="0.2" max="3" step="0.1" value="0.6"><span>mm</span></span>
-              <button type="button" id="densityAllBtn" class="rg-button rg-button--outline rg-button--small">Applica a tutti</button>
-            </span>
-            <span class="rg-field__help">poi ritocca le righe che vuoi diverse</span>
-          </div>
-        </div>
-      </section>
-
-      <details class="rg-param-section rg-disclosure">
-        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">04</span><span class="rg-param-section__title">Punto</span></summary>
-        <div class="rg-param-grid">
-          <label class="rg-field">
-            <span class="rg-field__label">Orientamento delle righe</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="fillAngleDeg" type="number" min="-90" max="90" step="5"><span>\u00b0</span></span>
-            <span class="rg-field__help">0 = orizzontale, uguale per tutti i colori</span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Lunghezza del punto</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="maxStitchMm" type="number" min="0.5" step="0.1"><span>mm</span></span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Sfalsamento del ritorno</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="retraceOffsetMm" type="number" min="0" step="0.05"><span>mm</span></span>
-            <span class="rg-field__help">solo a pettine: di quanto il ritorno evita i buchi dell'andata</span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Punto minimo</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="minStitchMm" type="number" min="0" step="0.1"><span>mm</span></span>
-            <span class="rg-field__help">imposto alla fine, dopo i passaggi</span>
-          </label>
-          <label class="rg-field">
-            <span class="rg-field__label">Fermatura di uscita</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="endLockCount" type="number" min="0" max="8" step="1"><span>punti</span></span>
-            <span class="rg-field__help">0 = nessuna. Nel riferimento sono 4, prima del cambio-colore</span>
-          </label>
-        </div>
-      </details>
-
-    </aside>
-
-    <div class="rg-workspace__stage">
-      <header class="rg-workspace__stage-header">
-        <h2 class="rg-h3">Anteprima</h2>
-        <div class="rg-cluster">
-          <div>
-            <div class="rg-segmented" role="group" aria-label="Cosa guardare">
-              <button type="button" class="rg-segmented__item" data-vista="originale" aria-pressed="false">Originale</button>
-              <button type="button" class="rg-segmented__item" data-vista="preparata" aria-pressed="false">Preparata</button>
-              <button type="button" class="rg-segmented__item rg-segmented__item--active" data-vista="ridotta" aria-pressed="true">Ridotta</button>
-              <button type="button" class="rg-segmented__item" data-vista="ricamo" aria-pressed="false">Ricamo</button>
-            </div>
-          </div>
-          <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
-          <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
-          <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Esporta SVG</button>
-        </div>
-      </header>
-      <div class="rg-workspace__canvas" id="canvas">
-        <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
-      </div>
-      <footer class="rg-workspace__statusbar">
-        <span id="status">Pronto</span>
-        <span id="zoom" class="rg-mono">zoom 100%</span>
-      </footer>
+  const T = (nome: string) => testiCampo('broccato', nome);
+  const CHIAVE: Record<string, string> = { realWidth: 'realWidthMm' };
+  const campo = (id: string): string => {
+    const valore = id === 'densityAll' ? 0.6 : Number((defaultBroccatoParams as unknown as Record<string, unknown>)[CHIAVE[id] ?? id]);
+    const t = CHIAVE_REGISTRO[id] ? testiCampo('broccato', CHIAVE_REGISTRO[id]) : undefined;
+    return campoNumero({ etichetta: '', unita: '', id, ...DATI_CAMPI[id], ...(t ? { etichetta: t.etichetta, unita: t.unita, aiuto: t.aiuto } : {}), valore });
+  };
+  root.innerHTML = scheletro({
+    topbar: topbar('Broccato', opts.backHref),
+    classe: 'broccato-workspace',
+    pannello: [
+      sezioneSorgente({
+        tipo: 'immagine', accetta: 'image/*', etichettaCarica: "Scegli un'immagine", statoIniziale: 'Immagine dimostrativa',
+        larghezzaReale: false,
+        extra: `${campo('realWidth')}
+          ${campo('dpiDefault')}
+          ${campo('maxWidthPx')}`,
+      }),
+      sezione({
+        indice: 2, titolo: "Preparazione", apribile: true, aperta: true,
+        contenuto: `<div class="rg-param-grid">
+    <p class="rg-field__help rg-param-grid__wide">Serve a far cadere sugli stessi aghi lo stesso motivo ripetuto in punti diversi del tessuto, dove la luce cambia.</p>
+    ${campo('flattenLightMm')}
+    ${campo('smoothMm')}
+    ${campo('minBlobMm2')}
+  </div>`,
+      }),
+      sezione({
+        indice: 3, titolo: "Colori",
+        contenuto: `<div class="rg-param-grid">
+    ${campo('colorCount')}
+    <div class="rg-field rg-param-grid__wide">
+      <span class="rg-field__label">${T('paletteMode').etichetta}</span>
+      <div><div class="rg-segmented" id="paletteMode" role="group" aria-label="${T('paletteMode').etichetta}">
+        <button type="button" class="rg-segmented__item rg-segmented__item--active" data-palette="auto" aria-pressed="true">Automatiche</button>
+        <button type="button" class="rg-segmented__item" data-palette="manuale" aria-pressed="false">Manuali</button>
+      </div></div>
+      <span class="rg-field__help">${T('paletteMode').aiuto ?? ''}</span>
     </div>
-  </div>`;
+    <div class="rg-field">
+      <span class="rg-field__label">Cattura dall'immagine</span>
+      <button type="button" id="captureBtn" class="rg-button rg-button--outline rg-button--small">Cattura colori</button>
+    </div>
+    <ul class="rg-color-map rg-param-grid__wide" id="paletteList"></ul>
+    ${campo('densityAll')}
+  <div class="rg-cluster rg-param-grid__wide"><button type="button" id="densityAllBtn" class="rg-button rg-button--outline rg-button--small">Applica a tutti</button></div>
+  </div>`,
+      }),
+      sezione({
+        indice: 4, titolo: "Punto", apribile: true, aperta: false,
+        contenuto: `<div class="rg-param-grid">
+    ${campo('fillAngleDeg')}
+    ${campo('maxStitchMm')}
+    ${campo('retraceOffsetMm')}
+    ${campo('minStitchMm')}
+    ${campo('endLockCount')}
+  </div>`,
+      }),
+    ],
+    // L'anteprima si rifà da sola a ogni cambio: niente Genera. Le quattro viste stanno a sinistra.
+    anteprima: {
+      simula: true,
+      viste: `<div>
+        <div class="rg-segmented" role="group" aria-label="Cosa guardare">
+          <button type="button" class="rg-segmented__item" data-vista="originale" aria-pressed="false">Originale</button>
+          <button type="button" class="rg-segmented__item" data-vista="preparata" aria-pressed="false">Preparata</button>
+          <button type="button" class="rg-segmented__item rg-segmented__item--active" data-vista="ridotta" aria-pressed="true">Ridotta</button>
+          <button type="button" class="rg-segmented__item" data-vista="ricamo" aria-pressed="false">Ricamo</button>
+        </div>
+        </div>`,
+    },
+  });
+  attivaCampiNumero(root);
+  // la simulazione (U3): si collega più sotto, quando la tela e le viste esistono; fino ad allora non c'è niente da fermare
+  let sim: { ferma(): void } | null = null;
 
   const $ = (id: string) => root.querySelector<HTMLElement>(`#${id}`)!;
   const params: BroccatoParams = { ...defaultBroccatoParams, colors: [] };
@@ -222,28 +182,35 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
     $('zoom').textContent = `zoom ${Math.round(z * 100)}%`;
   });
   $('fitBtn').addEventListener('click', () => pz.fit());
+  sim = collegaSimula({
+    pulsante: $('simBtn') as HTMLButtonElement, host: $('layer'), controlli: $('simControlli'),
+    stato: (t) => { $('status').textContent = t; },
+    dati: (): DatiSimulazione | null => (ultimo ? datiDaStrati(ultimo.plan.exportLayers, { label: 'BROCCATO' }) : null),
+    ripristina: () => paint(),
+    senzaDati: "Niente da simulare: serve un'immagine con almeno un colore.",
+  });
 
   // ---- campi numerici ------------------------------------------------------
   for (const b of NUM_BINDS) {
     const el = $(b.id) as HTMLInputElement;
-    el.value = String(params[b.key]);
+    impostaNumero(el, params[b.key] as number);
     el.addEventListener('change', () => {
-      let v = b.int ? Math.round(Number(el.value)) : Number(el.value);
+      let v = b.int ? Math.round(leggiCampo(el)) : leggiCampo(el);
       if (!Number.isFinite(v)) v = Number(defaultBroccatoParams[b.key]);
       if (b.min !== undefined) v = Math.max(b.min, v);
       if (b.max !== undefined) v = Math.min(b.max, v);
       (params[b.key] as number) = v;
-      el.value = String(v);
+      impostaNumero(el, v);
       // Cambiare la preparazione cambia l'immagine su cui si sono decise le tinte → si ricattura.
       scheduleAnalyze(b.key === 'flattenLightMm' || b.key === 'smoothMm' || b.key === 'maxWidthPx');
     });
   }
 
   const countEl = $('colorCount') as HTMLInputElement;
-  countEl.value = String(params.colorCount);
+  impostaNumero(countEl, params.colorCount);
   countEl.addEventListener('change', () => {
-    params.colorCount = clampColorCount(Number(countEl.value));
-    countEl.value = String(params.colorCount);
+    params.colorCount = clampColorCount(leggiCampo(countEl));
+    impostaNumero(countEl, params.colorCount);
     scheduleAnalyze(true);
   });
 
@@ -342,7 +309,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
   }
 
   $('densityAllBtn').addEventListener('click', () => {
-    const v = Number(($('densityAll') as HTMLInputElement).value);
+    const v = leggiCampo($('densityAll') as HTMLInputElement);
     if (!Number.isFinite(v) || v <= 0) return;
     params.colors = applyDensityToAll(params.colors, v);
     buildPaletteUI();
@@ -424,25 +391,19 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
       mode.addEventListener('change', () => { params.colors[i].mode = mode.value as FillMode; scheduleAnalyze(false); });
 
       // Densità per-colore (R22): il campo compatto con le sole classi DS, come in interlace.
-      const dwrap = document.createElement('span');
-      dwrap.className = 'rg-field-with-unit';
-      dwrap.style.setProperty('--rg-input-numeric-width', '7ch');
-      const dens = document.createElement('input');
-      dens.type = 'number';
-      dens.className = 'rg-input rg-input--numeric';
-      dens.min = '0.2'; dens.max = '3'; dens.step = '0.1';
-      dens.value = String(col.densitySpacingMm);
-      dens.disabled = col.role === 'escluso';
-      dens.setAttribute('aria-label', `Densità del colore ${i + 1}`);
+      const modello = document.createElement('template');
+      modello.innerHTML = campoNumeroInline({
+        aria: `Densità del colore ${i + 1}`, unita: 'mm', valore: col.densitySpacingMm, passo: 0.1, min: 0.2, max: 3,
+        larghezza: '7ch', disabilitato: col.role === 'escluso',
+      });
+      const dwrap = modello.content.firstElementChild as HTMLElement;
+      const dens = dwrap.querySelector('input') as HTMLInputElement;
       dens.addEventListener('change', () => {
-        const v = Number(dens.value);
+        const v = leggiCampo(dens);
         if (Number.isFinite(v) && v > 0) params.colors[i].densitySpacingMm = v;
-        dens.value = String(params.colors[i].densitySpacingMm);
+        impostaNumero(dens, params.colors[i].densitySpacingMm);
         scheduleAnalyze(false);
       });
-      const unit = document.createElement('span');
-      unit.textContent = 'mm';
-      dwrap.append(dens, unit);
 
       // Ordine di cucitura: chi va prima nasconde i propri passaggi sotto chi viene dopo (R16).
       const up = document.createElement('button');
@@ -512,6 +473,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
 
   // ---- anteprima ------------------------------------------------------------
   function paint(ms?: number): void {
+    sim?.ferma();
     if (!ultimo) return;
     const { res, img, mmpp, plan } = ultimo;
     const w = img.width, h = img.height;
@@ -592,7 +554,7 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
   }
 
   // ---- import: File → <img> → <canvas> → pixel (l'unico pezzo legato al DOM) ----
-  ($('file') as HTMLInputElement).addEventListener('change', (ev) => {
+  ($('fileInput') as HTMLInputElement).addEventListener('change', (ev) => {
     const f = (ev.target as HTMLInputElement).files?.[0];
     if (!f) return;
     const url = URL.createObjectURL(f);
@@ -678,26 +640,26 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
     const salvati = meta.params as Partial<BroccatoParams> | undefined;
     if (!salvati) return false;
     Object.assign(params, salvati);
-    for (const b of NUM_BINDS) ($(b.id) as HTMLInputElement).value = String(params[b.key]);
-    countEl.value = String(params.colorCount);
+    for (const b of NUM_BINDS) impostaNumero($(b.id) as HTMLInputElement, params[b.key] as number);
+    impostaNumero(countEl, params.colorCount);
     setPaletteMode(params.paletteMode ?? 'auto');
     buildPaletteUI();
     scheduleAnalyze(false);
     return true;
   }
 
-  ($('reopen') as HTMLInputElement).addEventListener('change', async (ev) => {
+  ($('progettoInput') as HTMLInputElement).addEventListener('change', async (ev) => {
     const f = (ev.target as HTMLInputElement).files?.[0];
     if (!f) return;
     try {
       const meta = /\.dst$/i.test(f.name)
         ? readDstMetadata(new Uint8Array(await f.arrayBuffer()))
         : readProjectMetadata(await f.text());
-      $('reopenStatus').textContent = applicaParametri(meta)
+      $('progettoStatus').textContent = applicaParametri(meta)
         ? `Parametri ripristinati da ${f.name} — l'immagine va ricaricata a parte`
         : `${f.name} non contiene i parametri di questo strumento`;
     } catch (e) {
-      $('reopenStatus').textContent = `Non riesco a leggere ${f.name}: ${(e as Error).message}`;
+      $('progettoStatus').textContent = `Non riesco a leggere ${f.name}: ${(e as Error).message}`;
     }
   });
 

@@ -135,9 +135,9 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: 0, max: 30, passo: 1, predefinito: 10, concetto: 'ordine-cucitura',
     },
     {
-      id: 'spool', nome: 'spoolM', etichetta: 'Rocchetta del filo, metri',
+      id: 'spool', nome: 'spoolM', etichetta: 'Rocchetta del filo',
       aiuto: 'Prima che finisca, il filo esce su un bordo (come a fine parte) e dopo il cambio ago riparte dallo stesso punto. 0 = nessun limite.',
-      tipo: 'num', unita: '', min: 0, max: 10000, passo: 5, predefinito: 0, concetto: 'ordine-cucitura',
+      tipo: 'num', unita: '', unitaTesto: 'm', min: 0, max: 10000, passo: 5, predefinito: 0, concetto: 'ordine-cucitura',
     },
     {
       id: 'spoolMargin', nome: 'spoolMarginPct', etichetta: 'Scarto sulla rocchetta',

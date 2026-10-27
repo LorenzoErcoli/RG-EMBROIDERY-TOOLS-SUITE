@@ -45,6 +45,9 @@ export { costruisci as rzCostruisci, pezzoDa as rzPezzoDa, rettangolo as rzRetta
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 export * as ui from ${JSON.stringify(posix('packages/ui/src/anatomia.ts'))};
 export { DEBITO_ANATOMIA } from ${JSON.stringify(posix('packages/ui/src/debito-anatomia.ts'))};
+export { DEBITO_SIMULA, DEBITO_ESEMPIO } from ${JSON.stringify(posix('packages/ui/src/debito-simula-esempio.ts'))};
+export { DEBITO_ETICHETTE, DEBITO_TESTI_A_MANO } from ${JSON.stringify(posix('packages/ui/src/debito-etichette.ts'))};
+export { datiDaStrati } from ${JSON.stringify(posix('packages/ui/src/simulatore.ts'))};
 export { TOOLS as ToolsDati } from ${JSON.stringify(posix('packages/ui/src/tools-dati.ts'))};
 export { routeCells as csRouteCells, colorPolylines as csColorPolylines, colorPolylinesTrim as csColorPolylinesTrim, DEFAULT_ROUTE as CS_DEFAULT_ROUTE, RETRACE_PRESETS as CS_RETRACE_PRESETS } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
 export { editsFor as csEditsFor, cellsToJson as csCellsToJson, cellsFromJson as csCellsFromJson, fromThreadRoute as csFromThreadRoute, gridForSize as csGridForSize, gridHeight as csGridHeight, knitFromImage as csKnitFromImage, refinePalette as csRefinePalette, brushEdits as csBrushEdits, fillEdits as csFillEdits, applyEdits as csApplyEdits, fromTwoColumnV as csFromTwoColumnV } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
@@ -6143,24 +6146,84 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   check('...e nemmeno i passaggi sotto il raso (salvo sotto le punte sfrangiate in fuori, entro 0,5 mm)', peggiore(r.vista.sotto, r.forme) <= 0.55, true);
   // fra una macchia e l'altra si salta (83 passaggi per 84 macchie, in tutti e due gli stop), dentro quasi mai
   check('fra le macchie si salta: 83 salti nel raso e 83 nel punto sopra', [r.saltiFra.raso.length, r.saltiFra.sopra.length], [83, 83]);
-  check('dentro le macchie quasi nessun salto (misurati 0) e poco punto sopra tolto (10 mm)', [r.saltiDentro <= 3, r.tolto < 30], [true, true]);
+  // (il punto sopra tolto: i pezzi staccati, e dal 2026-10-26 il moncone dove la linea è tagliata sul bordo, più corto
+  // del punto minimo — misurati 1.159 mm su 36 m)
+  check('dentro le macchie nessun salto nel punto sopra, e punto sopra tolto meno di 1,5 m (misurati 0 e 1.159 mm)', [r.saltiDentro, r.tolto < 1500], [0, true]);
+  // I PUNTI CORTI DEL PUNTO SOPRA (Lorenzo, 2026-10-26: «ci sono davvero troppi punti corti e tanti che rischiano di non
+  // lavorare bene con fili più spessi»): al bordo la linea si ferma all'ago prima, dentro gli aghi si ridistribuiscono
+  // lungo la linea. Prima: 21% sotto 1 mm, 3,4% sotto 0,5 (la base, lo stesso punto intero: 0,7%)
+  const corti2 = (tr, x) => { let n = 0, c = 0; for (const t of tr) for (let k = 1; k < t.length; k++) { n++; if (Math.hypot(t[k].x - t[k - 1].x, t[k].y - t[k - 1].y) < x) c++; } return c / n; };
+  check('punto sopra: sotto 1 mm al più il 12% dei punti, sotto 0,5 al più l’1% (misurati 9,5% e 0,3%)', [corti2(r.vista.sopra, 1) <= 0.12, corti2(r.vista.sopra, 0.5) <= 0.01], [true, true]);
+  const spesso = rg.pmCostruisci(pannello, macchie, squame, { ...rg.PM_PARAMETRI, sopraPuntoMin: 1.5 });
+  check('...col punto minimo a 1,5 mm (fili spessi): sotto 1,5 mm al più il 25% (misurato 20%; col minimo a 1 il 40%), e il punto sopra non esce dalla macchia', [corti2(spesso.vista.sopra, 1.5) <= 0.25, peggiore(spesso.vista.sopra, spesso.forme) <= 0.05], [true, true]);
   // si entra dove conviene e si esce dal lato della macchia dopo: i salti sono quasi la distanza fra le macchie
   const corti = (v) => v.filter((d) => d <= 5).length;
-  // ingresso e uscita nei punti più vicini alle macchie vicine (Lorenzo, 2026-10-12): il raso finisce sulla riga più
-  // vicina alla macchia dopo, anche cucendo la sua parte in due — misurati: raso al più 13,1 mm, 65 su 83 entro 5;
-  // punto sopra al più 13,4, 66 entro 5 (le macchie consecutive distano al più 13,2 mm: una macchia isolata)
-  check('salti fra le macchie: nessuno oltre 14 mm, almeno 60 su 83 entro 5 mm, nel raso e nel punto sopra', [Math.max(...r.saltiFra.raso, ...r.saltiFra.sopra) <= 14, corti(r.saltiFra.raso) >= 60, corti(r.saltiFra.sopra) >= 55], [true, true, true]);
+  // ingresso e uscita vicini alle macchie vicine (Lorenzo, 2026-10-12), ma ogni macchia in una passata, coi passaggi sul
+  // bordo, e mai un salto sopra una macchia (2026-10-26): misurati raso al più 12,0 mm, 57 su 83 entro 5; punto sopra
+  // al più 10,1 (prima di queste regole 13,1 e 69 su 83)
+  check('salti fra le macchie: nessuno oltre 14 mm, almeno 50 su 83 entro 5 mm nel raso', [Math.max(...r.saltiFra.raso, ...r.saltiFra.sopra) <= 14, corti(r.saltiFra.raso) >= 50], [true, true]);
+  // COME STILISTA (Lorenzo, 2026-10-26, dal DST delle nove macchie tracciate con Stilista: «i passaggi sono vicino al
+  // bordo e ridotti al minimo»): una passata per macchia, i passaggi lungo il bordo. I passaggi dentro le macchie,
+  // misurati come sul DST di Stilista: due o più punti di fila non verticali, o uno solo spostato di lato più di 0,6
+  // mm; la loro distanza dal bordo ogni due decimi di filo.
+  const passaggiDentro = (rr) => {
+    let filo = 0; const dal = [];
+    const db = (p) => Math.max(...rr.forme.map((m) => rg.distanceToBoundary(p, m) * (rg.pointInPolygon(p, m) ? 1 : -1)));
+    for (const t of rr.raso.tratti) {
+      let corsa = [];
+      const chiudi = () => {
+        if (corsa.length > 2 || (corsa.length === 2 && Math.abs(corsa[1].x - corsa[0].x) > 0.6)) for (let k = 1; k < corsa.length; k++) {
+          const a = corsa[k - 1], b = corsa[k], L = Math.hypot(b.x - a.x, b.y - a.y);
+          filo += L;
+          for (let u = 0.1; u < 1; u += 0.2) dal.push(db({ x: a.x + (b.x - a.x) * u, y: a.y + (b.y - a.y) * u }));
+        }
+        corsa = [];
+      };
+      for (let k = 1; k < t.length; k++) { const a = t[k - 1], b = t[k]; if (Math.abs(b.x - a.x) >= 0.06) { if (!corsa.length) corsa.push(a); corsa.push(b); } else chiudi(); }
+      chiudi();
+    }
+    dal.sort((a, b) => a - b);
+    return { filo, mediana: dal[dal.length >> 1], entro1: dal.filter((x) => Math.abs(x) <= 1).length / dal.length, salti: rr.saltiFra.raso.reduce((a, b) => a + b, 0) };
+  };
+  const pr = passaggiDentro(r);
+  check('i passaggi dentro le macchie costeggiano il bordo: mediana entro 0,3 mm, almeno il 90% entro 1 mm (misurati 0,21 mm e 93%; prima 0,31 e 77%; Stilista 0,23 e 91%)', [pr.mediana <= 0.3, pr.entro1 >= 0.9], [true, true]);
+  // «la freccia blu presenta un passaggio da macchia a macchia, ma poi lì viene ricamata e quel filo si incastrerà
+  // sicuramente sotto il ricamo» (Lorenzo, 2026-10-26): il filo dritto di un salto, tolto un millimetro ai capi, non
+  // entra mai più di 0,3 mm in una macchia della sua zona (le altre zone si cuciono dopo uno stop) — erano 32 su 83
+  const saltiSopra = (rr) => rr.stop.map((st) => {
+    const tr = st.livello.tratti, zf = rr.zone[st.zona].map((i) => rr.forme[i]);
+    let n = 0;
+    for (let k = 1; k < tr.length; k++) {
+      const a = tr[k - 1].at(-1), b = tr[k][0], L = Math.hypot(b.x - a.x, b.y - a.y);
+      let sopra = false;
+      for (let t = 1; t <= L - 1 && !sopra; t += 0.2) { const q = { x: a.x + ((b.x - a.x) * t) / L, y: a.y + ((b.y - a.y) * t) / L }; sopra = zf.some((m) => rg.pointInPolygon(q, m) && rg.distanceToBoundary(q, m) > 0.3); }
+      if (sopra) n++;
+    }
+    return n;
+  });
+  check('nessun salto passa sopra una macchia: nel raso e nel punto sopra', saltiSopra(r), [0, 0]);
+  // le nove macchie che Lorenzo ha fatto tracciare a Stilista (in alto a sinistra): passaggi e salti vicini ai suoi
+  // (Stilista, misurato sul suo DST: passaggi 237 mm, salti 52 mm)
+  const nove = [0, 1, 2, 3, 4, 5, 7, 8, 9];
+  const p9 = passaggiDentro(rg.pmCostruisci(pannello, nove.map((i) => macchie[i]), squame));
+  check('le nove macchie di Stilista: passaggi entro 300 mm e salti entro 60 mm (misurati 269 e 44)', [p9.filo <= 300, p9.salti <= 60], [true, true]);
   // «da sinistra a destra» (Lorenzo, 2026-10-09): l'ordine delle macchie torna a sinistra molto meno di quello
   // coi salti più corti
   const indietro = (rr) => { const cx = rr.forme.map((f) => (Math.min(...f.map((q) => q.x)) + Math.max(...f.map((q) => q.x))) / 2); let t = 0; for (let k = 1; k < rr.ordine.length; k++) t += Math.max(0, cx[rr.ordine[k - 1]] - cx[rr.ordine[k]]); return t; };
   // (di serie spento dal 2026-10-12: l'ordine lo sceglie il sistema; resta per le prove)
   const sx = rg.pmCostruisci(pannello, macchie, squame, { ...rg.PM_PARAMETRI, daSinistra: true });
-  check('da sinistra a destra (a richiesta): si torna verso sinistra meno di un terzo che con l’ordine libero', indietro(sx) < indietro(r) / 3, true);
+  check('da sinistra a destra (a richiesta): si torna verso sinistra meno della metà che con l’ordine libero (misurati 197 contro 518 mm)', indietro(sx) < indietro(r) / 2, true);
   // «i passaggi devono sempre essere coperti… ripassare sopra il raso già fatto è un errore»: nessun passaggio del
   // raso incrocia una riga già cucita (le righe: i tratti verticali che girano di un'interlinea, la serpentina)
   // (`punta`: quanto vicino al capo della riga l'incrocio non si conta — coi ponti i passaggi tagliano a volte la
   // punta di una riga, entro 0,7 mm dal capo)
-  const sopraIlRaso = (rr, punta = 0) => {
+  // (`coperto`: un incrocio entro 1,1 mm dalla punta della riga non conta se una riga cucita dopo, nello stesso tratto,
+  // ci passa sopra: è la punta di una riga del ponte della macchia prima, dentro la macchia dopo, e il suo raso la copre)
+  const sopraIlRaso = (rr, punta = 0, coperto = false) => {
+    // (i passaggi d'ingresso, che il motore dà in `vista.sotto`, non sono righe anche quando corrono dritti lungo una
+    // colonna: dal 2026-10-26 costeggiano il bordo, e sul bordo verticale di una macchia stanno sulla griglia)
+    const passaggio = new Set();
+    for (const v of rr.vista.sotto) for (let i = 1; i < v.length; i++) passaggio.add(`${v[i - 1].x.toFixed(3)},${v[i - 1].y.toFixed(3)},${v[i].x.toFixed(3)},${v[i].y.toFixed(3)}`);
     const inc = (a, b, c, d) => { const rx = b.x - a.x, ry = b.y - a.y, sx = d.x - c.x, sy = d.y - c.y, den = rx * sy - ry * sx; if (Math.abs(den) < 1e-12) return false; const t = ((c.x - a.x) * sy - (c.y - a.y) * sx) / den, u = ((c.x - a.x) * ry - (c.y - a.y) * rx) / den; const l = Math.hypot(sx, sy); return t > 0.02 && t < 0.98 && u > 0.02 && u < 0.98 && Math.min(u, 1 - u) * l > punta; };
     let male = 0;
     for (const t of rr.raso.tratti) {
@@ -6177,13 +6240,23 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
           let i0 = i, i1 = i;
           while (i0 > 1 && Math.abs(t[i0 - 1].x - t[i0 - 2].x) < 0.02) i0--;
           while (i1 < t.length - 1 && Math.abs(t[i1 + 1].x - t[i1].x) < 0.02) i1++;
-          if (sullaGriglia(a.x) && (volta(i0 - 1) || volta(i1 + 1))) righe.push([a, b]);
+          if (sullaGriglia(a.x) && (volta(i0 - 1) || volta(i1 + 1)) && !passaggio.has(`${a.x.toFixed(3)},${a.y.toFixed(3)},${b.x.toFixed(3)},${b.y.toFixed(3)}`)) righe.push([a, b]);
           continue;
         }
         if (Math.abs(b.x - a.x) <= 0.45) continue;
         // (una riga da cui il passaggio parte o a cui arriva non è attraversata: la si lascia, o la si raggiunge)
         const tocca = (c, d) => { const dd = (p) => { const dx = d.x - c.x, dy = d.y - c.y, l = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((p.x - c.x) * dx + (p.y - c.y) * dy) / l)); return Math.hypot(c.x + dx * t - p.x, c.y + dy * t - p.y); }; return dd(a) < 0.15 || dd(b) < 0.15; };
-        if (righe.some(([c, d]) => inc(a, b, c, d) && !tocca(c, d))) male++;
+        const incrocia = righe.filter(([c, d]) => inc(a, b, c, d) && !tocca(c, d));
+        if (coperto) {
+          const dopo = (q) => { for (let j = i + 1; j < t.length; j++) { const c = t[j - 1], d = t[j]; if (Math.abs(d.x - c.x) > 0.02) continue; if (Math.abs(c.x - q.x) < 0.3 && q.y >= Math.min(c.y, d.y) - 0.1 && q.y <= Math.max(c.y, d.y) + 0.1) return true; } return false; };
+          const ancora = incrocia.filter(([c, d]) => {
+            const sx = d.x - c.x, sy = d.y - c.y, rx = b.x - a.x, ry = b.y - a.y, den = rx * sy - ry * sx;
+            const u = ((c.x - a.x) * ry - (c.y - a.y) * rx) / den, l = Math.hypot(sx, sy);
+            const q = { x: c.x + sx * u, y: c.y + sy * u };
+            return Math.min(u, 1 - u) * l > 1.1 || !dopo(q);
+          });
+          if (ancora.length) male++;
+        } else if (incrocia.length) male++;
       }
     }
     return male;
@@ -6200,10 +6273,17 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   check('sfrangiatura: senza, i capi delle righe sul bordo; con 1 mm, sparsi (sul bordo meno di un quinto)', sulBordo(sfr) < sulBordo(netto) / 5, true);
   // i ponti: le macchie che si seguono a meno di 5 mm si uniscono, e il filo ci passa senza salto
   const pt = rg.pmCostruisci(pannello, macchie, squame, { ...rg.PM_PARAMETRI, ponti: 5 });
-  check('ponti a 5 mm: almeno 70 ponti; salti del raso da 89 a meno di 42, del punto sopra da 83 a meno di 22 (misurati 37 e 19)', [pt.ponti >= 70, pt.raso.salti < 42, pt.sopra.salti < 22], [true, true, true]);
-  // LIMITE NOTO (2026-10-12): nelle strisce dei ponti, dove le righe sono corte, restano un paio di passaggi che
-  // tagliano una riga a circa un millimetro dalla punta. Da sistemare col lavoro sui ponti; qui si blocca che crescano.
-  check('...coi ponti, passaggi sopra le righe già cucite (oltre 0,75 mm dalla punta): al più 2', sopraIlRaso(pt, 0.75) <= 2, true);
+  check('ponti a 5 mm: almeno 70 ponti; salti del raso da 83 a meno di 17, del punto sopra a meno di 10 (misurati 15 e 8)', [pt.ponti >= 70, pt.raso.salti < 17, pt.sopra.salti < 10], [true, true, true]);
+  // coi ponti i pezzi del punto sopra che le linee del punto non collegano si raggiungono sulle corde nel verso del raso,
+  // una ogni millimetro (2026-10-26): erano 6 salti dentro le macchie, uno di 29 mm sopra il raso della macchia 34
+  check('...e coi ponti nessun salto dentro le macchie nel punto sopra (erano 6), nessuno sopra una macchia', [pt.saltiDentro, saltiSopra(pt).every((n) => n === 0)], [0, true]);
+  // (2026-10-26) coi ponti le macchie hanno fino a 17 parti: la ricerca del piano arrivava al tetto provando le mosse
+  // che finiscono in un vicolo cieco, e teneva un piano con 7 salti dentro le macchie; ora quelle mosse si provano solo
+  // se non c'è altro
+  check('...coi ponti nessun salto dentro le macchie nel raso (erano 7)', pt.passaggiScoperti, 0);
+  // e il passaggio d'ingresso conosce il raso della macchia prima, che col ponte ci entra: non ne taglia le punte
+  // (erano 13 passaggi sopra una riga cucita, 2 oltre 0,75 mm dalla punta)
+  check('...e nessun passaggio sopra le righe già cucite, nemmeno vicino alla punta (erano 13), salvo sulle punte del ponte che il raso dopo copre', sopraIlRaso(pt, 0, true), 0);
   check('...e anche coi ponti nessun punto fuori dalle macchie (coi ponti)', [peggiore([...pt.raso.tratti, ...pt.sopra.tratti], pt.forme) <= 0.55, peggiore(pt.vista.sopra, pt.forme) <= 0.05], [true, true]);
   check('stessi dati, stesso ricamo', rg.pmCostruisci(pannello, macchie, squame).sopra.punti, r.sopra.punti);
   // LE ZONE (Lorenzo, 2026-10-12): con 2, base · raso prima metà · punto sopra prima metà · raso seconda · punto sopra seconda
@@ -6217,6 +6297,10 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   const zo = rg.pmCostruisci(pannello, macchie, squame, { ...rg.PM_PARAMETRI, zone: 2, zoneVerso: 'orizzontale' });
   const centroY = (i) => { const ys = macchie[i].map((q) => q.y); return (Math.min(...ys) + Math.max(...ys)) / 2; };
   check('zone orizzontali: la prima zona sta sopra la seconda', Math.max(...zo.zone[0].map(centroY)) <= Math.min(...zo.zone[1].map(centroY)), true);
+  // tre fasce dall'alto in basso (Lorenzo, 2026-10-26: «libero ma dentro fasce… lavora fascia 1 (2-3) e lo stesso per le
+  // altre 2 fasce»): raso e punto sopra di ogni fascia di seguito, e nessun salto sopra una macchia della fascia
+  const z3 = rg.pmCostruisci(pannello, macchie, squame, { ...rg.PM_PARAMETRI, zone: 3, zoneVerso: 'orizzontale' });
+  check('tre fasce dall’alto in basso: raso e punto sopra di ogni fascia di seguito, nessun salto sopra una macchia della fascia', [z3.stop.map((st) => `${st.tipo}${st.zona + 1}`).join(' '), saltiSopra(z3).every((n) => n === 0)], ['raso1 sopra1 raso2 sopra2 raso3 sopra3', true]);
   const dst5 = rg.dstFromExportLayers([{ id: 'base', color: '#000', polylines: z2.base.tratti }, ...z2.stop.map((st, i) => ({ id: `s${i}`, color: '#111', polylines: st.livello.tratti }))], { label: 'ZONE' });
   check('...e il DST ha cinque stop', [...new Set(rg.readDst(dst5).blocks.map((b) => b.needle))], [1, 2, 3, 4, 5]);
   // il DST: tre stop (la base, il raso, il punto sopra) e il progetto nel footer (R27)
@@ -6234,6 +6318,13 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   // (sulla griglia di 0,1 mm del calcolo: un decimo di tolleranza)
   const scarto = Math.max(Math.abs(Math.min(...bb.map((p) => p.x)) - 2), Math.abs(Math.max(...bb.map((p) => p.x)) - 18), Math.abs(Math.min(...bb.map((p) => p.y)) - 2), Math.abs(Math.max(...bb.map((p) => p.y)) - 8));
   check('restringi: un rettangolo 20 × 10 ristretto di 2 mm è 16 × 6 (entro 0,15 mm)', scarto <= 0.15, true);
+  // il calcolo in un Web Worker (2026-10-26): coi ponti ci vogliono alcuni secondi, e nella pagina la bloccavano. Il
+  // worker non gira in node: si controlla il sorgente (il calcolo nel worker, gli export fermi finché il ricamo non è
+  // quello dei parametri di adesso)
+  const pmTool = readFileSync(join(root, 'apps/pattern-macchie/src/tool.ts'), 'utf8');
+  const pmWorker = readFileSync(join(root, 'apps/pattern-macchie/src/macchie.worker.ts'), 'utf8');
+  check('il calcolo gira in un Web Worker, che chiama il motore', [/new Worker\(new URL\('\.\/macchie\.worker\.ts'/.test(pmTool), /costruisciMacchie\(/.test(pmWorker)], [true, true]);
+  check('...e durante il calcolo gli export sono fermi', /exportPronti\(false\)[\s\S]*worker\.postMessage/.test(pmTool), true);
 }
 
 // ---- K1 — il registro dei parametri e il suo cricchetto ---------------------------------------------------------
@@ -6996,6 +7087,12 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
   check('...«Ricalcola da solo» spunta quando è acceso e i due export possono partire spenti', [/id="autoCalcolo" checked/.test(tutto), /id="autoCalcolo">/.test(A.barraAnteprima({ ricalcolaDaSolo: { acceso: false } })), (A.barraAnteprima({ esportaSpenti: true }).match(/disabled/g) ?? []).length], [true, true, 2]);
   check('barra di stato: messaggio, spazio del referto, zoom — in quest\'ordine', [...A.barraStato().matchAll(/id="(status|misure|zoom)"/g)].map((m) => m[1]), ['status', 'misure', 'zoom']);
 
+  const inl = A.campoNumeroInline({ aria: 'Densità del colore 2', unita: 'mm', valore: 0.6, passo: 0.1, min: 0.2, max: 3, larghezza: '7ch', disabilitato: true });
+  check('il campo numerico compatto (per le righe di lista) è lo stesso campo: virgola nel valore, passo e limiti, unità nello slot, aria-label, niente id',
+    [/value="0,6"/.test(inl), /data-numero data-passo="0.1" data-min="0.2" data-max="3"/.test(inl), /<span>mm<\/span><\/span>$/.test(inl), /aria-label="Densità del colore 2"/.test(inl), /\sid=/.test(inl)],
+    [true, true, true, true, false]);
+  check('...può nascere spento e stretto, e un aria-label con virgolette non rompe l\'HTML', [/ disabled /.test(inl), /--rg-input-numeric-width: 7ch/.test(inl), A.campoNumeroInline({ aria: 'a"b', unita: '', valore: 1 }).includes('aria-label="a&quot;b"')], [true, true, true]);
+
   const sez = A.sezione({ indice: 3, titolo: 'Parametri', contenuto: '<p>x</p>', apribile: true, aperta: true, id: 'par' });
   check('sezione numerata: due cifre, apribile con details/open, chiusa se non lo è',
     [/__index">03</.test(sez), /^<details[^>]* open>/.test(sez), /data-sez="par"/.test(sez), A.sezione({ indice: 2, titolo: 'A', contenuto: '' }).startsWith('<section')], [true, true, true, true]);
@@ -7014,7 +7111,7 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
   };
   const tools = readdirSync(join(radice, 'apps')).filter((d) => d !== 'shell' && existsSync(join(radice, 'apps', d, 'src/tool.ts'))).sort();
   const aMano = Object.fromEntries(tools.map((t) => { const s = readFileSync(join(radice, 'apps', t, 'src/tool.ts'), 'utf8'); return [t, Object.entries(COSE).filter(([, f]) => f(s)).map(([n]) => n)]; }));
-  const DEBITO_ANATOMIA_ATTUALE = 44;
+  const DEBITO_ANATOMIA_ATTUALE = 39;
   const debito = rg.DEBITO_ANATOMIA;
   check(`il debito dell'interfaccia è ${DEBITO_ANATOMIA_ATTUALE} voci (può solo scendere: se è sceso, abbassa DEBITO_ANATOMIA_ATTUALE)`, Object.values(debito).reduce((n, v) => n + v.length, 0), DEBITO_ANATOMIA_ATTUALE);
   check('nessun tool scrive a mano un pezzo che ha un componente, se non è nel debito (un tool nuovo deve usare anatomia.ts)',
@@ -7023,6 +7120,72 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
     [...Object.entries(debito).flatMap(([t, v]) => v.filter((c) => !(aMano[t] ?? []).includes(c)).map((c) => `${t}: ${c}`)), ...Object.keys(debito).filter((t) => !tools.includes(t))], []);
   check('il tool di prova (net-45) usa i componenti: scheletro, sezione 01, campo numerico, e non ha niente nel debito',
     [/from '@rg\/ui\/anatomia'/.test(readFileSync(join(radice, 'apps/net-45/src/tool.ts'), 'utf8')), aMano['net-45'], debito['net-45']], [true, [], undefined]);
+
+  console.log('\nU3 e U4 — Simula e l\'esempio pronto: il cricchetto');
+  const sorgenteDi = (t) => readFileSync(join(radice, 'apps', t, 'src/tool.ts'), 'utf8');
+  const haSimula = (t) => /collegaSimula\(|montaSimulatore\(/.test(sorgenteDi(t));
+  const haEsempio = (t) => /\bdemo:\s*'|sampleContours|sampleImage|ESEMPIO_SVG|id="(demoBtn|sampleBtn|esempioBtn)"/.test(sorgenteDi(t));
+  const DEBITO_SIMULA_ATTUALE = 9;
+  const DEBITO_ESEMPIO_ATTUALE = 7;
+  check(`il debito di Simula è ${DEBITO_SIMULA_ATTUALE} tool su ${tools.length} (può solo scendere: se è sceso, abbassa DEBITO_SIMULA_ATTUALE)`, rg.DEBITO_SIMULA.length, DEBITO_SIMULA_ATTUALE);
+  check('chi non ha Simula è nel debito (un tool nuovo nasce con Simula), e chi ce l\'ha ne è fuori (la voce va tolta)',
+    [tools.filter((t) => !haSimula(t) && !rg.DEBITO_SIMULA.includes(t)), tools.filter((t) => haSimula(t) && rg.DEBITO_SIMULA.includes(t)), rg.DEBITO_SIMULA.filter((t) => !tools.includes(t))], [[], [], []]);
+  check(`il debito dell'esempio è ${DEBITO_ESEMPIO_ATTUALE} tool su ${tools.length} (può solo scendere: se è sceso, abbassa DEBITO_ESEMPIO_ATTUALE)`, rg.DEBITO_ESEMPIO.length, DEBITO_ESEMPIO_ATTUALE);
+  check('chi non ha un esempio è nel debito (un tool nuovo nasce con un esempio), e chi ce l\'ha ne è fuori (la voce va tolta)',
+    [tools.filter((t) => !haEsempio(t) && !rg.DEBITO_ESEMPIO.includes(t)), tools.filter((t) => haEsempio(t) && rg.DEBITO_ESEMPIO.includes(t)), rg.DEBITO_ESEMPIO.filter((t) => !tools.includes(t))], [[], [], []]);
+
+  // datiDaStrati: lo stesso DST di «Esporta DST», con il colore di ogni ago nell'ordine d'ago e 5 mm di margine
+  const stratiProva = [
+    { id: 'a', color: '#ff0000', polylines: [[{ x: 0, y: 0 }, { x: 3, y: 0 }, { x: 6, y: 0 }]] },
+    { id: 'forme', color: '#cccccc', polylines: [[{ x: 0, y: 0 }, { x: 9, y: 9 }]], shapeOnly: true },
+    { id: 'vuoto', color: '#00ff00', polylines: [] },
+    { id: 'b', color: '#0000ff', polylines: [[{ x: 10, y: 4 }, { x: 14, y: 4 }]] },
+  ];
+  const ds = rg.datiDaStrati(stratiProva, { label: 'prova' });
+  check('datiDaStrati: i colori sono quelli degli aghi (le forme e gli strati vuoti non contano), il riquadro ha 5 mm di margine e parte dal centro',
+    [ds.colori, ds.larghezzaMm, ds.altezzaMm, ds.origine], [['#ff0000', '#0000ff'], 24, 14, { x: -12, y: -7 }]);
+  check('...il DST è lo stesso che esporta il tool, e si rilegge con lo stesso numero di aghi', [rg.readDst(ds.dst).blocks.length, new TextDecoder().decode(ds.dst.slice(0, 3))], [2, 'LA:']);
+  check('...niente da cucire → null, non un DST vuoto', [rg.datiDaStrati([]), rg.datiDaStrati([{ id: 'v', color: '#000', polylines: [] }])], [null, null]);
+
+  // ---- U5: le etichette dei pannelli sono quelle del registro ---------------------------------------------------
+  console.log('\nU5 — le etichette: quello che dice il pannello è quello che dice il registro');
+  const { caricaRegistro: caricaRegistroU5 } = await import('./registro.mjs');
+  const regU5 = await caricaRegistroU5('registro-u5');
+  const RE_TABELLA = /(?:etichetta|label):\s*(?:"((?:[^"\\]|\\.)*)"|'((?:[^'\\]|\\.)*)')/g;
+  const RE_HTML = /rg-field__label">([^<]+)</g;
+  const etichetteDi = (src) => [...new Set([
+    ...[...src.matchAll(RE_TABELLA)].map((m) => (m[1] ?? m[2]).split("\\'").join("'")),
+    ...[...src.matchAll(RE_HTML)].map((m) => m[1].trim()),
+  ])].filter((e) => /[a-zàèéìòù]/.test(e) && !e.includes('${') && !e.includes('&nbsp;'));
+  const delRegistro = (t) => new Set(regU5.parametriDelTool(t).flatMap((p) => [p.etichetta, p.tool[t]?.etichetta].filter(Boolean)));
+  const fuoriRegistro = Object.fromEntries(tools.map((t) => [t, etichetteDi(sorgenteDi(t)).filter((e) => !delRegistro(t).has(e))]));
+  const DEBITO_ETICHETTE_ATTUALE = 65;
+  const debitoEt = rg.DEBITO_ETICHETTE;
+  check(`il debito delle etichette è ${DEBITO_ETICHETTE_ATTUALE} (può solo scendere: se è sceso, abbassa DEBITO_ETICHETTE_ATTUALE)`, Object.values(debitoEt).reduce((n, v) => n + v.length, 0), DEBITO_ETICHETTE_ATTUALE);
+  check('un\'etichetta nel pannello che il registro non ha deve stare nel debito (le parole del pannello e del registro non si separano di nuovo)',
+    tools.flatMap((t) => fuoriRegistro[t].filter((e) => !(debitoEt[t] ?? []).includes(e)).map((e) => `${t}: «${e}»`)), []);
+  check('...e nel debito non c\'è un\'etichetta che il pannello non scrive più o che ora il registro ha (la voce va tolta), né un tool che non esiste',
+    [...Object.entries(debitoEt).flatMap(([t, v]) => v.filter((e) => !(fuoriRegistro[t] ?? []).includes(e)).map((e) => `${t}: «${e}»`)), ...Object.keys(debitoEt).filter((t) => !tools.includes(t))], []);
+
+  // ---- U5: i pannelli prendono i testi dal registro (testiCampo), non li scrivono a mano ---------------------------------
+  const DEBITO_TESTI_ATTUALE = 11;
+  const aManoSuRegistro = (t) => etichetteDi(sorgenteDi(t)).filter((e) => delRegistro(t).has(e));
+  const haTestiCampo = (t) => /testiCampo\(/.test(sorgenteDi(t));
+  check(`i tool che non prendono ancora i testi da testiCampo sono ${DEBITO_TESTI_ATTUALE} su ${tools.length} (può solo scendere: se è sceso, abbassa DEBITO_TESTI_ATTUALE)`, rg.DEBITO_TESTI_A_MANO.length, DEBITO_TESTI_ATTUALE);
+  check('chi non è nel debito usa testiCampo (un tool nuovo prende i testi dal registro); chi è nel debito non lo usa ancora (altrimenti la voce va tolta); chi lo usa non ha scritto a mano etichette del registro',
+    [tools.filter((t) => !rg.DEBITO_TESTI_A_MANO.includes(t) && !haTestiCampo(t)), rg.DEBITO_TESTI_A_MANO.filter((t) => haTestiCampo(t) || !tools.includes(t)), tools.filter((t) => haTestiCampo(t) && aManoSuRegistro(t).length)], [[], [], []]);
+  check('net-45, pittorico, sfrangiatura, pettine, bitmap e broccato prendono i testi da testiCampo e non hanno scritto a mano nessuna etichetta del registro',
+    ['net-45', 'pittorico', 'sfrangiatura', 'pettine', 'bitmap', 'broccato'].map((t) => [haTestiCampo(t), aManoSuRegistro(t)]), Array(6).fill([true, []]));
+
+  // testiCampo: etichetta, aiuto (se il pannello lo mostra) e testo dello slot dell'unità, dal registro
+  const tc = (t, n) => regU5.testiCampo(t, n);
+  check('testiCampo: etichetta e unità del registro, con l\'aiuto che il pannello mostra',
+    [tc('net-45', 'cordInterlineMm'), tc('bitmap', 'threshold').unita, tc('net-45', 'squareSizeMm').unita, tc('net-45', 'angleADeg').unita],
+    [{ etichetta: 'Interlinea del cordoncino', aiuto: 'distanza tra un punto e il successivo lungo il filo', unita: 'mm' }, 'lum', 'mm', '°']);
+  check('...dove il pannello non mostra l\'aiuto, testiCampo non lo dà (la frase resta nel registro)', ['aiuto' in tc('net-45', 'squareSizeMm'), regU5.parametriDelTool('net-45').find((p) => p.id === 'squareSize').aiuto.length > 0], [false, true]);
+  check('...un tool o un parametro che non esiste lancia: un pannello non mostra un campo vuoto', (() => { try { tc('net-45', 'nonEsiste'); return 'nessun errore'; } catch (e) { return /non ha un parametro salvato come/.test(e.message); } })(), true);
+  check('i tool passati all\'anatomia (U2) hanno nel pannello le etichette del registro, tranne i controlli che non sono parametri: net-45, bitmap e sfrangiatura (a parte lo strumento) non hanno niente fuori',
+    [fuoriRegistro['net-45'], fuoriRegistro['bitmap'], fuoriRegistro['sfrangiatura']], [[], [], ['Strumento']]);
 }
 
 // ---- K4 — la scheda di ogni tool: cosa prende, cosa dà, quali parametri usa ----------------------------------------

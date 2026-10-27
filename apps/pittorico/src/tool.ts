@@ -18,8 +18,11 @@ import {
   bounds, rgbToHex, type PixelImage,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
+import { testiCampo } from '@rg/cervello';
+import { disegnaDemo } from './demo';
 import { scheletro, sezioneSorgente, sezione, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero } from '@rg/ui/anatomia';
 import { hookPanZoom } from '@rg/ui/panzoom';
+import { collegaSimula, datiDaStrati, type DatiSimulazione } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import {
   buildPittoricoPlan, pittoricoExportLayers, defaultPittoricoParams,
@@ -40,24 +43,24 @@ type Vista = 'originale' | 'colori' | 'macchie' | 'ricamo' | 'passaggi';
 interface Sorgente { name: string; pixelsAt: (maxWidthPx: number) => PixelImage; }
 
 interface Campo {
-  id: string; key: keyof PittoricoParams; etichetta: string; unita: string; passo: number;
-  int?: boolean; min?: number; max?: number; aiuto?: string;
+  id: string; key: keyof PittoricoParams; passo: number;
+  int?: boolean; min?: number; max?: number;
 }
 
 const CAMPI: Campo[] = [
-  { id: 'realWidth', key: 'realWidthMm', etichetta: 'Larghezza reale', unita: 'mm', passo: 1, min: 0, aiuto: '0 = un pixel vale un millimetro. È la misura che comanda: senza, le altre non significano niente' },
-  { id: 'colorCount', key: 'colorCount', etichetta: 'Quanti fili', unita: '', passo: 1, int: true, min: 2, max: 8, aiuto: 'ogni tinta è un ago' },
-  { id: 'densitySpacingMm', key: 'densitySpacingMm', etichetta: 'Distanza fra le file', unita: 'mm', passo: 0.05, min: 0.1, max: 2, aiuto: 'quanto è fitto il pieno' },
-  { id: 'maxStitchMm', key: 'maxStitchMm', etichetta: 'Punto massimo', unita: 'mm', passo: 0.5, min: 0.5, max: 8, aiuto: 'lungo il filo' },
-  { id: 'frangiaMm', key: 'frangiaMm', etichetta: 'Lunghezza della frangia', unita: 'mm', passo: 0.5, min: 0, max: 12, aiuto: 'tienila sotto la sovrapposizione, o si appiattisce' },
-  { id: 'crescitaMm', key: 'crescitaMm', etichetta: 'Sovrapposizione dove sfuma', unita: 'mm', passo: 0.5, min: 0, max: 12, aiuto: 'quanto il colore sotto entra sotto quello sopra' },
-  { id: 'sormontoMm', key: 'sormontoMm', etichetta: 'Sormonto dove stacca', unita: 'mm', passo: 0.5, min: 0, max: 6, aiuto: 'basta poco: serve a non far vedere la tela alla giunta' },
-  { id: 'sogliaSfumaturaMm', key: 'sogliaSfumaturaMm', etichetta: 'Da qui in su è una sfumatura', unita: 'mm', passo: 0.5, min: 0, max: 20, aiuto: 'sotto, il colore stacca netto' },
-  { id: 'lisciaBordiMm', key: 'lisciaBordiMm', etichetta: 'Lisciatura del contorno', unita: 'mm', passo: 0.2, min: 0, max: 5, aiuto: "0 = il contorno com'esce dalla tracciatura. Alzandola sparisce il dettaglio più piccolo di così" },
-  { id: 'maxInternalTravelMm', key: 'maxInternalTravelMm', etichetta: 'Passaggio scoperto massimo', unita: 'mm', passo: 5, min: 5, max: 400, aiuto: 'oltre, il filo si taglia invece di attraversare il disegno. Più basso = meno fili tesi, più rasafili' },
-  { id: 'flattenLightMm', key: 'flattenLightMm', etichetta: 'Pareggio della luce', unita: 'mm', passo: 1, min: 0, aiuto: 'tienilo più grande del motivo' },
-  { id: 'smoothMm', key: 'smoothMm', etichetta: 'Attenuazione della grana', unita: 'mm', passo: 0.5, min: 0 },
-  { id: 'minAreaMm2', key: 'minAreaMm2', etichetta: 'Macchia più piccola', unita: 'mm²', passo: 10, min: 0 },
+  { id: 'realWidth', key: 'realWidthMm', passo: 1, min: 0 },
+  { id: 'colorCount', key: 'colorCount', passo: 1, int: true, min: 2, max: 8 },
+  { id: 'densitySpacingMm', key: 'densitySpacingMm', passo: 0.05, min: 0.1, max: 2 },
+  { id: 'maxStitchMm', key: 'maxStitchMm', passo: 0.5, min: 0.5, max: 8 },
+  { id: 'frangiaMm', key: 'frangiaMm', passo: 0.5, min: 0, max: 12 },
+  { id: 'crescitaMm', key: 'crescitaMm', passo: 0.5, min: 0, max: 12 },
+  { id: 'sormontoMm', key: 'sormontoMm', passo: 0.5, min: 0, max: 6 },
+  { id: 'sogliaSfumaturaMm', key: 'sogliaSfumaturaMm', passo: 0.5, min: 0, max: 20 },
+  { id: 'lisciaBordiMm', key: 'lisciaBordiMm', passo: 0.2, min: 0, max: 5 },
+  { id: 'maxInternalTravelMm', key: 'maxInternalTravelMm', passo: 5, min: 5, max: 400 },
+  { id: 'flattenLightMm', key: 'flattenLightMm', passo: 1, min: 0 },
+  { id: 'smoothMm', key: 'smoothMm', passo: 0.5, min: 0 },
+  { id: 'minAreaMm2', key: 'minAreaMm2', passo: 10, min: 0 },
 ];
 
 /** Larghezza di lavoro in pixel: sopra i ~900 il calcolo si allunga senza aggiungere forma. */
@@ -66,7 +69,8 @@ const MAX_WIDTH_PX = 900;
 export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = {}): void {
   const campo = (id: string): string => {
     const c = CAMPI.find((x) => x.id === id)!;
-    return campoNumero({ id: c.id, etichetta: c.etichetta, unita: c.unita, valore: defaultPittoricoParams[c.key] as number, passo: c.passo, min: c.min, max: c.max, aiuto: c.aiuto });
+    const t = testiCampo('pittorico', c.key as string);
+    return campoNumero({ id: c.id, etichetta: t.etichetta, unita: t.unita, valore: defaultPittoricoParams[c.key] as number, passo: c.passo, min: c.min, max: c.max, aiuto: t.aiuto });
   };
   const sezioneCampi = (indice: number, titolo: string, ids: string[], dopo = ''): string =>
     sezione({ indice, titolo, contenuto: `<div class="rg-param-grid">\n    ${ids.map(campo).join('\n    ')}${dopo}\n  </div>` });
@@ -92,7 +96,7 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
     pannello: [
       sezioneSorgente({
         tipo: 'immagine', accetta: 'image/*', statoIniziale: 'Nessuna immagine: caricane una per cominciare',
-        larghezzaReale: false, extra: campo('realWidth'),
+        larghezzaReale: false, extra: campo('realWidth'), demo: 'Immagine demo',
       }),
       sezioneCampi(2, 'Colori', ['colorCount', 'minAreaMm2', 'flattenLightMm', 'smoothMm'], `
     <div class="rg-param-grid__wide">
@@ -103,11 +107,13 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
       sezioneCampi(4, 'Bordi e sfumature', ['frangiaMm', 'lisciaBordiMm', 'sogliaSfumaturaMm', 'crescitaMm', 'sormontoMm']),
     ],
     anteprima: {
-      viste, genera: true, esportaSpenti: true,
+      viste, genera: true, simula: true, esportaSpenti: true,
       ricalcolaDaSolo: { acceso: false, aiuto: 'Su un disegno grande costa qualche secondo: di solito conviene premere Genera dopo aver messo la larghezza reale.' },
     },
   });
   attivaCampiNumero(root);
+  // la simulazione (U3): si collega più sotto, quando la tela e le viste esistono; fino ad allora non c'è niente da fermare
+  let sim: { ferma(): void } | null = null;
   root.querySelector('#status')!.textContent = "Carica un'immagine, poi premi Genera";
 
   const $ = (id: string): HTMLElement => root.querySelector(`#${id}`) as HTMLElement;
@@ -122,6 +128,13 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
     $('zoom').textContent = `zoom ${Math.round(z * 100)}%`;
   });
   $('fitBtn').addEventListener('click', () => pz.fit());
+  sim = collegaSimula({
+    pulsante: $('simBtn') as HTMLButtonElement, host: $('layer'), controlli: $('simControlli'),
+    stato: (t) => { $('status').textContent = t; },
+    dati: (): DatiSimulazione | null => (piano ? datiDaStrati(pittoricoExportLayers(piano), { label: 'PITTORICO' }) : null),
+    ripristina: () => disegna(),
+    senzaDati: "Niente da simulare: prima premi Genera.",
+  });
 
   // ---- i campi ---------------------------------------------------------------
   for (const c of CAMPI) {
@@ -143,16 +156,13 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
   };
 
   // ---- import: File → <img> → <canvas> → pixel (l'unico pezzo legato al DOM) ----
-  ($('fileInput') as HTMLInputElement).addEventListener('change', (ev) => {
-    const f = (ev.target as HTMLInputElement).files?.[0];
-    if (!f) return;
-    const url = URL.createObjectURL(f);
+  const apriImmagine = (url: string, nome: string, rilascia: boolean): void => {
     const el = new Image();
     el.onload = () => {
-      URL.revokeObjectURL(url);
-      nomeFile = f.name;
+      if (rilascia) URL.revokeObjectURL(url);
+      nomeFile = nome;
       sorgente = {
-        name: f.name,
+        name: nome,
         pixelsAt: (maxWidthPx: number) => {
           let w = el.naturalWidth || el.width;
           let h = el.naturalHeight || el.height;
@@ -167,7 +177,7 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
         },
       };
       const px = el.naturalWidth || el.width;
-      $('fileStatus').textContent = `${f.name} · ${px} × ${el.naturalHeight || el.height} px`;
+      $('fileStatus').textContent = `${nome} · ${px} × ${el.naturalHeight || el.height} px`;
       $('status').textContent = params.realWidthMm > 0
         ? 'Immagine caricata: premi Genera'
         : 'Immagine caricata. Metti la larghezza reale in mm, poi premi Genera';
@@ -177,9 +187,15 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
       mostraImmagine(el);
       pz.fit();
     };
-    el.onerror = () => { $('status').textContent = 'Immagine non leggibile'; URL.revokeObjectURL(url); };
+    el.onerror = () => { $('status').textContent = 'Immagine non leggibile'; if (rilascia) URL.revokeObjectURL(url); };
     el.src = url;
+  };
+  ($('fileInput') as HTMLInputElement).addEventListener('change', (ev) => {
+    const f = (ev.target as HTMLInputElement).files?.[0];
+    if (!f) return;
+    apriImmagine(URL.createObjectURL(f), f.name, true);
   });
+  $('demoBtn').addEventListener('click', () => apriImmagine(disegnaDemo().toDataURL('image/png'), 'immagine-demo.png', false));
 
   /** L'immagine appena caricata si VEDE subito: serve a capire se è entrata giusta. */
   function mostraImmagine(el: HTMLImageElement): void {
@@ -192,6 +208,7 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
 
   // ---- genera ----------------------------------------------------------------
   $('genBtn').addEventListener('click', () => {
+    sim?.ferma();
     if (!sorgente) { $('status').textContent = 'Prima carica un\'immagine'; return; }
     $('status').textContent = 'Calcolo il ricamo…';
     // un giro di rendering prima di bloccare il thread, così il messaggio si vede davvero
@@ -267,6 +284,7 @@ export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = 
    * dove il filo di passaggio finisce rispetto al riempimento.
    */
   function disegna(): void {
+    sim?.ferma();
     if (vista === 'originale') {
       if (immagine) mostraImmagine(immagine);
       return;
