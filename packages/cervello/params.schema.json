@@ -1743,7 +1743,7 @@
         },
         "pezzoMinimo": {
           "$ref": "#/$defs/minDetachedPiece",
-          "default": 3,
+          "default": 2,
           "x-id": "minDetachedPiece"
         },
         "sopraPuntoMin": {
@@ -4787,7 +4787,7 @@
     "hiddenPassMax": {
       "type": "number",
       "title": "Passaggio nascosto, fino a",
-      "description": "Da un pezzo all'altro sulle linee del punto o nel verso del raso: il filo non si vede. Oltre: salto.",
+      "description": "Il punto sopra va da un pezzo all'altro sulle linee della base, anche ripassando: dentro la macchia non salta.",
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 5,
@@ -4795,8 +4795,8 @@
     },
     "minDetachedPiece": {
       "type": "number",
-      "title": "Togli i pezzi staccati più corti di",
-      "description": "I pezzi che non si raggiungono senza salto: se sono corti si tolgono. Il punto sopra non esce mai dalla macchia.",
+      "title": "Togli i pezzi del punto sopra più corti di",
+      "description": "I pezzetti staccati dal resto (una barretta che entra dal bordo mentre la sua colonna è fuori) non si cuciono. Il punto sopra non esce mai dalla macchia.",
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 0.5,

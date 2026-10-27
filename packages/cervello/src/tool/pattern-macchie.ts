@@ -31,13 +31,13 @@ export const scheda: SchedaParametri = {
     },
     {
       id: 'hiddenPassMax', nome: 'passaggioMax', etichetta: 'Passaggio nascosto, fino a',
-      aiuto: 'Da un pezzo all\'altro sulle linee del punto o nel verso del raso: il filo non si vede. Oltre: salto.',
+      aiuto: 'Il punto sopra va da un pezzo all\'altro sulle linee della base, anche ripassando: dentro la macchia non salta.',
       tipo: 'num', unita: 'mm', min: 0, passo: 5, predefinito: 100, concetto: 'passaggi-nascosti',
     },
     {
-      id: 'minDetachedPiece', nome: 'pezzoMinimo', etichetta: 'Togli i pezzi staccati più corti di',
-      aiuto: 'I pezzi che non si raggiungono senza salto: se sono corti si tolgono. Il punto sopra non esce mai dalla macchia.',
-      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 3, concetto: 'altro',
+      id: 'minDetachedPiece', nome: 'pezzoMinimo', etichetta: 'Togli i pezzi del punto sopra più corti di',
+      aiuto: 'I pezzetti staccati dal resto (una barretta che entra dal bordo mentre la sua colonna è fuori) non si cuciono. Il punto sopra non esce mai dalla macchia.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 2, concetto: 'altro',
     },
     {
       id: 'overlayMinStitch', nome: 'sopraPuntoMin', etichetta: 'Punto minimo del punto sopra',

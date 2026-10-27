@@ -44,6 +44,9 @@ const FILI = [
   { chiave: 'sotto', nome: 'Passaggi sotto il raso', colore: '#3b78c4' },
 ] as const;
 type ChiaveFilo = typeof FILI[number]['chiave'];
+/** I salti nell'anteprima: quelli del raso viola, quelli del punto sopra rossi. */
+const COLORE_SALTI_RASO = '#8e3fd0';
+const COLORE_SALTI_SOPRA = '#d62020';
 
 type Campo = { nome: keyof ParametriMacchie; etichetta: string; unita: string; passo: number; min: number; max?: number; aiuto?: string; scelte?: Array<[string, string]> };
 const CAMPI_RASO: Campo[] = [
@@ -59,11 +62,11 @@ const CAMPI_RASO: Campo[] = [
 ];
 const CAMPI_SOPRA: Campo[] = [
   { nome: 'passaggioMax', etichetta: 'Passaggio nascosto, fino a', unita: 'mm', passo: 5, min: 0,
-    aiuto: 'Da un pezzo all\'altro sulle linee del punto o nel verso del raso: il filo non si vede. Oltre: salto.' },
+    aiuto: 'Il punto sopra va da un pezzo all\'altro sulle linee della base, anche ripassando: dentro la macchia non salta.' },
   { nome: 'sopraPuntoMin', etichetta: 'Punto minimo del punto sopra', unita: 'mm', passo: 0.1, min: 0.3,
     aiuto: 'Al bordo della macchia la linea si ferma all’ago prima invece di lasciare un puntino; dentro, gli aghi si ridistribuiscono lungo la linea. Più alto per i fili spessi.' },
-  { nome: 'pezzoMinimo', etichetta: 'Togli i pezzi staccati più corti di', unita: 'mm', passo: 0.5, min: 0,
-    aiuto: 'I pezzi che non si raggiungono senza salto: se sono corti si tolgono. Il punto sopra non esce mai dalla macchia.' },
+  { nome: 'pezzoMinimo', etichetta: 'Togli i pezzi del punto sopra più corti di', unita: 'mm', passo: 0.5, min: 0,
+    aiuto: 'I pezzetti staccati dal resto (una barretta che entra dal bordo mentre la sua colonna è fuori) non si cuciono. Il punto sopra non esce mai dalla macchia.' },
 ];
 const CAMPI_ZONE: Campo[] = [
   { nome: 'zone', etichetta: 'Dividi raso e punto sopra in zone', unita: '', passo: 1, min: 1, max: 8,
@@ -317,7 +320,8 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     const caselle = FILI.map((l) => `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-livello="${l.chiave}"${visibili[l.chiave] ? ' checked' : ''}>`
       + `<span class="macchie-ink" style="--ink:${l.colore}"></span>${l.nome}</label>`).join('');
     box.innerHTML = stop + dettaglio + caselle
-      + `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-livello="salti"${visibili.salti ? ' checked' : ''}> I salti, in rosso</label>`
+      + `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-livello="salti"${visibili.salti ? ' checked' : ''}> I salti, tratteggiati:`
+      + ` <span class="macchie-ink" style="--ink:${COLORE_SALTI_RASO}"></span>del raso, <span class="macchie-ink" style="--ink:${COLORE_SALTI_SOPRA}"></span>del punto sopra</label>`
       + `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-livello="contorni"${visibili.contorni ? ' checked' : ''}> Il contorno delle macchie (coi ponti)</label>`;
     return box;
   }
@@ -469,9 +473,10 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     const fili = FILI.filter((l) => visibili[l.chiave])
       .map((l) => `<path d="${percorso(linee[l.chiave])}" fill="none" stroke="${l.colore}" stroke-width="${l.chiave === 'raso' ? 0.1 : l.chiave === 'sotto' ? 0.2 : 0.14}" stroke-linejoin="round"/>`)
       .join('');
-    const salti = visibili.salti
-      ? `<path d="${[r.raso.tratti, r.sopra.tratti].flatMap((tr) => tr.slice(1).map((t, i) => percorso([[tr[i].at(-1)!, t[0]]]))).join('')}" fill="none" stroke="#d62020" stroke-width="0.3" stroke-dasharray="1 0.6"/>`
-      : '';
+    // (i salti del raso e quelli del punto sopra di colori diversi: Lorenzo, 2026-10-28, «per capire perché ci sono più
+    // salti che escono dalla stessa macchia»)
+    const saltiDi = (tr: Polyline[], colore: string) => `<path d="${tr.slice(1).map((t, i) => percorso([[tr[i].at(-1)!, t[0]]])).join('')}" fill="none" stroke="${colore}" stroke-width="0.3" stroke-dasharray="1 0.6"/>`;
+    const salti = visibili.salti ? saltiDi(r.raso.tratti, COLORE_SALTI_RASO) + saltiDi(r.sopra.tratti, COLORE_SALTI_SOPRA) : '';
     const forme = visibili.contorni ? `<path d="${percorso(r.forme.map((f) => [...f, f[0]]))}" fill="none" stroke="#2e8b57" stroke-width="0.15"/>` : '';
     $('layer').innerHTML = cornice(contorniSvg(0.12) + fili + forme + salti);
     if (adatta) pz.fit();
