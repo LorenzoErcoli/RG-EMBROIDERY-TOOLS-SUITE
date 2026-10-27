@@ -10,6 +10,7 @@ import {
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
+import { collegaStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import { runPipeline, type RoleAssignment } from './pipeline';
 import { defaultStriaturaParams, type StriaturaParams } from './engine';
 import { sampleContours } from './sample';
@@ -75,7 +76,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
               <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="objW" type="number" min="1" step="1" value="120"><span>mm</span></span>
               <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="objH" type="number" min="1" step="1" value="150"><span>mm</span></span>
             </div>
-            <div class="rg-cluster"><button type="button" id="objBtn" class="rg-button rg-button--outline rg-button--small">Genera oggetto</button></div>
+            <div class="rg-cluster"><button type="button" id="objBtn" class="rg-button rg-button--outline rg-button--small">Genera oggetto</button>${BOTTONE_PRENDI_STILISTA()}</div>
             <small class="rg-field__help">larghezza × altezza: crea un rettangolo pieno da riempire, senza importare un file</small>
           </div>
         </div>
@@ -132,6 +133,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
         <h2 class="rg-h3">Anteprima</h2>
         <div class="rg-cluster">
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
+          ${BOTTONE_INVIA_STILISTA()}
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Esporta SVG</button>
         </div>
@@ -330,6 +332,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
   }
 
   function loadImport(result: ImportResult, label: string) {
+    svgStilista = null; // ogni caricamento: solo il caricamento da Stilista la rimette, subito dopo
     imported = result;
     autoAssign();
     buildRoleUI();
@@ -453,16 +456,43 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${jumps} salti`;
   });
 
+  // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge fino all'END e
+  // lo ignora, noi lo rileggiamo. Lo usano «Esporta DST» e «Invia a Stilista».
+  function costruisciDst(exportLayers = runPipeline(currentContours(), roles, params).exportLayers): Uint8Array {
+    return dstFromExportLayers(exportLayers, {
+      label: (sourceName || 'STRIATURA').toUpperCase().slice(0, 16),
+      metadata: conBusta({ rgProject: 'striatura', version: '0.1.0', params, roles }, { strati: exportLayers, sorgente: sorgenteBusta() }),
+    });
+  }
+
+  // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è la sagoma, i fori le aree vuote ----
+  let svgStilista: string | null = null;
+  const aggancio: AggancioStilista = {
+    carica(svg, nome) {
+      // l'SVG dichiara le sue misure: una larghezza reale lo riscalerebbe e il ritorno non cadrebbe più al suo posto
+      params.realWidthMm = 0;
+      ($('realWidth') as HTMLInputElement).value = '0';
+      roles = {};
+      sourceName = nome.replace(/\.[^.]+$/, '');
+      loadImport(parseSvgToContours(svg), nome);
+      svgStilista = svg;
+    },
+    ruoli(fori) {
+      for (const c of uniqueColors()) roles[c] = c === fori ? 'EXCLUSION' : 'MASTER_OUTLINE';
+      buildRoleUI();
+      render();
+    },
+    sorgente: () => svgStilista,
+    strati: () => stratiCuciti(runPipeline(currentContours(), roles, params).exportLayers),
+    dst: () => ({ bytes: costruisciDst(), nome: `${sourceName || 'striatura'}-striatura` }),
+    stato: (testo) => { $('status').textContent = testo; },
+  };
+
   $('exportDstBtn').addEventListener('click', async () => {
     const { exportLayers, blockCount } = runPipeline(currentContours(), roles, params);
     let bytes: Uint8Array;
     try {
-      // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge
-      // fino all'END e lo ignora, noi lo rileggiamo. Senza, il .dst non sapeva da dove veniva.
-      bytes = dstFromExportLayers(exportLayers, {
-        label: (sourceName || 'STRIATURA').toUpperCase().slice(0, 16),
-        metadata: conBusta({ rgProject: 'striatura', version: '0.1.0', params, roles }, { strati: exportLayers, sorgente: sorgenteBusta() }),
-      });
+      bytes = costruisciDst(exportLayers);
     } catch (e) {
       $('status').textContent = (e as Error).message;
       return;
@@ -477,4 +507,5 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
   buildAllParams();
   buildThreadUI();
   loadImport(imported, 'Sagoma demo');
+  collegaStilista(aggancio, { prendi: $('fromStilista'), invia: $('toStilistaBtn') });
 }

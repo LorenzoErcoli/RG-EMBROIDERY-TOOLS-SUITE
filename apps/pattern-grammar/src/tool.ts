@@ -8,6 +8,7 @@ import { conBusta, dstFromExportLayers, DST_FILE, readDstMetadata, type ExportLa
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
+import { collegaStilista, prendiSelezioneStilista, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import { FORMATO, CORPO, ALL_FIELD_GROUPS, SCALE_MODES, type Field, type Group } from './fields';
 import { stratoPattern } from './motore';
 import sharedPresetsRaw from './presets.shared.json?raw';
@@ -73,6 +74,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
         <h2 class="rg-h3">Anteprima</h2>
         <div class="rg-cluster">
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
+          ${BOTTONE_INVIA_STILISTA()}
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Scarica SVG</button>
         </div>
@@ -205,6 +207,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
           <input type="file" id="boundaryFile" accept=".svg,.dxf,.dst" />
           <span class="rg-button rg-button--outline">Carica DXF, SVG o un DST di qui…</span>
         </label>
+        ${BOTTONE_PRENDI_STILISTA()}
         <p class="rg-file-input__status" id="boundaryStatus" role="status">${boundaryModel ? statoContorno : 'Nessun contorno: il piano non viene ritagliato.'}</p>
       </div>
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Scala del file importato</span>
@@ -319,6 +322,34 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     return grid;
   }
 
+  // ---- Stilista (RG Stilista Link, @rg/ui/stilista) ----
+  // La selezione arriva come un SVG in mm, un colore per oggetto, e si legge come un file caricato:
+  // stessi ruoli per colore, stesso formato che copre il pezzo, e torna anche nel DST (R27). Il ricamo
+  // torna in Stilista al suo posto se il cartamodello è venuto da lì, altrimenti come DST.
+  const aggancio: AggancioStilista = {
+    carica(svg, nome) {
+      boundarySource = { text: svg, name: nome };
+      scalaImport.scaleMode = 'auto'; // l'SVG del plugin dichiara width/height in mm
+      for (const k of Object.keys(boundaryRoles)) delete boundaryRoles[k];
+      buildPanel();
+      reparseBoundary();
+    },
+    // I FORI (le aree vuote dei riempimenti di Stilista) arrivano col loro colore, dichiarato nell'SVG:
+    // quel colore è «Area vuota», ogni altro (il filo degli oggetti, anche più d'uno) «Confine di ritaglio».
+    ruoli(fori) {
+      for (const c of boundaryModel?.choices ?? []) boundaryRoles[c.id] = c.color?.toLowerCase() === fori ? 'vuoto' : 'confine';
+      rebuildBoundary();
+      renderColorMap();
+    },
+    sorgente: () => boundarySource?.text ?? null,
+    strati: () => [{ nome: 'RG pattern', polylines: stratoPattern(cfg as PatternConfig).polylines }],
+    dst() {
+      const { bytes, base } = costruisciDst();
+      return { bytes, nome: `${base || 'pattern'}-pattern` };
+    },
+    stato(testo) { $('status').textContent = testo; },
+  };
+  const prendiDaStilista = () => prendiSelezioneStilista(aggancio);
   // ---- contorno importato ----
   function reparseBoundary() {
     if (!boundarySource) return;
@@ -518,6 +549,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       };
       if (isDst) reader.readAsArrayBuffer(file); else reader.readAsText(file);
     });
+    $('fromStilista').addEventListener('click', () => { void prendiDaStilista(); });
     const leggiScala = () => {
       scalaImport.scaleMode = ($('scaleMode') as HTMLSelectElement).value;
       scalaImport.customW = parseFloat(($('customW') as HTMLInputElement).value) || scalaImport.customW;
@@ -636,35 +668,43 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     const outcome = await saveTextFile(lastSvg, { suggestedName: name, description: 'Immagine SVG' });
     $('status').textContent = saveOutcomeMessage(outcome, name);
   });
-  $('exportDstBtn').addEventListener('click', async () => {
-    // Export ricamo Tajima .dst tramite la "possibilità" globale del core. Il pattern è un filo continuo:
-    // un solo layer cucito (un ago), un blocco per polilinea visibile. Punti già in mm, coordinate SVG.
+  /**
+   * Il ricamo come Tajima .dst, tramite la "possibilità" globale del core. Il pattern è un filo continuo:
+   * un solo layer cucito (un ago), un blocco per polilinea visibile. Punti già in mm, coordinate SVG.
+   */
+  function costruisciDst(): { bytes: Uint8Array; base: string | undefined } {
     const base = boundarySource?.name.replace(/\.[^.]+$/, '');
+    const layer: ExportLayer = stratoPattern(cfg as PatternConfig);
+    // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge fino all'END
+    // e lo ignora, noi lo rileggiamo. Ci va anche il DISEGNO, come testo del file caricato, con la sua
+    // scala e i ruoli dei colori: così un DST riaperto rigenera il programma intero (2026-10-07). Sopra
+    // MAX_DRAWING_KB (come negli altri tool) restano i soli parametri, e lo si dice.
+    const { importedBoundary, sourceAnalysis, reliefAreas, ...saved } = cfg as Record<string, unknown>;
+    const disegno: DisegnoSalvato | undefined = boundarySource && boundarySource.text.length / 1024 <= MAX_DRAWING_KB
+      ? { name: boundarySource.name, text: boundarySource.text, scale: { ...scalaImport }, roles: { ...boundaryRoles } }
+      : undefined;
+    notaDisegno = !boundarySource ? '' : disegno
+      ? ` · col disegno (${Math.round(boundarySource.text.length / 1024)} kB)`
+      : ` · disegno troppo pesante (${Math.round(boundarySource.text.length / 1024)} kB): nel file solo i parametri`;
+    const bytes = dstFromExportLayers([layer], {
+      label: (base || 'PATTERN').toUpperCase().slice(0, 16),
+      metadata: conBusta({ rgProject: 'pattern-grammar', version: '0.1.0', params: saved, ...(disegno ? { drawing: disegno } : {}) }, {
+        strati: [layer],
+        // il cartamodello caricato (misura reale in mm = il riquadro della sagoma scalata)
+        sorgente: boundarySource ? {
+          tipo: /\.dxf$/i.test(boundarySource.name) ? 'dxf' : 'svg', nome: boundarySource.name,
+          ...(importedBoundary ? { larghezzaMm: (importedBoundary as any).bounds.maxX - (importedBoundary as any).bounds.minX, altezzaMm: (importedBoundary as any).bounds.maxY - (importedBoundary as any).bounds.minY } : {}),
+        } : undefined,
+      }),
+    });
+    return { bytes, base };
+  }
+
+  $('exportDstBtn').addEventListener('click', async () => {
     let bytes: Uint8Array;
+    let base: string | undefined;
     try {
-      const layer: ExportLayer = stratoPattern(cfg as PatternConfig);
-      // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge fino all'END
-      // e lo ignora, noi lo rileggiamo. Ci va anche il DISEGNO, come testo del file caricato, con la sua
-      // scala e i ruoli dei colori: così un DST riaperto rigenera il programma intero (2026-10-07). Sopra
-      // MAX_DRAWING_KB (come negli altri tool) restano i soli parametri, e lo si dice.
-      const { importedBoundary, sourceAnalysis, reliefAreas, ...saved } = cfg as Record<string, unknown>;
-      const disegno: DisegnoSalvato | undefined = boundarySource && boundarySource.text.length / 1024 <= MAX_DRAWING_KB
-        ? { name: boundarySource.name, text: boundarySource.text, scale: { ...scalaImport }, roles: { ...boundaryRoles } }
-        : undefined;
-      notaDisegno = !boundarySource ? '' : disegno
-        ? ` · col disegno (${Math.round(boundarySource.text.length / 1024)} kB)`
-        : ` · disegno troppo pesante (${Math.round(boundarySource.text.length / 1024)} kB): nel file solo i parametri`;
-      bytes = dstFromExportLayers([layer], {
-        label: (base || 'PATTERN').toUpperCase().slice(0, 16),
-        metadata: conBusta({ rgProject: 'pattern-grammar', version: '0.1.0', params: saved, ...(disegno ? { drawing: disegno } : {}) }, {
-          strati: [layer],
-          // il cartamodello caricato (misura reale in mm = il riquadro della sagoma scalata)
-          sorgente: boundarySource ? {
-            tipo: /\.dxf$/i.test(boundarySource.name) ? 'dxf' : 'svg', nome: boundarySource.name,
-            ...(importedBoundary ? { larghezzaMm: (importedBoundary as any).bounds.maxX - (importedBoundary as any).bounds.minX, altezzaMm: (importedBoundary as any).bounds.maxY - (importedBoundary as any).bounds.minY } : {}),
-          } : undefined,
-        }),
-      });
+      ({ bytes, base } = costruisciDst());
     } catch (e) {
       $('status').textContent = (e as Error).message;
       return;
@@ -676,4 +716,8 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
 
   buildPanel();
   render();
+  // «Invia a Stilista»; e aperto dal pulsante di Stilista (?stilista=…) la selezione si prende da sola.
+  // «Prendi la selezione» vive nel pannello, che si ricostruisce: lo ricollega wirePanel.
+  collegaStilista(aggancio, { invia: $('toStilistaBtn') });
 }
+

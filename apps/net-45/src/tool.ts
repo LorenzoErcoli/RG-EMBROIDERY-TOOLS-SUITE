@@ -14,6 +14,7 @@ import { runPipeline, type RoleAssignment } from './pipeline';
 import { sampleContours } from './sample';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
+import { collegaStilista, stratiCuciti, type AggancioStilista } from '@rg/ui/stilista';
 
 /** Un campo del gruppo "Parametri". `check` = sì/no (interno 1/0). `unit` va nello slot del DS, mai nell'etichetta (R-panello). */
 type Field =
@@ -43,10 +44,11 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     topbar: topbar('Rete 45°', opts.backHref),
     classe: 'net45-workspace',
     pannello: [
-      sezioneSorgente({ tipo: 'cartamodello', accetta: '.svg,.dxf,.dst', statoIniziale: 'Nessun file: uso il cartamodello demo.', demo: 'Cartamodello demo' }),
+      sezioneSorgente({ tipo: 'cartamodello', accetta: '.svg,.dxf,.dst', statoIniziale: 'Nessun file: uso il cartamodello demo.', demo: 'Cartamodello demo', stilista: true }),
       sezione({ indice: 2, titolo: 'Colori e ruoli', contenuto: '<ul class="rg-color-map" id="roles"></ul>' }),
       sezione({ indice: 3, titolo: 'Parametri', contenuto: '<div id="params" class="rg-param-grid"></div>', apribile: true, aperta: true }),
     ],
+    anteprima: { inviaStilista: true },
   });
   attivaCampiNumero(root);
 
@@ -223,6 +225,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
         const result = isDxf ? parseDxfToContours(text) : parseSvgToContours(text);
         sourceName = file.name.replace(/\.[^.]+$/, '');
         sourceTipo = isDxf ? 'dxf' : 'svg';
+        svgStilista = null;
         // Se l'SVG viene dalla suite, i parametri si rimettono PRIMA di caricare, così valgono
         // già quando il disegno entra (e l'assegnazione automatica non li sovrascrive).
         let restored = false;
@@ -246,7 +249,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     updateFileStatus(sourceName || 'Cartamodello');
   });
 
-  $('demoBtn').addEventListener('click', () => { roles = {}; sourceName = ''; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
+  $('demoBtn').addEventListener('click', () => { roles = {}; sourceName = ''; svgStilista = null; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
   $('fitBtn').addEventListener('click', () => pz.fit());
 
   $('exportBtn').addEventListener('click', async () => {
@@ -264,18 +267,46 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     $('status').textContent = saveOutcomeMessage(outcome, name);
   });
 
-  $('exportDstBtn').addEventListener('click', async () => {
-    // Export ricamo Tajima .dst tramite la "possibilità" globale del core: i layer del pipeline sono già in
-    // mm reali; l'adattatore cuce i layer non-forma (rete/cordoncini), un blocco per polilinea.
+  // Export ricamo Tajima .dst tramite la "possibilità" globale del core: i layer del pipeline sono già in
+  // mm reali; l'adattatore cuce i layer non-forma (rete/cordoncini), un blocco per polilinea. I parametri
+  // viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge fino all'END e lo ignora, noi
+  // lo rileggiamo. Lo usano «Esporta DST» e «Invia a Stilista».
+  function costruisciDst(): Uint8Array {
     const { layers } = runPipeline(currentContours(), roles, params);
+    return dstFromExportLayers(layers, {
+      label: (sourceName || 'RETE45').toUpperCase().slice(0, 16),
+      metadata: conBusta({ rgProject: 'net-45', version: '0.1.0', params, roles }, { strati: layers, sorgente: sorgenteBusta() }),
+    });
+  }
+
+  // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è il cartamodello, i fori le aree vuote ----
+  let svgStilista: string | null = null;
+  const aggancio: AggancioStilista = {
+    carica(svg, nome) {
+      svgStilista = svg;
+      // l'SVG dichiara le sue misure: una larghezza reale lo riscalerebbe e il ritorno non cadrebbe più al suo posto
+      params.realWidthMm = 0;
+      impostaNumero($('realWidth') as HTMLInputElement, 0);
+      roles = {};
+      sourceName = nome.replace(/\.[^.]+$/, '');
+      sourceTipo = 'svg';
+      loadImport(parseSvgToContours(svg), nome);
+    },
+    ruoli(fori) {
+      for (const c of uniqueColors()) roles[c] = c === fori ? 'EXCLUSION' : 'MASTER_OUTLINE';
+      buildRoleUI();
+      render();
+    },
+    sorgente: () => svgStilista,
+    strati: () => stratiCuciti(runPipeline(currentContours(), roles, params).layers),
+    dst: () => ({ bytes: costruisciDst(), nome: `${sourceName || 'rete'}-rete45` }),
+    stato: (testo) => { $('status').textContent = testo; },
+  };
+
+  $('exportDstBtn').addEventListener('click', async () => {
     let bytes: Uint8Array;
     try {
-      // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge
-      // fino all'END e lo ignora, noi lo rileggiamo. Senza, il .dst non sapeva da dove veniva.
-      bytes = dstFromExportLayers(layers, {
-        label: (sourceName || 'RETE45').toUpperCase().slice(0, 16),
-        metadata: conBusta({ rgProject: 'net-45', version: '0.1.0', params, roles }, { strati: layers, sorgente: sorgenteBusta() }),
-      });
+      bytes = costruisciDst();
     } catch (e) {
       $('status').textContent = (e as Error).message;
       return;
@@ -287,4 +318,5 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
 
   buildParamUI();
   loadImport(imported, 'Cartamodello demo');
+  collegaStilista(aggancio, { prendi: $('fromStilista'), invia: $('toStilistaBtn') });
 }

@@ -1981,7 +1981,7 @@
           "title": "Punto dell’impuntura nel vuoto",
           "description": "Il punto della linea che gira sul bordo del vuoto o lo attraversa dritta.",
           "minimum": 0.5,
-          "maximum": 12
+          "maximum": 30
         },
         "netShape": {
           "$ref": "#/$defs/netShape",
@@ -2076,8 +2076,49 @@
           "default": 2,
           "x-id": "crossingOverlap"
         },
+        "buildMode": {
+          "$ref": "#/$defs/netConstruction",
+          "default": "zigzag",
+          "x-id": "netConstruction"
+        },
+        "tackWidthMm": {
+          "$ref": "#/$defs/tackWidth",
+          "default": 0,
+          "x-id": "tackWidth"
+        },
+        "tackRepeat": {
+          "$ref": "#/$defs/tackRepeat",
+          "default": 1
+        },
+        "sideDivisions": {
+          "$ref": "#/$defs/sideDivisions",
+          "default": 0
+        },
+        "lineLink": {
+          "$ref": "#/$defs/lineLink",
+          "default": "stop"
+        },
         "staggerColumns": {
           "$ref": "#/$defs/staggerColumns",
+          "default": false
+        },
+        "entryTailMm": {
+          "$ref": "#/$defs/entryTail",
+          "default": 10,
+          "x-id": "entryTail"
+        },
+        "spoolM": {
+          "$ref": "#/$defs/spool",
+          "default": 0,
+          "x-id": "spool"
+        },
+        "spoolMarginPct": {
+          "$ref": "#/$defs/spoolMargin",
+          "default": 5,
+          "x-id": "spoolMargin"
+        },
+        "fitColumns": {
+          "$ref": "#/$defs/fitColumns",
           "default": false
         },
         "cornerRounding": {
@@ -2102,6 +2143,10 @@
         "voidMode": {
           "$ref": "#/$defs/voidMode",
           "default": "ritorno"
+        },
+        "voidEdgeStitchMm": {
+          "$ref": "#/$defs/voidEdgeStitchMm",
+          "default": 1
         }
       }
     },
@@ -5255,10 +5300,93 @@
       "x-passo": 0.25,
       "x-concetto": "sovrapposizione"
     },
+    "netConstruction": {
+      "type": "string",
+      "title": "Come si costruisce la rete",
+      "description": "zigzag = serpentine che scendono e risalgono, con le lenti agli incroci; linee = due famiglie di linee dritte, prima tutte quelle di un verso poi le altre (cambio ago fra le due), che si attraversano senza lente. Il rombo è la maglia vera.",
+      "enum": [
+        "zigzag",
+        "linee"
+      ],
+      "x-concetto": "modulo"
+    },
+    "tackWidth": {
+      "type": "number",
+      "title": "Travetta della testa speciale",
+      "description": "A linee dritte: la macchina fa di ogni punto una travetta che va a sinistra se la linea sale, a destra se scende; il cordone si fissa al centro. I punti si spostano di mezza travetta al contrario (bordi verticali compresi, i tratti orizzontali no). 0 = niente.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 20,
+      "x-passo": 0.5,
+      "x-concetto": "spostamento"
+    },
+    "tackRepeat": {
+      "type": "integer",
+      "title": "Passaggi della travetta per punto",
+      "description": "A linee dritte: ogni punto delle linee (anche sugli incroci) ripetuto nello stesso posto; ogni ripetizione, un passaggio di travetta.",
+      "minimum": 1,
+      "maximum": 10,
+      "x-passo": 1,
+      "x-concetto": "densita"
+    },
+    "sideDivisions": {
+      "type": "integer",
+      "title": "Lato del rombo diviso in",
+      "description": "A linee dritte: in quante parti si divide il lato del rombo, da un incrocio all’altro; ogni incrocio ha sempre un punto su tutte e due le linee. 0 = a lunghezza del punto.",
+      "minimum": 0,
+      "maximum": 50,
+      "x-passo": 1,
+      "x-concetto": "densita"
+    },
+    "lineLink": {
+      "type": "string",
+      "title": "Fra un verso e l’altro",
+      "description": "A linee dritte: stop = cambio ago, con uscita e ingresso fuori sagoma; fuori = senza fermarsi, il filo esce alla distanza dell’ingresso, corre cucito fuori dal contorno e rientra all’inizio dell’altro verso.",
+      "enum": [
+        "stop",
+        "fuori"
+      ],
+      "x-concetto": "ordine-cucitura"
+    },
     "staggerColumns": {
       "type": "boolean",
       "title": "Colonne sfalsate di mezzo rombo",
       "description": "Le colonne vicine spostate di mezzo rombo lungo la serpentina.",
+      "x-concetto": "modulo"
+    },
+    "entryTail": {
+      "type": "number",
+      "title": "Ingresso e uscita fuori sagoma",
+      "description": "Ogni parte comincia con una linea fuori sagoma lunga così e un salto uguale al primo punto, e finisce al contrario (salto fuori, linea), poi il cambio ago (stop). Fuori dal bordo esterno o dentro il foro. 0 = niente.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 30,
+      "x-passo": 1,
+      "x-concetto": "ordine-cucitura"
+    },
+    "spool": {
+      "type": "number",
+      "title": "Rocchetta del filo",
+      "description": "Prima che finisca, il filo esce su un bordo (come a fine parte) e dopo il cambio ago riparte dallo stesso punto. 0 = nessun limite.",
+      "minimum": 0,
+      "maximum": 10000,
+      "x-passo": 5,
+      "x-concetto": "ordine-cucitura"
+    },
+    "spoolMargin": {
+      "type": "number",
+      "title": "Scarto sulla rocchetta",
+      "description": "Il filo della rocchetta che si tiene da parte.",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 50,
+      "x-passo": 1,
+      "x-concetto": "ordine-cucitura"
+    },
+    "fitColumns": {
+      "type": "boolean",
+      "title": "Colonne intere nella larghezza",
+      "description": "Ritocca di poco la larghezza del rombo perché nella larghezza del pezzo stia un numero intero di colonne: sui bordi laterali ogni punta tocca il bordo nello stesso modo, senza tagli irregolari.",
       "x-concetto": "modulo"
     },
     "cornerRounding": {
@@ -5310,6 +5438,19 @@
         "bordo",
         "centro"
       ],
+      "x-regole": [
+        "R5"
+      ],
+      "x-concetto": "aree-vuote"
+    },
+    "voidEdgeStitchMm": {
+      "type": "number",
+      "title": "Punti corti ai bordi del vuoto",
+      "description": "Attraversando il vuoto dritto: tre punti di questa lunghezza a ogni bordo, che segnano il foro; in mezzo i punti lunghi (fino a 30 mm). 0 = niente.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 5,
+      "x-passo": 0.1,
       "x-regole": [
         "R5"
       ],
@@ -5392,7 +5533,9 @@
         "satinRowSpacing",
         "rowSpacing",
         "spiralPitch",
-        "tieSpacing"
+        "tieSpacing",
+        "tackRepeat",
+        "sideDivisions"
       ]
     },
     "interlinea": {
@@ -5567,7 +5710,8 @@
         "globalPatternOffsetX",
         "globalPatternOffsetY",
         "stripShiftMm",
-        "retraceOffsetMm"
+        "retraceOffsetMm",
+        "tackWidth"
       ]
     },
     "sovrapposizione": {
@@ -5643,7 +5787,8 @@
         "enableExclusionAreas",
         "reconnectVoidBorders",
         "voidClearanceMm",
-        "voidMode"
+        "voidMode",
+        "voidEdgeStitchMm"
       ]
     },
     "seme": {
@@ -5734,7 +5879,11 @@
         "leftToRightOrder",
         "stopZones",
         "stopZonesDirection",
-        "continuousFill"
+        "continuousFill",
+        "lineLink",
+        "entryTail",
+        "spool",
+        "spoolMargin"
       ]
     },
     "modulo": {
@@ -5770,7 +5919,9 @@
         "radialSide",
         "diamondWidth",
         "diamondHeight",
+        "netConstruction",
         "staggerColumns",
+        "fitColumns",
         "cornerRounding"
       ]
     },
