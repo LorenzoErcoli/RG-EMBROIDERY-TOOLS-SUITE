@@ -32,8 +32,9 @@ namespace StilistaHostSkeleton
     /// <summary>
     /// Un HTTP minimo su TcpListener, solo su 127.0.0.1: niente HttpListener, che senza diritti di
     /// amministratore chiede una prenotazione dell'indirizzo. Una richiesta per connessione.
-    /// Il browser può leggere le risposte solo da pagine localhost (CORS), e le POST vogliono
-    /// l'intestazione X-RG-Link: così una pagina qualsiasi non può mandare niente a Stilista.
+    /// Il browser può leggere le risposte solo da pagine localhost o da quella della suite (CORS), le POST
+    /// vogliono l'intestazione X-RG-Link, e l'Host dev'essere 127.0.0.1 o localhost: così una pagina qualsiasi
+    /// non può mandare niente a Stilista.
     /// </summary>
     internal sealed class ServerLocale
     {
@@ -89,7 +90,12 @@ namespace StilistaHostSkeleton
                     }
                     var origine = richiesta.Intestazioni.TryGetValue("Origin", out var o) ? o : null;
                     Risposta risposta;
-                    if (richiesta.Metodo == "OPTIONS")
+                    if (!HostLocale(richiesta.Intestazioni.TryGetValue("Host", out var h) ? h : null))
+                    {
+                        // un nome che punta a 127.0.0.1 (DNS rebinding): la pagina sarebbe «dello stesso sito»
+                        risposta = Risposta.Testo("{\"ok\":false,\"errore\":\"solo 127.0.0.1 o localhost\"}", stato: 421);
+                    }
+                    else if (richiesta.Metodo == "OPTIONS")
                     {
                         risposta = new Risposta { Stato = 204 };
                     }
@@ -203,7 +209,7 @@ namespace StilistaHostSkeleton
             testa.Append("Content-Length: ").Append(risposta.Corpo.Length).Append("\r\n");
             testa.Append("Cache-Control: no-store\r\n");
             testa.Append("Connection: close\r\n");
-            if (OrigineLocale(origine))
+            if (OrigineAmmessa(origine))
             {
                 testa.Append("Access-Control-Allow-Origin: ").Append(origine).Append("\r\n");
                 testa.Append("Access-Control-Allow-Methods: GET, POST, OPTIONS\r\n");
@@ -218,12 +224,27 @@ namespace StilistaHostSkeleton
             flusso.Flush();
         }
 
-        private static bool OrigineLocale(string origine)
+        /// <summary>Le pagine localhost (la suite in sviluppo) e quella dell'indirizzo della suite (indirizzo.txt).</summary>
+        private static bool OrigineAmmessa(string origine)
         {
             return origine != null &&
                    (origine.StartsWith("http://localhost:", StringComparison.OrdinalIgnoreCase) ||
                     origine.StartsWith("http://127.0.0.1:", StringComparison.OrdinalIgnoreCase) ||
-                    string.Equals(origine, "http://localhost", StringComparison.OrdinalIgnoreCase));
+                    string.Equals(origine, "http://localhost", StringComparison.OrdinalIgnoreCase) ||
+                    string.Equals(origine, Configurazione.OrigineSuite, StringComparison.OrdinalIgnoreCase));
+        }
+
+        private static bool HostLocale(string host)
+        {
+            if (host == null)
+            {
+                return true; // HTTP/1.0 senza Host: non viene da un browser
+            }
+            var due = host.LastIndexOf(':');
+            var nome = due > 0 && !host.EndsWith("]") ? host.Substring(0, due) : host;
+            return string.Equals(nome, "127.0.0.1", StringComparison.Ordinal) ||
+                   string.Equals(nome, "localhost", StringComparison.OrdinalIgnoreCase) ||
+                   string.Equals(nome, "[::1]", StringComparison.Ordinal);
         }
     }
 

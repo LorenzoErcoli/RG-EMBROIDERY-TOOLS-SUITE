@@ -3,10 +3,15 @@ using System.IO;
 
 namespace StilistaHostSkeleton
 {
+    /// <summary>
+    /// Il registro del plugin. Prende il posto del ProbeLog del bridge (stesso nome, lo usa il codice copiato) ma
+    /// scrive in un file suo, %TEMP%\rg-stilista-link.log: quello del bridge resta del bridge, e la
+    /// disinstallazione cancella il nostro senza toccare l'altro.
+    /// </summary>
     internal static class ProbeLog
     {
         private static readonly string LogPath =
-            Path.Combine(Path.GetTempPath(), "stilista-json-bridge.log");
+            Path.Combine(Path.GetTempPath(), "rg-stilista-link.log");
 
         public static string PathOnDisk
         {

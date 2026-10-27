@@ -1,0 +1,42 @@
+RG STILISTA LINK - prova
+========================
+
+Un collegamento fra GMI Stilista 3.3 e i tool di RG Tools: si seleziona un oggetto in
+Stilista, lo si lavora in un tool nel browser, e il ricamo torna nel documento, al suo posto.
+Il disegno passa solo fra il browser e Stilista, sullo stesso PC: non va su internet.
+
+
+INSTALLARE
+1. Estrarre lo zip in una cartella qualsiasi (non aprirlo e basta: va estratto).
+2. Doppio clic su Installa.cmd.
+   Se dice che non puo' scrivere: tasto destro su Installa.cmd -> Esegui come amministratore.
+3. Aprire un documento in Stilista: c'e' una scheda nuova, RG_LINK.
+
+
+USARE
+1. In Stilista selezionare uno o piu' oggetti (un contorno, un riempimento coi fori, dei laser).
+2. Scheda RG_LINK -> "Lavora la selezione con RG Tools...": si apre la suite nel browser.
+   La prima volta il browser puo' chiedere di permettere al sito l'accesso ai dispositivi della
+   rete locale: rispondere Consenti (e' cosi' che la pagina parla con Stilista su questo PC).
+3. Scegliere un tool: prende la selezione da solo (o "Prendi la selezione da Stilista").
+   Ogni stop e ogni colore della selezione arriva con un colore suo; i fori come aree vuote.
+4. "Invia a Stilista": il ricamo torna nel documento, al suo posto, un oggetto per strato,
+   sugli aghi a partire da quello dell'oggetto selezionato.
+
+Da sapere: il ricamo tornato e' un oggetto a punti fissi ("RG Tools - ..."); se in Stilista lo
+si ricalcola cambiando i parametri, i punti si possono perdere. L'annulla di Stilista non lo
+toglie: si cancella come un oggetto qualsiasi.
+
+
+DISINSTALLARE (senza lasciare traccia)
+1. Chiudere tutte le finestre di Stilista.
+2. Doppio clic su Disinstalla.cmd.
+   Toglie la riga dal pluginlist.txt di Stilista, la cartella PLUG-INS\RGStilistaLink e i file
+   temporanei del plugin. Gli altri plugin restano come sono.
+3. Nel browser, se si e' usata la suite: lucchetto accanto all'indirizzo -> Impostazioni sito ->
+   togliere il permesso alla rete locale.
+Restano i ricami gia' tornati nei documenti: sono lavoro vostro.
+
+
+Se qualcosa non va: il registro e' in %TEMP%\rg-stilista-link.log (mandatelo insieme a cosa
+avete fatto).

@@ -27,15 +27,51 @@ powershell -ExecutionPolicy Bypass -File strumenti-sviluppo\stilista-link\script
 powershell -ExecutionPolicy Bypass -File strumenti-sviluppo\stilista-link\scripts\install.ps1
 ```
 
-`install.ps1` copia `StilistaLink.exe` in `C:\GMI\Stilista3.3\PLUG-INS\RGStilistaLink\` e lo aggiunge a
-`pluginlist.txt` (con backup; gli altri plugin restano). Stilista lo carica al riavvio: compare la scheda
-**RG_LINK**. Serve la suite aperta (`avvia.bat`, porta 5270).
+`install.ps1` è l'installazione di sviluppo: passa a `pacchetto\installa.ps1` il plugin appena compilato e
+l'indirizzo della suite locale (`avvia.bat`, porta 5270). Il plugin va in
+`C:\GMI\Stilista3.3\PLUG-INS\RGStilistaLink\<data-ora>\` con il suo `indirizzo.txt`, e la sua riga in
+`pluginlist.txt` (gli altri plugin restano; la copia di sicurezza in `RGStilistaLink\backup\`). Le finestre di
+Stilista aperte dopo hanno la scheda **RG_LINK**; le versioni vecchie che nessuno Stilista tiene aperte si
+cancellano.
+
+### Darlo da provare (2026-10-27)
+
+```powershell
+powershell -ExecutionPolicy Bypass -File strumenti-sviluppo\stilista-link\scripts\pacchetto.ps1
+```
+
+scrive `out\RG-Stilista-Link-<data>.zip` (fuori da git): `StilistaLink.exe`, **`Installa.cmd`**,
+**`Disinstalla.cmd`**, i due script, `indirizzo.txt` (la suite online,
+`https://lorenzoercoli.github.io/RG-EMBROIDERY-TOOLS-SUITE/`), `LEGGIMI.txt` e `versione.txt` (data e commit).
+Chi lo prova estrae lo zip e fa doppio clic su `Installa.cmd`: niente Node, niente repo.
+
+- **L'installazione** cerca Stilista (quello aperto, `C:\GMI\Stilista3.3`, le altre cartelle in `C:\GMI` e
+  `Program Files\GMI`; o `-Stilista <cartella>`), toglie al plugin il segno «scaricato da internet» (.NET
+  non lo caricherebbe) e se non può scrivere dice di rieseguirla come amministratore.
+- **La disinstallazione** vuole Stilista chiuso (i processi senza finestre, d'avvio e di riserva, li chiude
+  lei), toglie la riga da `pluginlist.txt` **senza rimettere una copia vecchia** (gli altri plugin restano come
+  sono ora), cancella `PLUG-INS\RGStilistaLink\`, `%TEMP%\rg-stilista-link\`, `%TEMP%\rg-stilista-link.log` e
+  le `pluginlist.txt.<data-ora>.bak` delle installazioni di sviluppo di prima che contengono la nostra riga.
+  Non scrive niente nel registro di Windows, né prima né dopo. Restano i ricami tornati nei documenti (lavoro
+  dell'utente) e, nel browser, il permesso alla rete locale dato al sito (si toglie a mano).
+- **Provato** su una cartella Stilista finta con una `%TEMP%` finta: installa, reinstalla (la versione di prima
+  si cancella), disinstalla → `pluginlist.txt` identico byte per byte a prima, nessun file né cartella del
+  plugin rimasti, il registro del bridge intatto.
+
+**La suite online.** Il plugin risponde alle pagine localhost e a quella del suo `indirizzo.txt` (l'origine,
+`https://lorenzoercoli.github.io`, che è comune a tutti i siti GitHub Pages di quell'account), e solo a
+richieste per `127.0.0.1`/`localhost` (un altro nome che punta lì, il *DNS rebinding*, ha 421). Il disegno
+passa fra il browser e Stilista sullo stesso PC, non su internet. Chrome ed Edge recenti chiedono una volta il
+permesso alla rete locale; il browser integrato dell'app Claude invece blocca da sé le richieste dei siti verso
+`127.0.0.1` (`ERR_BLOCKED_BY_CLIENT`): la prova dalla pagina online va fatta in Chrome o Edge. **Online i
+pulsanti Stilista ci sono solo quando `stilista-link` è unito in master** (la pagina si pubblica dai push su
+master).
 
 ## Le richieste
 
 | | |
 |---|---|
-| `GET /stato` | documento, oggetti, selezionati, quando la finestra è stata attivata |
+| `GET /stato` | documento, oggetti, selezionati, quando la finestra è stata attivata, l'indirizzo della suite |
 | `GET /selezione.svg` | i contorni degli oggetti selezionati, in mm: l'esterno col colore del filo (per un **laser** il colore dei suoi parametri laser, quello che si vede in Stilista), **un colore per ogni gruppo (stop, colore)** — un altro stop con lo stesso filo prende una variante più chiara o più scura, lo stop si conta lungo la sequenza a ogni cambio d'ago; **ogni foro un tracciato a sé** col colore dichiarato in `data-rg-stilista-fori` e quello del suo oggetto in `data-rg-stilista-di`; l'angolo della selezione meno 1 mm è lo 0,0, scritto in `data-rg-stilista-origine` |
 | `GET /selezione.json` | gli stessi oggetti come li legge il bridge (tipo, contorno, punti cuciti, parametri) |
 | `GET /fori` | per ogni oggetto con più di un anello (o per `?oggetti=…`): gli anelli, da dove vengono e quali sono fori — ricerca |

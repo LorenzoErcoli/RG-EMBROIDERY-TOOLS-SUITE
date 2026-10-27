@@ -1,0 +1,2 @@
+# La suite che il pulsante di Stilista apre. {0} e' la porta della finestra di Stilista.
+https://lorenzoercoli.github.io/RG-EMBROIDERY-TOOLS-SUITE/?stilista={0}#/

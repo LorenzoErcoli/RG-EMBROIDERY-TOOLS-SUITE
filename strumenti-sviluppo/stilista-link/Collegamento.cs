@@ -36,8 +36,6 @@ namespace StilistaHostSkeleton
     {
         internal const int PrimaPorta = 5370; // fuori dalle porte dei server di sviluppo della suite (5270-5313)
         internal const int QuantePorte = 10;
-        // la home della suite: ?stilista resta nell'indirizzo quando si apre un tool (#/…), che prende la selezione da solo
-        private const string IndirizzoSuite = "http://localhost:5270/?stilista={0}#/";
         private const double MargineMm = 1.0;
 
         // uno per processo, anche se Stilista creasse più schede
@@ -144,7 +142,8 @@ namespace StilistaHostSkeleton
             }
             try
             {
-                Process.Start(new ProcessStartInfo(string.Format(IndirizzoSuite, _porta)) { UseShellExecute = true });
+                // la home della suite (indirizzo.txt): il tool che si sceglie prende la selezione da solo
+                Process.Start(new ProcessStartInfo(string.Format(Configurazione.IndirizzoSuite, _porta)) { UseShellExecute = true });
                 Annota("Aperta la suite: il tool che scegli prende la selezione");
             }
             catch (Exception ex)
@@ -255,6 +254,7 @@ namespace StilistaHostSkeleton
                 ",\"processo\":" + Process.GetCurrentProcess().Id +
                 ",\"attiva_alle\":" + attiva +
                 ",\"documento\":" + Json.Stringa(titolo) +
+                ",\"suite\":" + Json.Stringa(Configurazione.IndirizzoSuite) +
                 ",\"oggetti\":" + oggetti.Count +
                 ",\"selezionati\":" + Selezionati().Count + "}");
         }

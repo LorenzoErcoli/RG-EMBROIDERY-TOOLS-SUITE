@@ -41,13 +41,13 @@ namespace StilistaHostSkeleton
             return true;
         }
 
-        // le DLL GMI stanno in bin\ dell'installazione, non accanto al plugin
+        // le DLL GMI stanno in bin\ dell'installazione di Stilista, non accanto al plugin
         private static Assembly DaStilista(object sender, ResolveEventArgs args)
         {
             try
             {
                 var nome = new AssemblyName(args.Name).Name;
-                var candidato = Path.Combine(@"C:\GMI\Stilista3.3", "bin", nome + ".dll");
+                var candidato = Path.Combine(Configurazione.CartellaStilista(), nome + ".dll");
                 return File.Exists(candidato) ? Assembly.LoadFile(candidato) : null;
             }
             catch
