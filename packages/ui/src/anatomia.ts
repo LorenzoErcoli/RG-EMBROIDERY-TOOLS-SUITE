@@ -14,6 +14,8 @@
 // Le funzioni che costruiscono HTML ritornano stringhe (come `topbar()`): niente DOM, si provano in node.
 // Quelle che toccano la pagina (`attivaCampiNumero`, `impostaNumero`) sono in fondo e sono sottili.
 
+import { BOTTONE_INVIA_STILISTA, BOTTONE_PRENDI_STILISTA } from './stilista';
+
 // ---------------------------------------------------------------------------------------------------------
 // Numeri: virgola e punto, frecce, limiti — funzioni pure
 // ---------------------------------------------------------------------------------------------------------
@@ -211,6 +213,8 @@ export interface OpzioniSorgente {
   demo?: string;
   /** HTML in più della sezione, dopo i pezzi comuni. */
   extra?: string;
+  /** «Prendi la selezione da Stilista» (RG Stilista Link, `@rg/ui/stilista`), accanto all'esempio pronto. */
+  stilista?: boolean;
 }
 
 /**
@@ -229,8 +233,9 @@ export function sezioneSorgente(o: OpzioniSorgente): string {
   if (o.larghezzaReale !== false) {
     pezzi.push(campoNumero({ id: 'realWidth', etichetta: 'Larghezza reale', unita: 'mm', valore: 0, passo: 1, min: 0, aiuto: '0 = usa la misura letta dal file.', largo: true }));
   }
-  if (o.demo) {
-    pezzi.push(`<div class="rg-cluster rg-param-grid__wide"><button id="demoBtn" class="rg-button rg-button--ghost rg-button--small" type="button">${esc(o.demo)}</button></div>`);
+  if (o.demo || o.stilista) {
+    const demo = o.demo ? `<button id="demoBtn" class="rg-button rg-button--ghost rg-button--small" type="button">${esc(o.demo)}</button>` : '';
+    pezzi.push(`<div class="rg-cluster rg-param-grid__wide">${demo}${o.stilista ? BOTTONE_PRENDI_STILISTA() : ''}</div>`);
   }
   if (o.extra) pezzi.push(o.extra);
   return sezione({ indice: 1, titolo: TITOLO_SORGENTE[o.tipo], contenuto: `<div class="rg-param-grid">\n  ${pezzi.join('\n  ')}\n</div>` });
@@ -274,11 +279,13 @@ export interface OpzioniBarraAnteprima {
   esportaDst?: boolean;
   /** I due export partono spenti, finché non c'è un ricamo. */
   esportaSpenti?: boolean;
+  /** «Invia a Stilista» (RG Stilista Link, `@rg/ui/stilista`), subito prima dei due export. */
+  inviaStilista?: boolean;
 }
 
 /**
  * L'intestazione dell'anteprima, nell'ordine fisso (U-D1, U-D4): titolo e viste a sinistra; a destra
- * «Ricalcola da solo» · Genera · Simula · Adatta · Esporta SVG · **Esporta DST** (pieno). Un tool che non ha una
+ * «Ricalcola da solo» · Genera · Simula · Adatta · [Invia a Stilista] · Esporta SVG · **Esporta DST** (pieno). Un tool che non ha una
  * cosa lascia il posto vuoto, non riordina. Gli id sono fissi: `autoCalcolo`, `genBtn`, `simBtn`, `fitBtn`,
  * `exportBtn` (SVG), `exportDstBtn`.
  */
@@ -292,6 +299,7 @@ export function barraAnteprima(o: OpzioniBarraAnteprima = {}): string {
   if (o.genera) b.push('<button id="genBtn" class="rg-button rg-button--outline rg-button--small" type="button">Genera</button>');
   if (o.simula) b.push('<button id="simBtn" class="rg-button rg-button--ghost rg-button--small" type="button">Simula</button>');
   if (o.adatta !== false) b.push('<button id="fitBtn" class="rg-button rg-button--ghost rg-button--small" type="button">Adatta</button>');
+  if (o.inviaStilista) b.push(BOTTONE_INVIA_STILISTA());
   if (o.esportaSvg !== false) b.push(`<button id="exportBtn" class="rg-button rg-button--outline rg-button--small" type="button"${spenti}>Esporta SVG</button>`);
   if (o.esportaDst !== false) b.push(`<button id="exportDstBtn" class="rg-button rg-button--primary rg-button--small" type="button"${spenti}>Esporta DST</button>`);
   return `<header class="rg-workspace__stage-header">\n        <h2 class="rg-h3">${esc(o.titolo ?? 'Anteprima')}</h2>${o.viste ? '\n        ' + o.viste : ''}\n        <div class="rg-cluster">\n          ${b.join('\n          ')}\n        </div>\n      </header>`;

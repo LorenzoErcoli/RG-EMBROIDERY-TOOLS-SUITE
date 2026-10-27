@@ -25,3 +25,7 @@ strumenti-sviluppo/*/.venv/
 strumenti-sviluppo/**/__pycache__/
 strumenti-sviluppo/ricamo-3d/rg-ricamo-3d-*.html
 strumenti-sviluppo/ricamo-3d/immagini/
+strumenti-sviluppo/stilista/out/
+strumenti-sviluppo/stilista-link/bin/
+strumenti-sviluppo/stilista-link/obj/
+strumenti-sviluppo/stilista-link/out/

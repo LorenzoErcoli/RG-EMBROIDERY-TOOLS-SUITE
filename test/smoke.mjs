@@ -68,9 +68,11 @@ export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordat
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_PARAMETRI } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
+export { pezzoAMisure as rtsPezzoAMisure, stratiPerDst as rtsStratiPerDst } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm, anelliOvali as rtsAnelliOvali, puntoDelNodo as rtsPuntoDelNodo, cimeDelleColonne as rtsCimeDelleColonne, ceIlNodo as rtsCeIlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
 export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, avanza as rtsAvanza, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
+export { origineStilista, coloreForiStilista, puntiDaPolilinee, svgForiAiLoroColori, primoColoreStilista, agoStilista } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -2743,17 +2745,97 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   // bottone vive nel DOM. L'andata e ritorno dei byte è quella del core, già bloccata da R27.
   {
     const sorgente = readFileSync(join(root, 'apps/pattern-grammar/src/tool.ts'), 'utf8');
-    const salva = sorgente.slice(sorgente.indexOf("$('exportDstBtn')"), sorgente.indexOf('buildPanel();\n  render();\n}'));
+    // il DST si costruisce in un posto solo (2026-10-20): lo usano «Esporta DST» e l'aggancio di Stilista
+    const salva = sorgente.slice(sorgente.indexOf('function costruisciDst()'), sorgente.indexOf("$('exportDstBtn')"));
+    const bottoni = sorgente.replace('function costruisciDst()', '');
     const riapri = sorgente.slice(sorgente.indexOf('if (isDst) {'), sorgente.indexOf("if (isDst) reader.readAsArrayBuffer(file)"));
     check('il DST del Generatore porta il disegno coi ruoli e la scala, entro un tetto',
       [salva.includes('{ name: boundarySource.name, text: boundarySource.text, scale: { ...scalaImport }, roles: { ...boundaryRoles } }'),
-        salva.includes('MAX_DRAWING_KB'), salva.includes("...(disegno ? { drawing: disegno } : {})")], [true, true, true]);
+        salva.includes('MAX_DRAWING_KB'), salva.includes("...(disegno ? { drawing: disegno } : {})"),
+        bottoni.split('costruisciDst()').length - 1], [true, true, true, 2]);
     check('riaprendo: prima il disegno, poi i ruoli salvati, per ultimi i parametri',
       [riapri.indexOf('reparseBoundary()') > 0, riapri.indexOf('Object.assign(boundaryRoles, disegno.roles') > riapri.indexOf('reparseBoundary()'),
         riapri.indexOf('Object.assign(cfg, NEUTRI, parametri)') > riapri.indexOf('Object.assign(boundaryRoles, disegno.roles')], [true, true, true]);
     // la scala d'import non torna più al default quando il pannello si ricostruisce (preset, riapertura)
     check('la scala d\'import sopravvive alla ricostruzione del pannello',
       sorgente.includes("v === scalaImport.scaleMode ? ' selected' : ''"), true);
+  }
+
+  // RG STILISTA LINK (ramo stilista-link, 2026-10-21): la selezione arriva come l'SVG del plugin
+  // (Collegamento.cs, SelezioneSvg) — mm dichiarati, un colore per il filo, i FORI a parte col colore
+  // dichiarato in data-rg-stilista-fori — e si legge con l'import di sempre. Il ricamo torna coi salti
+  // solo all'inizio delle polilinee dopo la prima.
+  {
+    const svgStilista = '<svg xmlns="http://www.w3.org/2000/svg" width="42mm" height="42mm" viewBox="0 0 42 42"'
+      + ' data-rg-stilista-origine="99.5 -3.25" data-rg-stilista-ago="7" data-rg-stilista-fori="#FF00FF">'
+      + '<path fill="none" stroke="#FFF200" stroke-width="0.2" d="M1 1 L41 1 L41 41 L1 41 Z"/>'
+      + '<path fill="none" stroke="#FF00FF" stroke-width="0.2" d="M11 11 L31 11 L31 31 L11 31 Z"/></svg>';
+    const modello = rg.parseImportedBoundarySource(svgStilista, 'prova-stilista.svg', { scaleMode: 'auto' });
+    const colori = modello.choices.map((c) => c.color?.toLowerCase()).sort();
+    const finoA = Object.fromEntries(modello.choices.map((c) => [c.color?.toLowerCase(), Math.round(c.bounds.maxX * 10) / 10]));
+    check('Stilista Link: l\'SVG della selezione dà due colori, il filo e i fori, in mm',
+      [colori, finoA, rg.coloreForiStilista(svgStilista), colori.includes(rg.coloreForiStilista(svgStilista))],
+      [['#ff00ff', '#fff200'], { '#fff200': 41, '#ff00ff': 31 }, '#ff00ff', true]);
+    check('Stilista Link: l\'ago dell\'oggetto selezionato si rilegge (gli strati tornano sugli aghi dopo)',
+      [rg.agoStilista(svgStilista), rg.agoStilista('<svg/>')], [7, null]);
+    check('Stilista Link: l\'origine si rilegge, e senza fori non c\'è colore dei fori',
+      [rg.origineStilista(svgStilista), rg.coloreForiStilista(svgStilista.replace(' data-rg-stilista-fori="#FF00FF"', '')), rg.origineStilista('<svg/>')],
+      [[99.5, -3.25], null, null]);
+    check('Stilista Link: il salto solo al primo punto delle polilinee dopo la prima',
+      rg.puntiDaPolilinee([[{ x: 0, y: 0 }, { x: 1, y: 0 }], [{ x: 5, y: 5 }, { x: 6, y: 5.0004 }]]),
+      [[0, 0, 0], [1, 0, 0], [5, 5, 1], [6, 5, 0]]);
+    // IL RACCORDO ATTORNO AI VUOTI (Lorenzo, 2026-10-21, pannello inclinato con due vuoti: «non è molto
+    // pulito»). Le colonne interrotte da un vuoto si raccordavano sul PERIMETRO: ventagli di filo dagli
+    // angoli del pezzo e tratti sopra i vuoti (punto canvas: 171 tagli fino a 118 mm, 295 mm di filo nei
+    // vuoti). Ora sullo stesso anello il filo gira sul suo bordo. Restano gli spigoli tagliati dal punto
+    // minimo (≤ 0,6 mm dentro).
+    const esterno = [[20, 58], [225, 25], [245, 150], [40, 180]];
+    const vuoti = [[[50, 74], [82, 69], [86, 84], [76, 104], [57, 107]], [[125, 88], [166, 70], [172, 113], [152, 103], [152, 113], [134, 110]]];
+    const dPoly = (pts) => pts.map(([x, y], i) => `${i ? 'L' : 'M'}${x} ${y}`).join(' ') + ' Z';
+    const pannello = rg.parseImportedBoundarySource(`<svg xmlns="http://www.w3.org/2000/svg" width="260mm" height="200mm" viewBox="0 0 260 200">`
+      + `<path fill="none" stroke="#00aa00" d="${dPoly(esterno)}"/>` + vuoti.map((v) => `<path fill="none" stroke="#ff00ff" d="${dPoly(v)}"/>`).join('') + '</svg>',
+    'pannello.svg', { scaleMode: 'auto' });
+    const pathsVuoti = pannello.choices.flatMap((c) => c.boundary.paths.map((p) => ({ ...p, hole: c.color === '#ff00ff', closed: true })));
+    const canvas = JSON.parse(readFileSync(join(root, 'apps/pattern-grammar/src/presets.shared.json'), 'utf8'))['RG-PUNTO CANVAS CLASSICO'];
+    const fatto = rg.generateFinalPatternPoints({ ...canvas, shapeType: 'imported', totalWidth: 250, totalHeight: 185, voidStitchMm: 0,
+      importedBoundary: { ...pannello.choices[0].boundary, paths: pathsVuoti, bounds: { minX: 20, minY: 25, maxX: 245, maxY: 180 } } });
+    const anelliP = [esterno, ...vuoti].map((r) => r.map(([x, y]) => ({ x, y })));
+    const dSeg = (p, a, b) => { const dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy; const t = l ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l)) : 0; return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy); };
+    const dBordo = (p) => Math.min(...anelliP.map((r) => Math.min(...r.map((a, i) => dSeg(p, a, r[(i + 1) % r.length])))));
+    const inPoly = (p, poly) => { let c = false; for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) { const a = poly[i], b = poly[j]; if ((a.y > p.y) !== (b.y > p.y) && p.x < (b.x - a.x) * (p.y - a.y) / (b.y - a.y) + a.x) c = !c; } return c; };
+    let tagli = 0, profondita = 0;
+    for (const l of fatto.visualPolylines) for (let i = 1; i < l.length; i++) {
+      const a = l[i - 1], b = l[i], len = Math.hypot(b.x - a.x, b.y - a.y);
+      if (len > 8 && dBordo({ x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 }) > 0.5) tagli++;
+      for (let k = 1; k < 8; k++) { const q = { x: a.x + (b.x - a.x) * k / 8, y: a.y + (b.y - a.y) * k / 8 }; if (anelliP.slice(1).some((v) => inPoly(q, v))) profondita = Math.max(profondita, dBordo(q)); }
+    }
+    check('vuoti aggirati: niente raccordi che tagliano il pezzo, e nei vuoti al più lo spigolo del punto minimo',
+      [tagli, profondita <= 1], [0, true]);
+    // i due pulsanti in tutti i tool col cartamodello (2026-10-21): l'aggancio collegato e i due bottoni nel DOM
+    const agganciati = ['pattern-grammar', 'net-45', 'striatura', 'interlace', 'rete-testa-speciale', 'pattern-macchie',
+      'cannage-rafia', 'zone-pattern', 'razza', 'oblique', 'cross-stitch'];
+    check('Stilista Link: «Prendi la selezione» e «Invia a Stilista» in tutti gli 11 tool col cartamodello',
+      agganciati.filter((t) => {
+        const s = readFileSync(join(root, `apps/${t}/src/tool.ts`), 'utf8');
+        // i bottoni scritti nel tool, o chiesti all'anatomia comune (sezioneSorgente stilista, barraAnteprima inviaStilista)
+        const prendi = s.includes('BOTTONE_PRENDI_STILISTA()') || s.includes('stilista: true');
+        const invia = s.includes('BOTTONE_INVIA_STILISTA()') || s.includes('inviaStilista: true');
+        return !(s.includes('collegaStilista(aggancio') && prendi && invia);
+      }), []);
+    check('Stilista Link: per oblique i fori di un plugin vecchio (senza «di chi») vanno al colore del primo filo',
+      rg.svgForiAiLoroColori(svgStilista).match(/stroke="#[0-9A-Fa-f]{6}"/g), ['stroke="#FFF200"', 'stroke="#FFF200"']);
+    // stop diversi = colori diversi (2026-10-22): il plugin dà a ogni stop il suo colore, e dice di chi è ogni foro
+    const dueStop = '<svg xmlns="http://www.w3.org/2000/svg" width="42mm" height="42mm" viewBox="0 0 42 42"'
+      + ' data-rg-stilista-origine="0 0" data-rg-stilista-ago="1" data-rg-stilista-fori="#FF00FF">'
+      + '<path fill="none" stroke="#ED1C24" stroke-width="0.2" d="M1 1 L41 1 L41 41 L1 41 Z"/>'
+      + '<path fill="none" stroke="#F4777C" stroke-width="0.2" d="M5 5 L37 5 L37 37 L5 37 Z"/>'
+      + '<path fill="none" stroke="#FF00FF" data-rg-stilista-di="#F4777C" stroke-width="0.2" d="M11 11 L31 11 L31 31 L11 31 Z"/></svg>';
+    check('Stilista Link: per oblique ogni stop resta un colore, il foro torna al suo oggetto, il primo fa il Pannello',
+      [rg.svgForiAiLoroColori(dueStop).match(/stroke="#[0-9A-Fa-f]{6}"/g), rg.primoColoreStilista(dueStop)],
+      [['stroke="#ED1C24"', 'stroke="#F4777C"', 'stroke="#F4777C"'], '#ED1C24']);
+    const tool = readFileSync(join(root, 'apps/pattern-grammar/src/tool.ts'), 'utf8');
+    check('Stilista Link: nel Generatore il colore dei fori diventa «Area vuota», ogni altro «Confine»',
+      tool.includes("boundaryRoles[c.id] = c.color?.toLowerCase() === fori ? 'vuoto' : 'confine';"), true);
   }
 
   console.log('\nzone-pattern — le aree di scarico sul davanti di Lorenzo');
@@ -3124,6 +3206,48 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   // Lorenzo: «sui bordi esterni avrei bisogno di avere del margine». Il ricamo deve debordare
   // dal perimetro, MA non fra un rombo e l'altro: lì due zone allargate si sovrapporrebbero,
   // cioè filo doppio proprio dove il disegno è già pieno.
+  // UNA ZONA SPENTA DENTRO UN'ALTRA È UN BUCO (Lorenzo, 2026-10-21). Prima la zona di fuori si riempiva
+  // intera. Una tinta SENZA ruolo dentro (Cannage rafia passa solo la sua) resta com'era: ricamata sopra.
+  console.log('\nzone-pattern — una zona spenta dentro un\'altra è un buco');
+  {
+    // anelli CHIUSI, come le zone lette da un disegno (il pointInPolygon delle zone lo dà per scontato)
+    const quadrato = (x0, y0, l) => [{ x: x0, y: y0 }, { x: x0 + l, y: y0 }, { x: x0 + l, y: y0 + l }, { x: x0, y: y0 + l }, { x: x0, y: y0 }];
+    const zoneBuco = rg.zonesFromShapes([
+      { id: 'fuori', color: '#aa0000', points: quadrato(0, 0, 60) },
+      { id: 'dentro', color: '#ff00ff', points: quadrato(20, 20, 20) },
+    ], 0);
+    const pianoBuco = (ruoloDentro) => rg.buildZonePlan(zoneBuco, {
+      roles: { '#aa0000': { pattern: 'A', angleDeg: 0 }, ...(ruoloDentro ? { '#ff00ff': ruoloDentro } : {}) },
+      patterns: { A: config }, marginMm: 2, rowHeightMm: 0, travelMode: 'none', travelStitchMm: 3, cleanupMinStitchMm: 0, outerMarginMm: 0 });
+    const nelBuco = (piano) => piano.stitches.filter((s) => s.zone.color === '#aa0000')
+      .flatMap((s) => s.polylines.flat()).filter((p) => p.x > 20.5 && p.x < 39.5 && p.y > 20.5 && p.y < 39.5).length;
+    const spenta = pianoBuco({ pattern: 'off', angleDeg: 0 });
+    const senzaRuolo = pianoBuco(null);
+    check('la zona spenta dentro resta vuota; una tinta senza ruolo no (come prima)',
+      [nelBuco(spenta), nelBuco(senzaRuolo) > 0, spenta.stitches.length], [0, true, 1]);
+
+    // «se ha lo stesso colore è buco, se è diverso è un secondo pattern. Importante però che il primo possa
+    // essere svuotato» (Lorenzo, 2026-10-21)
+    const zoneStessa = rg.zonesFromShapes([
+      { id: 'fuori', color: '#aa0000', points: quadrato(0, 0, 60) },
+      { id: 'dentro', color: '#aa0000', points: quadrato(20, 20, 20) },
+      { id: 'isola', color: '#aa0000', points: quadrato(27, 27, 6) },
+    ], 0);
+    const stessa = rg.buildZonePlan(zoneStessa, { roles: { '#aa0000': { pattern: 'A', angleDeg: 0 } }, patterns: { A: config },
+      marginMm: 2, rowHeightMm: 0, travelMode: 'none', travelStitchMm: 3, cleanupMinStitchMm: 0, outerMarginMm: 0 });
+    const fraBucoEIsola = stessa.stitches.flatMap((s) => s.polylines.flat())
+      .filter((p) => p.x > 20.5 && p.x < 39.5 && p.y > 20.5 && p.y < 39.5 && !(p.x > 26.5 && p.x < 33.5 && p.y > 26.5 && p.y < 33.5)).length;
+    check('stessa tinta dentro = buco (non si ricama), e l\'isola nel buco sì',
+      [stessa.stitches.map((s) => s.zone.id).sort(), fraBucoEIsola], [['fuori', 'isola'], 0]);
+    const conB = (svuota) => rg.buildZonePlan(zoneBuco, {
+      roles: { '#aa0000': { pattern: 'A', angleDeg: 0, ...(svuota ? { svuota: true } : {}) }, '#ff00ff': { pattern: 'B', angleDeg: 0 } },
+      patterns: { A: config, B: config }, marginMm: 2, rowHeightMm: 0, travelMode: 'none', travelStitchMm: 3, cleanupMinStitchMm: 0, outerMarginMm: 0 });
+    check('tinta diversa = secondo pattern sopra; con «svuota» il primo sotto non c\'è',
+      [nelBuco(conB(false)) > 0, nelBuco(conB(true)), conB(true).stitches.length], [true, 0, 2]);
+    check('«svuota» si conserva riaprendo un progetto (normalizeRole)',
+      rg.normalizeRole({ pattern: 'A', angleDeg: 5, svuota: true }), { pattern: 'A', angleDeg: 5, svuota: true });
+  }
+
   console.log('\nzone-pattern — il margine deborda fuori, non dentro');
   const flags = rg.outerEdgeFlags(zone);
   const latiEsterni = flags.flat().filter(Boolean).length;
@@ -6571,11 +6695,12 @@ console.log('\nrete-testa-speciale — serpentine a rombi: lente da incrocio a i
   check('pezzo a misure: la stessa rete del rettangolo 140 × 180 caricato; senza pezzo un avviso e niente ricamo',
     [JSON.stringify(aMisure.strati) === JSON.stringify(daRett), senzaPezzo.strati.length, senzaPezzo.avvisi.length], [true, 0, 1]);
 
-  // l'export: un solo filo, un tratto per parte, il DST si rilegge coi parametri (R27, R31)
+  // l'export: uno strato per parte (fra l'una e l'altra lo stop, il cambio ago: Lorenzo, 2026-10-21), ognuno con
+  // l'ingresso fuori sagoma, la cucitura e l'uscita; il DST si rilegge coi parametri (R27, R31)
   const strati = rg.rtsStrati(r);
   const dst = rg.dstFromExportLayers(strati, { label: 'RETE', metadata: { rgProject: 'rete-testa-speciale', params: P } });
-  check('DST: un filo, un tratto per parte, il progetto torna (R27)',
-    [strati.length, strati[0].polylines.length, rg.readDstMetadata(dst)?.rgProject, rg.readDstMetadata(dst)?.params?.diamondWidthMm], [1, 2, 'rete-testa-speciale', 12]);
+  check('DST: uno strato per parte (lo stop fra l’una e l’altra), ingresso, cucitura, uscita; il progetto torna (R27)',
+    [strati.length, strati[0].polylines.length, rg.readDst(dst).colorChanges, rg.readDstMetadata(dst)?.rgProject, rg.readDstMetadata(dst)?.params?.diamondWidthMm], [2, 3, 1, 'rete-testa-speciale', 12]);
 }
 
 // ---------------------------------------------------------------------------
@@ -6821,6 +6946,20 @@ console.log('\nrete-testa-speciale — il filo rigido: la sacca stretta dal cord
   const A24 = rg.rtsAnelli({ N: 24, L: 15, r0: 50, amax: 165, campo: 300 });
   const s = rg.rtsAppesa(A24, { ...base, N: 24, modo: 'cordone', morbidezza: 0, fondoRigido: 0.2, stretta: 0.8 }); rg.rtsAssesta(s, 4000);
   check('appesa per i capi col filo più rigido: i fili restano entro il 3% (le pieghe si correggono prima dei fili)', rg.rtsMisureAppesa(s).allungamentoMax < 0.03, true);
+}
+
+// rete-testa-speciale — COLONNE INTERE NELLA LARGHEZZA (Lorenzo, 2026-10-21, Net bag Clover 420 × 710: «se guardi i
+// bordi laterali sinistra e destra si creano delle curve strane… serve una curva migliore»). Col passo 8,25 nella
+// larghezza 420 stavano 50,9 colonne e il bordo tagliava il rombo in un punto qualsiasi; con 51 colonne intere ogni
+// bordo cade a metà della sovrapposizione, come una colonna vicina
+console.log('\nrete-testa-speciale — colonne intere nella larghezza: bordi laterali regolari');
+{
+  const P = { ...rg.RTS_PARAMETRI, pieceSource: 'misure', totalWidth: 420, totalHeight: 120, diamondWidthMm: 10, diamondHeightMm: 17, overlapMm: 1.75, cornerRounding: 20, maxStitchMm: 1 };
+  const r = rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], { ...P, fitColumns: true });
+  const xs = r.blocchi.flat().map((q) => q.x);
+  check('51 colonne intere, rombo 9,985 mm; un filo solo dentro il pezzo; spenta di partenza',
+    [r.colonneIntere.colonne, Math.round(r.colonneIntere.larghezzaRombo * 1000) / 1000, r.blocchi.length, Math.min(...xs) > -0.01, Math.max(...xs) < 420.01, rg.RTS_PARAMETRI.fitColumns, rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], P).colonneIntere],
+    [51, 9.985, 1, true, true, false, undefined]);
 }
 
 // punto-maglia — il cordoncino a maglia (Lorenzo, 2026-10-19/20: sapere/decisioni/punto-maglia-cordoncino.md).
@@ -7219,6 +7358,144 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
   check('ogni tool che scrive un progetto passa da conBusta, se non è nel debito (un tool nuovo scrive la busta fin dall\'inizio)',
     tools.filter((t) => !scrive(t) && !debito.includes(t)), []);
   check('...e nessuno sta nel debito se la scrive già (la voce va tolta)', tools.filter((t) => scrive(t) && debito.includes(t)), []);
+}
+
+// rete-testa-speciale — LE AREE VUOTE DA SINISTRA A DESTRA, GLI INGRESSI E LA ROCCHETTA (Lorenzo, 2026-10-21): «è
+// importante che il filo si muova sempre da sinistra a destra… la parte sotto o sopra… va fatta subito dopo la parte
+// principale, per poi concludere con la parte senza buco laterale… Quando si spezza facciamo un cambio ago. Tutti gli
+// inizi… un ingresso fuori dalla reale sagoma… una linea di circa 1cm poi un salto»; «il filo deve spezzarsi in base
+// alla lunghezza massima della rocchetta»
+console.log('\nrete-testa-speciale — aree vuote da sinistra a destra, ingressi e uscite fuori sagoma, rocchetta');
+{
+  const P = { ...rg.RTS_PARAMETRI, pieceSource: 'misure', totalWidth: 200, totalHeight: 140, diamondWidthMm: 10, diamondHeightMm: 17, overlapMm: 1.75, cornerRounding: 20, maxStitchMm: 1 };
+  const foro = Array.from({ length: 48 }, (_, i) => ({ x: 100 + 35 * Math.cos(2 * Math.PI * i / 48), y: 70 + 25 * Math.sin(2 * Math.PI * i / 48) }));
+  const nelForo = (q) => Math.hypot((q.x - 100) / 35, (q.y - 70) / 25) < 0.995;
+  const fuori = (q) => q.x < 0.01 || q.y < 0.01 || q.x > 199.99 || q.y > 139.99 || nelForo(q);
+  const r = rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [foro], P);
+  // da sinistra a destra: dentro una parte la x non torna mai indietro più di una colonna
+  const indietro = (pt) => { let mx = -Infinity, n = 0; for (const q of pt.tratti.flat()) { if (q.x < mx - 12) n++; mx = Math.max(mx, q.x); } return n; };
+  const [p1, p2] = r.parti, x = (pt) => pt.tratti.flat().map((q) => q.x), y = (pt) => pt.tratti.flat().map((q) => q.y);
+  check('due parti: la prima a sinistra e sopra il foro (finisce alla fine del foro), la seconda sotto il foro e poi fino in fondo a destra senza salti; nessuna torna indietro',
+    [r.parti.length, Math.round(Math.max(...x(p1))), Math.round(Math.min(...x(p2))), Math.round(Math.max(...x(p2))), p2.tratti.length, indietro(p1), indietro(p2), Math.round(p2.tratti[0][0].y)],
+    [2, 130, 70, 200, 1, 0, 0, 140]);
+  const code = r.parti.flatMap((pt) => [pt.ingresso, pt.uscita]);
+  const lungo = (pl) => pl.reduce((s, q, i) => (i ? s + Math.hypot(q.x - pl[i - 1].x, q.y - pl[i - 1].y) : 0), 0);
+  check('ingressi e uscite: linee di 10 mm tutte fuori sagoma, a 10 mm dal primo e dall’ultimo punto',
+    [code.every((c) => c && c.every(fuori)), code.every((c) => Math.abs(lungo(c) - 10) < 0.01),
+      r.parti.every((pt) => Math.abs(Math.hypot(pt.ingresso.at(-1).x - pt.tratti[0][0].x, pt.ingresso.at(-1).y - pt.tratti[0][0].y) - 10) < 0.01)], [true, true, true]);
+  // la rocchetta da 2 m (5% di scarto): sei parti, ognuna entro la rocchetta; i tagli cadono sul bordo, anche sul foro
+  const rr = rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [foro], { ...P, spoolM: 2 });
+  const sulBordo = (q) => q.x < 0.05 || q.y < 0.05 || q.x > 199.95 || q.y > 139.95 || Math.abs(Math.hypot((q.x - 100) / 35, (q.y - 70) / 25) - 1) < 0.02;
+  check('rocchetta da 2 m: 6 parti, ognuna sotto i 2 m, ogni taglio sul bordo (uno sul foro), con ingresso e uscita fuori sagoma',
+    [rr.parti.length, rr.parti.every((pt) => pt.filoMm < 2000), rr.parti.every((pt) => sulBordo(pt.tratti[0][0]) && sulBordo(pt.tratti.at(-1).at(-1))),
+      rr.parti.some((pt) => pt.perche === 'rocchetta' && nelForo({ x: pt.ingresso[0].x, y: pt.ingresso[0].y })), rr.parti.every((pt) => pt.ingresso.every(fuori) && pt.uscita.every(fuori))],
+    [6, true, true, true, true]);
+  // il DST: centrato sulla rete (le code fuori sagoma non spostano il centro), uno stop fra due parti
+  const d = rg.readDst(rg.dstFromExportLayers(rg.rtsStratiPerDst(rr), { label: 'RETE', center: false }));
+  const pts = d.blocks.flatMap((b) => b.points_mm), xs = pts.map((q) => q[0]);
+  check('DST: 5 stop per 6 parti; la rete centrata (da −100 a 100 mm in x)', [d.colorChanges, Math.round(Math.min(...xs) * 10) / 10 <= -100, Math.round(Math.max(...xs) * 10) / 10 >= 100], [5, true, true]);
+}
+
+// rete-testa-speciale — IL VUOTO ATTRAVERSATO DRITTO (Lorenzo, 2026-10-22: «mettiamo 3 punti avvicinati che
+// delimitano l'area del foro. e poi dentro devo poter aumentare la lunghezza punto fino a 3cm»)
+console.log('\nrete-testa-speciale — vuoto attraversato: tre punti corti a ogni bordo, dentro fino a 30 mm');
+{
+  const P = { ...rg.RTS_PARAMETRI, pieceSource: 'misure', totalWidth: 200, totalHeight: 140, diamondWidthMm: 10, diamondHeightMm: 17, overlapMm: 1.75, cornerRounding: 20, maxStitchMm: 1, voidMode: 'centro', voidStitchMm: 30 };
+  const foro = Array.from({ length: 48 }, (_, i) => ({ x: 100 + 35 * Math.cos(2 * Math.PI * i / 48), y: 70 + 25 * Math.sin(2 * Math.PI * i / 48) }));
+  const r = rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [foro], P);
+  const corse = []; for (const b of r.blocchi) { let c = null; for (let i = 0; i < b.length; i++) { if (b[i].tipo === 'vuoto') { if (!c) { c = [b[i - 1] ?? b[i]]; corse.push(c); } c.push(b[i]); } else c = null; } }
+  const passi = corse.map((c) => c.slice(1).map((q, i) => Math.hypot(q.x - c[i].x, q.y - c[i].y)));
+  const tre = (s) => s.length >= 7 && s.slice(0, 3).every((v) => Math.abs(v - 1) < 0.05) && s.slice(-3).every((v) => Math.abs(v - 1) < 0.05);
+  check('18 traversate, tutte con tre punti da 1 mm a ogni bordo; in mezzo punti fino a 30 mm (il più lungo oltre 25); i punti corti di partenza 1 mm',
+    [corse.length, passi.every(tre), Math.max(...passi.flat()) <= 30 + 1e-6, Math.max(...passi.flat()) > 25, rg.RTS_PARAMETRI.voidEdgeStitchMm], [18, true, true, true, 1]);
+}
+
+// rete-testa-speciale — LA RETE A LINEE DRITTE (Lorenzo, 2026-10-26: «non più zig zag, ma prima tutte le linee per
+// un verso e poi quelle per l'altro verso. quindi una rete normale. che non dà quindi punti tondi di sovrapposizione»;
+// chiesto: le linee si attraversano senza punto sull'incrocio; le aree vuote come oggi)
+console.log('\nrete-testa-speciale — rete a linee dritte: due versi, niente lenti, aree vuote come lo zig-zag');
+{
+  const P = { ...rg.RTS_PARAMETRI, pieceSource: 'misure', totalWidth: 200, totalHeight: 140, diamondWidthMm: 8.235, diamondHeightMm: 17, overlapMm: 1.75, cornerRounding: 20, maxStitchMm: 1, buildMode: 'linee' };
+  const r = rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], P);
+  const tutti = r.blocchi.flat(), tratti = r.blocchi.flatMap((b) => b.slice(1).map((q, i) => Math.hypot(q.x - b[i].x, q.y - b[i].y)));
+  // le linee: tratti di rete dritti; la pendenza dei due versi (larghezza/altezza della maglia), una per parte
+  const pendenze = [0, 1].map((parte) => {
+    const conta = new Map();
+    for (const bl of r.blocchi) for (let i = 1; i < bl.length; i++) if (bl[i].blocco === parte && bl[i].tipo === 'rete' && bl[i - 1].tipo === 'rete') {
+      const dy = bl[i].y - bl[i - 1].y; if (Math.abs(dy) < 0.3) continue;
+      const k = (Math.round((bl[i].x - bl[i - 1].x) / dy * 1000) / 1000).toFixed(3); conta.set(k, (conta.get(k) ?? 0) + 1);
+    }
+    return +[...conta.entries()].sort((x, y) => y[1] - x[1])[0][0];
+  });
+  check('due parti, una per verso (lo stop fra le due), linee con pendenza ±0,484; nessuna lente; punti fra minimo e massimo; zig-zag di partenza',
+    [r.parti.length, Math.abs(pendenze[0]), Math.abs(pendenze[1]), Math.sign(pendenze[0]) !== Math.sign(pendenze[1]), tutti.filter((q) => q.sovrapposto).length, Math.max(...tratti) <= P.maxStitchMm + 1e-6, Math.min(...tratti) >= P.minStitchMm - 1e-6, rg.RTS_PARAMETRI.buildMode],
+    [2, 0.484, 0.484, true, 0, true, true, 'zigzag']);
+  // col foro: «si ferma» divide ogni verso in tre parti (principale, ramo, resto) senza salti dentro le parti; «gira sul
+  // bordo» e «attraversa» restano a due parti; mai rete nel foro
+  const foro = Array.from({ length: 48 }, (_, i) => ({ x: 100 + 35 * Math.cos(2 * Math.PI * i / 48), y: 70 + 25 * Math.sin(2 * Math.PI * i / 48) }));
+  const nelForo = (q) => Math.hypot((q.x - 100) / 35, (q.y - 70) / 25) < 0.99;
+  const modi = ['ritorno', 'bordo', 'centro'].map((voidMode) => rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [foro], { ...P, voidMode }));
+  check('col foro: «si ferma» 6 parti e nessun salto dentro una parte; «gira sul bordo» e «attraversa» 2 parti; nessun punto di rete nel foro',
+    [modi[0].parti.length, modi[0].parti.every((pt) => pt.tratti.length === 1), modi[1].parti.length, modi[2].parti.length, modi.every((rr) => rr.blocchi.flat().every((q) => q.tipo !== 'rete' || !nelForo(q)))],
+    [6, true, 2, 2, true]);
+  // il filo: sulla Clover 420 × 710 con la maglia 10 × 17 a colonne intere, 71,5 m (lo zig-zag con la stessa larghezza di
+  // rombo, che però con la sovrapposizione fa la maglia larga 8,24, ne usa 90,5)
+  const C = rg.rtsCostruisci(rg.rtsPezzoAMisure({ ...P, totalWidth: 420, totalHeight: 710 }), [], { ...P, totalWidth: 420, totalHeight: 710, diamondWidthMm: 10, fitColumns: true });
+  const filo = C.blocchi.flatMap((b) => b.slice(1).map((q, i) => Math.hypot(q.x - b[i].x, q.y - b[i].y))).reduce((a, b) => a + b, 0);
+  check('la Clover a linee dritte: 2 parti, 71,5 m di filo', [C.parti.length, Math.round(filo / 100) / 10], [2, 71.5]);
+  // senza stop fra i versi (Lorenzo, 2026-10-26: «possiamo anche dire non spezzare e fa un passaggio esterno al contorno
+  // con il filo»): una parte sola, il passaggio cucito fuori sagoma alla distanza dell'ingresso (10 mm)
+  const F = rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], { ...P, lineLink: 'fuori' }), pass = F.passaggi[0];
+  const fuoriR = (q) => q.x < -0.01 || q.y < -0.01 || q.x > 200.01 || q.y > 140.01;
+  // (i due tratti che escono e rientrano attraversano la fascia vicino al bordo: si guarda il passaggio oltre 11 mm dai capi)
+  const lontano = pass.slice(1, -1).filter((q) => Math.hypot(q.x - pass.at(-1).x, q.y - pass.at(-1).y) > 11 && Math.hypot(q.x - pass[0].x, q.y - pass[0].y) > 11);
+  const passi = pass.slice(1).map((q, i) => Math.hypot(q.x - pass[i].x, q.y - pass[i].y));
+  check('senza stop fra i versi: una parte, un passaggio tutto fuori sagoma (a 10 mm dal bordo), punti entro il massimo; di partenza lo stop',
+    [F.parti.length, F.passaggi.length, lontano.every(fuoriR), Math.round(Math.min(...lontano.map((q) => Math.max(-q.x, -q.y, q.x - 200, q.y - 140)))), Math.max(...passi) <= 1 + 1e-6, rg.RTS_PARAMETRI.lineLink],
+    [1, 1, true, 10, true, 'stop']);
+}
+
+// rete-testa-speciale — LA TRAVETTA DELLA TESTA SPECIALE, a linee dritte (Lorenzo, 2026-10-27): la macchina fa di ogni
+// punto una travetta orizzontale che parte dal punto e va a sinistra se la linea sale, a destra se scende; il cordone si
+// fissa al centro. Compensazione: salendo il punto va a destra di mezza travetta, scendendo a sinistra (bordi verticali
+// compresi, i tratti orizzontali no). Ogni punto delle linee ripetuto: un passaggio di travetta per ripetizione
+console.log('\nrete-testa-speciale — travetta della testa speciale: compensazione e punti ripetuti');
+{
+  const P = { ...rg.RTS_PARAMETRI, pieceSource: 'misure', totalWidth: 70, totalHeight: 60, diamondWidthMm: 10, diamondHeightMm: 17, maxStitchMm: 3, minStitchMm: 0.5, buildMode: 'linee', tackWidthMm: 5, tackRepeat: 2 };
+  const r = rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], P);
+  const segs = []; for (const b of r.blocchi) for (let i = 1; i < b.length; i++) segs.push([b[i - 1], b[i]]);
+  const dSeg = (p, a, b) => { const dx = b.x - a.x, dy = b.y - a.y, l = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l)); return Math.hypot(p.x - a.x - t * dx, p.y - a.y - t * dy); };
+  // la macchina simulata: dove si fissa il cordone, dai punti del file
+  const scarti = (rr) => {
+    const e = [];
+    for (const pt of rr.parti) for (const pl0 of pt.tratti) {
+      const pl = pl0.filter((q, i) => !i || Math.hypot(q.x - pl0[i - 1].x, q.y - pl0[i - 1].y) > 1e-9);
+      pl.forEach((q, i) => { const a = pl[Math.max(0, i - 1)], c = pl[Math.min(pl.length - 1, i + 1)], dx = c.x - a.x, dy = c.y - a.y; const s = Math.abs(dy) < 0.3 * Math.hypot(dx, dy) ? 0 : dy < 0 ? -1 : 1; e.push(Math.min(...segs.map(([u, v]) => dSeg({ x: q.x + s * 2.5, y: q.y }, u, v)))); });
+    }
+    return e.sort((a, b) => a - b);
+  };
+  const con = scarti(r), senza = scarti(rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], { ...P, tackWidthMm: 0 }));
+  check('con la compensazione il cordone cade sul disegno (95% dei punti entro 0,05 mm; senza, la metà oltre 1 mm)',
+    [con[Math.floor(con.length * 0.95)] < 0.05, senza[senza.length >> 1] > 1], [true, true]);
+  const conta = (rr) => rr.parti.reduce((s, pt) => s + pt.tratti.reduce((u, pl) => u + pl.length, 0), 0);
+  const r1 = rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], { ...P, tackRepeat: 1 }), reti = r1.blocchi.flat().filter((q) => q.tipo === 'rete').length;
+  const zz = (extra) => JSON.stringify(rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], { ...P, buildMode: 'zigzag', ...extra }).parti.map((pt) => pt.tratti));
+  check('2 passaggi: ogni punto delle linee due volte (i bordi no); lo zig-zag non cambia; di partenza travetta 0 e 1 passaggio',
+    [conta(r) - conta(r1) === reti, zz({}) === zz({ tackWidthMm: 0, tackRepeat: 1 }), rg.RTS_PARAMETRI.tackWidthMm, rg.RTS_PARAMETRI.tackRepeat], [true, true, 0, 1]);
+  // il lato del rombo diviso in parti (Lorenzo, 2026-10-27: «il punto di incrocio deve sempre avere un punto per le
+  // travette, entrambe le diagonali. e poi devo poter decidere in quante parti dividere»): lato 9,86 mm (rombo 10 × 17)
+  const D = { ...P, totalWidth: 100, totalHeight: 85, tackWidthMm: 0, tackRepeat: 1, maxStitchMm: 1 };
+  const prova = (sideDivisions) => {
+    const rr = rg.rtsCostruisci(rg.rtsPezzoAMisure(D), [], { ...D, sideDivisions });
+    const passi = []; for (const bl of rr.blocchi) for (let i = 1; i < bl.length; i++) if (bl[i].tipo === 'rete' && bl[i - 1].tipo === 'rete') passi.push(Math.hypot(bl[i].x - bl[i - 1].x, bl[i].y - bl[i - 1].y));
+    const chiave = (q) => `${Math.round(q.x * 100)},${Math.round(q.y * 100)}`;
+    const [a, b] = [0, 1].map((k) => new Set(rr.blocchi.filter((bl) => bl[0].blocco === k).flat().filter((q) => q.tipo === 'rete').map(chiave)));
+    return { max: Math.max(...passi), lati: passi.filter((s) => Math.abs(s - 9.86 / sideDivisions) < 0.01).length / passi.length, incroci: [...a].filter((k) => b.has(k)).length };
+  };
+  const d3 = prova(3), d4 = prova(4), d0 = prova(0);
+  check('lato diviso in 3 e in 4: punti da 3,29 e 2,47 mm (oltre l’85%), mai più lunghi; ogni incrocio (91) col punto su tutte e due le linee; senza divisioni quasi nessuno',
+    [Math.abs(d3.max - 3.287) < 0.01, d3.lati > 0.85, Math.abs(d4.max - 2.465) < 0.01, d4.lati > 0.85, d3.incroci, d4.incroci, d0.incroci < 20, rg.RTS_PARAMETRI.sideDivisions],
+    [true, true, true, true, 91, 91, true, 0]);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).

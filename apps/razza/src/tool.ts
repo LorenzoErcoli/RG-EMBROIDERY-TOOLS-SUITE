@@ -9,6 +9,7 @@ import { topbar } from '@rg/ui/tools';
 import ICONS from '../../../packages/design-system/icons/rg-icons.svg?url';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveBinaryFile, saveOutcomeMessage, saveTextFile } from '@rg/ui/save';
+import { collegaStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import {
   PARAMETRI_RAZZA, VERSIONE_RAZZA, daDiPassaggio, leggiProgetto, pezzoDa, progetto, stratiDaRisultato, stratiPerDst,
   type Fisso, type ParametriRazza, type Pezzo, type Risultato, type Sfumatura,
@@ -93,6 +94,7 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
               <input type="file" id="fileInput" accept=".dxf,.svg" />
               <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
             </label>
+            ${BOTTONE_PRENDI_STILISTA()}
             <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file: uso la sagoma demo.</p>
           </div>
           <div class="rg-file-input rg-param-grid__wide">
@@ -184,6 +186,7 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
           <label class="rg-choice" title="Se è spenta, il ricamo si rifà solo quando premi Genera: così puoi mettere pallini e sfumature senza aspettare."><input type="checkbox" id="autoCalcolo"><span>Ricalcola da solo</span></label>
           <button id="genBtn" class="rg-button rg-button--primary rg-button--small" type="button">Genera</button>
           <button id="exportBtn" class="rg-button rg-button--outline rg-button--small" type="button" disabled>Esporta SVG</button>
+          ${BOTTONE_INVIA_STILISTA()}
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small" type="button" disabled>Esporta DST</button>
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small" type="button">Adatta</button>
         </div>
@@ -545,6 +548,7 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
 
   // ---------------------------------------------------------------- caricare una sagoma o un progetto
   function nuovoPezzo(p: Pezzo, etichetta: string, azzera = true): void {
+    svgStilista = null; // ogni pezzo nuovo: solo il caricamento da Stilista la rimette, subito dopo
     pezzo = p;
     riferimento = null; $('riferimentoRiga').hidden = true; // era centrato sul pezzo di prima
     if (azzera) { fissi = []; sfumature = []; selezione = null; }
@@ -695,14 +699,42 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
     $('status').textContent = saveOutcomeMessage(outcome, name);
   });
 
+  // Il tracciato e' gia' sulla griglia da 0,1 mm del DST e centrato su un multiplo di 0,1: se no il centraggio ri-arrotonda
+  // e il punto minimo non tiene piu' (R3). I parametri viaggiano nel footer (R27). Lo usano «Esporta DST» e «Invia a Stilista».
+  function costruisciDst(r: Risultato): Uint8Array {
+    const { layers } = stratiPerDst(r);
+    return dstFromExportLayers(layers, { label: (nomeBase() || 'RAZZA').toUpperCase().slice(0, 16), center: false, metadata: conBusta(datiProgetto() as unknown as Record<string, unknown>, { strati: layers, sorgente: sorgenteProgetto(), misure: refertoDaStrati(layers, { centra: false }) }) });
+  }
+
+  // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è la sagoma. Qui i ruoli li dà la geometria:
+  // il contorno chiuso più grande è il pezzo, quelli dentro le aree vuote — i fori di Stilista ci cadono da soli.
+  // Torna il tracciato nel riferimento della sagoma (stratiDaRisultato), non quello ricentrato del DST.
+  let svgStilista: string | null = null;
+  const aggancio: AggancioStilista = {
+    carica(svg, nome) {
+      // l'SVG dichiara le sue misure: una larghezza reale lo riscalerebbe e il ritorno non cadrebbe più al suo posto
+      larghezzaReale = 0;
+      ($('realWidth') as HTMLInputElement).value = fmt(0);
+      nomeFile = nome.replace(/\.[^.]+$/, '');
+      importato = parseSvgToContours(svg);
+      fattoreScala = 1;
+      applicaImport(nome, true);
+      svgStilista = svg;
+    },
+    sorgente: () => svgStilista,
+    strati: () => (risultato ? stratiCuciti(stratiDaRisultato(risultato)) : []),
+    dst() {
+      if (!risultato || !risultato.punti.length) throw new Error('genera prima il ricamo');
+      return { bytes: costruisciDst(risultato), nome: `${nomeBase()}-razza` };
+    },
+    stato: (testo) => { $('status').textContent = testo; },
+  };
+
   $('exportDstBtn').addEventListener('click', async () => {
     if (!risultato || !risultato.punti.length) return;
-    // Il tracciato e' gia' sulla griglia da 0,1 mm del DST e centrato su un multiplo di 0,1: se no il centraggio ri-arrotonda
-    // e il punto minimo non tiene piu' (R3). I parametri viaggiano nel footer (R27).
-    const { layers } = stratiPerDst(risultato);
     let bytes: Uint8Array;
     try {
-      bytes = dstFromExportLayers(layers, { label: (nomeBase() || 'RAZZA').toUpperCase().slice(0, 16), center: false, metadata: conBusta(datiProgetto() as unknown as Record<string, unknown>, { strati: layers, sorgente: sorgenteProgetto(), misure: refertoDaStrati(layers, { centra: false }) }) });
+      bytes = costruisciDst(risultato);
     } catch (e) { $('status').textContent = (e as Error).message; return; }
     const name = `${nomeBase()}-razza.dst`;
     const outcome = await saveBinaryFile(bytes, { suggestedName: name, ...DST_FILE });
@@ -748,4 +780,5 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
   disegnaAnteprima(); pz.fit();
   $('fileStatus').textContent = `Sagoma demo: ${Math.round(pezzo.maxX - pezzo.minX)}×${Math.round(pezzo.maxY - pezzo.minY)} mm · ${pezzo.vuoti.length} area vuota · versione ${VERSIONE_RAZZA}`;
   pianifica(true);
+  collegaStilista(aggancio, { prendi: $('fromStilista'), invia: $('toStilistaBtn') });
 }
