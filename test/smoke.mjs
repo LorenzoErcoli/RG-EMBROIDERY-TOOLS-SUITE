@@ -6022,7 +6022,16 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   check('...e nemmeno i passaggi sotto il raso (salvo sotto le punte sfrangiate in fuori, entro 0,5 mm)', peggiore(r.vista.sotto, r.forme) <= 0.55, true);
   // fra una macchia e l'altra si salta (83 passaggi per 84 macchie, in tutti e due gli stop), dentro quasi mai
   check('fra le macchie si salta: 83 salti nel raso e 83 nel punto sopra', [r.saltiFra.raso.length, r.saltiFra.sopra.length], [83, 83]);
-  check('dentro le macchie quasi nessun salto (misurati 0) e poco punto sopra tolto (10 mm)', [r.saltiDentro <= 3, r.tolto < 30], [true, true]);
+  // (il punto sopra tolto: i pezzi staccati, e dal 2026-10-26 il moncone dove la linea è tagliata sul bordo, più corto
+  // del punto minimo — misurati 1.159 mm su 36 m)
+  check('dentro le macchie nessun salto nel punto sopra, e punto sopra tolto meno di 1,5 m (misurati 0 e 1.159 mm)', [r.saltiDentro, r.tolto < 1500], [0, true]);
+  // I PUNTI CORTI DEL PUNTO SOPRA (Lorenzo, 2026-10-26: «ci sono davvero troppi punti corti e tanti che rischiano di non
+  // lavorare bene con fili più spessi»): al bordo la linea si ferma all'ago prima, dentro gli aghi si ridistribuiscono
+  // lungo la linea. Prima: 21% sotto 1 mm, 3,4% sotto 0,5 (la base, lo stesso punto intero: 0,7%)
+  const corti2 = (tr, x) => { let n = 0, c = 0; for (const t of tr) for (let k = 1; k < t.length; k++) { n++; if (Math.hypot(t[k].x - t[k - 1].x, t[k].y - t[k - 1].y) < x) c++; } return c / n; };
+  check('punto sopra: sotto 1 mm al più il 12% dei punti, sotto 0,5 al più l’1% (misurati 9,5% e 0,3%)', [corti2(r.vista.sopra, 1) <= 0.12, corti2(r.vista.sopra, 0.5) <= 0.01], [true, true]);
+  const spesso = rg.pmCostruisci(pannello, macchie, squame, { ...rg.PM_PARAMETRI, sopraPuntoMin: 1.5 });
+  check('...col punto minimo a 1,5 mm (fili spessi): sotto 1,5 mm al più il 25% (misurato 20%; col minimo a 1 il 40%), e il punto sopra non esce dalla macchia', [corti2(spesso.vista.sopra, 1.5) <= 0.25, peggiore(spesso.vista.sopra, spesso.forme) <= 0.05], [true, true]);
   // si entra dove conviene e si esce dal lato della macchia dopo: i salti sono quasi la distanza fra le macchie
   const corti = (v) => v.filter((d) => d <= 5).length;
   // ingresso e uscita vicini alle macchie vicine (Lorenzo, 2026-10-12), ma ogni macchia in una passata, coi passaggi sul
@@ -6140,7 +6149,10 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   check('sfrangiatura: senza, i capi delle righe sul bordo; con 1 mm, sparsi (sul bordo meno di un quinto)', sulBordo(sfr) < sulBordo(netto) / 5, true);
   // i ponti: le macchie che si seguono a meno di 5 mm si uniscono, e il filo ci passa senza salto
   const pt = rg.pmCostruisci(pannello, macchie, squame, { ...rg.PM_PARAMETRI, ponti: 5 });
-  check('ponti a 5 mm: almeno 70 ponti; salti del raso da 83 a meno di 17, del punto sopra a meno di 19 (misurati 15 e 15)', [pt.ponti >= 70, pt.raso.salti < 17, pt.sopra.salti < 19], [true, true, true]);
+  check('ponti a 5 mm: almeno 70 ponti; salti del raso da 83 a meno di 17, del punto sopra a meno di 10 (misurati 15 e 8)', [pt.ponti >= 70, pt.raso.salti < 17, pt.sopra.salti < 10], [true, true, true]);
+  // coi ponti i pezzi del punto sopra che le linee del punto non collegano si raggiungono sulle corde nel verso del raso,
+  // una ogni millimetro (2026-10-26): erano 6 salti dentro le macchie, uno di 29 mm sopra il raso della macchia 34
+  check('...e coi ponti nessun salto dentro le macchie nel punto sopra (erano 6), nessuno sopra una macchia', [pt.saltiDentro, saltiSopra(pt).every((n) => n === 0)], [0, true]);
   // (2026-10-26) coi ponti le macchie hanno fino a 17 parti: la ricerca del piano arrivava al tetto provando le mosse
   // che finiscono in un vicolo cieco, e teneva un piano con 7 salti dentro le macchie; ora quelle mosse si provano solo
   // se non c'è altro

@@ -54,6 +54,11 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    1 (2-3) e lo stesso per le altre 2 fasce. Dentro queste fasce può lavorare in maniera libera»*. Sono le zone della
    10, dall'alto in basso: raso e punto sopra di ogni fascia di seguito, l'ordine libero dentro. L'ordine a serpentina
    per fasce (13) è tolto.
+16. (2026-10-26) **Meno punti corti nel punto sopra**: *«c'è un po' da ridefinire quel passaggio: purtroppo ci sono
+   davvero troppi punti corti e tanti che rischiano di non lavorare bene con fili più spessi. Va in qualche modo cercato
+   di limitare i punti piccoli pur trovando soluzioni per comunque ricamare bene»*. Un campo: *Punto minimo del punto
+   sopra* (`sopraPuntoMin`, 1 mm come la base; più alto per i fili spessi). E coi ponti, nessun salto dentro le macchie
+   nel punto sopra (*«sì, sistemalo»*).
 
 ## Come è fatto, e perché
 - **Il punto sopra è la base stessa**, generata una volta e tagliata sulla macchia: a registro al millesimo.
@@ -133,6 +138,22 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
   (Stilista 52). Coi ponti a 5 mm: 75 ponti, raso 15 salti e punto sopra 15, nessun salto dentro le macchie nel raso.
   Il calcolo: circa 3,6 s in Node.
 
+- **I punti corti del punto sopra** (2026-10-26). Misurati sul pannello di prova: la base, lo stesso punto intero, ha lo
+  0,7% dei punti sotto il millimetro; il punto sopra il 21% (3,4% sotto 0,5 mm). Per due terzi vengono dal taglio sul
+  bordo (l'ultimo punto di una linea tagliata è lungo quel che avanza, da niente a un punto intero), per un quarto dai
+  passaggi, il resto dagli spigoli del disegno vicino al bordo. Ora: (1) `spuntaCapi` — se il moncone del taglio è più
+  corto del minimo la linea si ferma all'ago prima (solo il moncone: togliendo anche i punti corti che seguono, col
+  minimo a 1,5 se ne andava il 12% del punto sopra); (2) `puntiGiusti` — fra uno spigolo e l'altro, dove c'è un punto
+  corto, gli aghi si ridistribuiscono a passo uguale lungo la stessa linea (il filo resta sulla linea, a registro); uno
+  spigolo con una gambetta corta si toglie se il filo si sposta al più di metà del minimo (a 0,3 mm restava il 13,5%
+  sotto il millimetro). Col minimo a 1 mm: sotto 1 mm il 9,5%, sotto 0,5 lo 0,3%, mediana 1,7 mm; 1,16 m di punto sopra
+  in meno su 36 (i monconi). Col minimo a 1,5: sotto 1,5 mm il 20% (era il 40%), 2,5 m in meno; qualche spigolo tagliato
+  in diagonale, da guardare.
+- **Coi ponti, nessun salto dentro le macchie nel punto sopra.** Nelle macchie unite dai ponti alcuni gruppi di pezzi non
+  erano collegati dalle linee del punto (uno: 29 mm sopra il raso della macchia 34, per tornare al ponte d'uscita). Ora
+  una corda nel verso del raso ogni millimetro (`cordeARighe`) entra nella rete: il filo ci passa fra i fili del raso.
+  Salti dentro da 6 a 0, salti del punto sopra da 17 a 8 (il più lungo da 16,8 a 9,3 mm).
+
 ## Strade scartate
 - Passaggi fra le macchie sulle linee della base (27 salti in tutto): Lorenzo non vuole ricamo fra le macchie.
 - Raso e punto sopra di ogni macchia di seguito (una macchia finita, poi la successiva): Lorenzo vuole due stop.
@@ -157,9 +178,14 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
 - Vietare il salto anche sopra le macchie delle altre zone: con tre zone dall'alto in basso le macchie di una fascia
   sono incastrate con quelle delle altre, e l'ordine faceva salti fino a 89 mm.
 
+- Il punto sopra fuori dalla striscia del ponte (tagliato sulla macchia senza ponte): i suoi pezzetti tenevano collegate
+  le parti della macchia, e i salti dentro salivano da 6 a 18.
+
 ## Da guardare a macchina
 - la sfrangiatura (1 mm, metà fuori) e se il bordo così è quello che serve;
 - i ponti: se il disegno li regge, e la larghezza (2 mm);
 - il filo del punto sopra posato nel verso del raso;
 - la copertura del raso sopra la base intera;
-- i passaggi lungo il bordo (a una mediana di 0,2 mm): che le punte delle righe li coprano davvero.
+- i passaggi lungo il bordo (a una mediana di 0,2 mm): che le punte delle righe li coprano davvero;
+- il punto sopra col punto minimo a 1 e a 1,5 mm, coi fili spessi: se si ferma troppo prima del bordo, e gli spigoli
+  tagliati in diagonale.

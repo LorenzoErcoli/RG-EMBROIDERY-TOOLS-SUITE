@@ -60,6 +60,8 @@ const CAMPI_RASO: Campo[] = [
 const CAMPI_SOPRA: Campo[] = [
   { nome: 'passaggioMax', etichetta: 'Passaggio nascosto, fino a', unita: 'mm', passo: 5, min: 0,
     aiuto: 'Da un pezzo all\'altro sulle linee del punto o nel verso del raso: il filo non si vede. Oltre: salto.' },
+  { nome: 'sopraPuntoMin', etichetta: 'Punto minimo del punto sopra', unita: 'mm', passo: 0.1, min: 0.3,
+    aiuto: 'Al bordo della macchia la linea si ferma all’ago prima invece di lasciare un puntino; dentro, gli aghi si ridistribuiscono lungo la linea. Più alto per i fili spessi.' },
   { nome: 'pezzoMinimo', etichetta: 'Togli i pezzi staccati più corti di', unita: 'mm', passo: 0.5, min: 0,
     aiuto: 'I pezzi che non si raggiungono senza salto: se sono corti si tolgono. Il punto sopra non esce mai dalla macchia.' },
 ];

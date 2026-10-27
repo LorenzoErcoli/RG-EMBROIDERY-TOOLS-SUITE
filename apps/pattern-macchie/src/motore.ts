@@ -46,6 +46,12 @@ export type ParametriMacchie = {
   /** I gruppi del punto sopra che non si raggiungono senza salto, se più corti di tanto (mm di filo), si tolgono. */
   pezzoMinimo: number;
   /**
+   * IL PUNTO MINIMO DEL PUNTO SOPRA, mm (Lorenzo, 2026-10-26: «ci sono davvero troppi punti corti e tanti che rischiano
+   * di non lavorare bene con fili più spessi»). Al bordo della macchia la linea tagliata si ferma all'ago prima invece di
+   * lasciare un puntino; dentro, gli aghi si ridistribuiscono lungo la stessa linea. Come la base: 1 mm.
+   */
+  sopraPuntoMin: number;
+  /**
    * I PONTI: due macchie che si seguono e sono più vicine di tanto, mm, si uniscono con un ponte di raso — il filo
    * passa dall'una all'altra senza salto. 0 = mai: le macchie restano come nel disegno.
    */
@@ -70,11 +76,6 @@ export type ParametriMacchie = {
 
 /** Il punto più corto del raso, mm: fra una riga e l'altra il punto è l'interlinea. */
 const RASO_PUNTO_MIN = 0.3;
-/**
- * Il punto più corto del punto sopra, mm. Non quello della base (1 mm): togliendo i punti a meno di 1 mm i
- * passaggi tagliavano gli angoli fino a 0,7 mm fuori dalla linea; a 0,5 restano entro 0,37 mm.
- */
-const SOPRA_PUNTO_MIN = 0.5;
 
 export const PARAMETRI_MACCHIE: ParametriMacchie = {
   bucaLaBase: false,
@@ -86,6 +87,7 @@ export const PARAMETRI_MACCHIE: ParametriMacchie = {
   sfrangiaturaFuori: 50,
   passaggioMax: 100,
   pezzoMinimo: 3,
+  sopraPuntoMin: 1,
   ponti: 0,
   pontiLarghezza: 2,
   daSinistra: false,
@@ -928,6 +930,28 @@ function corda(macchia: Polyline, p: Point, u: Point): Polyline | null {
   return out.length > 1 ? out : null;
 }
 
+/** Le corde della macchia nel verso `u`, una ogni `passo` mm (tutti i tratti dentro la macchia di ogni retta). */
+function cordeARighe(macchia: Polyline, u: Point, passo: number): Polyline[] {
+  const n = { x: -u.y, y: u.x };
+  const s = macchia.map((p) => p.x * n.x + p.y * n.y);
+  const s0 = Math.min(...s), s1 = Math.max(...s), out: Polyline[] = [];
+  for (let o = s0 + passo / 2; o < s1; o += passo) {
+    const ts: number[] = [];
+    for (let i = 0, k = macchia.length - 1; i < macchia.length; k = i++) {
+      const a = macchia[k], b = macchia[i], sa = s[k] - o, sb = s[i] - o;
+      if ((sa > 0) === (sb > 0)) continue;
+      const t = sa / (sa - sb), p = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+      ts.push(p.x * u.x + p.y * u.y);
+    }
+    ts.sort((x, y) => x - y);
+    for (let k = 0; k + 1 < ts.length; k += 2) if (ts[k + 1] - ts[k] > 0.3) {
+      const pt = (t: number): Point => ({ x: n.x * o + u.x * t, y: n.y * o + u.y * t });
+      out.push([pt(ts[k] + 0.1), pt(ts[k + 1] - 0.1)]);
+    }
+  }
+  return out;
+}
+
 /** Un numero a caso fra 0 e 1, sempre lo stesso per gli stessi tre interi: stesso disegno, stesso ricamo. */
 function caso(a: number, b: number, c: number): number {
   let h = Math.imul(a + 0x9e3779b9, 0x85ebca6b) ^ Math.imul(b + 0x7f4a7c15, 0xc2b2ae35) ^ Math.imul(c + 0x165667b1, 0x27d4eb2f);
@@ -1652,7 +1676,11 @@ export function costruisciMacchie(
   uscita = stopRaso.tratti.length ? stopRaso.tratti[stopRaso.tratti.length - 1].at(-1) : fineStop;
   ordine.forEach((i, k) => {
     const m = forme[i];
-    const pezzi = pezziPer[i].filter((p) => lunghezza(p) > 0.05);
+    // (i capi dei pezzi sono i tagli sul bordo: un ultimo punto più corto del minimo non si cuce, la linea si ferma
+    // all'ago prima)
+    const minimo = Math.max(0.3, par.sopraPuntoMin);
+    const pezzi = pezziPer[i].map((p) => { const q = spuntaCapi(p, minimo); tolto += lunghezza(p) - (q ? lunghezza(q) : 0); return q; })
+      .filter((p): p is Polyline => !!p && lunghezza(p) > 0.05);
     const meta = uscitaVerso(ordine, k);
     const entraDaPrima = k > 0 && !!uscita && pointInPolygon(uscita, m);      // col ponte: si arriva già dentro
     const daPrima = k > 0;
@@ -1666,6 +1694,10 @@ export function costruisciMacchie(
       const [pa, pb] = ponte, l = Math.hypot(pb.x - pa.x, pb.y - pa.y) || 1;
       corde.push([{ x: pa.x - ((pb.x - pa.x) / l), y: pa.y - ((pb.y - pa.y) / l) }, meta]);
     }
+    // (e una corda nel verso del raso ogni millimetro, su tutta la macchia: i gruppi di pezzi che le linee del punto non
+    // collegano — nelle macchie unite dai ponti — si raggiungono fra i fili del raso invece che con un salto; coi ponti a
+    // 5 mm i salti dentro le macchie del punto sopra da 6 a 0, 2026-10-26)
+    corde.push(...cordeARighe(m, verso, 1));
     const rete = reteDelPunto([...pezzi, ...corde], [], 0);
     const perGruppo = new Map<number, { pezzi: Polyline[]; filo: number }>();
     for (const p of pezzi) {
@@ -1713,7 +1745,7 @@ export function costruisciMacchie(
       const salto = !via;
       if (salto && primo && daPrima && qui) saltiFra.sopra.push(Math.hypot(scelto[0].x - qui.x, scelto[0].y - qui.y));
       else if (salto && !primo) saltiDentro++;
-      const catena = minimoDentro(salto ? scelto : [...via!, ...scelto.slice(1)], SOPRA_PUNTO_MIN, m);
+      const catena = puntiGiusti(salto ? scelto : [...via!, ...scelto.slice(1)], minimo, m);
       stopSopra.attacca(catena, salto);
       vista.sopra.push(catena);
       qui = scelto[scelto.length - 1];
@@ -1722,7 +1754,7 @@ export function costruisciMacchie(
     // e dall'ultimo pezzo al punto d'uscita, nascosto
     const allUscita = meta && qui ? rete.strade(qui, par.passaggioMax)(meta) : null;
     if (meta && allUscita) {
-      const catena = minimoDentro(allUscita, SOPRA_PUNTO_MIN, m);
+      const catena = puntiGiusti(allUscita, minimo, m);
       stopSopra.attacca(catena, false);
       vista.sopra.push(catena);
       qui = meta;
@@ -1742,20 +1774,75 @@ export function costruisciMacchie(
 }
 
 /**
- * Il punto minimo, ma senza uscire dalla macchia: un punto troppo corto si toglie solo se il punto che ne viene
- * resta dentro (togliendolo a un angolo del bordo il filo taglierebbe fuori, di qualche decimo).
+ * I CAPI DI UN PEZZO del punto sopra sono i tagli sul bordo della macchia: lì l'ultimo punto è lungo quel che avanza
+ * della linea, da niente a un punto intero. Se è più corto del minimo non si cuce: la linea si ferma all'ago prima.
+ * Un pezzo che resta senza punti si toglie (null).
  */
-function minimoDentro(linea: Polyline, minimo: number, macchia: Polyline): Polyline {
-  if (linea.length < 3) return linea.slice();
-  const out: Polyline = [linea[0]];
-  for (let i = 1; i < linea.length - 1; i++) {
-    const u = out[out.length - 1], q = linea[i], dopo = linea[i + 1];
-    const corto = Math.hypot(q.x - u.x, q.y - u.y) < minimo;
-    const scorciatoia = { x: (u.x + dopo.x) / 2, y: (u.y + dopo.y) / 2 };
-    if (!corto || !(pointInPolygon(scorciatoia, macchia) || distanceToBoundary(scorciatoia, macchia) < 0.02)) out.push(q);
+function spuntaCapi(pezzo: Polyline, minimo: number): Polyline | null {
+  let a = 0, b = pezzo.length - 1;
+  const l = (i: number, j: number) => Math.hypot(pezzo[j].x - pezzo[i].x, pezzo[j].y - pezzo[i].y);
+  // (solo il moncone del taglio: togliendo anche i punti corti dopo, col minimo a 1,5 mm se ne andava il 12% del punto
+  // sopra; quelli li sistema `puntiGiusti`)
+  if (b - a >= 2 && l(a, a + 1) < minimo) a++;
+  if (b - a >= 2 && l(b - 1, b) < minimo) b--;
+  if (b - a === 1 && l(a, b) < minimo) return null;
+  return pezzo.slice(a, b + 1);
+}
+
+/**
+ * I PUNTI GIUSTI del punto sopra (Lorenzo, 2026-10-26: «limitare i punti piccoli pur trovando soluzioni per comunque
+ * ricamare bene»). Gli spigoli del disegno restano fermi; fra uno spigolo e l'altro, dove c'è un punto più corto del
+ * minimo, gli aghi si ridistribuiscono a passo uguale lungo la stessa linea: il filo resta sulla linea del punto, a
+ * registro con la base. Un tratto fra due spigoli più corto del minimo: si toglie lo spigolo, se il filo si sposta al
+ * più di metà del minimo (mezzo millimetro col minimo di 1 mm: a 0,3 restava il 13,5% dei punti sotto il millimetro, a
+ * 0,5 l'8,6%). Mai fuori dalla macchia: dove la corda nuova uscirebbe, resta com'era.
+ */
+function puntiGiusti(linea: Polyline, minimo: number, macchia: Polyline): Polyline {
+  const pts = linea.filter((p, i) => i === 0 || Math.hypot(p.x - linea[i - 1].x, p.y - linea[i - 1].y) > 1e-6);
+  if (pts.length < 3) return pts;
+  const dentro = (p: Point) => pointInPolygon(p, macchia) || distanceToBoundary(p, macchia) < 0.02;
+  // gli spigoli: dove la linea gira di più di 25°
+  const fermi = [0];
+  for (let i = 1; i < pts.length - 1; i++) {
+    const a = pts[i - 1], b = pts[i], c = pts[i + 1];
+    const u = Math.atan2(b.y - a.y, b.x - a.x), v = Math.atan2(c.y - b.y, c.x - b.x);
+    let g = Math.abs(v - u); if (g > Math.PI) g = 2 * Math.PI - g;
+    if (g > (25 * Math.PI) / 180) fermi.push(i);
   }
-  out.push(linea[linea.length - 1]);
-  return out;
+  fermi.push(pts.length - 1);
+  const out: Polyline = [pts[0]];
+  for (let f = 1; f < fermi.length; f++) {
+    const i0 = fermi[f - 1], i1 = fermi[f];
+    const tratto = pts.slice(i0, i1 + 1);
+    const lunghi = tratto.slice(1).map((p, k) => Math.hypot(p.x - tratto[k].x, p.y - tratto[k].y));
+    const L = lunghi.reduce((s, x) => s + x, 0);
+    if (lunghi.every((x) => x >= minimo) || L < minimo) { out.push(...tratto.slice(1)); continue; }
+    // a passo uguale lungo il tratto: tanti punti quanti c'erano, ma nessuno sotto il minimo
+    const n = Math.max(1, Math.min(lunghi.length, Math.floor(L / minimo)));
+    const nuovi: Point[] = [];
+    let k = 0, fatto = 0;
+    for (let j = 1; j < n; j++) {
+      const s = (L * j) / n;
+      while (k < lunghi.length - 1 && fatto + lunghi[k] < s) fatto += lunghi[k++];
+      const t = lunghi[k] > 0 ? (s - fatto) / lunghi[k] : 0;
+      nuovi.push({ x: tratto[k].x + (tratto[k + 1].x - tratto[k].x) * t, y: tratto[k].y + (tratto[k + 1].y - tratto[k].y) * t });
+    }
+    nuovi.push(tratto[tratto.length - 1]);
+    let prima = out[out.length - 1], ok = true;
+    for (const q of nuovi) { if (!dentro({ x: (prima.x + q.x) / 2, y: (prima.y + q.y) / 2 })) { ok = false; break; } prima = q; }
+    out.push(...(ok ? nuovi : tratto.slice(1)));
+  }
+  // i punti ancora corti (tratti fra due spigoli più corti del minimo): via lo spigolo, se il filo si sposta poco
+  // (la gambetta di una riga che gira vicino al bordo, l'incrocio di un passaggio con una linea)
+  const fine: Polyline = [out[0]];
+  for (let i = 1; i < out.length - 1; i++) {
+    const u = fine[fine.length - 1], q = out[i], dopo = out[i + 1];
+    const corto = Math.hypot(q.x - u.x, q.y - u.y) < minimo || Math.hypot(dopo.x - q.x, dopo.y - q.y) < minimo;
+    if (corto && distanzaSegmento(q, u, dopo) <= minimo / 2 && dentro({ x: (u.x + dopo.x) / 2, y: (u.y + dopo.y) / 2 })) continue;
+    fine.push(q);
+  }
+  fine.push(out[out.length - 1]);
+  return fine;
 }
 
 // ---------------------------------------------------------------------------------------------------
