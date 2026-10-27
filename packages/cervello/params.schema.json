@@ -2090,6 +2090,10 @@
           "$ref": "#/$defs/tackRepeat",
           "default": 1
         },
+        "sideDivisions": {
+          "$ref": "#/$defs/sideDivisions",
+          "default": 0
+        },
         "lineLink": {
           "$ref": "#/$defs/lineLink",
           "default": "stop"
@@ -5325,6 +5329,15 @@
       "x-passo": 1,
       "x-concetto": "densita"
     },
+    "sideDivisions": {
+      "type": "integer",
+      "title": "Lato del rombo diviso in",
+      "description": "A linee dritte: in quante parti si divide il lato del rombo, da un incrocio all’altro; ogni incrocio ha sempre un punto su tutte e due le linee. 0 = a lunghezza del punto.",
+      "minimum": 0,
+      "maximum": 50,
+      "x-passo": 1,
+      "x-concetto": "densita"
+    },
     "lineLink": {
       "type": "string",
       "title": "Fra un verso e l’altro",
@@ -5521,7 +5534,8 @@
         "rowSpacing",
         "spiralPitch",
         "tieSpacing",
-        "tackRepeat"
+        "tackRepeat",
+        "sideDivisions"
       ]
     },
     "interlinea": {

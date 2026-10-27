@@ -130,6 +130,11 @@ export const scheda: SchedaParametri = {
       tipo: 'int', unita: '', min: 1, max: 10, passo: 1, predefinito: 1, concetto: 'densita',
     },
     {
+      id: 'sideDivisions', etichetta: 'Lato del rombo diviso in',
+      aiuto: 'A linee dritte: in quante parti si divide il lato del rombo, da un incrocio all’altro; ogni incrocio ha sempre un punto su tutte e due le linee. 0 = a lunghezza del punto.',
+      tipo: 'int', unita: '', min: 0, max: 50, passo: 1, predefinito: 0, concetto: 'densita',
+    },
+    {
       id: 'lineLink', etichetta: 'Fra un verso e l’altro',
       aiuto: 'A linee dritte: stop = cambio ago, con uscita e ingresso fuori sagoma; fuori = senza fermarsi, il filo esce alla distanza dell’ingresso, corre cucito fuori dal contorno e rientra all’inizio dell’altro verso.',
       tipo: 'enum', unita: '', opzioni: ['stop', 'fuori'], predefinito: 'stop', concetto: 'ordine-cucitura',

@@ -112,6 +112,12 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
     `bottomRoundEnds` (0 = ovale, 100 = mezzi cerchi e tratti dritti).
 21. **La fascia sui lati lunghi nel tool** (2026-10-16): *«Fascia sui lati lunghi è importante che me lo metti dentro»* →
     `sideBandMm` (0 = tutta la rete), nel ricamo, nel pannello e nella sacca 3D.
+31. **Il lato del rombo in parti** (2026-10-27): *«la distanza tra i punti (travette) non dovrebbe essere un valore di
+    distanza, ma in quante parti vuoi dividere il lato del rombo. perché il punto di incrocio deve sempre avere un punto
+    per le travette, entrambe le diagonali»*. `sideDivisions` (0 = a lunghezza del punto). Gli incroci di tutte e due le
+    famiglie stanno ogni mezza altezza del rombo (dall'alto del pezzo: le rette partono da lì), quindi bastano punti fissi
+    ogni H/2/N in altezza; sulle linee si cuciono solo quelli. Lezione: il controllo finale del punto massimo usava ancora
+    il limite generale (2 mm, dal punto nel vuoto) e spezzava a metà le parti da 2,83: con le parti va saltato.
 30. **La travetta della testa speciale** (2026-10-27): *«quando vado a ricamare la macchina sostituisce il punto con una
     travetta orizzontale… La travetta serve per fissare un filo più grande con la testa speciale. Lavorando però andata e
     ritorno a serpentina questo porta ad avere quadrati più piccoli e più grandi… devo poter avere delle compensazioni che

@@ -7462,6 +7462,20 @@ console.log('\nrete-testa-speciale — travetta della testa speciale: compensazi
   const zz = (extra) => JSON.stringify(rg.rtsCostruisci(rg.rtsPezzoAMisure(P), [], { ...P, buildMode: 'zigzag', ...extra }).parti.map((pt) => pt.tratti));
   check('2 passaggi: ogni punto delle linee due volte (i bordi no); lo zig-zag non cambia; di partenza travetta 0 e 1 passaggio',
     [conta(r) - conta(r1) === reti, zz({}) === zz({ tackWidthMm: 0, tackRepeat: 1 }), rg.RTS_PARAMETRI.tackWidthMm, rg.RTS_PARAMETRI.tackRepeat], [true, true, 0, 1]);
+  // il lato del rombo diviso in parti (Lorenzo, 2026-10-27: «il punto di incrocio deve sempre avere un punto per le
+  // travette, entrambe le diagonali. e poi devo poter decidere in quante parti dividere»): lato 9,86 mm (rombo 10 × 17)
+  const D = { ...P, totalWidth: 100, totalHeight: 85, tackWidthMm: 0, tackRepeat: 1, maxStitchMm: 1 };
+  const prova = (sideDivisions) => {
+    const rr = rg.rtsCostruisci(rg.rtsPezzoAMisure(D), [], { ...D, sideDivisions });
+    const passi = []; for (const bl of rr.blocchi) for (let i = 1; i < bl.length; i++) if (bl[i].tipo === 'rete' && bl[i - 1].tipo === 'rete') passi.push(Math.hypot(bl[i].x - bl[i - 1].x, bl[i].y - bl[i - 1].y));
+    const chiave = (q) => `${Math.round(q.x * 100)},${Math.round(q.y * 100)}`;
+    const [a, b] = [0, 1].map((k) => new Set(rr.blocchi.filter((bl) => bl[0].blocco === k).flat().filter((q) => q.tipo === 'rete').map(chiave)));
+    return { max: Math.max(...passi), lati: passi.filter((s) => Math.abs(s - 9.86 / sideDivisions) < 0.01).length / passi.length, incroci: [...a].filter((k) => b.has(k)).length };
+  };
+  const d3 = prova(3), d4 = prova(4), d0 = prova(0);
+  check('lato diviso in 3 e in 4: punti da 3,29 e 2,47 mm (oltre l’85%), mai più lunghi; ogni incrocio (91) col punto su tutte e due le linee; senza divisioni quasi nessuno',
+    [Math.abs(d3.max - 3.287) < 0.01, d3.lati > 0.85, Math.abs(d4.max - 2.465) < 0.01, d4.lati > 0.85, d3.incroci, d4.incroci, d0.incroci < 20, rg.RTS_PARAMETRI.sideDivisions],
+    [true, true, true, true, 91, 91, true, 0]);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).

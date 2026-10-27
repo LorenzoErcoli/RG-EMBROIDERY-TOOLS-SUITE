@@ -119,6 +119,14 @@ export type ParametriRete = {
   /** A linee dritte: quante volte si ripete ogni punto delle linee (anche sugli incroci): ogni punto, un passaggio di travetta. */
   tackRepeat: number;
   /**
+   * A linee dritte: in quante parti si divide il lato del rombo (da un incrocio all'altro), 0 = a lunghezza del punto.
+   * Lorenzo, 2026-10-27: «la distanza tra i punti (travette) non dovrebbe essere un valore di distanza, ma in quante
+   * parti vuoi dividere il lato del rombo… il punto di incrocio deve sempre avere un punto per le travette, entrambe le
+   * diagonali». Con le parti, ogni incrocio ha un punto su tutte e due le linee; vicino al bordo il pezzo di lato si
+   * divide con la stessa misura. La lunghezza del punto resta per bordi e passaggi.
+   */
+  sideDivisions: number;
+  /**
    * Colonne intere nella larghezza (Lorenzo, 2026-10-21, sulla Net bag Clover 420 × 710: «se guardi i bordi laterali
    * sinistra e destra si creano delle curve strane… serve una curva migliore»). La larghezza del pezzo si divide in un
    * numero intero di colonne, ritoccando di poco la larghezza del rombo: ogni bordo laterale cade a metà della
@@ -196,6 +204,7 @@ export const PARAMETRI_RETE: ParametriRete = {
   lineLink: 'stop',
   tackWidthMm: 0,
   tackRepeat: 1,
+  sideDivisions: 0,
   fitColumns: false,
   entryTailMm: 10,
   spoolM: 0,
@@ -403,6 +412,7 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
   const dentro = (q: Point) => pointInPolygon(q, contorno) && (!ritorno || nelVuotoI(q) < 0);
   // a linee dritte la maglia è il rombo stesso: il passo fra due linee parallele è la sua larghezza
   const lineeDritte = p.buildMode === 'linee', sovr = lineeDritte ? 0 : p.overlapMm;
+  const divisioni = lineeDritte ? Math.max(0, Math.round(p.sideDivisions)) : 0;
   let passo = Math.max(0.5, W - sovr), u0 = 0, colonneIntere: RisultatoRete['colonneIntere'];
   if (p.fitColumns) {
     // un numero intero di colonne nella larghezza: la prima a mezzo passo dal bordo (lì cadrebbe la colonna vicina).
@@ -539,6 +549,14 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
         // (punti fitti lungo la retta: il taglio sul bordo e sui vuoti guarda i punti, e una retta ne ha solo due)
         const v0 = c.v0 - 0.5, v1 = c.v1 + 0.5, nv = Math.max(2, Math.ceil((v1 - v0) / 0.4));
         const fitta: PuntoLato[] = Array.from({ length: nv + 1 }, (_, i) => { const v = v0 + (v1 - v0) * i / nv; return { u: uA(c.col.L, v), v, fisso: i === 0 || i === nv, apice: false }; });
+        // il lato del rombo in parti: gli incroci stanno ogni mezza altezza del rombo (dall'alto del pezzo, per tutte e due
+        // le famiglie), e fra due incroci `divisioni` parti uguali; tutti punti fissi, così l'incrocio ha il punto su
+        // tutte e due le linee
+        if (divisioni > 0) {
+          const dv = H / 2 / divisioni, j0 = Math.ceil((v0 - vmin) / dv - 1e-9), j1 = Math.floor((v1 - vmin) / dv + 1e-9);
+          for (let j = j0; j <= j1; j++) { const v = vmin + j * dv; fitta.push({ u: uA(c.col.L, v), v, fisso: true, apice: false }); }
+          fitta.sort((a, b) => a.v - b.v);
+        }
         const ln = fitta.map((q) => verso(c.col, q, c.col.k + (c.col.famiglia < 0 ? 100000 : 0)));
         const giu = (ci % 2 === 0) !== dalBasso;
         return [taglia(giu ? ln : ln.slice().reverse()), taglia(giu ? ln.slice().reverse() : ln)].filter((t) => t.length);
@@ -576,7 +594,7 @@ export function costruisciRete(contorno: Polyline, vuoti: Polyline[], par: Param
   });
 
   const locale = (q: Point) => { const dx = q.x - C.x, dy = q.y - C.y; return { u: dx * U.x + dy * U.y, v: dx * V.x + dy * V.y }; };
-  const r = cuci(pezzi, { contorno, vuoti, ritorno, nelVuotoI, grande, locale, ordine: (ra, rb) => rb - ra, senzaLenti: lineeDritte }, p, t0);
+  const r = cuci(pezzi, { contorno, vuoti, ritorno, nelVuotoI, grande, locale, ordine: (ra, rb) => rb - ra, senzaLenti: lineeDritte, soloFissiInRete: divisioni > 0 }, p, t0);
   // a linee dritte senza stop fra i versi: la prima parte dell'altro verso si attacca all'ultima del primo
   const unisci = lineeDritte && p.lineLink === 'fuori' ? blocchi.findIndex((b) => b.famiglia < 0) : -1;
   const { parti, avviso, passaggi } = dividiInParti(r, contorno, vuoti, p, unisci);
@@ -599,6 +617,8 @@ interface Geometria {
   giro?: number;
   /** Niente lenti: le linee si attraversano senza sovrapporsi (la rete a linee dritte). */
   senzaLenti?: boolean;
+  /** Sulle linee della rete solo i punti fissi (il lato del rombo diviso in parti): niente punti aggiunti fra l'uno e l'altro. */
+  soloFissiInRete?: boolean;
 }
 
 /**
@@ -822,7 +842,7 @@ function cuci(pezzi: Pezzo[], g: Geometria, p: ParametriRete, t0: number): Risul
         const s0 = tagli[k - 1], len = tagli[k] - s0; if (len < 1e-6) continue;
         const zona = inZona(base + s0 + len / 2), sovrapposto = !!zona, sopra = !!zona?.[2];
         const sotto = p.underOverlapStitchMm > 0 ? p.underOverlapStitchMm : p.maxStitchMm;
-        const lp = tipo === 'vuoto' ? p.voidStitchMm : !zona ? p.maxStitchMm : sopra ? p.overlapStitchMm : sotto;
+        const lp = tipo === 'vuoto' ? p.voidStitchMm : tipo === 'rete' && g.soloFissiInRete ? Infinity : !zona ? p.maxStitchMm : sopra ? p.overlapStitchMm : sotto;
         // dove: punti uguali; nel vuoto attraversato dritto, tre punti corti a ogni bordo e quelli lunghi in mezzo
         const e = pc.tipo === 'vuoto' ? Math.max(0, p.voidEdgeStitchMm) : 0, dove: number[] = [];
         if (e > 0 && len > 6 * e + 1e-9) {
@@ -854,8 +874,9 @@ function cuci(pezzi: Pezzo[], g: Geometria, p: ParametriRete, t0: number): Risul
       // ogni punto col suo massimo: nel vuoto quello del vuoto, nelle zone quello delle zone (prima il più grande di
       // tutti valeva ovunque, e fra bordo e rete passavano punti da 1,28 mm col punto a 1)
       const a = tenuti[i - 1], q = tenuti[i];
-      const lim = Math.max(0.1, p.maxStitchMm, q.tipo === 'vuoto' || a.tipo === 'vuoto' ? p.voidStitchMm : 0, q.sovrapposto || a.sovrapposto ? Math.max(p.overlapStitchMm, p.underOverlapStitchMm) : 0);
-      const n = Math.ceil(distance(a, q) / Math.min(massimo, lim) - 1e-9);
+      const lim = g.soloFissiInRete && a.tipo === 'rete' && q.tipo === 'rete' ? Infinity // (il lato del rombo in parti: si tengono le parti)
+        : Math.max(0.1, p.maxStitchMm, q.tipo === 'vuoto' || a.tipo === 'vuoto' ? p.voidStitchMm : 0, q.sovrapposto || a.sovrapposto ? Math.max(p.overlapStitchMm, p.underOverlapStitchMm) : 0);
+      const n = Math.ceil(distance(a, q) / (lim === Infinity ? Infinity : Math.min(massimo, lim)) - 1e-9);
       for (let k = 1; k < n; k++) out.push({ ...q, ...lerp(a, q, k / n) });
       out.push(q);
     }

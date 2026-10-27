@@ -82,6 +82,8 @@ const CAMPI_TRAVETTA: Campo[] = [
     aiuto: 'La macchina fa di ogni punto una travetta che va a sinistra se la linea sale, a destra se scende; il cordone si fissa al centro. I punti si spostano di mezza travetta al contrario (salendo a destra, scendendo a sinistra, bordi verticali compresi) così il cordone cade sul disegno. 0 = niente.' },
   { nome: 'tackRepeat', etichetta: 'Passaggi della travetta per punto', unita: '', passo: 1, min: 1, max: 10,
     aiuto: 'Ogni punto delle linee (anche sugli incroci) ripetuto nello stesso posto: ogni ripetizione, un passaggio di travetta.' },
+  { nome: 'sideDivisions', etichetta: 'Lato del rombo diviso in', unita: '', passo: 1, min: 0, max: 50,
+    aiuto: 'Quante parti fra un incrocio e l’altro: ogni incrocio ha sempre un punto, su tutte e due le linee. 0 = a lunghezza del punto (che resta per bordi e passaggi).' },
 ];
 const CAMPO_FRA_VERSI: Campo = { nome: 'lineLink', etichetta: 'Fra un verso e l’altro', unita: '', passo: 1, min: 0,
   scelte: [['stop', 'cambio ago, con uscita e ingresso fuori sagoma'], ['fuori', 'senza fermarsi: passaggio cucito fuori sagoma']],
