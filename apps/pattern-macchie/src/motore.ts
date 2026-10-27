@@ -252,10 +252,13 @@ const ingombro = (m: Polyline): Ingombro => {
   return { x0, y0, x1, y1 };
 };
 
-export function ordinaMacchie(macchie: Polyline[], partenza?: Point, senzaSalto = 0.05, daSinistra = false, tutte: Polyline[] = macchie): number[] {
+export function ordinaMacchie(macchie: Polyline[], partenza?: Point, senzaSalto = 0.05, daSinistra = false): number[] {
   const N = macchie.length;
   if (N < 2) return macchie.map((_, i) => i);
   const bb = macchie.map(ingombro);
+  // (le distanze sul contorno semplificato a un decimo di millimetro, i due punti più vicini una volta sola per coppia:
+  // su un pannello di 500 macchie, duecento vertici l'una e tremila coppie vicine, era quasi metà del calcolo)
+  const sem = macchie.map((m) => simplifyPolyline(m, 0.1));
   const D = Array.from({ length: N }, () => new Float64Array(N));
   for (let i = 0; i < N; i++) for (let j = i + 1; j < N; j++) {
     const a = bb[i], b = bb[j];
@@ -264,11 +267,11 @@ export function ordinaMacchie(macchie: Polyline[], partenza?: Point, senzaSalto 
     // Lorenzo, 2026-10-26 — metterle in fila costa come 200 mm di salto in più)
     let inMezzo = false;
     if (d < 25) {
-      if (distanzaFra(macchie[i], macchie[j]) === 0) d = 0;
+      const [p, q, dd] = piuVicini(sem[i], sem[j]);
+      if (d === 0 && (pointInPolygon(sem[i][0], sem[j]) || pointInPolygon(sem[j][0], sem[i]))) d = 0;
       else {
-        const [p, q, dd] = piuVicini(macchie[i], macchie[j]);
         d = dd;
-        inMezzo = sopraAltre(p, q, tutte, macchie[i], macchie[j]);
+        inMezzo = sopraAltre(p, q, sem, sem[i], sem[j]);
       }
     } else d += 5;
     // ogni salto costa; e un salto lungo (oltre 8 mm, il filo resta lungo sul ricamo) costa il triplo per il di più
@@ -332,12 +335,14 @@ export function ordinaMacchie(macchie: Polyline[], partenza?: Point, senzaSalto 
  * delle altre zone si cuciono dopo uno stop, quando il filo del salto è già tagliato) diversa da `a` e da `b`.
  */
 function sopraAltre(p: Point, q: Point, tutte: Polyline[], a: Polyline, b: Polyline): boolean {
+  if (!ingombri.has(tutte)) ingombri.set(tutte, tutte.map(ingombro));
+  const bt = ingombri.get(tutte)!;
   const L = Math.hypot(q.x - p.x, q.y - p.y);
   if (L <= 1.6) return false;
   const x0 = Math.min(p.x, q.x), x1 = Math.max(p.x, q.x), y0 = Math.min(p.y, q.y), y1 = Math.max(p.y, q.y);
-  const altre = tutte.filter((f) => {
+  const altre = tutte.filter((f, i) => {
     if (f === a || f === b) return false;
-    const k = ingombro(f);
+    const k = bt[i];
     return k.x1 >= x0 && k.x0 <= x1 && k.y1 >= y0 && k.y0 <= y1;
   });
   if (!altre.length) return false;
@@ -347,6 +352,9 @@ function sopraAltre(p: Point, q: Point, tutte: Polyline[], a: Polyline, b: Polyl
   }
   return false;
 }
+
+/** Gli ingombri di una lista di macchie, tenuti (`sopraAltre` li chiede per ogni coppia). */
+const ingombri = new WeakMap<Polyline[], Ingombro[]>();
 
 /** La distanza fra i contorni di due macchie (0 se si toccano o si sovrappongono). */
 function distanzaFra(a: Polyline, b: Polyline): number {
@@ -1490,16 +1498,24 @@ export function costruisciMacchie(
    * Dove si esce dalla macchia: il suo punto più vicino alla prossima, appena dentro. Col ponte, la punta del
    * ponte: un quarto di millimetro dentro la macchia dopo.
    */
+  /** I due punti più vicini fra due macchie, tenuti: servono all'uscita del raso, a quella del punto sopra e al piano. */
+  const viciniTenuti = new Map<number, [Point, Point, number]>();
+  const piuViciniFra = (i: number, j: number) => {
+    const chiave = i * 100003 + j;
+    let v = viciniTenuti.get(chiave);
+    if (!v) { v = piuVicini(forme[i], forme[j]); viciniTenuti.set(chiave, v); }
+    return v;
+  };
   const uscitaVerso = (ordine: number[], k: number): Point | null => {
     if (k + 1 >= ordine.length) return null;
-    const i = ordine[k], m = forme[i], prossima = forme[ordine[k + 1]];
+    const i = ordine[k], m = forme[i];
     const ponte = asse.get(i);
     if (ponte) {
       const [pa, pb] = ponte, l = Math.hypot(pb.x - pa.x, pb.y - pa.y) || 1;
       const punta = { x: pb.x + ((pb.x - pa.x) / l) * 0.25, y: pb.y + ((pb.y - pa.y) / l) * 0.25 };
       if (pointInPolygon(punta, m)) return punta;
     }
-    const [pa, pb, dd] = piuVicini(m, prossima);
+    const [pa, pb, dd] = piuViciniFra(i, ordine[k + 1]);
     const l = Math.hypot(pb.x - pa.x, pb.y - pa.y);
     // appena dentro (un quarto di millimetro): sul bordo la corda nel verso del raso può non entrare nella macchia
     const dentroA = dd > 1e-6 && l > 1e-6 ? { x: pa.x - ((pb.x - pa.x) / l) * 0.25, y: pa.y - ((pb.y - pa.y) / l) * 0.25 } : pa;
@@ -1513,6 +1529,8 @@ export function costruisciMacchie(
    * bordo o appena dentro (le righe sfrangiate), nessun punto più di due decimi dentro una macchia.
    */
   const bbF = forme.map(ingombro);
+  // (sul contorno semplificato a un decimo: per ogni salto si provano decine di punti, su pannelli di centinaia di macchie)
+  const formeSem = forme.map((f) => simplifyPolyline(f, 0.1));
   const memoSopra = new Map<string, boolean>();
   let zonaOra = 0;
   const saltoSopra = (a: Point, b: Point): boolean => {
@@ -1523,8 +1541,8 @@ export function costruisciMacchie(
     let esito = false;
     if (L > 1.6) {
       const x0 = Math.min(a.x, b.x), x1 = Math.max(a.x, b.x), y0 = Math.min(a.y, b.y), y1 = Math.max(a.y, b.y);
-      const vicine = ordini[zonaOra].filter((k) => bbF[k].x1 >= x0 && bbF[k].x0 <= x1 && bbF[k].y1 >= y0 && bbF[k].y0 <= y1).map((k) => forme[k]);
-      for (let s = 0.8; s <= L - 0.8 && !esito; s += 0.2) {
+      const vicine = ordini[zonaOra].filter((k) => bbF[k].x1 >= x0 && bbF[k].x0 <= x1 && bbF[k].y1 >= y0 && bbF[k].y0 <= y1).map((k) => formeSem[k]);
+      for (let s = 0.8; s <= L - 0.8 && !esito; s += 0.25) {
         const p = { x: a.x + ((b.x - a.x) * s) / L, y: a.y + ((b.y - a.y) * s) / L };
         for (const f of vicine) if (pointInPolygon(p, f) && distanceToBoundary(p, f) > 0.2) { esito = true; break; }
       }
@@ -1581,7 +1599,7 @@ export function costruisciMacchie(
     // sul pannello di prova), il vecchio modo: la cella più vicina.
     const daDove = passate && uscita ? uscita : ingresso;
     const pianoTrovato = pianoDelRaso(celle, divise.lati, daDove, meta, asse.has(i), verso, par.daSinistra === true, passate, unito, passate ? stradaVera(m) : undefined, passate ? saltoSopra : undefined, uscita ? ingresso : undefined,
-      passate && k + 1 < ordine.length ? piuVicini(m, forme[ordine[k + 1]])[1] : undefined);
+      passate && k + 1 < ordine.length ? piuViciniFra(i, ordine[k + 1])[1] : undefined);
     let blocchi = pianoTrovato ?? pianoVicino(celle.filter((c) => c.length), daDove, meta);
     const primaRiga = blocchi.find((b) => b.length)?.[0]?.[0] ?? ingresso;
     // (dritti all'inizio della prima riga solo se il filo del salto non passa sopra una macchia: se no si entra dal punto
@@ -1697,8 +1715,10 @@ export function costruisciMacchie(
     // (e una corda nel verso del raso ogni millimetro, su tutta la macchia: i gruppi di pezzi che le linee del punto non
     // collegano — nelle macchie unite dai ponti — si raggiungono fra i fili del raso invece che con un salto; coi ponti a
     // 5 mm i salti dentro le macchie del punto sopra da 6 a 0, 2026-10-26)
-    corde.push(...cordeARighe(m, verso, 1));
-    const rete = reteDelPunto([...pezzi, ...corde], [], 0);
+    // (solo dove servono: se le linee del punto e le corde dei capi tengono già insieme tutti i pezzi, la rete resta
+    // leggera — su un pannello di 500 macchie la rete fitta in ogni macchia costava un sesto del calcolo)
+    let rete = reteDelPunto([...pezzi, ...corde], [], 0);
+    if (new Set(pezzi.map((p) => rete.gruppo(p[0]))).size > 1) rete = reteDelPunto([...pezzi, ...corde, ...cordeARighe(m, verso, 1)], [], 0);
     const perGruppo = new Map<number, { pezzi: Polyline[]; filo: number }>();
     for (const p of pezzi) {
       const g = rete.gruppo(p[0]);

@@ -375,7 +375,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   let occupato = false;
   /** Se il worker non parte (il browser non lo carica): si calcola nella pagina, come prima. */
   let senzaWorker = false;
-  let idCalcolo = 0, attesa = 0, tick = 0;
+  let idCalcolo = 0, attesa = 0;
   /** Gli export valgono solo col ricamo dei parametri di adesso: mentre si calcola, si fermano. */
   function exportPronti(si: boolean) {
     for (const id of ['exportBtn', 'exportDstBtn']) ($(id) as HTMLButtonElement).disabled = !si;
@@ -391,12 +391,10 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       try { worker = new Worker(new URL('./macchie.worker.ts', import.meta.url), { type: 'module' }); } catch { worker = null; }
     }
     exportPronti(false);
-    const inizio = Date.now();
-    window.clearInterval(tick);
+    // (senza contatore dei secondi: riscrivere la riga di stato ogni mezzo secondo faceva ridisegnare alla pagina tutto
+    // il disegno, e su un pannello di 500 macchie il calcolo passava da 10 a 35 s — 2026-10-27)
     $('status').textContent = 'Calcolo…';
-    tick = window.setInterval(() => { $('status').textContent = `Calcolo… ${Math.round((Date.now() - inizio) / 1000)} s`; }, 500);
     const finito = (r: RisultatoMacchie | null, errore?: string) => {
-      window.clearInterval(tick);
       occupato = false;
       exportPronti(true);
       risultato = r;
@@ -433,6 +431,9 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
 
   // ---- l'anteprima ----
   const d = (pl: { x: number; y: number }[]) => pl.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+  /** Tante linee in un tracciato solo (`M x y L x y …`), al decimo di millimetro. */
+  const percorso = (linee: Array<{ x: number; y: number }[]>) =>
+    linee.filter((t) => t.length > 1).map((t) => 'M' + t.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join('L')).join('');
 
   function cornice(corpo: string): string {
     const { pannello } = geometria();
@@ -448,7 +449,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   function contorniSvg(opacita: number): string {
     const { pannello, macchie } = geometria();
     return (pannello ? `<polygon points="${d(pannello)}" fill="none" stroke="#c0392b" stroke-width="0.3"/>` : '')
-      + macchie.map((m) => `<polygon points="${d(m)}" fill="#e8c547" fill-opacity="${opacita}" stroke="#b8941f" stroke-width="0.15"/>`).join('');
+      + (macchie.length ? `<path d="${percorso(macchie.map((m) => [...m, m[0]]))}" fill="#e8c547" fill-opacity="${opacita}" stroke="#b8941f" stroke-width="0.15"/>` : '');
   }
 
   function disegnaContorni() {
@@ -463,16 +464,15 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     if (simulando && simula()) { if (adatta) pz.fit(); return; }
     const r = risultato;
     const linee: Record<ChiaveFilo, Polyline[]> = { base: r.base.tratti, raso: r.vista.raso, sopra: r.vista.sopra, sotto: r.vista.sotto };
+    // un solo tracciato per filo, al decimo di millimetro: su un pannello di 400.000 punti l'anteprima a una linea per
+    // tratto era un SVG da 8 MB con 16.600 elementi, pesante da ridisegnare a ogni zoom (2026-10-27)
     const fili = FILI.filter((l) => visibili[l.chiave])
-      .map((l) => linee[l.chiave].map((t) => `<polyline points="${d(t)}" fill="none" stroke="${l.colore}" stroke-width="${l.chiave === 'raso' ? 0.1 : l.chiave === 'sotto' ? 0.2 : 0.14}"/>`).join(''))
+      .map((l) => `<path d="${percorso(linee[l.chiave])}" fill="none" stroke="${l.colore}" stroke-width="${l.chiave === 'raso' ? 0.1 : l.chiave === 'sotto' ? 0.2 : 0.14}" stroke-linejoin="round"/>`)
       .join('');
     const salti = visibili.salti
-      ? [r.raso.tratti, r.sopra.tratti].flatMap((tr) => tr.slice(1).map((t, i) => {
-        const a = tr[i].at(-1)!, b = t[0];
-        return `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="#d62020" stroke-width="0.3" stroke-dasharray="1 0.6"/>`;
-      })).join('')
+      ? `<path d="${[r.raso.tratti, r.sopra.tratti].flatMap((tr) => tr.slice(1).map((t, i) => percorso([[tr[i].at(-1)!, t[0]]]))).join('')}" fill="none" stroke="#d62020" stroke-width="0.3" stroke-dasharray="1 0.6"/>`
       : '';
-    const forme = visibili.contorni ? r.forme.map((f) => `<polygon points="${d(f)}" fill="none" stroke="#2e8b57" stroke-width="0.15"/>`).join('') : '';
+    const forme = visibili.contorni ? `<path d="${percorso(r.forme.map((f) => [...f, f[0]]))}" fill="none" stroke="#2e8b57" stroke-width="0.15"/>` : '';
     $('layer').innerHTML = cornice(contorniSvg(0.12) + fili + forme + salti);
     if (adatta) pz.fit();
   }

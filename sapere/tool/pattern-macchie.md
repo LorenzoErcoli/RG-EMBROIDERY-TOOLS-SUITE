@@ -59,6 +59,7 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    di limitare i punti piccoli pur trovando soluzioni per comunque ricamare bene»*. Un campo: *Punto minimo del punto
    sopra* (`sopraPuntoMin`, 1 mm come la base; più alto per i fili spessi). E coi ponti, nessun salto dentro le macchie
    nel punto sopra (*«sì, sistemalo»*).
+17. (2026-10-27) **I pannelli grandi**: *«in un pannello grande da 400000 punti generati fa davvero fatica»*.
 
 ## Come è fatto, e perché
 - **Il punto sopra è la base stessa**, generata una volta e tagliata sulla macchia: a registro al millesimo.
@@ -153,6 +154,18 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
   erano collegati dalle linee del punto (uno: 29 mm sopra il raso della macchia 34, per tornare al ponte d'uscita). Ora
   una corda nel verso del raso ogni millimetro (`cordeARighe`) entra nella rete: il filo ci passa fra i fili del raso.
   Salti dentro da 6 a 0, salti del punto sopra da 17 a 8 (il più lungo da 16,8 a 9,3 mm).
+
+- **I pannelli grandi** (2026-10-27; provato su un pannello costruito ripetendo quello di prova 3 × 2: 504 macchie,
+  1.071 × 206 mm, 392.000 punti). Nel tool il calcolo durava 35 s, ma lo stesso calcolo nella pagina o in un worker
+  lanciato a mano 10 s: **il contatore «Calcolo… N s»**, riscritto ogni mezzo secondo, faceva ridisegnare alla pagina
+  tutto il disegno (504 contorni, 105.000 vertici) e il computer non restava al calcolo. Tolto il contatore: 9 s. Poi
+  il motore: l'ordine delle macchie confrontava ogni vertice di una con ogni lato dell'altra per 3.453 coppie, due volte
+  (il 42% del tempo) — ora sul contorno semplificato a un decimo di millimetro e una volta sola per coppia; i punti più
+  vicini fra due macchie tenuti (servivano tre volte); il controllo dei salti sul contorno semplificato; le corde ogni
+  millimetro del punto sopra solo nelle macchie dove i pezzi sono staccati. In Node da 23 a 11 s (il pannello di prova
+  da 3,6 a 1,8 s). E l'anteprima: un tracciato per filo invece di una linea per tratto (da 16.600 elementi a 8, l'SVG da
+  8 a 6 MB). Da sapere: con la tolleranza di semplificazione a 0,02 e 0,05 mm l'ordine sul pannello di prova cambiava
+  (il salto più lungo da 12 a 20,5 mm), a 0, 0,01 e 0,1 no: l'ordinatore è sensibile alle coppie al limite.
 
 ## Strade scartate
 - Passaggi fra le macchie sulle linee della base (27 salti in tutto): Lorenzo non vuole ricamo fra le macchie.
