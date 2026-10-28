@@ -114,7 +114,9 @@ altrimenti il DST si apre in un documento nuovo. Nel plugin (`Collegamento.Ritor
    Se i selezionati sono tutti laser, il modello si cerca negli altri oggetti del documento. Se non c'è
    nessun oggetto da ricamo, si crea un **Manual nuovo**: `new DesignObject(EmbDesignData,
    ObjectType.Manual, cTarget.Embroidery)`, come fa Stilista in `MergeToManualStitch`, poi va sull'ago
-   chiesto o su quello della selezione. Solo se anche questo non riesce, un lineare nativo «cliccando»
+   chiesto o su quello di partenza. **L'ago di partenza** (`data-rg-stilista-ago`) è quello del modello se è
+   fra i selezionati; se i selezionati sono tutti laser è **il primo ago dopo i loro** (Lorenzo, 2026-10-28:
+   «il primo ago dopo quelli dei laser»), così il ricamo non va sull'ago dei tagli. Solo se anche questo non riesce, un lineare nativo «cliccando»
    `btLinear1` nella barra, che c'è solo se la barra mostra quella scheda (2026-10-21: «native function
    selection failed», ritorno fermo);
 2. `OldPoints2StitchPath(TAGGEDPOINT[])` coi nostri punti (`TAGGEDPOINT(x µm, y µm, tag)`: tag 0 punto,

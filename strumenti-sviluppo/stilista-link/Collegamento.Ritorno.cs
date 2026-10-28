@@ -294,7 +294,7 @@ namespace StilistaHostSkeleton
             modello = ModelloDiRicamo(documento.Where(o => !selezionati.Contains(o)));
             dove = modello != null
                 ? "i " + selezionati.Count + " selezionati sono tutti laser: l'oggetto " + (documento.IndexOf(modello) + 1) + " del documento"
-                : "nessun oggetto da ricamo, né fra i " + selezionati.Count + " selezionati né nel documento: il ritorno partirà dal lineare nativo";
+                : "nessun oggetto da ricamo, né fra i " + selezionati.Count + " selezionati né nel documento: il ritorno sarà un manuale nuovo, da ricamo";
             return modello;
         }
 
