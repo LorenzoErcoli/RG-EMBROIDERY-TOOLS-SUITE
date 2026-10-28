@@ -75,10 +75,15 @@ namespace StilistaHostSkeleton
                 buone = misura.Uguale ? buone + 1 : 0;
             }
             var ok = buone >= 3 && misura.OggettiOra == esito.PrimaDi + 1;
+            // un oggetto rimasto senza punti non serve a niente, e se i punti sono diventati tagli laser è
+            // anche pericoloso: si toglie dal documento
+            var tolto = !ok && misura != null && misura.Letti == 0 && (bool)NelFiloDiStilista(() => Togli(esito));
             var sb = new StringBuilder("{\"ok\":").Append(ok ? "true" : "false");
             if (!ok)
             {
-                sb.Append(",\"errore\":").Append(Json.Stringa("il ricamo non e' tornato intero: punti " + misura?.Letti + " su " + punti.Length + " · " + esito.ComeManuale));
+                sb.Append(",\"errore\":").Append(Json.Stringa("il ricamo non e' tornato intero: punti " + misura?.Letti + " su " + punti.Length +
+                    (misura != null && misura.Laser > 0 ? " (come laser: " + misura.Laser + ")" : "") + " · " + esito.ComeManuale +
+                    (tolto ? " · tolto dal documento" : "")));
             }
             sb.Append(",\"indice\":").Append(esito.Posizione);
             sb.Append(",\"tipo_prima\":").Append(Json.Stringa(esito.TipoPrima));
@@ -88,6 +93,7 @@ namespace StilistaHostSkeleton
             sb.Append(",\"punti_letti\":").Append(misura?.Letti ?? 0);
             sb.Append(",\"punti_cuciti\":").Append(misura?.Cuciti ?? 0);
             sb.Append(",\"salti\":").Append(misura?.Salti ?? 0);
+            sb.Append(",\"punti_laser\":").Append(misura?.Laser ?? -1);
             sb.Append(",\"scarto_um\":").Append(misura == null || misura.ScartoUm == int.MaxValue ? -1 : misura.ScartoUm);
             sb.Append(",\"ago\":").Append(Json.Stringa(misura?.Ago));
             Annota(ok ? "Ricamo tornato nel documento: " + punti.Length + " punti" : "Ritorno del ricamo incompleto: vedi il log");
@@ -109,7 +115,10 @@ namespace StilistaHostSkeleton
             //    ha già l'ago e il colore giusti, e non serve l'interfaccia. Prima si creava un lineare
             //    «cliccando» btLinear1 nella barra di Stilista, che c'è solo se la barra mostra quella scheda
             //    (2026-10-21: «native function selection failed», e il ritorno non partiva): resta di riserva.
+            //    Senza un oggetto da ricamo da copiare (2026-10-28: il documento del Pattern a macchie ha solo i 47
+            //    laser delle macchie) si crea un Manual nuovo, da ricamo, come lo crea Stilista (NuovoManuale).
             object partenza = null;
+            object manuale = null;
             var nelDocumento = false;
             var posizione = primaDi;
             var comeNato = "";
@@ -120,6 +129,11 @@ namespace StilistaHostSkeleton
             }
             if (partenza == null)
             {
+                manuale = NuovoManuale(embroidery);
+                comeNato = manuale != null ? "manuale nuovo, da ricamo" : comeNato;
+            }
+            if (partenza == null && manuale == null)
+            {
                 partenza = LineareNativo(embroidery, oggetti, punti, ricamo);
                 if (partenza == null)
                 {
@@ -129,41 +143,45 @@ namespace StilistaHostSkeleton
                 posizione = SnapshotObjects(oggetti).Count - 1;
                 comeNato = "lineare nativo";
             }
-            var tipoPrima = Tipo(partenza) + " · " + comeNato;
-            var scrivi = FindMethodInHierarchy(partenza.GetType(), "OldPoints2StitchPath", new[] { typeof(TAGGEDPOINT[]) });
+            var nuovo = manuale != null;
+            var tipoPrima = Tipo(partenza ?? manuale) + " · " + comeNato;
+            var scrivi = FindMethodInHierarchy((partenza ?? manuale).GetType(), "OldPoints2StitchPath", new[] { typeof(TAGGEDPOINT[]) });
             if (scrivi == null)
             {
-                return new Ritorno { Errore = "OldPoints2StitchPath non trovato su " + partenza.GetType().FullName };
+                return new Ritorno { Errore = "OldPoints2StitchPath non trovato su " + (partenza ?? manuale).GetType().FullName };
             }
 
             // 2. i punti cuciti diventano i nostri (non sempre agisce subito: si riscrivono anche dopo)
-            scrivi.Invoke(partenza, new object[] { punti });
+            scrivi.Invoke(partenza ?? manuale, new object[] { punti });
 
             // 3. un oggetto a punti manuali: una collezione con lui solo e DsgObjCollection.MergeToManualStitch()
-            object manuale = null;
-            string comeManuale;
-            try
+            //    (il manuale nuovo lo è già)
+            var comeManuale = "manuale nuovo";
+            if (!nuovo)
             {
-                // la collezione del documento è una EmbroideryDsgObjCollection, senza quel costruttore:
-                // si risale alla prima classe che ha .ctor(DesignObject) (DsgObjCollection)
-                var tipoCollezione = oggetti.GetType();
-                while (tipoCollezione != null && tipoCollezione.GetConstructor(new[] { partenza.GetType() }) == null)
+                try
                 {
-                    tipoCollezione = tipoCollezione.BaseType;
+                    // la collezione del documento è una EmbroideryDsgObjCollection, senza quel costruttore:
+                    // si risale alla prima classe che ha .ctor(DesignObject) (DsgObjCollection)
+                    var tipoCollezione = oggetti.GetType();
+                    while (tipoCollezione != null && tipoCollezione.GetConstructor(new[] { partenza.GetType() }) == null)
+                    {
+                        tipoCollezione = tipoCollezione.BaseType;
+                    }
+                    if (tipoCollezione == null)
+                    {
+                        throw new MissingMethodException("nessuna collezione con .ctor(" + partenza.GetType().Name + ")");
+                    }
+                    var collezione = Activator.CreateInstance(tipoCollezione, partenza);
+                    var risultato = FindMethodInHierarchy(tipoCollezione, "MergeToManualStitch", Type.EmptyTypes)?.Invoke(collezione, null);
+                    var dentro = SnapshotObjects(risultato);
+                    manuale = dentro.Count == 1 ? dentro[0] : null;
+                    comeManuale = "MergeToManualStitch: " + dentro.Count + " oggetti";
                 }
-                if (tipoCollezione == null)
+                catch (Exception ex)
                 {
-                    throw new MissingMethodException("nessuna collezione con .ctor(" + partenza.GetType().Name + ")");
+                    comeManuale = "MergeToManualStitch: " + DescribeException(ex);
                 }
-                var collezione = Activator.CreateInstance(tipoCollezione, partenza);
-                var risultato = FindMethodInHierarchy(tipoCollezione, "MergeToManualStitch", Type.EmptyTypes)?.Invoke(collezione, null);
-                var dentro = SnapshotObjects(risultato);
-                manuale = dentro.Count == 1 ? dentro[0] : null;
-                comeManuale = "MergeToManualStitch: " + dentro.Count + " oggetti";
-            }
-            catch (Exception ex)
-            {
-                comeManuale = "MergeToManualStitch: " + DescribeException(ex);
             }
             if (manuale == null)
             {
@@ -188,8 +206,8 @@ namespace StilistaHostSkeleton
             TrySetBoolMember(manuale, "NeedRestitching", false);
 
             // 4. nel documento: al posto del lineare, o in fondo (la copia non c'era)
-            var togli = FindMethodInHierarchy(oggetti.GetType(), "Remove", new[] { partenza.GetType() });
-            var metti = FindMethodInHierarchy(oggetti.GetType(), "Insert", new[] { typeof(int), partenza.GetType() });
+            var togli = FindMethodInHierarchy(oggetti.GetType(), "Remove", new[] { manuale.GetType() });
+            var metti = FindMethodInHierarchy(oggetti.GetType(), "Insert", new[] { typeof(int), manuale.GetType() });
             if (metti == null || (nelDocumento && togli == null))
             {
                 return new Ritorno { Errore = "Remove/Insert non trovati sulla collezione del documento" };
@@ -202,10 +220,12 @@ namespace StilistaHostSkeleton
             // L'AGO DELLO STRATO (Lorenzo, 2026-10-21: «tanti tools prevedono già la divisione in stop e aghi»):
             // il tool chiede l'ago (consecutivi da quello dell'oggetto selezionato). Si cambia solo l'ago, coi
             // colori che gli aghi hanno già nel documento: nessun colore passato = la tavolozza non si tocca.
-            if (ricamo.Ago.HasValue && ReadNativeNeedleOneBased(manuale) != ricamo.Ago.Value)
+            // Il manuale nuovo nasce sull'ago corrente di Stilista: senza ago chiesto va su quello della selezione.
+            var ago = ricamo.Ago ?? (nuovo ? _agoSelezione ?? 1 : (int?)null);
+            if (ago.HasValue && ReadNativeNeedleOneBased(manuale) != ago.Value)
             {
-                var cambiato = TryAssignNativeNeedle(GetReadableMemberValue(embroidery, "ListaFilati"), manuale, ricamo.Ago.Value, null, log + ".Ago");
-                comeManuale += " · ago " + ricamo.Ago.Value + (cambiato ? "" : " NON assegnato");
+                var cambiato = TryAssignNativeNeedle(GetReadableMemberValue(embroidery, "ListaFilati"), manuale, ago.Value, null, log + ".Ago");
+                comeManuale += " · ago " + ago.Value + (cambiato ? "" : " NON assegnato");
             }
             // l'inserimento lo segna da ricucire, e Stilista lo ricalcola da sé ~300 ms dopo: i punti si
             // scrivono ora che è nel documento (prima non agisce), e la sentinella fa il resto
@@ -215,7 +235,7 @@ namespace StilistaHostSkeleton
             AvviaSentinella();
             TryRaiseObjectsRedrawNeeded(oggetti);
             ProbeLog.Write(log + ": " + tipoPrima + " -> " + Tipo(manuale) + " punti chiesti " + punti.Length +
-                " ora " + ContaPunti(manuale) + " · " + comeManuale);
+                " ora " + ContaPunti(manuale) + " (laser " + PuntiLaser(manuale) + ") · " + comeManuale);
             return new Ritorno
             {
                 Finale = manuale,
@@ -226,6 +246,114 @@ namespace StilistaHostSkeleton
                 TipoPrima = tipoPrima,
                 ComeManuale = comeManuale,
             };
+        }
+
+        /// <summary>
+        /// Il modello del ricamo che torna: il primo oggetto selezionato da ricamo (Parameters.isConRicamo) che non è
+        /// un laser, meglio se ha già dei punti. Un laser no (2026-10-28, Pattern a macchie, 48 oggetti selezionati):
+        /// nella sua copia i nostri punti diventano tagli laser — Stilista li conta in TotalLaserCoords, TotalStitches
+        /// resta 0, Stitches() li dà vuoti e la sentinella li riscriveva ogni secondo per niente. Se nessuno è da
+        /// ricamo, il primo che non è un laser; null se sono tutti laser.
+        /// </summary>
+        private static object ModelloDiRicamo(IEnumerable<object> candidati)
+        {
+            object senzaPunti = null;
+            object diRiserva = null;
+            foreach (var o in candidati)
+            {
+                if (Vero(o, "ContainsLaser"))
+                {
+                    continue;
+                }
+                if (Vero(GetReadableMemberValue(o, "Parameters"), "isConRicamo"))
+                {
+                    if (Vero(o, "ContainsStitches"))
+                    {
+                        return o;
+                    }
+                    senzaPunti = senzaPunti ?? o;
+                }
+                diRiserva = diRiserva ?? o;
+            }
+            return senzaPunti ?? diRiserva;
+        }
+
+        /// <summary>
+        /// Il modello fra i selezionati, e se sono tutti laser fra gli altri oggetti del documento (2026-10-28: nel
+        /// Pattern a macchie si selezionano le macchie, 46 sagome laser, e il ricamo ci va sopra). Il modello
+        /// presta solo la natura di oggetto da ricamo: l'ago lo decide il tool, il colore quello dell'ago.
+        /// </summary>
+        private static object ModelloDiRicamo(List<object> selezionati, List<object> documento, out string dove)
+        {
+            var modello = ModelloDiRicamo(selezionati);
+            if (modello != null)
+            {
+                dove = "l'oggetto " + (selezionati.IndexOf(modello) + 1) + " dei " + selezionati.Count + " selezionati";
+                return modello;
+            }
+            modello = ModelloDiRicamo(documento.Where(o => !selezionati.Contains(o)));
+            dove = modello != null
+                ? "i " + selezionati.Count + " selezionati sono tutti laser: l'oggetto " + (documento.IndexOf(modello) + 1) + " del documento"
+                : "nessun oggetto da ricamo, né fra i " + selezionati.Count + " selezionati né nel documento: il ritorno sarà un manuale nuovo, da ricamo";
+            return modello;
+        }
+
+        private static bool Vero(object oggetto, string nome)
+        {
+            try
+            {
+                return GetReadableMemberValue(oggetto, nome) is bool b && b;
+            }
+            catch (Exception)
+            {
+                return false;
+            }
+        }
+
+        /// <summary>I punti che Stilista conta come tagli laser (GetTotalNumberOfLaserCoords), o -1.</summary>
+        private static int PuntiLaser(object oggetto)
+        {
+            try
+            {
+                return TryConvertToInt(GetReadableMemberValue(oggetto, "GetTotalNumberOfLaserCoords")) ?? -1;
+            }
+            catch (Exception)
+            {
+                return -1;
+            }
+        }
+
+        /// <summary>
+        /// Un oggetto Manual nuovo, da ricamo, fuori dal documento: new DesignObject(EmbDesignData, ObjectType.Manual,
+        /// cTarget.Embroidery), lo stesso che Stilista usa in DsgObjCollection.MergeToManualStitch. Il costruttore gli
+        /// dà l'ago corrente del documento (Objects.AddNeedle) e i parametri della funzione Manuale. Null se non riesce.
+        /// </summary>
+        private static object NuovoManuale(object embroidery)
+        {
+            try
+            {
+                var tipo = embroidery.GetType().Assembly.GetType("Emg2_IO.EmgDefinition+DesignObject");
+                foreach (var c in tipo?.GetConstructors() ?? new System.Reflection.ConstructorInfo[0])
+                {
+                    var p = c.GetParameters();
+                    if (p.Length == 3 && p[0].ParameterType.IsInstanceOfType(embroidery) && p[1].ParameterType.IsEnum && p[2].ParameterType.Name == "cTarget")
+                    {
+                        var manual = Enum.Parse(p[1].ParameterType, "Manual");
+                        var daRicamo = p[2].ParameterType.GetField("Embroidery", System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.Static)?.GetValue(null);
+                        if (daRicamo == null)
+                        {
+                            break;
+                        }
+                        return c.Invoke(new[] { embroidery, manual, daRicamo });
+                    }
+                }
+                ProbeLog.Write("RGLink.NuovoManuale: costruttore DesignObject(EmbDesignData, ObjectType, cTarget) non trovato");
+            }
+            catch (Exception ex)
+            {
+                ProbeLog.Write("RGLink.NuovoManuale: " + DescribeException(ex));
+            }
+            return null;
         }
 
         /// <summary>Una copia dell'oggetto (DesignObject.Clone(EmbDesignData, bool)), fuori dal documento.</summary>
@@ -338,6 +466,7 @@ namespace StilistaHostSkeleton
             public int Letti;
             public int Cuciti;
             public int Salti;
+            public int Laser;
             public int ScartoUm;
             public int OggettiOra;
             public string Tipo;
@@ -358,6 +487,7 @@ namespace StilistaHostSkeleton
                 Letti = letti.Length,
                 Cuciti = TryConvertToInt(GetReadableMemberValue(esito.Finale, "GetTotalNumberOfStitches")).GetValueOrDefault(),
                 Salti = letti.Count(p => (p.Tag & TagSalto) != 0),
+                Laser = PuntiLaser(esito.Finale),
                 ScartoUm = scarto,
                 OggettiOra = SnapshotObjects(esito.Oggetti).Count,
                 Tipo = Tipo(esito.Finale),
@@ -365,6 +495,25 @@ namespace StilistaHostSkeleton
                 Uguale = letti.Length == punti.Length && scarto <= 1,
             };
         }
+        /// <summary>Toglie dal documento l'oggetto tornato (sul filo di Stilista). True se non c'è più.</summary>
+        private static object Togli(Ritorno esito)
+        {
+            try
+            {
+                var togli = FindMethodInHierarchy(esito.Oggetti.GetType(), "Remove", new[] { esito.Finale.GetType() });
+                togli?.Invoke(esito.Oggetti, new[] { esito.Finale });
+                TryRaiseObjectsRedrawNeeded(esito.Oggetti);
+                var via = !SnapshotObjects(esito.Oggetti).Contains(esito.Finale);
+                ProbeLog.Write("RGLink.Punti: oggetto senza punti " + (via ? "tolto dal documento" : "NON tolto dal documento"));
+                return via;
+            }
+            catch (Exception ex)
+            {
+                ProbeLog.Write("RGLink.Punti.Togli: " + DescribeException(ex));
+                return false;
+            }
+        }
+
         private static int ContaPunti(object oggetto)
         {
             return (FindMethodInHierarchy(oggetto.GetType(), "Stitches", Type.EmptyTypes)?.Invoke(oggetto, null) as TAGGEDPOINT[])?.Length ?? 0;

@@ -30,9 +30,11 @@ powershell -ExecutionPolicy Bypass -File strumenti-sviluppo\stilista-link\script
 `install.ps1` è l'installazione di sviluppo: passa a `pacchetto\installa.ps1` il plugin appena compilato e
 l'indirizzo della suite locale (`avvia.bat`, porta 5270). Il plugin va in
 `C:\GMI\Stilista3.3\PLUG-INS\RGStilistaLink\<data-ora>\` con il suo `indirizzo.txt`, e la sua riga in
-`pluginlist.txt` (gli altri plugin restano; la copia di sicurezza in `RGStilistaLink\backup\`). Le finestre di
-Stilista aperte dopo hanno la scheda **RG_LINK**; le versioni vecchie che nessuno Stilista tiene aperte si
-cancellano.
+`pluginlist.txt` (gli altri plugin restano; la copia di sicurezza in `RGStilistaLink\backup\`). La versione
+nuova la carica solo uno Stilista **chiuso del tutto e riaperto**: Stilista tiene dei processi di riserva già
+avviati, senza finestra, che hanno letto `pluginlist.txt` prima e aprono i documenti nuovi col plugin di
+prima (2026-10-28: chiudere le finestre non bastava). Le versioni vecchie si cancellano solo a Stilista
+chiuso: toglierle a una riserva le rompe.
 
 ### Darlo da provare (2026-10-27)
 
@@ -105,20 +107,44 @@ legge le risposte solo da pagine `localhost`/`127.0.0.1`.
 altrimenti il DST si apre in un documento nuovo. Nel plugin (`Collegamento.Ritorno.cs`):
 
 1. l'oggetto di partenza è una **copia dell'oggetto selezionato** da cui è partito il lavoro
-   (`DesignObject.Clone(EmbDesignData, bool)`: ago e colore giusti, nessun clic nell'interfaccia). Solo se
-   quello non c'è più, di riserva, un lineare nativo «cliccando» `btLinear1` nella barra — che c'è solo se la
-   barra mostra quella scheda (2026-10-21: «native function selection failed», ritorno fermo);
+   (`DesignObject.Clone(EmbDesignData, bool)`: ago e colore giusti, nessun clic nell'interfaccia): il primo
+   selezionato **da ricamo** (`Parameters.isConRicamo`, meglio se con punti) **che non è un laser**
+   (`ContainsLaser`). Da un laser i nostri punti diventano tagli laser: Stilista li conta in
+   `GetTotalNumberOfLaserCoords`, `TotalStitches` resta 0 e `Stitches()` li dà vuoti (2026-10-28, vedi sotto).
+   Se i selezionati sono tutti laser, il modello si cerca negli altri oggetti del documento. Se non c'è
+   nessun oggetto da ricamo, si crea un **Manual nuovo**: `new DesignObject(EmbDesignData,
+   ObjectType.Manual, cTarget.Embroidery)`, come fa Stilista in `MergeToManualStitch`, poi va sull'ago
+   chiesto o su quello di partenza. **L'ago di partenza** (`data-rg-stilista-ago`) è quello del modello se è
+   fra i selezionati; se i selezionati sono tutti laser è **il primo ago dopo i loro** (Lorenzo, 2026-10-28:
+   «il primo ago dopo quelli dei laser»), così il ricamo non va sull'ago dei tagli. Solo se anche questo non riesce, un lineare nativo «cliccando»
+   `btLinear1` nella barra, che c'è solo se la barra mostra quella scheda (2026-10-21: «native function
+   selection failed», ritorno fermo);
 2. `OldPoints2StitchPath(TAGGEDPOINT[])` coi nostri punti (`TAGGEDPOINT(x µm, y µm, tag)`: tag 0 punto,
    bit 1 = 2 salto, bit 15 STOP);
 3. `new DsgObjCollection(partenza).MergeToManualStitch()` dà un oggetto **Manual**; il suo contorno diventa i
    nostri punti (`SourcePath.CopyOfPoints`), la descrizione «RG Tools · …», il lucchetto (`LockRecalc`);
 4. nel documento (in fondo; al posto del lineare se si è usata la riserva), poi i punti si riscrivono;
 5. la risposta aspetta (fino a 9 s) tre misure di fila coi punti identici ai nostri: solo allora `ok`.
+   Se non arriva e l'oggetto è rimasto a 0 punti, si toglie dal documento; la risposta dice anche
+   `punti_laser`.
 
 **La sentinella** (`Collegamento.Sentinella.cs`). Regola: in un oggetto la cui descrizione comincia per
 «RG Tools · » i punti cuciti sono uguali al contorno. Ogni secondo li controlla, e se Stilista li ha
 ricalcolati li rimette. Spostare o ruotare l'oggetto muove contorno e punti insieme, quindi non annulla niente;
 per modificarne i punti a mano si toglie «RG Tools» dalla descrizione. Vale anche su un file riaperto.
+Dopo **5 riscritture di fila senza effetto** l'oggetto si lascia, con una riga nel log.
+
+**Il guasto del 2026-10-28** (Pattern a macchie, 48 oggetti selezionati: la base, 16.783 punti, tornava con
+0 punti, la sentinella la riscriveva ogni secondo per sempre, raso e punto sopra non partivano). Il modello
+era il primo selezionato, e il primo era un **laser**. Nel codice di Stilista (`Emg2_IO`):
+`OldPoints2StitchPath` → `ElaboratedPath.ConvertOldPoints` traduce i tag coi tipi di punto dell'oggetto, e
+per un laser ogni punto prende il bit `ExecuteWithLaser`; il riepilogo (`doRecalculateSummary`) li conta come
+coordinate laser, non come punti, e `Stitches()` restituisce i punti solo se `TotalStitches > 0`. Quindi i
+punti c'erano, ma erano tagli. Nel vecchio log ci sono gli stessi fallimenti dal 2026-10-20 (rete-1, level0,
+RG pattern), sempre con più oggetti selezionati e mai con uno solo. Il log ora scrive quale oggetto fa da
+modello (`RGLink.Modello`) e i punti laser accanto ai punti. La seconda prova ha mostrato che nel documento
+delle macchie **tutti i 47 oggetti sono laser** (ago 1, #ED1C24): `MergeToManualStitch` prende il target
+dal primo oggetto, quindi da un laser fa un manuale laser. Da qui il Manual nuovo da ricamo.
 
 **Misurato** (2026-10-21, net-45 sulla corona di SH295): 17.201 punti tornati in 4 s; **ricalcolo forzato,
 anche senza lucchetto (`/ricalcola?sblocca=1`): 17.201 prima e dopo**. Col lineare di partenza di prima, lo

@@ -342,8 +342,21 @@ namespace StilistaHostSkeleton
             var coloreFori = ColoriFori.FirstOrDefault(c => !coloriFili.Contains(c)) ?? ColoriFori[0];
             var quantiFori = forme.Count(f => f.Item5);
             // lo 0,0 del tool è l'angolo della selezione meno un margine: il piano del Generatore parte da 0
-            _agoSelezione = ReadNativeNeedleOneBased(selezionati[0]);
-            _modelloRitorno = selezionati[0];
+            _modelloRitorno = ModelloDiRicamo(selezionati, SnapshotObjects(GetReadableMemberValue(Ricamo(), "Objects")), out var doveModello);
+            // l'ago di partenza: quello del modello se è fra i selezionati (il primo da ricamo). Se i selezionati sono
+            // tutti laser, il primo ago dopo i loro (Lorenzo, 2026-10-28: «il primo ago dopo quelli dei laser»): il
+            // ricamo non va sull'ago dei tagli
+            if (_modelloRitorno != null && selezionati.Contains(_modelloRitorno))
+            {
+                _agoSelezione = ReadNativeNeedleOneBased(_modelloRitorno);
+            }
+            else
+            {
+                var agiLaser = selezionati.Select(ReadNativeNeedleOneBased).Where(a => a.HasValue).Select(a => a.Value).ToList();
+                _agoSelezione = agiLaser.Count > 0 ? agiLaser.Max() + 1 : (int?)null;
+            }
+            ProbeLog.Write("RGLink.Modello: " + doveModello + (_modelloRitorno != null ? ", suo ago " + (ReadNativeNeedleOneBased(_modelloRitorno)?.ToString() ?? "?") : "") +
+                " · ago di partenza " + (_agoSelezione?.ToString() ?? "?"));
             _origineX = minX - MargineMm;
             _origineY = minY - MargineMm;
             var larghezza = maxX - minX + 2 * MargineMm;

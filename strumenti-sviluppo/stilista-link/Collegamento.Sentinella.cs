@@ -14,6 +14,7 @@ namespace StilistaHostSkeleton
     /// gli oggetti la cui descrizione comincia per «RG Tools · » si controllano, e se i punti non sono più il
     /// contorno si riscrivono. Spostarlo o ruotarlo muove contorno e punti insieme: la regola regge e non
     /// si annulla niente. Per modificarne i punti a mano in Stilista si toglie «RG Tools» dalla descrizione.
+    /// Un oggetto che dopo 5 riscritture di fila non tiene i punti si lascia stare, con una riga nel log.
     /// </summary>
     public sealed partial class CodexTab
     {
@@ -23,6 +24,15 @@ namespace StilistaHostSkeleton
 
         /// <summary>L'oggetto selezionato da cui è partito il lavoro: il ricamo che torna ne è una copia.</summary>
         private object _modelloRitorno;
+
+        /// <summary>
+        /// Quante volte di fila la sentinella ha riscritto un oggetto senza che i punti tornassero i nostri. Una
+        /// riscrittura che prende si vede al giro dopo e azzera il conto; dopo MassimoInvano l'oggetto si lascia
+        /// (2026-10-28: un ricamo nato da un laser restava a 0 punti, e la sentinella lo riscriveva ogni secondo).
+        /// </summary>
+        private static readonly System.Runtime.CompilerServices.ConditionalWeakTable<object, System.Runtime.CompilerServices.StrongBox<int>> _riscritture =
+            new System.Runtime.CompilerServices.ConditionalWeakTable<object, System.Runtime.CompilerServices.StrongBox<int>>();
+        private const int MassimoInvano = 5;
 
         private void AvviaSentinella()
         {
@@ -52,15 +62,34 @@ namespace StilistaHostSkeleton
                     var contorno = FindMethodInHierarchy(GetReadableMemberValue(oggetto, "SourcePath")?.GetType(), "GetTaggedPoints", Type.EmptyTypes)
                         ?.Invoke(GetReadableMemberValue(oggetto, "SourcePath"), null) as TAGGEDPOINT[];
                     var cuciti = FindMethodInHierarchy(oggetto.GetType(), "Stitches", Type.EmptyTypes)?.Invoke(oggetto, null) as TAGGEDPOINT[];
-                    if (contorno == null || contorno.Length < 2 || cuciti == null || Uguali(contorno, cuciti))
+                    if (contorno == null || contorno.Length < 2 || cuciti == null)
                     {
                         continue;
+                    }
+                    var invano = _riscritture.GetOrCreateValue(oggetto);
+                    if (Uguali(contorno, cuciti))
+                    {
+                        invano.Value = 0;
+                        continue;
+                    }
+                    if (invano.Value >= MassimoInvano)
+                    {
+                        continue; // già lasciato
                     }
                     FindMethodInHierarchy(oggetto.GetType(), "OldPoints2StitchPath", new[] { typeof(TAGGEDPOINT[]) })?.Invoke(oggetto, new object[] { contorno });
                     TrySetBoolMember(oggetto, "NeedRestitching", false);
                     rimessi++;
-                    ProbeLog.Write("RGLink.Sentinella: «" + descrizione + "» ricalcolato da Stilista (" + cuciti.Length +
-                        " punti invece di " + contorno.Length + "): rimessi i punti del contorno");
+                    invano.Value++;
+                    if (invano.Value < MassimoInvano)
+                    {
+                        ProbeLog.Write("RGLink.Sentinella: «" + descrizione + "» ricalcolato da Stilista (" + cuciti.Length +
+                            " punti invece di " + contorno.Length + "): rimessi i punti del contorno");
+                    }
+                    else
+                    {
+                        ProbeLog.Write("RGLink.Sentinella: «" + descrizione + "» lasciato: " + MassimoInvano + " riscritture di fila senza effetto (" +
+                            cuciti.Length + " punti invece di " + contorno.Length + ", come laser " + PuntiLaser(oggetto) + ")");
+                    }
                 }
                 if (rimessi > 0)
                 {

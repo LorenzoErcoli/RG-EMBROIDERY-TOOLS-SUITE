@@ -1,8 +1,9 @@
 # RG Stilista Link - installazione.
 # Copia il plugin in <Stilista>\PLUG-INS\RGStilistaLink\<data-ora>\ e aggiunge la sua riga a pluginlist.txt
 # (gli altri plugin restano). La copia di sicurezza di pluginlist.txt va in RGStilistaLink\backup\, cosi'
-# la disinstallazione non lascia niente in giro. Una cartella per installazione: un Stilista aperto tiene
-# la versione di prima, le finestre aperte dopo caricano questa; le versioni vecchie libere si cancellano.
+# la disinstallazione non lascia niente in giro. Una cartella per installazione: uno Stilista aperto (anche
+# solo coi suoi processi di riserva) tiene la versione di prima, finche' non lo si chiude del tutto; le
+# versioni vecchie si cancellano solo a Stilista chiuso.
 # (Solo ASCII qui: PowerShell 5 legge gli script senza BOM come ANSI.)
 param(
     [string]$Stilista = "",   # la cartella di Stilista (quella con bin\ e PLUG-INS\); vuota = la cerca
@@ -64,11 +65,16 @@ $righe = @([IO.File]::ReadAllLines($lista, $codifica) | Where-Object {
 })
 [IO.File]::WriteAllLines($lista, [string[]]($righe + $installato), $codifica)
 
-# le versioni di prima che nessuno Stilista tiene aperte
+# le versioni di prima, solo se Stilista e' chiuso del tutto. Stilista tiene processi di riserva gia' avviati,
+# che hanno letto pluginlist.txt prima di adesso e caricano il plugin di prima quando aprono un documento:
+# toglierne la cartella (o solo indirizzo.txt, se l'exe e' bloccato) lo rompe (2026-10-28)
+$aperti = @(Get-Process -ErrorAction SilentlyContinue | Where-Object { $_.ProcessName -like 'Stilista*' })
 $tolte = 0
-Get-ChildItem -LiteralPath $radice -Directory | Where-Object { $_.Name -match '^\d{8}-\d{6}$' -and $_.Name -ne $versione } | ForEach-Object {
-    # .NET e non Remove-Item -Recurse, che in PowerShell 5 non trova le cartelle coi nomi brevi (NOME~1)
-    try { [IO.Directory]::Delete($_.FullName, $true); $tolte++ } catch {}
+if ($aperti.Count -eq 0) {
+    Get-ChildItem -LiteralPath $radice -Directory | Where-Object { $_.Name -match '^\d{8}-\d{6}$' -and $_.Name -ne $versione } | ForEach-Object {
+        # .NET e non Remove-Item -Recurse, che in PowerShell 5 non trova le cartelle coi nomi brevi (NOME~1)
+        try { [IO.Directory]::Delete($_.FullName, $true); $tolte++ } catch {}
+    }
 }
 
 $verso = if (Test-Path -LiteralPath $indirizzoTxt) { (Get-Content -LiteralPath $indirizzoTxt | Where-Object { $_ -and -not $_.StartsWith('#') } | Select-Object -First 1) } else { "la suite online" }
@@ -77,4 +83,9 @@ Write-Host "RG Stilista Link installato in $cartella"
 Write-Host "  Stilista: $Stilista"
 Write-Host "  la suite: $verso"
 if ($tolte -gt 0) { Write-Host "  tolte $tolte versioni precedenti" }
-Write-Host "Le finestre di Stilista aperte da ora hanno la scheda RG_LINK."
+if ($aperti.Count -gt 0) {
+    Write-Host "Stilista e' aperto ($($aperti.Count) processi, comprese le riserve senza finestra): questa versione"
+    Write-Host "la carica solo dopo averlo chiuso del tutto e riaperto. Le versioni precedenti restano finche' e' aperto."
+} else {
+    Write-Host "Al prossimo avvio di Stilista c'e' la scheda RG_LINK."
+}
