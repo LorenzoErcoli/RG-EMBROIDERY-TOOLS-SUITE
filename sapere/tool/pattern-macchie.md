@@ -84,6 +84,11 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    macchia successiva. poi fai un passaggio nascosto e ricami la macchia come preferisci. Per quello superiore da capire
    come fare. Io rimango dell'idea che un passaggio che porta fino al limite della macchia verso la macchia successiva
    che può passare al bordo o ripassare sopra va bene. ridurre la lunghezza dei salti è importante»*.
+22. (2026-10-28) **Aperto da Stilista, il suo punto e i suoi parametri.** Dal pulsante di Stilista (la suite su un altro
+   indirizzo, senza i pattern salvati nel suo Generatore): *«non vedo la base come la vorrei io e le macchie lavorano al
+   contrario»* — partiva dal punto squame e dai valori di serie (*da sinistra a destra* spento). Il tool ricorda pattern
+   e parametri dell'ultimo calcolo, e *Pattern e parametri da un progetto…* li prende da un DST o SVG uscito da qui
+   lasciando il disegno di adesso.
 
 ## Come è fatto, e perché
 - **Il punto sopra è la base tagliata sulla macchia**, a registro, ma con una sola andata e ritorno dove la base va e
@@ -94,6 +99,11 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
   piano dà per scontato che dall'ingresso si arrivi sotto il raso a ogni riga; se alla sua prima riga non si arriva, si
   rifà il piano con la prima riga che non si raggiunge pagata come un salto fin lì (decisione 21). Vicino ai capi della
   strada vale anche il raso fuori dal bordo, fin dove la sfrangiatura va fuori (le righe cominciano lì).
+- **L'ultimo punto usato** (2026-10-28, decisione 22): pattern e parametri si salvano a ogni calcolo nella memoria del
+  browser (`pattern-macchie-ultimo`) e la pagina riparte da lì. È per indirizzo: la suite su `localhost:5270` e su
+  `127.0.0.1:5301` hanno memorie diverse, come i pattern salvati nel Generatore. Per portarli da una all'altra, *Pattern e
+  parametri da un progetto…* (un DST o SVG uscito da qui porta dentro il pattern intero, non solo il nome). Un pattern
+  che non è né nella libreria condivisa né nel Generatore di quel browser compare nell'elenco sotto *Da un progetto*.
 - **La sfrangiatura dentro: al più tre decimi della riga per capo** (2026-10-28). Con la sfrangiatura a 5 mm del
   progetto di Lorenzo, nelle strozzature larghe 2 mm le righe si accorciavano fino a sparire: buchi senza raso, e
   dall'una all'altra parte della macchia il passaggio sotto il raso non passava più (si saltava).

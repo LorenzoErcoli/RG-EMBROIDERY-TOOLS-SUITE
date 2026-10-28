@@ -23,6 +23,19 @@ const presetLocali = (): Record<string, PatternConfig> => {
 };
 /** Il pattern di partenza: quello delle prove di Lorenzo (punto nastro a squame). */
 const PRESET_INIZIALE = 'RG-PUNTO NASTRO — SQUAME';
+/**
+ * L'ULTIMO PUNTO USATO (Lorenzo, 2026-10-28, aperto da Stilista: «non vedo la base come la vorrei io e le macchie
+ * lavorano al contrario»): pattern e parametri dell'ultimo calcolo, su questo computer. Un disegno nuovo, un file o la
+ * selezione di Stilista, parte da lì e non dai valori di serie.
+ */
+const ULTIMO_KEY = 'pattern-macchie-ultimo';
+type Punto = { pattern: { nome: string; config: PatternConfig }; params: Partial<ParametriMacchie> };
+const ultimoPunto = (): Punto | null => {
+  try {
+    const u = JSON.parse(localStorage.getItem(ULTIMO_KEY) || 'null') as Punto | null;
+    return u?.pattern?.config && u.params && typeof u.params === 'object' ? u : null;
+  } catch { return null; }
+};
 
 /** Il disegno nel file riapribile, se non pesa troppo (come nel Generatore pattern). */
 const MAX_DRAWING_KB = 256;
@@ -118,10 +131,12 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   let model: ImportedBoundaryModel | null = null;
   const scala = { scaleMode: 'illustrator-72dpi' };
   const ruoli: Record<string, Ruolo> = {};
-  const par: ParametriMacchie = { ...PARAMETRI_MACCHIE };
-  let pattern: { nome: string; config: PatternConfig } = PRESET_CONDIVISI[PRESET_INIZIALE]
+  const ultimo = ultimoPunto();
+  const par: ParametriMacchie = { ...PARAMETRI_MACCHIE, ...(ultimo?.params ?? {}) };
+  let pattern: { nome: string; config: PatternConfig } = ultimo ? ultimo.pattern : PRESET_CONDIVISI[PRESET_INIZIALE]
     ? { nome: PRESET_INIZIALE, config: PRESET_CONDIVISI[PRESET_INIZIALE] }
     : { nome: Object.keys(PRESET_CONDIVISI)[0] ?? '', config: Object.values(PRESET_CONDIVISI)[0] ?? ({} as PatternConfig) };
+  const ricordaPunto = () => { try { localStorage.setItem(ULTIMO_KEY, JSON.stringify({ pattern, params: par })); } catch { /* senza memoria si riparte dai valori di serie */ } };
   let risultato: RisultatoMacchie | null = null;
   const visibili: Record<ChiaveFilo | 'salti' | 'contorni', boolean> = { base: true, raso: true, sopra: true, sotto: false, salti: true, contorni: false };
   let testoDisegno = 'Nessun disegno caricato.';
@@ -235,6 +250,13 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
           <span class="rg-button rg-button--ghost">Riapri un progetto (DST o SVG)…</span>
         </label>
         <p class="rg-file-input__status" id="reopenStatus" role="status">Un file uscito da qui torna com'era: disegno, ruoli, pattern e parametri.</p>
+      </div>
+      <div class="rg-file-input rg-param-grid__wide">
+        <label class="rg-file-input__control">
+          <input type="file" id="puntoFile" accept=".dst,.svg" />
+          <span class="rg-button rg-button--ghost">Pattern e parametri da un progetto…</span>
+        </label>
+        <p class="rg-file-input__status" id="puntoStatus" role="status">Da un file uscito da qui prende solo pattern e parametri: il disegno resta questo. L'ultimo punto usato resta per la volta dopo.</p>
       </div>`;
     return box;
   }
@@ -273,16 +295,26 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     }
   }
 
+  /** Da dove viene il pattern di adesso: la libreria condivisa, il Generatore su questo computer, o un progetto. */
+  function origineDelPattern(): 'shared' | 'local' | 'file' {
+    const uguale = (c?: PatternConfig) => !!c && JSON.stringify(c) === JSON.stringify(pattern.config);
+    if (uguale(PRESET_CONDIVISI[pattern.nome])) return 'shared';
+    if (uguale(presetLocali()[pattern.nome])) return 'local';
+    return 'file';
+  }
+
   function patternGrid(): HTMLElement {
     const box = document.createElement('div');
     box.className = 'rg-param-grid';
+    const da = origineDelPattern();
     const opzioni = (gruppo: string, nomi: string[], origine: string) => nomi.length
-      ? `<optgroup label="${gruppo}">${nomi.map((n) => `<option value="${origine}:${n}"${n === pattern.nome ? ' selected' : ''}>${n}</option>`).join('')}</optgroup>` : '';
+      ? `<optgroup label="${gruppo}">${nomi.map((n) => `<option value="${origine}:${n}"${n === pattern.nome && origine === da ? ' selected' : ''}>${n}</option>`).join('')}</optgroup>` : '';
     box.innerHTML = `
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Il pattern della base (e sopra le macchie)</span>
         <select id="presetList" class="rg-select">
           ${opzioni('Condivisi', Object.keys(PRESET_CONDIVISI), 'shared')}
           ${opzioni('Salvati nel Generatore pattern', Object.keys(presetLocali()), 'local')}
+          ${da === 'file' ? opzioni('Da un progetto', [pattern.nome], 'file') : ''}
         </select>
         <small class="rg-field__help">I pattern si preparano nel Generatore pattern; qui si sceglie quale usare.</small></label>`;
     box.appendChild(campione());
@@ -391,6 +423,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     const { pannello, macchie } = geometria();
     if (!pannello) { $('status').textContent = model ? 'Dai a un colore il ruolo «Pannello».' : 'Carica prima un disegno.'; return; }
     if (!macchie.length) { $('status').textContent = 'Dai a un colore il ruolo «Macchie».'; return; }
+    ricordaPunto();
     const mioId = ++idCalcolo;
     window.clearTimeout(attesa);
     if (occupato) { worker?.terminate(); worker = null; occupato = false; }
@@ -579,11 +612,13 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       ...(b ? { larghezzaMm: b.maxX - b.minX, altezzaMm: b.maxY - b.minY } : {}) };
   }
 
-  function riapri(meta: Record<string, unknown>): void {
+  /** Riapre un progetto; con `soloPunto` ne prende solo pattern e parametri, e il disegno resta quello di adesso. */
+  function riapri(meta: Record<string, unknown>, soloPunto = false): void {
     const drawing = meta.drawing as { name?: string; text?: string; scale?: { scaleMode?: string } } | undefined;
     if (meta.params && typeof meta.params === 'object') Object.assign(par, PARAMETRI_MACCHIE, meta.params);
     const p = meta.pattern as { nome?: string; config?: PatternConfig } | undefined;
     if (p?.config) pattern = { nome: p.nome ?? 'dal file', config: p.config };
+    if (soloPunto) { buildPanel(); genera(); return; }
     if (meta.ruoli && typeof meta.ruoli === 'object') {
       for (const k of Object.keys(ruoli)) delete ruoli[k];
       Object.assign(ruoli, meta.ruoli);
@@ -625,33 +660,43 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       });
     });
     $('scaleMode').addEventListener('change', () => { scala.scaleMode = ($('scaleMode') as HTMLSelectElement).value; reparse(); });
-    $('reopenFile').addEventListener('change', (ev) => {
-      const input = ev.target as HTMLInputElement;
-      const file = input.files?.[0];
-      if (!file) return;
-      const isDst = /\.dst$/i.test(file.name);
-      leggiFile(file, isDst, (letto) => {
-        try {
-          const meta = isDst ? readDstMetadata(new Uint8Array(letto as ArrayBuffer)) : (readProjectMetadata(String(letto)) as Record<string, unknown> | null);
-          if (meta?.rgProject !== 'pattern-macchie') {
-            $('reopenStatus').textContent = meta
-              ? `Questo file viene da "${String(meta.rgProject ?? 'un altro tool')}", non da qui.`
-              : 'Nessun progetto dentro questo file: non è uscito dalla suite.';
-            return;
+    /** Il progetto dentro un DST o un SVG uscito da qui: `fatto` riceve i metadati; gli errori si scrivono in `stato`. */
+    const leggiProgetto = (idInput: string, stato: string, fatto: (meta: Record<string, unknown>, nome: string) => void) => {
+      $(idInput).addEventListener('change', (ev) => {
+        const input = ev.target as HTMLInputElement;
+        const file = input.files?.[0];
+        if (!file) return;
+        const isDst = /\.dst$/i.test(file.name);
+        leggiFile(file, isDst, (letto) => {
+          try {
+            const meta = isDst ? readDstMetadata(new Uint8Array(letto as ArrayBuffer)) : (readProjectMetadata(String(letto)) as Record<string, unknown> | null);
+            if (meta?.rgProject !== 'pattern-macchie') {
+              $(stato).textContent = meta
+                ? `Questo file viene da "${String(meta.rgProject ?? 'un altro tool')}", non da qui.`
+                : 'Nessun progetto dentro questo file: non è uscito dalla suite.';
+              return;
+            }
+            fatto(meta, file.name);
+          } catch (e) {
+            $(stato).textContent = 'Errore: ' + (e as Error).message;
           }
-          riapri(meta);
-          $('reopenStatus').textContent = `${file.name}: riaperto` + (meta.drawing ? ' col disegno.' : ' — senza disegno: caricalo a parte.');
-        } catch (e) {
-          $('reopenStatus').textContent = 'Errore: ' + (e as Error).message;
-        }
-        input.value = '';
+          input.value = '';
+        });
       });
+    };
+    leggiProgetto('reopenFile', 'reopenStatus', (meta, nome) => {
+      riapri(meta);
+      $('reopenStatus').textContent = `${nome}: riaperto` + (meta.drawing ? ' col disegno.' : ' — senza disegno: caricalo a parte.');
+    });
+    leggiProgetto('puntoFile', 'puntoStatus', (meta, nome) => {
+      riapri(meta, true);
+      $('puntoStatus').textContent = `${nome}: presi il pattern «${pattern.nome}» e i parametri; il disegno è quello di prima.`;
     });
     $('presetList').addEventListener('change', () => {
       const raw = ($('presetList') as HTMLSelectElement).value;
       const sep = raw.indexOf(':');
       const origine = raw.slice(0, sep), nome = raw.slice(sep + 1);
-      const config = origine === 'shared' ? PRESET_CONDIVISI[nome] : presetLocali()[nome];
+      const config = origine === 'shared' ? PRESET_CONDIVISI[nome] : origine === 'local' ? presetLocali()[nome] : pattern.config;
       if (!config) return;
       pattern = { nome, config };
       buildPanel();
