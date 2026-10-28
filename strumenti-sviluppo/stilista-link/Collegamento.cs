@@ -342,8 +342,11 @@ namespace StilistaHostSkeleton
             var coloreFori = ColoriFori.FirstOrDefault(c => !coloriFili.Contains(c)) ?? ColoriFori[0];
             var quantiFori = forme.Count(f => f.Item5);
             // lo 0,0 del tool è l'angolo della selezione meno un margine: il piano del Generatore parte da 0
-            _agoSelezione = ReadNativeNeedleOneBased(selezionati[0]);
-            _modelloRitorno = selezionati[0];
+            _modelloRitorno = ModelloDiRicamo(selezionati, SnapshotObjects(GetReadableMemberValue(Ricamo(), "Objects")), out var doveModello);
+            // l'ago di partenza resta quello della selezione anche quando il modello viene da fuori
+            _agoSelezione = ReadNativeNeedleOneBased(_modelloRitorno != null && selezionati.Contains(_modelloRitorno) ? _modelloRitorno : selezionati[0]);
+            ProbeLog.Write("RGLink.Modello: " + doveModello + (_modelloRitorno != null ? ", suo ago " + (ReadNativeNeedleOneBased(_modelloRitorno)?.ToString() ?? "?") : "") +
+                " · ago di partenza " + (_agoSelezione?.ToString() ?? "?"));
             _origineX = minX - MargineMm;
             _origineY = minY - MargineMm;
             var larghezza = maxX - minX + 2 * MargineMm;

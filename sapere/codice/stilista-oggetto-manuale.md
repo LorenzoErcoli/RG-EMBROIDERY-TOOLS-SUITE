@@ -42,6 +42,19 @@ suoi punti: net-45 sulla corona di SH295, 17.201 punti, ricalcolo forzato anche 
 Il lineare resta solo di riserva (e richiede il pulsante `btLinear1` visibile nella barra di Stilista). In
 più, una sentinella rimette i punti uguali al contorno negli oggetti descritti «RG Tools · ».
 
+**Il modello non può essere un laser** (2026-10-28). Copiato da un laser, il ricamo torna a 0 punti per
+sempre e nessuna riscrittura lo aggiusta. In `Emg2_IO`: `OldPoints2StitchPath` → `ElaboratedPath.ConvertOldPoints`
+(o `ConvertOldPointsFromAgo`) traduce ogni tag col tipo di punto dell'oggetto (`OldTag2NewTag`), e per un laser
+prende il bit `ExecuteWithLaser`. Il riepilogo (`doRecalculateSummary`) conta quei punti in `TotalLaserCoords`,
+non in `TotalStitches`, e `Stitches()` restituisce i punti solo se `TotalStitches > 0`. Quindi i punti ci sono,
+ma come tagli laser. Altre due trappole silenziose della stessa funzione: non scrive niente se i tipi di
+punto dell'oggetto sono vuoti, o se il percorso cucito non è di tipo 0, 14 (laser) o 19. Il modello va quindi
+scelto fra i selezionati: da ricamo (`Parameters.isConRicamo`), `ContainsLaser` falso. `MergeToManualStitch`
+prende il target del manuale dal primo oggetto (laser → manuale laser), e quando può copia i suoi parametri
+con la funzione `Manuale`. Senza nessun oggetto da ricamo nel documento (le macchie: 47 laser) il manuale si
+crea come lo crea lui: `new DesignObject(EmbDesignData, ObjectType.Manual (1), cTarget.Embroidery)`. Il
+costruttore assegna l'ago corrente (`Objects.AddNeedle`).
+
 **Come si applica.** Un ricamo calcolato fuori da Stilista entra come Manual e non va ricalcolato: chi lo
 ricalcola a mano in Stilista lo perde. Il colore: il codice del bridge che assegna l'ago **scrive il colore
 nella tavolozza del documento** (`TrySetNativeThreadColor`), quindi al ritorno si passa il colore che
