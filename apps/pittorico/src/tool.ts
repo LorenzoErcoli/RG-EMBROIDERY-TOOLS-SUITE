@@ -18,6 +18,7 @@ import {
   bounds, rgbToHex, type PixelImage,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
+import { testiCampo } from '@rg/cervello';
 import { disegnaDemo } from './demo';
 import { scheletro, sezioneSorgente, sezione, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero } from '@rg/ui/anatomia';
 import { hookPanZoom } from '@rg/ui/panzoom';
@@ -42,24 +43,24 @@ type Vista = 'originale' | 'colori' | 'macchie' | 'ricamo' | 'passaggi';
 interface Sorgente { name: string; pixelsAt: (maxWidthPx: number) => PixelImage; }
 
 interface Campo {
-  id: string; key: keyof PittoricoParams; etichetta: string; unita: string; passo: number;
-  int?: boolean; min?: number; max?: number; aiuto?: string;
+  id: string; key: keyof PittoricoParams; passo: number;
+  int?: boolean; min?: number; max?: number;
 }
 
 const CAMPI: Campo[] = [
-  { id: 'realWidth', key: 'realWidthMm', etichetta: 'Larghezza reale del ricamo', unita: 'mm', passo: 1, min: 0, aiuto: '0 = un pixel vale un millimetro. È la misura che comanda: senza, le altre non significano niente' },
-  { id: 'colorCount', key: 'colorCount', etichetta: 'Quanti fili', unita: '', passo: 1, int: true, min: 2, max: 8, aiuto: 'ogni tinta è un ago' },
-  { id: 'densitySpacingMm', key: 'densitySpacingMm', etichetta: 'Distanza fra le file', unita: 'mm', passo: 0.05, min: 0.1, max: 2, aiuto: 'quanto è fitto il pieno' },
-  { id: 'maxStitchMm', key: 'maxStitchMm', etichetta: 'Punto massimo', unita: 'mm', passo: 0.5, min: 0.5, max: 8, aiuto: 'lungo il filo' },
-  { id: 'frangiaMm', key: 'frangiaMm', etichetta: 'Lunghezza della frangia', unita: 'mm', passo: 0.5, min: 0, max: 12, aiuto: 'tienila sotto la sovrapposizione, o si appiattisce' },
-  { id: 'crescitaMm', key: 'crescitaMm', etichetta: 'Sovrapposizione dove sfuma', unita: 'mm', passo: 0.5, min: 0, max: 12, aiuto: 'quanto il colore sotto entra sotto quello sopra' },
-  { id: 'sormontoMm', key: 'sormontoMm', etichetta: 'Sormonto dove stacca', unita: 'mm', passo: 0.5, min: 0, max: 6, aiuto: 'basta poco: serve a non far vedere la tela alla giunta' },
-  { id: 'sogliaSfumaturaMm', key: 'sogliaSfumaturaMm', etichetta: 'Da qui in su è una sfumatura', unita: 'mm', passo: 0.5, min: 0, max: 20, aiuto: 'sotto, il colore stacca netto' },
-  { id: 'lisciaBordiMm', key: 'lisciaBordiMm', etichetta: 'Lisciatura del contorno', unita: 'mm', passo: 0.2, min: 0, max: 5, aiuto: "0 = il contorno com'esce dalla tracciatura. Alzandola sparisce il dettaglio più piccolo di così" },
-  { id: 'maxInternalTravelMm', key: 'maxInternalTravelMm', etichetta: 'Passaggio scoperto massimo', unita: 'mm', passo: 5, min: 5, max: 400, aiuto: 'oltre, il filo si taglia invece di attraversare il disegno. Più basso = meno fili tesi, più rasafili' },
-  { id: 'flattenLightMm', key: 'flattenLightMm', etichetta: 'Pareggio della luce', unita: 'mm', passo: 1, min: 0, aiuto: 'tienilo più grande del motivo' },
-  { id: 'smoothMm', key: 'smoothMm', etichetta: 'Attenuazione della grana', unita: 'mm', passo: 0.5, min: 0 },
-  { id: 'minAreaMm2', key: 'minAreaMm2', etichetta: 'Macchia più piccola', unita: 'mm²', passo: 10, min: 0 },
+  { id: 'realWidth', key: 'realWidthMm', passo: 1, min: 0 },
+  { id: 'colorCount', key: 'colorCount', passo: 1, int: true, min: 2, max: 8 },
+  { id: 'densitySpacingMm', key: 'densitySpacingMm', passo: 0.05, min: 0.1, max: 2 },
+  { id: 'maxStitchMm', key: 'maxStitchMm', passo: 0.5, min: 0.5, max: 8 },
+  { id: 'frangiaMm', key: 'frangiaMm', passo: 0.5, min: 0, max: 12 },
+  { id: 'crescitaMm', key: 'crescitaMm', passo: 0.5, min: 0, max: 12 },
+  { id: 'sormontoMm', key: 'sormontoMm', passo: 0.5, min: 0, max: 6 },
+  { id: 'sogliaSfumaturaMm', key: 'sogliaSfumaturaMm', passo: 0.5, min: 0, max: 20 },
+  { id: 'lisciaBordiMm', key: 'lisciaBordiMm', passo: 0.2, min: 0, max: 5 },
+  { id: 'maxInternalTravelMm', key: 'maxInternalTravelMm', passo: 5, min: 5, max: 400 },
+  { id: 'flattenLightMm', key: 'flattenLightMm', passo: 1, min: 0 },
+  { id: 'smoothMm', key: 'smoothMm', passo: 0.5, min: 0 },
+  { id: 'minAreaMm2', key: 'minAreaMm2', passo: 10, min: 0 },
 ];
 
 /** Larghezza di lavoro in pixel: sopra i ~900 il calcolo si allunga senza aggiungere forma. */
@@ -68,7 +69,8 @@ const MAX_WIDTH_PX = 900;
 export function mountPittorico(root: HTMLElement, opts: { backHref?: string } = {}): void {
   const campo = (id: string): string => {
     const c = CAMPI.find((x) => x.id === id)!;
-    return campoNumero({ id: c.id, etichetta: c.etichetta, unita: c.unita, valore: defaultPittoricoParams[c.key] as number, passo: c.passo, min: c.min, max: c.max, aiuto: c.aiuto });
+    const t = testiCampo('pittorico', c.key as string);
+    return campoNumero({ id: c.id, etichetta: t.etichetta, unita: t.unita, valore: defaultPittoricoParams[c.key] as number, passo: c.passo, min: c.min, max: c.max, aiuto: t.aiuto });
   };
   const sezioneCampi = (indice: number, titolo: string, ids: string[], dopo = ''): string =>
     sezione({ indice, titolo, contenuto: `<div class="rg-param-grid">\n    ${ids.map(campo).join('\n    ')}${dopo}\n  </div>` });

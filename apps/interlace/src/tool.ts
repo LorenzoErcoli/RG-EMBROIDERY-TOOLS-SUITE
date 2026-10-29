@@ -10,6 +10,7 @@ import {
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
+import { collegaStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import { runPipeline, type RoleAssignment } from './pipeline';
 import { defaultInterlaceParams, type InterlaceParams } from './engine';
 import { sampleContours } from './sample';
@@ -64,7 +65,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
               <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="objW" type="number" min="1" step="1" value="100"><span>mm</span></span>
               <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="objH" type="number" min="1" step="1" value="100"><span>mm</span></span>
             </div>
-            <div class="rg-cluster"><button type="button" id="objBtn" class="rg-button rg-button--outline rg-button--small">Genera oggetto</button></div>
+            <div class="rg-cluster"><button type="button" id="objBtn" class="rg-button rg-button--outline rg-button--small">Genera oggetto</button>${BOTTONE_PRENDI_STILISTA()}</div>
             <small class="rg-field__help">larghezza × altezza: crea un rettangolo pieno da riempire, senza importare un file</small>
           </div>
         </div>
@@ -197,6 +198,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
         <h2 class="rg-h3">Anteprima</h2>
         <div class="rg-cluster">
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
+          ${BOTTONE_INVIA_STILISTA()}
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Esporta SVG</button>
         </div>
@@ -722,6 +724,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   }
 
   function loadImport(result: ImportResult, label: string) {
+    svgStilista = null; // ogni caricamento: solo il caricamento da Stilista la rimette, subito dopo
     imported = result;
     autoAssign();
     buildRoleUI();
@@ -1127,19 +1130,49 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     }
   });
 
+  // Export ricamo Tajima .dst tramite la "possibilità" globale del core: l'export dell'interlace è già
+  // in mm reali; l'adattatore fa un blocco per polilinea, un ago per stop (cambio-colore in sequenza).
+  // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge fino all'END e
+  // lo ignora, noi lo rileggiamo. Lo usano «Esporta DST» e «Invia a Stilista».
+  const esporta = () => runPipeline(currentContours(), roles, params, { imageColorAt: imageSampler() });
+  function costruisciDst(exportLayers = esporta().exportLayers): Uint8Array {
+    return dstFromExportLayers(exportLayers, {
+      label: (sourceName || 'INTERLACE').toUpperCase().slice(0, 16),
+      metadata: conBusta(projectMetadata(), { strati: exportLayers, sorgente: sorgenteProgetto() }),
+    });
+  }
+
+  // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è il cartamodello, i fori le aree vuote.
+  // Ogni stop torna come un oggetto a sé, nell'ordine, sull'ago dell'oggetto selezionato.
+  let svgStilista: string | null = null;
+  const aggancio: AggancioStilista = {
+    carica(svg, nome) {
+      // l'SVG dichiara le sue misure: una larghezza reale lo riscalerebbe e il ritorno non cadrebbe più al suo posto
+      params.realWidthMm = 0;
+      ($('realWidth') as HTMLInputElement).value = '0';
+      roles = {};
+      generated = null;
+      sourceName = nome.replace(/\.[^.]+$/, '');
+      loadImport(parseSvgToContours(svg), nome);
+      svgStilista = svg;
+    },
+    ruoli(fori) {
+      for (const c of uniqueColors()) roles[c] = c === fori ? 'EXCLUSION' : 'MASTER_OUTLINE';
+      buildRoleUI();
+      render();
+    },
+    sorgente: () => svgStilista,
+    strati: () => stratiCuciti(esporta().exportLayers),
+    dst: () => ({ bytes: costruisciDst(), nome: `${sourceName || 'interlace'}-interlace` }),
+    stato: (testo) => { $('status').textContent = testo; },
+  };
+
   $('exportDstBtn').addEventListener('click', async () => {
-    // Export ricamo Tajima .dst tramite la "possibilità" globale del core: l'export dell'interlace è già
-    // in mm reali; l'adattatore fa un blocco per polilinea, un ago per stop (cambio-colore in sequenza).
     // Tutto sotto try/catch: un export non deve MAI fallire in silenzio (l'errore va in statusbar).
     try {
       $('status').textContent = 'Genero il DST…';
-      const { exportLayers, stopCount } = runPipeline(currentContours(), roles, params, { imageColorAt: imageSampler() });
-      // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge
-      // fino all'END e lo ignora, noi lo rileggiamo. Senza, il .dst non sapeva da dove veniva.
-      const bytes = dstFromExportLayers(exportLayers, {
-        label: (sourceName || 'INTERLACE').toUpperCase().slice(0, 16),
-        metadata: conBusta(projectMetadata(), { strati: exportLayers, sorgente: sorgenteProgetto() }),
-      });
+      const { exportLayers, stopCount } = esporta();
+      const bytes = costruisciDst(exportLayers);
       const name = sourceName ? `${sourceName}-interlace.dst` : 'interlace.dst';
       const outcome = await saveBinaryFile(bytes, { suggestedName: name, ...DST_FILE });
       $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${stopCount} stop · ${(bytes.length / 1024).toFixed(1)} KB`;
@@ -1152,4 +1185,5 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   buildParamUI();
   buildPaletteUI();
   loadImport(imported, 'Cartamodello demo');
+  collegaStilista(aggancio, { prendi: $('fromStilista'), invia: $('toStilistaBtn') });
 }

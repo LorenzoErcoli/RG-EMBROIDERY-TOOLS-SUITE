@@ -726,7 +726,7 @@
         "seed": {
           "$ref": "#/$defs/seed",
           "default": 1,
-          "description": "Stessa variante = stesso identico risultato (riproducibile)."
+          "description": "stessa variante = stesso identico risultato (riproducibile)"
         },
         "excludeBackground": {
           "$ref": "#/$defs/excludeBackground",
@@ -1332,7 +1332,7 @@
           "$ref": "#/$defs/realWidthMm",
           "default": 0,
           "title": "Larghezza reale del ricamo",
-          "description": "0 = usa la stima al DPI di stima. Se maggiore di 0 è la fonte di verità e prevale su qualsiasi stima."
+          "description": "0 = usa la stima al DPI qui sotto"
         },
         "maxStitchMm": {
           "$ref": "#/$defs/maxStitchMm",
@@ -1361,19 +1361,19 @@
           "$ref": "#/$defs/colorCount",
           "default": 6,
           "title": "Numero di colori",
-          "description": "Quante tinte, base compresa.",
+          "description": "da 4 a 8, base compresa",
           "minimum": 4,
           "maximum": 8
         },
         "minStitchMm": {
           "$ref": "#/$defs/minStitchMm",
           "default": 1,
-          "description": "Imposto alla fine, dopo i passaggi."
+          "description": "imposto alla fine, dopo i passaggi"
         },
         "maxWidthPx": {
           "$ref": "#/$defs/maxWidthPx",
           "default": 900,
-          "description": "L'immagine si analizza ridotta a questa larghezza.",
+          "description": "l'immagine si analizza ridotta a questa larghezza",
           "minimum": 100
         },
         "voidClearanceMm": {
@@ -1422,7 +1422,7 @@
         "seme": {
           "$ref": "#/$defs/seed",
           "default": 1,
-          "description": "Stessa variante = stesso identico ricamo. Cambiala per un’altra estrazione di lunghezze e aperture.",
+          "description": "Stessa variante = stesso identico ricamo. Cambiala per un'altra estrazione di lunghezze e aperture.",
           "maximum": 9999,
           "x-id": "seed"
         },
@@ -1743,8 +1743,13 @@
         },
         "pezzoMinimo": {
           "$ref": "#/$defs/minDetachedPiece",
-          "default": 3,
+          "default": 2,
           "x-id": "minDetachedPiece"
+        },
+        "sopraPuntoMin": {
+          "$ref": "#/$defs/overlayMinStitch",
+          "default": 1,
+          "x-id": "overlayMinStitch"
         },
         "ponti": {
           "$ref": "#/$defs/bridgeMaxGap",
@@ -1976,7 +1981,7 @@
           "title": "Punto dell’impuntura nel vuoto",
           "description": "Il punto della linea che gira sul bordo del vuoto o lo attraversa dritta.",
           "minimum": 0.5,
-          "maximum": 12
+          "maximum": 30
         },
         "netShape": {
           "$ref": "#/$defs/netShape",
@@ -2080,8 +2085,49 @@
           "default": 2,
           "x-id": "crossingOverlap"
         },
+        "buildMode": {
+          "$ref": "#/$defs/netConstruction",
+          "default": "zigzag",
+          "x-id": "netConstruction"
+        },
+        "tackWidthMm": {
+          "$ref": "#/$defs/tackWidth",
+          "default": 0,
+          "x-id": "tackWidth"
+        },
+        "tackRepeat": {
+          "$ref": "#/$defs/tackRepeat",
+          "default": 1
+        },
+        "sideDivisions": {
+          "$ref": "#/$defs/sideDivisions",
+          "default": 0
+        },
+        "lineLink": {
+          "$ref": "#/$defs/lineLink",
+          "default": "stop"
+        },
         "staggerColumns": {
           "$ref": "#/$defs/staggerColumns",
+          "default": false
+        },
+        "entryTailMm": {
+          "$ref": "#/$defs/entryTail",
+          "default": 10,
+          "x-id": "entryTail"
+        },
+        "spoolM": {
+          "$ref": "#/$defs/spool",
+          "default": 0,
+          "x-id": "spool"
+        },
+        "spoolMarginPct": {
+          "$ref": "#/$defs/spoolMargin",
+          "default": 5,
+          "x-id": "spoolMargin"
+        },
+        "fitColumns": {
+          "$ref": "#/$defs/fitColumns",
           "default": false
         },
         "cornerRounding": {
@@ -2106,6 +2152,10 @@
         "voidMode": {
           "$ref": "#/$defs/voidMode",
           "default": "ritorno"
+        },
+        "voidEdgeStitchMm": {
+          "$ref": "#/$defs/voidEdgeStitchMm",
+          "default": 1
         }
       }
     },
@@ -2227,7 +2277,7 @@
     "cordInterline": {
       "type": "number",
       "title": "Interlinea del cordoncino",
-      "description": "Distanza tra un punto e il successivo lungo il filo.",
+      "description": "distanza tra un punto e il successivo lungo il filo",
       "x-unita": "mm",
       "x-passo": 0.05,
       "x-regole": [
@@ -3496,7 +3546,7 @@
     "threshold": {
       "type": "integer",
       "title": "Soglia di selezione",
-      "description": "Un pixel è scelto se più scuro della soglia (luminanza 0–255); più alta = include più pixel chiari.",
+      "description": "un pixel è scelto se più scuro della soglia (0–255); più alta = include più pixel chiari",
       "minimum": 0,
       "maximum": 255,
       "x-passo": 5,
@@ -3536,7 +3586,7 @@
     "colorCount": {
       "type": "integer",
       "title": "Numero di colori (cambi-ago)",
-      "description": "In quante tinte separare l'immagine (quantizzazione); usato solo con colori automatici.",
+      "description": "in quante tinte separare l'immagine (quantizzazione)",
       "minimum": 1,
       "maximum": 16,
       "x-passo": 1,
@@ -3545,7 +3595,7 @@
     "densitySpacingMm": {
       "type": "number",
       "title": "Distanza tra i punti",
-      "description": "Quanto sono distanti i punti: piccola = fitto (più punti), grande = rado (meno punti); 0 = piena risoluzione.",
+      "description": "quanto sono distanti i punti: piccola = fitto (più punti), grande = rado (meno punti); 0 = piena risoluzione",
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 0.1,
@@ -3658,7 +3708,7 @@
     "maxWidthPx": {
       "type": "integer",
       "title": "Risoluzione di lavoro",
-      "description": "L'immagine viene ridotta a questa larghezza per la resa (0 = nativa); più bassa = più veloce.",
+      "description": "l'immagine viene ridotta a questa larghezza per la resa (0 = nativa); più bassa = più veloce",
       "x-unita": "px",
       "minimum": 0,
       "x-passo": 50,
@@ -3667,7 +3717,7 @@
     "chunkSize": {
       "type": "integer",
       "title": "Punti massimi per tracciato",
-      "description": "Spezza i tracciati lunghi per Illustrator; 0 = nessun taglio.",
+      "description": "spezza i tracciati lunghi per Illustrator (R6); 0 = nessun taglio",
       "minimum": 0,
       "x-passo": 500,
       "x-regole": [
@@ -4226,7 +4276,7 @@
     "flattenLightMm": {
       "type": "number",
       "title": "Pareggio della luce",
-      "description": "Toglie la variazione lenta di tono (illuminazione, sporco, invecchiamento) e lascia le differenze di disegno. 0 = spento. Tienilo fra un quinto e un terzo del motivo.",
+      "description": "0 = spento. Tienilo fra un quinto e un terzo del motivo",
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 1,
@@ -4235,7 +4285,7 @@
     "smoothMm": {
       "type": "number",
       "title": "Attenuazione della grana",
-      "description": "Spiana il tratteggio senza sbavare i contorni. 0 = spenta.",
+      "description": "spiana il tratteggio senza sbavare i contorni",
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 0.3,
@@ -4244,7 +4294,7 @@
     "minBlobMm2": {
       "type": "number",
       "title": "Macchia più piccola",
-      "description": "Sotto questa misura la macchia va al colore vicino.",
+      "description": "sotto questa misura la macchia va al colore vicino",
       "x-unita": "mm2",
       "minimum": 0,
       "x-passo": 5,
@@ -4253,7 +4303,7 @@
     "fillAngleDeg": {
       "type": "number",
       "title": "Orientamento delle righe",
-      "description": "0 = orizzontale, uguale per tutti i colori.",
+      "description": "0 = orizzontale, uguale per tutti i colori",
       "x-unita": "deg",
       "minimum": -90,
       "maximum": 90,
@@ -4266,7 +4316,7 @@
     "retraceOffsetMm": {
       "type": "number",
       "title": "Sfalsamento del ritorno",
-      "description": "Solo a pettine: di quanto il ritorno evita i buchi dell'andata.",
+      "description": "solo a pettine: di quanto il ritorno evita i buchi dell'andata",
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 0.05,
@@ -4275,7 +4325,7 @@
     "endLockCount": {
       "type": "integer",
       "title": "Fermatura di uscita",
-      "description": "Quanti punti cortissimi in fondo a ogni ago, prima del cambio-colore. 0 = nessuna.",
+      "description": "0 = nessuna. Nel riferimento sono 4, prima del cambio-colore",
       "minimum": 0,
       "maximum": 8,
       "x-passo": 1,
@@ -4337,7 +4387,7 @@
     "fringeOverlap": {
       "type": "number",
       "title": "Sormonto",
-      "description": "Quanto ogni frangia entra di sicuro nella macchia vicina: alza il minimo, non il massimo.",
+      "description": "quanto ogni frangia entra di sicuro nella macchia vicina: alza il minimo, non il massimo",
       "x-unita": "mm",
       "minimum": 0,
       "maximum": 10,
@@ -4347,7 +4397,7 @@
     "brushWidth": {
       "type": "number",
       "title": "Pennello",
-      "description": "È il raggio d’azione: si sfrangia solo dove passi.",
+      "description": "è il raggio d'azione: si sfrangia solo dove passi",
       "x-unita": "mm",
       "minimum": 0.5,
       "maximum": 40,
@@ -4439,7 +4489,7 @@
     "passMaxMm": {
       "type": "number",
       "title": "Passaggio più lungo",
-      "description": "Fin dove un passaggio si cuce comunque, anche se un pezzetto si vedrà. Oltre questa misura il passaggio si fa lo stesso, ma solo se il cammino resta nascosto sotto ciò che verrà dopo e a vista ne resta meno di 3 mm. Negli ultimi due colori i passaggi lunghi non si fanno, perché lì non viene più nessuno a coprirli.",
+      "description": "Fin dove un passaggio si cuce comunque, anche se un pezzetto si vedrà. Oltre questa misura il passaggio si fa lo stesso, ma solo se il cammino resta nascosto sotto ciò che verrà dopo e a vista ne resta meno di 3 mm: sul pannello a sei tinte i tagli passano da 424 a 168. Negli ultimi due colori i passaggi lunghi non si fanno, perché lì non viene più nessuno a coprirli.",
       "x-unita": "mm",
       "minimum": 4,
       "maximum": 250,
@@ -4448,7 +4498,7 @@
     "hiddenPassMaxMm": {
       "type": "number",
       "title": "Passaggio nascosto più lungo",
-      "description": "Fin dove si prova un passaggio che va oltre la misura del passaggio più lungo, e che quindi si fa solo se resta nascosto: nella banda di sovrapposizione fra il colore in corso e uno più scuro accanto, o sulla linea esatta di una base futura dello stesso colore.",
+      "description": "Fin dove si prova un passaggio che va oltre la misura qui sopra, e che quindi si fa solo se resta nascosto. Nascosto vuol dire: nella banda di sovrapposizione fra il colore in corso e uno più scuro accanto, o sulla linea esatta di una base futura dello stesso colore. Dentro il proprio colore un passaggio si vede fra un dente e l’altro, e allora si taglia. Le macchie piccole non contano qui: per incastrarle in una riga grande il corridoio può arrivare a 15 cm.",
       "x-unita": "mm",
       "minimum": 4,
       "maximum": 400,
@@ -4457,7 +4507,7 @@
     "gapCrossMm": {
       "type": "number",
       "title": "Gola attraversata",
-      "description": "Fin dove la riga più esterna di una fascia attraversa una gola senza spezzarsi: un tratto di tinta più chiara, già cucita, o troppo addossato alla riga prima, incastrato fra due tratti della stessa tinta. A 0 non lo fa mai.",
+      "description": "Fin dove la riga più esterna di una fascia attraversa una gola senza spezzarsi: un tratto di tinta più chiara, già cucita, o troppo addossato alla riga prima, incastrato fra due tratti della stessa tinta. La riga dentata continua sopra e raggiunge l’altro pezzo, invece di lasciarlo orfano con un taglio. A 0 non lo fa mai.",
       "x-unita": "mm",
       "minimum": 0,
       "maximum": 100,
@@ -4791,7 +4841,7 @@
     "hiddenPassMax": {
       "type": "number",
       "title": "Passaggio nascosto, fino a",
-      "description": "Da un pezzo all'altro sulle linee del punto o nel verso del raso: il filo non si vede. Oltre: salto.",
+      "description": "Il punto sopra va da un pezzo all'altro sulle linee della base, anche ripassando: dentro la macchia non salta.",
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 5,
@@ -4799,12 +4849,21 @@
     },
     "minDetachedPiece": {
       "type": "number",
-      "title": "Togli i pezzi staccati più corti di",
-      "description": "I pezzi che non si raggiungono senza salto: se sono corti si tolgono. Il punto sopra non esce mai dalla macchia.",
+      "title": "Togli i pezzi del punto sopra più corti di",
+      "description": "I pezzetti staccati dal resto (una barretta che entra dal bordo mentre la sua colonna è fuori) non si cuciono. Il punto sopra non esce mai dalla macchia.",
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 0.5,
       "x-concetto": "altro"
+    },
+    "overlayMinStitch": {
+      "type": "number",
+      "title": "Punto minimo del punto sopra",
+      "description": "Al bordo della macchia la linea si ferma all’ago prima invece di lasciare un puntino; dentro, gli aghi si ridistribuiscono lungo la linea. Più alto per i fili spessi.",
+      "x-unita": "mm",
+      "minimum": 0.3,
+      "x-passo": 0.1,
+      "x-concetto": "punto-minimo"
     },
     "bridgeMaxGap": {
       "type": "number",
@@ -4874,7 +4933,7 @@
     "lightFlattening": {
       "type": "number",
       "title": "Pareggio della luce",
-      "description": "tienilo più grande del motivo (0 = spento)",
+      "description": "tienilo più grande del motivo",
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 1,
@@ -4925,7 +4984,7 @@
     "outlineSmoothing": {
       "type": "number",
       "title": "Lisciatura del contorno",
-      "description": "0 = il contorno com’esce dalla tracciatura. Alzandola sparisce il dettaglio più piccolo di così",
+      "description": "0 = il contorno com'esce dalla tracciatura. Alzandola sparisce il dettaglio più piccolo di così",
       "x-unita": "mm",
       "minimum": 0,
       "maximum": 5,
@@ -5266,10 +5325,93 @@
       "x-passo": 0.25,
       "x-concetto": "sovrapposizione"
     },
+    "netConstruction": {
+      "type": "string",
+      "title": "Come si costruisce la rete",
+      "description": "zigzag = serpentine che scendono e risalgono, con le lenti agli incroci; linee = due famiglie di linee dritte, prima tutte quelle di un verso poi le altre (cambio ago fra le due), che si attraversano senza lente. Il rombo è la maglia vera.",
+      "enum": [
+        "zigzag",
+        "linee"
+      ],
+      "x-concetto": "modulo"
+    },
+    "tackWidth": {
+      "type": "number",
+      "title": "Travetta della testa speciale",
+      "description": "A linee dritte: la macchina fa di ogni punto una travetta che va a sinistra se la linea sale, a destra se scende; il cordone si fissa al centro. I punti si spostano di mezza travetta al contrario (bordi verticali compresi, i tratti orizzontali no). 0 = niente.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 20,
+      "x-passo": 0.5,
+      "x-concetto": "spostamento"
+    },
+    "tackRepeat": {
+      "type": "integer",
+      "title": "Passaggi della travetta per punto",
+      "description": "A linee dritte: ogni punto delle linee (anche sugli incroci) ripetuto nello stesso posto; ogni ripetizione, un passaggio di travetta.",
+      "minimum": 1,
+      "maximum": 10,
+      "x-passo": 1,
+      "x-concetto": "densita"
+    },
+    "sideDivisions": {
+      "type": "integer",
+      "title": "Lato del rombo diviso in",
+      "description": "A linee dritte: in quante parti si divide il lato del rombo, da un incrocio all’altro; ogni incrocio ha sempre un punto su tutte e due le linee. 0 = a lunghezza del punto.",
+      "minimum": 0,
+      "maximum": 50,
+      "x-passo": 1,
+      "x-concetto": "densita"
+    },
+    "lineLink": {
+      "type": "string",
+      "title": "Fra un verso e l’altro",
+      "description": "A linee dritte: stop = cambio ago, con uscita e ingresso fuori sagoma; fuori = senza fermarsi, il filo esce alla distanza dell’ingresso, corre cucito fuori dal contorno e rientra all’inizio dell’altro verso.",
+      "enum": [
+        "stop",
+        "fuori"
+      ],
+      "x-concetto": "ordine-cucitura"
+    },
     "staggerColumns": {
       "type": "boolean",
       "title": "Colonne sfalsate di mezzo rombo",
       "description": "Le colonne vicine spostate di mezzo rombo lungo la serpentina.",
+      "x-concetto": "modulo"
+    },
+    "entryTail": {
+      "type": "number",
+      "title": "Ingresso e uscita fuori sagoma",
+      "description": "Ogni parte comincia con una linea fuori sagoma lunga così e un salto uguale al primo punto, e finisce al contrario (salto fuori, linea), poi il cambio ago (stop). Fuori dal bordo esterno o dentro il foro. 0 = niente.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 30,
+      "x-passo": 1,
+      "x-concetto": "ordine-cucitura"
+    },
+    "spool": {
+      "type": "number",
+      "title": "Rocchetta del filo",
+      "description": "Prima che finisca, il filo esce su un bordo (come a fine parte) e dopo il cambio ago riparte dallo stesso punto. 0 = nessun limite.",
+      "minimum": 0,
+      "maximum": 10000,
+      "x-passo": 5,
+      "x-concetto": "ordine-cucitura"
+    },
+    "spoolMargin": {
+      "type": "number",
+      "title": "Scarto sulla rocchetta",
+      "description": "Il filo della rocchetta che si tiene da parte.",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 50,
+      "x-passo": 1,
+      "x-concetto": "ordine-cucitura"
+    },
+    "fitColumns": {
+      "type": "boolean",
+      "title": "Colonne intere nella larghezza",
+      "description": "Ritocca di poco la larghezza del rombo perché nella larghezza del pezzo stia un numero intero di colonne: sui bordi laterali ogni punta tocca il bordo nello stesso modo, senza tagli irregolari.",
       "x-concetto": "modulo"
     },
     "cornerRounding": {
@@ -5321,6 +5463,19 @@
         "bordo",
         "centro"
       ],
+      "x-regole": [
+        "R5"
+      ],
+      "x-concetto": "aree-vuote"
+    },
+    "voidEdgeStitchMm": {
+      "type": "number",
+      "title": "Punti corti ai bordi del vuoto",
+      "description": "Attraversando il vuoto dritto: tre punti di questa lunghezza a ogni bordo, che segnano il foro; in mezzo i punti lunghi (fino a 30 mm). 0 = niente.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 5,
+      "x-passo": 0.1,
       "x-regole": [
         "R5"
       ],
@@ -5403,7 +5558,9 @@
         "satinRowSpacing",
         "rowSpacing",
         "spiralPitch",
-        "tieSpacing"
+        "tieSpacing",
+        "tackRepeat",
+        "sideDivisions"
       ]
     },
     "interlinea": {
@@ -5431,7 +5588,8 @@
         "minStitchMm",
         "reinsertionRounds",
         "cleanupMinStitch",
-        "minStitchLength"
+        "minStitchLength",
+        "overlayMinStitch"
       ]
     },
     "punto-massimo": {
@@ -5578,7 +5736,8 @@
         "globalPatternOffsetX",
         "globalPatternOffsetY",
         "stripShiftMm",
-        "retraceOffsetMm"
+        "retraceOffsetMm",
+        "tackWidth"
       ]
     },
     "sovrapposizione": {
@@ -5654,7 +5813,8 @@
         "enableExclusionAreas",
         "reconnectVoidBorders",
         "voidClearanceMm",
-        "voidMode"
+        "voidMode",
+        "voidEdgeStitchMm"
       ]
     },
     "seme": {
@@ -5745,7 +5905,11 @@
         "leftToRightOrder",
         "stopZones",
         "stopZonesDirection",
-        "continuousFill"
+        "continuousFill",
+        "lineLink",
+        "entryTail",
+        "spool",
+        "spoolMargin"
       ]
     },
     "modulo": {
@@ -5781,7 +5945,9 @@
         "radialSide",
         "diamondWidth",
         "diamondHeight",
+        "netConstruction",
         "staggerColumns",
+        "fitColumns",
         "cornerRounding"
       ]
     },

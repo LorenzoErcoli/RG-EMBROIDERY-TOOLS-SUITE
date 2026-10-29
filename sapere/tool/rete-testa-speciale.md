@@ -112,6 +112,77 @@ la cucitura animata, ripubblicata a ogni sua correzione. Le decisioni qui sotto 
     `bottomRoundEnds` (0 = ovale, 100 = mezzi cerchi e tratti dritti).
 21. **La fascia sui lati lunghi nel tool** (2026-10-16): *«Fascia sui lati lunghi è importante che me lo metti dentro»* →
     `sideBandMm` (0 = tutta la rete), nel ricamo, nel pannello e nella sacca 3D.
+31. **Il lato del rombo in parti** (2026-10-27): *«la distanza tra i punti (travette) non dovrebbe essere un valore di
+    distanza, ma in quante parti vuoi dividere il lato del rombo. perché il punto di incrocio deve sempre avere un punto
+    per le travette, entrambe le diagonali»*. `sideDivisions` (0 = a lunghezza del punto). Gli incroci di tutte e due le
+    famiglie stanno ogni mezza altezza del rombo (dall'alto del pezzo: le rette partono da lì), quindi bastano punti fissi
+    ogni H/2/N in altezza; sulle linee si cuciono solo quelli. Lezione: il controllo finale del punto massimo usava ancora
+    il limite generale (2 mm, dal punto nel vuoto) e spezzava a metà le parti da 2,83: con le parti va saltato.
+30. **La travetta della testa speciale** (2026-10-27): *«quando vado a ricamare la macchina sostituisce il punto con una
+    travetta orizzontale… La travetta serve per fissare un filo più grande con la testa speciale. Lavorando però andata e
+    ritorno a serpentina questo porta ad avere quadrati più piccoli e più grandi… devo poter avere delle compensazioni che
+    mi portano ad avere il mio cordone da 5… fissato sempre al centro»*. Poi, sulla simulazione: *«il sistema vale solo
+    per le linee dirette, non per lo zig zag»*, *«le travette le fa a sinistra e non a destra»* (salendo a sinistra,
+    scendendo a destra), compensare anche i bordi verticali, non i tratti orizzontali; e i punti ripetuti: *«se c'è 1 punto
+    la travetta è di un passaggio… se ne metto 2 ne fa due»*, anche uno sopra l'altro, solo su linee e incroci.
+    `tackWidthMm` (0), `tackRepeat` (1). Compensazione fatta in `dividiInParti` sulle parti (il file da cucire); il verso
+    di ogni punto dai suoi vicini (|dy| sotto il 30% = orizzontale). Verificata simulando la macchina dai punti del file:
+    95% dei centri sul disegno; restano scarti fino a 2 mm sulle punte dove la linea arriva al bordo e cambia verso.
+    Lezione: la verifica va fatta come distanza dalla linea del disegno, non accoppiando i punti per indice (nel disegno ci
+    sono punti doppi dove due pezzi si toccano, e l'indice si sfasa).
+29. **Fra i due versi: stop o passaggio fuori** (2026-10-26): chiesto perché nella simulazione la trama si spezza in due
+    (lo stop fra i versi: il primo finisce a destra, il secondo riparte da sinistra), *«normalmente spezzi, con allora
+    sempre entrata e uscita prima. ma possiamo anche dire non spezzare e fa un passaggio esterno al contorno con il
+    filo»*. `lineLink` (`stop` di partenza, `fuori`): il passaggio segue il contorno spostato in fuori della distanza
+    dell'ingresso (sui vertici lungo la bisettrice), parte e arriva sulla proiezione dei capi (il secondo verso comincia
+    spesso sulla passata affiancata del bordo, 1 mm dentro). Clover: 0,47 m di passaggio lungo il bordo alto.
+28. **La rete a linee dritte** (2026-10-26): *«dammi la possibilità di cambiare il modo di costruzione, non più zig zag,
+    ma prima tutte le linee orizzontali per un verso e poi quelle per l'altro verso. quindi una rete normale. che non dà
+    quindi punti tondi di sovrapposizione. fai delle prove prima»*; e, chiesto: niente punto sull'incrocio, le aree vuote
+    come oggi. `buildMode` (`zigzag` di partenza, `linee`; id di registro `netConstruction`, perché `buildMode` è già del
+    Pettine con un altro significato). Nel motore ogni retta è una «colonna» con una linea sola, le due famiglie una dopo
+    l'altra: blocchi, aree vuote, parti, ingressi e rocchetta sono quelli dello zig-zag; le lenti sono spente.
+    Lezioni: (1) la prima prova usava la larghezza del rombo come passo, ma nello zig-zag la maglia vera è larghezza meno
+    sovrapposizione (8,24 con 10 e 1,75): per confrontare va usata la stessa maglia (82,7 m contro 90,5 alla pari);
+    (2) una retta ha due punti, e il taglio sul bordo guarda i punti: va resa fitta (ogni 0,4 mm); (3) ogni linea finisce
+    dalla parte opposta a dove comincia: il ramo attorno a un vuoto si sceglie dal lato dove è il filo (con la parità
+    giù-su; scegliere il capo più vicino sbagliava sulle linee cortissime negli angoli), e dove il filo di un ramo resta sul
+    bordo del vuoto la rete oltre è una parte nuova invece di un salto volante; (4) il punto massimo finale si controlla
+    punto per punto (prima valeva il più grande fra punto, punto nel vuoto e punto nelle lenti, e passavano punti da 1,28
+    mm col punto a 1).
+27. **Il vuoto attraversato dritto: tre punti corti ai bordi, dentro fino a 3 cm** (2026-10-22): *«nella modalità aree
+    vuote che si attraversano con impuntura dritta, mettiamo 3 punti avvicinati che delimitano l'area del foro. e poi
+    dentro devo poter aumentare la lunghezza punto fino a 3cm»*. `voidEdgeStitchMm` (1 mm; tre punti a ogni bordo, dal
+    bordo verso dentro) e `voidStitchMm` fino a 30 (prima 12). Se la traversata è più corta di sei punti corti, è tutta a
+    punti corti.
+24. **Aree vuote: sempre da sinistra a destra, cambio ago a ogni spezzatura** (2026-10-21): *«è importante che il filo
+    si muova sempre da sinistra a destra. Quindi in caso di aree vuote la parte sotto o sopra in base a quando si spezza
+    va fatto subito dopo la parte principale, per poi concludere con la parte senza buco laterale… Quando si spezza
+    facciamo un cambio ago»*; e, chiesto: da 2a a 2b non serve cambiare ago. Prima la parte oltre il vuoto si cuciva alla
+    fine con un salto e ogni parte sceglieva fra quattro partenze (anche da destra a sinistra).
+    Come si fa: i blocchi si assegnano colonna per colonna; dove un blocco si spezza continua sul ramo dal suo lato, gli
+    altri rami aprono blocchi nuovi (cuciti subito dopo); dove due rami si riuniscono continua il più nuovo. Un ramo
+    sotto un vuoto parte dal BASSO: la prima prova lo faceva partire dal bordo del vuoto e, per passare alla colonna oltre
+    il vuoto, il filo saltava attraverso il vuoto fino al bordo alto.
+25. **Ingressi e uscite fuori sagoma** (2026-10-21): *«Tutti gli inizi poi devono avere un ingresso fuori dalla reale
+    sagoma. Quindi fuori esterno o dentro interno in caso di foro, dove non va il ricamo, mettiamo un ingresso una linea
+    di circa 1cm poi un salto di nuovo da 1 centimetro»*; e, chiesto: alla fine di ogni parte l'uscita uguale. Il cambio
+    ago è uno stop (cambio colore) nel DST. `entryTailMm` (10); la coda va lungo la normale al bordo, verso fuori; se non
+    ci sta (foro piccolo) si accorcia fino al 30% o si gira di 30–60°.
+26. **La rocchetta** (2026-10-21): *«il filo deve spezzarsi in base alla lunghezza massima della rocchetta di filo
+    speciale… il sistema trova un punto esterno entro il quale fare l'uscita simile all'entrata»*. `spoolM` (0 = nessun
+    limite), `spoolMarginPct` (5%, chiesto: «si va bene con lo scarto inseribile»). Il filo si conta come lunghezza dei
+    punti più ingresso e uscita; il taglio cade sull'ultimo punto che corre sul bordo prima del limite. Ogni cambio ago
+    conta come rocchetta nuova (da verificare in produzione: se lo stesso ago torna dopo, la sua rocchetta è già usata).
+23. **Colonne intere nella larghezza** (2026-10-21, Net bag Clover, DST «Rete 420x710»: *«se guardi i bordi laterali
+    sinistra e destra si creano delle curve strane. dovute anche al fatto che la rete viene appunto tagliata… serve una
+    curva migliore… mi serve una soluzione rapida»*). Causa: il passo delle colonne (rombo 10 − sovrapposizione 1,75 =
+    8,25) non divide la larghezza (420 / 8,25 = 50,9), quindi il bordo cade in un punto qualsiasi del rombo, diverso a
+    ogni colonna tagliata: tagli profondi, triangolini di decimi, scalini fra le due passate sul bordo. Rimedio
+    (`fitColumns`): un numero intero di colonne (51), il rombo ritoccato a 9,985 mm, la prima colonna a mezzo passo dal
+    bordo; il bordo cade a metà della sovrapposizione come una colonna vicina. Il DST nuovo («Rete 420x710 colonne
+    intere») è stato salvato accanto all'originale, che resta com'era. In alto e in basso il bordo taglia ancora il rombo
+    a caso (710 / 17 = 41,8 rombi): si potrebbe fare lo stesso con l'altezza.
 22. **Nessuna cima volante** (2026-10-16, su un'anteprima con la cima di una colonna su un anello dispari): *«eliminiamo
     queste situazioni qui, perché non è attaccato a niente rimarrebbe volante»*. Su un anello dispari le due linee della
     colonna finiscono su due nodi diversi e il filo passava dall'una all'altra lungo il bordo, senza incrociare niente.

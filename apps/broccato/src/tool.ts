@@ -12,6 +12,7 @@ import '@rg/ui/rg.css';
 import './broccato.css';
 import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, readDstMetadata, readProjectMetadata } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
+import { testiCampo } from '@rg/cervello';
 import { scheletro, sezioneSorgente, sezione, campoNumero, campoNumeroInline, attivaCampiNumero, leggiCampo, impostaNumero, type OpzioniCampoNumero } from '@rg/ui/anatomia';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { collegaSimula, datiDaStrati, type DatiSimulazione } from '@rg/ui/simulatore';
@@ -45,20 +46,36 @@ type Vista = 'originale' | 'preparata' | 'ridotta' | 'ricamo';
 
 interface NumBind { id: string; key: keyof BroccatoParams; int?: boolean; min?: number; max?: number; }
 
+// Da quale parametro salvato (nel registro) prende i testi ogni campo; chi non è qui ha i testi nella tabella sotto.
+const CHIAVE_REGISTRO: Record<string, string> = {
+  realWidth: 'realWidthMm',
+  dpiDefault: 'dpiDefault',
+  maxWidthPx: 'maxWidthPx',
+  flattenLightMm: 'flattenLightMm',
+  smoothMm: 'smoothMm',
+  minBlobMm2: 'minBlobMm2',
+  fillAngleDeg: 'fillAngleDeg',
+  maxStitchMm: 'maxStitchMm',
+  retraceOffsetMm: 'retraceOffsetMm',
+  minStitchMm: 'minStitchMm',
+  endLockCount: 'endLockCount',
+  colorCount: 'colorCount',
+};
+
 // Testi, unità e limiti dei campi numerici (le stesse parole di prima, ora costruite da campoNumero). Il valore parte dai default del motore.
-const DATI_CAMPI: Record<string, Omit<OpzioniCampoNumero, 'id' | 'valore'>> = {
-  realWidth: {etichetta:"Larghezza reale del ricamo",unita:"mm",passo:1,min:0,aiuto:"0 = usa la stima al DPI qui sotto",largo:false},
-  dpiDefault: {etichetta:"DPI di stima",unita:"dpi",passo:1,min:1,largo:false},
-  maxWidthPx: {etichetta:"Risoluzione di lavoro",unita:"px",passo:50,min:100,aiuto:"l'immagine si analizza ridotta a questa larghezza",largo:false},
-  flattenLightMm: {etichetta:"Pareggio della luce",unita:"mm",passo:1,min:0,aiuto:"0 = spento. Tienilo fra un quinto e un terzo del motivo",largo:false},
-  smoothMm: {etichetta:"Attenuazione della grana",unita:"mm",passo:0.3,min:0,aiuto:"spiana il tratteggio senza sbavare i contorni",largo:false},
-  minBlobMm2: {etichetta:"Macchia più piccola",unita:"mm²",passo:5,min:0,aiuto:"sotto questa misura la macchia va al colore vicino",largo:false},
-  fillAngleDeg: {etichetta:"Orientamento delle righe",unita:"°",passo:5,min:-90,max:90,aiuto:"0 = orizzontale, uguale per tutti i colori",largo:false},
-  maxStitchMm: {etichetta:"Lunghezza del punto",unita:"mm",passo:0.1,min:0.5,largo:false},
-  retraceOffsetMm: {etichetta:"Sfalsamento del ritorno",unita:"mm",passo:0.05,min:0,aiuto:"solo a pettine: di quanto il ritorno evita i buchi dell'andata",largo:false},
-  minStitchMm: {etichetta:"Punto minimo",unita:"mm",passo:0.1,min:0,aiuto:"imposto alla fine, dopo i passaggi",largo:false},
-  endLockCount: {etichetta:"Fermatura di uscita",unita:"punti",passo:1,min:0,max:8,aiuto:"0 = nessuna. Nel riferimento sono 4, prima del cambio-colore",largo:false},
-  colorCount: { etichetta: 'Numero di colori', unita: 'aghi', passo: 1, min: MIN_COLORS, max: MAX_COLORS, aiuto: `da ${MIN_COLORS} a ${MAX_COLORS}, base compresa`, largo: false },
+const DATI_CAMPI: Record<string, Omit<OpzioniCampoNumero, 'id' | 'valore' | 'etichetta' | 'unita'> & Partial<Pick<OpzioniCampoNumero, 'etichetta' | 'unita'>>> = {
+  realWidth: {passo:1,min:0,largo:false},
+  dpiDefault: {passo:1,min:1,largo:false},
+  maxWidthPx: {passo:50,min:100,largo:false},
+  flattenLightMm: {passo:1,min:0,largo:false},
+  smoothMm: {passo:0.3,min:0,largo:false},
+  minBlobMm2: {passo:5,min:0,largo:false},
+  fillAngleDeg: {passo:5,min:-90,max:90,largo:false},
+  maxStitchMm: {passo:0.1,min:0.5,largo:false},
+  retraceOffsetMm: {passo:0.05,min:0,largo:false},
+  minStitchMm: {passo:0.1,min:0,largo:false},
+  endLockCount: {passo:1,min:0,max:8,largo:false},
+  colorCount: { passo: 1, min: MIN_COLORS, max: MAX_COLORS, largo: false },
   densityAll: { etichetta: 'Stessa densità per tutti', unita: 'mm', passo: 0.1, min: 0.2, max: 3, aiuto: 'poi ritocca le righe che vuoi diverse', largo: true },
 };
 
@@ -77,10 +94,12 @@ const NUM_BINDS: NumBind[] = [
 ];
 
 export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {}): void {
+  const T = (nome: string) => testiCampo('broccato', nome);
   const CHIAVE: Record<string, string> = { realWidth: 'realWidthMm' };
   const campo = (id: string): string => {
     const valore = id === 'densityAll' ? 0.6 : Number((defaultBroccatoParams as unknown as Record<string, unknown>)[CHIAVE[id] ?? id]);
-    return campoNumero({ id, ...DATI_CAMPI[id], valore });
+    const t = CHIAVE_REGISTRO[id] ? testiCampo('broccato', CHIAVE_REGISTRO[id]) : undefined;
+    return campoNumero({ etichetta: '', unita: '', id, ...DATI_CAMPI[id], ...(t ? { etichetta: t.etichetta, unita: t.unita, aiuto: t.aiuto } : {}), valore });
   };
   root.innerHTML = scheletro({
     topbar: topbar('Broccato', opts.backHref),
@@ -107,12 +126,12 @@ export function mountBroccato(root: HTMLElement, opts: { backHref?: string } = {
         contenuto: `<div class="rg-param-grid">
     ${campo('colorCount')}
     <div class="rg-field rg-param-grid__wide">
-      <span class="rg-field__label">Da dove vengono le tinte</span>
-      <div><div class="rg-segmented" id="paletteMode" role="group" aria-label="Da dove vengono le tinte">
+      <span class="rg-field__label">${T('paletteMode').etichetta}</span>
+      <div><div class="rg-segmented" id="paletteMode" role="group" aria-label="${T('paletteMode').etichetta}">
         <button type="button" class="rg-segmented__item rg-segmented__item--active" data-palette="auto" aria-pressed="true">Automatiche</button>
         <button type="button" class="rg-segmented__item" data-palette="manuale" aria-pressed="false">Manuali</button>
       </div></div>
-      <span class="rg-field__help">Automatiche: le trova il sistema. Manuali: le scegli tu col contagocce, e non vengono più ricatturate.</span>
+      <span class="rg-field__help">${T('paletteMode').aiuto ?? ''}</span>
     </div>
     <div class="rg-field">
       <span class="rg-field__label">Cattura dall'immagine</span>

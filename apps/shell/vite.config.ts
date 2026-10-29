@@ -8,6 +8,7 @@ export default defineConfig(({ command }) => ({
   resolve: {
     alias: {
       '@rg/core': fileURLToPath(new URL('../../packages/core/src/index.ts', import.meta.url)),
+      '@rg/cervello': fileURLToPath(new URL('../../packages/cervello/src/index.ts', import.meta.url)),
       '@rg/ui': fileURLToPath(new URL('../../packages/ui/src', import.meta.url)),
       '@app/net-45': fileURLToPath(new URL('../net-45/src/tool.ts', import.meta.url)),
       '@app/pattern-grammar': fileURLToPath(new URL('../pattern-grammar/src/tool.ts', import.meta.url)),

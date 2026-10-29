@@ -9,6 +9,7 @@ import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
+import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';
 import { costruisciMacchie, PARAMETRI_MACCHIE, type ParametriMacchie, type RisultatoMacchie } from './motore';
 
@@ -22,6 +23,19 @@ const presetLocali = (): Record<string, PatternConfig> => {
 };
 /** Il pattern di partenza: quello delle prove di Lorenzo (punto nastro a squame). */
 const PRESET_INIZIALE = 'RG-PUNTO NASTRO — SQUAME';
+/**
+ * L'ULTIMO PUNTO USATO (Lorenzo, 2026-10-28, aperto da Stilista: «non vedo la base come la vorrei io e le macchie
+ * lavorano al contrario»): pattern e parametri dell'ultimo calcolo, su questo computer. Un disegno nuovo, un file o la
+ * selezione di Stilista, parte da lì e non dai valori di serie.
+ */
+const ULTIMO_KEY = 'pattern-macchie-ultimo';
+type Punto = { pattern: { nome: string; config: PatternConfig }; params: Partial<ParametriMacchie> };
+const ultimoPunto = (): Punto | null => {
+  try {
+    const u = JSON.parse(localStorage.getItem(ULTIMO_KEY) || 'null') as Punto | null;
+    return u?.pattern?.config && u.params && typeof u.params === 'object' ? u : null;
+  } catch { return null; }
+};
 
 /** Il disegno nel file riapribile, se non pesa troppo (come nel Generatore pattern). */
 const MAX_DRAWING_KB = 256;
@@ -44,6 +58,9 @@ const FILI = [
   { chiave: 'sotto', nome: 'Passaggi sotto il raso', colore: '#3b78c4' },
 ] as const;
 type ChiaveFilo = typeof FILI[number]['chiave'];
+/** I salti nell'anteprima: quelli del raso viola, quelli del punto sopra rossi. */
+const COLORE_SALTI_RASO = '#8e3fd0';
+const COLORE_SALTI_SOPRA = '#d62020';
 
 type Campo = { nome: keyof ParametriMacchie; etichetta: string; unita: string; passo: number; min: number; max?: number; aiuto?: string; scelte?: Array<[string, string]> };
 const CAMPI_RASO: Campo[] = [
@@ -59,9 +76,11 @@ const CAMPI_RASO: Campo[] = [
 ];
 const CAMPI_SOPRA: Campo[] = [
   { nome: 'passaggioMax', etichetta: 'Passaggio nascosto, fino a', unita: 'mm', passo: 5, min: 0,
-    aiuto: 'Da un pezzo all\'altro sulle linee del punto o nel verso del raso: il filo non si vede. Oltre: salto.' },
-  { nome: 'pezzoMinimo', etichetta: 'Togli i pezzi staccati più corti di', unita: 'mm', passo: 0.5, min: 0,
-    aiuto: 'I pezzi che non si raggiungono senza salto: se sono corti si tolgono. Il punto sopra non esce mai dalla macchia.' },
+    aiuto: 'Il punto sopra va da un pezzo all\'altro sulle linee della base, anche ripassando: dentro la macchia non salta.' },
+  { nome: 'sopraPuntoMin', etichetta: 'Punto minimo del punto sopra', unita: 'mm', passo: 0.1, min: 0.3,
+    aiuto: 'Al bordo della macchia la linea si ferma all’ago prima invece di lasciare un puntino; dentro, gli aghi si ridistribuiscono lungo la linea. Più alto per i fili spessi.' },
+  { nome: 'pezzoMinimo', etichetta: 'Togli i pezzi del punto sopra più corti di', unita: 'mm', passo: 0.5, min: 0,
+    aiuto: 'I pezzetti staccati dal resto (una barretta che entra dal bordo mentre la sua colonna è fuori) non si cuciono. Il punto sopra non esce mai dalla macchia.' },
 ];
 const CAMPI_ZONE: Campo[] = [
   { nome: 'zone', etichetta: 'Dividi raso e punto sopra in zone', unita: '', passo: 1, min: 1, max: 8,
@@ -88,6 +107,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
           <button id="simulaBtn" class="rg-button rg-button--ghost rg-button--small" aria-pressed="false" title="Il simulatore: il filo si cuce sullo schermo nell'ordine del DST">Simula</button>
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
           <button id="genBtn" class="rg-button rg-button--secondary rg-button--small">Genera</button>
+          ${BOTTONE_INVIA_STILISTA()}
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
           <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Scarica SVG</button>
         </div>
@@ -111,10 +131,12 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   let model: ImportedBoundaryModel | null = null;
   const scala = { scaleMode: 'illustrator-72dpi' };
   const ruoli: Record<string, Ruolo> = {};
-  const par: ParametriMacchie = { ...PARAMETRI_MACCHIE };
-  let pattern: { nome: string; config: PatternConfig } = PRESET_CONDIVISI[PRESET_INIZIALE]
+  const ultimo = ultimoPunto();
+  const par: ParametriMacchie = { ...PARAMETRI_MACCHIE, ...(ultimo?.params ?? {}) };
+  let pattern: { nome: string; config: PatternConfig } = ultimo ? ultimo.pattern : PRESET_CONDIVISI[PRESET_INIZIALE]
     ? { nome: PRESET_INIZIALE, config: PRESET_CONDIVISI[PRESET_INIZIALE] }
     : { nome: Object.keys(PRESET_CONDIVISI)[0] ?? '', config: Object.values(PRESET_CONDIVISI)[0] ?? ({} as PatternConfig) };
+  const ricordaPunto = () => { try { localStorage.setItem(ULTIMO_KEY, JSON.stringify({ pattern, params: par })); } catch { /* senza memoria si riparte dai valori di serie */ } };
   let risultato: RisultatoMacchie | null = null;
   const visibili: Record<ChiaveFilo | 'salti' | 'contorni', boolean> = { base: true, raso: true, sopra: true, sotto: false, salti: true, contorni: false };
   let testoDisegno = 'Nessun disegno caricato.';
@@ -216,6 +238,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
           <input type="file" id="fileInput" accept=".svg,.dxf" />
           <span class="rg-button rg-button--outline">Carica SVG o DXF…</span>
         </label>
+        ${BOTTONE_PRENDI_STILISTA()}
         <p class="rg-file-input__status" id="fileStatus" role="status">${testoDisegno}</p>
       </div>
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Scala del file</span>
@@ -227,6 +250,13 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
           <span class="rg-button rg-button--ghost">Riapri un progetto (DST o SVG)…</span>
         </label>
         <p class="rg-file-input__status" id="reopenStatus" role="status">Un file uscito da qui torna com'era: disegno, ruoli, pattern e parametri.</p>
+      </div>
+      <div class="rg-file-input rg-param-grid__wide">
+        <label class="rg-file-input__control">
+          <input type="file" id="puntoFile" accept=".dst,.svg" />
+          <span class="rg-button rg-button--ghost">Pattern e parametri da un progetto…</span>
+        </label>
+        <p class="rg-file-input__status" id="puntoStatus" role="status">Da un file uscito da qui prende solo pattern e parametri: il disegno resta questo. L'ultimo punto usato resta per la volta dopo.</p>
       </div>`;
     return box;
   }
@@ -265,16 +295,26 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     }
   }
 
+  /** Da dove viene il pattern di adesso: la libreria condivisa, il Generatore su questo computer, o un progetto. */
+  function origineDelPattern(): 'shared' | 'local' | 'file' {
+    const uguale = (c?: PatternConfig) => !!c && JSON.stringify(c) === JSON.stringify(pattern.config);
+    if (uguale(PRESET_CONDIVISI[pattern.nome])) return 'shared';
+    if (uguale(presetLocali()[pattern.nome])) return 'local';
+    return 'file';
+  }
+
   function patternGrid(): HTMLElement {
     const box = document.createElement('div');
     box.className = 'rg-param-grid';
+    const da = origineDelPattern();
     const opzioni = (gruppo: string, nomi: string[], origine: string) => nomi.length
-      ? `<optgroup label="${gruppo}">${nomi.map((n) => `<option value="${origine}:${n}"${n === pattern.nome ? ' selected' : ''}>${n}</option>`).join('')}</optgroup>` : '';
+      ? `<optgroup label="${gruppo}">${nomi.map((n) => `<option value="${origine}:${n}"${n === pattern.nome && origine === da ? ' selected' : ''}>${n}</option>`).join('')}</optgroup>` : '';
     box.innerHTML = `
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Il pattern della base (e sopra le macchie)</span>
         <select id="presetList" class="rg-select">
           ${opzioni('Condivisi', Object.keys(PRESET_CONDIVISI), 'shared')}
           ${opzioni('Salvati nel Generatore pattern', Object.keys(presetLocali()), 'local')}
+          ${da === 'file' ? opzioni('Da un progetto', [pattern.nome], 'file') : ''}
         </select>
         <small class="rg-field__help">I pattern si preparano nel Generatore pattern; qui si sceglie quale usare.</small></label>`;
     box.appendChild(campione());
@@ -315,7 +355,8 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     const caselle = FILI.map((l) => `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-livello="${l.chiave}"${visibili[l.chiave] ? ' checked' : ''}>`
       + `<span class="macchie-ink" style="--ink:${l.colore}"></span>${l.nome}</label>`).join('');
     box.innerHTML = stop + dettaglio + caselle
-      + `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-livello="salti"${visibili.salti ? ' checked' : ''}> I salti, in rosso</label>`
+      + `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-livello="salti"${visibili.salti ? ' checked' : ''}> I salti, tratteggiati:`
+      + ` <span class="macchie-ink" style="--ink:${COLORE_SALTI_RASO}"></span>del raso, <span class="macchie-ink" style="--ink:${COLORE_SALTI_SOPRA}"></span>del punto sopra</label>`
       + `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-livello="contorni"${visibili.contorni ? ' checked' : ''}> Il contorno delle macchie (coi ponti)</label>`;
     return box;
   }
@@ -367,36 +408,72 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     genera();
   }
 
-  // ---- il calcolo ----
-  let attesa = 0;
+  // ---- il calcolo, in un processo a parte (Web Worker): la pagina resta libera ----
+  let worker: Worker | null = null;
+  /** Se il worker sta calcolando: un calcolo nuovo butta via quello vecchio invece di aspettarlo. */
+  let occupato = false;
+  /** Se il worker non parte (il browser non lo carica): si calcola nella pagina, come prima. */
+  let senzaWorker = false;
+  let idCalcolo = 0, attesa = 0;
+  /** Gli export valgono solo col ricamo dei parametri di adesso: mentre si calcola, si fermano. */
+  function exportPronti(si: boolean) {
+    for (const id of ['exportBtn', 'exportDstBtn']) ($(id) as HTMLButtonElement).disabled = !si;
+  }
   function genera() {
     const { pannello, macchie } = geometria();
     if (!pannello) { $('status').textContent = model ? 'Dai a un colore il ruolo «Pannello».' : 'Carica prima un disegno.'; return; }
     if (!macchie.length) { $('status').textContent = 'Dai a un colore il ruolo «Macchie».'; return; }
-    $('status').textContent = 'Calcolo…';
-    // un attimo perché la riga di stato si veda: il calcolo blocca la pagina per un secondo o due
+    ricordaPunto();
+    const mioId = ++idCalcolo;
     window.clearTimeout(attesa);
-    attesa = window.setTimeout(() => {
-      try {
-        risultato = costruisciMacchie(pannello, macchie, pattern.config, par);
-      } catch (e) {
-        risultato = null;
-        $('status').textContent = 'Errore: ' + (e as Error).message;
-        console.error(e);
-        return;
-      }
-      const r = risultato;
+    if (occupato) { worker?.terminate(); worker = null; occupato = false; }
+    if (!worker && !senzaWorker) {
+      try { worker = new Worker(new URL('./macchie.worker.ts', import.meta.url), { type: 'module' }); } catch { worker = null; }
+    }
+    exportPronti(false);
+    // (senza contatore dei secondi: riscrivere la riga di stato ogni mezzo secondo faceva ridisegnare alla pagina tutto
+    // il disegno, e su un pannello di 500 macchie il calcolo passava da 10 a 35 s — 2026-10-27)
+    $('status').textContent = 'Calcolo…';
+    const finito = (r: RisultatoMacchie | null, errore?: string) => {
+      occupato = false;
+      exportPronti(true);
+      risultato = r;
+      if (!r) { $('status').textContent = 'Errore: ' + errore; return; }
       const punti = r.base.punti + r.raso.punti + r.sopra.punti;
       $('status').textContent = `${macchie.length} macchie · ${1 + r.stop.length} stop · salti: raso ${r.raso.salti}, punto sopra ${r.sopra.salti}`
         + (r.ponti ? ` · ${r.ponti} ponti` : '') + ` · ${(r.tempoMs / 1000).toFixed(1)} s`;
       $('points').textContent = ` · ${punti.toLocaleString('it-IT')} punti`;
-      buildPanel();
+      aggiornaProgramma();
       disegna();
-    }, 30);
+    };
+    if (!worker) {
+      // senza worker si calcola qui, come prima (un attimo perché la riga di stato si veda: la pagina si blocca)
+      attesa = window.setTimeout(() => {
+        if (mioId !== idCalcolo) return;
+        try { finito(costruisciMacchie(pannello, macchie, pattern.config, par)); } catch (e) { console.error(e); finito(null, (e as Error).message); }
+      }, 30);
+      return;
+    }
+    occupato = true;
+    worker.onmessage = (e: MessageEvent<{ id: number; result?: RisultatoMacchie; error?: string }>) => {
+      if (e.data.id !== mioId) return;
+      finito(e.data.result ?? null, e.data.error);
+    };
+    // (gli errori del calcolo tornano nel messaggio: qui arriva solo un worker che non è partito)
+    worker.onerror = (e) => {
+      console.error(e);
+      worker?.terminate(); worker = null; occupato = false;
+      senzaWorker = true;
+      if (mioId === idCalcolo) genera();
+    };
+    worker.postMessage({ id: mioId, pannello, macchie, pattern: pattern.config, par: { ...par } });
   }
 
   // ---- l'anteprima ----
   const d = (pl: { x: number; y: number }[]) => pl.map((p) => `${p.x.toFixed(2)},${p.y.toFixed(2)}`).join(' ');
+  /** Tante linee in un tracciato solo (`M x y L x y …`), al decimo di millimetro. */
+  const percorso = (linee: Array<{ x: number; y: number }[]>) =>
+    linee.filter((t) => t.length > 1).map((t) => 'M' + t.map((p) => `${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join('L')).join('');
 
   function cornice(corpo: string): string {
     const { pannello } = geometria();
@@ -412,7 +489,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   function contorniSvg(opacita: number): string {
     const { pannello, macchie } = geometria();
     return (pannello ? `<polygon points="${d(pannello)}" fill="none" stroke="#c0392b" stroke-width="0.3"/>` : '')
-      + macchie.map((m) => `<polygon points="${d(m)}" fill="#e8c547" fill-opacity="${opacita}" stroke="#b8941f" stroke-width="0.15"/>`).join('');
+      + (macchie.length ? `<path d="${percorso(macchie.map((m) => [...m, m[0]]))}" fill="#e8c547" fill-opacity="${opacita}" stroke="#b8941f" stroke-width="0.15"/>` : '');
   }
 
   function disegnaContorni() {
@@ -427,16 +504,16 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     if (simulando && simula()) { if (adatta) pz.fit(); return; }
     const r = risultato;
     const linee: Record<ChiaveFilo, Polyline[]> = { base: r.base.tratti, raso: r.vista.raso, sopra: r.vista.sopra, sotto: r.vista.sotto };
+    // un solo tracciato per filo, al decimo di millimetro: su un pannello di 400.000 punti l'anteprima a una linea per
+    // tratto era un SVG da 8 MB con 16.600 elementi, pesante da ridisegnare a ogni zoom (2026-10-27)
     const fili = FILI.filter((l) => visibili[l.chiave])
-      .map((l) => linee[l.chiave].map((t) => `<polyline points="${d(t)}" fill="none" stroke="${l.colore}" stroke-width="${l.chiave === 'raso' ? 0.1 : l.chiave === 'sotto' ? 0.2 : 0.14}"/>`).join(''))
+      .map((l) => `<path d="${percorso(linee[l.chiave])}" fill="none" stroke="${l.colore}" stroke-width="${l.chiave === 'raso' ? 0.1 : l.chiave === 'sotto' ? 0.2 : 0.14}" stroke-linejoin="round"/>`)
       .join('');
-    const salti = visibili.salti
-      ? [r.raso.tratti, r.sopra.tratti].flatMap((tr) => tr.slice(1).map((t, i) => {
-        const a = tr[i].at(-1)!, b = t[0];
-        return `<line x1="${a.x.toFixed(2)}" y1="${a.y.toFixed(2)}" x2="${b.x.toFixed(2)}" y2="${b.y.toFixed(2)}" stroke="#d62020" stroke-width="0.3" stroke-dasharray="1 0.6"/>`;
-      })).join('')
-      : '';
-    const forme = visibili.contorni ? r.forme.map((f) => `<polygon points="${d(f)}" fill="none" stroke="#2e8b57" stroke-width="0.15"/>`).join('') : '';
+    // (i salti del raso e quelli del punto sopra di colori diversi: Lorenzo, 2026-10-28, «per capire perché ci sono più
+    // salti che escono dalla stessa macchia»)
+    const saltiDi = (tr: Polyline[], colore: string) => `<path d="${tr.slice(1).map((t, i) => percorso([[tr[i].at(-1)!, t[0]]])).join('')}" fill="none" stroke="${colore}" stroke-width="0.3" stroke-dasharray="1 0.6"/>`;
+    const salti = visibili.salti ? saltiDi(r.raso.tratti, COLORE_SALTI_RASO) + saltiDi(r.sopra.tratti, COLORE_SALTI_SOPRA) : '';
+    const forme = visibili.contorni ? `<path d="${percorso(r.forme.map((f) => [...f, f[0]]))}" fill="none" stroke="#2e8b57" stroke-width="0.15"/>` : '';
     $('layer').innerHTML = cornice(contorniSvg(0.12) + fili + forme + salti);
     if (adatta) pz.fit();
   }
@@ -462,6 +539,36 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   }
 
   const nomeBase = () => (source?.name.replace(/\.[^.]+$/, '') ?? 'macchie');
+
+  // tre strati → tre stop: la base, il raso delle macchie, il punto sopra (lo stesso filo).
+  // Lo usano «Esporta DST» e «Invia a Stilista».
+  const costruisciDst = (layers = strati()) => dstFromExportLayers(layers, { label: nomeBase().toUpperCase().slice(0, 16), metadata: conBusta(progetto(), { strati: layers, sorgente: sorgenteBusta() }) });
+
+  // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è il disegno — il colore più grande il
+  // pannello, gli altri le macchie, come per un file. Le macchie non hanno aree vuote: i fori restano fuori.
+  // Ogni stop torna come un oggetto a sé, nell'ordine (base, raso, sopra…).
+  const aggancio: AggancioStilista = {
+    fori: 'esclusi',
+    carica(svg, nome) {
+      for (const k of Object.keys(ruoli)) delete ruoli[k];
+      scala.scaleMode = 'auto'; // l'SVG del plugin dichiara width/height in mm (Illustrator 72 dpi lo scalerebbe)
+      source = { text: svg, name: nome };
+      reparse();
+    },
+    ruoli(fori) {
+      if (!fori) return;
+      for (const c of model?.choices ?? []) if (c.color?.toLowerCase() === fori) ruoli[c.id] = '';
+      disegnaContorni();
+      genera();
+    },
+    sorgente: () => source?.text ?? null,
+    strati: () => stratiCuciti(strati()),
+    dst() {
+      if (!risultato) throw new Error('genera prima il ricamo');
+      return { bytes: costruisciDst(), nome: `${nomeBase()}-macchie` };
+    },
+    stato: (testo) => { $('status').textContent = testo; },
+  };
 
   /** Il DST di adesso, cucito sullo schermo (lo stesso simulatore del Pettine e di Cannage rafia). */
   function simula(): boolean {
@@ -505,11 +612,13 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       ...(b ? { larghezzaMm: b.maxX - b.minX, altezzaMm: b.maxY - b.minY } : {}) };
   }
 
-  function riapri(meta: Record<string, unknown>): void {
+  /** Riapre un progetto; con `soloPunto` ne prende solo pattern e parametri, e il disegno resta quello di adesso. */
+  function riapri(meta: Record<string, unknown>, soloPunto = false): void {
     const drawing = meta.drawing as { name?: string; text?: string; scale?: { scaleMode?: string } } | undefined;
     if (meta.params && typeof meta.params === 'object') Object.assign(par, PARAMETRI_MACCHIE, meta.params);
     const p = meta.pattern as { nome?: string; config?: PatternConfig } | undefined;
     if (p?.config) pattern = { nome: p.nome ?? 'dal file', config: p.config };
+    if (soloPunto) { buildPanel(); genera(); return; }
     if (meta.ruoli && typeof meta.ruoli === 'object') {
       for (const k of Object.keys(ruoli)) delete ruoli[k];
       Object.assign(ruoli, meta.ruoli);
@@ -531,6 +640,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   }
 
   function wirePanel() {
+    root.querySelector('#fromStilista')?.addEventListener('click', () => { void prendiSelezioneStilista(aggancio); });
     $('fileInput').addEventListener('change', (ev) => {
       const input = ev.target as HTMLInputElement;
       const file = input.files?.[0];
@@ -550,41 +660,66 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       });
     });
     $('scaleMode').addEventListener('change', () => { scala.scaleMode = ($('scaleMode') as HTMLSelectElement).value; reparse(); });
-    $('reopenFile').addEventListener('change', (ev) => {
-      const input = ev.target as HTMLInputElement;
-      const file = input.files?.[0];
-      if (!file) return;
-      const isDst = /\.dst$/i.test(file.name);
-      leggiFile(file, isDst, (letto) => {
-        try {
-          const meta = isDst ? readDstMetadata(new Uint8Array(letto as ArrayBuffer)) : (readProjectMetadata(String(letto)) as Record<string, unknown> | null);
-          if (meta?.rgProject !== 'pattern-macchie') {
-            $('reopenStatus').textContent = meta
-              ? `Questo file viene da "${String(meta.rgProject ?? 'un altro tool')}", non da qui.`
-              : 'Nessun progetto dentro questo file: non è uscito dalla suite.';
-            return;
+    /** Il progetto dentro un DST o un SVG uscito da qui: `fatto` riceve i metadati; gli errori si scrivono in `stato`. */
+    const leggiProgetto = (idInput: string, stato: string, fatto: (meta: Record<string, unknown>, nome: string) => void) => {
+      $(idInput).addEventListener('change', (ev) => {
+        const input = ev.target as HTMLInputElement;
+        const file = input.files?.[0];
+        if (!file) return;
+        const isDst = /\.dst$/i.test(file.name);
+        leggiFile(file, isDst, (letto) => {
+          try {
+            const meta = isDst ? readDstMetadata(new Uint8Array(letto as ArrayBuffer)) : (readProjectMetadata(String(letto)) as Record<string, unknown> | null);
+            if (meta?.rgProject !== 'pattern-macchie') {
+              $(stato).textContent = meta
+                ? `Questo file viene da "${String(meta.rgProject ?? 'un altro tool')}", non da qui.`
+                : 'Nessun progetto dentro questo file: non è uscito dalla suite.';
+              return;
+            }
+            fatto(meta, file.name);
+          } catch (e) {
+            $(stato).textContent = 'Errore: ' + (e as Error).message;
           }
-          riapri(meta);
-          $('reopenStatus').textContent = `${file.name}: riaperto` + (meta.drawing ? ' col disegno.' : ' — senza disegno: caricalo a parte.');
-        } catch (e) {
-          $('reopenStatus').textContent = 'Errore: ' + (e as Error).message;
-        }
-        input.value = '';
+          input.value = '';
+        });
       });
+    };
+    leggiProgetto('reopenFile', 'reopenStatus', (meta, nome) => {
+      riapri(meta);
+      $('reopenStatus').textContent = `${nome}: riaperto` + (meta.drawing ? ' col disegno.' : ' — senza disegno: caricalo a parte.');
+    });
+    leggiProgetto('puntoFile', 'puntoStatus', (meta, nome) => {
+      riapri(meta, true);
+      $('puntoStatus').textContent = `${nome}: presi il pattern «${pattern.nome}» e i parametri; il disegno è quello di prima.`;
     });
     $('presetList').addEventListener('change', () => {
       const raw = ($('presetList') as HTMLSelectElement).value;
       const sep = raw.indexOf(':');
       const origine = raw.slice(0, sep), nome = raw.slice(sep + 1);
-      const config = origine === 'shared' ? PRESET_CONDIVISI[nome] : presetLocali()[nome];
+      const config = origine === 'shared' ? PRESET_CONDIVISI[nome] : origine === 'local' ? presetLocali()[nome] : pattern.config;
       if (!config) return;
       pattern = { nome, config };
       buildPanel();
       genera();
     });
-    for (const inp of root.querySelectorAll<HTMLInputElement>('input[data-livello]')) {
+    wireLivelli(root);
+  }
+  function wireLivelli(dove: ParentNode) {
+    for (const inp of dove.querySelectorAll<HTMLInputElement>('input[data-livello]')) {
       inp.addEventListener('change', () => { visibili[inp.dataset.livello as ChiaveFilo | 'salti' | 'contorni'] = inp.checked; disegna(); });
     }
+  }
+  /**
+   * A calcolo finito si rifà solo il Programma: il resto del pannello resta com'è (col calcolo nel worker si può
+   * scrivere in un campo mentre si calcola, e rifare tutto il pannello lo cancellerebbe).
+   */
+  function aggiornaProgramma() {
+    const det = $('panel').querySelector<HTMLDetailsElement>('details[data-sezione="programma"]');
+    const vecchia = det?.querySelector(':scope > .rg-param-grid');
+    if (!det || !vecchia) { buildPanel(); return; }
+    const nuova = livelliGrid();
+    vecchia.replaceWith(nuova);
+    wireLivelli(nuova);
   }
 
   // ---- azioni fisse ----
@@ -612,9 +747,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     if (!risultato) { $('status').textContent = 'Genera prima il ricamo.'; return; }
     let bytes: Uint8Array;
     try {
-      // tre strati → tre stop: la base, il raso delle macchie, il punto sopra (lo stesso filo)
-      const layers = strati();
-      bytes = dstFromExportLayers(layers, { label: nomeBase().toUpperCase().slice(0, 16), metadata: conBusta(progetto(), { strati: layers, sorgente: sorgenteBusta() }) });
+      bytes = costruisciDst();
     } catch (e) {
       $('status').textContent = (e as Error).message;
       return;
@@ -625,4 +758,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   });
 
   buildPanel();
+  // «Invia a Stilista»; e aperto dal pulsante di Stilista (?stilista=…) la selezione si prende da sola.
+  // «Prendi la selezione» vive nel pannello, che si ricostruisce: lo ricollega wirePanel.
+  collegaStilista(aggancio, { invia: $('toStilistaBtn') });
 }

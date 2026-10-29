@@ -8,31 +8,33 @@ import {
   dstFromExportLayers, DST_FILE, conBusta,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
+import { testiCampo } from '@rg/cervello';
 import { scheletro, sezioneSorgente, sezione, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero } from '@rg/ui/anatomia';
 import { runPipeline, type RoleAssignment } from './pipeline';
 import { sampleContours } from './sample';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
+import { collegaStilista, stratiCuciti, type AggancioStilista } from '@rg/ui/stilista';
 
 /** Un campo del gruppo "Parametri". `check` = sì/no (interno 1/0). `unit` va nello slot del DS, mai nell'etichetta (R-panello). */
 type Field =
-  | { key: keyof NetParams; label: string; unit: string; step: number; help?: string; kind?: 'num' }
-  | { key: keyof NetParams; label: string; kind: 'check' };
+  | { key: keyof NetParams; step: number; kind?: 'num' }
+  | { key: keyof NetParams; kind: 'check' };
 
 // Ordine e nomi decisi con Lorenzo (REVISIONE-PARAMETRI.md). `realWidthMm` sta nel gruppo Sagoma, non qui.
 const PARAMS: Field[] = [
-  { key: 'squareSizeMm', label: 'Lato del quadrato', unit: 'mm', step: 0.5 },
-  { key: 'angleADeg', label: 'Angolo diagonali principali', unit: '°', step: 1 },
-  { key: 'angleBDeg', label: 'Angolo diagonali secondarie', unit: '°', step: 1 },
-  { key: 'netInsetMm', label: 'Rientro della rete dal bordo', unit: 'mm', step: 0.5 },
-  { key: 'netOffsetXMm', label: 'Sposta rete — orizzontale', unit: 'mm', step: 1 },
-  { key: 'netOffsetYMm', label: 'Sposta rete — verticale', unit: 'mm', step: 1 },
-  { key: 'rasoBandMm', label: 'Spessore della fascia di raso', unit: 'mm', step: 1 },
-  { key: 'rasoDownwardOnly', label: 'Raso solo sui bordi bassi e laterali', kind: 'check' },
-  { key: 'cordWidthMm', label: 'Larghezza del cordoncino', unit: 'mm', step: 0.1 },
-  { key: 'cordInterlineMm', label: 'Interlinea del cordoncino', unit: 'mm', step: 0.05, help: 'distanza tra un punto e il successivo lungo il filo' },
-  { key: 'travelStitchMm', label: 'Lunghezza del punto nei passaggi', unit: 'mm', step: 0.5 },
-  { key: 'minStitchMm', label: 'Punto minimo', unit: 'mm', step: 0.1 },
+  { key: 'squareSizeMm', step: 0.5 },
+  { key: 'angleADeg', step: 1 },
+  { key: 'angleBDeg', step: 1 },
+  { key: 'netInsetMm', step: 0.5 },
+  { key: 'netOffsetXMm', step: 1 },
+  { key: 'netOffsetYMm', step: 1 },
+  { key: 'rasoBandMm', step: 1 },
+  { key: 'rasoDownwardOnly', kind: 'check' },
+  { key: 'cordWidthMm', step: 0.1 },
+  { key: 'cordInterlineMm', step: 0.05 },
+  { key: 'travelStitchMm', step: 0.5 },
+  { key: 'minStitchMm', step: 0.1 },
 ];
 const ROLE_OPTIONS: (Role | '')[] = ['', 'MASTER_OUTLINE', 'NET_AREA', 'SATIN_AREA', 'SQUARE_AREA', 'BORDER', 'EXCLUSION'];
 
@@ -42,10 +44,11 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     topbar: topbar('Rete 45°', opts.backHref),
     classe: 'net45-workspace',
     pannello: [
-      sezioneSorgente({ tipo: 'cartamodello', accetta: '.svg,.dxf,.dst', statoIniziale: 'Nessun file: uso il cartamodello demo.', demo: 'Cartamodello demo' }),
+      sezioneSorgente({ tipo: 'cartamodello', accetta: '.svg,.dxf,.dst', statoIniziale: 'Nessun file: uso il cartamodello demo.', demo: 'Cartamodello demo', stilista: true }),
       sezione({ indice: 2, titolo: 'Colori e ruoli', contenuto: '<ul class="rg-color-map" id="roles"></ul>' }),
       sezione({ indice: 3, titolo: 'Parametri', contenuto: '<div id="params" class="rg-param-grid"></div>', apribile: true, aperta: true }),
     ],
+    anteprima: { inviaStilista: true },
   });
   attivaCampiNumero(root);
 
@@ -95,6 +98,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     const host = $('params');
     host.innerHTML = '';
     for (const f of PARAMS) {
+      const testi = testiCampo('net-45', f.key);
       if (f.kind === 'check') {
         const lab = document.createElement('label');
         lab.className = 'rg-choice rg-param-grid__wide';
@@ -102,12 +106,12 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
         inp.type = 'checkbox';
         inp.checked = (params[f.key] as number) !== 0;
         inp.addEventListener('change', () => { (params[f.key] as number) = inp.checked ? 1 : 0; render(); });
-        lab.append(inp, document.createTextNode(' ' + f.label));
+        lab.append(inp, document.createTextNode(' ' + testi.etichetta));
         host.appendChild(lab);
         continue;
       }
       host.insertAdjacentHTML('beforeend', campoNumero({
-        id: 'p-' + f.key, etichetta: f.label, unita: f.unit, valore: params[f.key] as number, passo: f.step, aiuto: f.help,
+        id: 'p-' + f.key, etichetta: testi.etichetta, unita: testi.unita, valore: params[f.key] as number, passo: f.step, aiuto: testi.aiuto,
         attributi: 'data-param="' + f.key + '"',
       }));
       const inp = host.querySelector<HTMLInputElement>('[data-param="' + f.key + '"]')!;
@@ -221,6 +225,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
         const result = isDxf ? parseDxfToContours(text) : parseSvgToContours(text);
         sourceName = file.name.replace(/\.[^.]+$/, '');
         sourceTipo = isDxf ? 'dxf' : 'svg';
+        svgStilista = null;
         // Se l'SVG viene dalla suite, i parametri si rimettono PRIMA di caricare, così valgono
         // già quando il disegno entra (e l'assegnazione automatica non li sovrascrive).
         let restored = false;
@@ -244,7 +249,7 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     updateFileStatus(sourceName || 'Cartamodello');
   });
 
-  $('demoBtn').addEventListener('click', () => { roles = {}; sourceName = ''; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
+  $('demoBtn').addEventListener('click', () => { roles = {}; sourceName = ''; svgStilista = null; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
   $('fitBtn').addEventListener('click', () => pz.fit());
 
   $('exportBtn').addEventListener('click', async () => {
@@ -262,18 +267,46 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
     $('status').textContent = saveOutcomeMessage(outcome, name);
   });
 
-  $('exportDstBtn').addEventListener('click', async () => {
-    // Export ricamo Tajima .dst tramite la "possibilità" globale del core: i layer del pipeline sono già in
-    // mm reali; l'adattatore cuce i layer non-forma (rete/cordoncini), un blocco per polilinea.
+  // Export ricamo Tajima .dst tramite la "possibilità" globale del core: i layer del pipeline sono già in
+  // mm reali; l'adattatore cuce i layer non-forma (rete/cordoncini), un blocco per polilinea. I parametri
+  // viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge fino all'END e lo ignora, noi
+  // lo rileggiamo. Lo usano «Esporta DST» e «Invia a Stilista».
+  function costruisciDst(): Uint8Array {
     const { layers } = runPipeline(currentContours(), roles, params);
+    return dstFromExportLayers(layers, {
+      label: (sourceName || 'RETE45').toUpperCase().slice(0, 16),
+      metadata: conBusta({ rgProject: 'net-45', version: '0.1.0', params, roles }, { strati: layers, sorgente: sorgenteBusta() }),
+    });
+  }
+
+  // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è il cartamodello, i fori le aree vuote ----
+  let svgStilista: string | null = null;
+  const aggancio: AggancioStilista = {
+    carica(svg, nome) {
+      svgStilista = svg;
+      // l'SVG dichiara le sue misure: una larghezza reale lo riscalerebbe e il ritorno non cadrebbe più al suo posto
+      params.realWidthMm = 0;
+      impostaNumero($('realWidth') as HTMLInputElement, 0);
+      roles = {};
+      sourceName = nome.replace(/\.[^.]+$/, '');
+      sourceTipo = 'svg';
+      loadImport(parseSvgToContours(svg), nome);
+    },
+    ruoli(fori) {
+      for (const c of uniqueColors()) roles[c] = c === fori ? 'EXCLUSION' : 'MASTER_OUTLINE';
+      buildRoleUI();
+      render();
+    },
+    sorgente: () => svgStilista,
+    strati: () => stratiCuciti(runPipeline(currentContours(), roles, params).layers),
+    dst: () => ({ bytes: costruisciDst(), nome: `${sourceName || 'rete'}-rete45` }),
+    stato: (testo) => { $('status').textContent = testo; },
+  };
+
+  $('exportDstBtn').addEventListener('click', async () => {
     let bytes: Uint8Array;
     try {
-      // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge
-      // fino all'END e lo ignora, noi lo rileggiamo. Senza, il .dst non sapeva da dove veniva.
-      bytes = dstFromExportLayers(layers, {
-        label: (sourceName || 'RETE45').toUpperCase().slice(0, 16),
-        metadata: conBusta({ rgProject: 'net-45', version: '0.1.0', params, roles }, { strati: layers, sorgente: sorgenteBusta() }),
-      });
+      bytes = costruisciDst();
     } catch (e) {
       $('status').textContent = (e as Error).message;
       return;
@@ -285,4 +318,5 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
 
   buildParamUI();
   loadImport(imported, 'Cartamodello demo');
+  collegaStilista(aggancio, { prendi: $('fromStilista'), invia: $('toStilistaBtn') });
 }

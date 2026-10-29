@@ -554,13 +554,74 @@ function boundaryConnector(from: GeneratedPoint, to: GeneratedPoint, options: Bo
     // di Lorenzo: 490 punti di raccordo dentro lo specchio, fino a 26,1mm di profondità).
     const { outer: importato, holes } = importedBoundaryParts(options);
     const outer = perimetroImportato(importato, options);
-    const way = polygonBoundaryConnector(from, to, outer, options);
-    if (!holes.length || way.length < 2) return way;
-    const around = avoidVoids([from, ...way], holes, options.inset ?? 0).slice(1);
-    return around.map((point) => connectorPoint(point, to));
+    if (!holes.length) return polygonBoundaryConnector(from, to, outer, options);
+    return raccordoFraGliAnelli(from, to, [outer, ...holes], holes, options);
   }
   if (options.shapeType === "rectangle") return polygonBoundaryConnector(from, to, rectangleVertices(options), options);
   return [connectorPoint(to, to)];
+}
+
+/**
+ * IL RACCORDO CON LE AREE VUOTE (Lorenzo, 2026-10-21, su un pannello inclinato con due vuoti: «non è
+ * molto pulito»). Una colonna interrotta da un VUOTO finisce sul bordo del vuoto e riprende sul bordo del
+ * vuoto: prima il raccordo andava comunque sul PERIMETRO esterno — dal vuoto dritto fino a un angolo del
+ * pezzo, lungo il perimetro, e dritto indietro — e `avoidVoids` raddrizzava i pezzi che entravano nei
+ * vuoti. Ne uscivano ventagli di filo dagli angoli e tratti sopra i vuoti: misurato sul punto canvas,
+ * 171 tagli oltre 8 mm lontani da ogni bordo (fino a 118 mm) e 295 mm di filo dentro i vuoti.
+ *
+ * Ora ogni capo si riconosce sull'anello a cui appartiene (il perimetro o un vuoto). Sullo STESSO anello
+ * il filo ci cammina sopra dal lato più corto (`lungoIlBordo`, la stessa strada dell'impuntura): attorno
+ * al vuoto, non attraverso il pezzo. Su anelli DIVERSI cammina sul primo fino al punto più vicino al
+ * secondo, fa il ponte più corto, e cammina sul secondo; sul ponte resta la deviazione attorno agli altri
+ * vuoti. Un capo che non sta su nessun anello (oltre la tolleranza) torna alla strada di prima.
+ */
+function raccordoFraGliAnelli(
+  from: GeneratedPoint,
+  to: GeneratedPoint,
+  anelli: Point[][],
+  holes: Point[][],
+  options: BoundaryConnectionOptions
+): GeneratedPoint[] {
+  const tolleranza = (options.inset ?? 0) + 0.5;
+  const da = anelloDelPunto(from, anelli);
+  const a = anelloDelPunto(to, anelli);
+  let way: Point[];
+  if (da.distanza > tolleranza || a.distanza > tolleranza) {
+    way = avoidVoids([from, ...polygonBoundaryConnector(from, to, anelli[0], options)], holes, options.inset ?? 0);
+  } else if (da.indice === a.indice) {
+    way = lungoIlBordo(anelli[da.indice], from, to);
+  } else {
+    const ponteDa = puntoPiuVicinoSullAnello(to, anelli[da.indice]);
+    const ponteA = puntoPiuVicinoSullAnello(ponteDa, anelli[a.indice]);
+    const andata = lungoIlBordo(anelli[da.indice], from, ponteDa);
+    const ritorno = lungoIlBordo(anelli[a.indice], ponteA, to);
+    const ponte = avoidVoids([ponteDa, ponteA], holes.filter((_, i) => i + 1 !== da.indice && i + 1 !== a.indice), options.inset ?? 0);
+    way = [...(andata.length ? andata : [from]), ...ponte.slice(1, -1), ...(ritorno.length ? ritorno : [to])];
+  }
+  const passi = way.length && samePoint(way[0], from) ? way.slice(1) : way;
+  if (!passi.length || !samePoint(passi[passi.length - 1], to)) passi.push(to);
+  return passi.map((point) => connectorPoint(point, to));
+}
+
+/** L'anello (perimetro = 0, poi i vuoti) più vicino a un punto, e quanto dista. */
+function anelloDelPunto(point: Point, anelli: Point[][]): { indice: number; distanza: number } {
+  let best = { indice: 0, distanza: Number.POSITIVE_INFINITY };
+  anelli.forEach((anello, indice) => {
+    for (let i = 0; i < anello.length - 1; i++) {
+      const d = closestPointOnSegment(point, anello[i], anello[i + 1]).distance;
+      if (d < best.distanza) best = { indice, distanza: d };
+    }
+  });
+  return best;
+}
+
+function puntoPiuVicinoSullAnello(point: Point, anello: Point[]): Point {
+  let best = { p: anello[0], d: Number.POSITIVE_INFINITY };
+  for (let i = 0; i < anello.length - 1; i++) {
+    const c = closestPointOnSegment(point, anello[i], anello[i + 1]);
+    if (c.distance < best.d) best = { p: pointOnSegment(anello[i], anello[i + 1], c.t), d: c.distance };
+  }
+  return best.p;
 }
 
 export function connectClippedChunksAlongBoundary(

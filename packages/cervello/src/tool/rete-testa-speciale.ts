@@ -125,8 +125,53 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: -6, max: 10, passo: 0.25, predefinito: 2, concetto: 'sovrapposizione',
     },
     {
+      id: 'netConstruction', nome: 'buildMode', etichetta: 'Come si costruisce la rete',
+      aiuto: 'zigzag = serpentine che scendono e risalgono, con le lenti agli incroci; linee = due famiglie di linee dritte, prima tutte quelle di un verso poi le altre (cambio ago fra le due), che si attraversano senza lente. Il rombo è la maglia vera.',
+      tipo: 'enum', unita: '', opzioni: ['zigzag', 'linee'], predefinito: 'zigzag', concetto: 'modulo',
+    },
+    {
+      id: 'tackWidth', nome: 'tackWidthMm', etichetta: 'Travetta della testa speciale',
+      aiuto: 'A linee dritte: la macchina fa di ogni punto una travetta che va a sinistra se la linea sale, a destra se scende; il cordone si fissa al centro. I punti si spostano di mezza travetta al contrario (bordi verticali compresi, i tratti orizzontali no). 0 = niente.',
+      tipo: 'num', unita: 'mm', min: 0, max: 20, passo: 0.5, predefinito: 0, concetto: 'spostamento',
+    },
+    {
+      id: 'tackRepeat', etichetta: 'Passaggi della travetta per punto',
+      aiuto: 'A linee dritte: ogni punto delle linee (anche sugli incroci) ripetuto nello stesso posto; ogni ripetizione, un passaggio di travetta.',
+      tipo: 'int', unita: '', min: 1, max: 10, passo: 1, predefinito: 1, concetto: 'densita',
+    },
+    {
+      id: 'sideDivisions', etichetta: 'Lato del rombo diviso in',
+      aiuto: 'A linee dritte: in quante parti si divide il lato del rombo, da un incrocio all’altro; ogni incrocio ha sempre un punto su tutte e due le linee. 0 = a lunghezza del punto.',
+      tipo: 'int', unita: '', min: 0, max: 50, passo: 1, predefinito: 0, concetto: 'densita',
+    },
+    {
+      id: 'lineLink', etichetta: 'Fra un verso e l’altro',
+      aiuto: 'A linee dritte: stop = cambio ago, con uscita e ingresso fuori sagoma; fuori = senza fermarsi, il filo esce alla distanza dell’ingresso, corre cucito fuori dal contorno e rientra all’inizio dell’altro verso.',
+      tipo: 'enum', unita: '', opzioni: ['stop', 'fuori'], predefinito: 'stop', concetto: 'ordine-cucitura',
+    },
+    {
       id: 'staggerColumns', etichetta: 'Colonne sfalsate di mezzo rombo',
       aiuto: 'Le colonne vicine spostate di mezzo rombo lungo la serpentina.',
+      tipo: 'bool', unita: '', predefinito: false, concetto: 'modulo',
+    },
+    {
+      id: 'entryTail', nome: 'entryTailMm', etichetta: 'Ingresso e uscita fuori sagoma',
+      aiuto: 'Ogni parte comincia con una linea fuori sagoma lunga così e un salto uguale al primo punto, e finisce al contrario (salto fuori, linea), poi il cambio ago (stop). Fuori dal bordo esterno o dentro il foro. 0 = niente.',
+      tipo: 'num', unita: 'mm', min: 0, max: 30, passo: 1, predefinito: 10, concetto: 'ordine-cucitura',
+    },
+    {
+      id: 'spool', nome: 'spoolM', etichetta: 'Rocchetta del filo',
+      aiuto: 'Prima che finisca, il filo esce su un bordo (come a fine parte) e dopo il cambio ago riparte dallo stesso punto. 0 = nessun limite.',
+      tipo: 'num', unita: '', unitaTesto: 'm', min: 0, max: 10000, passo: 5, predefinito: 0, concetto: 'ordine-cucitura',
+    },
+    {
+      id: 'spoolMargin', nome: 'spoolMarginPct', etichetta: 'Scarto sulla rocchetta',
+      aiuto: 'Il filo della rocchetta che si tiene da parte.',
+      tipo: 'num', unita: '%', min: 0, max: 50, passo: 1, predefinito: 5, concetto: 'ordine-cucitura',
+    },
+    {
+      id: 'fitColumns', etichetta: 'Colonne intere nella larghezza',
+      aiuto: 'Ritocca di poco la larghezza del rombo perché nella larghezza del pezzo stia un numero intero di colonne: sui bordi laterali ogni punta tocca il bordo nello stesso modo, senza tagli irregolari.',
       tipo: 'bool', unita: '', predefinito: false, concetto: 'modulo',
     },
     {
@@ -167,7 +212,12 @@ export const scheda: SchedaParametri = {
     {
       id: 'voidStitchMm', etichetta: 'Punto dell’impuntura nel vuoto',
       aiuto: 'Il punto della linea che gira sul bordo del vuoto o lo attraversa dritta.',
-      tipo: 'num', unita: 'mm', min: 0.5, max: 12, passo: 0.1, predefinito: 2, regole: ['R5'], concetto: 'aree-vuote',
+      tipo: 'num', unita: 'mm', min: 0.5, max: 30, passo: 0.1, predefinito: 2, regole: ['R5'], concetto: 'aree-vuote',
+    },
+    {
+      id: 'voidEdgeStitchMm', etichetta: 'Punti corti ai bordi del vuoto',
+      aiuto: 'Attraversando il vuoto dritto: tre punti di questa lunghezza a ogni bordo, che segnano il foro; in mezzo i punti lunghi (fino a 30 mm). 0 = niente.',
+      tipo: 'num', unita: 'mm', min: 0, max: 5, passo: 0.1, predefinito: 1, regole: ['R5'], concetto: 'aree-vuote',
     },
     {
       id: 'minStitch', nome: 'minStitchMm', etichetta: 'Punto minimo',

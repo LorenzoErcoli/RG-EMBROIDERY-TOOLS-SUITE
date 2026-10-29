@@ -25,6 +25,7 @@ import '@rg/ui/rg.css';
 import './pettine.css';
 import { DST_FILE, readDstMetadata, conBusta, type PixelImage } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
+import { testiCampo } from '@rg/cervello';
 import { scheletro, sezioneSorgente, sezione, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero, type OpzioniCampoNumero } from '@rg/ui/anatomia';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
@@ -55,28 +56,47 @@ const CAMPI: Campo[] = [
   { id: 'traslazioneMm2', key: 'traslaMaxMm2', min: 0, max: 200000 },
 ];
 
+// Da quale parametro salvato (nel registro) prende i testi ogni campo; chi non è qui ha i testi nella tabella sotto.
+const CHIAVE_REGISTRO: Record<string, string> = {
+  densitySpacingMm: 'basiMm',
+  denteInterlineMm: 'passoMm',
+  denteMinMm: 'denteMinMm',
+  denteMaxMm: 'denteMaxMm',
+  aperturaDeg: 'aperturaDeg',
+  sormontoMm: 'sormontoMm',
+  sconfinamentoMm: 'sconfinaMm',
+  passaggioMaxMm: 'passaggioMaxMm',
+  passaggioNascostoMm: 'passaggioNascostoMm',
+  tintaMinimaMm: 'tintaMinimaMm',
+  golaMm: 'golaMm',
+  spianaturaMm: 'spianaMm',
+  addolcimentoMmMm: 'addolcisciMm',
+  chiusuraMm: 'chiudiMm',
+  traslazioneMm2: 'traslaMaxMm2',
+};
+
 // Testi, unità e limiti dei campi numerici (le stesse parole di prima, ora costruite da campoNumero).
-const DATI_CAMPI: Record<string, Omit<OpzioniCampoNumero, 'id'>> = {
+const DATI_CAMPI: Record<string, Omit<OpzioniCampoNumero, 'id' | 'etichetta' | 'unita'> & Partial<Pick<OpzioniCampoNumero, 'etichetta' | 'unita'>>> = {
   realWidth: {etichetta:"Larghezza reale del pannello",unita:"mm",valore:419.45,passo:1,min:10,aiuto:"Comanda la scala di tutto: i millimetri del ritaglio e dei punti sono misurati su questa.",largo:true},
   ritaglioXMm: {etichetta:"Da sinistra",unita:"mm",valore:0,passo:1,min:0,attributi:"aria-describedby=\"aiutoRitaglio\""},
   ritaglioYMm: {etichetta:"Dall'alto",unita:"mm",valore:0,passo:1,min:0,attributi:"aria-describedby=\"aiutoRitaglio\""},
   ritaglioLarghezzaMm: {etichetta:"Larghezza",unita:"mm",valore:0,passo:1,min:0,attributi:"aria-describedby=\"aiutoRitaglio\""},
   ritaglioAltezzaMm: {etichetta:"Altezza",unita:"mm",valore:0,passo:1,min:0,attributi:"aria-describedby=\"aiutoRitaglio\""},
-  densitySpacingMm: {etichetta:"Distanza tra le linee",unita:"mm",valore:2,passo:0.5,min:0.8,max:12,aiuto:"Di quanto una linea di base dista dalla successiva, misurata di traverso. Si devono sovrastare: a 2 mm i denti di una coprono la vicina."},
-  denteInterlineMm: {etichetta:"Densità del pettine",unita:"mm",valore:1.5,passo:0.1,min:1,max:8,aiuto:"Distanza fra un dente e il successivo lungo la linea di base. Non scende sotto 1."},
-  denteMinMm: {etichetta:"Lunghezza minima",unita:"mm",valore:3,passo:0.5,min:0.5,max:20,attributi:"aria-describedby=\"aiutoDente\""},
-  denteMaxMm: {etichetta:"Lunghezza massima",unita:"mm",valore:5,passo:0.5,min:0.5,max:20,attributi:"aria-describedby=\"aiutoDente\""},
-  aperturaDeg: {etichetta:"Apertura",unita:"°",valore:40,passo:1,min:0,max:80,aiuto:"Di quanto il dente si scosta, a caso, dal verso del chiaro. A 0 vanno tutti dritti."},
-  sormontoMm: {etichetta:"Sormonto",unita:"mm",valore:4,passo:0.5,min:0,max:20,aiuto:"Se entro tanto, verso il chiaro, c'è una tinta più chiara, il dente si cuce anche con quella: prima, e sotto. È così che le tinte si mescolano dentro un gruppo."},
-  sconfinamentoMm: {etichetta:"Sconfinamento fra blocchi",unita:"mm",valore:1,passo:0.5,min:0,max:10,aiuto:"Quanto le righe di un blocco entrano in quello accanto, perché la giunta non resti nuda. Alzandolo le righe dei due blocchi si affiancano e si vede una banda più fitta: a 2,5 mm sono il doppio che a 1."},
-  passaggioMaxMm: {etichetta:"Passaggio più lungo",unita:"mm",valore:30,passo:1,min:4,max:250,aiuto:"Fin dove un passaggio si cuce comunque, anche se un pezzetto si vedrà. Oltre questa misura il passaggio si fa lo stesso, ma solo se il cammino resta nascosto sotto ciò che verrà dopo e a vista ne resta meno di 3 mm: sul pannello a sei tinte i tagli passano da 424 a 168. Negli ultimi due colori i passaggi lunghi non si fanno, perché lì non viene più nessuno a coprirli."},
-  passaggioNascostoMm: {etichetta:"Passaggio nascosto più lungo",unita:"mm",valore:400,passo:5,min:4,max:400,aiuto:"Fin dove si prova un passaggio che va oltre la misura qui sopra, e che quindi si fa solo se resta nascosto. Nascosto vuol dire: nella banda di sovrapposizione fra il colore in corso e uno più scuro accanto, o sulla linea esatta di una base futura dello stesso colore. Dentro il proprio colore un passaggio si vede fra un dente e l’altro, e allora si taglia. Le macchie piccole non contano qui: per incastrarle in una riga grande il corridoio può arrivare a 15 cm."},
-  golaMm: {etichetta:"Gola attraversata",unita:"mm",valore:30,passo:1,min:0,max:100,aiuto:"Fin dove la riga più esterna di una fascia attraversa una gola senza spezzarsi: un tratto di tinta più chiara, già cucita, o troppo addossato alla riga prima, incastrato fra due tratti della stessa tinta. La riga dentata continua sopra e raggiunge l’altro pezzo, invece di lasciarlo orfano con un taglio. A 0 non lo fa mai."},
-  tintaMinimaMm: {etichetta:"Tinta più corta",unita:"mm",valore:6,passo:1,min:0,max:40,aiuto:"Quanto deve durare una tinta lungo una riga per meritare un cambio di colore. Sotto, la riga tiene il colore che aveva: senza, restano pezzetti da 5 mm che il loro colore deve andarsi a prendere da lontano."},
-  spianaturaMm: {etichetta:"Spianatura",unita:"mm",valore:5,passo:0.5,min:0.5,max:20},
-  chiusuraMm: {etichetta:"Chiusura",unita:"mm",valore:3,passo:0.5,min:0,max:20},
-  addolcimentoMmMm: {etichetta:"Addolcimento",unita:"mm/mm",valore:0.15,passo:0.05,min:0,max:1},
-  traslazioneMm2: {etichetta:"Traslazione fino a",unita:"mm²",valore:9000,passo:1000,min:0,max:200000},
+  densitySpacingMm: {valore:2,passo:0.5,min:0.8,max:12},
+  denteInterlineMm: {valore:1.5,passo:0.1,min:1,max:8},
+  denteMinMm: {valore:3,passo:0.5,min:0.5,max:20,attributi:"aria-describedby=\"aiutoDente\""},
+  denteMaxMm: {valore:5,passo:0.5,min:0.5,max:20,attributi:"aria-describedby=\"aiutoDente\""},
+  aperturaDeg: {valore:40,passo:1,min:0,max:80},
+  sormontoMm: {valore:4,passo:0.5,min:0,max:20},
+  sconfinamentoMm: {valore:1,passo:0.5,min:0,max:10},
+  passaggioMaxMm: {valore:30,passo:1,min:4,max:250},
+  passaggioNascostoMm: {valore:400,passo:5,min:4,max:400},
+  golaMm: {valore:30,passo:1,min:0,max:100},
+  tintaMinimaMm: {valore:6,passo:1,min:0,max:40},
+  spianaturaMm: {valore:5,passo:0.5,min:0.5,max:20},
+  chiusuraMm: {valore:3,passo:0.5,min:0,max:20},
+  addolcimentoMmMm: {valore:0.15,passo:0.05,min:0,max:1},
+  traslazioneMm2: {valore:9000,passo:1000,min:0,max:200000},
 };
 
 /** I numeri si scrivono e si leggono all'italiana: 0,15 e 419,45. */
@@ -99,7 +119,10 @@ async function leggiImmagine(file: File): Promise<PixelImage> {
 }
 
 export function mountPettine(root: HTMLElement, opts: { backHref?: string } = {}): void {
-  const campo = (id: string): string => campoNumero({ id, ...DATI_CAMPI[id] });
+  const campo = (id: string): string => {
+    const t = CHIAVE_REGISTRO[id] ? testiCampo('pettine', CHIAVE_REGISTRO[id]) : undefined;
+    return campoNumero({ etichetta: '', unita: '', id, ...DATI_CAMPI[id], ...(t ? { etichetta: t.etichetta, unita: t.unita, aiuto: t.aiuto } : {}) } as OpzioniCampoNumero);
+  };
   root.innerHTML = scheletro({
     topbar: topbar('Punto pettine sfrangiato', opts.backHref),
     classe: 'pettine-workspace',
