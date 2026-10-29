@@ -40,6 +40,13 @@ export type ParametriMacchie = {
    * spostati di tanto rispetto a quelli della riga accanto. 0 = gli aghi di tutte le righe alla stessa altezza.
    */
   rasoFase: number;
+  /**
+   * IL RASO FATTO DA STILISTA (Lorenzo, 2026-10-29: «avere il riempimento raso di stilista ma gestito dal programma»):
+   * con «Invia a Stilista» ogni macchia torna come una copia del riempimento selezionato in Stilista (il modello),
+   * nella direzione del raso, con l'ingresso e l'uscita del nostro raso e nel nostro ordine. Vale solo per Stilista:
+   * l'anteprima e il DST restano col nostro raso.
+   */
+  rasoDiStilista: boolean;
   /** Sfrangiatura del raso, mm: di quanto, a caso, ogni riga finisce prima o dopo il bordo. 0 = bordo netto. */
   sfrangiatura: number;
   /** Quanta parte della sfrangiatura va oltre il bordo (sulla base), %: il resto resta dentro. */
@@ -99,6 +106,7 @@ export const PARAMETRI_MACCHIE: ParametriMacchie = {
   rasoInterlinea: 0.4,
   rasoPuntoMax: 4,
   rasoFase: 30,
+  rasoDiStilista: false,
   sfrangiatura: 1,
   sfrangiaturaFuori: 50,
   passaggioMax: 100,
@@ -2225,6 +2233,55 @@ function incrocio(a: Point, b: Point, c: Point, d: Point): number | null {
 import { refertoDaStrati } from '@rg/core';
 import type { Ingresso, Motore } from '@rg/cervello';
 import type { ExportLayer as StratoEsportato } from '@rg/core';
+
+/** Una macchia da far riempire a Stilista: il contorno e, sul contorno, l'ingresso e l'uscita. */
+export type MacchiaPerStilista = { contorno: Polyline; inizio: Point; fine: Point };
+
+/** Il punto del contorno chiuso `c` più vicino a `p`. */
+function sulContorno(p: Point, c: Polyline): Point {
+  let best = c[0], d2 = Infinity;
+  for (let i = 0; i < c.length; i++) {
+    const a = c[i], b = c[(i + 1) % c.length];
+    const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy;
+    const t = l2 ? Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2)) : 0;
+    const q = { x: a.x + dx * t, y: a.y + dy * t }, e = (q.x - p.x) ** 2 + (q.y - p.y) ** 2;
+    if (e < d2) { d2 = e; best = q; }
+  }
+  return best;
+}
+
+/**
+ * IL RASO FATTO DA STILISTA (2026-10-29, `rasoDiStilista`): per ogni stop del raso, le sue macchie nel loro ordine,
+ * ognuna col contorno (coi ponti, se ci sono) e l'ingresso e l'uscita del nostro raso — il primo e l'ultimo punto
+ * cucito dentro quella macchia — portati sul contorno: Stilista li segue solo lì (sapere/codice/stilista-ingresso-uscita.md).
+ * Un punto del raso è della macchia che lo contiene o che ha il bordo entro 1,5 mm (la sfrangiatura va oltre il bordo).
+ */
+export function macchiePerStilista(r: RisultatoMacchie): Array<{ zona: number; macchie: MacchiaPerStilista[] }> {
+  return r.stop.filter((st) => st.tipo === 'raso').map((st) => {
+    const indici = r.zone[st.zona] ?? [];
+    const bb = indici.map((i) => ingombro(r.forme[i]));
+    const primo = new Map<number, Point>(), ultimo = new Map<number, Point>();
+    let k = 0; // la macchia di adesso: si prova per prima
+    for (const t of st.livello.tratti) for (const p of t) {
+      const prova = [k, ...indici.keys()];
+      for (const j of prova) {
+        const b = bb[j];
+        if (!b || p.x < b.x0 - 1.5 || p.x > b.x1 + 1.5 || p.y < b.y0 - 1.5 || p.y > b.y1 + 1.5) continue;
+        const f = r.forme[indici[j]];
+        if (!pointInPolygon(p, f) && distanceToBoundary(p, f) > 1.5) continue;
+        k = j;
+        if (!primo.has(j)) primo.set(j, p);
+        ultimo.set(j, p);
+        break;
+      }
+    }
+    const macchie = indici.flatMap((i, j) => {
+      const a = primo.get(j), z = ultimo.get(j), c = r.forme[i];
+      return a && z ? [{ contorno: c, inizio: sulContorno(a, c), fine: sulContorno(z, c) }] : [];
+    });
+    return { zona: st.zona, macchie };
+  });
+}
 
 /** Oltre ai parametri: la sagoma del pannello, le macchie (i poligoni scelti dai ruoli dei colori) e il pattern della base. */
 export interface IngressoMacchie extends Ingresso {

@@ -1731,6 +1731,11 @@
           "default": 30,
           "x-id": "satinPhase"
         },
+        "rasoDiStilista": {
+          "$ref": "#/$defs/satinByStilista",
+          "default": false,
+          "x-id": "satinByStilista"
+        },
         "sfrangiatura": {
           "$ref": "#/$defs/fringeAmount",
           "default": 1,
@@ -4844,6 +4849,12 @@
       "x-passo": 5,
       "x-concetto": "spostamento"
     },
+    "satinByStilista": {
+      "type": "boolean",
+      "title": "In Stilista, il raso lo fa Stilista",
+      "description": "Con «Invia a Stilista» ogni macchia torna come una copia del riempimento selezionato in Stilista, con l'ingresso, l'uscita e l'ordine del tool. L'anteprima e il DST restano col raso del tool.",
+      "x-concetto": "interruttore"
+    },
     "fringeAmount": {
       "type": "number",
       "title": "Sfrangiatura",
@@ -6013,6 +6024,7 @@
         "buildDst",
         "showBare",
         "showPasses",
+        "satinByStilista",
         "cutBaseUnderSpots",
         "fullBottom",
         "rimPass"

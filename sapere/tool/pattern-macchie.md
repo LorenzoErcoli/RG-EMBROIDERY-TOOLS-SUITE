@@ -104,6 +104,16 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    della macchia non batte sul filo della base.»* Poi: *«io farei anche 1 mm a destra va bene»* e *«ma anche
    spostamento verticale in realtà»*. Due campi, `sopraSfasaX` (di serie 1 mm a destra) e `sopraSfasaY` (di serie 1 mm
    in basso, scelto misurando: vedi sotto). Restano la 4 (mai fuori dalla macchia) e la 19 (da sinistra a destra).
+26. (2026-10-29) **Una prova: il raso lo fa Stilista, gestito dal tool.** *«Invece che disegnare il raso delle macchie,
+   tu saresti in grado di sfruttare la costruzione di stilista per i riempimenti, ma di scegliere tu ingresso e uscita
+   delle macchie per la sequenza e anche orientamento sempre verticale e ovviamente sequenza? Quindi alla fine avere il
+   riempimento raso di stilista ma gestito dal programma?»* Poi: *«sì, fallo, seleziono la macchia modello»*. Casella
+   *In Stilista, il raso lo fa Stilista* (`rasoDiStilista`, di serie spenta): con «Invia a Stilista» ogni stop del raso
+   torna come riempimenti di Stilista, uno per macchia nell'ordine del tool, copie del riempimento selezionato in
+   Stilista (il modello, coi suoi parametri), nella direzione `rasoAngolo`, con l'ingresso e l'uscita del nostro raso
+   portati sul contorno (`macchiePerStilista`; il plugin: `POST /riempimenti`). Anteprima e DST restano col nostro raso.
+   Ingresso e uscita: [`sapere/codice/stilista-ingresso-uscita.md`](../codice/stilista-ingresso-uscita.md).
+   **Non ancora provata in Stilista** sulle macchie vere.
 
 ## Come è fatto, e perché
 - **Il punto sopra è la base tagliata sulla macchia**, con una sola andata e ritorno dove la base va e torna più volte
