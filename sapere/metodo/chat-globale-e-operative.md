@@ -5,9 +5,12 @@ tool: []
 data: 2026-08-25
 ---
 
-Dal 2026-08-25 Lorenzo ha diviso il lavoro in due piani. **La chat globale** serve a chiedere
+> **Superata il 2026-10-29**: le chat per tool non ci sono più, c'è una chat madre che apre una
+> sotto-chat per ogni lavoro. Vedi [chat-madre-e-sotto-chat.md](chat-madre-e-sotto-chat.md).
+
+~~Dal 2026-08-25 Lorenzo ha diviso il lavoro in due piani. **La chat globale** serve a chiedere
 informazioni sui tool, a capire se ci sono aggiornamenti da fare a livello di suite, e a segnalare cose
-che non vanno. **Il lavoro operativo su un singolo tool** si fa in chat dedicate a quel tool.
+che non vanno. **Il lavoro operativo su un singolo tool** si fa in chat dedicate a quel tool.~~
 
 **Perché:** mescolare la vista d'insieme con l'implementazione di un singolo strumento fa perdere il
 filo di entrambe. La chat globale è il posto dove si guarda lo stato complessivo (`STATO.md`, la lista
