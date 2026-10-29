@@ -11,7 +11,7 @@ import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';
-import { costruisciMacchie, PARAMETRI_MACCHIE, type ParametriMacchie, type RisultatoMacchie } from './motore';
+import { costruisciMacchie, macchiePerStilista, PARAMETRI_MACCHIE, type ParametriMacchie, type RisultatoMacchie } from './motore';
 
 /** I pattern pronti: la libreria condivisa del Generatore pattern, e quelli salvati nel Generatore su questo computer. */
 const PRESET_CONDIVISI: Record<string, PatternConfig> = (() => {
@@ -75,6 +75,8 @@ const CAMPI_RASO: Campo[] = [
     aiuto: 'Di quanto, a caso, ogni riga finisce prima o dopo il bordo: il bordo non è più netto. 0 = netto.' },
   { nome: 'sfrangiaturaFuori', etichetta: '…di cui oltre il bordo', unita: '%', passo: 10, min: 0, max: 100,
     aiuto: '0 = le righe si accorciano soltanto; 100 = si allungano soltanto, sulla base.' },
+  { nome: 'rasoDiStilista', etichetta: 'In Stilista, il raso lo fa Stilista', unita: '', passo: 1, min: 0,
+    aiuto: 'Con «Invia a Stilista» ogni macchia torna come una copia del riempimento selezionato in Stilista (il modello: selezionalo prima di inviare), nella direzione del raso, con l’ingresso, l’uscita e l’ordine di qui. L’anteprima e il DST restano col raso di qui.' },
 ];
 const CAMPI_SOPRA: Campo[] = [
   { nome: 'passaggioMax', etichetta: 'Passaggio nascosto, fino a', unita: 'mm', passo: 5, min: 0,
@@ -568,7 +570,16 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       genera();
     },
     sorgente: () => source?.text ?? null,
-    strati: () => stratiCuciti(strati()),
+    // col raso fatto da Stilista (rasoDiStilista) ogni stop del raso torna come riempimenti, uno per macchia
+    strati: () => {
+      const cuciti = stratiCuciti(strati());
+      if (!risultato || !par.rasoDiStilista) return cuciti;
+      const perZona = new Map(macchiePerStilista(risultato).map((z) => [`raso-${z.zona + 1}`, z.macchie]));
+      return cuciti.map((s) => {
+        const forme = s.nome ? perZona.get(s.nome) : undefined;
+        return forme ? { ...s, polylines: [], riempimenti: { orientamentoDeg: par.rasoAngolo, forme } } : s;
+      });
+    },
     dst() {
       if (!risultato) throw new Error('genera prima il ricamo');
       return { bytes: costruisciDst(), nome: `${nomeBase()}-macchie` };

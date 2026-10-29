@@ -26,6 +26,8 @@ namespace StilistaHostSkeleton
     ///   POST /dst?nome=…       un DST: Stilista lo apre in un documento nuovo
     ///   POST /oggetti          un programma stilista-bridge-batch-1: oggetti nativi nel documento aperto
     ///   POST /punti            il ricamo di un tool, al suo posto nel documento aperto, a punti fissi (Collegamento.Ritorno.cs)
+    ///   GET|POST /ingresso-uscita  ingresso e uscita di un riempimento: leggerli, scriverli (Collegamento.IngressoUscita.cs)
+    ///   POST /riempimenti      macchie come copie del riempimento selezionato, con ingresso e uscita (Collegamento.Riempimenti.cs)
     ///
     /// Stilista apre un PROCESSO PER DOCUMENTO (più un processo d'avvio e qualche riserva «/WAIT»,
     /// tutti col plugin caricato): il server parte solo nel processo che mostra una finestra, sulla
@@ -192,6 +194,9 @@ namespace StilistaHostSkeleton
                 case "POST /dst": return RiceviDst(r);
                 case "POST /oggetti": return RiceviOggetti(r);
                 case "POST /punti": return RiceviPunti(r);
+                case "GET /ingresso-uscita": return conScelta(LeggiIngressoUscita);
+                case "POST /ingresso-uscita": return RiceviIngressoUscita(r);
+                case "POST /riempimenti": return RiceviRiempimenti(r);
                 case "POST /salva-copia": return (Risposta)NelFiloDiStilista(SalvaCopia);
                 case "POST /ricalcola":
                     var sblocca = r.Query.ContainsKey("sblocca");

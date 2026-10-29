@@ -169,6 +169,50 @@ export interface StratoPerStilista {
   nome?: string;
   /** Le polilinee cucite in mm, nel riferimento del cartamodello importato. Fra una e l'altra: salto. */
   polylines: Array<Array<{ x: number; y: number }>>;
+  /**
+   * Al posto dei punti, riempimenti di Stilista (2026-10-29, Pattern a macchie): ogni forma torna come una copia del
+   * riempimento selezionato in Stilista, con la direzione dei punti e l'ingresso e l'uscita dati qui, nell'ordine.
+   */
+  riempimenti?: {
+    orientamentoDeg?: number;
+    forme: Array<{ contorno: Array<{ x: number; y: number }>; inizio: { x: number; y: number }; fine: { x: number; y: number } }>;
+  };
+}
+
+export interface EsitoRiempimenti {
+  ok: boolean;
+  macchie: number;
+  chieste: number;
+  punti: number;
+  ingresso_scarto_max_mm: number;
+  uscita_scarto_max_mm: number;
+  errori: string[];
+  errore?: string;
+}
+
+const mm = (p: { x: number; y: number }): [number, number] => [Math.round(p.x * 1000) / 1000, Math.round(p.y * 1000) / 1000];
+
+/** Le forme tornano nel documento aperto come copie del riempimento selezionato in Stilista (il modello). */
+export async function riempimentiAStilista(
+  f: FinestraStilista,
+  origine: [number, number],
+  r: NonNullable<StratoPerStilista['riempimenti']>,
+  extra: { nome?: string; ago?: number } = {},
+): Promise<EsitoRiempimenti> {
+  const risposta = await fetch(`http://127.0.0.1:${f.porta}/riempimenti`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json', 'X-RG-Link': '1' },
+    body: JSON.stringify({
+      origine_mm: origine,
+      ...(r.orientamentoDeg !== undefined ? { orientamento_deg: r.orientamentoDeg } : {}),
+      ...extra,
+      macchie: r.forme.map((m) => ({ contorno_mm: m.contorno.map(mm), inizio_mm: mm(m.inizio), fine_mm: mm(m.fine) })),
+    }),
+  });
+  if (risposta.status === 404) throw new Error('in questa finestra c\'è il plugin di prima, che non sa fare i riempimenti: chiudi e riapri Stilista');
+  const esito = await risposta.json().catch(() => null) as EsitoRiempimenti | null;
+  if (!risposta.ok || !esito?.ok) throw new Error(esito?.errore ?? (esito?.errori?.length ? esito.errori.join('; ') : `Stilista ha risposto ${risposta.status}`));
+  return esito;
 }
 
 export interface AggancioStilista {
@@ -242,12 +286,19 @@ export async function inviaAStilista(a: AggancioStilista): Promise<void> {
     const testo = a.sorgente();
     const origine = testo ? origineStilista(testo) : null;
     if (origine) {
-      const strati = a.strati().filter((s) => s.polylines.some((l) => l.length > 1));
+      const strati = a.strati().filter((s) => s.polylines.some((l) => l.length > 1) || s.riempimenti?.forme.length);
       if (!strati.length) throw new Error('non c\'è niente da cucire');
       const agoBase = agoStilista(testo!);
-      let punti = 0, salti = 0, ago = '';
+      let punti = 0, salti = 0, ago = '', riempite = 0, nonRiempite = 0;
       for (const [i, s] of strati.entries()) {
         a.stato(`Invio a Stilista… strato ${i + 1} di ${strati.length}`);
+        if (s.riempimenti?.forme.length) {
+          const esito = await riempimentiAStilista(finestra, origine, s.riempimenti, {
+            nome: s.nome ?? `RG ${i + 1}`, ...(agoBase ? { ago: agoBase + i } : {}),
+          });
+          punti += esito.punti; riempite += esito.macchie; nonRiempite += esito.chieste - esito.macchie;
+          continue;
+        }
         const esito = await puntiAStilista(finestra, {
           origine_mm: origine, punti: puntiDaPolilinee(s.polylines), nome: s.nome ?? `RG ${i + 1}`,
           ...(agoBase ? { ago: agoBase + i } : {}),
@@ -256,7 +307,9 @@ export async function inviaAStilista(a: AggancioStilista): Promise<void> {
       }
       const quanti = strati.length > 1 ? `${strati.length} oggetti, ` : '';
       const aghi = strati.length > 1 && agoBase ? `aghi ${agoBase}–${agoBase + strati.length - 1}` : ago;
-      a.stato(`Tornato in Stilista al suo posto: ${quanti}${punti.toLocaleString('it-IT')} punti (${salti} salti), ${aghi}`);
+      const piene = riempite || nonRiempite
+        ? `, ${riempite} forme come riempimenti di Stilista${nonRiempite ? ` (${nonRiempite} non riuscite: vedi il log del plugin)` : ''}` : '';
+      a.stato(`Tornato in Stilista al suo posto: ${quanti}${punti.toLocaleString('it-IT')} punti (${salti} salti)${piene}, ${aghi}`);
       return;
     }
     const dst = a.dst();

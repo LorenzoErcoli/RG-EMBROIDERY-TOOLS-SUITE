@@ -82,6 +82,7 @@ master).
 | `POST /dst?nome=…` | un DST: Stilista lo apre in un documento nuovo (`IStilista3.LoadNewEmb`) |
 | `POST /oggetti` | un programma `stilista-bridge-batch-1`: oggetti nativi `fill`/`running` aggiunti al documento aperto |
 | `POST /punti` | **il ricamo di un tool torna nel documento aperto, al suo posto**, come oggetto a punti manuali: `{ origine_mm, punti: [[x, y, salto]…] }` in mm nel riferimento dell'SVG della selezione; ago e colore quelli del primo oggetto selezionato |
+| `GET /ingresso-uscita` · `POST /ingresso-uscita` | **ingresso e uscita di un riempimento** (2026-10-29): leggerli (scelti, icone, primo e ultimo punto cucito) e scriverli: `{ origine_mm?, modo?: "ui"\|"diretto", oggetti: [{ indice?, inizio_mm, fine_mm }] }`, in mm nel riferimento del documento (o dell'SVG con `origine_mm`); abilita, scrive come un clic, ricalcola e rilegge subito e dopo 1,5 s. Vanno dati sul contorno: vedi [`sapere/codice/stilista-ingresso-uscita.md`](../../sapere/codice/stilista-ingresso-uscita.md) |
 | `POST /ricalcola?oggetti=…[&sblocca=1]` | per le prove: ricalcola quegli oggetti come Stilista (con `sblocca` senza lucchetto) e dice i punti prima e dopo |
 | `POST /salva-copia` | una copia del documento in `%TEMP%\rg-stilista-link\copia-*.emg3`, da rileggere col lettore offline (il file aperto non si tocca) |
 

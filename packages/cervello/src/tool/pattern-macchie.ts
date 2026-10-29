@@ -25,6 +25,11 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: '%', min: 0, max: 100, passo: 5, predefinito: 30, concetto: 'spostamento',
     },
     {
+      id: 'satinByStilista', nome: 'rasoDiStilista', etichetta: 'In Stilista, il raso lo fa Stilista',
+      aiuto: 'Con «Invia a Stilista» ogni macchia torna come una copia del riempimento selezionato in Stilista, con l\'ingresso, l\'uscita e l\'ordine del tool. L\'anteprima e il DST restano col raso del tool.',
+      tipo: 'bool', unita: '', predefinito: false, concetto: 'interruttore',
+    },
+    {
       id: 'fringeAmount', nome: 'sfrangiatura', etichetta: 'Sfrangiatura',
       aiuto: 'Di quanto, a caso, ogni riga finisce prima o dopo il bordo: il bordo non è più netto. 0 = netto.',
       tipo: 'num', unita: 'mm', min: 0, passo: 0.1, predefinito: 1, concetto: 'variazione',
