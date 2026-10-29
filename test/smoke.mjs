@@ -6751,6 +6751,49 @@ console.log('\nrete-testa-speciale — la sacca a rete: anelli coi lati uguali, 
     [viaMotore.strati.length, viaMotore.avvisi.length, troppo.strati.length, troppo.avvisi.length], [1, 0, 0, 1]);
 }
 
+// rete-testa-speciale — LE BASI PIENE (Lorenzo, 2026-10-22). Scelte guardando la simulazione: il fondo pieno è la
+// spirale a giri affiancati (passo = spessore del filo, e lo segue), le colonne entrano nel fondo di qualche mm così il
+// primo rombo è cucito sopra la spirale, e il fondo si ricama prima della rete.
+console.log('\nrete-testa-speciale — le basi piene: spirale a giri affiancati, colonne che entrano nel fondo');
+{
+  const P = { ...rg.RTS_PARAMETRI, netShape: 'radiale' };
+  // la distanza fra i giri, misurata dove la spirale passa sul semiasse x positivo (lontano dal centro e dal bordo)
+  const passi = (r) => {
+    const C = r.centro, b = r.blocchi[0], raggi = [];
+    for (let i = 1; i < b.length && b[i].tipo === 'fondo'; i++) {
+      const a = b[i - 1], q = b[i];
+      if (a.y < C.y && q.y >= C.y && q.x > C.x) { const t = (C.y - a.y) / (q.y - a.y); raggi.push(a.x + t * (q.x - a.x) - C.x); }
+    }
+    const d = raggi.slice(1).map((x, i) => x - raggi[i]).filter((_, i) => raggi[i] > 10 && raggi[i + 1] < 90);
+    // (sui punti ago, che tagliano le curve: al decimo)
+    return [Math.round(Math.min(...d) * 10) / 10, Math.round(Math.max(...d) * 10) / 10];
+  };
+  const pieno = rg.rtsRadiale({ ...P, fullBottom: true }), filo15 = rg.rtsRadiale({ ...P, fullBottom: true, constructionStroke: 1.5, spiralPitchMm: 20 });
+  check('il fondo pieno: i giri a uno spessore di filo (1 mm), e lo seguono (1,5 mm) qualunque sia il passo scritto; spento di partenza',
+    [passi(pieno), passi(filo15), rg.RTS_PARAMETRI.fullBottom], [[1, 1], [1.5, 1.5], false]);
+  const tratti = (r) => r.blocchi.flatMap((b) => b.slice(1).map((q, i) => Math.hypot(q.x - b[i].x, q.y - b[i].y)));
+  check('il fondo pieno: un filo solo, punti fra minimo e massimo (R3, R4), più del doppio dei punti del fondo rado',
+    [pieno.blocchi.length, Math.min(...tratti(pieno)) >= P.minStitchMm - 1e-6, Math.max(...tratti(pieno)) <= P.maxStitchMm + 1e-6,
+      pieno.blocchi.flat().filter((q) => q.tipo === 'fondo').length > 2 * rg.rtsRadiale(P).blocchi.flat().filter((q) => q.tipo === 'fondo').length],
+    [1, true, true, true]);
+  // le colonne entrano nel fondo: la rete arriva a 8 mm dentro il bordo del fondo (Ø 200), solo lungo i 48 raggi delle
+  // colonne, e le lenti non cambiano
+  const lenti = (r) => { let n = 0; for (const b of r.blocchi) for (let i = 1; i < b.length; i++) if (b[i].sovrapposto && !b[i - 1].sovrapposto) n++; return n; };
+  const dentro = rg.rtsRadiale({ ...P, fullBottom: true, bottomEntryMm: 8 }), C = dentro.centro, rr = (q) => Math.hypot(q.x - C.x, q.y - C.y);
+  const nelFondo = dentro.blocchi.flat().filter((q) => q.tipo === 'rete' && rr(q) < 100 - 0.05);
+  const fuoriDaiRaggi = nelFondo.filter((q) => { const a = Math.atan2(q.y - C.y, q.x - C.x) * 48 / (2 * Math.PI); return Math.abs(a - Math.round(a)) > 1e-3; });
+  check('le colonne entrano nel fondo di 8 mm: rete fino a 92 mm dal centro, solo sui raggi delle colonne, lenti invariate (1248)',
+    [Math.round(Math.min(...nelFondo.map(rr)) * 100) / 100, nelFondo.length > 0, fuoriDaiRaggi.length, lenti(dentro), lenti(pieno), rg.RTS_PARAMETRI.bottomEntryMm],
+    [92, true, 0, lenti(rg.rtsRadiale(P)), lenti(rg.rtsRadiale(P)), 0]);
+  // al più metà del fondo; sull'ovale l'entrata si misura come le legature (dentro la forma del fondo)
+  const troppo = rg.rtsRadiale({ ...P, bottomEntryMm: 80 });
+  const ov = rg.rtsRadiale({ ...P, bottomShape: 'ovale', fullBottom: true, bottomEntryMm: 8 });
+  check('l’entrata si ferma a metà del fondo (80 → 50 mm); sull’ovale un filo solo e punti fra minimo e massimo',
+    [Math.round(Math.min(...troppo.blocchi.flat().filter((q) => q.tipo === 'rete').map((q) => Math.hypot(q.x - troppo.centro.x, q.y - troppo.centro.y)))),
+      ov.blocchi.length, Math.min(...tratti(ov)) >= P.minStitchMm - 1e-6, Math.max(...tratti(ov)) <= P.maxStitchMm + 1e-6],
+    [50, 1, true, true]);
+}
+
 // ---------------------------------------------------------------------------
 // rete-testa-speciale — la SACCA APPESA (Lorenzo, 2026-10-16: «simulare una certa morbidezza del filo nel 3d… come se
 // fosse un po' appesa»): nodi legati da fili che non si allungano ma si allentano, la gravità, la morbidezza.

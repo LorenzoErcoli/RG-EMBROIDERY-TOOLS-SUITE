@@ -62,6 +62,16 @@ export type ParametriRete = {
   fieldMm: number;
   /** Sacca: passo della spirale del fondo, mm (uguale allo spessore del filo = giri affiancati). */
   spiralPitchMm: number;
+  /**
+   * Sacca: il fondo pieno (Lorenzo, 2026-10-22, «basi piene»: la spirale a giri affiancati). Il passo della spirale è lo
+   * spessore del filo e lo segue; `spiralPitchMm` resta da parte per quando si spegne.
+   */
+  fullBottom: boolean;
+  /**
+   * Sacca: di quanto le colonne entrano nel fondo, mm (0 = partono sul bordo del fondo). Ogni colonna comincia e finisce
+   * dentro il fondo, così il primo rombo è cucito sopra la spirale e non solo sul suo bordo (Lorenzo, 2026-10-22).
+   */
+  bottomEntryMm: number;
   /** Sacca: distanza minima fra le legature che entrano nel fondo, mm. */
   tieSpacingMm: number;
   /**
@@ -189,6 +199,8 @@ export const PARAMETRI_RETE: ParametriRete = {
   maxAngleDeg: 165,
   fieldMm: 450,
   spiralPitchMm: 5,
+  fullBottom: false,
+  bottomEntryMm: 0,
   tieSpacingMm: 10,
   overlapRule: 'spostamento',
   rimPass: false,
@@ -220,6 +232,11 @@ export const PARAMETRI_RETE: ParametriRete = {
   voidEdgeStitchMm: 1,
   minStitchMm: 0.5,
 };
+
+/** Il passo della spirale del fondo, mm: col fondo pieno lo spessore del filo (giri affiancati), se no quello scritto. */
+export function passoDellaSpirale(p: Pick<ParametriRete, 'fullBottom' | 'spiralPitchMm' | 'constructionStroke'>): number {
+  return p.fullBottom ? p.constructionStroke : p.spiralPitchMm;
+}
 
 /** Che tratto di filo è un punto: la rete, una passata sul contorno, l'impuntura in un vuoto, un raccordo dritto, il fondo della sacca. */
 export type TipoTratto = 'rete' | 'bordo' | 'vuoto' | 'raccordo' | 'fondo';
@@ -991,9 +1008,14 @@ export function costruisciReteRadiale(par: ParametriRete): RisultatoRete & { ane
   };
 
   const pezzi: Pezzo[] = []; let sid = 0;
-  // 1. il fondo: la spirale dal centro in fuori, che finisce sul nodo 0 dell'anello 0
+  const R0 = raggioDelFondo(A), passo = Math.max(0.3, passoDellaSpirale(p)), giri = R0 / passo, dritto = A.ovale ? A.ovale.a - A.ovale.b : 0;
+  // dove comincia e finisce la colonna k: sul nodo 0, o dentro il fondo di `bottomEntryMm` (al più metà del fondo)
+  const entrata = Math.max(0, Math.min(R0 / 2, p.bottomEntryMm));
+  const nodo0 = (k: number): PuntoTraccia => ({ ...(ovale ? nodoA(0, k) : pol(r0, fi(k))), fisso: true });
+  const dentro = (k: number, rs: number): Point => { const q = versoIlCentro(A, N, k, rs / R0); return { x: centro.x + q.x, y: centro.y + q.y }; };
+  const inizio = (k: number): PuntoTraccia => (entrata > 0 ? { ...dentro(k, R0 - entrata), fisso: true } : nodo0(k));
+  // 1. il fondo: la spirale dal centro in fuori, che finisce dove comincia la colonna 0
   // (sull'ovale i giri sono gli ovali del fondo, `puntoDelFondo`: alla stessa distanza sui lati lunghi e sulle teste)
-  const R0 = raggioDelFondo(A), passo = Math.max(0.3, p.spiralPitchMm), giri = R0 / passo, dritto = A.ovale ? A.ovale.a - A.ovale.b : 0;
   if (giri >= 1) {
     const Th = 2 * Math.PI * giri, sp: PuntoTraccia[] = [];
     for (let th = 0; th < Th; ) {
@@ -1001,28 +1023,29 @@ export function costruisciReteRadiale(par: ParametriRete): RisultatoRete & { ane
       sp.push({ x: centro.x + q.x, y: centro.y + q.y, fisso: sp.length === 0 });
       th += 0.25 / Math.max(dritto + f * R0, 0.5);
     }
-    sp.push({ ...nodoA(0, 0), fisso: true });
+    sp.push(inizio(0));
     pezzi.push({ tipo: 'fondo', pts: sp, sid: sid++, blocco: 0 });
   }
-  // 2. le colonne
-  const nodo0 = (k: number): PuntoTraccia => ({ ...(ovale ? nodoA(0, k) : pol(r0, fi(k))), fisso: true });
-  const dentro = (k: number, rs: number): Point => { const q = versoIlCentro(A, N, k, rs / R0); return { x: centro.x + q.x, y: centro.y + q.y }; };
+  // 2. le colonne (con l'entrata, le due linee scendono insieme dal nodo 0 dentro il fondo: due passate sulla spirale)
   for (let k = 0; k < N; k++) {
     const B = linea(k, -1), Ar = linea(k, 1).reverse();
+    if (entrata > 0) { B.unshift({ ...inizio(k), riga: 2 * k }); Ar.push({ ...inizio(k), riga: 2 * k + 1 }); }
     pezzi.push({ tipo: 'rete', pts: B, sid: sid++, blocco: 0 });
     const a = B[B.length - 1], b = Ar[0];
     if (distance(a, b) > 1e-6) pezzi.push({ tipo: 'bordo', poly: contorno, a: { ...a, poly: contorno }, b: { ...b, poly: contorno }, sid: sid++, blocco: 0 });
     pezzi.push({ tipo: 'rete', pts: Ar, sid: sid++, blocco: 0 });
     // la legatura: dentro il fondo e fuori alla colonna dopo
     // (sull'ovale la profondità si misura sul mezzo asse corto, e la legatura entra lungo la forma del fondo)
+    // (una legatura che non arriva oltre l'entrata va dritta da una colonna all'altra)
     const rs = fondoDellaLegatura(k, N, Math.max(passo, p.tieSpacingMm), R0, Math.min(passo, R0 / 2));
-    pezzi.push({ tipo: 'fondo', pts: [nodo0(k), { ...(ovale ? dentro(k, rs) : pol(rs, fi(k))), fisso: true }, nodo0(k + 1)], sid: sid++, blocco: 0 });
+    const fondoK = rs < R0 - entrata - 1e-6 ? [{ ...(ovale ? dentro(k, rs) : pol(rs, fi(k))), fisso: true }] : [];
+    pezzi.push({ tipo: 'fondo', pts: [inizio(k), ...fondoK, inizio(k + 1)], sid: sid++, blocco: 0 });
   }
   // 3. il giro in cima (un salto dal fondo fino alla bocca)
   if (p.rimPass) {
     const sulBordo = (i: number) => (ovale ? contorno[Math.round(i * M / 3) % M] : pol(rOut, 2 * Math.PI * i / 3));
     const s0 = { ...sulBordo(0), fisso: true, poly: contorno };
-    pezzi.push({ tipo: 'salto', pts: [nodo0(0), s0], sid: sid++, blocco: 1 });
+    pezzi.push({ tipo: 'salto', pts: [inizio(0), s0], sid: sid++, blocco: 1 });
     for (let i = 0; i < 3; i++) {
       const a = { ...sulBordo(i), fisso: true, poly: contorno }, b = { ...sulBordo(i + 1), fisso: true, poly: contorno };
       pezzi.push({ tipo: 'bordo', poly: contorno, a, b, sid: sid++, blocco: 1 });
