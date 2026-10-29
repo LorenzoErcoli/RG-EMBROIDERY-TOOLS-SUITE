@@ -92,7 +92,9 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
 23. (2026-10-29) **Sotto le macchie la base a 2 passaggi.** Provato a macchina: *«il filo si sovrappone»*. *«La base che
    lateralmente è a 2 passaggi e al centro è a 4 passaggi, deve prevedere però dove ci saranno le macchie sopra. Dove
    vi sono le macchie i passaggi rimangono a 2 per non sovrapporre troppo filo.»* Fuori dalle macchie la base resta
-   com'è, e resta intera (`bucaLaBase` spento).
+   com'è, e resta intera (`bucaLaBase` spento). Poi, visti i 127 mm rimasti a 4 passaggi nei pezzetti sotto il
+   millimetro sul bordo: *«togliamo anche i pezzetti da 1 mm sul bordo, non sono necessari»* — dentro le macchie mai 4
+   passaggi, da nessuna parte.
 24. (2026-10-29) **La fase del raso, da controllare in un campo**: *«la fase tra i punti ricamo dovrebbe essere 30, ma
    vorrei poterla controllare»*; chiesto cosa fosse il 30: *«sì, 30% del punto»* — lo sfalsamento degli aghi di una riga
    rispetto alla riga accanto, in % del punto massimo del raso. Campo *Fase del raso* (`rasoFase`), di serie 30%.
@@ -117,9 +119,11 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
 - **La base sotto le macchie a due passaggi** (2026-10-29, decisione 23, `dueSottoLeMacchie`). Dopo i ponti, perché
   il raso copre le forme coi ponti: ogni corsa a, b, a, b, a della base che entra in una macchia diventa una sola
   andata e ritorno dentro. Una barretta a cavallo del bordo si spezza sul bordo (a fuori, b dentro: a, c, a, c, b,
-  a — fuori 4 passaggi, dentro 2); un pezzo dentro o fuori più corto di 1 mm segue quello accanto, così non nascono
-  punti corti (restano a 4 i pezzetti dentro sotto il millimetro, sotto la sfrangiatura). I capi della base non
-  cambiano: l'ordine delle macchie, che parte dalla fine della base, resta lo stesso.
+  a — fuori 4 passaggi, dentro 2). Perché non nascano punti corti: un pezzo dentro più corto di 1 mm si allunga a
+  1,01 mm restando sulla barretta, cioè un po' fuori dalla macchia, sotto le punte del raso (prima tornava a 4
+  passaggi: 127 mm dentro le macchie, tolti il 2026-10-29); un pezzo fuori più corto di 1 mm passa a 2. Una barretta
+  che sfiora appena la macchia passa quindi a 2 tutta. I capi della base non cambiano: l'ordine delle macchie, che
+  parte dalla fine della base, resta lo stesso.
 - **Ingresso e uscita.** In ogni macchia si entra nel punto dell'interno più vicino a dove si è usciti; un passaggio
   SOTTO il raso (A* su griglia, lontano dal bordo più della sfrangiatura: il raso lo copre) porta all'inizio delle righe.
   Il raso sceglie da quale cella e da quale angolo cominciare guardando dove FINISCE: dal lato della macchia dopo. Il
@@ -267,10 +271,12 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
 
 - **Le tre correzioni del 2026-10-29, misurate** sul pannello di prova (84 macchie), col punto 2e4 di Lorenzo (il preset
   `RG-PUNTO-SQUAMA-2e4-PASSAGGI` dell'8 ottobre: la v2 non è su disco) e col punto squame delle prove.
-  (1) **La base dentro le macchie**: tracciato a 4 passaggi 2.573 → **127 mm** (restano i pezzetti sotto il millimetro
-  sul bordo), a 2 passaggi 2.504 → 4.952 mm; fuori dalle macchie a 4 passaggi 3.307 → 3.186 mm (i pezzetti fuori sotto
-  il millimetro, accanto al bordo, passano a 2); la base intera 55,8 → **50,7 m** di filo. Il punto squame non ha
-  barrette a 4: non cambia. (2) **La fase**: aghi dentro le righe con un ago della riga accanto entro 0,3 mm di altezza
+  (1) **La base dentro le macchie**: tracciato a 4 passaggi 2.573 → 127 mm (prima versione, coi pezzetti sul bordo)
+  → **0 mm**; a 2 passaggi 2.504 → 5.078 mm; fuori dalle macchie a 4 passaggi 3.307 → 3.064 mm (la striscia di un
+  millimetro accanto al bordo, dove i pezzetti dentro si allungano, passa a 2); la base intera 55,8 → **50,2 m** di filo.
+  Punti della base sotto 1 mm: **52 prima e 52 dopo**, tutti fuori dalle macchie (sono del Generatore); allungando i
+  pezzetti a 1 mm esatto ne nascevano 129 da 0,99–1 mm per gli arrotondamenti, da qui l'1,01. Il punto squame non ha
+  barrette a 4: non cambia (200 punti sotto 1 mm prima e dopo). (2) **La fase**: aghi dentro le righe con un ago della riga accanto entro 0,3 mm di altezza
   **58% → 1,1%** (con la fase a 0, 91%); punti del raso 15.995 → 16.959 (+6%), il più lungo sempre 4 mm, sotto 1 mm
   0,7%. (3) **Il punto sopra sfasato**: aghi del punto sopra a meno di 0,2 mm dal filo della base —
 
@@ -288,7 +294,8 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
   del 2e4, gli zig-zag dello squame): serve la diagonale. Lo squame è fitto, sotto il 34% non si scende. Il migliore
   misurato è 0,7 e 0,7, ma Lorenzo ha chiesto 1 mm a destra: con quello, 1 mm in basso. In ogni caso il punto sopra non
   esce dalla macchia (al più 0,04 mm, come prima), nessun salto dentro le macchie, salti fra le macchie 83 come prima.
-  DST di prova: `Downloads\PROVA-MACCHIE-2e4-fase30-sfasato1-1.dst` (fuori dal repo, col progetto dentro).
+  DST di prova (fuori dal repo, col progetto dentro): `Downloads\PROVA-MACCHIE-2e4-fase30-sfasato1-1.dst` (coi
+  pezzetti sul bordo a 4) e `Downloads\PROVA-MACCHIE-2e4-base2-senza-pezzetti.dst` (senza, 50.050 punti, 3 stop).
 
 ## Strade scartate
 - **Il punto sopra ridisegnato in ogni macchia** (2026-10-28): colonne che seguono la forma, denti sovrapposti, la

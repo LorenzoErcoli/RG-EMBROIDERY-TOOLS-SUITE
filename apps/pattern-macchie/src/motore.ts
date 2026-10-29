@@ -1378,7 +1378,10 @@ function conPonte(a: Polyline, b: Polyline, larghezza: number): { forma: Polylin
   return { forma: anelli[0] && anelli[0].length >= 4 ? anelli[0] : b, da: pa, a: pb };
 }
 
-/** Il pezzo più corto di una barretta che resta a sé dentro o fuori da una macchia, mm: sotto, segue il pezzo accanto. */
+/**
+ * Il pezzo più corto di una barretta spezzata sul bordo, mm: un pezzo dentro più corto si allunga fino a tanto (un po'
+ * fuori dalla macchia, sotto le punte del raso), un pezzo fuori più corto passa dentro. Così non nascono punti corti.
+ */
 const BARRETTA_PEZZO_MIN = 1;
 
 /**
@@ -1386,9 +1389,10 @@ const BARRETTA_PEZZO_MIN = 1;
  * a 4 passaggi, deve prevedere però dove ci saranno le macchie sopra. Dove vi sono le macchie i passaggi rimangono a 2
  * per non sovrapporre troppo filo»). Dove la base va e torna più volte sullo stesso tratto (a, b, a, b, a: le barrette a
  * 4 passaggi del centro), dentro le macchie solo andata e ritorno; fuori resta com'è. Una barretta a cavallo del bordo
- * si spezza dove lo attraversa: fuori i suoi passaggi, dentro due (a fuori, b dentro: a, c, a, c, b, a). I pezzi più
- * corti di `BARRETTA_PEZZO_MIN` seguono quello accanto, così non nascono punti corti; i capi della barretta restano
- * quelli, e la base va avanti come prima.
+ * si spezza dove lo attraversa: fuori i suoi passaggi, dentro due (a fuori, b dentro: a, c, a, c, b, a). Dentro la
+ * macchia mai 4 passaggi, nemmeno nei pezzetti sul bordo (Lorenzo, stesso giorno: «togliamo anche i pezzetti da 1 mm sul
+ * bordo, non sono necessari»): un pezzo dentro più corto di `BARRETTA_PEZZO_MIN` si allunga fino a tanto, verso fuori;
+ * un pezzo fuori più corto passa a due. I capi della barretta restano quelli, e la base va avanti come prima.
  */
 function dueSottoLeMacchie(base: Polyline[], forme: Polyline[]): Polyline[] {
   const bb = forme.map(ingombro);
@@ -1402,6 +1406,13 @@ function dueSottoLeMacchie(base: Polyline[], forme: Polyline[]): Polyline[] {
       if (Math.max(a.x, b.x) < q.x0 || Math.min(a.x, b.x) > q.x1 || Math.max(a.y, b.y) < q.y0 || Math.min(a.y, b.y) > q.y1) return;
       for (const [p, r] of clipSegmentToPolygon(a, b, f)) dentro.push([tt(p), tt(r)]);
     });
+    // (un pezzo dentro corto si allunga attorno al suo mezzo, restando sulla barretta: dentro c'è tutto)
+    // (un centesimo in più: il punto che nasce non scende sotto il minimo per gli arrotondamenti)
+    const h = Math.min(1, (BARRETTA_PEZZO_MIN + 0.01) / L);
+    for (const d of dentro) if (d[1] - d[0] < h) {
+      const m = Math.min(1 - h / 2, Math.max(h / 2, (d[0] + d[1]) / 2));
+      d[0] = Math.min(d[0], m - h / 2); d[1] = Math.max(d[1], m + h / 2);
+    }
     dentro.sort((x, y) => x[0] - y[0]);
     let out: Array<{ t0: number; t1: number; dentro: boolean }> = [];
     let t = 0;
@@ -1411,14 +1422,14 @@ function dueSottoLeMacchie(base: Polyline[], forme: Polyline[]): Polyline[] {
       t = Math.max(t, e);
     }
     if (t < 1) out.push({ t0: t, t1: 1, dentro: false });
-    // (i pezzi corti seguono il vicino: prima quelli dentro, perché fuori la base resta com'è)
+    // (un pezzo fuori corto, fra il bordo e un capo o fra due macchie, passa dentro: due passaggi)
     const corto = (p: { t0: number; t1: number }) => (p.t1 - p.t0) * L < BARRETTA_PEZZO_MIN;
     const unisci = (v: typeof out) => v.reduce<typeof out>((acc, p) => {
       const u = acc[acc.length - 1];
       if (u && u.dentro === p.dentro) u.t1 = p.t1; else acc.push({ ...p });
       return acc;
     }, []);
-    for (const lato of [true, false]) out = unisci(out.map((p) => (p.dentro === lato && corto(p) && out.length > 1 ? { ...p, dentro: !lato } : p)));
+    if (dentro.length) out = unisci(out.map((p) => (!p.dentro && corto(p) ? { ...p, dentro: true } : p)));
     return out;
   };
   return base.map((l) => {

@@ -6203,16 +6203,20 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     const dove = (p) => { let d = -Infinity; for (const m of forme) { const s = rg.distanceToBoundary(p, m) * (rg.pointInPolygon(p, m) ? 1 : -1); if (s > d) d = s; } return d; };
     let dentro = 0, fuori = 0;
     for (const l of linee) for (let i = 0; i + 4 < l.length; i++) if (ug(l[i], l[i + 2]) && ug(l[i + 1], l[i + 3]) && ug(l[i], l[i + 4])) {
-      // (dentro: il mezzo a più di 1 mm dal bordo; fuori: tutta la barretta fuori dalle macchie)
+      // (dentro: un pezzo qualsiasi in una macchia — anche i pezzetti sul bordo, «non sono necessari»; fuori: tutta fuori,
+      // ad almeno un decimo dal bordo: una punta che sfiora la macchia fra due campioni la tocca, e passa a 2)
       const at = (t) => ({ x: l[i].x + (l[i + 1].x - l[i].x) * t, y: l[i].y + (l[i + 1].y - l[i].y) * t });
-      if (dove(at(0.5)) > 1) dentro++; else if ([0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1].every((t) => dove(at(t)) < 0)) fuori++;
+      const lati = Array.from({ length: 41 }, (_, k) => dove(at(k / 40)));
+      if (lati.some((d) => d > 0.01)) dentro++; else if (lati.every((d) => d < -0.1)) fuori++;
     }
     return { dentro, fuori };
   };
   const prima24 = barrette4(interaB24, b24.forme), dopo24 = barrette4(b24.base.tratti, b24.forme);
   const capi = (linee) => [linee[0][0], linee.at(-1).at(-1)].map((p) => `${p.x.toFixed(3)},${p.y.toFixed(3)}`);
-  check(`la base sotto le macchie a 2 passaggi: nessuna barretta a 4 dentro le macchie (prima ${prima24.dentro}), fuori le stesse (${prima24.fuori}), la base un tratto solo con gli stessi capi`,
-    [prima24.dentro > 100, dopo24.dentro, dopo24.fuori, b24.base.salti, capi(b24.base.tratti)], [true, 0, prima24.fuori, 0, capi(interaB24)]);
+  // (e i pezzi spezzati sul bordo non fanno punti corti: sotto 1 mm, gli stessi della base del Generatore)
+  const sotto1 = (linee) => { let c = 0; for (const t of linee) for (let k = 1; k < t.length; k++) { const L = Math.hypot(t[k].x - t[k - 1].x, t[k].y - t[k - 1].y); if (L > 1e-6 && L < 1) c++; } return c; };
+  check(`la base sotto le macchie a 2 passaggi: nessuna barretta a 4 che tocca una macchia, nemmeno sul bordo (prima ${prima24.dentro}), fuori le stesse (${prima24.fuori}), la base un tratto solo con gli stessi capi, nessun punto corto in più (${sotto1(interaB24)} sotto 1 mm)`,
+    [prima24.dentro > 100, dopo24.dentro, dopo24.fuori, b24.base.salti, capi(b24.base.tratti), sotto1(b24.base.tratti)], [true, 0, prima24.fuori, 0, capi(interaB24), sotto1(interaB24)]);
   const spesso = rg.pmCostruisci(pannello, macchie, squame, { ...rg.PM_PARAMETRI, sopraPuntoMin: 1.5 });
   check('...col punto minimo a 1,5 mm (fili spessi): sotto 1,5 mm al più il 25% (misurato 20%; col minimo a 1 il 40%), e il punto sopra non esce dalla macchia', [corti2(spesso.vista.sopra, 1.5) <= 0.25, peggiore(spesso.vista.sopra, spesso.forme) <= 0.05], [true, true]);
   // si entra dove conviene e si esce dal lato della macchia dopo: i salti sono quasi la distanza fra le macchie
