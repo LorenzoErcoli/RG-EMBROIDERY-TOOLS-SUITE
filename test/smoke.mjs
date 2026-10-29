@@ -6159,8 +6159,60 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   // precisione… niente 4 passaggi, solo andata e ritorno»): le linee della base dentro le macchie ci sono quasi tutte
   // (a un decimo; tolte le briciole sul bordo e qualche ago nei punti corti — misurato 99%)
   const sotto = (rr) => { const g = new Map(); const cella = (x, y) => `${Math.floor(x / 0.5)},${Math.floor(y / 0.5)}`; for (const t of rr.vista.sopra) for (let k = 1; k < t.length; k++) { const a = t[k - 1], b = t[k], L = Math.hypot(b.x - a.x, b.y - a.y), n = Math.max(1, Math.ceil(L / 0.25)); for (let j = 0; j <= n; j++) { const q = { x: a.x + ((b.x - a.x) * j) / n, y: a.y + ((b.y - a.y) * j) / n }, c = cella(q.x, q.y); if (!g.has(c)) g.set(c, []); g.get(c).push([a, b]); } } return g; };
-  const coperto = (rr) => { const g = sotto(rr); let tot = 0, ok = 0; for (const t of rr.base.tratti) for (let k = 1; k < t.length; k++) { const a = t[k - 1], b = t[k], L = Math.hypot(b.x - a.x, b.y - a.y); if (L < 1e-6) continue; const n = Math.ceil(L / 0.3); for (let j = 0; j < n; j++) { const q = { x: a.x + ((b.x - a.x) * (j + 0.5)) / n, y: a.y + ((b.y - a.y) * (j + 0.5)) / n }; if (!rr.forme.some((m) => rg.pointInPolygon(q, m) && rg.distanceToBoundary(q, m) > 0.6)) continue; tot++; const c = `${Math.floor(q.x / 0.5)},${Math.floor(q.y / 0.5)}`; if ((g.get(c) ?? []).some(([u, v]) => { const dx = v.x - u.x, dy = v.y - u.y, l2 = dx * dx + dy * dy || 1, s = Math.max(0, Math.min(1, ((q.x - u.x) * dx + (q.y - u.y) * dy) / l2)); return Math.hypot(u.x + dx * s - q.x, u.y + dy * s - q.y) < 0.1; })) ok++; } } return ok / tot; };
+  // (dal 2026-10-29 il punto sopra è la base spostata di `sopraSfasaX`, `sopraSfasaY`: si confronta con la base spostata)
+  const coperto = (rr, dx = rg.PM_PARAMETRI.sopraSfasaX, dy = rg.PM_PARAMETRI.sopraSfasaY) => { const g = sotto(rr); let tot = 0, ok = 0; for (const t of rr.base.tratti) for (let k = 1; k < t.length; k++) { const a = t[k - 1], b = t[k], L = Math.hypot(b.x - a.x, b.y - a.y); if (L < 1e-6) continue; const n = Math.ceil(L / 0.3); for (let j = 0; j < n; j++) { const q = { x: a.x + ((b.x - a.x) * (j + 0.5)) / n + dx, y: a.y + ((b.y - a.y) * (j + 0.5)) / n + dy }; if (!rr.forme.some((m) => rg.pointInPolygon(q, m) && rg.distanceToBoundary(q, m) > 0.6)) continue; tot++; const c = `${Math.floor(q.x / 0.5)},${Math.floor(q.y / 0.5)}`; if ((g.get(c) ?? []).some(([u, v]) => { const dx = v.x - u.x, dy = v.y - u.y, l2 = dx * dx + dy * dy || 1, s = Math.max(0, Math.min(1, ((q.x - u.x) * dx + (q.y - u.y) * dy) / l2)); return Math.hypot(u.x + dx * s - q.x, u.y + dy * s - q.y) < 0.1; })) ok++; } } return ok / tot; };
   check('il punto sopra è la base: almeno il 95% delle sue linee dentro le macchie (misurato 99%)', coperto(r) >= 0.95, true);
+  // IL PUNTO SOPRA SFASATO (Lorenzo, 2026-10-29: «lo sfasiamo un po', in modo che non corrisponda ed il filo del punto
+  // speciale della macchia non batte sul filo della base»): gli aghi del punto sopra a meno di 0,2 mm dal filo della base
+  const sulFilo = (rr) => {
+    const G = 1, idx = new Map();
+    for (const l of rr.base.tratti) for (let k = 1; k < l.length; k++) { const a = l[k - 1], b = l[k]; for (let gx = Math.floor(Math.min(a.x, b.x)); gx <= Math.floor(Math.max(a.x, b.x)); gx++) for (let gy = Math.floor(Math.min(a.y, b.y)); gy <= Math.floor(Math.max(a.y, b.y)); gy++) { const c = `${gx},${gy}`; if (!idx.has(c)) idx.set(c, []); idx.get(c).push([a, b]); } }
+    const ds = (p, a, b) => { const dx = b.x - a.x, dy = b.y - a.y, l2 = dx * dx + dy * dy || 1, t = Math.max(0, Math.min(1, ((p.x - a.x) * dx + (p.y - a.y) * dy) / l2)); return Math.hypot(a.x + dx * t - p.x, a.y + dy * t - p.y); };
+    let n = 0, su = 0;
+    for (const t of rr.sopra.tratti) for (const p of t) { n++; const gx = Math.floor(p.x / G), gy = Math.floor(p.y / G); let vicino = false; for (let i = -1; i <= 1 && !vicino; i++) for (let j = -1; j <= 1 && !vicino; j++) vicino = (idx.get(`${gx + i},${gy + j}`) ?? []).some(([a, b]) => ds(p, a, b) < 0.2); if (vicino) su++; }
+    return su / n;
+  };
+  const aRegistro = rg.pmCostruisci(pannello, macchie, squame, { ...rg.PM_PARAMETRI, sopraSfasaX: 0, sopraSfasaY: 0 });
+  check('il punto sopra sfasato di 1 mm a destra e 1 in basso: sul punto squame al più il 40% degli aghi a meno di 0,2 mm dal filo della base (misurati 35%; a registro 99,6%), e non esce dalla macchia',
+    [sulFilo(r) <= 0.4, sulFilo(aRegistro) > 0.99, peggiore(r.vista.sopra, r.forme) <= 0.05, coperto(aRegistro, 0, 0) >= 0.95], [true, true, true, true]);
+  // LA FASE DEL RASO (Lorenzo, 2026-10-29: «sì, 30% del punto»): gli aghi dentro le righe (fra due tratti verticali
+  // nello stesso verso) con un ago della riga accanto alla stessa altezza, entro 0,3 mm; e i punti delle righe
+  const fase = (rr) => {
+    const righe = new Map(); let lungo = 0;
+    for (const t of rr.raso.tratti) for (let k = 1; k < t.length; k++) {
+      const a = t[k - 1], b = t[k];
+      if (Math.abs(b.x - a.x) >= 0.02) continue;
+      lungo = Math.max(lungo, Math.abs(b.y - a.y));
+      if (k + 1 < t.length && Math.abs(t[k + 1].x - b.x) < 0.02 && Math.sign(t[k + 1].y - b.y) === Math.sign(b.y - a.y)) { const c = Math.round(b.x / 0.4); if (!righe.has(c)) righe.set(c, []); righe.get(c).push(b.y); }
+    }
+    let n = 0, pari = 0;
+    for (const [c, ys] of righe) for (const y of ys) { const v = [...(righe.get(c - 1) ?? []), ...(righe.get(c + 1) ?? [])]; if (!v.length) continue; n++; if (v.some((w) => Math.abs(w - y) < 0.3)) pari++; }
+    return { pari: pari / n, lungo };
+  };
+  const f30 = fase(r), f0 = fase(rg.pmCostruisci(pannello, macchie.slice(0, 30), squame, { ...rg.PM_PARAMETRI, rasoFase: 0 }));
+  check('la fase del raso al 30%: al più il 5% degli aghi alla stessa altezza di quelli della riga accanto (misurati 1,1%; con la fase a 0 il 91%, prima della fase il 58%), mai un punto oltre il punto massimo',
+    [f30.pari <= 0.05, f0.pari > 0.8, f30.lungo <= rg.PM_PARAMETRI.rasoPuntoMax + 1e-6], [true, true, true]);
+  // LA BASE A DUE PASSAGGI SOTTO LE MACCHIE (Lorenzo, 2026-10-29: «dove vi sono le macchie i passaggi rimangono a 2 per
+  // non sovrapporre troppo filo»). Il punto squame con 2 passaggi ai lati e 4 al centro, come il punto 2e4 di Lorenzo.
+  // Una barretta a 4 passaggi è una corsa a, b, a, b, a.
+  const squame24 = { ...squame, variationPassCountSides: 2, variationPassCountCenter: 4 };
+  const b24 = rg.pmCostruisci(pannello, macchie, squame24);
+  const interaB24 = rg.generateFinalPatternPoints({ ...squame24, ...formato, shapeType: 'imported', voidStitchMm: 0, importedBoundary: { id: 'p', sourceFileName: 'p', sourceType: 'svg', paths: [{ id: 'p', points: pannello, closed: true }], bounds: { minX: 0, minY: 0, maxX: formato.totalWidth, maxY: formato.totalHeight } } }).visualPolylines;
+  const barrette4 = (linee, forme) => {
+    const ug = (p, q) => Math.abs(p.x - q.x) < 1e-4 && Math.abs(p.y - q.y) < 1e-4;
+    const dove = (p) => { let d = -Infinity; for (const m of forme) { const s = rg.distanceToBoundary(p, m) * (rg.pointInPolygon(p, m) ? 1 : -1); if (s > d) d = s; } return d; };
+    let dentro = 0, fuori = 0;
+    for (const l of linee) for (let i = 0; i + 4 < l.length; i++) if (ug(l[i], l[i + 2]) && ug(l[i + 1], l[i + 3]) && ug(l[i], l[i + 4])) {
+      // (dentro: il mezzo a più di 1 mm dal bordo; fuori: tutta la barretta fuori dalle macchie)
+      const at = (t) => ({ x: l[i].x + (l[i + 1].x - l[i].x) * t, y: l[i].y + (l[i + 1].y - l[i].y) * t });
+      if (dove(at(0.5)) > 1) dentro++; else if ([0, 0.125, 0.25, 0.375, 0.5, 0.625, 0.75, 0.875, 1].every((t) => dove(at(t)) < 0)) fuori++;
+    }
+    return { dentro, fuori };
+  };
+  const prima24 = barrette4(interaB24, b24.forme), dopo24 = barrette4(b24.base.tratti, b24.forme);
+  const capi = (linee) => [linee[0][0], linee.at(-1).at(-1)].map((p) => `${p.x.toFixed(3)},${p.y.toFixed(3)}`);
+  check(`la base sotto le macchie a 2 passaggi: nessuna barretta a 4 dentro le macchie (prima ${prima24.dentro}), fuori le stesse (${prima24.fuori}), la base un tratto solo con gli stessi capi`,
+    [prima24.dentro > 100, dopo24.dentro, dopo24.fuori, b24.base.salti, capi(b24.base.tratti)], [true, 0, prima24.fuori, 0, capi(interaB24)]);
   const spesso = rg.pmCostruisci(pannello, macchie, squame, { ...rg.PM_PARAMETRI, sopraPuntoMin: 1.5 });
   check('...col punto minimo a 1,5 mm (fili spessi): sotto 1,5 mm al più il 25% (misurato 20%; col minimo a 1 il 40%), e il punto sopra non esce dalla macchia', [corti2(spesso.vista.sopra, 1.5) <= 0.25, peggiore(spesso.vista.sopra, spesso.forme) <= 0.05], [true, true]);
   // si entra dove conviene e si esce dal lato della macchia dopo: i salti sono quasi la distanza fra le macchie
