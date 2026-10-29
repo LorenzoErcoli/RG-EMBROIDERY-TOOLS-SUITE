@@ -34,6 +34,12 @@ export type ParametriMacchie = {
   rasoInterlinea: number;
   /** Punto massimo del raso, mm: le macchie larghe non fanno punti da bordo a bordo. */
   rasoPuntoMax: number;
+  /**
+   * LA FASE DEL RASO, % del punto (Lorenzo, 2026-10-29: «la fase tra i punti ricamo dovrebbe essere 30, ma vorrei
+   * poterla controllare»; «sì, 30% del punto»): nelle righe più lunghe del punto massimo, gli aghi di una riga cadono
+   * spostati di tanto rispetto a quelli della riga accanto. 0 = gli aghi di tutte le righe alla stessa altezza.
+   */
+  rasoFase: number;
   /** Sfrangiatura del raso, mm: di quanto, a caso, ogni riga finisce prima o dopo il bordo. 0 = bordo netto. */
   sfrangiatura: number;
   /** Quanta parte della sfrangiatura va oltre il bordo (sulla base), %: il resto resta dentro. */
@@ -48,6 +54,18 @@ export type ParametriMacchie = {
    * lasciare un puntino; dentro, gli aghi si ridistribuiscono lungo la stessa linea. Come la base: 1 mm.
    */
   sopraPuntoMin: number;
+  /**
+   * LO SPOSTAMENTO DEL PUNTO SOPRA, mm, verso destra (Lorenzo, 2026-10-29: «ricreare sì quel punto della grandezza come
+   * la base, ma lo sfasiamo un po', in modo che non corrisponda ed il filo del punto speciale della macchia non batte
+   * sul filo della base»). Il punto sopra è la base intera spostata di tanto, poi tagliata sulla macchia: non ne esce.
+   * 0 e 0 = a registro con la base, come fino al 2026-10-28. Di serie 1 mm (Lorenzo: «io farei anche 1 mm a destra»).
+   */
+  sopraSfasaX: number;
+  /**
+   * Lo spostamento del punto sopra verso il basso, mm (Lorenzo, stesso giorno: «ma anche spostamento verticale in
+   * realtà»). Di serie 1 mm: con 1 mm a destra, sul punto 2e4 gli aghi sul filo della base sono il 12% (verticale 0: 50%).
+   */
+  sopraSfasaY: number;
   /**
    * I PONTI: due macchie che si seguono e sono più vicine di tanto, mm, si uniscono con un ponte di raso — il filo
    * passa dall'una all'altra senza salto. 0 = mai: le macchie restano come nel disegno.
@@ -80,11 +98,14 @@ export const PARAMETRI_MACCHIE: ParametriMacchie = {
   rasoAngolo: 90,
   rasoInterlinea: 0.4,
   rasoPuntoMax: 4,
+  rasoFase: 30,
   sfrangiatura: 1,
   sfrangiaturaFuori: 50,
   passaggioMax: 100,
   pezzoMinimo: 2,
   sopraPuntoMin: 1,
+  sopraSfasaX: 1,
+  sopraSfasaY: 1,
   ponti: 0,
   pontiLarghezza: 2,
   daSinistra: false,
@@ -1308,6 +1329,35 @@ function sfrangia(riga: Polyline, macchia: number, n: number, dentroMax: number,
   return [at(s0), ...mezzo, at(s1)];
 }
 
+/** Il punto più corto ai capi di una riga del raso con la fase, mm: un ago più vicino al capo non si mette. */
+const RASO_FASE_MIN = 1;
+
+/**
+ * LA FASE DEL RASO (Lorenzo, 2026-10-29: «sì, 30% del punto»). Gli aghi di una riga stanno su una scala di passo
+ * `passo`, la stessa per tutto il pannello, spostata di `fase`% del passo a ogni riga (la riga si conta
+ * dall'interlinea, di traverso al raso): righe accanto non hanno gli aghi alla stessa altezza. Ai capi un ago a meno
+ * di `RASO_FASE_MIN` non si mette; se così un punto supera il passo, quel punto si divide in parti uguali come prima.
+ * `riga` è dritta (i capi bastano), `verso` il verso delle righe, `origine` dove sta (di traverso) la riga 0.
+ */
+function aFase(riga: Polyline, passo: number, fase: number, verso: Point, interlinea: number, origine: number): Polyline {
+  const a = riga[0], b = riga[riga.length - 1];
+  const sa = a.x * verso.x + a.y * verso.y, sb = b.x * verso.x + b.y * verso.y, L = Math.abs(sb - sa);
+  if (L <= passo) return [a, b];
+  const j = Math.round((-a.x * verso.y + a.y * verso.x - origine) / (interlinea || 1));
+  const f = (((j * fase) / 100) % 1 + 1) % 1, s0 = Math.min(sa, sb), s1 = Math.max(sa, sb);
+  const quote: number[] = [];
+  for (let k = Math.ceil(s0 / passo - f); (k + f) * passo < s1; k++) {
+    const s = (k + f) * passo;
+    if (s - s0 >= RASO_FASE_MIN && s1 - s >= RASO_FASE_MIN) quote.push(s);
+  }
+  if (sb < sa) quote.reverse();
+  const at = (s: number): Point => { const t = (s - sa) / (sb - sa); return { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; };
+  const aghi = [a, ...quote.map(at), b];
+  const out: Polyline = [a];
+  for (let k = 1; k < aghi.length; k++) for (const q of apasso([aghi[k - 1], aghi[k]], passo).slice(1)) out.push(q);
+  return out;
+}
+
 /**
  * IL PONTE: `b` allargata fino a toccare `a` con una striscia larga `larghezza` mm fra i loro punti più vicini
  * (dentro `a` di mezzo millimetro, così il passaggio dall'una all'altra resta tutto dentro). Su griglia, come il
@@ -1326,6 +1376,90 @@ function conPonte(a: Polyline, b: Polyline, larghezza: number): { forma: Polylin
   const anelli = contorni(rasterizza([b, striscia], g, ox, oy, W, H), W, H, ox, oy, g).map((r) => simplifyPolyline(r, 0.05));
   anelli.sort((x, y) => Math.abs(polygonArea(y)) - Math.abs(polygonArea(x)));
   return { forma: anelli[0] && anelli[0].length >= 4 ? anelli[0] : b, da: pa, a: pb };
+}
+
+/**
+ * Il pezzo più corto di una barretta spezzata sul bordo, mm: un pezzo dentro più corto si allunga fino a tanto (un po'
+ * fuori dalla macchia, sotto le punte del raso), un pezzo fuori più corto passa dentro. Così non nascono punti corti.
+ */
+const BARRETTA_PEZZO_MIN = 1;
+
+/**
+ * LA BASE A DUE PASSAGGI SOTTO LE MACCHIE (Lorenzo, 2026-10-29: «la base che lateralmente è a 2 passaggi e al centro è
+ * a 4 passaggi, deve prevedere però dove ci saranno le macchie sopra. Dove vi sono le macchie i passaggi rimangono a 2
+ * per non sovrapporre troppo filo»). Dove la base va e torna più volte sullo stesso tratto (a, b, a, b, a: le barrette a
+ * 4 passaggi del centro), dentro le macchie solo andata e ritorno; fuori resta com'è. Una barretta a cavallo del bordo
+ * si spezza dove lo attraversa: fuori i suoi passaggi, dentro due (a fuori, b dentro: a, c, a, c, b, a). Dentro la
+ * macchia mai 4 passaggi, nemmeno nei pezzetti sul bordo (Lorenzo, stesso giorno: «togliamo anche i pezzetti da 1 mm sul
+ * bordo, non sono necessari»): un pezzo dentro più corto di `BARRETTA_PEZZO_MIN` si allunga fino a tanto, verso fuori;
+ * un pezzo fuori più corto passa a due. I capi della barretta restano quelli, e la base va avanti come prima.
+ */
+function dueSottoLeMacchie(base: Polyline[], forme: Polyline[]): Polyline[] {
+  const bb = forme.map(ingombro);
+  const ug = (p: Point, q: Point) => Math.abs(p.x - q.x) < 1e-4 && Math.abs(p.y - q.y) < 1e-4;
+  /** I pezzi di a→b, da 0 a 1: dentro una macchia o fuori. */
+  const pezzi = (a: Point, b: Point): Array<{ t0: number; t1: number; dentro: boolean }> => {
+    const L = Math.hypot(b.x - a.x, b.y - a.y), tt = (p: Point) => ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / (L * L);
+    const dentro: Array<[number, number]> = [];
+    forme.forEach((f, i) => {
+      const q = bb[i];
+      if (Math.max(a.x, b.x) < q.x0 || Math.min(a.x, b.x) > q.x1 || Math.max(a.y, b.y) < q.y0 || Math.min(a.y, b.y) > q.y1) return;
+      for (const [p, r] of clipSegmentToPolygon(a, b, f)) dentro.push([tt(p), tt(r)]);
+    });
+    // (un pezzo dentro corto si allunga attorno al suo mezzo, restando sulla barretta: dentro c'è tutto)
+    // (un centesimo in più: il punto che nasce non scende sotto il minimo per gli arrotondamenti)
+    const h = Math.min(1, (BARRETTA_PEZZO_MIN + 0.01) / L);
+    for (const d of dentro) if (d[1] - d[0] < h) {
+      const m = Math.min(1 - h / 2, Math.max(h / 2, (d[0] + d[1]) / 2));
+      d[0] = Math.min(d[0], m - h / 2); d[1] = Math.max(d[1], m + h / 2);
+    }
+    dentro.sort((x, y) => x[0] - y[0]);
+    let out: Array<{ t0: number; t1: number; dentro: boolean }> = [];
+    let t = 0;
+    for (const [s, e] of dentro) {
+      if (s > t) out.push({ t0: t, t1: s, dentro: false });
+      if (e > t) out.push({ t0: Math.max(t, s), t1: e, dentro: true });
+      t = Math.max(t, e);
+    }
+    if (t < 1) out.push({ t0: t, t1: 1, dentro: false });
+    // (un pezzo fuori corto, fra il bordo e un capo o fra due macchie, passa dentro: due passaggi)
+    const corto = (p: { t0: number; t1: number }) => (p.t1 - p.t0) * L < BARRETTA_PEZZO_MIN;
+    const unisci = (v: typeof out) => v.reduce<typeof out>((acc, p) => {
+      const u = acc[acc.length - 1];
+      if (u && u.dentro === p.dentro) u.t1 = p.t1; else acc.push({ ...p });
+      return acc;
+    }, []);
+    if (dentro.length) out = unisci(out.map((p) => (!p.dentro && corto(p) ? { ...p, dentro: true } : p)));
+    return out;
+  };
+  return base.map((l) => {
+    const out: Polyline = [];
+    // (`dato`: l'ultimo punto della linea già messo, che è anche dove comincia la corsa dopo)
+    let i = 0, dato = -1;
+    while (i < l.length) {
+      // la corsa a, b, a, b, …: quante volte il filo passa su a–b
+      let j = i + 1;
+      while (j + 1 < l.length && ug(l[j + 1], l[j - 1])) j++;
+      const n = j - i, tieni = n % 2 ? 3 : 2;
+      const a = l[i], b = l[i + 1];
+      const pz = j < l.length && n > tieni && Math.hypot(b.x - a.x, b.y - a.y) > 1e-6 ? pezzi(a, b) : [];
+      if (!pz.some((p) => p.dentro)) { if (i !== dato) out.push(a); i++; continue; }
+      // andata da a a b: su ogni pezzo fuori, i passaggi in più (avanti e indietro); poi i ritorni che restano
+      const at = (t: number): Point => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+      const via: Polyline = [a];
+      for (const p of pz) {
+        if (p.dentro) continue;
+        if (p.t0 > 0) via.push(at(p.t0));
+        via.push(at(p.t1));
+        for (let k = 0; k < (n - tieni) / 2; k++) via.push(at(p.t0), at(p.t1));
+      }
+      via.push(b);
+      for (let k = 1; k < tieni; k++) via.push(k % 2 ? a : b);
+      for (const q of via) if (!out.length || !ug(out[out.length - 1], q)) out.push(q);
+      i = dato = j;
+    }
+    return out;
+  });
 }
 
 // ---------------------------------------------------------------------------------------------------
@@ -1348,7 +1482,8 @@ export function costruisciMacchie(
   });
   const comune = { ...pattern, ...formato, shapeType: 'imported' as const, voidStitchMm: 0 };
 
-  // 1. LA BASE INTERA, una volta sola: è la base E il punto sopra le macchie, così i due coincidono al millesimo.
+  // 1. LA BASE INTERA, una volta sola: è la base E il punto sopra le macchie (dal 2026-10-29 spostato di
+  //    `sopraSfasaX`, `sopraSfasaY`: lo stesso disegno, ma gli aghi fuori dal filo della base).
   const intera = generateFinalPatternPoints({ ...comune, importedBoundary: sagoma([]) }).visualPolylines
     .map((l) => l.map((p) => ({ x: p.x, y: p.y })));
 
@@ -1396,6 +1531,16 @@ export function costruisciMacchie(
     }
   }
   const ponti = ponteVerso.size;
+
+  // 4. LA BASE SOTTO LE MACCHIE A DUE PASSAGGI (Lorenzo, 2026-10-29: «dove vi sono le macchie i passaggi rimangono a 2
+  //    per non sovrapporre troppo filo»): le barrette che vanno e tornano più volte, dentro le macchie (coi ponti) una
+  //    sola andata e ritorno. La base resta intera, e comincia e finisce dove prima.
+  const baseCucita = dueSottoLeMacchie(baseLinee, forme);
+  // IL PUNTO SOPRA SFASATO (Lorenzo, 2026-10-29: «ricreare sì quel punto della grandezza come la base, ma lo sfasiamo
+  // un po', in modo che non corrisponda ed il filo del punto speciale della macchia non batte sul filo della base»): la
+  // base intera spostata di (`sopraSfasaX`, `sopraSfasaY`), poi tagliata sulla macchia come prima: non ne esce.
+  const sx = par.sopraSfasaX || 0, sy = par.sopraSfasaY || 0;
+  const baseSopra = sx || sy ? baseLinee.map((l) => l.map((p) => ({ x: p.x + sx, y: p.y + sy }))) : baseLinee;
 
   // 5. LE MACCHIE: stop 2 il raso di tutte, stop 3 il punto sopra di tutte (Lorenzo, 2026-10-08: «ho bisogno che
   //    le macchie siano divise in 2 stop, lo stop del raso e lo stop del punto sopra»). Lo stesso ordine per tutti
@@ -1503,9 +1648,11 @@ export function costruisciMacchie(
     // comunque sotto il raso, dove il filo non si vede).
     const grezze = buildParallelFill(m, [], { angleDeg: par.rasoAngolo, spacingMm: par.rasoInterlinea, maxStitchMm: par.rasoPuntoMax, mode: 'serpentine' });
     let n = 0;
+    // (la riga 0 della fase: la prima riga della macchia)
+    const origine = grezze.length ? -grezze[0][0].x * verso.y + grezze[0][0].y * verso.x : 0;
     const divise = celleDelRaso(grezze, verso, par.rasoInterlinea, m);
     const celle = divise.celle
-      .map((c) => c.map((r) => sfrangia(r, i, n++, dentroSfr, fuori)).filter((r): r is Polyline => !!r && r.length >= 2).map((r) => apasso(r, par.rasoPuntoMax)));
+      .map((c) => c.map((r) => sfrangia(r, i, n++, dentroSfr, fuori)).filter((r): r is Polyline => !!r && r.length >= 2).map((r) => aFase(r, par.rasoPuntoMax, par.rasoFase, verso, par.rasoInterlinea, origine)));
     const interno = new SottoIlRaso(m, celle.flat(), fuori);
     const bm = ingombro(m);
     interno.giaCucite(rasoCucito.filter((r) => { const b = ingombro(r); return b.x1 > bm.x0 - 1 && b.x0 < bm.x1 + 1 && b.y1 > bm.y0 - 1 && b.y0 < bm.y1 + 1; }), uscita);
@@ -1659,7 +1806,7 @@ export function costruisciMacchie(
       return true;
     };
     const dopo = ponteVerso.get(i);
-    const r = sopraComeLaBase(baseLinee, forme[i], uscita, uscitaVerso(ordine, k), minimo, par.pezzoMinimo, buonSalto, dopo === undefined ? null : macchie[dopo]);
+    const r = sopraComeLaBase(baseSopra, forme[i], uscita, uscitaVerso(ordine, k), minimo, par.pezzoMinimo, buonSalto, dopo === undefined ? null : macchie[dopo]);
     const tratti = r.tratti;
     tolto += r.tolto;
     // (col ponte dalla macchia prima si arriva sul ponte, accanto a questa: si continua senza salto, con un punto sul
@@ -1683,7 +1830,7 @@ export function costruisciMacchie(
 
   const tutti = (tipo: 'raso' | 'sopra') => livello(stop.filter((st) => st.tipo === tipo).flatMap((st) => st.livello.tratti));
   return {
-    base: livello(baseLinee), stop, raso: tutti('raso'), sopra: tutti('sopra'), zone: ordini, vista, forme, ordine, ponti,
+    base: livello(baseCucita), stop, raso: tutti('raso'), sopra: tutti('sopra'), zone: ordini, vista, forme, ordine, ponti,
     saltiFra, saltiDentro, tolto, passaggiScoperti, buchi, tempoMs: Date.now() - t0,
   };
 }

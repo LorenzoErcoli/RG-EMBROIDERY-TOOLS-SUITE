@@ -1726,6 +1726,11 @@
           "default": 4,
           "x-id": "satinMaxStitch"
         },
+        "rasoFase": {
+          "$ref": "#/$defs/satinPhase",
+          "default": 30,
+          "x-id": "satinPhase"
+        },
         "sfrangiatura": {
           "$ref": "#/$defs/fringeAmount",
           "default": 1,
@@ -1750,6 +1755,16 @@
           "$ref": "#/$defs/overlayMinStitch",
           "default": 1,
           "x-id": "overlayMinStitch"
+        },
+        "sopraSfasaX": {
+          "$ref": "#/$defs/overlayShiftX",
+          "default": 1,
+          "x-id": "overlayShiftX"
+        },
+        "sopraSfasaY": {
+          "$ref": "#/$defs/overlayShiftY",
+          "default": 1,
+          "x-id": "overlayShiftY"
         },
         "ponti": {
           "$ref": "#/$defs/bridgeMaxGap",
@@ -4819,6 +4834,16 @@
       "x-passo": 0.5,
       "x-concetto": "punto-massimo"
     },
+    "satinPhase": {
+      "type": "number",
+      "title": "Fase del raso",
+      "description": "Nelle righe più lunghe del punto massimo, di quanto gli aghi di una riga sono spostati rispetto alla riga accanto, in % del punto. 0 = tutti alla stessa altezza.",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 100,
+      "x-passo": 5,
+      "x-concetto": "spostamento"
+    },
     "fringeAmount": {
       "type": "number",
       "title": "Sfrangiatura",
@@ -4864,6 +4889,26 @@
       "minimum": 0.3,
       "x-passo": 0.1,
       "x-concetto": "punto-minimo"
+    },
+    "overlayShiftX": {
+      "type": "number",
+      "title": "Sposta il punto sopra verso destra di",
+      "description": "Il punto sopra è il disegno della base spostato: così i suoi aghi non cadono sul filo della base. Negativo = verso sinistra. 0 e 0 = sopra la base, a registro.",
+      "x-unita": "mm",
+      "minimum": -5,
+      "maximum": 5,
+      "x-passo": 0.1,
+      "x-concetto": "spostamento"
+    },
+    "overlayShiftY": {
+      "type": "number",
+      "title": "…e verso il basso di",
+      "description": "Negativo = verso l'alto. In diagonale gli aghi cadono più lontano dal filo della base che spostando in una direzione sola.",
+      "x-unita": "mm",
+      "minimum": -5,
+      "maximum": 5,
+      "x-passo": 0.1,
+      "x-concetto": "spostamento"
     },
     "bridgeMaxGap": {
       "type": "number",
@@ -5737,6 +5782,9 @@
         "globalPatternOffsetY",
         "stripShiftMm",
         "retraceOffsetMm",
+        "satinPhase",
+        "overlayShiftX",
+        "overlayShiftY",
         "tackWidth"
       ]
     },

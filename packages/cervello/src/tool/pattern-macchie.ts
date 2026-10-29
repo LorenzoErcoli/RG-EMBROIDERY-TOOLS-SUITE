@@ -20,6 +20,11 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: 1, passo: 0.5, predefinito: 4, concetto: 'punto-massimo',
     },
     {
+      id: 'satinPhase', nome: 'rasoFase', etichetta: 'Fase del raso',
+      aiuto: 'Nelle righe più lunghe del punto massimo, di quanto gli aghi di una riga sono spostati rispetto alla riga accanto, in % del punto. 0 = tutti alla stessa altezza.',
+      tipo: 'num', unita: '%', min: 0, max: 100, passo: 5, predefinito: 30, concetto: 'spostamento',
+    },
+    {
       id: 'fringeAmount', nome: 'sfrangiatura', etichetta: 'Sfrangiatura',
       aiuto: 'Di quanto, a caso, ogni riga finisce prima o dopo il bordo: il bordo non è più netto. 0 = netto.',
       tipo: 'num', unita: 'mm', min: 0, passo: 0.1, predefinito: 1, concetto: 'variazione',
@@ -43,6 +48,16 @@ export const scheda: SchedaParametri = {
       id: 'overlayMinStitch', nome: 'sopraPuntoMin', etichetta: 'Punto minimo del punto sopra',
       aiuto: 'Al bordo della macchia la linea si ferma all’ago prima invece di lasciare un puntino; dentro, gli aghi si ridistribuiscono lungo la linea. Più alto per i fili spessi.',
       tipo: 'num', unita: 'mm', min: 0.3, passo: 0.1, predefinito: 1, concetto: 'punto-minimo',
+    },
+    {
+      id: 'overlayShiftX', nome: 'sopraSfasaX', etichetta: 'Sposta il punto sopra verso destra di',
+      aiuto: 'Il punto sopra è il disegno della base spostato: così i suoi aghi non cadono sul filo della base. Negativo = verso sinistra. 0 e 0 = sopra la base, a registro.',
+      tipo: 'num', unita: 'mm', min: -5, max: 5, passo: 0.1, predefinito: 1, concetto: 'spostamento',
+    },
+    {
+      id: 'overlayShiftY', nome: 'sopraSfasaY', etichetta: '…e verso il basso di',
+      aiuto: 'Negativo = verso l\'alto. In diagonale gli aghi cadono più lontano dal filo della base che spostando in una direzione sola.',
+      tipo: 'num', unita: 'mm', min: -5, max: 5, passo: 0.1, predefinito: 1, concetto: 'spostamento',
     },
     {
       id: 'bridgeMaxGap', nome: 'ponti', etichetta: 'Unisci le macchie che si seguono e distano meno di',
