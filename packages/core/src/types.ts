@@ -20,7 +20,8 @@ export type Role =
   | 'SATIN_AREA'     // area di riempimento raso di fondo (generata come FORMA)
   | 'SQUARE_AREA'    // area dei quadratini strass (generata come FORMA)
   | 'BORDER'         // bordo perimetrale
-  | 'EXCLUSION';     // area vuota (niente ricamo)
+  | 'EXCLUSION'      // area vuota (niente ricamo)
+  | 'COVER_AREA';    // dove dopo verrà cucita un'altra grafica: il ricamo continua, i passaggi ci vanno sotto
 
 export const ROLE_LABELS: Record<Role, string> = {
   MASTER_OUTLINE: 'Perimetro / sagoma',
@@ -29,6 +30,7 @@ export const ROLE_LABELS: Record<Role, string> = {
   SQUARE_AREA: 'Quadratini',
   BORDER: 'Bordo',
   EXCLUSION: 'Area vuota',
+  COVER_AREA: 'Ricamo sopra',
 };
 
 /** Un contorno estratto da un file importato (SVG/DXF), in mm. */

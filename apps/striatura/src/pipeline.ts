@@ -19,12 +19,19 @@ export interface PipelineResult {
   threadMm: number;
   /** Numero di tratti (polilinee): 1 = filo tutto continuo; >1 = ci sono salti (es. attorno ai vuoti). */
   blockCount: number;
+  /** I passaggi fra le macchie, già cuciti nelle striature: per misurarli e per evidenziarli nell'anteprima. */
+  passaggi: Polyline[];
+  /** Filo di passaggio che resta in vista (mm) e filo che il ricamo sopra coprirà (mm). */
+  passaggiInVistaMm: number;
+  passaggiCopertiMm: number;
 }
 
 const COLORS = {
   reference: '#d0d0d0',
   fillFallback: '#1a1a1a',
   voidOutline: '#e06666',
+  coverOutline: '#2f9e6e',
+  passaggi: '#e8590c',
 };
 
 function contoursWithRole(contours: Contour[], roles: RoleAssignment, role: Role): Contour[] {
@@ -46,6 +53,27 @@ function minStitched(pl: Polyline, minMm: number): Polyline {
   return out;
 }
 
+/** Quanti mm dei passaggi restano fuori dalle zone del ricamo sopra, e quanti ci stanno sotto. */
+function misuraPassaggi(passaggi: Polyline[], coperte: Polyline[]): { inVista: number; coperti: number } {
+  let inVista = 0, coperti = 0;
+  const scatole = coperte.map((z) => ({ z, b: boundsOf(z) }));
+  const sotto = (q: { x: number; y: number }) => scatole.some(({ z, b }) =>
+    q.x >= b.minX && q.x <= b.maxX && q.y >= b.minY && q.y <= b.maxY && pointInPolygon(q, z));
+  for (const pl of passaggi) {
+    for (let i = 1; i < pl.length; i++) {
+      const a = pl[i - 1], b = pl[i];
+      const d = distance(a, b);
+      const n = coperte.length ? Math.max(1, Math.ceil(d / 0.5)) : 1;
+      for (let k = 0; k < n; k++) {
+        const t = (k + 0.5) / n;
+        const q = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t };
+        if (sotto(q)) coperti += d / n; else inVista += d / n;
+      }
+    }
+  }
+  return { inVista, coperti };
+}
+
 export function runPipeline(
   contours: Contour[],
   roles: RoleAssignment,
@@ -56,6 +84,7 @@ export function runPipeline(
 
   const master = contoursWithRole(contours, roles, 'MASTER_OUTLINE').filter((c) => c.closed);
   const exclusions = contoursWithRole(contours, roles, 'EXCLUSION').filter((c) => c.closed).map((c) => c.points);
+  const coperte = contoursWithRole(contours, roles, 'COVER_AREA').filter((c) => c.closed).map((c) => c.points);
   const fillColor = params.color && params.color !== 'none' ? params.color : COLORS.fillFallback;
 
   const layers: ExportLayer[] = [];
@@ -69,13 +98,15 @@ export function runPipeline(
   // Aree più grandi prima (stabilità), come per gli altri tool.
   const areas = master.slice().sort((a, b) => polygonArea(b.points) - polygonArea(a.points));
   const allPolylines: Polyline[] = [];
+  const passaggi: Polyline[] = [];
   for (const m of areas) {
     const innerVoids = exclusions.filter((v) => v.length > 0 && pointInPolygon(v[0], m.points));
-    for (const gl of generateStriatura({ outline: m.points, voids: innerVoids }, { ...params, color: fillColor })) {
+    for (const gl of generateStriatura({ outline: m.points, voids: innerVoids, coperte }, { ...params, color: fillColor })) {
       for (const pl of gl.polylines) {
         const s = minStitched(pl, params.minStitchMm);
         if (s.length >= 2) allPolylines.push(s);
       }
+      if (gl.passaggi) passaggi.push(...gl.passaggi);
     }
   }
   const threadMm = layerThreadMm({ color: fillColor, polylines: allPolylines });
@@ -87,6 +118,12 @@ export function runPipeline(
   if (exclusions.length) {
     layers.push({ id: 'void', color: COLORS.voidOutline, polylines: exclusions, strokeMm: SHAPE_STROKE_MM, shapeOnly: true });
   }
+  if (coperte.length) {
+    layers.push({ id: 'ricamo-sopra', color: COLORS.coverOutline, polylines: coperte, strokeMm: SHAPE_STROKE_MM, shapeOnly: true });
+  }
+  if (passaggi.length) {
+    layers.push({ id: 'passaggi', color: COLORS.passaggi, polylines: passaggi, strokeMm: THREAD_STROKE_MM, shapeOnly: true });
+  }
 
   // --- EXPORT: riferimento (shapeOnly, non cucito) + le striature come UN ago (mono). I salti tra le
   //     polilinee diventano jump macchina; il multicolore futuro aggiungerà altri layer/aghi. ---
@@ -97,5 +134,9 @@ export function runPipeline(
     exportLayers.push({ id: 'striatura', color: fillColor, polylines: allPolylines, strokeMm: THREAD_STROKE_MM });
   }
 
-  return { layers, exportLayers, bounds: bnds, threadMm, blockCount: allPolylines.length };
+  const { inVista, coperti } = misuraPassaggi(passaggi, coperte);
+  return {
+    layers, exportLayers, bounds: bnds, threadMm, blockCount: allPolylines.length,
+    passaggi, passaggiInVistaMm: inVista, passaggiCopertiMm: coperti,
+  };
 }

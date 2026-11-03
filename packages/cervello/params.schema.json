@@ -844,26 +844,26 @@
           "$ref": "#/$defs/maxStitchMm",
           "default": 2,
           "title": "Lunghezza del punto",
-          "description": "Passo lungo la striatura.",
+          "description": "Quanto è lungo ogni punto lungo il trattino.",
           "minimum": 0.5
         },
         "travelStitchMm": {
           "$ref": "#/$defs/travelStitchMm",
           "default": 3,
-          "title": "Punto degli spostamenti",
-          "description": "I tragitti non superano mai questa misura."
+          "title": "Punto dei collegamenti",
+          "description": "Il punto più lungo sui tratti che collegano un trattino al successivo."
         },
         "densitySpacingMm": {
           "$ref": "#/$defs/densitySpacingMm",
           "default": 0.6,
-          "title": "Densità della macchia",
-          "description": "Passo tra le striature dentro la macchia: piccolo = più fitta.",
+          "title": "Distanza fra i trattini",
+          "description": "Quanto stanno vicini i trattini dentro la macchia: più basso = macchia più piena, più filo.",
           "minimum": 0.2
         },
         "minStitchMm": {
           "$ref": "#/$defs/minStitchMm",
           "default": 1,
-          "description": "Lunghezza minima del punto, imposta dopo il routing.",
+          "description": "Sotto questa misura due punti diventano uno: niente punti troppo corti che rompono il filo.",
           "minimum": 0.2
         },
         "fillSpacingMm": {
@@ -886,6 +886,10 @@
           "$ref": "#/$defs/blobSizeMm",
           "default": 22
         },
+        "blobVariationPct": {
+          "$ref": "#/$defs/blobVariationPct",
+          "default": 50
+        },
         "blobSpacingMm": {
           "$ref": "#/$defs/blobSpacingMm",
           "default": 5
@@ -905,6 +909,14 @@
         "waveLenMm": {
           "$ref": "#/$defs/waveLenMm",
           "default": 80
+        },
+        "coverMarginMm": {
+          "$ref": "#/$defs/coverMarginMm",
+          "default": 1
+        },
+        "coverNoPassLines": {
+          "$ref": "#/$defs/coverNoPassLines",
+          "default": true
         },
         "stitchMode": {
           "$ref": "#/$defs/stitchMode",
@@ -3802,8 +3814,8 @@
     },
     "fillSpacingMm": {
       "type": "number",
-      "title": "Densità dei passaggi",
-      "description": "Passo del raso tra le macchie: grande = meno passaggi.",
+      "title": "Distanza fra i passaggi",
+      "description": "Ogni quanti mm c’è una linea di passaggio fra una macchia e l’altra: più alto = meno passaggi.",
       "x-unita": "mm",
       "minimum": 0.4,
       "x-passo": 0.1,
@@ -3811,8 +3823,8 @@
     },
     "passaggioAmpMm": {
       "type": "number",
-      "title": "Ampiezza del passaggio",
-      "description": "Altezza del raso di passaggio: piccola = meno invadente.",
+      "title": "Altezza dei passaggi",
+      "description": "Quanto è alta ogni linea di passaggio: più bassa = meno invadente. Le macchie piccole la riducono in proporzione.",
       "x-unita": "mm",
       "minimum": 2,
       "x-passo": 1,
@@ -3820,8 +3832,8 @@
     },
     "voidClearanceMm": {
       "type": "number",
-      "title": "Distanza di sicurezza da bordi e vuoti",
-      "description": "Distanza minima dei segmenti da bordi e aree vuote.",
+      "title": "Distanza da bordi e aree vuote",
+      "description": "Il ricamo si ferma a questa distanza dal bordo della sagoma e dalle aree vuote.",
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 0.1,
@@ -3833,8 +3845,8 @@
     },
     "striaturaLengthMm": {
       "type": "number",
-      "title": "Lunghezza della striatura",
-      "description": "Altezza dei trattini della macchia (la riga).",
+      "title": "Trattini: lunghezza massima",
+      "description": "Quanto possono essere lunghi i trattini. Le macchie più piccole di 22 mm li accorciano da sole.",
       "x-unita": "mm",
       "minimum": 4,
       "x-passo": 1,
@@ -3843,16 +3855,26 @@
     "blobSizeMm": {
       "type": "number",
       "title": "Grandezza delle macchie",
-      "description": "Grandezza media delle macchie maculate (diametro indicativo).",
+      "description": "Il comando per averle più piccole o più grandi. Sotto i 22 mm si accorciano anche i trattini, il frastaglio e i passaggi, tutti insieme.",
       "x-unita": "mm",
       "minimum": 2,
       "x-passo": 1,
       "x-concetto": "altro"
     },
+    "blobVariationPct": {
+      "type": "number",
+      "title": "Differenza fra piccole e grandi",
+      "description": "0 = tutte uguali. 50 = dalla metà alla volta e mezza della misura media. Più alto = più differenza.",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 100,
+      "x-passo": 5,
+      "x-concetto": "variazione"
+    },
     "blobSpacingMm": {
       "type": "number",
-      "title": "Distanza tra le macchie",
-      "description": "Distanza tra una macchia e l’altra.",
+      "title": "Distanza fra le macchie",
+      "description": "Spazio fra una macchia e l’altra: più alto = macchie più rade, più fondo scoperto.",
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 1,
@@ -3860,8 +3882,8 @@
     },
     "jaggedLengthMm": {
       "type": "number",
-      "title": "Frastaglio — variazione di lunghezza",
-      "description": "Frastaglio: variazione di lunghezza delle striature.",
+      "title": "Frastaglio: lunghezze diverse",
+      "description": "Quanto variano le lunghezze dei trattini: più alto = bordo della macchia più irregolare.",
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 1,
@@ -3869,8 +3891,8 @@
     },
     "jaggedStartMm": {
       "type": "number",
-      "title": "Frastaglio — sfasamento delle partenze",
-      "description": "Frastaglio: sfasamento verticale delle partenze (non allineate).",
+      "title": "Frastaglio: partenze sfalsate",
+      "description": "Quanto si spostano su e giù i trattini vicini: 0 = partono tutti alla stessa altezza.",
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 1,
@@ -3893,6 +3915,21 @@
       "minimum": 10,
       "x-passo": 5,
       "x-concetto": "altro"
+    },
+    "coverMarginMm": {
+      "type": "number",
+      "title": "Margine dal ricamo sopra",
+      "description": "I passaggi stanno almeno a questa distanza dal bordo di una zona «Ricamo sopra», così non spuntano fuori dalla grafica.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "passaggi-nascosti"
+    },
+    "coverNoPassLines": {
+      "type": "boolean",
+      "title": "Con il ricamo sopra: niente linee di passaggio",
+      "description": "Acceso: se ci sono zone «Ricamo sopra» il filo si sposta da una macchia all’altra passando sotto le zone, senza le linee rade. Senza zone non cambia niente.",
+      "x-concetto": "passaggi-nascosti"
     },
     "stitchMode": {
       "type": "string",
@@ -5990,6 +6027,8 @@
     "passaggi-nascosti": {
       "descrizione": "Passaggi che si nascondono sotto il ricamo successivo (R16–R21): mappa di copertura, pesi, bypass.",
       "parametri": [
+        "coverMarginMm",
+        "coverNoPassLines",
         "travelMode",
         "passMaxMm",
         "hiddenPassMaxMm",
@@ -6044,6 +6083,7 @@
         "style",
         "degradeDrop",
         "degradeJitterMm",
+        "blobVariationPct",
         "jaggedLengthMm",
         "jaggedStartMm",
         "hookIrregularity",
