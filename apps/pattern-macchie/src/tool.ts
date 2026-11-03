@@ -43,8 +43,17 @@ const MAX_DRAWING_KB = 256;
 type Ruolo = '' | 'pannello' | 'macchie' | 'macchie2';
 const RUOLI: Array<[Ruolo, string]> = [['', '— (non usare)'], ['pannello', 'Pannello (contorno)'], ['macchie', 'Macchie'], ['macchie2', 'Macchie, 2° livello']];
 
-/** Un progetto (o l'ultimo punto ricordato) di prima del 2026-11-03: base e punto sopra c'erano sempre, e si riapre così. */
-const conQuelliDiPrima = (p: Partial<ParametriMacchie>): Partial<ParametriMacchie> => ({ conBase: true, conSopra: true, ...p });
+/** I parametri del raso che ogni livello ha per sé: il secondo ha gli stessi nomi con un 2 in fondo. */
+const DEL_LIVELLO = ['daSinistra', 'rasoAngolo', 'rasoInterlinea', 'rasoPuntoMax', 'rasoFase', 'sfrangiatura', 'sfrangiaturaFuori'] as const;
+/**
+ * Un progetto (o l'ultimo punto ricordato) di prima: base e punto sopra c'erano sempre, e si riapre così; un secondo
+ * livello senza parametri suoi lavora come il primo, come lavorava allora.
+ */
+const conQuelliDiPrima = (p: Partial<ParametriMacchie>): Partial<ParametriMacchie> => {
+  const out: Record<string, unknown> = { conBase: true, conSopra: true, ...p };
+  for (const k of DEL_LIVELLO) if (out[`${k}2`] === undefined && out[k] !== undefined) out[`${k}2`] = out[k];
+  return out as Partial<ParametriMacchie>;
+};
 
 const SCALE_MODES: Array<[string, string]> = [
   ['illustrator-72dpi', 'Illustrator 72 dpi'],
@@ -72,6 +81,8 @@ const CAMPI_COSA: Campo[] = [
     aiuto: 'La base col pattern su tutto il pannello. Spenta: niente base.' },
   { nome: 'conSopra', etichetta: 'Il punto sopra le macchie', unita: '', passo: 1, min: 0,
     aiuto: 'Lo stesso punto della base sopra il raso, dentro le macchie. Spento: solo il raso. Spenti tutti e due, il pattern e il pannello non servono.' },
+  { nome: 'rasoDiStilista', etichetta: 'In Stilista, il raso lo fa Stilista', unita: '', passo: 1, min: 0,
+    aiuto: 'Con «Invia a Stilista» ogni macchia torna come una copia del riempimento selezionato in Stilista (il modello: selezionalo prima di inviare), nella direzione del raso, con l’ingresso, l’uscita e l’ordine di qui. L’anteprima e il DST restano col raso di qui. Coi due livelli il modello è uno solo, e fra un riempimento e l’altro Stilista salta: i passaggi fra le macchie non si cuciono.' },
 ];
 const CAMPI_RASO: Campo[] = [
   { nome: 'daSinistra', etichetta: 'Le macchie da sinistra a destra', unita: '', passo: 1, min: 0,
@@ -85,10 +96,14 @@ const CAMPI_RASO: Campo[] = [
     aiuto: 'Di quanto, a caso, ogni riga finisce prima o dopo il bordo: il bordo non è più netto. 0 = netto.' },
   { nome: 'sfrangiaturaFuori', etichetta: '…di cui oltre il bordo', unita: '%', passo: 10, min: 0, max: 100,
     aiuto: '0 = le righe si accorciano soltanto; 100 = si allungano soltanto, sulla base.' },
-  { nome: 'rasoDiStilista', etichetta: 'In Stilista, il raso lo fa Stilista', unita: '', passo: 1, min: 0,
-    aiuto: 'Con «Invia a Stilista» ogni macchia torna come una copia del riempimento selezionato in Stilista (il modello: selezionalo prima di inviare), nella direzione del raso, con l’ingresso, l’uscita e l’ordine di qui. L’anteprima e il DST restano col raso di qui. Coi due livelli, fra un riempimento e l’altro Stilista salta: i passaggi sotto il secondo livello non si cuciono.' },
+];
+/** Il pannellino del secondo livello: gli stessi campi, coi parametri suoi (Lorenzo, 2026-11-03: «ogni livello di macchia deve avere il suo pannellino dei parametri»). */
+const CAMPI_RASO_2: Campo[] = CAMPI_RASO.map((f) => ({ ...f, nome: `${f.nome}2` as keyof ParametriMacchie }));
+const CAMPI_FRA_I_LIVELLI: Campo[] = [
   { nome: 'secondoMargine', etichetta: 'Il primo livello entra sotto il secondo di', unita: 'mm', passo: 0.1, min: 0,
-    aiuto: 'Serve se un colore ha il ruolo «Macchie, 2° livello». Dove una macchia del primo livello sta sotto una del secondo si ferma: ci entra solo di tanto, così non si sovrappone troppo filo. I suoi passaggi corrono sotto il secondo livello, che li copre; dove non c’è, si salta.' },
+    aiuto: 'Dove una macchia del primo livello sta sotto una del secondo si ferma: ci entra solo di tanto, così non si sovrappone troppo filo.' },
+  { nome: 'secondoVista', etichetta: 'Fra le macchie del primo livello, a vista al più', unita: 'mm', passo: 0.5, min: 0,
+    aiuto: 'Il filo da una macchia alla dopo corre sotto il secondo livello e sotto le macchie ancora da cucire. Dove nessuna lo copre attraversa lo spazio a vista, il meno possibile e al più di tanto per volta: così non si salta. 0 = mai a vista: lì si salta.' },
 ];
 const CAMPI_SOPRA: Campo[] = [
   { nome: 'passaggioMax', etichetta: 'Passaggio nascosto, fino a', unita: 'mm', passo: 5, min: 0,
@@ -315,7 +330,8 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
         if (v === (ruoli[c.id] ?? '')) o.selected = true;
         sel.appendChild(o);
       }
-      sel.addEventListener('change', () => { ruoli[c.id] = sel.value as Ruolo; disegnaContorni(); genera(); });
+      // (col ruolo del secondo livello compaiono i suoi parametri)
+      sel.addEventListener('change', () => { ruoli[c.id] = sel.value as Ruolo; buildPanel(); disegnaContorni(); genera(); });
       row.append(sw, code, sel);
       ul.appendChild(row);
     }
@@ -377,7 +393,8 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       ? `<p class="rg-field__help rg-param-grid__wide">Salti fra una macchia e l'altra — raso: ${descrivi(r.saltiFra.raso)}; punto sopra: ${descrivi(r.saltiFra.sopra)}`
         + ` · dentro le macchie: raso ${r.passaggiScoperti}, punto sopra ${r.saltiDentro}` + (r.ponti ? ` · ponti: ${r.ponti}` : '')
         + (r.tolto > 0.5 ? ` · punto sopra tolto: ${r.tolto.toFixed(0)} mm` : '') + '</p>'
-      + (r.sottoIlSecondo.collegate ? `<p class="rg-field__help rg-param-grid__wide">Sotto il secondo livello: ${r.sottoIlSecondo.collegate} passaggi invece di un salto, ${r.sottoIlSecondo.mm.toFixed(0)} mm di filo`
+      + (r.sottoIlSecondo.collegate ? `<p class="rg-field__help rg-param-grid__wide">Primo livello: ${r.sottoIlSecondo.collegate} passaggi invece di un salto, ${r.sottoIlSecondo.mm.toFixed(0)} mm di filo`
+        + (r.sottoIlSecondo.attraversamenti ? `, di cui a vista ${r.sottoIlSecondo.aVista.toFixed(0)} mm in ${r.sottoIlSecondo.attraversamenti} attraversamenti` : ', tutti coperti')
         + (par.rasoDiStilista ? ' (non col raso di Stilista: lì si salta)' : '') + '</p>' : '')
       : '';
     const caselle = FILI.map((l) => `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-livello="${l.chiave}"${visibili[l.chiave] ? ' checked' : ''}>`
@@ -393,22 +410,27 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     const panel = $('panel');
     const aperti = new Set([...panel.querySelectorAll<HTMLDetailsElement>('details[data-sezione]')].filter((x) => x.open).map((x) => x.dataset.sezione!));
     const primaVolta = !panel.childElementCount;
+    // (quando compaiono i due livelli, i loro due pannellini si aprono)
+    const eranoDue = !!panel.querySelector('details[data-sezione="raso2"]');
     const scroll = panel.scrollTop;
     panel.innerHTML = '';
     const disegno = headSection('01', 'Disegno');
     disegno.appendChild(disegnoGrid());
     panel.appendChild(disegno);
+    const dueLivelli = geometria().secondo.length > 0;
     const sezioni: Array<[string, string, HTMLElement]> = [
       ['cosa', 'Cosa ricamare', campi(CAMPI_COSA)],
       ...(serveIlPattern() ? [['pattern', 'Pattern della base', patternGrid()] as [string, string, HTMLElement]] : []),
-      ['raso', 'Raso delle macchie', campi(CAMPI_RASO)],
+      ...(dueLivelli
+        ? [['raso', 'Raso, 1° livello', campi(CAMPI_RASO)], ['raso2', 'Raso, 2° livello', campi(CAMPI_RASO_2)], ['livelli', 'Fra i due livelli', campi(CAMPI_FRA_I_LIVELLI)]] as Array<[string, string, HTMLElement]>
+        : [['raso', 'Raso delle macchie', campi(CAMPI_RASO)]] as Array<[string, string, HTMLElement]>),
       ...(par.conSopra ? [['sopra', 'Punto sopra le macchie', campi(CAMPI_SOPRA)] as [string, string, HTMLElement]] : []),
       ['ponti', 'Macchie vicine', campi(CAMPI_PONTI)],
       ['zone', 'Zone', campi(CAMPI_ZONE)],
       ['programma', 'Programma', livelliGrid()],
     ];
     sezioni.forEach(([chiave, titolo, corpo], k) => {
-      const det = accordionSection(String(k + 2).padStart(2, '0'), titolo, corpo, primaVolta ? chiave === 'cosa' || chiave === 'pattern' || chiave === 'programma' : aperti.has(chiave) || chiave === 'cosa');
+      const det = accordionSection(String(k + 2).padStart(2, '0'), titolo, corpo, (dueLivelli && !eranoDue && (chiave === 'raso' || chiave === 'raso2')) || (primaVolta ? chiave === 'cosa' || chiave === 'pattern' || chiave === 'programma' : aperti.has(chiave) || chiave === 'cosa'));
       det.dataset.sezione = chiave;
       panel.appendChild(det);
     });
@@ -612,7 +634,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       // (i ruoli di serie, senza il colore dei fori: non è né il pannello né un livello di macchie)
       ruoliDiSerie((model?.choices ?? []).filter((c) => c.color?.toLowerCase() !== fori));
       for (const c of model?.choices ?? []) if (c.color?.toLowerCase() === fori) ruoli[c.id] = '';
-      renderColori();
+      buildPanel();
       disegnaContorni();
       genera();
     },
@@ -624,7 +646,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       const perZona = new Map(macchiePerStilista(risultato).map((z) => [`raso${z.strato === 2 ? '2' : ''}-${z.zona + 1}`, z.macchie]));
       return cuciti.map((s) => {
         const forme = s.nome ? perZona.get(s.nome) : undefined;
-        return forme ? { ...s, polylines: [], riempimenti: { orientamentoDeg: par.rasoAngolo, forme } } : s;
+        return forme ? { ...s, polylines: [], riempimenti: { orientamentoDeg: s.nome?.startsWith('raso2-') ? par.rasoAngolo2 : par.rasoAngolo, forme } } : s;
       });
     },
     dst() {

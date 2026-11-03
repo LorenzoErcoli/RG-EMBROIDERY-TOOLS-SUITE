@@ -6574,7 +6574,7 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     const giu = { x: 0, y: 1 }, margine = rg.PM_DI_SERIE.secondoMargine;
     const fermate = chiare.flatMap((m) => rg.pmFerma(m, scure, margine, giu));
     const prima = rg.pmCostruisci([], fermate, {}, rg.PM_DI_SERIE);
-    const due = rg.pmCostruisci([], chiare, {}, rg.PM_DI_SERIE, scure);
+    const due = rg.pmCostruisci([], chiare, {}, { ...rg.PM_DI_SERIE, secondoVista: 0 }, scure);
     check('due livelli: prima il raso del primo, poi quello del secondo',
       due.stop.map((s) => `${s.tipo}${s.strato}`).join(), 'raso1,raso2');
     const primo = due.stop[0], salti = (st) => st.livello.tratti.slice(1).map((t, i) => [st.livello.tratti[i].at(-1), t[0]]);
@@ -6597,6 +6597,18 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     check('in Stilista due stop di riempimenti, tutte le macchie, ognuna col suo ingresso e la sua uscita',
       [perS.map((z) => z.strato).join(), perS[0].macchie.length, perS[1].macchie.length, perS.flatMap((z) => z.macchie).every((m) => rg.distanceToBoundary(m.inizio, m.contorno) < 0.01 && rg.distanceToBoundary(m.fine, m.contorno) < 0.01)],
       ['1,2', fermate.length, scure.length, true]);
+    // ZERO SALTI (Lorenzo, 2026-11-03: «andando a zero di salti»; ha scelto i punti corti a vista dove non si può coprire):
+    // di serie nel primo livello nessun salto, il filo a vista poco e a pezzi corti, mai un punto sopra il raso già cucito
+    const zero = rg.pmCostruisci([], chiare, {}, rg.PM_DI_SERIE, scure);
+    const zs = zero.sottoIlSecondo;
+    check('di serie zero salti nel primo livello, a vista al più 12 mm per volta e in tutto meno di 300 mm',
+      [zero.stop[0].livello.salti, zs.attraversamenti > 0, zs.aVista <= zs.attraversamenti * rg.PM_DI_SERIE.secondoVista, zs.aVista < 300], [0, true, true, true]);
+    // OGNI LIVELLO COI SUOI PARAMETRI (Lorenzo, 2026-11-03: «ogni livello di macchia deve avere il suo pannellino dei parametri»)
+    const propri = rg.pmCostruisci([], chiare.slice(0, 6), {}, { ...rg.PM_DI_SERIE, rasoInterlinea2: 0.8, rasoAngolo2: 45, sfrangiatura2: 0 }, scure.slice(0, 6));
+    const uguali = rg.pmCostruisci([], chiare.slice(0, 6), {}, rg.PM_DI_SERIE, scure.slice(0, 6));
+    const obliqui = propri.stop[1].livello.tratti.flatMap((t) => t.slice(1).map((p, i) => Math.abs(Math.abs(p.x - t[i].x) - Math.abs(p.y - t[i].y)) < 0.05 && Math.hypot(p.x - t[i].x, p.y - t[i].y) > 1)).filter(Boolean).length;
+    check('il secondo livello coi suoi parametri: più rado e di traverso; il primo non cambia di disegno',
+      [propri.stop[1].livello.punti < uguali.stop[1].livello.punti, obliqui > 100, propri.stop[0].livello.tratti.length > 0], [true, true, true]);
     const conTutto = rg.pmCostruisci(pannello, chiare.slice(0, 8), squame, { ...pmSerie, zone: 2 }, scure.slice(0, 8));
     check('con base, punto sopra e zone: la base, poi per ogni livello e ogni zona il raso e il punto sopra',
       [conTutto.base.punti > 0, conTutto.stop.every((s, i, a) => s.tipo === (i % 2 ? 'sopra' : 'raso') && (i === 0 || a[i - 1].strato <= s.strato)), new Set(conTutto.stop.map((s) => s.strato)).size],
