@@ -94,45 +94,63 @@ selezione da Stilista, il contorno più grande fa la sagoma e le forme di un alt
 diventano Ricamo sopra (si corregge dal menu). In alternativa, il bottone *Ricamo sopra dalla selezione di Stilista*
 le aggiunge dopo aver preso la sagoma.
 
-**Non è un'area vuota**: lì il ricamo continua, e le macchie del Punto Striato restano le stesse con le zone o senza.
-Lo spostamento resta cucito, mai un salto. L'ordine resta la serpentina a righe. Il filo corre dritto sotto le zone,
-anche sopra i trattini, perché la grafica lo coprirà. Con le zone si spengono **tutte** le linee rade di passaggio
-(`coverNoPassLines`, «Con il ricamo sopra: niente linee di passaggio», acceso di serie), che fuori dalle zone restavano
-in vista e non servivano: il filo arriva lo stesso. Senza zone non cambia niente. Il pannello conta i metri in vista e
-quelli sotto il ricamo, e può evidenziare i passaggi in arancione (solo a schermo).
+~~**Prima versione, stesso giorno (bocciata).** Serpentina a righe, passaggi cercati col minimo di filo in vista e linee
+rade spente: 1,47 m in vista a grandezza 22.~~ Lorenzo, guardandola: *«La gestione del passaggio sotto le aree di ricamo
+superiori è un disastro si formano delle linee improbabili. perchè?»*. Misurato: un passaggio da 106 mm per coprirne 11
+(sotto le zone un millimetro costava 1/50), 420 ingressi e uscite dalle zone con 185 passaggi, il 94% del filo in vista
+storto invece del 47%. **La lezione:** i metri in vista non bastano. La forma del passaggio si guarda e si misura.
 
-**Sul pannello laser di Lorenzo** (361 × 307 mm, 177 forme, il 52% del pezzo; letto da Stilista in sola lettura, varianti
-1 e 2), metri di passaggi in vista:
+**La versione di adesso.** Lorenzo: *«sì, procedi col rifacimento, considera che se più comodo le macchie dello striato
+possono costruirsi anche in base allo spazio libero lasciato dalle macchie sovrastanti. il che significa che in maniera
+sempre casuale riempe solo quesgli spazi e poi fa i passaggi sotto le altre macchie. OVviamente per la sicurezza di
+ricentrature la struatura deve comunque un po' entrare dentro la macchia e non essere disegnata rispetto alle macchie
+superiori ma in maiera normale. non deve appunto noatarsi il fatto che sopra poi andrà una macchia guardando le striature»*.
 
-| Grandezza | Senza zone | Solo perché le forme coprono | Passaggi instradati sotto, linee rade accese | **Linee rade spente (di serie)** |
-|---|---|---|---|---|
-| 22 | 9,6 / 9,1 | 4,8 / 4,4 | 4,0 / 3,7 | **1,47 / 1,29** |
-| 8 | 21,5 / 21,4 | 10,3 / 10,3 | 9,4 / 9,4 | **4,83 / 4,75** |
+- **I trattini sono quelli di sempre**, disegnati senza guardare le zone, e restano interi. Cade solo un trattino che sta
+  tutto più dentro una zona di `coverOverlapMm` («Le striature entrano sotto il ricamo di», 3 mm di serie, numero scelto da
+  me). Quelli a cavallo del bordo non si tagliano.
+- **Con le zone non c'è più la serpentina a righe** (`cuciSottoLeZone`): si cuce a *file*, trattini vicini della stessa
+  riga, nell'ordine che costa meno filo in vista; le file isolate si risistemano dopo. La serpentina resta uguale senza zone:
+  i DST senza zone non cambiano. Niente linee rade; l'interruttore `coverNoPassLines` della prima versione è tolto.
+- **Il filo esce dal capo del trattino che entra sotto la zona**, ripassando sul trattino stesso, e arriva allo stesso modo
+  sul prossimo. Lo spostamento resta cucito, mai un salto (solo se un vuoto taglia in due il pezzo).
+- **La strada ha un costo:** sotto una zona un millimetro vale 0,33, in vista 1, sopra i trattini in vista 30. Si tira
+  dritto dove il filo dritto non costa più della strada: niente scalini.
+- **I passaggi stanno lontani dal bordo della sagoma e dai vuoti** come il ricamo (trovato dallo smoke test: cucivano sul bordo).
+- **Non è un'area vuota** e `coverMarginMm` resta: i passaggi si contano nascosti solo a questa distanza dal bordo.
 
-0 salti in tutti i casi. Calcolo circa 2 secondi a ogni modifica su questo pannello, contro 0,1–0,4 senza zone.
+Il ruolo `COVER_AREA` («Ricamo sopra»), la presa da Stilista e il bottone restano come sopra. Il pannello conta i metri in
+vista e sotto il ricamo, e può evidenziare i passaggi in arancione (solo a schermo).
 
-Con una zona sola, su un rettangolo 120×150, media su 8 varianti:
+**Sul pannello laser di Lorenzo** (361 × 307 mm, 177 forme, il 52% del pezzo; variante 1):
 
-| Zona | Grandezza 22: prima → dopo | Grandezza 8: prima → dopo |
+| | Grandezza 22: bocciata → ora | Grandezza 8: bocciata → ora |
 |---|---|---|
-| cerchio di raggio 30 al centro | 0,92 → 0,48 | 2,50 → 1,76 |
-| fascia verticale larga 30 | 0,81 → 0,43 | 2,17 → 1,56 |
-| fascia orizzontale alta 30 | 0,89 → 0,43 | 2,43 → 1,60 |
-| due riquadri 30×30 | 1,02 → 0,51 | 2,70 → 1,87 |
+| passaggi in tutto | 5,39 → 3,34 m | 18,14 → 5,33 m |
+| in vista | 1,47 → 0,97 m | 4,83 → 1,48 m |
+| passaggi con un giro di oltre una volta e mezza la distanza (oltre 10 mm) | 24 → 16 | 130 → 1 |
+| ingressi e uscite dalle zone | 420 → 228 | 1.380 → 348 |
+| trattini in vista attraversati | 165 → 59 | 362 → 181 |
+| filo | 128,7 → 126,9 m | 95,7 → 84,6 m |
 
-*Prima* è il ricamo di prima, contando in vista solo quello fuori dalla zona. **Provato:** instradare il filo sotto
-la zona tenendo le linee rade dava solo il 3–6% (cerchio a 22: 0,89 m): il guadagno viene dallo spegnerle.
+Su 4 varianti: 0 salti; in vista 0,80–1,00 m a grandezza 22, 0,98–1,10 a 14, 1,48–1,55 a 8, 1,85–1,98 a 6. Senza zone sono
+9,6 m a grandezza 22 e 21,5 m a grandezza 8.
 
-**Cucire macchia per macchia (scartato per ora).** Una stima fuori dal motore dava 0,37 m invece di 0,89 col cerchio a
-22. Proposta prima di queste parole di Lorenzo, che ha risposto *«avanza»*. Con le linee rade spente la serpentina arriva
-a 0,48 m senza riscrivere l'ordine. Non è stata provata nel motore; la stima era ottimistica (linee dritte, senza
-controllare se passano sopra altre macchie).
+**Cosa non è ancora a posto:**
+- qualche passaggio lungo resta: il più lungo fra 86 e 140 mm a grandezza 22, fra 34 e 136 mm a 8, fra 25 e 152 mm a 6;
+- a grandezza 22 restano 16 giri: le macchie grandi fanno muro e il filo le aggira per non passarci sopra;
+- i passaggi in vista sono quasi tutti storti (98%): sono pochi metri, ma non si confondono con le striature;
+- attraversano ancora dei trattini in vista (59 e 181), quando costa troppo aggirarli;
+- il punto più lungo sul pannello arriva a 3,6 mm a grandezza 8 e 3,9 mm a 6 (chiesti 3);
+- calcolo da 1,5 a 3,8 secondi a ogni modifica su quel pannello (più le macchie sono piccole, più è lento).
+
+**Cucire macchia per macchia, la stima di prima:** è di fatto questa strada, a file invece che a macchie intere.
 
 **Le etichette** sono in `REVISIONE-PARAMETRI.md`. Lorenzo le ha viste come proposta e non le ha corrette.
 
-**Provato:** la presa della selezione sul vero Stilista, in sola lettura, col programma aperto: ruoli giusti da soli.
-**Non provati:** il bottone *Ricamo sopra dalla selezione di Stilista* sul vero Stilista (solo con un finto plugin, che dà
-la zona al posto giusto), il ritorno in Stilista con le zone e il ricamo in macchina. Il punto più lungo sul pannello arriva a 3,16 mm a grandezza 22 e 3,77 mm a 8 (chiesti 3).
+**Provati:** la presa della selezione sul vero Stilista, in sola lettura, con la versione bocciata (i ruoli vengono giusti
+da soli). **Non provati:** questa versione con Stilista, il bottone *Ricamo sopra dalla selezione di Stilista* sul vero
+Stilista (solo finto plugin), il ritorno in Stilista con le zone, il ricamo in macchina.
 
-DST di prova fuori dal repo, sul pannello: grandezza 22: 68.674 punti, 0 salti, 128,7 m, 1,47 m in vista, 3,92 m sotto;
-grandezza 8: 57.587 punti, 0 salti, 95,7 m, 4,83 m in vista, 13,31 m sotto. I parametri e i ruoli si rileggono dal file.
+DST di prova fuori dal repo, sul pannello: grandezza 22: 67.876 punti, 0 salti, 126,9 m, punto più lungo 3,09 mm; grandezza
+8: 53.230 punti, 0 salti, 84,6 m, punto più lungo 3,30 mm. I parametri e i ruoli si rileggono dal file.

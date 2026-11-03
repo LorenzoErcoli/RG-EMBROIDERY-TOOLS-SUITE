@@ -127,7 +127,7 @@ Proposte mostrate a Lorenzo, che ha risposto *«avanza»* senza correggerle: da 
 | — | **Margine dal ricamo sopra** | `coverMarginMm` |
 | Punto degli spostamenti | **Punto dei collegamenti** | `travelStitchMm` |
 | Distanza di sicurezza da bordi e vuoti | **Distanza da bordi e aree vuote** | `voidClearanceMm` |
-| — | **Con il ricamo sopra: niente linee di passaggio** | `coverNoPassLines` |
+| — | **Le striature entrano sotto il ricamo di** | `coverOverlapMm` |
 | — (ruolo) | **Ricamo sopra** | `COVER_AREA` |
 
 ---
