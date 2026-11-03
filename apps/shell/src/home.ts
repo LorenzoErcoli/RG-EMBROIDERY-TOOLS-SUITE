@@ -30,6 +30,14 @@ function card(t: ToolDef): string {
   return `<a class="rg-card rg-card--technical suite-card" href="#/${t.id}">${inner}</a>`;
 }
 
+/**
+ * Il Compositore non è un tool (non genera punti: mette in fila quelli dei tool), quindi non sta in `TOOLS`. Per ora
+ * è un progetto non finito e sta in testa alla pagina «In sviluppo».
+ */
+function cardCompositore(): string {
+  return `<a class="rg-card rg-card--technical suite-card" href="#/compositore">${toolIcon('compositore')}<div class="rg-h3">Compositore</div><p class="rg-body suite-card__desc">Mette in fila i DST dei tool e di Stilista in un documento solo: fili, cambi d’ago, tagli fra un oggetto e l’altro, controllo prima della macchina e simulazione. Il DST che esce si riapre qui.</p><span class="rg-badge">In sviluppo</span></a>`;
+}
+
 export function renderHome(root: HTMLElement, page: HomePage = 'suite'): void {
   const tools = TOOLS.filter((t) => t.section === page);
   const quanti = (p: HomePage) => TOOLS.filter((t) => t.section === p).length;
@@ -49,6 +57,6 @@ export function renderHome(root: HTMLElement, page: HomePage = 'suite'): void {
         ${tab('sviluppo', '#/sviluppo', 'In sviluppo')}
       </nav>
       <p class="rg-body rg-u-muted suite-home__sub">${intro}</p>
-      <div class="rg-grid rg-grid--2 suite-grid">${tools.map(card).join('')}</div>
+      <div class="rg-grid rg-grid--2 suite-grid">${page === 'sviluppo' ? cardCompositore() : ''}${tools.map(card).join('')}</div>
     </main>`;
 }

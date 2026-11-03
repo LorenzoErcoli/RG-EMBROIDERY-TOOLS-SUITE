@@ -18,6 +18,7 @@ import { mountRazza } from '@app/razza';
 import { mountPuntoMaglia } from '@app/punto-maglia';
 import { mountPatternMacchie } from '@app/pattern-macchie';
 import { mountReteTestaSpeciale } from '@app/rete-testa-speciale';
+import { mountCompositore } from '@app/compositore';
 
 const app = document.getElementById('app')!;
 
@@ -40,6 +41,7 @@ function route(): void {
   else if (hash === '#/punto-maglia') mountPuntoMaglia(app, { backHref: '#/' });
   else if (hash === '#/pattern-macchie') mountPatternMacchie(app, { backHref: '#/' });
   else if (hash === '#/rete-testa-speciale') mountReteTestaSpeciale(app, { backHref: '#/' });
+  else if (hash === '#/compositore') mountCompositore(app, { backHref: '#/' });
   else if (hash === '#/sviluppo') renderHome(app, 'sviluppo');
   else renderHome(app);
 }

@@ -1028,6 +1028,49 @@ si prendono solo i punti: gruppi, blocchi, salti e passaggi ridisegnati no.
 
 ---
 
+## Compositore (`compositore`)
+
+**A cosa serve.** A mettere in fila, in un documento solo, i ricami che arrivano dai tool e da Stilista:
+un pannello vero ne usa tanti, e finora la fila si faceva in Stilista. Il Compositore non genera punti e
+non ricalcola niente: ogni ricamo entra com'è, punto per punto. Decidi tu dove sta, con quale filo, in che
+ordine e come si passa da uno all'altro. Sta nella pagina «In sviluppo»: è il primo passo.
+
+**Come si usa.**
+1. **Oggetti**: «Aggiungi DST…» (anche più file insieme). Ogni DST diventa un oggetto in fondo alla lista.
+   **L'ordine della lista è l'ordine di cucitura.** Con ↑ e ↓ cambi l'ordine, «Acceso/Spento» lo toglie
+   dalla cucitura senza toglierlo dal documento, ✕ lo toglie. «Esempio» carica tre oggetti di prova.
+2. **Oggetto**: quello scelto (clic nella lista o sull'anteprima). Puoi rinominarlo e spostarlo
+   (**Spostamento X / Y**, al decimo di mm). **Come si arriva qui dall'oggetto prima**: di solito decide la
+   regola (04), ma puoi volere sempre il taglio o un salto senza taglio. Per ogni ago del file scegli il filo
+   del documento: due aghi sullo stesso filo non fanno più un cambio d'ago.
+3. **Fili**: i colori del documento. Il DST non porta i colori: quelli dei tool della suite arrivano dal
+   file, quelli di Stilista prendono una tinta di servizio che puoi cambiare. Lo stesso colore in due file è
+   lo stesso filo.
+4. **Passaggi**: **Taglia i salti più lunghi di** (2 mm di partenza): fra due oggetti sullo stesso filo, un
+   salto più lungo porta il taglio, uno più corto resta collegato. Sotto vedi i fili in macchina nell'ordine,
+   i cambi d'ago, i tagli, i salti senza taglio e la strada fatta fra un oggetto e l'altro.
+   **Proponi un ordine** raggruppa per filo e poi va al più vicino: meno cambi e salti più corti. Non sa
+   cosa deve coprire cosa: guarda il risultato, e se non va **Annulla** (anche Ctrl+Z).
+5. **Controllo**: quello da guardare prima della macchina (salti lunghi senza taglio scelti a mano, fili che
+   tornano più volte, punti sotto 1 mm, oggetti che si sovrappongono) e il referto del DST: punti, filo,
+   salti, tagli, cambi, ingombro. Un avviso con un oggetto, cliccato, lo seleziona.
+
+**L'anteprima.** Ogni oggetto col colore dei suoi fili. Fra un oggetto e l'altro: **rosso tratteggiato** il
+taglio, **arancio pieno** il salto senza taglio (il filo resta), **grigio puntinato** il cambio d'ago. Con
+«Sposta l'oggetto» trascini l'oggetto col mouse; con «Muovi la vista» trascini la vista e un clic sceglie.
+**Simula** cuce il documento sullo schermo, nell'ordine in cui andrà in macchina.
+
+**Esportazione.** **Esporta DST** scrive il documento intero, e il file **si riapre qui** com'era: oggetti,
+fili, spostamenti, regole, anche gli oggetti spenti. Aperto in un documento che ha già oggetti, li aggiunge in
+fondo. Il DST porta anche i colori dei fili e il referto, che la macchina non vede. **Esporta SVG** dà il
+disegno del ricamo acceso.
+
+**Cosa non fa ancora.** Non prende la selezione da Stilista (si passa da un DST), non ruota né specchia,
+non sceglie da sé dove entra e dove esce ogni oggetto, non fa passaggi nascosti fra un oggetto e l'altro
+(solo salti e tagli), non conosce il telaio. Il piano è in `studi/COMPOSITORE.md`.
+
+---
+
 ## Se qualcosa non torna
 
 - **"Non vedo niente in anteprima."** Controlla di aver assegnato i **ruoli** ai colori (spesso manca l'area da riempire), e prova **Adatta**.

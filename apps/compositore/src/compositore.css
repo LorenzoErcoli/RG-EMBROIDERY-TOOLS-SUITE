@@ -1,0 +1,36 @@
+/* Solo quel poco che il DS non copre: la tinta di un filo, la riga di un oggetto spento, il cursore
+   quando si sposta un oggetto. Niente colori inventati: i valori vengono dai token del design system. */
+
+/* L'altezza del guscio la mette l'app (pattern workspace): senza, la tela si allunga quanto il pannello. */
+html, body { height: 100%; margin: 0; }
+body {
+  background: var(--rg-color-background);
+  color: var(--rg-color-text-primary);
+  font-family: var(--rg-font-body);
+}
+#app { display: flex; flex-direction: column; height: 100vh; }
+.cmp-workspace { flex: 1 1 auto; min-height: 0; }
+
+/* l'anteprima non sborda dalla tela */
+.cmp-workspace #layer svg { max-width: 100%; max-height: 100%; }
+
+.rg-workspace__canvas.cmp-sposta { cursor: move; }
+
+.cmp-tinta {
+  display: inline-block; width: 0.8rem; height: 0.8rem; vertical-align: middle;
+  border: 1px solid var(--rg-color-border);
+}
+
+/* il titolo della riga è un bottone (sceglie l'oggetto): senza il chrome del bottone */
+.cmp-scegli { padding: 0; background: none; border: 0; color: inherit; text-align: left; cursor: pointer; }
+.cmp-scegli:focus-visible { outline: var(--rg-border-strong) var(--rg-border-style) var(--rg-color-focus); outline-offset: 2px; }
+
+.cmp-spento .rg-list-row__title { color: var(--rg-color-text-secondary); text-decoration: line-through; }
+
+.cmp-oggetti { max-height: 22rem; overflow-y: auto; }
+
+.cmp-colore { width: 2rem; height: 1.6rem; padding: 0; border: 1px solid var(--rg-color-border); background: none; }
+.cmp-nome-filo { min-height: 32px; max-width: 9rem; }
+
+.cmp-avvisi { display: grid; gap: var(--rg-space-2); margin-bottom: var(--rg-space-4); }
+.cmp-avvisi [data-ogg] { cursor: pointer; }

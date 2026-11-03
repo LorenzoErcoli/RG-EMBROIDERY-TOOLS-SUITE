@@ -250,7 +250,9 @@ export function dstFromExportLayers(layers: ExportLayer[], opts: DstFromLayersOp
 // - un **blocco** è una sequenza di record-punto consecutivi; un salto o un cambio-colore lo chiudono;
 // - i salti consecutivi sono UN solo spostamento a vuoto (è così che li scrive `buildDst` quando il
 //   movimento supera i 12,1 mm del record) e non generano punti;
-// - l'ago è progressivo (1, 2, 3…) e avanza a ogni cambio-colore: il DST non porta l'ago reale (R31).
+// - l'ago è progressivo (1, 2, 3…) e avanza a ogni cambio-colore: il DST non porta l'ago reale (R31);
+// - un **taglio** (la sequenza Tajima di tre salti minimi fra due blocchi) marca il blocco che segue con
+//   `trim`: riscrivendolo, `buildDst` rimette il taglio dov'era (dal 2026-10-29, per il Compositore).
 // ------------------------------------------------------------
 
 const DECODE_X: Array<[number, number, number]> = Object.entries(BIT_X).map(([w, [b, bit]]) => [b, bit, Number(w)]);
@@ -261,6 +263,11 @@ export interface DstBlock {
   needle: number;
   /** Punti cuciti in millimetri assoluti, nell'ordine di cucitura. */
   points_mm: Array<[number, number]>;
+  /**
+   * true = prima di questo blocco il file taglia il filo (la sequenza Tajima di tre salti minimi, come la scrive
+   * `buildDst` e come la conta `misuraDst`). Assente = salto semplice. Serve a riscrivere un ricamo coi suoi tagli.
+   */
+  trim?: boolean;
 }
 
 export interface DstReadResult {
@@ -305,12 +312,15 @@ export function readDst(bytes: Uint8Array, opts: DstReadOptions = {}): DstReadRe
   }
 
   const blocks: DstBlock[] = [];
+  let blocco: DstBlock = { needle: 1, points_mm: [] };
   const jumps: Array<{ from: [number, number]; to: [number, number] }> = [];
   // Posizione corrente in decimi di millimetro (l'unità dei record): interi, nessun errore di accumulo.
   let x = 0, y = 0;
   let needle = 1, colorChanges = 0, stitchCount = 0, recordCount = 0;
   let current: Array<[number, number]> | null = null;
   let jumpFrom: [number, number] | null = null;
+  // i salti di fila dall'ultimo punto cucito: se dentro c'è la sequenza del taglio, il blocco che segue nasce tagliato
+  let corsa: Array<[number, number]> = [];
   const mm = (rx: number, ry: number): [number, number] => [rx / 10, coord === 'svg' ? -ry / 10 : ry / 10];
 
   for (let i = 512; i + 2 < bytes.length; i += 3) {
@@ -326,10 +336,11 @@ export function readDst(bytes: Uint8Array, opts: DstReadOptions = {}): DstReadRe
     const isJump = !isChange && (b2 & 0x80) !== 0;
 
     if (isChange || isJump) {
-      if (current) { blocks.push({ needle, points_mm: current }); current = null; }
+      if (current) { blocks.push(blocco); current = null; }
       if (jumpFrom === null) jumpFrom = mm(x, y);
       x += dx; y += dy;
       if (isChange) { colorChanges++; needle++; }
+      else corsa.push([dx, dy]);
       continue;
     }
 
@@ -338,13 +349,16 @@ export function readDst(bytes: Uint8Array, opts: DstReadOptions = {}): DstReadRe
     // comincia un punto piu' avanti e l'andata-e-ritorno non torna (difetto trovato dal test, non a occhio).
     if (!current) {
       current = [mm(x, y)];
+      blocco = { needle, points_mm: current };
+      if (blocks.length && conTaglio(corsa)) blocco.trim = true;
+      corsa = [];
       if (jumpFrom) { jumps.push({ from: jumpFrom, to: mm(x, y) }); jumpFrom = null; }
     }
     x += dx; y += dy;
     stitchCount++;
     current.push(mm(x, y));
   }
-  if (current) blocks.push({ needle, points_mm: current });
+  if (current) blocks.push(blocco);
 
   return { label, blocks, stitchCount, recordCount, colorChanges, jumps, metadata: readDstMetadata(bytes) };
 }
@@ -357,7 +371,7 @@ export function dstProgramFromBlocks(blocks: DstBlock[], opts: { label?: string;
   return {
     label: opts.label,
     coordinate_system: opts.coordinate_system || 'svg',
-    paths: blocks.filter((b) => b.points_mm.length >= 2).map((b) => ({ needle: b.needle, points_mm: b.points_mm })),
+    paths: blocks.filter((b) => b.points_mm.length >= 2).map((b) => ({ needle: b.needle, points_mm: b.points_mm, ...(b.trim ? { trim: true } : {}) })),
     metadata: opts.metadata,
   };
 }
@@ -429,6 +443,14 @@ export interface MisuraDstOptions {
 }
 
 const TAGLIO_TAJIMA: ReadonlyArray<readonly [number, number]> = [[2, 2], [-4, -4], [2, 2]];
+
+/** Se in una serie di salti (record in decimi) c'è la sequenza del taglio Tajima. */
+function conTaglio(corsa: Array<[number, number]>): boolean {
+  for (let i = 0; i + 2 < corsa.length; i++) {
+    if (TAGLIO_TAJIMA.every(([tx, ty], k) => corsa[i + k][0] === tx && corsa[i + k][1] === ty)) return true;
+  }
+  return false;
+}
 
 /** Il referto di un DST vuoto (nessun punto cucito). */
 export function refertoVuoto(opts: MisuraDstOptions = {}): Referto {
