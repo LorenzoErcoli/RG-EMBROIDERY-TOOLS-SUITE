@@ -9,6 +9,10 @@ const svg = (body: string): string =>
   `<svg class="suite-card__icon" viewBox="0 0 32 32" width="32" height="32" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true" focusable="false">${body}</svg>`;
 
 const ICONS: Record<string, string> = {
+  // Compositore: tre ricami in fila, col passaggio tratteggiato dall'uno all'altro.
+  compositore:
+    '<rect x="4" y="6" width="8" height="8"/><circle cx="23" cy="10" r="4"/><rect x="10" y="20" width="12" height="7"/><path d="M12 10h7M23 14 18 20" stroke-dasharray="2 2"/>',
+
   // Rete 45°: il reticolo di cordoncini a rombi.
   'net-45':
     '<path d="M4 16 16 4 28 16 16 28Z"/><path d="M10 10 22 22M22 10 10 22"/>',
