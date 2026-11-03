@@ -20,7 +20,7 @@ export { generateStitch, stitchSteps, reinsertPoints, analyzeBitmap, buildSelect
 export { buildRawLevels, computeGridCounts, moduleFromPolylines, parseModuleSvg, defaultObliqueParams, resolveBoundaries, buildLaserExport, filterLevelByHoles, rectBoundaryOf, boundaryFromFormat, boundaryFromPoints, contourBoundary, simplifyLoop, isInside, applyModuleClipMode, cleanupPolylines, subtractExclusions, cleanupVoids, applyVoids, generateOblique, connectLayerContinuity, connectTechnicalDiagonals, enforceMinimumStitch, reconnectCutFragmentsOnBoundary, offsetPolygonBoundary, insetAnyBoundary, removeIsolatedSpikes } from ${JSON.stringify(posix('apps/oblique/src/engine.ts'))};
 export { runBitmapPreview, runBitmapPipeline, PREVIEW_MAX_DOTS } from ${JSON.stringify(posix('apps/bitmap/src/pipeline.ts'))};
 export { buildNet } from ${JSON.stringify(posix('apps/net-45/src/net.ts'))};
-export { generateStriatura, layerThreadMm, defaultStriaturaParams } from ${JSON.stringify(posix('apps/striatura/src/engine.ts'))};
+export { generateStriatura, layerThreadMm, defaultStriaturaParams, misureEffettive as striaturaMisure } from ${JSON.stringify(posix('apps/striatura/src/engine.ts'))};
 export { paletteToColors, applyDensityToAll, colorsToPalette, clampColorCount, mmPerPixel, defaultBroccatoParams } from ${JSON.stringify(posix('apps/broccato/src/engine.ts'))};
 export { buildPlan } from ${JSON.stringify(posix('apps/broccato/src/pipeline.ts'))};
 export { sampleImage as sampleBroccatoImage } from ${JSON.stringify(posix('apps/broccato/src/sample.ts'))};
@@ -1645,6 +1645,73 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   check('il filo cambia di pochissimo (<1%)', Math.abs(sAfter.mm - sBefore.mm) / sBefore.mm < 0.01, true);
   check('i vuoti restano rispettati anche dopo il pass (R5)', [sAfter.nelVuoto, sAfter.attraversa], [0, 0]);
   check('la statusbar conta i tratti generati', sPipe.blockCount, sFilo.polylines.length);
+
+  // Le macchie piccole (Lorenzo, 2026-11-03: «non capisco come rendere le macchie più piccoline»). La grandezza da
+  // sola non bastava: la macchia è fatta di trattini, che restavano da 18 mm. Ora sotto la misura di serie scala tutto.
+  console.log('\nstriatura — la grandezza rimpicciolisce davvero le macchie, e il filo resta continuo');
+  const sTrattini = (pls) => {
+    const out = [];
+    for (const pl of pls) {
+      let i = 0;
+      while (i < pl.length - 1) {
+        if (Math.abs(pl[i + 1].x - pl[i].x) > 1e-6) { i++; continue; }
+        let j = i, y0 = pl[i].y, y1 = pl[i].y, su = false, giu = false;
+        while (j < pl.length - 1 && Math.abs(pl[j + 1].x - pl[j].x) < 1e-6) {
+          if (pl[j + 1].y < pl[j].y) su = true; else if (pl[j + 1].y > pl[j].y) giu = true;
+          y0 = Math.min(y0, pl[j + 1].y); y1 = Math.max(y1, pl[j + 1].y); j++;
+        }
+        if (su && giu) out.push({ x: pl[i].x, alto: y1 - y0 });
+        i = j;
+      }
+    }
+    return out;
+  };
+  const sMediana = (a) => a.slice().sort((p, q) => p - q)[a.length >> 1];
+  check('a 22 mm le misure sono quelle chieste, a 8 il trattino si accorcia con la macchia',
+    [rg.striaturaMisure(sP) === sP, rg.striaturaMisure({ ...sP, blobSizeMm: 30 }).striaturaLengthMm, rg.striaturaMisure({ ...sP, blobSizeMm: 8 }).striaturaLengthMm < 7], [true, 18, true]);
+  const sOtto = sTrattini(sGen({ ...sP, blobSizeMm: 8 }));
+  const sVenti = sTrattini(sGen(sP));
+  check('i trattini a 8 mm sono meno della metà di quelli a 22', sMediana(sOtto.map((t) => t.alto)) < sMediana(sVenti.map((t) => t.alto)) / 2, true);
+  for (const blobSizeMm of [22, 8, 6]) {
+    let salti = 0, fuori = 0, attraversa = 0, nelVuoto = 0;
+    for (let seed = 1; seed <= 8; seed++) {
+      const m = sMeasure(sGen({ ...sP, blobSizeMm, seed }), sRect, []);
+      salti += m.blocchi - 1; fuori += m.fuori;
+      const v = sMeasure(sGen({ ...sP, blobSizeMm, seed }, [sVoid]), sRect, [sVoid]);
+      attraversa += v.attraversa; nelVuoto += v.nelVuoto;
+    }
+    check(`grandezza ${blobSizeMm}, 8 varianti: niente salti, niente punti fuori, vuoti rispettati`, [salti, fuori, attraversa, nelVuoto], [0, 0, 0, 0]);
+  }
+  check('la differenza fra piccole e grandi cambia il ricamo', sSig(1) !== (() => { const pl = sGen({ ...sP, seed: 1, blobVariationPct: 0 }); return `${pl.length}:${rg.layerThreadMm({ color: '#000', polylines: pl }).toFixed(2)}`; })(), true);
+
+  // Il ricamo sopra (Lorenzo, 2026-11-03: «indicare dove poi andrà il ricamo sopra… perché almeno i passaggi li faccio
+  // fare lì sotto»). Non è un'area vuota: lì il ricamo continua, e altrove le macchie non cambiano.
+  console.log('\nstriatura — ricamo sopra: i passaggi ci vanno sotto, il ricamo continua');
+  const sZona = (() => { const a = []; for (let i = 0; i < 48; i++) { const t = (i / 48) * 2 * Math.PI; a.push({ x: 60 + Math.cos(t) * 30, y: 75 + Math.sin(t) * 30 }); } return a; })();
+  const sConZona = [{ points: sRect, closed: true, color: '#000000' }, { points: sZona, closed: true, color: '#00ff00' }];
+  const sSenza = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE' }, sP);
+  const sSotto = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE', '#00ff00': 'COVER_AREA' }, sP);
+  const sFiloDi = (r) => r.exportLayers.find((l) => l.id === 'striatura').polylines;
+  // i punti dei trattini restano gli stessi: mancano solo quelli dei collegamenti cambiati (lo 0,2% misurato)
+  const sChiave = (q) => `${q.x.toFixed(3)},${q.y.toFixed(3)}`;
+  const sConZonaPunti = new Set(rg.generateStriatura({ outline: sRect, voids: [], coperte: [sZona] }, sP)[0].polylines.flat().map(sChiave));
+  const sSenzaLayer = rg.generateStriatura({ outline: sRect, voids: [] }, sP)[0];
+  const sPassati = new Set(sSenzaLayer.passaggi.flat().map(sChiave));
+  const sMacchiaPunti = sSenzaLayer.polylines.flat().map(sChiave).filter((k) => !sPassati.has(k));
+  const sPersi = sMacchiaPunti.filter((k) => !sConZonaPunti.has(k)).length;
+  check('le macchie sono le stesse, con la zona o senza', sPersi < sMacchiaPunti.length * 0.01, true);
+  check('il ricamo continua dentro la zona (non è un vuoto)', sFiloDi(sSotto).flat().some((q) => rg.pointInPolygon(q, sZona)), true);
+  check('nessun salto in più', sFiloDi(sSotto).length, sFiloDi(sSenza).length);
+  check('sotto la zona i passaggi ci sono, e misurati', sSotto.passaggiCopertiMm > 0, true);
+  const sMisuraSenza = (() => { let v = 0; for (const pl of sSenza.passaggi) for (let i = 1; i < pl.length; i++) { const a = pl[i - 1], b = pl[i]; const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.5)); for (let k = 0; k < n; k++) { const t = (k + 0.5) / n; const q = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; if (!rg.pointInPolygon(q, sZona)) v += Math.hypot(b.x - a.x, b.y - a.y) / n; } } return v; })();
+  check('in vista non restano più passaggi di prima (a parità di zona)', sSotto.passaggiInVistaMm <= sMisuraSenza + 1, true);
+  const sConLinee = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE', '#00ff00': 'COVER_AREA' }, { ...sP, coverNoPassLines: false });
+  check('con le zone, senza linee rade restano in vista meno passaggi; spento l’interruttore tornano', sSotto.passaggiInVistaMm < sConLinee.passaggiInVistaMm, true);
+  check('senza zone l’interruttore non cambia niente', rg.layerThreadMm({ color: '#000', polylines: sGen({ ...sP, coverNoPassLines: false }) }), rg.layerThreadMm({ color: '#000', polylines: sGen(sP) }));
+  check('i passaggi evidenziati e la zona restano in anteprima: non si cuciono', sSotto.exportLayers.map((l) => l.id).join(), 'reference,striatura');
+  check('filo dentro la sagoma e passo rispettato anche coi passaggi sotto', [sMeasure(sFiloDi(sSotto), sRect, []).fuori, sMeasure(sFiloDi(sSotto), sRect, []).segMax <= sStep + 0.1], [0, true]);
+  const sZonaEVuoto = sMeasure(sGen(sP, [sVoid]).length ? rg.generateStriatura({ outline: sRect, voids: [sVoid], coperte: [sZona] }, sP)[0].polylines : [], sRect, [sVoid]);
+  check('una zona sopra un vuoto: il filo nel vuoto non ci entra lo stesso (R5)', [sZonaEVuoto.nelVuoto, sZonaEVuoto.attraversa], [0, 0]);
 }
 
 // ---------------------------------------------------------------------------------------------

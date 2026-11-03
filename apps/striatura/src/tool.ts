@@ -10,7 +10,10 @@ import {
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { collegaStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
+import {
+  collegaStilista, stratiCuciti, trovaStilista, selezioneDaStilista, origineStilista, coloreForiStilista,
+  BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista,
+} from '@rg/ui/stilista';
 import { runPipeline, type RoleAssignment } from './pipeline';
 import { defaultStriaturaParams, type StriaturaParams } from './engine';
 import { sampleContours } from './sample';
@@ -18,35 +21,39 @@ import { sampleContours } from './sample';
 /** Un campo numerico. L'unità va nello slot del DS, mai nell'etichetta (REVISIONE-PARAMETRI). */
 interface Field { key: keyof StriaturaParams; label: string; unit: string; step: number; min?: number; help?: string; }
 
-// Parametri raggruppati come li ragiona Lorenzo (macchia · passaggi · frastaglio · punto). Etichette da
-// validare col processo REVISIONE-PARAMETRI.
+// Parametri raggruppati come li ragiona Lorenzo: tutto quello che cambia la macchia sta in «Macchie»
+// (2026-11-03: «non capisco come rendere le macchie più piccoline»). Il primo campo è il comando per farle più piccole.
 const MACCHIA_PARAMS: Field[] = [
-  { key: 'blobSizeMm', label: 'Grandezza delle macchie', unit: 'mm', step: 1, min: 2 },
-  { key: 'blobSpacingMm', label: 'Distanza tra le macchie', unit: 'mm', step: 1, min: 0 },
-  { key: 'densitySpacingMm', label: 'Densità della macchia', unit: 'mm', step: 0.1, min: 0.2, help: 'passo tra le striature dentro la macchia: piccolo = più fitta' },
-];
-const PASSAGGI_PARAMS: Field[] = [
-  { key: 'fillSpacingMm', label: 'Densità dei passaggi', unit: 'mm', step: 0.1, min: 0.4, help: 'passo del raso tra le macchie: grande = meno passaggi' },
-  { key: 'passaggioAmpMm', label: 'Ampiezza del passaggio', unit: 'mm', step: 1, min: 2, help: 'altezza del raso di passaggio: piccola = meno invadente' },
-  { key: 'striaturaLengthMm', label: 'Lunghezza della striatura', unit: 'mm', step: 1, min: 4, help: 'altezza dei trattini della macchia (la riga)' },
+  { key: 'blobSizeMm', label: 'Grandezza delle macchie', unit: 'mm', step: 1, min: 2, help: 'il comando per averle più piccole o più grandi: sotto i 22 mm si accorciano anche i trattini, il frastaglio e i passaggi, tutti insieme' },
+  { key: 'blobVariationPct', label: 'Differenza fra piccole e grandi', unit: '%', step: 5, min: 0, help: '0 = tutte uguali; 50 = dalla metà alla volta e mezza della misura media' },
+  { key: 'blobSpacingMm', label: 'Distanza fra le macchie', unit: 'mm', step: 1, min: 0, help: 'più alta = macchie più rade, più fondo scoperto' },
+  { key: 'densitySpacingMm', label: 'Distanza fra i trattini', unit: 'mm', step: 0.1, min: 0.2, help: 'più bassa = macchia più piena, più filo' },
+  { key: 'striaturaLengthMm', label: 'Trattini: lunghezza massima', unit: 'mm', step: 1, min: 4, help: 'le macchie più piccole di 22 mm li accorciano da sole' },
 ];
 const FRASTAGLIO_PARAMS: Field[] = [
-  { key: 'jaggedLengthMm', label: 'Frastaglio — variazione di lunghezza', unit: 'mm', step: 1, min: 0 },
-  { key: 'jaggedStartMm', label: 'Frastaglio — sfasamento delle partenze', unit: 'mm', step: 1, min: 0 },
+  { key: 'jaggedLengthMm', label: 'Frastaglio: lunghezze diverse', unit: 'mm', step: 1, min: 0, help: 'più alto = bordo della macchia più irregolare' },
+  { key: 'jaggedStartMm', label: 'Frastaglio: partenze sfalsate', unit: 'mm', step: 1, min: 0, help: 'quanto si spostano su e giù i trattini vicini; 0 = stessa altezza' },
 ];
 const MOVIMENTO_PARAMS: Field[] = [
   { key: 'waveAmpMm', label: 'Movimento (ampiezza onda)', unit: 'mm', step: 1, min: 0, help: '0 = fasce dritte; alza per far ondulare le fasce delle macchie' },
   { key: 'waveLenMm', label: 'Lunghezza d’onda', unit: 'mm', step: 5, min: 10, help: 'ogni quanti mm si ripete l’ondulazione' },
 ];
+const PASSAGGI_PARAMS: Field[] = [
+  { key: 'fillSpacingMm', label: 'Distanza fra i passaggi', unit: 'mm', step: 0.1, min: 0.4, help: 'ogni quanti mm c’è una linea di passaggio fra le macchie: più alta = meno passaggi' },
+  { key: 'passaggioAmpMm', label: 'Altezza dei passaggi', unit: 'mm', step: 1, min: 2, help: 'quanto è alta ogni linea di passaggio: più bassa = meno invadente' },
+  { key: 'coverMarginMm', label: 'Margine dal ricamo sopra', unit: 'mm', step: 0.5, min: 0, help: 'i passaggi stanno almeno a questa distanza dal bordo di una zona «Ricamo sopra», così non spuntano fuori dalla grafica' },
+];
 const PUNTO_PARAMS: Field[] = [
-  { key: 'maxStitchMm', label: 'Lunghezza del punto', unit: 'mm', step: 0.5, min: 0.5, help: 'passo lungo la striatura' },
-  { key: 'travelStitchMm', label: 'Punto degli spostamenti', unit: 'mm', step: 0.5, min: 0.5, help: 'i tragitti non superano mai questa misura' },
-  { key: 'minStitchMm', label: 'Punto minimo', unit: 'mm', step: 0.5, min: 0.2 },
-  { key: 'voidClearanceMm', label: 'Distanza di sicurezza da bordi e vuoti', unit: 'mm', step: 0.1, min: 0 },
+  { key: 'maxStitchMm', label: 'Lunghezza del punto', unit: 'mm', step: 0.5, min: 0.5, help: 'quanto è lungo ogni punto lungo il trattino' },
+  { key: 'travelStitchMm', label: 'Punto dei collegamenti', unit: 'mm', step: 0.5, min: 0.5, help: 'il punto più lungo sui tratti che collegano un trattino al successivo' },
+  { key: 'minStitchMm', label: 'Punto minimo', unit: 'mm', step: 0.5, min: 0.2, help: 'sotto questa misura due punti diventano uno' },
+  { key: 'voidClearanceMm', label: 'Distanza da bordi e aree vuote', unit: 'mm', step: 0.1, min: 0, help: 'il ricamo si ferma a questa distanza dal bordo della sagoma e dalle aree vuote' },
 ];
 
-// Questo tool usa solo due ruoli: l'area da ricamare e le aree vuote.
-const ROLE_OPTIONS: (Role | '')[] = ['', 'MASTER_OUTLINE', 'EXCLUSION'];
+// I ruoli di questo tool: l'area da ricamare, le aree vuote e le zone dove dopo verrà cucita un'altra grafica.
+const ROLE_OPTIONS: (Role | '')[] = ['', 'MASTER_OUTLINE', 'EXCLUSION', 'COVER_AREA'];
+/** Il colore delle zone prese dalla selezione di Stilista (non è un filo: serve solo a dar loro il ruolo). */
+const COLORE_ZONE_STILISTA = '#2f9e6e';
 
 /** Monta il tool "Punto Striato" dentro `root`. `backHref` = link di ritorno alla home suite. */
 export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = {}): void {
@@ -85,6 +92,12 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
       <section class="rg-param-section">
         <div class="rg-param-section__header"><span class="rg-param-section__index">02</span><h3 class="rg-param-section__title">Colori e ruoli</h3></div>
         <ul class="rg-color-map" id="roles"></ul>
+        <div class="rg-param-grid">
+          <div class="rg-field rg-param-grid__wide">
+            <div class="rg-cluster"><button type="button" id="zoneStilista" class="rg-button rg-button--ghost rg-button--small" title="Gli oggetti selezionati in Stilista diventano zone «Ricamo sopra» (serve RG Stilista Link, e la sagoma presa da Stilista)">Ricamo sopra dalla selezione di Stilista</button></div>
+            <small class="rg-field__help">«Ricamo sopra» = dove dopo verrà cucita un’altra grafica: lì il ricamo continua e i passaggi ci vanno sotto. Non è un’area vuota.</small>
+          </div>
+        </div>
       </section>
 
       <details class="rg-param-section rg-disclosure" open>
@@ -108,13 +121,22 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
             <small class="rg-field__help">stessa variante = stesso identico pattern; cambiala per una disposizione diversa (riproducibile)</small>
           </div>
         </div>
+        <div id="frastaglioParams" class="rg-param-grid"></div>
         <div id="movimentoParams" class="rg-param-grid"></div>
       </details>
 
       <details class="rg-param-section rg-disclosure" open>
-        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">04</span><span class="rg-param-section__title">Passaggi e frastaglio</span></summary>
+        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">04</span><span class="rg-param-section__title">Passaggi</span></summary>
         <div id="passaggiParams" class="rg-param-grid"></div>
-        <div id="frastaglioParams" class="rg-param-grid"></div>
+        <div class="rg-param-grid">
+          <label class="rg-toggle rg-param-grid__wide">
+            <input type="checkbox" id="senzaLinee" checked><span class="rg-toggle__track"></span><span>Con il ricamo sopra: niente linee di passaggio</span>
+          </label>
+          <small class="rg-field__help rg-param-grid__wide">acceso: se ci sono zone «Ricamo sopra» il filo si sposta da una macchia all’altra passando sotto le zone, senza le linee rade; senza zone non cambia niente</small>
+          <label class="rg-toggle rg-param-grid__wide">
+            <input type="checkbox" id="mostraPassaggi"><span class="rg-toggle__track"></span><span>Evidenzia i passaggi nell’anteprima</span>
+          </label>
+        </div>
       </details>
 
       <details class="rg-param-section rg-disclosure">
@@ -298,11 +320,14 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
 
   function render() {
     try {
-      const { layers, bounds, threadMm, blockCount } = runPipeline(currentContours(), roles, params);
-      $('layer').innerHTML = buildSvg(layers, { bounds, marginMm: 8 });
+      const { layers, bounds, threadMm, blockCount, passaggiInVistaMm, passaggiCopertiMm } = runPipeline(currentContours(), roles, params);
+      const mostra = ($('mostraPassaggi') as HTMLInputElement).checked;
+      $('layer').innerHTML = buildSvg(layers.filter((l) => l.id !== 'passaggi' || mostra), { bounds, marginMm: 8 });
       if (threadMm > 0) {
         const jumps = Math.max(0, blockCount - 1);
-        $('status').textContent = `Filo: ${(threadMm / 1000).toFixed(2)} m · ${jumps} salt${jumps === 1 ? 'o' : 'i'}`;
+        const metri = (mm: number) => (mm / 1000).toFixed(2);
+        const sotto = passaggiCopertiMm > 0 ? ` · sotto il ricamo: ${metri(passaggiCopertiMm)} m` : '';
+        $('status').textContent = `Filo: ${metri(threadMm)} m · ${jumps} salt${jumps === 1 ? 'o' : 'i'} · passaggi in vista: ${metri(passaggiInVistaMm)} m${sotto}`;
       } else {
         $('status').textContent = 'Assegna un colore all’area da ricamare';
       }
@@ -368,6 +393,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     if (meta.roles && typeof meta.roles === 'object') roles = { ...(meta.roles as RoleAssignment) };
     ($('realWidth') as HTMLInputElement).value = String(params.realWidthMm);
     ($('seed') as HTMLInputElement).value = String(params.seed);
+    ($('senzaLinee') as HTMLInputElement).checked = params.coverNoPassLines;
     syncMode();
     buildAllParams();
     buildThreadUI();
@@ -479,6 +505,17 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     },
     ruoli(fori) {
       for (const c of uniqueColors()) roles[c] = c === fori ? 'EXCLUSION' : 'MASTER_OUTLINE';
+      // il contorno più grande è la sagoma; le forme di un altro colore tutte dentro di lui (le macchie del laser,
+      // Lorenzo 2026-11-03: «è dove verrà ricamato sopra») sono le zone del ricamo sopra. Si corregge dal menu.
+      const chiusi = currentContours().filter((c) => c.closed && c.color !== fori);
+      if (chiusi.length > 1) {
+        const grande = chiusi.reduce((a, b) => (polygonArea(b.points) > polygonArea(a.points) ? b : a));
+        for (const colore of new Set(chiusi.map((c) => c.color))) {
+          if (colore !== grande.color && chiusi.filter((c) => c.color === colore).every((c) => pointInPolygon(c.points[0], grande.points))) {
+            roles[colore] = 'COVER_AREA';
+          }
+        }
+      }
       buildRoleUI();
       render();
     },
@@ -487,6 +524,36 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     dst: () => ({ bytes: costruisciDst(), nome: `${sourceName || 'striatura'}-striatura` }),
     stato: (testo) => { $('status').textContent = testo; },
   };
+
+  // Le zone del ricamo sopra dalla selezione di Stilista: si aggiungono al disegno, nel riferimento della sagoma
+  // (ogni SVG del plugin ha il suo 0,0, e `data-rg-stilista-origine` dice dov'era). I fori non contano.
+  $('zoneStilista').addEventListener('click', async () => {
+    const sagoma = svgStilista ? origineStilista(svgStilista) : null;
+    if (!sagoma) { $('status').textContent = 'Prima prendi la sagoma da Stilista, poi seleziona le grafiche e premi di nuovo.'; return; }
+    try {
+      const finestra = await trovaStilista();
+      if (!finestra) throw new Error('non risponde: è aperto, con RG Stilista Link installato?');
+      const svg = await selezioneDaStilista(finestra);
+      const qui = origineStilista(svg);
+      if (!qui) throw new Error('la selezione non dice dov’era: aggiorna RG Stilista Link');
+      const fori = coloreForiStilista(svg);
+      const zone = parseSvgToContours(svg).contours.filter((c) => c.closed && c.color !== fori).map((c) => ({
+        ...c, color: COLORE_ZONE_STILISTA,
+        points: c.points.map((p) => ({ x: p.x + qui[0] - sagoma[0], y: p.y + qui[1] - sagoma[1] })),
+      }));
+      if (!zone.length) throw new Error('nella selezione non c’è un contorno chiuso');
+      imported = { ...imported, contours: [...imported.contours, ...zone] };
+      roles[COLORE_ZONE_STILISTA] = 'COVER_AREA';
+      buildRoleUI();
+      render();
+      $('status').textContent += ` · ${zone.length === 1 ? '1 zona' : `${zone.length} zone`} di ricamo sopra da Stilista`;
+    } catch (e) {
+      $('status').textContent = 'Stilista: ' + (e as Error).message;
+    }
+  });
+
+  $('mostraPassaggi').addEventListener('change', () => render());
+  $('senzaLinee').addEventListener('change', () => { params.coverNoPassLines = ($('senzaLinee') as HTMLInputElement).checked; render(); });
 
   $('exportDstBtn').addEventListener('click', async () => {
     const { exportLayers, blockCount } = runPipeline(currentContours(), roles, params);
