@@ -1,0 +1,29 @@
+import type { SchedaParametri } from '../tipi';
+
+// Rete a catenella. Il tool salva i parametri in `params` (metadata `rgProject: 'rete-catenella'`).
+// I valori di serie sono quelli misurati sul file di riferimento: sapere/tool/rete-catenella.md.
+export const scheda: SchedaParametri = {
+  concetti: [
+    { id: 'griglia-moduli', descrizione: 'Dove sta la griglia dei moduli rispetto al contorno. I passi della griglia sono del modulo e non si toccano: fanno combaciare gli incastri.' },
+    { id: 'passate-base', descrizione: 'Quante volte la base passa su ogni linea della rete, prima delle catenelle.' },
+    { id: 'maglia-psil', descrizione: 'La maglia della catenella: un triangolo cucito a giri, una maglia ogni passo lungo la linea.' },
+    { id: 'corsie-bordo', descrizione: 'I passaggi lunghi lasciati dal taglio sul contorno: vanno fuori dal bordo, ognuno sulla sua corsia, per non battere negli stessi punti.' },
+  ],
+  parametri: [
+    { id: 'catenellaGridOffsetX', nome: 'spostaXMm', etichetta: 'Sposta la griglia, X', aiuto: 'Dove cadono i moduli rispetto al contorno. I passi restano fissi.', tipo: 'num', unita: 'mm', min: -200, max: 200, predefinito: 0, concetto: 'griglia-moduli' },
+    { id: 'catenellaGridOffsetY', nome: 'spostaYMm', etichetta: 'Sposta la griglia, Y', aiuto: 'Dove cadono i moduli rispetto al contorno. I passi restano fissi.', senzaAiuto: true, tipo: 'num', unita: 'mm', min: -100, max: 100, predefinito: 0, concetto: 'griglia-moduli' },
+    { id: 'catenellaMinModule', nome: 'moduloMinimoPct', etichetta: 'Tieni i pezzi di modulo da', aiuto: 'Sul bordo un modulo tagliato si cuce solo se ha dentro almeno questa parte della sua catenella. Il file di riferimento taglia fra il 21% e il 24%. Con 0 riempie fino al bordo.', tipo: 'num', unita: '%', min: 0, max: 100, predefinito: 22, concetto: 'griglia-moduli' },
+    { id: 'catenellaBasePasses', nome: 'passate', etichetta: 'Passate di base', aiuto: 'Andata, ritorno, andata su ogni metà del modulo. Con 2 il filo finisce dove era partito, non sul lato dell’uscita.', tipo: 'num', unita: '', min: 1, max: 3, predefinito: 3, concetto: 'passate-base' },
+    { id: 'catenellaBaseStitch', nome: 'puntoBaseMm', etichetta: 'Punto delle basi, massimo', aiuto: 'Ogni tratto fra due vertici si divide in punti uguali, non più lunghi di così.', tipo: 'num', unita: 'mm', min: 1, max: 6, predefinito: 2.5, concetto: 'punto-corsa' },
+    { id: 'catenellaTravelStitch', nome: 'puntoPassaggioMm', etichetta: 'Punto dei passaggi, massimo', aiuto: 'I passaggi corrono sotto una catenella che arriva dopo.', tipo: 'num', unita: 'mm', min: 1, max: 6, predefinito: 2.5, concetto: 'punto-passaggio' },
+    { id: 'catenellaPsilLength', nome: 'psilLunghezzaMm', etichetta: 'Lunghezza della maglia', aiuto: 'In Stilista è PIWidthPsil.', tipo: 'num', unita: 'mm', min: 1, max: 6, predefinito: 2.5, concetto: 'maglia-psil' },
+    { id: 'catenellaPsilWidth', nome: 'psilLarghezzaMm', etichetta: 'Larghezza della maglia', aiuto: 'In Stilista è PIHeightPsil.', tipo: 'num', unita: 'mm', min: 0.4, max: 4, predefinito: 1.3, concetto: 'maglia-psil' },
+    { id: 'catenellaPsilPitch', nome: 'psilPassoMm', etichetta: 'Passo fra le maglie', aiuto: 'In Stilista è circa PIWidthPsil + PIPSILSpacing.', tipo: 'num', unita: 'mm', min: 0.8, max: 5, predefinito: 1.7, concetto: 'maglia-psil' },
+    { id: 'catenellaPsilStart', nome: 'psilInizioMm', etichetta: 'Prima maglia dopo', aiuto: 'Misurato sul file di riferimento. Fra i parametri di Stilista non si è trovato.', tipo: 'num', unita: 'mm', min: 0, max: 3, predefinito: 0.6, concetto: 'maglia-psil' },
+    { id: 'catenellaPsilTurns', nome: 'psilGiri', etichetta: 'Giri del triangolo', aiuto: 'Misurato sul file di riferimento. Fra i parametri di Stilista non si è trovato.', tipo: 'num', unita: '', min: 1, max: 3, predefinito: 2, concetto: 'maglia-psil' },
+    { id: 'catenellaContourMargin', nome: 'margineMm', etichetta: 'Si tiene anche fuori dal contorno', aiuto: '0 = il taglio è esatto sul contorno.', tipo: 'num', unita: 'mm', min: 0, max: 20, predefinito: 0, concetto: 'corsie-bordo' },
+    { id: 'catenellaEdgeLanes', nome: 'corsie', etichetta: 'Passaggi su corsie fuori dal bordo', aiuto: 'Dove il taglio lascia un passo lungo nelle basi, il filo gira fuori dal contorno, ognuno sulla sua corsia. Spento: resta il passo lungo.', tipo: 'bool', unita: '', predefinito: true, concetto: 'corsie-bordo' },
+    { id: 'catenellaFirstLane', nome: 'primaCorsiaMm', etichetta: 'Prima corsia, dal bordo', aiuto: 'La corsia più vicina al contorno.', tipo: 'num', unita: 'mm', min: 0, max: 10, predefinito: 1, concetto: 'corsie-bordo' },
+    { id: 'catenellaLaneSpacing', nome: 'passoCorsiaMm', etichetta: 'Distanza fra le corsie', aiuto: 'Più è larga, meno batte negli stessi punti, e più il filo va lontano dal bordo.', tipo: 'num', unita: 'mm', min: 0.3, max: 3, predefinito: 1, concetto: 'corsie-bordo' },
+  ],
+};

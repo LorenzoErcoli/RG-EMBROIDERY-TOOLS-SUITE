@@ -69,6 +69,8 @@ export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordat
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_DI_SERIE, fermaSottoIlSecondo as pmFerma, macchiePerStilista as pmPerStilista } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
+export { griglia as rcGriglia, riquadroRete as rcRiquadro, costruisciRete as rcCostruisci, stratiRete as rcStrati, catenella as rcCatenella, pezziDentro as rcPezzi, maschera as rcMaschera, PARAMETRI_RETE as RC_PARAMETRI, motore as rcMotore } from ${JSON.stringify(posix('apps/rete-catenella/src/motore.ts'))};
+export { moduloDiEsempio as rcModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/esempio.ts'))};
 export { pezzoAMisure as rtsPezzoAMisure, stratiPerDst as rtsStratiPerDst } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm, anelliOvali as rtsAnelliOvali, puntoDelNodo as rtsPuntoDelNodo, cimeDelleColonne as rtsCimeDelleColonne, ceIlNodo as rtsCeIlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
@@ -1067,7 +1069,7 @@ check('S/s: stessa area della C esplicita', Math.round(Math.abs(rg.polygonArea(p
 console.log('\nsuite — ogni tool scrive i parametri nel .dst e li sa rileggere (R27)');
 for (const [tool, id] of [['net-45', 'net-45'], ['pattern-grammar', 'pattern-grammar'],
   ['interlace', 'interlace'], ['striatura', 'striatura'], ['oblique', 'oblique'],
-  ['bitmap', 'bitmap'], ['zone-pattern', 'zone-pattern'], ['cannage-rafia', 'cannage-rafia'], ['cross-stitch', 'cross-stitch'], ['pattern-macchie', 'pattern-macchie'], ['rete-testa-speciale', 'rete-testa-speciale']]) {
+  ['bitmap', 'bitmap'], ['zone-pattern', 'zone-pattern'], ['cannage-rafia', 'cannage-rafia'], ['cross-stitch', 'cross-stitch'], ['pattern-macchie', 'pattern-macchie'], ['rete-testa-speciale', 'rete-testa-speciale'], ['rete-catenella', 'rete-catenella']]) {
   const src = readFileSync(join(root, `apps/${tool}/src/tool.ts`), 'utf8');
   const call = src.indexOf('dstFromExportLayers(');
   const blocco = call >= 0 ? src.slice(call, call + 600) : '';
@@ -6835,6 +6837,50 @@ console.log('\ncannage-rafia — il cartamodello curvo: linee, cornice e griglia
 }
 
 // ---------------------------------------------------------------------------
+// rete-catenella — un contorno riempito a moduli che si attaccano (Lorenzo, 2026-11-03). Basi con le passate, catenelle e passaggi nell'ordine del
+// modulo, taglio sul contorno, i passaggi lunghi su corsie fuori dal bordo. Le misure della maglia vengono da un file vero: sapere/tool/rete-catenella.md.
+console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, taglio sul contorno, corsie fuori dal bordo');
+{
+  const P = rg.RC_PARAMETRI, m = rg.rcModulo();
+  const quadrato = [[0, 0], [300, 0], [300, 200], [0, 200], [0, 0]];
+  const e = rg.rcCostruisci(m, quadrato, P);
+  const dist = (a, b) => Math.hypot(a[0] - b[0], a[1] - b[1]);
+  const p = rg.rcCatenella([[0, 0], [20, 0]], P);
+  check('la catenella: 7 punti a maglia, A B C A B C A', [p.length % 7, p[0][0], p[3][0] === p[0][0], p[6][0] === p[0][0]], [0, P.psilInizioMm, true, true]);
+  check('la maglia è lunga e larga come chiesto, e il passo è fisso', [+(p[1][0] - p[0][0]).toFixed(3), +dist(p[1], p[2]).toFixed(3), +(p[7][0] - p[0][0]).toFixed(3)], [P.psilLunghezzaMm, P.psilLarghezzaMm, P.psilPassoMm]);
+  check('una linea più corta del punto di partenza non ha maglie', rg.rcCatenella([[0, 0], [0.3, 0]], P).length, 0);
+  check('i pezzi tengono i vertici: non aggiungono un punto ogni mezzo mm', rg.rcPezzi([[10, 10], [30, 10], [30, 30]], () => true)[0].length, 3);
+  check('il taglio sul contorno spezza la linea in due', rg.rcPezzi([[0, 0], [10, 0], [20, 0]], (q) => q[0] < 5 || q[0] > 15).length, 2);
+  const dentro = rg.rcMaschera(quadrato, 0);
+  check('la maschera: dentro, fuori, e il margine allarga', [dentro([150, 100]), dentro([350, 100]), rg.rcMaschera(quadrato, 5)([303, 100])], [true, false, true]);
+  check('nessuna catenella ha un capo di maglia fuori dal contorno', e.oggetti.filter((o) => o.tipo === 'catenella').every((o) => o.punti.filter((_, i) => i % 7 === 0).every((q) => q[0] > -0.6 && q[0] < 300.6 && q[1] > -0.6 && q[1] < 200.6)), true);
+  // i moduli si attaccano: il bordo di un modulo è il bordo del vicino
+  const tracciati = m.varianti.A.oggetti.filter((o) => o.tipo === 'catenella').flatMap((o) => o.t);
+  const passoX = m.passi.colonne, passoY = m.passi.righe;
+  check('il modulo di esempio combacia col vicino: il bordo destro è il sinistro spostato di un passo', tracciati.filter((q) => q[0] > passoX - 4).every((q) => tracciati.some((r) => Math.abs(r[0] + passoX - q[0]) < 1e-6 && Math.abs(r[1] - q[1]) < 1e-6)), true);
+  check('e il bordo basso è quello alto spostato di un passo', tracciati.filter((q) => q[1] > passoY - 4).every((q) => tracciati.some((r) => Math.abs(r[1] + passoY - q[1]) < 1e-6 && Math.abs(r[0] - q[0]) < 1e-6)), true);
+  const celle = [...new Set(e.oggetti.map((o) => o.cella))];
+  const colonneDiverse = [...new Set(rg.rcGriglia([0, 0, 500, 100], { ...m, passi: { colonne: 100.33, righe: 49.41 } }, [0, 0]).map((c) => c.dx))].sort((a, b) => a - b);
+  check('le colonne stanno tutte allo stesso passo', colonneDiverse.slice(1).every((x, i) => Math.abs(x - colonneDiverse[i] - 100.33) < 1e-9), true);
+  check('in ogni modulo le basi vengono prima delle catenelle', celle.every((c) => { const og = e.oggetti.filter((o) => o.cella === c); const u = og.map((o) => o.tipo).lastIndexOf('base'); const pr = og.findIndex((o) => o.tipo !== 'base'); return u < 0 || pr < 0 || u < pr; }), true);
+  check('le passate: con 1 ci sono meno basi che con 3', rg.rcCostruisci(m, quadrato, { ...P, passate: 1 }).conti.basi < e.conti.basi, true);
+  const senza = rg.rcCostruisci(m, quadrato, { ...P, corsie: false });
+  check('con le corsie restano meno passi lunghi nelle basi', [e.conti.tagliSulleCorsie > 0, e.conti.passiLunghi < senza.conti.passiLunghi], [true, true]);
+  const fuori = (q) => q[0] < 0 || q[0] > 300 || q[1] < 0 || q[1] > 200;
+  check('le corsie stanno FUORI dal contorno, non dentro la rete', e.oggetti.filter((o) => o.tipo === 'base').flatMap((o) => o.punti).filter(fuori).length > 0, true);
+  check('senza corsie le basi non escono dal contorno', senza.oggetti.filter((o) => o.tipo === 'base').flatMap((o) => o.punti).filter(fuori).length, 0);
+  const tutti = rg.rcCostruisci(m, quadrato, { ...P, moduloMinimoPct: 0 }), interi = rg.rcCostruisci(m, quadrato, { ...P, moduloMinimoPct: 100 });
+  check('i pezzi di modulo sul bordo: con 0 ne tiene di più, con 100 solo i moduli interi', [tutti.conti.moduli > e.conti.moduli, interi.conti.moduli < e.conti.moduli, new Set(tutti.oggetti.filter((o) => o.tipo === 'catenella').map((o) => o.cella)).size], [true, true, tutti.conti.moduli]);
+  const moltiPunti = Array.from({ length: 400000 }, (_, i) => [i % 300, i % 200]);
+  check('l’ingombro regge centinaia di migliaia di punti', rg.rcRiquadro(quadrato, [{ punti: moltiPunti }]), { x0: -5, y0: -5, w: 310, h: 210 });
+  const s = rg.rcStrati(e);
+  check('uno strato per modulo, e ogni modulo è un filo solo: si salta solo dove resta un movimento lungo', [s.length, s.reduce((n, l) => n + l.polylines.length, 0)], [e.conti.moduli, e.conti.moduli + e.conti.movimentiLunghi]);
+  const passi = s.flatMap((l) => l.polylines).filter((pl) => pl.some((q, i) => i && Math.hypot(q.x - pl[i - 1].x, q.y - pl[i - 1].y) > 7));
+  check('dentro un tratto continuo nessun passo è lungo: i passaggi stanno nel filo', passi.length, 0);
+  const dst = rg.dstFromExportLayers(s, { label: 'RETE', metadata: { rgProject: 'rete-catenella', params: P } });
+  check('il DST si riapre coi parametri', [rg.readDst(dst).colorChanges, rg.readDstMetadata(dst)?.rgProject, rg.readDstMetadata(dst)?.params?.psilPassoMm], [s.length - 1, 'rete-catenella', P.psilPassoMm]);
+}
+
 // rete-testa-speciale — la rete a serpentine (Lorenzo, 2026-10-15, decisa sulla simulazione): la linea scende a
 // zig-zag e risale, una sola sovrapposizione per ogni incrocio, la zona di sovrapposizione da incrocio a incrocio,
 // le linee fino al bordo, sul bordo il filo accanto e mai sopra, ogni parte nuova dal contorno esterno.

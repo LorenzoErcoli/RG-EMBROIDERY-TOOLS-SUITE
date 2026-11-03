@@ -21,6 +21,7 @@ import { scheda as cannageRafia } from './tool/cannage-rafia';
 import { scheda as broccato } from './tool/broccato';
 import { scheda as sfrangiatura } from './tool/sfrangiatura';
 import { scheda as pettine } from './tool/pettine';
+import { scheda as reteCatenella } from './tool/rete-catenella';
 import { scheda as razza } from './tool/razza';
 import { scheda as patternMacchie } from './tool/pattern-macchie';
 import { scheda as pittorico } from './tool/pittorico';
@@ -41,6 +42,7 @@ export const SCHEDE: Record<string, SchedaParametri> = {
   broccato,
   sfrangiatura,
   pettine,
+  'rete-catenella': reteCatenella,
   razza,
   'pattern-macchie': patternMacchie,
   pittorico,

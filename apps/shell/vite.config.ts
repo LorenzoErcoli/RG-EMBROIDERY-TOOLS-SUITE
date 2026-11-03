@@ -28,6 +28,7 @@ export default defineConfig(({ command }) => ({
       '@app/pattern-macchie': fileURLToPath(new URL('../pattern-macchie/src/tool.ts', import.meta.url)),
       '@app/rete-testa-speciale': fileURLToPath(new URL('../rete-testa-speciale/src/tool.ts', import.meta.url)),
       '@app/compositore': fileURLToPath(new URL('../compositore/src/tool.ts', import.meta.url)),
+      '@app/rete-catenella': fileURLToPath(new URL('../rete-catenella/src/tool.ts', import.meta.url)),
       '@rg/pattern-grammar': fileURLToPath(new URL('../../packages/pattern-grammar/src/index.ts', import.meta.url)),
     },
   },

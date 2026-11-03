@@ -19,6 +19,7 @@ import { mountPuntoMaglia } from '@app/punto-maglia';
 import { mountPatternMacchie } from '@app/pattern-macchie';
 import { mountReteTestaSpeciale } from '@app/rete-testa-speciale';
 import { mountCompositore } from '@app/compositore';
+import { mountReteCatenella } from '@app/rete-catenella';
 
 const app = document.getElementById('app')!;
 
@@ -42,6 +43,7 @@ function route(): void {
   else if (hash === '#/pattern-macchie') mountPatternMacchie(app, { backHref: '#/' });
   else if (hash === '#/rete-testa-speciale') mountReteTestaSpeciale(app, { backHref: '#/' });
   else if (hash === '#/compositore') mountCompositore(app, { backHref: '#/' });
+  else if (hash === '#/rete-catenella') mountReteCatenella(app, { backHref: '#/' });
   else if (hash === '#/sviluppo') renderHome(app, 'sviluppo');
   else renderHome(app);
 }

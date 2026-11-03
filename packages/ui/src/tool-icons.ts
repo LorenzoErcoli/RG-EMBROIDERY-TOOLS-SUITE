@@ -73,6 +73,10 @@ const ICONS: Record<string, string> = {
   'rete-testa-speciale':
     '<path d="M10 4l6 4-6 4 6 4-6 4 6 4-6 4"/><path d="M10 4l-6 4 6 4-6 4 6 4-6 4 6 4"/><path d="M22 4l6 4-6 4 6 4-6 4 6 4-6 4"/><path d="M22 4l-6 4 6 4-6 4 6 4-6 4 6 4"/>',
 
+  // Rete a catenella: una ragnatela di maglie irregolari.
+  'rete-catenella':
+    '<path d="M5 8l8-3 9 3 5 8-4 9-10 2-7-5-2-8Z"/><path d="M13 5l1 9-6 4M22 8l-8 6 9 5M14 14l-1 13"/>',
+
   // Punto maglia: il cordoncino — le V del centro con le mezze catene ai lati.
   'punto-maglia':
     '<path d="M12 5l4 6 4-6M12 12l4 6 4-6M12 19l4 6 4-6"/><path d="M5 6l5 5M5 13l5 5M5 20l5 5M27 6l-5 5M27 13l-5 5M27 20l-5 5"/>',
