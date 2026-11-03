@@ -12,7 +12,7 @@ export async function prova() {
   const pannello = pm.choices.find((c) => c.color === '#e52521')!.boundary.paths[0].points;
   const macchie = pm.choices.find((c) => c.color === '#ede300')!.boundary.paths.map((p) => p.points).slice(0, 12);
   const pattern = JSON.parse(readFileSync(new URL('apps/pattern-grammar/src/presets.shared.json', radice), 'utf8'))['RG-PUNTO NASTRO — SQUAME'] as PatternConfig;
-  const params = { ...PARAMETRI_MACCHIE };
+  const params = { ...PARAMETRI_MACCHIE, conBase: true, conSopra: true };
   return {
     ingresso: { pannello, macchie, pattern },
     params,

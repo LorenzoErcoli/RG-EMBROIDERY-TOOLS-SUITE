@@ -6,7 +6,8 @@ data: 2026-10-08
 ---
 
 **Stato: tool vero, in «In sviluppo» (2026-10-08).** `apps/pattern-macchie/` (motore in `src/motore.ts`, interfaccia
-in `src/tool.ts`). Provato a macchina; dopo la prova del 2026-10-29 le decisioni 23–25.
+in `src/tool.ts`). Provato a macchina; dopo la prova del 2026-10-29 le decisioni 23–25. Le 27–28 (2026-11-03) non sono ancora
+provate in Stilista né a macchina.
 
 ## Da dove nasce
 Lorenzo, 2026-10-08, con `TEST-PIAZZEMENTO CON MACCHIE.svg` (FENDI FALL 27-28, «magic serpente ghepardato»: pannello
@@ -113,9 +114,38 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    Stilista (il modello, coi suoi parametri), nella direzione `rasoAngolo`, con l'ingresso e l'uscita del nostro raso
    portati sul contorno (`macchiePerStilista`; il plugin: `POST /riempimenti`). Anteprima e DST restano col nostro raso.
    Ingresso e uscita: [`sapere/codice/stilista-ingresso-uscita.md`](../codice/stilista-ingresso-uscita.md).
-   **Non ancora provata in Stilista** sulle macchie vere.
+   Provata da Lorenzo il 2026-10-29: *«funziona. è un passaggio molto importante per lo sviluppo di tools che sono in
+   grado di controllare anche stilista»* (41 macchie su 42; una è rimasta a 0 punti, da guardare).
+27. (2026-11-03) **La base e il punto sopra solo se richiesti**: *«il punto speciale sopra deve essere qualcosa che non
+   deve esserci per forza, ma solo se richiesto e lo stesso vale per la base. magari io chiedo solo di fare le macchie»*.
+   Due caselle in *Cosa ricamare* (`conBase`, `conSopra`), spente di serie. Spente tutte e due il tool fa solo il raso, non
+   mostra il pattern e non vuole il pannello. I progetti di prima, che questi campi non li hanno, si riaprono con tutte e
+   due accese, e con quelle il ricamo è identico al micron a prima (provato anche con zone, ponti, da sinistra, base bucata).
+28. (2026-11-03) **Due livelli di macchie**: *«la possibilità di generare 2 stop di macchie, in cui la prima i passaggi li
+   fa sotto la seconda. come al solito»*. Il suo progetto: *«base ricamo da stilista, punto sfrangiato sulla base, livello
+   macchie chiaro e livello macchie scuro»*. Le scelte di Lorenzo, lo stesso giorno: i livelli vanno **per colore del
+   disegno** (ruolo *Macchie, 2° livello*); chiaro e scuro **si toccano o si sovrappongono**; dove si sovrappongono **il
+   chiaro si ferma sotto lo scuro**, entrandoci solo di `secondoMargine` (di serie 1 mm: l'ha proposto la chat, da
+   confermare a macchina); dove lo scuro non copre il passaggio **si salta, come oggi**: resta la decisione 3, mai un
+   punto a vista fra le macchie. Stop: primo livello (raso, poi punto sopra se c'è), poi secondo.
 
 ## Come è fatto, e perché
+- **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso
+  codice: un livello solo dà lo stesso ricamo di prima. Prima il primo livello si ferma sotto il secondo
+  (`fermaSottoIlSecondo`): su una griglia di un decimo, la macchia meno le scure ristrette del margine; una macchia che
+  non ci finisce sotto resta esatta, una tagliata in due fa due macchie, una tutta sotto sparisce, una con una scura
+  dentro resta col buco (`conBuco`: un taglio nel verso delle righe, che così non ne attraversano nessuna). Tutto il resto,
+  raso di Stilista compreso, vede solo macchie normali.
+- **I passaggi sotto il secondo livello** (`SottoIlSecondo`). Da una macchia alla dopo si cerca una strada su una griglia di
+  due decimi solo dentro le macchie del secondo livello, a `sfrangiatura dentro + 0,3 mm` dal loro contorno (dove le righe
+  sfrangiate potrebbero non coprire), al più 40 mm. Se c'è, il raso finisce dove la strada comincia (la riga più vicina per
+  ultima, come coi ponti), il filo la percorre, e nella macchia dopo si continua sotto il raso come sempre. Se non c'è, si
+  salta. **Provato e scartato:** spingere l'ordine delle macchie verso le coppie legate da una scura: più salti e più
+  lunghi (26 e 457 mm contro 23 e 223); l'ordine resta quello di sempre, dei salti più corti.
+- **Col raso di Stilista i passaggi sotto il secondo livello non si cuciono.** Fra due riempimenti Stilista salta: il
+  filo di un riempimento finisce all'uscita e quello dopo comincia all'ingresso, non c'è punto in mezzo. Si rispettano solo
+  ingresso e uscita, che sono i capi della nostra strada. Per cucirli servirebbe un oggetto a punti fra due riempimenti
+  (con `POST /punti`, un oggetto in più per macchia): non fatto, da decidere con Lorenzo.
 - **Il punto sopra è la base tagliata sulla macchia**, con una sola andata e ritorno dove la base va e torna più volte
   (le barrette a 4 passaggi del punto 2e4). Dal 2026-10-29 (decisione 25) non è più a registro: è la base intera
   spostata di `sopraSfasaX` a destra e `sopraSfasaY` in basso (di serie 1 e 1 mm), poi tagliata sulla macchia,
@@ -307,6 +337,22 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
   DST di prova (fuori dal repo, col progetto dentro): `Downloads\PROVA-MACCHIE-2e4-fase30-sfasato1-1.dst` (coi
   pezzetti sul bordo a 4) e `Downloads\PROVA-MACCHIE-2e4-base2-senza-pezzetti.dst` (senza, 50.050 punti, 3 stop).
 
+## I due livelli, misurati (2026-11-03)
+Il pannello di prova ha le macchie staccate (1,6 mm in mediana) e di un colore solo: **non è il disegno di Lorenzo**. Per
+provare, le 84 macchie vanno a turno ai due livelli, nell'ordine di `ordinaMacchie`, e le scure si allargano attorno al
+centro finché toccano le chiare. Il numero dipende da quanto si toccano. Margine 1 mm, sfrangiatura di serie.
+
+| Scure allargate | | Salti del primo livello | mm di salto | fuori dalle scure | Passaggi sotto il secondo |
+|---|---|---|---|---|---|
+| × 1,6 (le chiare diventano 45) | prima | 44 | 478 | 218 | 0 |
+| | dopo | **23** | **223** | **128** | 21, 346 mm |
+| × 1,35 (si toccano appena) | prima | 41 | 477 | 286 | 0 |
+| | dopo | 37 | 443 | 269 | 4, 96 mm |
+
+«Prima» è lo stesso primo livello, già fermato sotto il secondo, senza le strade. Tutti i millimetri che restano fuori
+dalle scure sono **salti**: nessun punto cucito del primo livello è in vista fra le macchie (il più lontano a 0,46 mm dal
+contorno, cioè la sfrangiatura). Col raso di Stilista, × 1,6: 44 salti, 552 mm, fuori dalle scure 202 mm.
+
 ## Strade scartate
 - **Il punto sopra ridisegnato in ogni macchia** (2026-10-28): colonne che seguono la forma, denti sovrapposti, la
   scala dalla base sotto. Era fatto sul punto squame del pannello di prova: col punto 2e4 di Lorenzo (zig-zag e
@@ -360,6 +406,8 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
   le parti della macchia, e i salti dentro salivano da 6 a 18.
 
 ## Da guardare a macchina
+- (2026-11-03) i due livelli sul disegno vero di Lorenzo: se 1 mm sotto lo scuro basta e non fa troppo spessore; se i
+  passaggi sotto lo scuro restano davvero coperti (`sfrangiatura dentro + 0,3 mm` dal suo contorno);
 - (2026-10-29) la base a 2 passaggi sotto le macchie: se il raso copre ancora bene, e le barrette spezzate sul bordo;
   la fase del raso al 30%; il punto sopra spostato di 1 e 1 mm: se il filo non ribatte più e se somiglia ancora alla
   base;
