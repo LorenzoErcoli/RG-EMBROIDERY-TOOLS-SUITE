@@ -19,6 +19,9 @@
 // `fillSpacingMm`). Le celle sono collegate da tragitti verticali corti (running) = il riempimento che
 // collega → un unico filo, salti solo se un tragitto uscirebbe/entrerebbe nel vuoto (R5, raro).
 //
+// RICAMO SOPRA (Lorenzo, 2026-11-03): le zone dove dopo verrà cucita un'altra grafica non sono aree vuote. Lì il
+// ricamo continua e il filo corre dritto; con le zone le linee di passaggio si spengono. L'ordine resta la serpentina.
+//
 // MOTIVO DELLA STRIATURA (`stitchMode`):
 // - 'retrace' (DEFAULT): dal centro su e torna, giù e torna → trattino marcato (ciò che vuole Lorenzo);
 // - 'boustrophedon': passata singola (più magra). Scelta di stile (R30), da valutare a occhio.
@@ -26,6 +29,7 @@
 // NOTA: puro TS (niente DOM) → testabile in Node come interlace/bitmap. Riceve contorni GIÀ parsati.
 import {
   type Point, type Polyline,
+  distanceToBoundary,
 } from '@rg/core';
 
 /** Parametri del generatore. App-locali; nomi canonici §3 dove il concetto esiste già. */
@@ -41,13 +45,16 @@ export interface StriaturaParams {
   voidClearanceMm: number;   // §3.2 R5/R7 — distanza minima da bordi e aree vuote
   // --- stile macchia + frastaglio (generativi) ---
   striaturaLengthMm: number; // lunghezza di una striatura (altezza della riga/trattino)
-  blobSizeMm: number;        // grandezza media delle macchie maculate (diametro indicativo)
+  blobSizeMm: number;        // grandezza delle macchie: comanda anche il trattino, sotto la misura di serie
+  blobVariationPct: number;  // quanto variano fra piccole e grandi (±%): 0 = tutte uguali
   blobSpacingMm: number;     // distanza tra una macchia e l'altra
   jaggedLengthMm: number;    // frastaglio: variazione di lunghezza delle striature
   jaggedStartMm: number;     // frastaglio: sfasamento verticale delle partenze (non allineate)
   // --- movimento: onda che fa ondulare le fasce orizzontali (0 = fasce dritte) ---
   waveAmpMm: number;         // ampiezza dell'onda (quanto si muovono le fasce su/giù); 0 = niente movimento
   waveLenMm: number;         // lunghezza d'onda (ogni quanti mm si ripete l'ondulazione)
+  coverMarginMm: number;     // i passaggi stanno a questa distanza dal bordo del ricamo che li coprirà
+  coverNoPassLines: boolean; // con zone di ricamo sopra, niente linee rade di passaggio: il filo si sposta sotto le zone
   stitchMode: 'boustrophedon' | 'retrace'; // vedi sopra: default retrace (dal centro su/giù e torna)
   seed: number;              // "Variante": disposizione ricreabile (deterministica)
   // --- colore (mono ora; multicolore in futuro → l'output è già a layer) ---
@@ -65,11 +72,14 @@ export const defaultStriaturaParams: StriaturaParams = {
   voidClearanceMm: 0.5,
   striaturaLengthMm: 18,     // lunghezza trattino (righe ~15–25 mm nel DST)
   blobSizeMm: 22,            // macchie a foglia, dimensione media
+  blobVariationPct: 50,      // era fisso nel codice: da 0,6 a 1,8 volte la grandezza
   blobSpacingMm: 5,          // ravvicinate → copertura più omogenea (poi jitter per l'irregolarità)
   jaggedLengthMm: 8,
   jaggedStartMm: 4,
   waveAmpMm: 0,              // 0 = fasce dritte; alza per dare movimento (ondulazione)
   waveLenMm: 80,
+  coverMarginMm: 1,
+  coverNoPassLines: true,
   stitchMode: 'retrace',
   seed: 1,
   color: '#1a1a1a',
@@ -79,12 +89,16 @@ export const defaultStriaturaParams: StriaturaParams = {
 export interface StriaturaLayer {
   color: string;
   polylines: Polyline[];
+  /** I passaggi fra le macchie (già dentro `polylines`): servono solo a misurarli e a mostrarli. */
+  passaggi?: Polyline[];
 }
 
 /** Contorni d'ingresso già parsati: perimetro (area) + eventuali vuoti (R5). */
 export interface StriaturaInput {
   outline: Polyline;     // perimetro esterno dell'area da ricamare (mm, chiuso o quasi)
   voids: Polyline[];     // aree vuote interne (R5)
+  /** Dove dopo verrà cucita un'altra grafica: lì il ricamo continua e i passaggi corrono liberi. */
+  coperte?: Polyline[];
 }
 
 // ------------------------------------------------------------------ utilità pure
@@ -192,12 +206,40 @@ function scatterBlobs(outline: Polyline, bb: BBox, p: StriaturaParams, rng: () =
       const cx = bb.minX + (gx + 0.5) * pitch + (rng() * 2 - 1) * jit;
       const cy = bb.minY + (gy + 0.5) * pitch + (rng() * 2 - 1) * jit;
       if (!insideOutline(cx, cy, outline)) continue;
-      const halfH = base * 0.5 * (0.6 + rng() * 1.2);   // variazione (piccole↔grandi) ma senza minuscole → meno buchi
+      // variazione (piccole↔grandi) attorno a 1,2 volte la grandezza: con ±50% va da 0,6 a 1,8
+      const halfH = base * 0.5 * 1.2 * (1 + (rng() * 2 - 1) * (Math.max(0, Math.min(100, p.blobVariationPct)) / 100));
       const halfW = halfH * (0.4 + rng() * 0.32);        // più alta che larga (foglia)
       blobs.push({ cx, cy, halfW, halfH, sharp: 0.65 + rng() * 0.25, amp: 0.10 + rng() * 0.10, phase: rng() * 6.283 });
     }
   }
   return blobs;
+}
+
+// ------------------------------------------------------------------ la macchia comanda
+//
+// La macchia è fatta di trattini e sta su righe alte un trattino: con la sola grandezza si stringeva ma i
+// trattini restavano da 18 mm. Misurato il 2026-11-03, con la grandezza a 8 invece di 22: macchie alte 46 mm
+// invece di 91, ma trattini ancora da 17 mm. Ora sotto i 22 mm scalano con la macchia i trattini, il frastaglio e
+// l'altezza dei passaggi: a 8 mm macchie alte 21 mm, trattini da 6,4. La distanza fra i passaggi NON scala: provato,
+// faceva una greca su tutto il campo (4,3 m di passaggi contro 3,1 sul rettangolo di prova).
+// A 22 mm il rapporto vale 1: con 22 o più il ricamo è identico a prima.
+
+// per uscire da una tasca fra i trattini: al massimo ~5 mm attraverso il cucito, verso un corridoio di almeno ~10 mm²
+const USCITA_CELLE = 6;
+const CORRIDOIO_CELLE = 16;
+
+/** Le misure con cui si cuce davvero: il trattino non è mai più lungo di quanto la macchia consente. */
+export function misureEffettive(p: StriaturaParams): StriaturaParams {
+  const trattino = Math.min(p.striaturaLengthMm, Math.max(2, p.blobSizeMm) * 18 / 22);
+  const k = trattino / p.striaturaLengthMm;
+  if (k >= 1) return p;
+  return {
+    ...p,
+    striaturaLengthMm: trattino,
+    jaggedLengthMm: p.jaggedLengthMm * k,
+    jaggedStartMm: p.jaggedStartMm * k,
+    passaggioAmpMm: p.passaggioAmpMm * k,
+  };
 }
 
 // ------------------------------------------------------------------ cucitura
@@ -237,6 +279,28 @@ function pushTravel(pts: Point[], a: Point, b: Point, step: number): void {
   const d = Math.hypot(b.x - a.x, b.y - a.y);
   const n = Math.max(1, Math.ceil(d / step));
   for (let k = 1; k <= n; k++) pts.push({ x: a.x + (b.x - a.x) * (k / n), y: a.y + (b.y - a.y) * (k / n) });
+}
+
+/**
+ * Aggiunge a `pts` una strada a più tratti (`strada[0]` escluso), coi punti uguali distribuiti su tutta la lunghezza.
+ * Punto per punto, ogni svolta lasciava un punto corto che il punto minimo univa al vicino: fino a 3,7 mm con 3 chiesti.
+ */
+function pushStrada(pts: Point[], strada: Point[], step: number): void {
+  let lung = 0;
+  for (let i = 1; i < strada.length; i++) lung += Math.hypot(strada[i].x - strada[i - 1].x, strada[i].y - strada[i - 1].y);
+  const n = Math.max(1, Math.ceil(lung / step));
+  let i = 1, fatti = 0;
+  for (let k = 1; k <= n; k++) {
+    const dove = (lung * k) / n;
+    while (i < strada.length - 1 && fatti + Math.hypot(strada[i].x - strada[i - 1].x, strada[i].y - strada[i - 1].y) < dove) {
+      fatti += Math.hypot(strada[i].x - strada[i - 1].x, strada[i].y - strada[i - 1].y);
+      i++;
+    }
+    const a = strada[i - 1], b = strada[i];
+    const d = Math.hypot(b.x - a.x, b.y - a.y);
+    const t = d > 0 ? Math.min(1, (dove - fatti) / d) : 1;
+    pts.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+  }
 }
 
 /**
@@ -281,8 +345,9 @@ function striaturaCell(
  * Le celle sono collegate da tragitti retti a running (`travelStitchMm`, mai troppo lunghi) → filo continuo;
  * si spezza (salto) solo se un tragitto uscirebbe dal bordo o entrerebbe in un vuoto (R5). Output a layer.
  */
-export function generateStriatura(input: StriaturaInput, params: StriaturaParams): StriaturaLayer[] {
+export function generateStriatura(input: StriaturaInput, richiesti: StriaturaParams): StriaturaLayer[] {
   const { outline, voids } = input;
+  const params = misureEffettive(richiesti);
   if (!outline || outline.length < 3) return [{ color: params.color, polylines: [] }];
   const bb = bboxOf(outline);
   const rng = mulberry32(params.seed);
@@ -292,7 +357,7 @@ export function generateStriatura(input: StriaturaInput, params: StriaturaParams
   const baseEvery = Math.max(1, Math.round(params.fillSpacingMm / dx));
   const clr = params.voidClearanceMm;
   const minLen = params.minStitchMm;
-  const rowH = Math.max(4, params.striaturaLengthMm);
+  const rowH = Math.max(2, params.striaturaLengthMm);
   const travelStep = Math.max(params.minStitchMm, params.travelStitchMm);
   const maxTravel = rowH * 1.6; // collegamento CORTO consentito; oltre (o se attraverserebbe qualcosa) → salto
 
@@ -373,6 +438,35 @@ export function generateStriatura(input: StriaturaInput, params: StriaturaParams
       if (edge) borderLane[idx] = 1;
     }
   }
+  // ZONE COPERTE: celle dove dopo verrà cucita un'altra grafica. Non sono aree vuote: lì il ricamo continua,
+  // e i passaggi ci possono correre anche sopra le macchie, perché la grafica li coprirà.
+  const coperte = (input.coperte ?? []).filter((c) => c.length >= 3);
+  const coperta = new Uint8Array(gcols * grows);
+  // zona per zona, solo le celle del suo rettangolo: le zone possono essere centinaia (le macchie di un pannello)
+  for (const z of coperte) {
+    const zb = bboxOf(z);
+    const gx0 = Math.max(0, Math.floor((zb.minX - bb.minX) / occCell)), gx1 = Math.min(gcols - 1, Math.floor((zb.maxX - bb.minX) / occCell));
+    const gy0 = Math.max(0, Math.floor((zb.minY - bb.minY) / occCell)), gy1 = Math.min(grows - 1, Math.floor((zb.maxY - bb.minY) / occCell));
+    for (let gy = gy0; gy <= gy1; gy++) {
+      for (let gx = gx0; gx <= gx1; gx++) {
+        const idx = gy * gcols + gx;
+        if (!insideCell[idx] || coperta[idx]) continue;
+        const c = { x: bb.minX + (gx + 0.5) * occCell, y: bb.minY + (gy + 0.5) * occCell };
+        if (insideOutline(c.x, c.y, z) && distanceToBoundary(c, z) >= params.coverMarginMm) coperta[idx] = 1;
+      }
+    }
+  }
+  /** Quanti mm del tratto a→b restano in vista (non coperti). */
+  const inVista = (a: Point, b: Point): number => {
+    const d = Math.hypot(b.x - a.x, b.y - a.y);
+    const n = Math.max(1, Math.ceil(d / 0.5));
+    let liberi = 0;
+    for (let k = 0; k < n; k++) {
+      const t = (k + 0.5) / n;
+      if (!coperta[gIdx(a.x + (b.x - a.x) * t, a.y + (b.y - a.y) * t)]) liberi++;
+    }
+    return d * (liberi / n);
+  };
   const neighOf = (c: number, d: number): number => {
     const cgx = c % gcols;
     if (d === 0) return cgx === gcols - 1 ? -1 : c + 1;
@@ -382,7 +476,7 @@ export function generateStriatura(input: StriaturaInput, params: StriaturaParams
   };
 
   /** Cella LIBERA (dentro la sagoma, non cucita) più vicina a `p`: serve a uscire da dentro una macchia. */
-  const routable = (idx: number) => insideCell[idx] === 1 && (occ[idx] === 0 || borderLane[idx] === 1);
+  const routable = (idx: number) => insideCell[idx] === 1 && (occ[idx] === 0 || borderLane[idx] === 1 || coperta[idx] === 1);
   const nearestFree = (p: Point): number => {
     const start = gIdx(p.x, p.y);
     if (routable(start)) return start;
@@ -405,6 +499,45 @@ export function generateStriatura(input: StriaturaInput, params: StriaturaParams
   const routeFree = (a: Point, b: Point): Point[] | null => {
     const sIdx = nearestFree(a), tIdx = nearestFree(b);
     if (sIdx < 0 || tIdx < 0) return null;
+    return strada(sIdx, tIdx) ?? fuoriDallaTasca(a, b);
+  };
+  /**
+   * La cella libera più vicina può essere una tasca di una cella fra i buchi dei trattini: da lì non si va da
+   * nessuna parte, anche con tutto il campo libero a due celle di distanza, e il filo saltava (misurato il
+   * 2026-11-03: con macchie da 8 mm quasi tutti i salti nascevano così). Se la strada non c'è, si esce verso il
+   * corridoio vero più vicino, al massimo `USCITA_CELLE` celle attraverso il cucito.
+   */
+  const fuoriDallaTasca = (a: Point, b: Point): Point[] | null => {
+    const gruppo = new Int32Array(gcols * grows).fill(-1);
+    const quante: number[] = [];
+    const q = new Int32Array(gcols * grows);
+    for (let i = 0; i < gruppo.length; i++) {
+      if (gruppo[i] >= 0 || !routable(i)) continue;
+      let head = 0, tail = 0; q[tail++] = i; gruppo[i] = quante.length;
+      while (head < tail) {
+        const c = q[head++];
+        for (let d = 0; d < 4; d++) { const nx = neighOf(c, d); if (nx >= 0 && gruppo[nx] < 0 && routable(nx)) { gruppo[nx] = quante.length; q[tail++] = nx; } }
+      }
+      quante.push(tail);
+    }
+    const uscita = (p: Point, voluto: number): number => {
+      const start = gIdx(p.x, p.y);
+      const dist = new Map<number, number>([[start, 0]]);
+      const coda = [start];
+      for (let k = 0; k < coda.length; k++) {
+        const c = coda[k];
+        if (gruppo[c] >= 0 && (voluto >= 0 ? gruppo[c] === voluto : quante[gruppo[c]] >= CORRIDOIO_CELLE)) return c;
+        if (dist.get(c)! >= USCITA_CELLE) continue;
+        for (let d = 0; d < 4; d++) { const nx = neighOf(c, d); if (nx >= 0 && insideCell[nx] && !dist.has(nx)) { dist.set(nx, dist.get(c)! + 1); coda.push(nx); } }
+      }
+      return -1;
+    };
+    const s = uscita(a, -1);
+    if (s < 0) return null;
+    const t = uscita(b, gruppo[s]);
+    return t < 0 ? null : strada(s, t);
+  };
+  const strada = (sIdx: number, tIdx: number): Point[] | null => {
     if (sIdx === tIdx) return [cellCenter(sIdx)];
     const prevArr = new Int32Array(gcols * grows).fill(-2);
     const q = new Int32Array(gcols * grows);
@@ -428,7 +561,54 @@ export function generateStriatura(input: StriaturaInput, params: StriaturaParams
     return cells.map(cellCenter);
   };
 
+  /**
+   * La strada che lascia meno filo in vista: sulle celle coperte un millimetro non costa quasi niente, fuori costa
+   * un millimetro. Fuori si passa solo dove passa `routeFree`; il tratto coperto si tira dritto.
+   */
+  const routeCoperta = (a: Point, b: Point): Point[] | null => {
+    const sIdx = nearestFree(a), tIdx = nearestFree(b);
+    if (sIdx < 0 || tIdx < 0 || sIdx === tIdx) return null;
+    const costo = new Float64Array(gcols * grows).fill(Infinity);
+    const prima = new Int32Array(gcols * grows).fill(-1);
+    const coda: number[] = [sIdx];
+    const sale = (i: number) => { while (i > 0) { const m = (i - 1) >> 1; if (costo[coda[m]] <= costo[coda[i]]) break; [coda[m], coda[i]] = [coda[i], coda[m]]; i = m; } };
+    const scende = (i: number) => {
+      for (;;) {
+        const l = 2 * i + 1, r = l + 1; let m = i;
+        if (l < coda.length && costo[coda[l]] < costo[coda[m]]) m = l;
+        if (r < coda.length && costo[coda[r]] < costo[coda[m]]) m = r;
+        if (m === i) return;
+        [coda[m], coda[i]] = [coda[i], coda[m]]; i = m;
+      }
+    };
+    costo[sIdx] = 0;
+    while (coda.length) {
+      const c = coda[0];
+      const ultimo = coda.pop()!;
+      if (coda.length) { coda[0] = ultimo; scende(0); }
+      if (c === tIdx) break;
+      for (let d = 0; d < 4; d++) {
+        const nx = neighOf(c, d);
+        if (nx < 0 || (nx !== tIdx && !routable(nx))) continue;
+        const nuovo = costo[c] + (coperta[nx] ? 0.02 : 1);
+        if (nuovo < costo[nx]) { costo[nx] = nuovo; prima[nx] = c; coda.push(nx); sale(coda.length - 1); }
+      }
+    }
+    if (costo[tIdx] === Infinity) return null;
+    const celle: number[] = [];
+    for (let c = tIdx; c !== -1; c = prima[c]) celle.push(c);
+    celle.reverse();
+    const via: Point[] = [cellCenter(celle[0])];
+    for (let i = 1; i < celle.length; i++) {
+      const prossima = i + 1 < celle.length ? cellCenter(celle[i + 1]) : null;
+      if (prossima && inVista(via[via.length - 1], prossima) === 0) continue; // resta coperto: si tira dritto
+      via.push(cellCenter(celle[i]));
+    }
+    return via;
+  };
+
   const polylines: Polyline[] = [];
+  const passaggi: Polyline[] = [];
   let cur: Polyline = [];
   let pen: Point | null = null;
 
@@ -447,6 +627,7 @@ export function generateStriatura(input: StriaturaInput, params: StriaturaParams
   // millimetro (il frastaglio muove anche il capo vicino): misurata, pende di 1,62mm in mediana e mai
   // più di 2,99mm, cioè meno di un punto. Verificata con Lorenzo il 2026-08-25 e accettata così.
   let lastWasBase = false;
+  let lastCol = -1;
   // righe extra (±1) per coprire lo spostamento dell'onda ai bordi.
   for (let r = -1; r <= nRows; r++) {
     const rowY = bb.minY + rowH * (r + 0.5);
@@ -497,6 +678,10 @@ export function generateStriatura(input: StriaturaInput, params: StriaturaParams
         nearY = Math.max(iv[0], Math.min(iv[1], nearY));
         farY = Math.max(iv[0], Math.min(iv[1], farY));
         if (Math.abs(farY - nearY) < minLen) continue;
+        // sotto il ricamo di dopo il passaggio non serve come riempimento: il filo ci passa dritto. E con le zone
+        // non servono nemmeno altrove (Lorenzo, 2026-11-03: «usare le macchie… per andare a fare i passaggi»): sul
+        // pannello di prova restano in vista 1,45 m invece di 4,04. Dopo i numeri a caso: le macchie non cambiano.
+        if (coperta[gIdx(x, rc)] || (coperte.length && params.coverNoPassLines)) continue;
         const p2: Point[] = [{ x, y: nearY }];
         pushSeg(p2, x, nearY, farY, step);
         pts = p2;
@@ -513,7 +698,26 @@ export function generateStriatura(input: StriaturaInput, params: StriaturaParams
         && dtravel <= maxTravel
         && !forbidden(pen, entry)
         && (shortLink || !crossesOcc(pen, entry));
-      if (reachable && pen) {
+      // fra due trattini vicini della stessa macchia il collegamento non è un passaggio: sta in mezzo ai trattini
+      const interno = dense && !lastWasBase && Math.abs(i - lastCol) <= 3;
+      let daQui = cur.length - 1;
+      // con le zone coperte: se c'è una strada che lascia in vista meno filo (almeno 1 mm), si prende quella
+      let viaCoperta: Point[] | null = null;
+      // (se in vista ne resta già meno di 1 mm non c'è niente da guadagnare, e la ricerca costa: 177 zone su un pannello)
+      if (coperte.length && pen && dtravel > travelStep * 2 && (!reachable || inVista(pen, entry) > 1)) {
+        const via = routeCoperta(pen, entry);
+        if (via) {
+          let vista = inVista(via[via.length - 1], entry);
+          let prec: Point = pen;
+          for (const wp of via) { vista += inVista(prec, wp); prec = wp; }
+          if (!reachable || vista < inVista(pen, entry) - 1) viaCoperta = via;
+        }
+      }
+      if (viaCoperta && pen) {
+        pushStrada(cur, [pen, ...viaCoperta, entry], travelStep);
+        if (!interno) passaggi.push(cur.slice(daQui));
+        for (let k = 1; k < pts.length; k++) cur.push(pts[k]);
+      } else if (reachable && pen) {
         // COLLEGAMENTO NASCOSTO (feedback di Lorenzo, 2026-08-25). Il trattino in retrace entra ed esce
         // dal proprio CENTRO, e i centri di due colonne vicine sono sfasati apposta (le partenze non
         // devono allinearsi): il collegamento diretto diventava una linea verticale lunga anche 16mm in
@@ -526,11 +730,13 @@ export function generateStriatura(input: StriaturaInput, params: StriaturaParams
         if (salita) {
           const svolta = { x: pen.x, y: yStop };
           pushTravel(cur, pen, svolta, travelStep);   // gamba nascosta sopra il cucito
+          daQui = cur.length - 1;
           pushTravel(cur, svolta, entry, travelStep); // gamba corta verso il trattino nuovo
         } else {
           // UN SOLO passaggio retto pen→entry (`ceil` = nessun segmento troppo lungo).
           pushTravel(cur, pen, entry, travelStep);
         }
+        if (!interno) passaggi.push(cur.slice(daQui));
         for (let k = 1; k < pts.length; k++) cur.push(pts[k]); // stroke senza il primo (= entry, già aggiunto)
       } else {
         const route = pen ? routeFree(pen, entry) : null;
@@ -539,17 +745,18 @@ export function generateStriatura(input: StriaturaInput, params: StriaturaParams
           let prev: Point = pen;
           for (const wp of route) { pushTravel(cur, prev, wp, travelStep); prev = wp; }
           pushTravel(cur, prev, entry, travelStep);
+          if (!interno) passaggi.push(cur.slice(daQui));
           for (let k = 1; k < pts.length; k++) cur.push(pts[k]);
           // NB: il percorso di collegamento NON viene marcato occupato → i corridoi restano aperti per gli
           // altri collegamenti (evita che lo spazio libero si frammenti e costringa a un salto). Al più due
           // collegamenti condividono un corridoio (thin), meglio di un salto o di un attraversamento.
         } else {
           // lo spazio libero è scollegato (tasca murata dalle macchie): niente corridoio né bordo → l'unica
-          // alternativa a un salto sarebbe ATTRAVERSARE una macchia (bocciato). Salto raro e onesto.
           if (cur.length > 1) polylines.push(cur);
           cur = pts.slice();
         }
       }
+      if (!dense) passaggi.push(pts);    // la passata rada è un passaggio anche lei
       markPts(pts);                      // la macchia/passata appena cucita occupa spazio
       pen = pts[pts.length - 1];
       // estensione verticale del trattino appena cucito: serve al collegamento successivo per capire
@@ -559,11 +766,12 @@ export function generateStriatura(input: StriaturaInput, params: StriaturaParams
       lastSpan = { x, y0, y1 };
       passDir = -passDir;
       lastWasBase = !dense;
+      lastCol = i;
     }
   }
   if (cur.length > 1) polylines.push(cur);
 
-  return [{ color: params.color, polylines }];
+  return [{ color: params.color, polylines, passaggi }];
 }
 
 /** Somma delle lunghezze di tutte le polilinee di un layer (mm), per la statusbar. */

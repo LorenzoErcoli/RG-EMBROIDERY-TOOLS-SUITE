@@ -109,6 +109,29 @@ Nome preset, elenco, salva/carica/elimina. Nessun problema di etichetta.
 
 ---
 
+## Tool "Punto Striato" — rivisti il 2026-11-03
+
+Proposte mostrate a Lorenzo, che ha risposto *«avanza»* senza correggerle: da rivedere se, guardandole nel pannello, non suonano giuste.
+
+| Etichetta di prima | Etichetta di ora | Nome interno |
+|---|---|---|
+| Grandezza delle macchie | uguale, ora è il comando per averle più piccole | `blobSizeMm` |
+| — (fisso nel codice) | **Differenza fra piccole e grandi** | `blobVariationPct` |
+| Distanza tra le macchie | **Distanza fra le macchie** | `blobSpacingMm` |
+| Densità della macchia | **Distanza fra i trattini** | `densitySpacingMm` |
+| Lunghezza della striatura | **Trattini: lunghezza massima**, ora in *Macchie* | `striaturaLengthMm` |
+| Frastaglio — variazione di lunghezza | **Frastaglio: lunghezze diverse**, ora in *Macchie* | `jaggedLengthMm` |
+| Frastaglio — sfasamento delle partenze | **Frastaglio: partenze sfalsate**, ora in *Macchie* | `jaggedStartMm` |
+| Densità dei passaggi | **Distanza fra i passaggi** | `fillSpacingMm` |
+| Ampiezza del passaggio | **Altezza dei passaggi** | `passaggioAmpMm` |
+| — | **Margine dal ricamo sopra** | `coverMarginMm` |
+| Punto degli spostamenti | **Punto dei collegamenti** | `travelStitchMm` |
+| Distanza di sicurezza da bordi e vuoti | **Distanza da bordi e aree vuote** | `voidClearanceMm` |
+| — | **Con il ricamo sopra: niente linee di passaggio** | `coverNoPassLines` |
+| — (ruolo) | **Ricamo sopra** | `COVER_AREA` |
+
+---
+
 ## Le decisioni che servono a te
 
 **①** `squareSizeMm` — tu l'avevi chiamata **"larghezza rete"**; il codice la chiama "lato del quadrato". Sono la stessa cosa: quale nome vuoi in interfaccia?
