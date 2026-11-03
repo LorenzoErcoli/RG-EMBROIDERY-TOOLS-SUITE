@@ -20,6 +20,46 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: 0, passo: 0.1, predefinito: 1, concetto: 'rientro',
     },
     {
+      id: 'firstLevelVisibleMax', nome: 'secondoVista', etichetta: 'Fra le macchie del primo livello, a vista al più',
+      aiuto: 'Il filo da una macchia alla dopo corre sotto il secondo livello e sotto le macchie ancora da cucire. Dove nessuna lo copre attraversa lo spazio a vista, al più di tanto per volta. 0 = mai a vista: lì si salta.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 12, concetto: 'passaggi-nascosti',
+    },
+    {
+      id: 'leftToRightOrder2', nome: 'daSinistra2', etichetta: '2° livello: le macchie da sinistra a destra',
+      aiuto: 'Come «Le macchie da sinistra a destra», per il secondo livello.',
+      tipo: 'bool', unita: '', predefinito: false, concetto: 'ordine-cucitura',
+    },
+    {
+      id: 'satinAngle2', nome: 'rasoAngolo2', etichetta: '2° livello: direzione del raso',
+      aiuto: 'Direzione delle righe del raso del secondo livello, gradi (90 = verticale).',
+      tipo: 'num', unita: 'deg', min: -180, passo: 1, predefinito: 90, concetto: 'angolo',
+    },
+    {
+      id: 'satinRowSpacing2', nome: 'rasoInterlinea2', etichetta: '2° livello: interlinea del raso',
+      aiuto: 'Distanza fra le righe del raso del secondo livello.',
+      tipo: 'num', unita: 'mm', min: 0.1, passo: 0.05, predefinito: 0.4, concetto: 'densita',
+    },
+    {
+      id: 'satinMaxStitch2', nome: 'rasoPuntoMax2', etichetta: '2° livello: punto massimo del raso',
+      aiuto: 'Le macchie larghe non fanno punti da bordo a bordo.',
+      tipo: 'num', unita: 'mm', min: 1, passo: 0.5, predefinito: 4, concetto: 'punto-massimo',
+    },
+    {
+      id: 'satinPhase2', nome: 'rasoFase2', etichetta: '2° livello: fase del raso',
+      aiuto: 'Di quanto gli aghi di una riga sono spostati rispetto alla riga accanto, in % del punto.',
+      tipo: 'num', unita: '%', min: 0, max: 100, passo: 5, predefinito: 30, concetto: 'spostamento',
+    },
+    {
+      id: 'fringeAmount2', nome: 'sfrangiatura2', etichetta: '2° livello: sfrangiatura',
+      aiuto: 'Di quanto, a caso, ogni riga finisce prima o dopo il bordo. 0 = netto.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.1, predefinito: 1, concetto: 'variazione',
+    },
+    {
+      id: 'fringeOutsidePercent2', nome: 'sfrangiaturaFuori2', etichetta: '2° livello: …di cui oltre il bordo',
+      aiuto: '0 = le righe si accorciano soltanto; 100 = si allungano soltanto.',
+      tipo: 'num', unita: '%', min: 0, max: 100, passo: 10, predefinito: 50, concetto: 'variazione',
+    },
+    {
       id: 'satinAngle', nome: 'rasoAngolo', etichetta: 'Direzione del raso',
       aiuto: 'Direzione delle righe del raso, gradi (90 = verticale).',
       tipo: 'num', unita: 'deg', min: -180, passo: 1, predefinito: 90, concetto: 'angolo',

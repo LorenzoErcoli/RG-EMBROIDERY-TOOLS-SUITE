@@ -127,7 +127,18 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    disegno** (ruolo *Macchie, 2° livello*); chiaro e scuro **si toccano o si sovrappongono**; dove si sovrappongono **il
    chiaro si ferma sotto lo scuro**, entrandoci solo di `secondoMargine` (di serie 1 mm: l'ha proposto la chat, da
    confermare a macchina); dove lo scuro non copre il passaggio **si salta, come oggi**: resta la decisione 3, mai un
-   punto a vista fra le macchie. Stop: primo livello (raso, poi punto sopra se c'è), poi secondo.
+   punto a vista fra le macchie (superata dalla 29). Stop: primo livello (raso, poi punto sopra se c'è), poi secondo.
+29. (2026-11-03) **Zero salti nel primo livello, con punti corti a vista.** Provato in Stilista: *«funziona da stilista, ti
+   chiedo però di gestire i passaggi delle macchie a livello 1, che deve passare sotto il raso che c'è sopra. andando a zero
+   di salti»*. Misurato il suo disegno (62 macchie del primo livello, 177 del secondo): le macchie del secondo quasi non
+   si toccano (6 su 177, staccate di 2,2 mm in mediana), quindi tutto coperto il minimo erano 51 salti. Gli ho chiesto come
+   preferiva arrivare a zero e ha scelto i **punti corti a vista**, non i ponti di raso nel secondo livello. Campo
+   `secondoVista` (di serie 12 mm per attraversamento, 0 = si salta). Solo per il primo livello: il secondo salta ancora.
+30. (2026-11-03) **Ogni livello coi suoi parametri**: *«Vanno gestite le macchie con 2 parametri diversi, ogni livello di
+   macchia deve avere il suo pannellino dei parametri»*. Due pannellini, *Raso, 1° livello* e *Raso, 2° livello* (quello
+   del secondo solo se un colore ha quel ruolo): `daSinistra`, `rasoAngolo`, `rasoInterlinea`, `rasoPuntoMax`, `rasoFase`,
+   `sfrangiatura`, `sfrangiaturaFuori` e gli stessi col 2 in fondo. Ponti, zone e punto sopra restano comuni: l'ho scelto
+   io, da confermare. Un progetto senza i parametri del secondo gli dà quelli del primo, come lavorava allora.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso
@@ -352,6 +363,21 @@ centro finché toccano le chiare. Il numero dipende da quanto si toccano. Margin
 «Prima» è lo stesso primo livello, già fermato sotto il secondo, senza le strade. Tutti i millimetri che restano fuori
 dalle scure sono **salti**: nessun punto cucito del primo livello è in vista fra le macchie (il più lontano a 0,46 mm dal
 contorno, cioè la sfrangiatura). Col raso di Stilista, × 1,6: 44 salti, 552 mm, fuori dalle scure 202 mm.
+
+La tabella qui sopra è con `secondoVista` a 0 (solo filo coperto).
+
+**Sul disegno vero di Lorenzo** (62 macchie del primo livello, 177 del secondo, letto da Stilista, fuori dal repo):
+
+| Parametri del raso, primo livello | Salti | Filo fra le macchie | Di cui a vista |
+|---|---|---|---|
+| `secondoVista` 0, di serie | 51 (1.089 mm) | 85 mm | 0 |
+| di serie | **0** | 1.256 mm | 285 mm in 61 attraversamenti |
+| interlinea 0,2 | 2 (23 mm), dentro le macchie | 1.252 mm | 286 mm in 62 |
+| sfrangiatura 5 | 3 (45 mm) | 1.348 mm | 520 mm in 116 |
+
+**Lo zero non è garantito.** I salti rimasti con interlinea 0,2 sono dentro una macchia, dove fra due parti non c'è strada sotto il
+raso (decisione 8). Con la sfrangiatura 5 la zona sicura sotto il secondo si restringe, e se chiude le strade il filo passa a 0,5 mm dal
+suo contorno: lì le righe sfrangiate potrebbero non coprirlo. Da guardare a macchina. Il secondo livello salta ancora (175 salti).
 
 ## Strade scartate
 - **Il punto sopra ridisegnato in ogni macchia** (2026-10-28): colonne che seguono la forma, denti sovrapposti, la

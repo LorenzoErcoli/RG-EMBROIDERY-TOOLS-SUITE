@@ -1726,6 +1726,46 @@
           "default": 1,
           "x-id": "secondLevelMargin"
         },
+        "secondoVista": {
+          "$ref": "#/$defs/firstLevelVisibleMax",
+          "default": 12,
+          "x-id": "firstLevelVisibleMax"
+        },
+        "daSinistra2": {
+          "$ref": "#/$defs/leftToRightOrder2",
+          "default": false,
+          "x-id": "leftToRightOrder2"
+        },
+        "rasoAngolo2": {
+          "$ref": "#/$defs/satinAngle2",
+          "default": 90,
+          "x-id": "satinAngle2"
+        },
+        "rasoInterlinea2": {
+          "$ref": "#/$defs/satinRowSpacing2",
+          "default": 0.4,
+          "x-id": "satinRowSpacing2"
+        },
+        "rasoPuntoMax2": {
+          "$ref": "#/$defs/satinMaxStitch2",
+          "default": 4,
+          "x-id": "satinMaxStitch2"
+        },
+        "rasoFase2": {
+          "$ref": "#/$defs/satinPhase2",
+          "default": 30,
+          "x-id": "satinPhase2"
+        },
+        "sfrangiatura2": {
+          "$ref": "#/$defs/fringeAmount2",
+          "default": 1,
+          "x-id": "fringeAmount2"
+        },
+        "sfrangiaturaFuori2": {
+          "$ref": "#/$defs/fringeOutsidePercent2",
+          "default": 50,
+          "x-id": "fringeOutsidePercent2"
+        },
         "rasoAngolo": {
           "$ref": "#/$defs/satinAngle",
           "default": 90,
@@ -4848,6 +4888,77 @@
       "x-passo": 0.1,
       "x-concetto": "rientro"
     },
+    "firstLevelVisibleMax": {
+      "type": "number",
+      "title": "Fra le macchie del primo livello, a vista al più",
+      "description": "Il filo da una macchia alla dopo corre sotto il secondo livello e sotto le macchie ancora da cucire. Dove nessuna lo copre attraversa lo spazio a vista, al più di tanto per volta. 0 = mai a vista: lì si salta.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "passaggi-nascosti"
+    },
+    "leftToRightOrder2": {
+      "type": "boolean",
+      "title": "2° livello: le macchie da sinistra a destra",
+      "description": "Come «Le macchie da sinistra a destra», per il secondo livello.",
+      "x-concetto": "ordine-cucitura"
+    },
+    "satinAngle2": {
+      "type": "number",
+      "title": "2° livello: direzione del raso",
+      "description": "Direzione delle righe del raso del secondo livello, gradi (90 = verticale).",
+      "x-unita": "deg",
+      "minimum": -180,
+      "x-passo": 1,
+      "x-concetto": "angolo"
+    },
+    "satinRowSpacing2": {
+      "type": "number",
+      "title": "2° livello: interlinea del raso",
+      "description": "Distanza fra le righe del raso del secondo livello.",
+      "x-unita": "mm",
+      "minimum": 0.1,
+      "x-passo": 0.05,
+      "x-concetto": "densita"
+    },
+    "satinMaxStitch2": {
+      "type": "number",
+      "title": "2° livello: punto massimo del raso",
+      "description": "Le macchie larghe non fanno punti da bordo a bordo.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 0.5,
+      "x-concetto": "punto-massimo"
+    },
+    "satinPhase2": {
+      "type": "number",
+      "title": "2° livello: fase del raso",
+      "description": "Di quanto gli aghi di una riga sono spostati rispetto alla riga accanto, in % del punto.",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 100,
+      "x-passo": 5,
+      "x-concetto": "spostamento"
+    },
+    "fringeAmount2": {
+      "type": "number",
+      "title": "2° livello: sfrangiatura",
+      "description": "Di quanto, a caso, ogni riga finisce prima o dopo il bordo. 0 = netto.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-concetto": "variazione"
+    },
+    "fringeOutsidePercent2": {
+      "type": "number",
+      "title": "2° livello: …di cui oltre il bordo",
+      "description": "0 = le righe si accorciano soltanto; 100 = si allungano soltanto.",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 100,
+      "x-passo": 10,
+      "x-concetto": "variazione"
+    },
     "satinAngle": {
       "type": "number",
       "title": "Direzione del raso",
@@ -5647,6 +5758,7 @@
         "fillSpacingMm",
         "baseSpacing",
         "densitySpacing",
+        "satinRowSpacing2",
         "satinRowSpacing",
         "rowSpacing",
         "spiralPitch",
@@ -5692,6 +5804,7 @@
         "cordedMaxStitch",
         "runMaxStitch",
         "maxStitchLength",
+        "satinMaxStitch2",
         "satinMaxStitch",
         "overlapStitch",
         "underOverlapStitch"
@@ -5781,6 +5894,7 @@
         "fringeOpeningMax",
         "toothOpening",
         "axisMode",
+        "satinAngle2",
         "satinAngle",
         "maxDiamondAngle",
         "serpentineAngle"
@@ -5830,6 +5944,7 @@
         "globalPatternOffsetY",
         "stripShiftMm",
         "retraceOffsetMm",
+        "satinPhase2",
         "satinPhase",
         "overlayShiftX",
         "overlayShiftY",
@@ -5880,6 +5995,7 @@
         "hiddenPassMaxMm",
         "noPassLastColors",
         "overStitchedCost",
+        "firstLevelVisibleMax",
         "hiddenPassMax",
         "maxInternalTravel",
         "maxVisibleTravel",
@@ -5934,6 +6050,8 @@
         "fringeLengthMin",
         "fringeLengthMax",
         "diameterIrregularity",
+        "fringeAmount2",
+        "fringeOutsidePercent2",
         "fringeAmount",
         "fringeOutsidePercent"
       ]
@@ -5998,6 +6116,7 @@
         "rowHeight",
         "gapCrossMm",
         "buildMode",
+        "leftToRightOrder2",
         "leftToRightOrder",
         "stopZones",
         "stopZonesDirection",
