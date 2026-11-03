@@ -556,6 +556,11 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   // pannello, gli altri le macchie, come per un file. Le macchie non hanno aree vuote: i fori restano fuori.
   // Ogni stop torna come un oggetto a sé, nell'ordine (base, raso, sopra…).
   const aggancio: AggancioStilista = {
+    tool: 'pattern-macchie',
+    riapri(meta) {
+      riapri(meta);
+      return true;
+    },
     fori: 'esclusi',
     carica(svg, nome) {
       for (const k of Object.keys(ruoli)) delete ruoli[k];

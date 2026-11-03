@@ -4,6 +4,7 @@
 //
 // La finestra giusta: quella che ha aperto il tool (?stilista=<porta> nell'indirizzo), altrimenti
 // fra quelle che rispondono quella con qualcosa selezionato, poi con un documento, poi l'ultima attivata.
+import { readDstMetadata } from '@rg/core';
 
 const PRIMA_PORTA = 5370;
 const QUANTE_PORTE = 10;
@@ -127,13 +128,15 @@ export interface EsitoRitorno {
   salti: number;
   tipo_dopo: string;
   ago: string;
+  /** Il plugin ha scritto i parametri nell'oggetto. Un plugin di prima non lo dice. */
+  parametri_salvati?: boolean;
   errore?: string;
 }
 
 /** Il ricamo torna nel documento aperto in Stilista, al suo posto, come oggetto a punti fissi. */
 export async function puntiAStilista(
   f: FinestraStilista,
-  ricamo: { origine_mm: [number, number]; punti: Array<[number, number, number]>; nome?: string; ago?: number },
+  ricamo: { origine_mm: [number, number]; punti: Array<[number, number, number]>; nome?: string; ago?: number; parametri?: string },
 ): Promise<EsitoRitorno> {
   const r = await fetch(`http://127.0.0.1:${f.porta}/punti`, {
     method: 'POST',
@@ -146,15 +149,90 @@ export async function puntiAStilista(
   return esito;
 }
 
-/** Manda un DST a Stilista, che lo apre in un documento nuovo. */
-export async function dstAStilista(f: FinestraStilista, dst: Uint8Array, nome: string): Promise<void> {
-  const r = await fetch(`http://127.0.0.1:${f.porta}/dst?nome=${encodeURIComponent(nome)}`, {
+/**
+ * Manda un DST a Stilista, che lo apre in un documento nuovo. I parametri vanno in coda al corpo: un plugin di
+ * prima li scrive nel file dopo il DST, dove nessuno li legge, e il DST resta buono. Dice se li ha salvati.
+ */
+export async function dstAStilista(f: FinestraStilista, dst: Uint8Array, nome: string, parametri?: string): Promise<boolean> {
+  const coda = new TextEncoder().encode(parametri ?? '');
+  const corpo = new Uint8Array(dst.length + coda.length);
+  corpo.set(dst);
+  corpo.set(coda, dst.length);
+  const r = await fetch(`http://127.0.0.1:${f.porta}/dst?nome=${encodeURIComponent(nome)}${coda.length ? `&parametri=${coda.length}` : ''}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/octet-stream', 'X-RG-Link': '1' },
-    body: dst as unknown as BodyInit,
+    body: corpo as unknown as BodyInit,
   });
-  const esito = await r.json().catch(() => null) as { ok?: boolean; errore?: string } | null;
+  const esito = await r.json().catch(() => null) as { ok?: boolean; parametri_salvati?: boolean; errore?: string } | null;
   if (!r.ok || !esito?.ok) throw new Error(esito?.errore ?? `Stilista ha risposto ${r.status}`);
+  return !!esito.parametri_salvati;
+}
+
+// ------------------------------------------------------------------------------------------------
+// I PARAMETRI NELL'OGGETTO (2026-11-03, Lorenzo: «non so come né dove salvarmi i parametri di creazione delle cose
+// fatte con i tools»). «Invia a Stilista» scrive il progetto del tool — la busta del suo DST (`conBusta`), più il
+// cartamodello se la busta non ce l'ha — nell'oggetto; settimane dopo si seleziona l'oggetto e il tool riparte da
+// lì. Il plugin lo tiene nella descrizione dell'oggetto: vedi sapere/codice/stilista-parametri-nell-oggetto.md.
+// ------------------------------------------------------------------------------------------------
+
+/** Il progetto come sta nell'oggetto di Stilista. */
+export interface ProgettoInStilista {
+  v: 1;
+  /** L'id del tool, quello della busta. */
+  tool: string;
+  /** Quando è stato mandato (ISO). */
+  quando: string;
+  nome?: string;
+  /** Il cartamodello da cui è partito, se la busta non porta già il disegno. */
+  sorgente?: string;
+  /** I metadati del DST del tool, gli stessi che legge quando riapre quel DST. */
+  meta: Record<string, unknown>;
+}
+
+/** Oltre non è provato (1 MB nella descrizione torna identico): si lascia giù il cartamodello, poi tutto. */
+const MASSIMO_PARAMETRI = 1_000_000;
+
+/** Il progetto in testo: JSON compresso (gzip) in base64, una riga senza caratteri strani. */
+export async function impacchettaProgetto(p: ProgettoInStilista): Promise<string> {
+  const flusso = new Blob([JSON.stringify(p)]).stream().pipeThrough(new CompressionStream('gzip'));
+  const byte = new Uint8Array(await new Response(flusso).arrayBuffer());
+  let testo = '';
+  for (let i = 0; i < byte.length; i += 0x8000) testo += String.fromCharCode(...byte.subarray(i, i + 0x8000));
+  return btoa(testo);
+}
+
+/** Il contrario di `impacchettaProgetto`; null se il testo non è un progetto. */
+export async function spacchettaProgetto(dati: string): Promise<ProgettoInStilista | null> {
+  try {
+    const byte = Uint8Array.from(atob(dati), (c) => c.charCodeAt(0));
+    const flusso = new Blob([byte]).stream().pipeThrough(new DecompressionStream('gzip'));
+    const p = JSON.parse(await new Response(flusso).text()) as ProgettoInStilista;
+    return p?.v === 1 && typeof p.tool === 'string' && p.meta && typeof p.meta === 'object' ? p : null;
+  } catch {
+    return null;
+  }
+}
+
+export interface ParametriLetti {
+  oggetti: number;
+  conParametri: number;
+  /** Quanti progetti diversi ci sono nella selezione. */
+  diversi: number;
+  progetto: ProgettoInStilista | null;
+}
+
+/** Il progetto scritto negli oggetti selezionati; null da un plugin di prima, che non sa dirlo. */
+export async function parametriDaStilista(f: FinestraStilista): Promise<ParametriLetti | null> {
+  const prova = new URLSearchParams(location.search).get('stilista-oggetti');
+  const r = await fetch(`http://127.0.0.1:${f.porta}/parametri${prova ? `?oggetti=${encodeURIComponent(prova)}` : ''}`);
+  if (!r.ok) return null;
+  const letti = await r.json() as { oggetti: number; con_parametri: number; diversi: number; parametri: string | null };
+  return {
+    oggetti: letti.oggetti,
+    conParametri: letti.con_parametri,
+    diversi: letti.diversi,
+    progetto: letti.parametri ? await spacchettaProgetto(letti.parametri) : null,
+  };
 }
 
 // ------------------------------------------------------------------------------------------------
@@ -184,6 +262,7 @@ export interface EsitoRiempimenti {
   macchie: number;
   chieste: number;
   punti: number;
+  parametri_salvati?: boolean;
   ingresso_scarto_max_mm: number;
   uscita_scarto_max_mm: number;
   errori: string[];
@@ -197,7 +276,7 @@ export async function riempimentiAStilista(
   f: FinestraStilista,
   origine: [number, number],
   r: NonNullable<StratoPerStilista['riempimenti']>,
-  extra: { nome?: string; ago?: number } = {},
+  extra: { nome?: string; ago?: number; parametri?: string } = {},
 ): Promise<EsitoRiempimenti> {
   const risposta = await fetch(`http://127.0.0.1:${f.porta}/riempimenti`, {
     method: 'POST',
@@ -216,6 +295,13 @@ export async function riempimentiAStilista(
 }
 
 export interface AggancioStilista {
+  /** L'id del tool, quello della sua busta: un oggetto fatto da lui si riapre invece di ricalcarne i contorni. */
+  tool?: string;
+  /**
+   * Rimette un progetto (i metadati del suo DST), come quando si riapre quel DST: parametri, ruoli, pattern.
+   * Il cartamodello, se la busta non lo porta, è già stato caricato con `carica`. Dice se il progetto era suo.
+   */
+  riapri?(meta: Record<string, unknown>): boolean;
   /** Carica l'SVG della selezione esattamente come se l'utente l'avesse scelto col bottone del file. */
   carica(svg: string, nome: string): void | Promise<void>;
   /**
@@ -252,21 +338,109 @@ export function stratiCuciti(
     .map((l) => ({ nome: l.id, polylines: l.polylines }));
 }
 
-/** I contorni selezionati in Stilista diventano il cartamodello del tool. */
-export async function prendiSelezioneStilista(a: AggancioStilista): Promise<void> {
+let osservaRiapertura: MutationObserver | null = null;
+
+/**
+ * Dopo una riapertura, accanto a «Prendi la selezione»: di quando sono i parametri, e il bottone per chi vuole
+ * l'oggetto come forma. Non basta la barra di stato: i tool che calcolano in differita ridisegnano il pannello e
+ * riscrivono la barra quando il calcolo finisce, e l'avviso sparirebbe. Quindi, se il pannello si ridisegna, si
+ * rimette; finché non si riprende la selezione o non si cambia tool.
+ */
+function notaRiapertura(a: AggancioStilista, testo: string | null): void {
+  osservaRiapertura?.disconnect();
+  osservaRiapertura = null;
+  document.getElementById('riapertoDaStilista')?.remove();
+  if (!testo) return;
+  const scheda = location.hash;
+  const metti = () => {
+    if (location.hash !== scheda) { notaRiapertura(a, null); return; }
+    const prendi = document.getElementById('fromStilista');
+    if (!prendi || document.getElementById('riapertoDaStilista')) return;
+    const riga = document.createElement('div');
+    riga.id = 'riapertoDaStilista';
+    riga.className = 'rg-field__help';
+    riga.textContent = `${testo} `;
+    const b = document.createElement('button');
+    b.type = 'button';
+    b.className = 'rg-button rg-button--ghost rg-button--small';
+    b.title = "Riprende l'oggetto selezionato come forma, senza i parametri con cui è stato fatto";
+    b.textContent = 'Prendi solo i contorni';
+    b.addEventListener('click', () => { void prendiSelezioneStilista(a, { soloContorni: true }); });
+    riga.append(b);
+    prendi.after(riga);
+  };
+  osservaRiapertura = new MutationObserver(metti);
+  osservaRiapertura.observe(document.body, { childList: true, subtree: true });
+  metti();
+}
+
+/**
+ * I contorni selezionati in Stilista diventano il cartamodello del tool. Se gli oggetti selezionati sono TUTTI
+ * stati fatti da questo tool si riapre il loro progetto (Lorenzo, 2026-11-03): i contorni di un ricamo tornato
+ * sono i suoi punti, un cartamodello non servirebbe. Con oggetti misti o di un altro tool si prendono i contorni.
+ */
+export async function prendiSelezioneStilista(a: AggancioStilista, opzioni: { soloContorni?: boolean } = {}): Promise<void> {
   a.stato('Cerco Stilista…');
   try {
     const finestra = await trovaStilista();
     if (!finestra) throw new Error(NON_RISPONDE);
+    const letti = await parametriDaStilista(finestra).catch(() => null);
+    const progetto = opzioni.soloContorni ? null : letti?.progetto ?? null;
+    // anche quando si riapre: chiedendo la selezione il plugin ricorda da quale oggetto copiare il ritorno
     const svg = await selezioneDaStilista(finestra);
     const documento = nomeDocumento(finestra).replace(/\.[^.]+$/, '');
+    if (progetto && letti?.conParametri === letti?.oggetti && progetto.tool === a.tool && a.riapri) {
+      if (progetto.sorgente) {
+        await a.carica(progetto.sorgente, `${documento}-stilista.svg`);
+        a.ruoli?.(coloreForiStilista(progetto.sorgente));
+      }
+      if (!a.riapri(progetto.meta)) throw new Error('il progetto scritto in questo oggetto non si riapre qui');
+      const quando = new Date(progetto.quando).toLocaleString('it-IT', { dateStyle: 'short', timeStyle: 'short' });
+      const altri = (letti?.diversi ?? 1) > 1 ? ` · nella selezione ci sono ${letti?.diversi} progetti: questo è il primo` : '';
+      const riaperto = `Riaperto l'oggetto da Stilista (${documento}): parametri del ${quando}${altri}`;
+      notaRiapertura(a, riaperto);
+      a.stato(riaperto);
+      return;
+    }
     await a.carica(svg, `${documento}-stilista.svg`);
     a.ruoli?.(coloreForiStilista(svg));
+    notaRiapertura(a, null);
     const fori = !coloreForiStilista(svg) ? '' : a.fori === 'esclusi' ? ' (i fori restano senza ruolo: qui non ci sono aree vuote)' : ', coi fori come aree vuote';
-    a.stato(`Selezione presa da Stilista (${documento})${fori}`);
+    const altro = progetto && progetto.tool !== a.tool ? ` · l'oggetto è stato fatto con ${progetto.tool}: i suoi parametri si riaprono da lì` : '';
+    a.stato(`Selezione presa da Stilista (${documento})${fori}${altro}`);
   } catch (e) {
     a.stato('Stilista: ' + (e as Error).message);
   }
+}
+
+/**
+ * Il progetto da scrivere nell'oggetto: la busta del DST del tool, e il cartamodello se la busta non porta il suo
+ * testo. Non ferma mai l'invio: se non si può, il ricamo va lo stesso e la nota lo dice.
+ */
+export async function progettoDaInviare(a: Pick<AggancioStilista, 'dst' | 'sorgente'>, dst?: { bytes: Uint8Array; nome: string }): Promise<{ dati?: string; nota: string }> {
+  try {
+    const { bytes, nome } = dst ?? a.dst();
+    const meta = readDstMetadata(bytes);
+    const tool = typeof meta?.tool === 'string' ? meta.tool : typeof meta?.rgProject === 'string' ? meta.rgProject : null;
+    if (!meta || !tool) return { nota: ' · parametri non salvati: il DST del tool non li ha' };
+    const base: ProgettoInStilista = { v: 1, tool, quando: new Date().toISOString(), nome, meta };
+    const testo = typeof (meta.drawing as { text?: unknown } | undefined)?.text === 'string' ? null : a.sorgente();
+    if (testo) {
+      const dati = await impacchettaProgetto({ ...base, sorgente: testo });
+      if (dati.length <= MASSIMO_PARAMETRI) return { dati, nota: '' };
+    }
+    const dati = await impacchettaProgetto(base);
+    if (dati.length > MASSIMO_PARAMETRI) return { nota: ' · parametri non salvati: troppo pesanti' };
+    return { dati, nota: testo ? ' (senza il cartamodello: troppo pesante)' : '' };
+  } catch (e) {
+    return { nota: ` · parametri non salvati: ${(e as Error).message}` };
+  }
+}
+
+/** La coda del messaggio di «Invia a Stilista»: i parametri sono al sicuro o no. */
+function notaParametri(progetto: { dati?: string; nota: string }, salvati: boolean): string {
+  if (!progetto.dati) return progetto.nota;
+  return salvati ? ` · parametri salvati nell'oggetto${progetto.nota}` : ' · parametri NON salvati: il plugin è quello di prima, va aggiornato';
 }
 
 /**
@@ -289,32 +463,36 @@ export async function inviaAStilista(a: AggancioStilista): Promise<void> {
       const strati = a.strati().filter((s) => s.polylines.some((l) => l.length > 1) || s.riempimenti?.forme.length);
       if (!strati.length) throw new Error('non c\'è niente da cucire');
       const agoBase = agoStilista(testo!);
-      let punti = 0, salti = 0, ago = '', riempite = 0, nonRiempite = 0;
+      const progetto = await progettoDaInviare(a);
+      let punti = 0, salti = 0, ago = '', riempite = 0, nonRiempite = 0, salvati = true;
       for (const [i, s] of strati.entries()) {
         a.stato(`Invio a Stilista… strato ${i + 1} di ${strati.length}`);
         if (s.riempimenti?.forme.length) {
           const esito = await riempimentiAStilista(finestra, origine, s.riempimenti, {
-            nome: s.nome ?? `RG ${i + 1}`, ...(agoBase ? { ago: agoBase + i } : {}),
+            nome: s.nome ?? `RG ${i + 1}`, ...(agoBase ? { ago: agoBase + i } : {}), ...(progetto.dati ? { parametri: progetto.dati } : {}),
           });
           punti += esito.punti; riempite += esito.macchie; nonRiempite += esito.chieste - esito.macchie;
+          salvati &&= !!esito.parametri_salvati;
           continue;
         }
         const esito = await puntiAStilista(finestra, {
           origine_mm: origine, punti: puntiDaPolilinee(s.polylines), nome: s.nome ?? `RG ${i + 1}`,
-          ...(agoBase ? { ago: agoBase + i } : {}),
+          ...(agoBase ? { ago: agoBase + i } : {}), ...(progetto.dati ? { parametri: progetto.dati } : {}),
         });
         punti += esito.punti_letti; salti += esito.salti; ago = esito.ago;
+        salvati &&= !!esito.parametri_salvati;
       }
       const quanti = strati.length > 1 ? `${strati.length} oggetti, ` : '';
       const aghi = strati.length > 1 && agoBase ? `aghi ${agoBase}–${agoBase + strati.length - 1}` : ago;
       const piene = riempite || nonRiempite
         ? `, ${riempite} forme come riempimenti di Stilista${nonRiempite ? ` (${nonRiempite} non riuscite: vedi il log del plugin)` : ''}` : '';
-      a.stato(`Tornato in Stilista al suo posto: ${quanti}${punti.toLocaleString('it-IT')} punti (${salti} salti)${piene}, ${aghi}`);
+      a.stato(`Tornato in Stilista al suo posto: ${quanti}${punti.toLocaleString('it-IT')} punti (${salti} salti)${piene}, ${aghi}${notaParametri(progetto, salvati)}`);
       return;
     }
     const dst = a.dst();
-    await dstAStilista(finestra, dst.bytes, dst.nome);
-    a.stato(`Inviato a Stilista (${(dst.bytes.length / 1024).toFixed(1)} KB): si apre in un documento nuovo`);
+    const progetto = await progettoDaInviare(a, dst);
+    const salvati = await dstAStilista(finestra, dst.bytes, dst.nome, progetto.dati);
+    a.stato(`Inviato a Stilista (${(dst.bytes.length / 1024).toFixed(1)} KB): si apre in un documento nuovo${notaParametri(progetto, salvati)}`);
   } catch (e) {
     a.stato('Stilista: ' + (e as Error).message);
   }

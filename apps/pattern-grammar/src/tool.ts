@@ -327,6 +327,8 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
   // stessi ruoli per colore, stesso formato che copre il pezzo, e torna anche nel DST (R27). Il ricamo
   // torna in Stilista al suo posto se il cartamodello è venuto da lì, altrimenti come DST.
   const aggancio: AggancioStilista = {
+    tool: 'pattern-grammar',
+    riapri: (meta) => riapriProgetto(meta, 'progetto'),
     carica(svg, nome) {
       boundarySource = { text: svg, name: nome };
       scalaImport.scaleMode = 'auto'; // l'SVG del plugin dichiara width/height in mm
@@ -502,6 +504,32 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
   }
 
   /** Ricollega gli eventi degli elementi generati (il pannello può essere ricostruito). */
+  function riapriProgetto(meta: Record<string, unknown>, nomeFile: string): boolean {
+    if (meta.rgProject !== 'pattern-grammar' || !meta.params) return false;
+    const disegno = meta.drawing as DisegnoSalvato | undefined;
+    if (disegno?.text) {
+      boundarySource = { text: disegno.text, name: disegno.name || nomeFile };
+      Object.assign(scalaImport, disegno.scale ?? {});
+      for (const k of Object.keys(boundaryRoles)) delete boundaryRoles[k];
+      buildPanel();
+      reparseBoundary();
+      // i ruoli del file al posto di quello proposto dall'import (il confine sul contorno più grande)
+      for (const k of Object.keys(boundaryRoles)) delete boundaryRoles[k];
+      Object.assign(boundaryRoles, disegno.roles ?? {});
+      rebuildBoundary();
+    }
+    // i parametri per ultimi: formato e sagoma tornano quelli salvati, non quelli dell'import
+    const { importedBoundary: _sagoma, ...parametri } = migratePreset(meta.params as PatternConfig) as Record<string, unknown>;
+    Object.assign(cfg, NEUTRI, parametri);
+    buildPanel();
+    render();
+    $('boundaryStatus').textContent = disegno?.text
+      ? `${nomeFile}: progetto riaperto — parametri, disegno «${boundarySource!.name}» e ruoli dei colori`
+      : `${nomeFile}: parametri ripristinati dal DST (il disegno non c'era: caricalo a parte)`;
+    statoContorno = $('boundaryStatus').textContent ?? statoContorno;
+    return true;
+  }
+
   function wirePanel() {
     $('boundaryFile').addEventListener('change', (ev) => {
       const file = (ev.target as HTMLInputElement).files?.[0];
@@ -516,31 +544,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
           // parametri e il cartamodello restava quello che c'era (o nessuno).
           if (isDst) {
             const meta = readDstMetadata(new Uint8Array(reader.result as ArrayBuffer));
-            if (meta?.rgProject === 'pattern-grammar' && meta.params) {
-              const disegno = meta.drawing as DisegnoSalvato | undefined;
-              if (disegno?.text) {
-                boundarySource = { text: disegno.text, name: disegno.name || file.name };
-                Object.assign(scalaImport, disegno.scale ?? {});
-                for (const k of Object.keys(boundaryRoles)) delete boundaryRoles[k];
-                buildPanel();
-                reparseBoundary();
-                // i ruoli del file al posto di quello proposto dall'import (il confine sul contorno più grande)
-                for (const k of Object.keys(boundaryRoles)) delete boundaryRoles[k];
-                Object.assign(boundaryRoles, disegno.roles ?? {});
-                rebuildBoundary();
-              }
-              // i parametri per ultimi: formato e sagoma tornano quelli salvati, non quelli dell'import
-              const { importedBoundary: _sagoma, ...parametri } = migratePreset(meta.params as PatternConfig) as Record<string, unknown>;
-              Object.assign(cfg, NEUTRI, parametri);
-              buildPanel();
-              render();
-              $('boundaryStatus').textContent = disegno?.text
-                ? `${file.name}: progetto riaperto — parametri, disegno «${boundarySource!.name}» e ruoli dei colori`
-                : `${file.name}: parametri ripristinati dal DST (il disegno non c'era: caricalo a parte)`;
-              statoContorno = $('boundaryStatus').textContent ?? statoContorno;
-            } else {
-              $('boundaryStatus').textContent = `${file.name}: nessun parametro di questo tool nel DST`;
-            }
+            if (!meta || !riapriProgetto(meta, file.name)) $('boundaryStatus').textContent = `${file.name}: nessun parametro di questo tool nel DST`;
             return;
           }
           boundarySource = { text: String(reader.result), name: file.name };

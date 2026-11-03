@@ -580,6 +580,11 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   // Il testo caricato dice da solo se viene da Stilista (solo il suo SVG porta l'origine). Nel modo radiale la
   // rete sta nel campo macchina, non nel cartamodello: lì il ricamo va in Stilista come DST, in un documento nuovo.
   const aggancio: AggancioStilista = {
+    tool: 'rete-testa-speciale',
+    riapri(meta) {
+      riapri(meta);
+      return true;
+    },
     carica(svg, nome) {
       for (const k of Object.keys(ruoli)) delete ruoli[k];
       scala.scaleMode = 'auto'; // l'SVG del plugin dichiara width/height in mm (Illustrator 72 dpi lo scalerebbe)

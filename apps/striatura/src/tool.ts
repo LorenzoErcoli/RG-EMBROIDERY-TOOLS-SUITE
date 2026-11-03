@@ -468,6 +468,12 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
   // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è la sagoma, i fori le aree vuote ----
   let svgStilista: string | null = null;
   const aggancio: AggancioStilista = {
+    tool: 'striatura',
+    riapri(meta) {
+      if (!applyImportedProject(meta)) return false;
+      render();
+      return true;
+    },
     carica(svg, nome) {
       // l'SVG dichiara le sue misure: una larghezza reale lo riscalerebbe e il ritorno non cadrebbe più al suo posto
       params.realWidthMm = 0;
