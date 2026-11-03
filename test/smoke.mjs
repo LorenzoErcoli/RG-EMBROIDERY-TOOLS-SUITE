@@ -42,6 +42,7 @@ export { regolarizzaAnello, fitCerchio, fitRetta } from ${JSON.stringify(posix('
 export { regioniDiProva, bandaCurva, ventaglio, cerchio } from ${JSON.stringify(posix('apps/pittorico/src/sample.ts'))};
 export { lineaTratto as pmgLinea, cordoncino as pmgCordoncino, cuci as pmgCuci, strati as pmgStrati, progetto as pmgProgetto, leggiProgetto as pmgLeggiProgetto, PARAMETRI_MAGLIA as PMG_PARAMETRI } from ${JSON.stringify(posix('apps/punto-maglia/src/motore.ts'))};
 export { costruisci as rzCostruisci, pezzoDa as rzPezzoDa, rettangolo as rzRettangolo, stratiDaRisultato as rzStrati, stratiPerDst as rzStratiPerDst, progetto as rzProgetto, leggiProgetto as rzLeggiProgetto, daDiPassaggio as rzDaDiPassaggio, PARAMETRI_RAZZA as RZ_PARAMETRI } from ${JSON.stringify(posix('apps/razza/src/motore.ts'))};
+export { documentoVuoto as cmpVuoto, documentoEsempio as cmpEsempio, aggiungiDst as cmpAggiungi, apriDst as cmpApri, documentoDaDst as cmpDaDst, componi as cmpComponi, dstNudo as cmpNudo, dstDocumento as cmpDst, controlla as cmpControlla, contaGiunti as cmpContaGiunti, ordineProposto as cmpOrdine, refertoDi as cmpReferto, puntiDi as cmpPunti, sposta as cmpSposta } from ${JSON.stringify(posix('apps/compositore/src/documento.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 export * as ui from ${JSON.stringify(posix('packages/ui/src/anatomia.ts'))};
 export { DEBITO_ANATOMIA } from ${JSON.stringify(posix('packages/ui/src/debito-anatomia.ts'))};
@@ -834,6 +835,93 @@ if (rvUguali) for (let i = 0; i < rv.blocks.length && rvUguali; i++) {
   for (let j = 0; j < a.length; j++) if (Math.abs(a[j][0] - b[j][0]) > 1e-9 || Math.abs(a[j][1] - b[j][1]) > 1e-9) { rvUguali = false; break; }
 }
 check('DST vero: riscritto e riletto, gli stessi punti al millesimo', rvUguali, true);
+
+// I TAGLI dentro un ricamo letto (readDst → trim): senza, riscrivendo un DST coi suoi tagli i tagli sparivano e
+// due blocchi dello stesso ago restavano collegati da un salto. È ciò che serve al Compositore per mettere in fila
+// un ricamo senza cambiarlo.
+const rtProg = { label: 'TAGLI', coordinate_system: 'svg', paths: [
+  { needle: 1, points_mm: [[0, 0], [5, 0]] },
+  { needle: 1, points_mm: [[20, 0], [25, 0]], trim: true },
+  { needle: 1, points_mm: [[26, 0], [30, 0]] },
+] };
+const rtBytes = rg.buildDst(rtProg);
+const rt = rg.readDst(rtBytes);
+check('readDst: il blocco dopo il taglio è marcato, quello dopo un salto semplice no', rt.blocks.map((b) => !!b.trim), [false, true, false]);
+check('readDst: coi tagli, andata e ritorno BYTE per BYTE', Array.from(rg.buildDst(rg.dstProgramFromBlocks(rt.blocks, { label: rt.label }))).join(','), Array.from(rtBytes).join(','));
+check('readDst: nel DST vero di Stilista i tagli letti sono quelli che conta il referto', rv.blocks.filter((b) => b.trim).length, rg.misuraDst(dstVero).trim);
+
+// IL COMPOSITORE (apps/compositore): più ricami in fila in un documento solo. Le prove: un oggetto non cambia
+// passando di qui; i fili si uniscono per colore; i giunti fra oggetti seguono la regola (e la scelta a mano); il DST
+// che esce si riapre identico; il riordino abbassa i cambi d'ago.
+console.log('\ncompositore — il documento a oggetti (apps/compositore/src/documento.ts)');
+{
+  // un oggetto solo, dal DST vero di Stilista: esce con gli stessi blocchi e gli stessi punti
+  const d1 = rg.cmpVuoto();
+  const o1 = rg.cmpAggiungi(d1, dstVero, 'riferimento-a-mano.dst');
+  check('Stilista: 4 aghi del file → 4 fili nuovi (il DST non dice i colori)', [o1.fili, d1.fili.length], [[1, 2, 3, 4], 4]);
+  const r1 = rg.readDst(rg.cmpNudo(d1));
+  let uguali = r1.blocks.length === rv.blocks.length;
+  for (let i = 0; uguali && i < rv.blocks.length; i++) uguali = JSON.stringify(r1.blocks[i].points_mm) === JSON.stringify(rv.blocks[i].points_mm) && r1.blocks[i].needle === rv.blocks[i].needle;
+  check('Stilista: passato dal Compositore, gli stessi 62 blocchi con gli stessi punti e gli stessi aghi', uguali, true);
+  const m1 = rg.misuraDst(rg.cmpNudo(d1)), mv = rg.misuraDst(dstVero);
+  check('Stilista: lo stesso referto (punti, salti, tagli, cambi)', [m1.punti, m1.salti, m1.trim, m1.cambiAgo], [mv.punti, mv.salti, mv.trim, mv.cambiAgo]);
+
+  // due ricami della suite: la busta dice i colori, e il rosso di tutti e due diventa un filo solo
+  const busta = (fili) => rg.conBusta({ rgProject: 'net-45' }, { fili: fili.map((c) => ({ colore: c })) });
+  const dstA = rg.buildDst({ label: 'A', paths: [{ needle: 1, points_mm: [[0, 0], [10, 0], [10, 10]] }, { needle: 2, points_mm: [[0, 20], [10, 20]] }], metadata: busta(['#ff0000', '#0000ff']) });
+  const dstB = rg.buildDst({ label: 'B', paths: [{ needle: 1, points_mm: [[0, 0], [5, 0]] }], metadata: busta(['#FF0000']) });
+  const d = rg.cmpVuoto('prova');
+  const a = rg.cmpAggiungi(d, dstA, 'a.dst');
+  const b = rg.cmpAggiungi(d, dstB, 'b.dst');
+  check('busta: i fili per colore, il rosso è uno solo', [d.fili.map((f) => f.colore), a.fili, b.fili, a.tool], [['#ff0000', '#0000ff'], [1, 2], [1], 'net-45']);
+
+  // i giunti: A finisce blu, B è rosso → cambio d'ago. Con B blu: lontano → taglio, vicino → salto, a mano → come scelto
+  const tipi = () => rg.cmpComponi(d).giunti.map((g) => g.tipo);
+  check('giunti: filo diverso → cambio d’ago', tipi(), ['inizio', 'cambio']);
+  b.fili = [2];
+  rg.cmpSposta(b, 0, 20);                     // B parte a 10 mm dalla fine di A ([10,20] → [0,20])
+  check('giunti: stesso filo e 10 mm (> 2) → taglio', tipi(), ['inizio', 'taglio']);
+  rg.cmpSposta(b, 11, 20);                    // ora a 1 mm
+  check('giunti: stesso filo e 1 mm → salto collegato', tipi(), ['inizio', 'salto']);
+  rg.cmpSposta(b, 0, 20); b.arrivo = 'salto';
+  check('giunti: il salto scelto a mano resta salto, anche a 10 mm', tipi(), ['inizio', 'salto']);
+  const avvisi = rg.cmpControlla(d, rg.cmpComponi(d), rg.cmpReferto(d));
+  check('controllo: il salto lungo senza taglio è segnalato, sull’oggetto giusto', avvisi.filter((x) => x.livello === 'attenzione' && x.oggetto === b.id).length, 1);
+  b.arrivo = 'auto';
+  check('i punti in macchina sono quelli degli oggetti', rg.misuraDst(rg.cmpNudo(d)).punti, rg.cmpPunti(a) + rg.cmpPunti(b));
+
+  // il DST del documento si riapre: stessi oggetti, stessi fili, stessi spostamenti; risalvato, stessi byte
+  const c = rg.cmpAggiungi(d, dstB, 'c.dst'); c.spento = true; rg.cmpSposta(c, 3.3, -7.1);
+  const salvato = rg.cmpDst(d);
+  const riaperto = rg.cmpDaDst(salvato);
+  // le chiavi in ordine fisso: conta cosa c'è, non in che ordine l'ha scritto il JSON
+  const forma = (x) => JSON.stringify({ n: x.nome, f: x.fili, r: x.regole, o: x.oggetti.map((o) => [o.id, o.nome, o.file, o.tool, o.fili, o.dx, o.dy, o.arrivo, !!o.spento, o.blocchi.map((k) => [k.ago, k.punti, !!k.taglio])]) });
+  check('riaprire: il documento torna com’era (anche l’oggetto spento, che nel DST non c’è)', forma(riaperto), forma(d));
+  check('riaprire e risalvare: gli stessi byte', Array.from(rg.cmpDst(riaperto)).join(','), Array.from(salvato).join(','));
+  check('la busta: il tool, i fili in ordine di macchina, il referto dei byte veri', (() => { const p = rg.leggiProgetto(salvato); return [p.tool, p.fili.map((f) => f.colore), p.misure.punti]; })(), ['compositore', ['#ff0000', '#0000ff'], rg.cmpPunti(a) + rg.cmpPunti(b)]);
+  check('un DST modificato fuori (un blocco in meno) non si spaccia per il documento', rg.cmpDaDst(rg.buildDst({ paths: [{ needle: 1, points_mm: [[0, 0], [1, 0]] }], metadata: rg.readDst(salvato).metadata })), null);
+  const d2 = rg.cmpVuoto(); rg.cmpApri(d2, salvato, 'x.dst');
+  check('aprire il documento in un documento vuoto lo ridà intero', d2.oggetti.length, 3);
+  rg.cmpApri(d2, salvato, 'x.dst');
+  check('aprirlo in uno pieno ne aggiunge gli oggetti, coi fili uniti per colore', [d2.oggetti.length, d2.fili.length, new Set(d2.oggetti.map((o) => o.id)).size], [6, 2, 6]);
+
+  // dentro un oggetto: il taglio del file resta; due aghi del file messi sullo stesso filo → la macchina non si
+  // ferma più, quindi si taglia
+  const d3 = rg.cmpVuoto();
+  rg.cmpAggiungi(d3, rtBytes, 'tagli.dst');
+  check('dentro un oggetto il taglio del file resta', rg.misuraDst(rg.cmpNudo(d3)).trim, 1);
+  a.fili = [1, 1];
+  const ca = rg.cmpComponi({ ...d, oggetti: [a] });
+  check('due aghi sullo stesso filo: niente cambio, ma il taglio', [ca.sequenzaFili, ca.paths.map((p) => !!p.trim)], [[1], [false, true]]);
+
+  // il riordino: A(1) B(2) C(1) → i due sullo stesso filo insieme, un cambio in meno
+  const e = rg.cmpEsempio();
+  const prima = rg.cmpContaGiunti(rg.cmpComponi(e));
+  e.oggetti = rg.cmpOrdine(e);
+  const dopo = rg.cmpContaGiunti(rg.cmpComponi(e));
+  check('riordino dell’esempio: i cambi d’ago 2 → 1', [prima.cambi, dopo.cambi], [2, 1]);
+  check('riordino: nessun oggetto perso', e.oggetti.map((o) => o.id).sort(), ['o1', 'o2', 'o3']);
+}
 
 // I CAPI DELLE FILE DI RASO dentro un blocco cucito (tool `sfrangiatura`). Misurato contro verita'
 // nota: un raso generato dal core, dove le file si sanno gia' quante sono e dove finiscono.
@@ -7337,22 +7425,25 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
     ...[...src.matchAll(RE_HTML)].map((m) => m[1].trim()),
   ])].filter((e) => /[a-zàèéìòù]/.test(e) && !e.includes('${') && !e.includes('&nbsp;'));
   const delRegistro = (t) => new Set(regU5.parametriDelTool(t).flatMap((p) => [p.etichetta, p.tool[t]?.etichetta].filter(Boolean)));
-  const fuoriRegistro = Object.fromEntries(tools.map((t) => [t, etichetteDi(sorgenteDi(t)).filter((e) => !delRegistro(t).has(e))]));
+  // Il Compositore non è un tool: non ha parametri di punto nel registro (non è in TOOLS), i suoi campi sono del
+  // documento (nome, spostamento, come si arriva a un oggetto). Gli altri cricchetti dell'interfaccia (U1, U3, U4) li passa.
+  const toolsU5 = tools.filter((t) => t !== 'compositore');
+  const fuoriRegistro = Object.fromEntries(toolsU5.map((t) => [t, etichetteDi(sorgenteDi(t)).filter((e) => !delRegistro(t).has(e))]));
   const DEBITO_ETICHETTE_ATTUALE = 65;
   const debitoEt = rg.DEBITO_ETICHETTE;
   check(`il debito delle etichette è ${DEBITO_ETICHETTE_ATTUALE} (può solo scendere: se è sceso, abbassa DEBITO_ETICHETTE_ATTUALE)`, Object.values(debitoEt).reduce((n, v) => n + v.length, 0), DEBITO_ETICHETTE_ATTUALE);
   check('un\'etichetta nel pannello che il registro non ha deve stare nel debito (le parole del pannello e del registro non si separano di nuovo)',
-    tools.flatMap((t) => fuoriRegistro[t].filter((e) => !(debitoEt[t] ?? []).includes(e)).map((e) => `${t}: «${e}»`)), []);
+    toolsU5.flatMap((t) => fuoriRegistro[t].filter((e) => !(debitoEt[t] ?? []).includes(e)).map((e) => `${t}: «${e}»`)), []);
   check('...e nel debito non c\'è un\'etichetta che il pannello non scrive più o che ora il registro ha (la voce va tolta), né un tool che non esiste',
-    [...Object.entries(debitoEt).flatMap(([t, v]) => v.filter((e) => !(fuoriRegistro[t] ?? []).includes(e)).map((e) => `${t}: «${e}»`)), ...Object.keys(debitoEt).filter((t) => !tools.includes(t))], []);
+    [...Object.entries(debitoEt).flatMap(([t, v]) => v.filter((e) => !(fuoriRegistro[t] ?? []).includes(e)).map((e) => `${t}: «${e}»`)), ...Object.keys(debitoEt).filter((t) => !toolsU5.includes(t))], []);
 
   // ---- U5: i pannelli prendono i testi dal registro (testiCampo), non li scrivono a mano ---------------------------------
   const DEBITO_TESTI_ATTUALE = 11;
   const aManoSuRegistro = (t) => etichetteDi(sorgenteDi(t)).filter((e) => delRegistro(t).has(e));
   const haTestiCampo = (t) => /testiCampo\(/.test(sorgenteDi(t));
-  check(`i tool che non prendono ancora i testi da testiCampo sono ${DEBITO_TESTI_ATTUALE} su ${tools.length} (può solo scendere: se è sceso, abbassa DEBITO_TESTI_ATTUALE)`, rg.DEBITO_TESTI_A_MANO.length, DEBITO_TESTI_ATTUALE);
+  check(`i tool che non prendono ancora i testi da testiCampo sono ${DEBITO_TESTI_ATTUALE} su ${toolsU5.length} (può solo scendere: se è sceso, abbassa DEBITO_TESTI_ATTUALE)`, rg.DEBITO_TESTI_A_MANO.length, DEBITO_TESTI_ATTUALE);
   check('chi non è nel debito usa testiCampo (un tool nuovo prende i testi dal registro); chi è nel debito non lo usa ancora (altrimenti la voce va tolta); chi lo usa non ha scritto a mano etichette del registro',
-    [tools.filter((t) => !rg.DEBITO_TESTI_A_MANO.includes(t) && !haTestiCampo(t)), rg.DEBITO_TESTI_A_MANO.filter((t) => haTestiCampo(t) || !tools.includes(t)), tools.filter((t) => haTestiCampo(t) && aManoSuRegistro(t).length)], [[], [], []]);
+    [toolsU5.filter((t) => !rg.DEBITO_TESTI_A_MANO.includes(t) && !haTestiCampo(t)), rg.DEBITO_TESTI_A_MANO.filter((t) => haTestiCampo(t) || !toolsU5.includes(t)), toolsU5.filter((t) => haTestiCampo(t) && aManoSuRegistro(t).length)], [[], [], []]);
   check('net-45, pittorico, sfrangiatura, pettine, bitmap e broccato prendono i testi da testiCampo e non hanno scritto a mano nessuna etichetta del registro',
     ['net-45', 'pittorico', 'sfrangiatura', 'pettine', 'bitmap', 'broccato'].map((t) => [haTestiCampo(t), aManoSuRegistro(t)]), Array(6).fill([true, []]));
 

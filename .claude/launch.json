@@ -142,6 +142,19 @@
       "port": 5299,
       "autoPort": false,
       "url": "http://127.0.0.1:5299"
+    },
+    {
+      "name": "compositore-dev",
+      "runtimeExecutable": "npm",
+      "runtimeArgs": [
+        "run",
+        "dev",
+        "--workspace",
+        "apps/compositore"
+      ],
+      "port": 5284,
+      "autoPort": false,
+      "url": "http://127.0.0.1:5284"
     }
   ]
 }
