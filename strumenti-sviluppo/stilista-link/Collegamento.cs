@@ -28,6 +28,9 @@ namespace StilistaHostSkeleton
     ///   POST /punti            il ricamo di un tool, al suo posto nel documento aperto, a punti fissi (Collegamento.Ritorno.cs)
     ///   GET|POST /ingresso-uscita  ingresso e uscita di un riempimento: leggerli, scriverli (Collegamento.IngressoUscita.cs)
     ///   POST /riempimenti      macchie come copie del riempimento selezionato, con ingresso e uscita (Collegamento.Riempimenti.cs)
+    ///   POST /parametri /ago /cancella /ordine · GET /punti-cuciti   oggetti che ci sono già (Collegamento.Comandi.cs)
+    ///   POST /apri-copia /running   una copia del documento in una finestra nuova; copie di running su tracciati nuovi (Collegamento.Running.cs)
+    ///   POST /riscrivi-punti    i punti di un oggetto che c'è già, senza ricalcolo (Collegamento.Running.cs)
     ///
     /// Stilista apre un PROCESSO PER DOCUMENTO (più un processo d'avvio e qualche riserva «/WAIT»,
     /// tutti col plugin caricato): il server parte solo nel processo che mostra una finestra, sulla
@@ -198,6 +201,14 @@ namespace StilistaHostSkeleton
                 case "POST /ingresso-uscita": return RiceviIngressoUscita(r);
                 case "POST /riempimenti": return RiceviRiempimenti(r);
                 case "POST /salva-copia": return (Risposta)NelFiloDiStilista(SalvaCopia);
+                case "POST /parametri": return RiceviParametri(r);
+                case "POST /ago": return RiceviAgo(r);
+                case "POST /cancella": return RiceviCancella(r);
+                case "POST /ordine": return RiceviOrdine(r);
+                case "GET /punti-cuciti": return conScelta(PuntiCuciti);
+                case "POST /apri-copia": return RiceviApriCopia(r);
+                case "POST /running": return RiceviRunning(r);
+                case "POST /riscrivi-punti": return RiceviRiscriviPunti(r);
                 case "POST /ricalcola":
                     var sblocca = r.Query.ContainsKey("sblocca");
                     return conScelta(() => { _sblocca = sblocca; try { return Ricalcola(); } finally { _sblocca = false; } });

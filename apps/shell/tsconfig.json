@@ -26,6 +26,7 @@
       "@app/pattern-macchie": ["../pattern-macchie/src/tool.ts"],
       "@app/rete-testa-speciale": ["../rete-testa-speciale/src/tool.ts"],
       "@app/compositore": ["../compositore/src/tool.ts"],
+      "@app/rete-catenella": ["../rete-catenella/src/tool.ts"],
       "@rg/pattern-grammar": ["../../packages/pattern-grammar/src/index.ts"]
     }
   },

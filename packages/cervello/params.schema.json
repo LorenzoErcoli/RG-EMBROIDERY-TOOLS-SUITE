@@ -1590,6 +1590,86 @@
         }
       }
     },
+    "rete-catenella": {
+      "type": "object",
+      "properties": {
+        "spostaXMm": {
+          "$ref": "#/$defs/catenellaGridOffsetX",
+          "default": 0,
+          "x-id": "catenellaGridOffsetX"
+        },
+        "spostaYMm": {
+          "$ref": "#/$defs/catenellaGridOffsetY",
+          "default": 0,
+          "x-id": "catenellaGridOffsetY"
+        },
+        "moduloMinimoPct": {
+          "$ref": "#/$defs/catenellaMinModule",
+          "default": 22,
+          "x-id": "catenellaMinModule"
+        },
+        "passate": {
+          "$ref": "#/$defs/catenellaBasePasses",
+          "default": 3,
+          "x-id": "catenellaBasePasses"
+        },
+        "puntoBaseMm": {
+          "$ref": "#/$defs/catenellaBaseStitch",
+          "default": 2.5,
+          "x-id": "catenellaBaseStitch"
+        },
+        "puntoPassaggioMm": {
+          "$ref": "#/$defs/catenellaTravelStitch",
+          "default": 2.5,
+          "x-id": "catenellaTravelStitch"
+        },
+        "psilLunghezzaMm": {
+          "$ref": "#/$defs/catenellaPsilLength",
+          "default": 2.5,
+          "x-id": "catenellaPsilLength"
+        },
+        "psilLarghezzaMm": {
+          "$ref": "#/$defs/catenellaPsilWidth",
+          "default": 1.3,
+          "x-id": "catenellaPsilWidth"
+        },
+        "psilPassoMm": {
+          "$ref": "#/$defs/catenellaPsilPitch",
+          "default": 1.7,
+          "x-id": "catenellaPsilPitch"
+        },
+        "psilInizioMm": {
+          "$ref": "#/$defs/catenellaPsilStart",
+          "default": 0.6,
+          "x-id": "catenellaPsilStart"
+        },
+        "psilGiri": {
+          "$ref": "#/$defs/catenellaPsilTurns",
+          "default": 2,
+          "x-id": "catenellaPsilTurns"
+        },
+        "margineMm": {
+          "$ref": "#/$defs/catenellaContourMargin",
+          "default": 0,
+          "x-id": "catenellaContourMargin"
+        },
+        "corsie": {
+          "$ref": "#/$defs/catenellaEdgeLanes",
+          "default": true,
+          "x-id": "catenellaEdgeLanes"
+        },
+        "primaCorsiaMm": {
+          "$ref": "#/$defs/catenellaFirstLane",
+          "default": 1,
+          "x-id": "catenellaFirstLane"
+        },
+        "passoCorsiaMm": {
+          "$ref": "#/$defs/catenellaLaneSpacing",
+          "default": 1,
+          "x-id": "catenellaLaneSpacing"
+        }
+      }
+    },
     "razza": {
       "type": "object",
       "properties": {
@@ -4708,6 +4788,136 @@
       "description": "I passaggi sono il filo che va da una riga all'altra invece di essere tagliato: nel disegno sono più sottili e trasparenti del ricamo, perché nel pannello finiscono sotto le righe che vengono dopo.",
       "x-concetto": "interruttore"
     },
+    "catenellaGridOffsetX": {
+      "type": "number",
+      "title": "Sposta la griglia, X",
+      "description": "Dove cadono i moduli rispetto al contorno. I passi restano fissi.",
+      "x-unita": "mm",
+      "minimum": -200,
+      "maximum": 200,
+      "x-concetto": "griglia-moduli"
+    },
+    "catenellaGridOffsetY": {
+      "type": "number",
+      "title": "Sposta la griglia, Y",
+      "description": "Dove cadono i moduli rispetto al contorno. I passi restano fissi.",
+      "x-unita": "mm",
+      "minimum": -100,
+      "maximum": 100,
+      "x-concetto": "griglia-moduli"
+    },
+    "catenellaMinModule": {
+      "type": "number",
+      "title": "Tieni i pezzi di modulo da",
+      "description": "Sul bordo un modulo tagliato si cuce solo se ha dentro almeno questa parte della sua catenella. Il file di riferimento taglia fra il 21% e il 24%. Con 0 riempie fino al bordo.",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 100,
+      "x-concetto": "griglia-moduli"
+    },
+    "catenellaBasePasses": {
+      "type": "number",
+      "title": "Passate di base",
+      "description": "Andata, ritorno, andata su ogni metà del modulo. Con 2 il filo finisce dove era partito, non sul lato dell’uscita.",
+      "minimum": 1,
+      "maximum": 3,
+      "x-concetto": "passate-base"
+    },
+    "catenellaBaseStitch": {
+      "type": "number",
+      "title": "Punto delle basi, massimo",
+      "description": "Ogni tratto fra due vertici si divide in punti uguali, non più lunghi di così.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "maximum": 6,
+      "x-concetto": "punto-corsa"
+    },
+    "catenellaTravelStitch": {
+      "type": "number",
+      "title": "Punto dei passaggi, massimo",
+      "description": "I passaggi corrono sotto una catenella che arriva dopo.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "maximum": 6,
+      "x-concetto": "punto-passaggio"
+    },
+    "catenellaPsilLength": {
+      "type": "number",
+      "title": "Lunghezza della maglia",
+      "description": "In Stilista è PIWidthPsil.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "maximum": 6,
+      "x-concetto": "maglia-psil"
+    },
+    "catenellaPsilWidth": {
+      "type": "number",
+      "title": "Larghezza della maglia",
+      "description": "In Stilista è PIHeightPsil.",
+      "x-unita": "mm",
+      "minimum": 0.4,
+      "maximum": 4,
+      "x-concetto": "maglia-psil"
+    },
+    "catenellaPsilPitch": {
+      "type": "number",
+      "title": "Passo fra le maglie",
+      "description": "In Stilista è circa PIWidthPsil + PIPSILSpacing.",
+      "x-unita": "mm",
+      "minimum": 0.8,
+      "maximum": 5,
+      "x-concetto": "maglia-psil"
+    },
+    "catenellaPsilStart": {
+      "type": "number",
+      "title": "Prima maglia dopo",
+      "description": "Misurato sul file di riferimento. Fra i parametri di Stilista non si è trovato.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 3,
+      "x-concetto": "maglia-psil"
+    },
+    "catenellaPsilTurns": {
+      "type": "number",
+      "title": "Giri del triangolo",
+      "description": "Misurato sul file di riferimento. Fra i parametri di Stilista non si è trovato.",
+      "minimum": 1,
+      "maximum": 3,
+      "x-concetto": "maglia-psil"
+    },
+    "catenellaContourMargin": {
+      "type": "number",
+      "title": "Si tiene anche fuori dal contorno",
+      "description": "0 = il taglio è esatto sul contorno.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 20,
+      "x-concetto": "corsie-bordo"
+    },
+    "catenellaEdgeLanes": {
+      "type": "boolean",
+      "title": "Passaggi su corsie fuori dal bordo",
+      "description": "Dove il taglio lascia un passo lungo nelle basi, il filo gira fuori dal contorno, ognuno sulla sua corsia. Spento: resta il passo lungo.",
+      "x-concetto": "corsie-bordo"
+    },
+    "catenellaFirstLane": {
+      "type": "number",
+      "title": "Prima corsia, dal bordo",
+      "description": "La corsia più vicina al contorno.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 10,
+      "x-concetto": "corsie-bordo"
+    },
+    "catenellaLaneSpacing": {
+      "type": "number",
+      "title": "Distanza fra le corsie",
+      "description": "Più è larga, meno batte negli stessi punti, e più il filo va lontano dal bordo.",
+      "x-unita": "mm",
+      "minimum": 0.3,
+      "maximum": 3,
+      "x-concetto": "corsie-bordo"
+    },
     "dotMinDiameter": {
       "type": "number",
       "title": "Pallino minimo",
@@ -5854,7 +6064,8 @@
         "minimumTravelStitchLength",
         "travelStitchMm",
         "edgeTravelStitch",
-        "frameTravelStitch"
+        "frameTravelStitch",
+        "catenellaTravelStitch"
       ]
     },
     "punto-corsa": {
@@ -5863,7 +6074,8 @@
         "level05StitchLength",
         "thermoOutlineStitch",
         "outlineStitch",
-        "gridStitch"
+        "gridStitch",
+        "catenellaBaseStitch"
       ]
     },
     "larghezza-punto": {
@@ -6334,6 +6546,39 @@
       "parametri": [
         "toothMinLength",
         "toothMaxLength"
+      ]
+    },
+    "griglia-moduli": {
+      "descrizione": "Dove sta la griglia dei moduli rispetto al contorno. I passi della griglia sono del modulo e non si toccano: fanno combaciare gli incastri.",
+      "parametri": [
+        "catenellaGridOffsetX",
+        "catenellaGridOffsetY",
+        "catenellaMinModule"
+      ]
+    },
+    "passate-base": {
+      "descrizione": "Quante volte la base passa su ogni linea della rete, prima delle catenelle.",
+      "parametri": [
+        "catenellaBasePasses"
+      ]
+    },
+    "maglia-psil": {
+      "descrizione": "La maglia della catenella: un triangolo cucito a giri, una maglia ogni passo lungo la linea.",
+      "parametri": [
+        "catenellaPsilLength",
+        "catenellaPsilWidth",
+        "catenellaPsilPitch",
+        "catenellaPsilStart",
+        "catenellaPsilTurns"
+      ]
+    },
+    "corsie-bordo": {
+      "descrizione": "I passaggi lunghi lasciati dal taglio sul contorno: vanno fuori dal bordo, ognuno sulla sua corsia, per non battere negli stessi punti.",
+      "parametri": [
+        "catenellaContourMargin",
+        "catenellaEdgeLanes",
+        "catenellaFirstLane",
+        "catenellaLaneSpacing"
       ]
     },
     "pallino": {

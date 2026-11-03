@@ -84,6 +84,14 @@ master).
 | `POST /punti` | **il ricamo di un tool torna nel documento aperto, al suo posto**, come oggetto a punti manuali: `{ origine_mm, punti: [[x, y, salto]…] }` in mm nel riferimento dell'SVG della selezione; ago e colore quelli del primo oggetto selezionato |
 | `GET /ingresso-uscita` · `POST /ingresso-uscita` | **ingresso e uscita di un riempimento** (2026-10-29): leggerli (scelti, icone, primo e ultimo punto cucito) e scriverli: `{ origine_mm?, modo?: "ui"\|"diretto", oggetti: [{ indice?, inizio_mm, fine_mm }] }`, in mm nel riferimento del documento (o dell'SVG con `origine_mm`); abilita, scrive come un clic, ricalcola e rilegge subito e dopo 1,5 s. Vanno dati sul contorno: vedi [`sapere/codice/stilista-ingresso-uscita.md`](../../sapere/codice/stilista-ingresso-uscita.md) |
 | `POST /ricalcola?oggetti=…[&sblocca=1]` | per le prove: ricalcola quegli oggetti come Stilista (con `sblocca` senza lucchetto) e dice i punti prima e dopo |
+| `POST /parametri` | **parametri interi di oggetti che ci sono già** (2026-10-29): `{ oggetti: [{ indice, parametri: { PIThreadDistance: 400, … } }] }` → copia scrivibile, valori cambiati, rimessi, ricalcolo; risponde chiesto/prima/dopo e i punti prima e dopo. Da provare: [`sapere/codice/stilista-cosa-si-comanda.md`](../../sapere/codice/stilista-cosa-si-comanda.md) |
+| `POST /ago` | `{ oggetti: [i…], ago }`: l'ago di oggetti che ci sono già, col colore che quell'ago ha nella tavolozza (da provare) |
+| `POST /cancella?oggetti=i,j` | toglie quegli oggetti dal documento (da provare) |
+| `POST /ordine` | `{ da, a }`: sposta un oggetto al posto `a` della sequenza (da provare) |
+| `GET /punti-cuciti` | tutti i punti cuciti degli oggetti (`?oggetti=` o la selezione), `[x, y, tag]` in µm (da provare) |
+| `POST /apri-copia?file=nome.emg3` | apre in una finestra nuova una copia che sta in `%TEMP%\rg-stilista-link` (solo lì) — per lavorare su copie, mai sui documenti aperti (da provare) |
+| `POST /running` | `{ linee: [{ modello, dopo, contorno_mm, nome }], ricalcola? }`: copie di running del documento (passaggi, catenelle psil…) su tracciati nuovi, ognuna subito dopo l'oggetto `dopo`; per infittire una rete ([`sapere/riferimenti/rete-a-moduli.md`](../../sapere/riferimenti/rete-a-moduli.md)) (da provare) |
+| `POST /riscrivi-punti` | `{ oggetti: [{ indice, contorno_mm?, punti_mm }] }`: i punti di un oggetto che c'è già, senza ricalcolo; risponde coi punti subito e dopo 1,5 s |
 | `POST /salva-copia` | una copia del documento in `%TEMP%\rg-stilista-link\copia-*.emg3`, da rileggere col lettore offline (il file aperto non si tocca) |
 
 `?oggetti=0,3` sulle GET usa quegli oggetti del documento al posto della selezione (prove senza mouse; dal

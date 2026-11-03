@@ -515,6 +515,17 @@ collegamenti restano corti e il taglio si paga solo per cambiare blocco.
 
 ---
 
+## Rete a catenella (`rete-catenella`)
+
+Riempie un contorno di moduli che si attaccano fra loro: una ragnatela di basi, con passaggi nascosti e catenelle sopra. **È in prova: non è ancora stata cucita su macchina.**
+
+1. **Il contorno.** Carica un SVG o un DXF, oppure prendi la selezione da Stilista. Si usa l'anello più grande; le aree vuote non ci sono ancora.
+2. **Il modulo.** Carica il file del modulo (`.json`): i moduli dei clienti non stanno nella suite, li tieni tu. Senza, il tool usa un modulo di esempio inventato. I passi di colonne e righe vengono dal modulo e non si cambiano: sono loro a far combaciare gli incastri. La griglia intera si può spostare. Sul bordo un modulo tagliato si cuce solo se ha dentro abbastanza catenella (di serie il 22%, come nel file di riferimento); con 0 riempie fino al bordo.
+3. **I valori.** Passate di base, lunghezza dei punti, maglia della catenella. Quello che esce dal contorno si taglia; dove il taglio lascia un passo lungo nelle basi, il filo gira fuori dal contorno, ognuno sulla sua corsia, per non battere negli stessi punti.
+4. **L'uscita.** Esporta SVG e DST, o «Invia a Stilista». In Stilista arriva come oggetti a punti fissi, uno per modulo, non ancora come oggetti psil veri. Ogni modulo è un filo solo: si taglia solo fra un modulo e l'altro.
+
+Il tool calcola la catenella con una regola misurata su un file vero; Stilista può fare punti un po' diversi, soprattutto negli angoli.
+
 ## Rete testa speciale (`rete-testa-speciale`)
 
 **A cosa serve.** Una **rete a rombi** per le teste speciali, fatta di **serpentine**: la linea scende a zig-zag e risale con lo stesso zig-zag sull'altro lato, e le due insieme formano una colonna di rombi. Le colonne vicine si toccano, o si accavallano, con le punte. Il filo delle teste speciali è spesso: dove due fili si incrociano il punto si accorcia, e sul contorno le passate si mettono una **accanto** all'altra, mai una sopra l'altra.

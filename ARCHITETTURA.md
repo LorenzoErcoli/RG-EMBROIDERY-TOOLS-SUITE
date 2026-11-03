@@ -121,6 +121,7 @@ graph TD
 | **broccato** (Broccato) | ✅ **live** — da immagine a raso rado orizzontale coi passaggi nascosti sotto i colori successivi; nato dalla decodifica di `BROCCATO.dst` |
 | **cross-stitch** (Punto croce, era Cross-Stitch) | ✅ **live nella suite** (dal 2026-10-13; prima in «sviluppo») — migrato da ThreadRoute Grid Lab con motore dei passaggi riscritto; bersaglio: l’effetto maglia |
 | **razza** (Punto razza, era Pelle di razza) | ✅ **live nella suite** (dal 2026-10-13; prima in «sviluppo») — pallini di cordoncino piccoli ai bordi e grandi al centro, fissi e sfumature a scelta; motore nuovo (`apps/razza/src`), girato in un Web Worker. Ha fatto correggere l'importatore DXF del core (blocchi e `INSERT`) |
+| **rete-catenella** (Rete a catenella) | 🟡 **in «sviluppo»** (dal 2026-11-03) — un contorno riempito a moduli che si attaccano, con basi, passaggi sotto e catenelle sopra; motore nuovo (`apps/rete-catenella/src`). Il modulo del cliente si carica da un file fuori dal repo. Non ancora cucito su macchina |
 | **rete-testa-speciale** (Rete testa speciale) | 🟡 **in «sviluppo»** (dal 2026-10-15) — rete a rombi fatta di serpentine per le teste speciali; motore nuovo (`apps/rete-testa-speciale/src`), nato da una simulazione visiva decisa con Lorenzo prima del codice. Manca il DXF vero di una testa speciale |
 | 45-grid | da migrare quando lo tocchi (stesso schema) |
 | `bitmap_to_stitch` (repo Python) | satellite: contratti sì, codice no. Migrata la sola pipeline *immagine→punti→SVG*; il laboratorio DST/recipe con AI (CLIP/OpenAI) resta fuori scope |
