@@ -139,6 +139,17 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    del secondo solo se un colore ha quel ruolo): `daSinistra`, `rasoAngolo`, `rasoInterlinea`, `rasoPuntoMax`, `rasoFase`,
    `sfrangiatura`, `sfrangiaturaFuori` e gli stessi col 2 in fondo. Ponti, zone e punto sopra restano comuni: l'ho scelto
    io, da confermare. Un progetto senza i parametri del secondo gli dà quelli del primo, come lavorava allora.
+31. (2026-11-03) **L'anteprima dice di chi è il salto, e il filo non salta nemmeno dentro la macchia.** *«hai risolto i
+   passaggi delle macchia sotto quelle sopra? perchè ora non fa il passaggio fa dei salti»*: li guardava nell'anteprima.
+   I passaggi erano spenti di serie e i tratteggi erano i 175 salti del secondo livello, contati insieme al primo: sembrava
+   che il primo saltasse. Ora i passaggi fra le macchie del primo livello (`vista.fra`) sono accesi, i salti hanno un colore
+   e un conto per livello, e fra due stop non c'è più un tratteggio (lì il filo è tagliato). Ma c'era anche un difetto vero:
+   col raso fitto restavano salti dentro le macchie (9 a interlinea 0,25). Dove sotto il raso non c'è strada il filo
+   prende la stessa strada di fra le macchie: nella parte ancora da cucire, o fuori (`giraFuori`), mai sopra le righe già
+   cucite. *«considera che le macchie piccole sono quelle sotto e quelle grandi quelle sopra»*: sul suo disegno sotto
+   le viola (62) e sopra le verdi (177), confermato da lui, ed è già così. Il tool però sceglie il livello dall'ordine dei
+   colori, non dalla grandezza: non ho messo una regola, perché qui mediana (312 contro 242 mm²) e massimo (957 contro 1887)
+   direbbero il contrario l'una dell'altro. Se un disegno viene al contrario si cambia il ruolo nel menu.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso
@@ -372,12 +383,18 @@ La tabella qui sopra è con `secondoVista` a 0 (solo filo coperto).
 |---|---|---|---|
 | `secondoVista` 0, di serie | 51 (1.089 mm) | 85 mm | 0 |
 | di serie | **0** | 1.256 mm | 285 mm in 61 attraversamenti |
-| interlinea 0,2 | 2 (23 mm), dentro le macchie | 1.252 mm | 286 mm in 62 |
-| sfrangiatura 5 | 3 (45 mm) | 1.348 mm | 520 mm in 116 |
+| interlinea 0,25 | **0** | 1.309 mm | 288 mm in 64 |
+| interlinea 0,2 | **0** | 1.275 mm | 286 mm in 62 |
+| interlinea 0,15 | 1 (0,5 mm) | 1.401 mm | 291 mm in 64 |
+| angolo 45° | **0** | 1.291 mm | 290 mm in 64 |
+| sfrangiatura 5 | **0** | 1.415 mm | 538 mm in 122 |
+| interlinea 0,2, sfrangiatura 3 | 1 (0,6 mm) | 1.369 mm | 421 mm in 114 |
 
-**Lo zero non è garantito.** I salti rimasti con interlinea 0,2 sono dentro una macchia, dove fra due parti non c'è strada sotto il
-raso (decisione 8). Con la sfrangiatura 5 la zona sicura sotto il secondo si restringe, e se chiude le strade il filo passa a 0,5 mm dal
-suo contorno: lì le righe sfrangiate potrebbero non coprirlo. Da guardare a macchina. Il secondo livello salta ancora (175 salti).
+Prima di `giraFuori` (decisione 31), a parità del resto: 9 salti a interlinea 0,25, 2 a 0,2, 1 con l'angolo 45°, 3 con la sfrangiatura 5.
+
+**Lo zero non è garantito** su ogni disegno: il limite è `secondoVista` (con 5 mm, misurato prima di `giraFuori`, 19 salti). Con la
+sfrangiatura 5 la zona sicura sotto il secondo si restringe, e se chiude le strade il filo passa a 0,5 mm dal suo contorno: lì le righe
+sfrangiate potrebbero non coprirlo. Da guardare a macchina. Il secondo livello salta ancora: 175 salti, 69 coi ponti a 5 mm.
 
 ## Strade scartate
 - **Il punto sopra ridisegnato in ogni macchia** (2026-10-28): colonne che seguono la forma, denti sovrapposti, la

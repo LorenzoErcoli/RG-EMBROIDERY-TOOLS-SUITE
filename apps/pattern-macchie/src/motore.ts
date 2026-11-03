@@ -189,8 +189,8 @@ export type RisultatoMacchie = {
   sopra: Livello;
   /** Le zone: per ognuna le macchie nel loro ordine (col secondo livello, prima quelle del primo). */
   zone: number[][];
-  /** Per vedere i fili coi loro colori: il raso, il punto sopra e i passaggi sotto il raso (sono già in `macchie`). */
-  vista: { raso: Polyline[]; raso2: Polyline[]; sopra: Polyline[]; sotto: Polyline[] };
+  /** Per vedere i fili coi loro colori: il raso, il punto sopra, i passaggi sotto il raso e (`fra`) il filo fra le macchie del primo livello (sono già in `macchie`). */
+  vista: { raso: Polyline[]; raso2: Polyline[]; sopra: Polyline[]; sotto: Polyline[]; fra: Polyline[] };
   /**
    * Quante macchie del primo livello ne raggiungono un'altra col filo invece che col salto, e con quanto filo (mm); di
    * quel filo, quanto resta a vista (mm) e in quanti attraversamenti.
@@ -202,7 +202,7 @@ export type RisultatoMacchie = {
   ordine: number[];
   /** Quanti ponti, e i salti: fra una macchia e l'altra (nel raso e nel punto sopra, in mm), e dentro (punto sopra in gruppi staccati). */
   ponti: number;
-  saltiFra: { raso: number[]; sopra: number[] };
+  saltiFra: { raso: number[]; raso2: number[]; sopra: number[] };
   saltiDentro: number;
   /**
    * I salti dentro le macchie nel raso: dove da una parte all'altra non c'è strada SOTTO il raso (passare sopra
@@ -1755,8 +1755,8 @@ export function costruisciMacchie(
   const sx = par.sopraSfasaX || 0, sy = par.sopraSfasaY || 0;
   const baseSopra = sx || sy ? baseLinee.map((l) => l.map((p) => ({ x: p.x + sx, y: p.y + sy }))) : baseLinee;
 
-  const vista = { raso: [] as Polyline[], raso2: [] as Polyline[], sopra: [] as Polyline[], sotto: [] as Polyline[] };
-  const saltiFra = { raso: [] as number[], sopra: [] as number[] };
+  const vista = { raso: [] as Polyline[], raso2: [] as Polyline[], sopra: [] as Polyline[], sotto: [] as Polyline[], fra: [] as Polyline[] };
+  const saltiFra = { raso: [] as number[], raso2: [] as number[], sopra: [] as number[] };
   const sottoIlSecondo = { collegate: 0, mm: 0, aVista: 0, attraversamenti: 0 };
   let saltiDentro = 0, tolto = 0, passaggiScoperti = 0, ponti = 0;
   const stop: RisultatoMacchie['stop'] = [];
@@ -2018,11 +2018,35 @@ export function costruisciMacchie(
     // (dritti all'inizio della prima riga solo se il filo del salto non passa sopra una macchia: se no si entra dal punto
     // del bordo più vicino, e sotto il raso fino alle righe)
     const saltoDritto = passate && !unito && !(uscita && saltoSopra(uscita, primaRiga));
-    if (k > 0 && uscita && !unito) { const a = saltoDritto ? primaRiga : ingresso; saltiFra.raso.push(Math.hypot(a.x - uscita.x, a.y - uscita.y)); }
+    if (k > 0 && uscita && !unito) { const a = saltoDritto ? primaRiga : ingresso; (strato === 2 ? saltiFra.raso2 : saltiFra.raso).push(Math.hypot(a.x - uscita.x, a.y - uscita.y)); }
     // i pezzi di raso separati da un salto (dove fra una parte e l'altra non c'è strada sotto il raso)
     const pezziRaso: Polyline[] = [catenaRaso];
     let catena = catenaRaso;
     const passaggio = (da: Point, righe: Polyline[]) => passaggioIn(interno, da, righe);
+    /** Le righe di questa macchia già cucite, blocco per blocco: la loro sagoma (un'interlinea più larga). */
+    const cuciteQui: Polyline[] = [];
+    const sagomaDelBlocco = (righe: Polyline[]): Polyline => {
+      const n = { x: -verso.y, y: verso.x }, lungo = (p: Point) => p.x * verso.x + p.y * verso.y, largo = (p: Point) => p.x * n.x + p.y * n.y;
+      const capi = righe.map((r) => (lungo(r[0]) <= lungo(r[r.length - 1]) ? [r[0], r[r.length - 1]] : [r[r.length - 1], r[0]])).sort((a, b) => largo(a[0]) - largo(b[0]));
+      const scosta = (p: Point, s: number) => ({ x: p.x + n.x * s, y: p.y + n.y * s }), l = par.rasoInterlinea / 2, u = capi[capi.length - 1];
+      return [scosta(capi[0][0], -l), ...capi.map((c) => c[0]), scosta(u[0], l), scosta(u[1], l), ...capi.map((c) => c[1]).reverse(), scosta(capi[0][1], -l)];
+    };
+    // (col secondo livello sopra, dove sotto il raso non c'è strada: il filo passa dove questa macchia è ancora da cucire, o gira
+    // fuori da lei come fra una macchia e l'altra, piuttosto che un salto. Lorenzo, 2026-11-03: «andando a zero di salti»)
+    const giraFuori = (da: Point, a: Point): Polyline | null => {
+      const r = 1.5, attorno = [{ x: a.x - r, y: a.y - r }, { x: a.x + r, y: a.y - r }, { x: a.x + r, y: a.y + r }, { x: a.x - r, y: a.y + r }];
+      for (const c of [coperte, vicineAlBordo]) {
+        const giro = c?.strada(da, attorno, [...ordine.slice(k + 1).map((q) => forme[q]), m], [...ordine.slice(0, k).map((q) => forme[q]), ...cuciteQui]);
+        if (!c || !giro) continue;
+        const cucito = [...giro, a];
+        vista.fra.push(cucito);
+        sottoIlSecondo.mm += lunghezza(cucito);
+        sottoIlSecondo.aVista += c.aVista;
+        sottoIlSecondo.attraversamenti += c.attraversamenti;
+        return cucito;
+      }
+      return null;
+    };
     /** I quattro modi di cucire un blocco in serpentina: com'è, girato tutto, ogni riga girata, l'ordine girato. */
     const modi = (b: Polyline[]) => [b, b.slice().reverse().map((r) => r.slice().reverse()), b.map((r) => r.slice().reverse()), b.slice().reverse()];
     const restano = blocchi.slice();
@@ -2035,7 +2059,12 @@ export function costruisciMacchie(
         if (via) sotto = via;
         // (arrivati col filo fra i due livelli, un punto dritto fino alle righe piuttosto che un salto: Lorenzo vuole zero salti)
         else if (rotta && Math.hypot(righe[0][0].x - ingresso.x, righe[0][0].y - ingresso.y) <= Math.max(0, par.secondoVista)) sotto = [ingresso, righe[0][0]];
-        else { sotto = [righe[0][0]]; senzaSotto = true; }
+        else {
+          const daQui = rotta ? ingresso : unito ? uscita : undefined;
+          const giro = daQui ? giraFuori(daQui, righe[0][0]) : null;
+          if (giro) sotto = giro;
+          else { sotto = [righe[0][0]]; senzaSotto = true; }
+        }
       } else {
         let via = passaggio(fin, righe);
         if (!via) {
@@ -2061,7 +2090,9 @@ export function costruisciMacchie(
             }
           }
         }
+        const giro = via ? null : giraFuori(fin, righe[0][0]);
         if (via) for (const q of apasso(via, par.rasoPuntoMax).slice(1, -1)) catena.push(q);
+        else if (giro) for (const q of apasso(giro, 3).slice(1, -1)) catena.push(q);
         else { catena = []; pezziRaso.push(catena); passaggiScoperti++; }       // mai sopra il raso: piuttosto un salto
       }
       const catenaRaso = catena;
@@ -2073,6 +2104,7 @@ export function costruisciMacchie(
       ultimaRigaPer.set(i, righe[righe.length - 1]);
       fin = catenaRaso[catenaRaso.length - 1];
       interno.occupa(righe);
+      if (coperte) cuciteQui.push(sagomaDelBlocco(righe));
     }
     rasoCucito.push(...celle.flat());
     const sottoCucito = enforceMinStitch(apasso(sotto, 3), RASO_PUNTO_MIN);
@@ -2080,7 +2112,7 @@ export function costruisciMacchie(
     if (unito && senzaSotto) passaggiScoperti++;      // (unita alla macchia prima, ma all'inizio delle righe si salta)
     const rottaCucita = rotta && unisci ? enforceMinStitch(apasso(rotta, 3), RASO_PUNTO_MIN) : null;
     if (rottaCucita) {
-      vista.sotto.push(rottaCucita);
+      vista.fra.push(rottaCucita);
       sottoIlSecondo.collegate++;
       sottoIlSecondo.mm += lunghezza(rottaCucita);
       sottoIlSecondo.aVista += rottaVista;

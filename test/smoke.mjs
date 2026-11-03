@@ -6605,6 +6605,13 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     const zs = zero.sottoIlSecondo;
     check('di serie zero salti nel primo livello, a vista al più 12 mm per volta e in tutto meno di 300 mm',
       [zero.stop[0].livello.salti, zs.attraversamenti > 0, zs.aVista <= zs.attraversamenti * rg.PM_DI_SERIE.secondoVista, zs.aVista < 300], [0, true, true, true]);
+    // (Lorenzo, 2026-11-03: «ora non fa il passaggio fa dei salti»: col raso più fitto sotto il raso la strada può mancare: il filo
+    // gira fuori dalla macchia. E i passaggi si vedono a parte, e i salti del secondo livello non si contano col primo)
+    const fitto = rg.pmCostruisci([], chiare, {}, { ...rg.PM_DI_SERIE, rasoInterlinea: 0.25 }, scure);
+    const lunghiFra = fitto.vista.fra.flatMap((t) => t.slice(1).map((p, i) => Math.hypot(p.x - t[i].x, p.y - t[i].y)));
+    check('col raso fitto ancora zero salti nel primo livello, i passaggi a parte nella vista, i salti divisi per livello',
+      [fitto.stop[0].livello.salti, fitto.vista.fra.length >= fitto.sottoIlSecondo.collegate, lunghiFra.length > 0, fitto.saltiFra.raso.length, fitto.saltiFra.raso2.length === fitto.stop[1].livello.salti || fitto.saltiFra.raso2.length > 0],
+      [0, true, true, 0, true]);
     // OGNI LIVELLO COI SUOI PARAMETRI (Lorenzo, 2026-11-03: «ogni livello di macchia deve avere il suo pannellino dei parametri»)
     const propri = rg.pmCostruisci([], chiare.slice(0, 6), {}, { ...rg.PM_DI_SERIE, rasoInterlinea2: 0.8, rasoAngolo2: 45, sfrangiatura2: 0 }, scure.slice(0, 6));
     const uguali = rg.pmCostruisci([], chiare.slice(0, 6), {}, rg.PM_DI_SERIE, scure.slice(0, 6));
