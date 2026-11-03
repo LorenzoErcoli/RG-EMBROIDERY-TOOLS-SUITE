@@ -5,6 +5,21 @@ import type { SchedaParametri } from '../tipi';
 export const scheda: SchedaParametri = {
   parametri: [
     {
+      id: 'withBase', nome: 'conBase', etichetta: 'La base',
+      aiuto: 'La base col pattern su tutto il pannello. Spenta: niente base.',
+      tipo: 'bool', unita: '', predefinito: false, concetto: 'interruttore',
+    },
+    {
+      id: 'withOverlay', nome: 'conSopra', etichetta: 'Il punto sopra le macchie',
+      aiuto: 'Lo stesso punto della base sopra il raso, dentro le macchie. Spento: solo il raso.',
+      tipo: 'bool', unita: '', predefinito: false, concetto: 'interruttore',
+    },
+    {
+      id: 'secondLevelMargin', nome: 'secondoMargine', etichetta: 'Il primo livello entra sotto il secondo di',
+      aiuto: 'Dove una macchia del primo livello sta sotto una del secondo si ferma: ci entra solo di tanto, così non si sovrappone troppo filo.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.1, predefinito: 1, concetto: 'rientro',
+    },
+    {
       id: 'satinAngle', nome: 'rasoAngolo', etichetta: 'Direzione del raso',
       aiuto: 'Direzione delle righe del raso, gradi (90 = verticale).',
       tipo: 'num', unita: 'deg', min: -180, passo: 1, predefinito: 90, concetto: 'angolo',
