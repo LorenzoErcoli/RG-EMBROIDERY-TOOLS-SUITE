@@ -114,37 +114,52 @@ superiori ma in maiera normale. non deve appunto noatarsi il fatto che sopra poi
   i DST senza zone non cambiano. Niente linee rade; l'interruttore `coverNoPassLines` della prima versione è tolto.
 - **Il filo esce dal capo del trattino che entra sotto la zona**, ripassando sul trattino stesso, e arriva allo stesso modo
   sul prossimo. Lo spostamento resta cucito, mai un salto (solo se un vuoto taglia in due il pezzo).
-- **La strada ha un costo:** sotto una zona un millimetro vale 0,33, in vista 1, sopra i trattini in vista 30. Si tira
-  dritto dove il filo dritto non costa più della strada: niente scalini.
+- **La strada ha un costo:** sotto una zona un millimetro vale 0,9, in vista 1, sopra i trattini in vista 30. Conta
+  soprattutto che il passaggio sia corto. Si tira dritto dove il filo dritto non costa più della strada: niente scalini.
 - **I passaggi stanno lontani dal bordo della sagoma e dai vuoti** come il ricamo (trovato dallo smoke test: cucivano sul bordo).
 - **Non è un'area vuota** e `coverMarginMm` resta: i passaggi si contano nascosti solo a questa distanza dal bordo.
 
 Il ruolo `COVER_AREA` («Ricamo sopra»), la presa da Stilista e il bottone restano come sopra. Il pannello conta i metri in
 vista e sotto il ricamo, e può evidenziare i passaggi in arancione (solo a schermo).
 
+**Lo sfrangiato aiuta.** Lorenzo, vista la versione qui sopra: *«ma come mai ci sono questi passaggi così lunghi che passano
+in mezzo un po' a caso? Capisco la scelta di elimianare quelli coperti, ma secondo me è utile provare a costurire anche in
+base a dove verrà coeprto, per allungare o restringere un po' lo sfrnagiato e far partire o finirte nelle vicinanze di parti
+coperte»*. Misurato il perché: a grandezza 22 si cucivano 190 file, una su tre partiva nel bianco, e sotto le zone il filo
+costava troppo poco (0,33) rispetto a un giro in più. Fatto:
+
+- il primo e l'ultimo trattino di una fila, se non toccano una zona ma ne hanno una vicina, si **allungano** fin sotto, al
+  massimo di quanto vale il frastaglio (`jaggedLengthMm`); non si **accorciano** (non è servito: chi attraversa una zona ha già
+  un tratto coperto, e il filo ora può entrare o uscire da lì);
+- il filo costa 0,9 sotto le zone invece di 0,33: un passaggio corto conta più di uno nascosto. **Scambio accettato da me, da
+  giudicare a occhio:** un po' più di filo in vista, ma linee più corte.
+
+**Provato e scartato:** cucire ogni macchia intera prima di uscire. Colonna per colonna: 1.352 passaggi e 27 m di filo in più.
+Riga per riga: 1,46 m in vista contro 0,96, perché dentro una macchia grande i salti di riga restano.
+
 **Sul pannello laser di Lorenzo** (361 × 307 mm, 177 forme, il 52% del pezzo; variante 1):
 
-| | Grandezza 22: bocciata → ora | Grandezza 8: bocciata → ora |
+| | Grandezza 22: prima versione → rifatta → ora | Grandezza 8: prima versione → rifatta → ora |
 |---|---|---|
-| passaggi in tutto | 5,39 → 3,34 m | 18,14 → 5,33 m |
-| in vista | 1,47 → 0,97 m | 4,83 → 1,48 m |
-| passaggi con un giro di oltre una volta e mezza la distanza (oltre 10 mm) | 24 → 16 | 130 → 1 |
-| ingressi e uscite dalle zone | 420 → 228 | 1.380 → 348 |
-| trattini in vista attraversati | 165 → 59 | 362 → 181 |
-| filo | 128,7 → 126,9 m | 95,7 → 84,6 m |
+| passaggi in tutto | 5,39 → 3,34 → 3,01 m | 18,14 → 5,33 → 5,51 m |
+| in vista | 1,47 → 0,97 → 1,02 m | 4,83 → 1,48 → 1,87 m |
+| il più lungo | 120 → 140 → 76 mm | 142 → 60 → 38 mm |
+| oltre 60 mm | ? → 7 → 2 | ? → 1 → 0 |
+| partono sotto una zona | ? → 64% → 75% | ? → 64% → 68% |
+| con un giro di oltre una volta e mezza la distanza (oltre 10 mm) | 24 → 16 → 9 | 130 → 1 → 9 |
+| trattini in vista attraversati | 165 → 59 → 56 | 362 → 181 → 155 |
+| filo | 128,7 → 126,9 → 126,8 m | 95,7 → 84,6 → 86,1 m |
 
-Su 4 varianti: 0 salti; in vista 0,80–1,00 m a grandezza 22, 0,98–1,10 a 14, 1,48–1,55 a 8, 1,85–1,98 a 6. Senza zone sono
-9,6 m a grandezza 22 e 21,5 m a grandezza 8.
+(? = non misurato su quella versione.) Su 4 varianti: 0 salti; in vista 0,86–1,03 m a grandezza 22, 1,25–1,43 a 14, 1,88–1,89 a
+8, 2,35–2,49 a 6. Senza zone sono 9,6 m a grandezza 22 e 21,5 m a grandezza 8.
 
 **Cosa non è ancora a posto:**
-- qualche passaggio lungo resta: il più lungo fra 86 e 140 mm a grandezza 22, fra 34 e 136 mm a 8, fra 25 e 152 mm a 6;
-- a grandezza 22 restano 16 giri: le macchie grandi fanno muro e il filo le aggira per non passarci sopra;
-- i passaggi in vista sono quasi tutti storti (98%): sono pochi metri, ma non si confondono con le striature;
-- attraversano ancora dei trattini in vista (59 e 181), quando costa troppo aggirarli;
-- il punto più lungo sul pannello arriva a 3,6 mm a grandezza 8 e 3,9 mm a 6 (chiesti 3);
-- calcolo da 1,5 a 3,8 secondi a ogni modifica su quel pannello (più le macchie sono piccole, più è lento).
-
-**Cucire macchia per macchia, la stima di prima:** è di fatto questa strada, a file invece che a macchie intere.
+- in alcune varianti resta uno o due passaggi molto lunghi: il più lungo fra 67 e 132 mm a grandezza 22, fra 56 e 191 a 14, fra 38
+  e 139 a 8, fra 20 e 32 a 6. Cambiando *Variante* si può evitarli;
+- i passaggi in vista sono quasi tutti storti (95–98%): non si confondono con le striature;
+- attraversano ancora dei trattini in vista (56 e 155), quando costa troppo aggirarli;
+- il punto più lungo sul pannello arriva a 3,8 mm a grandezza 8 e 6 (chiesti 3);
+- calcolo da 1,1 a 3,3 secondi a ogni modifica su quel pannello.
 
 **Le etichette** sono in `REVISIONE-PARAMETRI.md`. Lorenzo le ha viste come proposta e non le ha corrette.
 
@@ -152,5 +167,5 @@ Su 4 varianti: 0 salti; in vista 0,80–1,00 m a grandezza 22, 0,98–1,10 a 14,
 da soli). **Non provati:** questa versione con Stilista, il bottone *Ricamo sopra dalla selezione di Stilista* sul vero
 Stilista (solo finto plugin), il ritorno in Stilista con le zone, il ricamo in macchina.
 
-DST di prova fuori dal repo, sul pannello: grandezza 22: 67.876 punti, 0 salti, 126,9 m, punto più lungo 3,09 mm; grandezza
-8: 53.230 punti, 0 salti, 84,6 m, punto più lungo 3,30 mm. I parametri e i ruoli si rileggono dal file.
+DST di prova fuori dal repo, sul pannello: grandezza 22: 67.887 punti, 0 salti, 126,8 m, punto più lungo 3,09 mm; grandezza
+8: 53.841 punti, 0 salti, 86,1 m, punto più lungo 3,50 mm. I parametri e i ruoli si rileggono dal file.

@@ -1717,7 +1717,12 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   const sTratZone = new Set(sTrattini(sTante.polylines).map((t) => `${t.x.toFixed(3)}:${t.alto.toFixed(1)}`));
   const sVisibili = sTrattini(sGen(sP)).length;
   const sUguali = sTratSenza.filter((t) => sTratZone.has(`${t.x.toFixed(3)}:${t.alto.toFixed(1)}`)).length;
-  check('i trattini rimasti sono quelli di sempre, non tagliati dal bordo delle zone', sUguali >= sTratZone.size * 0.95 && sTratZone.size < sVisibili, true);
+  check('i trattini rimasti sono quelli di sempre, non tagliati dal bordo delle zone', sUguali >= sTratZone.size * 0.85 && sTratZone.size < sVisibili, true);
+  // Lo sfrangiato aiuta (Lorenzo, 2026-11-03: «allungare… lo sfrangiato e far partire o finire nelle vicinanze di parti
+  // coperte»): nessun trattino cresce oltre il frastaglio, così non si nota.
+  const sAlti = sTrattini(sTante.polylines).map((t) => t.alto);
+  const sAltiSenza = sTratSenza.map((t) => t.alto);
+  check('allungato per arrivare sotto una zona, un trattino resta nella misura dello sfrangiato', Math.max(...sAlti) <= Math.max(...sAltiSenza) + sP.jaggedLengthMm + 1, true);
   check('sotto la zona i passaggi ci sono, e misurati', sSotto.passaggiCopertiMm > 0, true);
   const sMisuraSenza = (() => { let v = 0; for (const pl of sSenza.passaggi) for (let i = 1; i < pl.length; i++) { const a = pl[i - 1], b = pl[i]; const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.5)); for (let k = 0; k < n; k++) { const t = (k + 0.5) / n; const q = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; if (!rg.pointInPolygon(q, sZona)) v += Math.hypot(b.x - a.x, b.y - a.y) / n; } } return v; })();
   check('in vista non restano più passaggi di prima (a parità di zona)', sSotto.passaggiInVistaMm <= sMisuraSenza + 1, true);

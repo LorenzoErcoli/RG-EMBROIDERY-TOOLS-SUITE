@@ -128,13 +128,13 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
 
 **Come si usa.**
 1. **Sagoma** — la forma.
-2. **Colori e ruoli** — perimetro, aree vuote e **Ricamo sopra**: le zone dove dopo verrà cucita un'altra grafica. Le striature sono disegnate come sempre, così non si nota dove andrà la grafica; cadono solo quelle del tutto nascoste, e il filo passa da un gruppo di trattini al prossimo sotto le zone. Le zone si danno con un colore del disegno. Da Stilista basta selezionare insieme il contorno e le forme: il contorno più grande fa la sagoma e le forme di un altro colore dentro di lui diventano Ricamo sopra (si corregge dal menu). Oppure prendi prima la sagoma, poi seleziona le grafiche e premi *Ricamo sopra dalla selezione di Stilista*.
+2. **Colori e ruoli** — perimetro, aree vuote e **Ricamo sopra**: le zone dove dopo verrà cucita un'altra grafica. Le striature sono disegnate come sempre, così non si nota dove andrà la grafica; cadono solo quelle del tutto nascoste, i trattini che aprono e chiudono un gruppo si allungano un po' fin sotto una zona vicina, e il filo passa da un gruppo al prossimo per la strada corta, sotto le zone quando sono di strada. Le zone si danno con un colore del disegno. Da Stilista basta selezionare insieme il contorno e le forme: il contorno più grande fa la sagoma e le forme di un altro colore dentro di lui diventano Ricamo sopra (si corregge dal menu). Oppure prendi prima la sagoma, poi seleziona le grafiche e premi *Ricamo sopra dalla selezione di Stilista*.
 3. **Macchie** — tutto quello che cambia la macchia. **Per averle più piccole abbassa *Grandezza delle macchie***: sotto i 22 mm si accorciano da soli anche i trattini, il frastaglio e i passaggi. *Differenza fra piccole e grandi* dice quanto variano; a 0 sono tutte uguali.
 4. **Passaggi** — quanti e quanto alti. Con il Ricamo sopra le linee rade non ci sono. *Le striature entrano sotto il ricamo di* è la sicurezza per la ricentratura: fin lì dentro una zona i trattini restano interi. *Evidenzia i passaggi nell'anteprima* li mostra in arancione. La barra in basso dice quanti metri restano in vista e quanti finiscono sotto il ricamo.
 5. **Punto** — lunghezza/minimo del punto.
 6. **Filo** — il colore del filo.
 
-**Da sapere.** Con le macchie piccole ci sono più macchie, quindi più passaggi fra l'una e l'altra. Più forme ci sono sul pezzo, più filo sta nascosto; lontano dalle forme qualche passaggio resta in vista. Un progetto salvato con grandezza sotto i 22 mm, riaperto, viene diverso.
+**Da sapere.** Con le macchie piccole ci sono più macchie, quindi più passaggi fra l'una e l'altra. Più forme ci sono sul pezzo, più filo sta nascosto; lontano dalle forme qualche passaggio resta in vista. Se un passaggio lungo non ti piace, prova un'altra *Variante*. Un progetto salvato con grandezza sotto i 22 mm, riaperto, viene diverso.
 
 **Esportazione.** SVG o DST.
 
