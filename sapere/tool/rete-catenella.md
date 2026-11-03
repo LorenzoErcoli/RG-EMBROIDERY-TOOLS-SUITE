@@ -31,6 +31,10 @@ esattamente come questo»*.
 - **Un passo solo per tutte le colonne** (2026-11-03, *«i 0,22 mm non sono voluti»*): nel file le colonne alternano 100,44 e 100,218 mm. Il tool usa la metà della ripetizione A → A, che nel file è esatta: 100,329 mm. Il valore l'ho scelto io, perché tiene la larghezza del file e sposta le colonne B di 0,11 mm; il modulo non indica un passo migliore: da 100,0 a 100,7 mm i capi liberi che cadono sui vicini non cambiano in modo netto.
 - **I pezzi di modulo sul bordo: 22%** (2026-11-03, *«lascia 22%»*).
 - **Le corsie vanno bene anche a 18 mm dal bordo** (2026-11-03, *«corsie ok»*).
+- **I moduli sono collegati, senza rasafilo** (2026-11-03, *«i moduli sono tutti rasafilo non sono collegati non va bene»*). Il filo passa al modulo dopo lungo le linee, soprattutto quelle del modulo che arriva, che le cucirà sopra; le righe vanno a serpentina. Spegnendo la spunta ogni modulo è un cambio ago.
+- **La scelta psil vero o disegnato** (2026-11-03, *«sullo psil dammi la possibilità di scegliere se psil o no»*). Acceso: in Stilista oggetti psil copiati da una catenella del documento aperto. Spento: i punti del tool. Il DST ha sempre i punti del tool.
+- **La trama si infittisce dal tool** (2026-11-03, *«mi devo poter infittire le trame»*). Stesso metodo della versione C su una copia in Stilista ([`../riferimenti/rete-a-moduli.md`](../riferimenti/rete-a-moduli.md)), con la soglia sull'area della maglia. Lorenzo non ha dato un valore: i 20 mm² di serie sono una scelta mia.
+- **Il modulo caricato resta su quel PC** (browser), non nel repo: si ricarica solo cambiando PC o browser.
 
 ## Da decidere
 - Come nasce la ragnatela nella versione parametrica: il modulo è disegnato a mano e la regola che lo genera non è misurata.
@@ -54,8 +58,22 @@ Il file è stato pulito a mano e l'8% dei vertici delle sue catenelle sta fuori 
 
 **Quali pezzi di modulo si tengono sul bordo.** Riempiendo tutto il contorno venivano 42 moduli. Il file ha un modulo tagliato con dentro il 23,6% della sua catenella e non ne ha uno col 20,7%: la soglia sta fra i due. Di serie è 22% e tornano esattamente i 29 moduli. La regola è dedotta dal file e Lorenzo l'ha tenuta. Con 0 il tool riempie fino al bordo.
 
-**I movimenti fra oggetti.** Nel modulo due oggetti di seguito distano fino a 5,46 mm. Il tool cuce un punto solo fino a 7 mm (5,46 più circa un passo di maglia) e oltre gira sulla corsia. Sul contorno del file: un filo per modulo, nessun salto dentro un modulo, 823 tagli sulle corsie, corsia più lontana a 18 mm.
+**I movimenti fra oggetti.** Nel modulo due oggetti di seguito distano fino a 5,46 mm. Il tool cuce un punto solo fino a 7 mm (5,46 più circa un passo di maglia) e oltre gira sulla corsia. Sul contorno del file: nessun salto dentro un modulo, 823 tagli sulle corsie, corsia più lontana a 18 mm.
+
+**Come passa il filo fra i moduli nel file** (misurato): ogni modulo finisce con un passaggio lungo, da 83 a 322 mm, che corre sulla rete e **esce dal pannello**, più un trattino; il modulo dopo cambia ago (9, 10, 11, 12, 11 per colonna). Il tool invece li collega dentro la rete, come ha chiesto Lorenzo: sul contorno del file 28 fili, 4 m in tutto, 0 rasafili, un ago solo.
+
+**Quanto si infittisce sul contorno del file.** Di partenza 40 mm di catenella per cm²:
+
+| Maglie più grandi di | Linee nuove | Maglie rimaste intere, ogni due moduli | Catenella per cm² | Punti |
+|---|---|---|---|---|
+| 30 mm² | 404 | 6 | 42,8 mm | 363.694 |
+| 25 mm² | 784 | 8 | 44,8 mm | 378.843 |
+| 20 mm² | 1.355 | 20 | 47,9 mm | 404.399 |
+| 15 mm² | 1.912 | 36 | 50,6 mm | 426.114 |
+| 12 mm² | 3.043 | 58 | 55,4 mm | 467.647 |
+
+Oltre i 40 mm² non c'è niente da dividere. Linee da 6 a 8 mm di mediana, al massimo 11,4 mm.
 
 La simulazione ha trovato un errore che i test non vedevano: ogni oggetto diventava un tratto a sé, e nel DST erano 3.534 rasafili. Ora un test controlla che un modulo sia un filo solo.
 
-**Non ci sono ancora:** il running d'uscita verso il modulo dopo; le aree vuote nel contorno (si usa l'anello più grande); la versione parametrica; gli oggetti psil veri verso Stilista (ora arrivano come punti fissi, uno per modulo). La pulizia è il taglio esatto sul contorno, non la pulizia a mano.
+**Non ci sono ancora:** le aree vuote nel contorno (si usa l'anello più grande); la versione parametrica. La pulizia è il taglio esatto sul contorno, non la pulizia a mano.

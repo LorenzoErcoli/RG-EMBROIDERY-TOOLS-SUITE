@@ -8,6 +8,7 @@
 import { dstFromExportLayers, misuraDst, type Contour, type ExportLayer, type Point, type Polyline } from '@rg/core';
 import type { Ingresso, Motore, Risultato } from '@rg/cervello';
 import { moduloDiEsempio } from './esempio';
+import { conDeviazioni, infittisciModulo, type Deviazione, type EsitoInfittimento } from './infittisci';
 
 export type Xy = [number, number];
 
@@ -16,6 +17,10 @@ export interface OggettoModulo {
   /** Di una base: quale passata è, nella sua metà del modulo (1, 2, 3). */
   passata?: number;
   t: Xy[];
+  /** Una linea aggiunta dall'infittimento, non del modulo com'è. */
+  nuovo?: boolean;
+  /** Di una base: le linee nuove su cui fa andata e ritorno. */
+  deviazioni?: Deviazione[];
 }
 /** Un modulo: una o due varianti che si alternano a colonne, e i passi che le fanno combaciare. Fissi: sono loro gli incastri. */
 export interface ModuloRete {
@@ -40,6 +45,11 @@ export interface ParametriRete {
   spostaXMm: number;
   spostaYMm: number;
   moduloMinimoPct: number;
+  collegaModuli: boolean;
+  psilVero: boolean;
+  infittisci: boolean;
+  magliaMassimaMm2: number;
+  infittisciVariante: number;
   corsie: boolean;
   primaCorsiaMm: number;
   passoCorsiaMm: number;
@@ -49,7 +59,8 @@ export interface ParametriRete {
 export const PARAMETRI_RETE: ParametriRete = {
   passate: 3, puntoBaseMm: 2.5, puntoPassaggioMm: 2.5,
   psilLunghezzaMm: 2.5, psilLarghezzaMm: 1.3, psilPassoMm: 1.7, psilInizioMm: 0.6, psilGiri: 2,
-  margineMm: 0, spostaXMm: 0, spostaYMm: 0, moduloMinimoPct: 22,
+  margineMm: 0, spostaXMm: 0, spostaYMm: 0, moduloMinimoPct: 22, collegaModuli: true, psilVero: true,
+  infittisci: false, magliaMassimaMm2: 20, infittisciVariante: 1,
   corsie: true, primaCorsiaMm: 1, passoCorsiaMm: 1,
 };
 
@@ -214,12 +225,26 @@ export function stradaInCorsia(b: Bordo, a0: Xy, b0: Xy, p: ParametriRete): { t:
   return { t: [a0, ...via.filter((q) => d(q, a0) > 0.05 && d(q, b0) > 0.05), b0], corsia: c };
 }
 
-export interface OggettoRete { tipo: OggettoModulo['tipo']; t: Xy[]; punti: Xy[]; cella: Cella }
+export interface OggettoRete {
+  tipo: OggettoModulo['tipo']; t: Xy[]; punti: Xy[]; cella: Cella;
+  /** Una linea dell'infittimento. */
+  nuovo?: boolean;
+  /** Il filo che porta al modulo dopo. */
+  collegamento?: boolean;
+}
 export interface ContiRete {
   moduli: number; basi: number; catenelle: number; passaggi: number; punti: number; filoMm: number;
   tagliSulleCorsie: number; corsieUsate: number; corsiaPiuLontanaMm: number; passiLunghi: number; movimentiLunghi: number;
+  /** I fili che passano da un modulo al dopo, e quanti non ce l'hanno fatta (lì si salta). */
+  collegamenti: number;
+  collegamentiMm: number;
+  saltiFraModuli: number;
+  lineeNuove: number;
+  /** Maglie oltre la soglia rimaste intere, in un periodo della griglia. */
+  maglieIntere: number;
+  catenellaPerCm2: number;
 }
-export interface EsitoRete { oggetti: OggettoRete[]; conti: ContiRete; celle: Cella[]; anello: Xy[] }
+export interface EsitoRete { oggetti: OggettoRete[]; conti: ContiRete; celle: Cella[]; anello: Xy[]; collegati: boolean }
 
 /** L'anello più grande del contorno, in coordinate [x, y]. Gli altri non si usano: le aree vuote non ci sono ancora. */
 export function anelloDiContorno(sagoma: Contour[]): Xy[] {
@@ -232,26 +257,137 @@ export function anelloDiContorno(sagoma: Contour[]): Xy[] {
   return (meglio ?? []).map((p) => [p.x, p.y]);
 }
 
-/** Il ricamo: ogni cella col suo modulo, tagliato sul contorno, nell'ordine di cucitura del modulo. */
-export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRete): EsitoRete {
+/** Il filo da un modulo al dopo: lungo le linee, soprattutto quelle del modulo che arriva, che le cucirà sopra. Null se le linee non si toccano. */
+function strada(prima: OggettoRete[], dopo: OggettoRete[], da: Xy, a: Xy, dentro: (q: Xy) => boolean): Xy[] | null {
+  const PASSO = 2.5, PONTE = 3;
+  const nodi: Xy[] = [], chiavi = new Map<string, number>();
+  const nodo = (q: Xy): number => {
+    const k = `${Math.round(q[0] * 20)},${Math.round(q[1] * 20)}`;
+    let i = chiavi.get(k);
+    if (i === undefined) { i = nodi.length; nodi.push(q); chiavi.set(k, i); }
+    return i;
+  };
+  const archi: Array<Array<[number, number]>> = [];
+  const lega = (x: number, y: number, c: number): void => { (archi[x] ??= []).push([y, c]); (archi[y] ??= []).push([x, c]); };
+  const linee = (lista: OggettoRete[], peso: number): void => {
+    for (const o of lista) {
+      for (let i = 1; i < o.t.length; i++) {
+        const u = o.t[i - 1], v = o.t[i], l = d(u, v);
+        if (!dentro([(u[0] + v[0]) / 2, (u[1] + v[1]) / 2])) continue; // il tratto che salta un taglio sul contorno non è una linea
+        const n = Math.max(1, Math.ceil(l / PASSO));
+        let x = nodo(u);
+        for (let s = 1; s <= n; s++) {
+          const y = nodo([u[0] + ((v[0] - u[0]) * s) / n, u[1] + ((v[1] - u[1]) * s) / n]);
+          if (y !== x) lega(x, y, (l / n) * peso);
+          x = y;
+        }
+      }
+    }
+  };
+  linee(dopo, 1);
+  linee(prima, 3);
+  if (!nodi.length) return null;
+  // i ponti fra linee vicine, più cari di ogni linea
+  const griglia = new Map<string, number[]>();
+  nodi.forEach((q, i) => { const k = `${Math.floor(q[0] / PONTE)},${Math.floor(q[1] / PONTE)}`; const l = griglia.get(k); if (l) l.push(i); else griglia.set(k, [i]); });
+  nodi.forEach((q, i) => {
+    const cx = Math.floor(q[0] / PONTE), cy = Math.floor(q[1] / PONTE);
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const j of griglia.get(`${cx + a},${cy + b}`) ?? []) {
+      if (j <= i) continue;
+      const l = d(q, nodi[j]);
+      if (l <= PONTE) lega(i, j, l * 5);
+    }
+  });
+  const vicino = (q: Xy): number => { let m = 0, e = Infinity; nodi.forEach((x, i) => { const c = d(x, q); if (c < e) { e = c; m = i; } }); return m; };
+  const s = vicino(da), f = vicino(a);
+  // Dijkstra con un mucchio binario
+  const dist = new Float64Array(nodi.length).fill(Infinity), viene = new Int32Array(nodi.length).fill(-1);
+  const mucchio: Array<[number, number]> = [[0, s]];
+  dist[s] = 0;
+  while (mucchio.length) {
+    const [c, x] = mucchio[0];
+    const ultimo = mucchio.pop()!;
+    if (mucchio.length) {
+      mucchio[0] = ultimo;
+      for (let i = 0; ;) {
+        const l = 2 * i + 1, r = l + 1;
+        let m = i;
+        if (l < mucchio.length && mucchio[l][0] < mucchio[m][0]) m = l;
+        if (r < mucchio.length && mucchio[r][0] < mucchio[m][0]) m = r;
+        if (m === i) break;
+        [mucchio[i], mucchio[m]] = [mucchio[m], mucchio[i]];
+        i = m;
+      }
+    }
+    if (c > dist[x]) continue;
+    if (x === f) break;
+    for (const [y, w] of archi[x] ?? []) {
+      if (c + w >= dist[y]) continue;
+      dist[y] = c + w; viene[y] = x;
+      mucchio.push([c + w, y]);
+      for (let i = mucchio.length - 1; i > 0;) {
+        const g = (i - 1) >> 1;
+        if (mucchio[g][0] <= mucchio[i][0]) break;
+        [mucchio[i], mucchio[g]] = [mucchio[g], mucchio[i]];
+        i = g;
+      }
+    }
+  }
+  if (dist[f] === Infinity) return null;
+  const via: Xy[] = [];
+  for (let x = f; x >= 0; x = viene[x]) via.push(nodi[x]);
+  via.reverse();
+  return [da, ...via, a];
+}
+
+const infittiti = new WeakMap<ModuloRete, Map<string, EsitoInfittimento>>();
+/** Il calcolo delle maglie costa: per ogni modulo e valori si fa una volta sola. */
+function moduloInfittito(modulo: ModuloRete, p: ParametriRete): EsitoInfittimento {
+  let m = infittiti.get(modulo);
+  if (!m) { m = new Map(); infittiti.set(modulo, m); }
+  const k = `${p.magliaMassimaMm2}|${p.infittisciVariante}`;
+  let e = m.get(k);
+  if (!e) { e = infittisciModulo(modulo, p.magliaMassimaMm2, p.infittisciVariante); m.set(k, e); }
+  return e;
+}
+
+/**
+ * Il ricamo: ogni cella col suo modulo, tagliato sul contorno, nell'ordine di cucitura del modulo. Le righe vanno a serpentina, così il modulo
+ * dopo è sempre vicino. `zona`: dove vale l'infittimento; assente, dappertutto.
+ */
+export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRete, zona?: Xy[] | null): EsitoRete {
   const xs = anello.map((q) => q[0]), ys = anello.map((q) => q[1]);
   const ingombro: [number, number, number, number] = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
   const partenza = modulo.origine ?? [ingombro[0], ingombro[1]];
   const celle = griglia(ingombro, modulo, [partenza[0] + p.spostaXMm, partenza[1] + p.spostaYMm]);
   const dentro = maschera(anello, p.margineMm);
   const bordo = preparaBordo(anello);
-  const catenellaIntera = (v: { oggetti: OggettoModulo[] }): number => v.oggetti.reduce((s, o) => s + (o.tipo === 'catenella' ? lunghezza(o.t) : 0), 0);
+  const dentroZona = zona && zona.length >= 3 ? maschera(zona, 0) : null;
+  const piu = p.infittisci ? moduloInfittito(modulo, p) : null;
+  const lavoro = piu ? piu.modulo : modulo;
+  const catenellaIntera = (v: { oggetti: OggettoModulo[] }): number => v.oggetti.reduce((s, o) => s + (o.tipo === 'catenella' && !o.nuovo ? lunghezza(o.t) : 0), 0);
   const intere = { A: catenellaIntera(modulo.varianti.A), B: catenellaIntera(modulo.varianti.B) };
   const oggetti: OggettoRete[] = [];
-  const conti: ContiRete = { moduli: 0, basi: 0, catenelle: 0, passaggi: 0, punti: 0, filoMm: 0, tagliSulleCorsie: 0, corsieUsate: 0, corsiaPiuLontanaMm: 0, passiLunghi: 0, movimentiLunghi: 0 };
-  for (const cella of celle) {
+  const conti: ContiRete = { moduli: 0, basi: 0, catenelle: 0, passaggi: 0, punti: 0, filoMm: 0, tagliSulleCorsie: 0, corsieUsate: 0, corsiaPiuLontanaMm: 0, passiLunghi: 0, movimentiLunghi: 0, collegamenti: 0, collegamentiMm: 0, saltiFraModuli: 0, lineeNuove: 0, maglieIntere: piu?.intere ?? 0, catenellaPerCm2: 0 };
+  const inOrdine = [...celle].sort((a, b) => a.riga - b.riga || (((a.riga % 2) + 2) % 2 === 0 ? a.colonna - b.colonna : b.colonna - a.colonna));
+  const nellaZona = (t: Xy[], c: Cella): boolean => { if (!dentroZona) return true; const q = t[t.length >> 1]; return dentroZona([q[0] + c.dx, q[1] + c.dy]); };
+  let moduloPrima: OggettoRete[] | null = null;
+  let catenellaMm = 0;
+  for (const cella of inOrdine) {
     const usati: OggettoRete[] = [];
-    for (const o of modulo.varianti[cella.variante].oggetti) {
+    let originaleMm = 0;
+    for (const o of lavoro.varianti[cella.variante].oggetti) {
       if (o.tipo === 'base' && (o.passata ?? 1) > p.passate) continue;
-      const pezzi = pezziDentro(o.t.map((q): Xy => [q[0] + cella.dx, q[1] + cella.dy]), dentro);
+      if (o.nuovo && !nellaZona(o.t, cella)) continue;
+      const attive = o.deviazioni?.filter((x) => nellaZona(x.linea, cella)) ?? [];
+      const tracciato = attive.length ? conDeviazioni(o.t, attive) : o.t;
+      const pezzi = pezziDentro(tracciato.map((q): Xy => [q[0] + cella.dx, q[1] + cella.dy]), dentro);
       if (!pezzi.length) continue;
       if (o.tipo === 'catenella') {
-        for (const x of pezzi) usati.push({ tipo: 'catenella', t: x, punti: catenella(x, p), cella });
+        for (const x of pezzi) {
+          usati.push({ tipo: 'catenella', t: x, punti: catenella(x, p), cella, ...(o.nuovo ? { nuovo: true } : {}) });
+          if (!o.nuovo) originaleMm += lunghezza(x);
+        }
         continue;
       }
       const passo = o.tipo === 'base' ? p.puntoBaseMm : p.puntoPassaggioMm;
@@ -270,8 +406,7 @@ export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRet
       usati.push({ tipo: o.tipo, t: pezzi.flat(), punti, cella });
     }
     // un pezzo di modulo sul bordo si tiene solo se porta abbastanza catenella: sul file di riferimento il taglio cade fra il 21% e il 24%
-    const dentroMm = usati.reduce((s, o) => s + (o.tipo === 'catenella' ? lunghezza(o.t) : 0), 0);
-    if (dentroMm <= 0 || dentroMm < (intere[cella.variante] * p.moduloMinimoPct) / 100) continue;
+    if (originaleMm <= 0 || originaleMm < (intere[cella.variante] * p.moduloMinimoPct) / 100) continue;
     conti.moduli++;
     // il filo non si taglia dentro un modulo (Lorenzo: «senza salti o passaggi»): dove il taglio sul contorno lascia un movimento lungo fra due oggetti, gira su una corsia
     const continui: OggettoRete[] = [];
@@ -289,18 +424,36 @@ export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRet
       }
       continui.push(o);
     }
+    // il filo passa al modulo dopo senza tagliarsi (Lorenzo: «i moduli sono tutti rasafilo non sono collegati non va bene»)
+    if (p.collegaModuli && moduloPrima?.length && continui.length) {
+      const coda = moduloPrima[moduloPrima.length - 1].punti, a = coda[coda.length - 1], b = continui[0].punti[0];
+      if (d(a, b) > MOVIMENTO_LUNGO_MM) {
+        // se i due moduli non si toccano, per esempio ai lati di un incavo, si cerca fra tutto quello già cucito
+        const via = strada(moduloPrima, continui, a, b, dentro) ?? strada(oggetti.filter((o) => o.t.some((q) => q[0] > Math.min(a[0], b[0]) - 60 && q[0] < Math.max(a[0], b[0]) + 60 && q[1] > Math.min(a[1], b[1]) - 60 && q[1] < Math.max(a[1], b[1]) + 60)), continui, a, b, dentro) ?? (p.corsie ? stradaInCorsia(bordo, a, b, p)?.t ?? null : null);
+        if (via) {
+          const ponte: OggettoRete = { tipo: 'passaggio', t: via, punti: ricampiona(via, p.puntoPassaggioMm), cella, collegamento: true };
+          oggetti.push(ponte);
+          conti.collegamenti++;
+          conti.collegamentiMm += lunghezza(via);
+          conti.punti += ponte.punti.length;
+          conti.filoMm += lunghezza(ponte.punti);
+        } else conti.saltiFraModuli++;
+      }
+    }
+    if (continui.length) moduloPrima = continui;
     for (const o of continui) {
-      if (o.tipo === 'base') conti.basi++; else if (o.tipo === 'catenella') conti.catenelle++; else conti.passaggi++;
+      if (o.tipo === 'base') conti.basi++; else if (o.tipo === 'catenella') { conti.catenelle++; catenellaMm += lunghezza(o.t); if (o.nuovo) conti.lineeNuove++; } else conti.passaggi++;
       conti.punti += o.punti.length;
       conti.filoMm += lunghezza(o.punti);
       oggetti.push(o);
     }
   }
-  return { oggetti, conti, celle, anello };
+  const area = Math.abs(anello.reduce((s, q, i) => { const r = anello[(i + 1) % anello.length]; return s + q[0] * r[1] - r[0] * q[1]; }, 0)) / 2;
+  conti.catenellaPerCm2 = area ? catenellaMm / (area / 100) : 0;
+  return { oggetti, conti, celle, anello, collegati: p.collegaModuli };
 }
 
 const TINTE = ['#a5432f', '#2a6db0', '#1f8a5f', '#8a4fa6', '#c07a15', '#277f8e'];
-/** Uno strato per modulo: nel DST ogni modulo è un cambio ago, come nel file di riferimento. */
 // nel modulo di riferimento due oggetti consecutivi distano fino a 5,46 mm, senza salti; i capi delle maglie aggiungono fino a un passo
 const MOVIMENTO_LUNGO_MM = 7;
 
@@ -326,7 +479,9 @@ function tratti(lista: OggettoRete[]): Polyline[] {
   return out;
 }
 
+/** Coi moduli collegati è un filo solo, senza cambi ago; se no uno strato per modulo: nel DST ogni modulo è un cambio ago, come nel file di riferimento. */
 export function stratiRete(e: EsitoRete): ExportLayer[] {
+  if (e.collegati) return e.oggetti.length ? [{ id: 'rete', color: TINTE[0], polylines: tratti(e.oggetti) }] : [];
   const perCella = new Map<Cella, OggettoRete[]>();
   for (const o of e.oggetti) { const l = perCella.get(o.cella); if (l) l.push(o); else perCella.set(o.cella, [o]); }
   const strati: ExportLayer[] = [];
