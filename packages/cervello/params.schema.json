@@ -1711,6 +1711,21 @@
     "pattern-macchie": {
       "type": "object",
       "properties": {
+        "conBase": {
+          "$ref": "#/$defs/withBase",
+          "default": false,
+          "x-id": "withBase"
+        },
+        "conSopra": {
+          "$ref": "#/$defs/withOverlay",
+          "default": false,
+          "x-id": "withOverlay"
+        },
+        "secondoMargine": {
+          "$ref": "#/$defs/secondLevelMargin",
+          "default": 1,
+          "x-id": "secondLevelMargin"
+        },
         "rasoAngolo": {
           "$ref": "#/$defs/satinAngle",
           "default": 90,
@@ -4812,6 +4827,27 @@
       "maximum": 1,
       "x-concetto": "pallino"
     },
+    "withBase": {
+      "type": "boolean",
+      "title": "La base",
+      "description": "La base col pattern su tutto il pannello. Spenta: niente base.",
+      "x-concetto": "interruttore"
+    },
+    "withOverlay": {
+      "type": "boolean",
+      "title": "Il punto sopra le macchie",
+      "description": "Lo stesso punto della base sopra il raso, dentro le macchie. Spento: solo il raso.",
+      "x-concetto": "interruttore"
+    },
+    "secondLevelMargin": {
+      "type": "number",
+      "title": "Il primo livello entra sotto il secondo di",
+      "description": "Dove una macchia del primo livello sta sotto una del secondo si ferma: ci entra solo di tanto, così non si sovrappone troppo filo.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-concetto": "rientro"
+    },
     "satinAngle": {
       "type": "number",
       "title": "Direzione del raso",
@@ -5765,6 +5801,7 @@
         "frameInset",
         "firstLineOffset",
         "edgeMargin",
+        "secondLevelMargin",
         "baseCutMargin",
         "travelEdgeMargin",
         "knitSideInset"
@@ -6024,6 +6061,8 @@
         "buildDst",
         "showBare",
         "showPasses",
+        "withBase",
+        "withOverlay",
         "satinByStilista",
         "cutBaseUnderSpots",
         "fullBottom",
