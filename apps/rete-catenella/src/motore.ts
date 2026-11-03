@@ -46,6 +46,7 @@ export interface ParametriRete {
   spostaYMm: number;
   moduloMinimoPct: number;
   collegaModuli: boolean;
+  uscitaFuoriMm: number;
   psilVero: boolean;
   infittisci: boolean;
   magliaMassimaMm2: number;
@@ -59,7 +60,7 @@ export interface ParametriRete {
 export const PARAMETRI_RETE: ParametriRete = {
   passate: 3, puntoBaseMm: 2.5, puntoPassaggioMm: 2.5,
   psilLunghezzaMm: 2.5, psilLarghezzaMm: 1.3, psilPassoMm: 1.7, psilInizioMm: 0.6, psilGiri: 2,
-  margineMm: 0, spostaXMm: 0, spostaYMm: 0, moduloMinimoPct: 22, collegaModuli: true, psilVero: true,
+  margineMm: 0, spostaXMm: 0, spostaYMm: 0, moduloMinimoPct: 22, collegaModuli: false, uscitaFuoriMm: 20, psilVero: true,
   infittisci: false, magliaMassimaMm2: 20, infittisciVariante: 1,
   corsie: true, primaCorsiaMm: 1, passoCorsiaMm: 1,
 };
@@ -231,6 +232,8 @@ export interface OggettoRete {
   nuovo?: boolean;
   /** Il filo che porta al modulo dopo. */
   collegamento?: boolean;
+  /** L'uscita del modulo: sotto i moduli dopo e fuori dal contorno, dove cambia ago. */
+  uscita?: boolean;
 }
 export interface ContiRete {
   moduli: number; basi: number; catenelle: number; passaggi: number; punti: number; filoMm: number;
@@ -238,6 +241,10 @@ export interface ContiRete {
   /** I fili che passano da un modulo al dopo, e quanti non ce l'hanno fatta (lì si salta). */
   collegamenti: number;
   collegamentiMm: number;
+  /** Le uscite: quante, i mm sotto le linee dei moduli dopo, e quelli dove i moduli dopo non ci sono più. */
+  uscite: number;
+  usciteSottoMm: number;
+  usciteScoperteMm: number;
   saltiFraModuli: number;
   lineeNuove: number;
   /** Maglie oltre la soglia rimaste intere, in un periodo della griglia. */
@@ -245,6 +252,12 @@ export interface ContiRete {
   catenellaPerCm2: number;
 }
 export interface EsitoRete { oggetti: OggettoRete[]; conti: ContiRete; celle: Cella[]; anello: Xy[]; collegati: boolean }
+
+/** Un punto oltre il contorno, sulla normale del punto di bordo più vicino a q. */
+function fuoriDalBordo(b: Bordo, q: Xy, mm: number): Xy {
+  const s = sulBordo(b, q).s, c = puntoSulBordo(b, s), u = puntoSulBordo(b, s - 2), v = puntoSulBordo(b, s + 2), dx = v[0] - u[0], dy = v[1] - u[1], l = Math.hypot(dx, dy) || 1;
+  return [c[0] + ((b.fuori * dy) / l) * mm, c[1] + ((-b.fuori * dx) / l) * mm];
+}
 
 /** L'anello più grande del contorno, in coordinate [x, y]. Gli altri non si usano: le aree vuote non ci sono ancora. */
 export function anelloDiContorno(sagoma: Contour[]): Xy[] {
@@ -257,6 +270,125 @@ export function anelloDiContorno(sagoma: Contour[]): Xy[] {
   return (meglio ?? []).map((p) => [p.x, p.y]);
 }
 
+/** Dijkstra con un mucchio binario. `costo` dà il peso di un arco dalla sua lunghezza e da chi lo possiede; si ferma al primo nodo per cui `arriva` è vero. */
+function camminoMinimo(n: number, s: number, archi: Array<Array<[number, number, number?]>>, costo: (l: number, chi: number | undefined) => number, arriva: (x: number) => boolean): { dist: Float64Array; viene: Int32Array; arrivo: number; daChi: Int32Array } {
+  const dist = new Float64Array(n).fill(Infinity), viene = new Int32Array(n).fill(-1), daChi = new Int32Array(n).fill(-1);
+  const mucchio: Array<[number, number]> = [[0, s]];
+  dist[s] = 0;
+  let arrivo = -1;
+  while (mucchio.length) {
+    const [c, x] = mucchio[0];
+    const ultimo = mucchio.pop()!;
+    if (mucchio.length) {
+      mucchio[0] = ultimo;
+      for (let i = 0; ;) {
+        const l = 2 * i + 1, r = l + 1;
+        let m = i;
+        if (l < mucchio.length && mucchio[l][0] < mucchio[m][0]) m = l;
+        if (r < mucchio.length && mucchio[r][0] < mucchio[m][0]) m = r;
+        if (m === i) break;
+        [mucchio[i], mucchio[m]] = [mucchio[m], mucchio[i]];
+        i = m;
+      }
+    }
+    if (c > dist[x]) continue;
+    if (arriva(x)) { arrivo = x; break; }
+    for (const [y, l, chi] of archi[x] ?? []) {
+      const w = c + costo(l, chi);
+      if (w >= dist[y]) continue;
+      dist[y] = w; viene[y] = x; daChi[y] = chi ?? -1;
+      mucchio.push([w, y]);
+      for (let i = mucchio.length - 1; i > 0;) {
+        const g = (i - 1) >> 1;
+        if (mucchio[g][0] <= mucchio[i][0]) break;
+        [mucchio[i], mucchio[g]] = [mucchio[g], mucchio[i]];
+        i = g;
+      }
+    }
+  }
+  return { dist, viene, arrivo, daChi };
+}
+
+/**
+ * L'uscita di ogni modulo (Lorenzo, 2026-11-03: «alla fine di ogni modulo c'è un'impuntura che esce passando sotto quella successiva, in modo che il
+ * cambio ago avviene fuori»). Sul file di riferimento corre tutta sulle linee dei moduli che arrivano dopo, poi oltre il contorno. Qui: la strada più
+ * corta fino al bordo, con le linee dei moduli dopo che costano poco e quelle già cucite molto, poi fuori dal contorno.
+ */
+function aggiungiUscite(moduli: Array<{ cella: Cella; oggetti: OggettoRete[] }>, bordo: Bordo, dentro: (q: Xy) => boolean, p: ParametriRete, conti: ContiRete): void {
+  const PASSO = 5, PONTE = 3;
+  const nodi: Xy[] = [], chiavi = new Map<string, number>(), archi: Array<Array<[number, number, number?]>> = [];
+  const nodo = (q: Xy): number => {
+    const k = `${Math.round(q[0] * 20)},${Math.round(q[1] * 20)}`;
+    let i = chiavi.get(k);
+    if (i === undefined) { i = nodi.length; nodi.push(q); chiavi.set(k, i); }
+    return i;
+  };
+  const lega = (x: number, y: number, l: number, chi: number): void => { (archi[x] ??= []).push([y, l, chi]); (archi[y] ??= []).push([x, l, chi]); };
+  moduli.forEach((m, chi) => {
+    // sotto si passa alle catenelle e alla prima andata delle basi: le altre passate stanno sulle stesse linee
+    const viste = new Set<OggettoRete>();
+    for (const o of m.oggetti) {
+      if (o.tipo === 'passaggio' || viste.has(o)) continue;
+      viste.add(o);
+      for (let i = 1; i < o.t.length; i++) {
+        const u = o.t[i - 1], v = o.t[i], l = d(u, v);
+        if (!dentro([(u[0] + v[0]) / 2, (u[1] + v[1]) / 2])) continue;
+        const n = Math.max(1, Math.ceil(l / PASSO));
+        let x = nodo(u);
+        for (let s = 1; s <= n; s++) {
+          const y = nodo([u[0] + ((v[0] - u[0]) * s) / n, u[1] + ((v[1] - u[1]) * s) / n]);
+          if (y !== x) lega(x, y, l / n, chi);
+          x = y;
+        }
+      }
+    }
+  });
+  const griglia = new Map<string, number[]>();
+  nodi.forEach((q, i) => { const k = `${Math.floor(q[0] / PONTE)},${Math.floor(q[1] / PONTE)}`; const l = griglia.get(k); if (l) l.push(i); else griglia.set(k, [i]); });
+  nodi.forEach((q, i) => {
+    const cx = Math.floor(q[0] / PONTE), cy = Math.floor(q[1] / PONTE);
+    for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const j of griglia.get(`${cx + a},${cy + b}`) ?? []) {
+      if (j <= i) continue;
+      const l = d(q, nodi[j]);
+      if (l <= PONTE) lega(i, j, l, -1);
+    }
+  });
+  const alBordo = nodi.map((q) => !dentro([q[0] + 1.5, q[1]]) || !dentro([q[0] - 1.5, q[1]]) || !dentro([q[0], q[1] + 1.5]) || !dentro([q[0], q[1] - 1.5]));
+  moduli.forEach((m, i) => {
+    const coda = m.oggetti[m.oggetti.length - 1]?.punti;
+    if (!coda?.length || !nodi.length) return;
+    const da = coda[coda.length - 1];
+    let s = 0, e = Infinity;
+    nodi.forEach((x, k) => { const c = d(x, da); if (c < e) { e = c; s = k; } });
+    const { viene, arrivo, daChi } = camminoMinimo(nodi.length, s, archi, (l, chi) => l * (chi === undefined || chi === -1 ? 5 : chi > i ? 1 : 8), (x) => alBordo[x]);
+    const fine = arrivo >= 0 ? arrivo : s;
+    const via: Xy[] = [];
+    let sottoMm = 0, scopertaMm = 0;
+    for (let x = fine; x >= 0; x = viene[x]) {
+      via.push(nodi[x]);
+      if (viene[x] < 0) continue;
+      const l = d(nodi[x], nodi[viene[x]]);
+      if (daChi[x] > i) sottoMm += l; else scopertaMm += l;
+    }
+    via.reverse();
+    const ultimo = via[via.length - 1];
+    // la prossima uscita non batte negli stessi punti: la stessa linea costa di più, e il bordo qui intorno è già preso
+    for (let x = fine; viene[x] >= 0; x = viene[x]) {
+      for (const a of archi[x]) if (a[0] === viene[x]) a[1] *= 3;
+      for (const a of archi[viene[x]]) if (a[0] === x) a[1] *= 3;
+    }
+    nodi.forEach((q, k) => { if (alBordo[k] && d(q, ultimo) < 6) alBordo[k] = false; });
+    const t: Xy[] = [da, ...via, fuoriDalBordo(bordo, ultimo, p.uscitaFuoriMm)];
+    const o: OggettoRete = { tipo: 'passaggio', t, punti: ricampiona(t, p.puntoPassaggioMm), cella: m.cella, uscita: true };
+    m.oggetti.push(o);
+    conti.uscite++;
+    conti.usciteSottoMm += sottoMm;
+    conti.usciteScoperteMm += scopertaMm;
+    conti.punti += o.punti.length;
+    conti.filoMm += lunghezza(o.punti);
+  });
+}
+
 /** Il filo da un modulo al dopo: lungo le linee, soprattutto quelle del modulo che arriva, che le cucirà sopra. Null se le linee non si toccano. */
 function strada(prima: OggettoRete[], dopo: OggettoRete[], da: Xy, a: Xy, dentro: (q: Xy) => boolean): Xy[] | null {
   const PASSO = 2.5, PONTE = 3;
@@ -267,7 +399,7 @@ function strada(prima: OggettoRete[], dopo: OggettoRete[], da: Xy, a: Xy, dentro
     if (i === undefined) { i = nodi.length; nodi.push(q); chiavi.set(k, i); }
     return i;
   };
-  const archi: Array<Array<[number, number]>> = [];
+  const archi: Array<Array<[number, number, number?]>> = [];
   const lega = (x: number, y: number, c: number): void => { (archi[x] ??= []).push([y, c]); (archi[y] ??= []).push([x, c]); };
   const linee = (lista: OggettoRete[], peso: number): void => {
     for (const o of lista) {
@@ -300,39 +432,7 @@ function strada(prima: OggettoRete[], dopo: OggettoRete[], da: Xy, a: Xy, dentro
   });
   const vicino = (q: Xy): number => { let m = 0, e = Infinity; nodi.forEach((x, i) => { const c = d(x, q); if (c < e) { e = c; m = i; } }); return m; };
   const s = vicino(da), f = vicino(a);
-  // Dijkstra con un mucchio binario
-  const dist = new Float64Array(nodi.length).fill(Infinity), viene = new Int32Array(nodi.length).fill(-1);
-  const mucchio: Array<[number, number]> = [[0, s]];
-  dist[s] = 0;
-  while (mucchio.length) {
-    const [c, x] = mucchio[0];
-    const ultimo = mucchio.pop()!;
-    if (mucchio.length) {
-      mucchio[0] = ultimo;
-      for (let i = 0; ;) {
-        const l = 2 * i + 1, r = l + 1;
-        let m = i;
-        if (l < mucchio.length && mucchio[l][0] < mucchio[m][0]) m = l;
-        if (r < mucchio.length && mucchio[r][0] < mucchio[m][0]) m = r;
-        if (m === i) break;
-        [mucchio[i], mucchio[m]] = [mucchio[m], mucchio[i]];
-        i = m;
-      }
-    }
-    if (c > dist[x]) continue;
-    if (x === f) break;
-    for (const [y, w] of archi[x] ?? []) {
-      if (c + w >= dist[y]) continue;
-      dist[y] = c + w; viene[y] = x;
-      mucchio.push([c + w, y]);
-      for (let i = mucchio.length - 1; i > 0;) {
-        const g = (i - 1) >> 1;
-        if (mucchio[g][0] <= mucchio[i][0]) break;
-        [mucchio[i], mucchio[g]] = [mucchio[g], mucchio[i]];
-        i = g;
-      }
-    }
-  }
+  const { dist, viene } = camminoMinimo(nodi.length, s, archi, (c) => c, (x) => x === f);
   if (dist[f] === Infinity) return null;
   const via: Xy[] = [];
   for (let x = f; x >= 0; x = viene[x]) via.push(nodi[x]);
@@ -368,8 +468,10 @@ export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRet
   const catenellaIntera = (v: { oggetti: OggettoModulo[] }): number => v.oggetti.reduce((s, o) => s + (o.tipo === 'catenella' && !o.nuovo ? lunghezza(o.t) : 0), 0);
   const intere = { A: catenellaIntera(modulo.varianti.A), B: catenellaIntera(modulo.varianti.B) };
   const oggetti: OggettoRete[] = [];
-  const conti: ContiRete = { moduli: 0, basi: 0, catenelle: 0, passaggi: 0, punti: 0, filoMm: 0, tagliSulleCorsie: 0, corsieUsate: 0, corsiaPiuLontanaMm: 0, passiLunghi: 0, movimentiLunghi: 0, collegamenti: 0, collegamentiMm: 0, saltiFraModuli: 0, lineeNuove: 0, maglieIntere: piu?.intere ?? 0, catenellaPerCm2: 0 };
-  const inOrdine = [...celle].sort((a, b) => a.riga - b.riga || (((a.riga % 2) + 2) % 2 === 0 ? a.colonna - b.colonna : b.colonna - a.colonna));
+  const conti: ContiRete = { moduli: 0, basi: 0, catenelle: 0, passaggi: 0, punti: 0, filoMm: 0, tagliSulleCorsie: 0, corsieUsate: 0, corsiaPiuLontanaMm: 0, passiLunghi: 0, movimentiLunghi: 0, collegamenti: 0, collegamentiMm: 0, uscite: 0, usciteSottoMm: 0, usciteScoperteMm: 0, saltiFraModuli: 0, lineeNuove: 0, maglieIntere: piu?.intere ?? 0, catenellaPerCm2: 0 };
+  // coi moduli collegati a serpentina, il dopo è sempre vicino; se no come il file di riferimento, riga per riga
+  const inOrdine = [...celle].sort((a, b) => a.riga - b.riga || (p.collegaModuli && ((a.riga % 2) + 2) % 2 !== 0 ? b.colonna - a.colonna : a.colonna - b.colonna));
+  const moduli: Array<{ cella: Cella; oggetti: OggettoRete[] }> = [];
   const nellaZona = (t: Xy[], c: Cella): boolean => { if (!dentroZona) return true; const q = t[t.length >> 1]; return dentroZona([q[0] + c.dx, q[1] + c.dy]); };
   let moduloPrima: OggettoRete[] | null = null;
   let catenellaMm = 0;
@@ -440,13 +542,18 @@ export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRet
         } else conti.saltiFraModuli++;
       }
     }
-    if (continui.length) moduloPrima = continui;
+    if (continui.length) { moduloPrima = continui; moduli.push({ cella, oggetti: continui }); }
     for (const o of continui) {
       if (o.tipo === 'base') conti.basi++; else if (o.tipo === 'catenella') { conti.catenelle++; catenellaMm += lunghezza(o.t); if (o.nuovo) conti.lineeNuove++; } else conti.passaggi++;
       conti.punti += o.punti.length;
       conti.filoMm += lunghezza(o.punti);
       oggetti.push(o);
     }
+  }
+  if (!p.collegaModuli) {
+    aggiungiUscite(moduli, bordo, dentro, p, conti);
+    oggetti.length = 0;
+    for (const m of moduli) oggetti.push(...m.oggetti);
   }
   const area = Math.abs(anello.reduce((s, q, i) => { const r = anello[(i + 1) % anello.length]; return s + q[0] * r[1] - r[0] * q[1]; }, 0)) / 2;
   conti.catenellaPerCm2 = area ? catenellaMm / (area / 100) : 0;

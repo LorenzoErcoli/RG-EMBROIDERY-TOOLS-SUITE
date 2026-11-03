@@ -85,7 +85,7 @@ master).
 | `GET /ingresso-uscita` · `POST /ingresso-uscita` | **ingresso e uscita di un riempimento** (2026-10-29): leggerli (scelti, icone, primo e ultimo punto cucito) e scriverli: `{ origine_mm?, modo?: "ui"\|"diretto", oggetti: [{ indice?, inizio_mm, fine_mm }] }`, in mm nel riferimento del documento (o dell'SVG con `origine_mm`); abilita, scrive come un clic, ricalcola e rilegge subito e dopo 1,5 s. Vanno dati sul contorno: vedi [`sapere/codice/stilista-ingresso-uscita.md`](../../sapere/codice/stilista-ingresso-uscita.md) |
 | `POST /ricalcola?oggetti=…[&sblocca=1]` | per le prove: ricalcola quegli oggetti come Stilista (con `sblocca` senza lucchetto) e dice i punti prima e dopo |
 | `POST /parametri` | **parametri interi di oggetti che ci sono già** (2026-10-29): `{ oggetti: [{ indice, parametri: { PIThreadDistance: 400, … } }] }` → copia scrivibile, valori cambiati, rimessi, ricalcolo; risponde chiesto/prima/dopo e i punti prima e dopo. Da provare: [`sapere/codice/stilista-cosa-si-comanda.md`](../../sapere/codice/stilista-cosa-si-comanda.md) |
-| `POST /ago` | `{ oggetti: [i…], ago }`: l'ago di oggetti che ci sono già, col colore che quell'ago ha nella tavolozza (da provare) |
+| `POST /ago` | `{ oggetti: [i…], ago }`: l'ago di oggetti che ci sono già, col colore che quell'ago ha nella tavolozza |
 | `POST /cancella?oggetti=i,j` | toglie quegli oggetti dal documento (da provare) |
 | `POST /ordine` | `{ da, a }`: sposta un oggetto al posto `a` della sequenza (da provare) |
 | `GET /punti-cuciti` | tutti i punti cuciti degli oggetti (`?oggetti=` o la selezione), `[x, y, tag]` in µm (da provare) |

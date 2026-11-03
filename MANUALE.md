@@ -524,7 +524,7 @@ Riempie un contorno di moduli che si attaccano fra loro: una ragnatela di basi, 
 3. **I valori.** Passate di base, lunghezza dei punti, maglia della catenella. Quello che esce dal contorno si taglia; dove il taglio lascia un passo lungo nelle basi, il filo gira fuori dal contorno, ognuno sulla sua corsia, per non battere negli stessi punti.
 4. **L'uscita.** Esporta SVG e DST, o «Invia a Stilista». Ogni modulo è un filo solo.
 
-5. **Moduli collegati.** Di serie il filo passa da un modulo al dopo lungo le linee della rete, senza rasafilo: le righe vanno a serpentina. Togliendo la spunta ogni modulo è un cambio ago.
+5. **Fra un modulo e l'altro.** Di serie, come nel lavoro di riferimento: ogni modulo finisce con un'uscita che passa sotto i moduli che arrivano dopo e va oltre il contorno, dove cambia ago. Scegli quanto oltre. Con «Moduli collegati a filo continuo» invece il filo passa al modulo dopo lungo le linee, senza cambi ago: le righe vanno a serpentina.
 6. **Psil vero o disegnato.** Con «Psil vero in Stilista» acceso, «Invia a Stilista» mette le catenelle come oggetti psil veri: li copia da una catenella del documento aperto, coi valori di maglia del tool, quindi in quel documento una catenella psil ci deve essere. Va in coda al documento e con migliaia di oggetti può volerci qualche minuto. Spento, o nel DST, le catenelle sono i punti disegnati dal tool.
 7. **Infittire la trama.** Spunta «Infittisci la trama»: le maglie più grandi della soglia si dividono in due con una linea irregolare; più la soglia è bassa, più la trama è fitta. Ogni numero di «Variante» dà un disegno diverso. Puoi limitarla a una zona caricando un altro SVG o DXF. Una maglia senza un punto giusto da cui partire resta intera: i conti dicono quante sono.
 

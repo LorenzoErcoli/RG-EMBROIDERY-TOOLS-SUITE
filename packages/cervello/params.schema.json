@@ -1610,8 +1610,13 @@
         },
         "collegaModuli": {
           "$ref": "#/$defs/catenellaLinkModules",
-          "default": true,
+          "default": false,
           "x-id": "catenellaLinkModules"
+        },
+        "uscitaFuoriMm": {
+          "$ref": "#/$defs/catenellaExitOutside",
+          "default": 20,
+          "x-id": "catenellaExitOutside"
         },
         "passate": {
           "$ref": "#/$defs/catenellaBasePasses",
@@ -4842,8 +4847,17 @@
     },
     "catenellaLinkModules": {
       "type": "boolean",
-      "title": "Moduli collegati, senza rasafilo",
-      "description": "Il filo passa al modulo dopo lungo le linee della rete. Spento: ogni modulo è un cambio ago.",
+      "title": "Moduli collegati a filo continuo, senza cambio ago",
+      "description": "Spento, come il file di riferimento: ogni modulo finisce con un’uscita che passa sotto i moduli dopo e cambia ago fuori dal contorno. Acceso: il filo passa al modulo dopo lungo le linee.",
+      "x-concetto": "griglia-moduli"
+    },
+    "catenellaExitOutside": {
+      "type": "number",
+      "title": "L’uscita finisce oltre il contorno di",
+      "description": "Dove cambia ago. Sul file di riferimento i capi stanno da 14 a 114 mm oltre il bordo, tutti sulla stessa verticale.",
+      "x-unita": "mm",
+      "minimum": 2,
+      "maximum": 150,
       "x-concetto": "griglia-moduli"
     },
     "catenellaBasePasses": {
@@ -6613,7 +6627,8 @@
         "catenellaGridOffsetX",
         "catenellaGridOffsetY",
         "catenellaMinModule",
-        "catenellaLinkModules"
+        "catenellaLinkModules",
+        "catenellaExitOutside"
       ]
     },
     "passate-base": {

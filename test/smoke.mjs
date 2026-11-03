@@ -6863,7 +6863,7 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   const celle = [...new Set(e.oggetti.map((o) => o.cella))];
   const colonneDiverse = [...new Set(rg.rcGriglia([0, 0, 500, 100], { ...m, passi: { colonne: 100.33, righe: 49.41 } }, [0, 0]).map((c) => c.dx))].sort((a, b) => a - b);
   check('le colonne stanno tutte allo stesso passo', colonneDiverse.slice(1).every((x, i) => Math.abs(x - colonneDiverse[i] - 100.33) < 1e-9), true);
-  check('in ogni modulo le basi vengono prima delle catenelle', celle.every((c) => { const og = e.oggetti.filter((o) => o.cella === c && !o.collegamento); const u = og.map((o) => o.tipo).lastIndexOf('base'); const pr = og.findIndex((o) => o.tipo !== 'base'); return u < 0 || pr < 0 || u < pr; }), true);
+  check('in ogni modulo le basi vengono prima delle catenelle', celle.every((c) => { const og = e.oggetti.filter((o) => o.cella === c && !o.collegamento && !o.uscita); const u = og.map((o) => o.tipo).lastIndexOf('base'); const pr = og.findIndex((o) => o.tipo !== 'base'); return u < 0 || pr < 0 || u < pr; }), true);
   check('le passate: con 1 ci sono meno basi che con 3', rg.rcCostruisci(m, quadrato, { ...P, passate: 1 }).conti.basi < e.conti.basi, true);
   const senza = rg.rcCostruisci(m, quadrato, { ...P, corsie: false });
   check('con le corsie restano meno passi lunghi nelle basi', [e.conti.tagliSulleCorsie > 0, e.conti.passiLunghi < senza.conti.passiLunghi], [true, true]);
@@ -6875,11 +6875,23 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   const moltiPunti = Array.from({ length: 400000 }, (_, i) => [i % 300, i % 200]);
   check('l’ingombro regge centinaia di migliaia di punti', rg.rcRiquadro(quadrato, [{ punti: moltiPunti }]), { x0: -5, y0: -5, w: 310, h: 210 });
   const s = rg.rcStrati(e);
-  check('coi moduli collegati è un filo solo, senza cambi ago: si salta solo dove resta un movimento lungo', [s.length, s[0].polylines.length, e.conti.saltiFraModuli], [1, 1 + e.conti.movimentiLunghi, 0]);
-  check('il filo fra i moduli c\'è: un collegamento o un passo corto per ogni modulo dopo il primo', e.conti.collegamenti > 0 && e.conti.collegamenti <= e.conti.moduli - 1, true);
-  const sciolti = rg.rcCostruisci(m, quadrato, { ...P, collegaModuli: false }), stratiSciolti = rg.rcStrati(sciolti);
-  check('sciolti: uno strato per modulo, come il file di riferimento', [stratiSciolti.length, stratiSciolti.reduce((n, l) => n + l.polylines.length, 0), sciolti.conti.collegamenti], [sciolti.conti.moduli, sciolti.conti.moduli + sciolti.conti.movimentiLunghi, 0]);
-  check('collegare i moduli non cambia i moduli: stesse catenelle e stesse basi', [e.conti.moduli, e.conti.catenelle, e.conti.basi], [sciolti.conti.moduli, sciolti.conti.catenelle, sciolti.conti.basi]);
+  // l'uscita (Lorenzo): passa sotto i moduli dopo, e il cambio ago avviene fuori
+  check('uno strato per modulo, ogni modulo un filo solo', [s.length, s.reduce((n, l) => n + l.polylines.length, 0)], [e.conti.moduli, e.conti.moduli + e.conti.movimentiLunghi]);
+  check('ogni modulo finisce con un\'uscita', [e.conti.uscite, e.oggetti.filter((o) => o.uscita).length, e.oggetti.filter((o, i) => o.uscita && (e.oggetti[i + 1]?.cella === o.cella)).length], [e.conti.moduli, e.conti.moduli, 0]);
+  const oltre = (q) => Math.max(0 - q.x, q.x - 300, 0 - q.y, q.y - 200);
+  check('il cambio ago è fuori: ogni modulo finisce oltre il contorno', s.every((l) => { const pl = l.polylines[l.polylines.length - 1]; return oltre(pl[pl.length - 1]) > P.uscitaFuoriMm * 0.8; }), true);
+  const righeDelModulo = [0, 10, 30, 40, 20].map((y) => ({ tipo: 'catenella', t: [[0, y], [100, y]] }));
+  const varianteRiga = { oggetti: [{ tipo: 'base', passata: 1, t: [[0, 20], [100, 20]] }, { tipo: 'catenella', t: [[50, 0], [50, 40]] }, ...righeDelModulo] };
+  const riga = { formato: 'rete-modulo-1', nome: 'riga', passi: { colonne: 100, righe: 50 }, origine: [0, 5], varianti: { A: varianteRiga, B: varianteRiga } };
+  const suRiga = rg.rcCostruisci(riga, [[0, 0], [310, 0], [310, 100], [0, 100], [0, 0]], { ...P, moduloMinimoPct: 0 }), usciteRiga = suRiga.oggetti.filter((o) => o.uscita);
+  check('le uscite corrono sotto i moduli che arrivano dopo, anche se il bordo dietro è più vicino', [usciteRiga.filter((o) => o.cella.riga === 0 && o.cella.colonna === 0).every((o) => o.t[o.t.length - 1][0] > 310), suRiga.conti.usciteSottoMm > 0], [true, true]);
+  check('due uscite non finiscono nello stesso punto', usciteRiga.every((o, i) => usciteRiga.every((x, k) => k === i || Math.hypot(x.t[x.t.length - 1][0] - o.t[o.t.length - 1][0], x.t[x.t.length - 1][1] - o.t[o.t.length - 1][1]) > 3)), true);
+  const altrove = rg.rcCostruisci(m, quadrato, { ...P, uscitaFuoriMm: 50 });
+  check('quanto va fuori si sceglie', rg.rcStrati(altrove).every((l) => { const pl = l.polylines[l.polylines.length - 1]; return oltre(pl[pl.length - 1]) > 40; }), true);
+  const unFilo = rg.rcCostruisci(m, quadrato, { ...P, collegaModuli: true }), stratiUnFilo = rg.rcStrati(unFilo);
+  check('a filo continuo: un filo solo, nessun cambio ago, nessuna uscita', [stratiUnFilo.length, stratiUnFilo[0].polylines.length, unFilo.conti.saltiFraModuli, unFilo.conti.uscite], [1, 1 + unFilo.conti.movimentiLunghi, 0, 0]);
+  check('a filo continuo: un collegamento o un passo corto per ogni modulo dopo il primo', unFilo.conti.collegamenti > 0 && unFilo.conti.collegamenti <= unFilo.conti.moduli - 1, true);
+  check('il modo fra i moduli non cambia i moduli: stesse catenelle e stesse basi', [e.conti.moduli, e.conti.catenelle, e.conti.basi], [unFilo.conti.moduli, unFilo.conti.catenelle, unFilo.conti.basi]);
   // la trama: le maglie grandi divise, con una linea uguale in tutte le copie del modulo
   const fitta = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40 }), piuFitta = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 15 });
   check('infittire: la soglia più bassa fa più linee e più catenella per cm²', [fitta.conti.lineeNuove > 0, piuFitta.conti.lineeNuove > fitta.conti.lineeNuove, fitta.conti.catenellaPerCm2 > e.conti.catenellaPerCm2], [true, true, true]);
