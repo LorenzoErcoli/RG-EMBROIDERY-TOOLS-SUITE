@@ -74,5 +74,15 @@ export const scheda: SchedaParametri = {
       aiuto: 'quanto è largo il raggio attorno al colore di sfondo.',
       tipo: 'num', unita: '', min: 0, passo: 5, predefinito: 30, concetto: 'immagine',
     },
+    {
+      id: 'toneBlend', nome: 'toneBlend', etichetta: 'Sfumatura dai toni',
+      aiuto: 'i fili si dividono il ricamo in proporzione al tono dell’immagine, invece di dare ogni punto a un colore solo: il filo totale resta pari ovunque. Serve un’immagine e gli agglomerati attivi.',
+      tipo: 'bool', unita: '', predefinito: false, concetto: 'immagine',
+    },
+    {
+      id: 'toneSoftness', nome: 'toneSoftnessMm', etichetta: 'Morbidezza della sfumatura',
+      aiuto: 'quanto si sfoca l’immagine prima di leggerne il tono: poco = segue ogni variazione, tanto = passaggi larghi.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 1, predefinito: 4, concetto: 'immagine',
+    },
   ],
 };
