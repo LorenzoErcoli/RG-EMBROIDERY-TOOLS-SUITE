@@ -6623,6 +6623,18 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
       [conTutto.base.punti > 0, conTutto.stop.every((s, i, a) => s.tipo === (i % 2 ? 'sopra' : 'raso') && (i === 0 || a[i - 1].strato <= s.strato)), new Set(conTutto.stop.map((s) => s.strato)).size],
       [true, true, 2]);
     const q = (x, y, l) => [{ x, y }, { x: x + l, y }, { x: x + l, y: y + l }, { x, y: y + l }];
+    // I PONTI CON DUE LIVELLI (Lorenzo, 2026-11-04: «li costruisce il sistema non è che vanno forzati per forza per far passare il
+    // filo»): solo sul secondo livello, il filo del primo li usa, e dove due macchie sono più lontane del limite il salto resta
+    const conPonti = rg.pmCostruisci([], chiare, {}, { ...rg.PM_DI_SERIE, ponti: 5 }, scure);
+    check('i ponti sul secondo livello: meno salti lì, meno filo a vista, zero salti nel primo',
+      [conPonti.ponti > 0, conPonti.stop[1].livello.salti < zero.stop[1].livello.salti, conPonti.sottoIlSecondo.aVista < zs.aVista, conPonti.stop[0].livello.salti], [true, true, true, 0]);
+    const tre = [q(0, 0, 10), q(13, 0, 10), q(40, 0, 10)], sporgono = [q(2, -5, 6), q(15, -5, 6)];
+    const senzaPonte = rg.pmCostruisci([], sporgono, {}, { ...rg.PM_DI_SERIE, sfrangiatura: 0, sfrangiatura2: 0 }, tre);
+    const unPonte = rg.pmCostruisci([], sporgono, {}, { ...rg.PM_DI_SERIE, sfrangiatura: 0, sfrangiatura2: 0, ponti: 5 }, tre);
+    check('due macchie a 3 mm si uniscono, quella a 17 mm no: il salto resta; le macchie del primo livello senza ponte',
+      [senzaPonte.ponti, senzaPonte.stop[1].livello.salti, unPonte.ponti, unPonte.stop[1].livello.salti, unPonte.stop[0].livello.salti, unPonte.forme.slice(0, 2).every((f) => Math.max(...f.map((p) => p.x)) - Math.min(...f.map((p) => p.x)) < 7)],
+      [0, 2, 1, 1, 0, true]);
+    check('il filo del primo livello passa sotto il ponte: niente più a vista', [senzaPonte.sottoIlSecondo.aVista > 2, unPonte.sottoIlSecondo.aVista], [true, 0]);
     const fuori = q(100, 100, 5), sola = rg.pmFerma(fuori, [q(0, 0, 10)], 1, giu);
     const coperta = rg.pmFerma(q(2, 2, 2), [q(0, 0, 10)], 1, giu);
     const [conBuco] = rg.pmFerma(q(0, 0, 30), [q(10, 10, 10)], 1, giu);

@@ -104,7 +104,8 @@ export type ParametriMacchie = {
   sopraSfasaY: number;
   /**
    * I PONTI: due macchie che si seguono e sono più vicine di tanto, mm, si uniscono con un ponte di raso — il filo
-   * passa dall'una all'altra senza salto. 0 = mai: le macchie restano come nel disegno.
+   * passa dall'una all'altra senza salto. 0 = mai: le macchie restano come nel disegno. Con due livelli solo sul secondo,
+   * anche dove il filo del primo ci può passare sotto (`pontiDelSecondo`).
    */
   ponti: number;
   /** La larghezza del ponte, mm. */
@@ -1770,9 +1771,50 @@ export function costruisciMacchie(
   };
   const sfrangiaturaDentro = (p: ParametriMacchie) => Math.max(0, p.sfrangiatura) * (1 - Math.min(1, Math.max(0, p.sfrangiaturaFuori / 100)));
 
+  const ordineEPonti = (macchie: Polyline[], inizio: Point | undefined, par: ParametriMacchie) => {
+    // 3. L'ORDINE, e i ponti fra macchie che si seguono e sono vicine: la macchia PRIMA si allarga fino a quella
+    //    dopo (ci entra di mezzo millimetro). Nella macchia prima, perché così il suo raso e il suo punto sopra
+    //    possono finire dentro il ponte, cioè già dentro la macchia dopo: si continua senza salto.
+    // le zone: ogni macchia in quella del suo centro; ogni zona col suo ordine, che parte vicino a dove la zona prima finisce
+    const nZone = Math.max(1, Math.min(8, Math.round(par.zone || 1)));
+    const lungoX = par.zoneVerso !== 'orizzontale';
+    const zone: number[][] = Array.from({ length: nZone }, () => []);
+    macchie.forEach((m, i) => {
+      const b = ingombro(m), c = lungoX ? (b.x0 + b.x1) / 2 : (b.y0 + b.y1) / 2;
+      const a0 = lungoX ? bbP.x0 : bbP.y0, a1 = lungoX ? bbP.x1 : bbP.y1;
+      zone[Math.min(nZone - 1, Math.max(0, Math.floor(((c - a0) / (a1 - a0 || 1)) * nZone)))].push(i);
+    });
+    const ordini: number[][] = [];
+    let partenza = inizio;
+    for (const z of zone) {
+      if (!z.length) { ordini.push([]); continue; }
+      const o = ordinaMacchie(z.map((i) => macchie[i]), partenza, Math.max(0.05, par.ponti), par.daSinistra === true).map((k) => z[k]);
+      ordini.push(o);
+      const u = ingombro(macchie[o[o.length - 1]]);
+      partenza = { x: (u.x0 + u.x1) / 2, y: (u.y0 + u.y1) / 2 };
+    }
+    const forme = macchie.slice();
+    /** Per la macchia da cui parte un ponte: la macchia dove arriva. */
+    const ponteVerso = new Map<number, number>();
+    /** Per la macchia da cui parte un ponte: dove parte (sul suo bordo) e dove arriva (sul bordo dell'altra). */
+    const asse = new Map<number, [Point, Point]>();
+    // (i ponti solo dentro una zona: fra due zone c'è uno stop)
+    if (par.ponti > 0) for (const ordine of ordini) for (let k = 1; k < ordine.length; k++) {
+      const a = forme[ordine[k - 1]], b = forme[ordine[k]];
+      const d = distanzaFra(a, b);
+      if (d > 1e-6 && d <= par.ponti) {
+        const pt = conPonte(b, a, par.pontiLarghezza);
+        forme[ordine[k - 1]] = pt.forma;
+        ponteVerso.set(ordine[k - 1], ordine[k]);
+        asse.set(ordine[k - 1], [pt.a, pt.da]);
+      }
+    }
+    return { ordini, forme, ponteVerso, asse };
+  };
+
   // UN LIVELLO DI MACCHIE: i suoi stop, nel suo ordine. `scure`: le macchie del livello che verrà dopo, che copriranno i
   // passaggi di questo.
-  const unLivello = (macchie: Polyline[], strato: 1 | 2, scure: Polyline[], par: ParametriMacchie) => {
+  const unLivello = (macchie: Polyline[], strato: 1 | 2, scure: Polyline[], par: ParametriMacchie, piano?: ReturnType<typeof ordineEPonti>) => {
   const off = formeTutte.length;
   const ang = (par.rasoAngolo * Math.PI) / 180, verso = { x: Math.cos(ang), y: Math.sin(ang) };
   const fuori = Math.max(0, par.sfrangiatura) * Math.min(1, Math.max(0, par.sfrangiaturaFuori / 100));
@@ -1782,43 +1824,7 @@ export function costruisciMacchie(
   const coperte = scure.length ? new SottoIlSecondo(scure, dalBordo, Math.max(0, par.secondoVista)) : null;
   const vicineAlBordo = scure.length && par.secondoVista > 0 && dalBordo > 0.5 ? new SottoIlSecondo(scure, 0.5, par.secondoVista) : null;
 
-  // 3. L'ORDINE, e i ponti fra macchie che si seguono e sono vicine: la macchia PRIMA si allarga fino a quella
-  //    dopo (ci entra di mezzo millimetro). Nella macchia prima, perché così il suo raso e il suo punto sopra
-  //    possono finire dentro il ponte, cioè già dentro la macchia dopo: si continua senza salto.
-  // le zone: ogni macchia in quella del suo centro; ogni zona col suo ordine, che parte vicino a dove la zona prima finisce
-  const nZone = Math.max(1, Math.min(8, Math.round(par.zone || 1)));
-  const lungoX = par.zoneVerso !== 'orizzontale';
-  const zone: number[][] = Array.from({ length: nZone }, () => []);
-  macchie.forEach((m, i) => {
-    const b = ingombro(m), c = lungoX ? (b.x0 + b.x1) / 2 : (b.y0 + b.y1) / 2;
-    const a0 = lungoX ? bbP.x0 : bbP.y0, a1 = lungoX ? bbP.x1 : bbP.y1;
-    zone[Math.min(nZone - 1, Math.max(0, Math.floor(((c - a0) / (a1 - a0 || 1)) * nZone)))].push(i);
-  });
-  const ordini: number[][] = [];
-  let partenza = fineStop;
-  for (const z of zone) {
-    if (!z.length) { ordini.push([]); continue; }
-    const o = ordinaMacchie(z.map((i) => macchie[i]), partenza, Math.max(0.05, par.ponti), par.daSinistra === true).map((k) => z[k]);
-    ordini.push(o);
-    const u = ingombro(macchie[o[o.length - 1]]);
-    partenza = { x: (u.x0 + u.x1) / 2, y: (u.y0 + u.y1) / 2 };
-  }
-  const forme = macchie.slice();
-  /** Per la macchia da cui parte un ponte: la macchia dove arriva. */
-  const ponteVerso = new Map<number, number>();
-  /** Per la macchia da cui parte un ponte: dove parte (sul suo bordo) e dove arriva (sul bordo dell'altra). */
-  const asse = new Map<number, [Point, Point]>();
-  // (i ponti solo dentro una zona: fra due zone c'è uno stop)
-  if (par.ponti > 0) for (const ordine of ordini) for (let k = 1; k < ordine.length; k++) {
-    const a = forme[ordine[k - 1]], b = forme[ordine[k]];
-    const d = distanzaFra(a, b);
-    if (d > 1e-6 && d <= par.ponti) {
-      const pt = conPonte(b, a, par.pontiLarghezza);
-      forme[ordine[k - 1]] = pt.forma;
-      ponteVerso.set(ordine[k - 1], ordine[k]);
-      asse.set(ordine[k - 1], [pt.a, pt.da]);
-    }
-  }
+  const { ordini, forme, ponteVerso, asse } = piano ?? ordineEPonti(macchie, fineStop, par);
   ponti += ponteVerso.size;
 
   // 4. LE MACCHIE: stop 2 il raso di tutte, stop 3 il punto sopra di tutte (Lorenzo, 2026-10-08: «ho bisogno che
@@ -2185,9 +2191,77 @@ export function costruisciMacchie(
 
   // il primo livello si ferma sotto il secondo (e un pezzo che resta staccato è una macchia a sé)
   const angolo1 = (par.rasoAngolo * Math.PI) / 180;
-  const fermate = secondo.length ? macchie.flatMap((m) => fermaSottoIlSecondo(m, secondo, par.secondoMargine, { x: Math.cos(angolo1), y: Math.sin(angolo1) })) : macchie;
-  unLivello(fermate, 1, secondo, par);
-  if (secondo.length) unLivello(secondo, 2, [], delSecondo);
+  const fermaSotto = (scure: Polyline[]) => macchie.flatMap((m) => fermaSottoIlSecondo(m, scure, par.secondoMargine, { x: Math.cos(angolo1), y: Math.sin(angolo1) }));
+  const primoSenzaPonti = { ...par, ponti: 0 };
+
+  // I PONTI CON DUE LIVELLI (Lorenzo, 2026-11-04: «le macchie nere più grandi abbiano poi dei punti in cui si creano ponti
+  // che possono essere sfruttati per i passaggi»; «i ponti li costruisce il sistema non è che vanno forzati per forza per far
+  // passare il filo. Deve collaborare, se non ci sono rimarranno i salti»): solo sul secondo livello, mai oltre `ponti` mm.
+  // Quelli fra le macchie che si seguono, più quelli dove il filo del primo livello dovrebbe attraversare lo spazio fra due
+  // macchie del secondo. Si decidono prima di cucire: il primo livello si ferma anche sotto i ponti, e il filo ci passa.
+  const pontiDelSecondo = () => {
+    const alCentro = (m: Polyline): Point => { const u = ingombro(m); return { x: (u.x0 + u.x1) / 2, y: (u.y0 + u.y1) / 2 }; };
+    const pianoDelPrimo = (scure: Polyline[]) => ordineEPonti(fermaSotto(scure), fineStop, primoSenzaPonti);
+    // (il secondo livello parte da dove finirà il primo: il centro della sua ultima macchia)
+    const finePrimo = (p: ReturnType<typeof ordineEPonti>) => { const o = p.ordini.flat(); return o.length ? alCentro(p.forme[o[o.length - 1]]) : fineStop; };
+    const bbSec = secondo.map(ingombro);
+    /** La macchia del secondo livello accanto a un punto, a meno di 1,5 mm: -1 se non c'è. */
+    const accanto = (p: Point) => {
+      let quale = -1, d = 1.5;
+      secondo.forEach((m, i) => {
+        const b = bbSec[i];
+        if (Math.max(b.x0 - p.x, p.x - b.x1, b.y0 - p.y, p.y - b.y1) > d) return;
+        const v = pointInPolygon(p, m) ? 0 : distanceToBoundary(p, m);
+        if (v < d) { d = v; quale = i; }
+      });
+      return quale;
+    };
+    /** I tratti di una strada fuori da tutte le `forme`: dove il filo resterebbe a vista. */
+    const aVista = (strada: Polyline, forme: Polyline[]) => {
+      const bb = forme.map(ingombro), tratti: Array<[Point, Point]> = [];
+      let capo: Point | null = null, ultimo: Point | null = null;
+      const coperto = (p: Point) => forme.some((m, i) => p.x >= bb[i].x0 && p.x <= bb[i].x1 && p.y >= bb[i].y0 && p.y <= bb[i].y1 && pointInPolygon(p, m));
+      for (let s = 1; s < strada.length; s++) {
+        const a = strada[s - 1], b = strada[s], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.25));
+        for (let j = 0; j < n; j++) {
+          const p = { x: a.x + ((b.x - a.x) * (j + 0.5)) / n, y: a.y + ((b.y - a.y) * (j + 0.5)) / n };
+          if (coperto(p)) { if (capo && ultimo) tratti.push([capo, ultimo]); capo = null; } else { capo ??= p; ultimo = p; }
+        }
+      }
+      if (capo && ultimo) tratti.push([capo, ultimo]);
+      return tratti;
+    };
+    const dalBordo = Math.max(sfrangiaturaDentro(par), sfrangiaturaDentro(delSecondo)) + 0.3;
+    const conFilo = secondo.slice(), uniti = new Set<string>();
+    let sec = ordineEPonti(conFilo, finePrimo(pianoDelPrimo(secondo)), delSecondo);
+    // (ogni ponte nuovo cambia l'ordine del secondo livello, e con lui gli altri ponti: pochi giri, si ferma quando non ne servono più)
+    for (let giro = 0; giro < 3; giro++) {
+      const pri = pianoDelPrimo(sec.forme);
+      const prova = new SottoIlSecondo(sec.forme, dalBordo, Math.max(par.secondoVista, par.ponti + 2));
+      let nuovi = 0;
+      for (const ordine of pri.ordini) for (let k = 1; k < ordine.length; k++) {
+        const strada = prova.strada(pri.forme[ordine[k - 1]], pri.forme[ordine[k]], ordine.slice(k + 1).map((q) => pri.forme[q]), ordine.slice(0, k).map((q) => pri.forme[q]));
+        if (!strada || !prova.aVista) continue;
+        for (const [da, a] of aVista(strada, [...sec.forme, ...pri.forme])) {
+          const i = accanto(da), j = accanto(a), chiave = `${Math.min(i, j)}-${Math.max(i, j)}`;
+          if (i < 0 || j < 0 || i === j || uniti.has(chiave) || distanzaFra(secondo[i], secondo[j]) > par.ponti) continue;
+          uniti.add(chiave);
+          conFilo[i] = conPonte(conFilo[j], conFilo[i], par.pontiLarghezza).forma;
+          nuovi++;
+        }
+      }
+      if (!nuovi) break;
+      sec = ordineEPonti(conFilo, finePrimo(pri), delSecondo);
+    }
+    ponti += uniti.size;
+    return sec;
+  };
+
+  const pianoSecondo = secondo.length && par.ponti > 0 ? pontiDelSecondo() : undefined;
+  const sopraIlPrimo = pianoSecondo?.forme ?? secondo;
+  const fermate = secondo.length ? fermaSotto(sopraIlPrimo) : macchie;
+  unLivello(fermate, 1, sopraIlPrimo, secondo.length ? primoSenzaPonti : par);
+  if (secondo.length) unLivello(secondo, 2, [], delSecondo, pianoSecondo);
 
   // 5. LA BASE SOTTO LE MACCHIE A DUE PASSAGGI (Lorenzo, 2026-10-29: «dove vi sono le macchie i passaggi rimangono a 2
   //    per non sovrapporre troppo filo»): le barrette che vanno e tornano più volte, dentro le macchie (coi ponti) una

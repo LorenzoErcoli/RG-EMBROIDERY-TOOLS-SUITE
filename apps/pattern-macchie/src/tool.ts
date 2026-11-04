@@ -129,7 +129,7 @@ const CAMPI_ZONE: Campo[] = [
 ];
 const CAMPI_PONTI: Campo[] = [
   { nome: 'ponti', etichetta: 'Unisci le macchie che si seguono e distano meno di', unita: 'mm', passo: 0.5, min: 0,
-    aiuto: 'Un ponte di raso fra le due: il filo passa senza salto. Cambia il disegno delle macchie. 0 = mai.' },
+    aiuto: 'Un ponte di raso fra le due: il filo passa senza salto. Cambia il disegno delle macchie. Con due livelli i ponti stanno solo sul 2°, anche dove il filo del 1° ci può passare sotto. Oltre questa distanza nessun ponte: lì resta il salto o il filo a vista. 0 = mai.' },
   { nome: 'pontiLarghezza', etichetta: 'Larghezza del ponte', unita: 'mm', passo: 0.5, min: 1 },
 ];
 
