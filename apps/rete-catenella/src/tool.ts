@@ -15,6 +15,7 @@ import { coloreForiStilista, collegaStilista, inviaAStilista, origineStilista, s
 import { reteAStilista } from './stilista-psil';
 import { costruisciRete, stratiRete, PARAMETRI_RETE, type EsitoRete, type ModuloRete, type ParametriRete, type Xy, type ZonaTrama, riquadroRete } from './motore';
 import { moduloDiEsempio } from './esempio';
+import { aggiungiModulo, leggiElenco, leggiModulo, scriviElenco, togliModulo, type Memoria } from './elenco-moduli';
 
 type CampoNum = { [K in keyof ParametriRete]: ParametriRete[K] extends number ? K : never }[keyof ParametriRete];
 const LIMITI: Array<{ key: CampoNum; passo: number; min: number; max: number }> = [
@@ -26,8 +27,6 @@ const LIMITI: Array<{ key: CampoNum; passo: number; min: number; max: number }> 
 ];
 const COLORI = { base: '#7fb0e6', passaggio: '#1f9a55', catenella: '#a5432f', uscita: '#d6009a', contorno: '#2c2b28' };
 const n0 = (v: number): string => Math.round(v).toLocaleString('it-IT');
-// il modulo del cliente non sta nel repo: una volta caricato resta in questo browser, su questo PC
-const MODULO_RICORDATO = 'rg-rete-catenella-modulo';
 
 /** Un contorno di esempio inventato: un trapezio coi lati un po' curvi. */
 const CONTORNO_ESEMPIO = (): string => '<svg xmlns="http://www.w3.org/2000/svg" width="420mm" height="280mm" viewBox="0 0 420 280"><path fill="none" stroke="#c0392b" d="M10 10 L410 10 L340 270 L80 270 Z"/></svg>';
@@ -51,11 +50,13 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
     pannello: [
       sezioneSorgente({ tipo: 'cartamodello', accetta: '.svg,.dxf', statoIniziale: 'Nessun contorno: c’è quello di esempio.', larghezzaReale: false, demo: 'Contorno di esempio', stilista: true }),
       sezione({ indice: 2, titolo: 'Modulo', contenuto: `<div class="rg-param-grid">
+        <select class="rg-select rg-param-grid__wide" id="moduloScelta" aria-label="Modulo in uso"></select>
         <div class="rg-file-input rg-param-grid__wide">
-          <label class="rg-file-input__control"><input type="file" id="moduloInput" accept=".json" /><span class="rg-button rg-button--outline">Carica un modulo…</span></label>
+          <label class="rg-file-input__control"><input type="file" id="moduloInput" accept=".json" /><span class="rg-button rg-button--outline">Aggiungi un modulo…</span></label>
           <p class="rg-file-input__status" id="moduloStatus" role="status">Modulo di esempio.</p>
         </div>
-        <button type="button" id="moduloEsempioBtn" class="rg-button rg-button--ghost rg-param-grid__wide" hidden>Torna al modulo di esempio</button>
+        <button type="button" id="moduloDiSerieBtn" class="rg-button rg-button--ghost rg-param-grid__wide">Usa come modulo di serie</button>
+        <button type="button" id="moduloTogliBtn" class="rg-button rg-button--ghost rg-param-grid__wide">Togli dall’elenco</button>
         <dl class="rg-key-value rg-param-grid__wide"><dt>Passo colonne (fisso)</dt><dd id="passoColonne"></dd><dt>Passo righe (fisso)</dt><dd id="passoRighe"></dd></dl>
       </div>` }),
       sezione({ indice: 3, titolo: 'Griglia', apribile: true, aperta: true, contenuto: griglia(['spostaXMm', 'spostaYMm', 'moduloMinimoPct', 'pezzoMinimoMm', 'uscitaFuoriMm'], `
@@ -198,20 +199,45 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
   $('demoBtn').addEventListener('click', () => caricaContorno(CONTORNO_ESEMPIO(), 'contorno-di-esempio.svg'));
 
   // ---- il modulo: resta in un file fuori dal repo ----------------------------------
-  function usaModulo(testo: string, nome: string): void {
-    const m = JSON.parse(testo) as ModuloRete;
-    if (m.formato !== 'rete-modulo-1' || !m.varianti?.A?.oggetti?.length || !m.varianti?.B?.oggetti?.length || !(m.passi?.colonne > 0) || !(m.passi?.righe > 0)) throw new Error('non è un modulo');
-    modulo = m;
-    $('moduloStatus').textContent = `${m.nome || nome}: ${m.varianti.A.oggetti.length} oggetti. Resta su questo PC anche alla prossima apertura.`;
-    $('moduloEsempioBtn').hidden = false;
+  const memoria = (): Memoria | null => { try { return localStorage; } catch { return null; } };
+  let elenco = leggiElenco(memoria());
+  let moduloInUso: string | null = null;
+  /** Il modulo di esempio, o uno dell'elenco. */
+  function usaModulo(id: string | null): void {
+    const salvato = elenco.moduli.find((x) => x.id === id), m = salvato ? leggiModulo(salvato.testo) : null;
+    modulo = m ?? moduloDiEsempio();
+    moduloInUso = m ? salvato!.id : null;
     mostraPassi();
+    mostraElenco();
   }
-  $('moduloEsempioBtn').addEventListener('click', () => {
-    try { localStorage.removeItem(MODULO_RICORDATO); } catch { /* niente da togliere */ }
-    modulo = moduloDiEsempio();
-    $('moduloStatus').textContent = 'Modulo di esempio.';
-    $('moduloEsempioBtn').hidden = true;
-    mostraPassi();
+  function mostraElenco(note = ''): void {
+    const scelta = $('moduloScelta') as HTMLSelectElement;
+    const riga = (id: string, nome: string): string => `<option value="${id}">${nome.replace(/&/g, '&amp;').replace(/</g, '&lt;')}${(id || null) === elenco.diSerie ? ' — di serie' : ''}</option>`;
+    scelta.innerHTML = riga('', 'Modulo di esempio') + elenco.moduli.map((x) => riga(x.id, x.nome)).join('');
+    scelta.value = moduloInUso ?? '';
+    ($('moduloDiSerieBtn') as HTMLButtonElement).disabled = moduloInUso === elenco.diSerie;
+    ($('moduloTogliBtn') as HTMLButtonElement).disabled = !moduloInUso;
+    $('moduloStatus').textContent = note || (moduloInUso ? `${modulo.varianti.A.oggetti.length} oggetti. Resta su questo PC: sugli altri si carica una volta dal file.` : 'Inventato: non è un modulo vero. Carica il tuo file di modulo.');
+  }
+  $('moduloScelta').addEventListener('change', (e) => {
+    usaModulo((e.target as HTMLSelectElement).value || null);
+    adattaDopo = true;
+    genera();
+  });
+  $('moduloDiSerieBtn').addEventListener('click', () => {
+    const prima = elenco;
+    elenco = { ...elenco, diSerie: moduloInUso };
+    if (!scriviElenco(memoria(), elenco)) { elenco = prima; mostraElenco('Non riesco a salvarlo in questo browser.'); return; }
+    mostraElenco();
+  });
+  $('moduloTogliBtn').addEventListener('click', () => {
+    if (!moduloInUso) return;
+    const quale = elenco.moduli.find((x) => x.id === moduloInUso);
+    if (!confirm(`Togliere «${quale?.nome}» dall'elenco? Per riaverlo serve il suo file.`)) return;
+    elenco = togliModulo(elenco, moduloInUso);
+    scriviElenco(memoria(), elenco);
+    usaModulo(elenco.diSerie);
+    adattaDopo = true;
     genera();
   });
   // ---- la zona da infittire ------------------------------------------------------
@@ -235,15 +261,17 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
   ($('moduloInput') as HTMLInputElement).addEventListener('change', async (e) => {
     const f = (e.target as HTMLInputElement).files?.[0];
     if (!f) return;
-    try {
-      const testo = await f.text();
-      usaModulo(testo, f.name);
-      try { localStorage.setItem(MODULO_RICORDATO, testo); } catch { /* senza memoria va ricaricato ogni volta */ }
-      adattaDopo = true;
-      genera();
-    } catch {
-      $('moduloStatus').textContent = `${f.name}: non è un modulo di Rete a catenella.`;
-    }
+    const testo = await f.text();
+    if (!leggiModulo(testo)) { mostraElenco(`${f.name}: non è un modulo di Rete a catenella.`); return; }
+    const { elenco: nuovo, id } = aggiungiModulo(elenco, testo, f.name);
+    // il primo modulo vero diventa quello di serie: dopo si sceglie dall'elenco
+    const conSerie = elenco.moduli.length === 0 && !elenco.diSerie ? { ...nuovo, diSerie: id } : nuovo;
+    const salvato = scriviElenco(memoria(), conSerie);
+    elenco = conSerie;
+    usaModulo(id);
+    if (!salvato) mostraElenco('In uso, ma non ci sta nella memoria di questo browser: alla prossima apertura va ricaricato.');
+    adattaDopo = true;
+    genera();
   });
 
   // ---- i campi ------------------------------------------------------------------
@@ -293,7 +321,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
   }
 
   // ---- gli export: i parametri nel file (R27), il modulo no: è del cliente ------------------
-  const progetto = (): Record<string, unknown> => ({ rgProject: 'rete-catenella', params: { ...par }, modulo: modulo.nome, ...(zona ? { zona } : {}), ...(colori.some((c) => c.ruolo === 'area') ? { aree: colori.filter((c) => c.ruolo === 'area').map((c) => ({ colore: c.colore, soglia: c.soglia, anelli: c.anelli })) } : {}) });
+  const progetto = (): Record<string, unknown> => ({ rgProject: 'rete-catenella', params: { ...par }, modulo: elenco.moduli.find((x) => x.id === moduloInUso)?.nome ?? modulo.nome, ...(zona ? { zona } : {}), ...(colori.some((c) => c.ruolo === 'area') ? { aree: colori.filter((c) => c.ruolo === 'area').map((c) => ({ colore: c.colore, soglia: c.soglia, anelli: c.anelli })) } : {}) });
   const nomeBase = (): string => (sorgente?.name ?? 'rete-catenella').replace(/\.[^.]+$/, '');
   const dstBytes = (): Uint8Array => {
     const strati = stratiRete(esito!);
@@ -323,7 +351,10 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
       colori = [...colori.filter((c) => c.ruolo !== 'area'), ...(m.aree as Array<{ colore: string; soglia: number; anelli: Xy[][] }>).map((a) => ({ ...a, ruolo: 'area' as const }))];
       mostraColori();
     }
-    $('progettoStatus').textContent = `${da}: parametri ripresi. Il modulo era «${String(m.modulo ?? '?')}»: se non è questo, ricaricalo.`;
+    // il progetto dice il nome del modulo, non il modulo: se è nell'elenco si riprende, se no si dice
+    const suo = elenco.moduli.find((x) => x.nome === m.modulo);
+    if (suo) usaModulo(suo.id);
+    $('progettoStatus').textContent = `${da}: parametri ripresi. ${suo ? `Modulo «${suo.nome}».` : `Il modulo era «${String(m.modulo ?? '?')}»: non è nell’elenco, se non è questo aggiungilo.`}`;
     genera();
   };
   ($('progettoInput') as HTMLInputElement).addEventListener('change', async (e) => {
@@ -358,10 +389,6 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
     void reteAStilista(esito, par, sorgente ? origineStilista(sorgente.text) : null, stato);
   });
 
-  try {
-    const ricordato = localStorage.getItem(MODULO_RICORDATO);
-    if (ricordato) usaModulo(ricordato, 'modulo');
-  } catch { /* si riparte dal modulo di esempio */ }
-  mostraPassi();
+  usaModulo(elenco.diSerie);
   caricaContorno(CONTORNO_ESEMPIO(), 'contorno-di-esempio.svg');
 }
