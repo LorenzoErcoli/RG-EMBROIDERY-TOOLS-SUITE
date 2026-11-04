@@ -70,6 +70,7 @@ export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } f
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_DI_SERIE, fermaSottoIlSecondo as pmFerma, macchiePerStilista as pmPerStilista } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
 export { lineePerStilista as rcLineeStilista } from ${JSON.stringify(posix('apps/rete-catenella/src/stilista-psil.ts'))};
+export { aggiungiModulo as rcAggiungiModulo, leggiElenco as rcLeggiElenco, leggiModulo as rcLeggiModulo, scriviElenco as rcScriviElenco, togliModulo as rcTogliModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/elenco-moduli.ts'))};
 export { griglia as rcGriglia, riquadroRete as rcRiquadro, costruisciRete as rcCostruisci, stratiRete as rcStrati, catenella as rcCatenella, pezziDentro as rcPezzi, maschera as rcMaschera, PARAMETRI_RETE as RC_PARAMETRI, motore as rcMotore } from ${JSON.stringify(posix('apps/rete-catenella/src/motore.ts'))};
 export { moduloDiEsempio as rcModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/esempio.ts'))};
 export { pezzoAMisure as rtsPezzoAMisure, stratiPerDst as rtsStratiPerDst } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
@@ -6949,6 +6950,22 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   const riga = { formato: 'rete-modulo-1', nome: 'riga', passi: { colonne: 100, righe: 50 }, origine: [0, 5], varianti: { A: varianteRiga, B: varianteRiga } };
   const suRiga = rg.rcCostruisci(riga, [[0, 0], [310, 0], [310, 100], [0, 100], [0, 0]], { ...P, moduloMinimoPct: 0 }), usciteRiga = suRiga.oggetti.filter((o) => o.uscita);
   check('le uscite corrono sotto i moduli che arrivano dopo, anche se il bordo dietro è più vicino', [usciteRiga.filter((o) => o.cella.riga === 0 && o.cella.colonna === 0).every((o) => o.t[o.t.length - 1][0] > 310), suRiga.conti.usciteSottoMm > 0], [true, true]);
+  // Lorenzo, 2026-11-04: «il modulo che stiamo mettendo possiamo inserirlo come def? e casomai se uno ne crea un altro lo mette»
+  const memoriaProva = (iniziale = {}) => { const d = { ...iniziale }; return { d, getItem: (k) => d[k] ?? null, setItem: (k, v) => { d[k] = v; }, removeItem: (k) => { delete d[k]; } }; };
+  const testoModulo = JSON.stringify(m), altroModulo = JSON.stringify({ ...m, nome: 'altro' });
+  check('non ogni file è un modulo', [rg.rcLeggiModulo('niente') === null, rg.rcLeggiModulo('{"formato":"altro"}') === null, rg.rcLeggiModulo(testoModulo) !== null], [true, true, true]);
+  const conVecchio = memoriaProva({ 'rg-rete-catenella-modulo': testoModulo }), migrato = rg.rcLeggiElenco(conVecchio);
+  check('il modulo ricordato prima entra nell\'elenco e resta quello di serie, una volta sola', [migrato.moduli.length, migrato.diSerie === migrato.moduli[0].id, conVecchio.d['rg-rete-catenella-modulo'], rg.rcLeggiElenco(conVecchio).moduli.length], [1, true, undefined, 1]);
+  const uno = rg.rcAggiungiModulo({ moduli: [], diSerie: null }, testoModulo, 'a.json'), due = rg.rcAggiungiModulo(uno.elenco, altroModulo, 'b.json'), ripetuto = rg.rcAggiungiModulo(due.elenco, testoModulo, 'c.json');
+  check('aggiungere: si allunga l\'elenco, lo stesso file resta uno solo', [due.elenco.moduli.length, ripetuto.elenco.moduli.length, ripetuto.id === uno.id, due.elenco.moduli[1].nome], [2, 2, true, 'b']);
+  const stessoNome = rg.rcAggiungiModulo(due.elenco, JSON.stringify({ ...m, nome: 'altro', passi: { colonne: 9, righe: 9 } }), 'b.json');
+  check('stesso nome, disegno diverso: non si confondono', stessoNome.elenco.moduli[2].nome, 'b (2)');
+  const diSerie = { ...due.elenco, diSerie: due.id }, tolto = rg.rcTogliModulo(diSerie, due.id);
+  check('togliere quello di serie riporta a quello di esempio', [tolto.moduli.length, tolto.diSerie], [1, null]);
+  const memoria = memoriaProva();
+  rg.rcScriviElenco(memoria, diSerie);
+  check('l\'elenco torna uguale alla prossima apertura', [rg.rcLeggiElenco(memoria).moduli.length, rg.rcLeggiElenco(memoria).diSerie], [2, due.id]);
+  check('senza memoria o con la memoria piena non si ferma niente', [rg.rcLeggiElenco(null).moduli.length, rg.rcScriviElenco({ setItem: () => { throw new Error('piena'); } }, diSerie), rg.rcLeggiElenco(memoriaProva({ 'rg-rete-catenella-moduli': 'rovinato' })).moduli.length], [0, false, 0]);
   // Lorenzo, 2026-11-04: «in maniera automatica si aggiungano pezzi ai moduli dove vicino ci sono i bordi e c'è del bianco»
   const conPezzi = rg.rcCostruisci(m, quadrato, P), senzaPezzi = rg.rcCostruisci(m, quadrato, { ...P, pezziSulBordo: false });
   check('i pezzi sul bordo: più catenella, stessi moduli, stesse uscite, stessi cambi ago', [conPezzi.conti.pezzi > 0, conPezzi.conti.catenelle > senzaPezzi.conti.catenelle, conPezzi.conti.moduli === senzaPezzi.conti.moduli, conPezzi.conti.uscite === senzaPezzi.conti.uscite, rg.rcStrati(conPezzi).length === rg.rcStrati(senzaPezzi).length], [true, true, true, true, true]);
