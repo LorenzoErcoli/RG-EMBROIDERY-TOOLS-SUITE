@@ -159,6 +159,14 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    che mi interessa sia insertita»*: la distanza resta il campo `ponti`, di serie 0, e senza ponti il ricamo è identico a
    prima. Alla domanda se per le macchie sotto, senza copertura, volesse il salto o i punti ha risposto *«sotto punti»*:
    `secondoVista` non cambia, di serie 12 mm, e può abbassarlo lui.
+33. (2026-11-04) **Sotto la macchia è anche dove arrivano le punte del raso.** *«nella base, sotto alla macchia si crea una
+   situazione strana, vengono messi dei punti in più ripetto al normale passaggio singolo che dovrebbe avere sotto la
+   macchia»*. Sul suo DST (sfrangiatura 7 mm, 3,5 fuori) la barretta della foto attraversava una rientranza della macchia
+   larga 2,2 mm: le punte la riempiono di raso, ma la base guardava solo il contorno e la credeva fuori (1 mm a 2 passaggi, 1,6
+   a 4, 1,5 a 2, quindi due punti in mezzo). Ora conta come sotto anche la metà della sfrangiatura che va fuori, lungo il
+   raso: lì arrivano almeno metà delle righe (misurato: 2,9 righe al mm dentro, 1,9 a 1 mm dal contorno, 1,2 a 2 mm, 0,4 a 3
+   mm). Pezzi di base ripassati sotto il raso pieno: da 270 a 18 mm. Sul pannello: da 26.017 a 25.456 punti, da 70,7 a 69,1 m
+   di filo; raso, punto sopra e capi della base restano uguali. Non è provato a macchina.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso
@@ -194,7 +202,9 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
   1,01 mm restando sulla barretta, cioè un po' fuori dalla macchia, sotto le punte del raso (prima tornava a 4
   passaggi: 127 mm dentro le macchie, tolti il 2026-10-29); un pezzo fuori più corto di 1 mm passa a 2. Una barretta
   che sfiora appena la macchia passa quindi a 2 tutta. I capi della base non cambiano: l'ordine delle macchie, che
-  parte dalla fine della base, resta lo stesso.
+  parte dalla fine della base, resta lo stesso. Dal 2026-11-04 (decisione 33) «dentro» comprende anche le punte del
+  raso: la barretta si sposta lungo il raso, ogni quarto di millimetro, fino a metà della sfrangiatura che va fuori
+  (`PUNTE_COPRONO`), e si taglia su ogni macchia. Ogni macchia usa la sfrangiatura e l'angolo del suo livello.
 - **Ingresso e uscita.** In ogni macchia si entra nel punto dell'interno più vicino a dove si è usciti; un passaggio
   SOTTO il raso (A* su griglia, lontano dal bordo più della sfrangiatura: il raso lo copre) porta all'inizio delle righe.
   Il raso sceglie da quale cella e da quale angolo cominciare guardando dove FINISCE: dal lato della macchia dopo. Il

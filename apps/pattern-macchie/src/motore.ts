@@ -1446,6 +1446,9 @@ function conPonte(a: Polyline, b: Polyline, larghezza: number): { forma: Polylin
  */
 const BARRETTA_PEZZO_MIN = 1;
 
+/** Quanta parte della sfrangiatura fuori conta come «sotto la macchia»: fin lì arrivano almeno metà delle righe (misurato sul disegno vero). */
+const PUNTE_COPRONO = 0.5;
+
 /**
  * LA BASE A DUE PASSAGGI SOTTO LE MACCHIE (Lorenzo, 2026-10-29: «la base che lateralmente è a 2 passaggi e al centro è
  * a 4 passaggi, deve prevedere però dove ci saranno le macchie sopra. Dove vi sono le macchie i passaggi rimangono a 2
@@ -1455,19 +1458,33 @@ const BARRETTA_PEZZO_MIN = 1;
  * macchia mai 4 passaggi, nemmeno nei pezzetti sul bordo (Lorenzo, stesso giorno: «togliamo anche i pezzetti da 1 mm sul
  * bordo, non sono necessari»): un pezzo dentro più corto di `BARRETTA_PEZZO_MIN` si allunga fino a tanto, verso fuori;
  * un pezzo fuori più corto passa a due. I capi della barretta restano quelli, e la base va avanti come prima.
+ *
+ * Sotto la macchia è anche dove arrivano le punte del suo raso (Lorenzo, 2026-11-04: «vengono messi dei punti in più
+ * rispetto al normale passaggio singolo che dovrebbe avere sotto la macchia»): una rientranza stretta la sfrangiatura la
+ * riempie, e lì una barretta non è fuori. `punte[i]`: fin dove, e in che direzione, la macchia i si allarga così.
  */
-function dueSottoLeMacchie(base: Polyline[], forme: Polyline[]): Polyline[] {
+function dueSottoLeMacchie(base: Polyline[], forme: Polyline[], punte: Point[]): Polyline[] {
   const bb = forme.map(ingombro);
   const ug = (p: Point, q: Point) => Math.abs(p.x - q.x) < 1e-4 && Math.abs(p.y - q.y) < 1e-4;
   /** I pezzi di a→b, da 0 a 1: dentro una macchia o fuori. */
   const pezzi = (a: Point, b: Point): Array<{ t0: number; t1: number; dentro: boolean }> => {
     const L = Math.hypot(b.x - a.x, b.y - a.y), tt = (p: Point) => ((p.x - a.x) * (b.x - a.x) + (p.y - a.y) * (b.y - a.y)) / (L * L);
-    const dentro: Array<[number, number]> = [];
+    const tutti: Array<[number, number]> = [];
     forme.forEach((f, i) => {
-      const q = bb[i];
-      if (Math.max(a.x, b.x) < q.x0 || Math.min(a.x, b.x) > q.x1 || Math.max(a.y, b.y) < q.y0 || Math.min(a.y, b.y) > q.y1) return;
-      for (const [p, r] of clipSegmentToPolygon(a, b, f)) dentro.push([tt(p), tt(r)]);
+      const q = bb[i], u = punte[i], ux = Math.abs(u.x), uy = Math.abs(u.y);
+      if (Math.max(a.x, b.x) < q.x0 - ux || Math.min(a.x, b.x) > q.x1 + ux || Math.max(a.y, b.y) < q.y0 - uy || Math.min(a.y, b.y) > q.y1 + uy) return;
+      // (la barretta si sposta lungo il raso, invece di allargare la macchia: ogni quarto di millimetro fin dove arrivano le punte)
+      const passi = Math.ceil(Math.hypot(u.x, u.y) / 0.25);
+      for (let s = -passi; s <= passi; s++) {
+        const dx = passi ? (u.x * s) / passi : 0, dy = passi ? (u.y * s) / passi : 0;
+        for (const [p, r] of clipSegmentToPolygon({ x: a.x + dx, y: a.y + dy }, { x: b.x + dx, y: b.y + dy }, f)) tutti.push([tt({ x: p.x - dx, y: p.y - dy }), tt({ x: r.x - dx, y: r.y - dy })]);
+      }
     });
+    const dentro = tutti.sort((x, y) => x[0] - y[0]).reduce<Array<[number, number]>>((acc, d) => {
+      const u = acc[acc.length - 1];
+      if (u && d[0] <= u[1]) u[1] = Math.max(u[1], d[1]); else acc.push([d[0], d[1]]);
+      return acc;
+    }, []);
     // (un pezzo dentro corto si allunga attorno al suo mezzo, restando sulla barretta: dentro c'è tutto)
     // (un centesimo in più: il punto che nasce non scende sotto il minimo per gli arrotondamenti)
     const h = Math.min(1, (BARRETTA_PEZZO_MIN + 0.01) / L);
@@ -1761,7 +1778,7 @@ export function costruisciMacchie(
   const sottoIlSecondo = { collegate: 0, mm: 0, aVista: 0, attraversamenti: 0 };
   let saltiDentro = 0, tolto = 0, passaggiScoperti = 0, ponti = 0;
   const stop: RisultatoMacchie['stop'] = [];
-  const formeTutte: Polyline[] = [], ordiniTutti: number[][] = [];
+  const formeTutte: Polyline[] = [], ordiniTutti: number[][] = [], puntePer: Point[] = [];
   let fineStop: Point | undefined = fineBase;
   const livello = (t: Polyline[]): Livello => ({ tratti: t, punti: contaPunti(t), salti: Math.max(0, t.length - 1) });
   // il secondo livello, coi suoi parametri del raso
@@ -2186,6 +2203,7 @@ export function costruisciMacchie(
   fineStop = stopSopra.tratti.length ? stopSopra.tratti[stopSopra.tratti.length - 1].at(-1) : uscita;
   });
   formeTutte.push(...forme);
+  puntePer.push(...forme.map(() => ({ x: verso.x * fuori * PUNTE_COPRONO, y: verso.y * fuori * PUNTE_COPRONO })));
   ordiniTutti.push(...ordini.map((o) => o.map((i) => i + off)));
   };
 
@@ -2266,7 +2284,7 @@ export function costruisciMacchie(
   // 5. LA BASE SOTTO LE MACCHIE A DUE PASSAGGI (Lorenzo, 2026-10-29: «dove vi sono le macchie i passaggi rimangono a 2
   //    per non sovrapporre troppo filo»): le barrette che vanno e tornano più volte, dentro le macchie (coi ponti) una
   //    sola andata e ritorno. La base resta intera, e comincia e finisce dove prima.
-  const baseCucita = par.conBase ? dueSottoLeMacchie(baseLinee, formeTutte) : [];
+  const baseCucita = par.conBase ? dueSottoLeMacchie(baseLinee, formeTutte, puntePer) : [];
 
   const tutti = (tipo: 'raso' | 'sopra') => livello(stop.filter((st) => st.tipo === tipo).flatMap((st) => st.livello.tratti));
   return {
