@@ -18,7 +18,7 @@ import { moduloDiEsempio } from './esempio';
 
 type CampoNum = { [K in keyof ParametriRete]: ParametriRete[K] extends number ? K : never }[keyof ParametriRete];
 const LIMITI: Array<{ key: CampoNum; passo: number; min: number; max: number }> = [
-  { key: 'spostaXMm', passo: 1, min: -200, max: 200 }, { key: 'spostaYMm', passo: 1, min: -100, max: 100 }, { key: 'moduloMinimoPct', passo: 1, min: 0, max: 100 }, { key: 'uscitaFuoriMm', passo: 1, min: 2, max: 150 }, { key: 'magliaMassimaMm2', passo: 5, min: 12, max: 500 }, { key: 'infittisciVariante', passo: 1, min: 1, max: 99 },
+  { key: 'spostaXMm', passo: 1, min: -200, max: 200 }, { key: 'spostaYMm', passo: 1, min: -100, max: 100 }, { key: 'moduloMinimoPct', passo: 1, min: 0, max: 100 }, { key: 'pezzoMinimoMm', passo: 5, min: 0, max: 500 }, { key: 'uscitaFuoriMm', passo: 1, min: 2, max: 150 }, { key: 'magliaMassimaMm2', passo: 5, min: 12, max: 500 }, { key: 'infittisciVariante', passo: 1, min: 1, max: 99 },
   { key: 'passate', passo: 1, min: 1, max: 3 }, { key: 'puntoBaseMm', passo: 0.1, min: 1, max: 6 }, { key: 'puntoPassaggioMm', passo: 0.1, min: 1, max: 6 },
   { key: 'psilLunghezzaMm', passo: 0.05, min: 1, max: 6 }, { key: 'psilLarghezzaMm', passo: 0.05, min: 0.4, max: 4 }, { key: 'psilPassoMm', passo: 0.05, min: 0.8, max: 5 },
   { key: 'psilInizioMm', passo: 0.05, min: 0, max: 3 }, { key: 'psilGiri', passo: 1, min: 1, max: 3 },
@@ -41,6 +41,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
   const griglia = (keys: CampoNum[], dopo = ''): string => `<div class="rg-param-grid" style="--rg-input-numeric-width: 7ch">${keys.map(campo).join('\n')}${dopo}</div>`;
   const tCorsie = testiCampo('rete-catenella', 'corsie');
   const tCollega = testiCampo('rete-catenella', 'collegaModuli');
+  const tPezzi = testiCampo('rete-catenella', 'pezziSulBordo');
   const tPsil = testiCampo('rete-catenella', 'psilVero');
   const tInfittisci = testiCampo('rete-catenella', 'infittisci');
 
@@ -57,7 +58,8 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
         <button type="button" id="moduloEsempioBtn" class="rg-button rg-button--ghost rg-param-grid__wide" hidden>Torna al modulo di esempio</button>
         <dl class="rg-key-value rg-param-grid__wide"><dt>Passo colonne (fisso)</dt><dd id="passoColonne"></dd><dt>Passo righe (fisso)</dt><dd id="passoRighe"></dd></dl>
       </div>` }),
-      sezione({ indice: 3, titolo: 'Griglia', apribile: true, aperta: true, contenuto: griglia(['spostaXMm', 'spostaYMm', 'moduloMinimoPct', 'uscitaFuoriMm'], `
+      sezione({ indice: 3, titolo: 'Griglia', apribile: true, aperta: true, contenuto: griglia(['spostaXMm', 'spostaYMm', 'moduloMinimoPct', 'pezzoMinimoMm', 'uscitaFuoriMm'], `
+        <label class="rg-choice rg-param-grid__wide" title="${tPezzi.aiuto ?? ''}"><input type="checkbox" id="pezziSulBordo" checked> ${tPezzi.etichetta}</label>
         <label class="rg-choice rg-param-grid__wide" title="${tCollega.aiuto ?? ''}"><input type="checkbox" id="collegaModuli"> ${tCollega.etichetta}</label>`) }),
       sezione({ indice: 4, titolo: 'Basi e passaggi', apribile: true, aperta: true, contenuto: griglia(['passate', 'puntoBaseMm', 'puntoPassaggioMm']) }),
       sezione({ indice: 5, titolo: 'Catenella (psil)', apribile: true, aperta: true, contenuto: griglia(['psilLunghezzaMm', 'psilLarghezzaMm', 'psilPassoMm', 'psilInizioMm', 'psilGiri'], `
@@ -189,7 +191,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
       genera();
     });
   }
-  for (const k of ['corsie', 'collegaModuli', 'psilVero', 'infittisci'] as const) ($(k) as HTMLInputElement).addEventListener('change', (e) => { par[k] = (e.target as HTMLInputElement).checked; genera(); });
+  for (const k of ['corsie', 'pezziSulBordo', 'collegaModuli', 'psilVero', 'infittisci'] as const) ($(k) as HTMLInputElement).addEventListener('change', (e) => { par[k] = (e.target as HTMLInputElement).checked; genera(); });
   for (const id of ['vBasi', 'vPassaggi', 'vCatenelle', 'vUscite', 'vMaglie']) $(id).addEventListener('change', () => { sim?.ferma(); disegna(); });
 
   // ---- il calcolo e il disegno ------------------------------------------------------
@@ -199,7 +201,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
     const t0 = performance.now();
     esito = costruisciRete(modulo, anello, par, zona);
     const c = esito.conti;
-    const righe: Array<[string, string]> = [['Moduli', n0(c.moduli)], ...(par.collegaModuli ? [['Fili fra i moduli', `${n0(c.collegamenti)}, ${n0(c.collegamentiMm / 1000)} m`] as [string, string], ['Rasafili fra i moduli', n0(c.saltiFraModuli)] as [string, string]] : [['Uscite fuori dal contorno', n0(c.uscite)] as [string, string], ['Uscite sotto i moduli dopo', `${n0(c.usciteSottoMm / 1000)} m`] as [string, string], ['Uscite dove non c’è un modulo dopo', `${n0(c.usciteScoperteMm / 1000)} m`] as [string, string]]), ['Basi', n0(c.basi)], ['Catenelle', n0(c.catenelle)], ['Passaggi', n0(c.passaggi)], ['Punti', n0(c.punti)], ['Filo', `${n0(c.filoMm / 1000)} m`],
+    const righe: Array<[string, string]> = [['Moduli', n0(c.moduli)], ...(par.pezziSulBordo ? [['Pezzi attaccati ai moduli', `${n0(c.pezzi)}${c.pezziSenzaStrada ? `, ${n0(c.pezziSenzaStrada)} senza strada` : ''}`] as [string, string]] : []), ...(par.collegaModuli ? [['Fili fra i moduli', `${n0(c.collegamenti)}, ${n0(c.collegamentiMm / 1000)} m`] as [string, string], ['Rasafili fra i moduli', n0(c.saltiFraModuli)] as [string, string]] : [['Uscite fuori dal contorno', n0(c.uscite)] as [string, string], ['Uscite sotto i moduli dopo', `${n0(c.usciteSottoMm / 1000)} m`] as [string, string], ['Uscite dove non c’è un modulo dopo', `${n0(c.usciteScoperteMm / 1000)} m`] as [string, string]]), ['Basi', n0(c.basi)], ['Catenelle', n0(c.catenelle)], ['Passaggi', n0(c.passaggi)], ['Punti', n0(c.punti)], ['Filo', `${n0(c.filoMm / 1000)} m`],
       ['Tagli delle basi sulle corsie', n0(c.tagliSulleCorsie)], ['Corsia più lontana', `${c.corsiaPiuLontanaMm} mm`], ['Passi lunghi rimasti', n0(c.passiLunghi)], ['Salti rimasti nei moduli', n0(c.movimentiLunghi)], ['Catenella per cm²', `${n0(c.catenellaPerCm2)} mm`], ...(par.infittisci ? [['Linee nuove', n0(c.lineeNuove)] as [string, string], ['Maglie rimaste intere, ogni due moduli', n0(c.maglieIntere)] as [string, string]] : [])];
     $('conti').innerHTML = righe.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
     $('misure').textContent = `${n0(c.punti)} punti · ${n0(c.filoMm / 1000)} m`;
@@ -243,7 +245,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
     if (!m || m.rgProject !== 'rete-catenella') { $('progettoStatus').textContent = `${da} non porta dentro un progetto di Rete a catenella.`; return; }
     Object.assign(par, m.params as Partial<ParametriRete>);
     for (const l of LIMITI) impostaNumero($(l.key) as HTMLInputElement, par[l.key]);
-    for (const k of ['corsie', 'collegaModuli', 'psilVero', 'infittisci'] as const) ($(k) as HTMLInputElement).checked = par[k];
+    for (const k of ['corsie', 'pezziSulBordo', 'collegaModuli', 'psilVero', 'infittisci'] as const) ($(k) as HTMLInputElement).checked = par[k];
     zona = Array.isArray(m.zona) ? m.zona as Xy[] : null;
     $('zonaStatus').textContent = zona ? 'Solo dentro la zona del progetto.' : 'Dappertutto.';
     $('zonaViaBtn').hidden = !zona;

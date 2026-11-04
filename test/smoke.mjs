@@ -6927,7 +6927,7 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   const celle = [...new Set(e.oggetti.map((o) => o.cella))];
   const colonneDiverse = [...new Set(rg.rcGriglia([0, 0, 500, 100], { ...m, passi: { colonne: 100.33, righe: 49.41 } }, [0, 0]).map((c) => c.dx))].sort((a, b) => a - b);
   check('le colonne stanno tutte allo stesso passo', colonneDiverse.slice(1).every((x, i) => Math.abs(x - colonneDiverse[i] - 100.33) < 1e-9), true);
-  check('in ogni modulo le basi vengono prima delle catenelle', celle.every((c) => { const og = e.oggetti.filter((o) => o.cella === c && !o.collegamento && !o.uscita); const u = og.map((o) => o.tipo).lastIndexOf('base'); const pr = og.findIndex((o) => o.tipo !== 'base'); return u < 0 || pr < 0 || u < pr; }), true);
+  check('in ogni modulo le basi vengono prima delle catenelle', celle.every((c) => { const og = e.oggetti.filter((o) => o.cella === c && !o.collegamento && !o.uscita && !o.pezzo); const u = og.map((o) => o.tipo).lastIndexOf('base'); const pr = og.findIndex((o) => o.tipo !== 'base'); return u < 0 || pr < 0 || u < pr; }), true);
   check('le passate: con 1 ci sono meno basi che con 3', rg.rcCostruisci(m, quadrato, { ...P, passate: 1 }).conti.basi < e.conti.basi, true);
   const senza = rg.rcCostruisci(m, quadrato, { ...P, corsie: false });
   check('con le corsie restano meno passi lunghi nelle basi', [e.conti.tagliSulleCorsie > 0, e.conti.passiLunghi < senza.conti.passiLunghi], [true, true]);
@@ -6949,6 +6949,13 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   const riga = { formato: 'rete-modulo-1', nome: 'riga', passi: { colonne: 100, righe: 50 }, origine: [0, 5], varianti: { A: varianteRiga, B: varianteRiga } };
   const suRiga = rg.rcCostruisci(riga, [[0, 0], [310, 0], [310, 100], [0, 100], [0, 0]], { ...P, moduloMinimoPct: 0 }), usciteRiga = suRiga.oggetti.filter((o) => o.uscita);
   check('le uscite corrono sotto i moduli che arrivano dopo, anche se il bordo dietro è più vicino', [usciteRiga.filter((o) => o.cella.riga === 0 && o.cella.colonna === 0).every((o) => o.t[o.t.length - 1][0] > 310), suRiga.conti.usciteSottoMm > 0], [true, true]);
+  // Lorenzo, 2026-11-04: «in maniera automatica si aggiungano pezzi ai moduli dove vicino ci sono i bordi e c'è del bianco»
+  const conPezzi = rg.rcCostruisci(m, quadrato, P), senzaPezzi = rg.rcCostruisci(m, quadrato, { ...P, pezziSulBordo: false });
+  check('i pezzi sul bordo: più catenella, stessi moduli, stesse uscite, stessi cambi ago', [conPezzi.conti.pezzi > 0, conPezzi.conti.catenelle > senzaPezzi.conti.catenelle, conPezzi.conti.moduli === senzaPezzi.conti.moduli, conPezzi.conti.uscite === senzaPezzi.conti.uscite, rg.rcStrati(conPezzi).length === rg.rcStrati(senzaPezzi).length], [true, true, true, true, true]);
+  const passoFuori = conPezzi.oggetti.filter((o, i) => i && o.cella === conPezzi.oggetti[i - 1].cella && Math.hypot(o.punti[0][0] - conPezzi.oggetti[i - 1].punti.at(-1)[0], o.punti[0][1] - conPezzi.oggetti[i - 1].punti.at(-1)[1]) > 7).length;
+  check('i pezzi si cuciono prima del modulo, senza salti: il filo ci arriva sulle linee', [passoFuori, conPezzi.conti.pezziSenzaStrada, conPezzi.oggetti.filter((o, i) => o.pezzo && i && conPezzi.oggetti[i - 1].cella === o.cella && !conPezzi.oggetti[i - 1].pezzo).length], [0, 0, 0]);
+  const senzaPiccoli = rg.rcCostruisci(m, quadrato, { ...P, pezzoMinimoMm: 100000 });
+  check('i pezzi troppo piccoli non si cuciono', [senzaPiccoli.conti.pezzi, senzaPiccoli.conti.catenelle], [0, senzaPezzi.conti.catenelle]);
   // Lorenzo, 2026-11-04: «li farei passare sempre sinistra destra, così i moduli che dovrebbero coprirli arrivano prima»
   const conTesta = rg.rcCostruisci(riga, [[0, 8], [310, 8], [310, 100], [0, 100], [0, 8]], { ...P, moduloMinimoPct: 0 }).oggetti.filter((o) => o.uscita && o.cella.riga === 0 && o.cella.colonna === 1);
   check('le uscite vanno ai lati anche se il bordo sopra è più vicino, e non attraversano le righe', [conTesta.length, conTesta.every((o) => o.t[o.t.length - 1][0] > 310 || o.t[o.t.length - 1][0] < 0), conTesta.every((o) => o.t.every((q) => q[1] > 8 && q[1] < 50))], [1, true, true]);
@@ -6963,7 +6970,7 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   const fitta = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40 }), piuFitta = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 15 });
   check('infittire: la soglia più bassa fa più linee e più catenella per cm²', [fitta.conti.lineeNuove > 0, piuFitta.conti.lineeNuove > fitta.conti.lineeNuove, fitta.conti.catenellaPerCm2 > e.conti.catenellaPerCm2], [true, true, true]);
   check('infittire non cambia quali moduli ci sono', fitta.conti.moduli, e.conti.moduli);
-  const i1 = fitta.oggetti.findIndex((o) => o.nuovo), cat = fitta.oggetti[i1], pas = fitta.oggetti[i1 - 1];
+  const i1 = fitta.oggetti.findIndex((o) => o.nuovo && !o.pezzo), cat = fitta.oggetti[i1], pas = fitta.oggetti[i1 - 1];
   check('ogni linea nuova: passaggio all\'andata e catenella al ritorno, sullo stesso tracciato', [pas.tipo, cat.tipo, Math.hypot(pas.t[0][0] - cat.t[cat.t.length - 1][0], pas.t[0][1] - cat.t[cat.t.length - 1][1]) < 1e-9], ['passaggio', 'catenella', true]);
   const passiFitti = rg.rcStrati(fitta).flatMap((l) => l.polylines).filter((pl) => pl.some((q, i) => i && Math.hypot(q.x - pl[i - 1].x, q.y - pl[i - 1].y) > 7));
   check('infittita resta senza salti: niente passi lunghi, niente rasafili', [passiFitti.length, fitta.conti.saltiFraModuli, fitta.conti.movimentiLunghi], [0, 0, 0]);
