@@ -47,6 +47,12 @@ export async function trovaStilista(): Promise<FinestraStilista | null> {
   return tutte[0] ?? null;
 }
 
+/** Tutte le porte del plugin rispondono: una finestra in più di Stilista non ha il collegamento, e il tool non la vede. */
+export async function tutteLeFinestreOccupate(): Promise<boolean> {
+  const tutte = await Promise.all(Array.from({ length: QUANTE_PORTE }, (_, i) => stato(PRIMA_PORTA + i)));
+  return tutte.every(Boolean);
+}
+
 /** Nome del documento senza il prefisso della finestra («GMI Stilista 3 - C:\…\file.emg3» → «file.emg3»). */
 export function nomeDocumento(f: FinestraStilista): string {
   const percorso = f.documento.split(' - ').slice(1).join(' - ');

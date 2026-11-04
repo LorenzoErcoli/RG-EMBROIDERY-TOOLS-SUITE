@@ -69,7 +69,7 @@ export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordat
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_DI_SERIE, fermaSottoIlSecondo as pmFerma, macchiePerStilista as pmPerStilista } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
-export { lineePerStilista as rcLineeStilista } from ${JSON.stringify(posix('apps/rete-catenella/src/stilista-psil.ts'))};
+export { lineePerStilista as rcLineeStilista, scegliModelli as rcScegliModelli } from ${JSON.stringify(posix('apps/rete-catenella/src/stilista-psil.ts'))};
 export { aggiungiModulo as rcAggiungiModulo, leggiElenco as rcLeggiElenco, leggiModulo as rcLeggiModulo, scriviElenco as rcScriviElenco, togliModulo as rcTogliModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/elenco-moduli.ts'))};
 export { griglia as rcGriglia, riquadroRete as rcRiquadro, costruisciRete as rcCostruisci, stratiRete as rcStrati, catenella as rcCatenella, pezziDentro as rcPezzi, maschera as rcMaschera, PARAMETRI_RETE as RC_PARAMETRI, motore as rcMotore } from ${JSON.stringify(posix('apps/rete-catenella/src/motore.ts'))};
 export { moduloDiEsempio as rcModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/esempio.ts'))};
@@ -7047,6 +7047,11 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   const soglia40 = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true }, [{ anello: metaZona, magliaMassimaMm2: 40 }]);
   check('la soglia di un\'area non si porta dietro le linee più fitte di un\'altra', nuoveIn(conFinta, 0, 150) > 0 && nuoveIn(conFinta, 0, 150) <= nuoveIn(soglia40, 0, 150) * 2, true);
   check('la stessa variante dà lo stesso disegno, un\'altra no', [rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40 }).conti.punti === fitta.conti.punti, rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40, infittisciVariante: 2 }).oggetti.find((o) => o.nuovo)?.t[2]?.[0] !== cat.t[2][0]], [true, true]);
+  // misurato il 2026-11-04: PIFlagPsil 32 ce l'hanno anche i running normali, il psil vero ha PIStitchStrassLaser 4
+  const letto = (index, flag, strass, stitch_count = 10, needle = 1) => ({ index, needle, stitch_count, parameters: [['PITipoPunto', '1'], ['PIFlagPsil', flag], ['PIStitchStrassLaser', strass]].map(([Key, Value]) => ({ Key, Value })) });
+  check('il modello della catenella è il psil vero, non un running col flag 32', rg.rcScegliModelli([letto(0, '32', '0'), letto(1, '32', '4', 10, 7), letto(2, '16416', '0')]), { catenella: 1, running: 0, ago: 7 });
+  check('un documento di soli running normali non ha psil', rg.rcScegliModelli([letto(0, '32', '0'), letto(1, '32', '0')]).catenella, null);
+  check('un psil a 0 punti non fa da modello', rg.rcScegliModelli([letto(0, '32', '4', 0), letto(1, '32', '4')]).catenella, 1);
   // lo psil vero: in Stilista le catenelle sono il loro tracciato, il resto i punti del tool, nell'ordine e nel riferimento del documento
   const linee = rg.rcLineeStilista(e, [5, 7], { catenella: 3, running: 4 }, 9);
   const prima = e.oggetti.find((o) => o.tipo === 'catenella'), primaLinea = linee.find((l) => l.modello === 3);

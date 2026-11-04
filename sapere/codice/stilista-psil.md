@@ -64,3 +64,9 @@ Lorenzo: *«i valori psil poi li mandi a stilista?»*. Prova con `POST /parametr
 Quindi `PIHeightPsil` è la larghezza della maglia, `PIWidthPsil` la sua lunghezza, e il passo è circa `PIWidthPsil` + `PIPSILSpacing`. Stilista ricalcola la catenella da solo, e un altro ricalcolo non la cambia.
 
 **Non trovato fra i parametri:** i due giri del triangolo e la prima maglia a 0,60 mm. Non è provato da dove vengano; probabilmente dalla forma del psil. Vista su una catenella sola, non cucita.
+
+## Come si riconosce un psil (2026-11-04)
+
+Lorenzo: *«dice che dovrei selezionare uno psil, lo faccio ma comunque non va»*. **`PIFlagPsil` 32 non vuol dire psil.** Letto in sola lettura su dieci documenti aperti: la maggior parte dei running normali ha `PITipoPunto` 1, `PIFlagPsil` 32, `PIStitchStrassLaser` 0, altri `PIFlagPsil` 16416. L'unico oggetto psil trovato ha `PIStitchStrassLaser` 4, come le catenelle del file di riferimento. «Invia a Stilista» cercava il flag 32: in quei documenti prendeva un running normale come modello e ignorava la selezione. Ora guarda `PIStitchStrassLaser`, e la catenella selezionata ha la precedenza.
+
+**Le finestre.** Il plugin ha 10 porte. Quel giorno le finestre erano 15: le ultime aperte non avevano il collegamento e il tool non le vedeva, quindi la selezione fatta lì non arrivava. L'esito dell'invio ora dice in quale documento è andato.
