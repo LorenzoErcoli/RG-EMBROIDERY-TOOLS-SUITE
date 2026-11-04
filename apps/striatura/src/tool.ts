@@ -39,8 +39,9 @@ const MOVIMENTO_PARAMS: Field[] = [
   { key: 'waveLenMm', label: 'Lunghezza d’onda', unit: 'mm', step: 5, min: 10, help: 'ogni quanti mm si ripete l’ondulazione' },
 ];
 const PASSAGGI_PARAMS: Field[] = [
-  { key: 'fillSpacingMm', label: 'Distanza fra i passaggi', unit: 'mm', step: 0.1, min: 0.4, help: 'ogni quanti mm c’è una linea di passaggio fra le macchie: più alta = meno passaggi' },
+  { key: 'fillSpacingMm', label: 'Distanza fra i passaggi', unit: 'mm', step: 0.1, min: 0.4, help: 'ogni quanti mm c’è una linea di passaggio fra le macchie: più alta = meno passaggi. Con il Ricamo sopra le linee non ci sono' },
   { key: 'passaggioAmpMm', label: 'Altezza dei passaggi', unit: 'mm', step: 1, min: 2, help: 'quanto è alta ogni linea di passaggio: più bassa = meno invadente' },
+  { key: 'coverOverlapMm', label: 'Le striature entrano sotto il ricamo di', unit: 'mm', step: 0.5, min: 0, help: 'sicurezza per la ricentratura: fin qui dentro una zona i trattini restano interi, come se la zona non ci fosse; quelli tutti più in fondo non si cuciono' },
   { key: 'coverMarginMm', label: 'Margine dal ricamo sopra', unit: 'mm', step: 0.5, min: 0, help: 'i passaggi stanno almeno a questa distanza dal bordo di una zona «Ricamo sopra», così non spuntano fuori dalla grafica' },
 ];
 const PUNTO_PARAMS: Field[] = [
@@ -129,10 +130,6 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
         <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">04</span><span class="rg-param-section__title">Passaggi</span></summary>
         <div id="passaggiParams" class="rg-param-grid"></div>
         <div class="rg-param-grid">
-          <label class="rg-toggle rg-param-grid__wide">
-            <input type="checkbox" id="senzaLinee" checked><span class="rg-toggle__track"></span><span>Con il ricamo sopra: niente linee di passaggio</span>
-          </label>
-          <small class="rg-field__help rg-param-grid__wide">acceso: se ci sono zone «Ricamo sopra» il filo si sposta da una macchia all’altra passando sotto le zone, senza le linee rade; senza zone non cambia niente</small>
           <label class="rg-toggle rg-param-grid__wide">
             <input type="checkbox" id="mostraPassaggi"><span class="rg-toggle__track"></span><span>Evidenzia i passaggi nell’anteprima</span>
           </label>
@@ -393,7 +390,6 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     if (meta.roles && typeof meta.roles === 'object') roles = { ...(meta.roles as RoleAssignment) };
     ($('realWidth') as HTMLInputElement).value = String(params.realWidthMm);
     ($('seed') as HTMLInputElement).value = String(params.seed);
-    ($('senzaLinee') as HTMLInputElement).checked = params.coverNoPassLines;
     syncMode();
     buildAllParams();
     buildThreadUI();
@@ -553,7 +549,6 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
   });
 
   $('mostraPassaggi').addEventListener('change', () => render());
-  $('senzaLinee').addEventListener('change', () => { params.coverNoPassLines = ($('senzaLinee') as HTMLInputElement).checked; render(); });
 
   $('exportDstBtn').addEventListener('click', async () => {
     const { exportLayers, blockCount } = runPipeline(currentContours(), roles, params);
