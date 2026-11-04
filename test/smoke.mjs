@@ -6378,7 +6378,8 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     [prima24.dentro > 100, dopo24.dentro, dopo24.fuori, b24.base.salti, capi(b24.base.tratti), sotto1(b24.base.tratti)], [true, 0, prima24.fuori, 0, capi(interaB24), sotto1(interaB24)]);
   // «vengono messi dei punti in più rispetto al normale passaggio singolo che dovrebbe avere sotto la macchia» (Lorenzo,
   // 2026-11-04): con la sfrangiatura a 6 mm (3 fuori) una rientranza stretta è piena di raso, e una barretta che ci passa è
-  // sotto la macchia. Nessun tratto ripassato più di due volte a meno di 1,4 mm dalla macchia, lungo il raso.
+  // sotto la macchia. Nessun tratto ripassato più di due volte a meno di 1,4 mm dalla macchia, lungo il raso. E «quelle a
+  // cavallo toglile rendi tutto a 2»: una barretta che tocca una macchia non ha più pezzi ripassati, nemmeno quello fuori.
   const ripassatiVicini = (r, tiro) => {
     const ug = (p, q) => Math.abs(p.x - q.x) < 1e-4 && Math.abs(p.y - q.y) < 1e-4;
     const coperto = (p) => r.forme.some((m) => rg.pointInPolygon(p, m));
@@ -6393,7 +6394,7 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   };
   const b24Punte = rg.pmCostruisci(pannello, macchie, squame24, { ...pmSerie, sfrangiatura: 6, sfrangiaturaFuori: 50 });
   check(`la base sotto le punte del raso: a 2 passaggi anche dove arriva la sfrangiatura (con quella di serie, che arriva meno, ${ripassatiVicini(b24, 1.4)} tratti ripassati così vicini)`,
-    [ripassatiVicini(b24, 1.4) > 0, ripassatiVicini(b24Punte, 1.4), capi(b24Punte.base.tratti), b24Punte.base.salti], [true, 0, capi(interaB24), 0]);
+    [ripassatiVicini(b24, 1.4) > 0, ripassatiVicini(b24, 0), ripassatiVicini(b24Punte, 1.4), capi(b24Punte.base.tratti), b24Punte.base.salti], [true, 0, 0, capi(interaB24), 0]);
   const spesso = rg.pmCostruisci(pannello, macchie, squame, { ...pmSerie, sopraPuntoMin: 1.5 });
   check('...col punto minimo a 1,5 mm (fili spessi): sotto 1,5 mm al più il 25% (misurato 20%; col minimo a 1 il 40%), e il punto sopra non esce dalla macchia', [corti2(spesso.vista.sopra, 1.5) <= 0.25, peggiore(spesso.vista.sopra, spesso.forme) <= 0.05], [true, true]);
   // si entra dove conviene e si esce dal lato della macchia dopo: i salti sono quasi la distanza fra le macchie
