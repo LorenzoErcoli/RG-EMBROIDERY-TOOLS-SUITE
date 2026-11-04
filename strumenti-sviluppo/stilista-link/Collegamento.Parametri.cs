@@ -95,17 +95,18 @@ namespace StilistaHostSkeleton
         /// <summary>
         /// Un DST si apre in un altro processo (LoadNewEmb), che di quel che ha ricevuto questo non sa niente: i
         /// parametri lo aspettano in un file accanto al DST (RiceviDst), e la finestra che ha aperto quel DST li
-        /// scrive nei suoi oggetti. Li legge la sentinella, che gira ogni secondo.
+        /// scrive nei suoi oggetti. Li legge la sentinella, che gira ogni secondo. Nel titolo della finestra il DST
+        /// aperto si chiama già «<nome>.EMG3», nella stessa cartella: il file si cerca dal nome senza estensione.
         /// </summary>
         private void ParametriDelDstAperto()
         {
             var titolo = _stilista?.Form?.Text;
             var inizio = titolo?.IndexOf(" - ", StringComparison.Ordinal) ?? -1;
-            if (inizio < 0 || !titolo.EndsWith(".dst", StringComparison.OrdinalIgnoreCase))
+            if (inizio < 0)
             {
                 return;
             }
-            var file = titolo.Substring(inizio + 3) + EstensioneParametriDst;
+            var file = Path.ChangeExtension(titolo.Substring(inizio + 3), ".dst") + EstensioneParametriDst;
             if (!File.Exists(file))
             {
                 return;

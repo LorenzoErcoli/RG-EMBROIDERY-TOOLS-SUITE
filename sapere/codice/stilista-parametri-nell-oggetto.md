@@ -80,7 +80,9 @@ primi 16 caratteri del nome nell'intestazione del DST. Un file così non si riap
 - Una copia dell'oggetto si porta dietro la descrizione: `Clona` passa anche i parametri del modello. Il ritorno li
   sovrascrive subito con `ImpostaDescrizione`.
 - Un DST si apre in un altro processo: i parametri aspettano in `<file>.dst.rgp`, e la finestra che ha aperto quel
-  DST li scrive nei suoi oggetti (`ParametriDelDstAperto`, dalla sentinella).
+  DST li scrive nei suoi oggetti (`ParametriDelDstAperto`, dalla sentinella). Nel titolo di quella finestra il file si
+  chiama già `<nome>.EMG3`, nella stessa cartella: cercando un titolo che finisce per `.dst` non si trova mai
+  (visto nella prova su Stilista del 2026-11-04).
 
 **Come si applica.** Lato tool è tutto in `packages/ui/src/stilista.ts`: a un tool basta dire `tool` (il suo id) e
 `riapri(meta)` (la riapertura che ha già per il suo DST). `Invia a Stilista` prende la busta da `a.dst()`, e ci
@@ -95,7 +97,14 @@ non passa dal salvataggio.
 parametro, si manda, si ricarica la pagina, si riapre l'oggetto e si manda di nuovo. Parametro tornato e ricamo uguale
 in tutti, al suo posto dove si parte dalla selezione. Punto Striato e Interlace anche con la tavola generata (documento
 nuovo). Il Punto croce riscrive `passes: 1` sui fili, un valore predefinito: 11 byte a filo in più nel footer, punti uguali.
-La catena intera, oggetto vero mandato da un tool a Stilista, documento chiuso e riaperto, è da fare.
+
+**La catena intera su Stilista vero** (2026-11-04, Rete 45° su una copia, in una finestra a parte col plugin del ramo):
+cambiati angolo e maglia, «Invia a Stilista» scrive 1.352 caratteri nell'oggetto; dopo ricalcolo, salvataggio, file
+spostato e rinominato, finestra chiusa e riaperta, i parametri sono identici, e aprendo il tool sull'oggetto tornano
+angolo 47 e maglia 2, con l'avviso e il bottone. «Prendi solo i contorni» riprende i contorni. Dopo
+`/togli-parametri` e il salvataggio, nel file nuovo non c'è traccia; c'è solo nelle copie salvate prima.
+Per provare senza chiudere le finestre degli altri: `Stilista3.3.exe --skipOpenCheck <file>` fa un processo nuovo, che
+legge `pluginlist.txt` in quel momento; aperto normalmente il file finisce in una riserva, col plugin che ha già.
 
 **Trappola dei tool che calcolano in differita** (Rete testa speciale, Pattern a macchie, Punto razza): il calcolo finisce
 dopo la riapertura, ridisegna il pannello e riscrive la barra di stato. L'avviso «Riaperto» e il bottone stanno quindi
