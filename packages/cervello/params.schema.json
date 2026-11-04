@@ -1608,6 +1608,16 @@
           "default": 22,
           "x-id": "catenellaMinModule"
         },
+        "pezziSulBordo": {
+          "$ref": "#/$defs/catenellaEdgePieces",
+          "default": true,
+          "x-id": "catenellaEdgePieces"
+        },
+        "pezzoMinimoMm": {
+          "$ref": "#/$defs/catenellaEdgePieceMin",
+          "default": 30,
+          "x-id": "catenellaEdgePieceMin"
+        },
         "collegaModuli": {
           "$ref": "#/$defs/catenellaLinkModules",
           "default": false,
@@ -4845,6 +4855,21 @@
       "maximum": 100,
       "x-concetto": "griglia-moduli"
     },
+    "catenellaEdgePieces": {
+      "type": "boolean",
+      "title": "Attacca i pezzi sotto la soglia ai moduli vicini",
+      "description": "Riempie il bianco sul bordo senza cambi ago in più: ogni pezzo si cuce subito prima del modulo che tocca di più. Spento: il bordo resta come nel file di riferimento.",
+      "x-concetto": "griglia-moduli"
+    },
+    "catenellaEdgePieceMin": {
+      "type": "number",
+      "title": "Non cucire i pezzi con meno catenella di",
+      "description": "I pezzi più piccoli di così non riempiono niente.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 500,
+      "x-concetto": "griglia-moduli"
+    },
     "catenellaLinkModules": {
       "type": "boolean",
       "title": "Moduli collegati a filo continuo, senza cambio ago",
@@ -6627,6 +6652,8 @@
         "catenellaGridOffsetX",
         "catenellaGridOffsetY",
         "catenellaMinModule",
+        "catenellaEdgePieces",
+        "catenellaEdgePieceMin",
         "catenellaLinkModules",
         "catenellaExitOutside"
       ]
