@@ -74,6 +74,15 @@ export interface InterlaceParams {
   excludeBackground: boolean;
   backgroundColor: string;
   backgroundToleranceRgb: number;
+  /** SFUMATURA DAI TONI (con gli agglomerati e un'immagine): invece di dare ogni punto a un colore solo,
+   *  i colori si dividono il filo in PROPORZIONE al tono dell'immagine (tutto beige → metà e metà → tutto
+   *  grigio). Il filo chiesto a ogni punto è lo stesso ovunque e cambia solo la proporzione; i divieti di
+   *  `zoneBans` valgono ancora, ma il filo vietato sfuma avvicinandosi alla zona vietata invece di
+   *  fermarsi di colpo. false = zone nette, come prima. */
+  toneBlend: boolean;
+  /** Morbidezza della sfumatura (mm, solo con `toneBlend`): di quanto si sfoca il tono dell'immagine prima
+   *  di leggerlo. Poco = segue ogni variazione, tanto = passaggi larghi e macchie più grandi. */
+  toneSoftnessMm: number;
 }
 
 export const defaultInterlaceParams: InterlaceParams = {
@@ -95,6 +104,8 @@ export const defaultInterlaceParams: InterlaceParams = {
   excludeBackground: false, // lo sfondo si ricama come tutto il resto
   backgroundColor: '#ffffff',
   backgroundToleranceRgb: 30,
+  toneBlend: false, // false = agglomerati a zone nette (comportamento storico)
+  toneSoftnessMm: 4,
 };
 
 // --- Costanti interne (implementazione, non parametri utente): il "movimento" del filo.
@@ -106,6 +117,9 @@ const SWIRL = 2.2;          // intensità di rotazione del campo
 const CANDIDATES = 16;      // candidati valutati a ogni passo (si sceglie la zona meno riempita)
 const CLUMP_CAP = 3;        // tetto ai picchi: il filo non passa più di ~3× il target in una stessa cella
 const STALL_MOVES = 300;    // passi senza guadagnare una cella oltre i quali il filo si dichiara murato
+const TONE_STALL_MOVES = 40; // lo stesso con la sfumatura dai toni: il filo non gira a vuoto ammucchiandosi
+const TONE_COVER = 0.32;    // quanto copre una passata per mm di cella: filo da 0,4 mm × ~0,8 mm di filo a passata
+const TONE_FADE = 3;      // il filo vietato sfuma su questa distanza dalla zona vietata (× morbidezza)
 const PEAK_FACTOR = 3;      // tetto automatico ai buchi d'ago = 3 × quelli che servono davvero a coprire
 const MAX_POINTS = 200000;  // guardia anti-runaway
 const MAX_MASK_CELLS = 4_000_000; // tetto memoria maschera fine
@@ -314,7 +328,8 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
  *  pannello avvisa già. */
 interface PenGrid { arr: Uint16Array; gx: number; gy: number; x0: number; y0: number; cap: number; }
 
-function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null, pen: PenGrid | null = null): Point[][] {
+function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null, pen: PenGrid | null = null, transit: Uint8Array | null = null): Point[][] {
+  const tone = transit !== null;
   const { bb, cell, gx, gy, ci, cj, cpx, cpy, minS, maxS, inRegion, segOk } = ctx;
   const { mgw, mgh, mx0, my0, mres } = ctx;
   /** Il mm² di un punto è già al tetto? Allora l'ago lì non ci scende più. */
@@ -334,8 +349,9 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
   };
   const cov = new Float32Array(gx * gy);
   const dead = new Uint8Array(gx * gy);
+  // `transit` (solo sfumatura): celle dove il colore può passare per raggiungere le sue, ma non deve coprire.
   let need = 0;
-  for (let id = 0; id < targetArr.length; id++) if (targetArr[id] > 0) need++;
+  for (let id = 0; id < targetArr.length; id++) if (targetArr[id] > 0 && !(transit && transit[id])) need++;
   if (need === 0) return [];
   let coveredCells = 0;
   const stamp = (ax: number, ay: number, bx: number, by: number): void => {
@@ -346,7 +362,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
       const before = cov[id];
       cov[id] = before + 1;
       const tg = targetArr[id];
-      if (tg > 0 && before < tg && before + 1 >= tg) coveredCells++;
+      if (tg > 0 && before < tg && before + 1 >= tg && !(transit && transit[id])) coveredCells++;
     }
   };
   const nearestGap = (x: number, y: number): { x: number; y: number; id: number } | null => {
@@ -356,7 +372,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
       let bestD = Infinity, bx = 0, by = 0, bid = -1;
       for (let j = 0; j < gy; j++) for (let i = 0; i < gx; i++) {
         const id = j * gx + i; const tg = targetArr[id];
-        if (tg === 0 || cov[id] >= tg || dead[id]) continue;
+        if (tg === 0 || cov[id] >= tg || dead[id] || (transit && transit[id])) continue;
         const d = (i - i0) * (i - i0) + (j - j0) * (j - j0);
         if (d < bestD) { bestD = d; bx = cpx[id]; by = cpy[id]; bid = id; }
       }
@@ -423,7 +439,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
       if (penFull(nx, ny)) continue;             // quel mm² ha già preso tutti i buchi d'ago che regge
       let score = -cov[destId] + rng() * 0.25;
       if (destId === curCell) score -= 3;
-      if (cov[destId] >= tg) score -= 6;
+      if (cov[destId] >= tg || (transit && transit[destId])) score -= 6;
       if (score > best) { best = score; bx = nx; by = ny; bAng = ang; has = true; }
     }
     if (has) return { x: bx, y: by, ang: bAng };
@@ -464,16 +480,25 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
     // Se per un po' non guadagna una cella si dichiara murato e riparte dal vuoto più vicino. È l'unico
     // stacco in più che i divieti si portano dietro; senza divieti non si attiva mai (regola 1 intatta:
     // il filo non stacca "di comodo").
-    if ((banArr || pen) && sinceGain > STALL_MOVES) {
+    // Con la sfumatura dai toni il filo ci prova molto meno a lungo (misurato sul disegno di prova: i 300
+    // passi a vuoto erano fino al 41% del filo di un colore, tutti ammucchiati nello stesso punto) e una
+    // cella che ha già preso almeno una passata si lascia lì senza staccare: resta un filo in meno, non
+    // uno stacco e una macchia.
+    if ((banArr || pen || tone) && sinceGain > (tone ? TONE_STALL_MOVES : STALL_MOVES)) {
       const g = nearestGap(cx, cy);
       if (!g) break;
+      if (tone && cov[g.id] > 0) {
+        dead[g.id] = 1; need--;
+        sinceGain = TONE_STALL_MOVES - 8; // se anche la prossima è irraggiungibile lo si scopre subito
+        continue;
+      }
       openRunAt(g.x, g.y, g.id);
       sinceGain = 0;
       continue;
     }
     const cc = cj(cy) * gx + ci(cx);
     let head = dir, spread = TURN_SPREAD;
-    const covered = targetArr[cc] === 0 || cov[cc] >= targetArr[cc];
+    const covered = targetArr[cc] === 0 || cov[cc] >= targetArr[cc] || (transit !== null && transit[cc] === 1);
     if (covered) {
       const g = nearestGap(cx, cy);
       if (!g) break; // niente più vuoti → passata finita
@@ -575,11 +600,13 @@ function hexToRgb(hex: string): [number, number, number] {
  *  invece i fili si mescolano alla base. */
 export const ZONE_SFONDO = -2;
 
-function imageZoneAt(x: number, y: number, palRgb: Array<[number, number, number]>, tol2: number[], sample: ImageColorAt, bg: { rgb: [number, number, number]; tol2: number } | null): number {
+function imageZoneAt(x: number, y: number, palRgb: Array<[number, number, number]>, tol2: number[], sample: ImageColorAt, bg: { rgb: [number, number, number]; tol2: number } | null, sampleBg: ImageColorAt = sample): number {
   const rgb = sample(x, y);
   if (!rgb) return -1;
   if (bg) {
-    const dr = rgb[0] - bg.rgb[0], dg = rgb[1] - bg.rgb[1], db = rgb[2] - bg.rgb[2];
+    // Lo sfondo si riconosce sull'immagine vera: quella sfocata della sfumatura ne confonderebbe il bordo.
+    const raw = sampleBg(x, y) || rgb;
+    const dr = raw[0] - bg.rgb[0], dg = raw[1] - bg.rgb[1], db = raw[2] - bg.rgb[2];
     if (dr * dr + dg * dg + db * db <= bg.tol2) return ZONE_SFONDO; // qui non cuce nessuno
   }
   let best = -1, bestD = Infinity;
@@ -601,6 +628,59 @@ function imageClusterTarget(zone: number, myColorIdx: number, strength: number):
   if (zone !== myColorIdx) return 1; // fuori immagine, o qui l'immagine vuole un altro colore → base
   const boost = Math.round(Math.max(0, Math.min(100, strength)) / 100 * 8);
   return COVER_TARGET + boost;
+}
+
+/**
+ * L'immagine SFOCATA per la sfumatura dai toni: letta una volta su una griglia da 1 mm e sfumata con tre
+ * passate di media (≈ una gaussiana larga `softMm`). Senza, i granelli dell'immagine diventano altrettante
+ * isolette di zona e di divieto, dove il filo si impiglia. I pixel fuori immagine o di sfondo non entrano
+ * nella media, così il loro colore non sporca il bordo del disegno.
+ */
+function smoothImage(sample: ImageColorAt, bb: ReturnType<typeof bounds>, softMm: number, bg: { rgb: [number, number, number]; tol2: number } | null): ImageColorAt {
+  const gw = Math.ceil(bb.maxX - bb.minX) + 2, gh = Math.ceil(bb.maxY - bb.minY) + 2;
+  const r = Math.max(0, Math.round(softMm * 0.7));
+  const ch = [new Float32Array(gw * gh), new Float32Array(gw * gh), new Float32Array(gw * gh)];
+  const wt = new Float32Array(gw * gh);
+  for (let j = 0; j < gh; j++) for (let i = 0; i < gw; i++) {
+    const c = sample(bb.minX + i, bb.minY + j);
+    if (!c) continue;
+    if (bg) {
+      const dr = c[0] - bg.rgb[0], dg = c[1] - bg.rgb[1], db = c[2] - bg.rgb[2];
+      if (dr * dr + dg * dg + db * db <= bg.tol2) continue;
+    }
+    const id = j * gw + i;
+    ch[0][id] = c[0]; ch[1][id] = c[1]; ch[2][id] = c[2]; wt[id] = 1;
+  }
+  const blur = (a: Float32Array): void => {
+    if (r === 0) return;
+    const line = new Float32Array(Math.max(gw, gh));
+    const pass = (n: number, m: number, at: (k: number, l: number) => number): void => {
+      for (let l = 0; l < m; l++) {
+        for (let k = 0; k < n; k++) line[k] = a[at(k, l)];
+        let sum = 0;
+        for (let k = -r; k <= r; k++) sum += line[Math.max(0, Math.min(n - 1, k))];
+        for (let k = 0; k < n; k++) {
+          a[at(k, l)] = sum / (2 * r + 1);
+          sum += line[Math.min(n - 1, k + r + 1)] - line[Math.max(0, k - r)];
+        }
+      }
+    };
+    for (let t = 0; t < 3; t++) { pass(gw, gh, (k, l) => l * gw + k); pass(gh, gw, (k, l) => k * gw + l); }
+  };
+  for (let c = 0; c < 3; c++) for (let id = 0; id < wt.length; id++) ch[c][id] *= wt[id];
+  ch.forEach(blur); blur(wt);
+  return (x: number, y: number): [number, number, number] | null => {
+    const fx = Math.max(0, Math.min(gw - 1.001, x - bb.minX)), fy = Math.max(0, Math.min(gh - 1.001, y - bb.minY));
+    const i = Math.floor(fx), j = Math.floor(fy), tx = fx - i, ty = fy - j;
+    const read = (a: Float32Array): number => {
+      const o = j * gw + i;
+      const top = a[o] + (a[o + 1] - a[o]) * tx, bot = a[o + gw] + (a[o + gw + 1] - a[o + gw]) * tx;
+      return top + (bot - top) * ty;
+    };
+    const w = read(wt);
+    if (w < 0.01) return null;
+    return [read(ch[0]) / w, read(ch[1]) / w, read(ch[2]) / w];
+  };
 }
 
 /**
@@ -689,6 +769,9 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
     if (pgx * pgy <= 16_000_000) pen = { arr: new Uint16Array(pgx * pgy), gx: pgx, gy: pgy, x0: pb.minX - 1, y0: pb.minY - 1, cap };
   }
 
+  // Sfumatura dai toni: vale solo con gli agglomerati e un'immagine da leggere (senza, zone come prima).
+  const tone = p.clusterMode && p.toneBlend === true && imgPal !== null;
+  const imgAt = tone ? smoothImage(imageColorAt as ImageColorAt, bounds(boundary), Math.max(0, p.toneSoftnessMm ?? 4), bg) : (imageColorAt as ImageColorAt);
   const overlapFor = (cell: number): number => p.zoneOverlapMm == null ? 0.6 * cell : Math.max(0, p.zoneOverlapMm);
   // Mappa delle ZONE alla risoluzione FINE, calcolata UNA volta e riusata da tutte le passate: la griglia
   // fine dipende solo da sagoma e punto minimo, non dalla densità, quindi è la stessa per ogni colore.
@@ -701,7 +784,7 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
     for (let j = 0; j < ctx.mgh; j++) for (let i = 0; i < ctx.mgw; i++) {
       const x = ctx.mx0 + (i + 0.5) * ctx.mres, y = ctx.my0 + (j + 0.5) * ctx.mres;
       z[j * ctx.mgw + i] = imgPal
-        ? imageZoneAt(x, y, imgPal, tol2, imageColorAt as ImageColorAt, bg)
+        ? imageZoneAt(x, y, imgPal, tol2, imgAt, bg, imageColorAt)
         : noiseZoneAt(x, y, densities.length, base) % nCol;
     }
     zoneFine = z; zoneKey = key;
@@ -734,6 +817,110 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
     return vietato;
   };
   const bans = p.clusterMode && Array.isArray(p.zoneBans) ? p.zoneBans : [];
+  // SFUMATURA: per ogni colore con divieti, quanto è lontano ogni punto dalla sua zona vietata. Serve a far
+  // calare il filo avvicinandosi al confine: fermandosi di colpo, lì il passaggio tornerebbe uno scalino.
+  const fadeMm = TONE_FADE * Math.max(1, p.toneSoftnessMm ?? 4);
+  const fadeByColor = new Map<number, Float32Array | null>();
+  const fadeOf = (ctx: FillCtx, k: number): Float32Array | null => {
+    const known = fadeByColor.get(k);
+    if (known !== undefined) return known;
+    const row = bans[k];
+    let d: Float32Array | null = null;
+    if (row && row.some(Boolean)) {
+      const z = zoneMapOf(ctx);
+      const src = new Uint8Array(z.length);
+      for (let c = 0; c < z.length; c++) if (z[c] >= 0 && row[z[c]]) src[c] = 1;
+      d = chamferDT(src, ctx.mgw, ctx.mgh, ctx.mres);
+    }
+    fadeByColor.set(k, d);
+    return d;
+  };
+  /** Quante passate tocca al colore `mine` in un punto. Prima le QUOTE VISIBILI: il tono dell'immagine si
+   *  legge come una miscela dei DUE colori che lo rifanno meglio (un tono a un quarto fra beige e grigio è
+   *  ¾ beige e ¼ grigio), non come il colore più vicino: così la proporzione cambia a poco a poco col tono.
+   *  Poi le passate: il filo cucito dopo COPRE quello di prima, quindi dividere il filo in proporzione non
+   *  basta (a queste densità l'ultimo colore coprirebbe tutto e la sfumatura tornerebbe a zone). Si parte
+   *  dal colore cucito per ultimo e gli si dà solo il filo che serve a coprire la sua quota; il primo prende
+   *  quel che resta, così il filo totale è lo stesso ovunque. */
+  const tonePasses = (ctx: FillCtx, x: number, y: number, mine: number, total: number): number => {
+    const rgb = imgAt(x, y);
+    const pal = imgPal as Array<[number, number, number]>;
+    if (!rgb) return total / pal.length; // fuori immagine: mélange alla pari
+    let fi = Math.floor((x - ctx.mx0) / ctx.mres), fj = Math.floor((y - ctx.my0) / ctx.mres);
+    if (fi < 0) fi = 0; else if (fi > ctx.mgw - 1) fi = ctx.mgw - 1;
+    if (fj < 0) fj = 0; else if (fj > ctx.mgh - 1) fj = ctx.mgh - 1;
+    const c = fj * ctx.mgw + fi;
+    // Il filo vietato sfuma avvicinandosi alla sua zona vietata; quelli a 0 qui non partecipano.
+    const open: number[] = [];
+    for (let k = 0; k < pal.length; k++) {
+      const dr = rgb[0] - pal[k][0], dg = rgb[1] - pal[k][1], db = rgb[2] - pal[k][2];
+      const fade = fadeOf(ctx, k);
+      open.push(dr * dr + dg * dg + db * db > tol2[k] ? 0 : fade ? Math.min(1, fade[c] / fadeMm) : 1);
+    }
+    const shares = new Array<number>(pal.length).fill(0);
+    // Il primo è il colore più vicino al tono; il secondo quello che, mescolato al primo, lo rifà meglio.
+    // A parità si prende il più simile: fra beige, grigio medio e grigio scuro, quasi in fila, beige e
+    // scuro rifanno il medio e il medio non verrebbe mai usato.
+    let bi = -1, bj = -1, bt = 0, near = Infinity, best = Infinity;
+    for (let k = 0; k < pal.length; k++) {
+      if (open[k] <= 0) continue;
+      const dr = rgb[0] - pal[k][0], dg = rgb[1] - pal[k][1], db = rgb[2] - pal[k][2];
+      const d = dr * dr + dg * dg + db * db;
+      if (d < near) { near = d; bi = k; }
+    }
+    if (bi >= 0) {
+      const ax = rgb[0] - pal[bi][0], ay = rgb[1] - pal[bi][1], az = rgb[2] - pal[bi][2];
+      for (let k = 0; k < pal.length; k++) {
+        if (k === bi || open[k] <= 0) continue;
+        const ex = pal[k][0] - pal[bi][0], ey = pal[k][1] - pal[bi][1], ez = pal[k][2] - pal[bi][2];
+        const e2 = ex * ex + ey * ey + ez * ez;
+        if (e2 <= 0) continue;
+        const t = (ax * ex + ay * ey + az * ez) / e2;
+        if (t <= 0) continue;
+        const u = Math.min(1, t);
+        const qx = ax - ex * u, qy = ay - ey * u, qz = az - ez * u;
+        const score = qx * qx + qy * qy + qz * qz + 0.02 * e2;
+        if (score < best) { best = score; bj = k; bt = u; }
+      }
+    }
+    if (bi < 0) return total / pal.length;
+    shares[bi] = bj < 0 ? 1 : (1 - bt) * open[bi];
+    if (bj >= 0) shares[bj] = bt * open[bj];
+    const sum = shares.reduce((u, v) => u + v, 0);
+    if (sum <= 0) return mine === bi ? total : 0;
+    let bottom = 0;
+    while (bottom < pal.length - 1 && shares[bottom] <= 0) bottom++;
+    let left = 1, budget = total;
+    for (let k = pal.length - 1; k > bottom; k--) {
+      const v = shares[k] / sum;
+      const covers = Math.min(0.98, left > 0 ? v / left : 0);
+      const n = Math.min(budget, -Math.log(1 - covers) * ctx.cell / TONE_COVER);
+      if (k === mine) return n;
+      budget -= n;
+      left -= v;
+    }
+    return mine === bottom ? budget : 0;
+  };
+  /** Quanta parte di ogni cella è ricamabile (0–1). Una cella tagliata dal bordo chiede meno filo: con la
+   *  stessa copertura di una intera, le strisce strette e le punte diventano le zone più fitte del ricamo. */
+  const cellAreaByCtx = new Map<FillCtx, Float32Array>();
+  const cellAreaOf = (ctx: FillCtx): Float32Array => {
+    let a = cellAreaByCtx.get(ctx);
+    if (a) return a;
+    a = new Float32Array(ctx.gx * ctx.gy);
+    const STEPS = 5;
+    for (let j = 0; j < ctx.gy; j++) for (let i = 0; i < ctx.gx; i++) {
+      if (!ctx.cfill[j * ctx.gx + i]) continue;
+      let hit = 0;
+      for (let v = 0; v < STEPS; v++) for (let u = 0; u < STEPS; u++) {
+        if (ctx.inRegion(ctx.cellX(i) + ((u + 0.5) / STEPS - 0.5) * ctx.cell, ctx.cellY(j) + ((v + 0.5) / STEPS - 0.5) * ctx.cell)) hit++;
+      }
+      a[j * ctx.gx + i] = hit / (STEPS * STEPS);
+    }
+    cellAreaByCtx.set(ctx, a);
+    return a;
+  };
+  const toneTotal = COVER_TARGET + Math.round(Math.max(0, Math.min(100, p.clusterStrength)) / 100 * 8) + (nCol - 1);
   // La densità PER-COLORE è la dimensione della cella → ogni densità ha una sua griglia. La maschera si
   // ricostruisce solo quando la cella cambia (cache per valore di cella): densità uguali → una sola build.
   const ctxByCell = new Map<number, FillCtx | null>();
@@ -744,6 +931,7 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
     if (ctx === undefined) { ctx = prepare(boundary, voids, minS, maxS, clear, cell); ctxByCell.set(cell, ctx); }
     if (!ctx) { passes.push([]); continue; }
     const targetArr = new Uint8Array(ctx.gx * ctx.gy);
+    const transitArr = tone ? new Uint8Array(ctx.gx * ctx.gy) : null;
     // Riga della matrice per il colore di QUESTA passata: se ha almeno un divieto si marca una maschera
     // di celle proibite — non solo escluse dal riempimento (target 0), ma nemmeno attraversabili.
     const myColor = pIdx % nCol;
@@ -759,7 +947,7 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
         // Zona del punto: indice di colore-palette (immagine) oppure campo vincente (rumore), riportato
         // sulla palette col modulo perché la matrice ragiona per COLORE anche con più cicli.
         const zone = imgPal
-          ? imageZoneAt(x, y, imgPal, tol2, imageColorAt as ImageColorAt, bg)
+          ? imageZoneAt(x, y, imgPal, tol2, imgAt, bg, imageColorAt)
           : noiseZoneAt(x, y, densities.length, base) % nCol;
         // Sfondo scelto come non ricamato: nessun filo, e nemmeno l'anello di sormonto (bordo netto).
         if (zone === ZONE_SFONDO) continue;
@@ -775,6 +963,17 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
           if (!banArr[fj * ctx.mgw + fi]) targetArr[id] = 1; // anello: una passata di sormonto
           continue;
         }
+        if (tone) {
+          // La quota dà un numero con la virgola: il resto si assegna col rumore, così la media è giusta.
+          // Dove la quota è quasi nulla il colore non deve coprire, ma la cella resta percorribile: a 0
+          // sarebbe un muro e il filo si spezzerebbe (come la base degli agglomerati). Coprirle tutte a 1
+          // invece gonfiava il filo totale dove passano più colori (misurato: 8,1 contro 5,7 mm/mm²).
+          const want = tonePasses(ctx, x, y, myColor, toneTotal) * cellAreaOf(ctx)[id];
+          const tg = Math.floor(want + hash(gi + pIdx * 7919, gj + base * 31));
+          targetArr[id] = Math.max(1, Math.min(255, tg));
+          if (tg < 1) (transitArr as Uint8Array)[id] = 1;
+          continue;
+        }
         targetArr[id] = imgPal
           ? imageClusterTarget(zone, myColor, p.clusterStrength)
           : clusterTarget(x, y, pIdx, densities.length, p.clusterStrength, base);
@@ -782,7 +981,7 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
     } else {
       for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = COVER_TARGET;
     }
-    passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr, banArr, pen));
+    passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr, banArr, pen, transitArr));
   }
   return passes;
 }

@@ -146,12 +146,21 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
               <button type="button" id="bgPickBtn" class="rg-icon-button" aria-label="Prendi il colore dello sfondo dall’immagine"></button>
               <span class="interlace-tol"><span class="interlace-tol__pre">±</span><input class="rg-input rg-input--numeric interlace-tol__input" id="bgTolerance" type="number" min="0" step="5" aria-label="Tolleranza dello sfondo (distanza RGB)" /></span>
             </div>
+            <label class="rg-choice">
+              <input type="checkbox" id="toneBlend" />
+              <span>Sfumatura dai toni</span>
+            </label>
+            <label class="rg-field" id="toneSoftnessField" hidden>
+              <span class="rg-field__label">Morbidezza della sfumatura</span>
+              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="toneSoftness" type="number" min="0" step="1" value="4"><span>mm</span></span>
+            </label>
+            <small class="rg-field__help" id="toneHelp">spunta per non dare più ogni punto a un colore solo: i fili si dividono il ricamo in proporzione al tono dell’immagine e il filo totale resta pari ovunque. I divieti della tabella valgono ancora: il filo vietato sfuma avvicinandosi alla zona vietata. La morbidezza è quanto si sfoca l’immagine: poco = segue ogni variazione, tanto = passaggi larghi. Serve un’immagine.</small>
             <small class="rg-field__help" id="bgHelp" hidden>i punti dell’immagine vicini a questo colore restano <strong>tessuto a vista</strong>: nessun filo ci cuce e nessuno ci passa sopra. Il bordo del disegno resta netto (lì il sormonto non si applica: il vuoto è voluto). La tolleranza è quanto largo è il raggio attorno al colore.</small>
           </div>
           <label class="rg-field rg-param-grid__wide" id="clusterStrengthField" hidden>
             <span class="rg-field__label">Intensità agglomerati</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="clusterStrength" type="number" min="0" max="100" step="5" value="60"><span>%</span></span>
-            <small class="rg-field__help">quanto i colori si separano in zone: basso = appena accennate, alto = molto marcate</small>
+            <small class="rg-field__help">quanto i colori si separano in zone: basso = appena accennate, alto = molto marcate. Con la sfumatura dai toni: quanto filo in tutto (la proporzione la decide l’immagine).</small>
           </label>
           <div class="rg-field rg-param-grid__wide" id="zoneBanField" hidden>
             <span class="rg-field__label">Dove passa ogni filo</span>
@@ -788,6 +797,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     syncOverlap();
     syncCap();
     syncBackground();
+    syncTone();
     syncCluster(); // switch agglomerati + visibilità intensità
     buildParamUI();
     buildPaletteUI();
@@ -905,6 +915,21 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     ($('bgPickBtn') as HTMLButtonElement).disabled = !refImage;
     ($('bgPickBtn') as HTMLButtonElement).title = refImage ? 'Prendi il colore dello sfondo dall’immagine' : 'Serve un’immagine di riferimento';
   }
+  const toneCheck = $('toneBlend') as HTMLInputElement;
+  const toneSoft = $('toneSoftness') as HTMLInputElement;
+  function syncTone() {
+    toneCheck.checked = params.toneBlend;
+    toneSoft.value = String(params.toneSoftnessMm);
+    ($('toneSoftnessField') as HTMLElement).hidden = !params.toneBlend;
+  }
+  syncTone();
+  toneCheck.addEventListener('change', () => { params.toneBlend = toneCheck.checked; syncTone(); render(); });
+  toneSoft.addEventListener('change', () => {
+    const v = parseFloat(toneSoft.value);
+    params.toneSoftnessMm = Number.isNaN(v) ? 4 : Math.max(0, v);
+    syncTone();
+    if (params.toneBlend) render();
+  });
   bgCheck.addEventListener('change', () => { params.excludeBackground = bgCheck.checked; syncBackground(); render(); });
   bgColor.addEventListener('input', () => { params.backgroundColor = bgColor.value; syncBackground(); render(); });
   bgTol.addEventListener('change', () => {

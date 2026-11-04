@@ -477,6 +477,35 @@ check('raggio illimitato (default): la banda di mezzo se la prende uno dei due',
 check('raggio stretto: la banda di mezzo non è di nessuno, i due fili ci stanno alla pari', Math.max(tightA, tightB) < Math.min(tightA, tightB) * 1.35, true);
 check('raggio stretto: nessuno dei due sparisce dalla banda di mezzo', Math.min(tightA, tightB) > 100, true);
 
+// interlace — SFUMATURA DAI TONI (`toneBlend`). L'immagine sfuma da un colore all'altro: a zone nette ogni
+// punto va a un colore solo e la proporzione fa uno scalino; con la sfumatura la proporzione cambia a poco a
+// poco e il filo totale resta pari. Il filo cucito dopo copre quello di prima, quindi si misura anche quello.
+console.log('\ninterlace — sfumatura dai toni (la proporzione segue il tono, il filo totale è pari)');
+const tonoA = [208, 197, 177], tonoB = [122, 125, 130];
+const tonoSample = (x) => { const t = Math.max(0, Math.min(1, x / 120)); return [0, 1, 2].map((k) => tonoA[k] + (tonoB[k] - tonoA[k]) * t); };
+const tonoParams = { ...rg.defaultInterlaceParams, minStitchMm: 2, maxStitchMm: 4, densitySpacingMm: 1.5, voidClearanceMm: 0, colors: ['#d0c5b1', '#7a7d82'], clusterMode: true, clusterStrength: 100, seed: 3 };
+const tonoFasce = (pass) => { const f = [0, 0, 0, 0]; for (const r of pass) for (let i = 1; i < r.length; i++) { const mx = (r[i].x + r[i - 1].x) / 2; f[Math.min(3, Math.floor(mx / 30))] += Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y); } return f; };
+const tonoZone = rg.generatePasses(imgSquare, [], tonoParams, [1.5, 1.5], (x) => tonoSample(x));
+const tonoMisto = rg.generatePasses(imgSquare, [], { ...tonoParams, toneBlend: true }, [1.5, 1.5], (x) => tonoSample(x));
+const [mA, mB] = tonoMisto.map(tonoFasce);
+const [zA, zB] = tonoZone.map(tonoFasce);
+const mTot = mA.map((v, i) => v + mB[i]);
+check('sfumatura: il secondo colore cresce fascia dopo fascia', mB[0] < mB[1] && mB[1] < mB[2] && mB[2] < mB[3], true);
+check('sfumatura: il primo colore cala fascia dopo fascia', mA[0] > mA[1] && mA[1] > mA[2] && mA[2] > mA[3], true);
+check('sfumatura: il filo totale resta pari fra le fasce (entro il 25%)', Math.max(...mTot) < Math.min(...mTot) * 1.25, true);
+check('a zone nette la proporzione fa uno scalino a metà', zB[2] > zB[1] * 2, true);
+check('sfumatura spenta di suo: è il comportamento di sempre', rg.defaultInterlaceParams.toneBlend, false);
+const tonoSenza = rg.generatePasses(imgSquare, [], { ...tonoParams, clusterStrength: 60, toneBlend: true }, [2, 2]);
+const tonoRumore = rg.generatePasses(imgSquare, [], { ...tonoParams, clusterStrength: 60 }, [2, 2]);
+check('sfumatura senza immagine: non cambia niente, le zone restano quelle del rumore', JSON.stringify(tonoSenza) === JSON.stringify(tonoRumore), true);
+// Il filo non deve ammucchiarsi nelle ultime celle: i passi a vuoto erano fino al 41% del filo di un colore.
+const tonoVar = [1, 2, 3, 4, 5].map((seed) => rg.generatePasses(imgSquare, [], { ...tonoParams, seed, toneBlend: true, zoneBans: [[false, false], [true, false]] }, [1.5, 1.5], (x) => tonoSample(x)).reduce((s, pa) => s + pa.reduce((t, r) => { for (let i = 1; i < r.length; i++) t += Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y); return t; }, 0), 0));
+check('sfumatura: il filo totale non dipende dalla variante (entro il 15%)', Math.max(...tonoVar) < Math.min(...tonoVar) * 1.15, true);
+let tonoNelVietato = 0;
+const tonoDiv = rg.generatePasses(imgSquare, [], { ...tonoParams, toneBlend: true, zoneBans: [[false, false], [true, false]], zoneOverlapMm: 0 }, [1.5, 1.5], (x) => tonoSample(x));
+for (const r of tonoDiv[1]) for (const pt of r) if (pt.x < 50) tonoNelVietato++;
+check('sfumatura: i divieti valgono ancora (lo scuro non scende nella zona chiara)', tonoNelVietato, 0);
+
 // interlace — DIVIETI DI TRANSITO (matrice filo × zona, `zoneBans`): un filo vietato in una zona non ci
 // cuce E non ci passa nemmeno di transito. Sulla stessa immagine metà rossa (x<60) / metà blu (x>60):
 // vietare il rosso nella zona blu deve lasciare la metà destra SENZA un solo punto rosso.
