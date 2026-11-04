@@ -41,6 +41,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
   const tCorsie = testiCampo('rete-catenella', 'corsie');
   const tCollega = testiCampo('rete-catenella', 'collegaModuli');
   const tPezzi = testiCampo('rete-catenella', 'pezziSulBordo');
+  const tLato = testiCampo('rete-catenella', 'allineaLato');
   const tPsil = testiCampo('rete-catenella', 'psilVero');
   const tInfittisci = testiCampo('rete-catenella', 'infittisci');
 
@@ -61,6 +62,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
       </div>` }),
       sezione({ indice: 3, titolo: 'Griglia', apribile: true, aperta: true, contenuto: griglia(['spostaXMm', 'spostaYMm', 'moduloMinimoPct', 'pezzoMinimoMm', 'uscitaFuoriMm'], `
         <label class="rg-choice rg-param-grid__wide" title="${tPezzi.aiuto ?? ''}"><input type="checkbox" id="pezziSulBordo" checked> ${tPezzi.etichetta}</label>
+        <label class="rg-choice rg-param-grid__wide" title="${tLato.aiuto ?? ''}"><input type="checkbox" id="allineaLato" checked> ${tLato.etichetta}</label>
         <label class="rg-choice rg-param-grid__wide" title="${tCollega.aiuto ?? ''}"><input type="checkbox" id="collegaModuli"> ${tCollega.etichetta}</label>`) }),
       sezione({ indice: 4, titolo: 'Basi e passaggi', apribile: true, aperta: true, contenuto: griglia(['passate', 'puntoBaseMm', 'puntoPassaggioMm']) }),
       sezione({ indice: 5, titolo: 'Catenella (psil)', apribile: true, aperta: true, contenuto: griglia(['psilLunghezzaMm', 'psilLarghezzaMm', 'psilPassoMm', 'psilInizioMm', 'psilGiri'], `
@@ -288,7 +290,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
       genera();
     });
   }
-  for (const k of ['corsie', 'pezziSulBordo', 'collegaModuli', 'psilVero', 'infittisci'] as const) ($(k) as HTMLInputElement).addEventListener('change', (e) => { par[k] = (e.target as HTMLInputElement).checked; genera(); });
+  for (const k of ['corsie', 'allineaLato', 'pezziSulBordo', 'collegaModuli', 'psilVero', 'infittisci'] as const) ($(k) as HTMLInputElement).addEventListener('change', (e) => { par[k] = (e.target as HTMLInputElement).checked; genera(); });
   for (const id of ['vBasi', 'vPassaggi', 'vCatenelle', 'vUscite', 'vMaglie']) $(id).addEventListener('change', () => { sim?.ferma(); disegna(); });
 
   // ---- il calcolo e il disegno ------------------------------------------------------
@@ -298,7 +300,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
     const t0 = performance.now();
     esito = costruisciRete(modulo, anello, par, zoneAttive());
     const c = esito.conti;
-    const righe: Array<[string, string]> = [['Moduli', n0(c.moduli)], ...(par.infittisci && zoneAttive().length ? [['Aree da infittire', n0(zoneAttive().length)] as [string, string]] : []), ...(par.pezziSulBordo ? [['Pezzi attaccati ai moduli', `${n0(c.pezzi)}${c.pezziSenzaStrada ? `, ${n0(c.pezziSenzaStrada)} senza strada` : ''}`] as [string, string]] : []), ...(par.collegaModuli ? [['Fili fra i moduli', `${n0(c.collegamenti)}, ${n0(c.collegamentiMm / 1000)} m`] as [string, string], ['Rasafili fra i moduli', n0(c.saltiFraModuli)] as [string, string]] : [['Uscite fuori dal contorno', n0(c.uscite)] as [string, string], ['Uscite sotto i moduli dopo', `${n0(c.usciteSottoMm / 1000)} m`] as [string, string], ['Uscite dove non c’è un modulo dopo', `${n0(c.usciteScoperteMm / 1000)} m`] as [string, string]]), ['Basi', n0(c.basi)], ['Catenelle', n0(c.catenelle)], ['Passaggi', n0(c.passaggi)], ['Punti', n0(c.punti)], ['Filo', `${n0(c.filoMm / 1000)} m`],
+    const righe: Array<[string, string]> = [['Moduli', n0(c.moduli)], ...(c.latoAllineatoMm !== null ? [['Griglia spostata per il lato dritto', `${c.latoAllineatoMm.toLocaleString('it-IT')} mm`] as [string, string], ['Filo sopra il lato dritto', `${n0(c.filoSopraLatoMm)} mm`] as [string, string]] : []), ...(par.infittisci && zoneAttive().length ? [['Aree da infittire', n0(zoneAttive().length)] as [string, string]] : []), ...(par.pezziSulBordo ? [['Pezzi attaccati ai moduli', `${n0(c.pezzi)}${c.pezziSenzaStrada ? `, ${n0(c.pezziSenzaStrada)} senza strada` : ''}`] as [string, string]] : []), ...(par.collegaModuli ? [['Fili fra i moduli', `${n0(c.collegamenti)}, ${n0(c.collegamentiMm / 1000)} m`] as [string, string], ['Rasafili fra i moduli', n0(c.saltiFraModuli)] as [string, string]] : [['Uscite fuori dal contorno', n0(c.uscite)] as [string, string], ['Uscite sotto i moduli dopo', `${n0(c.usciteSottoMm / 1000)} m`] as [string, string], ['Uscite dove non c’è un modulo dopo', `${n0(c.usciteScoperteMm / 1000)} m`] as [string, string]]), ['Basi', n0(c.basi)], ['Catenelle', n0(c.catenelle)], ['Passaggi', n0(c.passaggi)], ['Punti', n0(c.punti)], ['Filo', `${n0(c.filoMm / 1000)} m`],
       ['Tagli delle basi sulle corsie', n0(c.tagliSulleCorsie)], ['Corsia più lontana', `${c.corsiaPiuLontanaMm} mm`], ['Passi lunghi rimasti', n0(c.passiLunghi)], ['Salti rimasti nei moduli', n0(c.movimentiLunghi)], ['Catenella per cm²', `${n0(c.catenellaPerCm2)} mm`], ...(par.infittisci ? [['Linee nuove', n0(c.lineeNuove)] as [string, string], ['Maglie rimaste intere, ogni due moduli', n0(c.maglieIntere)] as [string, string]] : [])];
     $('conti').innerHTML = righe.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
     $('misure').textContent = `${n0(c.punti)} punti · ${n0(c.filoMm / 1000)} m`;
@@ -343,7 +345,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
     if (!m || m.rgProject !== 'rete-catenella') { $('progettoStatus').textContent = `${da} non porta dentro un progetto di Rete a catenella.`; return; }
     Object.assign(par, m.params as Partial<ParametriRete>);
     for (const l of LIMITI) impostaNumero($(l.key) as HTMLInputElement, par[l.key]);
-    for (const k of ['corsie', 'pezziSulBordo', 'collegaModuli', 'psilVero', 'infittisci'] as const) ($(k) as HTMLInputElement).checked = par[k];
+    for (const k of ['corsie', 'allineaLato', 'pezziSulBordo', 'collegaModuli', 'psilVero', 'infittisci'] as const) ($(k) as HTMLInputElement).checked = par[k];
     zona = Array.isArray(m.zona) ? m.zona as Xy[] : null;
     $('zonaStatus').textContent = zona ? 'Solo dentro la zona del progetto.' : 'Dappertutto.';
     $('zonaViaBtn').hidden = !zona;

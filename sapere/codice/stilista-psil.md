@@ -70,3 +70,17 @@ Quindi `PIHeightPsil` è la larghezza della maglia, `PIWidthPsil` la sua lunghez
 Lorenzo: *«dice che dovrei selezionare uno psil, lo faccio ma comunque non va»*. **`PIFlagPsil` 32 non vuol dire psil.** Letto in sola lettura su dieci documenti aperti: la maggior parte dei running normali ha `PITipoPunto` 1, `PIFlagPsil` 32, `PIStitchStrassLaser` 0, altri `PIFlagPsil` 16416. L'unico oggetto psil trovato ha `PIStitchStrassLaser` 4, come le catenelle del file di riferimento. «Invia a Stilista» cercava il flag 32: in quei documenti prendeva un running normale come modello e ignorava la selezione. Ora guarda `PIStitchStrassLaser`, e la catenella selezionata ha la precedenza.
 
 **Le finestre.** Il plugin ha 10 porte. Quel giorno le finestre erano 15: le ultime aperte non avevano il collegamento e il tool non le vedeva, quindi la selezione fatta lì non arrivava. L'esito dell'invio ora dice in quale documento è andato.
+
+## Perché l'invio della rete intera non arriva in fondo (2026-11-04/05)
+
+Lorenzo: *«mi stai bloccando tutto stilista»*. Invio di tutta la rete con `POST /running`, su una copia: a 1.350 oggetti su 4.138, dopo 7 minuti, la finestra occupava 19,7 GB su 32, e un blocco da 150 oggetti era passato da 9 a 162 s.
+
+**Dove va la memoria**, prova piccola su una copia ridotta a 2 oggetti, 30 copie per tipo:
+
+| Copia di | Memoria per oggetto | Tempo per oggetto |
+|---|---|---|
+| running, con ricalcolo | circa 0,6 MB | circa 20 ms |
+| psil, con ricalcolo | circa 30 MB | circa 95 ms |
+| psil, senza ricalcolo | circa 12 MB | circa 8 ms |
+
+Con 2.200 catenelle sono circa 66 GB. Il file di riferimento invece ha oltre 2.000 psil e si apre in circa 700 MB. **Ipotesi, non provata:** nel file le catenelle condividono gli insiemi di parametri, mentre `Clone` ne fa un doppione per ogni copia. Per provarlo serve cambiare il plugin. Finché non è risolto, per la rete intera si usa il psil disegnato o il DST.
