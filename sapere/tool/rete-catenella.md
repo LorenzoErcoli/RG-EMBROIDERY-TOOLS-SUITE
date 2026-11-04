@@ -37,9 +37,10 @@ esattamente come questo»*.
 - **La trama si infittisce dal tool** (2026-11-03, *«mi devo poter infittire le trame»*). Stesso metodo della versione C su una copia in Stilista ([`../riferimenti/rete-a-moduli.md`](../riferimenti/rete-a-moduli.md)), con la soglia sull'area della maglia. Lorenzo non ha dato un valore: i 20 mm² di serie sono una scelta mia.
 - **Il modulo caricato resta su quel PC** (browser), non nel repo: si ricarica solo cambiando PC o browser.
 
+- **I pezzi sul bordo si attaccano ai moduli vicini** (2026-11-04, *«in maniera automatica si aggiungano pezzi ai moduli dove vicino ci sono i bordi e c'è del bianco»*). Un pezzo sotto la soglia si cuce subito prima del modulo che tocca di più: il filo arriva al modulo sulle sue linee, che non sono ancora cucite, e non ci sono cambi ago in più. Dentro il pezzo: prima le basi, poi le catenelle, ognuna la più vicina; i passaggi del modulo non servono più. Che sia acceso di serie è una scelta mia, come i 30 mm di catenella sotto i quali un pezzo non si cuce. Spento, il bordo è quello del file.
+
 ## Da decidere
 - Come nasce la ragnatela nella versione parametrica: il modulo è disegnato a mano e la regola che lo genera non è misurata.
-- **Il bianco sul bordo** (2026-11-04, *«tante parti del bordo non sono coperte del tutto … in maniera automatica si aggiungano pezzi ai moduli dove vicino ci sono i bordi e c'è del bianco?»*). Viene dai pezzi sotto la soglia del 22%. Sul contorno del file, su 1.237 cm²: 19 cm² stanno a più di 5 mm dalla linea più vicina, 10 a più di 8 mm, 4 a più di 12 mm, il punto più lontano a 24 mm. Con tutti i pezzi (soglia 0) sono 10 moduli in più, 174 catenelle e 2,2 m di catenella su 49,9 m, e nessun punto oltre i 4 mm. Con la soglia a 0 però ogni pezzo è un modulo col suo cambio ago: da decidere se attaccarli al modulo vicino.
 
 ## In cantiere
 - **L'attivazione delle aree di infittimento** (2026-11-04, *«da mettere in cantiere è l'attivazione delle aree di infittimento»*). Oggi l'area si dà caricando un SVG o un DXF. Lorenzo non ha ancora detto come la vuole.
@@ -63,7 +64,21 @@ Il file è stato pulito a mano e l'8% dei vertici delle sue catenelle sta fuori 
 
 **Quali pezzi di modulo si tengono sul bordo.** Riempiendo tutto il contorno venivano 42 moduli. Il file ha un modulo tagliato con dentro il 23,6% della sua catenella e non ne ha uno col 20,7%: la soglia sta fra i due. Di serie è 22% e tornano esattamente i 29 moduli. La regola è dedotta dal file e Lorenzo l'ha tenuta. Con 0 il tool riempie fino al bordo.
 
-**I movimenti fra oggetti.** Nel modulo due oggetti di seguito distano fino a 5,46 mm. Il tool cuce un punto solo fino a 7 mm (5,46 più circa un passo di maglia) e oltre gira sulla corsia. Sul contorno del file: nessun salto dentro un modulo, 823 tagli sulle corsie, corsia più lontana a 18 mm.
+**Il bianco sul bordo**, sul contorno del file, su 1.237 cm² (tutto in linee di base e catenelle, passaggi esclusi):
+
+| | Pezzi spenti | Pezzi attaccati | Soglia a 0 |
+|---|---|---|---|
+| Moduli, e quindi cambi ago | 29 | 29 | 39 |
+| Pezzi attaccati | 0 | 10 | 0 |
+| Area a più di 5 mm dalla linea più vicina | 19 cm² | 0 | 0 |
+| Area a più di 12 mm | 4 cm² | 0 | 0 |
+| Punto più lontano | 24 mm | 5 mm | 4 mm |
+| Catenelle | 2.057 | 2.200 | 2.231 |
+| Punti | 344.212 | 360.150 | |
+
+Nei pezzi 2,06 m di catenella e 2,79 m di passaggi: 2,34 m sotto catenelle che arrivano dopo, 0,35 m sopra catenelle già cucite, 0,10 m su nessuna catenella. Nessun salto: fra due oggetti dello stesso modulo al più 6,9 mm.
+
+**I movimenti fra oggetti.** Nel modulo due oggetti di seguito distano fino a 5,46 mm. Il tool cuce un punto solo fino a 7 mm (5,46 più circa un passo di maglia) e oltre gira sulla corsia. Sul contorno del file: nessun salto dentro un modulo, 538 tagli sulle corsie, corsia più lontana a 18 mm.
 
 **Come passa il filo fra i moduli nel file** (misurato su 29 moduli): ogni modulo finisce con un passaggio da 83 a 322 mm. Dentro il contorno corre sulle linee dei moduli che arrivano dopo: su 27 moduli zero mm sopra linee di moduli già cuciti, sugli altri due 1,1 mm. Dove sotto non arriva più nessuno (ultima riga) corre su nessuna linea, fino a 45 mm. Poi va oltre il contorno e finisce su una verticale fissa: a sinistra per le prime due colonne, a destra per le altre tre. Le prime due colonne hanno anche un trattino a x −8,9 mm, 27,8 mm più in là. Il modulo dopo cambia ago (9, 10, 11, 12, 11 per colonna).
 
