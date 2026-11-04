@@ -6410,10 +6410,10 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     let dentro = 0, fuori = 0;
     for (const l of linee) for (let i = 0; i + 4 < l.length; i++) if (ug(l[i], l[i + 2]) && ug(l[i + 1], l[i + 3]) && ug(l[i], l[i + 4])) {
       // (dentro: un pezzo qualsiasi in una macchia — anche i pezzetti sul bordo, «non sono necessari»; fuori: tutta fuori,
-      // ad almeno un decimo dal bordo: una punta che sfiora la macchia fra due campioni la tocca, e passa a 2)
+      // a più di tre decimi dal bordo: fin lì, con la sfrangiatura di serie, ci sono le punte del raso, ed è sotto la macchia)
       const at = (t) => ({ x: l[i].x + (l[i + 1].x - l[i].x) * t, y: l[i].y + (l[i + 1].y - l[i].y) * t });
       const lati = Array.from({ length: 41 }, (_, k) => dove(at(k / 40)));
-      if (lati.some((d) => d > 0.01)) dentro++; else if (lati.every((d) => d < -0.1)) fuori++;
+      if (lati.some((d) => d > 0.01)) dentro++; else if (lati.every((d) => d < -0.3)) fuori++;
     }
     return { dentro, fuori };
   };
@@ -6423,6 +6423,25 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   const sotto1 = (linee) => { let c = 0; for (const t of linee) for (let k = 1; k < t.length; k++) { const L = Math.hypot(t[k].x - t[k - 1].x, t[k].y - t[k - 1].y); if (L > 1e-6 && L < 1) c++; } return c; };
   check(`la base sotto le macchie a 2 passaggi: nessuna barretta a 4 che tocca una macchia, nemmeno sul bordo (prima ${prima24.dentro}), fuori le stesse (${prima24.fuori}), la base un tratto solo con gli stessi capi, nessun punto corto in più (${sotto1(interaB24)} sotto 1 mm)`,
     [prima24.dentro > 100, dopo24.dentro, dopo24.fuori, b24.base.salti, capi(b24.base.tratti), sotto1(b24.base.tratti)], [true, 0, prima24.fuori, 0, capi(interaB24), sotto1(interaB24)]);
+  // «vengono messi dei punti in più rispetto al normale passaggio singolo che dovrebbe avere sotto la macchia» (Lorenzo,
+  // 2026-11-04): con la sfrangiatura a 6 mm (3 fuori) una rientranza stretta è piena di raso, e una barretta che ci passa è
+  // sotto la macchia. Nessun tratto ripassato più di due volte a meno di 1,4 mm dalla macchia, lungo il raso. E «quelle a
+  // cavallo toglile rendi tutto a 2»: una barretta che tocca una macchia non ha più pezzi ripassati, nemmeno quello fuori.
+  const ripassatiVicini = (r, tiro) => {
+    const ug = (p, q) => Math.abs(p.x - q.x) < 1e-4 && Math.abs(p.y - q.y) < 1e-4;
+    const coperto = (p) => r.forme.some((m) => rg.pointInPolygon(p, m));
+    let n = 0;
+    for (const l of r.base.tratti) for (let i = 0; i + 3 < l.length; i++) if (ug(l[i], l[i + 2]) && ug(l[i + 1], l[i + 3])) {
+      if (Array.from({ length: 19 }, (_, k) => (k + 1) / 20).some((t) => {
+        const p = { x: l[i].x + (l[i + 1].x - l[i].x) * t, y: l[i].y + (l[i + 1].y - l[i].y) * t };
+        return [-tiro, tiro, 0].some((s) => coperto({ x: p.x, y: p.y + s }));
+      })) n++;
+    }
+    return n;
+  };
+  const b24Punte = rg.pmCostruisci(pannello, macchie, squame24, { ...pmSerie, sfrangiatura: 6, sfrangiaturaFuori: 50 });
+  check(`la base sotto le punte del raso: a 2 passaggi anche dove arriva la sfrangiatura (con quella di serie, che arriva meno, ${ripassatiVicini(b24, 1.4)} tratti ripassati così vicini)`,
+    [ripassatiVicini(b24, 1.4) > 0, ripassatiVicini(b24, 0), ripassatiVicini(b24Punte, 1.4), capi(b24Punte.base.tratti), b24Punte.base.salti], [true, 0, 0, capi(interaB24), 0]);
   const spesso = rg.pmCostruisci(pannello, macchie, squame, { ...pmSerie, sopraPuntoMin: 1.5 });
   check('...col punto minimo a 1,5 mm (fili spessi): sotto 1,5 mm al più il 25% (misurato 20%; col minimo a 1 il 40%), e il punto sopra non esce dalla macchia', [corti2(spesso.vista.sopra, 1.5) <= 0.25, peggiore(spesso.vista.sopra, spesso.forme) <= 0.05], [true, true]);
   // si entra dove conviene e si esce dal lato della macchia dopo: i salti sono quasi la distanza fra le macchie
