@@ -6651,6 +6651,13 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     const zs = zero.sottoIlSecondo;
     check('di serie zero salti nel primo livello, a vista al più 12 mm per volta e in tutto meno di 300 mm',
       [zero.stop[0].livello.salti, zs.attraversamenti > 0, zs.aVista <= zs.attraversamenti * rg.PM_DI_SERIE.secondoVista, zs.aVista < 300], [0, true, true, true]);
+    // (Lorenzo, 2026-11-03: «ora non fa il passaggio fa dei salti»: col raso più fitto sotto il raso la strada può mancare: il filo
+    // gira fuori dalla macchia. E i passaggi si vedono a parte, e i salti del secondo livello non si contano col primo)
+    const fitto = rg.pmCostruisci([], chiare, {}, { ...rg.PM_DI_SERIE, rasoInterlinea: 0.25 }, scure);
+    const lunghiFra = fitto.vista.fra.flatMap((t) => t.slice(1).map((p, i) => Math.hypot(p.x - t[i].x, p.y - t[i].y)));
+    check('col raso fitto ancora zero salti nel primo livello, i passaggi a parte nella vista, i salti divisi per livello',
+      [fitto.stop[0].livello.salti, fitto.vista.fra.length >= fitto.sottoIlSecondo.collegate, lunghiFra.length > 0, fitto.saltiFra.raso.length, fitto.saltiFra.raso2.length === fitto.stop[1].livello.salti || fitto.saltiFra.raso2.length > 0],
+      [0, true, true, 0, true]);
     // OGNI LIVELLO COI SUOI PARAMETRI (Lorenzo, 2026-11-03: «ogni livello di macchia deve avere il suo pannellino dei parametri»)
     const propri = rg.pmCostruisci([], chiare.slice(0, 6), {}, { ...rg.PM_DI_SERIE, rasoInterlinea2: 0.8, rasoAngolo2: 45, sfrangiatura2: 0 }, scure.slice(0, 6));
     const uguali = rg.pmCostruisci([], chiare.slice(0, 6), {}, rg.PM_DI_SERIE, scure.slice(0, 6));
@@ -6662,6 +6669,18 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
       [conTutto.base.punti > 0, conTutto.stop.every((s, i, a) => s.tipo === (i % 2 ? 'sopra' : 'raso') && (i === 0 || a[i - 1].strato <= s.strato)), new Set(conTutto.stop.map((s) => s.strato)).size],
       [true, true, 2]);
     const q = (x, y, l) => [{ x, y }, { x: x + l, y }, { x: x + l, y: y + l }, { x, y: y + l }];
+    // I PONTI CON DUE LIVELLI (Lorenzo, 2026-11-04: «li costruisce il sistema non è che vanno forzati per forza per far passare il
+    // filo»): solo sul secondo livello, il filo del primo li usa, e dove due macchie sono più lontane del limite il salto resta
+    const conPonti = rg.pmCostruisci([], chiare, {}, { ...rg.PM_DI_SERIE, ponti: 5 }, scure);
+    check('i ponti sul secondo livello: meno salti lì, meno filo a vista, zero salti nel primo',
+      [conPonti.ponti > 0, conPonti.stop[1].livello.salti < zero.stop[1].livello.salti, conPonti.sottoIlSecondo.aVista < zs.aVista, conPonti.stop[0].livello.salti], [true, true, true, 0]);
+    const tre = [q(0, 0, 10), q(13, 0, 10), q(40, 0, 10)], sporgono = [q(2, -5, 6), q(15, -5, 6)];
+    const senzaPonte = rg.pmCostruisci([], sporgono, {}, { ...rg.PM_DI_SERIE, sfrangiatura: 0, sfrangiatura2: 0 }, tre);
+    const unPonte = rg.pmCostruisci([], sporgono, {}, { ...rg.PM_DI_SERIE, sfrangiatura: 0, sfrangiatura2: 0, ponti: 5 }, tre);
+    check('due macchie a 3 mm si uniscono, quella a 17 mm no: il salto resta; le macchie del primo livello senza ponte',
+      [senzaPonte.ponti, senzaPonte.stop[1].livello.salti, unPonte.ponti, unPonte.stop[1].livello.salti, unPonte.stop[0].livello.salti, unPonte.forme.slice(0, 2).every((f) => Math.max(...f.map((p) => p.x)) - Math.min(...f.map((p) => p.x)) < 7)],
+      [0, 2, 1, 1, 0, true]);
+    check('il filo del primo livello passa sotto il ponte: niente più a vista', [senzaPonte.sottoIlSecondo.aVista > 2, unPonte.sottoIlSecondo.aVista], [true, 0]);
     const fuori = q(100, 100, 5), sola = rg.pmFerma(fuori, [q(0, 0, 10)], 1, giu);
     const coperta = rg.pmFerma(q(2, 2, 2), [q(0, 0, 10)], 1, giu);
     const [conBuco] = rg.pmFerma(q(0, 0, 30), [q(10, 10, 10)], 1, giu);
