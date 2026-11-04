@@ -31,9 +31,18 @@ esattamente come questo»*.
 - **Un passo solo per tutte le colonne** (2026-11-03, *«i 0,22 mm non sono voluti»*): nel file le colonne alternano 100,44 e 100,218 mm. Il tool usa la metà della ripetizione A → A, che nel file è esatta: 100,329 mm. Il valore l'ho scelto io, perché tiene la larghezza del file e sposta le colonne B di 0,11 mm; il modulo non indica un passo migliore: da 100,0 a 100,7 mm i capi liberi che cadono sui vicini non cambiano in modo netto.
 - **I pezzi di modulo sul bordo: 22%** (2026-11-03, *«lascia 22%»*).
 - **Le corsie vanno bene anche a 18 mm dal bordo** (2026-11-03, *«corsie ok»*).
+- **Ogni modulo finisce con un'uscita** (2026-11-03, *«alla fine di ogni modulo c'è un'impuntura che esce passando sotto quella successiva, in modo che il cambio ago avviene fuori»*). Corre sulle linee dei moduli che arrivano dopo, poi oltre il contorno. Di serie 20 mm oltre: valore mio, sul file i capi stanno da 14 a 114 mm oltre il bordo.
+- **Filo continuo, a scelta** (2026-11-03, prima, *«i moduli sono tutti rasafilo non sono collegati non va bene»*): con la spunta il filo passa al modulo dopo lungo le linee, senza cambi ago, a serpentina.
+- **La scelta psil vero o disegnato** (2026-11-03, *«sullo psil dammi la possibilità di scegliere se psil o no»*). Acceso: in Stilista oggetti psil copiati da una catenella del documento aperto. Spento: i punti del tool. Il DST ha sempre i punti del tool.
+- **La trama si infittisce dal tool** (2026-11-03, *«mi devo poter infittire le trame»*). Stesso metodo della versione C su una copia in Stilista ([`../riferimenti/rete-a-moduli.md`](../riferimenti/rete-a-moduli.md)), con la soglia sull'area della maglia. Lorenzo non ha dato un valore: i 20 mm² di serie sono una scelta mia.
+- **Il modulo caricato resta su quel PC** (browser), non nel repo: si ricarica solo cambiando PC o browser.
 
 ## Da decidere
 - Come nasce la ragnatela nella versione parametrica: il modulo è disegnato a mano e la regola che lo genera non è misurata.
+- **Il bianco sul bordo** (2026-11-04, *«tante parti del bordo non sono coperte del tutto … in maniera automatica si aggiungano pezzi ai moduli dove vicino ci sono i bordi e c'è del bianco?»*). Viene dai pezzi sotto la soglia del 22%. Sul contorno del file, su 1.237 cm²: 19 cm² stanno a più di 5 mm dalla linea più vicina, 10 a più di 8 mm, 4 a più di 12 mm, il punto più lontano a 24 mm. Con tutti i pezzi (soglia 0) sono 10 moduli in più, 174 catenelle e 2,2 m di catenella su 49,9 m, e nessun punto oltre i 4 mm. Con la soglia a 0 però ogni pezzo è un modulo col suo cambio ago: da decidere se attaccarli al modulo vicino.
+
+## In cantiere
+- **L'attivazione delle aree di infittimento** (2026-11-04, *«da mettere in cantiere è l'attivazione delle aree di infittimento»*). Oggi l'area si dà caricando un SVG o un DXF. Lorenzo non ha ancora detto come la vuole.
 
 ## Il tool sul file di riferimento (2026-11-03)
 
@@ -54,8 +63,39 @@ Il file è stato pulito a mano e l'8% dei vertici delle sue catenelle sta fuori 
 
 **Quali pezzi di modulo si tengono sul bordo.** Riempiendo tutto il contorno venivano 42 moduli. Il file ha un modulo tagliato con dentro il 23,6% della sua catenella e non ne ha uno col 20,7%: la soglia sta fra i due. Di serie è 22% e tornano esattamente i 29 moduli. La regola è dedotta dal file e Lorenzo l'ha tenuta. Con 0 il tool riempie fino al bordo.
 
-**I movimenti fra oggetti.** Nel modulo due oggetti di seguito distano fino a 5,46 mm. Il tool cuce un punto solo fino a 7 mm (5,46 più circa un passo di maglia) e oltre gira sulla corsia. Sul contorno del file: un filo per modulo, nessun salto dentro un modulo, 823 tagli sulle corsie, corsia più lontana a 18 mm.
+**I movimenti fra oggetti.** Nel modulo due oggetti di seguito distano fino a 5,46 mm. Il tool cuce un punto solo fino a 7 mm (5,46 più circa un passo di maglia) e oltre gira sulla corsia. Sul contorno del file: nessun salto dentro un modulo, 823 tagli sulle corsie, corsia più lontana a 18 mm.
+
+**Come passa il filo fra i moduli nel file** (misurato su 29 moduli): ogni modulo finisce con un passaggio da 83 a 322 mm. Dentro il contorno corre sulle linee dei moduli che arrivano dopo: su 27 moduli zero mm sopra linee di moduli già cuciti, sugli altri due 1,1 mm. Dove sotto non arriva più nessuno (ultima riga) corre su nessuna linea, fino a 45 mm. Poi va oltre il contorno e finisce su una verticale fissa: a sinistra per le prime due colonne, a destra per le altre tre. Le prime due colonne hanno anche un trattino a x −8,9 mm, 27,8 mm più in là. Il modulo dopo cambia ago (9, 10, 11, 12, 11 per colonna).
+
+**Nel tool** l'uscita esce ai lati sulle linee dei moduli dopo, poi oltre il contorno: salire e scendere costa il triplo (valore mio). Dove ai lati resterebbe scoperta per più di 10 mm (valore mio) può uscire dal bordo più vicino. Non finisce su una verticale fissa come nel file; due uscite non lasciano il bordo entro 6 mm l'una dall'altra e una linea già usata da un'uscita costa di più.
+
+Quanto aspetta l'uscita prima di essere coperta, contando i moduli cuciti in mezzo, sul contorno del file con 29 moduli (il ritiro vero non è misurato):
+
+| | Strada più corta (prima) | Ai lati (ora) | File |
+|---|---|---|---|
+| Attesa massima | 16 moduli | 6 moduli | 7 moduli |
+| Attesa media | 3,1 moduli | 2,3 moduli | 3,6 moduli |
+| Linea che aspetta più di 5 moduli | 0,40 m | 0,01 m | 0,89 m |
+| Dislivello massimo fra inizio e fine | 216 mm | 90 mm | 93 mm |
+| Filo delle uscite | 3,06 m | 3,73 m | 6,32 m |
+| Sotto i moduli dopo | 2,36 m | 3,00 m | 3,80 m |
+| Dentro su nessuna linea dopo | 133 mm | 163 mm | 71 mm |
+| Sopra moduli già cuciti | 1 mm | 3 mm | |
+
+Sul file il tratto «su nessuna linea dopo» comprende anche quello sopra i già cuciti. Delle 29 uscite 23 finiscono ai lati, 5 della riga in cima escono in alto e una dell'ultima riga nell'incavo. Il trattino non c'è. Provata su una copia in Stilista con 4 moduli: ogni colonna col suo ago (`POST /ago`, prima non provata), i cambi ago tutti fuori dal contorno.
+
+**Quanto si infittisce sul contorno del file.** Di partenza 40 mm di catenella per cm²:
+
+| Maglie più grandi di | Linee nuove | Maglie rimaste intere, ogni due moduli | Catenella per cm² | Punti |
+|---|---|---|---|---|
+| 30 mm² | 404 | 6 | 42,8 mm | 363.694 |
+| 25 mm² | 784 | 8 | 44,8 mm | 378.843 |
+| 20 mm² | 1.355 | 20 | 47,9 mm | 404.399 |
+| 15 mm² | 1.912 | 36 | 50,6 mm | 426.114 |
+| 12 mm² | 3.043 | 58 | 55,4 mm | 467.647 |
+
+I punti sono misurati a filo continuo; con le uscite cambiano di poco (a 20 mm²: 403.772). Oltre i 40 mm² non c'è niente da dividere. Linee da 6 a 8 mm di mediana, al massimo 11,4 mm.
 
 La simulazione ha trovato un errore che i test non vedevano: ogni oggetto diventava un tratto a sé, e nel DST erano 3.534 rasafili. Ora un test controlla che un modulo sia un filo solo.
 
-**Non ci sono ancora:** il running d'uscita verso il modulo dopo; le aree vuote nel contorno (si usa l'anello più grande); la versione parametrica; gli oggetti psil veri verso Stilista (ora arrivano come punti fissi, uno per modulo). La pulizia è il taglio esatto sul contorno, non la pulizia a mano.
+**Non ci sono ancora:** le aree vuote nel contorno (si usa l'anello più grande); la versione parametrica. La pulizia è il taglio esatto sul contorno, non la pulizia a mano.

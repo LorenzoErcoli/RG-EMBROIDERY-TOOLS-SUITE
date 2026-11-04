@@ -1608,6 +1608,16 @@
           "default": 22,
           "x-id": "catenellaMinModule"
         },
+        "collegaModuli": {
+          "$ref": "#/$defs/catenellaLinkModules",
+          "default": false,
+          "x-id": "catenellaLinkModules"
+        },
+        "uscitaFuoriMm": {
+          "$ref": "#/$defs/catenellaExitOutside",
+          "default": 20,
+          "x-id": "catenellaExitOutside"
+        },
         "passate": {
           "$ref": "#/$defs/catenellaBasePasses",
           "default": 3,
@@ -1647,6 +1657,26 @@
           "$ref": "#/$defs/catenellaPsilTurns",
           "default": 2,
           "x-id": "catenellaPsilTurns"
+        },
+        "psilVero": {
+          "$ref": "#/$defs/catenellaTruePsil",
+          "default": true,
+          "x-id": "catenellaTruePsil"
+        },
+        "infittisci": {
+          "$ref": "#/$defs/catenellaDensify",
+          "default": false,
+          "x-id": "catenellaDensify"
+        },
+        "magliaMassimaMm2": {
+          "$ref": "#/$defs/catenellaMaxCell",
+          "default": 20,
+          "x-id": "catenellaMaxCell"
+        },
+        "infittisciVariante": {
+          "$ref": "#/$defs/catenellaDensifyVariant",
+          "default": 1,
+          "x-id": "catenellaDensifyVariant"
         },
         "margineMm": {
           "$ref": "#/$defs/catenellaContourMargin",
@@ -4815,6 +4845,21 @@
       "maximum": 100,
       "x-concetto": "griglia-moduli"
     },
+    "catenellaLinkModules": {
+      "type": "boolean",
+      "title": "Moduli collegati a filo continuo, senza cambio ago",
+      "description": "Spento, come il file di riferimento: ogni modulo finisce con un’uscita che passa sotto i moduli dopo e cambia ago fuori dal contorno. Acceso: il filo passa al modulo dopo lungo le linee.",
+      "x-concetto": "griglia-moduli"
+    },
+    "catenellaExitOutside": {
+      "type": "number",
+      "title": "L’uscita finisce oltre il contorno di",
+      "description": "Dove cambia ago. Sul file di riferimento i capi stanno da 14 a 114 mm oltre il bordo, tutti sulla stessa verticale.",
+      "x-unita": "mm",
+      "minimum": 2,
+      "maximum": 150,
+      "x-concetto": "griglia-moduli"
+    },
     "catenellaBasePasses": {
       "type": "number",
       "title": "Passate di base",
@@ -4884,6 +4929,34 @@
       "minimum": 1,
       "maximum": 3,
       "x-concetto": "maglia-psil"
+    },
+    "catenellaTruePsil": {
+      "type": "boolean",
+      "title": "Psil vero in Stilista",
+      "description": "Acceso: in Stilista le catenelle sono oggetti psil, copiati da una catenella del documento aperto. Spento: arrivano coi punti disegnati dal tool.",
+      "x-concetto": "maglia-psil"
+    },
+    "catenellaDensify": {
+      "type": "boolean",
+      "title": "Infittisci la trama",
+      "description": "Divide le maglie grandi con linee nuove. Spento: il modulo è quello caricato, esatto.",
+      "x-concetto": "infittimento"
+    },
+    "catenellaMaxCell": {
+      "type": "number",
+      "title": "Dividi le maglie più grandi di (mm²)",
+      "description": "Più è basso, più la trama è fitta. Una maglia senza una giunzione adatta resta intera.",
+      "minimum": 12,
+      "maximum": 500,
+      "x-concetto": "infittimento"
+    },
+    "catenellaDensifyVariant": {
+      "type": "number",
+      "title": "Variante delle linee",
+      "description": "Le linee sono irregolari: ogni numero dà un disegno diverso.",
+      "minimum": 1,
+      "maximum": 99,
+      "x-concetto": "infittimento"
     },
     "catenellaContourMargin": {
       "type": "number",
@@ -6553,7 +6626,9 @@
       "parametri": [
         "catenellaGridOffsetX",
         "catenellaGridOffsetY",
-        "catenellaMinModule"
+        "catenellaMinModule",
+        "catenellaLinkModules",
+        "catenellaExitOutside"
       ]
     },
     "passate-base": {
@@ -6569,7 +6644,16 @@
         "catenellaPsilWidth",
         "catenellaPsilPitch",
         "catenellaPsilStart",
-        "catenellaPsilTurns"
+        "catenellaPsilTurns",
+        "catenellaTruePsil"
+      ]
+    },
+    "infittimento": {
+      "descrizione": "Le maglie più grandi di una soglia si dividono in due con una linea che parte da una giunzione: andata e ritorno della base, passaggio e catenella, senza salti.",
+      "parametri": [
+        "catenellaDensify",
+        "catenellaMaxCell",
+        "catenellaDensifyVariant"
       ]
     },
     "corsie-bordo": {
