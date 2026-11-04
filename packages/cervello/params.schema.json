@@ -923,9 +923,9 @@
           "$ref": "#/$defs/coverMarginMm",
           "default": 1
         },
-        "coverNoPassLines": {
-          "$ref": "#/$defs/coverNoPassLines",
-          "default": true
+        "coverOverlapMm": {
+          "$ref": "#/$defs/coverOverlapMm",
+          "default": 3
         },
         "stitchMode": {
           "$ref": "#/$defs/stitchMode",
@@ -4059,10 +4059,13 @@
       "x-passo": 0.5,
       "x-concetto": "passaggi-nascosti"
     },
-    "coverNoPassLines": {
-      "type": "boolean",
-      "title": "Con il ricamo sopra: niente linee di passaggio",
-      "description": "Acceso: se ci sono zone «Ricamo sopra» il filo si sposta da una macchia all’altra passando sotto le zone, senza le linee rade. Senza zone non cambia niente.",
+    "coverOverlapMm": {
+      "type": "number",
+      "title": "Le striature entrano sotto il ricamo di",
+      "description": "Sicurezza per la ricentratura: fin qui dentro una zona «Ricamo sopra» i trattini restano interi, come se la zona non ci fosse. Quelli tutti più in fondo non si cuciono.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
       "x-concetto": "passaggi-nascosti"
     },
     "stitchMode": {
@@ -6337,7 +6340,7 @@
       "descrizione": "Passaggi che si nascondono sotto il ricamo successivo (R16–R21): mappa di copertura, pesi, bypass.",
       "parametri": [
         "coverMarginMm",
-        "coverNoPassLines",
+        "coverOverlapMm",
         "travelMode",
         "passMaxMm",
         "hiddenPassMaxMm",

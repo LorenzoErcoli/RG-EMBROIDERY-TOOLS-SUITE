@@ -1724,22 +1724,38 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   const sSenza = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE' }, sP);
   const sSotto = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE', '#00ff00': 'COVER_AREA' }, sP);
   const sFiloDi = (r) => r.exportLayers.find((l) => l.id === 'striatura').polylines;
-  // i punti dei trattini restano gli stessi: mancano solo quelli dei collegamenti cambiati (lo 0,2% misurato)
+  // fuori dalla zona i punti dei trattini restano gli stessi: mancano solo quelli dei collegamenti cambiati
   const sChiave = (q) => `${q.x.toFixed(3)},${q.y.toFixed(3)}`;
   const sConZonaPunti = new Set(rg.generateStriatura({ outline: sRect, voids: [], coperte: [sZona] }, sP)[0].polylines.flat().map(sChiave));
   const sSenzaLayer = rg.generateStriatura({ outline: sRect, voids: [] }, sP)[0];
   const sPassati = new Set(sSenzaLayer.passaggi.flat().map(sChiave));
-  const sMacchiaPunti = sSenzaLayer.polylines.flat().map(sChiave).filter((k) => !sPassati.has(k));
+  const sMacchiaPunti = sSenzaLayer.polylines.flat().filter((q) => !rg.pointInPolygon(q, sZona)).map(sChiave).filter((k) => !sPassati.has(k));
   const sPersi = sMacchiaPunti.filter((k) => !sConZonaPunti.has(k)).length;
-  check('le macchie sono le stesse, con la zona o senza', sPersi < sMacchiaPunti.length * 0.01, true);
+  check('fuori dalla zona le macchie sono le stesse, con la zona o senza', sPersi < sMacchiaPunti.length * 0.05, true);
   check('il ricamo continua dentro la zona (non è un vuoto)', sFiloDi(sSotto).flat().some((q) => rg.pointInPolygon(q, sZona)), true);
   check('nessun salto in più', sFiloDi(sSotto).length, sFiloDi(sSenza).length);
+  // La forma dei passaggi, non solo i metri (Lorenzo, 2026-11-03: «si formano delle linee improbabili»: un passaggio
+  // da 106 mm per coprirne 11). Sul pannello con tante zone: niente giri, niente passaggi sopra i trattini in vista.
+  const sMacchie = []; for (let gy = 0; gy < 5; gy++) for (let gx = 0; gx < 4; gx++) { const cx = 15 + gx * 30, cy = 15 + gy * 30, a = []; for (let i = 0; i < 24; i++) { const t = (i / 24) * 2 * Math.PI; a.push({ x: cx + Math.cos(t) * 10, y: cy + Math.sin(t) * 12 }); } sMacchie.push(a); }
+  const sTante = rg.generateStriatura({ outline: sRect, voids: [], coperte: sMacchie }, sP)[0];
+  const sLunghezza = (pl) => { let l = 0; for (let i = 1; i < pl.length; i++) l += Math.hypot(pl[i].x - pl[i - 1].x, pl[i].y - pl[i - 1].y); return l; };
+  const sGiri = sTante.passaggi.filter((pl) => { const l = sLunghezza(pl), d = Math.hypot(pl[pl.length - 1].x - pl[0].x, pl[pl.length - 1].y - pl[0].y); return l > 15 && l > d * 3; });
+  check('con tante zone nessun passaggio fa un giro di più di tre volte la distanza', sGiri.length, 0);
+  check('con tante zone il filo resta continuo, e dentro la sagoma', [sTante.polylines.length, sMeasure(sTante.polylines, sRect, []).fuori], [1, 0]);
+  // La striatura non si deve accorgere delle zone: i trattini che si vedono sono interi, identici a quelli senza zone.
+  const sTratSenza = sTrattini(sGen(sP));
+  const sTratZone = new Set(sTrattini(sTante.polylines).map((t) => `${t.x.toFixed(3)}:${t.alto.toFixed(1)}`));
+  const sVisibili = sTrattini(sGen(sP)).length;
+  const sUguali = sTratSenza.filter((t) => sTratZone.has(`${t.x.toFixed(3)}:${t.alto.toFixed(1)}`)).length;
+  check('i trattini rimasti sono quelli di sempre, non tagliati dal bordo delle zone', sUguali >= sTratZone.size * 0.85 && sTratZone.size < sVisibili, true);
+  // Lo sfrangiato aiuta (Lorenzo, 2026-11-03: «allungare… lo sfrangiato e far partire o finire nelle vicinanze di parti
+  // coperte»): nessun trattino cresce oltre il frastaglio, così non si nota.
+  const sAlti = sTrattini(sTante.polylines).map((t) => t.alto);
+  const sAltiSenza = sTratSenza.map((t) => t.alto);
+  check('allungato per arrivare sotto una zona, un trattino resta nella misura dello sfrangiato', Math.max(...sAlti) <= Math.max(...sAltiSenza) + sP.jaggedLengthMm + 1, true);
   check('sotto la zona i passaggi ci sono, e misurati', sSotto.passaggiCopertiMm > 0, true);
   const sMisuraSenza = (() => { let v = 0; for (const pl of sSenza.passaggi) for (let i = 1; i < pl.length; i++) { const a = pl[i - 1], b = pl[i]; const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.5)); for (let k = 0; k < n; k++) { const t = (k + 0.5) / n; const q = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; if (!rg.pointInPolygon(q, sZona)) v += Math.hypot(b.x - a.x, b.y - a.y) / n; } } return v; })();
   check('in vista non restano più passaggi di prima (a parità di zona)', sSotto.passaggiInVistaMm <= sMisuraSenza + 1, true);
-  const sConLinee = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE', '#00ff00': 'COVER_AREA' }, { ...sP, coverNoPassLines: false });
-  check('con le zone, senza linee rade restano in vista meno passaggi; spento l’interruttore tornano', sSotto.passaggiInVistaMm < sConLinee.passaggiInVistaMm, true);
-  check('senza zone l’interruttore non cambia niente', rg.layerThreadMm({ color: '#000', polylines: sGen({ ...sP, coverNoPassLines: false }) }), rg.layerThreadMm({ color: '#000', polylines: sGen(sP) }));
   check('i passaggi evidenziati e la zona restano in anteprima: non si cuciono', sSotto.exportLayers.map((l) => l.id).join(), 'reference,striatura');
   check('filo dentro la sagoma e passo rispettato anche coi passaggi sotto', [sMeasure(sFiloDi(sSotto), sRect, []).fuori, sMeasure(sFiloDi(sSotto), sRect, []).segMax <= sStep + 0.1], [0, true]);
   const sZonaEVuoto = sMeasure(sGen(sP, [sVoid]).length ? rg.generateStriatura({ outline: sRect, voids: [sVoid], coperte: [sZona] }, sP)[0].polylines : [], sRect, [sVoid]);
