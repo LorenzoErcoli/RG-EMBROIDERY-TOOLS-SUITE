@@ -69,10 +69,14 @@ const FILI = [
   { chiave: 'raso2', nome: 'Raso, 2° livello', colore: '#6b3fa0' },
   { chiave: 'sopra', nome: 'Punto sopra', colore: '#c8952e' },
   { chiave: 'sotto', nome: 'Passaggi sotto il raso', colore: '#3b78c4' },
+  { chiave: 'fra', nome: 'Passaggi fra le macchie, 1° livello', colore: '#0a9396' },
 ] as const;
 type ChiaveFilo = typeof FILI[number]['chiave'];
-/** I salti nell'anteprima: quelli del raso viola, quelli del punto sopra rossi. */
+/** I salti nell'anteprima: quelli del raso viola (del secondo livello, se ce n'è uno: arancio), quelli del punto sopra rossi. */
 const COLORE_SALTI_RASO = '#8e3fd0';
+const COLORE_SALTI_RASO_2 = '#ee7a12';
+const dueLivelli = (r: RisultatoMacchie) => r.stop.some((st) => st.strato === 2);
+const saltiDelRaso = (r: RisultatoMacchie, strato: 1 | 2) => r.stop.filter((st) => st.tipo === 'raso' && st.strato === strato).reduce((n, st) => n + st.livello.salti, 0);
 const COLORE_SALTI_SOPRA = '#d62020';
 
 type Campo = { nome: keyof ParametriMacchie; etichetta: string; unita: string; passo: number; min: number; max?: number; aiuto?: string; scelte?: Array<[string, string]> };
@@ -125,7 +129,7 @@ const CAMPI_ZONE: Campo[] = [
 ];
 const CAMPI_PONTI: Campo[] = [
   { nome: 'ponti', etichetta: 'Unisci le macchie che si seguono e distano meno di', unita: 'mm', passo: 0.5, min: 0,
-    aiuto: 'Un ponte di raso fra le due: il filo passa senza salto. Cambia il disegno delle macchie. 0 = mai.' },
+    aiuto: 'Un ponte di raso fra le due: il filo passa senza salto. Cambia il disegno delle macchie. Con due livelli i ponti stanno solo sul 2°, anche dove il filo del 1° ci può passare sotto. Oltre questa distanza nessun ponte: lì resta il salto o il filo a vista. 0 = mai.' },
   { nome: 'pontiLarghezza', etichetta: 'Larghezza del ponte', unita: 'mm', passo: 0.5, min: 1 },
 ];
 
@@ -173,7 +177,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     : { nome: Object.keys(PRESET_CONDIVISI)[0] ?? '', config: Object.values(PRESET_CONDIVISI)[0] ?? ({} as PatternConfig) };
   const ricordaPunto = () => { try { localStorage.setItem(ULTIMO_KEY, JSON.stringify({ pattern, params: par })); } catch { /* senza memoria si riparte dai valori di serie */ } };
   let risultato: RisultatoMacchie | null = null;
-  const visibili: Record<ChiaveFilo | 'salti' | 'contorni', boolean> = { base: true, raso: true, raso2: true, sopra: true, sotto: false, salti: true, contorni: false };
+  const visibili: Record<ChiaveFilo | 'salti' | 'contorni', boolean> = { base: true, raso: true, raso2: true, sopra: true, sotto: false, fra: true, salti: true, contorni: false };
   let testoDisegno = 'Nessun disegno caricato.';
   let simulando = false;
   let simulatore: Simulatore | null = null;
@@ -390,7 +394,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       + (l.livello ? ` — ${l.livello.punti.toLocaleString('it-IT')} punti, ${l.livello.salti} salti` : '') + '</p>').join('');
     const descrivi = (v: number[]) => { const f = v.slice().sort((a, b) => a - b); return `${f.length}` + (f.length ? ` (fino a 5 mm ${f.filter((d) => d <= 5).length}, oltre 12 mm ${f.filter((d) => d > 12).length}, il più lungo ${f[f.length - 1].toFixed(1)} mm)` : ''); };
     const dettaglio = r
-      ? `<p class="rg-field__help rg-param-grid__wide">Salti fra una macchia e l'altra — raso: ${descrivi(r.saltiFra.raso)}; punto sopra: ${descrivi(r.saltiFra.sopra)}`
+      ? `<p class="rg-field__help rg-param-grid__wide">Salti fra una macchia e l'altra — ${dueLivelli(r) ? `raso del 1° livello: ${descrivi(r.saltiFra.raso)}; raso del 2° livello: ${descrivi(r.saltiFra.raso2)}, che sopra non ha niente che copra il filo` : `raso: ${descrivi(r.saltiFra.raso)}`}; punto sopra: ${descrivi(r.saltiFra.sopra)}`
         + ` · dentro le macchie: raso ${r.passaggiScoperti}, punto sopra ${r.saltiDentro}` + (r.ponti ? ` · ponti: ${r.ponti}` : '')
         + (r.tolto > 0.5 ? ` · punto sopra tolto: ${r.tolto.toFixed(0)} mm` : '') + '</p>'
       + (r.sottoIlSecondo.collegate ? `<p class="rg-field__help rg-param-grid__wide">Primo livello: ${r.sottoIlSecondo.collegate} passaggi invece di un salto, ${r.sottoIlSecondo.mm.toFixed(0)} mm di filo`
@@ -401,7 +405,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       + `<span class="macchie-ink" style="--ink:${l.colore}"></span>${l.nome}</label>`).join('');
     box.innerHTML = stop + dettaglio + caselle
       + `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-livello="salti"${visibili.salti ? ' checked' : ''}> I salti, tratteggiati:`
-      + ` <span class="macchie-ink" style="--ink:${COLORE_SALTI_RASO}"></span>del raso, <span class="macchie-ink" style="--ink:${COLORE_SALTI_SOPRA}"></span>del punto sopra</label>`
+      + ` <span class="macchie-ink" style="--ink:${COLORE_SALTI_RASO}"></span>del raso${r && dueLivelli(r) ? `, <span class="macchie-ink" style="--ink:${COLORE_SALTI_RASO_2}"></span>del raso del 2° livello` : ''}, <span class="macchie-ink" style="--ink:${COLORE_SALTI_SOPRA}"></span>del punto sopra</label>`
       + `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-livello="contorni"${visibili.contorni ? ' checked' : ''}> Il contorno delle macchie (coi ponti)</label>`;
     return box;
   }
@@ -503,7 +507,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       risultato = r;
       if (!r) { $('status').textContent = 'Errore: ' + errore; return; }
       const punti = r.base.punti + r.raso.punti + r.sopra.punti;
-      $('status').textContent = `${macchie.length + secondo.length} macchie · ${(par.conBase ? 1 : 0) + r.stop.length} stop · salti: raso ${r.raso.salti}` + (par.conSopra ? `, punto sopra ${r.sopra.salti}` : '')
+      $('status').textContent = `${macchie.length + secondo.length} macchie · ${(par.conBase ? 1 : 0) + r.stop.length} stop · salti: ${dueLivelli(r) ? `raso 1° livello ${saltiDelRaso(r, 1)}, 2° livello ${saltiDelRaso(r, 2)}` : `raso ${r.raso.salti}`}` + (par.conSopra ? `, punto sopra ${r.sopra.salti}` : '')
         + (r.ponti ? ` · ${r.ponti} ponti` : '') + ` · ${(r.tempoMs / 1000).toFixed(1)} s`;
       $('points').textContent = ` · ${punti.toLocaleString('it-IT')} punti`;
       aggiornaProgramma();
@@ -567,16 +571,18 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     if (!risultato) { disegnaContorni(); return; }
     if (simulando && simula()) { if (adatta) pz.fit(); return; }
     const r = risultato;
-    const linee: Record<ChiaveFilo, Polyline[]> = { base: r.base.tratti, raso: r.vista.raso, raso2: r.vista.raso2, sopra: r.vista.sopra, sotto: r.vista.sotto };
+    const linee: Record<ChiaveFilo, Polyline[]> = { base: r.base.tratti, raso: r.vista.raso, raso2: r.vista.raso2, sopra: r.vista.sopra, sotto: r.vista.sotto, fra: r.vista.fra };
     // un solo tracciato per filo, al decimo di millimetro: su un pannello di 400.000 punti l'anteprima a una linea per
     // tratto era un SVG da 8 MB con 16.600 elementi, pesante da ridisegnare a ogni zoom (2026-10-27)
     const fili = FILI.filter((l) => visibili[l.chiave])
-      .map((l) => `<path d="${percorso(linee[l.chiave])}" fill="none" stroke="${l.colore}" stroke-width="${l.chiave === 'raso' || l.chiave === 'raso2' ? 0.1 : l.chiave === 'sotto' ? 0.2 : 0.14}" stroke-linejoin="round"/>`)
+      .map((l) => `<path d="${percorso(linee[l.chiave])}" fill="none" stroke="${l.colore}" stroke-width="${l.chiave === 'raso' || l.chiave === 'raso2' ? 0.1 : l.chiave === 'sotto' ? 0.2 : l.chiave === 'fra' ? 0.3 : 0.14}" stroke-linejoin="round"/>`)
       .join('');
     // (i salti del raso e quelli del punto sopra di colori diversi: Lorenzo, 2026-10-28, «per capire perché ci sono più
     // salti che escono dalla stessa macchia»)
     const saltiDi = (tr: Polyline[], colore: string) => `<path d="${tr.slice(1).map((t, i) => percorso([[tr[i].at(-1)!, t[0]]])).join('')}" fill="none" stroke="${colore}" stroke-width="0.3" stroke-dasharray="1 0.6"/>`;
-    const salti = visibili.salti ? saltiDi(r.raso.tratti, COLORE_SALTI_RASO) + saltiDi(r.sopra.tratti, COLORE_SALTI_SOPRA) : '';
+    // (uno stop alla volta: fra due stop il filo è tagliato, non è un salto)
+    const delRaso = (strato: 1 | 2, colore: string) => r.stop.filter((st) => st.tipo === 'raso' && st.strato === strato).map((st) => saltiDi(st.livello.tratti, colore)).join('');
+    const salti = visibili.salti ? delRaso(1, COLORE_SALTI_RASO) + delRaso(2, COLORE_SALTI_RASO_2) + saltiDi(r.sopra.tratti, COLORE_SALTI_SOPRA) : '';
     const forme = visibili.contorni ? `<path d="${percorso(r.forme.map((f) => [...f, f[0]]))}" fill="none" stroke="#2e8b57" stroke-width="0.15"/>` : '';
     $('layer').innerHTML = cornice(contorniSvg(0.12) + fili + forme + salti);
     if (adatta) pz.fit();
