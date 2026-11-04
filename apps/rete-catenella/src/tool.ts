@@ -4,16 +4,16 @@
 import '@rg/ui/rg.css';
 import './rete-catenella.css';
 import { parseImportedBoundarySource, type ImportedBoundaryModel } from '@rg/pattern-grammar';
-import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, polygonArea, readDstMetadata, readProjectMetadata } from '@rg/core';
+import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, pointInPolygon, polygonArea, readDstMetadata, readProjectMetadata } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { testiCampo } from '@rg/cervello';
-import { scheletro, sezioneSorgente, sezione, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero } from '@rg/ui/anatomia';
+import { scheletro, sezioneSorgente, sezione, campoNumero, campoNumeroInline, attivaCampiNumero, leggiCampo, impostaNumero } from '@rg/ui/anatomia';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { collegaSimula, type DatiSimulazione } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { collegaStilista, inviaAStilista, origineStilista, stratiCuciti, type AggancioStilista } from '@rg/ui/stilista';
+import { coloreForiStilista, collegaStilista, inviaAStilista, origineStilista, stratiCuciti, type AggancioStilista } from '@rg/ui/stilista';
 import { reteAStilista } from './stilista-psil';
-import { costruisciRete, stratiRete, PARAMETRI_RETE, type EsitoRete, type ModuloRete, type ParametriRete, type Xy, riquadroRete } from './motore';
+import { costruisciRete, stratiRete, PARAMETRI_RETE, type EsitoRete, type ModuloRete, type ParametriRete, type Xy, type ZonaTrama, riquadroRete } from './motore';
 import { moduloDiEsempio } from './esempio';
 
 type CampoNum = { [K in keyof ParametriRete]: ParametriRete[K] extends number ? K : never }[keyof ParametriRete];
@@ -66,6 +66,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
         <label class="rg-choice rg-param-grid__wide" title="${tPsil.aiuto ?? ''}"><input type="checkbox" id="psilVero" checked> ${tPsil.etichetta}</label>`) }),
       sezione({ indice: 6, titolo: 'Trama', apribile: true, aperta: true, contenuto: griglia(['magliaMassimaMm2', 'infittisciVariante'], `
         <label class="rg-choice rg-param-grid__wide" title="${tInfittisci.aiuto ?? ''}"><input type="checkbox" id="infittisci"> ${tInfittisci.etichetta}</label>
+        <div class="rg-param-grid__wide" id="ruoliBox" hidden><ul class="rg-color-map" id="ruoli"></ul><small class="rg-field__help">Un laser di un altro colore, dentro il contorno, è un’area da infittire. Ogni colore ha la sua soglia: più è bassa, più la trama è fitta.</small></div>
         <div class="rg-file-input rg-param-grid__wide">
           <label class="rg-file-input__control"><input type="file" id="zonaInput" accept=".svg,.dxf" /><span class="rg-button rg-button--outline">Solo in questa zona…</span></label>
           <p class="rg-file-input__status" id="zonaStatus" role="status">Dappertutto.</p>
@@ -92,6 +93,8 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
   const par: ParametriRete = { ...PARAMETRI_RETE };
   let modulo: ModuloRete = moduloDiEsempio();
   let zona: Xy[] | null = null;
+  // Lorenzo, 2026-11-04: «da stilista arriva un laser colorato e quindi identifica un'area specifica»: una riga per colore, come negli altri tool
+  let colori: Array<{ colore: string; ruolo: 'contorno' | 'area' | ''; soglia: number; anelli: Xy[][] }> = [];
   let model: ImportedBoundaryModel | null = null;
   let anello: Xy[] = [];
   let sorgente: { text: string; name: string } | null = null;
@@ -115,12 +118,78 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
     const anelli = anelliDi(model);
     if (!anelli.length) { $('fileStatus').textContent = `${name}: nessun contorno chiuso.`; return; }
     anelli.sort((a, b) => Math.abs(polygonArea(b)) - Math.abs(polygonArea(a)));
-    anello = anelli[0].map((p): Xy => [p.x, p.y]);
     sorgente = { text, name };
-    const xs = anello.map((p) => p[0]), ys = anello.map((p) => p[1]);
-    $('fileStatus').textContent = `${name}: ${(Math.max(...xs) - Math.min(...xs)).toFixed(0)} × ${(Math.max(...ys) - Math.min(...ys)).toFixed(0)} mm${anelli.length > 1 ? ` · uso l’anello più grande, gli altri ${anelli.length - 1} no` : ''}.`;
+    // il colore del contorno più grande è il cartamodello; gli altri colori tutti dentro di lui sono aree da infittire. I fori dei riempimenti non contano. Si corregge dal menu.
+    const fori = coloreForiStilista(text), grande = anelli[0];
+    colori = model.choices.map((c) => {
+      const suoi = c.boundary.paths.filter((p) => p.closed && p.points.length >= 3).map((p) => p.points);
+      const ilContorno = suoi.includes(grande);
+      const area = !ilContorno && c.color !== fori && suoi.length > 0 && suoi.every((q) => pointInPolygon(q[0], grande));
+      return { colore: c.color ?? 'none', ruolo: ilContorno ? 'contorno' as const : area ? 'area' as const : '' as const, soglia: par.magliaMassimaMm2, anelli: suoi.map((q) => q.map((p): Xy => [p.x, p.y])) };
+    }).filter((c) => c.anelli.length);
+    if (colori.some((c) => c.ruolo === 'area')) { par.infittisci = true; ($('infittisci') as HTMLInputElement).checked = true; }
+    scegliAnello();
+    mostraColori();
+    const xs = anello.map((p) => p[0]), ys = anello.map((p) => p[1]), contorni = colori.filter((c) => c.ruolo === 'contorno').reduce((n, c) => n + c.anelli.length, 0);
+    $('fileStatus').textContent = `${name}: ${(Math.max(...xs) - Math.min(...xs)).toFixed(0)} × ${(Math.max(...ys) - Math.min(...ys)).toFixed(0)} mm${contorni > 1 ? ` · uso l’anello più grande, gli altri ${contorni - 1} no` : ''}.`;
     adattaDopo = true;
     genera();
+  }
+  /** Il contorno: l'anello più grande fra i colori che fanno da contorno. */
+  function scegliAnello(): void {
+    let meglio: Xy[] | null = null, area = 0;
+    for (const c of colori) if (c.ruolo === 'contorno') for (const q of c.anelli) { const a = Math.abs(polygonArea(q.map(([x, y]) => ({ x, y })))); if (a > area) { area = a; meglio = q; } }
+    if (meglio) anello = meglio;
+  }
+  function zoneAttive(): ZonaTrama[] {
+    const aree = colori.filter((c) => c.ruolo === 'area').flatMap((c) => c.anelli.map((q) => ({ anello: q, magliaMassimaMm2: c.soglia })));
+    return zona ? [...aree, { anello: zona, magliaMassimaMm2: par.magliaMassimaMm2 }] : aree;
+  }
+  function mostraColori(): void {
+    const host = $('ruoli');
+    host.innerHTML = '';
+    $('ruoliBox').hidden = colori.length < 2;
+    for (const c of colori) {
+      const none = c.colore === 'none', riga = document.createElement('li');
+      riga.className = 'rg-color-map__row';
+      const campione = document.createElement('span');
+      campione.className = `rg-color-map__swatch${none ? ' rg-color-map__swatch--none' : ''}`;
+      if (!none) campione.style.setProperty('--swatch', c.colore);
+      const codice = document.createElement('span');
+      codice.className = 'rg-color-map__code';
+      codice.textContent = `${none ? 'nessun colore' : c.colore.toUpperCase()} `;
+      const quanti = document.createElement('span');
+      quanti.className = 'rg-color-map__meta';
+      quanti.textContent = `${c.anelli.length} contorni`;
+      codice.appendChild(quanti);
+      riga.append(campione, codice);
+      if (c.ruolo === 'area') {
+        const lato = document.createElement('span');
+        lato.className = 'rg-color-map__aside';
+        lato.innerHTML = campoNumeroInline({ aria: `Dividi le maglie più grandi di, per ${c.colore}`, unita: 'mm²', valore: c.soglia, passo: 5, min: 12, max: 500 });
+        const campo = lato.querySelector('input') as HTMLInputElement;
+        campo.addEventListener('change', () => { const v = leggiCampo(campo); if (v >= 12) { c.soglia = v; genera(); } impostaNumero(campo, c.soglia); });
+        riga.appendChild(lato);
+      }
+      const scelta = document.createElement('select');
+      scelta.className = 'rg-select rg-color-map__target';
+      scelta.setAttribute('aria-label', `Ruolo per ${c.colore}`);
+      for (const [v, testo] of [['contorno', 'Contorno'], ['area', 'Area da infittire'], ['', '— (ignora)']] as const) {
+        const o = document.createElement('option');
+        o.value = v; o.textContent = testo; o.selected = c.ruolo === v;
+        scelta.appendChild(o);
+      }
+      scelta.addEventListener('change', () => {
+        c.ruolo = scelta.value as 'contorno' | 'area' | '';
+        if (c.ruolo === 'area') { par.infittisci = true; ($('infittisci') as HTMLInputElement).checked = true; }
+        scegliAnello();
+        mostraColori();
+        adattaDopo = true;
+        genera();
+      });
+      riga.appendChild(scelta);
+      host.appendChild(riga);
+    }
   }
   ($('fileInput') as HTMLInputElement).addEventListener('change', async (e) => {
     const f = (e.target as HTMLInputElement).files?.[0];
@@ -199,9 +268,9 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
     sim?.ferma();
     if (anello.length < 3) return;
     const t0 = performance.now();
-    esito = costruisciRete(modulo, anello, par, zona);
+    esito = costruisciRete(modulo, anello, par, zoneAttive());
     const c = esito.conti;
-    const righe: Array<[string, string]> = [['Moduli', n0(c.moduli)], ...(par.pezziSulBordo ? [['Pezzi attaccati ai moduli', `${n0(c.pezzi)}${c.pezziSenzaStrada ? `, ${n0(c.pezziSenzaStrada)} senza strada` : ''}`] as [string, string]] : []), ...(par.collegaModuli ? [['Fili fra i moduli', `${n0(c.collegamenti)}, ${n0(c.collegamentiMm / 1000)} m`] as [string, string], ['Rasafili fra i moduli', n0(c.saltiFraModuli)] as [string, string]] : [['Uscite fuori dal contorno', n0(c.uscite)] as [string, string], ['Uscite sotto i moduli dopo', `${n0(c.usciteSottoMm / 1000)} m`] as [string, string], ['Uscite dove non c’è un modulo dopo', `${n0(c.usciteScoperteMm / 1000)} m`] as [string, string]]), ['Basi', n0(c.basi)], ['Catenelle', n0(c.catenelle)], ['Passaggi', n0(c.passaggi)], ['Punti', n0(c.punti)], ['Filo', `${n0(c.filoMm / 1000)} m`],
+    const righe: Array<[string, string]> = [['Moduli', n0(c.moduli)], ...(par.infittisci && zoneAttive().length ? [['Aree da infittire', n0(zoneAttive().length)] as [string, string]] : []), ...(par.pezziSulBordo ? [['Pezzi attaccati ai moduli', `${n0(c.pezzi)}${c.pezziSenzaStrada ? `, ${n0(c.pezziSenzaStrada)} senza strada` : ''}`] as [string, string]] : []), ...(par.collegaModuli ? [['Fili fra i moduli', `${n0(c.collegamenti)}, ${n0(c.collegamentiMm / 1000)} m`] as [string, string], ['Rasafili fra i moduli', n0(c.saltiFraModuli)] as [string, string]] : [['Uscite fuori dal contorno', n0(c.uscite)] as [string, string], ['Uscite sotto i moduli dopo', `${n0(c.usciteSottoMm / 1000)} m`] as [string, string], ['Uscite dove non c’è un modulo dopo', `${n0(c.usciteScoperteMm / 1000)} m`] as [string, string]]), ['Basi', n0(c.basi)], ['Catenelle', n0(c.catenelle)], ['Passaggi', n0(c.passaggi)], ['Punti', n0(c.punti)], ['Filo', `${n0(c.filoMm / 1000)} m`],
       ['Tagli delle basi sulle corsie', n0(c.tagliSulleCorsie)], ['Corsia più lontana', `${c.corsiaPiuLontanaMm} mm`], ['Passi lunghi rimasti', n0(c.passiLunghi)], ['Salti rimasti nei moduli', n0(c.movimentiLunghi)], ['Catenella per cm²', `${n0(c.catenellaPerCm2)} mm`], ...(par.infittisci ? [['Linee nuove', n0(c.lineeNuove)] as [string, string], ['Maglie rimaste intere, ogni due moduli', n0(c.maglieIntere)] as [string, string]] : [])];
     $('conti').innerHTML = righe.map(([k, v]) => `<dt>${k}</dt><dd>${v}</dd>`).join('');
     $('misure').textContent = `${n0(c.punti)} punti · ${n0(c.filoMm / 1000)} m`;
@@ -218,12 +287,13 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
     const pezzi: Record<'base' | 'passaggio' | 'catenella' | 'uscita', string[]> = { base: [], passaggio: [], catenella: [], uscita: [] };
     for (const o of esito.oggetti) pezzi[o.uscita ? 'uscita' : o.tipo].push(d(o.tipo === 'catenella' && !maglie ? o.t : o.punti));
     const r = riquadro();
+    const aree = par.infittisci ? colori.filter((c) => c.ruolo === 'area').map((c) => `<path fill="none" stroke="${c.colore === 'none' ? COLORI.contorno : c.colore}" stroke-width="0.5" stroke-dasharray="3 2" d="${c.anelli.map((q) => `${d(q)}Z`).join('')}"/>`).join('') : '';
     const strato = (chi: 'base' | 'passaggio' | 'catenella' | 'uscita', id: string, largo: number): string => (($(id) as HTMLInputElement).checked ? `<path fill="none" stroke="${COLORI[chi]}" stroke-width="${largo}" stroke-linejoin="round" d="${pezzi[chi].join('')}"/>` : '');
-    $('layer').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${r.w}mm" height="${r.h}mm" viewBox="${r.x0} ${r.y0} ${r.w} ${r.h}">${strato('base', 'vBasi', 0.2)}${strato('passaggio', 'vPassaggi', 0.25)}${strato('catenella', 'vCatenelle', maglie ? 0.12 : 0.35)}${strato('uscita', 'vUscite', 0.7)}<path fill="none" stroke="${COLORI.contorno}" stroke-width="0.4" d="${d(anello)}Z"/></svg>`;
+    $('layer').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${r.w}mm" height="${r.h}mm" viewBox="${r.x0} ${r.y0} ${r.w} ${r.h}">${strato('base', 'vBasi', 0.2)}${strato('passaggio', 'vPassaggi', 0.25)}${strato('catenella', 'vCatenelle', maglie ? 0.12 : 0.35)}${strato('uscita', 'vUscite', 0.7)}<path fill="none" stroke="${COLORI.contorno}" stroke-width="0.4" d="${d(anello)}Z"/>${aree}</svg>`;
   }
 
   // ---- gli export: i parametri nel file (R27), il modulo no: è del cliente ------------------
-  const progetto = (): Record<string, unknown> => ({ rgProject: 'rete-catenella', params: { ...par }, modulo: modulo.nome, ...(zona ? { zona } : {}) });
+  const progetto = (): Record<string, unknown> => ({ rgProject: 'rete-catenella', params: { ...par }, modulo: modulo.nome, ...(zona ? { zona } : {}), ...(colori.some((c) => c.ruolo === 'area') ? { aree: colori.filter((c) => c.ruolo === 'area').map((c) => ({ colore: c.colore, soglia: c.soglia, anelli: c.anelli })) } : {}) });
   const nomeBase = (): string => (sorgente?.name ?? 'rete-catenella').replace(/\.[^.]+$/, '');
   const dstBytes = (): Uint8Array => {
     const strati = stratiRete(esito!);
@@ -249,6 +319,10 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
     zona = Array.isArray(m.zona) ? m.zona as Xy[] : null;
     $('zonaStatus').textContent = zona ? 'Solo dentro la zona del progetto.' : 'Dappertutto.';
     $('zonaViaBtn').hidden = !zona;
+    if (Array.isArray(m.aree)) {
+      colori = [...colori.filter((c) => c.ruolo !== 'area'), ...(m.aree as Array<{ colore: string; soglia: number; anelli: Xy[][] }>).map((a) => ({ ...a, ruolo: 'area' as const }))];
+      mostraColori();
+    }
     $('progettoStatus').textContent = `${da}: parametri ripresi. Il modulo era «${String(m.modulo ?? '?')}»: se non è questo, ricaricalo.`;
     genera();
   };

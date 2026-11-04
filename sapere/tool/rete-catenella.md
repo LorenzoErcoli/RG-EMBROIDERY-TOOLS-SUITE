@@ -39,11 +39,10 @@ esattamente come questo»*.
 
 - **I pezzi sul bordo si attaccano ai moduli vicini** (2026-11-04, *«in maniera automatica si aggiungano pezzi ai moduli dove vicino ci sono i bordi e c'è del bianco»*). Un pezzo sotto la soglia si cuce subito prima del modulo che tocca di più: il filo arriva al modulo sulle sue linee, che non sono ancora cucite, e non ci sono cambi ago in più. Dentro il pezzo: prima le basi, poi le catenelle, ognuna la più vicina; i passaggi del modulo non servono più. Che sia acceso di serie è una scelta mia, come i 30 mm di catenella sotto i quali un pezzo non si cuce. Spento, il bordo è quello del file.
 
+- **Le aree da infittire arrivano da Stilista con un laser colorato** (2026-11-04, *«come al solito farei che da stilista arriva un laser colorato e che quindi identifica un area specifica»*). Il colore del contorno più grande è il cartamodello; gli altri colori tutti dentro di lui sono aree, i fori dei riempimenti no; si corregge dal menu. Ogni colore ha la sua soglia: l'ha proposto la chat e Lorenzo non ha obiettato. Si divide fino alla soglia più bassa, e una linea vale in un'area se la maglia che divide era più grande della soglia di quell'area. Che le aree accendano da sole l'infittimento è una scelta mia.
+
 ## Da decidere
 - Come nasce la ragnatela nella versione parametrica: il modulo è disegnato a mano e la regola che lo genera non è misurata.
-
-## In cantiere
-- **L'attivazione delle aree di infittimento** (2026-11-04, *«da mettere in cantiere è l'attivazione delle aree di infittimento»*). Oggi l'area si dà caricando un SVG o un DXF. Lorenzo non ha ancora detto come la vuole.
 
 ## Il tool sul file di riferimento (2026-11-03)
 
@@ -77,6 +76,17 @@ Il file è stato pulito a mano e l'8% dei vertici delle sue catenelle sta fuori 
 | Punti | 344.212 | 360.150 | |
 
 Nei pezzi 2,06 m di catenella e 2,79 m di passaggi: 2,34 m sotto catenelle che arrivano dopo, 0,35 m sopra catenelle già cucite, 0,10 m su nessuna catenella. Nessun salto: fra due oggetti dello stesso modulo al più 6,9 mm.
+
+**Le aree**, sul contorno e il modulo del file con due rettangoli di prova, A da 130 × 110 mm e B da 120 × 120 mm:
+
+| Soglia di A | Soglia di B | Linee nuove in A | Linee nuove in B | Fuori dalle aree | Capi in aria |
+|---|---|---|---|---|---|
+| 40 mm² | 15 mm² | 0 | 219 | 0 | 0 |
+| 30 mm² | 12 mm² | 50 | 361 | 0 | 0 |
+| 20 mm² | 20 mm² | 172 | 150 | 0 | 0 |
+| 15 mm² | 15 mm² | 242 | 219 | 0 | 0 |
+
+Nessun salto e nessun passo lungo in nessuna delle quattro. Provato con un SVG a tre colori fatto come quello del plugin, non con una selezione vera di laser in Stilista.
 
 **I movimenti fra oggetti.** Nel modulo due oggetti di seguito distano fino a 5,46 mm. Il tool cuce un punto solo fino a 7 mm (5,46 più circa un passo di maglia) e oltre gira sulla corsia. Sul contorno del file: nessun salto dentro un modulo, 538 tagli sulle corsie, corsia più lontana a 18 mm.
 
