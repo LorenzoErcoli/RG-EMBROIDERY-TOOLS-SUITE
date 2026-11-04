@@ -295,6 +295,15 @@
           "$ref": "#/$defs/backgroundTolerance",
           "default": 30,
           "x-id": "backgroundTolerance"
+        },
+        "toneBlend": {
+          "$ref": "#/$defs/toneBlend",
+          "default": false
+        },
+        "toneSoftnessMm": {
+          "$ref": "#/$defs/toneSoftness",
+          "default": 4,
+          "x-id": "toneSoftness"
         }
       }
     },
@@ -2896,6 +2905,21 @@
       "description": "quanto è largo il raggio attorno al colore di sfondo.",
       "minimum": 0,
       "x-passo": 5,
+      "x-concetto": "immagine"
+    },
+    "toneBlend": {
+      "type": "boolean",
+      "title": "Sfumatura dai toni",
+      "description": "i fili si dividono il ricamo in proporzione al tono dell’immagine, invece di dare ogni punto a un colore solo: il filo totale resta pari ovunque. Serve un’immagine e gli agglomerati attivi.",
+      "x-concetto": "immagine"
+    },
+    "toneSoftness": {
+      "type": "number",
+      "title": "Morbidezza della sfumatura",
+      "description": "quanto si sfoca l’immagine prima di leggerne il tono: poco = segue ogni variazione, tanto = passaggi larghi.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
       "x-concetto": "immagine"
     },
     "panelWidth": {
@@ -6314,6 +6338,8 @@
         "excludeBackground",
         "backgroundColor",
         "backgroundTolerance",
+        "toneBlend",
+        "toneSoftness",
         "knitDetailPct",
         "knitStitch",
         "coverage",
