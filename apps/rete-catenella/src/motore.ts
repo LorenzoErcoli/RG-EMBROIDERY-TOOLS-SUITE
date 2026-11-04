@@ -313,9 +313,12 @@ function camminoMinimo(n: number, s: number, archi: Array<Array<[number, number,
  * L'uscita di ogni modulo (Lorenzo, 2026-11-03: «alla fine di ogni modulo c'è un'impuntura che esce passando sotto quella successiva, in modo che il
  * cambio ago avviene fuori»). Sul file di riferimento corre tutta sulle linee dei moduli che arrivano dopo, poi oltre il contorno. Qui: la strada più
  * corta fino al bordo, con le linee dei moduli dopo che costano poco e quelle già cucite molto, poi fuori dal contorno.
+ * Esce ai lati, a sinistra o a destra (Lorenzo, 2026-11-04: «li farei passare sempre sinistra destra, così i moduli che dovrebbero coprirli arrivano
+ * prima»): salire e scendere costa di più, così la linea non attraversa le righe e non aspetta troppo chi la copre. Dove ai lati resterebbe scoperta,
+ * per esempio nell'ultima riga, può uscire dal bordo più vicino.
  */
 function aggiungiUscite(moduli: Array<{ cella: Cella; oggetti: OggettoRete[] }>, bordo: Bordo, dentro: (q: Xy) => boolean, p: ParametriRete, conti: ContiRete): void {
-  const PASSO = 5, PONTE = 3;
+  const PASSO = 5, PONTE = 3, COSTO_IN_VERTICALE = 3, SCOPERTA_DA_EVITARE_MM = 10;
   const nodi: Xy[] = [], chiavi = new Map<string, number>(), archi: Array<Array<[number, number, number?]>> = [];
   const nodo = (q: Xy): number => {
     const k = `${Math.round(q[0] * 20)},${Math.round(q[1] * 20)}`;
@@ -337,7 +340,7 @@ function aggiungiUscite(moduli: Array<{ cella: Cella; oggetti: OggettoRete[] }>,
         let x = nodo(u);
         for (let s = 1; s <= n; s++) {
           const y = nodo([u[0] + ((v[0] - u[0]) * s) / n, u[1] + ((v[1] - u[1]) * s) / n]);
-          if (y !== x) lega(x, y, l / n, chi);
+          if (y !== x) lega(x, y, l / n + COSTO_IN_VERTICALE * Math.abs(nodi[x][1] - nodi[y][1]), chi);
           x = y;
         }
       }
@@ -350,26 +353,39 @@ function aggiungiUscite(moduli: Array<{ cella: Cella; oggetti: OggettoRete[] }>,
     for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const j of griglia.get(`${cx + a},${cy + b}`) ?? []) {
       if (j <= i) continue;
       const l = d(q, nodi[j]);
-      if (l <= PONTE) lega(i, j, l, -1);
+      if (l <= PONTE) lega(i, j, l + COSTO_IN_VERTICALE * Math.abs(q[1] - nodi[j][1]), -1);
     }
   });
   const alBordo = nodi.map((q) => !dentro([q[0] + 1.5, q[1]]) || !dentro([q[0] - 1.5, q[1]]) || !dentro([q[0], q[1] + 1.5]) || !dentro([q[0], q[1] - 1.5]));
+  // ai lati: da lì verso sinistra o verso destra non si rientra più nel contorno, quindi non vale il fianco di un incavo
+  let x0 = Infinity, x1 = -Infinity;
+  for (const q of nodi) { if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; }
+  const libero = (q: Xy, verso: number): boolean => { for (let x = q[0] + verso * 1.5; x > x0 - 5 && x < x1 + 5; x += verso * 4) if (dentro([x, q[1]])) return false; return true; };
+  const aiLati = nodi.map((q) => libero(q, -1) || libero(q, 1));
   moduli.forEach((m, i) => {
     const coda = m.oggetti[m.oggetti.length - 1]?.punti;
     if (!coda?.length || !nodi.length) return;
     const da = coda[coda.length - 1];
     let s = 0, e = Infinity;
     nodi.forEach((x, k) => { const c = d(x, da); if (c < e) { e = c; s = k; } });
-    const { viene, arrivo, daChi } = camminoMinimo(nodi.length, s, archi, (l, chi) => l * (chi === undefined || chi === -1 ? 5 : chi > i ? 1 : 8), (x) => alBordo[x]);
+    const cerca = (arriva: (x: number) => boolean): { viene: Int32Array; arrivo: number; daChi: Int32Array; sottoMm: number; scopertaMm: number } => {
+      const r = camminoMinimo(nodi.length, s, archi, (l, chi) => l * (chi === undefined || chi === -1 ? 5 : chi > i ? 1 : 8), arriva);
+      let sottoMm = 0, scopertaMm = 0;
+      for (let x = r.arrivo; x >= 0 && r.viene[x] >= 0; x = r.viene[x]) {
+        const l = d(nodi[x], nodi[r.viene[x]]);
+        if (r.daChi[x] > i) sottoMm += l; else scopertaMm += l;
+      }
+      return { viene: r.viene, arrivo: r.arrivo, daChi: r.daChi, sottoMm, scopertaMm };
+    };
+    let scelta = cerca((x) => alBordo[x] && aiLati[x]);
+    if (scelta.arrivo < 0 || scelta.scopertaMm > SCOPERTA_DA_EVITARE_MM) {
+      const altra = cerca((x) => alBordo[x]);
+      if (altra.arrivo >= 0 && (scelta.arrivo < 0 || altra.scopertaMm < scelta.scopertaMm - SCOPERTA_DA_EVITARE_MM)) scelta = altra;
+    }
+    const { viene, arrivo, sottoMm, scopertaMm } = scelta;
     const fine = arrivo >= 0 ? arrivo : s;
     const via: Xy[] = [];
-    let sottoMm = 0, scopertaMm = 0;
-    for (let x = fine; x >= 0; x = viene[x]) {
-      via.push(nodi[x]);
-      if (viene[x] < 0) continue;
-      const l = d(nodi[x], nodi[viene[x]]);
-      if (daChi[x] > i) sottoMm += l; else scopertaMm += l;
-    }
+    for (let x = fine; x >= 0; x = viene[x]) via.push(nodi[x]);
     via.reverse();
     const ultimo = via[via.length - 1];
     // la prossima uscita non batte negli stessi punti: la stessa linea costa di più, e il bordo qui intorno è già preso

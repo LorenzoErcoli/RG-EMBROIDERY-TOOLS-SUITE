@@ -39,6 +39,10 @@ esattamente come questo»*.
 
 ## Da decidere
 - Come nasce la ragnatela nella versione parametrica: il modulo è disegnato a mano e la regola che lo genera non è misurata.
+- **Il bianco sul bordo** (2026-11-04, *«tante parti del bordo non sono coperte del tutto … in maniera automatica si aggiungano pezzi ai moduli dove vicino ci sono i bordi e c'è del bianco?»*). Viene dai pezzi sotto la soglia del 22%. Sul contorno del file, su 1.237 cm²: 19 cm² stanno a più di 5 mm dalla linea più vicina, 10 a più di 8 mm, 4 a più di 12 mm, il punto più lontano a 24 mm. Con tutti i pezzi (soglia 0) sono 10 moduli in più, 174 catenelle e 2,2 m di catenella su 49,9 m, e nessun punto oltre i 4 mm. Con la soglia a 0 però ogni pezzo è un modulo col suo cambio ago: da decidere se attaccarli al modulo vicino.
+
+## In cantiere
+- **L'attivazione delle aree di infittimento** (2026-11-04, *«da mettere in cantiere è l'attivazione delle aree di infittimento»*). Oggi l'area si dà caricando un SVG o un DXF. Lorenzo non ha ancora detto come la vuole.
 
 ## Il tool sul file di riferimento (2026-11-03)
 
@@ -63,7 +67,22 @@ Il file è stato pulito a mano e l'8% dei vertici delle sue catenelle sta fuori 
 
 **Come passa il filo fra i moduli nel file** (misurato su 29 moduli): ogni modulo finisce con un passaggio da 83 a 322 mm. Dentro il contorno corre sulle linee dei moduli che arrivano dopo: su 27 moduli zero mm sopra linee di moduli già cuciti, sugli altri due 1,1 mm. Dove sotto non arriva più nessuno (ultima riga) corre su nessuna linea, fino a 45 mm. Poi va oltre il contorno e finisce su una verticale fissa: a sinistra per le prime due colonne, a destra per le altre tre. Le prime due colonne hanno anche un trattino a x −8,9 mm, 27,8 mm più in là. Il modulo dopo cambia ago (9, 10, 11, 12, 11 per colonna).
 
-**Nel tool** l'uscita è la strada più corta fino al bordo sulle linee dei moduli dopo, poi oltre il contorno: sul contorno del file 29 uscite, tutte finiscono fuori, 2,31 m sotto i moduli dopo e 0,12 m dove non ce ne sono più. Non finisce su una verticale fissa come nel file, ma nel punto di bordo più vicino; due uscite non lasciano il bordo entro 6 mm l'una dall'altra e una linea già usata da un'uscita costa di più. Il trattino non c'è. Provata su una copia in Stilista con 4 moduli: ogni colonna col suo ago (`POST /ago`, prima non provata), i cambi ago tutti fuori dal contorno.
+**Nel tool** l'uscita esce ai lati sulle linee dei moduli dopo, poi oltre il contorno: salire e scendere costa il triplo (valore mio). Dove ai lati resterebbe scoperta per più di 10 mm (valore mio) può uscire dal bordo più vicino. Non finisce su una verticale fissa come nel file; due uscite non lasciano il bordo entro 6 mm l'una dall'altra e una linea già usata da un'uscita costa di più.
+
+Quanto aspetta l'uscita prima di essere coperta, contando i moduli cuciti in mezzo, sul contorno del file con 29 moduli (il ritiro vero non è misurato):
+
+| | Strada più corta (prima) | Ai lati (ora) | File |
+|---|---|---|---|
+| Attesa massima | 16 moduli | 6 moduli | 7 moduli |
+| Attesa media | 3,1 moduli | 2,3 moduli | 3,6 moduli |
+| Linea che aspetta più di 5 moduli | 0,40 m | 0,01 m | 0,89 m |
+| Dislivello massimo fra inizio e fine | 216 mm | 90 mm | 93 mm |
+| Filo delle uscite | 3,06 m | 3,73 m | 6,32 m |
+| Sotto i moduli dopo | 2,36 m | 3,00 m | 3,80 m |
+| Dentro su nessuna linea dopo | 133 mm | 163 mm | 71 mm |
+| Sopra moduli già cuciti | 1 mm | 3 mm | |
+
+Sul file il tratto «su nessuna linea dopo» comprende anche quello sopra i già cuciti. Delle 29 uscite 23 finiscono ai lati, 5 della riga in cima escono in alto e una dell'ultima riga nell'incavo. Il trattino non c'è. Provata su una copia in Stilista con 4 moduli: ogni colonna col suo ago (`POST /ago`, prima non provata), i cambi ago tutti fuori dal contorno.
 
 **Quanto si infittisce sul contorno del file.** Di partenza 40 mm di catenella per cm²:
 

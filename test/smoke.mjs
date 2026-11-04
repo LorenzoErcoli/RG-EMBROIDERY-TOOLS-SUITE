@@ -6885,6 +6885,9 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   const riga = { formato: 'rete-modulo-1', nome: 'riga', passi: { colonne: 100, righe: 50 }, origine: [0, 5], varianti: { A: varianteRiga, B: varianteRiga } };
   const suRiga = rg.rcCostruisci(riga, [[0, 0], [310, 0], [310, 100], [0, 100], [0, 0]], { ...P, moduloMinimoPct: 0 }), usciteRiga = suRiga.oggetti.filter((o) => o.uscita);
   check('le uscite corrono sotto i moduli che arrivano dopo, anche se il bordo dietro è più vicino', [usciteRiga.filter((o) => o.cella.riga === 0 && o.cella.colonna === 0).every((o) => o.t[o.t.length - 1][0] > 310), suRiga.conti.usciteSottoMm > 0], [true, true]);
+  // Lorenzo, 2026-11-04: «li farei passare sempre sinistra destra, così i moduli che dovrebbero coprirli arrivano prima»
+  const conTesta = rg.rcCostruisci(riga, [[0, 8], [310, 8], [310, 100], [0, 100], [0, 8]], { ...P, moduloMinimoPct: 0 }).oggetti.filter((o) => o.uscita && o.cella.riga === 0 && o.cella.colonna === 1);
+  check('le uscite vanno ai lati anche se il bordo sopra è più vicino, e non attraversano le righe', [conTesta.length, conTesta.every((o) => o.t[o.t.length - 1][0] > 310 || o.t[o.t.length - 1][0] < 0), conTesta.every((o) => o.t.every((q) => q[1] > 8 && q[1] < 50))], [1, true, true]);
   check('due uscite non finiscono nello stesso punto', usciteRiga.every((o, i) => usciteRiga.every((x, k) => k === i || Math.hypot(x.t[x.t.length - 1][0] - o.t[o.t.length - 1][0], x.t[x.t.length - 1][1] - o.t[o.t.length - 1][1]) > 3)), true);
   const altrove = rg.rcCostruisci(m, quadrato, { ...P, uscitaFuoriMm: 50 });
   check('quanto va fuori si sceglie', rg.rcStrati(altrove).every((l) => { const pl = l.polylines[l.polylines.length - 1]; return oltre(pl[pl.length - 1]) > 40; }), true);
