@@ -6977,8 +6977,18 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   const lunghezzaBasi = (x) => x.oggetti.filter((o) => o.tipo === 'base').reduce((n, o) => n + o.punti.length, 0);
   check('la base fa andata e ritorno sulle linee nuove', lunghezzaBasi(fitta) > lunghezzaBasi(e), true);
   const metaZona = [[0, 0], [150, 0], [150, 200], [0, 200], [0, 0]];
-  const inZona = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40 }, metaZona);
+  const inZona = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40 }, [{ anello: metaZona, magliaMassimaMm2: 40 }]);
   check('la zona: le linee nuove solo lì, e la rete resta tutta', [inZona.conti.lineeNuove > 0, inZona.conti.lineeNuove < fitta.conti.lineeNuove, inZona.conti.moduli], [true, true, e.conti.moduli]);
+  // Lorenzo, 2026-11-04: «da stilista arriva un laser colorato e quindi identifica un'area specifica»
+  const destra = [[150, 0], [300, 0], [300, 200], [150, 200], [150, 0]];
+  const dueAree = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true }, [{ anello: metaZona, magliaMassimaMm2: 40 }, { anello: destra, magliaMassimaMm2: 15 }]);
+  const nuoveIn = (x, a, b) => x.oggetti.filter((o) => o.nuovo && o.tipo === 'catenella' && o.t[o.t.length >> 1][0] >= a && o.t[o.t.length >> 1][0] < b).length;
+  check('ogni area ha la sua soglia: dove è più bassa la trama è più fitta', nuoveIn(dueAree, 150, 300) > nuoveIn(dueAree, 0, 150), true);
+  const unaSola = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true }, [{ anello: metaZona, magliaMassimaMm2: 15 }]);
+  check('fuori dalle aree nessuna linea nuova', nuoveIn(unaSola, 150, 300), 0);
+  const conFinta = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true }, [{ anello: metaZona, magliaMassimaMm2: 40 }, { anello: [[1000, 1000], [1001, 1000], [1001, 1001], [1000, 1000]], magliaMassimaMm2: 15 }]);
+  const soglia40 = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true }, [{ anello: metaZona, magliaMassimaMm2: 40 }]);
+  check('la soglia di un\'area non si porta dietro le linee più fitte di un\'altra', nuoveIn(conFinta, 0, 150) > 0 && nuoveIn(conFinta, 0, 150) <= nuoveIn(soglia40, 0, 150) * 2, true);
   check('la stessa variante dà lo stesso disegno, un\'altra no', [rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40 }).conti.punti === fitta.conti.punti, rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40, infittisciVariante: 2 }).oggetti.find((o) => o.nuovo)?.t[2]?.[0] !== cat.t[2][0]], [true, true]);
   // lo psil vero: in Stilista le catenelle sono il loro tracciato, il resto i punti del tool, nell'ordine e nel riferimento del documento
   const linee = rg.rcLineeStilista(e, [5, 7], { catenella: 3, running: 4 }, 9);

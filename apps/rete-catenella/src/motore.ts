@@ -19,6 +19,8 @@ export interface OggettoModulo {
   t: Xy[];
   /** Una linea aggiunta dall'infittimento, non del modulo com'è. */
   nuovo?: boolean;
+  /** Di una linea nuova: quanto era grande la maglia che divide. */
+  magliaMm2?: number;
   /** Di una base: le linee nuove su cui fa andata e ritorno. */
   deviazioni?: Deviazione[];
 }
@@ -260,6 +262,8 @@ export interface ContiRete {
   maglieIntere: number;
   catenellaPerCm2: number;
 }
+/** Un'area dove la trama si infittisce, con la sua soglia. */
+export interface ZonaTrama { anello: Xy[]; magliaMassimaMm2: number }
 export interface EsitoRete { oggetti: OggettoRete[]; conti: ContiRete; celle: Cella[]; anello: Xy[]; collegati: boolean }
 
 /** Un punto oltre il contorno, sulla normale del punto di bordo più vicino a q. */
@@ -467,12 +471,12 @@ function strada(prima: OggettoRete[], dopo: OggettoRete[], da: Xy, a: Xy, dentro
 
 const infittiti = new WeakMap<ModuloRete, Map<string, EsitoInfittimento>>();
 /** Il calcolo delle maglie costa: per ogni modulo e valori si fa una volta sola. */
-function moduloInfittito(modulo: ModuloRete, p: ParametriRete): EsitoInfittimento {
+function moduloInfittito(modulo: ModuloRete, soglia: number, variante: number): EsitoInfittimento {
   let m = infittiti.get(modulo);
   if (!m) { m = new Map(); infittiti.set(modulo, m); }
-  const k = `${p.magliaMassimaMm2}|${p.infittisciVariante}`;
+  const k = `${soglia}|${variante}`;
   let e = m.get(k);
-  if (!e) { e = infittisciModulo(modulo, p.magliaMassimaMm2, p.infittisciVariante); m.set(k, e); }
+  if (!e) { e = infittisciModulo(modulo, soglia, variante); m.set(k, e); }
   return e;
 }
 
@@ -523,17 +527,18 @@ function ordinaPezzo(gruppo: OggettoRete[]): OggettoRete[] {
 
 /**
  * Il ricamo: ogni cella col suo modulo, tagliato sul contorno, nell'ordine di cucitura del modulo. Le righe vanno a serpentina, così il modulo
- * dopo è sempre vicino. `zona`: dove vale l'infittimento; assente, dappertutto.
+ * dopo è sempre vicino. `zone`: dove vale l'infittimento, ognuna con la sua soglia; assenti, dappertutto con quella dei parametri.
  */
-export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRete, zona?: Xy[] | null): EsitoRete {
+export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRete, zone?: ZonaTrama[] | null): EsitoRete {
   const xs = anello.map((q) => q[0]), ys = anello.map((q) => q[1]);
   const ingombro: [number, number, number, number] = [Math.min(...xs), Math.min(...ys), Math.max(...xs), Math.max(...ys)];
   const partenza = modulo.origine ?? [ingombro[0], ingombro[1]];
   const celle = griglia(ingombro, modulo, [partenza[0] + p.spostaXMm, partenza[1] + p.spostaYMm]);
   const dentro = maschera(anello, p.margineMm);
   const bordo = preparaBordo(anello);
-  const dentroZona = zona && zona.length >= 3 ? maschera(zona, 0) : null;
-  const piu = p.infittisci ? moduloInfittito(modulo, p) : null;
+  const aree = (zone ?? []).filter((z) => z.anello.length >= 3).map((z) => ({ dentro: maschera(z.anello, 0), soglia: z.magliaMassimaMm2 }));
+  // si divide fino alla soglia più bassa: una linea vale in un'area se la maglia che divide era più grande della soglia di quell'area, e le maglie più piccole nascono solo da linee già valide
+  const piu = p.infittisci ? moduloInfittito(modulo, aree.length ? Math.min(...aree.map((a) => a.soglia)) : p.magliaMassimaMm2, p.infittisciVariante) : null;
   const lavoro = piu ? piu.modulo : modulo;
   const catenellaIntera = (v: { oggetti: OggettoModulo[] }): number => v.oggetti.reduce((s, o) => s + (o.tipo === 'catenella' && !o.nuovo ? lunghezza(o.t) : 0), 0);
   const intere = { A: catenellaIntera(modulo.varianti.A), B: catenellaIntera(modulo.varianti.B) };
@@ -542,7 +547,7 @@ export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRet
   // coi moduli collegati a serpentina, il dopo è sempre vicino; se no come il file di riferimento, riga per riga
   const inOrdine = [...celle].sort((a, b) => a.riga - b.riga || (p.collegaModuli && ((a.riga % 2) + 2) % 2 !== 0 ? b.colonna - a.colonna : a.colonna - b.colonna));
   const moduli: Array<{ cella: Cella; oggetti: OggettoRete[] }> = [];
-  const nellaZona = (t: Xy[], c: Cella): boolean => { if (!dentroZona) return true; const q = t[t.length >> 1]; return dentroZona([q[0] + c.dx, q[1] + c.dy]); };
+  const nellaZona = (t: Xy[], c: Cella, magliaMm2 = Infinity): boolean => { if (!aree.length) return true; const q = t[t.length >> 1], x: Xy = [q[0] + c.dx, q[1] + c.dy]; return aree.some((a) => magliaMm2 > a.soglia && a.dentro(x)); };
   let moduloPrima: OggettoRete[] | null = null;
   let catenellaMm = 0;
   // spezza: ogni tratto dentro il contorno è un oggetto a sé, senza corsie: serve per dividere una cella scartata nei suoi pezzi
@@ -551,8 +556,8 @@ export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRet
     let originaleMm = 0;
     for (const o of lavoro.varianti[cella.variante].oggetti) {
       if (o.tipo === 'base' && (o.passata ?? 1) > p.passate) continue;
-      if (o.nuovo && !nellaZona(o.t, cella)) continue;
-      const attive = o.deviazioni?.filter((x) => nellaZona(x.linea, cella)) ?? [];
+      if (o.nuovo && !nellaZona(o.t, cella, o.magliaMm2)) continue;
+      const attive = o.deviazioni?.filter((x) => nellaZona(x.linea, cella, x.magliaMm2)) ?? [];
       const tracciato = attive.length ? conDeviazioni(o.t, attive) : o.t;
       const pezzi = pezziDentro(tracciato.map((q): Xy => [q[0] + cella.dx, q[1] + cella.dy]), dentro);
       if (!pezzi.length) continue;

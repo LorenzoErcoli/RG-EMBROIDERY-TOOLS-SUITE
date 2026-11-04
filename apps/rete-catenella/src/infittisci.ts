@@ -18,6 +18,8 @@ export interface Deviazione {
   f: number;
   /** Da dove lascia la base all'altro capo; il ritorno è la stessa linea all'indietro. */
   linea: Xy[];
+  /** Quanto era grande la maglia che la linea divide. */
+  magliaMm2: number;
 }
 
 export interface EsitoInfittimento {
@@ -51,7 +53,7 @@ function curva(a: Xy, b: Xy, piega: number): Xy[] {
   return [a, [(a[0] + c[0]) / 2 + n[0] * quarto, (a[1] + c[1]) / 2 + n[1] * quarto], c, [(c[0] + b[0]) / 2 + n[0] * quarto, (c[1] + b[1]) / 2 + n[1] * quarto], b];
 }
 
-interface Linea { variante: 'A' | 'B'; dopoOggetto: number; t: Xy[]; base: number; dopo: number; f: number; daCapo: boolean }
+interface Linea { variante: 'A' | 'B'; dopoOggetto: number; t: Xy[]; base: number; dopo: number; f: number; daCapo: boolean; magliaMm2: number }
 
 export function infittisciModulo(m: ModuloRete, magliaMassimaMm2: number, seme: number): EsitoInfittimento {
   let stato = (Math.abs(Math.round(seme)) * 2654435761 + 1424) % 2147483648;
@@ -209,7 +211,7 @@ export function infittisciModulo(m: ModuloRete, magliaMassimaMm2: number, seme: 
           }
           if (!trovata) continue;
           scarto = s;
-          meglio = { variante: g.variante, dopoOggetto: g.dopoOggetto, t: locale, ...trovata };
+          meglio = { variante: g.variante, dopoOggetto: g.dopoOggetto, t: locale, ...trovata, magliaMm2: x.area };
         }
       }
       if (meglio) { linee.push(meglio); nuove++; } else intere++;
@@ -222,11 +224,11 @@ export function infittisciModulo(m: ModuloRete, magliaMassimaMm2: number, seme: 
     const delle = linee.filter((l) => l.variante === variante);
     const oggetti: OggettoModulo[] = [];
     m.varianti[variante].oggetti.forEach((o, i) => {
-      const deviazioni: Deviazione[] = delle.filter((l) => l.base === i).map((l) => ({ dopo: l.dopo, f: l.f, linea: l.daCapo ? l.t : [...l.t].reverse() }));
+      const deviazioni: Deviazione[] = delle.filter((l) => l.base === i).map((l) => ({ dopo: l.dopo, f: l.f, linea: l.daCapo ? l.t : [...l.t].reverse(), magliaMm2: l.magliaMm2 }));
       oggetti.push(deviazioni.length ? { ...o, deviazioni } : o);
       for (const l of delle) {
         if (l.dopoOggetto !== i) continue;
-        oggetti.push({ tipo: 'passaggio', t: l.t, nuovo: true }, { tipo: 'catenella', t: [...l.t].reverse(), nuovo: true });
+        oggetti.push({ tipo: 'passaggio', t: l.t, nuovo: true, magliaMm2: l.magliaMm2 }, { tipo: 'catenella', t: [...l.t].reverse(), nuovo: true, magliaMm2: l.magliaMm2 });
       }
     });
     return { oggetti };
