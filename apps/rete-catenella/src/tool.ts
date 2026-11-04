@@ -24,7 +24,7 @@ const LIMITI: Array<{ key: CampoNum; passo: number; min: number; max: number }> 
   { key: 'psilInizioMm', passo: 0.05, min: 0, max: 3 }, { key: 'psilGiri', passo: 1, min: 1, max: 3 },
   { key: 'margineMm', passo: 0.5, min: 0, max: 20 }, { key: 'primaCorsiaMm', passo: 0.5, min: 0, max: 10 }, { key: 'passoCorsiaMm', passo: 0.1, min: 0.3, max: 3 },
 ];
-const COLORI = { base: '#7fb0e6', passaggio: '#1f9a55', catenella: '#a5432f', contorno: '#2c2b28' };
+const COLORI = { base: '#7fb0e6', passaggio: '#1f9a55', catenella: '#a5432f', uscita: '#d6009a', contorno: '#2c2b28' };
 const n0 = (v: number): string => Math.round(v).toLocaleString('it-IT');
 // il modulo del cliente non sta nel repo: una volta caricato resta in questo browser, su questo PC
 const MODULO_RICORDATO = 'rg-rete-catenella-modulo';
@@ -76,6 +76,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
         <label class="rg-choice rg-param-grid__wide"><input type="checkbox" id="vBasi" checked> Basi</label>
         <label class="rg-choice rg-param-grid__wide"><input type="checkbox" id="vPassaggi" checked> Passaggi</label>
         <label class="rg-choice rg-param-grid__wide"><input type="checkbox" id="vCatenelle" checked> Catenelle</label>
+        <label class="rg-choice rg-param-grid__wide"><input type="checkbox" id="vUscite" checked> Uscite dei moduli</label>
         <label class="rg-choice rg-param-grid__wide"><input type="checkbox" id="vMaglie"> Le maglie, punto per punto</label>
       </div>` }),
       sezione({ indice: 9, titolo: 'I conti', contenuto: '<dl class="rg-key-value" id="conti"></dl>' }),
@@ -189,7 +190,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
     });
   }
   for (const k of ['corsie', 'collegaModuli', 'psilVero', 'infittisci'] as const) ($(k) as HTMLInputElement).addEventListener('change', (e) => { par[k] = (e.target as HTMLInputElement).checked; genera(); });
-  for (const id of ['vBasi', 'vPassaggi', 'vCatenelle', 'vMaglie']) $(id).addEventListener('change', () => { sim?.ferma(); disegna(); });
+  for (const id of ['vBasi', 'vPassaggi', 'vCatenelle', 'vUscite', 'vMaglie']) $(id).addEventListener('change', () => { sim?.ferma(); disegna(); });
 
   // ---- il calcolo e il disegno ------------------------------------------------------
   function calcola(): void {
@@ -212,11 +213,11 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
     if (!esito) return;
     const maglie = ($('vMaglie') as HTMLInputElement).checked;
     const d = (t: Xy[]): string => t.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(2)} ${p[1].toFixed(2)}`).join('');
-    const pezzi: Record<'base' | 'passaggio' | 'catenella', string[]> = { base: [], passaggio: [], catenella: [] };
-    for (const o of esito.oggetti) pezzi[o.tipo].push(d(o.tipo === 'catenella' && !maglie ? o.t : o.punti));
+    const pezzi: Record<'base' | 'passaggio' | 'catenella' | 'uscita', string[]> = { base: [], passaggio: [], catenella: [], uscita: [] };
+    for (const o of esito.oggetti) pezzi[o.uscita ? 'uscita' : o.tipo].push(d(o.tipo === 'catenella' && !maglie ? o.t : o.punti));
     const r = riquadro();
-    const strato = (chi: 'base' | 'passaggio' | 'catenella', id: string, largo: number): string => (($(id) as HTMLInputElement).checked ? `<path fill="none" stroke="${COLORI[chi]}" stroke-width="${largo}" stroke-linejoin="round" d="${pezzi[chi].join('')}"/>` : '');
-    $('layer').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${r.w}mm" height="${r.h}mm" viewBox="${r.x0} ${r.y0} ${r.w} ${r.h}">${strato('base', 'vBasi', 0.2)}${strato('passaggio', 'vPassaggi', 0.25)}${strato('catenella', 'vCatenelle', maglie ? 0.12 : 0.35)}<path fill="none" stroke="${COLORI.contorno}" stroke-width="0.4" d="${d(anello)}Z"/></svg>`;
+    const strato = (chi: 'base' | 'passaggio' | 'catenella' | 'uscita', id: string, largo: number): string => (($(id) as HTMLInputElement).checked ? `<path fill="none" stroke="${COLORI[chi]}" stroke-width="${largo}" stroke-linejoin="round" d="${pezzi[chi].join('')}"/>` : '');
+    $('layer').innerHTML = `<svg xmlns="http://www.w3.org/2000/svg" width="${r.w}mm" height="${r.h}mm" viewBox="${r.x0} ${r.y0} ${r.w} ${r.h}">${strato('base', 'vBasi', 0.2)}${strato('passaggio', 'vPassaggi', 0.25)}${strato('catenella', 'vCatenelle', maglie ? 0.12 : 0.35)}${strato('uscita', 'vUscite', 0.7)}<path fill="none" stroke="${COLORI.contorno}" stroke-width="0.4" d="${d(anello)}Z"/></svg>`;
   }
 
   // ---- gli export: i parametri nel file (R27), il modulo no: è del cliente ------------------
