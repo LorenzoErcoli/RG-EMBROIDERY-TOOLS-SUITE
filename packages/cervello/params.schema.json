@@ -927,6 +927,14 @@
           "$ref": "#/$defs/coverOverlapMm",
           "default": 3
         },
+        "stopZones": {
+          "$ref": "#/$defs/stopZones",
+          "default": 3
+        },
+        "stopZonesDirection": {
+          "$ref": "#/$defs/stopZonesDirection",
+          "default": "orizzontale"
+        },
         "stitchMode": {
           "$ref": "#/$defs/stitchMode",
           "default": "retrace"
@@ -1852,6 +1860,23 @@
     "pattern-macchie": {
       "type": "object",
       "properties": {
+        "zone": {
+          "$ref": "#/$defs/stopZones",
+          "default": 1,
+          "title": "Dividi raso e punto sopra in zone",
+          "description": "1 = nessuna divisione. Con 2: base · raso della prima metà · punto sopra della prima metà · raso della seconda · punto sopra della seconda.",
+          "x-id": "stopZones"
+        },
+        "zoneVerso": {
+          "$ref": "#/$defs/stopZonesDirection",
+          "default": "verticale",
+          "description": "verticale = strisce da sinistra a destra; orizzontale = dall'alto in basso.",
+          "enum": [
+            "verticale",
+            "orizzontale"
+          ],
+          "x-id": "stopZonesDirection"
+        },
         "conBase": {
           "$ref": "#/$defs/withBase",
           "default": false,
@@ -1981,16 +2006,6 @@
           "$ref": "#/$defs/leftToRightOrder",
           "default": false,
           "x-id": "leftToRightOrder"
-        },
-        "zone": {
-          "$ref": "#/$defs/stopZones",
-          "default": 1,
-          "x-id": "stopZones"
-        },
-        "zoneVerso": {
-          "$ref": "#/$defs/stopZonesDirection",
-          "default": "verticale",
-          "x-id": "stopZonesDirection"
         },
         "sopraFascia": {
           "$ref": "#/$defs/topStitchBandBeforeDivision",
@@ -4083,6 +4098,25 @@
       "x-passo": 0.5,
       "x-concetto": "passaggi-nascosti"
     },
+    "stopZones": {
+      "type": "integer",
+      "title": "Dividi in zone",
+      "description": "Col Ricamo sopra si cuce una zona dopo l'altra, con l'ordine libero dentro ogni zona, così il pezzo non ritira. 1 = nessuna divisione.",
+      "minimum": 1,
+      "maximum": 8,
+      "x-passo": 1,
+      "x-concetto": "ordine-cucitura"
+    },
+    "stopZonesDirection": {
+      "type": "string",
+      "title": "Le zone vanno",
+      "description": "orizzontale = dall'alto in basso; verticale = strisce da sinistra a destra.",
+      "enum": [
+        "orizzontale",
+        "verticale"
+      ],
+      "x-concetto": "ordine-cucitura"
+    },
     "stitchMode": {
       "type": "string",
       "title": "Costruzione della striatura",
@@ -5469,25 +5503,6 @@
       "description": "L'ordine delle macchie da sinistra a destra, e il raso dentro le macchie da sinistra a destra dove può. Spento: l'ordine coi salti più corti.",
       "x-concetto": "ordine-cucitura"
     },
-    "stopZones": {
-      "type": "integer",
-      "title": "Dividi raso e punto sopra in zone",
-      "description": "1 = nessuna divisione. Con 2: base · raso della prima metà · punto sopra della prima metà · raso della seconda · punto sopra della seconda.",
-      "minimum": 1,
-      "maximum": 8,
-      "x-passo": 1,
-      "x-concetto": "ordine-cucitura"
-    },
-    "stopZonesDirection": {
-      "type": "string",
-      "title": "Le zone vanno",
-      "description": "verticale = strisce da sinistra a destra; orizzontale = dall'alto in basso.",
-      "enum": [
-        "verticale",
-        "orizzontale"
-      ],
-      "x-concetto": "ordine-cucitura"
-    },
     "topStitchBandBeforeDivision": {
       "type": "number",
       "title": "Prima della divisione, punto sopra nella zona dopo: fascia di",
@@ -6504,6 +6519,8 @@
         "ordering",
         "scanlineBandMm",
         "serpentine",
+        "stopZones",
+        "stopZonesDirection",
         "stitchMode",
         "useConnectors",
         "rowHeight",
@@ -6511,8 +6528,6 @@
         "buildMode",
         "leftToRightOrder2",
         "leftToRightOrder",
-        "stopZones",
-        "stopZonesDirection",
         "topStitchBandBeforeDivision",
         "continuousFill",
         "lineLink",

@@ -110,12 +110,12 @@ superiori ma in maiera normale. non deve appunto noatarsi il fatto che sopra poi
   tutto più dentro una zona di `coverOverlapMm` («Le striature entrano sotto il ricamo di», 3 mm di serie, numero scelto da
   me). Quelli a cavallo del bordo non si tagliano.
 - **Con le zone non c'è più la serpentina a righe** (`cuciSottoLeZone`): si cuce a *file*, trattini vicini della stessa
-  riga, nell'ordine che costa meno filo in vista; le file isolate si risistemano dopo. La serpentina resta uguale senza zone:
+  riga, nell'ordine che lascia meno filo in vista, a fasce (vedi «Sempre sotto, a zone» più avanti). La serpentina resta uguale senza zone:
   i DST senza zone non cambiano. Niente linee rade; l'interruttore `coverNoPassLines` della prima versione è tolto.
 - **Il filo esce dal capo del trattino che entra sotto la zona**, ripassando sul trattino stesso, e arriva allo stesso modo
   sul prossimo. Lo spostamento resta cucito, mai un salto (solo se un vuoto taglia in due il pezzo).
-- **La strada ha un costo:** sotto una zona un millimetro vale 0,9, in vista 1, sopra i trattini in vista 30. Conta
-  soprattutto che il passaggio sia corto. Si tira dritto dove il filo dritto non costa più della strada: niente scalini.
+- **La strada ha un costo:** sotto una zona un millimetro vale 0,05, in vista 1, sopra i trattini in vista 30. Si tira dritto
+  dove il filo dritto non costa più della strada: niente scalini.
 - **I passaggi stanno lontani dal bordo della sagoma e dai vuoti** come il ricamo (trovato dallo smoke test: cucivano sul bordo).
 - **Non è un'area vuota** e `coverMarginMm` resta: i passaggi si contano nascosti solo a questa distanza dal bordo.
 
@@ -160,6 +160,48 @@ Riga per riga: 1,46 m in vista contro 0,96, perché dentro una macchia grande i 
 - attraversano ancora dei trattini in vista (56 e 155), quando costa troppo aggirarli;
 - il punto più lungo sul pannello arriva a 3,8 mm a grandezza 8 e 6 (chiesti 3);
 - calcolo da 1,1 a 3,3 secondi a ogni modifica su quel pannello.
+
+**Sempre sotto, a zone.** Lorenzo, 2026-11-05, su una linea in vista fra due zone: *«no ma linee che passano così in mezzo sono
+inaccettabili, deve passare sempre sotto la macchia»*, e *«comunque si passa a lavorare a zone, come al solito valutando il modo
+migliore per ricamare»*. Prima, su come stava cucendo: *«a me sembra davvero poco elegatne… i passaggi ora sono linee dritte, ma
+potrebbero seguire in maniera pià elegante le macchie che ci sono sopra»*. Questa regola supera il costo 0,9 qui sopra: conta
+quello che resta fuori a lavoro finito, non quanto è lungo il filo lì sotto. Fatto:
+
+- sotto una zona un millimetro costa 0,05. **Le immagini con le zone trasparenti ora mostrano linee più lunghe e non
+  significano niente:** si giudica con le zone piene;
+- l'ordine delle file si decide sul costo vero della strada (griglia di 2,4 mm, da ogni fila fino alle 30 vicine), non sul
+  filo dritto: sotto le zone si gira quasi gratis e il filo dritto non lo sapeva;
+- la strada sceglie insieme da dove uscire e dove entrare, fra i capi e i tratti coperti delle due file;
+- **zone di ricamo** come in Pattern a macchie (`stopZones` «Dividi in zone», `stopZonesDirection` «Le zone vanno»): una fascia
+  dopo l'altra, libero dentro, la fascia dopo comincia vicino a dove è finita quella prima. Il filo esce dalla fascia al massimo
+  di 12 mm. Niente stop e niente tagli fra una zona e l'altra: è lo stesso filo. Di serie 3, dall'alto in basso (numero scelto da
+  me: su questo pannello sono 10 cm; da confermare). Solo col ricamo sopra: senza zone «Ricamo sopra» il DST non cambia.
+
+**Sul pannello laser, 3 varianti, com'era → 3 zone** (con 1 zona e 6 zone i tratti in vista restano più lunghi o uguali):
+
+| | Grandezza 22 | Grandezza 8 |
+|---|---|---|
+| tratto in vista più lungo | 20–35 → 12–13 mm | 16–22 → 12–18 mm |
+| tratti in vista oltre 15 mm | 5–11 → 0 | 2–5 → 0–2 |
+| filo in vista | 0,86–1,03 → 0,61–0,80 m | 1,88–1,89 → 1,84–2,02 m |
+| filo sotto le zone | 1,92–2,13 → 3,71–3,82 m | 3,46–3,62 → 8,23–8,86 m |
+| filo in tutto | 127–131 → 128–132 m | 80–86 → 85–91 m |
+
+0 salti. **Il minimo possibile non è zero:** le 177 forme sono 176 zone staccate, e per collegarle tutte servono 175 attraversamenti,
+0,76 m in tutto, il più largo 11 mm, 29 oltre 5 mm. Quindi «sempre sotto» è possibile solo a meno di questi ponti. A grandezza 8 il
+filo in vista non cala: cala solo il tratto più lungo.
+
+**Provato il 2026-11-04 e il 2026-11-05 e tolto:**
+- finire la macchia che si vede, poi uscire (l'idea di togliere del tutto il legame con le righe): in vista 1,04–1,28 m contro
+  0,86–1,03 a grandezza 22, 2,6–2,8 contro 1,9 a grandezza 8;
+- passaggi che seguono le zone con le curve, costo 0,3–0,8 più alto verso il bordo: 20% in meno in vista, ma linee dritte rimaste e
+  a lavoro finito quasi uguale;
+- macchiette (macchie minuscole al posto dei passaggi, sparse a caso): con il triplo di macchiette i passaggi oltre 30 mm restavano
+  una ventina; messe come tappe sui passaggi lunghi funzionano senza zone. **Non è deciso:** la divisione denti / macchiette che
+  Lorenzo ha proposto il 2026-11-04 resta da riprendere; le prove non sono nel codice.
+
+**Da guardare:** il calcolo sale a 2,5–5 secondi a ogni modifica su quel pannello (era 1,1–3,3). Il filo sotto le zone raddoppia: da
+vedere in macchina se fa spessore sotto la grafica. Non provati: Stilista, il ricamo in macchina.
 
 **Le etichette** sono in `REVISIONE-PARAMETRI.md`. Lorenzo le ha viste come proposta e non le ha corrette.
 
