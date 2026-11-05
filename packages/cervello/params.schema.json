@@ -1992,6 +1992,11 @@
           "default": "verticale",
           "x-id": "stopZonesDirection"
         },
+        "sopraFascia": {
+          "$ref": "#/$defs/topStitchBandBeforeDivision",
+          "default": 0,
+          "x-id": "topStitchBandBeforeDivision"
+        },
         "bucaLaBase": {
           "$ref": "#/$defs/cutBaseUnderSpots",
           "default": false,
@@ -5483,6 +5488,15 @@
       ],
       "x-concetto": "ordine-cucitura"
     },
+    "topStitchBandBeforeDivision": {
+      "type": "number",
+      "title": "Prima della divisione, punto sopra nella zona dopo: fascia di",
+      "description": "Una macchia che entra in questa fascia, misurata dal confine con la zona dopo, ha il raso nella sua zona e tutto il punto sopra nella zona dopo. 0 = nessuna.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "ordine-cucitura"
+    },
     "cutBaseUnderSpots": {
       "type": "boolean",
       "title": "Buca la base sotto le macchie",
@@ -6499,6 +6513,7 @@
         "leftToRightOrder",
         "stopZones",
         "stopZonesDirection",
+        "topStitchBandBeforeDivision",
         "continuousFill",
         "lineLink",
         "entryTail",
