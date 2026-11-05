@@ -929,7 +929,7 @@
         },
         "usciteDallePunte": {
           "$ref": "#/$defs/usciteDallePunte",
-          "default": true
+          "default": false
         },
         "stopZones": {
           "$ref": "#/$defs/stopZones",
@@ -958,6 +958,22 @@
         "densitySpacingMm2": {
           "$ref": "#/$defs/densitySpacingMm2",
           "default": 0.6
+        },
+        "striaturaLengthMm2": {
+          "$ref": "#/$defs/striaturaLengthMm2",
+          "default": 18
+        },
+        "blobVariationPct2": {
+          "$ref": "#/$defs/blobVariationPct2",
+          "default": 50
+        },
+        "jaggedLengthMm2": {
+          "$ref": "#/$defs/jaggedLengthMm2",
+          "default": 8
+        },
+        "jaggedStartMm2": {
+          "$ref": "#/$defs/jaggedStartMm2",
+          "default": 4
         },
         "color2": {
           "$ref": "#/$defs/color2",
@@ -4159,7 +4175,7 @@
     "secondLevel": {
       "type": "boolean",
       "title": "Secondo livello di striature",
-      "description": "Un'altra passata di striature con un altro filo, cucita dopo la prima. Frastaglio, punto, passaggi e zone sono gli stessi.",
+      "description": "Un'altra passata di striature con un altro filo, cucita dopo la prima. Punto, passaggi e zone sono gli stessi.",
       "x-concetto": "interruttore"
     },
     "seed2": {
@@ -4196,6 +4212,43 @@
       "minimum": 0.2,
       "x-passo": 0.1,
       "x-concetto": "densita"
+    },
+    "striaturaLengthMm2": {
+      "type": "number",
+      "title": "2° livello: trattini, lunghezza massima",
+      "description": "Come «Trattini: lunghezza massima», per il secondo livello.",
+      "x-unita": "mm",
+      "minimum": 4,
+      "x-passo": 1,
+      "x-concetto": "modulo"
+    },
+    "blobVariationPct2": {
+      "type": "number",
+      "title": "2° livello: differenza fra piccole e grandi",
+      "description": "Come «Differenza fra piccole e grandi», per il secondo livello.",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 100,
+      "x-passo": 5,
+      "x-concetto": "variazione"
+    },
+    "jaggedLengthMm2": {
+      "type": "number",
+      "title": "2° livello: frastaglio, lunghezze diverse",
+      "description": "Come «Frastaglio: lunghezze diverse», per il secondo livello.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "variazione"
+    },
+    "jaggedStartMm2": {
+      "type": "number",
+      "title": "2° livello: frastaglio, partenze sfalsate",
+      "description": "Come «Frastaglio: partenze sfalsate», per il secondo livello.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "variazione"
     },
     "color2": {
       "type": "string",
@@ -6547,6 +6600,9 @@
         "blobVariationPct",
         "jaggedLengthMm",
         "jaggedStartMm",
+        "blobVariationPct2",
+        "jaggedLengthMm2",
+        "jaggedStartMm2",
         "hookIrregularity",
         "fringeLengthMin",
         "fringeLengthMax",
@@ -6660,6 +6716,7 @@
         "holesAnchorX",
         "holesAnchorY",
         "striaturaLengthMm",
+        "striaturaLengthMm2",
         "netShape",
         "radialCount",
         "radialSide",

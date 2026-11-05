@@ -34,6 +34,10 @@ const SECONDO_PARAMS: Field[] = [
   { key: 'blobSizeMm2', label: 'Grandezza delle macchie', unit: 'mm', step: 1, min: 2, help: 'come per il primo livello' },
   { key: 'blobSpacingMm2', label: 'Distanza fra le macchie', unit: 'mm', step: 1, min: 0 },
   { key: 'densitySpacingMm2', label: 'Distanza fra i trattini', unit: 'mm', step: 0.1, min: 0.2 },
+  { key: 'blobVariationPct2', label: 'Differenza fra piccole e grandi', unit: '%', step: 5, min: 0 },
+  { key: 'striaturaLengthMm2', label: 'Trattini: lunghezza massima', unit: 'mm', step: 1, min: 4, help: 'le macchie più piccole di 22 mm li accorciano da sole' },
+  { key: 'jaggedLengthMm2', label: 'Frastaglio: lunghezze diverse', unit: 'mm', step: 1, min: 0 },
+  { key: 'jaggedStartMm2', label: 'Frastaglio: partenze sfalsate', unit: 'mm', step: 1, min: 0 },
   { key: 'seed2', label: 'Variante', unit: '#', step: 1, min: 1, help: 'la disposizione delle macchie: diversa dal primo, riproducibile' },
 ];
 const FRASTAGLIO_PARAMS: Field[] = [
@@ -139,7 +143,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
           <label class="rg-toggle rg-param-grid__wide">
             <input type="checkbox" id="secondLevel"><span class="rg-toggle__track"></span><span>Due livelli, con due fili</span>
           </label>
-          <small class="rg-field__help rg-param-grid__wide">un’altra passata di striature, cucita dopo la prima con un altro filo. Frastaglio, punto, passaggi e zone sono gli stessi</small>
+          <small class="rg-field__help rg-param-grid__wide">un’altra passata di striature, cucita dopo la prima con un altro filo. Punto, passaggi e zone sono gli stessi</small>
         </div>
         <div id="secondoBox">
           <div id="secondoParams" class="rg-param-grid"></div>
