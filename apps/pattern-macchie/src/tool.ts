@@ -126,6 +126,8 @@ const CAMPI_ZONE: Campo[] = [
     aiuto: '1 = nessuna divisione. Con 2: base · raso della prima metà · punto sopra della prima metà · raso della seconda · punto sopra della seconda.' },
   { nome: 'zoneVerso', etichetta: 'Le zone vanno', unita: '', passo: 1, min: 0,
     scelte: [['verticale', 'da sinistra a destra (strisce verticali)'], ['orizzontale', 'dall’alto in basso (strisce orizzontali)']] },
+  { nome: 'sopraFascia', etichetta: 'Prima della divisione, punto sopra nella zona dopo: fascia di', unita: 'mm', passo: 1, min: 0,
+    aiuto: 'Una macchia che entra in questa fascia, misurata dal confine con la zona dopo, ha il raso nella sua zona e tutto il punto sopra nella zona dopo, anche la parte lontana dal confine. Serve almeno a 2 zone. 0 = nessuna.' },
 ];
 const CAMPI_PONTI: Campo[] = [
   { nome: 'ponti', etichetta: 'Unisci le macchie che si seguono e distano meno di', unita: 'mm', passo: 0.5, min: 0,

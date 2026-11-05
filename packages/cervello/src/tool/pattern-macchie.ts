@@ -145,6 +145,11 @@ export const scheda: SchedaParametri = {
       tipo: 'enum', unita: '', opzioni: ['verticale', 'orizzontale'], predefinito: 'verticale', concetto: 'ordine-cucitura',
     },
     {
+      id: 'topStitchBandBeforeDivision', nome: 'sopraFascia', etichetta: 'Prima della divisione, punto sopra nella zona dopo: fascia di',
+      aiuto: 'Una macchia che entra in questa fascia, misurata dal confine con la zona dopo, ha il raso nella sua zona e tutto il punto sopra nella zona dopo. 0 = nessuna.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 1, predefinito: 0, concetto: 'ordine-cucitura',
+    },
+    {
       id: 'cutBaseUnderSpots', nome: 'bucaLaBase', etichetta: 'Buca la base sotto le macchie',
       aiuto: 'Se la base si buca sotto le macchie (fermandosi al margine dentro). Spento: la base resta tutta intera.',
       tipo: 'bool', unita: '', predefinito: false, concetto: 'interruttore',

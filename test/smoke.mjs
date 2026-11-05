@@ -6553,6 +6553,27 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   check('zone orizzontali: la prima zona sta sopra la seconda', Math.max(...zo.zone[0].map(centroY)) <= Math.min(...zo.zone[1].map(centroY)), true);
   // tre fasce dall'alto in basso (Lorenzo, 2026-10-26: «libero ma dentro fasce… lavora fascia 1 (2-3) e lo stesso per le
   // altre 2 fasce»): raso e punto sopra di ogni fascia di seguito, e nessun salto sopra una macchia della fascia
+  // LA FASCIA PRIMA DELLA DIVISIONE (Lorenzo, 2026-11-05: «devo poter scegliere quanto è alta la fascia delle macchie dove
+  // il punto speciale si sposta nella divisione successiva»; «Tutta la macchia»): il raso non si muove, il punto sopra sì.
+  {
+    const fascia = 20;
+    const zf = rg.pmCostruisci(pannello, macchie, squame, { ...pmSerie, zone: 2, zoneVerso: 'orizzontale', sopraFascia: fascia });
+    const ysBB = (i) => zf.forme[i].map((p) => p.y);
+    const dello = (r, tipo, zona) => r.stop.find((s) => s.tipo === tipo && s.zona === zona);
+    const confine = Math.min(...pannello.map((p) => p.y)) + (Math.max(...pannello.map((p) => p.y)) - Math.min(...pannello.map((p) => p.y))) / 2;
+    const spostate = dello(zf, 'raso', 0).indici.filter((i) => Math.max(...ysBB(i)) >= confine - fascia);
+    const tuttiSopra = zf.stop.filter((s) => s.tipo === 'sopra').flatMap((s) => s.indici);
+    check(`la fascia: ${spostate.length} macchie tengono il raso nella zona 1 e hanno il punto sopra nella zona 2, prima delle sue; ognuna una volta sola, e il raso resta dov'era`,
+      [spostate.length > 0, dello(zf, 'sopra', 0).indici.filter((i) => spostate.includes(i)).length, dello(zf, 'sopra', 1).indici.slice(0, spostate.length), dello(zf, 'sopra', 0).indici.length + spostate.length, new Set(tuttiSopra).size, tuttiSopra.length, dello(zf, 'raso', 0).indici, dello(zf, 'raso', 1).indici],
+      [true, 0, spostate, dello(zf, 'raso', 0).indici.length, zf.forme.length, zf.forme.length, dello(zo, 'raso', 0).indici, dello(zo, 'raso', 1).indici]);
+    const zf0 = rg.pmCostruisci(pannello, macchie, squame, { ...pmSerie, zone: 2, zoneVerso: 'orizzontale', sopraFascia: 0 });
+    check('...con la fascia a 0 il programma è quello di prima', zf0.stop.map((s) => [s.tipo, s.zona, s.livello.punti]), zo.stop.map((s) => [s.tipo, s.zona, s.livello.punti]));
+    // (una fascia più grande della zona: tutto il punto sopra passa alla zona dopo, e lo stop vuoto non c'è)
+    const zt = rg.pmCostruisci(pannello, macchie, squame, { ...pmSerie, zone: 2, zoneVerso: 'orizzontale', sopraFascia: 10000 });
+    const st1 = rg.pmCostruisci(pannello, macchie, squame, { ...pmSerie, zone: 1, sopraFascia: 50 });
+    const st0 = rg.pmCostruisci(pannello, macchie, squame, { ...pmSerie, zone: 1 });
+    check('...tutta la zona nella fascia: niente stop vuoto; con una zona sola la fascia non fa niente', [zt.stop.map((s) => s.tipo + (s.zona + 1)), st1.sopra.punti], [['raso1', 'raso2', 'sopra2'], st0.sopra.punti]);
+  }
   const z3 = rg.pmCostruisci(pannello, macchie, squame, { ...pmSerie, zone: 3, zoneVerso: 'orizzontale' });
   check('tre fasce dall’alto in basso: raso e punto sopra di ogni fascia di seguito, nessun salto sopra una macchia della fascia da cucire', [z3.stop.map((st) => `${st.tipo}${st.zona + 1}`).join(' '), saltiSopra(z3, true).every((n) => n === 0)], ['raso1 sopra1 raso2 sopra2 raso3 sopra3', true]);
   const dst5 = rg.dstFromExportLayers([{ id: 'base', color: '#000', polylines: z2.base.tratti }, ...z2.stop.map((st, i) => ({ id: `s${i}`, color: '#111', polylines: st.livello.tratti }))], { label: 'ZONE' });

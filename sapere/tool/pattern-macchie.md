@@ -171,6 +171,18 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    796 barrette spezzate a 4 (tre o più posizioni d'ago su una riga, non nate da qui), da 4.417 a 2.061 mm ripassati, di cui
    sotto il raso pieno da 270 a 4 mm; da 26.017 a 23.265 punti, da 70,7 a 65,9 m di filo; raso, punto sopra e capi della base
    restano uguali. Non è provato a macchina: **da guardare se ai bordi delle macchie la base resta troppo leggera**.
+34. (2026-11-05) **La fascia prima della divisione: il punto speciale passa alla zona dopo.** *«Il terzo stop quello del punto
+   speciale, nella parte verso la divisione in basso del ricamo deve essere ricamata nella seconda zona. questo per
+   permettermi di alzare le termo e far ricamare nella seconda fase il raso»*, *«a livello di programma devo poter scegliere
+   quanto è alta la fascia delle macchie dove il punto speciale si sposta nella divisione sucessiva»*. Campo `sopraFascia`,
+   mm prima del confine, di serie 0. Alla domanda se spostare la macchia o solo il pezzo nella fascia ha scelto *«Tutta la
+   macchia»*: chi entra nella fascia ha il raso nella sua zona e tutto il punto sopra nella zona dopo, per non tagliare il
+   filo in mezzo alla macchia. Una macchia lunga si sposta quindi per intero (sul suo pezzo, due zone orizzontali: fascia 20
+   mm, 8 macchie su 32, la più alta 94 mm). Nello stop dopo vengono prima quelle spostate, nel loro ordine, poi quelle della
+   zona: la zona comincia vicino a dove finisce la zona prima. Una zona avanti sola, e nell'ultima zona niente. Se tutta la
+   zona finisce nella fascia, il suo stop del punto sopra non c'è. Con due livelli vale per ognuno, in ciascuno dei suoi stop.
+   Ogni macchia resta col raso nella sua zona, nello stesso ordine; il raso della zona dopo parte da dove è finito il punto
+   sopra, quindi può cambiare di pochi punti (sul pannello di prova 3 su 8.104; sul suo pezzo nessuno). Non è provato a macchina.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso
