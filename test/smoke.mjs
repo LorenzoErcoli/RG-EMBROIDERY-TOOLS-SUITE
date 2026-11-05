@@ -69,7 +69,7 @@ export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordat
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_DI_SERIE, fermaSottoIlSecondo as pmFerma, macchiePerStilista as pmPerStilista } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
-export { lineePerStilista as rcLineeStilista, scegliModelli as rcScegliModelli, oggettiDaMandare as rcOggettiDaMandare } from ${JSON.stringify(posix('apps/rete-catenella/src/stilista-psil.ts'))};
+export { lineePerStilista as rcLineeStilista, scegliModelli as rcScegliModelli, oggettiDaMandare as rcOggettiDaMandare, oggettiMancanti as rcOggettiMancanti } from ${JSON.stringify(posix('apps/rete-catenella/src/stilista-psil.ts'))};
 export { aggiungiModulo as rcAggiungiModulo, leggiElenco as rcLeggiElenco, leggiModulo as rcLeggiModulo, scriviElenco as rcScriviElenco, togliModulo as rcTogliModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/elenco-moduli.ts'))};
 export { griglia as rcGriglia, riquadroRete as rcRiquadro, costruisciRete as rcCostruisci, latoSuperioreDritto as rcLatoDritto, filoSopra as rcFiloSopraIntero, stratiRete as rcStrati, catenella as rcCatenella, pezziDentro as rcPezzi, maschera as rcMaschera, PARAMETRI_RETE as RC_PARAMETRI, motore as rcMotore } from ${JSON.stringify(posix('apps/rete-catenella/src/motore.ts'))};
 export { moduloDiEsempio as rcModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/esempio.ts'))};
@@ -7036,9 +7036,18 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   const conPezzi = rg.rcCostruisci(m, quadrato, P), senzaPezzi = rg.rcCostruisci(m, quadrato, { ...P, pezziSulBordo: false });
   check('i pezzi sul bordo: più catenella, stessi moduli, stesse uscite, stessi cambi ago', [conPezzi.conti.pezzi > 0, conPezzi.conti.catenelle > senzaPezzi.conti.catenelle, conPezzi.conti.moduli === senzaPezzi.conti.moduli, conPezzi.conti.uscite === senzaPezzi.conti.uscite, rg.rcStrati(conPezzi).length === rg.rcStrati(senzaPezzi).length], [true, true, true, true, true]);
   const passoFuori = conPezzi.oggetti.filter((o, i) => i && o.cella === conPezzi.oggetti[i - 1].cella && Math.hypot(o.punti[0][0] - conPezzi.oggetti[i - 1].punti.at(-1)[0], o.punti[0][1] - conPezzi.oggetti[i - 1].punti.at(-1)[1]) > 7).length;
-  check('i pezzi si cuciono prima del modulo, senza salti: il filo ci arriva sulle linee', [passoFuori, conPezzi.conti.pezziSenzaStrada, conPezzi.oggetti.filter((o, i) => o.pezzo && i && conPezzi.oggetti[i - 1].cella === o.cella && !conPezzi.oggetti[i - 1].pezzo).length], [0, 0, 0]);
+  check('i pezzi senza salti: il filo ci arriva sulle linee', [passoFuori, conPezzi.conti.pezziSenzaStrada], [0, 0]);
+  // Lorenzo, 2026-11-05: «si lavora sempre da sinistra a destra, quindi prima modulo e poi area infittita a destra»
+  const mediaDiX = (l) => { const x = l.flatMap((o) => o.t.map((q) => q[0])); return x.reduce((u, v) => u + v, 0) / (x.length || 1); };
+  const sequenza = [...new Set(conPezzi.oggetti.map((o) => o.cella))].map((c) => { const og = conPezzi.oggetti.filter((o) => o.cella === c && !o.uscita), primo = og.findIndex((o) => !o.pezzo), ultimo = og.length - 1 - [...og].reverse().findIndex((o) => !o.pezzo), xm = mediaDiX(og.filter((o) => !o.pezzo)); return { prima: og.slice(0, primo).filter((o) => o.tipo === 'catenella'), dopo: og.slice(ultimo + 1).filter((o) => o.tipo === 'catenella'), xm }; });
+  check('da sinistra a destra: un pezzo prima del modulo sta a sinistra, uno dopo sta a destra, e ce ne sono', [sequenza.filter((q) => q.prima.length && mediaDiX(q.prima) > q.xm).length, sequenza.filter((q) => q.dopo.length && mediaDiX(q.dopo) <= q.xm).length, sequenza.some((q) => q.prima.length) || sequenza.some((q) => q.dopo.length)], [0, 0, true]);
   const senzaPiccoli = rg.rcCostruisci(m, quadrato, { ...P, pezzoMinimoMm: 100000 });
   check('i pezzi troppo piccoli non si cuciono', [senzaPiccoli.conti.pezzi, senzaPiccoli.conti.catenelle], [0, senzaPezzi.conti.catenelle]);
+  // Lorenzo, 2026-11-05: «non fare i passaggi esterni al contorno quando il modulo viene tagliato, ma fare i passaggi interni ribattendo sulle linee»
+  const conInterni = rg.rcCostruisci(m, quadrato, { ...P, passaggiInterni: true }), conCorsie = rg.rcCostruisci(m, quadrato, { ...P, allineaLato: false });
+  const fuoriDaQuadrato = (x) => x.oggetti.filter((o) => !o.uscita && o.tipo !== 'catenella').reduce((n, o) => n + o.punti.filter((q) => q[0] < -0.6 || q[0] > 300.6 || q[1] < -0.6 || q[1] > 200.6).length, 0);
+  check('passaggi interni: basi e passaggi tutti dentro, le corsie no; fuori restano le uscite e le punte delle maglie', [fuoriDaQuadrato(conInterni), conInterni.conti.tagliSulleCorsie, conInterni.conti.passaggiInterni > 0, fuoriDaQuadrato(conCorsie) > 0], [0, 0, true, true]);
+  check('passaggi interni: stessi moduli e stesse catenelle', [conInterni.conti.moduli, conInterni.conti.catenelle, rg.rcStrati(conInterni).length], [conCorsie.conti.moduli, conCorsie.conti.catenelle, rg.rcStrati(conCorsie).length]);
   // Lorenzo, 2026-11-04: «soprattutto nei contorni che hanno un lato superiore orizzontale preciso, il modulo fosse preciso a quello così che non ci sono passaggi in quel punto»
   check('il lato superiore dritto si riconosce, anche se l\'anello comincia a metà; un bordo ondulato no', [rg.rcLatoDritto(quadrato)?.y, rg.rcLatoDritto([[150, 0], [300, 0], [300, 200], [0, 200], [0, 0], [150, 0]])?.x1, rg.rcLatoDritto(Array.from({ length: 41 }, (_, i) => [i * 10, 5 * Math.sin(i)]).concat([[400, 200], [0, 200], [0, 0]]))], [0, 300, null]);
   check('un lato troppo corto non conta', rg.rcLatoDritto([[0, 0], [100, 0], [300, 200], [-200, 200], [0, 0]]), null);
@@ -7087,6 +7096,8 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   check('un psil a 0 punti non fa da modello', rg.rcScegliModelli([letto(0, '32', '4', 0), letto(1, '32', '4')]).catenella, 1);
   const conCorta = { ...e, oggetti: [...e.oggetti, { tipo: 'catenella', t: [[0, 0], [1.4, 0]], punti: [], cella: e.oggetti[0].cella }, { tipo: 'catenella', t: [[0, 0], [2, 0]], punti: [], cella: e.oggetti[0].cella }] };
   check('una catenella troppo corta per una maglia non va in Stilista, le altre sì', rg.rcLineeStilista(conCorta, null, { catenella: 3, running: 4 }, 9).length, rg.rcLineeStilista(e, null, { catenella: 3, running: 4 }, 9).length + 1);
+  check('verso Stilista: se un oggetto non entra si dice, con il suo errore, e non con quello di una catenella a 0 punti', rg.rcOggettiMancanti(10, 5, 13, ['3: 0 punti (NoError)', '7: copia del modello non riuscita']), { mancanti: 1, errore: '7: copia del modello non riuscita' });
+  check('verso Stilista: una catenella a 0 punti è entrata, non manca', rg.rcOggettiMancanti(10, 5, 14, ['3: 0 punti (NoError)']), { mancanti: 0, errore: null });
   // lo psil vero: in Stilista le catenelle sono il loro tracciato, il resto i punti del tool, nell'ordine e nel riferimento del documento
   const linee = rg.rcLineeStilista(e, [5, 7], { catenella: 3, running: 4 }, 9);
   const prima = rg.rcOggettiDaMandare(e).find((o) => o.tipo === 'catenella'), primaLinea = linee.find((l) => l.modello === 3);
