@@ -1757,6 +1757,12 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   const sViste = sInVista(sTante);
   console.log(`   (in vista: ${sViste.length} tratti, il più lungo ${Math.max(...sViste).toFixed(1)} mm, in tutto ${sViste.reduce((a, b) => a + b, 0).toFixed(0)} mm)`);
   check('con tante zone il filo sta sotto: nessun tratto in vista oltre i 15 mm', Math.max(...sViste) <= 15, true);
+  // Le uscite dalle punte (Lorenzo, 2026-11-05: «magari si esce su una striatura più vicina ad un punto coperto»): stessi
+  // trattini, un filo solo, e non più filo in vista di prima.
+  const sDaCapo = rg.generateStriatura({ outline: sRect, voids: [], coperte: sMacchie }, { ...sP, usciteDallePunte: false })[0];
+  const sVisteDaCapo = sInVista(sDaCapo).reduce((a, b) => a + b, 0), sVisteOra = sViste.reduce((a, b) => a + b, 0);
+  console.log(`   (filo in vista: da un capo all'altro ${sVisteDaCapo.toFixed(0)} mm, dalle punte ${sVisteOra.toFixed(0)} mm)`);
+  check('dalle punte: gli stessi trattini, un filo solo, non più filo in vista', [sTrattini(sTante.polylines).length === sTrattini(sDaCapo.polylines).length, sTante.polylines.length, sVisteOra <= sVisteDaCapo], [true, 1, true]);
   // A zone (Lorenzo, 2026-11-05: «si passa a lavorare a zone»): una fascia dopo l'altra, senza salti in più.
   const sCentroFasce = (p) => { const f = rg.generateStriatura({ outline: sRect, voids: [], coperte: sMacchie }, p)[0].polylines.flat(); const m = (a) => a.reduce((s, q) => s + q, 0) / a.length; const assi = f.map((q) => (p.stopZonesDirection === 'verticale' ? q.x : q.y)); return [m(assi.slice(0, assi.length / 3)), m(assi.slice(assi.length / 3, assi.length * 2 / 3)), m(assi.slice(assi.length * 2 / 3))]; };
   const sOriz = sCentroFasce({ ...sP, stopZones: 3 }), sVert = sCentroFasce({ ...sP, stopZones: 3, stopZonesDirection: 'verticale' });

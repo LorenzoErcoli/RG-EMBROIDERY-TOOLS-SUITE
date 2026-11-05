@@ -128,6 +128,7 @@ Proposte mostrate a Lorenzo, che ha risposto *«avanza»* senza correggerle: da 
 | Punto degli spostamenti | **Punto dei collegamenti** | `travelStitchMm` |
 | Distanza di sicurezza da bordi e vuoti | **Distanza da bordi e aree vuote** | `voidClearanceMm` |
 | — | **Le striature entrano sotto il ricamo di** | `coverOverlapMm` |
+| — | **Uscite dalle punte** | `usciteDallePunte` |
 | — | **Dividi in zone** | `stopZones` |
 | — | **Le zone vanno** | `stopZonesDirection` |
 | — (ruolo) | **Ricamo sopra** | `COVER_AREA` |

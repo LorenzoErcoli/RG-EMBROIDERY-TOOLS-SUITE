@@ -927,6 +927,10 @@
           "$ref": "#/$defs/coverOverlapMm",
           "default": 3
         },
+        "usciteDallePunte": {
+          "$ref": "#/$defs/usciteDallePunte",
+          "default": true
+        },
         "stopZones": {
           "$ref": "#/$defs/stopZones",
           "default": 3
@@ -4098,6 +4102,12 @@
       "x-passo": 0.5,
       "x-concetto": "passaggi-nascosti"
     },
+    "usciteDallePunte": {
+      "type": "boolean",
+      "title": "Uscite dalle punte",
+      "description": "Col Ricamo sopra un gruppo di striature va e torna, così il filo entra ed esce dalla punta più vicina a un punto coperto. Spento: si cuce da un capo all'altro.",
+      "x-concetto": "passaggi-nascosti"
+    },
     "stopZones": {
       "type": "integer",
       "title": "Dividi in zone",
@@ -6395,6 +6405,7 @@
       "parametri": [
         "coverMarginMm",
         "coverOverlapMm",
+        "usciteDallePunte",
         "travelMode",
         "passMaxMm",
         "hiddenPassMaxMm",

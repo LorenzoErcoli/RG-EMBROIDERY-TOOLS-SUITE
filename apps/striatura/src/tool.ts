@@ -141,6 +141,10 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
         </div>
         <div class="rg-param-grid">
           <label class="rg-toggle rg-param-grid__wide">
+            <input type="checkbox" id="usciteDallePunte"><span class="rg-toggle__track"></span><span>Uscite dalle punte</span>
+          </label>
+          <small class="rg-field__help rg-param-grid__wide">col Ricamo sopra un gruppo di striature va e torna, così il filo entra ed esce dalla punta più vicina a un punto coperto; spento: si cuce da un capo all’altro</small>
+          <label class="rg-toggle rg-param-grid__wide">
             <input type="checkbox" id="mostraPassaggi"><span class="rg-toggle__track"></span><span>Evidenzia i passaggi nell’anteprima</span>
           </label>
         </div>
@@ -380,6 +384,9 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
   const versoBtns = Array.from($('stopZonesDirection').querySelectorAll('.rg-segmented__item')) as HTMLButtonElement[];
+  const usciteInput = $('usciteDallePunte') as HTMLInputElement;
+  const syncUscite = () => { usciteInput.checked = params.usciteDallePunte; };
+  usciteInput.addEventListener('change', () => { params.usciteDallePunte = usciteInput.checked; render(); });
   const syncVerso = () => versoBtns.forEach((b) => {
     const on = b.dataset.verso === params.stopZonesDirection;
     b.classList.toggle('rg-segmented__item--active', on);
@@ -415,6 +422,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     ($('seed') as HTMLInputElement).value = String(params.seed);
     syncMode();
     syncVerso();
+    syncUscite();
     buildAllParams();
     buildThreadUI();
     return true;
@@ -591,6 +599,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
 
   syncMode();
   syncVerso();
+  syncUscite();
   buildAllParams();
   buildThreadUI();
   loadImport(imported, 'Sagoma demo');

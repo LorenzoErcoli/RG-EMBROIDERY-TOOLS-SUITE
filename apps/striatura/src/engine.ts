@@ -57,6 +57,7 @@ export interface StriaturaParams {
   waveLenMm: number;         // lunghezza d'onda (ogni quanti mm si ripete l'ondulazione)
   coverMarginMm: number;     // i passaggi stanno a questa distanza dal bordo del ricamo che li coprirà
   coverOverlapMm: number;    // per la ricentratura: i trattini restano interi fin qui dentro la zona; più in fondo non si cuciono
+  usciteDallePunte: boolean; // il filo entra ed esce dalla punta della striatura più vicina a un punto coperto, non solo dai due capi della fila
   stopZones: number;         // col ricamo sopra si cuce a fasce, una dopo l'altra, l'ordine è libero dentro la fascia; 1 = nessuna divisione
   stopZonesDirection: 'orizzontale' | 'verticale'; // orizzontale = dall'alto in basso; verticale = da sinistra a destra
   stitchMode: 'boustrophedon' | 'retrace'; // vedi sopra: default retrace (dal centro su/giù e torna)
@@ -84,6 +85,7 @@ export const defaultStriaturaParams: StriaturaParams = {
   waveLenMm: 80,
   coverMarginMm: 1,
   coverOverlapMm: 3,
+  usciteDallePunte: true,
   stopZones: 3,
   stopZonesDirection: 'orizzontale',
   stitchMode: 'retrace',
@@ -552,6 +554,53 @@ function cuciSottoLeZone(
     quoteNote.delete(t);
   };
   for (const f of file) { allunga(f.trattini[0]); if (f.trattini.length > 1) allunga(f.trattini[f.trattini.length - 1]); }
+
+  // LE USCITE DALLE PUNTE (Lorenzo, 2026-11-05: «se le uscite non fossero solo da sinistra a destra della macchia striata, ma in
+  // necessità possano passare anche per le punte? rivedendo come si disegna magari si esce su una striatura più vicina a un
+  // punto coperto»). Da un capo all'altro il filo finisce per forza all'altro capo, spesso nel vuoto. Se la fila va e torna, un
+  // trattino sì e uno no, si entra e si esce vicino alla stessa striatura: quella con la punta sotto una zona.
+  if (params.usciteDallePunte) {
+    const andataERitorno = (tr: Trattino[], p: number): Trattino[] => {
+      const fuori = [tr[p]];
+      const lato = (l: Trattino[]) => {
+        if (!l.length) return;
+        for (let k = 1; k < l.length; k += 2) fuori.push(l[k]);
+        for (let k = l.length - 1 - ((l.length - 1) % 2); k >= 0; k -= 2) fuori.push(l[k]);
+      };
+      lato(tr.slice(0, p).reverse());
+      lato(tr.slice(p + 1));
+      return fuori;
+    };
+    const quantoManca = (t: Trattino): number => {
+      for (let d = cella / 2; d <= params.jaggedLengthMm; d += cella / 2) {
+        if (coperta[gIdx(t.x, t.y0 - d)] && percorribile[gIdx(t.x, t.y0 - d)] && t.y0 - d >= bb.minY) return d;
+        if (coperta[gIdx(t.x, t.y1 + d)] && percorribile[gIdx(t.x, t.y1 + d)] && t.y1 + d <= bb.maxY) return d;
+      }
+      return Infinity;
+    };
+    for (const f of file) {
+      const tr = f.trattini;
+      if (tr.length < 3) continue;
+      const copre = (k: number) => quoteCoperte(tr[k]).length > 0;
+      if (copre(0) && copre(tr.length - 1)) continue;       // i due capi vanno già bene
+      if (!tr.some((_, k) => copre(k))) {
+        // nessuna punta è sotto: si allunga, nei limiti del frastaglio, quella che ci arriva con meno
+        let meglio = -1, m = Infinity;
+        tr.forEach((t, k) => { const d = quantoManca(t); if (d < m) { m = d; meglio = k; } });
+        if (meglio < 0) continue;
+        allunga(tr[meglio]);
+        if (!copre(meglio)) continue;
+      }
+      // la striatura da cui entrare: il mezzo del tratto coperto più lungo
+      let inizio = -1, migliore = -1, lungh = 0;
+      for (let k = 0; k <= tr.length; k++) {
+        if (k < tr.length && copre(k)) { if (inizio < 0) inizio = k; continue; }
+        if (inizio >= 0 && k - inizio > lungh) { lungh = k - inizio; migliore = (inizio + k - 1) >> 1; }
+        inizio = -1;
+      }
+      f.trattini = andataERitorno(tr, migliore);
+    }
+  }
 
   // dove ci sono trattini in vista il filo non passa: anche quelli che verranno dopo
   const cucita = new Uint8Array(gcols * grows);

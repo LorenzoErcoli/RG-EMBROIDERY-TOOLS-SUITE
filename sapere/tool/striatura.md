@@ -191,6 +191,18 @@ quello che resta fuori a lavoro finito, non quanto è lungo il filo lì sotto. F
 0,76 m in tutto, il più largo 11 mm, 29 oltre 5 mm. Quindi «sempre sotto» è possibile solo a meno di questi ponti. A grandezza 8 il
 filo in vista non cala: cala solo il tratto più lungo.
 
+**Le uscite dalle punte.** Lorenzo, stesso giorno: *«ma se le uscite non fossero solo da sinistra a destra della machia striata, ma in
+necessità possano passsare anche per le punte? rivedendo come si disegna magari si esce su una struatura più vicina ad un punto
+coperto»*. Una fila cucita da un capo all'altro finisce per forza all'altro capo, spesso nel vuoto. `usciteDallePunte` («Uscite dalle
+punte», acceso di serie, scelta mia, da confermare): se i due capi non sono già coperti, la fila parte dal mezzo del suo tratto coperto
+più lungo, va e torna un trattino sì e uno no su un lato, poi sull'altro, e finisce accanto a dove è partita. Se nessuna punta è
+coperta, si allunga, nei limiti del frastaglio, quella che ci arriva con meno. Ogni trattino si cuce una volta sola, come prima; fra
+due trattini il filo salta due colonne invece di una.
+
+Sul pannello laser, 3 zone, 3 varianti, spento → acceso: grandezza 22, in vista 0,61–0,80 → 0,56–0,74 m, tratti in vista oltre 5 mm
+43–62 → 42–58; grandezza 8, in vista 1,84–2,02 → 1,43–1,49 m, oltre 5 mm 117–135 → 91–102. Il tratto più lungo non cambia (12–18 → 11–16
+mm a 22 e 8). Filo totale uguale, 0 salti. **Non provato in macchina:** il salto di due colonne a metà dei trattini, su macchie da 0,6 mm.
+
 **Provato il 2026-11-04 e il 2026-11-05 e tolto:**
 - finire la macchia che si vede, poi uscire (l'idea di togliere del tutto il legame con le righe): in vista 1,04–1,28 m contro
   0,86–1,03 a grandezza 22, 2,6–2,8 contro 1,9 a grandezza 8;

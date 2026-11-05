@@ -40,6 +40,8 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 1, concetto: 'passaggi-nascosti' },
     { id: 'coverOverlapMm', etichetta: 'Le striature entrano sotto il ricamo di', aiuto: 'Sicurezza per la ricentratura: fin qui dentro una zona «Ricamo sopra» i trattini restano interi, come se la zona non ci fosse. Quelli tutti più in fondo non si cuciono.',
       tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 3, concetto: 'passaggi-nascosti' },
+    { id: 'usciteDallePunte', etichetta: 'Uscite dalle punte', aiuto: 'Col Ricamo sopra un gruppo di striature va e torna, così il filo entra ed esce dalla punta più vicina a un punto coperto. Spento: si cuce da un capo all\'altro.',
+      tipo: 'bool', unita: '', predefinito: true, concetto: 'passaggi-nascosti' },
     { id: 'stopZones', etichetta: 'Dividi in zone', aiuto: 'Col Ricamo sopra si cuce una zona dopo l\'altra, con l\'ordine libero dentro ogni zona, così il pezzo non ritira. 1 = nessuna divisione.',
       tipo: 'int', unita: '', min: 1, max: 8, passo: 1, predefinito: 3, concetto: 'ordine-cucitura' },
     { id: 'stopZonesDirection', etichetta: 'Le zone vanno', aiuto: 'orizzontale = dall\'alto in basso; verticale = strisce da sinistra a destra.',
