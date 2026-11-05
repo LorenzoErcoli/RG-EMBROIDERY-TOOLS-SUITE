@@ -114,3 +114,9 @@ Anche la sospensione della cronologia di Annulla (`csUndoManager.SoftwareUndoSus
 **Il modello giusto** è un running nativo creato con `POST /oggetti` (funzione 21 invece della 5 del psil): 30 copie in 223 ms, ognuna con i suoi punti al posto giusto, memoria ferma. Quindi al documento basta una catenella psil.
 
 **`index` di `GET /selezione.json`** è il posto nella risposta, non nel documento: riparte da 0 a ogni richiesta e sulla selezione. Il posto vero è quello chiesto in `?oggetti=`.
+
+**Gli aghi** (2026-11-05). `POST /ago` su tutta la rete ha portato la finestra da 2,5 GB oltre 8 GB: nella prova si è fermata lì, a 337 s. Ora ogni ago ha i suoi due modelli provvisori, e gli oggetti nascono con quello giusto.
+
+**Il controllo dopo l'invio** (2026-11-05). Nella rete intera 1 oggetto su 4.135, la base più lunga, è risultato cucito due volte (1.734 punti invece di 867, salto di 78 mm), e 4 oggetti avevano 0 punti al momento dell'inserimento ma poi i loro punti. Probabilmente un calcolo di Stilista che finisce in ritardo. `/ricalcola` lo sistema, e l'invio ora rilegge e ricalcola da solo.
+
+**La prova finale** (2026-11-05, copia con un solo psil, contorno e modulo del file, 29 moduli): 4.135 oggetti su 4.135, 299 s, picco 6 GB, alla fine 2,2 GB, 1 oggetto ricalcolato dal controllo. Riletti tutti: 0 all'origine, 0 col primo punto lontano dal tool, 0 vuoti, 0 passi oltre 12 mm, aghi da 1 a 5 per colonna, modelli provvisori tolti. **Non provati:** salvare e riaprire il documento, la trasparenza dei fili, il campione cucito.
