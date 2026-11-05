@@ -114,7 +114,7 @@ superiori ma in maiera normale. non deve appunto noatarsi il fatto che sopra poi
   i DST senza zone non cambiano. Niente linee rade; l'interruttore `coverNoPassLines` della prima versione è tolto.
 - **Il filo esce dal capo del trattino che entra sotto la zona**, ripassando sul trattino stesso, e arriva allo stesso modo
   sul prossimo. Lo spostamento resta cucito, mai un salto (solo se un vuoto taglia in due il pezzo).
-- **La strada ha un costo:** sotto una zona un millimetro vale 0,05, in vista 1, sopra i trattini in vista 30. Si tira dritto
+- **La strada ha un costo:** sotto una zona un millimetro vale 0,05, fra i trattini 0,3, nel vuoto 1 in verticale e 21 in orizzontale. Si tira dritto
   dove il filo dritto non costa più della strada: niente scalini.
 - **I passaggi stanno lontani dal bordo della sagoma e dai vuoti** come il ricamo (trovato dallo smoke test: cucivano sul bordo).
 - **Non è un'area vuota** e `coverMarginMm` resta: i passaggi si contano nascosti solo a questa distanza dal bordo.
@@ -194,7 +194,7 @@ filo in vista non cala: cala solo il tratto più lungo.
 **Le uscite dalle punte.** Lorenzo, stesso giorno: *«ma se le uscite non fossero solo da sinistra a destra della machia striata, ma in
 necessità possano passsare anche per le punte? rivedendo come si disegna magari si esce su una struatura più vicina ad un punto
 coperto»*. Una fila cucita da un capo all'altro finisce per forza all'altro capo, spesso nel vuoto. `usciteDallePunte` («Uscite dalle
-punte», acceso di serie, scelta mia, da confermare): se i due capi non sono già coperti, la fila parte dal mezzo del suo tratto coperto
+punte», spento di serie: vedi «Passaggi puliti» più avanti): se i due capi non sono già coperti, la fila parte dal mezzo del suo tratto coperto
 più lungo, va e torna un trattino sì e uno no su un lato, poi sull'altro, e finisce accanto a dove è partita. Se nessuna punta è
 coperta, si allunga, nei limiti del frastaglio, quella che ci arriva con meno. Ogni trattino si cuce una volta sola, come prima; fra
 due trattini il filo salta due colonne invece di una.
@@ -202,6 +202,63 @@ due trattini il filo salta due colonne invece di una.
 Sul pannello laser, 3 zone, 3 varianti, spento → acceso: grandezza 22, in vista 0,61–0,80 → 0,56–0,74 m, tratti in vista oltre 5 mm
 43–62 → 42–58; grandezza 8, in vista 1,84–2,02 → 1,43–1,49 m, oltre 5 mm 117–135 → 91–102. Il tratto più lungo non cambia (12–18 → 11–16
 mm a 22 e 8). Filo totale uguale, 0 salti. **Non provato in macchina:** il salto di due colonne a metà dei trattini, su macchie da 0,6 mm.
+
+**Due livelli, due fili.** Lorenzo, stesso giorno: *«ti chiedo la possibilità di creare non solo 1 ma un doppio livello di striato, come
+se volessi farlo con 2 fili diversi»*. `secondLevel` («Due livelli, con due fili», spento di serie): il secondo livello è una passata
+intera, cucita dopo il primo, con variante, grandezza, distanza fra le macchie, distanza fra i trattini, lunghezza dei trattini, differenza fra piccole e grandi, frastaglio e filo suoi (`seed2`,
+`blobSizeMm2`, `blobSpacingMm2`, `densitySpacingMm2`, `striaturaLengthMm2`, `blobVariationPct2`, `jaggedLengthMm2`, `jaggedStartMm2`, `color2`: Lorenzo, *«le striature possono esser gestite con parametri diversi?»*); punto, passaggi e zone sono quelli del primo. Il primo livello
+resta identico a quando è da solo. Lorenzo: *«si si cuce tutto dopo, un solo cambio filo. No va bene che si sovrapponga in alcune situazioni»*. Quindi il secondo non sa dove sono le macchie del primo: si sovrappongono a caso. Nel DST: due aghi, un
+cambio filo, che non conta come salto. **Da confermare:** di serie macchie da 14 mm.
+
+I passaggi del secondo livello evitano i trattini del primo (costo 30 come gli altri trattini in vista): un passaggio sopra si vedrebbe
+col suo colore. Solo col ricamo sopra: senza zone il secondo livello è a serpentina e i suoi denti non guardano il primo.
+
+Sul pannello laser, 3 zone, 3 varianti, primo livello a 22 mm, col secondo da 14 mm: filo nel vuoto 0,64–0,88 m, di cui storto 0,14–0,19 m (con un livello 0,28–0,34 e 0,02). Il
+filo totale circa raddoppia. Calcolo circa il doppio. **Non provato:** i due fili
+in macchina, lo spessore dove le macchie si sovrappongono.
+
+**L'apertura.** Lorenzo, stesso giorno: *«per velocizzare l'apertura quando inserisco un svg con delle macchie non impostare macchie in aree
+vuote ma il più grande ci sta che sia contorno il resto tutto su ignora»*. Alla prima apertura la forma più grande fa da contorno e gli altri
+colori restano su «ignora». Prima le forme di altro colore dentro il contorno diventavano aree vuote, e con 177 forme si aspettava un calcolo
+inutile. La sagoma demo tiene il suo foro.
+
+**Passaggi puliti, niente linee nel vuoto.** Lorenzo, stesso giorno: *«a me i passaggi mi sembrano molto sporchi e poco precisi. riesci a
+renderli più ordinati? più belli da vedere nel ricamo?»*, e sui ponti orizzontali che gli ho proposto: *«no ma quelle nel vuoto io le vorrei
+propio evitare, non c'è modo di farlo?»*. Conferma anche: il secondo livello tutto dopo il primo, con un solo cambio filo; la sovrapposizione va bene.
+Guardato da vicino, col filo del suo spessore, lo sporco veniva da due cose:
+
+- **Gli scarabocchi dentro le macchie.** I trattini distano 0,6 mm e il punto minimo è 1 mm: il salto fra due vicini veniva fuso col punto prima
+  e diventava una diagonale, una per trattino. Ora con la densità sotto il punto minimo una fila non salta mai una colonna sola (`aBlocchi`: 1, 3, 0,
+  2, poi 5, 7, 4, 6…, e va avanti senza tornare), e il salto va piatto, all'altezza che i due trattini hanno in comune: il resto del movimento sta
+  sui trattini. Solo col ricamo sopra.
+- **Le linee storte nel vuoto.** Il filo ora passa anche fra i trattini delle macchie (costo 0,3), che lo nascondono, ma non sopra il livello prima (30).
+  Nel vuoto andare in orizzontale costa 20 volte di più: quello che resta è verticale e si legge come una striatura.
+- **Le righe che tagliavano le macchie.** Lorenzo, vista la versione qui sopra: *«vedo un po' di sporcature, con delle line orizzontali che tagiano le macchie. non mi
+  fanno impazzire»*. Venivano dai salti a metà trattino e dai passaggi di traverso. Ora il trattino parte e torna dalla punta invece che dal centro (stesso filo, due
+  passate come prima): il salto sta nello sfrangiato, a quote diverse. Riga pari dalle punte in alto, dispari in basso. E fra i trattini il filo va lungo le colonne: di
+  traverso costa 20 volte di più.
+- **Altri due difetti trovati strada facendo:** più passaggi nello stesso corridoio facevano una linea nera spessa (dove è già passato un passaggio costa di più,
+  `COSTO_RIPASSO`); con le zone distanti il filo preferiva un rettilineo da 50 mm a un ponte corto (un passaggio con un tratto nel vuoto più lungo di un trattino si rifà senza
+  la preferenza per il verticale).
+- **Le uscite dalle punte non aiutano più:** ora che il filo passa fra i trattini, da un capo all'altro il filo nel vuoto è pari o un po' meno, e restano meno collegamenti
+  storti. L'interruttore resta, spento di serie.
+
+**Sul pannello laser, 3 zone, 3 varianti, com'era → ora:**
+
+| | Grandezza 22 | Grandezza 8 |
+|---|---|---|
+| filo storto nel vuoto | 0,39–0,47 → 0,02 m | 0,92–0,97 → 0,29–0,36 m |
+| filo verticale nel vuoto | 0,08–0,15 → 0,26–0,32 m | 0,16–0,18 → 0,37–0,40 m |
+| il tratto nel vuoto più lungo | 9–16 → 12–14 mm | 11–15 → 7–11 mm |
+| collegamenti storti dentro le macchie | 2.851–2.996 → 219–227 | 3.877–4.215 → 726–802 |
+| filo in tutto | 127–133 → 136–140 m | 85–91 → 92–99 m |
+| filo fra i trattini | 0,07–0,13 → 0,97–1,09 m | 0,33–0,35 → 1,37–1,54 m |
+
+0 salti. **A zero non si arriva col filo continuo:** le zone staccate chiedono dei ponti. Per lo zero vero resta il salto col taglio, non fatto: Lorenzo
+ha sempre chiesto il filo cucito. Provati e scartati il 2026-11-05: i ponti orizzontali (*«no»*), e il va-e-torna per tutte le file (restavano diagonali).
+**Cosa resta:** con macchie piccole e nel secondo livello si vedono dei piccoli merli in cima ai trattini, dove il filo salta da una punta all'altra; da giudicare a occhio. **Prezzo:**
+più filo verticale nel vuoto, a un passaggio solo mentre una striatura è a due; più filo fra i trattini; il 5–8% di filo in più; il punto più lungo arriva a 3,74 mm a
+grandezza 8 (chiesti 3). Da vedere in macchina. Il salto va sotto una zona solo se è entro 3 mm (`SALTO_SOTTO_ENTRO_MM`): senza limite il filo saliva a 152 m.
 
 **Provato il 2026-11-04 e il 2026-11-05 e tolto:**
 - finire la macchia che si vede, poi uscire (l'idea di togliere del tutto il legame con le righe): in vista 1,04–1,28 m contro

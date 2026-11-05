@@ -5,7 +5,7 @@ import {
   bounds as boundsOf, pointInPolygon, polygonArea, distance, enforceMinStitch,
   THREAD_STROKE_MM, SHAPE_STROKE_MM,
 } from '@rg/core';
-import { generateStriatura, layerThreadMm, type StriaturaParams } from './engine';
+import { generateStriatura, layerThreadMm, parametriSecondoLivello, type StriaturaParams } from './engine';
 
 export type RoleAssignment = Record<string, Role | undefined>;
 
@@ -17,7 +17,8 @@ export interface PipelineResult {
   bounds: Bounds;
   /** Lunghezza totale del filo generato (mm), per la statusbar. */
   threadMm: number;
-  /** Numero di tratti (polilinee): 1 = filo tutto continuo; >1 = ci sono salti (es. attorno ai vuoti). */
+  /** Numero di tratti (polilinee), contati come un filo solo: 1 = nessun salto; >1 = ci sono salti (es. attorno ai vuoti).
+   *  Il cambio di filo fra un livello e l'altro non è un salto. */
   blockCount: number;
   /** I passaggi fra le macchie, già cuciti nelle striature: per misurarli e per evidenziarli nell'anteprima. */
   passaggi: Polyline[];
@@ -97,23 +98,33 @@ export function runPipeline(
   // GENERA: un filo di striature per ogni contorno-area (MASTER_OUTLINE), rispettando i vuoti interni (R5).
   // Aree più grandi prima (stabilità), come per gli altri tool.
   const areas = master.slice().sort((a, b) => polygonArea(b.points) - polygonArea(a.points));
-  const allPolylines: Polyline[] = [];
   const passaggi: Polyline[] = [];
-  for (const m of areas) {
-    const innerVoids = exclusions.filter((v) => v.length > 0 && pointInPolygon(v[0], m.points));
-    for (const gl of generateStriatura({ outline: m.points, voids: innerVoids, coperte }, { ...params, color: fillColor })) {
-      for (const pl of gl.polylines) {
-        const s = minStitched(pl, params.minStitchMm);
-        if (s.length >= 2) allPolylines.push(s);
+  const unLivello = (p: StriaturaParams, giaCucito: Polyline[]): Polyline[] => {
+    const fatti: Polyline[] = [];
+    for (const m of areas) {
+      const innerVoids = exclusions.filter((v) => v.length > 0 && pointInPolygon(v[0], m.points));
+      for (const gl of generateStriatura({ outline: m.points, voids: innerVoids, coperte, giaCucito }, p)) {
+        for (const pl of gl.polylines) {
+          const s = minStitched(pl, p.minStitchMm);
+          if (s.length >= 2) fatti.push(s);
+        }
+        if (gl.passaggi) passaggi.push(...gl.passaggi);
       }
-      if (gl.passaggi) passaggi.push(...gl.passaggi);
     }
-  }
-  const threadMm = layerThreadMm({ color: fillColor, polylines: allPolylines });
+    return fatti;
+  };
+  const allPolylines = unLivello({ ...params, color: fillColor }, []);
+  const color2 = params.color2 && params.color2 !== 'none' ? params.color2 : COLORS.fillFallback;
+  // Il secondo sta tutto dopo il primo: le striature dei due non vanno a registro, non serve alternarli zona per zona.
+  const secondo = params.secondLevel ? unLivello({ ...parametriSecondoLivello(params), color: color2 }, allPolylines) : [];
+  const threadMm = layerThreadMm({ color: fillColor, polylines: allPolylines }) + layerThreadMm({ color: color2, polylines: secondo });
 
   // --- ANTEPRIMA: il filo si disegna sottile (R15); contorno dei vuoti tenue per mostrare che sono rispettati. ---
   if (allPolylines.length) {
     layers.push({ id: 'striatura', color: fillColor, polylines: allPolylines, strokeMm: THREAD_STROKE_MM });
+  }
+  if (secondo.length) {
+    layers.push({ id: 'striatura2', color: color2, polylines: secondo, strokeMm: THREAD_STROKE_MM });
   }
   if (exclusions.length) {
     layers.push({ id: 'void', color: COLORS.voidOutline, polylines: exclusions, strokeMm: SHAPE_STROKE_MM, shapeOnly: true });
@@ -133,10 +144,13 @@ export function runPipeline(
   if (allPolylines.length) {
     exportLayers.push({ id: 'striatura', color: fillColor, polylines: allPolylines, strokeMm: THREAD_STROKE_MM });
   }
+  if (secondo.length) {
+    exportLayers.push({ id: 'striatura2', color: color2, polylines: secondo, strokeMm: THREAD_STROKE_MM });
+  }
 
   const { inVista, coperti } = misuraPassaggi(passaggi, coperte);
   return {
-    layers, exportLayers, bounds: bnds, threadMm, blockCount: allPolylines.length,
+    layers, exportLayers, bounds: bnds, threadMm, blockCount: allPolylines.length + Math.max(0, secondo.length - 1),
     passaggi, passaggiInVistaMm: inVista, passaggiCopertiMm: coperti,
   };
 }

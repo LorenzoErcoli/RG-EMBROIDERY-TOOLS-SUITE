@@ -60,6 +60,17 @@ export interface StriaturaParams {
   usciteDallePunte: boolean; // il filo entra ed esce dalla punta della striatura più vicina a un punto coperto, non solo dai due capi della fila
   stopZones: number;         // col ricamo sopra si cuce a fasce, una dopo l'altra, l'ordine è libero dentro la fascia; 1 = nessuna divisione
   stopZonesDirection: 'orizzontale' | 'verticale'; // orizzontale = dall'alto in basso; verticale = da sinistra a destra
+  // --- secondo livello: un'altra passata di striature, con un altro filo (Lorenzo, 2026-11-05) ---
+  secondLevel: boolean;      // spento = un livello solo
+  seed2: number;             // la sua variante: disposizione diversa dal primo
+  blobSizeMm2: number;       // grandezza delle sue macchie
+  blobSpacingMm2: number;    // distanza fra le sue macchie
+  densitySpacingMm2: number; // distanza fra i suoi trattini
+  striaturaLengthMm2: number; // lunghezza massima dei suoi trattini
+  blobVariationPct2: number;  // quanto variano le sue macchie
+  jaggedLengthMm2: number;    // il suo frastaglio: lunghezze diverse
+  jaggedStartMm2: number;     // il suo frastaglio: partenze sfalsate
+  color2: string;            // il suo filo
   stitchMode: 'boustrophedon' | 'retrace'; // vedi sopra: default retrace (dal centro su/giù e torna)
   seed: number;              // "Variante": disposizione ricreabile (deterministica)
   // --- colore (mono ora; multicolore in futuro → l'output è già a layer) ---
@@ -85,13 +96,28 @@ export const defaultStriaturaParams: StriaturaParams = {
   waveLenMm: 80,
   coverMarginMm: 1,
   coverOverlapMm: 3,
-  usciteDallePunte: true,
+  usciteDallePunte: false,
   stopZones: 3,
   stopZonesDirection: 'orizzontale',
+  secondLevel: false,
+  seed2: 2,
+  blobSizeMm2: 14,
+  blobSpacingMm2: 5,
+  densitySpacingMm2: 0.6,
+  striaturaLengthMm2: 18,
+  blobVariationPct2: 50,
+  jaggedLengthMm2: 8,
+  jaggedStartMm2: 4,
+  color2: '#b5651d',
   stitchMode: 'retrace',
   seed: 1,
   color: '#1a1a1a',
 };
+
+/** Il secondo livello è una passata intera con le sue misure; punto, passaggi e zone sono quelli del primo. */
+export function parametriSecondoLivello(p: StriaturaParams): StriaturaParams {
+  return { ...p, seed: p.seed2, blobSizeMm: p.blobSizeMm2, blobSpacingMm: p.blobSpacingMm2, densitySpacingMm: p.densitySpacingMm2, striaturaLengthMm: p.striaturaLengthMm2, blobVariationPct: p.blobVariationPct2, jaggedLengthMm: p.jaggedLengthMm2, jaggedStartMm: p.jaggedStartMm2, color: p.color2 };
+}
 
 /** Un layer di output del motore (un filo = una passata). Mono ora; lista → multicolore futuro. */
 export interface StriaturaLayer {
@@ -107,6 +133,8 @@ export interface StriaturaInput {
   voids: Polyline[];     // aree vuote interne (R5)
   /** Dove dopo verrà cucita un'altra grafica: lì il ricamo continua e i passaggi corrono liberi. */
   coperte?: Polyline[];
+  /** Il filo dei livelli già cuciti: i passaggi col ricamo sopra non corrono sopra i suoi trattini. */
+  giaCucito?: Polyline[];
 }
 
 // ------------------------------------------------------------------ utilità pure
@@ -349,6 +377,7 @@ interface GrigliaZone {
   bb: BBox; cella: number; gcols: number; grows: number;
   gIdx: (x: number, y: number) => number;
   insideCell: Uint8Array; coperta: Uint8Array; profonda: Uint8Array;
+  giaCucito: Polyline[];
 }
 interface Trattino { pts: Point[]; x: number; col: number; riga: number; y0: number; y1: number; }
 /** Una fila di trattini vicini della stessa riga: si cuce d'un fiato, e il filo entra ed esce dai suoi due capi. */
@@ -359,12 +388,38 @@ interface Fila { trattini: Trattino[]; }
 // A 0,9 si contava soprattutto che il passaggio fosse corto (e sotto una zona era corto ma non nascosto). Quanto sia lungo
 // lì sotto non si vede: a lavoro finito conta solo quello che resta fuori.
 const COSTO_SOTTO = 0.05;
-const COSTO_SOPRA_TRATTINI = 30;
+// Lorenzo, 2026-11-05: «quelle nel vuoto io le vorrei proprio evitare». Allora il filo passa anche fra i trattini delle macchie, che
+// lo nascondono: lì 0,3. Quelli del livello prima no: si vedrebbe col suo colore. E nel vuoto andare in orizzontale costa 20
+// volte di più: quello che resta è verticale, e si legge come una striatura invece che come una linea. Sul pannello di prova a
+// grandezza 22: il filo storto nel vuoto da 0,39–0,47 a 0,02 m; quello verticale da 0,08–0,15 a 0,26–0,32 m.
+const COSTO_SOPRA_TRATTINI = 0.3;
+const COSTO_SOPRA_LIVELLO_PRIMA = 30;
+const COSTO_ORIZZONTALE_NEL_VUOTO = 20;
+// fra i trattini si va lungo le colonne. Di traverso tagliava la macchia con una riga (Lorenzo, 2026-11-05: «linee orizzontali che
+// tagliano le macchie»), e a 3 si vedeva ancora
+const COSTO_ORIZZONTALE_FRA_TRATTINI = 20;
+// dove è già passato un passaggio costa di più: più fili nello stesso corridoio facevano una linea nera spessa
+const COSTO_RIPASSO = 2;
+// il salto va sotto una zona solo se è a questa distanza: andarci e tornare lungo il trattino lo carica di filo (152 m contro 128 sul pannello di prova)
+const SALTO_SOTTO_ENTRO_MM = 3;
 const CANDIDATE_VICINE = 12;
 const PASSAGGIO_COSTOSO = 15;
 const PASSAGGIO_MOLTO_COSTOSO = 60;
 // il filo può uscire dalla sua fascia di poco: quanto basta per un trattino a cavallo del confine
 const MARGINE_FASCIA = 12;
+
+/**
+ * L'ordine dei trattini di una fila senza mai saltare una colonna sola: 1, 3, 0, 2, poi 5, 7, 4, 6… Un salto più corto del punto
+ * minimo viene fuso col punto prima e diventa una diagonale: sono gli scarabocchi che si vedevano dentro le macchie.
+ */
+function aBlocchi<T>(tr: T[]): T[] {
+  const fuori: T[] = [];
+  let i = 0;
+  for (; i + 4 <= tr.length; i += 4) fuori.push(tr[i + 1], tr[i + 3], tr[i], tr[i + 2]);
+  if (tr.length - i === 3) fuori.push(tr[i], tr[i + 2], tr[i + 1]);
+  else for (; i < tr.length; i++) fuori.push(tr[i]);
+  return fuori;
+}
 
 /** Una coda che dà sempre per prima la cella col costo più basso. */
 function codaMinima() {
@@ -559,6 +614,21 @@ function cuciSottoLeZone(
   // necessità possano passare anche per le punte? rivedendo come si disegna magari si esce su una striatura più vicina a un
   // punto coperto»). Da un capo all'altro il filo finisce per forza all'altro capo, spesso nel vuoto. Se la fila va e torna, un
   // trattino sì e uno no, si entra e si esce vicino alla stessa striatura: quella con la punta sotto una zona.
+  if (Math.max(0.2, params.densitySpacingMm) < params.minStitchMm) {
+    for (const f of file) f.trattini = aBlocchi(f.trattini);
+  }
+  // Il trattino parte e torna dalla punta invece che dal centro: stesso filo, due passate come prima. Così il salto al prossimo sta nello
+  // sfrangiato, a quote diverse, invece di fare una riga in mezzo alla macchia. Riga pari dalle punte in alto, dispari in basso.
+  if (params.stitchMode === 'retrace') {
+    const passoT = Math.max(params.minStitchMm, params.maxStitchMm);
+    for (const f of file) for (const t of f.trattini) {
+      const parte = t.riga % 2 === 0 ? t.y0 : t.y1, arriva = t.riga % 2 === 0 ? t.y1 : t.y0;
+      const pts: Point[] = [{ x: t.x, y: parte }];
+      pushSeg(pts, t.x, parte, arriva, passoT);
+      pushSeg(pts, t.x, arriva, parte, passoT);
+      t.pts = pts;
+    }
+  }
   if (params.usciteDallePunte) {
     const andataERitorno = (tr: Trattino[], p: number): Trattino[] => {
       const fuori = [tr[p]];
@@ -579,17 +649,19 @@ function cuciSottoLeZone(
       return Infinity;
     };
     for (const f of file) {
-      const tr = f.trattini;
+      const tr = f.trattini.slice();
       if (tr.length < 3) continue;
+      tr.sort((a, b) => a.col - b.col);
       const copre = (k: number) => quoteCoperte(tr[k]).length > 0;
       if (copre(0) && copre(tr.length - 1)) continue;       // i due capi vanno già bene
       if (!tr.some((_, k) => copre(k))) {
         // nessuna punta è sotto: si allunga, nei limiti del frastaglio, quella che ci arriva con meno
         let meglio = -1, m = Infinity;
         tr.forEach((t, k) => { const d = quantoManca(t); if (d < m) { m = d; meglio = k; } });
-        if (meglio < 0) continue;
-        allunga(tr[meglio]);
-        if (!copre(meglio)) continue;
+        if (meglio >= 0) allunga(tr[meglio]);
+        if (meglio < 0 || !copre(meglio)) {
+          continue;
+        }
       }
       // la striatura da cui entrare: il mezzo del tratto coperto più lungo
       let inizio = -1, migliore = -1, lungh = 0;
@@ -605,10 +677,35 @@ function cuciSottoLeZone(
   // dove ci sono trattini in vista il filo non passa: anche quelli che verranno dopo
   const cucita = new Uint8Array(gcols * grows);
   for (const t of conSpan) for (let y = t.y0; y <= t.y1; y += cella / 2) cucita[gIdx(t.x, y)] = 1;
+  // quelli del livello prima a parte: un passaggio sopra si vedrebbe, col suo colore (solo i tratti verticali: i trattini)
+  const livelloPrima = new Uint8Array(gcols * grows);
+  for (const pl of g.giaCucito) {
+    for (let i = 1; i < pl.length; i++) {
+      const a = pl[i - 1], b = pl[i];
+      if (Math.abs(a.x - b.x) > 1e-6) continue;
+      for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y += cella / 2) livelloPrima[gIdx(a.x, y)] = 1;
+    }
+  }
 
+  const passati = new Uint8Array(gcols * grows);
+  // Con le zone distanti il filo preferirebbe un rettilineo lunghissimo a un ponte corto (misurato: 50 mm sul pannello di prova), e una
+  // linea così non si legge più come una striatura: se succede, quel passaggio si rifà senza la preferenza.
+  let orizzontaleNelVuoto = COSTO_ORIZZONTALE_NEL_VUOTO;
+  const tuttoVuoto = (idx: number) => !coperta[idx] && !cucita[idx] && !livelloPrima[idx];
+  const piuLungaNelVuoto = (via: Point[]): number => {
+    let m = 0, run = 0;
+    for (let i = 1; i < via.length; i++) {
+      const a = via[i - 1], b = via[i], d = Math.hypot(b.x - a.x, b.y - a.y), n = Math.max(1, Math.ceil(d / (cella / 2)));
+      for (let k = 0; k < n; k++) {
+        if (tuttoVuoto(gIdx(a.x + ((b.x - a.x) * (k + 0.5)) / n, a.y + ((b.y - a.y) * (k + 0.5)) / n))) { run += d / n; if (run > m) m = run; } else run = 0;
+      }
+    }
+    return m;
+  };
   const costoCella = (idx: number) => {
-    if (coperta[idx]) return COSTO_SOTTO;
-    return cucita[idx] ? COSTO_SOPRA_TRATTINI : 1;
+    if (coperta[idx]) return COSTO_SOTTO * (1 + passati[idx]);
+    if (livelloPrima[idx]) return COSTO_SOPRA_LIVELLO_PRIMA;
+    return (cucita[idx] ? COSTO_SOPRA_TRATTINI : 1) * (1 + COSTO_RIPASSO * passati[idx]);
   };
   /** Quanto costa il filo dritto da a a b. I primi e gli ultimi 1,5 mm non contano i trattini: sono quelli da cui parte e a cui arriva. */
   const costoLinea = (a: Point, b: Point): number => {
@@ -622,7 +719,9 @@ function cuciSottoLeZone(
       const lontana = t * d > 1.5 && (1 - t) * d > 1.5;
       if (!percorribile[idx] && lontana) somma += 100;
       else if (coperta[idx]) somma += COSTO_SOTTO;
-      else somma += cucita[idx] && lontana ? COSTO_SOPRA_TRATTINI : 1;
+      else if (livelloPrima[idx] && lontana) somma += COSTO_SOPRA_LIVELLO_PRIMA;
+      else if (cucita[idx] && lontana) somma += COSTO_SOPRA_TRATTINI * (1 + COSTO_ORIZZONTALE_FRA_TRATTINI * Math.abs(b.x - a.x) / d);
+      else somma += 1 + orizzontaleNelVuoto * Math.abs(b.x - a.x) / d;
     }
     return somma * (d / n);
   };
@@ -698,7 +797,7 @@ function cuciSottoLeZone(
         if (nx < 0 || ny < 0 || nx >= gcols || ny >= grows) continue;
         const n = ny * gcols + nx;
         if (!mete.has(n) && (!percorribile[n] || !nelleFasce(bb.minX + (nx + 0.5) * cella, bb.minY + (ny + 0.5) * cella, z0, z1))) continue;
-        const nuovo = gg[testa.idx] + l * cella * costoCella(n);
+        const nuovo = gg[testa.idx] + l * cella * costoCella(n) * (coperta[n] || livelloPrima[n] ? 1 : 1 + (cucita[n] ? COSTO_ORIZZONTALE_FRA_TRATTINI : orizzontaleNelVuoto) * Math.abs(dx) / l);
         if (visita[n] === giro && gg[n] <= nuovo) continue;
         gg[n] = nuovo; prima[n] = testa.idx; visita[n] = giro;
         coda.metti(n, nuovo);
@@ -802,8 +901,24 @@ function cuciSottoLeZone(
         pushTravel(cur, { x: t.x, y: ingresso }, entrata, passo);
       } else if (k > 0 && pen) {
         const p = seq[k - 1];
-        const yStop = Math.max(p.y0, Math.min(p.y1, entrata.y));
-        if (Math.abs(yStop - pen.y) > passo) { const svolta = { x: pen.x, y: yStop }; pushTravel(cur, pen, svolta, passo); pen = svolta; }
+        const lo = Math.max(p.y0, t.y0), hi = Math.min(p.y1, t.y1);
+        if (lo <= hi) {
+          // il salto va piatto, all'altezza che i due trattini hanno in comune; il resto del movimento sta sui trattini, sugli stessi buchi
+          // e se può sotto una zona, così non si vede
+          let quota = Math.max(lo, Math.min(hi, pen.y));
+          if (!coperta[gIdx(p.x, quota)] || !coperta[gIdx(t.x, quota)]) {
+            let dist = SALTO_SOTTO_ENTRO_MM;
+            const da = quota;
+            for (let y = lo; y <= hi; y += cella) {
+              if (coperta[gIdx(p.x, y)] && coperta[gIdx(t.x, y)] && Math.abs(y - da) < dist) { dist = Math.abs(y - da); quota = y; }
+            }
+          }
+          if (Math.abs(quota - pen.y) >= params.minStitchMm) { const svolta = { x: pen.x, y: quota }; pushTravel(cur, pen, svolta, passo); pen = svolta; }
+          if (Math.abs(quota - entrata.y) >= params.minStitchMm) { const sul = { x: t.x, y: quota }; pushTravel(cur, pen, sul, passo); pen = sul; }
+        } else {
+          const yStop = Math.max(p.y0, Math.min(p.y1, entrata.y));
+          if (Math.abs(yStop - pen.y) > passo) { const svolta = { x: pen.x, y: yStop }; pushTravel(cur, pen, svolta, passo); pen = svolta; }
+        }
         pushTravel(cur, pen, entrata, passo);
       }
       if (cur.length === 0) cur.push(entrata);
@@ -822,13 +937,27 @@ function cuciSottoLeZone(
       for (const y of [t.pts[0].y, t.y0, t.y1, ...quoteCoperte(t)]) arrivi.push({ x: t.x, y, seq });
     }
     const z0 = Math.min(fasciaFila[ordine[o]], fasciaFila[ordine[o - 1]]), z1 = Math.max(fasciaFila[ordine[o]], fasciaFila[ordine[o - 1]]);
-    const r = strada(uscite, arrivi, z0, z1) ?? strada(uscite, arrivi, 0, nFasce - 1);
+    let r = strada(uscite, arrivi, z0, z1) ?? strada(uscite, arrivi, 0, nFasce - 1);
+    if (r && piuLungaNelVuoto(r.via) > params.striaturaLengthMm) {
+      orizzontaleNelVuoto = 0;
+      r = strada(uscite, arrivi, z0, z1) ?? strada(uscite, arrivi, 0, nFasce - 1) ?? r;
+      orizzontaleNelVuoto = COSTO_ORIZZONTALE_NEL_VUOTO;
+    }
     if (r) {
       // esce lungo il trattino, sugli stessi buchi; poi il passaggio; poi entra lungo il trattino nuovo
       if (Math.abs(r.uscita.y - pen!.y) > 1e-6) pushTravel(cur, pen!, r.uscita, passo);
       const daQui = cur.length - 1;
       pushStrada(cur, r.via, passo);
       passaggi.push(cur.slice(daQui));
+      for (let i = 1; i < r.via.length; i++) {
+        const a = r.via[i - 1], b = r.via[i], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (cella / 2)));
+        let prima = -1;
+        for (let k = 0; k <= n; k++) {
+          const c = gIdx(a.x + ((b.x - a.x) * k) / n, a.y + ((b.y - a.y) * k) / n);
+          if (c !== prima && passati[c] < 200) passati[c]++;
+          prima = c;
+        }
+      }
       pen = { x: r.arrivo.x, y: r.arrivo.y };
       cuci(r.arrivo.seq, r.arrivo.y);
     } else {
@@ -1211,7 +1340,7 @@ export function generateStriatura(input: StriaturaInput, richiesti: StriaturaPar
   if (cur.length > 1) polylines.push(cur);
 
   if (coperte.length) {
-    const griglia: GrigliaZone = { bb, cella: occCell, gcols, grows, gIdx, insideCell, coperta, profonda };
+    const griglia: GrigliaZone = { bb, cella: occCell, gcols, grows, gIdx, insideCell, coperta, profonda, giaCucito: input.giaCucito ?? [] };
     return [{ color: params.color, ...cuciSottoLeZone(raccolti, griglia, forbidden, params, travelStep, clr) }];
   }
   return [{ color: params.color, polylines, passaggi }];

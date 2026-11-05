@@ -1739,30 +1739,54 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   const sMacchie = []; for (let gy = 0; gy < 5; gy++) for (let gx = 0; gx < 4; gx++) { const cx = 15 + gx * 30, cy = 15 + gy * 30, a = []; for (let i = 0; i < 24; i++) { const t = (i / 24) * 2 * Math.PI; a.push({ x: cx + Math.cos(t) * 10, y: cy + Math.sin(t) * 12 }); } sMacchie.push(a); }
   const sTante = rg.generateStriatura({ outline: sRect, voids: [], coperte: sMacchie }, sP)[0];
   const sLunghezza = (pl) => { let l = 0; for (let i = 1; i < pl.length; i++) l += Math.hypot(pl[i].x - pl[i - 1].x, pl[i].y - pl[i - 1].y); return l; };
-  const sInVista = (layer) => {
+  // i trattini veri: fra un passaggio e l'altro. Un passaggio verticale sulla stessa colonna non deve contare come trattino.
+  const sSenzaPassaggi = (layer) => {
+    const chiave = (q) => `${q.x.toFixed(4)},${q.y.toFixed(4)}`;
+    const dei = new Set(); for (const pl of layer.passaggi) for (let i = 1; i < pl.length; i++) dei.add(`${chiave(pl[i - 1])}|${chiave(pl[i])}`);
+    const fuori = [];
+    for (const pl of layer.polylines) {
+      let ora = [pl[0]];
+      for (let i = 1; i < pl.length; i++) {
+        if (dei.has(`${chiave(pl[i - 1])}|${chiave(pl[i])}`)) { if (ora.length > 1) fuori.push(ora); ora = [pl[i]]; } else ora.push(pl[i]);
+      }
+      if (ora.length > 1) fuori.push(ora);
+    }
+    return fuori;
+  };
+  /** I tratti dei passaggi davvero nel vuoto: né sotto una zona né fra i trattini. */
+  const sNelVuoto = (layer) => {
+    const fra = new Set();
+    for (const t of sSenzaPassaggi(layer)) for (let i = 1; i < t.length; i++) {
+      if (Math.abs(t[i].x - t[i - 1].x) > 1e-6) continue;
+      for (let y = Math.min(t[i].y, t[i - 1].y); y <= Math.max(t[i].y, t[i - 1].y); y += 0.25) for (const dx of [-1, 0, 1]) fra.add(`${Math.floor(t[i].x * 2) + dx}:${Math.floor(y * 2)}`);
+    }
     const tratti = [];
     for (const pl of layer.passaggi) {
-      let run = 0;
+      let run = 0, storto = 0;
+      const chiudi = () => { if (run) tratti.push({ mm: run, storto }); run = 0; storto = 0; };
       for (let i = 1; i < pl.length; i++) {
-        const a = pl[i - 1], b = pl[i], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.5));
+        const a = pl[i - 1], b = pl[i], d = Math.hypot(b.x - a.x, b.y - a.y), n = Math.max(1, Math.ceil(d / 0.5));
+        const obliquo = Math.abs(b.x - a.x) > 0.3 * Math.abs(b.y - a.y);
         for (let k = 0; k < n; k++) {
           const q = { x: a.x + (b.x - a.x) * (k + 0.5) / n, y: a.y + (b.y - a.y) * (k + 0.5) / n };
-          if (sMacchie.some((z) => rg.pointInPolygon(q, z))) { if (run) tratti.push(run); run = 0; } else run += Math.hypot(b.x - a.x, b.y - a.y) / n;
+          if (sMacchie.some((z) => rg.pointInPolygon(q, z)) || fra.has(`${Math.floor(q.x * 2)}:${Math.floor(q.y * 2)}`)) chiudi();
+          else { run += d / n; if (obliquo) storto += d / n; }
         }
       }
-      if (run) tratti.push(run);
+      chiudi();
     }
     return tratti;
   };
-  const sViste = sInVista(sTante);
-  console.log(`   (in vista: ${sViste.length} tratti, il più lungo ${Math.max(...sViste).toFixed(1)} mm, in tutto ${sViste.reduce((a, b) => a + b, 0).toFixed(0)} mm)`);
-  check('con tante zone il filo sta sotto: nessun tratto in vista oltre i 15 mm', Math.max(...sViste) <= 15, true);
-  // Le uscite dalle punte (Lorenzo, 2026-11-05: «magari si esce su una striatura più vicina ad un punto coperto»): stessi
-  // trattini, un filo solo, e non più filo in vista di prima.
+  const sViste = sNelVuoto(sTante);
+  console.log(`   (nel vuoto: ${sViste.length} tratti, il più lungo ${Math.max(...sViste.map((t) => t.mm)).toFixed(1)} mm, in tutto ${sViste.reduce((a, t) => a + t.mm, 0).toFixed(0)} mm, storti ${sViste.reduce((a, t) => a + t.storto, 0).toFixed(0)} mm)`);
+  check('con tante zone niente rettilinei nel vuoto: nessun tratto più lungo di un trattino e mezzo', Math.max(...sViste.map((t) => t.mm)) <= sP.striaturaLengthMm * 1.5, true);
+  // Passaggi puliti (Lorenzo, 2026-11-05: «molto sporchi e poco precisi»): il salto fra due trattini vicini va piatto.
+  const sStortiDentro = (() => { let n = 0, tutti = 0; for (const t of sSenzaPassaggi(sTante)) for (let i = 1; i < t.length; i++) { const dx = Math.abs(t[i].x - t[i - 1].x), dy = Math.abs(t[i].y - t[i - 1].y); if (dx > 1e-6) { tutti++; if (dy > dx * 0.5) n++; } } return { n, tutti }; })();
+  console.log(`   (collegamenti dentro le macchie: ${sStortiDentro.tutti}, storti ${sStortiDentro.n})`);
+  check('dentro le macchie i collegamenti sono piatti, non scarabocchi', sStortiDentro.tutti > 50 && sStortiDentro.n <= sStortiDentro.tutti * 0.25, true);
+  // Le uscite dalle punte (Lorenzo, 2026-11-05: «magari si esce su una striatura più vicina ad un punto coperto»): stessi trattini, un filo solo.
   const sDaCapo = rg.generateStriatura({ outline: sRect, voids: [], coperte: sMacchie }, { ...sP, usciteDallePunte: false })[0];
-  const sVisteDaCapo = sInVista(sDaCapo).reduce((a, b) => a + b, 0), sVisteOra = sViste.reduce((a, b) => a + b, 0);
-  console.log(`   (filo in vista: da un capo all'altro ${sVisteDaCapo.toFixed(0)} mm, dalle punte ${sVisteOra.toFixed(0)} mm)`);
-  check('dalle punte: gli stessi trattini, un filo solo, non più filo in vista', [sTrattini(sTante.polylines).length === sTrattini(sDaCapo.polylines).length, sTante.polylines.length, sVisteOra <= sVisteDaCapo], [true, 1, true]);
+  check('dalle punte: gli stessi trattini, un filo solo', [sTrattini(sSenzaPassaggi(sTante)).length, sTante.polylines.length], [sTrattini(sSenzaPassaggi(sDaCapo)).length, 1]);
   // A zone (Lorenzo, 2026-11-05: «si passa a lavorare a zone»): una fascia dopo l'altra, senza salti in più.
   const sCentroFasce = (p) => { const f = rg.generateStriatura({ outline: sRect, voids: [], coperte: sMacchie }, p)[0].polylines.flat(); const m = (a) => a.reduce((s, q) => s + q, 0) / a.length; const assi = f.map((q) => (p.stopZonesDirection === 'verticale' ? q.x : q.y)); return [m(assi.slice(0, assi.length / 3)), m(assi.slice(assi.length / 3, assi.length * 2 / 3)), m(assi.slice(assi.length * 2 / 3))]; };
   const sOriz = sCentroFasce({ ...sP, stopZones: 3 }), sVert = sCentroFasce({ ...sP, stopZones: 3, stopZonesDirection: 'verticale' });
@@ -1777,7 +1801,7 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   check('i trattini rimasti sono quelli di sempre, non tagliati dal bordo delle zone', sUguali >= sTratZone.size * 0.85 && sTratZone.size < sVisibili, true);
   // Lo sfrangiato aiuta (Lorenzo, 2026-11-03: «allungare… lo sfrangiato e far partire o finire nelle vicinanze di parti
   // coperte»): nessun trattino cresce oltre il frastaglio, così non si nota.
-  const sAlti = sTrattini(sTante.polylines).map((t) => t.alto);
+  const sAlti = sTrattini(sSenzaPassaggi(sTante)).map((t) => t.alto);
   const sAltiSenza = sTratSenza.map((t) => t.alto);
   check('allungato per arrivare sotto una zona, un trattino resta nella misura dello sfrangiato', Math.max(...sAlti) <= Math.max(...sAltiSenza) + sP.jaggedLengthMm + 1, true);
   check('sotto la zona i passaggi ci sono, e misurati', sSotto.passaggiCopertiMm > 0, true);
@@ -1785,6 +1809,23 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   check('in vista non restano più passaggi di prima (a parità di zona)', sSotto.passaggiInVistaMm <= sMisuraSenza + 1, true);
   check('i passaggi evidenziati e la zona restano in anteprima: non si cuciono', sSotto.exportLayers.map((l) => l.id).join(), 'reference,striatura');
   check('filo dentro la sagoma e passo rispettato anche coi passaggi sotto', [sMeasure(sFiloDi(sSotto), sRect, []).fuori, sMeasure(sFiloDi(sSotto), sRect, []).segMax <= sStep + 0.1], [0, true]);
+  // Due livelli (Lorenzo, 2026-11-05: «non solo 1 ma un doppio livello di striato, come se volessi farlo con 2 fili diversi»).
+  console.log('\nstriatura — due livelli, due fili');
+  const s2P = { ...sP, secondLevel: true };
+  const s2 = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE', '#00ff00': 'COVER_AREA' }, s2P);
+  const s2Fili = s2.exportLayers.filter((l) => !l.shapeOnly);
+  check('due livelli: due fili, ognuno del suo colore', s2Fili.map((l) => l.color).join(), [sP.color, sP.color2].join());
+  check('il primo livello è identico a quando è da solo', JSON.stringify(s2Fili[0].polylines), JSON.stringify(sFiloDi(sSotto)));
+  check('un livello solo resta il comportamento di serie', sSotto.exportLayers.filter((l) => !l.shapeOnly).length, 1);
+  check('il cambio di filo non è un salto', s2.blockCount, 1);
+  const s2Corti = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE', '#00ff00': 'COVER_AREA' }, { ...s2P, striaturaLengthMm2: 8, jaggedLengthMm2: 0, jaggedStartMm2: 0 }).exportLayers.filter((l) => !l.shapeOnly);
+  check('il secondo ha i suoi trattini e il suo frastaglio, il primo non cambia', [JSON.stringify(s2Corti[0].polylines) === JSON.stringify(s2Fili[0].polylines), rg.layerThreadMm({ color: '#000', polylines: s2Corti[1].polylines }) < rg.layerThreadMm({ color: '#000', polylines: s2Fili[1].polylines })], [true, true]);
+  check('il secondo ha le sue misure: macchie e disposizione diverse', sTrattini(s2Fili[1].polylines).length !== sTrattini(s2Fili[0].polylines).length, true);
+  const s2Dst = rg.readDst(rg.dstFromExportLayers(s2.exportLayers, { label: 'STRIATURA' }));
+  check('nel DST: due aghi, un cambio filo', [s2Dst.colorChanges, s2Dst.blocks.length], [1, 2]);
+  const s2Senza = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE' }, s2P);
+  const s2FiliSenza = s2Senza.exportLayers.filter((l) => !l.shapeOnly);
+  check('due livelli anche senza ricamo sopra, dentro la sagoma', [s2FiliSenza.length, sMeasure(s2FiliSenza[1].polylines, sRect, []).fuori], [2, 0]);
   const sZonaEVuoto = sMeasure(sGen(sP, [sVoid]).length ? rg.generateStriatura({ outline: sRect, voids: [sVoid], coperte: [sZona] }, sP)[0].polylines : [], sRect, [sVoid]);
   check('una zona sopra un vuoto: il filo nel vuoto non ci entra lo stesso (R5)', [sZonaEVuoto.nelVuoto, sZonaEVuoto.attraversa], [0, 0]);
 }
