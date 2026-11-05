@@ -69,7 +69,7 @@ export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordat
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_DI_SERIE, fermaSottoIlSecondo as pmFerma, macchiePerStilista as pmPerStilista } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
-export { lineePerStilista as rcLineeStilista, scegliModelli as rcScegliModelli } from ${JSON.stringify(posix('apps/rete-catenella/src/stilista-psil.ts'))};
+export { lineePerStilista as rcLineeStilista, scegliModelli as rcScegliModelli, oggettiDaMandare as rcOggettiDaMandare } from ${JSON.stringify(posix('apps/rete-catenella/src/stilista-psil.ts'))};
 export { aggiungiModulo as rcAggiungiModulo, leggiElenco as rcLeggiElenco, leggiModulo as rcLeggiModulo, scriviElenco as rcScriviElenco, togliModulo as rcTogliModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/elenco-moduli.ts'))};
 export { griglia as rcGriglia, riquadroRete as rcRiquadro, costruisciRete as rcCostruisci, latoSuperioreDritto as rcLatoDritto, filoSopra as rcFiloSopraIntero, stratiRete as rcStrati, catenella as rcCatenella, pezziDentro as rcPezzi, maschera as rcMaschera, PARAMETRI_RETE as RC_PARAMETRI, motore as rcMotore } from ${JSON.stringify(posix('apps/rete-catenella/src/motore.ts'))};
 export { moduloDiEsempio as rcModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/esempio.ts'))};
@@ -7059,10 +7059,12 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   check('il modello della catenella è il psil vero, non un running col flag 32', rg.rcScegliModelli([letto(0, '32', '0'), letto(1, '32', '4', 10, 7), letto(2, '16416', '0')]), { catenella: 1, running: 0, ago: 7 });
   check('un documento di soli running normali non ha psil', rg.rcScegliModelli([letto(0, '32', '0'), letto(1, '32', '0')]).catenella, null);
   check('un psil a 0 punti non fa da modello', rg.rcScegliModelli([letto(0, '32', '4', 0), letto(1, '32', '4')]).catenella, 1);
+  const conCorta = { ...e, oggetti: [...e.oggetti, { tipo: 'catenella', t: [[0, 0], [1.4, 0]], punti: [], cella: e.oggetti[0].cella }, { tipo: 'catenella', t: [[0, 0], [2, 0]], punti: [], cella: e.oggetti[0].cella }] };
+  check('una catenella troppo corta per una maglia non va in Stilista, le altre sì', rg.rcLineeStilista(conCorta, null, { catenella: 3, running: 4 }, 9).length, rg.rcLineeStilista(e, null, { catenella: 3, running: 4 }, 9).length + 1);
   // lo psil vero: in Stilista le catenelle sono il loro tracciato, il resto i punti del tool, nell'ordine e nel riferimento del documento
   const linee = rg.rcLineeStilista(e, [5, 7], { catenella: 3, running: 4 }, 9);
-  const prima = e.oggetti.find((o) => o.tipo === 'catenella'), primaLinea = linee.find((l) => l.modello === 3);
-  check('verso Stilista: le catenelle col tracciato sul loro modello, spostate dall\'origine', [primaLinea.contorno_mm.length, primaLinea.contorno_mm[0][0], primaLinea.contorno_mm[0][1], linee[0].modello, linee.length], [prima.t.length, +(prima.t[0][0] + 5).toFixed(3), +(prima.t[0][1] + 7).toFixed(3), 4, e.oggetti.length]);
+  const prima = rg.rcOggettiDaMandare(e).find((o) => o.tipo === 'catenella'), primaLinea = linee.find((l) => l.modello === 3);
+  check('verso Stilista: le catenelle col tracciato sul loro modello, spostate dall\'origine', [primaLinea.contorno_mm.length, primaLinea.contorno_mm[0][0], primaLinea.contorno_mm[0][1], linee[0].modello, linee.length <= e.oggetti.length], [prima.t.length, +(prima.t[0][0] + 5).toFixed(3), +(prima.t[0][1] + 7).toFixed(3), 4, true]);
   const passi = s.flatMap((l) => l.polylines).filter((pl) => pl.some((q, i) => i && Math.hypot(q.x - pl[i - 1].x, q.y - pl[i - 1].y) > 7));
   check('dentro un tratto continuo nessun passo è lungo: i passaggi stanno nel filo', passi.length, 0);
   const dst = rg.dstFromExportLayers(s, { label: 'RETE', metadata: { rgProject: 'rete-catenella', params: P } });

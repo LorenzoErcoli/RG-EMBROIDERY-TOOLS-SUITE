@@ -94,4 +94,17 @@ Con 2.200 catenelle sono circa 66 GB. Il file di riferimento invece ha oltre 2.0
 | Ricalcolo di 10 psil del file | +129 MB, circa 13 MB ognuno |
 | `/riscrivi-punti` su psil del file | Da 5 a 9 MB ognuno, ma dopo 1,5 s Stilista li ricalcola da solo sul tracciato dato (154 punti → 98), quindi i punti scritti non restano. La misura è sporca: gli indici si spostavano fra un blocco e l'altro, e 11 dei 30 oggetti letti alla fine non erano più psil |
 
-Quindi la memoria cresce a ogni copia e a ogni ricalcolo di un psil, e qualcosa fuori dagli oggetti la tiene. Che cosa sia non è trovato. Finché non è risolto, per la rete intera si usa il psil disegnato o il DST; il psil vero regge poche centinaia di oggetti.
+Anche la sospensione della cronologia di Annulla (`csUndoManager.SoftwareUndoSuspeded`) non cambia niente: stessi 25 MB.
+
+**La causa, misurata contando la memoria per tipo prima e dopo 20 copie:** ogni copia di un psil crea circa 2.260 `cFilato`, 4.500 tipi di punto da ricamo, 5.000 `cStichingPailletteParameterRO`, 1.050 `cStitchTypePerlina` e 19 MB di immagini. Ogni tipo di punto si iscrive all'evento statico `cBaseStichTypeRO.TransparencyChanged` e da lì non si libera più: per questo togliere le copie non scendeva. **Non è provato** se succede anche fuori dal plugin, a chi lavora con le catenelle in Stilista; potrebbe spiegare il *«lavora ad una lentezza atroce»* del 2026-11-02.
+
+**La correzione**, in `POST /running`: alla fine di ogni blocco si rimette la lista di iscritti di prima, poi si libera la memoria. Nella stessa finestra, 30 psil:
+
+| | Memoria viva | Punti di ogni copia |
+|---|---|---|
+| Iscrizioni staccate | 178–180 MB, ferma | 245, ancora psil |
+| Come prima | da 416 a 929 MB | 245 |
+
+**La rete intera con la correzione:** 4.135 oggetti su 4.135, 348.556 punti, aghi compresi, 321 s, picco di memoria 6 GB, alla fine 4,5 GB; prima a 1.350 oggetti era a 19,7 GB. Le catenelle sotto 1,5 mm (3 su 2.200: a 1,46 mm 0 punti, a 1,86 mm 7) non si mandano. **Leggere tutto il documento** con `GET /selezione.json`, a blocchi da 200, lo ha portato sopra 8 GB: quella rilettura non è stata finita, quindi gli aghi di questo invio non sono stati riletti.
+
+**Non provato:** salvare e riaprire quel documento; la trasparenza dei fili su quelle copie, che non ricevono più l'evento fino alla riapertura; il tool col plugin nella pagina vera; il campione cucito.

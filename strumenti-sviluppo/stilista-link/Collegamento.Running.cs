@@ -174,6 +174,10 @@ namespace StilistaHostSkeleton
             }
             // tutto per riferimento, prima di inserire: gli indici cambiano a ogni inserimento
             var linee = chiesti.Linee.Select(l => new { l, modello = tutti[l.Modello], ancora = tutti[l.Dopo] }).ToList();
+            // Ogni copia di un psil crea migliaia di tipi di punto, e ognuno si iscrive a questo evento statico: restano in memoria per sempre, circa 25 MB a copia,
+            // e una rete intera non ci sta (sapere/codice/stilista-psil.md). Alla fine si rimette la lista di iscritti di prima
+            var eventoTipi = typeof(Emg2_IO.EmgTypes.cBaseStichTypeRO).GetFields(System.Reflection.BindingFlags.Static | System.Reflection.BindingFlags.Public | System.Reflection.BindingFlags.NonPublic).FirstOrDefault(c => c.FieldType.Name.Contains("TransparencyChanged"));
+            var iscrittiPrima = eventoTipi?.GetValue(null);
             var ultimoDopo = new Dictionary<object, object>(new PerRiferimento());
             var ricalcola = chiesti.Ricalcola ?? true;
             var primaDi = tutti.Count;
@@ -237,6 +241,8 @@ namespace StilistaHostSkeleton
                     errori.Add((i + 1) + ": " + DescribeException(ex));
                 }
             }
+            eventoTipi?.SetValue(null, iscrittiPrima);
+            GC.Collect();
             TryRaiseObjectsRedrawNeeded(oggetti);
             var riassunto = "Running copiati: " + fatte + " su " + linee.Count + ", " + punti + " punti";
             ProbeLog.Write(log + ": " + riassunto + (errori.Count > 0 ? " · errori: " + string.Join(" | ", errori) : ""));

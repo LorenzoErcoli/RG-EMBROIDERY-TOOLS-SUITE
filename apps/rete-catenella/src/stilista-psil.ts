@@ -6,6 +6,8 @@ import type { EsitoRete, ParametriRete, Xy } from './motore';
 
 const POSTA = { 'X-RG-Link': '1', 'Content-Type': 'application/json' };
 const PER_VOLTA = 150; // un invio blocca Stilista finché non ha finito
+// misurato: a 1,46 mm una catenella in Stilista resta a 0 punti, a 1,86 mm ne ha 7
+const CATENELLA_MINIMA_MM = 1.5;
 
 interface Stato { oggetti: number }
 interface OggettoLetto { index: number; needle?: number; stitch_count?: number; parameters?: Array<{ Key: string; Value: string }> }
@@ -51,11 +53,22 @@ async function trovaModelli(f: FinestraStilista, oggetti: number): Promise<{ cat
   return { ...scelta, selezionata };
 }
 
+/** Gli oggetti che vanno davvero in Stilista: una catenella troppo corta per una maglia lì resterebbe un oggetto vuoto. */
+export function oggettiDaMandare(e: EsitoRete): EsitoRete['oggetti'] {
+  return e.oggetti.filter((o) => {
+    if (o.t.length < 2) return false;
+    if (o.tipo !== 'catenella') return true;
+    let l = 0;
+    for (let i = 1; i < o.t.length; i++) l += Math.hypot(o.t[i][0] - o.t[i - 1][0], o.t[i][1] - o.t[i - 1][1]);
+    return l >= CATENELLA_MINIMA_MM;
+  });
+}
+
 /** Una linea per ogni oggetto del ricamo, nell'ordine: basi e passaggi coi punti del tool, le catenelle col loro tracciato, che il psil lo calcola Stilista. */
 export function lineePerStilista(e: EsitoRete, origine: Xy | null, modelli: { catenella: number; running: number }, dopo: number): Array<{ modello: number; dopo: number; contorno_mm: Xy[]; nome: string }> {
   const [ox, oy] = origine ?? [0, 0];
   const nel = (t: Xy[]): Xy[] => t.map(([x, y]) => [Math.round((x + ox) * 1000) / 1000, Math.round((y + oy) * 1000) / 1000]);
-  return e.oggetti.filter((o) => o.t.length >= 2).map((o, i) => (o.tipo === 'catenella'
+  return oggettiDaMandare(e).map((o, i) => (o.tipo === 'catenella'
     ? { modello: modelli.catenella, dopo, contorno_mm: nel(o.t), nome: `catenella ${i + 1}` }
     : { modello: modelli.running, dopo, contorno_mm: nel(o.punti), nome: `${o.tipo} ${i + 1}` }));
 }
@@ -91,9 +104,10 @@ export async function reteAStilista(e: EsitoRete, par: ParametriRete, origine: X
       dopo = r.oggetti_dopo - 1;
     }
     // come nel file ogni colonna ha il suo ago: il cambio avviene alla fine dell'uscita, fuori dal contorno
-    if (!e.collegati && !errori.length) {
+    // gli indici valgono solo se tutti gli oggetti sono entrati; una catenella a 0 punti è entrata lo stesso
+    if (!e.collegati && dopo - modello === linee.length) {
       stato('Invio a Stilista… gli aghi delle colonne');
-      const buone = e.oggetti.filter((o) => o.t.length >= 2);
+      const buone = oggettiDaMandare(e);
       const colonne = [...new Set(buone.map((o) => o.cella.colonna))].sort((a, b) => a - b);
       for (const [k, c] of colonne.entries()) {
         const indici = buone.flatMap((o, i) => (o.cella.colonna === c ? [modello + 1 + i] : []));
@@ -101,7 +115,7 @@ export async function reteAStilista(e: EsitoRete, par: ParametriRete, origine: X
       }
     }
     await posta(f, `/cancella?oggetti=${modello}`, {});
-    stato(`In «${documento}»${selezionata ? ', col psil selezionato' : ''}: ${fatte.toLocaleString('it-IT')} oggetti su ${linee.length.toLocaleString('it-IT')}, ${punti.toLocaleString('it-IT')} punti, catenelle psil vere${errori.length ? `; ${errori.length} non riusciti: ${errori[0]}` : ''}`);
+    stato(`In «${documento}»${selezionata ? ', col psil selezionato' : ''}: ${fatte.toLocaleString('it-IT')} oggetti su ${linee.length.toLocaleString('it-IT')}, ${punti.toLocaleString('it-IT')} punti, catenelle psil vere${e.oggetti.length > linee.length ? `; ${e.oggetti.length - linee.length} troppo corte non mandate` : ''}${errori.length ? `; ${errori.length} non riusciti: ${errori[0]}` : ''}`);
   } catch (x) {
     stato('Stilista: ' + (x as Error).message);
   }
