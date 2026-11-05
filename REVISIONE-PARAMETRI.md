@@ -129,6 +129,8 @@ Proposte mostrate a Lorenzo, che ha risposto *«avanza»* senza correggerle: da 
 | Distanza di sicurezza da bordi e vuoti | **Distanza da bordi e aree vuote** | `voidClearanceMm` |
 | — | **Le striature entrano sotto il ricamo di** | `coverOverlapMm` |
 | — | **Uscite dalle punte** | `usciteDallePunte` |
+| — | **Due livelli, con due fili** | `secondLevel` |
+| — | **2° livello:** Grandezza delle macchie · Distanza fra le macchie · Distanza fra i trattini · Variante · filo | `blobSizeMm2` · `blobSpacingMm2` · `densitySpacingMm2` · `seed2` · `color2` |
 | — | **Dividi in zone** | `stopZones` |
 | — | **Le zone vanno** | `stopZonesDirection` |
 | — (ruolo) | **Ricamo sopra** | `COVER_AREA` |

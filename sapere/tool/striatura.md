@@ -203,6 +203,27 @@ Sul pannello laser, 3 zone, 3 varianti, spento → acceso: grandezza 22, in vist
 43–62 → 42–58; grandezza 8, in vista 1,84–2,02 → 1,43–1,49 m, oltre 5 mm 117–135 → 91–102. Il tratto più lungo non cambia (12–18 → 11–16
 mm a 22 e 8). Filo totale uguale, 0 salti. **Non provato in macchina:** il salto di due colonne a metà dei trattini, su macchie da 0,6 mm.
 
+**Due livelli, due fili.** Lorenzo, stesso giorno: *«ti chiedo la possibilità di creare non solo 1 ma un doppio livello di striato, come
+se volessi farlo con 2 fili diversi»*. `secondLevel` («Due livelli, con due fili», spento di serie): il secondo livello è una passata
+intera, cucita dopo il primo, con variante, grandezza, distanza fra le macchie, distanza fra i trattini e filo suoi (`seed2`,
+`blobSizeMm2`, `blobSpacingMm2`, `densitySpacingMm2`, `color2`); frastaglio, punto, passaggi e zone sono quelli del primo. Il primo livello
+resta identico a quando è da solo, e il secondo non sa dove sono le macchie del primo: si sovrappongono a caso. Nel DST: due aghi, un
+cambio filo, che non conta come salto. **Scelte mie, da confermare:** il secondo tutto dopo il primo e non alternati zona per zona (le
+striature dei due non vanno a registro, e alternarli farebbe 6 stop invece di 2); di serie macchie da 14 mm.
+
+I passaggi del secondo livello evitano i trattini del primo (costo 30 come gli altri trattini in vista): un passaggio sopra si vedrebbe
+col suo colore. Solo col ricamo sopra: senza zone il secondo livello è a serpentina e i suoi denti non guardano il primo.
+
+Sul pannello laser, 3 zone, 3 varianti, primo livello a 22 mm: in vista 0,56–0,74 m con un livello; 1,60–1,98 m col secondo da 14 mm, 2,49–2,62
+col secondo da 8 mm; tratto in vista più lungo 11–16 → 17–23 mm. Il secondo livello ha più macchie piccole e meno strade libere: resta più
+filo in vista e più lungo per ogni tratto. Filo 128–133 m → 245–250 m (da 14) e 218–222 m (da 8). Calcolo circa il doppio. **Non provato:** i due fili
+in macchina, lo spessore dove le macchie si sovrappongono.
+
+**L'apertura.** Lorenzo, stesso giorno: *«per velocizzare l'apertura quando inserisco un svg con delle macchie non impostare macchie in aree
+vuote ma il più grande ci sta che sia contorno il resto tutto su ignora»*. Alla prima apertura la forma più grande fa da contorno e gli altri
+colori restano su «ignora». Prima le forme di altro colore dentro il contorno diventavano aree vuote, e con 177 forme si aspettava un calcolo
+inutile. La sagoma demo tiene il suo foro.
+
 **Provato il 2026-11-04 e il 2026-11-05 e tolto:**
 - finire la macchia che si vede, poi uscire (l'idea di togliere del tutto il legame con le righe): in vista 1,04–1,28 m contro
   0,86–1,03 a grandezza 22, 2,6–2,8 contro 1,9 a grandezza 8;

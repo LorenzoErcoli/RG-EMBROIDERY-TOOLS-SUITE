@@ -60,6 +60,13 @@ export interface StriaturaParams {
   usciteDallePunte: boolean; // il filo entra ed esce dalla punta della striatura più vicina a un punto coperto, non solo dai due capi della fila
   stopZones: number;         // col ricamo sopra si cuce a fasce, una dopo l'altra, l'ordine è libero dentro la fascia; 1 = nessuna divisione
   stopZonesDirection: 'orizzontale' | 'verticale'; // orizzontale = dall'alto in basso; verticale = da sinistra a destra
+  // --- secondo livello: un'altra passata di striature, con un altro filo (Lorenzo, 2026-11-05) ---
+  secondLevel: boolean;      // spento = un livello solo
+  seed2: number;             // la sua variante: disposizione diversa dal primo
+  blobSizeMm2: number;       // grandezza delle sue macchie
+  blobSpacingMm2: number;    // distanza fra le sue macchie
+  densitySpacingMm2: number; // distanza fra i suoi trattini
+  color2: string;            // il suo filo
   stitchMode: 'boustrophedon' | 'retrace'; // vedi sopra: default retrace (dal centro su/giù e torna)
   seed: number;              // "Variante": disposizione ricreabile (deterministica)
   // --- colore (mono ora; multicolore in futuro → l'output è già a layer) ---
@@ -88,10 +95,21 @@ export const defaultStriaturaParams: StriaturaParams = {
   usciteDallePunte: true,
   stopZones: 3,
   stopZonesDirection: 'orizzontale',
+  secondLevel: false,
+  seed2: 2,
+  blobSizeMm2: 14,
+  blobSpacingMm2: 5,
+  densitySpacingMm2: 0.6,
+  color2: '#b5651d',
   stitchMode: 'retrace',
   seed: 1,
   color: '#1a1a1a',
 };
+
+/** Il secondo livello è una passata intera con le sue misure; frastaglio, punto, passaggi e zone sono quelli del primo. */
+export function parametriSecondoLivello(p: StriaturaParams): StriaturaParams {
+  return { ...p, seed: p.seed2, blobSizeMm: p.blobSizeMm2, blobSpacingMm: p.blobSpacingMm2, densitySpacingMm: p.densitySpacingMm2, color: p.color2 };
+}
 
 /** Un layer di output del motore (un filo = una passata). Mono ora; lista → multicolore futuro. */
 export interface StriaturaLayer {
@@ -107,6 +125,8 @@ export interface StriaturaInput {
   voids: Polyline[];     // aree vuote interne (R5)
   /** Dove dopo verrà cucita un'altra grafica: lì il ricamo continua e i passaggi corrono liberi. */
   coperte?: Polyline[];
+  /** Il filo dei livelli già cuciti: i passaggi col ricamo sopra non corrono sopra i suoi trattini. */
+  giaCucito?: Polyline[];
 }
 
 // ------------------------------------------------------------------ utilità pure
@@ -349,6 +369,7 @@ interface GrigliaZone {
   bb: BBox; cella: number; gcols: number; grows: number;
   gIdx: (x: number, y: number) => number;
   insideCell: Uint8Array; coperta: Uint8Array; profonda: Uint8Array;
+  giaCucito: Polyline[];
 }
 interface Trattino { pts: Point[]; x: number; col: number; riga: number; y0: number; y1: number; }
 /** Una fila di trattini vicini della stessa riga: si cuce d'un fiato, e il filo entra ed esce dai suoi due capi. */
@@ -605,6 +626,14 @@ function cuciSottoLeZone(
   // dove ci sono trattini in vista il filo non passa: anche quelli che verranno dopo
   const cucita = new Uint8Array(gcols * grows);
   for (const t of conSpan) for (let y = t.y0; y <= t.y1; y += cella / 2) cucita[gIdx(t.x, y)] = 1;
+  // anche quelli del livello prima: un passaggio sopra si vedrebbe, col suo colore (solo i tratti verticali: i trattini)
+  for (const pl of g.giaCucito) {
+    for (let i = 1; i < pl.length; i++) {
+      const a = pl[i - 1], b = pl[i];
+      if (Math.abs(a.x - b.x) > 1e-6) continue;
+      for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y += cella / 2) cucita[gIdx(a.x, y)] = 1;
+    }
+  }
 
   const costoCella = (idx: number) => {
     if (coperta[idx]) return COSTO_SOTTO;
@@ -1211,7 +1240,7 @@ export function generateStriatura(input: StriaturaInput, richiesti: StriaturaPar
   if (cur.length > 1) polylines.push(cur);
 
   if (coperte.length) {
-    const griglia: GrigliaZone = { bb, cella: occCell, gcols, grows, gIdx, insideCell, coperta, profonda };
+    const griglia: GrigliaZone = { bb, cella: occCell, gcols, grows, gIdx, insideCell, coperta, profonda, giaCucito: input.giaCucito ?? [] };
     return [{ color: params.color, ...cuciSottoLeZone(raccolti, griglia, forbidden, params, travelStep, clr) }];
   }
   return [{ color: params.color, polylines, passaggi }];

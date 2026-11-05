@@ -30,6 +30,12 @@ const MACCHIA_PARAMS: Field[] = [
   { key: 'densitySpacingMm', label: 'Distanza fra i trattini', unit: 'mm', step: 0.1, min: 0.2, help: 'più bassa = macchia più piena, più filo' },
   { key: 'striaturaLengthMm', label: 'Trattini: lunghezza massima', unit: 'mm', step: 1, min: 4, help: 'le macchie più piccole di 22 mm li accorciano da sole' },
 ];
+const SECONDO_PARAMS: Field[] = [
+  { key: 'blobSizeMm2', label: 'Grandezza delle macchie', unit: 'mm', step: 1, min: 2, help: 'come per il primo livello' },
+  { key: 'blobSpacingMm2', label: 'Distanza fra le macchie', unit: 'mm', step: 1, min: 0 },
+  { key: 'densitySpacingMm2', label: 'Distanza fra i trattini', unit: 'mm', step: 0.1, min: 0.2 },
+  { key: 'seed2', label: 'Variante', unit: '#', step: 1, min: 1, help: 'la disposizione delle macchie: diversa dal primo, riproducibile' },
+];
 const FRASTAGLIO_PARAMS: Field[] = [
   { key: 'jaggedLengthMm', label: 'Frastaglio: lunghezze diverse', unit: 'mm', step: 1, min: 0, help: 'più alto = bordo della macchia più irregolare' },
   { key: 'jaggedStartMm', label: 'Frastaglio: partenze sfalsate', unit: 'mm', step: 1, min: 0, help: 'quanto si spostano su e giù i trattini vicini; 0 = stessa altezza' },
@@ -128,7 +134,21 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
       </details>
 
       <details class="rg-param-section rg-disclosure" open>
-        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">04</span><span class="rg-param-section__title">Passaggi</span></summary>
+        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">04</span><span class="rg-param-section__title">Secondo livello</span></summary>
+        <div class="rg-param-grid">
+          <label class="rg-toggle rg-param-grid__wide">
+            <input type="checkbox" id="secondLevel"><span class="rg-toggle__track"></span><span>Due livelli, con due fili</span>
+          </label>
+          <small class="rg-field__help rg-param-grid__wide">un’altra passata di striature, cucita dopo la prima con un altro filo. Frastaglio, punto, passaggi e zone sono gli stessi</small>
+        </div>
+        <div id="secondoBox">
+          <div id="secondoParams" class="rg-param-grid"></div>
+          <ul class="rg-color-map" id="threadColor2"></ul>
+        </div>
+      </details>
+
+      <details class="rg-param-section rg-disclosure" open>
+        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">05</span><span class="rg-param-section__title">Passaggi</span></summary>
         <div id="passaggiParams" class="rg-param-grid"></div>
         <div class="rg-param-grid">
           <div class="rg-field rg-param-grid__wide">
@@ -151,12 +171,12 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
       </details>
 
       <details class="rg-param-section rg-disclosure">
-        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">05</span><span class="rg-param-section__title">Punto</span></summary>
+        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">06</span><span class="rg-param-section__title">Punto</span></summary>
         <div id="puntoParams" class="rg-param-grid"></div>
       </details>
 
       <details class="rg-param-section rg-disclosure">
-        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">06</span><span class="rg-param-section__title">Filo</span></summary>
+        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">07</span><span class="rg-param-section__title">Filo</span></summary>
         <ul class="rg-color-map" id="threadColor"></ul>
       </details>
     </aside>
@@ -184,7 +204,9 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
   const $ = (id: string) => root.querySelector<HTMLElement>('#' + id)!;
 
   let imported: ImportResult = importResultFromContours(sampleContours());
-  let roles: RoleAssignment = {};
+  // la demo ha un foro di colore suo: mostra le aree vuote
+  const ruoliDemo = (): RoleAssignment => ({ '#e53e3e': 'EXCLUSION' });
+  let roles: RoleAssignment = ruoliDemo();
   const params: StriaturaParams = { ...defaultStriaturaParams };
 
   const currentContours = () => applyRealWidth(imported, params.realWidthMm);
@@ -194,19 +216,15 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
   // Pan/zoom del canvas (la vista non si azzera rigenerando l'SVG).
   const pz = hookPanZoom($('canvas'), $('layer'), (z) => { $('zoom').textContent = `zoom ${Math.round(z * 100)}%`; });
 
-  // Auto-assegna: il contorno di area maggiore = area da ricamare; una forma di altro colore
-  // interamente dentro di esso = area vuota (R12). L'utente può correggere.
+  // Auto-assegna: il contorno di area maggiore = area da ricamare, il resto su «ignora». Lorenzo, 2026-11-05: «per velocizzare
+  // l'apertura quando inserisco un svg con delle macchie non impostare macchie in aree vuote ma il più grande ci sta che sia
+  // contorno il resto tutto su ignora». Con 177 forme come vuoti l'apertura calcolava per niente. L'utente può correggere.
   function autoAssign() {
     const cs = currentContours().filter((c) => c.closed);
     if (!cs.length) return;
     let big = cs[0];
     for (const c of cs) if (polygonArea(c.points) > polygonArea(big.points)) big = c;
     if (roles[big.color] === undefined) roles[big.color] = 'MASTER_OUTLINE';
-    for (const c of cs) {
-      if (c.color !== big.color && roles[c.color] === undefined && c.points.length && pointInPolygon(c.points[0], big.points)) {
-        roles[c.color] = 'EXCLUSION';
-      }
-    }
   }
 
   function buildParamGrid(hostId: string, fields: Field[]) {
@@ -253,6 +271,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     buildParamGrid('macchiaParams', MACCHIA_PARAMS);
     buildParamGrid('movimentoParams', MOVIMENTO_PARAMS);
     buildParamGrid('passaggiParams', PASSAGGI_PARAMS);
+    buildParamGrid('secondoParams', SECONDO_PARAMS);
     buildParamGrid('frastaglioParams', FRASTAGLIO_PARAMS);
     buildParamGrid('puntoParams', PUNTO_PARAMS);
   }
@@ -303,23 +322,27 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
   // ---- "Filo": una riga rg-color-map con picker nativo per il colore unico (mono ora). ----
   const asHex6 = (c: string) => (/^#[0-9a-fA-F]{6}$/.test(c) ? c : '#1a1a1a');
   function buildThreadUI() {
-    const host = $('threadColor');
+    rigaFilo('threadColor', 'color', 'Colore del filo');
+    rigaFilo('threadColor2', 'color2', 'Colore del filo del secondo livello');
+  }
+  function rigaFilo(hostId: string, chiave: 'color' | 'color2', titolo: string) {
+    const host = $(hostId);
     host.innerHTML = '';
     const li = document.createElement('li');
     li.className = 'rg-color-map__row';
     const sw = document.createElement('label');
     sw.className = 'rg-color-map__swatch';
-    sw.style.setProperty('--swatch', params.color);
+    sw.style.setProperty('--swatch', params[chiave]);
     const picker = document.createElement('input');
     picker.type = 'color';
     picker.className = 'rg-u-visually-hidden';
-    picker.value = asHex6(params.color);
-    picker.setAttribute('aria-label', 'Colore del filo');
+    picker.value = asHex6(params[chiave]);
+    picker.setAttribute('aria-label', titolo);
     const code = document.createElement('span');
     code.className = 'rg-color-map__code';
-    code.textContent = params.color.toUpperCase();
+    code.textContent = params[chiave].toUpperCase();
     picker.addEventListener('input', () => {
-      params.color = picker.value;
+      params[chiave] = picker.value;
       sw.style.setProperty('--swatch', picker.value);
       code.textContent = picker.value.toUpperCase();
       render();
@@ -384,6 +407,9 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
   const versoBtns = Array.from($('stopZonesDirection').querySelectorAll('.rg-segmented__item')) as HTMLButtonElement[];
+  const secondoInput = $('secondLevel') as HTMLInputElement;
+  const syncSecondo = () => { secondoInput.checked = params.secondLevel; $('secondoBox').hidden = !params.secondLevel; };
+  secondoInput.addEventListener('change', () => { params.secondLevel = secondoInput.checked; syncSecondo(); render(); });
   const usciteInput = $('usciteDallePunte') as HTMLInputElement;
   const syncUscite = () => { usciteInput.checked = params.usciteDallePunte; };
   usciteInput.addEventListener('change', () => { params.usciteDallePunte = usciteInput.checked; render(); });
@@ -423,6 +449,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     syncMode();
     syncVerso();
     syncUscite();
+    syncSecondo();
     buildAllParams();
     buildThreadUI();
     return true;
@@ -481,7 +508,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     render();
   });
 
-  $('sampleBtn').addEventListener('click', () => { roles = {}; sourceName = ''; sourceFile = null; loadImport(importResultFromContours(sampleContours()), 'Sagoma demo'); });
+  $('sampleBtn').addEventListener('click', () => { roles = ruoliDemo(); sourceName = ''; sourceFile = null; loadImport(importResultFromContours(sampleContours()), 'Sagoma demo'); });
 
   // Oggetto pieno: rettangolo largo×alto (mm) senza fori, da riempire subito (nessun file).
   $('objBtn').addEventListener('click', () => {
@@ -600,6 +627,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
   syncMode();
   syncVerso();
   syncUscite();
+  syncSecondo();
   buildAllParams();
   buildThreadUI();
   loadImport(imported, 'Sagoma demo');

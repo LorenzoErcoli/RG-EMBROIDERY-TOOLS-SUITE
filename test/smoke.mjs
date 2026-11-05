@@ -1785,6 +1785,21 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   check('in vista non restano più passaggi di prima (a parità di zona)', sSotto.passaggiInVistaMm <= sMisuraSenza + 1, true);
   check('i passaggi evidenziati e la zona restano in anteprima: non si cuciono', sSotto.exportLayers.map((l) => l.id).join(), 'reference,striatura');
   check('filo dentro la sagoma e passo rispettato anche coi passaggi sotto', [sMeasure(sFiloDi(sSotto), sRect, []).fuori, sMeasure(sFiloDi(sSotto), sRect, []).segMax <= sStep + 0.1], [0, true]);
+  // Due livelli (Lorenzo, 2026-11-05: «non solo 1 ma un doppio livello di striato, come se volessi farlo con 2 fili diversi»).
+  console.log('\nstriatura — due livelli, due fili');
+  const s2P = { ...sP, secondLevel: true };
+  const s2 = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE', '#00ff00': 'COVER_AREA' }, s2P);
+  const s2Fili = s2.exportLayers.filter((l) => !l.shapeOnly);
+  check('due livelli: due fili, ognuno del suo colore', s2Fili.map((l) => l.color).join(), [sP.color, sP.color2].join());
+  check('il primo livello è identico a quando è da solo', JSON.stringify(s2Fili[0].polylines), JSON.stringify(sFiloDi(sSotto)));
+  check('un livello solo resta il comportamento di serie', sSotto.exportLayers.filter((l) => !l.shapeOnly).length, 1);
+  check('il cambio di filo non è un salto', s2.blockCount, 1);
+  check('il secondo ha le sue misure: macchie e disposizione diverse', sTrattini(s2Fili[1].polylines).length !== sTrattini(s2Fili[0].polylines).length, true);
+  const s2Dst = rg.readDst(rg.dstFromExportLayers(s2.exportLayers, { label: 'STRIATURA' }));
+  check('nel DST: due aghi, un cambio filo', [s2Dst.colorChanges, s2Dst.blocks.length], [1, 2]);
+  const s2Senza = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE' }, s2P);
+  const s2FiliSenza = s2Senza.exportLayers.filter((l) => !l.shapeOnly);
+  check('due livelli anche senza ricamo sopra, dentro la sagoma', [s2FiliSenza.length, sMeasure(s2FiliSenza[1].polylines, sRect, []).fuori], [2, 0]);
   const sZonaEVuoto = sMeasure(sGen(sP, [sVoid]).length ? rg.generateStriatura({ outline: sRect, voids: [sVoid], coperte: [sZona] }, sP)[0].polylines : [], sRect, [sVoid]);
   check('una zona sopra un vuoto: il filo nel vuoto non ci entra lo stesso (R5)', [sZonaEVuoto.nelVuoto, sZonaEVuoto.attraversa], [0, 0]);
 }

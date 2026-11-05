@@ -939,6 +939,30 @@
           "$ref": "#/$defs/stopZonesDirection",
           "default": "orizzontale"
         },
+        "secondLevel": {
+          "$ref": "#/$defs/secondLevel",
+          "default": false
+        },
+        "seed2": {
+          "$ref": "#/$defs/seed2",
+          "default": 2
+        },
+        "blobSizeMm2": {
+          "$ref": "#/$defs/blobSizeMm2",
+          "default": 14
+        },
+        "blobSpacingMm2": {
+          "$ref": "#/$defs/blobSpacingMm2",
+          "default": 5
+        },
+        "densitySpacingMm2": {
+          "$ref": "#/$defs/densitySpacingMm2",
+          "default": 0.6
+        },
+        "color2": {
+          "$ref": "#/$defs/color2",
+          "default": "#b5651d"
+        },
         "stitchMode": {
           "$ref": "#/$defs/stitchMode",
           "default": "retrace"
@@ -4132,6 +4156,53 @@
       ],
       "x-concetto": "ordine-cucitura"
     },
+    "secondLevel": {
+      "type": "boolean",
+      "title": "Secondo livello di striature",
+      "description": "Un'altra passata di striature con un altro filo, cucita dopo la prima. Frastaglio, punto, passaggi e zone sono gli stessi.",
+      "x-concetto": "interruttore"
+    },
+    "seed2": {
+      "type": "integer",
+      "title": "2° livello: variante",
+      "description": "La disposizione delle macchie del secondo livello: diversa dal primo, riproducibile.",
+      "minimum": 1,
+      "x-passo": 1,
+      "x-concetto": "seme"
+    },
+    "blobSizeMm2": {
+      "type": "number",
+      "title": "2° livello: grandezza delle macchie",
+      "description": "Come «Grandezza delle macchie», per il secondo livello.",
+      "x-unita": "mm",
+      "minimum": 2,
+      "x-passo": 1,
+      "x-concetto": "altro"
+    },
+    "blobSpacingMm2": {
+      "type": "number",
+      "title": "2° livello: distanza fra le macchie",
+      "description": "Come «Distanza fra le macchie», per il secondo livello.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "altro"
+    },
+    "densitySpacingMm2": {
+      "type": "number",
+      "title": "2° livello: distanza fra i trattini",
+      "description": "Come «Distanza fra i trattini», per il secondo livello.",
+      "x-unita": "mm",
+      "minimum": 0.2,
+      "x-passo": 0.1,
+      "x-concetto": "densita"
+    },
+    "color2": {
+      "type": "string",
+      "title": "2° livello: colore del filo",
+      "description": "Il filo del secondo livello.",
+      "x-concetto": "colori"
+    },
     "stitchMode": {
       "type": "string",
       "title": "Costruzione della striatura",
@@ -6178,6 +6249,7 @@
         "densitySpacingMm",
         "targetDensityPct",
         "fillSpacingMm",
+        "densitySpacingMm2",
         "baseSpacing",
         "densitySpacing",
         "satinRowSpacing2",
@@ -6460,7 +6532,8 @@
       "descrizione": "Seme del caso: stesso seme, stesso ricamo.",
       "parametri": [
         "variationSeed",
-        "seed"
+        "seed",
+        "seed2"
       ]
     },
     "variazione": {
@@ -6518,6 +6591,7 @@
         "clusterStrength",
         "paletteMode",
         "colorCount",
+        "color2",
         "color",
         "minTintRunMm"
       ]
@@ -6606,6 +6680,7 @@
         "autoModulesPerDiagonal",
         "enableLevel0",
         "enableLevel05",
+        "secondLevel",
         "thermoOutline",
         "teeth",
         "buildDst",
@@ -6633,6 +6708,8 @@
         "blobSpacingMm",
         "waveAmpMm",
         "waveLenMm",
+        "blobSizeMm2",
+        "blobSpacingMm2",
         "windowWidening",
         "gridMinLine",
         "lineSpacing",
