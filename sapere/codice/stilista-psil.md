@@ -83,4 +83,15 @@ Lorenzo: *«mi stai bloccando tutto stilista»*. Invio di tutta la rete con `POS
 | psil, con ricalcolo | circa 30 MB | circa 95 ms |
 | psil, senza ricalcolo | circa 12 MB | circa 8 ms |
 
-Con 2.200 catenelle sono circa 66 GB. Il file di riferimento invece ha oltre 2.000 psil e si apre in circa 700 MB. **Ipotesi, non provata:** nel file le catenelle condividono gli insiemi di parametri, mentre `Clone` ne fa un doppione per ogni copia. Per provarlo serve cambiare il plugin. Finché non è risolto, per la rete intera si usa il psil disegnato o il DST.
+Con 2.200 catenelle sono circa 66 GB. Il file di riferimento invece ha oltre 2.000 psil e si apre in circa 700 MB. **Provato il 2026-11-05 con plugin di prova, poi rimesso quello di master:**
+
+| Prova | Risultato |
+|---|---|
+| Copie coi parametri del modello invece del doppione | Uguale: 863 MB invece di 870 per 30 psil. Ipotesi dei parametri smentita |
+| Pulizia forzata della memoria dopo ogni blocco | Non è roba inutile: dopo la pulizia restano circa 25 MB vivi per ogni psil copiato e ricalcolato |
+| Togliere le copie dal documento, poi pulizia | La memoria viva non scende (1.697 MB prima e dopo): non sta negli oggetti del documento |
+| File aperto con 3.777 oggetti | 154 MB di memoria viva: gli oggetti letti dal file pesano poco |
+| Ricalcolo di 10 psil del file | +129 MB, circa 13 MB ognuno |
+| `/riscrivi-punti` su psil del file | Da 5 a 9 MB ognuno, ma dopo 1,5 s Stilista li ricalcola da solo sul tracciato dato (154 punti → 98), quindi i punti scritti non restano. La misura è sporca: gli indici si spostavano fra un blocco e l'altro, e 11 dei 30 oggetti letti alla fine non erano più psil |
+
+Quindi la memoria cresce a ogni copia e a ogni ricalcolo di un psil, e qualcosa fuori dagli oggetti la tiene. Che cosa sia non è trovato. Finché non è risolto, per la rete intera si usa il psil disegnato o il DST; il psil vero regge poche centinaia di oggetti.
