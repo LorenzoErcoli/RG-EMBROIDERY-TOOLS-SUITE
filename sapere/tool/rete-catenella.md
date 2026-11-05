@@ -41,6 +41,8 @@ esattamente come questo»*.
 
 - **Le aree da infittire arrivano da Stilista con un laser colorato** (2026-11-04, *«come al solito farei che da stilista arriva un laser colorato e che quindi identifica un area specifica»*). Il colore del contorno più grande è il cartamodello; gli altri colori tutti dentro di lui sono aree, i fori dei riempimenti no; si corregge dal menu. Ogni colore ha la sua soglia: l'ha proposto la chat e Lorenzo non ha obiettato. Si divide fino alla soglia più bassa, e una linea vale in un'area se la maglia che divide era più grande della soglia di quell'area. Che le aree accendano da sole l'infittimento è una scelta mia.
 
+- **La griglia si allinea al lato superiore dritto** (2026-11-04, *«dove possibile, soprattutto nei contorni che hanno un lato superiore orizzontale preciso, il modulo fosse preciso a quello così che non ci sono passaggi in quel punto»*). Il tool prova le posizioni in verticale su una striscia sotto il lato e tiene quella con meno filo sopra il lato; a parità meglio i moduli interi; sul contorno vero deve andare davvero meglio, se no la griglia resta dov'era. Un lato conta se è dritto entro mezzo mm, lungo almeno 150 mm e almeno il 40% della larghezza: valori miei, come il peso fra filo e moduli interi. Acceso di serie: sui contorni senza lato dritto non cambia niente.
+
 ## Da decidere
 - Come nasce la ragnatela nella versione parametrica: il modulo è disegnato a mano e la regola che lo genera non è misurata.
 

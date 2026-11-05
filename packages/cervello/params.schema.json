@@ -1629,6 +1629,11 @@
           "default": 22,
           "x-id": "catenellaMinModule"
         },
+        "allineaLato": {
+          "$ref": "#/$defs/catenellaAlignTopEdge",
+          "default": true,
+          "x-id": "catenellaAlignTopEdge"
+        },
         "pezziSulBordo": {
           "$ref": "#/$defs/catenellaEdgePieces",
           "default": true,
@@ -4931,6 +4936,12 @@
       "maximum": 100,
       "x-concetto": "griglia-moduli"
     },
+    "catenellaAlignTopEdge": {
+      "type": "boolean",
+      "title": "Allinea la griglia al lato superiore dritto",
+      "description": "Se il contorno ha un lato superiore dritto e orizzontale, la griglia si mette dove meno filo gira sopra quel lato. Vale solo lì: gli altri contorni non cambiano. Sposta la griglia, Y si somma.",
+      "x-concetto": "griglia-moduli"
+    },
     "catenellaEdgePieces": {
       "type": "boolean",
       "title": "Attacca i pezzi sotto la soglia ai moduli vicini",
@@ -6722,6 +6733,7 @@
         "catenellaGridOffsetX",
         "catenellaGridOffsetY",
         "catenellaMinModule",
+        "catenellaAlignTopEdge",
         "catenellaEdgePieces",
         "catenellaEdgePieceMin",
         "catenellaLinkModules",
