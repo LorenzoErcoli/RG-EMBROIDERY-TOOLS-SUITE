@@ -58,6 +58,8 @@ export interface ParametriRete {
   /** Un pezzo con meno catenella di così non si cuce. */
   pezzoMinimoMm: number;
   psilVero: boolean;
+  /** Prova: i punti delle catenelle con le regole misurate su Stilista, per il campione cucito. Spento: il calcolo di sempre. */
+  catenellaDiProva: boolean;
   infittisci: boolean;
   magliaMassimaMm2: number;
   infittisciVariante: number;
@@ -70,7 +72,7 @@ export interface ParametriRete {
 export const PARAMETRI_RETE: ParametriRete = {
   passate: 3, puntoBaseMm: 2.5, puntoPassaggioMm: 2.5,
   psilLunghezzaMm: 2.5, psilLarghezzaMm: 1.3, psilPassoMm: 1.7, psilInizioMm: 0.6, psilGiri: 2,
-  margineMm: 0, spostaXMm: 0, spostaYMm: 0, moduloMinimoPct: 22, passaggiInterni: false, allineaLato: true, pezziSulBordo: true, pezzoMinimoMm: 30, collegaModuli: false, uscitaFuoriMm: 20, psilVero: true,
+  margineMm: 0, spostaXMm: 0, spostaYMm: 0, moduloMinimoPct: 22, passaggiInterni: false, allineaLato: true, pezziSulBordo: true, pezzoMinimoMm: 30, collegaModuli: false, uscitaFuoriMm: 20, psilVero: true, catenellaDiProva: false,
   infittisci: false, magliaMassimaMm2: 20, infittisciVariante: 1,
   corsie: true, primaCorsiaMm: 1, passoCorsiaMm: 1,
 };
@@ -87,8 +89,54 @@ export function ricampiona(t: Xy[], passo: number): Xy[] {
   return out;
 }
 
+/** Gli angoli del tracciato raccordati, a raggio costante: da lontano la curva non si vede, sugli angoli Stilista taglia. */
+function raccordata(t: Xy[], raggio: number): Xy[] {
+  if (t.length < 3) return t;
+  const out: Xy[] = [t[0]];
+  for (let i = 1; i < t.length - 1; i++) {
+    const a = t[i - 1], b = t[i], c = t[i + 1], la = d(a, b) || 1, lc = d(b, c) || 1;
+    const coseno = Math.max(-1, Math.min(1, ((b[0] - a[0]) * (c[0] - b[0]) + (b[1] - a[1]) * (c[1] - b[1])) / (la * lc)));
+    const tg = Math.min(raggio * Math.tan(Math.acos(coseno) / 2), la / 2, lc / 2);
+    if (tg < 1e-3) { out.push(b); continue; }
+    const p: Xy = [b[0] + ((a[0] - b[0]) * tg) / la, b[1] + ((a[1] - b[1]) * tg) / la], q: Xy = [b[0] + ((c[0] - b[0]) * tg) / lc, b[1] + ((c[1] - b[1]) * tg) / lc];
+    for (let k = 0; k <= 10; k++) {
+      const f = k / 10, g = 1 - f;
+      out.push([g * g * p[0] + 2 * g * f * b[0] + f * f * q[0], g * g * p[1] + 2 * g * f * b[1] + f * f * q[1]]);
+    }
+  }
+  out.push(t[t.length - 1]);
+  return out;
+}
+
+/**
+ * Lorenzo, 2026-11-05: «io devo essere sicuro che il risultato tra stilista e tools delle catenelle è uguale se non migliorativo». Le regole misurate sulle 2.118 catenelle del file
+ * (sapere/codice/stilista-psil.md): il numero di maglie è il più vicino al passo, poi il passo si stira per riempire il tratto e il triangolo si allunga con lui. Non è ancora uguale: agli angoli resta uno scarto.
+ */
+function catenellaDiProva(t0: Xy[], p: ParametriRete): Xy[] {
+  const W = p.psilLunghezzaMm, t = raccordata(t0, 3), L = lunghezza(t), inizio = 0.239 * W, utile = L - inizio - 0.44 * W;
+  if (L <= inizio) return [];
+  const n = Math.max(1, Math.floor(utile / p.psilPassoMm + 0.5) + 1), passo = n > 1 ? utile / (n - 1) : p.psilPassoMm;
+  const cum = [0];
+  for (let i = 1; i < t.length; i++) cum.push(cum[i - 1] + d(t[i - 1], t[i]));
+  const out: Xy[] = [];
+  const avanti = 0.9985 * W * (passo / p.psilPassoMm), lato = (0.9977 * p.psilLarghezzaMm) / 2;
+  for (let k = 0; k < n; k++) {
+    const s = inizio + k * passo;
+    let i = 1;
+    while (i < t.length - 1 && cum[i] < s) i++;
+    const l = cum[i] - cum[i - 1] || 1, f = Math.max(0, Math.min(1, (s - cum[i - 1]) / l));
+    const q: Xy = [t[i - 1][0] + (t[i][0] - t[i - 1][0]) * f, t[i - 1][1] + (t[i][1] - t[i - 1][1]) * f], u: Xy = [(t[i][0] - t[i - 1][0]) / l, (t[i][1] - t[i - 1][1]) / l], nor: Xy = [-u[1], u[0]];
+    const B: Xy = [q[0] + u[0] * avanti - nor[0] * lato, q[1] + u[1] * avanti - nor[1] * lato];
+    const C: Xy = [q[0] + u[0] * avanti + nor[0] * lato, q[1] + u[1] * avanti + nor[1] * lato];
+    for (let r = 0; r < p.psilGiri; r++) out.push(q, B, C);
+    out.push(q);
+  }
+  return out;
+}
+
 /** La maglia misurata sul file: A, B, C per ogni giro, poi di nuovo A. La prima parte a psilInizioMm, poi una ogni psilPassoMm. */
 export function catenella(t: Xy[], p: ParametriRete): Xy[] {
+  if (p.catenellaDiProva) return catenellaDiProva(t, p);
   const L = lunghezza(t);
   if (L <= p.psilInizioMm) return [];
   const n = Math.floor((L - p.psilInizioMm) / p.psilPassoMm) + 1;
