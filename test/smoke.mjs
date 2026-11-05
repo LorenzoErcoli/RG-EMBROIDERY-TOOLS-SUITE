@@ -69,9 +69,9 @@ export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordat
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
 export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_DI_SERIE, fermaSottoIlSecondo as pmFerma, macchiePerStilista as pmPerStilista } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
-export { lineePerStilista as rcLineeStilista } from ${JSON.stringify(posix('apps/rete-catenella/src/stilista-psil.ts'))};
+export { lineePerStilista as rcLineeStilista, scegliModelli as rcScegliModelli } from ${JSON.stringify(posix('apps/rete-catenella/src/stilista-psil.ts'))};
 export { aggiungiModulo as rcAggiungiModulo, leggiElenco as rcLeggiElenco, leggiModulo as rcLeggiModulo, scriviElenco as rcScriviElenco, togliModulo as rcTogliModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/elenco-moduli.ts'))};
-export { griglia as rcGriglia, riquadroRete as rcRiquadro, costruisciRete as rcCostruisci, stratiRete as rcStrati, catenella as rcCatenella, pezziDentro as rcPezzi, maschera as rcMaschera, PARAMETRI_RETE as RC_PARAMETRI, motore as rcMotore } from ${JSON.stringify(posix('apps/rete-catenella/src/motore.ts'))};
+export { griglia as rcGriglia, riquadroRete as rcRiquadro, costruisciRete as rcCostruisci, latoSuperioreDritto as rcLatoDritto, filoSopra as rcFiloSopraIntero, stratiRete as rcStrati, catenella as rcCatenella, pezziDentro as rcPezzi, maschera as rcMaschera, PARAMETRI_RETE as RC_PARAMETRI, motore as rcMotore } from ${JSON.stringify(posix('apps/rete-catenella/src/motore.ts'))};
 export { moduloDiEsempio as rcModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/esempio.ts'))};
 export { pezzoAMisure as rtsPezzoAMisure, stratiPerDst as rtsStratiPerDst } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
@@ -7013,8 +7013,15 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   check('i pezzi si cuciono prima del modulo, senza salti: il filo ci arriva sulle linee', [passoFuori, conPezzi.conti.pezziSenzaStrada, conPezzi.oggetti.filter((o, i) => o.pezzo && i && conPezzi.oggetti[i - 1].cella === o.cella && !conPezzi.oggetti[i - 1].pezzo).length], [0, 0, 0]);
   const senzaPiccoli = rg.rcCostruisci(m, quadrato, { ...P, pezzoMinimoMm: 100000 });
   check('i pezzi troppo piccoli non si cuciono', [senzaPiccoli.conti.pezzi, senzaPiccoli.conti.catenelle], [0, senzaPezzi.conti.catenelle]);
+  // Lorenzo, 2026-11-04: «soprattutto nei contorni che hanno un lato superiore orizzontale preciso, il modulo fosse preciso a quello così che non ci sono passaggi in quel punto»
+  check('il lato superiore dritto si riconosce, anche se l\'anello comincia a metà; un bordo ondulato no', [rg.rcLatoDritto(quadrato)?.y, rg.rcLatoDritto([[150, 0], [300, 0], [300, 200], [0, 200], [0, 0], [150, 0]])?.x1, rg.rcLatoDritto(Array.from({ length: 41 }, (_, i) => [i * 10, 5 * Math.sin(i)]).concat([[400, 200], [0, 200], [0, 0]]))], [0, 300, null]);
+  check('un lato troppo corto non conta', rg.rcLatoDritto([[0, 0], [100, 0], [300, 200], [-200, 200], [0, 0]]), null);
+  const conLato = rg.rcCostruisci(m, quadrato, P), senzaLato = rg.rcCostruisci(m, quadrato, { ...P, allineaLato: false });
+  check('allineare non fa girare più filo sopra il lato, e si dice di quanto si è spostata la griglia', [conLato.conti.latoAllineatoMm !== null, senzaLato.conti.latoAllineatoMm, conLato.conti.filoSopraLatoMm <= rg.rcFiloSopraIntero(senzaLato.oggetti, 0, -Infinity, Infinity)], [true, null, true]);
+  const trapezioOnde = Array.from({ length: 41 }, (_, i) => [i * 10, 5 * Math.sin(i)]).concat([[400, 200], [0, 200], [0, 0]]);
+  check('un contorno senza lato dritto non cambia', [rg.rcCostruisci(m, trapezioOnde, P).conti.punti === rg.rcCostruisci(m, trapezioOnde, { ...P, allineaLato: false }).conti.punti, rg.rcCostruisci(m, trapezioOnde, P).conti.latoAllineatoMm], [true, null]);
   // Lorenzo, 2026-11-04: «li farei passare sempre sinistra destra, così i moduli che dovrebbero coprirli arrivano prima»
-  const conTesta = rg.rcCostruisci(riga, [[0, 8], [310, 8], [310, 100], [0, 100], [0, 8]], { ...P, moduloMinimoPct: 0 }).oggetti.filter((o) => o.uscita && o.cella.riga === 0 && o.cella.colonna === 1);
+  const conTesta = rg.rcCostruisci(riga, [[0, 8], [310, 8], [310, 100], [0, 100], [0, 8]], { ...P, moduloMinimoPct: 0, allineaLato: false }).oggetti.filter((o) => o.uscita && o.cella.riga === 0 && o.cella.colonna === 1);
   check('le uscite vanno ai lati anche se il bordo sopra è più vicino, e non attraversano le righe', [conTesta.length, conTesta.every((o) => o.t[o.t.length - 1][0] > 310 || o.t[o.t.length - 1][0] < 0), conTesta.every((o) => o.t.every((q) => q[1] > 8 && q[1] < 50))], [1, true, true]);
   check('due uscite non finiscono nello stesso punto', usciteRiga.every((o, i) => usciteRiga.every((x, k) => k === i || Math.hypot(x.t[x.t.length - 1][0] - o.t[o.t.length - 1][0], x.t[x.t.length - 1][1] - o.t[o.t.length - 1][1]) > 3)), true);
   const altrove = rg.rcCostruisci(m, quadrato, { ...P, uscitaFuoriMm: 50 });
@@ -7047,6 +7054,11 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   const soglia40 = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true }, [{ anello: metaZona, magliaMassimaMm2: 40 }]);
   check('la soglia di un\'area non si porta dietro le linee più fitte di un\'altra', nuoveIn(conFinta, 0, 150) > 0 && nuoveIn(conFinta, 0, 150) <= nuoveIn(soglia40, 0, 150) * 2, true);
   check('la stessa variante dà lo stesso disegno, un\'altra no', [rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40 }).conti.punti === fitta.conti.punti, rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40, infittisciVariante: 2 }).oggetti.find((o) => o.nuovo)?.t[2]?.[0] !== cat.t[2][0]], [true, true]);
+  // misurato il 2026-11-04: PIFlagPsil 32 ce l'hanno anche i running normali, il psil vero ha PIStitchStrassLaser 4
+  const letto = (index, flag, strass, stitch_count = 10, needle = 1) => ({ index, needle, stitch_count, parameters: [['PITipoPunto', '1'], ['PIFlagPsil', flag], ['PIStitchStrassLaser', strass]].map(([Key, Value]) => ({ Key, Value })) });
+  check('il modello della catenella è il psil vero, non un running col flag 32', rg.rcScegliModelli([letto(0, '32', '0'), letto(1, '32', '4', 10, 7), letto(2, '16416', '0')]), { catenella: 1, running: 0, ago: 7 });
+  check('un documento di soli running normali non ha psil', rg.rcScegliModelli([letto(0, '32', '0'), letto(1, '32', '0')]).catenella, null);
+  check('un psil a 0 punti non fa da modello', rg.rcScegliModelli([letto(0, '32', '4', 0), letto(1, '32', '4')]).catenella, 1);
   // lo psil vero: in Stilista le catenelle sono il loro tracciato, il resto i punti del tool, nell'ordine e nel riferimento del documento
   const linee = rg.rcLineeStilista(e, [5, 7], { catenella: 3, running: 4 }, 9);
   const prima = e.oggetti.find((o) => o.tipo === 'catenella'), primaLinea = linee.find((l) => l.modello === 3);

@@ -1,7 +1,7 @@
 // Le catenelle in Stilista come oggetti psil veri (Lorenzo, 2026-11-03: «sullo psil dammi la possibilità di scegliere se psil o no»).
 // Il psil non si può creare da zero: si copia una catenella del documento aperto (POST /running), coi valori della maglia del tool
 // (POST /parametri, misurati in sapere/codice/stilista-psil.md). Basi e passaggi sono copie di un running del documento.
-import { trovaStilista, type FinestraStilista } from '@rg/ui/stilista';
+import { nomeDocumento, tutteLeFinestreOccupate, trovaStilista, type FinestraStilista } from '@rg/ui/stilista';
 import type { EsitoRete, ParametriRete, Xy } from './motore';
 
 const POSTA = { 'X-RG-Link': '1', 'Content-Type': 'application/json' };
@@ -17,22 +17,38 @@ async function posta<T>(f: FinestraStilista, via: string, corpo: unknown): Promi
   return j;
 }
 
-/** Cerca nel documento una catenella psil e un running qualsiasi da copiare. */
-async function trovaModelli(f: FinestraStilista, oggetti: number): Promise<{ catenella: number | null; running: number | null; ago: number }> {
+/**
+ * I modelli fra gli oggetti letti. Il psil vero ha `PIStitchStrassLaser` 4: `PIFlagPsil` 32 ce l'hanno anche i running normali (misurato il 2026-11-04 su
+ * documenti di Lorenzo). Una catenella a 0 punti non serve: lì Stilista il psil non lo sa calcolare.
+ */
+export function scegliModelli(oggetti: OggettoLetto[]): { catenella: number | null; running: number | null; ago: number } {
   let catenella: number | null = null, running: number | null = null, ago = 1;
-  for (let i = 0; i < oggetti && (catenella === null || running === null); i += 100) {
+  for (const o of oggetti) {
+    const par = new Map((o.parameters ?? []).map((x) => [x.Key, x.Value]));
+    if (par.get('PITipoPunto') !== '1' || !o.stitch_count) continue;
+    if (par.get('PIStitchStrassLaser') === '4') { if (catenella === null) { catenella = o.index; ago = o.needle ?? 1; } }
+    else if (par.get('PIStitchStrassLaser') === '0') running ??= o.index;
+  }
+  return { catenella, running, ago };
+}
+
+/** La catenella selezionata in Stilista fa da modello; se non ce n'è una selezionata, si cerca nel documento. */
+async function trovaModelli(f: FinestraStilista, oggetti: number): Promise<{ catenella: number | null; running: number | null; ago: number; selezionata: boolean }> {
+  let scelta: ReturnType<typeof scegliModelli> = { catenella: null, running: null, ago: 1 };
+  if (f.selezionati > 0) {
+    const r = await fetch(`http://127.0.0.1:${f.porta}/selezione.json`);
+    if (r.ok) scelta = scegliModelli((await r.json() as { oggetti: OggettoLetto[] }).oggetti);
+  }
+  const selezionata = scelta.catenella !== null;
+  for (let i = 0; i < oggetti && (scelta.catenella === null || scelta.running === null); i += 100) {
     const ids = Array.from({ length: Math.min(100, oggetti - i) }, (_, k) => i + k).join(',');
     const r = await fetch(`http://127.0.0.1:${f.porta}/selezione.json?oggetti=${ids}`);
     if (!r.ok) throw new Error(`Stilista ha risposto ${r.status}`);
-    const j = await r.json() as { oggetti: OggettoLetto[] };
-    for (const o of j.oggetti) {
-      const par = new Map((o.parameters ?? []).map((x) => [x.Key, x.Value]));
-      if (par.get('PITipoPunto') !== '1' || !o.stitch_count) continue; // una catenella a 0 punti: lì Stilista il psil non lo sa calcolare
-      if (par.get('PIFlagPsil') === '32' && catenella === null) { catenella = o.index; ago = o.needle ?? 1; }
-      else running ??= o.index;
-    }
+    const trovati = scegliModelli((await r.json() as { oggetti: OggettoLetto[] }).oggetti);
+    if (scelta.catenella === null && trovati.catenella !== null) { scelta.catenella = trovati.catenella; scelta.ago = trovati.ago; }
+    scelta.running ??= trovati.running;
   }
-  return { catenella, running, ago };
+  return { ...scelta, selezionata };
 }
 
 /** Una linea per ogni oggetto del ricamo, nell'ordine: basi e passaggi coi punti del tool, le catenelle col loro tracciato, che il psil lo calcola Stilista. */
@@ -50,9 +66,11 @@ export async function reteAStilista(e: EsitoRete, par: ParametriRete, origine: X
     const f = await trovaStilista();
     if (!f) throw new Error('non risponde: è aperto, con RG Stilista Link installato?');
     const s = await (await fetch(`http://127.0.0.1:${f.porta}/stato`)).json() as Stato;
-    const { catenella, running, ago } = await trovaModelli(f, s.oggetti);
+    const documento = nomeDocumento(f);
+    const { catenella, running, ago, selezionata } = await trovaModelli(f, s.oggetti);
     if (catenella === null || running === null) {
-      stato(`Stilista: il psil si copia da una catenella del documento aperto, e qui ${catenella === null ? 'non ce n’è una' : 'manca un running da copiare per le basi'}. Apri un file con le catenelle psil, o togli «Psil vero».`);
+      const pieno = await tutteLeFinestreOccupate();
+      stato(`Stilista, «${documento}»: ${catenella === null ? 'qui non c’è una catenella psil con i suoi punti da copiare' : 'qui non c’è un running normale da copiare per le basi'}. Mettila in questo documento, o togli «Psil vero».${pieno ? ' Se il tuo documento è un altro: ci sono già 10 finestre collegate e le altre il tool non le vede, chiudine qualcuna e riaprilo.' : ''}`);
       return;
     }
     // una copia della catenella coi valori del tool fa da modello per tutte: l'originale non si tocca
@@ -83,7 +101,7 @@ export async function reteAStilista(e: EsitoRete, par: ParametriRete, origine: X
       }
     }
     await posta(f, `/cancella?oggetti=${modello}`, {});
-    stato(`In Stilista: ${fatte.toLocaleString('it-IT')} oggetti su ${linee.length.toLocaleString('it-IT')}, ${punti.toLocaleString('it-IT')} punti, catenelle psil vere${errori.length ? `; ${errori.length} non riusciti: ${errori[0]}` : ''}`);
+    stato(`In «${documento}»${selezionata ? ', col psil selezionato' : ''}: ${fatte.toLocaleString('it-IT')} oggetti su ${linee.length.toLocaleString('it-IT')}, ${punti.toLocaleString('it-IT')} punti, catenelle psil vere${errori.length ? `; ${errori.length} non riusciti: ${errori[0]}` : ''}`);
   } catch (x) {
     stato('Stilista: ' + (x as Error).message);
   }
