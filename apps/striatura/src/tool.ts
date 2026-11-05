@@ -43,6 +43,7 @@ const PASSAGGI_PARAMS: Field[] = [
   { key: 'passaggioAmpMm', label: 'Altezza dei passaggi', unit: 'mm', step: 1, min: 2, help: 'quanto è alta ogni linea di passaggio: più bassa = meno invadente' },
   { key: 'coverOverlapMm', label: 'Le striature entrano sotto il ricamo di', unit: 'mm', step: 0.5, min: 0, help: 'sicurezza per la ricentratura: fin qui dentro una zona i trattini restano interi, come se la zona non ci fosse; quelli tutti più in fondo non si cuciono' },
   { key: 'coverMarginMm', label: 'Margine dal ricamo sopra', unit: 'mm', step: 0.5, min: 0, help: 'i passaggi stanno almeno a questa distanza dal bordo di una zona «Ricamo sopra», così non spuntano fuori dalla grafica' },
+  { key: 'stopZones', label: 'Dividi in zone', unit: '', step: 1, min: 1, help: 'col Ricamo sopra si cuce una zona dopo l’altra, con l’ordine libero dentro ogni zona, così il pezzo non ritira; 1 = nessuna divisione' },
 ];
 const PUNTO_PARAMS: Field[] = [
   { key: 'maxStitchMm', label: 'Lunghezza del punto', unit: 'mm', step: 0.5, min: 0.5, help: 'quanto è lungo ogni punto lungo il trattino' },
@@ -130,6 +131,19 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
         <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">04</span><span class="rg-param-section__title">Passaggi</span></summary>
         <div id="passaggiParams" class="rg-param-grid"></div>
         <div class="rg-param-grid">
+          <div class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Le zone vanno</span>
+            <div class="rg-segmented" id="stopZonesDirection" role="group" aria-label="Le zone vanno">
+              <button type="button" class="rg-segmented__item rg-segmented__item--active" data-verso="orizzontale" aria-pressed="true">Dall’alto in basso</button>
+              <button type="button" class="rg-segmented__item" data-verso="verticale" aria-pressed="false">Da sinistra a destra</button>
+            </div>
+          </div>
+        </div>
+        <div class="rg-param-grid">
+          <label class="rg-toggle rg-param-grid__wide">
+            <input type="checkbox" id="usciteDallePunte"><span class="rg-toggle__track"></span><span>Uscite dalle punte</span>
+          </label>
+          <small class="rg-field__help rg-param-grid__wide">col Ricamo sopra un gruppo di striature va e torna, così il filo entra ed esce dalla punta più vicina a un punto coperto; spento: si cuce da un capo all’altro</small>
           <label class="rg-toggle rg-param-grid__wide">
             <input type="checkbox" id="mostraPassaggi"><span class="rg-toggle__track"></span><span>Evidenzia i passaggi nell’anteprima</span>
           </label>
@@ -369,6 +383,22 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     b.classList.toggle('rg-segmented__item--active', on);
     b.setAttribute('aria-pressed', on ? 'true' : 'false');
   });
+  const versoBtns = Array.from($('stopZonesDirection').querySelectorAll('.rg-segmented__item')) as HTMLButtonElement[];
+  const usciteInput = $('usciteDallePunte') as HTMLInputElement;
+  const syncUscite = () => { usciteInput.checked = params.usciteDallePunte; };
+  usciteInput.addEventListener('change', () => { params.usciteDallePunte = usciteInput.checked; render(); });
+  const syncVerso = () => versoBtns.forEach((b) => {
+    const on = b.dataset.verso === params.stopZonesDirection;
+    b.classList.toggle('rg-segmented__item--active', on);
+    b.setAttribute('aria-pressed', on ? 'true' : 'false');
+  });
+  versoBtns.forEach((b) => b.addEventListener('click', () => {
+    const want = b.dataset.verso as StriaturaParams['stopZonesDirection'];
+    if (params.stopZonesDirection === want) return;
+    params.stopZonesDirection = want;
+    syncVerso();
+    render();
+  }));
   modeBtns.forEach((b) => b.addEventListener('click', () => {
     const want = b.dataset.mode as StriaturaParams['stitchMode'];
     if (params.stitchMode === want) return;
@@ -391,6 +421,8 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     ($('realWidth') as HTMLInputElement).value = String(params.realWidthMm);
     ($('seed') as HTMLInputElement).value = String(params.seed);
     syncMode();
+    syncVerso();
+    syncUscite();
     buildAllParams();
     buildThreadUI();
     return true;
@@ -566,6 +598,8 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
   });
 
   syncMode();
+  syncVerso();
+  syncUscite();
   buildAllParams();
   buildThreadUI();
   loadImport(imported, 'Sagoma demo');

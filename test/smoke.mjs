@@ -1725,23 +1725,49 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   const sSenza = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE' }, sP);
   const sSotto = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE', '#00ff00': 'COVER_AREA' }, sP);
   const sFiloDi = (r) => r.exportLayers.find((l) => l.id === 'striatura').polylines;
-  // fuori dalla zona i punti dei trattini restano gli stessi: mancano solo quelli dei collegamenti cambiati
-  const sChiave = (q) => `${q.x.toFixed(3)},${q.y.toFixed(3)}`;
-  const sConZonaPunti = new Set(rg.generateStriatura({ outline: sRect, voids: [], coperte: [sZona] }, sP)[0].polylines.flat().map(sChiave));
-  const sSenzaLayer = rg.generateStriatura({ outline: sRect, voids: [] }, sP)[0];
-  const sPassati = new Set(sSenzaLayer.passaggi.flat().map(sChiave));
-  const sMacchiaPunti = sSenzaLayer.polylines.flat().filter((q) => !rg.pointInPolygon(q, sZona)).map(sChiave).filter((k) => !sPassati.has(k));
-  const sPersi = sMacchiaPunti.filter((k) => !sConZonaPunti.has(k)).length;
-  check('fuori dalla zona le macchie sono le stesse, con la zona o senza', sPersi < sMacchiaPunti.length * 0.05, true);
+  // lontano dalla zona i trattini restano gli stessi. Si confrontano i trattini, non i punti: i collegamenti fra un trattino e
+  // l'altro cambiano con l'ordine di cucitura. Le colonne dei denti non contano: senza zona ci sono le linee rade, con la zona no.
+  const sColonnaDente = (t) => Math.round(t.x / sP.densitySpacingMm - 0.5) % Math.round(sP.fillSpacingMm / sP.densitySpacingMm) === 0;
+  const sLontani = (pls) => sTrattini(pls).filter((t) => (t.x < 28 || t.x > 92) && !sColonnaDente(t)).map((t) => `${t.x.toFixed(3)}:${t.alto.toFixed(1)}`);
+  const sConZonaTratt = new Set(sLontani(rg.generateStriatura({ outline: sRect, voids: [], coperte: [sZona] }, sP)[0].polylines));
+  const sSenzaTratt = sLontani(rg.generateStriatura({ outline: sRect, voids: [] }, sP)[0].polylines);
+  check('lontano dalla zona i trattini sono gli stessi, con la zona o senza', sSenzaTratt.length > 50 && sSenzaTratt.filter((k) => !sConZonaTratt.has(k)).length, 0);
   check('il ricamo continua dentro la zona (non è un vuoto)', sFiloDi(sSotto).flat().some((q) => rg.pointInPolygon(q, sZona)), true);
   check('nessun salto in più', sFiloDi(sSotto).length, sFiloDi(sSenza).length);
-  // La forma dei passaggi, non solo i metri (Lorenzo, 2026-11-03: «si formano delle linee improbabili»: un passaggio
-  // da 106 mm per coprirne 11). Sul pannello con tante zone: niente giri, niente passaggi sopra i trattini in vista.
+  // Il filo sta sotto (Lorenzo, 2026-11-05: «linee che passano così in mezzo sono inaccettabili, deve passare sempre sotto
+  // la macchia»). Conta quello che resta fuori: fra zone distanti 6-10 mm un passaggio non deve restare in vista molto di più.
   const sMacchie = []; for (let gy = 0; gy < 5; gy++) for (let gx = 0; gx < 4; gx++) { const cx = 15 + gx * 30, cy = 15 + gy * 30, a = []; for (let i = 0; i < 24; i++) { const t = (i / 24) * 2 * Math.PI; a.push({ x: cx + Math.cos(t) * 10, y: cy + Math.sin(t) * 12 }); } sMacchie.push(a); }
   const sTante = rg.generateStriatura({ outline: sRect, voids: [], coperte: sMacchie }, sP)[0];
   const sLunghezza = (pl) => { let l = 0; for (let i = 1; i < pl.length; i++) l += Math.hypot(pl[i].x - pl[i - 1].x, pl[i].y - pl[i - 1].y); return l; };
-  const sGiri = sTante.passaggi.filter((pl) => { const l = sLunghezza(pl), d = Math.hypot(pl[pl.length - 1].x - pl[0].x, pl[pl.length - 1].y - pl[0].y); return l > 15 && l > d * 3; });
-  check('con tante zone nessun passaggio fa un giro di più di tre volte la distanza', sGiri.length, 0);
+  const sInVista = (layer) => {
+    const tratti = [];
+    for (const pl of layer.passaggi) {
+      let run = 0;
+      for (let i = 1; i < pl.length; i++) {
+        const a = pl[i - 1], b = pl[i], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.5));
+        for (let k = 0; k < n; k++) {
+          const q = { x: a.x + (b.x - a.x) * (k + 0.5) / n, y: a.y + (b.y - a.y) * (k + 0.5) / n };
+          if (sMacchie.some((z) => rg.pointInPolygon(q, z))) { if (run) tratti.push(run); run = 0; } else run += Math.hypot(b.x - a.x, b.y - a.y) / n;
+        }
+      }
+      if (run) tratti.push(run);
+    }
+    return tratti;
+  };
+  const sViste = sInVista(sTante);
+  console.log(`   (in vista: ${sViste.length} tratti, il più lungo ${Math.max(...sViste).toFixed(1)} mm, in tutto ${sViste.reduce((a, b) => a + b, 0).toFixed(0)} mm)`);
+  check('con tante zone il filo sta sotto: nessun tratto in vista oltre i 15 mm', Math.max(...sViste) <= 15, true);
+  // Le uscite dalle punte (Lorenzo, 2026-11-05: «magari si esce su una striatura più vicina ad un punto coperto»): stessi
+  // trattini, un filo solo, e non più filo in vista di prima.
+  const sDaCapo = rg.generateStriatura({ outline: sRect, voids: [], coperte: sMacchie }, { ...sP, usciteDallePunte: false })[0];
+  const sVisteDaCapo = sInVista(sDaCapo).reduce((a, b) => a + b, 0), sVisteOra = sViste.reduce((a, b) => a + b, 0);
+  console.log(`   (filo in vista: da un capo all'altro ${sVisteDaCapo.toFixed(0)} mm, dalle punte ${sVisteOra.toFixed(0)} mm)`);
+  check('dalle punte: gli stessi trattini, un filo solo, non più filo in vista', [sTrattini(sTante.polylines).length === sTrattini(sDaCapo.polylines).length, sTante.polylines.length, sVisteOra <= sVisteDaCapo], [true, 1, true]);
+  // A zone (Lorenzo, 2026-11-05: «si passa a lavorare a zone»): una fascia dopo l'altra, senza salti in più.
+  const sCentroFasce = (p) => { const f = rg.generateStriatura({ outline: sRect, voids: [], coperte: sMacchie }, p)[0].polylines.flat(); const m = (a) => a.reduce((s, q) => s + q, 0) / a.length; const assi = f.map((q) => (p.stopZonesDirection === 'verticale' ? q.x : q.y)); return [m(assi.slice(0, assi.length / 3)), m(assi.slice(assi.length / 3, assi.length * 2 / 3)), m(assi.slice(assi.length * 2 / 3))]; };
+  const sOriz = sCentroFasce({ ...sP, stopZones: 3 }), sVert = sCentroFasce({ ...sP, stopZones: 3, stopZonesDirection: 'verticale' });
+  check('a zone il ricamo procede dall\'alto in basso, o da sinistra a destra', [sOriz[0] < sOriz[1] && sOriz[1] < sOriz[2], sVert[0] < sVert[1] && sVert[1] < sVert[2]], [true, true]);
+  check('senza ricamo sopra le zone non cambiano nulla', JSON.stringify(sGen({ ...sP, stopZones: 1 })), JSON.stringify(sGen({ ...sP, stopZones: 5 })));
   check('con tante zone il filo resta continuo, e dentro la sagoma', [sTante.polylines.length, sMeasure(sTante.polylines, sRect, []).fuori], [1, 0]);
   // La striatura non si deve accorgere delle zone: i trattini che si vedono sono interi, identici a quelli senza zone.
   const sTratSenza = sTrattini(sGen(sP));
