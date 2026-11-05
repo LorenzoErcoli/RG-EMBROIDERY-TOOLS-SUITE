@@ -86,6 +86,15 @@ export function lineePerStilista(e: EsitoRete, origine: Xy | null, modelli: Mode
 }
 
 /**
+ * Il plugin risponde 200 anche se un oggetto non entra: lo dice solo in `errori`. Gli oggetti a 0 punti sono entrati, e il controllo dopo l'invio li sistema;
+ * quelli mancanti no, e spostano gli indici: in quel caso il controllo non si può fare.
+ */
+export function oggettiMancanti(chiesti: number, primoIndice: number, ultimoIndice: number, errori: string[]): { mancanti: number; errore: string | null } {
+  const mancanti = chiesti - (ultimoIndice - primoIndice + 1);
+  return { mancanti, errore: mancanti > 0 ? errori.find((x) => !/: 0 punti/.test(x)) ?? errori[0] ?? null : null };
+}
+
+/**
  * Il controllo dopo l'invio: Stilista può finire un calcolo in ritardo, e un oggetto resta vuoto o cucito due volte (misurato il 2026-11-05: 1 su 4.135, la base più lunga,
  * con un salto di 78 mm; un ricalcolo lo sistema). Si leggono i punti di tutti e si ricalcolano quelli sbagliati. Dice quanti restano sbagliati.
  */
@@ -162,14 +171,21 @@ export async function reteAStilista(e: EsitoRete, par: ParametriRete, origine: X
     const linee = lineePerStilista(e, origine, (c) => perColonna.get(c) ?? { catenella: modello, running: basi }, 0);
     const primoIndice = ultimo + 1;
     let dopo = primoIndice - 1, punti = 0;
+    const errori: string[] = [];
     for (let i = 0; i < linee.length; i += PER_VOLTA) {
       stato(`Invio a Stilista… ${i.toLocaleString('it-IT')} oggetti su ${linee.length.toLocaleString('it-IT')}`);
       const parte = linee.slice(i, i + PER_VOLTA).map((l) => ({ ...l, dopo }));
-      const r = await posta<{ punti: number; oggetti_dopo: number }>(f, '/running', { linee: parte });
+      const r = await posta<{ punti: number; oggetti_dopo: number; errori: string[] }>(f, '/running', { linee: parte });
       punti += r.punti;
+      errori.push(...r.errori);
       dopo = r.oggetti_dopo - 1;
     }
     await posta(f, `/cancella?oggetti=${provvisori.join(',')}`, {});
+    const { mancanti, errore } = oggettiMancanti(linee.length, primoIndice, dopo, errori);
+    if (mancanti > 0) {
+      stato(`In «${documento}»: ATTENZIONE, ${mancanti.toLocaleString('it-IT')} oggetti su ${linee.length.toLocaleString('it-IT')} non sono entrati${errore ? ` (${errore})` : ''}. Controllo dei punti saltato: non salvare questo risultato.`);
+      return;
+    }
     stato('Invio a Stilista… controllo i punti');
     const controllo = await controllaPunti(f, modello, oggettiDaMandare(e));
     stato(`In «${documento}»${selezionata ? ', col psil selezionato' : ''}: ${linee.length.toLocaleString('it-IT')} oggetti, ${punti.toLocaleString('it-IT')} punti, catenelle psil vere${e.oggetti.length > linee.length ? `; ${e.oggetti.length - linee.length} troppo corte non mandate` : ''}${controllo.rifatti ? `; ${controllo.rifatti} ricalcolati` : ''}${controllo.sbagliati ? `; ATTENZIONE: ${controllo.sbagliati} ancora sbagliati` : ''}`);
