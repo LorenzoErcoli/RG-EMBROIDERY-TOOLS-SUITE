@@ -108,3 +108,9 @@ Anche la sospensione della cronologia di Annulla (`csUndoManager.SoftwareUndoSus
 **La rete intera con la correzione:** 4.135 oggetti su 4.135, 348.556 punti, aghi compresi, 321 s, picco di memoria 6 GB, alla fine 4,5 GB; prima a 1.350 oggetti era a 19,7 GB. Le catenelle sotto 1,5 mm (3 su 2.200: a 1,46 mm 0 punti, a 1,86 mm 7) non si mandano. **Leggere tutto il documento** con `GET /selezione.json`, a blocchi da 200, lo ha portato sopra 8 GB: quella rilettura non è stata finita, quindi gli aghi di questo invio non sono stati riletti.
 
 **Non provato:** salvare e riaprire quel documento; la trasparenza dei fili su quelle copie, che non ricevono più l'evento fino alla riapertura; il tool col plugin nella pagina vera; il campione cucito.
+
+**Un running dal psil non si può fare** (2026-11-05). Una copia del psil con `PIStitchStrassLaser` 0 e `PIFlagPsil` 16416 sembra un running, ma ricalcolarla dà `FunzioneNonAbilitata`: le sue copie hanno il tracciato nuovo e i punti del modello. Provato sull'invio di Lorenzo: basi e passaggi restavano all'origine e da lì partiva un ventaglio di linee verso tutta la rete; quella finestra è arrivata a 18 GB, e quanto dipenda da questo errore non è misurato. Il mio controllo di prima contava i punti e non guardava dove stavano.
+
+**Il modello giusto** è un running nativo creato con `POST /oggetti` (funzione 21 invece della 5 del psil): 30 copie in 223 ms, ognuna con i suoi punti al posto giusto, memoria ferma. Quindi al documento basta una catenella psil.
+
+**`index` di `GET /selezione.json`** è il posto nella risposta, non nel documento: riparte da 0 a ogni richiesta e sulla selezione. Il posto vero è quello chiesto in `?oggetti=`.
