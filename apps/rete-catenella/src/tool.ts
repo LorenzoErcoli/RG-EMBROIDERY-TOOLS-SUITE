@@ -44,6 +44,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
   const tPezzi = testiCampo('rete-catenella', 'pezziSulBordo');
   const tLato = testiCampo('rete-catenella', 'allineaLato');
   const tPsil = testiCampo('rete-catenella', 'psilVero');
+  const tProva = testiCampo('rete-catenella', 'catenellaDiProva');
   const tInfittisci = testiCampo('rete-catenella', 'infittisci');
 
   root.innerHTML = scheletro({
@@ -67,7 +68,9 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
         <label class="rg-choice rg-param-grid__wide" title="${tCollega.aiuto ?? ''}"><input type="checkbox" id="collegaModuli"> ${tCollega.etichetta}</label>`) }),
       sezione({ indice: 4, titolo: 'Basi e passaggi', apribile: true, aperta: true, contenuto: griglia(['passate', 'puntoBaseMm', 'puntoPassaggioMm']) }),
       sezione({ indice: 5, titolo: 'Catenella (psil)', apribile: true, aperta: true, contenuto: griglia(['psilLunghezzaMm', 'psilLarghezzaMm', 'psilPassoMm', 'psilInizioMm', 'psilGiri'], `
-        <label class="rg-choice rg-param-grid__wide" title="${tPsil.aiuto ?? ''}"><input type="checkbox" id="psilVero" checked> ${tPsil.etichetta}</label>`) }),
+        <label class="rg-choice rg-param-grid__wide" title="${tPsil.aiuto ?? ''}"><input type="checkbox" id="psilVero" checked> ${tPsil.etichetta}</label>
+        <label class="rg-choice rg-param-grid__wide"><input type="checkbox" id="catenellaDiProva"> ${tProva.etichetta}</label>
+        ${tProva.aiuto ? `<small class="rg-field__help rg-param-grid__wide">${tProva.aiuto}</small>` : ''}`) }),
       sezione({ indice: 6, titolo: 'Trama', apribile: true, aperta: true, contenuto: griglia(['magliaMassimaMm2', 'infittisciVariante'], `
         <label class="rg-choice rg-param-grid__wide" title="${tInfittisci.aiuto ?? ''}"><input type="checkbox" id="infittisci"> ${tInfittisci.etichetta}</label>
         <div class="rg-param-grid__wide" id="ruoliBox" hidden><ul class="rg-color-map" id="ruoli"></ul><small class="rg-field__help">Un laser di un altro colore, dentro il contorno, è un’area da infittire. Ogni colore ha la sua soglia: più è bassa, più la trama è fitta.</small></div>
@@ -293,7 +296,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
       genera();
     });
   }
-  for (const k of ['corsie', 'passaggiInterni', 'allineaLato', 'pezziSulBordo', 'collegaModuli', 'psilVero', 'infittisci'] as const) ($(k) as HTMLInputElement).addEventListener('change', (e) => { par[k] = (e.target as HTMLInputElement).checked; genera(); });
+  for (const k of ['corsie', 'passaggiInterni', 'allineaLato', 'pezziSulBordo', 'collegaModuli', 'psilVero', 'catenellaDiProva', 'infittisci'] as const) ($(k) as HTMLInputElement).addEventListener('change', (e) => { par[k] = (e.target as HTMLInputElement).checked; genera(); });
   for (const id of ['vBasi', 'vPassaggi', 'vCatenelle', 'vUscite', 'vMaglie']) $(id).addEventListener('change', () => { sim?.ferma(); disegna(); });
 
   // ---- il calcolo e il disegno ------------------------------------------------------
@@ -348,7 +351,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
     if (!m || m.rgProject !== 'rete-catenella') { $('progettoStatus').textContent = `${da} non porta dentro un progetto di Rete a catenella.`; return; }
     Object.assign(par, m.params as Partial<ParametriRete>);
     for (const l of LIMITI) impostaNumero($(l.key) as HTMLInputElement, par[l.key]);
-    for (const k of ['corsie', 'passaggiInterni', 'allineaLato', 'pezziSulBordo', 'collegaModuli', 'psilVero', 'infittisci'] as const) ($(k) as HTMLInputElement).checked = par[k];
+    for (const k of ['corsie', 'passaggiInterni', 'allineaLato', 'pezziSulBordo', 'collegaModuli', 'psilVero', 'catenellaDiProva', 'infittisci'] as const) ($(k) as HTMLInputElement).checked = par[k];
     zona = Array.isArray(m.zona) ? m.zona as Xy[] : null;
     $('zonaStatus').textContent = zona ? 'Solo dentro la zona del progetto.' : 'Dappertutto.';
     $('zonaViaBtn').hidden = !zona;

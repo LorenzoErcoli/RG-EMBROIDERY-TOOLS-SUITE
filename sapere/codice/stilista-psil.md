@@ -149,6 +149,8 @@ Lorenzo: *«io devo essere sicuro che il risultato tra stilista e tools delle ca
 | Scarto del singolo punto, 95% | | 0,224 mm | |
 | Scarto del singolo punto, 99% | | 0,378 mm | |
 
+Nel tool è la spunta *Prova: maglie calcolate come Stilista*, per il campione cucito, spenta di serie (2026-11-05, Lorenzo: *«sì metti la spunta»*). Usa sempre il passo adattato: l'insieme a passo fisso del file non ha una sua spunta.
+
 **Il criterio non è raggiunto.** Lo scarto rimasto sta vicino agli angoli, e non è provato quale forma di raccordo usi davvero Stilista: quadratica e arco danno gli stessi numeri. Restano fuori anche due catenelle con la prima maglia a oltre 18 mm dall'inizio.
 
 ## Alleggerire il giro del plugin (2026-11-05)

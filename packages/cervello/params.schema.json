@@ -1694,6 +1694,11 @@
           "default": 2,
           "x-id": "catenellaPsilTurns"
         },
+        "catenellaDiProva": {
+          "$ref": "#/$defs/catenellaTestStitches",
+          "default": false,
+          "x-id": "catenellaTestStitches"
+        },
         "psilVero": {
           "$ref": "#/$defs/catenellaTruePsil",
           "default": true,
@@ -5047,6 +5052,12 @@
       "maximum": 3,
       "x-concetto": "maglia-psil"
     },
+    "catenellaTestStitches": {
+      "type": "boolean",
+      "title": "Prova: maglie calcolate come Stilista",
+      "description": "Per il campione cucito. Vale per i punti del tool: DST, SVG e psil disegnato. Passo adattato e angoli raccordati, come misurato sul file. Non è ancora uguale a Stilista: agli angoli resta uno scarto.",
+      "x-concetto": "maglia-psil"
+    },
     "catenellaTruePsil": {
       "type": "boolean",
       "title": "Psil vero in Stilista",
@@ -6765,6 +6776,7 @@
         "catenellaPsilPitch",
         "catenellaPsilStart",
         "catenellaPsilTurns",
+        "catenellaTestStitches",
         "catenellaTruePsil"
       ]
     },

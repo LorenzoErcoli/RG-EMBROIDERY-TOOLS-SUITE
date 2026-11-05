@@ -7089,6 +7089,12 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   const soglia40 = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true }, [{ anello: metaZona, magliaMassimaMm2: 40 }]);
   check('la soglia di un\'area non si porta dietro le linee più fitte di un\'altra', nuoveIn(conFinta, 0, 150) > 0 && nuoveIn(conFinta, 0, 150) <= nuoveIn(soglia40, 0, 150) * 2, true);
   check('la stessa variante dà lo stesso disegno, un\'altra no', [rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40 }).conti.punti === fitta.conti.punti, rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40, infittisciVariante: 2 }).oggetti.find((o) => o.nuovo)?.t[2]?.[0] !== cat.t[2][0]], [true, true]);
+  // Lorenzo, 2026-11-05: «io devo essere sicuro che il risultato tra stilista e tools delle catenelle è uguale se non migliorativo»
+  const dritta = [[0, 0], [16.5, 0]], diProva = rg.rcCatenella(dritta, { ...P, catenellaDiProva: true }), diSempre = rg.rcCatenella(dritta, P);
+  check('catenella di prova su 16,5 mm: 10 maglie, passo stirato a 1,64, prima a 0,6 e ultima a 1,1 dalla fine', [diProva.length, +diProva[0][0].toFixed(2), +(diProva[7][0] - diProva[0][0]).toFixed(2), +(16.5 - diProva.at(-1)[0]).toFixed(1)], [70, 0.6, 1.64, 1.1]);
+  check('spenta non cambia niente: la catenella di sempre', [diSempre.length, +(diSempre[7][0] - diSempre[0][0]).toFixed(2), +rg.rcCatenella(dritta, { ...P, catenellaDiProva: false })[0][0].toFixed(2)], [70, P.psilPassoMm, P.psilInizioMm]);
+  const ginocchio = rg.rcCatenella([[0, 0], [20, 0], [20, 20]], { ...P, catenellaDiProva: true }), staccoMax = Math.max(...ginocchio.filter((_, i) => i % 7 === 0).map((q) => Math.min(Math.abs(q[1]) + (q[0] > 20 ? q[0] - 20 : 0), Math.abs(q[0] - 20) + (q[1] < 0 ? -q[1] : 0))));
+  check('catenella di prova: all\'angolo taglia, con raggio 3 mm', staccoMax > 0.3 && staccoMax < 1.3, true);
   // misurato il 2026-11-04: PIFlagPsil 32 ce l'hanno anche i running normali, il psil vero ha PIStitchStrassLaser 4
   const letto = (index, flag, strass, stitch_count = 10, needle = 1) => ({ index, needle, stitch_count, parameters: [['PITipoPunto', '1'], ['PIFlagPsil', flag], ['PIStitchStrassLaser', strass]].map(([Key, Value]) => ({ Key, Value })) });
   check('il modello della catenella è il psil vero, non un running col flag 32', rg.rcScegliModelli([letto(0, '32', '0'), letto(1, '32', '4', 10, 7), letto(2, '16416', '0')]), { catenella: 1, running: 0, ago: 7 });
