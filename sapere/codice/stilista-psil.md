@@ -83,4 +83,42 @@ Lorenzo: *«mi stai bloccando tutto stilista»*. Invio di tutta la rete con `POS
 | psil, con ricalcolo | circa 30 MB | circa 95 ms |
 | psil, senza ricalcolo | circa 12 MB | circa 8 ms |
 
-Con 2.200 catenelle sono circa 66 GB. Il file di riferimento invece ha oltre 2.000 psil e si apre in circa 700 MB. **Ipotesi, non provata:** nel file le catenelle condividono gli insiemi di parametri, mentre `Clone` ne fa un doppione per ogni copia. Per provarlo serve cambiare il plugin. Finché non è risolto, per la rete intera si usa il psil disegnato o il DST.
+Con 2.200 catenelle sono circa 66 GB. Il file di riferimento invece ha oltre 2.000 psil e si apre in circa 700 MB. **Provato il 2026-11-05 con plugin di prova, poi rimesso quello di master:**
+
+| Prova | Risultato |
+|---|---|
+| Copie coi parametri del modello invece del doppione | Uguale: 863 MB invece di 870 per 30 psil. Ipotesi dei parametri smentita |
+| Pulizia forzata della memoria dopo ogni blocco | Non è roba inutile: dopo la pulizia restano circa 25 MB vivi per ogni psil copiato e ricalcolato |
+| Togliere le copie dal documento, poi pulizia | La memoria viva non scende (1.697 MB prima e dopo): non sta negli oggetti del documento |
+| File aperto con 3.777 oggetti | 154 MB di memoria viva: gli oggetti letti dal file pesano poco |
+| Ricalcolo di 10 psil del file | +129 MB, circa 13 MB ognuno |
+| `/riscrivi-punti` su psil del file | Da 5 a 9 MB ognuno, ma dopo 1,5 s Stilista li ricalcola da solo sul tracciato dato (154 punti → 98), quindi i punti scritti non restano. La misura è sporca: gli indici si spostavano fra un blocco e l'altro, e 11 dei 30 oggetti letti alla fine non erano più psil |
+
+Anche la sospensione della cronologia di Annulla (`csUndoManager.SoftwareUndoSuspeded`) non cambia niente: stessi 25 MB.
+
+**La causa, misurata contando la memoria per tipo prima e dopo 20 copie:** ogni copia di un psil crea circa 2.260 `cFilato`, 4.500 tipi di punto da ricamo, 5.000 `cStichingPailletteParameterRO`, 1.050 `cStitchTypePerlina` e 19 MB di immagini. Ogni tipo di punto si iscrive all'evento statico `cBaseStichTypeRO.TransparencyChanged` e da lì non si libera più: per questo togliere le copie non scendeva. **Non è provato** se succede anche fuori dal plugin, a chi lavora con le catenelle in Stilista; potrebbe spiegare il *«lavora ad una lentezza atroce»* del 2026-11-02.
+
+**La correzione**, in `POST /running`: alla fine di ogni blocco si rimette la lista di iscritti di prima, poi si libera la memoria. Nella stessa finestra, 30 psil:
+
+| | Memoria viva | Punti di ogni copia |
+|---|---|---|
+| Iscrizioni staccate | 178–180 MB, ferma | 245, ancora psil |
+| Come prima | da 416 a 929 MB | 245 |
+
+**La rete intera con la correzione:** 4.135 oggetti su 4.135, 348.556 punti, aghi compresi, 321 s, picco di memoria 6 GB, alla fine 4,5 GB; prima a 1.350 oggetti era a 19,7 GB. Le catenelle sotto 1,5 mm (3 su 2.200: a 1,46 mm 0 punti, a 1,86 mm 7) non si mandano. **Leggere tutto il documento** con `GET /selezione.json`, a blocchi da 200, lo ha portato sopra 8 GB: quella rilettura non è stata finita, quindi gli aghi di questo invio non sono stati riletti.
+
+**Non provato:** salvare e riaprire quel documento; la trasparenza dei fili su quelle copie, che non ricevono più l'evento fino alla riapertura; il tool col plugin nella pagina vera; il campione cucito.
+
+**Un running dal psil non si può fare** (2026-11-05). Una copia del psil con `PIStitchStrassLaser` 0 e `PIFlagPsil` 16416 sembra un running, ma ricalcolarla dà `FunzioneNonAbilitata`: le sue copie hanno il tracciato nuovo e i punti del modello. Provato sull'invio di Lorenzo: basi e passaggi restavano all'origine e da lì partiva un ventaglio di linee verso tutta la rete; quella finestra è arrivata a 18 GB, e quanto dipenda da questo errore non è misurato. Il mio controllo di prima contava i punti e non guardava dove stavano.
+
+**Il modello giusto** è un running nativo creato con `POST /oggetti` (funzione 21 invece della 5 del psil): 30 copie in 223 ms, ognuna con i suoi punti al posto giusto, memoria ferma. Quindi al documento basta una catenella psil.
+
+**`index` di `GET /selezione.json`** è il posto nella risposta, non nel documento: riparte da 0 a ogni richiesta e sulla selezione. Il posto vero è quello chiesto in `?oggetti=`.
+
+**Gli aghi** (2026-11-05). `POST /ago` su tutta la rete ha portato la finestra da 2,5 GB oltre 8 GB: nella prova si è fermata lì, a 337 s. Ora ogni ago ha i suoi due modelli provvisori, e gli oggetti nascono con quello giusto.
+
+**Il controllo dopo l'invio** (2026-11-05). Nella rete intera 1 oggetto su 4.135, la base più lunga, è risultato cucito due volte (1.734 punti invece di 867, salto di 78 mm), e 4 oggetti avevano 0 punti al momento dell'inserimento ma poi i loro punti. Probabilmente un calcolo di Stilista che finisce in ritardo. `/ricalcola` lo sistema, e l'invio ora rilegge e ricalcola da solo.
+
+**La prova finale** (2026-11-05, copia con un solo psil, contorno e modulo del file, 29 moduli): 4.135 oggetti su 4.135, 299 s, picco 6 GB, alla fine 2,2 GB, 1 oggetto ricalcolato dal controllo. Riletti tutti: 0 all'origine, 0 col primo punto lontano dal tool, 0 vuoti, 0 passi oltre 12 mm, aghi da 1 a 5 per colonna, modelli provvisori tolti. **Non provati:** salvare e riaprire il documento, la trasparenza dei fili, il campione cucito.
+
+**Se un oggetto non entra** (2026-11-05, trovato dalla chat madre): `POST /running` risponde 200 lo stesso e lo dice solo in `errori`. L'invio ora conta gli oggetti entrati: se ne mancano lo dice, e non fa il controllo dei punti, che con indici spostati leggerebbe gli oggetti sbagliati.

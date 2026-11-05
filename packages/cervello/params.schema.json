@@ -1759,6 +1759,11 @@
           "default": 0,
           "x-id": "catenellaContourMargin"
         },
+        "passaggiInterni": {
+          "$ref": "#/$defs/catenellaInnerPasses",
+          "default": false,
+          "x-id": "catenellaInnerPasses"
+        },
         "corsie": {
           "$ref": "#/$defs/catenellaEdgeLanes",
           "default": true,
@@ -5069,7 +5074,7 @@
     "catenellaEdgePieces": {
       "type": "boolean",
       "title": "Attacca i pezzi sotto la soglia ai moduli vicini",
-      "description": "Riempie il bianco sul bordo senza cambi ago in più: ogni pezzo si cuce subito prima del modulo che tocca di più. Spento: il bordo resta come nel file di riferimento.",
+      "description": "Riempie il bianco sul bordo senza cambi ago in più: ogni pezzo si cuce col modulo che tocca di più, da sinistra a destra: prima del modulo se sta a sinistra, dopo se sta a destra. Spento: il bordo resta come nel file di riferimento.",
       "x-concetto": "griglia-moduli"
     },
     "catenellaEdgePieceMin": {
@@ -5201,6 +5206,12 @@
       "x-unita": "mm",
       "minimum": 0,
       "maximum": 20,
+      "x-concetto": "corsie-bordo"
+    },
+    "catenellaInnerPasses": {
+      "type": "boolean",
+      "title": "Passaggi interni sulle linee, niente fuori dal contorno",
+      "description": "Dove il taglio lascia un passo lungo, il filo ribatte sulle linee già ricamate o che arriveranno, anche se i passaggi vengono più lunghi. Fuori dal contorno restano solo le uscite per il cambio ago.",
       "x-concetto": "corsie-bordo"
     },
     "catenellaEdgeLanes": {
@@ -6903,6 +6914,7 @@
       "descrizione": "I passaggi lunghi lasciati dal taglio sul contorno: vanno fuori dal bordo, ognuno sulla sua corsia, per non battere negli stessi punti.",
       "parametri": [
         "catenellaContourMargin",
+        "catenellaInnerPasses",
         "catenellaEdgeLanes",
         "catenellaFirstLane",
         "catenellaLaneSpacing"
