@@ -122,3 +122,35 @@ Anche la sospensione della cronologia di Annulla (`csUndoManager.SoftwareUndoSus
 **La prova finale** (2026-11-05, copia con un solo psil, contorno e modulo del file, 29 moduli): 4.135 oggetti su 4.135, 299 s, picco 6 GB, alla fine 2,2 GB, 1 oggetto ricalcolato dal controllo. Riletti tutti: 0 all'origine, 0 col primo punto lontano dal tool, 0 vuoti, 0 passi oltre 12 mm, aghi da 1 a 5 per colonna, modelli provvisori tolti. **Non provati:** salvare e riaprire il documento, la trasparenza dei fili, il campione cucito.
 
 **Se un oggetto non entra** (2026-11-05, trovato dalla chat madre): `POST /running` risponde 200 lo stesso e lo dice solo in `errori`. L'invio ora conta gli oggetti entrati: se ne mancano lo dice, e non fa il controllo dei punti, che con indici spostati leggerebbe gli oggetti sbagliati.
+
+## Le catenelle del tool contro quelle di Stilista (2026-11-05)
+
+Lorenzo: *«io devo essere sicuro che il risultato tra stilista e tools delle catenelle è uguale se non migliorativo»*. Criterio accettato da lui: stesso numero di maglie su almeno il 99%, scarto massimo sotto 0,15 mm, e un campione cucito. Misurato sulle 2.118 catenelle del file di riferimento, senza Stilista aperto.
+
+**Come calcola Stilista, per quanto misurato:**
+- Il file ha 4 insiemi di parametri. Il valore 17 dell'insieme (nome non trovato) sceglie il modo: con 1 il passo si adatta, con 0 è fisso. Il valore 35 è `PIWidthPsil`.
+- Prima maglia a 0,239 × `PIWidthPsil` dall'inizio; la fine utile a 0,44 × `PIWidthPsil` dal fondo.
+- Passo adattato: il numero di maglie è il più vicino al passo nominale (`PIWidthPsil` − 0,8 mm), poi il passo si stira per riempire esattamente il tratto. Su 16,5 mm passo 1,65; su 44,71 mm passo 1,72.
+- Il triangolo è perfettamente perpendicolare, base 1,297 mm, e la sua lunghezza si allunga col passo.
+- Gli angoli sono raccordati: il valore che torna meglio è un raggio di circa 3 mm. La maglia segue la tangente, non punta alla maglia dopo.
+
+**Il risultato del calcolo di prova, che non è nel tool:**
+
+| | Tool di oggi | Calcolo di prova | Criterio |
+|---|---|---|---|
+| Stesso numero di punti | 68% | 97,9–98,3% | 99% |
+| Insieme 10 (921) | | 921 | |
+| Insieme 4 (405) | | 404 | |
+| Insieme 9 (383) | | 374 | |
+| Insieme 2, passo fisso (409) | | 374–398, secondo il raggio | |
+| Scarto massimo per catenella, mediana | 0,47 mm | 0,31 mm | sotto 0,15 mm |
+| Scarto massimo per catenella, peggiore | 2,17 mm | 0,66 mm | sotto 0,15 mm |
+| Scarto del singolo punto, mediana | | 0,022 mm | |
+| Scarto del singolo punto, 95% | | 0,224 mm | |
+| Scarto del singolo punto, 99% | | 0,378 mm | |
+
+**Il criterio non è raggiunto.** Lo scarto rimasto sta vicino agli angoli, e non è provato quale forma di raccordo usi davvero Stilista: quadratica e arco danno gli stessi numeri. Restano fuori anche due catenelle con la prima maglia a oltre 18 mm dall'inizio.
+
+## Alleggerire il giro del plugin (2026-11-05)
+
+Leggere il posto nel documento una volta per blocco, ridisegnare solo alla fine e liberare la memoria solo oltre 500 MB: 499 s invece di 299 s sulla rete intera, 3,9 GB alla fine invece di 2,2. La prova non è pulita, perché erano aperte altre finestre di Stilista, ma guadagno non ce n'è: tolta. Sui 5 minuti il calcolo del psil pesa circa 4 minuti.
