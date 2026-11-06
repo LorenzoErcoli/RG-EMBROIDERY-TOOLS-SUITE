@@ -220,6 +220,15 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    del 2026-11-03 (il chiaro si ferma sotto lo scuro), che resta con la casella spenta, e allora vale *Un livello entra sotto
    quelli sopra di*. I progetti salvati prima si riaprono con la casella spenta, come erano; i parametri ricordati dalla pagina
    no, prendono quella di serie.
+39. (2026-11-06) **Il taglio sui salti lunghi.** *«Manca la gestione dei salti sui passaggi sopra un tot, sia un dst che nel
+   rimandalo a stilista»*; alla domanda ha scelto «salto lungo → taglio». Campo `tagliaOltre` in *Cosa ricamare*, di serie 3 mm
+   (scelto da me, da confermare): nel DST un salto più lungo porta il taglio del filo (`ExportLayer.trims`), uno più corto
+   resta salto. Non cambia il ricamo, quindi si cambia senza rigenerare; il *Programma* dice quanti salti di ogni stop hanno il
+   taglio. Vale per *Esporta DST*, per *Simula* e per *Invia a Stilista* quando il disegno non viene da Stilista (va il DST).
+   **Non vale** per il ritorno in Stilista al suo posto: il plugin manda solo il salto, non il taglio, e per aggiungerlo va
+   capito come Stilista segna un taglio nei punti. I progetti salvati prima si riaprono con 0, senza tagli, come erano. Sul suo
+   disegno (tre livelli divisi per grandezza): oltre 3 mm 7 tagli su 8 salti nel 2° livello e 71 su 87 nel 3°; a due livelli
+   135 su 175.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso

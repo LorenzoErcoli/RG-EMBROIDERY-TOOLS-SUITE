@@ -68,7 +68,7 @@ export { sagomaDaZone, sagomaDaAnello, sagomaDaAnelli } from ${JSON.stringify(po
 export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordatura, stratiProgramma, conPuntoMinimo, unisciTratti } from ${JSON.stringify(posix('apps/cannage-rafia/src/programma.ts'))};
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
-export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_DI_SERIE, fermaSottoIlSecondo as pmFerma, macchiePerStilista as pmPerStilista } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
+export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_DI_SERIE, fermaSottoIlSecondo as pmFerma, macchiePerStilista as pmPerStilista, tagliDeiSalti as pmTagli } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
 export { lineePerStilista as rcLineeStilista, scegliModelli as rcScegliModelli, oggettiDaMandare as rcOggettiDaMandare, oggettiMancanti as rcOggettiMancanti } from ${JSON.stringify(posix('apps/rete-catenella/src/stilista-psil.ts'))};
 export { aggiungiModulo as rcAggiungiModulo, leggiElenco as rcLeggiElenco, leggiModulo as rcLeggiModulo, scriviElenco as rcScriviElenco, togliModulo as rcTogliModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/elenco-moduli.ts'))};
 export { griglia as rcGriglia, riquadroRete as rcRiquadro, costruisciRete as rcCostruisci, latoSuperioreDritto as rcLatoDritto, filoSopra as rcFiloSopraIntero, stratiRete as rcStrati, catenella as rcCatenella, pezziDentro as rcPezzi, maschera as rcMaschera, PARAMETRI_RETE as RC_PARAMETRI, motore as rcMotore } from ${JSON.stringify(posix('apps/rete-catenella/src/motore.ts'))};
@@ -6854,13 +6854,25 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     const [conBuco] = rg.pmFerma(q(0, 0, 30), [q(10, 10, 10)], 1, giu);
     check('una macchia lontana resta com\'è, una tutta sotto sparisce, con una scura dentro resta col buco',
       [sola[0] === fuori, coperta.length, rg.pointInPolygon({ x: 15, y: 15 }, conBuco), rg.pointInPolygon({ x: 5, y: 5 }, conBuco), Math.abs(rg.polygonArea(conBuco) - (900 - 64)) < 4], [true, 0, false, true, true]);
+    // IL TAGLIO SUI SALTI LUNGHI (Lorenzo, 2026-11-06: «Manca la gestione dei salti sui passaggi sopra un tot»; scelto «salto
+    // lungo → taglio»): nel DST il salto più lungo di `tagliaOltre` porta il taglio, quello più corto no
+    {
+      const tr = [[{ x: 0, y: 0 }, { x: 2, y: 0 }], [{ x: 4, y: 0 }, { x: 6, y: 0 }], [{ x: 16, y: 0 }, { x: 18, y: 0 }]];
+      check('i tagli: il salto di 2 mm resta salto, quello di 10 mm col taglio (oltre 3 mm); con 0 mai', [rg.pmTagli(tr, 3), rg.pmTagli(tr, 0)], [[false, false, true], [false, false, false]]);
+      const st = zero.stop.find((s) => s.strato === 2);
+      const tagli = rg.pmTagli(st.livello.tratti, rg.PM_DI_SERIE.tagliaOltre), attesi = tagli.filter(Boolean).length;
+      const conTagli = rg.misuraDst(rg.dstFromExportLayers([{ id: 'raso2-1', color: '#000', polylines: st.livello.tratti, trims: tagli }]));
+      const senza = rg.misuraDst(rg.dstFromExportLayers([{ id: 'raso2-1', color: '#000', polylines: st.livello.tratti }]));
+      check(`nel DST del 2° livello ${attesi} tagli su ${st.livello.salti} salti (oltre ${rg.PM_DI_SERIE.tagliaOltre} mm); i punti non cambiano`,
+        [attesi > 0, conTagli.trim, senza.trim, conTagli.punti === senza.punti], [true, attesi, 0, true]);
+    }
     const soloBuco = rg.pmCostruisci([], [q(0, 0, 30)], {}, FERMI, [q(10, 10, 10)]);
     const nelBuco = soloBuco.stop[0].livello.tratti.flat().filter((p) => p.x > 12 && p.x < 18 && p.y > 12 && p.y < 18);
     check('...e il raso di quella col buco non ci entra', [soloBuco.stop[0].livello.punti > 100, nelBuco.length], [true, 0]);
   }
   const pmTool = readFileSync(join(root, 'apps/pattern-macchie/src/tool.ts'), 'utf8');
   const pmWorker = readFileSync(join(root, 'apps/pattern-macchie/src/macchie.worker.ts'), 'utf8');
-  check('i progetti di prima si riaprono con base e punto sopra, e coi livelli sotto fermati', /conQuelliDiPrima\(\{ sovrapposti: false, \.\.\.\(meta\.params/.test(pmTool) && /conBase: true, conSopra: true, \.\.\.p/.test(pmTool), true);
+  check('i progetti di prima si riaprono con base e punto sopra, coi livelli sotto fermati e senza tagli', /conQuelliDiPrima\(\{ sovrapposti: false, tagliaOltre: 0, \.\.\.\(meta\.params/.test(pmTool) && /conBase: true, conSopra: true, \.\.\.p/.test(pmTool), true);
   check('il calcolo gira in un Web Worker, che chiama il motore', [/new Worker\(new URL\('\.\/macchie\.worker\.ts'/.test(pmTool), /costruisciMacchie\(/.test(pmWorker)], [true, true]);
   check('...e durante il calcolo gli export sono fermi', /exportPronti\(false\)[\s\S]*worker\.postMessage/.test(pmTool), true);
 }

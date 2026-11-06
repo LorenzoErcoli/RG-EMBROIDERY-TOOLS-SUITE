@@ -11,7 +11,7 @@ import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';
-import { costruisciMacchie, macchiePerStilista, PARAMETRI_MACCHIE, type ParametriMacchie, type RisultatoMacchie, type Strato } from './motore';
+import { costruisciMacchie, macchiePerStilista, tagliDeiSalti, PARAMETRI_MACCHIE, type ParametriMacchie, type RisultatoMacchie, type Strato } from './motore';
 
 /** I pattern pronti: la libreria condivisa del Generatore pattern, e quelli salvati nel Generatore su questo computer. */
 const PRESET_CONDIVISI: Record<string, PatternConfig> = (() => {
@@ -94,6 +94,8 @@ const CAMPI_COSA: Campo[] = [
     aiuto: 'Lo stesso punto della base sopra il raso, dentro le macchie. Spento: solo il raso. Spenti tutti e due, il pattern e il pannello non servono.' },
   { nome: 'rasoDiStilista', etichetta: 'In Stilista, il raso lo fa Stilista', unita: '', passo: 1, min: 0,
     aiuto: 'Con «Invia a Stilista» ogni macchia torna come una copia del riempimento selezionato in Stilista (il modello: selezionalo prima di inviare), nella direzione del raso, con l’ingresso, l’uscita e l’ordine di qui. L’anteprima e il DST restano col raso di qui. Con più livelli il modello è uno solo, e fra un riempimento e l’altro Stilista salta: i passaggi fra le macchie non si cuciono.' },
+  { nome: 'tagliaOltre', etichetta: 'Nel DST, taglia i salti più lunghi di', unita: 'mm', passo: 0.5, min: 0,
+    aiuto: 'Un salto più lungo porta il taglio del filo; uno più corto resta un salto. Non cambia il ricamo: non serve rigenerare. 0 = mai.' },
 ];
 const CAMPI_RASO: Campo[] = [
   { nome: 'daSinistra', etichetta: 'Le macchie da sinistra a destra', unita: '', passo: 1, min: 0,
@@ -272,7 +274,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       inp.value = String(par[f.nome]);
       inp.addEventListener('change', () => {
         const v = parseFloat(inp.value);
-        if (Number.isFinite(v)) { (par as Record<string, unknown>)[f.nome] = Math.min(f.max ?? Infinity, Math.max(f.min, v)); daRifare(); }
+        if (Number.isFinite(v)) { (par as Record<string, unknown>)[f.nome] = Math.min(f.max ?? Infinity, Math.max(f.min, v)); if (f.nome === 'tagliaOltre') aggiornaProgramma(); else daRifare(); }
       });
       const unit = document.createElement('span');
       unit.textContent = f.unita;
@@ -401,12 +403,14 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     return box;
   }
 
+  /** Quanti salti dello stop portano il taglio nel DST. */
+  const tagliTesto = (tratti: Polyline[]) => { const n = tagliDeiSalti(tratti, par.tagliaOltre).filter(Boolean).length; return n ? `, di cui ${n} col taglio` : ''; };
   function livelliGrid(): HTMLElement {
     const box = document.createElement('div');
     box.className = 'rg-param-grid';
     const r = risultato;
     const stop = elencoStop().map((l, i) => `<p class="rg-field__help rg-param-grid__wide">Stop ${i + 1}<span class="macchie-ink" style="--ink:${l.colore}"></span>${l.nome}`
-      + (l.livello ? ` — ${l.livello.punti.toLocaleString('it-IT')} punti, ${l.livello.salti} salti` : '') + '</p>').join('');
+      + (l.livello ? ` — ${l.livello.punti.toLocaleString('it-IT')} punti, ${l.livello.salti} salti` + tagliTesto(l.livello.tratti) : '') + '</p>').join('');
     const descrivi = (v: number[]) => { const f = v.slice().sort((a, b) => a - b); return `${f.length}` + (f.length ? ` (fino a 5 mm ${f.filter((d) => d <= 5).length}, oltre 12 mm ${f.filter((d) => d > 12).length}, il più lungo ${f[f.length - 1].toFixed(1)} mm)` : ''); };
     const dettaglio = r
       ? `<p class="rg-field__help rg-param-grid__wide">Salti fra una macchia e l'altra — ${livelliDi(r).length > 1 ? livelliDi(r).map((n) => `raso del ${n}° livello: ${descrivi(n === 3 ? r.saltiFra.raso3 : n === 2 ? r.saltiFra.raso2 : r.saltiFra.raso)}`).join('; ') + ' (l’ultimo sopra non ha niente che copra il filo)' : `raso: ${descrivi([...r.saltiFra.raso, ...r.saltiFra.raso2, ...r.saltiFra.raso3])}`}; punto sopra: ${descrivi(r.saltiFra.sopra)}`
@@ -662,7 +666,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   /** Gli strati da esportare: uno per stop. */
   function strati(): ExportLayer[] {
     if (!risultato) return [];
-    return elencoStop().filter((l) => l.livello && l.livello.tratti.length).map((l) => ({ id: l.id, color: l.colore, polylines: l.livello!.tratti }));
+    return elencoStop().filter((l) => l.livello && l.livello.tratti.length).map((l) => ({ id: l.id, color: l.colore, polylines: l.livello!.tratti, trims: tagliDeiSalti(l.livello!.tratti, par.tagliaOltre) }));
   }
 
   const nomeBase = () => (source?.name.replace(/\.[^.]+$/, '') ?? 'macchie');
@@ -755,7 +759,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   /** Riapre un progetto; con `soloPunto` ne prende solo pattern e parametri, e il disegno resta quello di adesso. */
   function riapri(meta: Record<string, unknown>, soloPunto = false): void {
     const drawing = meta.drawing as { name?: string; text?: string; scale?: { scaleMode?: string } } | undefined;
-    if (meta.params && typeof meta.params === 'object') Object.assign(par, PARAMETRI_MACCHIE, conQuelliDiPrima({ sovrapposti: false, ...(meta.params as Partial<ParametriMacchie>) }));
+    if (meta.params && typeof meta.params === 'object') Object.assign(par, PARAMETRI_MACCHIE, conQuelliDiPrima({ sovrapposti: false, tagliaOltre: 0, ...(meta.params as Partial<ParametriMacchie>) }));
     const p = meta.pattern as { nome?: string; config?: PatternConfig } | undefined;
     if (p?.config) pattern = { nome: p.nome ?? 'dal file', config: p.config };
     if (soloPunto) { buildPanel(); daRifare(); return; }
