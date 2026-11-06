@@ -243,6 +243,19 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    livelli col 2° sfrangiato: salti uguali (0/175), filo a vista uguale (282 mm), punti del 2° da 60.523 a 191.009, punte fino
    a 6,5 mm fuori, nessun punto oltre il punto massimo (4 mm). Non provato a macchina; l'interlinea di serie (0,4 mm) col
    doppio passaggio può essere fitta.
+41. (2026-11-06) **La prova su un pezzo.** *«ogni volta che genero ci mette tanto, non c'è modo di fare una simulazione rapida
+   per vedere come viene su un campione più piccolo e poi generare tutto il piazzato?»* Pulsante *Prova qui*, accanto a
+   *Genera*: calcola solo le macchie che toccano il pezzo che si vede nell'anteprima (intere), con la base, se c'è, sul
+   riquadro. Una prova non si esporta: DST, SVG e Stilista vogliono *Genera*, e la riga in basso lo dice. Con *Ricalcola da
+   solo* acceso, dopo una prova ogni campo cambiato rifà la prova lì, non tutto. Sulla pagina, 14 macchie su 120 in 0,1 s.
+   Il ricamo di una prova può differire ai bordi del pezzo da quello di *Genera*: le macchie fuori non ci sono, quindi
+   l'ordine e i passaggi lì cambiano.
+42. (2026-11-06) **I campi del raso e dello sfrangiato.** *«i parametri tra raso e sfrangiato non sono molto chiari, rendili più
+   chiari anche in base alla differenza»*. Il pannellino del livello si chiama *Raso* o *Sfrangiato* secondo il riempimento, e
+   i campi cambiano parole: col raso *righe da un bordo all'altro* (*Distanza fra le righe*, *Bordo irregolare*…), con lo
+   sfrangiato *colonne dal centro* (*Distanza fra una colonna e l'altra*, *Punto massimo, nelle andate e ritorno*, *Punte
+   oltre il bordo: almeno / al più*, *Da dove partono le punte*). Le punte si vedono solo con lo sfrangiato. I parametri sono
+   gli stessi: un progetto si riapre uguale.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso

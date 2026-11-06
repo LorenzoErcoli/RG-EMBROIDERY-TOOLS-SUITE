@@ -11,7 +11,7 @@ import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';
-import { costruisciMacchie, macchiePerStilista, tagliDeiSalti, PARAMETRI_MACCHIE, type ParametriMacchie, type RisultatoMacchie, type Strato } from './motore';
+import { costruisciMacchie, macchiePerStilista, tagliDeiSalti, PARAMETRI_MACCHIE, type ParametriMacchie, type Riempimento, type RisultatoMacchie, type Strato } from './motore';
 
 /** I pattern pronti: la libreria condivisa del Generatore pattern, e quelli salvati nel Generatore su questo computer. */
 const PRESET_CONDIVISI: Record<string, PatternConfig> = (() => {
@@ -97,27 +97,46 @@ const CAMPI_COSA: Campo[] = [
   { nome: 'tagliaOltre', etichetta: 'Nel DST, taglia i salti più lunghi di', unita: 'mm', passo: 0.5, min: 0,
     aiuto: 'Un salto più lungo porta il taglio del filo; uno più corto resta un salto. Non cambia il ricamo: non serve rigenerare. 0 = mai.' },
 ];
-const CAMPI_RASO: Campo[] = [
-  { nome: 'riempimento', etichetta: 'Riempimento', unita: '', passo: 1, min: 0,
-    scelte: [['raso', 'Raso'], ['sfrangiato', 'Sfrangiato: dal centro, su e giù fino oltre il bordo']],
-    aiuto: 'Sfrangiato: ogni riga del raso diventa due andate e ritorno dal suo centro, una fino oltre il bordo di sopra e una oltre quello di sotto, negli stessi buchi, come la frangia del Punto sfrangiato. Il filo corre lungo i centri; ordine e passaggi restano quelli del raso.' },
-  { nome: 'frangiaMin', etichetta: 'Sfrangiato: le punte oltre il bordo, da', unita: 'mm', passo: 0.5, min: 0 },
-  { nome: 'frangiaMax', etichetta: '…fino a', unita: 'mm', passo: 0.5, min: 0, aiuto: 'Ogni punta va oltre il capo della riga di una lunghezza a caso fra questi due. Solo col riempimento sfrangiato.' },
-  { nome: 'daSinistra', etichetta: 'Le macchie da sinistra a destra', unita: '', passo: 1, min: 0,
-    aiuto: 'L’ordine delle macchie va da sinistra a destra (vale per il raso e per il punto sopra); dentro ogni macchia il raso va da sinistra a destra dove può. Senza: l’ordine coi salti più corti.' },
-  { nome: 'rasoAngolo', etichetta: 'Direzione del raso', unita: '°', passo: 1, min: -180, aiuto: '90 = verticale.' },
-  { nome: 'rasoInterlinea', etichetta: 'Interlinea del raso', unita: 'mm', passo: 0.05, min: 0.1 },
-  { nome: 'rasoPuntoMax', etichetta: 'Punto massimo del raso', unita: 'mm', passo: 0.5, min: 1 },
-  { nome: 'rasoFase', etichetta: 'Fase del raso', unita: '%', passo: 5, min: 0, max: 100,
-    aiuto: 'Nelle righe più lunghe del punto massimo, di quanto gli aghi di una riga sono spostati rispetto alla riga accanto, in % del punto. 0 = tutti alla stessa altezza.' },
-  { nome: 'sfrangiatura', etichetta: 'Sfrangiatura', unita: 'mm', passo: 0.1, min: 0,
-    aiuto: 'Di quanto, a caso, ogni riga finisce prima o dopo il bordo: il bordo non è più netto. 0 = netto.' },
-  { nome: 'sfrangiaturaFuori', etichetta: '…di cui oltre il bordo', unita: '%', passo: 10, min: 0, max: 100,
-    aiuto: '0 = le righe si accorciano soltanto; 100 = si allungano soltanto, sulla base.' },
-];
-/** Il pannellino del secondo livello: gli stessi campi, coi parametri suoi (Lorenzo, 2026-11-03: «ogni livello di macchia deve avere il suo pannellino dei parametri»). */
-const CAMPI_RASO_2: Campo[] = CAMPI_RASO.map((f) => ({ ...f, nome: `${f.nome}2` as keyof ParametriMacchie }));
-const CAMPI_RASO_3: Campo[] = CAMPI_RASO.map((f) => ({ ...f, nome: `${f.nome}3` as keyof ParametriMacchie }));
+/**
+ * I CAMPI DI UN LIVELLO, SECONDO IL RIEMPIMENTO (Lorenzo, 2026-11-06: «i parametri tra raso e sfrangiato non sono molto chiari,
+ * rendili più chiari anche in base alla differenza»). Col raso si parla di righe da bordo a bordo; con lo sfrangiato di colonne
+ * che partono dal centro, e compaiono le punte. I parametri sono gli stessi: cambiano le parole e quali si vedono.
+ * Il secondo e il terzo livello hanno gli stessi campi coi loro parametri (`suf` 2 o 3; Lorenzo, 2026-11-03: «ogni livello di
+ * macchia deve avere il suo pannellino dei parametri»).
+ */
+function campiDelLivello(suf: '' | '2' | '3', riempimento: Riempimento): Campo[] {
+  const n = (k: string) => `${k}${suf}` as keyof ParametriMacchie;
+  const sfr = riempimento === 'sfrangiato';
+  return [
+    { nome: n('riempimento'), etichetta: 'Riempimento', unita: '', passo: 1, min: 0,
+      scelte: [['raso', 'Raso: righe da un bordo all’altro'], ['sfrangiato', 'Sfrangiato: colonne dal centro fino oltre i bordi']],
+      aiuto: sfr
+        ? 'Ogni colonna parte dal centro della macchia, sale fino oltre il bordo e torna al centro negli stessi buchi, poi fa lo stesso verso il basso. Il filo va di centro in centro. Le punte che escono dal bordo fanno la frangia.'
+        : 'Ogni riga va da un bordo all’altro della macchia, e la riga dopo torna indietro accanto. Il bordo resta pieno: niente punte fuori.' },
+    { nome: n('daSinistra'), etichetta: 'Le macchie da sinistra a destra', unita: '', passo: 1, min: 0,
+      aiuto: 'L’ordine delle macchie va da sinistra a destra (vale anche per il punto sopra); dentro ogni macchia si avanza da sinistra a destra dove si può. Senza: l’ordine coi salti più corti.' },
+    { nome: n('rasoAngolo'), etichetta: sfr ? 'Direzione delle colonne' : 'Direzione delle righe', unita: '°', passo: 1, min: -180,
+      aiuto: sfr ? '90 = verticale: le colonne vanno su e giù dal centro, e ci si sposta in orizzontale.' : '90 = verticale.' },
+    { nome: n('rasoInterlinea'), etichetta: sfr ? 'Distanza fra una colonna e l’altra' : 'Distanza fra le righe (interlinea)', unita: 'mm', passo: 0.05, min: 0.1,
+      aiuto: sfr ? 'Ogni colonna si cuce due volte (andata e ritorno): a parità di distanza copre più del raso. Se viene troppo fitto, allarga questa.' : undefined },
+    { nome: n('rasoPuntoMax'), etichetta: sfr ? 'Punto massimo, nelle andate e ritorno' : 'Punto massimo delle righe', unita: 'mm', passo: 0.5, min: 1,
+      aiuto: sfr ? 'Le colonne lunghe si dividono in punti di al più tanto; il ritorno ripassa negli stessi buchi.' : 'Le righe lunghe si dividono in punti di al più tanto: le macchie larghe non fanno punti da bordo a bordo.' },
+    { nome: n('rasoFase'), etichetta: 'Fase degli aghi', unita: '%', passo: 5, min: 0, max: 100,
+      aiuto: `Dove ${sfr ? 'una colonna' : 'una riga'} si divide in più punti, di quanto gli aghi sono spostati rispetto ${sfr ? 'alla colonna' : 'alla riga'} accanto, in % del punto. 0 = tutti alla stessa altezza.` },
+    ...(sfr ? [
+      { nome: n('frangiaMin'), etichetta: 'Punte oltre il bordo: almeno', unita: 'mm', passo: 0.5, min: 0,
+        aiuto: 'Di quanto ogni punta esce dal bordo, al minimo.' },
+      { nome: n('frangiaMax'), etichetta: 'Punte oltre il bordo: al più', unita: 'mm', passo: 0.5, min: 0,
+        aiuto: 'Ogni punta esce di una lunghezza a caso fra il minimo e questo: è la frangia.' },
+    ] as Campo[] : []),
+    { nome: n('sfrangiatura'), etichetta: sfr ? 'Da dove partono le punte: a caso prima o dopo il bordo, di' : 'Bordo irregolare: le righe finiscono a caso prima o dopo il bordo, di', unita: 'mm', passo: 0.1, min: 0,
+      aiuto: sfr ? 'Il capo della colonna, da cui parte la punta, cade a caso un po’ dentro o un po’ fuori dal bordo. 0 = sul bordo: variano solo le punte.' : 'Il bordo della macchia non è più una linea netta. 0 = netto.' },
+    { nome: n('sfrangiaturaFuori'), etichetta: '…di cui oltre il bordo', unita: '%', passo: 10, min: 0, max: 100,
+      aiuto: `0 = ${sfr ? 'le colonne' : 'le righe'} si accorciano soltanto; 100 = si allungano soltanto.` },
+  ];
+}
+/** Il titolo del pannellino: Raso o Sfrangiato. */
+const nomeRiemp = (r: Riempimento) => (r === 'sfrangiato' ? 'Sfrangiato' : 'Raso');
 const CAMPI_FRA_I_LIVELLI: Campo[] = [
   { nome: 'sovrapposti', etichetta: 'I livelli sotto restano interi: quelli sopra si cuciono sopra', unita: '', passo: 1, min: 0,
     aiuto: 'Spenta: dove una macchia sta sotto una di un livello più alto si ferma, e ci entra solo di «Un livello entra sotto quelli sopra di».' },
@@ -167,6 +186,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
           <button id="simulaBtn" class="rg-button rg-button--ghost rg-button--small" aria-pressed="false" title="Il simulatore: il filo si cuce sullo schermo nell'ordine del DST">Simula</button>
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
           <label class="rg-choice" title="Se è spenta, il ricamo si rifà solo quando premi Genera: così cambi i campi senza aspettare il calcolo."><input type="checkbox" id="autoCalcolo"><span>Ricalcola da solo</span></label>
+          <button id="provaBtn" class="rg-button rg-button--ghost rg-button--small" title="Calcola solo le macchie che si vedono adesso nell’anteprima: avvicinati a un pezzo e prova i parametri in pochi secondi. Il DST e Stilista vogliono Genera, su tutto.">Prova qui</button>
           <button id="genBtn" class="rg-button rg-button--secondary rg-button--small">Genera</button>
           ${BOTTONE_INVIA_STILISTA()}
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
@@ -243,7 +263,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
         sel.className = 'rg-select';
         sel.id = 'f-' + f.nome;
         for (const [v, l] of f.scelte) { const o = document.createElement('option'); o.value = v; o.textContent = l; o.selected = String(par[f.nome]) === v; sel.appendChild(o); }
-        sel.addEventListener('change', () => { (par as Record<string, unknown>)[f.nome] = sel.value; daRifare(); });
+        sel.addEventListener('change', () => { (par as Record<string, unknown>)[f.nome] = sel.value; if (String(f.nome).startsWith('riempimento')) buildPanel(); daRifare(); });
         lab.appendChild(sel);
         grid.appendChild(lab);
         continue;
@@ -452,14 +472,14 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       ...(serveIlPattern() ? [['pattern', 'Pattern della base', patternGrid()] as [string, string, HTMLElement]] : []),
       ...(piuLivelli
         ? [
-          ...(g.macchie.length ? [['raso', 'Raso, 1° livello', campi(CAMPI_RASO)]] : []),
-          ...(g.secondo.length ? [['raso2', 'Raso, 2° livello', campi(CAMPI_RASO_2)]] : []),
-          ...(g.terzo.length ? [['raso3', 'Raso, 3° livello', campi(CAMPI_RASO_3)]] : []),
+          ...(g.macchie.length ? [['raso', `${nomeRiemp(par.riempimento)}, 1° livello`, campi(campiDelLivello('', par.riempimento))]] : []),
+          ...(g.secondo.length ? [['raso2', `${nomeRiemp(par.riempimento2)}, 2° livello`, campi(campiDelLivello('2', par.riempimento2))]] : []),
+          ...(g.terzo.length ? [['raso3', `${nomeRiemp(par.riempimento3)}, 3° livello`, campi(campiDelLivello('3', par.riempimento3))]] : []),
           ['livelli', 'Fra i livelli', campi(CAMPI_FRA_I_LIVELLI)],
         ] as Array<[string, string, HTMLElement]>
-        : g.terzo.length ? [['raso3', 'Raso delle macchie', campi(CAMPI_RASO_3)]] as Array<[string, string, HTMLElement]>
-          : g.secondo.length ? [['raso2', 'Raso delle macchie', campi(CAMPI_RASO_2)]] as Array<[string, string, HTMLElement]>
-            : [['raso', 'Raso delle macchie', campi(CAMPI_RASO)]] as Array<[string, string, HTMLElement]>),
+        : g.terzo.length ? [['raso3', `${nomeRiemp(par.riempimento3)} delle macchie`, campi(campiDelLivello('3', par.riempimento3))]] as Array<[string, string, HTMLElement]>
+          : g.secondo.length ? [['raso2', `${nomeRiemp(par.riempimento2)} delle macchie`, campi(campiDelLivello('2', par.riempimento2))]] as Array<[string, string, HTMLElement]>
+            : [['raso', `${nomeRiemp(par.riempimento)} delle macchie`, campi(campiDelLivello('', par.riempimento))]] as Array<[string, string, HTMLElement]>),
       ...(par.conSopra ? [['sopra', 'Punto sopra le macchie', campi(CAMPI_SOPRA)] as [string, string, HTMLElement]] : []),
       ['ponti', 'Macchie vicine', campi(CAMPI_PONTI)],
       ['zone', 'Zone', campi(CAMPI_ZONE)],
@@ -501,6 +521,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     testoDisegno = `${source.name}: ${model.choices.length} colori` + (b ? ` · ${(b.maxX - b.minX).toFixed(1)} × ${(b.maxY - b.minY).toFixed(1)} mm` : '')
       + (model.warning ? ` · ${model.warning}` : '');
     risultato = null;
+    ultimaProva = null;
     buildPanel();
     disegnaContorni();
     daRifare();
@@ -523,10 +544,27 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
    * di prima, lo si dice, e gli export si fermano finché non si rigenera: varrebbero per i parametri vecchi.
    */
   let superato = false;
+  /**
+   * LA PROVA SU UN PEZZO (Lorenzo, 2026-11-06: «ogni volta che genero ci mette tanto, non c'è modo di fare una simulazione
+   * rapida per vedere come viene su un campione più piccolo e poi generare tutto il piazzato?»): «Prova qui» calcola solo le
+   * macchie che si vedono nell'anteprima. Il riquadro dell'ultima prova, in mm, o null se l'ultimo calcolo era su tutto: con
+   * «Ricalcola da solo» si rifà la prova lì. Una prova non si esporta.
+   */
+  type Riquadro = { x0: number; y0: number; x1: number; y1: number };
+  let ultimaProva: Riquadro | null = null;
+  /** Il riquadro dell'anteprima che si vede adesso, in mm (le coordinate del disegno), o null se non c'è un disegno. */
+  function riquadroVisto(): Riquadro | null {
+    const svg = $('layer').querySelector('svg');
+    const m = svg?.getScreenCTM();
+    if (!svg || !m) return null;
+    const inv = m.inverse(), r = $('canvas').getBoundingClientRect();
+    const a = new DOMPoint(r.left, r.top).matrixTransform(inv), b = new DOMPoint(r.right, r.bottom).matrixTransform(inv);
+    return { x0: Math.min(a.x, b.x), y0: Math.min(a.y, b.y), x1: Math.max(a.x, b.x), y1: Math.max(a.y, b.y) };
+  }
   let autoCalcolo = false;
   try { autoCalcolo = localStorage.getItem('pattern-macchie.auto') === '1'; } catch { /* senza archivio resta spento */ }
   function daRifare() {
-    if (autoCalcolo) { genera(); return; }
+    if (autoCalcolo) { genera(ultimaProva); return; }
     // (un calcolo partito prima non serve più: si ferma, così non tiene occupato il computer)
     idCalcolo++;
     window.clearTimeout(attesa);
@@ -535,13 +573,25 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     exportPronti(false);
     $('genBtn').classList.replace('rg-button--secondary', 'rg-button--primary');
     if (!model) return;
-    $('status').textContent = risultato ? "Cambiato qualcosa: premi Genera per rifare il ricamo (l'anteprima è quella di prima)." : 'Premi Genera per fare il ricamo.';
+    $('status').textContent = !risultato ? 'Premi Genera per fare il ricamo, o Prova qui per vedere solo il pezzo che hai davanti.'
+      : ultimaProva ? "Cambiato qualcosa: premi Prova qui per rivedere il pezzo, o Genera per tutto (l'anteprima è quella di prima)."
+        : "Cambiato qualcosa: premi Genera per rifare il ricamo, o Prova qui per vedere solo il pezzo che hai davanti (l'anteprima è quella di prima).";
   }
-  function genera() {
-    const { pannello, macchie, secondo, terzo } = geometria();
+  function genera(zona: Riquadro | null = null) {
+    const g = geometria();
+    let { pannello, macchie, secondo, terzo } = g;
     if (!model) { $('status').textContent = 'Carica prima un disegno.'; return; }
     if (!pannello && serveIlPattern()) { $('status').textContent = 'Dai a un colore il ruolo «Pannello»: serve per la base e il punto sopra.'; return; }
     if (!macchie.length && !secondo.length && !terzo.length) { $('status').textContent = 'Dai a un colore il ruolo «Macchie».'; return; }
+    const tutte = macchie.length + secondo.length + terzo.length;
+    if (zona) {
+      // (le macchie che toccano il riquadro, intere; il pannello della base, se c'è, è il riquadro)
+      const tocca = (m: Polyline) => m.some((p) => p.x >= zona.x0 && p.x <= zona.x1 && p.y >= zona.y0 && p.y <= zona.y1);
+      macchie = macchie.filter(tocca); secondo = secondo.filter(tocca); terzo = terzo.filter(tocca);
+      if (!macchie.length && !secondo.length && !terzo.length) { $('status').textContent = 'Nel pezzo che vedi non ci sono macchie: avvicinati a una parte del disegno e riprova.'; return; }
+      if (pannello) pannello = [{ x: zona.x0, y: zona.y0 }, { x: zona.x1, y: zona.y0 }, { x: zona.x1, y: zona.y1 }, { x: zona.x0, y: zona.y1 }];
+    }
+    ultimaProva = zona;
     ricordaPunto();
     const mioId = ++idCalcolo;
     window.clearTimeout(attesa);
@@ -555,13 +605,15 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     $('status').textContent = 'Calcolo…';
     const finito = (r: RisultatoMacchie | null, errore?: string) => {
       occupato = false;
-      superato = false;
-      $('genBtn').classList.replace('rg-button--primary', 'rg-button--secondary');
-      exportPronti(true);
+      // (una prova non si esporta: per il DST serve Genera, su tutto)
+      superato = !!zona;
+      if (zona) $('genBtn').classList.replace('rg-button--secondary', 'rg-button--primary');
+      else $('genBtn').classList.replace('rg-button--primary', 'rg-button--secondary');
+      exportPronti(!zona);
       risultato = r;
       if (!r) { $('status').textContent = 'Errore: ' + errore; return; }
       const punti = r.base.punti + r.raso.punti + r.sopra.punti;
-      $('status').textContent = `${macchie.length + secondo.length + terzo.length} macchie · ${(par.conBase ? 1 : 0) + r.stop.length} stop · salti: ${livelliDi(r).length > 1 ? 'raso ' + livelliDi(r).map((n) => `${n}° livello ${saltiDelRaso(r, n)}`).join(', ') : `raso ${r.raso.salti}`}` + (par.conSopra ? `, punto sopra ${r.sopra.salti}` : '')
+      $('status').textContent = (zona ? `Prova qui: ${macchie.length + secondo.length + terzo.length} macchie di ${tutte} (per il DST premi Genera) · ` : `${tutte} macchie · `) + `${(par.conBase ? 1 : 0) + r.stop.length} stop · salti: ${livelliDi(r).length > 1 ? 'raso ' + livelliDi(r).map((n) => `${n}° livello ${saltiDelRaso(r, n)}`).join(', ') : `raso ${r.raso.salti}`}` + (par.conSopra ? `, punto sopra ${r.sopra.salti}` : '')
         + (r.ponti ? ` · ${r.ponti} ponti` : '') + ` · ${(r.tempoMs / 1000).toFixed(1)} s`;
       $('points').textContent = ` · ${punti.toLocaleString('it-IT')} punti`;
       aggiornaProgramma();
@@ -585,7 +637,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       console.error(e);
       worker?.terminate(); worker = null; occupato = false;
       senzaWorker = true;
-      if (mioId === idCalcolo) genera();
+      if (mioId === idCalcolo) genera(zona);
     };
     worker.postMessage({ id: mioId, pannello: pannello ?? [], macchie, secondo, terzo, pattern: pattern.config, par: { ...par } });
   }
@@ -703,7 +755,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     sorgente: () => source?.text ?? null,
     // col raso fatto da Stilista (rasoDiStilista) ogni stop del raso torna come riempimenti, uno per macchia
     strati: () => {
-      if (!risultato || superato) throw new Error(risultato ? 'i parametri sono cambiati: premi Genera' : 'premi prima Genera');
+      if (!risultato || superato) throw new Error(!risultato ? 'premi prima Genera' : ultimaProva ? 'questa è una prova su un pezzo: premi Genera' : 'i parametri sono cambiati: premi Genera');
       const cuciti = stratiCuciti(strati());
       if (!risultato || !par.rasoDiStilista) return cuciti;
       const perZona = new Map(macchiePerStilista(risultato).map((z) => [`raso${z.strato > 1 ? z.strato : ''}-${z.zona + 1}`, z.macchie]));
@@ -714,7 +766,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       });
     },
     dst() {
-      if (!risultato || superato) throw new Error(risultato ? 'i parametri sono cambiati: premi Genera' : 'premi prima Genera');
+      if (!risultato || superato) throw new Error(!risultato ? 'premi prima Genera' : ultimaProva ? 'questa è una prova su un pezzo: premi Genera' : 'i parametri sono cambiati: premi Genera');
       return { bytes: costruisciDst(), nome: `${nomeBase()}-macchie` };
     },
     stato: (testo) => { $('status').textContent = testo; },
@@ -874,12 +926,17 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
 
   // ---- azioni fisse ----
   $('fitBtn').addEventListener('click', () => pz.fit());
-  $('genBtn').addEventListener('click', genera);
+  $('genBtn').addEventListener('click', () => genera());
+  $('provaBtn').addEventListener('click', () => {
+    const zona = riquadroVisto();
+    if (!zona) { $('status').textContent = model ? 'Non vedo l’anteprima: premi Adatta e riprova.' : 'Carica prima un disegno.'; return; }
+    genera(zona);
+  });
   ($('autoCalcolo') as HTMLInputElement).checked = autoCalcolo;
   $('autoCalcolo').addEventListener('change', () => {
     autoCalcolo = ($('autoCalcolo') as HTMLInputElement).checked;
     try { localStorage.setItem('pattern-macchie.auto', autoCalcolo ? '1' : '0'); } catch { /* idem */ }
-    if (autoCalcolo && superato) genera();
+    if (autoCalcolo && superato) genera(ultimaProva);
   });
   $('simulaBtn').addEventListener('click', () => {
     simulando = !simulando;
