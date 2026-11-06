@@ -229,6 +229,20 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    capito come Stilista segna un taglio nei punti. I progetti salvati prima si riaprono con 0, senza tagli, come erano. Sul suo
    disegno (tre livelli divisi per grandezza): oltre 3 mm 7 tagli su 8 salti nel 2° livello e 71 su 87 nel 3°; a due livelli
    135 su 175.
+40. (2026-11-06) **Il riempimento sfrangiato.** *«ora le macchie che creo di def sono riempimenti raso. Invece vorrei poter
+   scegliere il riempimento o raso o riempimento con punto sfrangiato, quello che usiamo appunto nel tools punto sfrangiato, ma
+   che segua e riempia le macchie.»* Precisato: *«è fondamentalmente un andata e ritorno con il centro al centro della macchia
+   ma sempre in verticale, con spostamento orizzontale, non deve muoversi diversamente per ora»*; le punte *«tutto il giro»*;
+   *«se deve fare dei passaggi e per poi tornare indietro deve usare il centro»*; nelle forme con rientranze o vuoti il centro
+   si spezza in due. Campo *Riempimento* (`riempimento`, per livello: raso o sfrangiato) con *le punte oltre il bordo, da …
+   fino a* (2 e 6 mm, come nel Punto sfrangiato). Ogni riga del raso diventa due andate e ritorno dal suo centro, su e giù
+   fino oltre il bordo, negli stessi buchi (`rigaSfrangiata`); il filo va di centro in centro. Righe, celle (le rientranze),
+   ordine, passaggi e salti sono quelli del raso: cambia solo come si cuce la riga. Il codice del Punto sfrangiato non è
+   toccato né importato: la frangia è la stessa idea (andata e ritorno nello stesso buco), le righe qui le conosce già il
+   motore. Col raso di Stilista un livello sfrangiato torna coi suoi punti (Stilista non fa le punte). Sul suo disegno a due
+   livelli col 2° sfrangiato: salti uguali (0/175), filo a vista uguale (282 mm), punti del 2° da 60.523 a 191.009, punte fino
+   a 6,5 mm fuori, nessun punto oltre il punto massimo (4 mm). Non provato a macchina; l'interlinea di serie (0,4 mm) col
+   doppio passaggio può essere fitta.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso
