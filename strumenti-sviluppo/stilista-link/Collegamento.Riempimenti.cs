@@ -21,6 +21,8 @@ namespace StilistaHostSkeleton
         /// <summary>Ago (da 1); assente = quello del modello.</summary>
         [DataMember(Name = "ago")] public int? Ago { get; set; }
         [DataMember(Name = "nome")] public string Nome { get; set; }
+        /// <summary>Il progetto del tool, da scrivere in ogni macchia (Collegamento.Parametri.cs).</summary>
+        [DataMember(Name = "parametri")] public string Parametri { get; set; }
     }
 
     [DataContract]
@@ -139,7 +141,7 @@ namespace StilistaHostSkeleton
                     ImpostaOrientamento(copia, modello, contorno, chiesti.OrientamentoDeg);
 
                     // 3. nel documento, in fondo: la sequenza è quella del tool
-                    ImpostaDescrizione(copia, "RG raso · " + (chiesti.Nome ?? "macchia") + " " + (i + 1));
+                    ImpostaDescrizione(copia, ConParametri("RG raso · " + (chiesti.Nome ?? "macchia") + " " + (i + 1), chiesti.Parametri));
                     metti.Invoke(oggetti, new object[] { SnapshotObjects(oggetti).Count, copia });
                     if (chiesti.Ago.HasValue && ReadNativeNeedleOneBased(copia) != chiesti.Ago.Value)
                     {
@@ -181,11 +183,12 @@ namespace StilistaHostSkeleton
             }
             TryRaiseObjectsRedrawNeeded(oggetti);
             var riassunto = "Riempimenti: " + fatte + " macchie su " + chiesti.Macchie.Count + ", " + punti + " punti, modello «" +
-                Convert.ToString(GetReadableMemberValue(modello, "Description")) + "» " + Tipo(modello);
+                SenzaParametri(Convert.ToString(GetReadableMemberValue(modello, "Description"))) + "» " + Tipo(modello);
             ProbeLog.Write(log + ": " + riassunto + (errori.Count > 0 ? " · errori: " + string.Join(" | ", errori) : ""));
             Annota(riassunto);
             return "{\"ok\":" + (fatte > 0 ? "true" : "false") +
                    ",\"macchie\":" + fatte + ",\"chieste\":" + chiesti.Macchie.Count +
+                   ",\"parametri_salvati\":" + (string.IsNullOrEmpty(chiesti.Parametri) ? "false" : "true") +
                    ",\"punti\":" + punti +
                    ",\"oggetti_prima\":" + primaDi + ",\"oggetti_dopo\":" + SnapshotObjects(oggetti).Count +
                    ",\"ingresso_scarto_max_mm\":" + Json.Numero(Math.Round(peggioreIngresso, 3)) +

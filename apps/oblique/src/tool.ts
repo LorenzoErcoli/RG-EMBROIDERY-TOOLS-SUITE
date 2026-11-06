@@ -392,6 +392,12 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
   // gli anelli interni del loro oggetto: tornano al suo colore e le aree di esclusione interne si accendono.
   let svgStilista: string | null = null;
   const aggancio: AggancioStilista = {
+    tool: 'oblique',
+    riapri(meta) {
+      restoreProject(meta);
+      render();
+      return true;
+    },
     carica(svg, nome) {
       const coiFori = svgForiAiLoroColori(svg);
       // l'SVG dichiara le sue misure: una larghezza reale lo riscalerebbe e il ritorno non cadrebbe più al suo posto

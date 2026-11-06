@@ -1946,6 +1946,11 @@
           "default": false,
           "x-id": "withOverlay"
         },
+        "tagliaOltre": {
+          "$ref": "#/$defs/trimJumpsOver",
+          "default": 3,
+          "x-id": "trimJumpsOver"
+        },
         "sovrapposti": {
           "$ref": "#/$defs/levelsOverlap",
           "default": true,
@@ -1965,6 +1970,21 @@
           "$ref": "#/$defs/visiblePassagesNear",
           "default": 0,
           "x-id": "visiblePassagesNear"
+        },
+        "riempimento3": {
+          "$ref": "#/$defs/fillType3",
+          "default": "raso",
+          "x-id": "fillType3"
+        },
+        "frangiaMin3": {
+          "$ref": "#/$defs/fringeTipMin3",
+          "default": 2,
+          "x-id": "fringeTipMin3"
+        },
+        "frangiaMax3": {
+          "$ref": "#/$defs/fringeTipMax3",
+          "default": 6,
+          "x-id": "fringeTipMax3"
         },
         "daSinistra3": {
           "$ref": "#/$defs/leftToRightOrder3",
@@ -2001,6 +2021,21 @@
           "default": 50,
           "x-id": "fringeOutsidePercent3"
         },
+        "riempimento2": {
+          "$ref": "#/$defs/fillType2",
+          "default": "raso",
+          "x-id": "fillType2"
+        },
+        "frangiaMin2": {
+          "$ref": "#/$defs/fringeTipMin2",
+          "default": 2,
+          "x-id": "fringeTipMin2"
+        },
+        "frangiaMax2": {
+          "$ref": "#/$defs/fringeTipMax2",
+          "default": 6,
+          "x-id": "fringeTipMax2"
+        },
         "daSinistra2": {
           "$ref": "#/$defs/leftToRightOrder2",
           "default": false,
@@ -2035,6 +2070,21 @@
           "$ref": "#/$defs/fringeOutsidePercent2",
           "default": 50,
           "x-id": "fringeOutsidePercent2"
+        },
+        "riempimento": {
+          "$ref": "#/$defs/fillType",
+          "default": "raso",
+          "x-id": "fillType"
+        },
+        "frangiaMin": {
+          "$ref": "#/$defs/fringeTipMin",
+          "default": 2,
+          "x-id": "fringeTipMin"
+        },
+        "frangiaMax": {
+          "$ref": "#/$defs/fringeTipMax",
+          "default": 6,
+          "x-id": "fringeTipMax"
         },
         "rasoAngolo": {
           "$ref": "#/$defs/satinAngle",
@@ -5502,6 +5552,15 @@
       "description": "Lo stesso punto della base sopra il raso, dentro le macchie. Spento: solo il raso.",
       "x-concetto": "interruttore"
     },
+    "trimJumpsOver": {
+      "type": "number",
+      "title": "Nel DST, taglia i salti più lunghi di",
+      "description": "Un salto più lungo porta il taglio del filo; uno più corto resta un salto. Non cambia il ricamo: non serve rigenerare. 0 = mai.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "ordine-cucitura"
+    },
     "levelsOverlap": {
       "type": "boolean",
       "title": "I livelli sotto restano interi: quelli sopra si cuciono sopra",
@@ -5534,6 +5593,34 @@
       "minimum": 0,
       "x-passo": 1,
       "x-concetto": "passaggi-nascosti"
+    },
+    "fillType3": {
+      "type": "string",
+      "title": "3° livello: riempimento",
+      "description": "Raso, o sfrangiato: ogni riga diventa due andate e ritorno dal suo centro fino oltre il bordo, negli stessi buchi.",
+      "enum": [
+        "raso",
+        "sfrangiato"
+      ],
+      "x-concetto": "ordine-cucitura"
+    },
+    "fringeTipMin3": {
+      "type": "number",
+      "title": "3° livello: sfrangiato: le punte oltre il bordo, da",
+      "description": "Di quanto ogni punta va oltre il capo della riga, al minimo.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "variazione"
+    },
+    "fringeTipMax3": {
+      "type": "number",
+      "title": "3° livello: …fino a",
+      "description": "Ogni punta va oltre il capo della riga di una lunghezza a caso fra il minimo e questo.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "variazione"
     },
     "leftToRightOrder3": {
       "type": "boolean",
@@ -5597,6 +5684,34 @@
       "x-passo": 10,
       "x-concetto": "variazione"
     },
+    "fillType2": {
+      "type": "string",
+      "title": "2° livello: riempimento",
+      "description": "Raso, o sfrangiato: ogni riga diventa due andate e ritorno dal suo centro fino oltre il bordo, negli stessi buchi.",
+      "enum": [
+        "raso",
+        "sfrangiato"
+      ],
+      "x-concetto": "ordine-cucitura"
+    },
+    "fringeTipMin2": {
+      "type": "number",
+      "title": "2° livello: sfrangiato: le punte oltre il bordo, da",
+      "description": "Di quanto ogni punta va oltre il capo della riga, al minimo.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "variazione"
+    },
+    "fringeTipMax2": {
+      "type": "number",
+      "title": "2° livello: …fino a",
+      "description": "Ogni punta va oltre il capo della riga di una lunghezza a caso fra il minimo e questo.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "variazione"
+    },
     "leftToRightOrder2": {
       "type": "boolean",
       "title": "2° livello: le macchie da sinistra a destra",
@@ -5657,6 +5772,34 @@
       "minimum": 0,
       "maximum": 100,
       "x-passo": 10,
+      "x-concetto": "variazione"
+    },
+    "fillType": {
+      "type": "string",
+      "title": "Riempimento",
+      "description": "Raso, o sfrangiato: ogni riga diventa due andate e ritorno dal suo centro fino oltre il bordo, negli stessi buchi.",
+      "enum": [
+        "raso",
+        "sfrangiato"
+      ],
+      "x-concetto": "ordine-cucitura"
+    },
+    "fringeTipMin": {
+      "type": "number",
+      "title": "Sfrangiato: le punte oltre il bordo, da",
+      "description": "Di quanto ogni punta va oltre il capo della riga, al minimo.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "variazione"
+    },
+    "fringeTipMax": {
+      "type": "number",
+      "title": "…fino a",
+      "description": "Ogni punta va oltre il capo della riga di una lunghezza a caso fra il minimo e questo.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
       "x-concetto": "variazione"
     },
     "satinAngle": {
@@ -6756,10 +6899,16 @@
         "fringeLengthMin",
         "fringeLengthMax",
         "diameterIrregularity",
+        "fringeTipMin3",
+        "fringeTipMax3",
         "fringeAmount3",
         "fringeOutsidePercent3",
+        "fringeTipMin2",
+        "fringeTipMax2",
         "fringeAmount2",
         "fringeOutsidePercent2",
+        "fringeTipMin",
+        "fringeTipMax",
         "fringeAmount",
         "fringeOutsidePercent"
       ]
@@ -6829,8 +6978,12 @@
         "rowHeight",
         "gapCrossMm",
         "buildMode",
+        "trimJumpsOver",
+        "fillType3",
         "leftToRightOrder3",
+        "fillType2",
         "leftToRightOrder2",
+        "fillType",
         "leftToRightOrder",
         "topStitchBandBeforeDivision",
         "continuousFill",

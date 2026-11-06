@@ -282,6 +282,12 @@ export function mountNet45(root: HTMLElement, opts: { backHref?: string } = {}):
   // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è il cartamodello, i fori le aree vuote ----
   let svgStilista: string | null = null;
   const aggancio: AggancioStilista = {
+    tool: 'net-45',
+    riapri(meta) {
+      if (!applyImportedProject(meta)) return false;
+      render();
+      return true;
+    },
     carica(svg, nome) {
       svgStilista = svg;
       // l'SVG dichiara le sue misure: una larghezza reale lo riscalerebbe e il ritorno non cadrebbe più al suo posto

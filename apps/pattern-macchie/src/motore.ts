@@ -40,6 +40,12 @@ export type ParametriMacchie = {
    */
   sovrapposti: boolean;
   /**
+   * IL TAGLIO SUI SALTI LUNGHI (Lorenzo, 2026-11-06: «Manca la gestione dei salti sui passaggi sopra un tot, sia un dst che
+   * nel rimandalo a stilista»; scelto «salto lungo → taglio»): nel DST un salto più lungo di tanti mm porta il taglio del
+   * filo. Non cambia il ricamo: lo usa l'export (`tagliDeiSalti`). 0 = mai.
+   */
+  tagliaOltre: number;
+  /**
    * ZERO SALTI NEL PRIMO LIVELLO (Lorenzo, 2026-11-03: «deve passare sotto il raso che c'è sopra, andando a zero di salti»;
    * misurato il suo disegno, le macchie del secondo livello quasi non si toccano, e ha scelto «punti corti a vista»): dove
    * il filo fra due macchie non può restare coperto attraversa lo spazio a vista, al più di tanti mm per volta. 0 = si salta.
@@ -56,6 +62,9 @@ export type ParametriMacchie = {
   rasoFase2: number;
   sfrangiatura2: number;
   sfrangiaturaFuori2: number;
+  riempimento2: Riempimento;
+  frangiaMin2: number;
+  frangiaMax2: number;
   /**
    * IL TERZO LIVELLO (Lorenzo, 2026-11-05: «3 livelli di macchia. in cui il 3 è il più alto il due il medio e l'1 il primo.
    * ovviamente a cascata si distribuiscono i passaggi nascosti»): gli stessi parametri del raso, per il terzo.
@@ -67,6 +76,9 @@ export type ParametriMacchie = {
   rasoFase3: number;
   sfrangiatura3: number;
   sfrangiaturaFuori3: number;
+  riempimento3: Riempimento;
+  frangiaMin3: number;
+  frangiaMax3: number;
   /**
    * I PASSAGGI A VISTA VICINI FRA LORO (Lorenzo, 2026-11-05: «se ci sono a vista farli passare tutti più o meno vicino, così
    * il rifilo a mano è più veloce»), mm: attraversare lo spazio entro tanto da un passaggio a vista già cucito costa meno, e
@@ -103,6 +115,18 @@ export type ParametriMacchie = {
   sfrangiatura: number;
   /** Quanta parte della sfrangiatura va oltre il bordo (sulla base), %: il resto resta dentro. */
   sfrangiaturaFuori: number;
+  /**
+   * IL RIEMPIMENTO SFRANGIATO (Lorenzo, 2026-11-06: «vorrei poter scegliere il riempimento o raso o riempimento con punto
+   * sfrangiato, quello che usiamo appunto nel tools punto sfrangiato, ma che segua e riempia le macchie»; «è fondamentalmente
+   * un andata e ritorno con il centro al centro della macchia ma sempre in verticale, con spostamento orizzontale»). Con
+   * 'sfrangiato' ogni riga del raso diventa due andate e ritorno dal suo centro: su fino oltre il bordo e giù al centro,
+   * giù fino oltre il bordo e su al centro, nello stesso buco, come la frangia del Punto sfrangiato. Il filo corre lungo i
+   * centri; le righe, l'ordine e i passaggi sono quelli del raso. Vedi `rigaSfrangiata`.
+   */
+  riempimento: Riempimento;
+  /** Di quanto la punta di ogni andata e ritorno va oltre il capo della riga, mm: a caso fra questi due (come nel Punto sfrangiato). */
+  frangiaMin: number;
+  frangiaMax: number;
   /** (Dal 2026-10-28 il punto sopra va sulle linee della base senza limite: vedi `sopraComeLaBase`. Non usato.) */
   passaggioMax: number;
   /** I gruppi di linee del punto sopra staccati dal resto con meno filo di tanto, mm, non si cuciono. */
@@ -158,11 +182,15 @@ export type ParametriMacchie = {
 /** Il punto più corto del raso, mm: fra una riga e l'altra il punto è l'interlinea. */
 const RASO_PUNTO_MIN = 0.3;
 
+/** Il riempimento di un livello: il raso, o il raso fatto di andate e ritorno dal centro (`rigaSfrangiata`). */
+export type Riempimento = 'raso' | 'sfrangiato';
+
 export const PARAMETRI_MACCHIE: ParametriMacchie = {
   conBase: false,
   conSopra: false,
   secondoMargine: 1,
   sovrapposti: true,
+  tagliaOltre: 3,
   secondoVista: 12,
   daSinistra2: false,
   rasoAngolo2: 90,
@@ -171,6 +199,9 @@ export const PARAMETRI_MACCHIE: ParametriMacchie = {
   rasoFase2: 30,
   sfrangiatura2: 1,
   sfrangiaturaFuori2: 50,
+  riempimento2: 'raso',
+  frangiaMin2: 2,
+  frangiaMax2: 6,
   daSinistra3: false,
   rasoAngolo3: 90,
   rasoInterlinea3: 0.4,
@@ -178,6 +209,9 @@ export const PARAMETRI_MACCHIE: ParametriMacchie = {
   rasoFase3: 30,
   sfrangiatura3: 1,
   sfrangiaturaFuori3: 50,
+  riempimento3: 'raso',
+  frangiaMin3: 2,
+  frangiaMax3: 6,
   vistaVicini: 0,
   bucaLaBase: false,
   margineBase: 2,
@@ -188,6 +222,9 @@ export const PARAMETRI_MACCHIE: ParametriMacchie = {
   rasoDiStilista: false,
   sfrangiatura: 1,
   sfrangiaturaFuori: 50,
+  riempimento: 'raso',
+  frangiaMin: 2,
+  frangiaMax: 6,
   passaggioMax: 100,
   pezzoMinimo: 2,
   sopraPuntoMin: 1,
@@ -1434,6 +1471,29 @@ function sfrangia(riga: Polyline, macchia: number, n: number, dentroMax: number,
   return [at(s0), ...mezzo, at(s1)];
 }
 
+/**
+ * LA RIGA SFRANGIATA (`riempimento: 'sfrangiato'`): la riga del raso, da `a` a `b`, diventa due andate e ritorno dal suo
+ * centro `c`: c → oltre b → c, poi c → oltre a → c. Ogni punta va oltre il suo capo di una lunghezza a caso fra `min` e
+ * `max` (dal posto della riga: stesso disegno, stesso ricamo), e il ritorno ripassa negli stessi buchi dell'andata, come la
+ * frangia del Punto sfrangiato. Gli aghi in mezzo sono quelli della riga (la fase), più fitti di `passo` dove serve. La
+ * riga comincia e finisce nel centro: da una riga alla dopo il filo va di centro in centro, coperto.
+ */
+export function rigaSfrangiata(riga: Polyline, macchia: number, min: number, max: number, passo: number): Polyline {
+  const a = riga[0], b = riga[riga.length - 1], L = Math.hypot(b.x - a.x, b.y - a.y);
+  if (L < 1e-6) return riga;
+  const u = { x: (b.x - a.x) / L, y: (b.y - a.y) / L }, c = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+  const s = (q: Point) => (q.x - a.x) * u.x + (q.y - a.y) * u.y;
+  const lo = Math.max(0, Math.min(min, max)), hi = Math.max(lo, min, max);
+  const lunga = (k: number) => lo + (hi - lo) * caso(macchia, Math.round(c.x * 100), Math.round(c.y * 100) * 4 + k);
+  const pb = lunga(1), pa = lunga(2);
+  const punta = (q: Point, verso: number, l: number): Point => ({ x: q.x + u.x * verso * l, y: q.y + u.y * verso * l });
+  // (via gli aghi a meno di tre decimi dal centro o dal capo: il punto più corto del raso)
+  const versoB = [c, ...riga.slice(1, -1).filter((q) => s(q) > L / 2 + 0.35 && s(q) < L - 0.35), b, ...(pb > 0.05 ? [punta(b, 1, pb)] : [])];
+  const versoA = [c, ...riga.slice(1, -1).filter((q) => s(q) < L / 2 - 0.35 && s(q) > 0.35).reverse(), a, ...(pa > 0.05 ? [punta(a, -1, pa)] : [])];
+  const andataB = apasso(versoB, passo), andataA = apasso(versoA, passo);
+  return [...andataB, ...andataB.slice(0, -1).reverse(), ...andataA.slice(1), ...andataA.slice(0, -1).reverse()];
+}
+
 /** Il punto più corto ai capi di una riga del raso con la fase, mm: un ago più vicino al capo non si mette. */
 const RASO_FASE_MIN = 1;
 
@@ -1823,10 +1883,12 @@ export function costruisciMacchie(
   const delSecondo: ParametriMacchie = {
     ...par, daSinistra: par.daSinistra2, rasoAngolo: par.rasoAngolo2, rasoInterlinea: par.rasoInterlinea2, rasoPuntoMax: par.rasoPuntoMax2,
     rasoFase: par.rasoFase2, sfrangiatura: par.sfrangiatura2, sfrangiaturaFuori: par.sfrangiaturaFuori2,
+    riempimento: par.riempimento2, frangiaMin: par.frangiaMin2, frangiaMax: par.frangiaMax2,
   };
   const delTerzo: ParametriMacchie = {
     ...par, daSinistra: par.daSinistra3, rasoAngolo: par.rasoAngolo3, rasoInterlinea: par.rasoInterlinea3, rasoPuntoMax: par.rasoPuntoMax3,
     rasoFase: par.rasoFase3, sfrangiatura: par.sfrangiatura3, sfrangiaturaFuori: par.sfrangiaturaFuori3,
+    riempimento: par.riempimento3, frangiaMin: par.frangiaMin3, frangiaMax: par.frangiaMax3,
   };
   const sfrangiaturaDentro = (p: ParametriMacchie) => Math.max(0, p.sfrangiatura) * (1 - Math.min(1, Math.max(0, p.sfrangiaturaFuori / 100)));
 
@@ -2178,10 +2240,20 @@ export function costruisciMacchie(
         else { catena = []; pezziRaso.push(catena); passaggiScoperti++; }       // mai sopra il raso: piuttosto un salto
       }
       const catenaRaso = catena;
-      for (const r of righe) {
+      for (const riga of righe) {
+        // (sfrangiato: la riga comincia dal centro; il filo ci arriva lungo la riga, che poi lo copre)
+        const r = par.riempimento === 'sfrangiato' ? rigaSfrangiata(riga, i + off, par.frangiaMin, par.frangiaMax, par.rasoPuntoMax) : riga;
+        // (il passaggio sotto il raso arriva al capo della prima riga: di lì al centro lungo la riga, a punti)
+        if (!catenaRaso.length && r !== riga) catenaRaso.push(riga[0]);
         const u = catenaRaso[catenaRaso.length - 1];
         if (u && Math.hypot(r[0].x - u.x, r[0].y - u.y) > par.rasoPuntoMax) for (const q of apasso([u, r[0]], par.rasoPuntoMax).slice(1, -1)) catenaRaso.push(q);
         for (const q of r) catenaRaso.push(q);
+      }
+      // (sfrangiato: il blocco finisce nel centro; si torna lungo l'ultima riga, sotto i suoi punti, fino al suo capo, dove il
+      // raso finirebbe: di lì partono le strade coperte verso il blocco dopo e la macchia dopo, come col raso)
+      if (par.riempimento === 'sfrangiato' && righe.length) {
+        const capo = righe[righe.length - 1][righe[righe.length - 1].length - 1];
+        for (const q of apasso([catenaRaso[catenaRaso.length - 1], capo], par.rasoPuntoMax).slice(1)) catenaRaso.push(q);
       }
       ultimaRigaPer.set(i, righe[righe.length - 1]);
       fin = catenaRaso[catenaRaso.length - 1];
@@ -2791,6 +2863,18 @@ function sulContorno(p: Point, c: Polyline): Point {
     if (e < d2) { d2 = e; best = q; }
   }
   return best;
+}
+
+/**
+ * I tagli di uno stop: per ogni tratto, se prima di lui il filo si taglia (`ExportLayer.trims`). Si taglia dove il salto
+ * dal tratto prima è più lungo di `oltre` mm; il primo tratto no (lo stop comincia col suo cambio ago). 0 = mai.
+ */
+export function tagliDeiSalti(tratti: Polyline[], oltre: number): boolean[] {
+  return tratti.map((t, k) => {
+    if (k === 0 || !(oltre > 0) || !t.length || !tratti[k - 1].length) return false;
+    const a = tratti[k - 1][tratti[k - 1].length - 1], b = t[0];
+    return Math.hypot(b.x - a.x, b.y - a.y) > oltre;
+  });
 }
 
 /**

@@ -68,7 +68,7 @@ export { sagomaDaZone, sagomaDaAnello, sagomaDaAnelli } from ${JSON.stringify(po
 export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordatura, stratiProgramma, conPuntoMinimo, unisciTratti } from ${JSON.stringify(posix('apps/cannage-rafia/src/programma.ts'))};
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
-export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_DI_SERIE, fermaSottoIlSecondo as pmFerma, macchiePerStilista as pmPerStilista } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
+export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_DI_SERIE, fermaSottoIlSecondo as pmFerma, macchiePerStilista as pmPerStilista, tagliDeiSalti as pmTagli, rigaSfrangiata as pmSfrangiata } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
 export { lineePerStilista as rcLineeStilista, scegliModelli as rcScegliModelli, oggettiDaMandare as rcOggettiDaMandare, oggettiMancanti as rcOggettiMancanti } from ${JSON.stringify(posix('apps/rete-catenella/src/stilista-psil.ts'))};
 export { aggiungiModulo as rcAggiungiModulo, leggiElenco as rcLeggiElenco, leggiModulo as rcLeggiModulo, scriviElenco as rcScriviElenco, togliModulo as rcTogliModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/elenco-moduli.ts'))};
 export { griglia as rcGriglia, riquadroRete as rcRiquadro, costruisciRete as rcCostruisci, latoSuperioreDritto as rcLatoDritto, filoSopra as rcFiloSopraIntero, stratiRete as rcStrati, catenella as rcCatenella, pezziDentro as rcPezzi, maschera as rcMaschera, PARAMETRI_RETE as RC_PARAMETRI, motore as rcMotore } from ${JSON.stringify(posix('apps/rete-catenella/src/motore.ts'))};
@@ -77,7 +77,8 @@ export { pezzoAMisure as rtsPezzoAMisure, stratiPerDst as rtsStratiPerDst } from
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm, anelliOvali as rtsAnelliOvali, puntoDelNodo as rtsPuntoDelNodo, cimeDelleColonne as rtsCimeDelleColonne, ceIlNodo as rtsCeIlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
 export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, avanza as rtsAvanza, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
-export { origineStilista, coloreForiStilista, puntiDaPolilinee, svgForiAiLoroColori, primoColoreStilista, agoStilista } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
+export { senzaDatiDiProgetto } from ${JSON.stringify(posix('packages/ui/src/save.ts'))};
+export { origineStilista, coloreForiStilista, puntiDaPolilinee, svgForiAiLoroColori, primoColoreStilista, agoStilista, impacchettaProgetto, spacchettaProgetto, progettoDaInviare } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -3065,7 +3066,7 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
     // il DST si costruisce in un posto solo (2026-10-20): lo usano «Esporta DST» e l'aggancio di Stilista
     const salva = sorgente.slice(sorgente.indexOf('function costruisciDst()'), sorgente.indexOf("$('exportDstBtn')"));
     const bottoni = sorgente.replace('function costruisciDst()', '');
-    const riapri = sorgente.slice(sorgente.indexOf('if (isDst) {'), sorgente.indexOf("if (isDst) reader.readAsArrayBuffer(file)"));
+    const riapri = sorgente.slice(sorgente.indexOf('function riapriProgetto('), sorgente.indexOf('function wirePanel()'));
     check('il DST del Generatore porta il disegno coi ruoli e la scala, entro un tetto',
       [salva.includes('{ name: boundarySource.name, text: boundarySource.text, scale: { ...scalaImport }, roles: { ...boundaryRoles } }'),
         salva.includes('MAX_DRAWING_KB'), salva.includes("...(disegno ? { drawing: disegno } : {})"),
@@ -3139,6 +3140,34 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
         const invia = s.includes('BOTTONE_INVIA_STILISTA()') || s.includes('inviaStilista: true');
         return !(s.includes('collegaStilista(aggancio') && prendi && invia);
       }), []);
+    // i parametri nell'oggetto (2026-11-03): ogni tool agganciato dice chi è e sa riaprire il suo progetto
+    check('Stilista Link: tutti gli 11 tool dichiarano il loro id e come riaprono un progetto',
+      agganciati.filter((t) => {
+        const s = readFileSync(join(root, `apps/${t}/src/tool.ts`), 'utf8');
+        return !(s.includes(`tool: '${t}',`) && /\n {4}riapri[(:]/.test(s));
+      }), []);
+    const progettoProva = { v: 1, tool: 'net-45', quando: '2026-11-03T12:00:00.000Z', nome: 'prova', sorgente: '<svg>è</svg>', meta: { rgProject: 'net-45', params: { passo: 2.5 }, testo: 'à'.repeat(200000) } };
+    const pacchetto = await rg.impacchettaProgetto(progettoProva);
+    check('Stilista Link: il progetto nell\'oggetto torna identico, compresso, e in testo semplice',
+      [JSON.stringify(await rg.spacchettaProgetto(pacchetto)) === JSON.stringify(progettoProva), pacchetto.length < 5000, /^[A-Za-z0-9+/=]+$/.test(pacchetto)], [true, true, true]);
+    check('Stilista Link: un testo che non è un progetto non si riapre', [await rg.spacchettaProgetto('non è un progetto'), await rg.spacchettaProgetto(btoa('x'))], [null, null]);
+    const dstProva = rg.dstFromExportLayers([{ id: 'prova', color: '#ff0000', polylines: [[{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }]] }], { metadata: rg.conBusta({ rgProject: 'net-45', params: { passo: 2.5 } }) });
+    const inviato = await rg.progettoDaInviare({ dst: () => ({ bytes: dstProva, nome: 'prova' }), sorgente: () => '<svg/>' });
+    const riletto = await rg.spacchettaProgetto(inviato.dati);
+    check('Stilista Link: «Invia» prende la busta dal DST del tool, e il cartamodello',
+      [riletto.tool, riletto.meta.params.passo, riletto.sorgente], ['net-45', 2.5, '<svg/>']);
+    // esportare senza dati (2026-11-03): il footer e i <metadata> vanno via, il ricamo no
+    const dstPulito = rg.senzaDatiDiProgetto(dstProva);
+    const dstSenzaDati = rg.dstFromExportLayers([{ id: 'prova', color: '#ff0000', polylines: [[{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }]] }], {});
+    check('Esporta senza dati: il DST perde il progetto, ed è identico a uno scritto senza',
+      [rg.readDstMetadata(dstPulito), Buffer.compare(Buffer.from(dstPulito), Buffer.from(dstSenzaDati)), new TextDecoder('latin1').decode(dstPulito).includes('RGPROJ01')], [null, 0, false]);
+    check('Esporta senza dati: un DST senza progetto resta com\'è', Buffer.compare(Buffer.from(rg.senzaDatiDiProgetto(dstSenzaDati)), Buffer.from(dstSenzaDati)), 0);
+    const svgConDati = '<svg xmlns="http://www.w3.org/2000/svg">\n  <metadata id="rg-project">{"params":{"a":1},"drawing":{"text":"cliente"}}</metadata>\n  <metadata id="rg-progetto">{"b":2}</metadata>\n  <metadata>{"c":3}</metadata>\n  <path d="M0 0L1 1"/>\n</svg>';
+    check('Esporta senza dati: l\'SVG perde ogni <metadata>, il disegno resta',
+      [rg.senzaDatiDiProgetto(svgConDati).includes('metadata'), rg.senzaDatiDiProgetto(svgConDati).includes('cliente'), rg.senzaDatiDiProgetto(svgConDati).includes('<path d="M0 0L1 1"/>')], [false, false, true]);
+    check('Esporta senza dati: un testo che non è un SVG non si tocca', rg.senzaDatiDiProgetto('{"metadata":"<metadata>x</metadata>"}'), '{"metadata":"<metadata>x</metadata>"}');
+    check('Stilista Link: un DST senza busta non ferma l\'invio, lo dice',
+      (await rg.progettoDaInviare({ dst: () => ({ bytes: new Uint8Array(600), nome: 'x' }), sorgente: () => null })).dati, undefined);
     check('Stilista Link: per oblique i fori di un plugin vecchio (senza «di chi») vanno al colore del primo filo',
       rg.svgForiAiLoroColori(svgStilista).match(/stroke="#[0-9A-Fa-f]{6}"/g), ['stroke="#FFF200"', 'stroke="#FFF200"']);
     // stop diversi = colori diversi (2026-10-22): il plugin dà a ogni stop il suo colore, e dice di chi è ogni foro
@@ -6880,13 +6909,51 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     const [conBuco] = rg.pmFerma(q(0, 0, 30), [q(10, 10, 10)], 1, giu);
     check('una macchia lontana resta com\'è, una tutta sotto sparisce, con una scura dentro resta col buco',
       [sola[0] === fuori, coperta.length, rg.pointInPolygon({ x: 15, y: 15 }, conBuco), rg.pointInPolygon({ x: 5, y: 5 }, conBuco), Math.abs(rg.polygonArea(conBuco) - (900 - 64)) < 4], [true, 0, false, true, true]);
+    // IL TAGLIO SUI SALTI LUNGHI (Lorenzo, 2026-11-06: «Manca la gestione dei salti sui passaggi sopra un tot»; scelto «salto
+    // lungo → taglio»): nel DST il salto più lungo di `tagliaOltre` porta il taglio, quello più corto no
+    {
+      const tr = [[{ x: 0, y: 0 }, { x: 2, y: 0 }], [{ x: 4, y: 0 }, { x: 6, y: 0 }], [{ x: 16, y: 0 }, { x: 18, y: 0 }]];
+      check('i tagli: il salto di 2 mm resta salto, quello di 10 mm col taglio (oltre 3 mm); con 0 mai', [rg.pmTagli(tr, 3), rg.pmTagli(tr, 0)], [[false, false, true], [false, false, false]]);
+      const st = zero.stop.find((s) => s.strato === 2);
+      const tagli = rg.pmTagli(st.livello.tratti, rg.PM_DI_SERIE.tagliaOltre), attesi = tagli.filter(Boolean).length;
+      const conTagli = rg.misuraDst(rg.dstFromExportLayers([{ id: 'raso2-1', color: '#000', polylines: st.livello.tratti, trims: tagli }]));
+      const senza = rg.misuraDst(rg.dstFromExportLayers([{ id: 'raso2-1', color: '#000', polylines: st.livello.tratti }]));
+      check(`nel DST del 2° livello ${attesi} tagli su ${st.livello.salti} salti (oltre ${rg.PM_DI_SERIE.tagliaOltre} mm); i punti non cambiano`,
+        [attesi > 0, conTagli.trim, senza.trim, conTagli.punti === senza.punti], [true, attesi, 0, true]);
+    }
+    // IL RIEMPIMENTO SFRANGIATO (Lorenzo, 2026-11-06: «è fondamentalmente un andata e ritorno con il centro al centro della
+    // macchia ma sempre in verticale, con spostamento orizzontale»; le punte tutto il giro, 2–6 mm oltre il bordo)
+    {
+      const riga = [{ x: 5, y: 0 }, { x: 5, y: 3 }, { x: 5, y: 7 }, { x: 5, y: 10 }];
+      const s = rg.pmSfrangiata(riga, 1, 2, 6, 4);
+      const ys = s.map((p) => p.y), su = Math.min(...ys), giu = Math.max(...ys);
+      const lunghi = s.slice(1).map((p, i) => Math.hypot(p.x - s[i].x, p.y - s[i].y));
+      const centri = s.filter((p) => Math.abs(p.y - 5) < 1e-9).length;
+      // (andata e ritorno negli stessi buchi: dalla punta si torna ripassando per gli stessi punti)
+      const kB = ys.indexOf(giu), kA = ys.indexOf(su);
+      const stessiBuchi = s.slice(0, kB + 1).every((p, i) => { const q = s[2 * kB - i]; return q && q.x === p.x && q.y === p.y; })
+        && s.slice(2 * kB, kA + 1).every((p, i) => { const q = s[2 * kA - 2 * kB - i]; return q && q.x === p.x && q.y === p.y; });
+      check(`la riga sfrangiata: comincia e finisce nel centro, punte da 2 a 6 mm oltre i capi (${(-su).toFixed(1)} e ${(giu - 10).toFixed(1)} mm), stessi buchi, nessun punto oltre 4 mm`,
+        [s[0], s.at(-1), centri, -su >= 2 && -su <= 6, giu - 10 >= 2 && giu - 10 <= 6, stessiBuchi, Math.max(...lunghi) <= 4 + 1e-9, s.every((p) => p.x === 5)],
+        [{ x: 5, y: 5 }, { x: 5, y: 5 }, 3, true, true, true, true, true]);
+      const sottile = chiare.slice(0, 10), alto = scure.slice(0, 10);
+      const raso = rg.pmCostruisci([], sottile, {}, rg.PM_DI_SERIE, alto);
+      const sfr = rg.pmCostruisci([], sottile, {}, { ...rg.PM_DI_SERIE, riempimento2: 'sfrangiato' }, alto);
+      const st = (r, n) => r.stop.filter((x) => x.strato === n);
+      const punti2 = (r) => st(r, 2).reduce((x, s) => x + s.livello.punti, 0);
+      const oltre = Math.max(0, ...st(sfr, 2).flatMap((s) => s.livello.tratti.flat()).map((p) => (alto.some((m) => rg.pointInPolygon(p, m)) ? 0 : Math.min(...alto.map((m) => rg.distanceToBoundary(p, m))))));
+      let piuLungo = 0; for (const s of sfr.stop) for (const tr of s.livello.tratti) for (let i = 1; i < tr.length; i++) piuLungo = Math.max(piuLungo, Math.hypot(tr[i].x - tr[i - 1].x, tr[i].y - tr[i - 1].y));
+      check(`il 2° livello sfrangiato: gli stessi salti del raso (${st(raso, 2).reduce((x, s) => x + s.livello.salti, 0)}), il 1° identico, più punti (${punti2(raso)} → ${punti2(sfr)}), punte al più ${oltre.toFixed(1)} mm fuori, nessun punto oltre il punto massimo`,
+        [st(sfr, 2).map((s) => s.livello.salti), JSON.stringify(st(sfr, 1).map((s) => s.livello.tratti)) === JSON.stringify(st(raso, 1).map((s) => s.livello.tratti)), punti2(sfr) > punti2(raso) * 2, oltre > 2 && oltre <= 6 + rg.PM_DI_SERIE.sfrangiatura2 + 0.6, piuLungo <= rg.PM_DI_SERIE.rasoPuntoMax2 + 0.15],
+        [st(raso, 2).map((s) => s.livello.salti), true, true, true, true]);
+    }
     const soloBuco = rg.pmCostruisci([], [q(0, 0, 30)], {}, FERMI, [q(10, 10, 10)]);
     const nelBuco = soloBuco.stop[0].livello.tratti.flat().filter((p) => p.x > 12 && p.x < 18 && p.y > 12 && p.y < 18);
     check('...e il raso di quella col buco non ci entra', [soloBuco.stop[0].livello.punti > 100, nelBuco.length], [true, 0]);
   }
   const pmTool = readFileSync(join(root, 'apps/pattern-macchie/src/tool.ts'), 'utf8');
   const pmWorker = readFileSync(join(root, 'apps/pattern-macchie/src/macchie.worker.ts'), 'utf8');
-  check('i progetti di prima si riaprono con base e punto sopra, e coi livelli sotto fermati', /conQuelliDiPrima\(\{ sovrapposti: false, \.\.\.\(meta\.params/.test(pmTool) && /conBase: true, conSopra: true, \.\.\.p/.test(pmTool), true);
+  check('i progetti di prima si riaprono con base e punto sopra, coi livelli sotto fermati e senza tagli', /conQuelliDiPrima\(\{ sovrapposti: false, tagliaOltre: 0, \.\.\.\(meta\.params/.test(pmTool) && /conBase: true, conSopra: true, \.\.\.p/.test(pmTool), true);
   check('il calcolo gira in un Web Worker, che chiama il motore', [/new Worker\(new URL\('\.\/macchie\.worker\.ts'/.test(pmTool), /costruisciMacchie\(/.test(pmWorker)], [true, true]);
   check('...e durante il calcolo gli export sono fermi', /exportPronti\(false\)[\s\S]*worker\.postMessage/.test(pmTool), true);
 }

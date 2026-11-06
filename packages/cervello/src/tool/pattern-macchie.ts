@@ -15,6 +15,11 @@ export const scheda: SchedaParametri = {
       tipo: 'bool', unita: '', predefinito: false, concetto: 'interruttore',
     },
     {
+      id: 'trimJumpsOver', nome: 'tagliaOltre', etichetta: 'Nel DST, taglia i salti più lunghi di',
+      aiuto: 'Un salto più lungo porta il taglio del filo; uno più corto resta un salto. Non cambia il ricamo: non serve rigenerare. 0 = mai.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 3, concetto: 'ordine-cucitura',
+    },
+    {
       id: 'levelsOverlap', nome: 'sovrapposti', etichetta: 'I livelli sotto restano interi: quelli sopra si cuciono sopra',
       aiuto: 'Spenta: dove una macchia sta sotto una di un livello più alto si ferma, e ci entra solo di «Un livello entra sotto quelli sopra di».',
       tipo: 'bool', unita: '', predefinito: true, concetto: 'interruttore',
@@ -33,6 +38,21 @@ export const scheda: SchedaParametri = {
       id: 'visiblePassagesNear', nome: 'vistaVicini', etichetta: 'I passaggi a vista si avvicinano a quelli già fatti, entro',
       aiuto: 'Attraversare lo spazio entro questa distanza da un altro passaggio a vista costa meno, e il filo ci va se può arrivarci coperto. 0 = ognuno dove è più corto.',
       tipo: 'num', unita: 'mm', min: 0, passo: 1, predefinito: 0, concetto: 'passaggi-nascosti',
+    },
+    {
+      id: 'fillType3', nome: 'riempimento3', etichetta: '3° livello: riempimento',
+      aiuto: 'Raso, o sfrangiato: ogni riga diventa due andate e ritorno dal suo centro fino oltre il bordo, negli stessi buchi.',
+      tipo: 'enum', unita: '', opzioni: ['raso', 'sfrangiato'], predefinito: 'raso', concetto: 'ordine-cucitura',
+    },
+    {
+      id: 'fringeTipMin3', nome: 'frangiaMin3', etichetta: '3° livello: sfrangiato: le punte oltre il bordo, da',
+      aiuto: 'Di quanto ogni punta va oltre il capo della riga, al minimo.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 2, concetto: 'variazione',
+    },
+    {
+      id: 'fringeTipMax3', nome: 'frangiaMax3', etichetta: '3° livello: …fino a',
+      aiuto: 'Ogni punta va oltre il capo della riga di una lunghezza a caso fra il minimo e questo.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 6, concetto: 'variazione',
     },
     {
       id: 'leftToRightOrder3', nome: 'daSinistra3', etichetta: '3° livello: le macchie da sinistra a destra',
@@ -70,6 +90,21 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: '%', min: 0, max: 100, passo: 10, predefinito: 50, concetto: 'variazione',
     },
     {
+      id: 'fillType2', nome: 'riempimento2', etichetta: '2° livello: riempimento',
+      aiuto: 'Raso, o sfrangiato: ogni riga diventa due andate e ritorno dal suo centro fino oltre il bordo, negli stessi buchi.',
+      tipo: 'enum', unita: '', opzioni: ['raso', 'sfrangiato'], predefinito: 'raso', concetto: 'ordine-cucitura',
+    },
+    {
+      id: 'fringeTipMin2', nome: 'frangiaMin2', etichetta: '2° livello: sfrangiato: le punte oltre il bordo, da',
+      aiuto: 'Di quanto ogni punta va oltre il capo della riga, al minimo.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 2, concetto: 'variazione',
+    },
+    {
+      id: 'fringeTipMax2', nome: 'frangiaMax2', etichetta: '2° livello: …fino a',
+      aiuto: 'Ogni punta va oltre il capo della riga di una lunghezza a caso fra il minimo e questo.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 6, concetto: 'variazione',
+    },
+    {
       id: 'leftToRightOrder2', nome: 'daSinistra2', etichetta: '2° livello: le macchie da sinistra a destra',
       aiuto: 'Come «Le macchie da sinistra a destra», per il secondo livello.',
       tipo: 'bool', unita: '', predefinito: false, concetto: 'ordine-cucitura',
@@ -103,6 +138,21 @@ export const scheda: SchedaParametri = {
       id: 'fringeOutsidePercent2', nome: 'sfrangiaturaFuori2', etichetta: '2° livello: …di cui oltre il bordo',
       aiuto: '0 = le righe si accorciano soltanto; 100 = si allungano soltanto.',
       tipo: 'num', unita: '%', min: 0, max: 100, passo: 10, predefinito: 50, concetto: 'variazione',
+    },
+    {
+      id: 'fillType', nome: 'riempimento', etichetta: 'Riempimento',
+      aiuto: 'Raso, o sfrangiato: ogni riga diventa due andate e ritorno dal suo centro fino oltre il bordo, negli stessi buchi.',
+      tipo: 'enum', unita: '', opzioni: ['raso', 'sfrangiato'], predefinito: 'raso', concetto: 'ordine-cucitura',
+    },
+    {
+      id: 'fringeTipMin', nome: 'frangiaMin', etichetta: 'Sfrangiato: le punte oltre il bordo, da',
+      aiuto: 'Di quanto ogni punta va oltre il capo della riga, al minimo.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 2, concetto: 'variazione',
+    },
+    {
+      id: 'fringeTipMax', nome: 'frangiaMax', etichetta: '…fino a',
+      aiuto: 'Ogni punta va oltre il capo della riga di una lunghezza a caso fra il minimo e questo.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 6, concetto: 'variazione',
     },
     {
       id: 'satinAngle', nome: 'rasoAngolo', etichetta: 'Direzione del raso',
