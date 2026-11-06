@@ -5606,7 +5606,7 @@
     },
     "fringeTipMin3": {
       "type": "number",
-      "title": "3° livello: sfrangiato: le punte oltre il bordo, da",
+      "title": "3° livello: punte oltre il bordo: almeno",
       "description": "Di quanto ogni punta va oltre il capo della riga, al minimo.",
       "x-unita": "mm",
       "minimum": 0,
@@ -5615,7 +5615,7 @@
     },
     "fringeTipMax3": {
       "type": "number",
-      "title": "3° livello: …fino a",
+      "title": "3° livello: punte oltre il bordo: al più",
       "description": "Ogni punta va oltre il capo della riga di una lunghezza a caso fra il minimo e questo.",
       "x-unita": "mm",
       "minimum": 0,
@@ -5657,7 +5657,7 @@
     },
     "satinPhase3": {
       "type": "number",
-      "title": "3° livello: fase del raso",
+      "title": "3° livello: fase degli aghi",
       "description": "Di quanto gli aghi di una riga sono spostati rispetto alla riga accanto, in % del punto.",
       "x-unita": "%",
       "minimum": 0,
@@ -5696,7 +5696,7 @@
     },
     "fringeTipMin2": {
       "type": "number",
-      "title": "2° livello: sfrangiato: le punte oltre il bordo, da",
+      "title": "2° livello: punte oltre il bordo: almeno",
       "description": "Di quanto ogni punta va oltre il capo della riga, al minimo.",
       "x-unita": "mm",
       "minimum": 0,
@@ -5705,7 +5705,7 @@
     },
     "fringeTipMax2": {
       "type": "number",
-      "title": "2° livello: …fino a",
+      "title": "2° livello: punte oltre il bordo: al più",
       "description": "Ogni punta va oltre il capo della riga di una lunghezza a caso fra il minimo e questo.",
       "x-unita": "mm",
       "minimum": 0,
@@ -5747,7 +5747,7 @@
     },
     "satinPhase2": {
       "type": "number",
-      "title": "2° livello: fase del raso",
+      "title": "2° livello: fase degli aghi",
       "description": "Di quanto gli aghi di una riga sono spostati rispetto alla riga accanto, in % del punto.",
       "x-unita": "%",
       "minimum": 0,
@@ -5786,7 +5786,7 @@
     },
     "fringeTipMin": {
       "type": "number",
-      "title": "Sfrangiato: le punte oltre il bordo, da",
+      "title": "Punte oltre il bordo: almeno",
       "description": "Di quanto ogni punta va oltre il capo della riga, al minimo.",
       "x-unita": "mm",
       "minimum": 0,
@@ -5795,7 +5795,7 @@
     },
     "fringeTipMax": {
       "type": "number",
-      "title": "…fino a",
+      "title": "Punte oltre il bordo: al più",
       "description": "Ogni punta va oltre il capo della riga di una lunghezza a caso fra il minimo e questo.",
       "x-unita": "mm",
       "minimum": 0,
@@ -5831,7 +5831,7 @@
     },
     "satinPhase": {
       "type": "number",
-      "title": "Fase del raso",
+      "title": "Fase degli aghi",
       "description": "Nelle righe più lunghe del punto massimo, di quanto gli aghi di una riga sono spostati rispetto alla riga accanto, in % del punto. 0 = tutti alla stessa altezza.",
       "x-unita": "%",
       "minimum": 0,

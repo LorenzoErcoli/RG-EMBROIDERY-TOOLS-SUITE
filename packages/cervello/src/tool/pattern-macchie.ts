@@ -45,12 +45,12 @@ export const scheda: SchedaParametri = {
       tipo: 'enum', unita: '', opzioni: ['raso', 'sfrangiato'], predefinito: 'raso', concetto: 'ordine-cucitura',
     },
     {
-      id: 'fringeTipMin3', nome: 'frangiaMin3', etichetta: '3° livello: sfrangiato: le punte oltre il bordo, da',
+      id: 'fringeTipMin3', nome: 'frangiaMin3', etichetta: '3° livello: punte oltre il bordo: almeno',
       aiuto: 'Di quanto ogni punta va oltre il capo della riga, al minimo.',
       tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 2, concetto: 'variazione',
     },
     {
-      id: 'fringeTipMax3', nome: 'frangiaMax3', etichetta: '3° livello: …fino a',
+      id: 'fringeTipMax3', nome: 'frangiaMax3', etichetta: '3° livello: punte oltre il bordo: al più',
       aiuto: 'Ogni punta va oltre il capo della riga di una lunghezza a caso fra il minimo e questo.',
       tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 6, concetto: 'variazione',
     },
@@ -75,7 +75,7 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: 1, passo: 0.5, predefinito: 4, concetto: 'punto-massimo',
     },
     {
-      id: 'satinPhase3', nome: 'rasoFase3', etichetta: '3° livello: fase del raso',
+      id: 'satinPhase3', nome: 'rasoFase3', etichetta: '3° livello: fase degli aghi',
       aiuto: 'Di quanto gli aghi di una riga sono spostati rispetto alla riga accanto, in % del punto.',
       tipo: 'num', unita: '%', min: 0, max: 100, passo: 5, predefinito: 30, concetto: 'spostamento',
     },
@@ -95,12 +95,12 @@ export const scheda: SchedaParametri = {
       tipo: 'enum', unita: '', opzioni: ['raso', 'sfrangiato'], predefinito: 'raso', concetto: 'ordine-cucitura',
     },
     {
-      id: 'fringeTipMin2', nome: 'frangiaMin2', etichetta: '2° livello: sfrangiato: le punte oltre il bordo, da',
+      id: 'fringeTipMin2', nome: 'frangiaMin2', etichetta: '2° livello: punte oltre il bordo: almeno',
       aiuto: 'Di quanto ogni punta va oltre il capo della riga, al minimo.',
       tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 2, concetto: 'variazione',
     },
     {
-      id: 'fringeTipMax2', nome: 'frangiaMax2', etichetta: '2° livello: …fino a',
+      id: 'fringeTipMax2', nome: 'frangiaMax2', etichetta: '2° livello: punte oltre il bordo: al più',
       aiuto: 'Ogni punta va oltre il capo della riga di una lunghezza a caso fra il minimo e questo.',
       tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 6, concetto: 'variazione',
     },
@@ -125,7 +125,7 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: 1, passo: 0.5, predefinito: 4, concetto: 'punto-massimo',
     },
     {
-      id: 'satinPhase2', nome: 'rasoFase2', etichetta: '2° livello: fase del raso',
+      id: 'satinPhase2', nome: 'rasoFase2', etichetta: '2° livello: fase degli aghi',
       aiuto: 'Di quanto gli aghi di una riga sono spostati rispetto alla riga accanto, in % del punto.',
       tipo: 'num', unita: '%', min: 0, max: 100, passo: 5, predefinito: 30, concetto: 'spostamento',
     },
@@ -145,12 +145,12 @@ export const scheda: SchedaParametri = {
       tipo: 'enum', unita: '', opzioni: ['raso', 'sfrangiato'], predefinito: 'raso', concetto: 'ordine-cucitura',
     },
     {
-      id: 'fringeTipMin', nome: 'frangiaMin', etichetta: 'Sfrangiato: le punte oltre il bordo, da',
+      id: 'fringeTipMin', nome: 'frangiaMin', etichetta: 'Punte oltre il bordo: almeno',
       aiuto: 'Di quanto ogni punta va oltre il capo della riga, al minimo.',
       tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 2, concetto: 'variazione',
     },
     {
-      id: 'fringeTipMax', nome: 'frangiaMax', etichetta: '…fino a',
+      id: 'fringeTipMax', nome: 'frangiaMax', etichetta: 'Punte oltre il bordo: al più',
       aiuto: 'Ogni punta va oltre il capo della riga di una lunghezza a caso fra il minimo e questo.',
       tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 6, concetto: 'variazione',
     },
@@ -170,7 +170,7 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: 1, passo: 0.5, predefinito: 4, concetto: 'punto-massimo',
     },
     {
-      id: 'satinPhase', nome: 'rasoFase', etichetta: 'Fase del raso',
+      id: 'satinPhase', nome: 'rasoFase', etichetta: 'Fase degli aghi',
       aiuto: 'Nelle righe più lunghe del punto massimo, di quanto gli aghi di una riga sono spostati rispetto alla riga accanto, in % del punto. 0 = tutti alla stessa altezza.',
       tipo: 'num', unita: '%', min: 0, max: 100, passo: 5, predefinito: 30, concetto: 'spostamento',
     },
