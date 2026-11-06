@@ -40,6 +40,21 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: 0, passo: 1, predefinito: 0, concetto: 'passaggi-nascosti',
     },
     {
+      id: 'fillType3', nome: 'riempimento3', etichetta: '3° livello: riempimento',
+      aiuto: 'Raso, o sfrangiato: ogni riga diventa due andate e ritorno dal suo centro fino oltre il bordo, negli stessi buchi.',
+      tipo: 'enum', unita: '', opzioni: ['raso', 'sfrangiato'], predefinito: 'raso', concetto: 'ordine-cucitura',
+    },
+    {
+      id: 'fringeTipMin3', nome: 'frangiaMin3', etichetta: '3° livello: sfrangiato: le punte oltre il bordo, da',
+      aiuto: 'Di quanto ogni punta va oltre il capo della riga, al minimo.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 2, concetto: 'variazione',
+    },
+    {
+      id: 'fringeTipMax3', nome: 'frangiaMax3', etichetta: '3° livello: …fino a',
+      aiuto: 'Ogni punta va oltre il capo della riga di una lunghezza a caso fra il minimo e questo.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 6, concetto: 'variazione',
+    },
+    {
       id: 'leftToRightOrder3', nome: 'daSinistra3', etichetta: '3° livello: le macchie da sinistra a destra',
       aiuto: 'Come «Le macchie da sinistra a destra», per il terzo livello.',
       tipo: 'bool', unita: '', predefinito: false, concetto: 'ordine-cucitura',
@@ -75,6 +90,21 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: '%', min: 0, max: 100, passo: 10, predefinito: 50, concetto: 'variazione',
     },
     {
+      id: 'fillType2', nome: 'riempimento2', etichetta: '2° livello: riempimento',
+      aiuto: 'Raso, o sfrangiato: ogni riga diventa due andate e ritorno dal suo centro fino oltre il bordo, negli stessi buchi.',
+      tipo: 'enum', unita: '', opzioni: ['raso', 'sfrangiato'], predefinito: 'raso', concetto: 'ordine-cucitura',
+    },
+    {
+      id: 'fringeTipMin2', nome: 'frangiaMin2', etichetta: '2° livello: sfrangiato: le punte oltre il bordo, da',
+      aiuto: 'Di quanto ogni punta va oltre il capo della riga, al minimo.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 2, concetto: 'variazione',
+    },
+    {
+      id: 'fringeTipMax2', nome: 'frangiaMax2', etichetta: '2° livello: …fino a',
+      aiuto: 'Ogni punta va oltre il capo della riga di una lunghezza a caso fra il minimo e questo.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 6, concetto: 'variazione',
+    },
+    {
       id: 'leftToRightOrder2', nome: 'daSinistra2', etichetta: '2° livello: le macchie da sinistra a destra',
       aiuto: 'Come «Le macchie da sinistra a destra», per il secondo livello.',
       tipo: 'bool', unita: '', predefinito: false, concetto: 'ordine-cucitura',
@@ -108,6 +138,21 @@ export const scheda: SchedaParametri = {
       id: 'fringeOutsidePercent2', nome: 'sfrangiaturaFuori2', etichetta: '2° livello: …di cui oltre il bordo',
       aiuto: '0 = le righe si accorciano soltanto; 100 = si allungano soltanto.',
       tipo: 'num', unita: '%', min: 0, max: 100, passo: 10, predefinito: 50, concetto: 'variazione',
+    },
+    {
+      id: 'fillType', nome: 'riempimento', etichetta: 'Riempimento',
+      aiuto: 'Raso, o sfrangiato: ogni riga diventa due andate e ritorno dal suo centro fino oltre il bordo, negli stessi buchi.',
+      tipo: 'enum', unita: '', opzioni: ['raso', 'sfrangiato'], predefinito: 'raso', concetto: 'ordine-cucitura',
+    },
+    {
+      id: 'fringeTipMin', nome: 'frangiaMin', etichetta: 'Sfrangiato: le punte oltre il bordo, da',
+      aiuto: 'Di quanto ogni punta va oltre il capo della riga, al minimo.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 2, concetto: 'variazione',
+    },
+    {
+      id: 'fringeTipMax', nome: 'frangiaMax', etichetta: '…fino a',
+      aiuto: 'Ogni punta va oltre il capo della riga di una lunghezza a caso fra il minimo e questo.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 6, concetto: 'variazione',
     },
     {
       id: 'satinAngle', nome: 'rasoAngolo', etichetta: 'Direzione del raso',

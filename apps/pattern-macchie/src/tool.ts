@@ -44,7 +44,7 @@ type Ruolo = '' | 'pannello' | 'macchie' | 'macchie2' | 'macchie3';
 const RUOLI: Array<[Ruolo, string]> = [['', '— (non usare)'], ['pannello', 'Pannello (contorno)'], ['macchie', 'Macchie'], ['macchie2', 'Macchie, 2° livello'], ['macchie3', 'Macchie, 3° livello (il più alto)']];
 
 /** I parametri del raso che ogni livello ha per sé: il secondo e il terzo hanno gli stessi nomi con un 2 o un 3 in fondo. */
-const DEL_LIVELLO = ['daSinistra', 'rasoAngolo', 'rasoInterlinea', 'rasoPuntoMax', 'rasoFase', 'sfrangiatura', 'sfrangiaturaFuori'] as const;
+const DEL_LIVELLO = ['daSinistra', 'rasoAngolo', 'rasoInterlinea', 'rasoPuntoMax', 'rasoFase', 'sfrangiatura', 'sfrangiaturaFuori', 'riempimento', 'frangiaMin', 'frangiaMax'] as const;
 /**
  * Un progetto (o l'ultimo punto ricordato) di prima: base e punto sopra c'erano sempre, e si riapre così; un secondo
  * livello senza parametri suoi lavora come il primo, come lavorava allora, e un terzo come il secondo.
@@ -98,6 +98,11 @@ const CAMPI_COSA: Campo[] = [
     aiuto: 'Un salto più lungo porta il taglio del filo; uno più corto resta un salto. Non cambia il ricamo: non serve rigenerare. 0 = mai.' },
 ];
 const CAMPI_RASO: Campo[] = [
+  { nome: 'riempimento', etichetta: 'Riempimento', unita: '', passo: 1, min: 0,
+    scelte: [['raso', 'Raso'], ['sfrangiato', 'Sfrangiato: dal centro, su e giù fino oltre il bordo']],
+    aiuto: 'Sfrangiato: ogni riga del raso diventa due andate e ritorno dal suo centro, una fino oltre il bordo di sopra e una oltre quello di sotto, negli stessi buchi, come la frangia del Punto sfrangiato. Il filo corre lungo i centri; ordine e passaggi restano quelli del raso.' },
+  { nome: 'frangiaMin', etichetta: 'Sfrangiato: le punte oltre il bordo, da', unita: 'mm', passo: 0.5, min: 0 },
+  { nome: 'frangiaMax', etichetta: '…fino a', unita: 'mm', passo: 0.5, min: 0, aiuto: 'Ogni punta va oltre il capo della riga di una lunghezza a caso fra questi due. Solo col riempimento sfrangiato.' },
   { nome: 'daSinistra', etichetta: 'Le macchie da sinistra a destra', unita: '', passo: 1, min: 0,
     aiuto: 'L’ordine delle macchie va da sinistra a destra (vale per il raso e per il punto sopra); dentro ogni macchia il raso va da sinistra a destra dove può. Senza: l’ordine coi salti più corti.' },
   { nome: 'rasoAngolo', etichetta: 'Direzione del raso', unita: '°', passo: 1, min: -180, aiuto: '90 = verticale.' },
@@ -708,7 +713,8 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       if (!risultato || !par.rasoDiStilista) return cuciti;
       const perZona = new Map(macchiePerStilista(risultato).map((z) => [`raso${z.strato > 1 ? z.strato : ''}-${z.zona + 1}`, z.macchie]));
       return cuciti.map((s) => {
-        const forme = s.nome ? perZona.get(s.nome) : undefined;
+        const sfrangiato = (s.nome?.startsWith('raso3-') ? par.riempimento3 : s.nome?.startsWith('raso2-') ? par.riempimento2 : par.riempimento) === 'sfrangiato';
+        const forme = s.nome && !sfrangiato ? perZona.get(s.nome) : undefined;
         return forme ? { ...s, polylines: [], riempimenti: { orientamentoDeg: s.nome?.startsWith('raso3-') ? par.rasoAngolo3 : s.nome?.startsWith('raso2-') ? par.rasoAngolo2 : par.rasoAngolo, forme } } : s;
       });
     },
