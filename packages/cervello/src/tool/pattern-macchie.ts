@@ -15,14 +15,54 @@ export const scheda: SchedaParametri = {
       tipo: 'bool', unita: '', predefinito: false, concetto: 'interruttore',
     },
     {
-      id: 'secondLevelMargin', nome: 'secondoMargine', etichetta: 'Il primo livello entra sotto il secondo di',
-      aiuto: 'Dove una macchia del primo livello sta sotto una del secondo si ferma: ci entra solo di tanto, così non si sovrappone troppo filo.',
+      id: 'secondLevelMargin', nome: 'secondoMargine', etichetta: 'Un livello entra sotto quelli sopra di',
+      aiuto: 'Dove una macchia sta sotto una di un livello più alto si ferma: ci entra solo di tanto, così non si sovrappone troppo filo.',
       tipo: 'num', unita: 'mm', min: 0, passo: 0.1, predefinito: 1, concetto: 'rientro',
     },
     {
-      id: 'firstLevelVisibleMax', nome: 'secondoVista', etichetta: 'Fra le macchie del primo livello, a vista al più',
-      aiuto: 'Il filo da una macchia alla dopo corre sotto il secondo livello e sotto le macchie ancora da cucire. Dove nessuna lo copre attraversa lo spazio a vista, al più di tanto per volta. 0 = mai a vista: lì si salta.',
+      id: 'firstLevelVisibleMax', nome: 'secondoVista', etichetta: 'Fra le macchie dei livelli sotto, a vista al più',
+      aiuto: 'Il filo da una macchia alla dopo corre sotto i livelli più alti e sotto le macchie ancora da cucire. Dove nessuna lo copre attraversa lo spazio a vista, al più di tanto per volta. 0 = mai a vista: lì si salta.',
       tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 12, concetto: 'passaggi-nascosti',
+    },
+    {
+      id: 'visiblePassagesNear', nome: 'vistaVicini', etichetta: 'I passaggi a vista si avvicinano a quelli già fatti, entro',
+      aiuto: 'Attraversare lo spazio entro questa distanza da un altro passaggio a vista costa meno, e il filo ci va se può arrivarci coperto. 0 = ognuno dove è più corto.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 1, predefinito: 0, concetto: 'passaggi-nascosti',
+    },
+    {
+      id: 'leftToRightOrder3', nome: 'daSinistra3', etichetta: '3° livello: le macchie da sinistra a destra',
+      aiuto: 'Come «Le macchie da sinistra a destra», per il terzo livello.',
+      tipo: 'bool', unita: '', predefinito: false, concetto: 'ordine-cucitura',
+    },
+    {
+      id: 'satinAngle3', nome: 'rasoAngolo3', etichetta: '3° livello: direzione del raso',
+      aiuto: 'Direzione delle righe del raso del terzo livello, gradi (90 = verticale).',
+      tipo: 'num', unita: 'deg', min: -180, passo: 1, predefinito: 90, concetto: 'angolo',
+    },
+    {
+      id: 'satinRowSpacing3', nome: 'rasoInterlinea3', etichetta: '3° livello: interlinea del raso',
+      aiuto: 'Distanza fra le righe del raso del terzo livello.',
+      tipo: 'num', unita: 'mm', min: 0.1, passo: 0.05, predefinito: 0.4, concetto: 'densita',
+    },
+    {
+      id: 'satinMaxStitch3', nome: 'rasoPuntoMax3', etichetta: '3° livello: punto massimo del raso',
+      aiuto: 'Le macchie larghe non fanno punti da bordo a bordo.',
+      tipo: 'num', unita: 'mm', min: 1, passo: 0.5, predefinito: 4, concetto: 'punto-massimo',
+    },
+    {
+      id: 'satinPhase3', nome: 'rasoFase3', etichetta: '3° livello: fase del raso',
+      aiuto: 'Di quanto gli aghi di una riga sono spostati rispetto alla riga accanto, in % del punto.',
+      tipo: 'num', unita: '%', min: 0, max: 100, passo: 5, predefinito: 30, concetto: 'spostamento',
+    },
+    {
+      id: 'fringeAmount3', nome: 'sfrangiatura3', etichetta: '3° livello: sfrangiatura',
+      aiuto: 'Di quanto, a caso, ogni riga finisce prima o dopo il bordo. 0 = netto.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.1, predefinito: 1, concetto: 'variazione',
+    },
+    {
+      id: 'fringeOutsidePercent3', nome: 'sfrangiaturaFuori3', etichetta: '3° livello: …di cui oltre il bordo',
+      aiuto: '0 = le righe si accorciano soltanto; 100 = si allungano soltanto.',
+      tipo: 'num', unita: '%', min: 0, max: 100, passo: 10, predefinito: 50, concetto: 'variazione',
     },
     {
       id: 'leftToRightOrder2', nome: 'daSinistra2', etichetta: '2° livello: le macchie da sinistra a destra',
