@@ -287,6 +287,41 @@ Due livelli a grandezza 22: filo 260 → 245–248 m. 0 salti. Il filo nel vuoto
 minimo veniva fusa col passaggio in un punto da 3,4 mm. Resta, come prima, qualche punto da 3,1–3,7 mm sul pannello: un passaggio corto fra due file
 (sotto il punto minimo) fuso col pezzo dopo. Non provati: Stilista, il ricamo in macchina.
 
+### Niente passaggi sopra le striature già cucite (2026-11-06)
+
+Lorenzo, in macchina: *«Le impunture di passaggio orizzontali a volte vanno sopra il punto striato ricamato. E lasciano il segno. È grave e si vede molto»*.
+
+La causa: per scegliere la strada di un passaggio `cucita` segnava tutti i trattini, quelli già cuciti e quelli che vengono dopo, e passarci in mezzo costava
+poco (0,3, dal 2026-11-05: *«quelle nel vuoto io le vorrei proprio evitare»*). Sotto un trattino che viene dopo il filo resta nascosto; sopra uno già cucito
+resta in vista e lo schiaccia. Ora (`trattiniCuciti`) il motore sa, man mano che cuce, quali trattini sono già fatti, colonna per colonna, e quelli del livello
+prima. Passarci sopra fuori dalle zone costa come un metro di filo (`COSTO_SOPRA_GIA_CUCITI`):
+- **la strada** sulla griglia conta gli incroci col filo vero, coi punti veri di partenza e d'arrivo, e quando la si raddrizza non si taglia sopra un trattino;
+- **i punti del passaggio**: se un punto taglia una svolta e passa sopra, la svolta diventa un punto e i due pezzi si dividono ognuno a punti uguali. Prima si
+  aggiungeva solo la svolta: restavano punti corti che il punto minimo univa ai vicini in punti fino a 4 mm (provato e cambiato);
+- **il salto fra due trattini** di una fila sceglie un'altezza da cui non passa sopra la colonna in mezzo; se il trattino in mezzo copre tutto, oltre la sua
+  punta; se non c'è, gira attorno con una strada;
+- **il punto minimo** lo fa il motore (`minimoFatto`), sapendo cosa è già cucito: unendo due punti si tagliava la svolta attorno alla punta di un trattino
+  (misurato a grandezza 8: 0 punti sopra uscendo dal motore, 11 dopo). Se togliere il punto corto farebbe passare sopra, o il filo dritto supera il passo, il
+  punto si sposta e divide il tratto in due punti buoni; se non si può resta un punto corto.
+
+**Pannello laser, 3 zone, varianti 1–3. Incroci sopra una striatura già cucita, fuori dalle zone:**
+
+| | Grandezza 22 | Grandezza 8 |
+|---|---|---|
+| un livello | 23–30 → 0 | 67–101 → 0–1 |
+| secondo livello (sopra il primo o sopra sé stesso) | 91–108 → 0–1 | 66–84 → 0 |
+| punto più lungo | 3,10–3,73 → 3,00 mm | 2,99–3,73 → 3,00 mm |
+| punti sotto il minimo (1 mm) | 0 → 0–8 | 0 → 4–13 |
+
+Filo quasi uguale: un livello 127,4–130,6 → 127,5–130,7 m a grandezza 22, 86,1–93,0 → 86,3–93,2 m a grandezza 8; il secondo livello +0,5–1%. 0 salti. I punti corti
+(0,75–0,9 mm, su 30–40.000) sono all'uscita di un passaggio da un trattino: l'altro modo era passare sopra la colonna vicina o un punto da 3,25 mm.
+Trovato strada facendo: quando due trattini vicini non hanno un pezzo in comune il salto andava da punta a punta, poteva restare sotto il punto minimo e il
+punto minimo si mangiava la punta del trattino; ora si entra un punto minimo più dentro e si scende alla punta. **Calcolo più lento** (in node, stesso PC):
+grandezza 22 da 1,5 a 1,6 s, grandezza 8 da 2,6 a 3,2 s, due livelli a grandezza 22 da 6,0 a 8,6 s: il secondo livello esplora il 60% di celle in più per
+girare attorno al primo. Il test «il secondo ha i suoi trattini» ora guarda l'altezza dei trattini e non il filo: col filo che gira attorno al primo livello i
+passaggi pesano più dei trattini (prima passava per 2 cm su 17,7 m).
+Immagine: `striatura-passaggi-sopra-prima-dopo.png` nelle note della sessione (fuori dal repo). Non provati: Stilista, il ricamo in macchina.
+
 **Provato il 2026-11-04 e il 2026-11-05 e tolto:**
 - finire la macchia che si vede, poi uscire (l'idea di togliere del tutto il legame con le righe): in vista 1,04–1,28 m contro
   0,86–1,03 a grandezza 22, 2,6–2,8 contro 1,9 a grandezza 8;
