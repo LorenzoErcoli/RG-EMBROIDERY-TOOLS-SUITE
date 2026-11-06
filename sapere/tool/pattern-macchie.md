@@ -207,6 +207,19 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    lei, quindi i passaggi sono sparsi quanto le macchie, e la strada coperta per raggrupparli di solito non c'è. Per questo è
    spento. Aiutano di più l'anteprima, che li mostra in rosa, e il numero del giro nel *Programma*. Per un rifilo davvero più
    corto servirebbe cambiare l'ordine delle macchie: non è fatto.
+37. (2026-11-06) **Si calcola solo con «Genera».** *«Il sistema è troppo lento del calcolo. Il problema è che appena modifico
+   una cosa lui inizia a calcolare. invece dovrebbe calcolare solo se avvio genera.»* Cambiare un campo, un ruolo, il pattern o
+   caricare un disegno non fa più partire il calcolo: l'anteprima resta quella di prima, la riga in basso dice di premere
+   *Genera*, il pulsante si accende, e *Esporta DST*, *Scarica SVG* e *Invia a Stilista* si fermano finché non si rigenera
+   (varrebbero per i parametri vecchi). Un calcolo già partito si ferma appena si cambia qualcosa. Chi vuole il modo di prima
+   accende *Ricalcola da solo* accanto a *Genera* (spento di serie, la pagina se lo ricorda), come nel Razza. Anche aperto
+   dal pulsante di Stilista il disegno arriva senza calcolo: si preme *Genera*.
+38. (2026-11-06) **I livelli si sovrappongono, non si bucano.** *«il livello 2 non deve bucare il livello 1 ma deve
+   sovrapporsi»*; alla domanda sul 3° ha scelto «tutti interi». Casella `sovrapposti`, accesa di serie: ogni livello si cuce
+   intero e quelli sopra gli si cuciono sopra; il filo dei livelli sotto passa lo stesso sotto quelli sopra. Cambia la decisione
+   del 2026-11-03 (il chiaro si ferma sotto lo scuro), che resta con la casella spenta, e allora vale *Un livello entra sotto
+   quelli sopra di*. I progetti salvati prima si riaprono con la casella spenta, come erano; i parametri ricordati dalla pagina
+   no, prendono quella di serie.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso
