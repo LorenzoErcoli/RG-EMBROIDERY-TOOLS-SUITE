@@ -1946,6 +1946,11 @@
           "default": false,
           "x-id": "withOverlay"
         },
+        "tagliaOltre": {
+          "$ref": "#/$defs/trimJumpsOver",
+          "default": 3,
+          "x-id": "trimJumpsOver"
+        },
         "sovrapposti": {
           "$ref": "#/$defs/levelsOverlap",
           "default": true,
@@ -5502,6 +5507,15 @@
       "description": "Lo stesso punto della base sopra il raso, dentro le macchie. Spento: solo il raso.",
       "x-concetto": "interruttore"
     },
+    "trimJumpsOver": {
+      "type": "number",
+      "title": "Nel DST, taglia i salti più lunghi di",
+      "description": "Un salto più lungo porta il taglio del filo; uno più corto resta un salto. Non cambia il ricamo: non serve rigenerare. 0 = mai.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.5,
+      "x-concetto": "ordine-cucitura"
+    },
     "levelsOverlap": {
       "type": "boolean",
       "title": "I livelli sotto restano interi: quelli sopra si cuciono sopra",
@@ -6829,6 +6843,7 @@
         "rowHeight",
         "gapCrossMm",
         "buildMode",
+        "trimJumpsOver",
         "leftToRightOrder3",
         "leftToRightOrder2",
         "leftToRightOrder",

@@ -40,6 +40,12 @@ export type ParametriMacchie = {
    */
   sovrapposti: boolean;
   /**
+   * IL TAGLIO SUI SALTI LUNGHI (Lorenzo, 2026-11-06: «Manca la gestione dei salti sui passaggi sopra un tot, sia un dst che
+   * nel rimandalo a stilista»; scelto «salto lungo → taglio»): nel DST un salto più lungo di tanti mm porta il taglio del
+   * filo. Non cambia il ricamo: lo usa l'export (`tagliDeiSalti`). 0 = mai.
+   */
+  tagliaOltre: number;
+  /**
    * ZERO SALTI NEL PRIMO LIVELLO (Lorenzo, 2026-11-03: «deve passare sotto il raso che c'è sopra, andando a zero di salti»;
    * misurato il suo disegno, le macchie del secondo livello quasi non si toccano, e ha scelto «punti corti a vista»): dove
    * il filo fra due macchie non può restare coperto attraversa lo spazio a vista, al più di tanti mm per volta. 0 = si salta.
@@ -163,6 +169,7 @@ export const PARAMETRI_MACCHIE: ParametriMacchie = {
   conSopra: false,
   secondoMargine: 1,
   sovrapposti: true,
+  tagliaOltre: 3,
   secondoVista: 12,
   daSinistra2: false,
   rasoAngolo2: 90,
@@ -2791,6 +2798,18 @@ function sulContorno(p: Point, c: Polyline): Point {
     if (e < d2) { d2 = e; best = q; }
   }
   return best;
+}
+
+/**
+ * I tagli di uno stop: per ogni tratto, se prima di lui il filo si taglia (`ExportLayer.trims`). Si taglia dove il salto
+ * dal tratto prima è più lungo di `oltre` mm; il primo tratto no (lo stop comincia col suo cambio ago). 0 = mai.
+ */
+export function tagliDeiSalti(tratti: Polyline[], oltre: number): boolean[] {
+  return tratti.map((t, k) => {
+    if (k === 0 || !(oltre > 0) || !t.length || !tratti[k - 1].length) return false;
+    const a = tratti[k - 1][tratti[k - 1].length - 1], b = t[0];
+    return Math.hypot(b.x - a.x, b.y - a.y) > oltre;
+  });
 }
 
 /**
