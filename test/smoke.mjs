@@ -6728,6 +6728,28 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     const chiare = fila.filter((_, k) => k % 2 === 0).map((i) => macchie[i]);
     const scure = fila.filter((_, k) => k % 2 === 1).map((i) => allarga(macchie[i], 1.6));
     const giu = { x: 0, y: 1 }, margine = rg.PM_DI_SERIE.secondoMargine;
+    // I TRE LIVELLI (Lorenzo, 2026-11-05: «il 3 è il più alto il due il medio e l'1 il primo. ovviamente a cascata si
+    // distribuiscono i passaggi nascosti»): ognuno si ferma sotto tutti quelli sopra, e il filo a vista non sta mai in mezzo a
+    // una macchia, cucita o da cucire (lì sarebbe coperto, o sopra un raso già fatto).
+    {
+      const uno = fila.filter((_, k) => k % 3 === 0).map((i) => macchie[i]);
+      const due3 = fila.filter((_, k) => k % 3 === 1).map((i) => allarga(macchie[i], 1.6));
+      const tre = fila.filter((_, k) => k % 3 === 2).map((i) => allarga(macchie[i], 1.6));
+      const r3 = rg.pmCostruisci([], uno, {}, rg.PM_DI_SERIE, due3, tre);
+      const delLivello = (n) => r3.stop.filter((s) => s.strato === n).flatMap((s) => s.indici).map((i) => r3.forme[i]);
+      const entra = (sotto, sopra) => Math.max(0, ...sotto.flat().flatMap((p) => sopra.filter((m) => rg.pointInPolygon(p, m)).map((m) => rg.distanceToBoundary(p, m))));
+      const aVistaDentro = Math.max(0, ...r3.vista.aVista.flatMap((t) => t.slice(1).flatMap((b, i) => {
+        const a = t[i], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.25));
+        return Array.from({ length: n }, (_, k) => ({ x: a.x + ((b.x - a.x) * (k + 0.5)) / n, y: a.y + ((b.y - a.y) * (k + 0.5)) / n }));
+      })).flatMap((p) => r3.forme.filter((m) => rg.pointInPolygon(p, m)).map((m) => rg.distanceToBoundary(p, m))));
+      check(`tre livelli: raso del 1°, del 2°, del 3°; il 1° e il 2° entrano sotto quelli sopra al più del margine; ${r3.sottoIlSecondo.collegate} passaggi invece di un salto, a vista mai più di 1 mm dentro una macchia (misurato ${aVistaDentro.toFixed(2)} mm)`,
+        [r3.stop.map((s) => `${s.tipo}${s.strato}`).join(), entra(delLivello(1), [...delLivello(2), ...delLivello(3)]) <= margine + 0.2, entra(delLivello(2), delLivello(3)) <= margine + 0.2, r3.sottoIlSecondo.collegate > 0, aVistaDentro <= 1],
+        ['raso1,raso2,raso3', true, true, true, true]);
+      const saltiDi = (r) => r.stop.filter((s) => s.strato < 3).reduce((n, s) => n + s.livello.salti, 0);
+      const vicini = rg.pmCostruisci([], uno, {}, { ...rg.PM_DI_SERIE, vistaVicini: 10 }, due3, tre);
+      check(`i passaggi a vista vicini fra loro: non fanno più salti, il raso resta nei suoi stop (giro del rifilo ${r3.sottoIlSecondo.giro.toFixed(0)} → ${vicini.sottoIlSecondo.giro.toFixed(0)} mm, a vista ${r3.sottoIlSecondo.aVista.toFixed(0)} → ${vicini.sottoIlSecondo.aVista.toFixed(0)} mm)`,
+        [saltiDi(vicini) <= saltiDi(r3), vicini.stop.map((s) => s.indici.length)], [true, r3.stop.map((s) => s.indici.length)]);
+    }
     const fermate = chiare.flatMap((m) => rg.pmFerma(m, scure, margine, giu));
     const prima = rg.pmCostruisci([], fermate, {}, rg.PM_DI_SERIE);
     const due = rg.pmCostruisci([], chiare, {}, { ...rg.PM_DI_SERIE, secondoVista: 0 }, scure);

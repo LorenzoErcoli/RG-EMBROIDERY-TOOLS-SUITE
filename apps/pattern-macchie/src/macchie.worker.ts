@@ -3,9 +3,9 @@
 import { costruisciMacchie } from './motore';
 
 self.onmessage = (e: MessageEvent) => {
-  const { id, pannello, macchie, pattern, par, secondo } = e.data;
+  const { id, pannello, macchie, pattern, par, secondo, terzo } = e.data;
   try {
-    (self as unknown as Worker).postMessage({ id, result: costruisciMacchie(pannello, macchie, pattern, par, secondo) });
+    (self as unknown as Worker).postMessage({ id, result: costruisciMacchie(pannello, macchie, pattern, par, secondo, terzo) });
   } catch (err) {
     (self as unknown as Worker).postMessage({ id, error: (err as Error)?.message ?? String(err) });
   }
