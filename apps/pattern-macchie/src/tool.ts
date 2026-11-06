@@ -112,8 +112,10 @@ const CAMPI_RASO: Campo[] = [
 const CAMPI_RASO_2: Campo[] = CAMPI_RASO.map((f) => ({ ...f, nome: `${f.nome}2` as keyof ParametriMacchie }));
 const CAMPI_RASO_3: Campo[] = CAMPI_RASO.map((f) => ({ ...f, nome: `${f.nome}3` as keyof ParametriMacchie }));
 const CAMPI_FRA_I_LIVELLI: Campo[] = [
+  { nome: 'sovrapposti', etichetta: 'I livelli sotto restano interi: quelli sopra si cuciono sopra', unita: '', passo: 1, min: 0,
+    aiuto: 'Spenta: dove una macchia sta sotto una di un livello più alto si ferma, e ci entra solo di «Un livello entra sotto quelli sopra di».' },
   { nome: 'secondoMargine', etichetta: 'Un livello entra sotto quelli sopra di', unita: 'mm', passo: 0.1, min: 0,
-    aiuto: 'Dove una macchia sta sotto una di un livello più alto si ferma: ci entra solo di tanto, così non si sovrappone troppo filo.' },
+    aiuto: 'Solo coi livelli sotto non interi: dove una macchia sta sotto una di un livello più alto si ferma, e ci entra solo di tanto.' },
   { nome: 'secondoVista', etichetta: 'Fra le macchie dei livelli sotto, a vista al più', unita: 'mm', passo: 0.5, min: 0,
     aiuto: 'Il filo da una macchia alla dopo corre sotto i livelli più alti e sotto le macchie ancora da cucire. Dove nessuna lo copre attraversa lo spazio a vista, il meno possibile e al più di tanto per volta: così non si salta. Mai sopra il raso già cucito. 0 = mai a vista: lì si salta.' },
   { nome: 'vistaVicini', etichetta: 'I passaggi a vista si avvicinano a quelli già fatti, entro', unita: 'mm', passo: 1, min: 0,
@@ -157,6 +159,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
         <div class="rg-cluster">
           <button id="simulaBtn" class="rg-button rg-button--ghost rg-button--small" aria-pressed="false" title="Il simulatore: il filo si cuce sullo schermo nell'ordine del DST">Simula</button>
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
+          <label class="rg-choice" title="Se è spenta, il ricamo si rifà solo quando premi Genera: così cambi i campi senza aspettare il calcolo."><input type="checkbox" id="autoCalcolo"><span>Ricalcola da solo</span></label>
           <button id="genBtn" class="rg-button rg-button--secondary rg-button--small">Genera</button>
           ${BOTTONE_INVIA_STILISTA()}
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
@@ -233,7 +236,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
         sel.className = 'rg-select';
         sel.id = 'f-' + f.nome;
         for (const [v, l] of f.scelte) { const o = document.createElement('option'); o.value = v; o.textContent = l; o.selected = String(par[f.nome]) === v; sel.appendChild(o); }
-        sel.addEventListener('change', () => { (par as Record<string, unknown>)[f.nome] = sel.value; genera(); });
+        sel.addEventListener('change', () => { (par as Record<string, unknown>)[f.nome] = sel.value; daRifare(); });
         lab.appendChild(sel);
         grid.appendChild(lab);
         continue;
@@ -248,7 +251,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
         inp.addEventListener('change', () => {
           (par as Record<string, unknown>)[f.nome] = inp.checked;
           if (f.nome === 'conBase' || f.nome === 'conSopra') buildPanel();   // (il pattern e il punto sopra compaiono solo se servono)
-          genera();
+          daRifare();
         });
         lab.append(inp, document.createTextNode(' ' + f.etichetta));
         grid.appendChild(lab);
@@ -269,7 +272,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       inp.value = String(par[f.nome]);
       inp.addEventListener('change', () => {
         const v = parseFloat(inp.value);
-        if (Number.isFinite(v)) { (par as Record<string, unknown>)[f.nome] = Math.min(f.max ?? Infinity, Math.max(f.min, v)); genera(); }
+        if (Number.isFinite(v)) { (par as Record<string, unknown>)[f.nome] = Math.min(f.max ?? Infinity, Math.max(f.min, v)); daRifare(); }
       });
       const unit = document.createElement('span');
       unit.textContent = f.unita;
@@ -347,7 +350,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
         sel.appendChild(o);
       }
       // (col ruolo di un livello compaiono i suoi parametri)
-      sel.addEventListener('change', () => { ruoli[c.id] = sel.value as Ruolo; buildPanel(); disegnaContorni(); genera(); });
+      sel.addEventListener('change', () => { ruoli[c.id] = sel.value as Ruolo; buildPanel(); disegnaContorni(); daRifare(); });
       row.append(sw, code, sel);
       ul.appendChild(row);
     }
@@ -491,7 +494,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     risultato = null;
     buildPanel();
     disegnaContorni();
-    genera();
+    daRifare();
   }
 
   // ---- il calcolo, in un processo a parte (Web Worker): la pagina resta libera ----
@@ -504,6 +507,26 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   /** Gli export valgono solo col ricamo dei parametri di adesso: mentre si calcola, si fermano. */
   function exportPronti(si: boolean) {
     for (const id of ['exportBtn', 'exportDstBtn']) ($(id) as HTMLButtonElement).disabled = !si;
+  }
+  /**
+   * Il ricamo si rifà solo con «Genera», salvo «Ricalcola da solo» (Lorenzo, 2026-11-06: «appena modifico una cosa lui
+   * inizia a calcolare. invece dovrebbe calcolare solo se avvio genera»). Quando cambia qualcosa l'anteprima resta quella
+   * di prima, lo si dice, e gli export si fermano finché non si rigenera: varrebbero per i parametri vecchi.
+   */
+  let superato = false;
+  let autoCalcolo = false;
+  try { autoCalcolo = localStorage.getItem('pattern-macchie.auto') === '1'; } catch { /* senza archivio resta spento */ }
+  function daRifare() {
+    if (autoCalcolo) { genera(); return; }
+    // (un calcolo partito prima non serve più: si ferma, così non tiene occupato il computer)
+    idCalcolo++;
+    window.clearTimeout(attesa);
+    if (occupato) { worker?.terminate(); worker = null; occupato = false; }
+    superato = true;
+    exportPronti(false);
+    $('genBtn').classList.replace('rg-button--secondary', 'rg-button--primary');
+    if (!model) return;
+    $('status').textContent = risultato ? "Cambiato qualcosa: premi Genera per rifare il ricamo (l'anteprima è quella di prima)." : 'Premi Genera per fare il ricamo.';
   }
   function genera() {
     const { pannello, macchie, secondo, terzo } = geometria();
@@ -523,6 +546,8 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     $('status').textContent = 'Calcolo…';
     const finito = (r: RisultatoMacchie | null, errore?: string) => {
       occupato = false;
+      superato = false;
+      $('genBtn').classList.replace('rg-button--primary', 'rg-button--secondary');
       exportPronti(true);
       risultato = r;
       if (!r) { $('status').textContent = 'Errore: ' + errore; return; }
@@ -664,11 +689,12 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       for (const c of model?.choices ?? []) if (c.color?.toLowerCase() === fori) ruoli[c.id] = '';
       buildPanel();
       disegnaContorni();
-      genera();
+      daRifare();
     },
     sorgente: () => source?.text ?? null,
     // col raso fatto da Stilista (rasoDiStilista) ogni stop del raso torna come riempimenti, uno per macchia
     strati: () => {
+      if (!risultato || superato) throw new Error(risultato ? 'i parametri sono cambiati: premi Genera' : 'premi prima Genera');
       const cuciti = stratiCuciti(strati());
       if (!risultato || !par.rasoDiStilista) return cuciti;
       const perZona = new Map(macchiePerStilista(risultato).map((z) => [`raso${z.strato > 1 ? z.strato : ''}-${z.zona + 1}`, z.macchie]));
@@ -678,7 +704,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       });
     },
     dst() {
-      if (!risultato) throw new Error('genera prima il ricamo');
+      if (!risultato || superato) throw new Error(risultato ? 'i parametri sono cambiati: premi Genera' : 'premi prima Genera');
       return { bytes: costruisciDst(), nome: `${nomeBase()}-macchie` };
     },
     stato: (testo) => { $('status').textContent = testo; },
@@ -729,10 +755,10 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   /** Riapre un progetto; con `soloPunto` ne prende solo pattern e parametri, e il disegno resta quello di adesso. */
   function riapri(meta: Record<string, unknown>, soloPunto = false): void {
     const drawing = meta.drawing as { name?: string; text?: string; scale?: { scaleMode?: string } } | undefined;
-    if (meta.params && typeof meta.params === 'object') Object.assign(par, PARAMETRI_MACCHIE, conQuelliDiPrima(meta.params as Partial<ParametriMacchie>));
+    if (meta.params && typeof meta.params === 'object') Object.assign(par, PARAMETRI_MACCHIE, conQuelliDiPrima({ sovrapposti: false, ...(meta.params as Partial<ParametriMacchie>) }));
     const p = meta.pattern as { nome?: string; config?: PatternConfig } | undefined;
     if (p?.config) pattern = { nome: p.nome ?? 'dal file', config: p.config };
-    if (soloPunto) { buildPanel(); genera(); return; }
+    if (soloPunto) { buildPanel(); daRifare(); return; }
     if (meta.ruoli && typeof meta.ruoli === 'object') {
       for (const k of Object.keys(ruoli)) delete ruoli[k];
       Object.assign(ruoli, meta.ruoli);
@@ -743,7 +769,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       reparse();
     } else {
       buildPanel();
-      genera();
+      daRifare();
     }
   }
 
@@ -814,7 +840,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       if (!config) return;
       pattern = { nome, config };
       buildPanel();
-      genera();
+      daRifare();
     });
     wireLivelli(root);
   }
@@ -839,6 +865,12 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   // ---- azioni fisse ----
   $('fitBtn').addEventListener('click', () => pz.fit());
   $('genBtn').addEventListener('click', genera);
+  ($('autoCalcolo') as HTMLInputElement).checked = autoCalcolo;
+  $('autoCalcolo').addEventListener('change', () => {
+    autoCalcolo = ($('autoCalcolo') as HTMLInputElement).checked;
+    try { localStorage.setItem('pattern-macchie.auto', autoCalcolo ? '1' : '0'); } catch { /* idem */ }
+    if (autoCalcolo && superato) genera();
+  });
   $('simulaBtn').addEventListener('click', () => {
     simulando = !simulando;
     $('simulaBtn').setAttribute('aria-pressed', String(simulando));
