@@ -256,9 +256,36 @@ Guardato da vicino, col filo del suo spessore, lo sporco veniva da due cose:
 
 0 salti. **A zero non si arriva col filo continuo:** le zone staccate chiedono dei ponti. Per lo zero vero resta il salto col taglio, non fatto: Lorenzo
 ha sempre chiesto il filo cucito. Provati e scartati il 2026-11-05: i ponti orizzontali (*«no»*), e il va-e-torna per tutte le file (restavano diagonali).
-**Cosa resta:** con macchie piccole e nel secondo livello si vedono dei piccoli merli in cima ai trattini, dove il filo salta da una punta all'altra; da giudicare a occhio. **Prezzo:**
+**Cosa restava:** dei piccoli merli in cima ai trattini, dove il filo salta da una punta all'altra: tolti il 2026-11-06, vedi *Niente denti* qui sotto. **Prezzo:**
 più filo verticale nel vuoto, a un passaggio solo mentre una striatura è a due; più filo fra i trattini; il 5–8% di filo in più; il punto più lungo arriva a 3,74 mm a
 grandezza 8 (chiesti 3). Da vedere in macchina. Il salto va sotto una zona solo se è entro 3 mm (`SALTO_SOTTO_ENTRO_MM`): senza limite il filo saliva a 152 m.
+
+### Niente denti (2026-11-06)
+
+Lorenzo: *«i passaggi ancora lavorano solo con la funzione dello zig zag invece quello dovrebbe essere disattivata quando si tratta di far passare i
+passaggi sotto le altre macchie sopra»*; chiarito che intendeva il dente fra due trattini vicini: *«è la terza, prova a togliere il dente»*.
+
+Il dente era il salto da un trattino al prossimo, fatto in punta, all'altezza della punta più corta: in cima alle striature una fila di merli.
+Ora, col ricamo sopra e col ritorno al centro (`cuciSenzaDenti`):
+- **il salto sta dentro la macchia**, dove ci sono tutti e due i trattini, nella metà centrale del pezzo in comune, a un'altezza a caso ogni volta: i salti non si
+  mettono in fila. Se lì c'è una zona del ricamo sopra entro 3 mm, il salto va sotto;
+- **i trattini vanno uno dopo l'altro**, e il salto al vicino è un punto corto e ripido (il punto minimo più il 5%) nello spazio fra le due colonne. I trattini
+  distano 0,6 mm e il punto minimo è 1 mm: un salto piatto al vicino verrebbe fuso in una diagonale. L'ordine a blocchi (`aBlocchi`) resta solo per la passata singola;
+- il trattino entra all'altezza del salto prima ed esce a quella del salto dopo: due passate come prima, tre nel pezzo fra le due altezze.
+
+Provata prima e scartata: il salto dentro la macchia con l'ordine a blocchi. I denti spariscono, ma il salto scavalca una o due colonne e si vedono delle «H».
+
+**Pannello laser, 3 zone, un livello, punta → dentro:**
+
+| | Grandezza 22 | Grandezza 8 |
+|---|---|---|
+| salti in punta (variante 1) | 1.942 → 1 | 2.291 → 13 |
+| filo in vista (variante 1) | 1,37 → 1,08 m | 2,22 → 2,17 m |
+| filo in tutto (varianti 1–3) | 136–140 → 127–131 m | 92–99 → 86–93 m |
+
+Due livelli a grandezza 22: filo 260 → 245–248 m. 0 salti. Il filo nel vuoto non cambia (0,24–0,33 m a grandezza 22). Trovato e corretto strada facendo: un'uscita verso un passaggio più corta del punto
+minimo veniva fusa col passaggio in un punto da 3,4 mm. Resta, come prima, qualche punto da 3,1–3,7 mm sul pannello: un passaggio corto fra due file
+(sotto il punto minimo) fuso col pezzo dopo. Non provati: Stilista, il ricamo in macchina.
 
 **Provato il 2026-11-04 e il 2026-11-05 e tolto:**
 - finire la macchia che si vede, poi uscire (l'idea di togliere del tutto il legame con le righe): in vista 1,04–1,28 m contro

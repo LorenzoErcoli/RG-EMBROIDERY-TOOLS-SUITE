@@ -1780,10 +1780,30 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   const sViste = sNelVuoto(sTante);
   console.log(`   (nel vuoto: ${sViste.length} tratti, il più lungo ${Math.max(...sViste.map((t) => t.mm)).toFixed(1)} mm, in tutto ${sViste.reduce((a, t) => a + t.mm, 0).toFixed(0)} mm, storti ${sViste.reduce((a, t) => a + t.storto, 0).toFixed(0)} mm)`);
   check('con tante zone niente rettilinei nel vuoto: nessun tratto più lungo di un trattino e mezzo', Math.max(...sViste.map((t) => t.mm)) <= sP.striaturaLengthMm * 1.5, true);
-  // Passaggi puliti (Lorenzo, 2026-11-05: «molto sporchi e poco precisi»): il salto fra due trattini vicini va piatto.
-  const sStortiDentro = (() => { let n = 0, tutti = 0; for (const t of sSenzaPassaggi(sTante)) for (let i = 1; i < t.length; i++) { const dx = Math.abs(t[i].x - t[i - 1].x), dy = Math.abs(t[i].y - t[i - 1].y); if (dx > 1e-6) { tutti++; if (dy > dx * 0.5) n++; } } return { n, tutti }; })();
-  console.log(`   (collegamenti dentro le macchie: ${sStortiDentro.tutti}, storti ${sStortiDentro.n})`);
-  check('dentro le macchie i collegamenti sono piatti, non scarabocchi', sStortiDentro.tutti > 50 && sStortiDentro.n <= sStortiDentro.tutti * 0.25, true);
+  // Passaggi puliti (Lorenzo, 2026-11-05: «molto sporchi e poco precisi»): il salto fra due trattini vicini è un punto corto, non uno
+  // scarabocchio. E niente denti (Lorenzo, 2026-11-06: «prova a togliere il dente»): il salto sta dentro la macchia, non in punta.
+  const sDenti = (() => {
+    const colonne = new Map();
+    const tratti = sSenzaPassaggi(sTante);
+    for (const t of tratti) for (let i = 1; i < t.length; i++) {
+      if (Math.abs(t[i].x - t[i - 1].x) > 1e-6) continue;
+      const k = t[i].x.toFixed(2), v = colonne.get(k) ?? [Infinity, -Infinity];
+      colonne.set(k, [Math.min(v[0], t[i].y, t[i - 1].y), Math.max(v[1], t[i].y, t[i - 1].y)]);
+    }
+    const inPunta = (q) => { const v = colonne.get(q.x.toFixed(2)); return !v || q.y - v[0] < 0.5 || v[1] - q.y < 0.5; };
+    let tutti = 0, corti = 0, denti = 0;
+    for (const t of tratti) for (let i = 1; i < t.length; i++) {
+      const a = t[i - 1], b = t[i];
+      if (Math.abs(b.x - a.x) <= 1e-6) continue;
+      tutti++;
+      if (Math.hypot(b.x - a.x, b.y - a.y) <= sP.minStitchMm * 1.1) corti++;
+      if (inPunta(a) || inPunta(b)) denti++;
+    }
+    return { tutti, corti, denti };
+  })();
+  console.log(`   (collegamenti dentro le macchie: ${sDenti.tutti}, corti ${sDenti.corti}, in punta ${sDenti.denti})`);
+  check('dentro le macchie i collegamenti sono un punto corto, non scarabocchi', sDenti.tutti > 50 && sDenti.corti >= sDenti.tutti * 0.75, true);
+  check('dentro le macchie il salto non sta in punta: niente denti', sDenti.denti <= sDenti.tutti * 0.15, true);
   // Le uscite dalle punte (Lorenzo, 2026-11-05: «magari si esce su una striatura più vicina ad un punto coperto»): stessi trattini, un filo solo.
   const sDaCapo = rg.generateStriatura({ outline: sRect, voids: [], coperte: sMacchie }, { ...sP, usciteDallePunte: false })[0];
   check('dalle punte: gli stessi trattini, un filo solo', [sTrattini(sSenzaPassaggi(sTante)).length, sTante.polylines.length], [sTrattini(sSenzaPassaggi(sDaCapo)).length, 1]);

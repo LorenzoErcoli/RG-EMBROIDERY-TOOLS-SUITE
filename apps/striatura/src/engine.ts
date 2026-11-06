@@ -614,11 +614,12 @@ function cuciSottoLeZone(
   // necessità possano passare anche per le punte? rivedendo come si disegna magari si esce su una striatura più vicina a un
   // punto coperto»). Da un capo all'altro il filo finisce per forza all'altro capo, spesso nel vuoto. Se la fila va e torna, un
   // trattino sì e uno no, si entra e si esce vicino alla stessa striatura: quella con la punta sotto una zona.
-  if (Math.max(0.2, params.densitySpacingMm) < params.minStitchMm) {
+  // Col ritorno al centro l'ordine a blocchi non serve più: i trattini vanno uno dopo l'altro e il salto al vicino è un punto corto e ripido.
+  if (Math.max(0.2, params.densitySpacingMm) < params.minStitchMm && params.stitchMode !== 'retrace') {
     for (const f of file) f.trattini = aBlocchi(f.trattini);
   }
-  // Il trattino parte e torna dalla punta invece che dal centro: stesso filo, due passate come prima. Così il salto al prossimo sta nello
-  // sfrangiato, a quote diverse, invece di fare una riga in mezzo alla macchia. Riga pari dalle punte in alto, dispari in basso.
+  // Il trattino parte e torna dalla punta invece che dal centro: stesso filo, due passate come prima. Riga pari dalle punte in alto,
+  // dispari in basso. Serve al primo trattino di una fila, se non arriva un passaggio; gli altri li rifà `cuciSenzaDenti`.
   if (params.stitchMode === 'retrace') {
     const passoT = Math.max(params.minStitchMm, params.maxStitchMm);
     for (const f of file) for (const t of f.trattini) {
@@ -893,7 +894,71 @@ function cuciSottoLeZone(
     ordine.push(...ordinaFile(qui.length, (a, b) => costoFile(qui[a], qui[b]), (a, b) => distanzaFile(qui[a], qui[b]), inizio).map((k) => qui[k]));
   }
 
+  // NIENTE DENTI (Lorenzo, 2026-11-06: «prova a togliere il dente»). Il salto da un trattino al prossimo stava in punta, all'altezza
+  // della punta più corta: un dente in cima alle striature. Ora sta dentro la macchia, dove i due trattini ci sono tutti e due, a
+  // un'altezza a caso ogni volta, così i salti non si mettono in fila. Il trattino entra all'altezza del salto prima ed esce a quella
+  // del salto dopo: due passate come prima, tre solo nel pezzo fra le due altezze.
+  const saltoRng = mulberry32((params.seed ^ 0x85ebca6b) >>> 0);
+  const passoT = Math.max(params.minStitchMm, params.maxStitchMm);
+  const percorso = (t: Trattino, e: number, u: number, arrivaUnPassaggio: boolean): Point[] => {
+    const [a, b] = u <= e ? [t.y0, t.y1] : [t.y1, t.y0];
+    // un pezzo più corto del punto minimo verrebbe fuso col salto in un punto lungo: lì si entra o si esce dalla punta. Se arriva un
+    // passaggio, il punto d'arrivo resta e salta la punta
+    const tappe = [e, a, b, u];
+    if (Math.abs(a - e) < params.minStitchMm) tappe.splice(arrivaUnPassaggio ? 1 : 0, 1);
+    if (Math.abs(u - b) < params.minStitchMm) tappe.pop();
+    const pts: Point[] = [{ x: t.x, y: tappe[0] }];
+    let y = tappe[0];
+    for (const v of tappe.slice(1)) { if (Math.abs(v - y) > 1e-6) pushSeg(pts, t.x, y, v, passoT); y = v; }
+    return pts;
+  };
+  const cuciSenzaDenti = (seq: Trattino[], ingresso: number | null) => {
+    const salto: (number | null)[] = [];
+    for (let k = 0; k + 1 < seq.length; k++) {
+      const p = seq[k], t = seq[k + 1];
+      const lo = Math.max(p.y0, t.y0), hi = Math.min(p.y1, t.y1);
+      if (lo > hi) { salto.push(null); continue; }
+      const margine = (hi - lo) / 4;
+      let quota = lo + margine + saltoRng() * (hi - lo - 2 * margine);
+      // sotto una zona, se c'è, il salto non si vede affatto
+      let dist = SALTO_SOTTO_ENTRO_MM;
+      const voluta = quota;
+      for (let y = lo; y <= hi; y += cella / 2) {
+        if (coperta[gIdx(p.x, y)] && coperta[gIdx(t.x, y)] && Math.abs(y - voluta) < dist) { dist = Math.abs(y - voluta); quota = y; }
+      }
+      salto.push(quota);
+    }
+    const dentro = (t: Trattino, y: number) => Math.max(t.y0, Math.min(t.y1, y));
+    // fra due colonne più vicine del punto minimo il salto si allunga in verticale fino al punto minimo: un punto corto e ripido nello
+    // spazio fra le due colonne, invece che fuso col punto prima in una diagonale
+    const pendenza: number[] = seq.map((t, k) => {
+      if (k === 0) return 0;
+      const dx = Math.abs(t.x - seq[k - 1].x), m = params.minStitchMm * 1.05;
+      return dx >= m ? 0 : Math.sqrt(m * m - dx * dx) * (saltoRng() < 0.5 ? -1 : 1);
+    });
+    seq.forEach((t, k) => {
+      let e: number;
+      if (k === 0) e = ingresso !== null ? dentro(t, ingresso) : t.pts[0].y;
+      else {
+        const s0 = salto[k - 1];
+        if (s0 === null) e = dentro(t, (seq[k - 1].y0 + seq[k - 1].y1) / 2);
+        else { e = s0 + pendenza[k]; if (e < t.y0 || e > t.y1) e = s0 - pendenza[k]; e = dentro(t, e); }
+      }
+      let u: number;
+      if (k === seq.length - 1) u = e;
+      else u = salto[k] ?? dentro(t, (seq[k + 1].y0 + seq[k + 1].y1) / 2);
+      t.pts = percorso(t, e, u, k === 0 && ingresso !== null);
+      const entrata = t.pts[0];
+      if (k === 0 && ingresso !== null) {
+        if (Math.abs(ingresso - e) > 1e-6) pushTravel(cur, { x: t.x, y: ingresso }, entrata, passo);
+      } else if (k > 0 && pen) pushTravel(cur, pen, entrata, passo);
+      if (cur.length === 0) cur.push(entrata);
+      for (let q = 1; q < t.pts.length; q++) cur.push(t.pts[q]);
+      pen = t.pts[t.pts.length - 1];
+    });
+  };
   const cuci = (seq: Trattino[], ingresso: number | null) => {
+    if (params.stitchMode === 'retrace') { cuciSenzaDenti(seq, ingresso); return; }
     seq.forEach((t, k) => {
       const entrata = t.pts[0];
       if (k === 0 && ingresso !== null) {
@@ -944,13 +1009,16 @@ function cuciSottoLeZone(
       orizzontaleNelVuoto = COSTO_ORIZZONTALE_NEL_VUOTO;
     }
     if (r) {
-      // esce lungo il trattino, sugli stessi buchi; poi il passaggio; poi entra lungo il trattino nuovo
-      if (Math.abs(r.uscita.y - pen!.y) > 1e-6) pushTravel(cur, pen!, r.uscita, passo);
+      // esce lungo il trattino, sugli stessi buchi; poi il passaggio; poi entra lungo il trattino nuovo. Un'uscita più corta del punto
+      // minimo verrebbe fusa col passaggio in un punto lungo: allora il passaggio parte da dov'è l'ago.
+      const via = r.via.slice();
+      if (Math.abs(r.uscita.y - pen!.y) >= params.minStitchMm) pushTravel(cur, pen!, r.uscita, passo);
+      else via[0] = pen!;
       const daQui = cur.length - 1;
-      pushStrada(cur, r.via, passo);
+      pushStrada(cur, via, passo);
       passaggi.push(cur.slice(daQui));
-      for (let i = 1; i < r.via.length; i++) {
-        const a = r.via[i - 1], b = r.via[i], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (cella / 2)));
+      for (let i = 1; i < via.length; i++) {
+        const a = via[i - 1], b = via[i], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (cella / 2)));
         let prima = -1;
         for (let k = 0; k <= n; k++) {
           const c = gIdx(a.x + ((b.x - a.x) * k) / n, a.y + ((b.y - a.y) * k) / n);
