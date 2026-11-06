@@ -31,6 +31,8 @@ namespace StilistaHostSkeleton
     ///   POST /parametri /ago /cancella /ordine · GET /punti-cuciti   oggetti che ci sono già (Collegamento.Comandi.cs)
     ///   POST /apri-copia /running   una copia del documento in una finestra nuova; copie di running su tracciati nuovi (Collegamento.Running.cs)
     ///   POST /riscrivi-punti    i punti di un oggetto che c'è già, senza ricalcolo (Collegamento.Running.cs)
+    ///   GET  /parametri        il progetto scritto negli oggetti selezionati (Collegamento.Parametri.cs)
+    ///   POST /togli-parametri  toglie i parametri da tutti gli oggetti del documento
     ///
     /// Stilista apre un PROCESSO PER DOCUMENTO (più un processo d'avvio e qualche riserva «/WAIT»,
     /// tutti col plugin caricato): il server parte solo nel processo che mostra una finestra, sulla
@@ -67,10 +69,13 @@ namespace StilistaHostSkeleton
             BackColor = Color.WhiteSmoke;
             var apri = new Button { Dock = DockStyle.Top, Height = 40, Text = "Lavora la selezione con RG Tools…" };
             apri.Click += (s, e) => ApriSuite();
+            var togli = new Button { Dock = DockStyle.Top, Height = 30, Text = "Togli i parametri da questo documento" };
+            togli.Click += (s, e) => PulsanteTogliParametri();
             _stato = new Label { Dock = DockStyle.Top, Height = 40, TextAlign = ContentAlignment.MiddleLeft, Text = "RG Link: avvio…" };
             _ultima = new Label { Dock = DockStyle.Fill, TextAlign = ContentAlignment.TopLeft, Text = "" };
             Controls.Add(_ultima);
             Controls.Add(_stato);
+            Controls.Add(togli);
             Controls.Add(apri);
         }
 
@@ -191,6 +196,7 @@ namespace StilistaHostSkeleton
                 case "GET /selezione.json": return conScelta(SelezioneJson);
                 case "GET /sonda": return conScelta(Sonda);
                 case "GET /fori": return conScelta(Fori);
+                case "GET /parametri": return conScelta(ParametriSelezione);
                 case "GET /foglie":
                     var livelli = r.Query.TryGetValue("livelli", out var l) && int.TryParse(l, out var n) ? Math.Min(n, 8) : 4;
                     return conScelta(() => Foglie(livelli));
@@ -200,6 +206,7 @@ namespace StilistaHostSkeleton
                 case "GET /ingresso-uscita": return conScelta(LeggiIngressoUscita);
                 case "POST /ingresso-uscita": return RiceviIngressoUscita(r);
                 case "POST /riempimenti": return RiceviRiempimenti(r);
+                case "POST /togli-parametri": return (Risposta)NelFiloDiStilista(RiceviTogliParametri);
                 case "POST /salva-copia": return (Risposta)NelFiloDiStilista(SalvaCopia);
                 case "POST /parametri": return RiceviParametri(r);
                 case "POST /ago": return RiceviAgo(r);
@@ -625,10 +632,16 @@ namespace StilistaHostSkeleton
             var cartella = Path.Combine(Path.GetTempPath(), "rg-stilista-link");
             Directory.CreateDirectory(cartella);
             var file = Path.Combine(cartella, nome + "-" + DateTime.Now.ToString("HHmmss") + ".dst");
-            File.WriteAllBytes(file, r.Corpo);
+            // ?parametri=<n>: gli ultimi n byte del corpo sono il progetto, il resto è il DST
+            var quanti = r.Query.TryGetValue("parametri", out var p) && int.TryParse(p, out var letti) && letti > 0 && letti < r.Corpo.Length ? letti : 0;
+            if (quanti > 0)
+            {
+                File.WriteAllBytes(file + EstensioneParametriDst, r.Corpo.Skip(r.Corpo.Length - quanti).ToArray());
+            }
+            File.WriteAllBytes(file, r.Corpo.Take(r.Corpo.Length - quanti).ToArray());
             NelFiloDiStilista(() => { _stilista.LoadNewEmb(file); return null; });
             Annota("Ricevuto un DST (" + (r.Corpo.Length / 1024) + " kB): aperto in un documento nuovo");
-            return Risposta.Testo("{\"ok\":true,\"file\":" + Json.Stringa(file) +
+            return Risposta.Testo("{\"ok\":true,\"parametri_salvati\":" + (quanti > 0 ? "true" : "false") + ",\"file\":" + Json.Stringa(file) +
                 ",\"origine_mm\":[" + Json.Numero(_origineX) + "," + Json.Numero(_origineY) + "]}");
         }
 

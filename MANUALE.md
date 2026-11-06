@@ -22,6 +22,8 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
 - **SVG** → per Illustrator/Stilista. È **allineato al file di partenza** (stesse coordinate) e **riapribile**: ricaricandolo nel tool, i parametri si ripristinano.
 - **DST** → il file macchina (Tajima). Ogni colore cucito diventa un **cambio-ago** in sequenza. Il DST **non porta** il filo reale né il colore: quelli li imposti in macchina. Anche il `.dst` è riapribile (i parametri sono nascosti in fondo al file, la macchina li ignora).
 
+**Esporta senza dati.** Di partenza un DST o un SVG porta dentro anche il progetto: parametri, ruoli, nome del file di partenza e, in certi tool, il cartamodello. Se devi dare il file a qualcuno e non vuoi che ci siano, attiva **Esporta senza dati** in alto: vale per tutti i tool e la scelta resta. Il ricamo è identico, ma quel file non si riapre più nel tool. Il disegno di un SVG resta, e nell'intestazione del DST restano i primi 16 caratteri del nome.
+
 **Dove si salva.** Alla prima esportazione il browser apre la finestra **"scegli dove salvare"**: scegli cartella e nome (proposto in automatico dal nome del cartamodello). La cartella se la ricorda tra un tool e l'altro. *(Da telefono, o senza HTTPS, il file va nei Download.)*
 
 **Preset** (dove presenti). Salvi una configurazione di parametri e la richiami. I preset **locali** restano su questo browser; i **condivisi** li vede chiunque apra il sito.
@@ -1098,6 +1100,16 @@ non sceglie da sé dove entra e dove esce ogni oggetto, non fa passaggi nascosti
 (solo salti e tagli), non conosce il telaio. Il piano è in `studi/COMPOSITORE.md`.
 
 ---
+
+## I parametri degli oggetti in Stilista
+
+**Ritrovarli.** Quando premi **Invia a Stilista**, parametri, pattern e cartamodello vanno nell'oggetto e si salvano nel documento. Non devi fare altro. Settimane dopo selezioni l'oggetto, apri lo stesso tool (o premi **Prendi la selezione**) e il tool riparte da lì; la barra di stato dice di quando sono i parametri. Reggono al salva con nome, allo spostamento del file, al ricalcolo e al copia e incolla in un altro documento.
+
+**Quando non riapre.** Con **Prendi solo i contorni** usi l'oggetto come forma. Se selezioni oggetti misti, o fatti con un altro tool, il tool prende i contorni come sempre e ti dice con quale tool sono stati fatti. Gli oggetti mandati prima del 2026-11-03 non hanno parametri, e nemmeno quelli che unisci in Stilista in un oggetto nuovo.
+
+**Toglierli.** I parametri restano nell'`.emg3`: se dai il documento a qualcuno, li riceve anche lui. Prima premi **Togli i parametri da questo documento** nella scheda RG_LINK di Stilista, poi salva. Nel documento non ne resta traccia, ma:
+- gli oggetti che avevi incollato in un altro documento hanno i loro: il comando va dato anche lì;
+- Stilista tiene la versione di prima in `C:\GMI\Stilista3.3\Backup`, in un file `.Bak`. Restano sul tuo PC e non escono da soli, ma se vuoi eliminarli del tutto vanno cancellati a mano.
 
 ## Se qualcosa non torna
 

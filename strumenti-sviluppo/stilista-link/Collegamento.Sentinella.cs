@@ -52,6 +52,7 @@ namespace StilistaHostSkeleton
             var rimessi = 0;
             try
             {
+                ParametriDelDstAperto();
                 foreach (var oggetto in SnapshotObjects(GetReadableMemberValue(Ricamo(), "Objects")))
                 {
                     var descrizione = Convert.ToString(GetReadableMemberValue(oggetto, "Description"));
@@ -82,12 +83,12 @@ namespace StilistaHostSkeleton
                     invano.Value++;
                     if (invano.Value < MassimoInvano)
                     {
-                        ProbeLog.Write("RGLink.Sentinella: «" + descrizione + "» ricalcolato da Stilista (" + cuciti.Length +
+                        ProbeLog.Write("RGLink.Sentinella: «" + SenzaParametri(descrizione) + "» ricalcolato da Stilista (" + cuciti.Length +
                             " punti invece di " + contorno.Length + "): rimessi i punti del contorno");
                     }
                     else
                     {
-                        ProbeLog.Write("RGLink.Sentinella: «" + descrizione + "» lasciato: " + MassimoInvano + " riscritture di fila senza effetto (" +
+                        ProbeLog.Write("RGLink.Sentinella: «" + SenzaParametri(descrizione) + "» lasciato: " + MassimoInvano + " riscritture di fila senza effetto (" +
                             cuciti.Length + " punti invece di " + contorno.Length + ", come laser " + PuntiLaser(oggetto) + ")");
                     }
                 }
@@ -142,7 +143,7 @@ namespace StilistaHostSkeleton
                 var dopo = ContaPunti(oggetto);
                 if (!primo) sb.Append(',');
                 primo = false;
-                sb.Append("{\"descrizione\":").Append(Json.Stringa(Convert.ToString(GetReadableMemberValue(oggetto, "Description"))))
+                sb.Append("{\"descrizione\":").Append(Json.Stringa(SenzaParametri(Convert.ToString(GetReadableMemberValue(oggetto, "Description")))))
                   .Append(",\"esito\":").Append(Json.Stringa(esito))
                   .Append(",\"prima\":").Append(prima).Append(",\"dopo\":").Append(dopo).Append('}');
             }

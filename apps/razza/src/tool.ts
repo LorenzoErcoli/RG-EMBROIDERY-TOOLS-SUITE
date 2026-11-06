@@ -711,6 +711,14 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
   // Torna il tracciato nel riferimento della sagoma (stratiDaRisultato), non quello ricentrato del DST.
   let svgStilista: string | null = null;
   const aggancio: AggancioStilista = {
+    tool: 'razza',
+    riapri(meta) {
+      // il progetto rifà il pezzo, e un pezzo nuovo dimentica da dove viene: il ritorno deve restare al suo posto
+      const svg = svgStilista;
+      const riaperto = riapriProgetto(meta, nomeFile || 'progetto');
+      svgStilista = svg;
+      return riaperto;
+    },
     carica(svg, nome) {
       // l'SVG dichiara le sue misure: una larghezza reale lo riscalerebbe e il ritorno non cadrebbe più al suo posto
       larghezzaReale = 0;

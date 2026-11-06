@@ -34,6 +34,42 @@ export interface SaveTarget {
   write(data: string | Uint8Array): Promise<SaveOutcome>;
 }
 
+// ESPORTARE SENZA DATI (Lorenzo, 2026-11-03: «magari non esportarli proprio»). I DST e gli SVG dei tool portano il
+// progetto (la busta): parametri, ruoli, e a volte il cartamodello e il nome del file di partenza. Con la spunta nella
+// topbar escono senza, da tutti i tool: tutti i salvataggi passano da qui. «Invia a Stilista» non passa da qui.
+const CHIAVE_SENZA_DATI = 'rg-export-senza-dati';
+const MAGIA_DST = [0x52, 0x47, 0x50, 0x52, 0x4f, 0x4a, 0x30, 0x31]; // "RGPROJ01", il footer di appendDstMetadata
+
+export function exportSenzaDati(): boolean {
+  try {
+    return localStorage.getItem(CHIAVE_SENZA_DATI) === '1';
+  } catch {
+    return false;
+  }
+}
+
+export function impostaExportSenzaDati(si: boolean): void {
+  try {
+    if (si) localStorage.setItem(CHIAVE_SENZA_DATI, '1');
+    else localStorage.removeItem(CHIAVE_SENZA_DATI);
+  } catch {
+    // il browser non lascia ricordare: la spunta resta come prima
+  }
+}
+
+/** Il file senza il progetto: un DST senza il footer dopo l'END, un SVG senza i suoi `<metadata>`. Il ricamo non cambia. */
+export function senzaDatiDiProgetto<T extends string | Uint8Array>(data: T): T {
+  if (typeof data === 'string') {
+    return (data.includes('<svg') ? data.replace(/[ \t]*<metadata\b[^>]*>[\s\S]*?<\/metadata>[ \t]*\r?\n?/g, '') : data) as T;
+  }
+  const n = data.length;
+  if (n < MAGIA_DST.length + 4) return data;
+  const lungo = new DataView(data.buffer, data.byteOffset, n).getUint32(n - 4, true);
+  const dove = n - 4 - lungo - MAGIA_DST.length;
+  if (dove < 0 || MAGIA_DST.some((b, i) => data[dove + i] !== b)) return data;
+  return data.subarray(0, dove) as T;
+}
+
 function download(data: string | Uint8Array, name: string, mime: string): void {
   const blob = new Blob([typeof data === 'string' ? data : (data as unknown as BlobPart)], { type: mime });
   const url = URL.createObjectURL(blob);
@@ -65,7 +101,8 @@ export async function pickSaveTarget(opts: SaveOptions): Promise<SaveTarget | nu
       const handle = await picker({ suggestedName, id: DIR_ID, types: [{ description, accept: { [mime]: [extension] } }] });
       return {
         picked: true,
-        async write(data: string | Uint8Array): Promise<SaveOutcome> {
+        async write(dati: string | Uint8Array): Promise<SaveOutcome> {
+          const data = exportSenzaDati() ? senzaDatiDiProgetto(dati) : dati;
           try {
             const writable = await handle.createWritable();
             // cast: con le lib TS recenti Uint8Array è generico su ArrayBufferLike; a runtime è sempre BufferSource valido.
@@ -85,7 +122,7 @@ export async function pickSaveTarget(opts: SaveOptions): Promise<SaveTarget | nu
     }
   }
 
-  return { picked: false, async write(data: string | Uint8Array): Promise<SaveOutcome> { download(data, suggestedName, mime); return 'downloaded'; } };
+  return { picked: false, async write(data: string | Uint8Array): Promise<SaveOutcome> { download(exportSenzaDati() ? senzaDatiDiProgetto(data) : data, suggestedName, mime); return 'downloaded'; } };
 }
 
 /**
@@ -109,7 +146,8 @@ export async function saveBinaryFile(data: Uint8Array, opts: SaveOptions): Promi
 
 /** Messaggio pronto per la statusbar, così tutti i tool dicono la stessa cosa. */
 export function saveOutcomeMessage(outcome: SaveOutcome, name: string): string {
-  if (outcome === 'saved') return `Salvato: ${name}`;
+  const nota = exportSenzaDati() ? ' (senza dati: non si riapre nel tool)' : '';
+  if (outcome === 'saved') return `Salvato: ${name}${nota}`;
   if (outcome === 'cancelled') return 'Salvataggio annullato';
-  return `Scaricato in Download: ${name}`;
+  return `Scaricato in Download: ${name}${nota}`;
 }

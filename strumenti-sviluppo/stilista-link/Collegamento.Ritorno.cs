@@ -22,6 +22,8 @@ namespace StilistaHostSkeleton
         [DataMember(Name = "ago")] public int? Ago { get; set; }
         [DataMember(Name = "colore")] public string Colore { get; set; }
         [DataMember(Name = "nome")] public string Nome { get; set; }
+        /// <summary>Il progetto del tool, da scrivere nell'oggetto (Collegamento.Parametri.cs).</summary>
+        [DataMember(Name = "parametri")] public string Parametri { get; set; }
     }
 
     /// <summary>
@@ -86,6 +88,7 @@ namespace StilistaHostSkeleton
                     (tolto ? " · tolto dal documento" : "")));
             }
             sb.Append(",\"indice\":").Append(esito.Posizione);
+            sb.Append(",\"parametri_salvati\":").Append(string.IsNullOrEmpty(ricamo.Parametri) ? "false" : "true");
             sb.Append(",\"tipo_prima\":").Append(Json.Stringa(esito.TipoPrima));
             sb.Append(",\"tipo_dopo\":").Append(Json.Stringa(misura?.Tipo));
             sb.Append(",\"manuale\":").Append(Json.Stringa(esito.ComeManuale));
@@ -201,7 +204,7 @@ namespace StilistaHostSkeleton
             {
                 copia.SetValue(contorno, punti.Clone(), null);
             }
-            ImpostaDescrizione(manuale, PrefissoDescrizione + (ricamo.Nome ?? "ricamo"));
+            ImpostaDescrizione(manuale, ConParametri(PrefissoDescrizione + (ricamo.Nome ?? "ricamo"), ricamo.Parametri));
             TrySetBoolMember(manuale, "LockRecalc", true);
             TrySetBoolMember(manuale, "NeedRestitching", false);
 
@@ -531,7 +534,7 @@ namespace StilistaHostSkeleton
             var daHeader = Convert.ToString(GetReadableMemberValue(header, "ObjectType") ?? GetReadableMemberValue(header, "Type"));
             var ricalcolatore = GetReadableMemberValue(designObject, "Ricalcolatore")?.GetType().Name;
             return (string.IsNullOrWhiteSpace(daHeader) ? "?" : daHeader) + " · " + (ricalcolatore ?? "?") +
-                   " · " + Convert.ToString(GetReadableMemberValue(designObject, "Description"));
+                   " · " + SenzaParametri(Convert.ToString(GetReadableMemberValue(designObject, "Description")));
         }
         /// <summary>Il colore che l'ago ha adesso nella tavolozza del documento (#RRGGBB), o null.</summary>
         private static string ColoreDellAgo(object embroidery, int agoDaUno)
