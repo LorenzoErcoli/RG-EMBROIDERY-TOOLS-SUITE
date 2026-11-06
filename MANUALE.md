@@ -22,6 +22,8 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
 - **SVG** → per Illustrator/Stilista. È **allineato al file di partenza** (stesse coordinate) e **riapribile**: ricaricandolo nel tool, i parametri si ripristinano.
 - **DST** → il file macchina (Tajima). Ogni colore cucito diventa un **cambio-ago** in sequenza. Il DST **non porta** il filo reale né il colore: quelli li imposti in macchina. Anche il `.dst` è riapribile (i parametri sono nascosti in fondo al file, la macchina li ignora).
 
+**Esporta senza dati.** Di partenza un DST o un SVG porta dentro anche il progetto: parametri, ruoli, nome del file di partenza e, in certi tool, il cartamodello. Se devi dare il file a qualcuno e non vuoi che ci siano, attiva **Esporta senza dati** in alto: vale per tutti i tool e la scelta resta. Il ricamo è identico, ma quel file non si riapre più nel tool. Il disegno di un SVG resta, e nell'intestazione del DST restano i primi 16 caratteri del nome.
+
 **Dove si salva.** Alla prima esportazione il browser apre la finestra **"scegli dove salvare"**: scegli cartella e nome (proposto in automatico dal nome del cartamodello). La cartella se la ricorda tra un tool e l'altro. *(Da telefono, o senza HTTPS, il file va nei Download.)*
 
 **Preset** (dove presenti). Salvi una configurazione di parametri e la richiami. I preset **locali** restano su questo browser; i **condivisi** li vede chiunque apra il sito.
@@ -132,7 +134,7 @@ Valgono ovunque; le sezioni dei singoli tool danno per scontate queste cose.
 2. **Colori e ruoli** — all'apertura la forma più grande fa da perimetro e il resto è su «ignora»; da qui scegli perimetro, aree vuote e **Ricamo sopra**: le zone dove dopo verrà cucita un'altra grafica. Le striature sono disegnate come sempre, così non si nota dove andrà la grafica; cadono solo quelle del tutto nascoste, i trattini che aprono e chiudono un gruppo si allungano un po' fin sotto una zona vicina, e il filo passa da un gruppo al prossimo per la strada corta, sotto le zone quando sono di strada. Le zone si danno con un colore del disegno. Da Stilista basta selezionare insieme il contorno e le forme: il contorno più grande fa la sagoma e le forme di un altro colore dentro di lui diventano Ricamo sopra (si corregge dal menu). Oppure prendi prima la sagoma, poi seleziona le grafiche e premi *Ricamo sopra dalla selezione di Stilista*.
 3. **Macchie** — tutto quello che cambia la macchia. **Per averle più piccole abbassa *Grandezza delle macchie***: sotto i 22 mm si accorciano da soli anche i trattini, il frastaglio e i passaggi. *Differenza fra piccole e grandi* dice quanto variano; a 0 sono tutte uguali.
 4. **Secondo livello** — *Due livelli, con due fili* aggiunge un'altra passata di striature, cucita dopo la prima con il suo filo, con variante, grandezza, distanze, lunghezza dei trattini e frastaglio suoi.
-5. **Passaggi** — quanti e quanto alti. Con il Ricamo sopra le linee rade non ci sono, il filo sta sotto le zone o fra i trattini, e quel poco che resta nel vuoto è verticale, come una striatura. Dentro una macchia il filo passa da un trattino al vicino con un punto corto, dentro la macchia e ogni volta a un'altezza diversa, non in punta: niente denti in cima alle striature. Si cuce a zone: *Dividi in zone* dice quante, *Le zone vanno* in che verso; una dopo l'altra, senza stop. *Uscite dalle punte* fa andare e tornare ogni gruppo di striature, così il filo entra ed esce dalla punta più vicina a un punto coperto. *Le striature entrano sotto il ricamo di* è la sicurezza per la ricentratura: fin lì dentro una zona i trattini restano interi. *Evidenzia i passaggi nell'anteprima* li mostra in arancione. La barra in basso dice quanti metri restano in vista e quanti finiscono sotto il ricamo.
+5. **Passaggi** — quanti e quanto alti. Con il Ricamo sopra le linee rade non ci sono, il filo sta sotto le zone o fra i trattini, e quel poco che resta nel vuoto è verticale, come una striatura. Dentro una macchia il filo passa da un trattino al vicino con un punto corto, dentro la macchia e ogni volta a un'altezza diversa, non in punta: niente denti in cima alle striature. I passaggi non vanno mai sopra una striatura già cucita (lì lascerebbero il segno): passano sotto quelle che vengono dopo, sotto le zone o ci girano attorno. Si cuce a zone: *Dividi in zone* dice quante, *Le zone vanno* in che verso; una dopo l'altra, senza stop. *Uscite dalle punte* fa andare e tornare ogni gruppo di striature, così il filo entra ed esce dalla punta più vicina a un punto coperto. *Le striature entrano sotto il ricamo di* è la sicurezza per la ricentratura: fin lì dentro una zona i trattini restano interi. *Evidenzia i passaggi nell'anteprima* li mostra in arancione. La barra in basso dice quanti metri restano in vista e quanti finiscono sotto il ricamo.
 6. **Punto** — lunghezza/minimo del punto.
 7. **Filo** — il colore del filo.
 
@@ -1100,6 +1102,16 @@ non sceglie da sé dove entra e dove esce ogni oggetto, non fa passaggi nascosti
 (solo salti e tagli), non conosce il telaio. Il piano è in `studi/COMPOSITORE.md`.
 
 ---
+
+## I parametri degli oggetti in Stilista
+
+**Ritrovarli.** Quando premi **Invia a Stilista**, parametri, pattern e cartamodello vanno nell'oggetto e si salvano nel documento. Non devi fare altro. Settimane dopo selezioni l'oggetto, apri lo stesso tool (o premi **Prendi la selezione**) e il tool riparte da lì; la barra di stato dice di quando sono i parametri. Reggono al salva con nome, allo spostamento del file, al ricalcolo e al copia e incolla in un altro documento.
+
+**Quando non riapre.** Con **Prendi solo i contorni** usi l'oggetto come forma. Se selezioni oggetti misti, o fatti con un altro tool, il tool prende i contorni come sempre e ti dice con quale tool sono stati fatti. Gli oggetti mandati prima del 2026-11-03 non hanno parametri, e nemmeno quelli che unisci in Stilista in un oggetto nuovo.
+
+**Toglierli.** I parametri restano nell'`.emg3`: se dai il documento a qualcuno, li riceve anche lui. Prima premi **Togli i parametri da questo documento** nella scheda RG_LINK di Stilista, poi salva. Nel documento non ne resta traccia, ma:
+- gli oggetti che avevi incollato in un altro documento hanno i loro: il comando va dato anche lì;
+- Stilista tiene la versione di prima in `C:\GMI\Stilista3.3\Backup`, in un file `.Bak`. Restano sul tuo PC e non escono da soli, ma se vuoi eliminarli del tutto vanno cancellati a mano.
 
 ## Se qualcosa non torna
 

@@ -125,6 +125,8 @@ export interface StriaturaLayer {
   polylines: Polyline[];
   /** I passaggi fra le macchie (già dentro `polylines`): servono solo a misurarli e a mostrarli. */
   passaggi?: Polyline[];
+  /** Il punto minimo l'ha già fatto il motore, sapendo cosa è già cucito: la pipeline non lo rifà (toglierebbe i punti corti tenuti apposta). */
+  minimoFatto?: boolean;
 }
 
 /** Contorni d'ingresso già parsati: perimetro (area) + eventuali vuoti (R5). */
@@ -321,22 +323,51 @@ function pushTravel(pts: Point[], a: Point, b: Point, step: number): void {
  * Aggiunge a `pts` una strada a più tratti (`strada[0]` escluso), coi punti uguali distribuiti su tutta la lunghezza.
  * Punto per punto, ogni svolta lasciava un punto corto che il punto minimo univa al vicino: fino a 3,7 mm con 3 chiesti.
  */
-function pushStrada(pts: Point[], strada: Point[], step: number): void {
-  let lung = 0;
-  for (let i = 1; i < strada.length; i++) lung += Math.hypot(strada[i].x - strada[i - 1].x, strada[i].y - strada[i - 1].y);
-  const n = Math.max(1, Math.ceil(lung / step));
-  let i = 1, fatti = 0;
-  for (let k = 1; k <= n; k++) {
-    const dove = (lung * k) / n;
-    while (i < strada.length - 1 && fatti + Math.hypot(strada[i].x - strada[i - 1].x, strada[i].y - strada[i - 1].y) < dove) {
-      fatti += Math.hypot(strada[i].x - strada[i - 1].x, strada[i].y - strada[i - 1].y);
-      i++;
+function pushStrada(pts: Point[], strada: Point[], step: number, evita?: (a: Point, b: Point) => boolean): void {
+  /** I punti da da a a (indici di `strada`), uguali; per ognuno il tratto su cui sta. */
+  const uguali = (da: number, a: number): { q: Point; i: number }[] => {
+    let lung = 0;
+    for (let i = da + 1; i <= a; i++) lung += Math.hypot(strada[i].x - strada[i - 1].x, strada[i].y - strada[i - 1].y);
+    const n = Math.max(1, Math.ceil(lung / step));
+    const fuori: { q: Point; i: number }[] = [];
+    let i = da + 1, fatti = 0;
+    for (let k = 1; k <= n; k++) {
+      const dove = (lung * k) / n;
+      while (i < a && fatti + Math.hypot(strada[i].x - strada[i - 1].x, strada[i].y - strada[i - 1].y) < dove) {
+        fatti += Math.hypot(strada[i].x - strada[i - 1].x, strada[i].y - strada[i - 1].y);
+        i++;
+      }
+      const p = strada[i - 1], b = strada[i];
+      const d = Math.hypot(b.x - p.x, b.y - p.y);
+      const t = k === n ? 1 : d > 0 ? Math.min(1, (dove - fatti) / d) : 1;
+      fuori.push({ q: { x: p.x + (b.x - p.x) * t, y: p.y + (b.y - p.y) * t }, i });
     }
-    const a = strada[i - 1], b = strada[i];
-    const d = Math.hypot(b.x - a.x, b.y - a.y);
-    const t = d > 0 ? Math.min(1, (dove - fatti) / d) : 1;
-    pts.push({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
+    return fuori;
+  };
+  // Il punto che taglia una svolta può passare sopra un trattino già cucito (Lorenzo, 2026-11-06: «lasciano il segno»): allora la
+  // svolta diventa un punto, e i due pezzi si dividono ognuno a punti uguali. Un punto in più messo lì e basta lasciava un punto corto,
+  // che il punto minimo univa al vicino in uno lungo fino a 4 mm.
+  const svolte = new Set<number>();
+  let fuori: { q: Point; i: number }[] = [];
+  for (let giro = 0; giro < 8; giro++) {
+    const capi = [0, ...[...svolte].sort((p, q) => p - q), strada.length - 1];
+    fuori = [];
+    for (let c = 1; c < capi.length; c++) fuori.push(...uguali(capi[c - 1], capi[c]));
+    if (!evita) break;
+    let nuove = false;
+    let prima = { q: strada[0], i: 1 };
+    for (const f of fuori) {
+      if (f.i > prima.i && evita(prima.q, f.q)) {
+        // basta una svolta, se ce n'è una da cui i due punti non passano sopra; svolte vicine lasciavano punti da 0,8 mm
+        let una = -1;
+        for (let j = prima.i; j < f.i && una < 0; j++) if (!evita(prima.q, strada[j]) && !evita(strada[j], f.q)) una = j;
+        for (let j = prima.i; j < f.i; j++) if ((una < 0 || j === una) && !svolte.has(j)) { svolte.add(j); nuove = true; }
+      }
+      prima = f;
+    }
+    if (!nuove) break;
   }
+  for (const f of fuori) pts.push(f.q);
 }
 
 /**
@@ -402,6 +433,8 @@ const COSTO_ORIZZONTALE_FRA_TRATTINI = 20;
 const COSTO_RIPASSO = 2;
 // il salto va sotto una zona solo se è a questa distanza: andarci e tornare lungo il trattino lo carica di filo (152 m contro 128 sul pannello di prova)
 const SALTO_SOTTO_ENTRO_MM = 3;
+// un passaggio sopra un trattino già cucito lascia il segno: costa come un metro di filo, così si fa solo se non c'è altra via
+const COSTO_SOPRA_GIA_CUCITI = 1000;
 const CANDIDATE_VICINE = 12;
 const PASSAGGIO_COSTOSO = 15;
 const PASSAGGIO_MOLTO_COSTOSO = 60;
@@ -422,6 +455,53 @@ function aBlocchi<T>(tr: T[]): T[] {
 }
 
 /** Una coda che dà sempre per prima la cella col costo più basso. */
+/**
+ * I trattini già cuciti, colonna per colonna (Lorenzo, 2026-11-06, in macchina: «le impunture di passaggio orizzontali a volte vanno
+ * sopra il punto striato ricamato. E lasciano il segno»). Un passaggio sotto un trattino che verrà dopo resta nascosto; sopra uno già
+ * cucito resta in vista e lo schiaccia.
+ */
+function trattiniCuciti() {
+  const colonne = new Map<number, number[]>();
+  let xs: number[] = [];
+  let ordinate = true;
+  const chiave = (x: number) => Math.round(x * 1000);
+  return {
+    aggiungi(x: number, y0: number, y1: number) {
+      const c = chiave(x);
+      let a = Math.min(y0, y1), b = Math.max(y0, y1);
+      const v = colonne.get(c);
+      if (!v) { colonne.set(c, [a, b]); xs.push(c); ordinate = false; return; }
+      // i tratti che si toccano si uniscono: una colonna resta di pochi pezzi, in ordine (punto per punto erano centinaia, e il calcolo raddoppiava)
+      const fuori: number[] = [];
+      let messo = false;
+      for (let i = 0; i < v.length; i += 2) {
+        if (v[i + 1] < a - 0.05) fuori.push(v[i], v[i + 1]);
+        else if (v[i] > b + 0.05) { if (!messo) { fuori.push(a, b); messo = true; } fuori.push(v[i], v[i + 1]); }
+        else { a = Math.min(a, v[i]); b = Math.max(b, v[i + 1]); }
+      }
+      if (!messo) fuori.push(a, b);
+      colonne.set(c, fuori);
+    },
+    /** Quante volte il filo dritto da a a b passa sopra un trattino già cucito, fuori da dove `nascosto` dice che non si vede. */
+    sopra(a: Point, b: Point, nascosto: (x: number, y: number) => boolean): number {
+      if (!ordinate) { xs = xs.sort((p, q) => p - q); ordinate = true; }
+      const lo = Math.min(a.x, b.x) * 1000 + 1, hi = Math.max(a.x, b.x) * 1000 - 1;
+      if (hi <= lo) return 0;
+      let s = 0, e = xs.length;
+      while (s < e) { const m = (s + e) >> 1; if (xs[m] < lo) s = m + 1; else e = m; }
+      let n = 0;
+      for (let j = s; j < xs.length && xs[j] <= hi; j++) {
+        const x = xs[j] / 1000, y = a.y + ((b.y - a.y) * (x - a.x)) / (b.x - a.x);
+        const v = colonne.get(xs[j])!;
+        for (let i = 0; i < v.length; i += 2) {
+          if (y >= v[i] - 0.1 && y <= v[i + 1] + 0.1) { if (!nascosto(x, y)) n++; break; }
+        }
+      }
+      return n;
+    },
+  };
+}
+
 function codaMinima() {
   const v: { idx: number; f: number }[] = [];
   const scambia = (i: number, j: number) => { const x = v[i]; v[i] = v[j]; v[j] = x; };
@@ -535,7 +615,7 @@ function ordinaFile(n: number, costo: (a: number, b: number) => number, distanza
  */
 function cuciSottoLeZone(
   raccolti: TrattinoRaccolto[], g: GrigliaZone, forbidden: (a: Point, b: Point) => boolean, params: StriaturaParams, passo: number, distanzaBordo: number,
-): { polylines: Polyline[]; passaggi: Polyline[] } {
+): { polylines: Polyline[]; passaggi: Polyline[]; minimoFatto?: boolean } {
   const { gcols, grows, gIdx, insideCell, coperta, profonda, cella, bb } = g;
   const tenuti = raccolti.filter((t) => t.pts.some((q) => !profonda[gIdx(q.x, q.y)]));
 
@@ -687,6 +767,22 @@ function cuciSottoLeZone(
       for (let y = Math.min(a.y, b.y); y <= Math.max(a.y, b.y); y += cella / 2) livelloPrima[gIdx(a.x, y)] = 1;
     }
   }
+  // `cucita` dice dove ci sono trattini, prima o dopo; questi sono quelli già cuciti, man mano: sopra di loro il filo non passa
+  const giaCuciti = trattiniCuciti();
+  // le celle dove c'è qualcosa di già cucito: altrove la strada non controlla, e il calcolo resta veloce
+  const giaCella = new Uint8Array(gcols * grows);
+  const segna = (x: number, y0: number, y1: number) => {
+    giaCuciti.aggiungi(x, y0, y1);
+    for (let y = Math.min(y0, y1); y <= Math.max(y0, y1) + cella / 2; y += cella / 2) giaCella[gIdx(x, Math.min(y, Math.max(y0, y1)))] = 1;
+  };
+  for (const pl of g.giaCucito) for (let i = 1; i < pl.length; i++) if (Math.abs(pl[i].x - pl[i - 1].x) <= 1e-6) segna(pl[i].x, pl[i - 1].y, pl[i].y);
+  const nascosto = (x: number, y: number) => coperta[gIdx(x, y)] === 1;
+  const sopraCuciti = (a: Point, b: Point) => giaCuciti.sopra(a, b, nascosto);
+  const segnaCucito = (t: Trattino) => {
+    let y0 = Infinity, y1 = -Infinity;
+    for (const q of t.pts) { if (q.y < y0) y0 = q.y; if (q.y > y1) y1 = q.y; }
+    segna(t.x, y0, y1);
+  };
 
   const passati = new Uint8Array(gcols * grows);
   // Con le zone distanti il filo preferirebbe un rettilineo lunghissimo a un ponte corto (misurato: 50 mm sul pannello di prova), e una
@@ -763,7 +859,7 @@ function cuciSottoLeZone(
     for (let i = 0; i < punti.length - 1;) {
       let meglio = i + 1;
       for (let j = punti.length - 1; j > i + 1; j--) {
-        if (costoLinea(punti[i], punti[j]) <= (costoFin(j) - costoFin(i)) * 1.02 + 0.1 && !forbidden(punti[i], punti[j])) { meglio = j; break; }
+        if (costoLinea(punti[i], punti[j]) <= (costoFin(j) - costoFin(i)) * 1.02 + 0.1 && !forbidden(punti[i], punti[j]) && !sopraCuciti(punti[i], punti[j])) { meglio = j; break; }
       }
       fuori.push(punti[meglio]);
       i = meglio;
@@ -798,7 +894,15 @@ function cuciSottoLeZone(
         if (nx < 0 || ny < 0 || nx >= gcols || ny >= grows) continue;
         const n = ny * gcols + nx;
         if (!mete.has(n) && (!percorribile[n] || !nelleFasce(bb.minX + (nx + 0.5) * cella, bb.minY + (ny + 0.5) * cella, z0, z1))) continue;
-        const nuovo = gg[testa.idx] + l * cella * costoCella(n) * (coperta[n] || livelloPrima[n] ? 1 : 1 + (cucita[n] ? COSTO_ORIZZONTALE_FRA_TRATTINI : orizzontaleNelVuoto) * Math.abs(dx) / l);
+        // il passo da qui al vicino, coi punti veri di partenza e d'arrivo: quelli che userà la strada
+        let sopra = 0;
+        if (giaCella[testa.idx] || giaCella[n]) {
+          const daSorgente = prima[testa.idx] === -1, aMeta = mete.has(n);
+          // da centro a centro in verticale non si incrocia nessuna colonna
+          if (dx !== 0 || daSorgente || aMeta) sopra = sopraCuciti(daSorgente ? sorgenti.get(testa.idx)! : centro(testa.idx), aMeta ? mete.get(n)! : centro(n));
+        }
+        const nuovo = gg[testa.idx] + l * cella * costoCella(n) * (coperta[n] || livelloPrima[n] ? 1 : 1 + (cucita[n] ? COSTO_ORIZZONTALE_FRA_TRATTINI : orizzontaleNelVuoto) * Math.abs(dx) / l)
+          + COSTO_SOPRA_GIA_CUCITI * sopra;
         if (visita[n] === giro && gg[n] <= nuovo) continue;
         gg[n] = nuovo; prima[n] = testa.idx; visita[n] = giro;
         coda.metti(n, nuovo);
@@ -912,46 +1016,79 @@ function cuciSottoLeZone(
     for (const v of tappe.slice(1)) { if (Math.abs(v - y) > 1e-6) pushSeg(pts, t.x, y, v, passoT); y = v; }
     return pts;
   };
-  const cuciSenzaDenti = (seq: Trattino[], ingresso: number | null) => {
-    const salto: (number | null)[] = [];
-    for (let k = 0; k + 1 < seq.length; k++) {
-      const p = seq[k], t = seq[k + 1];
-      const lo = Math.max(p.y0, t.y0), hi = Math.min(p.y1, t.y1);
-      if (lo > hi) { salto.push(null); continue; }
-      const margine = (hi - lo) / 4;
-      let quota = lo + margine + saltoRng() * (hi - lo - 2 * margine);
-      // sotto una zona, se c'è, il salto non si vede affatto
-      let dist = SALTO_SOTTO_ENTRO_MM;
-      const voluta = quota;
-      for (let y = lo; y <= hi; y += cella / 2) {
-        if (coperta[gIdx(p.x, y)] && coperta[gIdx(t.x, y)] && Math.abs(y - voluta) < dist) { dist = Math.abs(y - voluta); quota = y; }
-      }
-      salto.push(quota);
+  const dentro = (t: Trattino, y: number) => Math.max(t.y0, Math.min(t.y1, y));
+  /**
+   * Il salto da p al prossimo t: l'altezza d'uscita su p e quella d'entrata su t. Si sceglie quando p sta per essere cucito, perché
+   * il salto non passi sopra un trattino già cucito fra le due colonne (Lorenzo, 2026-11-06: «lasciano il segno»).
+   */
+  const scegliSalto = (p: Trattino, t: Trattino): [number, number] => {
+    const lo = Math.max(p.y0, t.y0), hi = Math.min(p.y1, t.y1);
+    if (lo > hi) {
+      // i due trattini non hanno un pezzo in comune: si esce dalla punta di p. Entrando proprio sulla punta di t il salto può restare più
+      // corto del punto minimo, che lo unisce al primo punto del trattino, e la punta si perde: si entra un punto minimo più dentro e si
+      // scende alla punta
+      const u = dentro(p, (t.y0 + t.y1) / 2);
+      const sopraP = t.y0 >= p.y1, m = params.minStitchMm * 1.05;
+      const e = t.y1 - t.y0 > 2 * m ? (sopraP ? t.y0 + m : t.y1 - m) : dentro(t, (p.y0 + p.y1) / 2);
+      return [u, e];
     }
-    const dentro = (t: Trattino, y: number) => Math.max(t.y0, Math.min(t.y1, y));
+    const margine = (hi - lo) / 4;
+    let quota = lo + margine + saltoRng() * (hi - lo - 2 * margine);
+    // sotto una zona, se c'è, il salto non si vede affatto
+    let dist = SALTO_SOTTO_ENTRO_MM;
+    const voluta = quota;
+    for (let y = lo; y <= hi; y += cella / 2) {
+      if (coperta[gIdx(p.x, y)] && coperta[gIdx(t.x, y)] && Math.abs(y - voluta) < dist) { dist = Math.abs(y - voluta); quota = y; }
+    }
     // fra due colonne più vicine del punto minimo il salto si allunga in verticale fino al punto minimo: un punto corto e ripido nello
     // spazio fra le due colonne, invece che fuso col punto prima in una diagonale
-    const pendenza: number[] = seq.map((t, k) => {
-      if (k === 0) return 0;
-      const dx = Math.abs(t.x - seq[k - 1].x), m = params.minStitchMm * 1.05;
-      return dx >= m ? 0 : Math.sqrt(m * m - dx * dx) * (saltoRng() < 0.5 ? -1 : 1);
-    });
-    seq.forEach((t, k) => {
-      let e: number;
-      if (k === 0) e = ingresso !== null ? dentro(t, ingresso) : t.pts[0].y;
-      else {
-        const s0 = salto[k - 1];
-        if (s0 === null) e = dentro(t, (seq[k - 1].y0 + seq[k - 1].y1) / 2);
-        else { e = s0 + pendenza[k]; if (e < t.y0 || e > t.y1) e = s0 - pendenza[k]; e = dentro(t, e); }
+    const dx = Math.abs(t.x - p.x), m = params.minStitchMm * 1.05;
+    const pend = dx >= m ? 0 : Math.sqrt(m * m - dx * dx) * (saltoRng() < 0.5 ? -1 : 1);
+    const entrata = (q: number, s: number) => { let e = q + s; if (e < t.y0 || e > t.y1) e = q - s; return dentro(t, e); };
+    let e = entrata(quota, pend);
+    if (sopraCuciti({ x: p.x, y: quota }, { x: t.x, y: e })) {
+      // passerebbe sopra: si cerca l'altezza libera più vicina, nel pezzo in comune
+      let meglio: [number, number] | null = null, dm = Infinity;
+      for (let y = lo; y <= hi; y += cella / 4) for (const s of [pend, -pend]) {
+        const ey = entrata(y, s);
+        if (Math.abs(y - quota) < dm && !sopraCuciti({ x: p.x, y }, { x: t.x, y: ey })) { dm = Math.abs(y - quota); meglio = [y, ey]; }
       }
-      let u: number;
-      if (k === seq.length - 1) u = e;
-      else u = salto[k] ?? dentro(t, (seq[k + 1].y0 + seq[k + 1].y1) / 2);
+      // se il trattino in mezzo copre tutto il pezzo in comune, si salta fuori dal pezzo in comune: oltre la sua punta
+      if (!meglio) {
+        for (let y = Math.min(p.y0, t.y0); y <= Math.max(p.y1, t.y1); y += cella / 4) for (const s of [pend, -pend]) {
+          const u = dentro(p, y), ey = dentro(t, y + s);
+          if (Math.abs(y - quota) < dm && !sopraCuciti({ x: p.x, y: u }, { x: t.x, y: ey })) { dm = Math.abs(y - quota); meglio = [u, ey]; }
+        }
+      }
+      if (meglio) [quota, e] = meglio;
+    }
+    return [quota, e];
+  };
+  const cuciSenzaDenti = (seq: Trattino[], ingresso: number | null) => {
+    let e = ingresso !== null ? dentro(seq[0], ingresso) : seq[0].pts[0].y;
+    seq.forEach((t, k) => {
+      let u = e, eDopo = e;
+      if (k + 1 < seq.length) [u, eDopo] = scegliSalto(t, seq[k + 1]);
       t.pts = percorso(t, e, u, k === 0 && ingresso !== null);
+      e = eDopo;
+      segnaCucito(t);
       const entrata = t.pts[0];
       if (k === 0 && ingresso !== null) {
-        if (Math.abs(ingresso - e) > 1e-6) pushTravel(cur, { x: t.x, y: ingresso }, entrata, passo);
-      } else if (k > 0 && pen) pushTravel(cur, pen, entrata, passo);
+        if (Math.abs(ingresso - entrata.y) > 1e-6) pushTravel(cur, { x: t.x, y: ingresso }, entrata, passo);
+      } else if (k > 0 && pen) {
+        // nessun salto dritto evita il trattino in mezzo (cucito prima, di solito dal livello prima): si gira attorno con una strada
+        let girato = false;
+        if (sopraCuciti(pen, entrata)) {
+          const r = strada([pen], [entrata], 0, nFasce - 1);
+          if (r && r.via.every((q, i) => i === 0 || !sopraCuciti(r.via[i - 1], q))) {
+            const daQui = cur.length - 1;
+            pushStrada(cur, r.via, passo, (a, b) => sopraCuciti(a, b) > 0);
+            passaggi.push(cur.slice(daQui));
+            girato = true;
+          }
+        }
+        if (!girato) pushTravel(cur, pen, entrata, passo);
+      }
       if (cur.length === 0) cur.push(entrata);
       for (let q = 1; q < t.pts.length; q++) cur.push(t.pts[q]);
       pen = t.pts[t.pts.length - 1];
@@ -989,6 +1126,7 @@ function cuciSottoLeZone(
       if (cur.length === 0) cur.push(entrata);
       for (let q = 1; q < t.pts.length; q++) cur.push(t.pts[q]);
       pen = t.pts[t.pts.length - 1];
+      segnaCucito(t);
     });
   };
   cuci(file[ordine[0]].trattini, null);
@@ -1012,10 +1150,10 @@ function cuciSottoLeZone(
       // esce lungo il trattino, sugli stessi buchi; poi il passaggio; poi entra lungo il trattino nuovo. Un'uscita più corta del punto
       // minimo verrebbe fusa col passaggio in un punto lungo: allora il passaggio parte da dov'è l'ago.
       const via = r.via.slice();
-      if (Math.abs(r.uscita.y - pen!.y) >= params.minStitchMm) pushTravel(cur, pen!, r.uscita, passo);
+      if (Math.abs(r.uscita.y - pen!.y) >= params.minStitchMm || sopraCuciti(pen!, via[1])) pushTravel(cur, pen!, r.uscita, passo);
       else via[0] = pen!;
       const daQui = cur.length - 1;
-      pushStrada(cur, via, passo);
+      pushStrada(cur, via, passo, (a, b) => sopraCuciti(a, b) > 0);
       passaggi.push(cur.slice(daQui));
       for (let i = 1; i < via.length; i++) {
         const a = via[i - 1], b = via[i], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (cella / 2)));
@@ -1038,7 +1176,48 @@ function cuciSottoLeZone(
     ultimo = seq[seq.length - 1];
   }
   if (cur.length > 1) polylines.push(cur);
-  return { polylines, passaggi };
+
+  // IL PUNTO MINIMO, SENZA PASSARE SOPRA. Il punto minimo della pipeline toglie il punto troppo vicino al precedente e unisce i due
+  // punti in uno: taglia la svolta, e a volte la svolta girava attorno alla punta di un trattino già cucito. Misurato a grandezza 8:
+  // 0 punti sopra uscendo dal motore, 11 dopo il punto minimo. Lo si fa qui, sapendo cosa è già cucito: se togliere il punto farebbe
+  // passare il filo sopra, il punto si sposta verso il prossimo fin dove è lungo il minimo.
+  const colonneTrattini = new Set(conSpan.map((t) => Math.round(t.x * 1000)));
+  const fatti = trattiniCuciti();
+  for (const pl of g.giaCucito) for (let i = 1; i < pl.length; i++) if (Math.abs(pl[i].x - pl[i - 1].x) <= 1e-6) fatti.aggiungi(pl[i].x, pl[i - 1].y, pl[i].y);
+  const min = params.minStitchMm;
+  const conMinimo = (pl: Polyline): Polyline => {
+    const out: Polyline = [pl[0]];
+    const metti = (q: Point) => {
+      const k = out[out.length - 1];
+      out.push(q);
+      if (Math.abs(q.x - k.x) <= 1e-6 && colonneTrattini.has(Math.round(q.x * 1000))) fatti.aggiungi(q.x, k.y, q.y);
+    };
+    for (let i = 1; i < pl.length; i++) {
+      const k = out[out.length - 1], q = pl[i];
+      if (i === pl.length - 1 || Math.hypot(q.x - k.x, q.y - k.y) >= min) { metti(q); continue; }
+      const n = pl[i + 1];
+      const libero = !fatti.sopra(k, n, nascosto);
+      // si toglie, come fa il punto minimo; ma se il filo dritto fino al prossimo diventa più lungo del passo, il punto si sposta verso
+      // il prossimo e divide il tratto in due punti buoni: togliendolo e basta veniva fuori un punto fino a 4 mm
+      if (libero && Math.hypot(n.x - k.x, n.y - k.y) <= passo + 1e-6) continue;
+      const dx = n.x - q.x, dy = n.y - q.y;
+      let meglio: Point | null = null, peggio = Infinity;
+      for (let u = 0.05; u < 1; u += 0.05) {
+        const s = { x: q.x + dx * u, y: q.y + dy * u };
+        const d1 = Math.hypot(s.x - k.x, s.y - k.y), d2 = Math.hypot(n.x - s.x, n.y - s.y);
+        if (d1 < min || d2 < min || Math.max(d1, d2) >= peggio || fatti.sopra(k, s, nascosto)) continue;
+        meglio = s; peggio = Math.max(d1, d2);
+      }
+      if (meglio) { metti(meglio); continue; }
+      if (libero) continue;
+      // non si può né togliere né spostare: si toglie quello prima, se il filo da quello prima ancora a questo resta buono
+      const kk = out.length >= 2 ? out[out.length - 2] : null;
+      if (kk && Math.hypot(q.x - kk.x, q.y - kk.y) >= min && Math.hypot(q.x - kk.x, q.y - kk.y) <= passo + 1e-6 && !fatti.sopra(kk, q, nascosto)) out.pop();
+      metti(q);                                                       // se no resta un punto corto: meglio che un segno sopra
+    }
+    return out;
+  };
+  return { polylines: polylines.map(conMinimo), passaggi, minimoFatto: true };
 }
 
 /**

@@ -77,7 +77,8 @@ export { pezzoAMisure as rtsPezzoAMisure, stratiPerDst as rtsStratiPerDst } from
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm, anelliOvali as rtsAnelliOvali, puntoDelNodo as rtsPuntoDelNodo, cimeDelleColonne as rtsCimeDelleColonne, ceIlNodo as rtsCeIlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
 export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, avanza as rtsAvanza, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
-export { origineStilista, coloreForiStilista, puntiDaPolilinee, svgForiAiLoroColori, primoColoreStilista, agoStilista } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
+export { senzaDatiDiProgetto } from ${JSON.stringify(posix('packages/ui/src/save.ts'))};
+export { origineStilista, coloreForiStilista, puntiDaPolilinee, svgForiAiLoroColori, primoColoreStilista, agoStilista, impacchettaProgetto, spacchettaProgetto, progettoDaInviare } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -1804,6 +1805,30 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   console.log(`   (collegamenti dentro le macchie: ${sDenti.tutti}, corti ${sDenti.corti}, in punta ${sDenti.denti})`);
   check('dentro le macchie i collegamenti sono un punto corto, non scarabocchi', sDenti.tutti > 50 && sDenti.corti >= sDenti.tutti * 0.75, true);
   check('dentro le macchie il salto non sta in punta: niente denti', sDenti.denti <= sDenti.tutti * 0.15, true);
+  // Niente passaggi sopra le striature già cucite (Lorenzo, 2026-11-06, in macchina: «le impunture di passaggio orizzontali a volte
+  // vanno sopra il punto striato ricamato. E lasciano il segno»). Sotto un trattino che viene dopo il filo resta nascosto; sopra uno
+  // già cucito si vede. Si segue il filo nell'ordine in cui si cuce; sotto una zona non conta.
+  const sSopra = (() => {
+    const dx = sP.densitySpacingMm, colonna = (x) => Math.abs(x / dx - 0.5 - Math.round(x / dx - 0.5)) < 1e-3;
+    const cuciti = new Map();
+    let sopra = 0, sotto = 0;
+    for (const pl of sTante.polylines) for (let i = 1; i < pl.length; i++) {
+      const a = pl[i - 1], b = pl[i];
+      if (Math.abs(b.x - a.x) <= 1e-6) {
+        if (colonna(a.x)) { const k = a.x.toFixed(3); const v = cuciti.get(k) ?? []; v.push([Math.min(a.y, b.y), Math.max(a.y, b.y)]); cuciti.set(k, v); }
+        continue;
+      }
+      const lo = Math.min(a.x, b.x), hi = Math.max(a.x, b.x);
+      for (let c = Math.ceil((lo + 1e-3) / dx - 0.5); (c + 0.5) * dx < hi - 1e-3; c++) {
+        const x = (c + 0.5) * dx, y = a.y + ((b.y - a.y) * (x - a.x)) / (b.x - a.x);
+        if (sMacchie.some((z) => rg.pointInPolygon({ x, y }, z))) continue;
+        if ((cuciti.get(x.toFixed(3)) ?? []).some(([y0, y1]) => y >= y0 - 0.05 && y <= y1 + 0.05)) sopra++; else sotto++;
+      }
+    }
+    return { sopra, sotto };
+  })();
+  console.log(`   (passaggi che incrociano una striatura fuori dalle zone: sotto una che viene dopo ${sSopra.sotto}, sopra una già cucita ${sSopra.sopra})`);
+  check('i passaggi non passano mai sopra una striatura già cucita', sSopra.sotto > 20 && sSopra.sopra, 0);
   // Le uscite dalle punte (Lorenzo, 2026-11-05: «magari si esce su una striatura più vicina ad un punto coperto»): stessi trattini, un filo solo.
   const sDaCapo = rg.generateStriatura({ outline: sRect, voids: [], coperte: sMacchie }, { ...sP, usciteDallePunte: false })[0];
   check('dalle punte: gli stessi trattini, un filo solo', [sTrattini(sSenzaPassaggi(sTante)).length, sTante.polylines.length], [sTrattini(sSenzaPassaggi(sDaCapo)).length, 1]);
@@ -1839,7 +1864,9 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   check('un livello solo resta il comportamento di serie', sSotto.exportLayers.filter((l) => !l.shapeOnly).length, 1);
   check('il cambio di filo non è un salto', s2.blockCount, 1);
   const s2Corti = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE', '#00ff00': 'COVER_AREA' }, { ...s2P, striaturaLengthMm2: 8, jaggedLengthMm2: 0, jaggedStartMm2: 0 }).exportLayers.filter((l) => !l.shapeOnly);
-  check('il secondo ha i suoi trattini e il suo frastaglio, il primo non cambia', [JSON.stringify(s2Corti[0].polylines) === JSON.stringify(s2Fili[0].polylines), rg.layerThreadMm({ color: '#000', polylines: s2Corti[1].polylines }) < rg.layerThreadMm({ color: '#000', polylines: s2Fili[1].polylines })], [true, true]);
+  // si guardano i trattini, non il filo: col filo che gira attorno al primo livello (2026-11-06) il filo dei passaggi conta più dei trattini
+  const s2Alto = (l) => sMediana(sTrattini(l.polylines).map((t) => t.alto));
+  check('il secondo ha i suoi trattini e il suo frastaglio, il primo non cambia', [JSON.stringify(s2Corti[0].polylines) === JSON.stringify(s2Fili[0].polylines), s2Alto(s2Corti[1]) < s2Alto(s2Fili[1])], [true, true]);
   check('il secondo ha le sue misure: macchie e disposizione diverse', sTrattini(s2Fili[1].polylines).length !== sTrattini(s2Fili[0].polylines).length, true);
   const s2Dst = rg.readDst(rg.dstFromExportLayers(s2.exportLayers, { label: 'STRIATURA' }));
   check('nel DST: due aghi, un cambio filo', [s2Dst.colorChanges, s2Dst.blocks.length], [1, 2]);
@@ -3039,7 +3066,7 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
     // il DST si costruisce in un posto solo (2026-10-20): lo usano «Esporta DST» e l'aggancio di Stilista
     const salva = sorgente.slice(sorgente.indexOf('function costruisciDst()'), sorgente.indexOf("$('exportDstBtn')"));
     const bottoni = sorgente.replace('function costruisciDst()', '');
-    const riapri = sorgente.slice(sorgente.indexOf('if (isDst) {'), sorgente.indexOf("if (isDst) reader.readAsArrayBuffer(file)"));
+    const riapri = sorgente.slice(sorgente.indexOf('function riapriProgetto('), sorgente.indexOf('function wirePanel()'));
     check('il DST del Generatore porta il disegno coi ruoli e la scala, entro un tetto',
       [salva.includes('{ name: boundarySource.name, text: boundarySource.text, scale: { ...scalaImport }, roles: { ...boundaryRoles } }'),
         salva.includes('MAX_DRAWING_KB'), salva.includes("...(disegno ? { drawing: disegno } : {})"),
@@ -3113,6 +3140,34 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
         const invia = s.includes('BOTTONE_INVIA_STILISTA()') || s.includes('inviaStilista: true');
         return !(s.includes('collegaStilista(aggancio') && prendi && invia);
       }), []);
+    // i parametri nell'oggetto (2026-11-03): ogni tool agganciato dice chi è e sa riaprire il suo progetto
+    check('Stilista Link: tutti gli 11 tool dichiarano il loro id e come riaprono un progetto',
+      agganciati.filter((t) => {
+        const s = readFileSync(join(root, `apps/${t}/src/tool.ts`), 'utf8');
+        return !(s.includes(`tool: '${t}',`) && /\n {4}riapri[(:]/.test(s));
+      }), []);
+    const progettoProva = { v: 1, tool: 'net-45', quando: '2026-11-03T12:00:00.000Z', nome: 'prova', sorgente: '<svg>è</svg>', meta: { rgProject: 'net-45', params: { passo: 2.5 }, testo: 'à'.repeat(200000) } };
+    const pacchetto = await rg.impacchettaProgetto(progettoProva);
+    check('Stilista Link: il progetto nell\'oggetto torna identico, compresso, e in testo semplice',
+      [JSON.stringify(await rg.spacchettaProgetto(pacchetto)) === JSON.stringify(progettoProva), pacchetto.length < 5000, /^[A-Za-z0-9+/=]+$/.test(pacchetto)], [true, true, true]);
+    check('Stilista Link: un testo che non è un progetto non si riapre', [await rg.spacchettaProgetto('non è un progetto'), await rg.spacchettaProgetto(btoa('x'))], [null, null]);
+    const dstProva = rg.dstFromExportLayers([{ id: 'prova', color: '#ff0000', polylines: [[{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }]] }], { metadata: rg.conBusta({ rgProject: 'net-45', params: { passo: 2.5 } }) });
+    const inviato = await rg.progettoDaInviare({ dst: () => ({ bytes: dstProva, nome: 'prova' }), sorgente: () => '<svg/>' });
+    const riletto = await rg.spacchettaProgetto(inviato.dati);
+    check('Stilista Link: «Invia» prende la busta dal DST del tool, e il cartamodello',
+      [riletto.tool, riletto.meta.params.passo, riletto.sorgente], ['net-45', 2.5, '<svg/>']);
+    // esportare senza dati (2026-11-03): il footer e i <metadata> vanno via, il ricamo no
+    const dstPulito = rg.senzaDatiDiProgetto(dstProva);
+    const dstSenzaDati = rg.dstFromExportLayers([{ id: 'prova', color: '#ff0000', polylines: [[{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }]] }], {});
+    check('Esporta senza dati: il DST perde il progetto, ed è identico a uno scritto senza',
+      [rg.readDstMetadata(dstPulito), Buffer.compare(Buffer.from(dstPulito), Buffer.from(dstSenzaDati)), new TextDecoder('latin1').decode(dstPulito).includes('RGPROJ01')], [null, 0, false]);
+    check('Esporta senza dati: un DST senza progetto resta com\'è', Buffer.compare(Buffer.from(rg.senzaDatiDiProgetto(dstSenzaDati)), Buffer.from(dstSenzaDati)), 0);
+    const svgConDati = '<svg xmlns="http://www.w3.org/2000/svg">\n  <metadata id="rg-project">{"params":{"a":1},"drawing":{"text":"cliente"}}</metadata>\n  <metadata id="rg-progetto">{"b":2}</metadata>\n  <metadata>{"c":3}</metadata>\n  <path d="M0 0L1 1"/>\n</svg>';
+    check('Esporta senza dati: l\'SVG perde ogni <metadata>, il disegno resta',
+      [rg.senzaDatiDiProgetto(svgConDati).includes('metadata'), rg.senzaDatiDiProgetto(svgConDati).includes('cliente'), rg.senzaDatiDiProgetto(svgConDati).includes('<path d="M0 0L1 1"/>')], [false, false, true]);
+    check('Esporta senza dati: un testo che non è un SVG non si tocca', rg.senzaDatiDiProgetto('{"metadata":"<metadata>x</metadata>"}'), '{"metadata":"<metadata>x</metadata>"}');
+    check('Stilista Link: un DST senza busta non ferma l\'invio, lo dice',
+      (await rg.progettoDaInviare({ dst: () => ({ bytes: new Uint8Array(600), nome: 'x' }), sorgente: () => null })).dati, undefined);
     check('Stilista Link: per oblique i fori di un plugin vecchio (senza «di chi») vanno al colore del primo filo',
       rg.svgForiAiLoroColori(svgStilista).match(/stroke="#[0-9A-Fa-f]{6}"/g), ['stroke="#FFF200"', 'stroke="#FFF200"']);
     // stop diversi = colori diversi (2026-10-22): il plugin dà a ogni stop il suo colore, e dice di chi è ogni foro

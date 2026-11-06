@@ -638,6 +638,9 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
   // (le tinte coi rombi interi diventano i pattern 1 e 2, come sempre). Cannage non ha aree vuote: i fori
   // restano fuori. Ogni stop torna come un oggetto a sé, nell'ordine.
   const aggancio: AggancioStilista = {
+    tool: 'cannage-rafia',
+    // il cartamodello c'è già: il disegno del progetto lo sostituirebbe e il ritorno perderebbe il suo posto
+    riapri: (meta) => restore(source?.text ? { ...meta, drawing: undefined } : meta),
     fori: 'esclusi',
     carica(svg, nome) {
       for (const k of Object.keys(ruoli)) delete ruoli[k];

@@ -818,6 +818,13 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
   // col pattern A (si cambia in 02), i fori spenti — e una zona spenta dentro un'altra è un buco (2026-10-21) —;
   // e si genera subito. Ogni ago torna come un oggetto a sé.
   const aggancio: AggancioStilista = {
+    tool: 'zone-pattern',
+    riapri(meta) {
+      // il cartamodello c'è già: il disegno del progetto lo sostituirebbe e il ritorno perderebbe il suo posto
+      if (!restore(source?.text ? { ...meta, drawing: undefined } : meta)) return false;
+      if (zones.length) generate();
+      return true;
+    },
     carica(svg, nome) {
       for (const k of Object.keys(roles)) delete roles[k];
       // la scala la legge reparse() dai menu: l'SVG del plugin dichiara width/height in mm, i contorni sono tratti
