@@ -1734,6 +1734,11 @@
           "default": 2,
           "x-id": "catenellaPsilTurns"
         },
+        "catenellaDiProva": {
+          "$ref": "#/$defs/catenellaTestStitches",
+          "default": false,
+          "x-id": "catenellaTestStitches"
+        },
         "psilVero": {
           "$ref": "#/$defs/catenellaTruePsil",
           "default": true,
@@ -1941,6 +1946,11 @@
           "default": false,
           "x-id": "withOverlay"
         },
+        "sovrapposti": {
+          "$ref": "#/$defs/levelsOverlap",
+          "default": true,
+          "x-id": "levelsOverlap"
+        },
         "secondoMargine": {
           "$ref": "#/$defs/secondLevelMargin",
           "default": 1,
@@ -1950,6 +1960,46 @@
           "$ref": "#/$defs/firstLevelVisibleMax",
           "default": 12,
           "x-id": "firstLevelVisibleMax"
+        },
+        "vistaVicini": {
+          "$ref": "#/$defs/visiblePassagesNear",
+          "default": 0,
+          "x-id": "visiblePassagesNear"
+        },
+        "daSinistra3": {
+          "$ref": "#/$defs/leftToRightOrder3",
+          "default": false,
+          "x-id": "leftToRightOrder3"
+        },
+        "rasoAngolo3": {
+          "$ref": "#/$defs/satinAngle3",
+          "default": 90,
+          "x-id": "satinAngle3"
+        },
+        "rasoInterlinea3": {
+          "$ref": "#/$defs/satinRowSpacing3",
+          "default": 0.4,
+          "x-id": "satinRowSpacing3"
+        },
+        "rasoPuntoMax3": {
+          "$ref": "#/$defs/satinMaxStitch3",
+          "default": 4,
+          "x-id": "satinMaxStitch3"
+        },
+        "rasoFase3": {
+          "$ref": "#/$defs/satinPhase3",
+          "default": 30,
+          "x-id": "satinPhase3"
+        },
+        "sfrangiatura3": {
+          "$ref": "#/$defs/fringeAmount3",
+          "default": 1,
+          "x-id": "fringeAmount3"
+        },
+        "sfrangiaturaFuori3": {
+          "$ref": "#/$defs/fringeOutsidePercent3",
+          "default": 50,
+          "x-id": "fringeOutsidePercent3"
         },
         "daSinistra2": {
           "$ref": "#/$defs/leftToRightOrder2",
@@ -5074,7 +5124,7 @@
     "catenellaEdgePieces": {
       "type": "boolean",
       "title": "Attacca i pezzi sotto la soglia ai moduli vicini",
-      "description": "Riempie il bianco sul bordo senza cambi ago in più: ogni pezzo si cuce col modulo che tocca di più, da sinistra a destra: prima del modulo se sta a sinistra, dopo se sta a destra. Spento: il bordo resta come nel file di riferimento.",
+      "description": "Riempie il bianco sul bordo, da sinistra a destra: un pezzo si cuce prima del modulo che tocca di più se sta a sinistra; se sta a destra, subito prima del modulo dopo. In fondo alla riga si cuce da solo, con la sua uscita e un cambio ago. Spento: il bordo resta come nel file di riferimento.",
       "x-concetto": "griglia-moduli"
     },
     "catenellaEdgePieceMin": {
@@ -5171,6 +5221,12 @@
       "maximum": 3,
       "x-concetto": "maglia-psil"
     },
+    "catenellaTestStitches": {
+      "type": "boolean",
+      "title": "Prova: maglie calcolate come Stilista",
+      "description": "Per il campione cucito. Vale per i punti del tool: DST, SVG e psil disegnato. Passo adattato e angoli raccordati, come misurato sul file. Non è ancora uguale a Stilista: agli angoli resta uno scarto.",
+      "x-concetto": "maglia-psil"
+    },
     "catenellaTruePsil": {
       "type": "boolean",
       "title": "Psil vero in Stilista",
@@ -5211,7 +5267,7 @@
     "catenellaInnerPasses": {
       "type": "boolean",
       "title": "Passaggi interni sulle linee, niente fuori dal contorno",
-      "description": "Dove il taglio lascia un passo lungo, il filo ribatte sulle linee già ricamate o che arriveranno, anche se i passaggi vengono più lunghi. Fuori dal contorno restano solo le uscite per il cambio ago.",
+      "description": "Dove il taglio lascia un passo lungo, il filo corre sulle linee che arriveranno e sulle basi, anche se i passaggi vengono più lunghi; segue una catenella già cucita solo se non c'è altra strada. Fuori dal contorno restano solo le uscite per il cambio ago.",
       "x-concetto": "corsie-bordo"
     },
     "catenellaEdgeLanes": {
@@ -5446,10 +5502,16 @@
       "description": "Lo stesso punto della base sopra il raso, dentro le macchie. Spento: solo il raso.",
       "x-concetto": "interruttore"
     },
+    "levelsOverlap": {
+      "type": "boolean",
+      "title": "I livelli sotto restano interi: quelli sopra si cuciono sopra",
+      "description": "Spenta: dove una macchia sta sotto una di un livello più alto si ferma, e ci entra solo di «Un livello entra sotto quelli sopra di».",
+      "x-concetto": "interruttore"
+    },
     "secondLevelMargin": {
       "type": "number",
-      "title": "Il primo livello entra sotto il secondo di",
-      "description": "Dove una macchia del primo livello sta sotto una del secondo si ferma: ci entra solo di tanto, così non si sovrappone troppo filo.",
+      "title": "Un livello entra sotto quelli sopra di",
+      "description": "Solo coi livelli sotto non interi: dove una macchia sta sotto una di un livello più alto si ferma, e ci entra solo di tanto.",
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 0.1,
@@ -5457,12 +5519,83 @@
     },
     "firstLevelVisibleMax": {
       "type": "number",
-      "title": "Fra le macchie del primo livello, a vista al più",
-      "description": "Il filo da una macchia alla dopo corre sotto il secondo livello e sotto le macchie ancora da cucire. Dove nessuna lo copre attraversa lo spazio a vista, al più di tanto per volta. 0 = mai a vista: lì si salta.",
+      "title": "Fra le macchie dei livelli sotto, a vista al più",
+      "description": "Il filo da una macchia alla dopo corre sotto i livelli più alti e sotto le macchie ancora da cucire. Dove nessuna lo copre attraversa lo spazio a vista, al più di tanto per volta. 0 = mai a vista: lì si salta.",
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 0.5,
       "x-concetto": "passaggi-nascosti"
+    },
+    "visiblePassagesNear": {
+      "type": "number",
+      "title": "I passaggi a vista si avvicinano a quelli già fatti, entro",
+      "description": "Attraversare lo spazio entro questa distanza da un altro passaggio a vista costa meno, e il filo ci va se può arrivarci coperto. 0 = ognuno dove è più corto.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "passaggi-nascosti"
+    },
+    "leftToRightOrder3": {
+      "type": "boolean",
+      "title": "3° livello: le macchie da sinistra a destra",
+      "description": "Come «Le macchie da sinistra a destra», per il terzo livello.",
+      "x-concetto": "ordine-cucitura"
+    },
+    "satinAngle3": {
+      "type": "number",
+      "title": "3° livello: direzione del raso",
+      "description": "Direzione delle righe del raso del terzo livello, gradi (90 = verticale).",
+      "x-unita": "deg",
+      "minimum": -180,
+      "x-passo": 1,
+      "x-concetto": "angolo"
+    },
+    "satinRowSpacing3": {
+      "type": "number",
+      "title": "3° livello: interlinea del raso",
+      "description": "Distanza fra le righe del raso del terzo livello.",
+      "x-unita": "mm",
+      "minimum": 0.1,
+      "x-passo": 0.05,
+      "x-concetto": "densita"
+    },
+    "satinMaxStitch3": {
+      "type": "number",
+      "title": "3° livello: punto massimo del raso",
+      "description": "Le macchie larghe non fanno punti da bordo a bordo.",
+      "x-unita": "mm",
+      "minimum": 1,
+      "x-passo": 0.5,
+      "x-concetto": "punto-massimo"
+    },
+    "satinPhase3": {
+      "type": "number",
+      "title": "3° livello: fase del raso",
+      "description": "Di quanto gli aghi di una riga sono spostati rispetto alla riga accanto, in % del punto.",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 100,
+      "x-passo": 5,
+      "x-concetto": "spostamento"
+    },
+    "fringeAmount3": {
+      "type": "number",
+      "title": "3° livello: sfrangiatura",
+      "description": "Di quanto, a caso, ogni riga finisce prima o dopo il bordo. 0 = netto.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.1,
+      "x-concetto": "variazione"
+    },
+    "fringeOutsidePercent3": {
+      "type": "number",
+      "title": "3° livello: …di cui oltre il bordo",
+      "description": "0 = le righe si accorciano soltanto; 100 = si allungano soltanto.",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 100,
+      "x-passo": 10,
+      "x-concetto": "variazione"
     },
     "leftToRightOrder2": {
       "type": "boolean",
@@ -6316,6 +6449,7 @@
         "densitySpacingMm2",
         "baseSpacing",
         "densitySpacing",
+        "satinRowSpacing3",
         "satinRowSpacing2",
         "satinRowSpacing",
         "rowSpacing",
@@ -6362,6 +6496,7 @@
         "cordedMaxStitch",
         "runMaxStitch",
         "maxStitchLength",
+        "satinMaxStitch3",
         "satinMaxStitch2",
         "satinMaxStitch",
         "overlapStitch",
@@ -6454,6 +6589,7 @@
         "fringeOpeningMax",
         "toothOpening",
         "axisMode",
+        "satinAngle3",
         "satinAngle2",
         "satinAngle",
         "maxDiamondAngle",
@@ -6504,6 +6640,7 @@
         "globalPatternOffsetY",
         "stripShiftMm",
         "retraceOffsetMm",
+        "satinPhase3",
         "satinPhase2",
         "satinPhase",
         "overlayShiftX",
@@ -6559,6 +6696,7 @@
         "noPassLastColors",
         "overStitchedCost",
         "firstLevelVisibleMax",
+        "visiblePassagesNear",
         "hiddenPassMax",
         "maxInternalTravel",
         "maxVisibleTravel",
@@ -6618,6 +6756,8 @@
         "fringeLengthMin",
         "fringeLengthMax",
         "diameterIrregularity",
+        "fringeAmount3",
+        "fringeOutsidePercent3",
         "fringeAmount2",
         "fringeOutsidePercent2",
         "fringeAmount",
@@ -6689,6 +6829,7 @@
         "rowHeight",
         "gapCrossMm",
         "buildMode",
+        "leftToRightOrder3",
         "leftToRightOrder2",
         "leftToRightOrder",
         "topStitchBandBeforeDivision",
@@ -6756,6 +6897,7 @@
         "showPasses",
         "withBase",
         "withOverlay",
+        "levelsOverlap",
         "satinByStilista",
         "cutBaseUnderSpots",
         "fullBottom",
@@ -6899,6 +7041,7 @@
         "catenellaPsilPitch",
         "catenellaPsilStart",
         "catenellaPsilTurns",
+        "catenellaTestStitches",
         "catenellaTruePsil"
       ]
     },

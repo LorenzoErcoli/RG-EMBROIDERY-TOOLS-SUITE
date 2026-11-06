@@ -6743,14 +6743,38 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   // si ferma sotto lo scuro; dove lo scuro non copre si salta). Il pannello di prova ha le macchie staccate: a turno
   // chiare e scure, e le scure allargate attorno al centro, così le toccano.
   {
+    // (i controlli qui sotto sono coi livelli sotto fermati, com'era prima del 2026-11-06: la casella spenta)
+    const FERMI = { ...rg.PM_DI_SERIE, sovrapposti: false };
     const fila = rg.pmOrdina(macchie);
     const allarga = (m, f) => { const c = m.reduce((s, p) => ({ x: s.x + p.x / m.length, y: s.y + p.y / m.length }), { x: 0, y: 0 }); return m.map((p) => ({ x: c.x + (p.x - c.x) * f, y: c.y + (p.y - c.y) * f })); };
     const chiare = fila.filter((_, k) => k % 2 === 0).map((i) => macchie[i]);
     const scure = fila.filter((_, k) => k % 2 === 1).map((i) => allarga(macchie[i], 1.6));
-    const giu = { x: 0, y: 1 }, margine = rg.PM_DI_SERIE.secondoMargine;
+    const giu = { x: 0, y: 1 }, margine = FERMI.secondoMargine;
+    // I TRE LIVELLI (Lorenzo, 2026-11-05: «il 3 è il più alto il due il medio e l'1 il primo. ovviamente a cascata si
+    // distribuiscono i passaggi nascosti»): ognuno si ferma sotto tutti quelli sopra, e il filo a vista non sta mai in mezzo a
+    // una macchia, cucita o da cucire (lì sarebbe coperto, o sopra un raso già fatto).
+    {
+      const uno = fila.filter((_, k) => k % 3 === 0).map((i) => macchie[i]);
+      const due3 = fila.filter((_, k) => k % 3 === 1).map((i) => allarga(macchie[i], 1.6));
+      const tre = fila.filter((_, k) => k % 3 === 2).map((i) => allarga(macchie[i], 1.6));
+      const r3 = rg.pmCostruisci([], uno, {}, FERMI, due3, tre);
+      const delLivello = (n) => r3.stop.filter((s) => s.strato === n).flatMap((s) => s.indici).map((i) => r3.forme[i]);
+      const entra = (sotto, sopra) => Math.max(0, ...sotto.flat().flatMap((p) => sopra.filter((m) => rg.pointInPolygon(p, m)).map((m) => rg.distanceToBoundary(p, m))));
+      const aVistaDentro = Math.max(0, ...r3.vista.aVista.flatMap((t) => t.slice(1).flatMap((b, i) => {
+        const a = t[i], n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.25));
+        return Array.from({ length: n }, (_, k) => ({ x: a.x + ((b.x - a.x) * (k + 0.5)) / n, y: a.y + ((b.y - a.y) * (k + 0.5)) / n }));
+      })).flatMap((p) => r3.forme.filter((m) => rg.pointInPolygon(p, m)).map((m) => rg.distanceToBoundary(p, m))));
+      check(`tre livelli: raso del 1°, del 2°, del 3°; il 1° e il 2° entrano sotto quelli sopra al più del margine; ${r3.sottoIlSecondo.collegate} passaggi invece di un salto, a vista mai più di 1 mm dentro una macchia (misurato ${aVistaDentro.toFixed(2)} mm)`,
+        [r3.stop.map((s) => `${s.tipo}${s.strato}`).join(), entra(delLivello(1), [...delLivello(2), ...delLivello(3)]) <= margine + 0.2, entra(delLivello(2), delLivello(3)) <= margine + 0.2, r3.sottoIlSecondo.collegate > 0, aVistaDentro <= 1],
+        ['raso1,raso2,raso3', true, true, true, true]);
+      const saltiDi = (r) => r.stop.filter((s) => s.strato < 3).reduce((n, s) => n + s.livello.salti, 0);
+      const vicini = rg.pmCostruisci([], uno, {}, { ...FERMI, vistaVicini: 10 }, due3, tre);
+      check(`i passaggi a vista vicini fra loro: non fanno più salti, il raso resta nei suoi stop (giro del rifilo ${r3.sottoIlSecondo.giro.toFixed(0)} → ${vicini.sottoIlSecondo.giro.toFixed(0)} mm, a vista ${r3.sottoIlSecondo.aVista.toFixed(0)} → ${vicini.sottoIlSecondo.aVista.toFixed(0)} mm)`,
+        [saltiDi(vicini) <= saltiDi(r3), vicini.stop.map((s) => s.indici.length)], [true, r3.stop.map((s) => s.indici.length)]);
+    }
     const fermate = chiare.flatMap((m) => rg.pmFerma(m, scure, margine, giu));
-    const prima = rg.pmCostruisci([], fermate, {}, rg.PM_DI_SERIE);
-    const due = rg.pmCostruisci([], chiare, {}, { ...rg.PM_DI_SERIE, secondoVista: 0 }, scure);
+    const prima = rg.pmCostruisci([], fermate, {}, FERMI);
+    const due = rg.pmCostruisci([], chiare, {}, { ...FERMI, secondoVista: 0 }, scure);
     check('due livelli: prima il raso del primo, poi quello del secondo',
       due.stop.map((s) => `${s.tipo}${s.strato}`).join(), 'raso1,raso2');
     const primo = due.stop[0], salti = (st) => st.livello.tratti.slice(1).map((t, i) => [st.livello.tratti[i].at(-1), t[0]]);
@@ -6775,20 +6799,36 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
       ['1,2', fermate.length, scure.length, true]);
     // ZERO SALTI (Lorenzo, 2026-11-03: «andando a zero di salti»; ha scelto i punti corti a vista dove non si può coprire):
     // di serie nel primo livello nessun salto, il filo a vista poco e a pezzi corti, mai un punto sopra il raso già cucito
-    const zero = rg.pmCostruisci([], chiare, {}, rg.PM_DI_SERIE, scure);
+    const zero = rg.pmCostruisci([], chiare, {}, FERMI, scure);
     const zs = zero.sottoIlSecondo;
     check('di serie zero salti nel primo livello, a vista al più 12 mm per volta e in tutto meno di 300 mm',
-      [zero.stop[0].livello.salti, zs.attraversamenti > 0, zs.aVista <= zs.attraversamenti * rg.PM_DI_SERIE.secondoVista, zs.aVista < 300], [0, true, true, true]);
+      [zero.stop[0].livello.salti, zs.attraversamenti > 0, zs.aVista <= zs.attraversamenti * FERMI.secondoVista, zs.aVista < 300], [0, true, true, true]);
+    // I LIVELLI SOVRAPPOSTI (Lorenzo, 2026-11-06: «il livello 2 non deve bucare il livello 1 ma deve sovrapporsi»; scelto «tutti
+    // interi»): di serie ogni livello resta intero, quelli sopra gli si cuciono sopra, e il filo passa lo stesso sotto
+    {
+      const sov = rg.pmCostruisci([], chiare, {}, rg.PM_DI_SERIE, scure);
+      const delLivelloS = (r, n) => r.stop.filter((s) => s.strato === n).flatMap((s) => s.indici).map((i) => r.forme[i]);
+      const sottoS = sov.stop[0].livello.tratti.flat().filter((p) => scure.some((s) => rg.pointInPolygon(p, s) && rg.distanceToBoundary(p, s) > margine + 0.5)).length;
+      const area = (ff) => ff.reduce((x, m) => x + Math.abs(rg.polygonArea(m)), 0);
+      check(`di serie i livelli si sovrappongono: il 1° resta intero sotto il 2° (${sottoS} punti del 1° dentro il 2° oltre il margine), ${sov.sottoIlSecondo.collegate} passaggi sotto, salti nel 1° ${sov.stop[0].livello.salti} (fermati ${zero.stop[0].livello.salti})`,
+        [delLivelloS(sov, 1).length, Math.abs(area(delLivelloS(sov, 1)) - area(chiare)) < 0.5, sottoS > 100, sov.sottoIlSecondo.collegate > 0, sov.stop.map((s) => `${s.tipo}${s.strato}`).join()],
+        [chiare.length, true, true, true, 'raso1,raso2']);
+      const uno = fila.filter((_, k) => k % 3 === 0).map((i) => macchie[i]);
+      const due3 = fila.filter((_, k) => k % 3 === 1).map((i) => allarga(macchie[i], 1.6));
+      const tre3 = fila.filter((_, k) => k % 3 === 2).map((i) => allarga(macchie[i], 1.6));
+      const s3 = rg.pmCostruisci([], uno, {}, rg.PM_DI_SERIE, due3, tre3);
+      check('...anche con tre livelli: il 1° e il 2° interi', [delLivelloS(s3, 1).length, delLivelloS(s3, 2).length, delLivelloS(s3, 3).length, Math.abs(area(delLivelloS(s3, 2)) - area(due3)) < 0.5], [uno.length, due3.length, tre3.length, true]);
+    }
     // (Lorenzo, 2026-11-03: «ora non fa il passaggio fa dei salti»: col raso più fitto sotto il raso la strada può mancare: il filo
     // gira fuori dalla macchia. E i passaggi si vedono a parte, e i salti del secondo livello non si contano col primo)
-    const fitto = rg.pmCostruisci([], chiare, {}, { ...rg.PM_DI_SERIE, rasoInterlinea: 0.25 }, scure);
+    const fitto = rg.pmCostruisci([], chiare, {}, { ...FERMI, rasoInterlinea: 0.25 }, scure);
     const lunghiFra = fitto.vista.fra.flatMap((t) => t.slice(1).map((p, i) => Math.hypot(p.x - t[i].x, p.y - t[i].y)));
     check('col raso fitto ancora zero salti nel primo livello, i passaggi a parte nella vista, i salti divisi per livello',
       [fitto.stop[0].livello.salti, fitto.vista.fra.length >= fitto.sottoIlSecondo.collegate, lunghiFra.length > 0, fitto.saltiFra.raso.length, fitto.saltiFra.raso2.length === fitto.stop[1].livello.salti || fitto.saltiFra.raso2.length > 0],
       [0, true, true, 0, true]);
     // OGNI LIVELLO COI SUOI PARAMETRI (Lorenzo, 2026-11-03: «ogni livello di macchia deve avere il suo pannellino dei parametri»)
-    const propri = rg.pmCostruisci([], chiare.slice(0, 6), {}, { ...rg.PM_DI_SERIE, rasoInterlinea2: 0.8, rasoAngolo2: 45, sfrangiatura2: 0 }, scure.slice(0, 6));
-    const uguali = rg.pmCostruisci([], chiare.slice(0, 6), {}, rg.PM_DI_SERIE, scure.slice(0, 6));
+    const propri = rg.pmCostruisci([], chiare.slice(0, 6), {}, { ...FERMI, rasoInterlinea2: 0.8, rasoAngolo2: 45, sfrangiatura2: 0 }, scure.slice(0, 6));
+    const uguali = rg.pmCostruisci([], chiare.slice(0, 6), {}, FERMI, scure.slice(0, 6));
     const obliqui = propri.stop[1].livello.tratti.flatMap((t) => t.slice(1).map((p, i) => Math.abs(Math.abs(p.x - t[i].x) - Math.abs(p.y - t[i].y)) < 0.05 && Math.hypot(p.x - t[i].x, p.y - t[i].y) > 1)).filter(Boolean).length;
     check('il secondo livello coi suoi parametri: più rado e di traverso; il primo non cambia di disegno',
       [propri.stop[1].livello.punti < uguali.stop[1].livello.punti, obliqui > 100, propri.stop[0].livello.tratti.length > 0], [true, true, true]);
@@ -6799,12 +6839,12 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     const q = (x, y, l) => [{ x, y }, { x: x + l, y }, { x: x + l, y: y + l }, { x, y: y + l }];
     // I PONTI CON DUE LIVELLI (Lorenzo, 2026-11-04: «li costruisce il sistema non è che vanno forzati per forza per far passare il
     // filo»): solo sul secondo livello, il filo del primo li usa, e dove due macchie sono più lontane del limite il salto resta
-    const conPonti = rg.pmCostruisci([], chiare, {}, { ...rg.PM_DI_SERIE, ponti: 5 }, scure);
+    const conPonti = rg.pmCostruisci([], chiare, {}, { ...FERMI, ponti: 5 }, scure);
     check('i ponti sul secondo livello: meno salti lì, meno filo a vista, zero salti nel primo',
       [conPonti.ponti > 0, conPonti.stop[1].livello.salti < zero.stop[1].livello.salti, conPonti.sottoIlSecondo.aVista < zs.aVista, conPonti.stop[0].livello.salti], [true, true, true, 0]);
     const tre = [q(0, 0, 10), q(13, 0, 10), q(40, 0, 10)], sporgono = [q(2, -5, 6), q(15, -5, 6)];
-    const senzaPonte = rg.pmCostruisci([], sporgono, {}, { ...rg.PM_DI_SERIE, sfrangiatura: 0, sfrangiatura2: 0 }, tre);
-    const unPonte = rg.pmCostruisci([], sporgono, {}, { ...rg.PM_DI_SERIE, sfrangiatura: 0, sfrangiatura2: 0, ponti: 5 }, tre);
+    const senzaPonte = rg.pmCostruisci([], sporgono, {}, { ...FERMI, sfrangiatura: 0, sfrangiatura2: 0 }, tre);
+    const unPonte = rg.pmCostruisci([], sporgono, {}, { ...FERMI, sfrangiatura: 0, sfrangiatura2: 0, ponti: 5 }, tre);
     check('due macchie a 3 mm si uniscono, quella a 17 mm no: il salto resta; le macchie del primo livello senza ponte',
       [senzaPonte.ponti, senzaPonte.stop[1].livello.salti, unPonte.ponti, unPonte.stop[1].livello.salti, unPonte.stop[0].livello.salti, unPonte.forme.slice(0, 2).every((f) => Math.max(...f.map((p) => p.x)) - Math.min(...f.map((p) => p.x)) < 7)],
       [0, 2, 1, 1, 0, true]);
@@ -6814,13 +6854,13 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     const [conBuco] = rg.pmFerma(q(0, 0, 30), [q(10, 10, 10)], 1, giu);
     check('una macchia lontana resta com\'è, una tutta sotto sparisce, con una scura dentro resta col buco',
       [sola[0] === fuori, coperta.length, rg.pointInPolygon({ x: 15, y: 15 }, conBuco), rg.pointInPolygon({ x: 5, y: 5 }, conBuco), Math.abs(rg.polygonArea(conBuco) - (900 - 64)) < 4], [true, 0, false, true, true]);
-    const soloBuco = rg.pmCostruisci([], [q(0, 0, 30)], {}, rg.PM_DI_SERIE, [q(10, 10, 10)]);
+    const soloBuco = rg.pmCostruisci([], [q(0, 0, 30)], {}, FERMI, [q(10, 10, 10)]);
     const nelBuco = soloBuco.stop[0].livello.tratti.flat().filter((p) => p.x > 12 && p.x < 18 && p.y > 12 && p.y < 18);
     check('...e il raso di quella col buco non ci entra', [soloBuco.stop[0].livello.punti > 100, nelBuco.length], [true, 0]);
   }
   const pmTool = readFileSync(join(root, 'apps/pattern-macchie/src/tool.ts'), 'utf8');
   const pmWorker = readFileSync(join(root, 'apps/pattern-macchie/src/macchie.worker.ts'), 'utf8');
-  check('i progetti di prima si riaprono con base e punto sopra', /conQuelliDiPrima\(meta\.params/.test(pmTool) && /conBase: true, conSopra: true, \.\.\.p/.test(pmTool), true);
+  check('i progetti di prima si riaprono con base e punto sopra, e coi livelli sotto fermati', /conQuelliDiPrima\(\{ sovrapposti: false, \.\.\.\(meta\.params/.test(pmTool) && /conBase: true, conSopra: true, \.\.\.p/.test(pmTool), true);
   check('il calcolo gira in un Web Worker, che chiama il motore', [/new Worker\(new URL\('\.\/macchie\.worker\.ts'/.test(pmTool), /costruisciMacchie\(/.test(pmWorker)], [true, true]);
   check('...e durante il calcolo gli export sono fermi', /exportPronti\(false\)[\s\S]*worker\.postMessage/.test(pmTool), true);
 }
@@ -7068,8 +7108,8 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   check('l’ingombro regge centinaia di migliaia di punti', rg.rcRiquadro(quadrato, [{ punti: moltiPunti }]), { x0: -5, y0: -5, w: 310, h: 210 });
   const s = rg.rcStrati(e);
   // l'uscita (Lorenzo): passa sotto i moduli dopo, e il cambio ago avviene fuori
-  check('uno strato per modulo, ogni modulo un filo solo', [s.length, s.reduce((n, l) => n + l.polylines.length, 0)], [e.conti.moduli, e.conti.moduli + e.conti.movimentiLunghi]);
-  check('ogni modulo finisce con un\'uscita', [e.conti.uscite, e.oggetti.filter((o) => o.uscita).length, e.oggetti.filter((o, i) => o.uscita && (e.oggetti[i + 1]?.cella === o.cella)).length], [e.conti.moduli, e.conti.moduli, 0]);
+  check('uno strato per modulo e per pezzo da solo, ognuno un filo solo', [s.length, s.reduce((n, l) => n + l.polylines.length, 0), new Set(s.map((l) => l.id)).size], [e.conti.moduli + e.conti.pezziDaSoli, e.conti.moduli + e.conti.pezziDaSoli + e.conti.movimentiLunghi, s.length]);
+  check('ogni modulo e ogni pezzo da solo finisce con un\'uscita', [e.conti.uscite, e.oggetti.filter((o) => o.uscita).length, e.oggetti.filter((o, i) => o.uscita && (e.oggetti[i + 1]?.cella === o.cella)).length], [e.conti.moduli + e.conti.pezziDaSoli, e.conti.moduli + e.conti.pezziDaSoli, 0]);
   const oltre = (q) => Math.max(0 - q.x, q.x - 300, 0 - q.y, q.y - 200);
   check('il cambio ago è fuori: ogni modulo finisce oltre il contorno', s.every((l) => { const pl = l.polylines[l.polylines.length - 1]; return oltre(pl[pl.length - 1]) > P.uscitaFuoriMm * 0.8; }), true);
   const righeDelModulo = [0, 10, 30, 40, 20].map((y) => ({ tipo: 'catenella', t: [[0, y], [100, y]] }));
@@ -7095,9 +7135,31 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   check('senza memoria o con la memoria piena non si ferma niente', [rg.rcLeggiElenco(null).moduli.length, rg.rcScriviElenco({ setItem: () => { throw new Error('piena'); } }, diSerie), rg.rcLeggiElenco(memoriaProva({ 'rg-rete-catenella-moduli': 'rovinato' })).moduli.length], [0, false, 0]);
   // Lorenzo, 2026-11-04: «in maniera automatica si aggiungano pezzi ai moduli dove vicino ci sono i bordi e c'è del bianco»
   const conPezzi = rg.rcCostruisci(m, quadrato, P), senzaPezzi = rg.rcCostruisci(m, quadrato, { ...P, pezziSulBordo: false });
-  check('i pezzi sul bordo: più catenella, stessi moduli, stesse uscite, stessi cambi ago', [conPezzi.conti.pezzi > 0, conPezzi.conti.catenelle > senzaPezzi.conti.catenelle, conPezzi.conti.moduli === senzaPezzi.conti.moduli, conPezzi.conti.uscite === senzaPezzi.conti.uscite, rg.rcStrati(conPezzi).length === rg.rcStrati(senzaPezzi).length], [true, true, true, true, true]);
+  check('i pezzi sul bordo: più catenella, stessi moduli; uscite e cambi ago in più solo per i pezzi da soli', [conPezzi.conti.pezzi > 0, conPezzi.conti.catenelle > senzaPezzi.conti.catenelle, conPezzi.conti.moduli === senzaPezzi.conti.moduli, conPezzi.conti.uscite - senzaPezzi.conti.uscite, rg.rcStrati(conPezzi).length - rg.rcStrati(senzaPezzi).length], [true, true, true, conPezzi.conti.pezziDaSoli, conPezzi.conti.pezziDaSoli]);
   const passoFuori = conPezzi.oggetti.filter((o, i) => i && o.cella === conPezzi.oggetti[i - 1].cella && Math.hypot(o.punti[0][0] - conPezzi.oggetti[i - 1].punti.at(-1)[0], o.punti[0][1] - conPezzi.oggetti[i - 1].punti.at(-1)[1]) > 7).length;
   check('i pezzi senza salti: il filo ci arriva sulle linee', [passoFuori, conPezzi.conti.pezziSenzaStrada], [0, 0]);
+  // Lorenzo, 2026-11-05: «le imbastiture passano sopra il punto catenella. Non va per niente bene»
+  const corsaSuCucite = (rete) => {
+    const cucite = [], segno = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], Q = dx * dx + dy * dy, f = Q ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / Q)) : 0; return Math.hypot(p[0] - a[0] - f * dx, p[1] - a[1] - f * dy); };
+    let peggiore = 0;
+    for (const o of rete.oggetti) {
+      if (o.tipo === 'catenella') { for (let i = 1; i < o.t.length; i++) cucite.push([o.t[i - 1], o.t[i]]); continue; }
+      if (!o.collegamento) continue; // qui il modulo è di poche linee: i suoi passaggi ci stanno sopra per disegno e le uscite non hanno altra via. Sul modulo vero: sapere/tool/rete-catenella.md
+      let corsa = 0;
+      for (let i = 1; i < o.punti.length; i++) {
+        const a = o.punti[i - 1], b = o.punti[i], l = Math.hypot(b[0] - a[0], b[1] - a[1]), mz = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        const sopra = l > 0 && cucite.some(([A, B]) => { const dx = B[0] - A[0], dy = B[1] - A[1], lb = Math.hypot(dx, dy); return lb > 0 && Math.abs(mz[0] - A[0]) < 40 && Math.abs(mz[1] - A[1]) < 40 && segno(mz, A, B) <= 0.75 && Math.abs((b[0] - a[0]) * dx + (b[1] - a[1]) * dy) / (l * lb) > Math.SQRT1_2; });
+        corsa = sopra ? corsa + l : 0;
+        peggiore = Math.max(peggiore, corsa);
+      }
+    }
+    return peggiore;
+  };
+  const conInterniPezzi = rg.rcCostruisci(m, quadrato, { ...P, passaggiInterni: true });
+  check('le strade non seguono catenelle già cucite', [corsaSuCucite(conPezzi) < 10, corsaSuCucite(conInterniPezzi) < 12], [true, true]);
+  // l'ultima colonna ha pezzi a destra, che in fondo alla riga si cuciono da soli
+  const fondoRiga = [...new Set(conPezzi.oggetti.filter((o) => o.cella.pezzoDaSolo).map((o) => o.cella))];
+  check('un pezzo da solo ha un ago diverso da chi lo precede', fondoRiga.every((c) => { const i = conPezzi.oggetti.findIndex((o) => o.cella === c); return i > 0 && conPezzi.oggetti[i - 1].uscita && conPezzi.oggetti[i - 1].cella.colonna !== c.colonna; }), true);
   // Lorenzo, 2026-11-05: «si lavora sempre da sinistra a destra, quindi prima modulo e poi area infittita a destra»
   const mediaDiX = (l) => { const x = l.flatMap((o) => o.t.map((q) => q[0])); return x.reduce((u, v) => u + v, 0) / (x.length || 1); };
   const sequenza = [...new Set(conPezzi.oggetti.map((o) => o.cella))].map((c) => { const og = conPezzi.oggetti.filter((o) => o.cella === c && !o.uscita), primo = og.findIndex((o) => !o.pezzo), ultimo = og.length - 1 - [...og].reverse().findIndex((o) => !o.pezzo), xm = mediaDiX(og.filter((o) => !o.pezzo)); return { prima: og.slice(0, primo).filter((o) => o.tipo === 'catenella'), dopo: og.slice(ultimo + 1).filter((o) => o.tipo === 'catenella'), xm }; });
@@ -7130,6 +7192,13 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   const fitta = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40 }), piuFitta = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 15 });
   check('infittire: la soglia più bassa fa più linee e più catenella per cm²', [fitta.conti.lineeNuove > 0, piuFitta.conti.lineeNuove > fitta.conti.lineeNuove, fitta.conti.catenellaPerCm2 > e.conti.catenellaPerCm2], [true, true, true]);
   check('infittire non cambia quali moduli ci sono', fitta.conti.moduli, e.conti.moduli);
+  // Lorenzo, 2026-11-05: «dubbi sui punti di infittimento che non siano ben collegati. Sarebbe un problema perché significa che si sgancia la rete»
+  const distDaSegmento = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], Q = dx * dx + dy * dy, f = Q ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / Q)) : 0; return Math.hypot(p[0] - a[0] - f * dx, p[1] - a[1] - f * dy); };
+  const lineeCatenella = fitta.oggetti.filter((o) => o.tipo === 'catenella'), dentroQuadrato = (q) => q[0] > 8 && q[0] < 292 && q[1] > 8 && q[1] < 192; // vicino al bordo la linea dove arriva può essere tagliata via
+  const capiStaccati = lineeCatenella.filter((o) => o.nuovo && dentroQuadrato(o.t[0])).filter((o) => { let m = 9; for (const x of lineeCatenella) { if (x === o) continue; for (let i = 1; i < x.t.length; i++) m = Math.min(m, distDaSegmento(o.t[0], x.t[i - 1], x.t[i])); } return m > 0.05; });
+  check('ogni linea nuova parte dal centro di una linea', capiStaccati.length, 0);
+  const capiLontani = lineeCatenella.filter((o) => o.nuovo && dentroQuadrato(o.t.at(-1))).filter((o) => { let m = 9; for (const x of lineeCatenella) { if (x === o) continue; for (let i = 1; i < x.t.length; i++) m = Math.min(m, distDaSegmento(o.t.at(-1), x.t[i - 1], x.t[i])); } return m > 0.05; });
+  check('il capo lontano di ogni linea nuova cade sul centro della linea dove arriva', capiLontani.length, 0);
   const i1 = fitta.oggetti.findIndex((o) => o.nuovo && !o.pezzo), cat = fitta.oggetti[i1], pas = fitta.oggetti[i1 - 1];
   check('ogni linea nuova: passaggio all\'andata e catenella al ritorno, sullo stesso tracciato', [pas.tipo, cat.tipo, Math.hypot(pas.t[0][0] - cat.t[cat.t.length - 1][0], pas.t[0][1] - cat.t[cat.t.length - 1][1]) < 1e-9], ['passaggio', 'catenella', true]);
   const passiFitti = rg.rcStrati(fitta).flatMap((l) => l.polylines).filter((pl) => pl.some((q, i) => i && Math.hypot(q.x - pl[i - 1].x, q.y - pl[i - 1].y) > 7));
@@ -7150,6 +7219,12 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   const soglia40 = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true }, [{ anello: metaZona, magliaMassimaMm2: 40 }]);
   check('la soglia di un\'area non si porta dietro le linee più fitte di un\'altra', nuoveIn(conFinta, 0, 150) > 0 && nuoveIn(conFinta, 0, 150) <= nuoveIn(soglia40, 0, 150) * 2, true);
   check('la stessa variante dà lo stesso disegno, un\'altra no', [rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40 }).conti.punti === fitta.conti.punti, rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40, infittisciVariante: 2 }).oggetti.find((o) => o.nuovo)?.t[2]?.[0] !== cat.t[2][0]], [true, true]);
+  // Lorenzo, 2026-11-05: «io devo essere sicuro che il risultato tra stilista e tools delle catenelle è uguale se non migliorativo»
+  const dritta = [[0, 0], [16.5, 0]], diProva = rg.rcCatenella(dritta, { ...P, catenellaDiProva: true }), diSempre = rg.rcCatenella(dritta, P);
+  check('catenella di prova su 16,5 mm: 10 maglie, passo stirato a 1,64, prima a 0,6 e ultima a 1,1 dalla fine', [diProva.length, +diProva[0][0].toFixed(2), +(diProva[7][0] - diProva[0][0]).toFixed(2), +(16.5 - diProva.at(-1)[0]).toFixed(1)], [70, 0.6, 1.64, 1.1]);
+  check('spenta non cambia niente: la catenella di sempre', [diSempre.length, +(diSempre[7][0] - diSempre[0][0]).toFixed(2), +rg.rcCatenella(dritta, { ...P, catenellaDiProva: false })[0][0].toFixed(2)], [70, P.psilPassoMm, P.psilInizioMm]);
+  const ginocchio = rg.rcCatenella([[0, 0], [20, 0], [20, 20]], { ...P, catenellaDiProva: true }), staccoMax = Math.max(...ginocchio.filter((_, i) => i % 7 === 0).map((q) => Math.min(Math.abs(q[1]) + (q[0] > 20 ? q[0] - 20 : 0), Math.abs(q[0] - 20) + (q[1] < 0 ? -q[1] : 0))));
+  check('catenella di prova: all\'angolo taglia, con raggio 3 mm', staccoMax > 0.3 && staccoMax < 1.3, true);
   // misurato il 2026-11-04: PIFlagPsil 32 ce l'hanno anche i running normali, il psil vero ha PIStitchStrassLaser 4
   const letto = (index, flag, strass, stitch_count = 10, needle = 1) => ({ index, needle, stitch_count, parameters: [['PITipoPunto', '1'], ['PIFlagPsil', flag], ['PIStitchStrassLaser', strass]].map(([Key, Value]) => ({ Key, Value })) });
   check('il modello della catenella è il psil vero, non un running col flag 32', rg.rcScegliModelli([letto(0, '32', '0'), letto(1, '32', '4', 10, 7), letto(2, '16416', '0')]), { catenella: 1, running: 0, ago: 7 });

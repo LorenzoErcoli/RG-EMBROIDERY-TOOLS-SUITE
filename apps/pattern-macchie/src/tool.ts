@@ -11,7 +11,7 @@ import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';
-import { costruisciMacchie, macchiePerStilista, PARAMETRI_MACCHIE, type ParametriMacchie, type RisultatoMacchie } from './motore';
+import { costruisciMacchie, macchiePerStilista, PARAMETRI_MACCHIE, type ParametriMacchie, type RisultatoMacchie, type Strato } from './motore';
 
 /** I pattern pronti: la libreria condivisa del Generatore pattern, e quelli salvati nel Generatore su questo computer. */
 const PRESET_CONDIVISI: Record<string, PatternConfig> = (() => {
@@ -40,18 +40,21 @@ const ultimoPunto = (): Punto | null => {
 /** Il disegno nel file riapribile, se non pesa troppo (come nel Generatore pattern). */
 const MAX_DRAWING_KB = 256;
 
-type Ruolo = '' | 'pannello' | 'macchie' | 'macchie2';
-const RUOLI: Array<[Ruolo, string]> = [['', '— (non usare)'], ['pannello', 'Pannello (contorno)'], ['macchie', 'Macchie'], ['macchie2', 'Macchie, 2° livello']];
+type Ruolo = '' | 'pannello' | 'macchie' | 'macchie2' | 'macchie3';
+const RUOLI: Array<[Ruolo, string]> = [['', '— (non usare)'], ['pannello', 'Pannello (contorno)'], ['macchie', 'Macchie'], ['macchie2', 'Macchie, 2° livello'], ['macchie3', 'Macchie, 3° livello (il più alto)']];
 
-/** I parametri del raso che ogni livello ha per sé: il secondo ha gli stessi nomi con un 2 in fondo. */
+/** I parametri del raso che ogni livello ha per sé: il secondo e il terzo hanno gli stessi nomi con un 2 o un 3 in fondo. */
 const DEL_LIVELLO = ['daSinistra', 'rasoAngolo', 'rasoInterlinea', 'rasoPuntoMax', 'rasoFase', 'sfrangiatura', 'sfrangiaturaFuori'] as const;
 /**
  * Un progetto (o l'ultimo punto ricordato) di prima: base e punto sopra c'erano sempre, e si riapre così; un secondo
- * livello senza parametri suoi lavora come il primo, come lavorava allora.
+ * livello senza parametri suoi lavora come il primo, come lavorava allora, e un terzo come il secondo.
  */
 const conQuelliDiPrima = (p: Partial<ParametriMacchie>): Partial<ParametriMacchie> => {
   const out: Record<string, unknown> = { conBase: true, conSopra: true, ...p };
-  for (const k of DEL_LIVELLO) if (out[`${k}2`] === undefined && out[k] !== undefined) out[`${k}2`] = out[k];
+  for (const k of DEL_LIVELLO) {
+    if (out[`${k}2`] === undefined && out[k] !== undefined) out[`${k}2`] = out[k];
+    if (out[`${k}3`] === undefined && out[`${k}2`] !== undefined) out[`${k}3`] = out[`${k}2`];
+  }
   return out as Partial<ParametriMacchie>;
 };
 
@@ -62,21 +65,25 @@ const SCALE_MODES: Array<[string, string]> = [
 ];
 
 /** I colori degli stop: la base, il raso delle macchie, il punto sopra (con le zone, raso e punto sopra si ripetono). */
-const COLORI_STOP = { base: '#8a6d4e', raso: '#1f1a17', raso2: '#6b3fa0', sopra: '#c8952e' } as const;
+const COLORI_STOP = { base: '#8a6d4e', raso: '#1f1a17', raso2: '#6b3fa0', raso3: '#0f7a5a', sopra: '#c8952e' } as const;
 const FILI = [
   { chiave: 'base', nome: 'Base', colore: '#8a6d4e' },
   { chiave: 'raso', nome: 'Raso', colore: '#1f1a17' },
   { chiave: 'raso2', nome: 'Raso, 2° livello', colore: '#6b3fa0' },
+  { chiave: 'raso3', nome: 'Raso, 3° livello', colore: '#0f7a5a' },
   { chiave: 'sopra', nome: 'Punto sopra', colore: '#c8952e' },
   { chiave: 'sotto', nome: 'Passaggi sotto il raso', colore: '#3b78c4' },
-  { chiave: 'fra', nome: 'Passaggi fra le macchie, 1° livello', colore: '#0a9396' },
+  { chiave: 'fra', nome: 'Passaggi fra le macchie, livelli sotto', colore: '#0a9396' },
+  { chiave: 'aVista', nome: 'Passaggi a vista, da rifilare', colore: '#e0115f' },
 ] as const;
 type ChiaveFilo = typeof FILI[number]['chiave'];
-/** I salti nell'anteprima: quelli del raso viola (del secondo livello, se ce n'è uno: arancio), quelli del punto sopra rossi. */
+/** I salti nell'anteprima: quelli del raso viola (del secondo livello arancio, del terzo verdi), quelli del punto sopra rossi. */
 const COLORE_SALTI_RASO = '#8e3fd0';
 const COLORE_SALTI_RASO_2 = '#ee7a12';
-const dueLivelli = (r: RisultatoMacchie) => r.stop.some((st) => st.strato === 2);
-const saltiDelRaso = (r: RisultatoMacchie, strato: 1 | 2) => r.stop.filter((st) => st.tipo === 'raso' && st.strato === strato).reduce((n, st) => n + st.livello.salti, 0);
+const COLORE_SALTI_RASO_3 = '#12a150';
+/** I livelli di macchie del ricamo, dal primo in su. */
+const livelliDi = (r: RisultatoMacchie): Strato[] => ([1, 2, 3] as const).filter((n) => r.stop.some((st) => st.strato === n));
+const saltiDelRaso = (r: RisultatoMacchie, strato: Strato) => r.stop.filter((st) => st.tipo === 'raso' && st.strato === strato).reduce((n, st) => n + st.livello.salti, 0);
 const COLORE_SALTI_SOPRA = '#d62020';
 
 type Campo = { nome: keyof ParametriMacchie; etichetta: string; unita: string; passo: number; min: number; max?: number; aiuto?: string; scelte?: Array<[string, string]> };
@@ -86,7 +93,7 @@ const CAMPI_COSA: Campo[] = [
   { nome: 'conSopra', etichetta: 'Il punto sopra le macchie', unita: '', passo: 1, min: 0,
     aiuto: 'Lo stesso punto della base sopra il raso, dentro le macchie. Spento: solo il raso. Spenti tutti e due, il pattern e il pannello non servono.' },
   { nome: 'rasoDiStilista', etichetta: 'In Stilista, il raso lo fa Stilista', unita: '', passo: 1, min: 0,
-    aiuto: 'Con «Invia a Stilista» ogni macchia torna come una copia del riempimento selezionato in Stilista (il modello: selezionalo prima di inviare), nella direzione del raso, con l’ingresso, l’uscita e l’ordine di qui. L’anteprima e il DST restano col raso di qui. Coi due livelli il modello è uno solo, e fra un riempimento e l’altro Stilista salta: i passaggi fra le macchie non si cuciono.' },
+    aiuto: 'Con «Invia a Stilista» ogni macchia torna come una copia del riempimento selezionato in Stilista (il modello: selezionalo prima di inviare), nella direzione del raso, con l’ingresso, l’uscita e l’ordine di qui. L’anteprima e il DST restano col raso di qui. Con più livelli il modello è uno solo, e fra un riempimento e l’altro Stilista salta: i passaggi fra le macchie non si cuciono.' },
 ];
 const CAMPI_RASO: Campo[] = [
   { nome: 'daSinistra', etichetta: 'Le macchie da sinistra a destra', unita: '', passo: 1, min: 0,
@@ -103,11 +110,16 @@ const CAMPI_RASO: Campo[] = [
 ];
 /** Il pannellino del secondo livello: gli stessi campi, coi parametri suoi (Lorenzo, 2026-11-03: «ogni livello di macchia deve avere il suo pannellino dei parametri»). */
 const CAMPI_RASO_2: Campo[] = CAMPI_RASO.map((f) => ({ ...f, nome: `${f.nome}2` as keyof ParametriMacchie }));
+const CAMPI_RASO_3: Campo[] = CAMPI_RASO.map((f) => ({ ...f, nome: `${f.nome}3` as keyof ParametriMacchie }));
 const CAMPI_FRA_I_LIVELLI: Campo[] = [
-  { nome: 'secondoMargine', etichetta: 'Il primo livello entra sotto il secondo di', unita: 'mm', passo: 0.1, min: 0,
-    aiuto: 'Dove una macchia del primo livello sta sotto una del secondo si ferma: ci entra solo di tanto, così non si sovrappone troppo filo.' },
-  { nome: 'secondoVista', etichetta: 'Fra le macchie del primo livello, a vista al più', unita: 'mm', passo: 0.5, min: 0,
-    aiuto: 'Il filo da una macchia alla dopo corre sotto il secondo livello e sotto le macchie ancora da cucire. Dove nessuna lo copre attraversa lo spazio a vista, il meno possibile e al più di tanto per volta: così non si salta. 0 = mai a vista: lì si salta.' },
+  { nome: 'sovrapposti', etichetta: 'I livelli sotto restano interi: quelli sopra si cuciono sopra', unita: '', passo: 1, min: 0,
+    aiuto: 'Spenta: dove una macchia sta sotto una di un livello più alto si ferma, e ci entra solo di «Un livello entra sotto quelli sopra di».' },
+  { nome: 'secondoMargine', etichetta: 'Un livello entra sotto quelli sopra di', unita: 'mm', passo: 0.1, min: 0,
+    aiuto: 'Solo coi livelli sotto non interi: dove una macchia sta sotto una di un livello più alto si ferma, e ci entra solo di tanto.' },
+  { nome: 'secondoVista', etichetta: 'Fra le macchie dei livelli sotto, a vista al più', unita: 'mm', passo: 0.5, min: 0,
+    aiuto: 'Il filo da una macchia alla dopo corre sotto i livelli più alti e sotto le macchie ancora da cucire. Dove nessuna lo copre attraversa lo spazio a vista, il meno possibile e al più di tanto per volta: così non si salta. Mai sopra il raso già cucito. 0 = mai a vista: lì si salta.' },
+  { nome: 'vistaVicini', etichetta: 'I passaggi a vista si avvicinano a quelli già fatti, entro', unita: 'mm', passo: 1, min: 0,
+    aiuto: 'Per rifilare a mano più in fretta: attraversare lo spazio entro questa distanza da un altro passaggio a vista costa meno, e il filo ci va se può arrivarci coperto. Non è forzato. 0 = ognuno dove è più corto.' },
 ];
 const CAMPI_SOPRA: Campo[] = [
   { nome: 'passaggioMax', etichetta: 'Passaggio nascosto, fino a', unita: 'mm', passo: 5, min: 0,
@@ -131,7 +143,7 @@ const CAMPI_ZONE: Campo[] = [
 ];
 const CAMPI_PONTI: Campo[] = [
   { nome: 'ponti', etichetta: 'Unisci le macchie che si seguono e distano meno di', unita: 'mm', passo: 0.5, min: 0,
-    aiuto: 'Un ponte di raso fra le due: il filo passa senza salto. Cambia il disegno delle macchie. Con due livelli i ponti stanno solo sul 2°, anche dove il filo del 1° ci può passare sotto. Oltre questa distanza nessun ponte: lì resta il salto o il filo a vista. 0 = mai.' },
+    aiuto: 'Un ponte di raso fra le due: il filo passa senza salto. Cambia il disegno delle macchie. Con più livelli i ponti stanno solo sul più alto, anche dove il filo di quelli sotto ci può passare sotto. Oltre questa distanza nessun ponte: lì resta il salto o il filo a vista. 0 = mai.' },
   { nome: 'pontiLarghezza', etichetta: 'Larghezza del ponte', unita: 'mm', passo: 0.5, min: 1 },
 ];
 
@@ -147,6 +159,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
         <div class="rg-cluster">
           <button id="simulaBtn" class="rg-button rg-button--ghost rg-button--small" aria-pressed="false" title="Il simulatore: il filo si cuce sullo schermo nell'ordine del DST">Simula</button>
           <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
+          <label class="rg-choice" title="Se è spenta, il ricamo si rifà solo quando premi Genera: così cambi i campi senza aspettare il calcolo."><input type="checkbox" id="autoCalcolo"><span>Ricalcola da solo</span></label>
           <button id="genBtn" class="rg-button rg-button--secondary rg-button--small">Genera</button>
           ${BOTTONE_INVIA_STILISTA()}
           <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
@@ -179,19 +192,19 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     : { nome: Object.keys(PRESET_CONDIVISI)[0] ?? '', config: Object.values(PRESET_CONDIVISI)[0] ?? ({} as PatternConfig) };
   const ricordaPunto = () => { try { localStorage.setItem(ULTIMO_KEY, JSON.stringify({ pattern, params: par })); } catch { /* senza memoria si riparte dai valori di serie */ } };
   let risultato: RisultatoMacchie | null = null;
-  const visibili: Record<ChiaveFilo | 'salti' | 'contorni', boolean> = { base: true, raso: true, raso2: true, sopra: true, sotto: false, fra: true, salti: true, contorni: false };
+  const visibili: Record<ChiaveFilo | 'salti' | 'contorni', boolean> = { base: true, raso: true, raso2: true, raso3: true, sopra: true, sotto: false, fra: true, aVista: true, salti: true, contorni: false };
   let testoDisegno = 'Nessun disegno caricato.';
   let simulando = false;
   let simulatore: Simulatore | null = null;
 
   /** Base e punto sopra sono quelli che chiedono il pattern e il pannello. */
   const serveIlPattern = () => par.conBase || par.conSopra;
-  /** Il contorno del pannello (il più grande fra quelli col ruolo) e le macchie dei due livelli. */
-  function geometria(): { pannello: Polyline | null; macchie: Polyline[]; secondo: Polyline[] } {
+  /** Il contorno del pannello (il più grande fra quelli col ruolo) e le macchie dei tre livelli. */
+  function geometria(): { pannello: Polyline | null; macchie: Polyline[]; secondo: Polyline[]; terzo: Polyline[] } {
     const anelli = (r: Ruolo) => (model?.choices ?? []).filter((c) => ruoli[c.id] === r)
       .flatMap((c) => c.boundary.paths.filter((p) => p.points.length >= 3).map((p) => p.points));
     const pannelli = anelli('pannello').sort((a, b) => Math.abs(polygonArea(b)) - Math.abs(polygonArea(a)));
-    return { pannello: pannelli[0] ?? null, macchie: anelli('macchie'), secondo: anelli('macchie2') };
+    return { pannello: pannelli[0] ?? null, macchie: anelli('macchie'), secondo: anelli('macchie2'), terzo: anelli('macchie3') };
   }
 
   // ---- il pannello dei parametri ----
@@ -223,7 +236,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
         sel.className = 'rg-select';
         sel.id = 'f-' + f.nome;
         for (const [v, l] of f.scelte) { const o = document.createElement('option'); o.value = v; o.textContent = l; o.selected = String(par[f.nome]) === v; sel.appendChild(o); }
-        sel.addEventListener('change', () => { (par as Record<string, unknown>)[f.nome] = sel.value; genera(); });
+        sel.addEventListener('change', () => { (par as Record<string, unknown>)[f.nome] = sel.value; daRifare(); });
         lab.appendChild(sel);
         grid.appendChild(lab);
         continue;
@@ -238,7 +251,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
         inp.addEventListener('change', () => {
           (par as Record<string, unknown>)[f.nome] = inp.checked;
           if (f.nome === 'conBase' || f.nome === 'conSopra') buildPanel();   // (il pattern e il punto sopra compaiono solo se servono)
-          genera();
+          daRifare();
         });
         lab.append(inp, document.createTextNode(' ' + f.etichetta));
         grid.appendChild(lab);
@@ -259,7 +272,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       inp.value = String(par[f.nome]);
       inp.addEventListener('change', () => {
         const v = parseFloat(inp.value);
-        if (Number.isFinite(v)) { (par as Record<string, unknown>)[f.nome] = Math.min(f.max ?? Infinity, Math.max(f.min, v)); genera(); }
+        if (Number.isFinite(v)) { (par as Record<string, unknown>)[f.nome] = Math.min(f.max ?? Infinity, Math.max(f.min, v)); daRifare(); }
       });
       const unit = document.createElement('span');
       unit.textContent = f.unita;
@@ -336,8 +349,8 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
         if (v === (ruoli[c.id] ?? '')) o.selected = true;
         sel.appendChild(o);
       }
-      // (col ruolo del secondo livello compaiono i suoi parametri)
-      sel.addEventListener('change', () => { ruoli[c.id] = sel.value as Ruolo; buildPanel(); disegnaContorni(); genera(); });
+      // (col ruolo di un livello compaiono i suoi parametri)
+      sel.addEventListener('change', () => { ruoli[c.id] = sel.value as Ruolo; buildPanel(); disegnaContorni(); daRifare(); });
       row.append(sw, code, sel);
       ul.appendChild(row);
     }
@@ -396,18 +409,18 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       + (l.livello ? ` — ${l.livello.punti.toLocaleString('it-IT')} punti, ${l.livello.salti} salti` : '') + '</p>').join('');
     const descrivi = (v: number[]) => { const f = v.slice().sort((a, b) => a - b); return `${f.length}` + (f.length ? ` (fino a 5 mm ${f.filter((d) => d <= 5).length}, oltre 12 mm ${f.filter((d) => d > 12).length}, il più lungo ${f[f.length - 1].toFixed(1)} mm)` : ''); };
     const dettaglio = r
-      ? `<p class="rg-field__help rg-param-grid__wide">Salti fra una macchia e l'altra — ${dueLivelli(r) ? `raso del 1° livello: ${descrivi(r.saltiFra.raso)}; raso del 2° livello: ${descrivi(r.saltiFra.raso2)}, che sopra non ha niente che copra il filo` : `raso: ${descrivi(r.saltiFra.raso)}`}; punto sopra: ${descrivi(r.saltiFra.sopra)}`
+      ? `<p class="rg-field__help rg-param-grid__wide">Salti fra una macchia e l'altra — ${livelliDi(r).length > 1 ? livelliDi(r).map((n) => `raso del ${n}° livello: ${descrivi(n === 3 ? r.saltiFra.raso3 : n === 2 ? r.saltiFra.raso2 : r.saltiFra.raso)}`).join('; ') + ' (l’ultimo sopra non ha niente che copra il filo)' : `raso: ${descrivi([...r.saltiFra.raso, ...r.saltiFra.raso2, ...r.saltiFra.raso3])}`}; punto sopra: ${descrivi(r.saltiFra.sopra)}`
         + ` · dentro le macchie: raso ${r.passaggiScoperti}, punto sopra ${r.saltiDentro}` + (r.ponti ? ` · ponti: ${r.ponti}` : '')
         + (r.tolto > 0.5 ? ` · punto sopra tolto: ${r.tolto.toFixed(0)} mm` : '') + '</p>'
-      + (r.sottoIlSecondo.collegate ? `<p class="rg-field__help rg-param-grid__wide">Primo livello: ${r.sottoIlSecondo.collegate} passaggi invece di un salto, ${r.sottoIlSecondo.mm.toFixed(0)} mm di filo`
-        + (r.sottoIlSecondo.attraversamenti ? `, di cui a vista ${r.sottoIlSecondo.aVista.toFixed(0)} mm in ${r.sottoIlSecondo.attraversamenti} attraversamenti` : ', tutti coperti')
+      + (r.sottoIlSecondo.collegate ? `<p class="rg-field__help rg-param-grid__wide">Livelli sotto: ${r.sottoIlSecondo.collegate} passaggi invece di un salto, ${r.sottoIlSecondo.mm.toFixed(0)} mm di filo`
+        + (r.sottoIlSecondo.attraversamenti ? `, di cui a vista ${r.sottoIlSecondo.aVista.toFixed(0)} mm in ${r.sottoIlSecondo.attraversamenti} attraversamenti (il giro per rifilarli a mano: ${r.sottoIlSecondo.giro.toFixed(0)} mm)` : ', tutti coperti')
         + (par.rasoDiStilista ? ' (non col raso di Stilista: lì si salta)' : '') + '</p>' : '')
       : '';
     const caselle = FILI.map((l) => `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-livello="${l.chiave}"${visibili[l.chiave] ? ' checked' : ''}>`
       + `<span class="macchie-ink" style="--ink:${l.colore}"></span>${l.nome}</label>`).join('');
     box.innerHTML = stop + dettaglio + caselle
       + `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-livello="salti"${visibili.salti ? ' checked' : ''}> I salti, tratteggiati:`
-      + ` <span class="macchie-ink" style="--ink:${COLORE_SALTI_RASO}"></span>del raso${r && dueLivelli(r) ? `, <span class="macchie-ink" style="--ink:${COLORE_SALTI_RASO_2}"></span>del raso del 2° livello` : ''}, <span class="macchie-ink" style="--ink:${COLORE_SALTI_SOPRA}"></span>del punto sopra</label>`
+      + ` <span class="macchie-ink" style="--ink:${COLORE_SALTI_RASO}"></span>del raso${r && r.stop.some((st) => st.strato === 2) ? `, <span class="macchie-ink" style="--ink:${COLORE_SALTI_RASO_2}"></span>del raso del 2° livello` : ''}${r && r.stop.some((st) => st.strato === 3) ? `, <span class="macchie-ink" style="--ink:${COLORE_SALTI_RASO_3}"></span>del raso del 3° livello` : ''}, <span class="macchie-ink" style="--ink:${COLORE_SALTI_SOPRA}"></span>del punto sopra</label>`
       + `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-livello="contorni"${visibili.contorni ? ' checked' : ''}> Il contorno delle macchie (coi ponti)</label>`;
     return box;
   }
@@ -416,27 +429,35 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     const panel = $('panel');
     const aperti = new Set([...panel.querySelectorAll<HTMLDetailsElement>('details[data-sezione]')].filter((x) => x.open).map((x) => x.dataset.sezione!));
     const primaVolta = !panel.childElementCount;
-    // (quando compaiono i due livelli, i loro due pannellini si aprono)
-    const eranoDue = !!panel.querySelector('details[data-sezione="raso2"]');
+    // (quando compaiono più livelli, i loro pannellini si aprono)
+    const cerano = new Set([...panel.querySelectorAll<HTMLDetailsElement>('details[data-sezione^="raso"]')].map((x) => x.dataset.sezione!));
     const scroll = panel.scrollTop;
     panel.innerHTML = '';
     const disegno = headSection('01', 'Disegno');
     disegno.appendChild(disegnoGrid());
     panel.appendChild(disegno);
-    const dueLivelli = geometria().secondo.length > 0;
+    const g = geometria();
+    const piuLivelli = [g.macchie, g.secondo, g.terzo].filter((m) => m.length).length > 1;
     const sezioni: Array<[string, string, HTMLElement]> = [
       ['cosa', 'Cosa ricamare', campi(CAMPI_COSA)],
       ...(serveIlPattern() ? [['pattern', 'Pattern della base', patternGrid()] as [string, string, HTMLElement]] : []),
-      ...(dueLivelli
-        ? [['raso', 'Raso, 1° livello', campi(CAMPI_RASO)], ['raso2', 'Raso, 2° livello', campi(CAMPI_RASO_2)], ['livelli', 'Fra i due livelli', campi(CAMPI_FRA_I_LIVELLI)]] as Array<[string, string, HTMLElement]>
-        : [['raso', 'Raso delle macchie', campi(CAMPI_RASO)]] as Array<[string, string, HTMLElement]>),
+      ...(piuLivelli
+        ? [
+          ...(g.macchie.length ? [['raso', 'Raso, 1° livello', campi(CAMPI_RASO)]] : []),
+          ...(g.secondo.length ? [['raso2', 'Raso, 2° livello', campi(CAMPI_RASO_2)]] : []),
+          ...(g.terzo.length ? [['raso3', 'Raso, 3° livello', campi(CAMPI_RASO_3)]] : []),
+          ['livelli', 'Fra i livelli', campi(CAMPI_FRA_I_LIVELLI)],
+        ] as Array<[string, string, HTMLElement]>
+        : g.terzo.length ? [['raso3', 'Raso delle macchie', campi(CAMPI_RASO_3)]] as Array<[string, string, HTMLElement]>
+          : g.secondo.length ? [['raso2', 'Raso delle macchie', campi(CAMPI_RASO_2)]] as Array<[string, string, HTMLElement]>
+            : [['raso', 'Raso delle macchie', campi(CAMPI_RASO)]] as Array<[string, string, HTMLElement]>),
       ...(par.conSopra ? [['sopra', 'Punto sopra le macchie', campi(CAMPI_SOPRA)] as [string, string, HTMLElement]] : []),
       ['ponti', 'Macchie vicine', campi(CAMPI_PONTI)],
       ['zone', 'Zone', campi(CAMPI_ZONE)],
       ['programma', 'Programma', livelliGrid()],
     ];
     sezioni.forEach(([chiave, titolo, corpo], k) => {
-      const det = accordionSection(String(k + 2).padStart(2, '0'), titolo, corpo, (dueLivelli && !eranoDue && (chiave === 'raso' || chiave === 'raso2')) || (primaVolta ? chiave === 'cosa' || chiave === 'pattern' || chiave === 'programma' : aperti.has(chiave) || chiave === 'cosa'));
+      const det = accordionSection(String(k + 2).padStart(2, '0'), titolo, corpo, (piuLivelli && !cerano.has(chiave) && chiave.startsWith('raso')) || (primaVolta ? chiave === 'cosa' || chiave === 'pattern' || chiave === 'programma' : aperti.has(chiave) || chiave === 'cosa'));
       det.dataset.sezione = chiave;
       panel.appendChild(det);
     });
@@ -447,8 +468,8 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
 
   /**
    * I ruoli di un disegno nuovo. Il colore più grande fa il pannello: con la base o il punto sopra sempre, senza solo se è
-   * davvero un contorno (un tracciato solo, attorno a tutto il resto). Degli altri, se sono due, il primo sono le macchie e
-   * il secondo il 2° livello (dalla selezione di Stilista: i due stop, nell'ordine); se no, tutti macchie.
+   * davvero un contorno (un tracciato solo, attorno a tutto il resto). Degli altri, se sono due o tre, il primo sono le macchie
+   * e i seguenti il 2° e il 3° livello (dalla selezione di Stilista: gli stop, nell'ordine); se no, tutti macchie.
    */
   function ruoliDiSerie(colori: BoundaryChoice[]) {
     const area = (c: BoundaryChoice) => (c.bounds.maxX - c.bounds.minX) * (c.bounds.maxY - c.bounds.minY);
@@ -456,7 +477,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     const contiene = (a: BoundaryChoice, b: BoundaryChoice) => a.bounds.minX <= b.bounds.minX && a.bounds.minY <= b.bounds.minY && a.bounds.maxX >= b.bounds.maxX && a.bounds.maxY >= b.bounds.maxY;
     const pannello = colori.length > 1 && (serveIlPattern() || (grande.pathCount === 1 && colori.every((c) => contiene(grande, c)))) ? grande : null;
     const resto = colori.filter((c) => c !== pannello);
-    for (const c of colori) ruoli[c.id] = c === pannello ? 'pannello' : resto.length === 2 && c === resto[1] ? 'macchie2' : 'macchie';
+    for (const c of colori) ruoli[c.id] = c === pannello ? 'pannello' : resto.length >= 2 && resto.length <= 3 && c === resto[1] ? 'macchie2' : resto.length === 3 && c === resto[2] ? 'macchie3' : 'macchie';
   }
 
   // ---- import ----
@@ -473,7 +494,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     risultato = null;
     buildPanel();
     disegnaContorni();
-    genera();
+    daRifare();
   }
 
   // ---- il calcolo, in un processo a parte (Web Worker): la pagina resta libera ----
@@ -487,11 +508,31 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   function exportPronti(si: boolean) {
     for (const id of ['exportBtn', 'exportDstBtn']) ($(id) as HTMLButtonElement).disabled = !si;
   }
+  /**
+   * Il ricamo si rifà solo con «Genera», salvo «Ricalcola da solo» (Lorenzo, 2026-11-06: «appena modifico una cosa lui
+   * inizia a calcolare. invece dovrebbe calcolare solo se avvio genera»). Quando cambia qualcosa l'anteprima resta quella
+   * di prima, lo si dice, e gli export si fermano finché non si rigenera: varrebbero per i parametri vecchi.
+   */
+  let superato = false;
+  let autoCalcolo = false;
+  try { autoCalcolo = localStorage.getItem('pattern-macchie.auto') === '1'; } catch { /* senza archivio resta spento */ }
+  function daRifare() {
+    if (autoCalcolo) { genera(); return; }
+    // (un calcolo partito prima non serve più: si ferma, così non tiene occupato il computer)
+    idCalcolo++;
+    window.clearTimeout(attesa);
+    if (occupato) { worker?.terminate(); worker = null; occupato = false; }
+    superato = true;
+    exportPronti(false);
+    $('genBtn').classList.replace('rg-button--secondary', 'rg-button--primary');
+    if (!model) return;
+    $('status').textContent = risultato ? "Cambiato qualcosa: premi Genera per rifare il ricamo (l'anteprima è quella di prima)." : 'Premi Genera per fare il ricamo.';
+  }
   function genera() {
-    const { pannello, macchie, secondo } = geometria();
+    const { pannello, macchie, secondo, terzo } = geometria();
     if (!model) { $('status').textContent = 'Carica prima un disegno.'; return; }
     if (!pannello && serveIlPattern()) { $('status').textContent = 'Dai a un colore il ruolo «Pannello»: serve per la base e il punto sopra.'; return; }
-    if (!macchie.length && !secondo.length) { $('status').textContent = 'Dai a un colore il ruolo «Macchie».'; return; }
+    if (!macchie.length && !secondo.length && !terzo.length) { $('status').textContent = 'Dai a un colore il ruolo «Macchie».'; return; }
     ricordaPunto();
     const mioId = ++idCalcolo;
     window.clearTimeout(attesa);
@@ -505,11 +546,13 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     $('status').textContent = 'Calcolo…';
     const finito = (r: RisultatoMacchie | null, errore?: string) => {
       occupato = false;
+      superato = false;
+      $('genBtn').classList.replace('rg-button--primary', 'rg-button--secondary');
       exportPronti(true);
       risultato = r;
       if (!r) { $('status').textContent = 'Errore: ' + errore; return; }
       const punti = r.base.punti + r.raso.punti + r.sopra.punti;
-      $('status').textContent = `${macchie.length + secondo.length} macchie · ${(par.conBase ? 1 : 0) + r.stop.length} stop · salti: ${dueLivelli(r) ? `raso 1° livello ${saltiDelRaso(r, 1)}, 2° livello ${saltiDelRaso(r, 2)}` : `raso ${r.raso.salti}`}` + (par.conSopra ? `, punto sopra ${r.sopra.salti}` : '')
+      $('status').textContent = `${macchie.length + secondo.length + terzo.length} macchie · ${(par.conBase ? 1 : 0) + r.stop.length} stop · salti: ${livelliDi(r).length > 1 ? 'raso ' + livelliDi(r).map((n) => `${n}° livello ${saltiDelRaso(r, n)}`).join(', ') : `raso ${r.raso.salti}`}` + (par.conSopra ? `, punto sopra ${r.sopra.salti}` : '')
         + (r.ponti ? ` · ${r.ponti} ponti` : '') + ` · ${(r.tempoMs / 1000).toFixed(1)} s`;
       $('points').textContent = ` · ${punti.toLocaleString('it-IT')} punti`;
       aggiornaProgramma();
@@ -519,7 +562,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       // senza worker si calcola qui, come prima (un attimo perché la riga di stato si veda: la pagina si blocca)
       attesa = window.setTimeout(() => {
         if (mioId !== idCalcolo) return;
-        try { finito(costruisciMacchie(pannello ?? [], macchie, pattern.config, par, secondo)); } catch (e) { console.error(e); finito(null, (e as Error).message); }
+        try { finito(costruisciMacchie(pannello ?? [], macchie, pattern.config, par, secondo, terzo)); } catch (e) { console.error(e); finito(null, (e as Error).message); }
       }, 30);
       return;
     }
@@ -535,7 +578,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       senzaWorker = true;
       if (mioId === idCalcolo) genera();
     };
-    worker.postMessage({ id: mioId, pannello: pannello ?? [], macchie, secondo, pattern: pattern.config, par: { ...par } });
+    worker.postMessage({ id: mioId, pannello: pannello ?? [], macchie, secondo, terzo, pattern: pattern.config, par: { ...par } });
   }
 
   // ---- l'anteprima ----
@@ -556,10 +599,11 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
 
   /** Il disegno com'è arrivato: il pannello col tratto, le macchie in trasparenza. */
   function contorniSvg(opacita: number): string {
-    const { pannello, macchie, secondo } = geometria();
+    const { pannello, macchie, secondo, terzo } = geometria();
     return (pannello ? `<polygon points="${d(pannello)}" fill="none" stroke="#c0392b" stroke-width="0.3"/>` : '')
       + (macchie.length ? `<path d="${percorso(macchie.map((m) => [...m, m[0]]))}" fill="#e8c547" fill-opacity="${opacita}" stroke="#b8941f" stroke-width="0.15"/>` : '')
-      + (secondo.length ? `<path d="${percorso(secondo.map((m) => [...m, m[0]]))}" fill="#8e6bbf" fill-opacity="${opacita}" stroke="#6b3fa0" stroke-width="0.15"/>` : '');
+      + (secondo.length ? `<path d="${percorso(secondo.map((m) => [...m, m[0]]))}" fill="#8e6bbf" fill-opacity="${opacita}" stroke="#6b3fa0" stroke-width="0.15"/>` : '')
+      + (terzo.length ? `<path d="${percorso(terzo.map((m) => [...m, m[0]]))}" fill="#4fae8c" fill-opacity="${opacita}" stroke="#0f7a5a" stroke-width="0.15"/>` : '');
   }
 
   function disegnaContorni() {
@@ -573,18 +617,18 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     if (!risultato) { disegnaContorni(); return; }
     if (simulando && simula()) { if (adatta) pz.fit(); return; }
     const r = risultato;
-    const linee: Record<ChiaveFilo, Polyline[]> = { base: r.base.tratti, raso: r.vista.raso, raso2: r.vista.raso2, sopra: r.vista.sopra, sotto: r.vista.sotto, fra: r.vista.fra };
+    const linee: Record<ChiaveFilo, Polyline[]> = { base: r.base.tratti, raso: r.vista.raso, raso2: r.vista.raso2, raso3: r.vista.raso3, sopra: r.vista.sopra, sotto: r.vista.sotto, fra: r.vista.fra, aVista: r.vista.aVista };
     // un solo tracciato per filo, al decimo di millimetro: su un pannello di 400.000 punti l'anteprima a una linea per
     // tratto era un SVG da 8 MB con 16.600 elementi, pesante da ridisegnare a ogni zoom (2026-10-27)
     const fili = FILI.filter((l) => visibili[l.chiave])
-      .map((l) => `<path d="${percorso(linee[l.chiave])}" fill="none" stroke="${l.colore}" stroke-width="${l.chiave === 'raso' || l.chiave === 'raso2' ? 0.1 : l.chiave === 'sotto' ? 0.2 : l.chiave === 'fra' ? 0.3 : 0.14}" stroke-linejoin="round"/>`)
+      .map((l) => `<path d="${percorso(linee[l.chiave])}" fill="none" stroke="${l.colore}" stroke-width="${l.chiave === 'raso' || l.chiave === 'raso2' || l.chiave === 'raso3' ? 0.1 : l.chiave === 'sotto' ? 0.2 : l.chiave === 'fra' ? 0.3 : l.chiave === 'aVista' ? 0.6 : 0.14}" stroke-linejoin="round"/>`)
       .join('');
     // (i salti del raso e quelli del punto sopra di colori diversi: Lorenzo, 2026-10-28, «per capire perché ci sono più
     // salti che escono dalla stessa macchia»)
     const saltiDi = (tr: Polyline[], colore: string) => `<path d="${tr.slice(1).map((t, i) => percorso([[tr[i].at(-1)!, t[0]]])).join('')}" fill="none" stroke="${colore}" stroke-width="0.3" stroke-dasharray="1 0.6"/>`;
     // (uno stop alla volta: fra due stop il filo è tagliato, non è un salto)
-    const delRaso = (strato: 1 | 2, colore: string) => r.stop.filter((st) => st.tipo === 'raso' && st.strato === strato).map((st) => saltiDi(st.livello.tratti, colore)).join('');
-    const salti = visibili.salti ? delRaso(1, COLORE_SALTI_RASO) + delRaso(2, COLORE_SALTI_RASO_2) + saltiDi(r.sopra.tratti, COLORE_SALTI_SOPRA) : '';
+    const delRaso = (strato: Strato, colore: string) => r.stop.filter((st) => st.tipo === 'raso' && st.strato === strato).map((st) => saltiDi(st.livello.tratti, colore)).join('');
+    const salti = visibili.salti ? delRaso(1, COLORE_SALTI_RASO) + delRaso(2, COLORE_SALTI_RASO_2) + delRaso(3, COLORE_SALTI_RASO_3) + saltiDi(r.sopra.tratti, COLORE_SALTI_SOPRA) : '';
     const forme = visibili.contorni ? `<path d="${percorso(r.forme.map((f) => [...f, f[0]]))}" fill="none" stroke="#2e8b57" stroke-width="0.15"/>` : '';
     $('layer').innerHTML = cornice(contorniSvg(0.12) + fili + forme + salti);
     if (adatta) pz.fit();
@@ -596,18 +640,19 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
    */
   function elencoStop(): Array<{ id: string; nome: string; colore: string; livello: RisultatoMacchie['base'] | null }> {
     const r = risultato;
-    const { macchie, secondo } = geometria();
-    const dueLivelli = r ? r.stop.some((st) => st.strato === 2) && r.stop.some((st) => st.strato === 1) : macchie.length > 0 && secondo.length > 0;
+    const { macchie, secondo, terzo } = geometria();
+    const previsti = ([[1, macchie], [2, secondo], [3, terzo]] as Array<[Strato, Polyline[]]>).filter(([, m]) => m.length).map(([n]) => n);
+    const piuLivelli = (r ? livelliDi(r).length : previsti.length) > 1;
     const n = r ? new Set(r.stop.map((st) => st.zona)).size : Math.max(1, Math.round(par.zone || 1));
-    const nome = (tipo: 'raso' | 'sopra', strato: 1 | 2, z: number) => (tipo === 'raso' ? 'Raso delle macchie' : 'Punto sopra le macchie')
-      + (dueLivelli ? `, ${strato}° livello` : '') + (n > 1 ? ` — zona ${z + 1} di ${n}` : '');
-    const voce = (tipo: 'raso' | 'sopra', strato: 1 | 2, z: number, livello: RisultatoMacchie['base'] | null) => ({
-      id: `${tipo}${strato === 2 ? '2' : ''}-${z + 1}`, nome: nome(tipo, strato, z),
-      colore: tipo === 'raso' && strato === 2 ? COLORI_STOP.raso2 : COLORI_STOP[tipo], livello,
+    const nome = (tipo: 'raso' | 'sopra', strato: Strato, z: number) => (tipo === 'raso' ? 'Raso delle macchie' : 'Punto sopra le macchie')
+      + (piuLivelli ? `, ${strato}° livello` : '') + (n > 1 ? ` — zona ${z + 1} di ${n}` : '');
+    const voce = (tipo: 'raso' | 'sopra', strato: Strato, z: number, livello: RisultatoMacchie['base'] | null) => ({
+      id: `${tipo}${strato > 1 ? strato : ''}-${z + 1}`, nome: nome(tipo, strato, z),
+      colore: tipo === 'raso' && strato === 2 ? COLORI_STOP.raso2 : tipo === 'raso' && strato === 3 ? COLORI_STOP.raso3 : COLORI_STOP[tipo], livello,
     });
     const out: Array<{ id: string; nome: string; colore: string; livello: RisultatoMacchie['base'] | null }> = par.conBase ? [{ id: 'base', nome: 'Base', colore: COLORI_STOP.base, livello: r?.base ?? null }] : [];
     if (r) for (const st of r.stop) out.push(voce(st.tipo, st.strato, st.zona, st.livello));
-    else for (const strato of secondo.length ? (macchie.length ? [1, 2] as const : [2] as const) : [1] as const) for (let z = 0; z < n; z++) {
+    else for (const strato of previsti.length ? previsti : [1] as Strato[]) for (let z = 0; z < n; z++) {
       out.push(voce('raso', strato, z, null));
       if (par.conSopra) out.push(voce('sopra', strato, z, null));
     }
@@ -644,21 +689,22 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       for (const c of model?.choices ?? []) if (c.color?.toLowerCase() === fori) ruoli[c.id] = '';
       buildPanel();
       disegnaContorni();
-      genera();
+      daRifare();
     },
     sorgente: () => source?.text ?? null,
     // col raso fatto da Stilista (rasoDiStilista) ogni stop del raso torna come riempimenti, uno per macchia
     strati: () => {
+      if (!risultato || superato) throw new Error(risultato ? 'i parametri sono cambiati: premi Genera' : 'premi prima Genera');
       const cuciti = stratiCuciti(strati());
       if (!risultato || !par.rasoDiStilista) return cuciti;
-      const perZona = new Map(macchiePerStilista(risultato).map((z) => [`raso${z.strato === 2 ? '2' : ''}-${z.zona + 1}`, z.macchie]));
+      const perZona = new Map(macchiePerStilista(risultato).map((z) => [`raso${z.strato > 1 ? z.strato : ''}-${z.zona + 1}`, z.macchie]));
       return cuciti.map((s) => {
         const forme = s.nome ? perZona.get(s.nome) : undefined;
-        return forme ? { ...s, polylines: [], riempimenti: { orientamentoDeg: s.nome?.startsWith('raso2-') ? par.rasoAngolo2 : par.rasoAngolo, forme } } : s;
+        return forme ? { ...s, polylines: [], riempimenti: { orientamentoDeg: s.nome?.startsWith('raso3-') ? par.rasoAngolo3 : s.nome?.startsWith('raso2-') ? par.rasoAngolo2 : par.rasoAngolo, forme } } : s;
       });
     },
     dst() {
-      if (!risultato) throw new Error('genera prima il ricamo');
+      if (!risultato || superato) throw new Error(risultato ? 'i parametri sono cambiati: premi Genera' : 'premi prima Genera');
       return { bytes: costruisciDst(), nome: `${nomeBase()}-macchie` };
     },
     stato: (testo) => { $('status').textContent = testo; },
@@ -709,10 +755,10 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   /** Riapre un progetto; con `soloPunto` ne prende solo pattern e parametri, e il disegno resta quello di adesso. */
   function riapri(meta: Record<string, unknown>, soloPunto = false): void {
     const drawing = meta.drawing as { name?: string; text?: string; scale?: { scaleMode?: string } } | undefined;
-    if (meta.params && typeof meta.params === 'object') Object.assign(par, PARAMETRI_MACCHIE, conQuelliDiPrima(meta.params as Partial<ParametriMacchie>));
+    if (meta.params && typeof meta.params === 'object') Object.assign(par, PARAMETRI_MACCHIE, conQuelliDiPrima({ sovrapposti: false, ...(meta.params as Partial<ParametriMacchie>) }));
     const p = meta.pattern as { nome?: string; config?: PatternConfig } | undefined;
     if (p?.config) pattern = { nome: p.nome ?? 'dal file', config: p.config };
-    if (soloPunto) { buildPanel(); genera(); return; }
+    if (soloPunto) { buildPanel(); daRifare(); return; }
     if (meta.ruoli && typeof meta.ruoli === 'object') {
       for (const k of Object.keys(ruoli)) delete ruoli[k];
       Object.assign(ruoli, meta.ruoli);
@@ -723,7 +769,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       reparse();
     } else {
       buildPanel();
-      genera();
+      daRifare();
     }
   }
 
@@ -794,7 +840,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       if (!config) return;
       pattern = { nome, config };
       buildPanel();
-      genera();
+      daRifare();
     });
     wireLivelli(root);
   }
@@ -819,6 +865,12 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   // ---- azioni fisse ----
   $('fitBtn').addEventListener('click', () => pz.fit());
   $('genBtn').addEventListener('click', genera);
+  ($('autoCalcolo') as HTMLInputElement).checked = autoCalcolo;
+  $('autoCalcolo').addEventListener('change', () => {
+    autoCalcolo = ($('autoCalcolo') as HTMLInputElement).checked;
+    try { localStorage.setItem('pattern-macchie.auto', autoCalcolo ? '1' : '0'); } catch { /* idem */ }
+    if (autoCalcolo && superato) genera();
+  });
   $('simulaBtn').addEventListener('click', () => {
     simulando = !simulando;
     $('simulaBtn').setAttribute('aria-pressed', String(simulando));

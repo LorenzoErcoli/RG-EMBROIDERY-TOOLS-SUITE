@@ -183,6 +183,43 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    zona finisce nella fascia, il suo stop del punto sopra non c'è. Con due livelli vale per ognuno, in ciascuno dei suoi stop.
    Ogni macchia resta col raso nella sua zona, nello stesso ordine; il raso della zona dopo parte da dove è finito il punto
    sopra, quindi può cambiare di pochi punti (sul pannello di prova 3 su 8.104; sul suo pezzo nessuno). Non è provato a macchina.
+35. (2026-11-05) **Tre livelli di macchie, a cascata.** *«Devo poter non solo fare 2 macchie ma 3 livelli di macca. in cui il 3 è
+   il più alto il due il medio e l'1 il primo. ovviamente a cascata si distribuiscono i passaggi nascosti.»* Ruolo
+   `macchie3`, parametri del raso col 3 in fondo, stop in ordine dal 1° al 3°. Ogni livello si ferma sotto tutti quelli sopra,
+   di `secondoMargine`, e il suo filo passa sotto tutti quelli sopra. Regola nuova che con due livelli non serviva: il filo del
+   2° non passa sopra il raso del 1° già cucito, salvo dove lo coprirà una macchia del 2° ancora da cucire o il 3°. Margine e
+   filo a vista restano uno solo per tutti. I ponti stanno solo sul livello più alto (decisione 32), anche per il filo del 1°
+   e del 2°. Con due livelli il ricamo è identico a prima (175 salti, 60.442 punti, 285 mm a vista). Il disegno vero con tre
+   livelli non c'è ancora: misurato dividendo le 177 verdi del suo disegno per grandezza, 89 nel 2° e 88 nel 3°.
+
+   | | Salti 1°/2°/3° | Filo a vista | Giro del rifilo |
+   |---|---|---|---|
+   | Di serie | 0 / 7 / 87 | 834 mm in 179 | 3.819 mm |
+   | Ponti 5 mm | 0 / 7 / 37 | 670 mm in 155 | 3.742 mm |
+   | A vista al più 3 mm | 40 / 67 / 87 | 55 mm in 29 | 1.726 mm |
+
+36. (2026-11-05) **I passaggi a vista vicini fra loro.** *«Sarebbe poi utile che se ci sono a vista farli passare tutti più o
+   meno vicino, così il rifilo a mano è più veloce.»* Campo `vistaVicini`, di serie 0: entro quei mm da un passaggio a vista già
+   cucito attraversare costa 2 invece di 25, e il filo ci va se può arrivarci coperto. Se così supera il massimo a vista si
+   riprova senza: non crea salti. **Funziona poco, e va detto**: con 5 mm i passaggi con un altro entro 5 mm vanno da 28 a 61 su
+   circa 180, ma il filo a vista sale da 834 a 895 mm e il giro del rifilo non si accorcia (3.819 → 3.868 mm). Provati anche
+   costo 5 e 1, raggio da 5 a 25 mm: mai sotto 3.819. Il motivo: ogni macchia isolata ha bisogno di un attraversamento vicino a
+   lei, quindi i passaggi sono sparsi quanto le macchie, e la strada coperta per raggrupparli di solito non c'è. Per questo è
+   spento. Aiutano di più l'anteprima, che li mostra in rosa, e il numero del giro nel *Programma*. Per un rifilo davvero più
+   corto servirebbe cambiare l'ordine delle macchie: non è fatto.
+37. (2026-11-06) **Si calcola solo con «Genera».** *«Il sistema è troppo lento del calcolo. Il problema è che appena modifico
+   una cosa lui inizia a calcolare. invece dovrebbe calcolare solo se avvio genera.»* Cambiare un campo, un ruolo, il pattern o
+   caricare un disegno non fa più partire il calcolo: l'anteprima resta quella di prima, la riga in basso dice di premere
+   *Genera*, il pulsante si accende, e *Esporta DST*, *Scarica SVG* e *Invia a Stilista* si fermano finché non si rigenera
+   (varrebbero per i parametri vecchi). Un calcolo già partito si ferma appena si cambia qualcosa. Chi vuole il modo di prima
+   accende *Ricalcola da solo* accanto a *Genera* (spento di serie, la pagina se lo ricorda), come nel Razza. Anche aperto
+   dal pulsante di Stilista il disegno arriva senza calcolo: si preme *Genera*.
+38. (2026-11-06) **I livelli si sovrappongono, non si bucano.** *«il livello 2 non deve bucare il livello 1 ma deve
+   sovrapporsi»*; alla domanda sul 3° ha scelto «tutti interi». Casella `sovrapposti`, accesa di serie: ogni livello si cuce
+   intero e quelli sopra gli si cuciono sopra; il filo dei livelli sotto passa lo stesso sotto quelli sopra. Cambia la decisione
+   del 2026-11-03 (il chiaro si ferma sotto lo scuro), che resta con la casella spenta, e allora vale *Un livello entra sotto
+   quelli sopra di*. I progetti salvati prima si riaprono con la casella spenta, come erano; i parametri ricordati dalla pagina
+   no, prendono quella di serie.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso
@@ -197,7 +234,7 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
   ultima, come coi ponti), il filo la percorre, e nella macchia dopo si continua sotto il raso come sempre. Se non c'è, si
   salta. **Provato e scartato:** spingere l'ordine delle macchie verso le coppie legate da una scura: più salti e più
   lunghi (26 e 457 mm contro 23 e 223); l'ordine resta quello di sempre, dei salti più corti.
-- **Col raso di Stilista i passaggi sotto il secondo livello non si cuciono.** Fra due riempimenti Stilista salta: il
+- **Con più livelli, col raso di Stilista i passaggi sotto i livelli sopra non si cuciono.** Fra due riempimenti Stilista salta: il
   filo di un riempimento finisce all'uscita e quello dopo comincia all'ingresso, non c'è punto in mezzo. Si rispettano solo
   ingresso e uscita, che sono i capi della nostra strada. Per cucirli servirebbe un oggetto a punti fra due riempimenti
   (con `POST /punti`, un oggetto in più per macchia): non fatto, da decidere con Lorenzo.
