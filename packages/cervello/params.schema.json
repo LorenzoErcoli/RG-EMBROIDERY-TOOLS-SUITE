@@ -5119,7 +5119,7 @@
     "catenellaEdgePieces": {
       "type": "boolean",
       "title": "Attacca i pezzi sotto la soglia ai moduli vicini",
-      "description": "Riempie il bianco sul bordo senza cambi ago in più: ogni pezzo si cuce col modulo che tocca di più, da sinistra a destra: prima del modulo se sta a sinistra, dopo se sta a destra. Spento: il bordo resta come nel file di riferimento.",
+      "description": "Riempie il bianco sul bordo, da sinistra a destra: un pezzo si cuce prima del modulo che tocca di più se sta a sinistra; se sta a destra, subito prima del modulo dopo. In fondo alla riga si cuce da solo, con la sua uscita e un cambio ago. Spento: il bordo resta come nel file di riferimento.",
       "x-concetto": "griglia-moduli"
     },
     "catenellaEdgePieceMin": {
@@ -5262,7 +5262,7 @@
     "catenellaInnerPasses": {
       "type": "boolean",
       "title": "Passaggi interni sulle linee, niente fuori dal contorno",
-      "description": "Dove il taglio lascia un passo lungo, il filo ribatte sulle linee già ricamate o che arriveranno, anche se i passaggi vengono più lunghi. Fuori dal contorno restano solo le uscite per il cambio ago.",
+      "description": "Dove il taglio lascia un passo lungo, il filo corre sulle linee che arriveranno e sulle basi, anche se i passaggi vengono più lunghi; segue una catenella già cucita solo se non c'è altra strada. Fuori dal contorno restano solo le uscite per il cambio ago.",
       "x-concetto": "corsie-bordo"
     },
     "catenellaEdgeLanes": {

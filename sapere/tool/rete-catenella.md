@@ -45,6 +45,14 @@ esattamente come questo»*.
 
 - **I passaggi possono stare dentro** (2026-11-05, *«non fare i passaggi esterni al contorno quando il modulo viene tagliato, ma fare i passaggi interni ribattendo sulle linee già ricamate o che verranno ricamate in seguito. Non ci interessa se i passaggi sono più degli altri»*). Spunta spenta di serie, scelta mia. Accesa, il filo fa la strada più corta sulle linee del ricamo; le uscite per il cambio ago restano fuori, e l'allineamento al lato dritto non serve.
 
+- **Le linee nuove finiscono sul centro della linea dove arrivano** (2026-11-05, *«dubbi sui punti di infittimento che non siano ben collegati. Sarebbe un problema perché significa che si sgancia la rete»*). Prima il calcolo si fermava sul bordo del tratto largo: 0,25 mm dal centro in mediana, fino a 0,67 mm, contro 0,08 mm delle linee del modulo. Non è cucito.
+
+- **Il filo non segue le catenelle già cucite** (2026-11-05, *«vicino ai bordi […] le imbastiture passano sopra il punto catenella in alcuni punti. Non va per niente bene»*). Misurato sui punti del documento generato, rifatto col calcolo con le stesse opzioni: 1.617 catenelle su 1.617 partono dallo stesso punto. Le corse oltre 10 mm entro la maglia di una catenella già cucita erano 38: 21 passaggi interni, che seguivano la sua richiesta di ribattere anche sulle linee già ricamate, e 17 strade dei pezzi. La più lunga 33,8 mm. Dopo: nessuna, la più lunga 5,8 mm; con l'infittimento a 20 mm² 6,2 mm. Restano 75 corse da 3 a 5 mm delle basi del modulo: dipendono dal modulo, non dalle strade.
+  - Scelte mie, da confermare: la striscia è 0,75 mm dal centro e 45 gradi (attraversare di traverso si può); seguire una catenella cucita costa 40 volte, con 10 tornavano corse fino a 11,6 mm; il filo può usare anche le linee dei moduli dopo.
+  - Un pezzo a destra del modulo: se tocca il modulo dopo nella riga, si cuce subito prima di quello. In fondo alla riga non ha linee libere intorno: si cuce da solo e finisce con la sua uscita, con l'ago di una colonna vicina, così c'è il cambio ago fuori dal contorno. Sul contorno misurato sono 6 uscite e 6 cambi ago in più, scelta mia.
+  - Le strade si allungano: su 516 m la rete ne ha 3 in più, la strada più lunga passa da 68 a 130 mm, il passaggio interno più lungo da 58 a 156 mm.
+  - Provato su 16 reti, due contorni e quattro posizioni della griglia, con e senza passaggi interni: le strade prima arrivavano fino a 33 mm, ora al più 7 mm; le uscite da 46 a 10 mm. In quattro reti restano passaggi fino a 17 mm (sul documento misurato no): non è ancora chiaro perché. Sul modulo di prova nei test, di poche linee, un'uscita corre per 113 mm e una strada per 10,6 mm su linee già cucite perché non hanno altra via. Non è cucito.
+
 ## Da decidere
 - Come nasce la ragnatela nella versione parametrica: il modulo è disegnato a mano e la regola che lo genera non è misurata.
 
