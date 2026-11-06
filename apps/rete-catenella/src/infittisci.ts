@@ -55,6 +55,24 @@ function curva(a: Xy, b: Xy, piega: number): Xy[] {
 
 interface Linea { variante: 'A' | 'B'; dopoOggetto: number; t: Xy[]; base: number; dopo: number; f: number; daCapo: boolean; magliaMm2: number }
 
+/** Il punto più vicino a q sulle linee della rete montata, entro 1 mm. */
+function sullaLineaPiuVicina(q: Xy, copie: Array<{ variante: 'A' | 'B'; dx: number; dy: number }>, m: ModuloRete, linee: Linea[]): Xy | null {
+  let meglio: Xy | null = null, e = 1;
+  const prova = (t: Xy[], dx: number, dy: number): void => {
+    for (let i = 1; i < t.length; i++) {
+      const ax = t[i - 1][0] + dx, ay = t[i - 1][1] + dy, bx = t[i][0] + dx, by = t[i][1] + dy, ux = bx - ax, uy = by - ay, l2 = ux * ux + uy * uy;
+      if (Math.min(ax, bx) > q[0] + 1 || Math.max(ax, bx) < q[0] - 1 || Math.min(ay, by) > q[1] + 1 || Math.max(ay, by) < q[1] - 1) continue;
+      const f = l2 ? Math.max(0, Math.min(1, ((q[0] - ax) * ux + (q[1] - ay) * uy) / l2)) : 0, x = ax + ux * f, y = ay + uy * f, c = Math.hypot(q[0] - x, q[1] - y);
+      if (c < e) { e = c; meglio = [x, y]; }
+    }
+  };
+  for (const c of copie) {
+    for (const o of m.varianti[c.variante].oggetti) if (o.tipo !== 'passaggio') prova(o.t, c.dx, c.dy);
+    for (const l of linee) if (l.variante === c.variante) prova(l.t, c.dx, c.dy);
+  }
+  return meglio;
+}
+
 export function infittisciModulo(m: ModuloRete, magliaMassimaMm2: number, seme: number): EsitoInfittimento {
   let stato = (Math.abs(Math.round(seme)) * 2654435761 + 1424) % 2147483648;
   const caso = (): number => (stato = (stato * 1103515245 + 12345) % 2147483648) / 2147483648;
@@ -181,7 +199,7 @@ export function infittisciModulo(m: ModuloRete, magliaMassimaMm2: number, seme: 
     intere = 0;
     for (const x of maglie) {
       const lista = giunti.get(x.id) ?? [];
-      let meglio: Linea | null = null, scarto = 0.27; // non più sbilanciata di 23% e 77%
+      let meglio: Linea | null = null, spostamento: { dx: number; dy: number } | null = null, scarto = 0.27; // non più sbilanciata di 23% e 77%
       for (const g of [...lista].sort(() => caso() - 0.5)) {
         for (let prova = 0; prova < 6; prova++) {
           const l = d(g.p, x.c) || 1, giroAng = tra(-0.25, 0.25);
@@ -212,9 +230,20 @@ export function infittisciModulo(m: ModuloRete, magliaMassimaMm2: number, seme: 
           if (!trovata) continue;
           scarto = s;
           meglio = { variante: g.variante, dopoOggetto: g.dopoOggetto, t: locale, ...trovata, magliaMm2: x.area };
+          spostamento = { dx: g.dx, dy: g.dy };
         }
       }
-      if (meglio) { linee.push(meglio); nuove++; } else intere++;
+      if (meglio && spostamento) {
+        // il raster ferma la linea sul bordo del tratto largo, fino a 0,67 mm prima: il capo deve cadere sul centro della linea dove arriva, se no la rete si sgancia (Lorenzo, 2026-11-05)
+        const coda = meglio.t[meglio.t.length - 1], q: Xy = [coda[0] + spostamento.dx, coda[1] + spostamento.dy], centro = sullaLineaPiuVicina(q, copie, m, linee);
+        if (centro) {
+          const arrivo: Xy = [centro[0] - spostamento.dx, centro[1] - spostamento.dy];
+          meglio.t = [...meglio.t.slice(0, -1), arrivo];
+          if (!meglio.daCapo) { const nuova = proietta(arrivo, m.varianti[meglio.variante].oggetti[meglio.base].t); meglio.dopo = nuova.i; meglio.f = nuova.f; }
+        }
+        linee.push(meglio);
+        nuove++;
+      } else intere++;
     }
     if (!nuove) break;
   }

@@ -53,7 +53,7 @@ export interface ParametriRete {
   passaggiInterni: boolean;
   /** Se il contorno ha un lato superiore dritto, la griglia si mette dove meno filo gira sopra quel lato. */
   allineaLato: boolean;
-  /** I pezzi dei moduli sotto la soglia si attaccano al modulo vicino, senza cambi ago in più. */
+  /** I pezzi dei moduli sotto la soglia si attaccano al modulo vicino, senza cambi ago in più; solo quelli in fondo alla riga finiscono con la loro uscita. */
   pezziSulBordo: boolean;
   /** Un pezzo con meno catenella di così non si cuce. */
   pezzoMinimoMm: number;
@@ -160,7 +160,11 @@ export function catenella(t: Xy[], p: ParametriRete): Xy[] {
   return out;
 }
 
-export interface Cella { riga: number; colonna: number; variante: 'A' | 'B'; dx: number; dy: number }
+export interface Cella {
+  riga: number; colonna: number; variante: 'A' | 'B'; dx: number; dy: number;
+  /** Un pezzo sul bordo che non può attaccarsi a un modulo da cucire: ha l'ago di una colonna vicina e la sua uscita. */
+  pezzoDaSolo?: number;
+}
 
 /** Dove va ogni modulo: le colonne alternano le due varianti, le righe si ripetono. I passi vengono dal modulo. */
 export function griglia(ingombro: [number, number, number, number], modulo: ModuloRete, origine: Xy): Cella[] {
@@ -256,6 +260,42 @@ function puntoSulBordo(b: Bordo, s: number): Xy {
   const l = b.cum[i] - b.cum[i - 1] || 1, f = (x - b.cum[i - 1]) / l;
   return [b.a[i - 1][0] + (b.a[i][0] - b.a[i - 1][0]) * f, b.a[i - 1][1] + (b.a[i][1] - b.a[i - 1][1]) * f];
 }
+/**
+ * Le catenelle già cucite (Lorenzo, 2026-11-05: «vicino ai bordi le imbastiture passano sopra il punto catenella. Non va per niente bene»). Il filo che porta da una parte
+ * all'altra non ci corre sopra: attraversarle di traverso sì, seguirle no. La striscia è la larghezza della maglia; misura: dentro la striscia e a meno di 45 gradi.
+ */
+interface Cucite { aggiungi(t: Xy[]): void; sopra(u: Xy, v: Xy): boolean }
+const STRISCIA_CATENELLA_MM = 0.75, CARO_SOPRA_CATENELLA = 40, SOPRA_TOLLERATO_MM = 3;
+function nuoveCucite(): Cucite {
+  const CASELLA = 3, caselle = new Map<string, Array<[Xy, Xy]>>();
+  return {
+    aggiungi(t) {
+      for (let i = 1; i < t.length; i++) {
+        const a = t[i - 1], b = t[i], n = Math.ceil(d(a, b) / 2) + 1, viste = new Set<string>();
+        for (let s = 0; s <= n; s++) {
+          const k = `${Math.floor((a[0] + ((b[0] - a[0]) * s) / n) / CASELLA)},${Math.floor((a[1] + ((b[1] - a[1]) * s) / n) / CASELLA)}`;
+          if (viste.has(k)) continue;
+          viste.add(k);
+          const l = caselle.get(k);
+          if (l) l.push([a, b]); else caselle.set(k, [[a, b]]);
+        }
+      }
+    },
+    sopra(u, v) {
+      const l = d(u, v);
+      if (!l) return false;
+      const mx = (u[0] + v[0]) / 2, my = (u[1] + v[1]) / 2, cx = Math.floor(mx / CASELLA), cy = Math.floor(my / CASELLA);
+      for (let a = -1; a <= 1; a++) for (let b = -1; b <= 1; b++) for (const [A, B] of caselle.get(`${cx + a},${cy + b}`) ?? []) {
+        const dx = B[0] - A[0], dy = B[1] - A[1], Q = dx * dx + dy * dy, f = Q ? Math.max(0, Math.min(1, ((mx - A[0]) * dx + (my - A[1]) * dy) / Q)) : 0;
+        if (Math.hypot(mx - A[0] - f * dx, my - A[1] - f * dy) > STRISCIA_CATENELLA_MM || !Q) continue;
+        if (Math.abs((v[0] - u[0]) * dx + (v[1] - u[1]) * dy) / (l * Math.sqrt(Q)) > Math.SQRT1_2) return true;
+      }
+      return false;
+    },
+  };
+}
+const mmSopra = (via: Xy[], sopra: (u: Xy, v: Xy) => boolean): number => { let s = 0; for (let i = 1; i < via.length; i++) if (sopra(via[i - 1], via[i])) s += d(via[i - 1], via[i]); return s; };
+
 /** La strada da a a b sulla prima corsia libera. Null se i capi sono lontani dal bordo o la strada è troppo più lunga. */
 export function stradaInCorsia(b: Bordo, a0: Xy, b0: Xy, p: ParametriRete): { t: Xy[]; corsia: number } | null {
   const pa = sulBordo(b, a0), pb = sulBordo(b, b0);
@@ -315,6 +355,10 @@ export interface ContiRete {
   /** I pezzi attaccati ai moduli vicini, e quelli da cui il filo non arriva al modulo vicino (non si cuciono). */
   pezzi: number;
   pezziSenzaStrada: number;
+  /** Il filo delle strade che corre sopra catenelle già cucite perché non c'era altra via. */
+  filoSuCatenellaMm: number;
+  /** I pezzi che finiscono con la loro uscita e un cambio ago. */
+  pezziDaSoli: number;
   lineeNuove: number;
   /** Maglie oltre la soglia rimaste intere, in un periodo della griglia. */
   maglieIntere: number;
@@ -342,7 +386,7 @@ export function anelloDiContorno(sagoma: Contour[]): Xy[] {
 }
 
 /** Dijkstra con un mucchio binario. `costo` dà il peso di un arco dalla sua lunghezza e da chi lo possiede; si ferma al primo nodo per cui `arriva` è vero. */
-function camminoMinimo(n: number, s: number, archi: Array<Array<[number, number, number?]>>, costo: (l: number, chi: number | undefined) => number, arriva: (x: number) => boolean): { dist: Float64Array; viene: Int32Array; arrivo: number; daChi: Int32Array } {
+function camminoMinimo(n: number, s: number, archi: Array<Array<[number, number, number?]>>, costo: (l: number, chi: number | undefined, x: number, y: number) => number, arriva: (x: number) => boolean): { dist: Float64Array; viene: Int32Array; arrivo: number; daChi: Int32Array } {
   const dist = new Float64Array(n).fill(Infinity), viene = new Int32Array(n).fill(-1), daChi = new Int32Array(n).fill(-1);
   const mucchio: Array<[number, number]> = [[0, s]];
   dist[s] = 0;
@@ -365,7 +409,7 @@ function camminoMinimo(n: number, s: number, archi: Array<Array<[number, number,
     if (c > dist[x]) continue;
     if (arriva(x)) { arrivo = x; break; }
     for (const [y, l, chi] of archi[x] ?? []) {
-      const w = c + costo(l, chi);
+      const w = c + costo(l, chi, x, y);
       if (w >= dist[y]) continue;
       dist[y] = w; viene[y] = x; daChi[y] = chi ?? -1;
       mucchio.push([w, y]);
@@ -433,14 +477,16 @@ function aggiungiUscite(moduli: Array<{ cella: Cella; oggetti: OggettoRete[] }>,
   for (const q of nodi) { if (q[0] < x0) x0 = q[0]; if (q[0] > x1) x1 = q[0]; }
   const libero = (q: Xy, verso: number): boolean => { for (let x = q[0] + verso * 1.5; x > x0 - 5 && x < x1 + 5; x += verso * 4) if (dentro([x, q[1]])) return false; return true; };
   const aiLati = nodi.map((q) => libero(q, -1) || libero(q, 1));
+  const cucite = nuoveCucite();
   moduli.forEach((m, i) => {
+    for (const o of m.oggetti) if (o.tipo === 'catenella') cucite.aggiungi(o.t);
     const coda = m.oggetti[m.oggetti.length - 1]?.punti;
     if (!coda?.length || !nodi.length) return;
     const da = coda[coda.length - 1];
     let s = 0, e = Infinity;
     nodi.forEach((x, k) => { const c = d(x, da); if (c < e) { e = c; s = k; } });
     const cerca = (arriva: (x: number) => boolean): { viene: Int32Array; arrivo: number; daChi: Int32Array; sottoMm: number; scopertaMm: number } => {
-      const r = camminoMinimo(nodi.length, s, archi, (l, chi) => l * (chi === undefined || chi === -1 ? 5 : chi > i ? 1 : 8), arriva);
+      const r = camminoMinimo(nodi.length, s, archi, (l, chi, x, y) => l * (chi === undefined || chi === -1 ? 5 : chi > i ? 1 : 8) * (cucite.sopra(nodi[x], nodi[y]) ? CARO_SOPRA_CATENELLA : 1), arriva);
       let sottoMm = 0, scopertaMm = 0;
       for (let x = r.arrivo; x >= 0 && r.viene[x] >= 0; x = r.viene[x]) {
         const l = d(nodi[x], nodi[r.viene[x]]);
@@ -477,7 +523,7 @@ function aggiungiUscite(moduli: Array<{ cella: Cella; oggetti: OggettoRete[] }>,
 }
 
 /** Il filo da un modulo al dopo: lungo le linee, soprattutto quelle del modulo che arriva, che le cucirà sopra. Null se le linee non si toccano. */
-function strada(prima: OggettoRete[], dopo: OggettoRete[], da: Xy, a: Xy, dentro: (q: Xy) => boolean, pesoPrima = 3): Xy[] | null {
+function strada(prima: OggettoRete[], dopo: OggettoRete[], da: Xy, a: Xy, dentro: (q: Xy) => boolean, pesoPrima = 3, sopra?: (u: Xy, v: Xy) => boolean): Xy[] | null {
   const PASSO = 2.5, PONTE = 3;
   const nodi: Xy[] = [], chiavi = new Map<string, number>();
   const nodo = (q: Xy): number => {
@@ -519,7 +565,7 @@ function strada(prima: OggettoRete[], dopo: OggettoRete[], da: Xy, a: Xy, dentro
   });
   const vicino = (q: Xy): number => { let m = 0, e = Infinity; nodi.forEach((x, i) => { const c = d(x, q); if (c < e) { e = c; m = i; } }); return m; };
   const s = vicino(da), f = vicino(a);
-  const { dist, viene } = camminoMinimo(nodi.length, s, archi, (c) => c, (x) => x === f);
+  const { dist, viene } = camminoMinimo(nodi.length, s, archi, (c, _, x, y) => (sopra?.(nodi[x], nodi[y]) ? c * CARO_SOPRA_CATENELLA : c), (x) => x === f);
   if (dist[f] === Infinity) return null;
   const via: Xy[] = [];
   for (let x = f; x >= 0; x = viene[x]) via.push(nodi[x]);
@@ -611,8 +657,9 @@ function faseDelLato(modulo: ModuloRete, anello: Xy[], lato: { y: number; x0: nu
 /**
  * Lorenzo, 2026-11-05: «non fare i passaggi esterni al contorno quando il modulo viene tagliato, ma fare i passaggi interni ribattendo sulle linee già ricamate o che
  * verranno ricamate in seguito. Non ci interessa se i passaggi sono più degli altri». Tutte le linee del ricamo valgono uguale; per saltare da una all'altra, 3 mm al più e costa di più.
+ * Poi, stesso giorno: «le imbastiture passano sopra il punto catenella, non va per niente bene». Le catenelle già cucite costano 40 volte: si seguono solo se non c'è altra strada.
  */
-function reteDiLinee(oggetti: OggettoRete[], dentro: (q: Xy) => boolean): (a: Xy, b: Xy) => Xy[] | null {
+function reteDiLinee(oggetti: OggettoRete[], dentro: (q: Xy) => boolean): (a: Xy, b: Xy, sopra: (u: Xy, v: Xy) => boolean) => Xy[] | null {
   const PASSO = 2.5, PONTE = 3;
   const nodi: Xy[] = [], chiavi = new Map<string, number>(), archi: Array<Array<[number, number, number?]>> = [];
   const nodo = (q: Xy): number => {
@@ -652,10 +699,10 @@ function reteDiLinee(oggetti: OggettoRete[], dentro: (q: Xy) => boolean): (a: Xy
     for (let a = -3; a <= 3; a++) for (let b = -3; b <= 3; b++) for (const j of griglia.get(`${cx + a},${cy + b}`) ?? []) { const c = d(q, nodi[j]); if (c < e) { e = c; m = j; } }
     return m;
   };
-  return (a, b) => {
+  return (a, b, sopra) => {
     const s = vicino(a), f = vicino(b);
     if (s < 0 || f < 0) return null;
-    const { dist, viene } = camminoMinimo(nodi.length, s, archi, (c) => c, (x) => x === f);
+    const { dist, viene } = camminoMinimo(nodi.length, s, archi, (c, _, x, y) => (sopra(nodi[x], nodi[y]) ? c * CARO_SOPRA_CATENELLA : c), (x) => x === f);
     if (dist[f] === Infinity) return null;
     const via: Xy[] = [];
     for (let x = f; x >= 0; x = viene[x]) via.push(nodi[x]);
@@ -730,16 +777,24 @@ export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRet
   const catenellaIntera = (v: { oggetti: OggettoModulo[] }): number => v.oggetti.reduce((s, o) => s + (o.tipo === 'catenella' && !o.nuovo ? lunghezza(o.t) : 0), 0);
   const intere = { A: catenellaIntera(modulo.varianti.A), B: catenellaIntera(modulo.varianti.B) };
   const oggetti: OggettoRete[] = [];
-  const conti: ContiRete = { moduli: 0, basi: 0, catenelle: 0, passaggi: 0, punti: 0, filoMm: 0, tagliSulleCorsie: 0, corsieUsate: 0, corsiaPiuLontanaMm: 0, passiLunghi: 0, movimentiLunghi: 0, collegamenti: 0, collegamentiMm: 0, uscite: 0, usciteSottoMm: 0, usciteScoperteMm: 0, saltiFraModuli: 0, passaggiInterni: 0, passaggiInterniMm: 0, latoAllineatoMm: null, filoSopraLatoMm: 0, pezzi: 0, pezziSenzaStrada: 0, lineeNuove: 0, maglieIntere: piu?.intere ?? 0, catenellaPerCm2: 0 };
+  const conti: ContiRete = { moduli: 0, basi: 0, catenelle: 0, passaggi: 0, punti: 0, filoMm: 0, tagliSulleCorsie: 0, corsieUsate: 0, corsiaPiuLontanaMm: 0, passiLunghi: 0, movimentiLunghi: 0, collegamenti: 0, collegamentiMm: 0, uscite: 0, usciteSottoMm: 0, usciteScoperteMm: 0, saltiFraModuli: 0, passaggiInterni: 0, passaggiInterniMm: 0, latoAllineatoMm: null, filoSopraLatoMm: 0, pezzi: 0, pezziSenzaStrada: 0, filoSuCatenellaMm: 0, pezziDaSoli: 0, lineeNuove: 0, maglieIntere: piu?.intere ?? 0, catenellaPerCm2: 0 };
   // coi moduli collegati a serpentina, il dopo è sempre vicino; se no come il file di riferimento, riga per riga
   const inOrdine = [...celle].sort((a, b) => a.riga - b.riga || (p.collegaModuli && ((a.riga % 2) + 2) % 2 !== 0 ? b.colonna - a.colonna : a.colonna - b.colonna));
   const moduli: Array<{ cella: Cella; oggetti: OggettoRete[] }> = [];
   const nellaZona = (t: Xy[], c: Cella, magliaMm2 = Infinity): boolean => { if (!aree.length) return true; const q = t[t.length >> 1], x: Xy = [q[0] + c.dx, q[1] + c.dy]; return aree.some((a) => magliaMm2 > a.soglia && a.dentro(x)); };
   let moduloPrima: OggettoRete[] | null = null;
   let catenellaMm = 0;
-  let dentroLeLinee: ((a: Xy, b: Xy) => Xy[] | null) | null = null;
+  let dentroLeLinee: ((a: Xy, b: Xy, sopra: (u: Xy, v: Xy) => boolean) => Xy[] | null) | null = null;
+  // quello che è già cucito quando parte il filo: i moduli prima, poi, cella per cella, quello che viene prima nella cella
+  const cucite = nuoveCucite();
+  const internaPulita = (a: Xy, b: Xy, qui: Cucite): Xy[] | null => {
+    if (!dentroLeLinee) return null;
+    const sopra = (u: Xy, v: Xy): boolean => cucite.sopra(u, v) || qui.sopra(u, v), via = dentroLeLinee(a, b, sopra);
+    if (via) conti.filoSuCatenellaMm += mmSopra(via, sopra);
+    return via;
+  };
   // spezza: ogni tratto dentro il contorno è un oggetto a sé, senza corsie: serve per dividere una cella scartata nei suoi pezzi
-  const oggettiDi = (cella: Cella, spezza: boolean): { usati: OggettoRete[]; originaleMm: number } => {
+  const oggettiDi = (cella: Cella, spezza: boolean, qui: Cucite = nuoveCucite()): { usati: OggettoRete[]; originaleMm: number } => {
     const usati: OggettoRete[] = [];
     let originaleMm = 0;
     for (const o of lavoro.varianti[cella.variante].oggetti) {
@@ -752,6 +807,7 @@ export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRet
       if (o.tipo === 'catenella') {
         for (const x of pezzi) {
           usati.push({ tipo: 'catenella', t: x, punti: soloStima ? x : catenella(x, p), cella, ...(o.nuovo ? { nuovo: true } : {}) });
+          qui.aggiungi(x);
           if (!o.nuovo) originaleMm += lunghezza(x);
         }
         continue;
@@ -764,7 +820,7 @@ export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRet
       let punti = ricampiona(pezzi[0], passo);
       for (let i = 1; i < pezzi.length; i++) {
         const a = pezzi[i - 1][pezzi[i - 1].length - 1], b = pezzi[i][0];
-        const interna = dentroLeLinee && d(a, b) > MOVIMENTO_LUNGO_MM ? dentroLeLinee(a, b) : null;
+        const interna = d(a, b) > MOVIMENTO_LUNGO_MM ? internaPulita(a, b, qui) : null;
         const s = p.corsie && !p.passaggiInterni ? stradaInCorsia(bordo, a, b, p) : null;
         if (interna) {
           punti = punti.concat(ricampiona(interna, passo).slice(1));
@@ -787,6 +843,7 @@ export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRet
   const tenute = spezzate.filter((c) => c.originaleMm > 0 && c.originaleMm >= (intere[c.cella.variante] * p.moduloMinimoPct) / 100);
   // quello che resta fuori lascia bianco sul bordo (Lorenzo, 2026-11-04: «in maniera automatica si aggiungano pezzi ai moduli dove vicino ci sono i bordi e c'è del bianco»):
   // ogni pezzo va al modulo che tocca di più
+  const mediaX = (l: OggettoRete[]): number => { let s = 0, n = 0; for (const o of l) for (const q of o.t) { s += q[0]; n++; } return n ? s / n : 0; };
   const pezziDi = new Map<Cella, OggettoRete[][]>();
   if (p.pezziSulBordo) {
     const contatti = tenute.map((c) => ({ cella: c.cella, chiavi: new Set(c.usati.filter((o) => o.tipo !== 'passaggio').flatMap((o) => [...chiaviVicino(o.t)])) }));
@@ -804,19 +861,43 @@ export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRet
         if (l) l.push(mio); else pezziDi.set(ospite, [mio]);
       }
     }
+    // cucito dopo il suo modulo, un pezzo a destra ha intorno solo linee già cucite: se tocca il modulo dopo nella riga si cuce subito prima di quello, sulle sue linee ancora da cucire.
+    // L'ordine resta da sinistra a destra (Lorenzo, 2026-11-05: «prima modulo e poi area infittita a destra») e non servono uscite né cambi ago in più
+    if (!p.collegaModuli) {
+      tenute.forEach((c, i) => {
+        const poi = tenute[i + 1], lista = pezziDi.get(c.cella);
+        if (!lista || !poi || poi.cella.riga !== c.cella.riga) return;
+        const x = mediaX(c.usati), chiaviPoi = contatti[i + 1].chiavi, restano: OggettoRete[][] = [], passano: OggettoRete[][] = [];
+        for (const g of lista) {
+          const tocca = g.some((o) => o.tipo !== 'passaggio' && [...chiaviVicino(o.t)].some((k) => chiaviPoi.has(k)));
+          if (mediaX(g) > x && tocca) passano.push(g.map((o) => ({ ...o, cella: poi.cella }))); else restano.push(g);
+        }
+        if (!passano.length) return;
+        pezziDi.set(c.cella, restano);
+        pezziDi.set(poi.cella, [...(pezziDi.get(poi.cella) ?? []), ...passano]);
+      });
+    }
   }
   if (p.passaggiInterni && !soloStima) dentroLeLinee = reteDiLinee([...tenute.flatMap((c) => c.usati), ...[...pezziDi.values()].flat(2)], dentro);
-  for (const { cella } of tenute) {
-    const { usati } = oggettiDi(cella, false);
+  const colonneUsate = new Set(tenute.map((c) => c.cella.colonna));
+  for (const [indice, { cella, usati: spezzati }] of tenute.entries()) {
+    // si lavora da sinistra a destra (Lorenzo, 2026-11-05: «prima modulo e poi area infittita a destra, mentre corretto come è ora a sinistra»):
+    // un pezzo a sinistra del modulo si cuce prima, e il filo arriva sulle linee del modulo, che lo copriranno; un pezzo a destra si cuce dopo
+    const xModulo = mediaX(spezzati);
+    const pezzi = (pezziDi.get(cella) ?? []).map((g) => ({ g, x: mediaX(g) }));
+    const aSinistra = pezzi.filter((x) => x.x <= xModulo).sort((a, b) => b.x - a.x), aDestra = pezzi.filter((x) => x.x > xModulo).sort((a, b) => a.x - b.x);
+    const catenelleIn = (qui: Cucite, l: OggettoRete[]): Cucite => { for (const o of l) if (o.tipo === 'catenella') qui.aggiungi(o.t); return qui; };
+    const { usati } = oggettiDi(cella, false, catenelleIn(nuoveCucite(), aSinistra.flatMap((x) => x.g)));
+    const prima = catenelleIn(nuoveCucite(), aSinistra.flatMap((x) => x.g));
     conti.moduli++;
     // il filo non si taglia dentro un modulo (Lorenzo: «senza salti o passaggi»): dove il taglio sul contorno lascia un movimento lungo fra due oggetti, gira su una corsia
     const continui: OggettoRete[] = [];
     for (const o of usati) {
       if (!o.punti.length) continue;
-      const prima = continui[continui.length - 1]?.punti;
-      if (prima && d(prima[prima.length - 1], o.punti[0]) > MOVIMENTO_LUNGO_MM) {
-        const interna = dentroLeLinee ? dentroLeLinee(prima[prima.length - 1], o.punti[0]) : null;
-        const s = p.corsie && !p.passaggiInterni ? stradaInCorsia(bordo, prima[prima.length - 1], o.punti[0], p) : null;
+      const coda = continui[continui.length - 1]?.punti;
+      if (coda && d(coda[coda.length - 1], o.punti[0]) > MOVIMENTO_LUNGO_MM) {
+        const interna = internaPulita(coda[coda.length - 1], o.punti[0], prima);
+        const s = p.corsie && !p.passaggiInterni ? stradaInCorsia(bordo, coda[coda.length - 1], o.punti[0], p) : null;
         if (interna) {
           continui.push({ tipo: 'passaggio', t: interna, punti: ricampiona(interna, p.puntoPassaggioMm), cella });
           conti.passaggiInterni++;
@@ -829,45 +910,66 @@ export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRet
         } else conti.movimentiLunghi++;
       }
       continui.push(o);
+      if (o.tipo === 'catenella') prima.aggiungi(o.t);
     }
-    // si lavora da sinistra a destra (Lorenzo, 2026-11-05: «prima modulo e poi area infittita a destra, mentre corretto come è ora a sinistra»):
-    // un pezzo a sinistra del modulo si cuce prima, e il filo arriva sulle linee del modulo, che lo copriranno; un pezzo a destra si cuce dopo
-    const mediaX = (l: OggettoRete[]): number => { let s = 0, n = 0; for (const o of l) for (const q of o.t) { s += q[0]; n++; } return n ? s / n : 0; };
-    const xModulo = mediaX(continui);
-    const pezzi = (pezziDi.get(cella) ?? []).map((g) => ({ g, x: mediaX(g) }));
-    const cuci = (gruppo: OggettoRete[], dopo: OggettoRete[]): OggettoRete[] => {
+    // le linee dei moduli che arrivano dopo: lì il filo verrà coperto, e quando un pezzo sta a destra non ci sono altre linee ancora da cucire
+    const piuAvanti = tenute.slice(indice + 1).flatMap((c) => [...c.usati, ...(pezziDi.get(c.cella) ?? []).flat()]).filter((o) => o.tipo !== 'passaggio');
+    const stradaPulita = (giaFatti: OggettoRete[], dopo: OggettoRete[], a: Xy, b: Xy, qui: Cucite): Xy[] | null => {
+      const m = 40, x0 = Math.min(a[0], b[0]) - m, x1 = Math.max(a[0], b[0]) + m, y0 = Math.min(a[1], b[1]) - m, y1 = Math.max(a[1], b[1]) + m;
+      const vicini = piuAvanti.filter((o) => o.t.some((q) => q[0] > x0 && q[0] < x1 && q[1] > y0 && q[1] < y1));
+      const sopra = (u: Xy, v: Xy): boolean => cucite.sopra(u, v) || qui.sopra(u, v);
+      const via = strada(giaFatti, [...dopo, ...vicini], a, b, dentro, 8, sopra), mm = via ? mmSopra(via, sopra) : 0;
+      if (mm > SOPRA_TOLLERATO_MM && p.corsie && !p.passaggiInterni) { const s = stradaInCorsia(bordo, a, b, p); if (s) return s.t; }
+      conti.filoSuCatenellaMm += mm;
+      return via;
+    };
+    const cuci = (gruppo: OggettoRete[], dopo: OggettoRete[], qui: Cucite): OggettoRete[] => {
       const cucito: OggettoRete[] = [];
       for (const [i, o] of gruppo.entries()) {
-        const prima = cucito[cucito.length - 1]?.punti;
-        if (prima && d(prima[prima.length - 1], o.punti[0]) > MOVIMENTO_LUNGO_MM) {
-          const via = strada(cucito, [...gruppo.slice(i), ...dopo], prima[prima.length - 1], o.punti[0], dentro, 8);
+        const coda = cucito[cucito.length - 1]?.punti;
+        if (coda && d(coda[coda.length - 1], o.punti[0]) > MOVIMENTO_LUNGO_MM) {
+          const via = stradaPulita(cucito, [...gruppo.slice(i), ...dopo], coda[coda.length - 1], o.punti[0], qui);
           if (via) cucito.push({ tipo: 'passaggio', t: via, punti: ricampiona(via, p.puntoPassaggioMm), cella, pezzo: true, collegamento: true });
           else conti.movimentiLunghi++;
         }
         cucito.push(o);
+        if (o.tipo === 'catenella') qui.aggiungi(o.t);
       }
       return cucito;
     };
-    for (const { g } of pezzi.filter((x) => x.x <= xModulo).sort((a, b) => b.x - a.x)) {
-      const cucito = cuci(ordinaPezzo(g), continui);
+    for (const [k, { g }] of aSinistra.entries()) {
+      // prima di questo pezzo si cuciono quelli più a sinistra
+      const qui = catenelleIn(nuoveCucite(), aSinistra.slice(k + 1).flatMap((x) => x.g));
+      const cucito = cuci(ordinaPezzo(g), continui, qui);
       const a = cucito[cucito.length - 1].punti, fine = a[a.length - 1], b = continui[0].punti[0];
       if (d(fine, b) > MOVIMENTO_LUNGO_MM) {
-        const via = strada(cucito, continui, fine, b, dentro, 8);
+        const via = stradaPulita(cucito, continui, fine, b, qui);
         if (!via) { conti.pezziSenzaStrada++; continue; }
         cucito.push({ tipo: 'passaggio', t: via, punti: ricampiona(via, p.puntoPassaggioMm), cella, pezzo: true, collegamento: true });
       }
       continui.unshift(...cucito);
       conti.pezzi++;
     }
-    for (const { g } of pezzi.filter((x) => x.x > xModulo).sort((a, b) => a.x - b.x)) {
+    // dopo il modulo, intorno al pezzo le linee sono già cucite e la strada per arrivarci gli correrebbe sopra (Lorenzo, 2026-11-05: «non va per niente bene»; misura: 32 corse oltre 10 mm,
+    // fino a 31 mm): dove non c'è un modulo dopo a cui attaccarlo, in fondo alla riga, il pezzo parte da solo e finisce con la sua uscita. Ogni colonna ha il suo ago: gli si dà quello di
+    // una colonna vicina, così fra il modulo e il pezzo c'è il cambio ago, fuori dal contorno, come fra due moduli
+    const daSoli: OggettoRete[][] = [];
+    const agoVicino = colonneUsate.has(cella.colonna - 1) ? cella.colonna - 1 : cella.colonna + 1;
+    for (const { g } of aDestra) {
       const coda = continui[continui.length - 1].punti, fine = coda[coda.length - 1];
-      const gruppo = ordinaPezzo(g, fine), cucito = cuci(gruppo, []), b = cucito[0].punti[0];
+      if (!p.collegaModuli) {
+        const suaCella: Cella = { ...cella, colonna: agoVicino, pezzoDaSolo: ++conti.pezziDaSoli };
+        daSoli.push(cuci(ordinaPezzo(g, (daSoli[daSoli.length - 1]?.at(-1)?.punti ?? coda).at(-1)), [], prima).map((o) => ({ ...o, cella: suaCella })));
+        conti.pezzi++;
+        continue;
+      }
+      const gruppo = ordinaPezzo(g, fine), b = gruppo[0].punti[0];
       if (d(fine, b) > MOVIMENTO_LUNGO_MM) {
-        const via = strada(continui, gruppo, fine, b, dentro, 8);
+        const via = stradaPulita(continui, gruppo, fine, b, prima);
         if (!via) { conti.pezziSenzaStrada++; continue; }
         continui.push({ tipo: 'passaggio', t: via, punti: ricampiona(via, p.puntoPassaggioMm), cella, pezzo: true, collegamento: true });
       }
-      continui.push(...cucito);
+      continui.push(...cuci(gruppo, [], prima));
       conti.pezzi++;
     }
     // il filo passa al modulo dopo senza tagliarsi (Lorenzo: «i moduli sono tutti rasafilo non sono collegati non va bene»)
@@ -875,7 +977,7 @@ export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRet
       const coda = moduloPrima[moduloPrima.length - 1].punti, a = coda[coda.length - 1], b = continui[0].punti[0];
       if (d(a, b) > MOVIMENTO_LUNGO_MM) {
         // se i due moduli non si toccano, per esempio ai lati di un incavo, si cerca fra tutto quello già cucito
-        const via = strada(moduloPrima, continui, a, b, dentro) ?? strada(oggetti.filter((o) => o.t.some((q) => q[0] > Math.min(a[0], b[0]) - 60 && q[0] < Math.max(a[0], b[0]) + 60 && q[1] > Math.min(a[1], b[1]) - 60 && q[1] < Math.max(a[1], b[1]) + 60)), continui, a, b, dentro) ?? (p.corsie ? stradaInCorsia(bordo, a, b, p)?.t ?? null : null);
+        const via = strada(moduloPrima, continui, a, b, dentro, 3, cucite.sopra) ?? strada(oggetti.filter((o) => o.t.some((q) => q[0] > Math.min(a[0], b[0]) - 60 && q[0] < Math.max(a[0], b[0]) + 60 && q[1] > Math.min(a[1], b[1]) - 60 && q[1] < Math.max(a[1], b[1]) + 60)), continui, a, b, dentro, 3, cucite.sopra) ?? (p.corsie ? stradaInCorsia(bordo, a, b, p)?.t ?? null : null);
         if (via) {
           const ponte: OggettoRete = { tipo: 'passaggio', t: via, punti: ricampiona(via, p.puntoPassaggioMm), cella, collegamento: true };
           oggetti.push(ponte);
@@ -887,7 +989,9 @@ export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRet
       }
     }
     if (continui.length) { moduloPrima = continui; moduli.push({ cella, oggetti: continui }); }
-    for (const o of continui) {
+    for (const pezzo of daSoli) moduli.push({ cella: pezzo[0].cella, oggetti: pezzo });
+    for (const o of [...continui, ...daSoli.flat()]) {
+      if (o.tipo === 'catenella') cucite.aggiungi(o.t);
       if (o.tipo === 'base') conti.basi++; else if (o.tipo === 'catenella') { conti.catenelle++; catenellaMm += lunghezza(o.t); if (o.nuovo) conti.lineeNuove++; } else conti.passaggi++;
       conti.punti += o.punti.length;
       conti.filoMm += lunghezza(o.punti);
@@ -939,7 +1043,7 @@ export function stratiRete(e: EsitoRete): ExportLayer[] {
   const strati: ExportLayer[] = [];
   for (const [cella, lista] of perCella) {
     strati.push({
-      id: `modulo-r${cella.riga}-c${cella.colonna}`, color: TINTE[((cella.colonna % TINTE.length) + TINTE.length) % TINTE.length],
+      id: `modulo-r${cella.riga}-c${cella.colonna}${cella.pezzoDaSolo ? `-pezzo${cella.pezzoDaSolo}` : ''}`, color: TINTE[((cella.colonna % TINTE.length) + TINTE.length) % TINTE.length],
       polylines: tratti(lista),
     });
   }

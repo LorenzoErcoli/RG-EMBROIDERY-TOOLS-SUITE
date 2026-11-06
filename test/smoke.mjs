@@ -7100,8 +7100,8 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   check('l’ingombro regge centinaia di migliaia di punti', rg.rcRiquadro(quadrato, [{ punti: moltiPunti }]), { x0: -5, y0: -5, w: 310, h: 210 });
   const s = rg.rcStrati(e);
   // l'uscita (Lorenzo): passa sotto i moduli dopo, e il cambio ago avviene fuori
-  check('uno strato per modulo, ogni modulo un filo solo', [s.length, s.reduce((n, l) => n + l.polylines.length, 0)], [e.conti.moduli, e.conti.moduli + e.conti.movimentiLunghi]);
-  check('ogni modulo finisce con un\'uscita', [e.conti.uscite, e.oggetti.filter((o) => o.uscita).length, e.oggetti.filter((o, i) => o.uscita && (e.oggetti[i + 1]?.cella === o.cella)).length], [e.conti.moduli, e.conti.moduli, 0]);
+  check('uno strato per modulo e per pezzo da solo, ognuno un filo solo', [s.length, s.reduce((n, l) => n + l.polylines.length, 0), new Set(s.map((l) => l.id)).size], [e.conti.moduli + e.conti.pezziDaSoli, e.conti.moduli + e.conti.pezziDaSoli + e.conti.movimentiLunghi, s.length]);
+  check('ogni modulo e ogni pezzo da solo finisce con un\'uscita', [e.conti.uscite, e.oggetti.filter((o) => o.uscita).length, e.oggetti.filter((o, i) => o.uscita && (e.oggetti[i + 1]?.cella === o.cella)).length], [e.conti.moduli + e.conti.pezziDaSoli, e.conti.moduli + e.conti.pezziDaSoli, 0]);
   const oltre = (q) => Math.max(0 - q.x, q.x - 300, 0 - q.y, q.y - 200);
   check('il cambio ago è fuori: ogni modulo finisce oltre il contorno', s.every((l) => { const pl = l.polylines[l.polylines.length - 1]; return oltre(pl[pl.length - 1]) > P.uscitaFuoriMm * 0.8; }), true);
   const righeDelModulo = [0, 10, 30, 40, 20].map((y) => ({ tipo: 'catenella', t: [[0, y], [100, y]] }));
@@ -7127,9 +7127,31 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   check('senza memoria o con la memoria piena non si ferma niente', [rg.rcLeggiElenco(null).moduli.length, rg.rcScriviElenco({ setItem: () => { throw new Error('piena'); } }, diSerie), rg.rcLeggiElenco(memoriaProva({ 'rg-rete-catenella-moduli': 'rovinato' })).moduli.length], [0, false, 0]);
   // Lorenzo, 2026-11-04: «in maniera automatica si aggiungano pezzi ai moduli dove vicino ci sono i bordi e c'è del bianco»
   const conPezzi = rg.rcCostruisci(m, quadrato, P), senzaPezzi = rg.rcCostruisci(m, quadrato, { ...P, pezziSulBordo: false });
-  check('i pezzi sul bordo: più catenella, stessi moduli, stesse uscite, stessi cambi ago', [conPezzi.conti.pezzi > 0, conPezzi.conti.catenelle > senzaPezzi.conti.catenelle, conPezzi.conti.moduli === senzaPezzi.conti.moduli, conPezzi.conti.uscite === senzaPezzi.conti.uscite, rg.rcStrati(conPezzi).length === rg.rcStrati(senzaPezzi).length], [true, true, true, true, true]);
+  check('i pezzi sul bordo: più catenella, stessi moduli; uscite e cambi ago in più solo per i pezzi da soli', [conPezzi.conti.pezzi > 0, conPezzi.conti.catenelle > senzaPezzi.conti.catenelle, conPezzi.conti.moduli === senzaPezzi.conti.moduli, conPezzi.conti.uscite - senzaPezzi.conti.uscite, rg.rcStrati(conPezzi).length - rg.rcStrati(senzaPezzi).length], [true, true, true, conPezzi.conti.pezziDaSoli, conPezzi.conti.pezziDaSoli]);
   const passoFuori = conPezzi.oggetti.filter((o, i) => i && o.cella === conPezzi.oggetti[i - 1].cella && Math.hypot(o.punti[0][0] - conPezzi.oggetti[i - 1].punti.at(-1)[0], o.punti[0][1] - conPezzi.oggetti[i - 1].punti.at(-1)[1]) > 7).length;
   check('i pezzi senza salti: il filo ci arriva sulle linee', [passoFuori, conPezzi.conti.pezziSenzaStrada], [0, 0]);
+  // Lorenzo, 2026-11-05: «le imbastiture passano sopra il punto catenella. Non va per niente bene»
+  const corsaSuCucite = (rete) => {
+    const cucite = [], segno = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], Q = dx * dx + dy * dy, f = Q ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / Q)) : 0; return Math.hypot(p[0] - a[0] - f * dx, p[1] - a[1] - f * dy); };
+    let peggiore = 0;
+    for (const o of rete.oggetti) {
+      if (o.tipo === 'catenella') { for (let i = 1; i < o.t.length; i++) cucite.push([o.t[i - 1], o.t[i]]); continue; }
+      if (!o.collegamento) continue; // qui il modulo è di poche linee: i suoi passaggi ci stanno sopra per disegno e le uscite non hanno altra via. Sul modulo vero: sapere/tool/rete-catenella.md
+      let corsa = 0;
+      for (let i = 1; i < o.punti.length; i++) {
+        const a = o.punti[i - 1], b = o.punti[i], l = Math.hypot(b[0] - a[0], b[1] - a[1]), mz = [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+        const sopra = l > 0 && cucite.some(([A, B]) => { const dx = B[0] - A[0], dy = B[1] - A[1], lb = Math.hypot(dx, dy); return lb > 0 && Math.abs(mz[0] - A[0]) < 40 && Math.abs(mz[1] - A[1]) < 40 && segno(mz, A, B) <= 0.75 && Math.abs((b[0] - a[0]) * dx + (b[1] - a[1]) * dy) / (l * lb) > Math.SQRT1_2; });
+        corsa = sopra ? corsa + l : 0;
+        peggiore = Math.max(peggiore, corsa);
+      }
+    }
+    return peggiore;
+  };
+  const conInterniPezzi = rg.rcCostruisci(m, quadrato, { ...P, passaggiInterni: true });
+  check('le strade non seguono catenelle già cucite', [corsaSuCucite(conPezzi) < 10, corsaSuCucite(conInterniPezzi) < 12], [true, true]);
+  // l'ultima colonna ha pezzi a destra, che in fondo alla riga si cuciono da soli
+  const fondoRiga = [...new Set(conPezzi.oggetti.filter((o) => o.cella.pezzoDaSolo).map((o) => o.cella))];
+  check('un pezzo da solo ha un ago diverso da chi lo precede', fondoRiga.every((c) => { const i = conPezzi.oggetti.findIndex((o) => o.cella === c); return i > 0 && conPezzi.oggetti[i - 1].uscita && conPezzi.oggetti[i - 1].cella.colonna !== c.colonna; }), true);
   // Lorenzo, 2026-11-05: «si lavora sempre da sinistra a destra, quindi prima modulo e poi area infittita a destra»
   const mediaDiX = (l) => { const x = l.flatMap((o) => o.t.map((q) => q[0])); return x.reduce((u, v) => u + v, 0) / (x.length || 1); };
   const sequenza = [...new Set(conPezzi.oggetti.map((o) => o.cella))].map((c) => { const og = conPezzi.oggetti.filter((o) => o.cella === c && !o.uscita), primo = og.findIndex((o) => !o.pezzo), ultimo = og.length - 1 - [...og].reverse().findIndex((o) => !o.pezzo), xm = mediaDiX(og.filter((o) => !o.pezzo)); return { prima: og.slice(0, primo).filter((o) => o.tipo === 'catenella'), dopo: og.slice(ultimo + 1).filter((o) => o.tipo === 'catenella'), xm }; });
@@ -7162,6 +7184,13 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   const fitta = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40 }), piuFitta = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 15 });
   check('infittire: la soglia più bassa fa più linee e più catenella per cm²', [fitta.conti.lineeNuove > 0, piuFitta.conti.lineeNuove > fitta.conti.lineeNuove, fitta.conti.catenellaPerCm2 > e.conti.catenellaPerCm2], [true, true, true]);
   check('infittire non cambia quali moduli ci sono', fitta.conti.moduli, e.conti.moduli);
+  // Lorenzo, 2026-11-05: «dubbi sui punti di infittimento che non siano ben collegati. Sarebbe un problema perché significa che si sgancia la rete»
+  const distDaSegmento = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], Q = dx * dx + dy * dy, f = Q ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / Q)) : 0; return Math.hypot(p[0] - a[0] - f * dx, p[1] - a[1] - f * dy); };
+  const lineeCatenella = fitta.oggetti.filter((o) => o.tipo === 'catenella'), dentroQuadrato = (q) => q[0] > 8 && q[0] < 292 && q[1] > 8 && q[1] < 192; // vicino al bordo la linea dove arriva può essere tagliata via
+  const capiStaccati = lineeCatenella.filter((o) => o.nuovo && dentroQuadrato(o.t[0])).filter((o) => { let m = 9; for (const x of lineeCatenella) { if (x === o) continue; for (let i = 1; i < x.t.length; i++) m = Math.min(m, distDaSegmento(o.t[0], x.t[i - 1], x.t[i])); } return m > 0.05; });
+  check('ogni linea nuova parte dal centro di una linea', capiStaccati.length, 0);
+  const capiLontani = lineeCatenella.filter((o) => o.nuovo && dentroQuadrato(o.t.at(-1))).filter((o) => { let m = 9; for (const x of lineeCatenella) { if (x === o) continue; for (let i = 1; i < x.t.length; i++) m = Math.min(m, distDaSegmento(o.t.at(-1), x.t[i - 1], x.t[i])); } return m > 0.05; });
+  check('il capo lontano di ogni linea nuova cade sul centro della linea dove arriva', capiLontani.length, 0);
   const i1 = fitta.oggetti.findIndex((o) => o.nuovo && !o.pezzo), cat = fitta.oggetti[i1], pas = fitta.oggetti[i1 - 1];
   check('ogni linea nuova: passaggio all\'andata e catenella al ritorno, sullo stesso tracciato', [pas.tipo, cat.tipo, Math.hypot(pas.t[0][0] - cat.t[cat.t.length - 1][0], pas.t[0][1] - cat.t[cat.t.length - 1][1]) < 1e-9], ['passaggio', 'catenella', true]);
   const passiFitti = rg.rcStrati(fitta).flatMap((l) => l.polylines).filter((pl) => pl.some((q, i) => i && Math.hypot(q.x - pl[i - 1].x, q.y - pl[i - 1].y) > 7));
