@@ -49,7 +49,10 @@ function contoursWithRole(contours: Contour[], roles: RoleAssignment, role: Role
  * massimo resta identico (2.999mm), cioè il pass NON allunga i punti (vincolo di Lorenzo).
  */
 function minStitched(pl: Polyline, minMm: number): Polyline {
-  const out = enforceMinStitch(pl, minMm);
+  return senzaDoppi(enforceMinStitch(pl, minMm));
+}
+function senzaDoppi(pl: Polyline): Polyline {
+  const out = pl.slice();
   while (out.length >= 2 && distance(out[out.length - 1], out[out.length - 2]) < 1e-9) out.pop();
   return out;
 }
@@ -105,7 +108,7 @@ export function runPipeline(
       const innerVoids = exclusions.filter((v) => v.length > 0 && pointInPolygon(v[0], m.points));
       for (const gl of generateStriatura({ outline: m.points, voids: innerVoids, coperte, giaCucito }, p)) {
         for (const pl of gl.polylines) {
-          const s = minStitched(pl, p.minStitchMm);
+          const s = gl.minimoFatto ? senzaDoppi(pl) : minStitched(pl, p.minStitchMm);
           if (s.length >= 2) fatti.push(s);
         }
         if (gl.passaggi) passaggi.push(...gl.passaggi);
