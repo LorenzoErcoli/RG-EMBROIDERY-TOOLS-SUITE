@@ -68,7 +68,7 @@ export { sagomaDaZone, sagomaDaAnello, sagomaDaAnelli } from ${JSON.stringify(po
 export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordatura, stratiProgramma, conPuntoMinimo, unisciTratti } from ${JSON.stringify(posix('apps/cannage-rafia/src/programma.ts'))};
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
-export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_DI_SERIE, fermaSottoIlSecondo as pmFerma, macchiePerStilista as pmPerStilista, tagliDeiSalti as pmTagli } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
+export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_DI_SERIE, fermaSottoIlSecondo as pmFerma, macchiePerStilista as pmPerStilista, tagliDeiSalti as pmTagli, rigaSfrangiata as pmSfrangiata } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
 export { lineePerStilista as rcLineeStilista, scegliModelli as rcScegliModelli, oggettiDaMandare as rcOggettiDaMandare, oggettiMancanti as rcOggettiMancanti } from ${JSON.stringify(posix('apps/rete-catenella/src/stilista-psil.ts'))};
 export { aggiungiModulo as rcAggiungiModulo, leggiElenco as rcLeggiElenco, leggiModulo as rcLeggiModulo, scriviElenco as rcScriviElenco, togliModulo as rcTogliModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/elenco-moduli.ts'))};
 export { griglia as rcGriglia, riquadroRete as rcRiquadro, costruisciRete as rcCostruisci, latoSuperioreDritto as rcLatoDritto, filoSopra as rcFiloSopraIntero, stratiRete as rcStrati, catenella as rcCatenella, pezziDentro as rcPezzi, maschera as rcMaschera, PARAMETRI_RETE as RC_PARAMETRI, motore as rcMotore } from ${JSON.stringify(posix('apps/rete-catenella/src/motore.ts'))};
@@ -6894,6 +6894,32 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
       const senza = rg.misuraDst(rg.dstFromExportLayers([{ id: 'raso2-1', color: '#000', polylines: st.livello.tratti }]));
       check(`nel DST del 2° livello ${attesi} tagli su ${st.livello.salti} salti (oltre ${rg.PM_DI_SERIE.tagliaOltre} mm); i punti non cambiano`,
         [attesi > 0, conTagli.trim, senza.trim, conTagli.punti === senza.punti], [true, attesi, 0, true]);
+    }
+    // IL RIEMPIMENTO SFRANGIATO (Lorenzo, 2026-11-06: «è fondamentalmente un andata e ritorno con il centro al centro della
+    // macchia ma sempre in verticale, con spostamento orizzontale»; le punte tutto il giro, 2–6 mm oltre il bordo)
+    {
+      const riga = [{ x: 5, y: 0 }, { x: 5, y: 3 }, { x: 5, y: 7 }, { x: 5, y: 10 }];
+      const s = rg.pmSfrangiata(riga, 1, 2, 6, 4);
+      const ys = s.map((p) => p.y), su = Math.min(...ys), giu = Math.max(...ys);
+      const lunghi = s.slice(1).map((p, i) => Math.hypot(p.x - s[i].x, p.y - s[i].y));
+      const centri = s.filter((p) => Math.abs(p.y - 5) < 1e-9).length;
+      // (andata e ritorno negli stessi buchi: dalla punta si torna ripassando per gli stessi punti)
+      const kB = ys.indexOf(giu), kA = ys.indexOf(su);
+      const stessiBuchi = s.slice(0, kB + 1).every((p, i) => { const q = s[2 * kB - i]; return q && q.x === p.x && q.y === p.y; })
+        && s.slice(2 * kB, kA + 1).every((p, i) => { const q = s[2 * kA - 2 * kB - i]; return q && q.x === p.x && q.y === p.y; });
+      check(`la riga sfrangiata: comincia e finisce nel centro, punte da 2 a 6 mm oltre i capi (${(-su).toFixed(1)} e ${(giu - 10).toFixed(1)} mm), stessi buchi, nessun punto oltre 4 mm`,
+        [s[0], s.at(-1), centri, -su >= 2 && -su <= 6, giu - 10 >= 2 && giu - 10 <= 6, stessiBuchi, Math.max(...lunghi) <= 4 + 1e-9, s.every((p) => p.x === 5)],
+        [{ x: 5, y: 5 }, { x: 5, y: 5 }, 3, true, true, true, true, true]);
+      const sottile = chiare.slice(0, 10), alto = scure.slice(0, 10);
+      const raso = rg.pmCostruisci([], sottile, {}, rg.PM_DI_SERIE, alto);
+      const sfr = rg.pmCostruisci([], sottile, {}, { ...rg.PM_DI_SERIE, riempimento2: 'sfrangiato' }, alto);
+      const st = (r, n) => r.stop.filter((x) => x.strato === n);
+      const punti2 = (r) => st(r, 2).reduce((x, s) => x + s.livello.punti, 0);
+      const oltre = Math.max(0, ...st(sfr, 2).flatMap((s) => s.livello.tratti.flat()).map((p) => (alto.some((m) => rg.pointInPolygon(p, m)) ? 0 : Math.min(...alto.map((m) => rg.distanceToBoundary(p, m))))));
+      let piuLungo = 0; for (const s of sfr.stop) for (const tr of s.livello.tratti) for (let i = 1; i < tr.length; i++) piuLungo = Math.max(piuLungo, Math.hypot(tr[i].x - tr[i - 1].x, tr[i].y - tr[i - 1].y));
+      check(`il 2° livello sfrangiato: gli stessi salti del raso (${st(raso, 2).reduce((x, s) => x + s.livello.salti, 0)}), il 1° identico, più punti (${punti2(raso)} → ${punti2(sfr)}), punte al più ${oltre.toFixed(1)} mm fuori, nessun punto oltre il punto massimo`,
+        [st(sfr, 2).map((s) => s.livello.salti), JSON.stringify(st(sfr, 1).map((s) => s.livello.tratti)) === JSON.stringify(st(raso, 1).map((s) => s.livello.tratti)), punti2(sfr) > punti2(raso) * 2, oltre > 2 && oltre <= 6 + rg.PM_DI_SERIE.sfrangiatura2 + 0.6, piuLungo <= rg.PM_DI_SERIE.rasoPuntoMax2 + 0.15],
+        [st(raso, 2).map((s) => s.livello.salti), true, true, true, true]);
     }
     const soloBuco = rg.pmCostruisci([], [q(0, 0, 30)], {}, FERMI, [q(10, 10, 10)]);
     const nelBuco = soloBuco.stop[0].livello.tratti.flat().filter((p) => p.x > 12 && p.x < 18 && p.y > 12 && p.y < 18);
