@@ -3865,6 +3865,13 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   // della forma, quantizzata alle celle (e spostata da area di prova e strisce): non nel riferimento di Stilista.
   // Per questo torna come DST, in un documento nuovo, e non al suo posto (sorgente → null).
   const aggancio: AggancioStilista = {
+    tool: 'cross-stitch',
+    riapri(meta) {
+      pushUndo();
+      if (!applyProject(meta)) { undo.pop(); return false; }
+      afterLoad();
+      return true;
+    },
     carica(svg, nome) {
       shapeSrc = { result: parseSvgToContours(svg), name: nome };
       num('shapeRealW').value = '0'; // l'SVG dichiara le sue misure

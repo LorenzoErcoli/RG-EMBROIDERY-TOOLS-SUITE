@@ -1171,6 +1171,13 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   // Ogni stop torna come un oggetto a sé, nell'ordine, sull'ago dell'oggetto selezionato.
   let svgStilista: string | null = null;
   const aggancio: AggancioStilista = {
+    tool: 'interlace',
+    riapri(meta) {
+      // senza cartamodello il disegno è la tavola generata, che sta nel progetto
+      if (!applyImportedProject(meta, !svgStilista)) return false;
+      render();
+      return true;
+    },
     carica(svg, nome) {
       // l'SVG dichiara le sue misure: una larghezza reale lo riscalerebbe e il ritorno non cadrebbe più al suo posto
       params.realWidthMm = 0;
