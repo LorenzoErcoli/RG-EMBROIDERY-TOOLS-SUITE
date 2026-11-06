@@ -15,8 +15,13 @@ export const scheda: SchedaParametri = {
       tipo: 'bool', unita: '', predefinito: false, concetto: 'interruttore',
     },
     {
+      id: 'levelsOverlap', nome: 'sovrapposti', etichetta: 'I livelli sotto restano interi: quelli sopra si cuciono sopra',
+      aiuto: 'Spenta: dove una macchia sta sotto una di un livello più alto si ferma, e ci entra solo di «Un livello entra sotto quelli sopra di».',
+      tipo: 'bool', unita: '', predefinito: true, concetto: 'interruttore',
+    },
+    {
       id: 'secondLevelMargin', nome: 'secondoMargine', etichetta: 'Un livello entra sotto quelli sopra di',
-      aiuto: 'Dove una macchia sta sotto una di un livello più alto si ferma: ci entra solo di tanto, così non si sovrappone troppo filo.',
+      aiuto: 'Solo coi livelli sotto non interi: dove una macchia sta sotto una di un livello più alto si ferma, e ci entra solo di tanto.',
       tipo: 'num', unita: 'mm', min: 0, passo: 0.1, predefinito: 1, concetto: 'rientro',
     },
     {

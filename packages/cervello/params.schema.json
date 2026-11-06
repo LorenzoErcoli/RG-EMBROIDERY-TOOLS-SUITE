@@ -1946,6 +1946,11 @@
           "default": false,
           "x-id": "withOverlay"
         },
+        "sovrapposti": {
+          "$ref": "#/$defs/levelsOverlap",
+          "default": true,
+          "x-id": "levelsOverlap"
+        },
         "secondoMargine": {
           "$ref": "#/$defs/secondLevelMargin",
           "default": 1,
@@ -5497,10 +5502,16 @@
       "description": "Lo stesso punto della base sopra il raso, dentro le macchie. Spento: solo il raso.",
       "x-concetto": "interruttore"
     },
+    "levelsOverlap": {
+      "type": "boolean",
+      "title": "I livelli sotto restano interi: quelli sopra si cuciono sopra",
+      "description": "Spenta: dove una macchia sta sotto una di un livello più alto si ferma, e ci entra solo di «Un livello entra sotto quelli sopra di».",
+      "x-concetto": "interruttore"
+    },
     "secondLevelMargin": {
       "type": "number",
       "title": "Un livello entra sotto quelli sopra di",
-      "description": "Dove una macchia sta sotto una di un livello più alto si ferma: ci entra solo di tanto, così non si sovrappone troppo filo.",
+      "description": "Solo coi livelli sotto non interi: dove una macchia sta sotto una di un livello più alto si ferma, e ci entra solo di tanto.",
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 0.1,
@@ -6886,6 +6897,7 @@
         "showPasses",
         "withBase",
         "withOverlay",
+        "levelsOverlap",
         "satinByStilista",
         "cutBaseUnderSpots",
         "fullBottom",

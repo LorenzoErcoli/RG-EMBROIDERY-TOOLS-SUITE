@@ -34,6 +34,12 @@ export type ParametriMacchie = {
    */
   secondoMargine: number;
   /**
+   * I LIVELLI SOVRAPPOSTI (Lorenzo, 2026-11-06: «il livello 2 non deve bucare il livello 1 ma deve sovrapporsi»; scelto
+   * «tutti interi»): ogni livello si cuce intero e quelli sopra gli si cuciono sopra. Spento: ognuno si ferma sotto quelli
+   * sopra, di `secondoMargine` (com'era dal 2026-11-03).
+   */
+  sovrapposti: boolean;
+  /**
    * ZERO SALTI NEL PRIMO LIVELLO (Lorenzo, 2026-11-03: «deve passare sotto il raso che c'è sopra, andando a zero di salti»;
    * misurato il suo disegno, le macchie del secondo livello quasi non si toccano, e ha scelto «punti corti a vista»): dove
    * il filo fra due macchie non può restare coperto attraversa lo spazio a vista, al più di tanti mm per volta. 0 = si salta.
@@ -156,6 +162,7 @@ export const PARAMETRI_MACCHIE: ParametriMacchie = {
   conBase: false,
   conSopra: false,
   secondoMargine: 1,
+  sovrapposti: true,
   secondoVista: 12,
   daSinistra2: false,
   rasoAngolo2: 90,
@@ -2273,7 +2280,8 @@ export function costruisciMacchie(
     let scure = forme;
     for (const l of sottoLaCima.slice().reverse()) {
       const a = (l.par.rasoAngolo * Math.PI) / 180;
-      const fermate = l.macchie.flatMap((m) => fermaSottoIlSecondo(m, scure, par.secondoMargine, { x: Math.cos(a), y: Math.sin(a) }));
+      // (sovrapposti: la macchia resta intera; il filo passa lo stesso sotto quelli sopra)
+      const fermate = par.sovrapposti ? l.macchie.slice() : l.macchie.flatMap((m) => fermaSottoIlSecondo(m, scure, par.secondoMargine, { x: Math.cos(a), y: Math.sin(a) }));
       out.unshift({ strato: l.strato, par: { ...l.par, ponti: 0 }, fermate, scure });
       scure = [...fermate, ...scure];
     }
