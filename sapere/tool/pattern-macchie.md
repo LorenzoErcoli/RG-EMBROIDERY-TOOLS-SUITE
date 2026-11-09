@@ -221,14 +221,15 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    quelli sopra di*. I progetti salvati prima si riaprono con la casella spenta, come erano; i parametri ricordati dalla pagina
    no, prendono quella di serie.
 39. (2026-11-06) **Il taglio sui salti lunghi.** *«Manca la gestione dei salti sui passaggi sopra un tot, sia un dst che nel
-   rimandalo a stilista»*; alla domanda ha scelto «salto lungo → taglio». Campo `tagliaOltre` in *Cosa ricamare*, di serie 3 mm
-   (scelto da me, da confermare): nel DST un salto più lungo porta il taglio del filo (`ExportLayer.trims`), uno più corto
+   rimandalo a stilista»*; alla domanda ha scelto «salto lungo → taglio». Campo `tagliaOltre` in *Cosa ricamare*, di serie 10 mm
+   (2026-11-09: prima erano 3, e a un suo amico il ricamo è uscito spezzettato e pieno di tagli; Lorenzo: *«mettilo a 10 mm»*): nel DST un salto più lungo porta il taglio del filo (`ExportLayer.trims`), uno più corto
    resta salto. Non cambia il ricamo, quindi si cambia senza rigenerare; il *Programma* dice quanti salti di ogni stop hanno il
    taglio. Vale per *Esporta DST*, per *Simula* e per *Invia a Stilista* quando il disegno non viene da Stilista (va il DST).
    **Non vale** per il ritorno in Stilista al suo posto: il plugin manda solo il salto, non il taglio, e per aggiungerlo va
    capito come Stilista segna un taglio nei punti. I progetti salvati prima si riaprono con 0, senza tagli, come erano. Sul suo
-   disegno (tre livelli divisi per grandezza): oltre 3 mm 7 tagli su 8 salti nel 2° livello e 71 su 87 nel 3°; a due livelli
-   135 su 175.
+   disegno (tre livelli divisi per grandezza): oltre 10 mm 7 tagli su 8 salti nel 2° livello e 18 su 87 nel 3°; a due livelli
+   33 su 175 (oltre 3 mm erano 135). La pagina ricorda gli ultimi parametri: dove si era già usato il tool il campo può restare
+   a 3 finché non lo si cambia una volta.
 40. (2026-11-06) **Il riempimento sfrangiato.** *«ora le macchie che creo di def sono riempimenti raso. Invece vorrei poter
    scegliere il riempimento o raso o riempimento con punto sfrangiato, quello che usiamo appunto nel tools punto sfrangiato, ma
    che segua e riempia le macchie.»* Precisato: *«è fondamentalmente un andata e ritorno con il centro al centro della macchia

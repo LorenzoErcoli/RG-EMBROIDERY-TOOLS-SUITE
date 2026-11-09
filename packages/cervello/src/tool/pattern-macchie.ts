@@ -17,7 +17,7 @@ export const scheda: SchedaParametri = {
     {
       id: 'trimJumpsOver', nome: 'tagliaOltre', etichetta: 'Nel DST, taglia i salti più lunghi di',
       aiuto: 'Un salto più lungo porta il taglio del filo; uno più corto resta un salto. Non cambia il ricamo: non serve rigenerare. 0 = mai.',
-      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 3, concetto: 'ordine-cucitura',
+      tipo: 'num', unita: 'mm', min: 0, passo: 0.5, predefinito: 10, concetto: 'ordine-cucitura',
     },
     {
       id: 'levelsOverlap', nome: 'sovrapposti', etichetta: 'I livelli sotto restano interi: quelli sopra si cuciono sopra',

@@ -190,7 +190,7 @@ export const PARAMETRI_MACCHIE: ParametriMacchie = {
   conSopra: false,
   secondoMargine: 1,
   sovrapposti: true,
-  tagliaOltre: 3,
+  tagliaOltre: 10,
   secondoVista: 12,
   daSinistra2: false,
   rasoAngolo2: 90,

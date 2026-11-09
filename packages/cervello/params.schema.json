@@ -1948,7 +1948,7 @@
         },
         "tagliaOltre": {
           "$ref": "#/$defs/trimJumpsOver",
-          "default": 3,
+          "default": 10,
           "x-id": "trimJumpsOver"
         },
         "sovrapposti": {
