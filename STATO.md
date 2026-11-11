@@ -1466,6 +1466,7 @@ Lo si è costruito solo come immagini da guardare insieme, e ogni passo ha la su
   nodi; ~1,5 s per variante con numpy 2.5.3 / scipy 1.18.1 su Python 3.14). HTML generato (0,9 MB),
   aperto nel browser: le sei varianti e le due fasi si scambiano, nessun errore in console. Due
   giri danno numeri identici.
+- **`/selezione.json` dà `indici_documento`** (2026-11-11, dal lavoro su Allarga raso, con il sì della chat madre): accanto a `oggetti`, l'indice vero di ogni selezionato nel documento, nello stesso ordine (-1 se non si ritrova). Il campo `index` di ogni oggetto è la posizione nella risposta, non nel documento (`Collegamento.cs`, `Index = i`), e resta così perché Rete a catenella lo usa: con una selezione parziale, chi lo usa per `/punti-cuciti` o `/riscrivi-punti` legge o scrive gli oggetti sbagliati. Compilato (`dotnet build`, 0 errori), **non installato**: sul PC di Lorenzo c'è ancora il plugin del 5 novembre. La pagina di Allarga raso usa il campo quando c'è, e col plugin vecchio ritrova gli indici confrontando gli oggetti. Smoke: il campo è nel codice del plugin, la pagina lo usa.
 
   | variante | Ø filo | garza compr. | filo in più | arco medio / p90 | copertura durante → dopo | err. lunghezza |
   |---|---|---|---|---|---|---|
