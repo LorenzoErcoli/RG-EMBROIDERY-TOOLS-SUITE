@@ -1,0 +1,16 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!--
+    Le prove del plugin che non hanno bisogno di Stilista: si compilano qui i file del plugin che non usano le sue
+    DLL. Le lancia test/smoke.mjs (dotnet run), e falliscono con codice diverso da 0.
+  -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net48</TargetFramework>
+    <LangVersion>latest</LangVersion>
+    <RootNamespace>StilistaHostSkeleton</RootNamespace>
+  </PropertyGroup>
+  <ItemGroup>
+    <Compile Include="..\stilista-link\Tracce.cs" Link="Tracce.cs" />
+    <Compile Include="..\stilista-link\Configurazione.cs" Link="Configurazione.cs" />
+  </ItemGroup>
+</Project>

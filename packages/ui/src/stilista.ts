@@ -5,6 +5,7 @@
 // La finestra giusta: quella che ha aperto il tool (?stilista=<porta> nell'indirizzo), altrimenti
 // fra quelle che rispondono quella con qualcosa selezionato, poi con un documento, poi l'ultima attivata.
 import { readDstMetadata } from '@rg/core';
+import { senzaDatiDiProgetto } from './save';
 
 const PRIMA_PORTA = 5370;
 const QUANTE_PORTE = 10;
@@ -226,6 +227,45 @@ export interface ParametriLetti {
   diversi: number;
   progetto: ProgettoInStilista | null;
 }
+
+// ------------------------------------------------------------------------------------------------
+// LE TRACCE RG NEL DOCUMENTO (2026-11-12, Lorenzo: «dammi la possibilità di spegnere e accendere perché io ho paura che
+// poi mi sgamano quelli del software di Stilista»). L'interruttore sta nel plugin, che se lo ricorda per tutte le
+// finestre; spente, nel documento non va niente di nostro: né nomi «RG …» né parametri. Qui si legge prima di ogni
+// invio, così da spente il tool non manda nemmeno i parametri, e il DST che Stilista apre esce senza la busta.
+// ------------------------------------------------------------------------------------------------
+
+export interface StatoTracce {
+  accese: boolean;
+  /** Nessuno ha ancora scelto: vale il valore di serie del plugin (spente). */
+  diSerie: boolean;
+}
+
+/** Le tracce RG di Stilista; null da un plugin di prima, che non ha l'interruttore e le scrive sempre. */
+export async function tracceStilista(f: FinestraStilista): Promise<StatoTracce | null> {
+  const r = await fetch(`http://127.0.0.1:${f.porta}/tracce`).catch(() => null);
+  if (!r?.ok) return null;
+  const s = await r.json() as { accese: boolean; di_serie: boolean };
+  return { accese: !!s.accese, diSerie: !!s.di_serie };
+}
+
+export async function impostaTracceStilista(f: FinestraStilista, accese: boolean): Promise<StatoTracce> {
+  const r = await fetch(`http://127.0.0.1:${f.porta}/tracce?accese=${accese ? 1 : 0}`, { method: 'POST', headers: { 'X-RG-Link': '1' } });
+  if (!r.ok) throw new Error(`Stilista ha risposto ${r.status}`);
+  const s = await r.json() as { accese: boolean; di_serie: boolean };
+  return { accese: !!s.accese, diSerie: !!s.di_serie };
+}
+
+/** Toglie nomi e parametri RG da tutti gli oggetti del documento aperto. Dice quanti. */
+export async function pulisciStilista(f: FinestraStilista): Promise<{ puliti: number; oggetti: number }> {
+  const r = await fetch(`http://127.0.0.1:${f.porta}/pulisci`, { method: 'POST', headers: { 'X-RG-Link': '1' } });
+  const esito = await r.json().catch(() => null) as { ok?: boolean; puliti: number; oggetti: number; errore?: string } | null;
+  if (r.status === 404) throw new Error('il plugin di questa finestra non sa pulire: va aggiornato');
+  if (!r.ok || !esito?.ok) throw new Error(esito?.errore ?? `Stilista ha risposto ${r.status}`);
+  return { puliti: esito.puliti, oggetti: esito.oggetti };
+}
+
+const TRACCE_SPENTE = ' · tracce RG spente: nel documento niente nomi né parametri';
 
 /** Il progetto scritto negli oggetti selezionati; null da un plugin di prima, che non sa dirlo. */
 export async function parametriDaStilista(f: FinestraStilista): Promise<ParametriLetti | null> {
@@ -469,7 +509,9 @@ export async function inviaAStilista(a: AggancioStilista): Promise<void> {
       const strati = a.strati().filter((s) => s.polylines.some((l) => l.length > 1) || s.riempimenti?.forme.length);
       if (!strati.length) throw new Error('non c\'è niente da cucire');
       const agoBase = agoStilista(testo!);
-      const progetto = await progettoDaInviare(a);
+      // un plugin di prima non ha l'interruttore: le tracce le scrive, come sempre
+      const accese = (await tracceStilista(finestra))?.accese ?? true;
+      const progetto = accese ? await progettoDaInviare(a) : { nota: TRACCE_SPENTE };
       let punti = 0, salti = 0, ago = '', riempite = 0, nonRiempite = 0, salvati = true;
       for (const [i, s] of strati.entries()) {
         a.stato(`Invio a Stilista… strato ${i + 1} di ${strati.length}`);
@@ -496,8 +538,12 @@ export async function inviaAStilista(a: AggancioStilista): Promise<void> {
       return;
     }
     const dst = a.dst();
-    const progetto = await progettoDaInviare(a, dst);
-    const salvati = await dstAStilista(finestra, dst.bytes, dst.nome, progetto.dati);
+    const accese = (await tracceStilista(finestra))?.accese ?? true;
+    const progetto = accese ? await progettoDaInviare(a, dst) : { nota: TRACCE_SPENTE };
+    // spente: il DST che Stilista apre non ha la busta, e il suo nome (che resta nel titolo) non dice niente
+    const salvati = accese
+      ? await dstAStilista(finestra, dst.bytes, dst.nome, progetto.dati)
+      : await dstAStilista(finestra, senzaDatiDiProgetto(dst.bytes), 'ricamo');
     a.stato(`Inviato a Stilista (${(dst.bytes.length / 1024).toFixed(1)} KB): si apre in un documento nuovo${notaParametri(progetto, salvati)}`);
   } catch (e) {
     a.stato('Stilista: ' + (e as Error).message);
@@ -517,8 +563,67 @@ export function collegaStilista(
   const prendi = () => prendiSelezioneStilista(a);
   pulsanti.prendi?.addEventListener('click', () => { void prendi(); });
   pulsanti.invia?.addEventListener('click', () => { void inviaAStilista(a); });
+  if (pulsanti.invia) pulsanti.invia.after(bottoneTracce(a));
   if ((opzioni.prendiSubito ?? true) && portaDaIndirizzo()) void prendi();
   return prendi;
+}
+
+/**
+ * «Tracce RG»: accanto a «Invia a Stilista», apre una riga con lo stato dell'interruttore, il bottone per cambiarlo e
+ * «Pulisci il documento», che chiede conferma. Stilista si cerca solo al clic: aprire un tool non chiede niente.
+ */
+function bottoneTracce(a: AggancioStilista): HTMLElement {
+  const gruppo = document.createElement('span');
+  const b = document.createElement('button');
+  b.type = 'button';
+  b.className = 'rg-button rg-button--ghost rg-button--small';
+  b.textContent = 'Tracce RG';
+  b.title = 'Se gli oggetti mandati a Stilista portano nel documento il nome «RG …» e i parametri, e per toglierli da un documento';
+  const riga = document.createElement('div');
+  riga.className = 'rg-field__help';
+  riga.hidden = true;
+  const mostra = async () => {
+    riga.hidden = false;
+    riga.textContent = 'Cerco Stilista…';
+    try {
+      const f = await trovaStilista();
+      if (!f) throw new Error(NON_RISPONDE);
+      const s = await tracceStilista(f);
+      riga.textContent = '';
+      if (!s) { riga.textContent = 'Il plugin di questa finestra di Stilista non ha l\'interruttore: scrive sempre le tracce. Va aggiornato.'; return; }
+      const testo = document.createElement('span');
+      testo.textContent = `Tracce RG nel documento: ${s.accese ? 'accese (nome «RG …» e parametri negli oggetti)' : 'spente (niente di nostro negli oggetti)'}${s.diSerie ? ', di serie' : ''}. `;
+      const cambia = document.createElement('button');
+      cambia.type = 'button';
+      cambia.className = 'rg-button rg-button--ghost rg-button--small';
+      cambia.textContent = s.accese ? 'Spegnile' : 'Accendile';
+      cambia.addEventListener('click', async () => {
+        await impostaTracceStilista(f, !s.accese).catch((e) => a.stato('Stilista: ' + (e as Error).message));
+        void mostra();
+      });
+      const pulisci = document.createElement('button');
+      pulisci.type = 'button';
+      pulisci.className = 'rg-button rg-button--ghost rg-button--small';
+      pulisci.textContent = 'Pulisci il documento';
+      pulisci.title = 'Toglie nomi «RG …» e parametri da tutti gli oggetti del documento aperto in Stilista. I ricami restano come sono.';
+      pulisci.addEventListener('click', async () => {
+        const doc = nomeDocumento(f);
+        if (!confirm(`Togliere nomi «RG …» e parametri da tutti gli oggetti di «${doc}»?\n\nI ricami restano come sono, ma i parametri non si potranno più riaprire nel tool. Poi salva il documento in Stilista.`)) return;
+        try {
+          const esito = await pulisciStilista(f);
+          a.stato(`Stilista (${doc}): tolti nomi e parametri RG da ${esito.puliti} oggetti su ${esito.oggetti}. Ora salva il documento; le copie .Bak di Stilista hanno ancora la versione di prima`);
+        } catch (e) {
+          a.stato('Stilista: ' + (e as Error).message);
+        }
+      });
+      riga.append(testo, cambia, pulisci);
+    } catch (e) {
+      riga.textContent = 'Stilista: ' + (e as Error).message;
+    }
+  };
+  b.addEventListener('click', () => { if (riga.hidden) void mostra(); else riga.hidden = true; });
+  gruppo.append(b, riga);
+  return gruppo;
 }
 
 /** I due bottoni, con le classi del design system, da mettere accanto al file e all'export. */

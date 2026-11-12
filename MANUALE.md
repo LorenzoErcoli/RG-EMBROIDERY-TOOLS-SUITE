@@ -1103,6 +1103,12 @@ non sceglie da sé dove entra e dove esce ogni oggetto, non fa passaggi nascosti
 
 ## I parametri degli oggetti in Stilista
 
+**Le tracce RG: accese o spente.** Accanto a **Invia a Stilista** c'è il bottone **Tracce RG**. Mostra se il plugin scrive le sue tracce negli oggetti del documento: il nome «RG …» e i parametri. **Di serie sono spente**: il ricamo arriva in Stilista come sempre, ma nel documento non c'è niente di nostro, e quindi i parametri non si ritrovano. Se vuoi ritrovarli, premi **Accendile**: la scelta vale per tutte le finestre di Stilista e resta anche quando lo riapri.
+
+Anche da spente si vede che usi il plugin: c'è nella cartella `PLUG-INS` di Stilista, nella scheda **RG_LINK** e nel suo registro. Le tracce spente tolgono solo quello che finisce dentro ai documenti.
+
+**Pulire un documento.** Dal bottone **Tracce RG**, **Pulisci il documento** toglie nomi «RG …» e parametri da tutti gli oggetti del documento aperto. I ricami restano come sono. Dopo salva il documento. I documenti salvati dal 20 ottobre in poi hanno le tracce: vanno puliti uno per uno.
+
 **Ritrovarli.** Quando premi **Invia a Stilista**, parametri, pattern e cartamodello vanno nell'oggetto e si salvano nel documento. Non devi fare altro. Settimane dopo selezioni l'oggetto, apri lo stesso tool (o premi **Prendi la selezione**) e il tool riparte da lì; la barra di stato dice di quando sono i parametri. Reggono al salva con nome, allo spostamento del file, al ricalcolo e al copia e incolla in un altro documento.
 
 **Quando non riapre.** Con **Prendi solo i contorni** usi l'oggetto come forma. Se selezioni oggetti misti, o fatti con un altro tool, il tool prende i contorni come sempre e ti dice con quale tool sono stati fatti. Gli oggetti mandati prima del 2026-11-03 non hanno parametri, e nemmeno quelli che unisci in Stilista in un oggetto nuovo.
