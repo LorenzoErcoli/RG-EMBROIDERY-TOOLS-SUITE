@@ -48,6 +48,28 @@ il documento va salvato. Restano i `.Bak` di Stilista e gli oggetti incollati in
 (`ConditionalWeakTable`, `Collegamento.Tracce.cs`), riempita al ritorno e da «Pulisci»: finché la finestra resta
 aperta, la protezione è la stessa. **Chiuso e riaperto il documento, un oggetto senza nome non lo protegge più nessuno.**
 
+**Misurato su Stilista** (2026-11-13, copia di `native-sequence-test.emg3`, plugin del ramo in una finestra a parte):
+
+| prova | esito |
+|---|---|
+| senza `tracce.txt` | spente, «di serie» |
+| ricamo da 100 punti con le tracce spente | arriva intero, descrizione vuota, nessun parametro |
+| lo stesso con le tracce accese | descrizione `RG Tools · raso` e parametri |
+| ricamo senza nome, ricalcolo forzato senza lucchetto, stessa finestra | 100 → 100 punti |
+| lo stesso dopo salvataggio e riapertura in una finestra nuova (nessuna memoria) | 100 → 100; anche col lucchetto 100 → 100 |
+| «Pulisci» | 1 oggetto pulito su 5 (l'altro era già senza nome); parametri 0 |
+| nei byte, blocchi compressi compresi, della copia pulita e salvata | nessuna traccia né di `RG Tools` né dei parametri; restano nella copia salvata prima |
+
+Quindi, con un ricamo che nasce da una copia dell'oggetto selezionato, **senza la sentinella non si è perso niente**:
+Stilista non l'ha ripercorso neanche forzando il ricalcolo. La sentinella era nata per i ricami che nascevano da un
+lineare ([`stilista-oggetto-manuale.md`](stilista-oggetto-manuale.md)), e resta come rete. La prova è su un solo
+ricamo piccolo, non su un documento di lavoro. Da qui **la proposta: spente di serie**.
+
+**La scheda macchina.** Nelle 36 librerie di `C:\GMI\Stilista3.3\bin` la descrizione la leggono solo la copia
+dell'oggetto, `cLockStitches.get_LockPaths` e, in `GMICamStitch`, `AzioneAutomatica.Execute` e la calibrazione del
+laser: nessuna stampa né anteprima. Ma 727 tipi non si caricano fuori da Stilista: che la scheda macchina non la mostri
+**non è provato**, va guardato in Stilista.
+
 **Cosa resta visibile anche da spente** (da dire a Lorenzo così):
 - il plugin in `C:\GMI\Stilista3.3\PLUG-INS\RGStilistaLink\` e la sua riga in `pluginlist.txt`;
 - la scheda **RG_LINK** con «Lavora la selezione con RG Tools…» e «Togli i parametri da questo documento»;
