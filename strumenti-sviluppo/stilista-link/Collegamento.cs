@@ -519,7 +519,12 @@ namespace StilistaHostSkeleton
                 // e i tag dei punti del contorno, che il lettore del bridge non conserva
                 var tag = string.Join(",", selezionati.Select(o =>
                     "[" + string.Join(",", PuntiConTag(GetReadableMemberValue(o, "SourcePath")).Select(p => p[2]).Distinct()) + "]"));
-                return Risposta.Testo("{\"ok\":true,\"oggetti\":" + Encoding.UTF8.GetString(m.ToArray()) + ",\"tag_del_contorno\":[" + tag + "]}");
+                // L'indice vero di ogni oggetto nel documento, nello stesso ordine di "oggetti" (2026-11-11). "index" è la
+                // posizione nella risposta, non nel documento: con una selezione parziale chi lo usa per /punti-cuciti o
+                // /riscrivi-punti legge o scrive gli oggetti sbagliati. -1 se l'oggetto non si ritrova fra quelli del documento.
+                var tutti = TuttiGliOggetti();
+                var indici = string.Join(",", selezionati.Select(o => tutti.FindIndex(t => ReferenceEquals(t, o))));
+                return Risposta.Testo("{\"ok\":true,\"oggetti\":" + Encoding.UTF8.GetString(m.ToArray()) + ",\"tag_del_contorno\":[" + tag + "],\"indici_documento\":[" + indici + "]}");
             }
         }
 
