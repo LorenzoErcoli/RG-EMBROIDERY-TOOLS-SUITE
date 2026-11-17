@@ -272,6 +272,22 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    salti uguali (0/8/87), sotto il raso 15,3 → 8,6 mm (54 → 10), fra le macchie 28,2 → 11,9 mm (137 → 60). I verticali restano
    dritti fino a 34–40 mm. Sulle nove macchie di prova il filo sotto il raso va da 303 a 436 mm (lo zig-zag allunga), i
    salti da 33 a 29. Non provato a macchina né in Stilista.
+44. (2026-11-17) **L'ordine di un livello segue i livelli sopra.** Lorenzo, sul suo disegno a tre livelli: *«Ho un dubbio
+   sulle macchie di livello 2 che fanno un sacco di salti invece di spostarsi sotto le macchie superiori»*; poi, fra le strade
+   proposte: *«scegli l'ordine delle rosse in base alle nere»*. L'ordine guardava solo la distanza fra le macchie: metteva in
+   fila due rosse vicine anche dove fra loro c'è il raso arancione già cucito e nessuna nera sopra, e il filo non poteva
+   passare. Ora, per ogni livello con livelli sopra, `costiNascosti` stima per ogni coppia di macchie se il filo può andare
+   dall'una all'altra nascosto (con le regole di `SottoIlSecondo`: coperto dai livelli sopra a «distanza dal bordo», a vista
+   al più «a vista al più» mm per volta, mai sopra il raso già cucito che nessuno copre, dentro la finestra che la strada vera
+   guarda) e quanto costa; `ordinaMacchie` usa quel costo al posto del salto, e un salto costa 20 in più (con 1.000,
+   cioè prima i salti e poi il resto, l'ordine univa gruppi lontani con salti lunghi: stessi salti, quasi il doppio dei mm). Oltre alla fila del più vicino prova le file di macchie legate (allungate verso la macchia
+   con meno legami liberi, 30–400 tentativi a caso col seme fisso: lo stesso disegno dà sempre lo stesso ordine) e tiene la
+   migliore. Sul suo disegno (33 arancioni, 49 rosse, 116 nere, parametri di serie): salti 2/22/115 → 1/15/115, i mm dei
+   salti delle rosse 516 → 343, quelli oltre 10 mm (col taglio) 12 → 8, filo a vista 335 → 402 mm (ogni tratto sempre entro
+   12 mm), passaggi 56 → 64, tempo uguale (circa 60 s). Sul pannello di prova a due livelli: 21 salti e 183 mm → 11 e 79. Il minimo stimato è 13 salti: 12 rosse non hanno nessuna nera che le
+   colleghi a un'altra (con la sfrangiatura di serie il filo sta a 0,8 mm dentro le nere, e molte nere sono strette). Il
+   livello più alto non cambia (nessuno sopra). Coi ponti accesi, i ponti del livello più alto si decidono ancora
+   sull'ordine di prima dei livelli sotto (`pontiDellaCima`). Non provato a macchina né in Stilista.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso
