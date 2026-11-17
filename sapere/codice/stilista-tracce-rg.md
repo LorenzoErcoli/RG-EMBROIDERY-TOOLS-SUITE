@@ -69,6 +69,10 @@ ricamo piccolo, non su un documento di lavoro. Da qui **la proposta: spente di s
 dell'oggetto, `cLockStitches.get_LockPaths` e, in `GMICamStitch`, `AzioneAutomatica.Execute` e la calibrazione del
 laser: nessuna stampa né anteprima. Ma 727 tipi non si caricano fuori da Stilista: che la scheda macchina non la mostri
 **non è provato**, va guardato in Stilista.
+**Lorenzo, 2026-11-17: «io ancora vedo le scritte sulle schede pdf»**: la scheda PDF della commessa
+(`C:\GMI\Stilista3.3\TMP\Commessa*.pdf`) stampa la descrizione degli oggetti. Quel giorno il suo Stilista aveva
+ancora il plugin del 2026-11-05, senza interruttore, e i documenti non erano puliti. Il testo di quei PDF non si legge
+con una ricerca: le lettere sono codici del carattere.
 
 **Cosa resta visibile anche da spente** (da dire a Lorenzo così):
 - il plugin in `C:\GMI\Stilista3.3\PLUG-INS\RGStilistaLink\` e la sua riga in `pluginlist.txt`;
