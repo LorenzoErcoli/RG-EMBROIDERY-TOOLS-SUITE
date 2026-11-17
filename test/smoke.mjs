@@ -2,6 +2,7 @@
 // Serve a una cosa sola ma importante: accorgersi quando due tool rispondono
 // in modo diverso alla STESSA domanda geometrica (vedi COSTITUZIONE R28).
 import { readFileSync, mkdirSync, rmSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -78,7 +79,7 @@ export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RET
 export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm, anelliOvali as rtsAnelliOvali, puntoDelNodo as rtsPuntoDelNodo, cimeDelleColonne as rtsCimeDelleColonne, ceIlNodo as rtsCeIlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
 export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, avanza as rtsAvanza, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
 export { senzaDatiDiProgetto } from ${JSON.stringify(posix('packages/ui/src/save.ts'))};
-export { origineStilista, coloreForiStilista, puntiDaPolilinee, svgForiAiLoroColori, primoColoreStilista, agoStilista, impacchettaProgetto, spacchettaProgetto, progettoDaInviare } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
+export { origineStilista, coloreForiStilista, puntiDaPolilinee, svgForiAiLoroColori, primoColoreStilista, agoStilista, impacchettaProgetto, spacchettaProgetto, progettoDaInviare, inviaAStilista } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -3196,6 +3197,72 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
     check('Esporta senza dati: l\'SVG perde ogni <metadata>, il disegno resta',
       [rg.senzaDatiDiProgetto(svgConDati).includes('metadata'), rg.senzaDatiDiProgetto(svgConDati).includes('cliente'), rg.senzaDatiDiProgetto(svgConDati).includes('<path d="M0 0L1 1"/>')], [false, false, true]);
     check('Esporta senza dati: un testo che non è un SVG non si tocca', rg.senzaDatiDiProgetto('{"metadata":"<metadata>x</metadata>"}'), '{"metadata":"<metadata>x</metadata>"}');
+    // LE TRACCE RG (2026-11-12): con l'interruttore spento non parte niente di nostro verso il documento
+    {
+      const plugin = readdirSync(join(root, 'strumenti-sviluppo/stilista-link')).filter((f) => f.endsWith('.cs'))
+        .map((f) => [f, readFileSync(join(root, 'strumenti-sviluppo/stilista-link', f), 'utf8')]);
+      const tutto = plugin.map(([, s]) => s).join('\n');
+      const ritorno = plugin.find(([f]) => f === 'Collegamento.Ritorno.cs')[1];
+      const imposta = ritorno.slice(ritorno.indexOf('private static void ImpostaDescrizione('), ritorno.indexOf('private static void ScriviDescrizione('));
+      check('Tracce RG: la descrizione si scrive in un posto solo, e ImpostaDescrizione passa dall\'interruttore',
+        [(tutto.match(/GetProperty\("Description"\)/g) || []).length, imposta.includes('Tracce.DaScrivere('),
+          plugin.filter(([f, s]) => /ScriviDescrizione\(/.test(s)).map(([f]) => f).sort(), (tutto.match(/ScriviDescrizione\(oggetto, ""\)/g) || []).length],
+        [1, true, ['Collegamento.Ritorno.cs', 'Collegamento.Tracce.cs'], 1]);
+      check('Tracce RG: «rg-tools» nel programma del bridge solo con le tracce accese', /Role = "rg-tools"|Id = ricamo\.Nome \?\? "rg-tools"/.test(ritorno), false);
+      check('Tracce RG: le strade passano prima dell\'elenco, e i parametri di un DST aperto guardano l\'interruttore',
+        [readFileSync(join(root, 'strumenti-sviluppo/stilista-link/ServerLocale.cs'), 'utf8').includes('CodexTab.StradaDelleTracce(richiesta) ?? _gestore(richiesta)'),
+          /if \(!Tracce\.Accese\)[\s\S]{0,120}File\.Delete\(file\)/.test(plugin.find(([f]) => f === 'Collegamento.Parametri.cs')[1])], [true, true]);
+      // il tool, contro un plugin finto: cosa parte verso Stilista con le tracce spente e accese
+      const prima = { fetch: globalThis.fetch, location: globalThis.location };
+      const giro = async (accese, conCartamodello) => {
+        const mandati = [];
+        globalThis.location = { search: '?stilista=5370' };
+        globalThis.fetch = async (url, opz = {}) => {
+          const u = new URL(url);
+          const rispondi = (j, stato = 200) => new Response(JSON.stringify(j), { status: stato, headers: { 'Content-Type': 'application/json' } });
+          if (u.pathname === '/stato') return rispondi({ ok: true, documento: 'GMI Stilista 3 - C:\\prova\\finto.emg3', oggetti: 1, selezionati: 1, attiva_alle: 1 });
+          if (u.pathname === '/tracce') return rispondi({ ok: true, accese, di_serie: false });
+          const corpo = opz.body instanceof Uint8Array ? opz.body : String(opz.body ?? '');
+          mandati.push({ strada: u.pathname + u.search, corpo });
+          if (u.pathname === '/punti') return rispondi({ ok: true, punti_chiesti: 3, punti_letti: 3, salti: 0, tipo_dopo: 'manual', ago: '1', parametri_salvati: JSON.parse(corpo).parametri !== undefined });
+          if (u.pathname === '/dst') return rispondi({ ok: true, parametri_salvati: u.searchParams.has('parametri') });
+          return rispondi({ ok: false }, 404);
+        };
+        let stato = '';
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" data-rg-stilista-origine="0 0" data-rg-stilista-ago="1"></svg>';
+        await rg.inviaAStilista({ tool: 'net-45', sorgente: () => (conCartamodello ? svg : null), strati: () => [{ nome: 'raso', polylines: [[{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }]] }],
+          dst: () => ({ bytes: dstProva, nome: 'cliente-prova' }), carica() {}, stato: (t) => { stato = t; } });
+        return { mandati, stato };
+      };
+      try {
+        const spento = await giro(false, true);
+        const corpoSpento = JSON.parse(spento.mandati[0].corpo);
+        const acceso = await giro(true, true);
+        const dstSpento = await giro(false, false);
+        const dstAcceso = await giro(true, false);
+        const coda = (m) => new TextDecoder('latin1').decode(m.corpo);
+        check('Tracce RG spente: al suo posto parte il ricamo senza parametri, e la barra lo dice',
+          [corpoSpento.parametri, corpoSpento.punti.length, /tracce RG spente/.test(spento.stato)], [undefined, 3, true]);
+        check('Tracce RG accese: i parametri partono come prima', [typeof JSON.parse(acceso.mandati[0].corpo).parametri, /parametri salvati/.test(acceso.stato)], ['string', true]);
+        check('Tracce RG spente: il DST per un documento nuovo esce senza busta, senza parametri e col nome neutro',
+          [coda(dstSpento.mandati[0]).includes('RGPROJ01'), dstSpento.mandati[0].strada.includes('parametri='), dstSpento.mandati[0].strada.includes('cliente'), dstSpento.mandati[0].strada.includes('nome=ricamo')],
+          [false, false, false, true]);
+        check('Tracce RG accese: il DST porta la busta e i parametri come prima',
+          [coda(dstAcceso.mandati[0]).includes('RGPROJ01'), dstAcceso.mandati[0].strada.includes('parametri=')], [true, true]);
+      } finally {
+        globalThis.fetch = prima.fetch;
+        globalThis.location = prima.location;
+      }
+      // l'interruttore nel plugin, provato da solo in C# (se c'è dotnet: sul PC di Lorenzo sì, in CI forse no)
+      const dotnet = spawnSync('dotnet', ['--version'], { encoding: 'utf8' });
+      if (dotnet.status === 0) {
+        const prova = spawnSync('dotnet', ['run', '--project', join(root, 'strumenti-sviluppo/stilista-link-prove'), '-c', 'Release'], { encoding: 'utf8' });
+        check('Tracce RG: le prove C# dell\'interruttore (spente: niente nella descrizione; «Pulisci» riconosce solo le nostre)',
+          [prova.status, /tracce: tutto ok/.test(prova.stdout)], [0, true]);
+      } else {
+        console.log('  --   Tracce RG: prove C# saltate, qui non c\'è dotnet');
+      }
+    }
     check('Stilista Link: un DST senza busta non ferma l\'invio, lo dice',
       (await rg.progettoDaInviare({ dst: () => ({ bytes: new Uint8Array(600), nome: 'x' }), sorgente: () => null })).dati, undefined);
     check('Stilista Link: per oblique i fori di un plugin vecchio (senza «di chi») vanno al colore del primo filo',

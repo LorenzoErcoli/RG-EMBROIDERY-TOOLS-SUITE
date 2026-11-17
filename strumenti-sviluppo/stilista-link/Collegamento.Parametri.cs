@@ -15,7 +15,7 @@ namespace StilistaHostSkeleton
     /// </summary>
     public sealed partial class CodexTab
     {
-        internal const string MarcaParametri = " #rg1:";
+        internal const string MarcaParametri = Tracce.MarcaParametri;
         private const string EstensioneParametriDst = ".rgp";
 
         private static string ConParametri(string nome, string parametri)
@@ -115,6 +115,12 @@ namespace StilistaHostSkeleton
             if (oggetti.Count == 0)
             {
                 return; // il documento si sta ancora caricando
+            }
+            if (!Tracce.Accese)
+            {
+                File.Delete(file); // con le tracce spente i parametri non vanno nel documento
+                ProbeLog.Write("RGLink.Parametri: tracce spente, parametri del DST aperto non scritti");
+                return;
             }
             var parametri = File.ReadAllText(file, Encoding.ASCII);
             for (var i = 0; i < oggetti.Count; i++)
