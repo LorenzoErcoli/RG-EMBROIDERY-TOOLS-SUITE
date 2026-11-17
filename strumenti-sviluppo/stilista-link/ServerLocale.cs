@@ -107,7 +107,8 @@ namespace StilistaHostSkeleton
                     {
                         try
                         {
-                            risposta = _gestore(richiesta);
+                            // le strade delle tracce prima dell'elenco (Collegamento.Tracce.cs)
+                            risposta = CodexTab.StradaDelleTracce(richiesta) ?? _gestore(richiesta);
                         }
                         catch (Exception ex)
                         {

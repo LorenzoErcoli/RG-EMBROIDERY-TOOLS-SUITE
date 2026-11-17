@@ -9,8 +9,12 @@ namespace StilistaHostSkeleton
         /// punch state machine.
         ///
         /// Keep this method as the readable workflow. Reflection details live in
-        /// CodexTab.NativePunch.Interop.cs and mouse/coordinate adaptation lives in
-        /// CodexTab.NativePunch.Input.cs.
+        /// CodexTab.NativePunch.Interop.cs, mouse/coordinate adaptation lives in
+        /// CodexTab.NativePunch.Input.cs and the exact contour (2026-11-17) in
+        /// CodexTab.ContornoEsatto.cs.
+        ///
+        /// On failure <paramref name="motivo"/> says why, in Italian, for the reply
+        /// of POST /oggetti.
         /// </summary>
         private bool TryCreateRecalculableObjectByNativePunch(
             object fatherEmbroidery,
@@ -19,9 +23,11 @@ namespace StilistaHostSkeleton
             TranslationPlan plan,
             string nativeExportPath,
             bool clearDocument,
-            double? orientationDeg)
+            double? orientationDeg,
+            out string motivo)
         {
             const string logPrefix = "CodexTab.NativePunch";
+            motivo = null;
             object nativeBox = null;
             var operationStarted = false;
             var operationEnded = false;
@@ -49,6 +55,22 @@ namespace StilistaHostSkeleton
                     plan == null)
                 {
                     ProbeLog.Write(logPrefix + ": missing polygon input");
+                    motivo = "mancano il contorno o il documento";
+                    return false;
+                }
+
+                // The requested points, to the micron: the final contour is this one.
+                var esatti = PuntiInMicron(spec.Geometry.Outer);
+                if (!isRunning &&
+                    esatti.Count >= 2 &&
+                    esatti[0] == esatti[esatti.Count - 1])
+                {
+                    esatti.RemoveAt(esatti.Count - 1);
+                }
+                if (esatti.Count < minimumPointCount)
+                {
+                    motivo = "il contorno ha meno di " + minimumPointCount +
+                             " punti distinti al micron";
                     return false;
                 }
 
@@ -58,6 +80,7 @@ namespace StilistaHostSkeleton
                 if (nativeBox == null)
                 {
                     ProbeLog.Write(logPrefix + ": active GMIAlphaBox missing");
+                    motivo = "nessun documento attivo in questa finestra di Stilista";
                     return false;
                 }
 
@@ -69,6 +92,8 @@ namespace StilistaHostSkeleton
                         logPrefix +
                         ": native function selection failed for " +
                         spec.Type);
+                    motivo = "Stilista non ha attivato lo strumento «" + spec.Type +
+                             "» (il pulsante nella barra non si trova)";
                     return false;
                 }
 
@@ -85,6 +110,7 @@ namespace StilistaHostSkeleton
                 if (executeMethod == null)
                 {
                     ProbeLog.Write(logPrefix + ": ExecuteContourActions missing");
+                    motivo = "manca ExecuteContourActions nella finestra di Stilista";
                     return false;
                 }
 
@@ -95,6 +121,8 @@ namespace StilistaHostSkeleton
                 ProbeLog.Write(logPrefix + ".ExecuteContourActions: " + startedResult);
                 if (!operationStarted)
                 {
+                    motivo = "Stilista non ha aperto il disegno a mano del contorno " +
+                             "(c'è un'altra operazione in corso nella finestra?)";
                     return false;
                 }
 
@@ -106,6 +134,7 @@ namespace StilistaHostSkeleton
                 if (currentObject == null)
                 {
                     ProbeLog.Write(logPrefix + ": DesignObjectInUse missing");
+                    motivo = "Stilista non ha creato l'oggetto nuovo";
                     return false;
                 }
 
@@ -113,11 +142,17 @@ namespace StilistaHostSkeleton
                 if (sourcePath == null)
                 {
                     ProbeLog.Write(logPrefix + ": native SourcePath missing");
+                    motivo = "l'oggetto nuovo non ha un contorno (SourcePath)";
                     return false;
                 }
 
                 // Phase 3: feed JSON vertices through InputContornoAMano, not by
                 // assigning its backing arrays. This preserves all native side effects.
+                // What is fed is a copy of the shape, about 200 px wide, in the middle
+                // of the visible canvas: InputContornoAMano works in screen pixels, so
+                // the real shape would depend on the zoom. The exact points are
+                // written in phase 5.
+                var immessa = CopiaDaImmettere(nativeBox, esatti, logPrefix + ".Copia");
                 var firstOperation = FindCurrentNativeContourOperation(
                     nativeBox,
                     logPrefix + ".Operation.BeforeInput");
@@ -126,15 +161,16 @@ namespace StilistaHostSkeleton
                         ? FeedNativeOpenPath(
                             nativeBox,
                             firstOperation,
-                            spec.Geometry.Outer,
+                            immessa,
                             logPrefix + ".OpenPath")
                         : FeedNativeFreehandContour(
                             nativeBox,
                             firstOperation,
-                            spec.Geometry.Outer,
+                            immessa,
                             logPrefix + ".Freehand")))
                 {
                     ProbeLog.Write(logPrefix + ": native freehand point feed failed");
+                    motivo = "Stilista non ha preso i punti del contorno disegnato a mano";
                     return false;
                 }
 
@@ -155,6 +191,7 @@ namespace StilistaHostSkeleton
                     logPrefix + ".Operation.SourceExit"))
                 {
                     ProbeLog.Write(logPrefix + ": source operation Exit(true) failed");
+                    motivo = "Stilista non ha chiuso il contorno disegnato a mano";
                     return false;
                 }
 
@@ -175,7 +212,7 @@ namespace StilistaHostSkeleton
                         ? FeedNativeDirectionLine(
                             nativeBox,
                             directionOperation,
-                            spec.Geometry.Outer,
+                            immessa,
                             orientationDeg.Value,
                             logPrefix + ".DirectionInput")
                         : TryAssignFreshOrientationLine(
@@ -186,6 +223,9 @@ namespace StilistaHostSkeleton
                         orientationReady);
                     if (!orientationReady)
                     {
+                        motivo = orientationDeg.HasValue
+                            ? "Stilista non ha preso la linea d'orientamento"
+                            : "un riempimento vuole orientation_deg (la direzione del punto)";
                         return false;
                     }
 
@@ -206,6 +246,8 @@ namespace StilistaHostSkeleton
                     ProbeLog.Write(
                         logPrefix +
                         ": expected EditRdo operation was not found");
+                    motivo = "dopo il contorno Stilista non ha chiesto la linea d'orientamento, " +
+                             "e l'oggetto non è entrato nel documento";
                     return false;
                 }
 
@@ -218,6 +260,7 @@ namespace StilistaHostSkeleton
                     if (endMethod == null)
                     {
                         ProbeLog.Write(logPrefix + ": EndOp(bool) missing");
+                        motivo = "l'operazione di Stilista non si chiude (EndOp manca)";
                         return false;
                     }
 
@@ -226,15 +269,46 @@ namespace StilistaHostSkeleton
                     ProbeLog.Write(logPrefix + ".EndOp.Fallback: true");
                 }
 
-                // Phase 5: apply final parameters, force native regeneration, validate,
-                // then serialize only a complete object.
+                // Phase 5: exact contour and orientation, final parameters, native
+                // regeneration, validation, then serialize only a complete object.
                 var createdObject = FindObjectByReference(objectsCollection, currentObject)
                     ? currentObject
                     : TryGetLastObject(objectsCollection);
                 if (createdObject == null)
                 {
                     ProbeLog.Write(logPrefix + ": finalized object not found");
+                    motivo = "l'oggetto creato non è nel documento";
                     return false;
+                }
+
+                // closed or open as Stilista made it from the mouse input
+                var immessi = PuntiConTag(GetReadableMemberValue(createdObject, "SourcePath"));
+                var chiusoDaStilista = immessi.Count > 2 &&
+                    immessi[0][0] == immessi[immessi.Count - 1][0] &&
+                    immessi[0][1] == immessi[immessi.Count - 1][1];
+                string problema;
+                var scritti = RiscriviContornoEsatto(
+                    createdObject,
+                    esatti,
+                    !isRunning && chiusoDaStilista,
+                    out problema);
+                if (scritti == null)
+                {
+                    motivo = problema;
+                    return false;
+                }
+
+                if (!isRunning && orientationDeg.HasValue)
+                {
+                    problema = ImpostaOrientamentoEsatto(
+                        createdObject,
+                        esatti,
+                        orientationDeg.Value);
+                    if (problema != null)
+                    {
+                        motivo = problema;
+                        return false;
+                    }
                 }
 
                 ApplyTranslationPlanToDesignObject(createdObject, plan, true);
@@ -254,16 +328,37 @@ namespace StilistaHostSkeleton
                 var sourceFigure = GetReadableMemberValue(
                     createdObject,
                     "SourceAndEmptyAreaPaths");
+                int puntiLetti;
+                var scarto = ScartoDelContorno(createdObject, scritti, out puntiLetti);
                 ProbeLog.Write(
                     logPrefix + ".Result: stitches=" +
                     (stitchCount?.ToString() ?? "<unknown>") +
                     " boundsValid=" + boundsValid +
-                    " sourceFigure=" + (sourceFigure != null));
+                    " sourceFigure=" + (sourceFigure != null) +
+                    " contour=" + puntiLetti + "/" + scritti.Count +
+                    " deviationMm=" + scarto);
 
-                var creationSucceeded =
-                    boundsValid &&
-                    stitchCount.GetValueOrDefault() > 0 &&
-                    (isRunning || sourceFigure != null);
+                if (stitchCount.GetValueOrDefault() <= 0)
+                {
+                    motivo = "il ricalcolo di Stilista non ha dato punti (" + recalcResult + ")";
+                }
+                else if (scarto > ScartoMassimoContornoMm)
+                {
+                    motivo = double.IsInfinity(scarto)
+                        ? "il contorno dell'oggetto ha " + puntiLetti + " punti invece di " + scritti.Count
+                        : "il contorno dell'oggetto si scosta di " + scarto.ToString("0.###") +
+                          " mm dai punti chiesti";
+                }
+                else if (!boundsValid)
+                {
+                    motivo = "i punti cuciti escono di più di 4 mm dal contorno (" + recalcResult + ")";
+                }
+                else if (!isRunning && sourceFigure == null)
+                {
+                    motivo = "il riempimento non ha la sua figura (SourceAndEmptyAreaPaths)";
+                }
+
+                var creationSucceeded = motivo == null;
 
                 if (creationSucceeded &&
                     !string.IsNullOrWhiteSpace(nativeExportPath))
@@ -282,6 +377,7 @@ namespace StilistaHostSkeleton
             catch (Exception ex)
             {
                 ProbeLog.Write(logPrefix + ": <error> " + DescribeException(ex));
+                motivo = "errore dentro Stilista: " + DescribeException(ex);
                 return false;
             }
             finally
