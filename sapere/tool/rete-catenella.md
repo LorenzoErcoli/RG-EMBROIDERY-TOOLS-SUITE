@@ -53,6 +53,10 @@ esattamente come questo»*.
   - Le strade si allungano: su 516 m la rete ne ha 3 in più, la strada più lunga passa da 68 a 130 mm, il passaggio interno più lungo da 58 a 156 mm.
   - Provato su 16 reti, due contorni e quattro posizioni della griglia, con e senza passaggi interni: le strade prima arrivavano fino a 33 mm, ora al più 7 mm; le uscite da 46 a 10 mm. In quattro reti restano passaggi fino a 17 mm (sul documento misurato no): non è ancora chiaro perché. Sul modulo di prova nei test, di poche linee, un'uscita corre per 113 mm e una strada per 10,6 mm su linee già cucite perché non hanno altra via. Non è cucito.
 
+- **La misura del contorno e la larghezza reale** (2026-11-17, *«Aggiungi la possibilità di inserire la larghezza dell'svg inserito e si allarga o ristringe in proporzione. Il problema è che sembra non prendere le dimensioni svg giuste»*).
+  - Perché sbagliava: il file di prova veniva da Illustrator con solo il viewBox (`0 0 1219.9 738`), senza `width` e `height`. Il tool lo leggeva 1 unità = 1 mm: 1.219 mm invece di 430. Ora vale la regola di Zone pattern e Oblique: Illustrator senza unità è in punti, 72 per pollice. Se il file dichiara le unità vincono quelle (il plugin le dichiara in mm).
+  - Scelte mie, da confermare: la larghezza reale è quella del contorno, non della tavola; si scala dal punto 0,0 del file, e con lo stesso fattore le aree colorate e la zona da infittire; un file nuovo la rimette a 0.
+
 ## Da decidere
 - Come nasce la ragnatela nella versione parametrica: il modulo è disegnato a mano e la regola che lo genera non è misurata.
 

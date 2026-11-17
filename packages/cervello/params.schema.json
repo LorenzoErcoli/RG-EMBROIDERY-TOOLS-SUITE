@@ -1654,6 +1654,12 @@
     "rete-catenella": {
       "type": "object",
       "properties": {
+        "realWidthMm": {
+          "$ref": "#/$defs/realWidth",
+          "default": 0,
+          "title": "Larghezza reale",
+          "x-id": "realWidth"
+        },
         "spostaXMm": {
           "$ref": "#/$defs/catenellaGridOffsetX",
           "default": 0,
