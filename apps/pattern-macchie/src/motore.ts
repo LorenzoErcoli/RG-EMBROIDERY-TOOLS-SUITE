@@ -854,6 +854,54 @@ function rasterizza(poligoni: Polyline[], g: number, ox: number, oy: number, W: 
 const PESO_BORDO = 5;
 
 /**
+ * I PASSAGGI NASCOSTI A LINEA SPEZZATA, E DAVVERO DENTRO (Costituzione R17; sapere/decisioni/passaggi-linea-spezzata.md;
+ * Lorenzo, 2026-11-17: «queste regole di passaggi devono essere globali nella suite, in particolare è importante ritrovarle
+ * in pattern a macchie»). Dalle sue 18 correzioni a mano in Stilista: sotto non va dritto (*«un po' a scalini mi sembrava
+ * che potesse mascherarsi meglio»*) e sta almeno un millimetro dentro quello che lo copre (*«si deve entrare per essere
+ * nascosto»*). Rifatta qui dalla Ricetta a livelli (apps/ricetta/src/motore/cammini.ts: `zigzag`, `COSTO.bordo`): niente
+ * import fra un'app e l'altra.
+ */
+const ZIGZAG = { passoMin: 1.8, passoMax: 2.6, scostMin: 0.6, scostMax: 1.2 };
+/** Quanto dentro quello che lo copre deve stare il passaggio, mm; nella fascia lungo il bordo un passo costa tanto. */
+const MARGINE_COPERTURA = 1;
+const COSTO_FASCIA_COPERTURA = 4;
+/** Sotto quest'angolo col verso del raso che copre, gradi, un tratto resta dritto: va nel verso dei punti (regola 2). */
+const ZIGZAG_DRITTO_DEG = 15;
+
+/**
+ * LA LINEA SPEZZATA: lungo ogni tratto della strada un punto ogni 1,8–2,6 mm, spostato di lato di 0,6–1,2 mm, una volta da
+ * una parte e una dall'altra; lo spostamento si dimezza o si annulla dove `va` (il filo dal punto prima, e da lì al capo
+ * del tratto) direbbe di no. Restano dritti i tratti corti e quelli nel `verso` dei punti che li coprono. Stesso disegno,
+ * stessa strada (`seme`).
+ */
+function lineaSpezzata(via: Polyline, va: (p: Point, q: Point) => boolean, verso: Point | null, seme: number): Polyline {
+  if (via.length < 2) return via;
+  const out: Polyline = [via[0]];
+  const sinDritto = Math.sin((ZIGZAG_DRITTO_DEG * Math.PI) / 180);
+  let n = 0, lato = caso(seme, 0, 7) < 0.5 ? 1 : -1;
+  for (let k = 1; k < via.length; k++) {
+    const a = via[k - 1], b = via[k], L = Math.hypot(b.x - a.x, b.y - a.y);
+    const u = L > 1e-9 ? { x: (b.x - a.x) / L, y: (b.y - a.y) / L } : { x: 0, y: 0 };
+    const dritto = L < ZIGZAG.passoMin * 1.5 || (!!verso && Math.abs(u.x * verso.y - u.y * verso.x) < sinDritto);
+    if (!dritto) {
+      for (let s = 0; ;) {
+        s += ZIGZAG.passoMin + caso(seme, ++n, 1) * (ZIGZAG.passoMax - ZIGZAG.passoMin);
+        if (s > L - ZIGZAG.passoMin * 0.6) break;
+        const base = { x: a.x + u.x * s, y: a.y + u.y * s }, sc = ZIGZAG.scostMin + caso(seme, n, 2) * (ZIGZAG.scostMax - ZIGZAG.scostMin);
+        const prec = out[out.length - 1];
+        for (const f of [1, 0.5, 0]) {
+          const p = { x: base.x - u.y * sc * f * lato, y: base.y + u.x * sc * f * lato };
+          if (va(prec, p) && va(p, b)) { out.push(p); break; }
+        }
+        lato = -lato;
+      }
+    }
+    out.push(b);
+  }
+  return out;
+}
+
+/**
  * DOVE IL RASO COPRIRÀ: una griglia fine sulla macchia, e per ogni cella quante righe di raso ANCORA DA CUCIRE ci
  * passano sopra (la riga e una fascia di due decimi per parte: a 0,4 mm d'interlinea le fasce si toccano). Un
  * passaggio può andare solo dove questo numero non è zero — il raso che viene dopo lo coprirà, sfrangiatura
@@ -875,7 +923,11 @@ class SottoIlRaso {
   /** Quante celle attorno ai capi della strada vale anche il raso fuori dal bordo: quanto la sfrangiatura va fuori. */
   private readonly capi: number;
 
-  constructor(macchia: Polyline, righe: Polyline[], fuori = 0) {
+  /** Il verso delle righe del raso che coprirà i passaggi: lì il passaggio resta dritto (R17, regola 2). */
+  private readonly verso: Point | null;
+
+  constructor(macchia: Polyline, righe: Polyline[], fuori = 0, verso: Point | null = null) {
+    this.verso = verso;
     const b = ingombro([...macchia, ...righe.flat()]), g = this.g;
     this.capi = Math.max(5, Math.ceil((fuori + 0.4) / g));
     this.W = Math.ceil((b.x1 - b.x0) / g) + 5; this.H = Math.ceil((b.y1 - b.y0) / g) + 5;
@@ -1003,8 +1055,30 @@ class SottoIlRaso {
     return best < 0 ? p : this.centro(best);
   }
 
-  /** La strada più corta, coperta, da `a` a `b` (A* sulla griglia, poi tirata dritta dove resta coperta); null se non c'è. */
+  /**
+   * La strada più corta, coperta, da `a` a `b` (A* sulla griglia, poi tirata dritta dove resta coperta), cucita a linea
+   * spezzata (`lineaSpezzata`); null se non c'è.
+   */
   strada(a: Point, b: Point): Polyline | null {
+    const via = this.stradaTesa(a, b);
+    if (!via) return null;
+    // (lo spostamento resta dove il raso coprirà, e non attraversa le righe già cucite; vicino ai due capi vale quello che
+    // valeva per la strada: di lì si entra e si esce)
+    const vicinoAiCapi = (s: Point) => Math.hypot(s.x - a.x, s.y - a.y) < 0.6 || Math.hypot(s.x - b.x, s.y - b.y) < 0.6;
+    const va = (p: Point, q: Point) => {
+      if (this.cucite.length > 0 && this.attraversa(p, q)) return false;
+      const m = Math.max(1, Math.ceil(Math.hypot(q.x - p.x, q.y - p.y) / (this.g / 3)));
+      for (let t = 0; t <= m; t++) {
+        const s = { x: p.x + ((q.x - p.x) * t) / m, y: p.y + ((q.y - p.y) * t) / m };
+        if (!(this.daCucire[this.qui(s)] > 0) && !vicinoAiCapi(s)) return false;
+      }
+      return true;
+    };
+    return lineaSpezzata(via, va, this.verso, Math.round(a.x * 100) * 31 + Math.round(a.y * 100));
+  }
+
+  /** La strada più corta, coperta, da `a` a `b`, tirata dritta dove resta coperta; null se non c'è. */
+  private stradaTesa(a: Point, b: Point): Polyline | null {
     const W = this.W, n = this.daCucire.length, ultima = this.righeCucite;
     const s0 = this.qui(a), t0 = this.qui(b);
     // vicino ai capi (le righe sfrangiate finiscono fino a quanto la sfrangiatura va fuori) vale anche il raso fuori dal
@@ -1018,7 +1092,8 @@ class SottoIlRaso {
      */
     const libero = (p: Point, q: Point) => {
       if (this.cucite.length > 0 && this.attraversa(p, q)) return false;
-      const limite = Math.max(this.bordo[this.qui(p)], this.bordo[this.qui(q)]) + 0.3;
+      // (fino alla fascia dove i passaggi devono stare, un millimetro dentro: R17)
+      const limite = Math.max(this.bordo[this.qui(p)], this.bordo[this.qui(q)], MARGINE_COPERTURA + 0.5) + 0.3;
       const m = Math.max(1, Math.ceil(Math.hypot(q.x - p.x, q.y - p.y) / (this.g / 3)));
       for (let t = 0; t <= m; t++) {
         const k = this.qui({ x: p.x + ((q.x - p.x) * t) / m, y: p.y + ((q.y - p.y) * t) / m });
@@ -1053,8 +1128,10 @@ class SottoIlRaso {
         if (!passa(v) || chiuso[v]) continue;
         if (this.cucite.length > 0 && this.attraversa(this.centro(u), this.centro(v))) continue;
         // (2026-10-26, dal DST di Stilista) I PASSAGGI COSTEGGIANO IL BORDO: un passo costa di più quanto più è lontano
-        // dal bordo, così la strada corre nella fascia che le punte delle righe coprono, non in mezzo alla macchia
-        const nd = gcost[u] + 1 + PESO_BORDO * Math.min(2, this.bordo[v]);
+        // dal bordo, così la strada non va in mezzo alla macchia. Ma almeno un millimetro dentro (R17, 2026-11-17): nella
+        // fascia lungo il bordo, dove la sfrangiatura può non coprire, un passo costa `COSTO_FASCIA_COPERTURA`
+        const bv = this.bordo[v];
+        const nd = gcost[u] + (bv < MARGINE_COPERTURA ? COSTO_FASCIA_COPERTURA : 1 + PESO_BORDO * Math.min(2, bv - MARGINE_COPERTURA));
         if (nd < gcost[v]) { gcost[v] = nd; prev[v] = u; heap.push([nd + h(v), v]); su(heap.length - 1); }
       }
     }
@@ -1154,9 +1231,12 @@ function stradaVera(macchia: Polyline): (a: Point, b: Point) => number {
   // prova stessi passaggi, 2.001 mm contro 1.989 con la macchia intera; 2,6 s invece di 7,9)
   const dentro = new Uint8Array(W * H);
   for (let k = 0; k < W * H; k++) dentro[k] = tutta[k] && (Math.sqrt(d2[k]) - 0.5) * g <= STRADA_BANDA ? 1 : 0;
-  const vicinoAlBordo = 1 + PESO_BORDO * 0.2;
+  // (lo stesso costo della griglia dei passaggi, R17 compresa: un millimetro dentro costa uno)
   const peso = new Float32Array(W * H);
-  for (let k = 0; k < W * H; k++) peso[k] = dentro[k] ? (1 + PESO_BORDO * Math.min(2, Math.max(0, Math.sqrt(d2[k]) - 0.5) * g)) / vicinoAlBordo : 0;
+  for (let k = 0; k < W * H; k++) {
+    const bv = Math.max(0, Math.sqrt(d2[k]) - 0.5) * g;
+    peso[k] = dentro[k] ? (bv < MARGINE_COPERTURA ? COSTO_FASCIA_COPERTURA : 1 + PESO_BORDO * Math.min(2, bv - MARGINE_COPERTURA)) : 0;
+  }
   /** La cella dentro più vicina a p (i capi delle righe sfrangiate stanno anche mezzo millimetro fuori). */
   const cella = (p: Point): number => {
     const i0 = Math.floor((p.x - ox) / g), j0 = Math.floor((p.y - oy) / g);
@@ -1687,7 +1767,9 @@ class SottoIlSecondo {
   attraversamenti = 0;
   trattiVista: Polyline[] = [];
   constructor(private readonly scure: Polyline[], private readonly dalBordo: number, private readonly vistaMax: number,
-    private readonly sotto: Polyline[] = [], private readonly vicini?: { punti: Point[]; raggio: number }) { this.bb = scure.map(ingombro); }
+    private readonly sotto: Polyline[] = [], private readonly vicini?: { punti: Point[]; raggio: number },
+    /** Il verso del raso dei livelli sopra, che copre il filo: lì il passaggio resta dritto (R17, regola 2). */
+    private readonly verso: Point | null = null) { this.bb = scure.map(ingombro); }
 
   /**
    * Da un punto, o da una macchia (dal suo punto migliore), fino alla macchia `arrivo`: la strada, o null. `daCucire`: le
@@ -1745,6 +1827,12 @@ class SottoIlSecondo {
       return out;
     };
     const meta = accanto(arrivo);
+    // (R17: almeno un millimetro dentro quello che copre: nella fascia lungo il suo bordo un passo costa di più)
+    const fasciaCop = new Uint8Array(W * H);
+    {
+      const dc = distanzeAlQuadrato(coperta, W, H), s = (MARGINE_COPERTURA / g) ** 2;
+      for (let k = 0; k < W * H; k++) if (coperta[k] && dc[k] <= s) fasciaCop[k] = 1;
+    }
     const dist = new Float64Array(W * H).fill(Infinity), prima = new Int32Array(W * H).fill(-1);
     const coda: Array<[number, number]> = [];
     const metti = (c: number, k: number) => {
@@ -1781,7 +1869,7 @@ class SottoIlSecondo {
       for (const [di, dj, w] of passi) {
         const x = i + di, y = j + dj;
         if (x < 0 || y < 0 || x >= W || y >= H) continue;
-        const n = y * W + x, nc = c + (coperta[n] ? w : w * (vicina && vicina[n] ? K_A_VISTA_VICINO : K_A_VISTA));
+        const n = y * W + x, nc = c + (coperta[n] ? w * (fasciaCop[n] ? COSTO_FASCIA_COPERTURA : 1) : w * (vicina && vicina[n] ? K_A_VISTA_VICINO : K_A_VISTA));
         if (ok[n] && nc < dist[n]) { dist[n] = nc; prima[n] = k; metti(nc, n); }
       }
     }
@@ -1819,6 +1907,12 @@ class SottoIlSecondo {
         if (lungo > this.vistaMax) return null;
         this.aVista += lungo; this.attraversamenti++;
         this.trattiVista.push(via.slice(daQui));
+      } else {
+        // il tratto coperto a linea spezzata (R17): lo spostamento resta coperto
+        const cella = (p: Point) => { const i = Math.floor((p.x - ox) / g), j = Math.floor((p.y - oy) / g); return i >= 0 && j >= 0 && i < W && j < H ? j * W + i : -1; };
+        const va = (p: Point, q: Point) => { const kq = cella(q); return kq >= 0 && !!coperta[kq] && vede(p, q, coperta); };
+        const pezzo = lineaSpezzata(via.slice(daQui), va, this.verso, celle[a]);
+        via.splice(daQui, via.length - daQui, ...pezzo);
       }
       a = z;
     }
@@ -1943,8 +2037,10 @@ export function costruisciMacchie(
   // (il filo sta lontano dal bordo quanto le righe che lo copriranno possono accorciarsi: quelle dei livelli sopra e queste)
   const dalBordo = Math.max(dentroSfr, ...sopra.map(sfrangiaturaDentro)) + 0.3;
   const vicini = { punti: passatiAVista, raggio: Math.max(0, par.vistaVicini) };
-  const coperte = scure.length ? new SottoIlSecondo(scure, dalBordo, Math.max(0, par.secondoVista), dabbasso, vicini) : null;
-  const vicineAlBordo = scure.length && par.secondoVista > 0 && dalBordo > 0.5 ? new SottoIlSecondo(scure, 0.5, par.secondoVista, dabbasso, vicini) : null;
+  // (il raso che copre il filo è quello del livello subito sopra: nel suo verso il passaggio resta dritto)
+  const versoSopra = sopra.length ? { x: Math.cos((sopra[0].rasoAngolo * Math.PI) / 180), y: Math.sin((sopra[0].rasoAngolo * Math.PI) / 180) } : null;
+  const coperte = scure.length ? new SottoIlSecondo(scure, dalBordo, Math.max(0, par.secondoVista), dabbasso, vicini, versoSopra) : null;
+  const vicineAlBordo = scure.length && par.secondoVista > 0 && dalBordo > 0.5 ? new SottoIlSecondo(scure, 0.5, par.secondoVista, dabbasso, vicini, versoSopra) : null;
   const saltiDelRaso = strato === 3 ? saltiFra.raso3 : strato === 2 ? saltiFra.raso2 : saltiFra.raso;
   const vistaDelRaso = strato === 3 ? vista.raso3 : strato === 2 ? vista.raso2 : vista.raso;
 
@@ -2072,7 +2168,7 @@ export function costruisciMacchie(
     const divise = celleDelRaso(grezze, verso, par.rasoInterlinea, m);
     const celle = divise.celle
       .map((c) => c.map((r) => sfrangia(r, i + off, n++, dentroSfr, fuori)).filter((r): r is Polyline => !!r && r.length >= 2).map((r) => aFase(r, par.rasoPuntoMax, par.rasoFase, verso, par.rasoInterlinea, origine)));
-    const interno = new SottoIlRaso(m, celle.flat(), fuori);
+    const interno = new SottoIlRaso(m, celle.flat(), fuori, verso);
     const bm = ingombro(m);
     interno.giaCucite(rasoCucito.filter((r) => { const b = ingombro(r); return b.x1 > bm.x0 - 1 && b.x0 < bm.x1 + 1 && b.y1 > bm.y0 - 1 && b.y0 < bm.y1 + 1; }), uscita);
     // L'INGRESSO: il punto più vicino a dove si è usciti fra quelli che il raso coprirà. Se il passaggio da lì resta
@@ -2143,7 +2239,7 @@ export function costruisciMacchie(
     // (per finire dove comincia il filo fra i due livelli il piano può spezzare la macchia in due parti. Se fra le due non c'è
     // strada sotto il raso, costerebbe un salto dentro la macchia: meglio finire altrove, il filo la strada la trova lo stesso)
     if (dalSecondo && pianoTrovato) {
-      const prova = new SottoIlRaso(m, celle.flat(), fuori);
+      const prova = new SottoIlRaso(m, celle.flat(), fuori, verso);
       prova.giaCucite(rasoCucito.filter((r) => { const b = ingombro(r); return b.x1 > bm.x0 - 1 && b.x0 < bm.x1 + 1 && b.y1 > bm.y0 - 1 && b.y0 < bm.y1 + 1; }), uscita);
       let qui: Point | null = null, cucibile = true;
       for (const righe of pianoTrovato) {

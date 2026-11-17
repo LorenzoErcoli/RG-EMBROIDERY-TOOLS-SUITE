@@ -257,6 +257,21 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    sfrangiato *colonne dal centro* (*Distanza fra una colonna e l'altra*, *Punto massimo, nelle andate e ritorno*, *Punte
    oltre il bordo: almeno / al più*, *Da dove partono le punte*). Le punte si vedono solo con lo sfrangiato. I parametri sono
    gli stessi: un progetto si riapre uguale.
+43. (2026-11-17) **I passaggi nascosti a linea spezzata, e un millimetro dentro** (Costituzione R17,
+   `sapere/decisioni/passaggi-linea-spezzata.md`). *«queste regole di passaggi devono essere globali nella suite, in
+   particolare è importante ritrovarle in pattern a macchie»*; mandate dalla chat della Ricetta a livelli. Sotto il raso della
+   macchia (`SottoIlRaso.strada`) e sotto i livelli sopra (`SottoIlSecondo`) il passaggio cammina a linea spezzata
+   (`lineaSpezzata`: un punto ogni 1,8–2,6 mm, spostato di lato di 0,6–1,2 mm, alternato; lo spostamento si dimezza o si
+   toglie dove il filo uscirebbe da quello che copre o taglierebbe le righe cucite). Restano dritti i tratti nel verso del
+   raso che copre (entro 15°) e i tratti a vista. La fascia di 1 mm lungo il bordo di quello che copre costa 4 invece di 1.
+   **Cambia la decisione del 2026-10-26** (i passaggi costeggiano il bordo, dal DST di Stilista): ora costeggiano a un
+   millimetro dentro (mediana 0,70 mm dal bordo sul pannello di prova, prima 0,21). La regola dello sfrangiato in diagonale
+   (costo 6) non serve qui: lo sfrangiato è verticale e i passaggi non ci passano. Sul suo disegno, a due livelli: salti
+   uguali (0/175), filo a vista uguale (282 mm); tratto dritto non verticale più lungo sotto il raso 17,7 → 15,5 mm (oltre 5
+   mm: 39 → 7), fra le macchie 28,2 → 11,6 mm (68 → 24); filo dei passaggi fra le macchie 1.154 → 1.272 mm. A tre livelli:
+   salti uguali (0/8/87), sotto il raso 15,3 → 8,6 mm (54 → 10), fra le macchie 28,2 → 11,9 mm (137 → 60). I verticali restano
+   dritti fino a 34–40 mm. Sulle nove macchie di prova il filo sotto il raso va da 303 a 436 mm (lo zig-zag allunga), i
+   salti da 33 a 29. Non provato a macchina né in Stilista.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso
