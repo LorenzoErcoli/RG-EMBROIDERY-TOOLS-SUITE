@@ -86,8 +86,13 @@ codice, continua a ricevere solo `false`.
 - Il **running** di `/oggetti` non prende `stitch.stitch_length_mm`: chiesto 2500, resta 3000 (era già nella mappa di
   [`stilista-cosa-si-comanda.md`](stilista-cosa-si-comanda.md)). Adesso lo dice: `PISngLunghezzaPunto chiesto 2500, rimasto
   3000`, e non crea niente. Con 3 mm, quella di serie, passa.
-- `geometry.holes` non si è mai applicato: adesso un foro non vuoto è un errore prima di creare, invece di un riempimento
-  pieno in silenzio.
+- ~~`geometry.holes` non si è mai applicato: adesso un foro non vuoto è un errore prima di creare, invece di un riempimento
+  pieno in silenzio.~~ **2026-11-17, più tardi**: i fori si applicano (`CodexTab.ForiEsatti.cs`). Ogni anello di `holes`
+  diventa un'area vuota del riempimento (`EmptyAreaPaths`, una copia del contorno coi punti al micron), prima del ricalcolo.
+  Prima di creare si controlla che ogni foro stia dentro l'esterno e non tocchi né lui né gli altri fori. Dopo l'ultimo
+  ricalcolo si rileggono le aree vuote (stessi punti entro 0,01 mm) e si guarda che nessun punto cucito ci passi dentro più
+  di 0,3 mm. Se no, è un errore col motivo e l'oggetto si toglie: mai un riempimento pieno. **Su Stilista non è ancora
+  provato.**
 - Un riempimento senza `orientation_deg` non si crea (era già così): adesso lo dice.
 - Ricalcolare a mano non rovina niente: il contorno esatto è quello salvato.
 - Questi file del bridge **non sono più uguali** a quelli del repo d'origine: vedi

@@ -251,11 +251,30 @@ namespace StilistaHostSkeleton
                 return false;
             }
 
-            // Phase 5: every parameter as it was asked.
+            // Phase 5: every parameter as it was asked, and the holes still empty after the last recalculation.
             motivo = VerificaParametri(objectsCollection, initialCount, batch, plans, logPrefix + ".Verifica");
             if (motivo != null)
             {
                 return false;
+            }
+
+            var finiti = SnapshotObjects(objectsCollection);
+            for (var index = 0; index < batch.Objects.Count; index++)
+            {
+                var fori = ForiInMicron(batch.Objects[index].Geometry);
+                if (fori.Count == 0)
+                {
+                    continue;
+                }
+                var problema = VerificaFori(
+                    finiti[initialCount + index],
+                    fori.Select(f => new List<Point>(f) { f[0] }).ToList());
+                ProbeLog.Write(logPrefix + ".Fori.Object[" + index + "]: " + fori.Count + " fori, " + (problema ?? "vuoti"));
+                if (problema != null)
+                {
+                    motivo = QualeOggetto(batch, index) + ": " + problema;
+                    return false;
+                }
             }
 
             totalStitches = CountStitches(objectsCollection);
@@ -296,9 +315,23 @@ namespace StilistaHostSkeleton
             {
                 return "geometry.outer vuole almeno " + (isRunning ? 2 : 3) + " punti";
             }
-            if (spec.Geometry.Holes != null && spec.Geometry.Holes.Any(h => h != null && h.Count > 0))
+            var fori = ForiInMicron(spec.Geometry);
+            if (fori.Count > 0)
             {
-                return "geometry.holes non si sa ancora applicare: i fori resterebbero pieni";
+                if (isRunning)
+                {
+                    return "geometry.holes vale solo per i riempimenti (fill), non per un running";
+                }
+                var esterno = PuntiInMicron(spec.Geometry.Outer);
+                if (esterno.Count >= 2 && esterno[0] == esterno[esterno.Count - 1])
+                {
+                    esterno.RemoveAt(esterno.Count - 1);
+                }
+                var problema = esterno.Count >= 3 ? ControllaFori(esterno, fori) : null;
+                if (problema != null)
+                {
+                    return "geometry.holes: " + problema;
+                }
             }
             if (spec.Machine != null && spec.Machine.Needle.HasValue && spec.Machine.Needle.Value < 1)
             {
