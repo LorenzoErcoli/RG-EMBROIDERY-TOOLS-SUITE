@@ -3079,6 +3079,36 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
       sorgente.includes("v === scalaImport.scaleMode ? ' selected' : ''"), true);
   }
 
+  // RG STILISTA LINK, POST /oggetti (2026-11-17, sapere/codice/stilista-oggetti-esatti.md). Il plugin non gira senza
+  // Stilista: qui si controlla che nel sorgente C# non tornino i tre difetti silenziosi, misurati su un pannello grande.
+  {
+    const ponte = (f) => readFileSync(join(root, 'strumenti-sviluppo/stilista-link/bridge', f), 'utf8');
+    const json = ponte('JsonBridge.cs');
+    const punzone = ponte('CodexTab.NativePunch.cs');
+    const sequenza = ponte('CodexTab.Sequence.cs');
+    const lotto = ponte('CodexTab.BatchImport.cs');
+    // 1. senza UseSimpleDictionaryFormat un Dictionary letto da { "PIx": 1 } resta vuoto, in silenzio
+    check('Stilista Link /oggetti: managed_overrides_int non è un Dictionary (si leggerebbe vuoto)',
+      [/public\s+Dictionary<[^>]*>\s+ManagedOverridesInt/.test(json), /public ParametriInteri ManagedOverridesInt/.test(json),
+        /class ParametriInteri : ISerializable/.test(json)], [false, true, true]);
+    // 2. il contorno passa dal clic a mano solo come copia, poi si riscrive al micron prima del ricalcolo
+    const riscrive = punzone.indexOf('RiscriviContornoEsatto(');
+    check('Stilista Link /oggetti: si immette la copia, e il contorno esatto si scrive prima del ricalcolo',
+      [/Feed\w+\(\s*nativeBox,\s*\w+,\s*spec\.Geometry\.Outer/.test(punzone), punzone.includes('CopiaDaImmettere('),
+        riscrive > 0 && riscrive < punzone.indexOf('ApplyTranslationPlanToDesignObject(createdObject, plan, true)'),
+        punzone.includes('scarto <= ScartoMassimoContornoMm') || punzone.includes('scarto > ScartoMassimoContornoMm')],
+      [false, true, true, true]);
+    // 3. l'ago si applica sempre quando c'è, senza la bandiera della sequenza
+    check('Stilista Link /oggetti: machine.needle non dipende da apply_native_needle_changes',
+      [sequenza.includes('native needle assignment disabled'), /if \(!applyChanges\)/.test(sequenza)], [false, false]);
+    // il motivo arriva nella risposta come messaggio di un'eccezione senza eccezione interna (Control.Invoke darebbe quella)
+    const lancio = lotto.match(/throw new InvalidOperationException\([\s\S]*?\);/)?.[0] ?? '';
+    check('Stilista Link /oggetti: un programma da JSON che fallisce lancia il motivo, senza eccezione interna',
+      [/if \(batch == null \|\| !batch\.ArrivatoDaJson\)/.test(lotto), lancio.includes('"/oggetti non ha creato niente: " + motivo'),
+        (lancio.match(/\bnew\b/g) || []).length, /,\s*ex\s*\)/.test(lancio), /\[OnDeserializing\]\s*private void LettoDaJson/.test(json)],
+      [true, true, 1, false, true]);
+  }
+
   // RG STILISTA LINK (ramo stilista-link, 2026-10-21): la selezione arriva come l'SVG del plugin
   // (Collegamento.cs, SelezioneSvg) — mm dichiarati, un colore per il filo, i FORI a parte col colore
   // dichiarato in data-rg-stilista-fori — e si legge con l'import di sempre. Il ricamo torna coi salti

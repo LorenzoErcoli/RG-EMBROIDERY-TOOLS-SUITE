@@ -14,16 +14,25 @@ namespace StilistaHostSkeleton
         /// DesignObject.CambiaAgo(IAgo), then StitchingPath.ChangeAgo(Reel).
         /// PINeedle alone is only a punch parameter and does not build the
         /// native needle/color blocks shown by Stilista.
+        ///
+        /// 2026-11-17: machine.needle is applied whenever it is there. Before,
+        /// only with sequence.apply_native_needle_changes, and without it the
+        /// object silently kept needle 1. A needle that does not stick is a
+        /// failure with its reason; sequence.require_persistent_needle_changes
+        /// now only means "every object must have a needle".
         /// </summary>
         private static bool ApplyBatchNeedleSequence(
             object fatherEmbroidery,
             object objectsCollection,
             int initialCount,
             JsonBatchSpec batch,
-            string logPrefix)
+            string logPrefix,
+            out string motivo)
         {
+            motivo = null;
             if (batch == null || batch.Objects == null)
             {
+                motivo = "il programma non ha oggetti";
                 return false;
             }
 
@@ -32,27 +41,15 @@ namespace StilistaHostSkeleton
                 objects.Count - initialCount != batch.Objects.Count)
             {
                 ProbeLog.Write(logPrefix + ": collection/order mismatch");
+                motivo = "gli oggetti nuovi non sono in fondo al documento";
                 return false;
             }
 
-            var applyChanges = batch.Sequence != null &&
-                               batch.Sequence.ApplyNativeNeedleChanges;
             var requireChanges = batch.Sequence != null &&
                                  batch.Sequence.RequirePersistentNeedleChanges;
-            if (!applyChanges)
-            {
-                ProbeLog.Write(logPrefix + ": native needle assignment disabled");
-                return !requireChanges;
-            }
-
             var threadList = GetReadableMemberValue(
                 fatherEmbroidery,
                 "ListaFilati");
-            if (threadList == null)
-            {
-                ProbeLog.Write(logPrefix + ": ListaFilati missing");
-                return false;
-            }
 
             var requested = 0;
             var applied = 0;
@@ -61,36 +58,59 @@ namespace StilistaHostSkeleton
             {
                 var spec = batch.Objects[index];
                 var needle = spec?.Machine?.Needle;
-                if (!needle.HasValue || needle.Value < 1)
+                if (!needle.HasValue)
                 {
                     ProbeLog.Write(
                         logPrefix + ".Object[" + index +
-                        "]: valid one-based needle missing");
-                    return !requireChanges;
+                        "]: no needle requested");
+                    if (requireChanges)
+                    {
+                        motivo = QualeOggetto(batch, index) +
+                                 ": manca machine.needle (sequence.require_persistent_needle_changes lo vuole per tutti)";
+                        return false;
+                    }
+                    continue;
+                }
+
+                if (needle.Value < 1)
+                {
+                    motivo = QualeOggetto(batch, index) + ": machine.needle va da 1 (è " + needle.Value + ")";
+                    return false;
+                }
+
+                if (threadList == null)
+                {
+                    ProbeLog.Write(logPrefix + ": ListaFilati missing");
+                    motivo = "la lista degli aghi del documento (ListaFilati) non si legge";
+                    return false;
                 }
 
                 requested++;
                 var designObject = objects[initialCount + index];
-                if (TryAssignNativeNeedle(
+                if (!TryAssignNativeNeedle(
                     threadList,
                     designObject,
                     needle.Value,
                     spec.Machine.ThreadColor,
                     logPrefix + ".Object[" + index + "]"))
                 {
-                    applied++;
-                }
-                else if (requireChanges)
-                {
+                    var resta = ReadNativeNeedleOneBased(designObject);
+                    motivo = QualeOggetto(batch, index) + ": l'ago " + needle.Value + " non si è applicato" +
+                             (resta.HasValue ? " (l'oggetto è rimasto sull'ago " + resta.Value + ")" : "") +
+                             (string.IsNullOrWhiteSpace(spec.Machine.ThreadColor)
+                                 ? ""
+                                 : ", o il colore " + spec.Machine.ThreadColor + " non si è scritto");
                     return false;
                 }
+
+                applied++;
             }
 
             ProbeLog.Write(
                 logPrefix + ": requestedNeedles=" + requested +
                 " appliedNeedles=" + applied +
                 " required=" + requireChanges);
-            return !requireChanges || requested == applied;
+            return true;
         }
 
         private static bool TryAssignNativeNeedle(
