@@ -212,7 +212,9 @@ lo scrittore li divide a 12,1 mm, in Stilista restano interi.
    i nostri punti a 3 mm e li perde. Spostarlo o salvarlo non lo ricalcola (da confermare a mano).
 2. **L'annulla**: l'oggetto entra senza un punto d'annullamento di Stilista (`createUndoPoint` da provare).
 3. **La posizione nella sequenza**: oggi va in fondo; potrebbe andare subito dopo l'oggetto selezionato.
-4. **I fori al ritorno degli oggetti nativi** (`POST /oggetti`): il bridge dichiara `holes` ma non li immette.
+4. ~~**I fori al ritorno degli oggetti nativi** (`POST /oggetti`): il bridge dichiara `holes` ma non li immette.~~
+   2026-11-17: `holes` diventano aree vuote del riempimento, ricontrollate dopo il ricalcolo
+   ([`sapere/codice/stilista-oggetti-esatti.md`](../../sapere/codice/stilista-oggetti-esatti.md)).
    Al ritorno dei punti non servono: il tool i fori li ha già rispettati.
 5. Gli altri tool: il modulo `@rg/ui/stilista` è comune, a ogni tool servono i due pulsanti.
 6. Le finestre aperte prima di un'installazione tengono il plugin vecchio: dopo un aggiornamento si riapre

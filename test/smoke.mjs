@@ -3103,6 +3103,15 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
     check('Stilista Link /oggetti: machine.needle non dipende da apply_native_needle_changes',
       [sequenza.includes('native needle assignment disabled'), /if \(!applyChanges\)/.test(sequenza)], [false, false]);
     // il motivo arriva nella risposta come messaggio di un'eccezione senza eccezione interna (Control.Invoke darebbe quella)
+    // 4. i fori (2026-11-17): diventano aree vuote prima del ricalcolo, e si ricontrollano dopo; mai un riempimento pieno
+    const fori = ponte('CodexTab.ForiEsatti.cs');
+    const scriveFori = punzone.indexOf('ScriviFori(createdObject');
+    check('Stilista Link /oggetti: i fori diventano aree vuote prima del ricalcolo e si ricontrollano',
+      [lotto.includes('non si sa ancora applicare'), /ControllaFori\(esterno, fori\)/.test(lotto),
+        scriveFori > 0 && scriveFori < punzone.indexOf('ApplyTranslationPlanToDesignObject(createdObject, plan, true)'),
+        punzone.includes('VerificaFori(createdObject, foriScritti)'), lotto.includes('VerificaFori('),
+        /proprieta\.SetValue\(designObject, percorsi, null\)/.test(fori), /"Stitches"/.test(fori)],
+      [false, true, true, true, true, true, true]);
     const lancio = lotto.match(/throw new InvalidOperationException\([\s\S]*?\);/)?.[0] ?? '';
     check('Stilista Link /oggetti: un programma da JSON che fallisce lancia il motivo, senza eccezione interna',
       [/if \(batch == null \|\| !batch\.ArrivatoDaJson\)/.test(lotto), lancio.includes('"/oggetti non ha creato niente: " + motivo'),
