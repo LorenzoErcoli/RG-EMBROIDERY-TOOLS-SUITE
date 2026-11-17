@@ -33,8 +33,13 @@ namespace StilistaHostSkeleton
         [DataMember(Name = "machine", EmitDefaultValue = false)]
         public JsonMachineSpec Machine { get; set; }
 
+        /// <summary>
+        /// { "PIFrastaglio": 30, … }. Non è un Dictionary: senza UseSimpleDictionaryFormat (POST /oggetti legge così)
+        /// DataContractJsonSerializer vuole un Dictionary come [{Key, Value}] e da un oggetto JSON ne fa uno VUOTO, in
+        /// silenzio (2026-11-17: 14 parametri persi). ParametriInteri si legge allo stesso modo con tutti e due i formati.
+        /// </summary>
         [DataMember(Name = "managed_overrides_int", EmitDefaultValue = false)]
-        public Dictionary<string, int> ManagedOverridesInt { get; set; }
+        public ParametriInteri ManagedOverridesInt { get; set; }
 
         [DataMember(Name = "design_object", EmitDefaultValue = false)]
         public JsonDesignObjectSpec DesignObject { get; set; }
@@ -69,6 +74,88 @@ namespace StilistaHostSkeleton
 
         [DataMember(Name = "sequence", EmitDefaultValue = false)]
         public JsonSequenceSpec Sequence { get; set; }
+
+        /// <summary>
+        /// Vero per un programma letto da JSON (POST /oggetti), falso per uno costruito nel codice (il lineare di riserva
+        /// del ritorno). Chi arriva da fuori vuole il motivo di un errore nella risposta: vedi TryCreateRecalculableBatch.
+        /// </summary>
+        public bool ArrivatoDaJson { get; private set; }
+
+        [OnDeserializing]
+        private void LettoDaJson(StreamingContext contesto)
+        {
+            ArrivatoDaJson = true;
+        }
+    }
+
+    /// <summary>
+    /// Parametri interi per nome, da un oggetto JSON { "nome": intero, … }. Si legge come ISerializable: il serializzatore
+    /// JSON passa ogni campo dell'oggetto in SerializationInfo, col formato dei dizionari semplice o no. Un valore che non è
+    /// un intero a 32 bit (1.5, "7", 3000000000, una lista) non si arrotonda e non si scarta in silenzio: va in NonInteri, e
+    /// il programma si ferma prima di creare qualcosa (JsonBridge.BuildPlan).
+    /// </summary>
+    [Serializable]
+    public sealed class ParametriInteri : ISerializable
+    {
+        public Dictionary<string, int> Valori { get; private set; }
+        public List<string> NonInteri { get; private set; }
+
+        public ParametriInteri()
+        {
+            Valori = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+            NonInteri = new List<string>();
+        }
+
+        private ParametriInteri(SerializationInfo info, StreamingContext contesto)
+            : this()
+        {
+            foreach (SerializationEntry campo in info)
+            {
+                int valore;
+                if (ComeIntero(campo.Value, out valore))
+                {
+                    Valori[campo.Name] = valore;
+                }
+                else
+                {
+                    NonInteri.Add(campo.Name + " = " + (campo.Value is string
+                        ? "\"" + campo.Value + "\" (un testo)"
+                        : campo.Value is IConvertible
+                            ? Convert.ToString(campo.Value, System.Globalization.CultureInfo.InvariantCulture)
+                            : "una lista o un oggetto"));
+                }
+            }
+        }
+
+        public static bool ComeIntero(object valore, out int intero)
+        {
+            intero = 0;
+            if (valore is int)
+            {
+                intero = (int)valore;
+                return true;
+            }
+            if (valore is long && (long)valore >= int.MinValue && (long)valore <= int.MaxValue)
+            {
+                intero = (int)(long)valore;
+                return true;
+            }
+            if (valore is decimal && decimal.Truncate((decimal)valore) == (decimal)valore &&
+                (decimal)valore >= int.MinValue && (decimal)valore <= int.MaxValue)
+            {
+                intero = (int)(decimal)valore;
+                return true;
+            }
+            return false;
+        }
+
+        public void GetObjectData(SerializationInfo info, StreamingContext contesto)
+        {
+            foreach (var coppia in Valori)
+            {
+                info.AddValue(coppia.Key, coppia.Value);
+            }
+        }
     }
 
     [DataContract]
@@ -252,6 +339,13 @@ namespace StilistaHostSkeleton
                 throw new ArgumentNullException("spec");
             }
 
+            if (spec.ManagedOverridesInt != null && spec.ManagedOverridesInt.NonInteri.Count > 0)
+            {
+                throw new InvalidOperationException(
+                    "managed_overrides_int vuole solo numeri interi, come { \"PIFrastaglio\": 30 }; non lo sono: " +
+                    string.Join(", ", spec.ManagedOverridesInt.NonInteri.ToArray()));
+            }
+
             if (string.Equals(spec.Type, "fill", StringComparison.OrdinalIgnoreCase))
             {
                 return BuildFillPlan(spec);
@@ -301,7 +395,28 @@ namespace StilistaHostSkeleton
                     spec.DesignObject.FunctionParamIndex.Value;
             }
 
+            AddManagedOverrides(spec, plan);
             return plan;
+        }
+
+        /// <summary>managed_overrides_int va per ultimo: vince sui campi con nome (stitch, machine).</summary>
+        private static void AddManagedOverrides(JsonObjectSpec spec, TranslationPlan plan)
+        {
+            if (spec.ManagedOverridesInt == null)
+            {
+                return;
+            }
+
+            foreach (var pair in spec.ManagedOverridesInt.Valori)
+            {
+                if (string.IsNullOrWhiteSpace(pair.Key))
+                {
+                    continue;
+                }
+
+                plan.ManagedIntParameters[pair.Key] = pair.Value;
+                plan.Notes.Add("managed_overrides_int." + pair.Key + " = " + pair.Value);
+            }
         }
 
         private static TranslationPlan BuildFillPlan(JsonObjectSpec spec)
@@ -440,20 +555,7 @@ namespace StilistaHostSkeleton
                     spec.Machine.Needle.Value);
             }
 
-            if (spec.ManagedOverridesInt != null)
-            {
-                foreach (var pair in spec.ManagedOverridesInt)
-                {
-                    if (string.IsNullOrWhiteSpace(pair.Key))
-                    {
-                        continue;
-                    }
-
-                    plan.ManagedIntParameters[pair.Key] = pair.Value;
-                    plan.Notes.Add("managed_overrides_int." + pair.Key + " = " + pair.Value);
-                }
-            }
-
+            AddManagedOverrides(spec, plan);
             return plan;
         }
 
