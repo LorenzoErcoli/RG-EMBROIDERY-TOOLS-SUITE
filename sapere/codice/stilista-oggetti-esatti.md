@@ -91,8 +91,13 @@ codice, continua a ricevere solo `false`.
   diventa un'area vuota del riempimento (`EmptyAreaPaths`, una copia del contorno coi punti al micron), prima del ricalcolo.
   Prima di creare si controlla che ogni foro stia dentro l'esterno e non tocchi né lui né gli altri fori. Dopo l'ultimo
   ricalcolo si rileggono le aree vuote (stessi punti entro 0,01 mm) e si guarda che nessun punto cucito ci passi dentro più
-  di 0,3 mm. Se no, è un errore col motivo e l'oggetto si toglie: mai un riempimento pieno. **Su Stilista non è ancora
-  provato.**
+  di 0,3 mm. Se no, è un errore col motivo e l'oggetto si toglie: mai un riempimento pieno. **Misurato su Stilista**
+  (2026-11-17, stesso documento di prova, zoom 0,658 mm/px): un'ellisse di 30 × 20 mm con due fori, uno tondo di 40 punti
+  in senso orario e un triangolo, e una macchia di 5 × 4 mm con un foro di 1,6 mm. Aree vuote uguali a quelle chieste (`/fori`:
+  41 e 4 punti chiusi, 25 punti). I punti cuciti entrano nei fori al massimo **0,2 mm**, a filo del bordo: è il sormonto del
+  riempimento, non un foro pieno (nessun tratto ha la metà dentro un foro). Dopo salvataggio, riapertura e ricalcolo senza
+  lucchetto i punti sono identici. Un foro che esce dal contorno dà `geometry.holes: il foro 1 esce dal contorno esterno`
+  e il documento non cambia.
 - Un riempimento senza `orientation_deg` non si crea (era già così): adesso lo dice.
 - Ricalcolare a mano non rovina niente: il contorno esatto è quello salvato.
 - Questi file del bridge **non sono più uguali** a quelli del repo d'origine: vedi
