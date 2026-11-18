@@ -298,6 +298,19 @@ namespace StilistaHostSkeleton
                     return false;
                 }
 
+                // the holes as empty areas of the fill, to the micron (CodexTab.ForiEsatti.cs)
+                var fori = isRunning ? new System.Collections.Generic.List<System.Collections.Generic.List<System.Drawing.Point>>() : ForiInMicron(spec.Geometry);
+                System.Collections.Generic.List<System.Collections.Generic.List<System.Drawing.Point>> foriScritti = null;
+                if (fori.Count > 0)
+                {
+                    foriScritti = ScriviFori(createdObject, fori, out problema);
+                    if (foriScritti == null)
+                    {
+                        motivo = problema;
+                        return false;
+                    }
+                }
+
                 if (!isRunning && orientationDeg.HasValue)
                 {
                     problema = ImpostaOrientamentoEsatto(
@@ -356,6 +369,11 @@ namespace StilistaHostSkeleton
                 else if (!isRunning && sourceFigure == null)
                 {
                     motivo = "il riempimento non ha la sua figura (SourceAndEmptyAreaPaths)";
+                }
+                else if (foriScritti != null)
+                {
+                    motivo = VerificaFori(createdObject, foriScritti);
+                    ProbeLog.Write(logPrefix + ".Fori: " + foriScritti.Count + " " + (motivo ?? "vuoti"));
                 }
 
                 var creationSucceeded = motivo == null;
