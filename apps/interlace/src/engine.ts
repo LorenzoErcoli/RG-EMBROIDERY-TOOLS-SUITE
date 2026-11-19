@@ -83,6 +83,14 @@ export interface InterlaceParams {
   /** Morbidezza della sfumatura (mm, solo con `toneBlend`): di quanto si sfoca il tono dell'immagine prima
    *  di leggerlo. Poco = segue ogni variazione, tanto = passaggi larghi e macchie più grandi. */
   toneSoftnessMm: number;
+  /** PIÙ FITTO INTORNO AI BUCHI (le aree vuote del cartamodello): acceso, il filo si addensa attorno a ogni
+   *  buco e torna alla densità normale allontanandosi. Spento = densità uguale ovunque, come prima.
+   *  Il bordo esterno e lo sfondo senza ricamo non contano: Lorenzo ha scelto solo i buchi. */
+  voidDensityBoost: boolean;
+  /** Quante volte la densità normale proprio a ridosso del buco (2 = il doppio del filo). */
+  voidDensityFactor: number;
+  /** In quanti mm dal buco la densità torna normale: la sfumatura da molto fitto a normale. */
+  voidDensityFadeMm: number;
 }
 
 export const defaultInterlaceParams: InterlaceParams = {
@@ -106,6 +114,9 @@ export const defaultInterlaceParams: InterlaceParams = {
   backgroundToleranceRgb: 30,
   toneBlend: false, // false = agglomerati a zone nette (comportamento storico)
   toneSoftnessMm: 4,
+  voidDensityBoost: false, // false = densità uguale ovunque (comportamento storico)
+  voidDensityFactor: 2,
+  voidDensityFadeMm: 8,
 };
 
 // --- Costanti interne (implementazione, non parametri utente): il "movimento" del filo.
@@ -728,8 +739,42 @@ export function stitchBudget(p: InterlaceParams, densities: number[]): StitchBud
     }
     if (sum > needMax) needMax = sum;
   }
+  // Attorno ai buchi si chiede di più: il tetto automatico deve lasciarlo fare, altrimenti lo taglierebbe.
+  if (p.voidDensityBoost) needMax *= voidFactorMax(p);
   const needed = Math.max(1, Math.ceil(needMax / avgStitch));
   return { needed, auto: Math.max(4, Math.ceil(PEAK_FACTOR * needMax / avgStitch)) };
+}
+
+/** Le volte della densità a ridosso del buco, dentro limiti sani: oltre 5 le celle vicine al buco
+ *  chiederebbero più punti di quanti ne stanno, e il tetto le lascerebbe scoperte. */
+function voidFactorMax(p: InterlaceParams): number {
+  return Math.max(1, Math.min(5, Number(p.voidDensityFactor) || 1));
+}
+
+/**
+ * Quante volte la densità normale in un punto, per la densità intorno ai buchi: il fattore pieno sul bordo
+ * del buco, che scende morbido (senza scalino) fino a 1 a `fadeMm` di distanza. La distanza si misura dai
+ * BUCHI soli, su una griglia da 0,5 mm fatta una volta: il bordo esterno non conta.
+ */
+function voidFactorField(boundary: Polyline, voids: Polyline[], factor: number, fadeMm: number): (x: number, y: number) => number {
+  if (!voids.length || factor <= 1 || fadeMm <= 0) return () => 1;
+  const bb = bounds(boundary);
+  const res = 0.5;
+  const x0 = bb.minX - res, y0 = bb.minY - res;
+  const gw = Math.ceil((bb.maxX - bb.minX) / res) + 3, gh = Math.ceil((bb.maxY - bb.minY) / res) + 3;
+  if (gw * gh > MAX_MASK_CELLS) return () => 1;
+  const holes = new Uint8Array(gw * gh);
+  for (const v of voids) fillPolygon(holes, gw, gh, x0, y0, res, v, 1);
+  const dist = chamferDT(holes, gw, gh, res);
+  return (x: number, y: number): number => {
+    let i = Math.floor((x - x0) / res), j = Math.floor((y - y0) / res);
+    if (i < 0) i = 0; else if (i > gw - 1) i = gw - 1;
+    if (j < 0) j = 0; else if (j > gh - 1) j = gh - 1;
+    const t = dist[j * gw + i] / fadeMm;
+    if (t >= 1) return 1;
+    const near = 1 - t * t * (3 - 2 * t); // 1 sul bordo del buco, 0 a fine sfumatura, senza spigoli
+    return 1 + (factor - 1) * near;
+  };
 }
 
 /**
@@ -920,6 +965,9 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
     cellAreaByCtx.set(ctx, a);
     return a;
   };
+  const voidFactorAt = p.voidDensityBoost
+    ? voidFactorField(boundary, voids, voidFactorMax(p), Math.max(0, Number(p.voidDensityFadeMm) || 0))
+    : null;
   const toneTotal = COVER_TARGET + Math.round(Math.max(0, Math.min(100, p.clusterStrength)) / 100 * 8) + (nCol - 1);
   // La densità PER-COLORE è la dimensione della cella → ogni densità ha una sua griglia. La maschera si
   // ricostruisce solo quando la cella cambia (cache per valore di cella): densità uguali → una sola build.
@@ -980,6 +1028,19 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
       }
     } else {
       for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = COVER_TARGET;
+    }
+    if (voidFactorAt) {
+      // Più fitto intorno ai buchi: si moltiplica l'obiettivo che la cella ha già (qualunque sia il modo),
+      // col resto assegnato dal rumore come nella sfumatura, così la media è quella chiesta. Le celle solo
+      // di passaggio restano tali: lì quel colore non deve coprire.
+      for (let id = 0; id < targetArr.length; id++) {
+        const tg = targetArr[id];
+        if (tg === 0 || (transitArr && transitArr[id])) continue;
+        const gi = id % ctx.gx, gj = (id / ctx.gx) | 0;
+        const f = voidFactorAt(ctx.cellX(gi), ctx.cellY(gj));
+        if (f <= 1) continue;
+        targetArr[id] = Math.max(1, Math.min(255, Math.floor(tg * f + hash(gi + pIdx * 104729 + 17, gj + base * 53))));
+      }
     }
     passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr, banArr, pen, transitArr));
   }

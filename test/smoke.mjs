@@ -509,6 +509,31 @@ const tonoDiv = rg.generatePasses(imgSquare, [], { ...tonoParams, toneBlend: tru
 for (const r of tonoDiv[1]) for (const pt of r) if (pt.x < 50) tonoNelVietato++;
 check('sfumatura: i divieti valgono ancora (lo scuro non scende nella zona chiara)', tonoNelVietato, 0);
 
+// interlace — PIÙ FITTO INTORNO ALLE AREE VUOTE (`voidDensityBoost`). Lorenzo: «la costruzione di agglomerati
+// intorno alle aree vuote … è una cosa che si attiva, normalmente tutta la densità è uguale». Acceso, il filo
+// si addensa attorno ai buchi del cartamodello e torna normale a `voidDensityFadeMm` di distanza.
+console.log('\ninterlace — più fitto intorno alle aree vuote');
+const vdRect = [{ x: 0, y: 0 }, { x: 140, y: 0 }, { x: 140, y: 90 }, { x: 0, y: 90 }];
+const vdHole = Array.from({ length: 72 }, (_, k) => ({ x: 50 + 10 * Math.cos(k / 72 * 2 * Math.PI), y: 45 + 10 * Math.sin(k / 72 * 2 * Math.PI) }));
+const vdParams = { ...rg.defaultInterlaceParams, minStitchMm: 2, maxStitchMm: 4, densitySpacingMm: 1.5, voidClearanceMm: 0.3, colors: ['#d0c5b1'] };
+const vdFasce = (passes) => { const mm = [0, 0, 0]; for (const pass of passes) for (const r of pass) for (let i = 1; i < r.length; i++) { const L = Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y), n = Math.max(1, Math.ceil(L / 0.2)); for (let s = 0; s < n; s++) { const t = (s + 0.5) / n, x = r[i - 1].x + (r[i].x - r[i - 1].x) * t, y = r[i - 1].y + (r[i].y - r[i - 1].y) * t; if (x >= 100 || y < 5 || y >= 85) continue; const d = Math.hypot(x - 50, y - 45) - 10; if (d >= 0 && d < 4) mm[0] += L / n; else if (d >= 12 && d < 20) mm[1] += L / n; else if (d >= 20) mm[2] += L / n; } } return mm; };
+// aree delle fasce, per avere mm di filo al mm²: anello 0-4, anello 12-20, il resto della parte misurata
+const vdArea = [Math.PI * (14 * 14 - 10 * 10), Math.PI * (30 * 30 - 22 * 22), 100 * 80 - Math.PI * 30 * 30];
+const vdDens = (passes) => vdFasce(passes).map((v, i) => v / vdArea[i]);
+const vdSpento = rg.generatePasses(vdRect, [vdHole], vdParams, [1.5]);
+const vdAcceso = rg.generatePasses(vdRect, [vdHole], { ...vdParams, voidDensityBoost: true, voidDensityFactor: 2, voidDensityFadeMm: 8 }, [1.5]);
+const [sv, sm, sl] = vdDens(vdSpento), [av, am, al] = vdDens(vdAcceso);
+check('aree vuote: spento di suo', rg.defaultInterlaceParams.voidDensityBoost, false);
+check('aree vuote: spento, i numeri del fattore non cambiano niente', JSON.stringify(rg.generatePasses(vdRect, [vdHole], { ...vdParams, voidDensityFactor: 5, voidDensityFadeMm: 30 }, [1.5])) === JSON.stringify(vdSpento), true);
+check('aree vuote: acceso, vicino al buco il filo cresce di almeno il 30% rispetto a spento', av > sv * 1.3, true);
+check('aree vuote: acceso, vicino al buco è almeno 1,7 volte il lontano', av > al * 1.7, true);
+check('aree vuote: oltre la sfumatura torna normale (entro il 15% del lontano)', Math.abs(am / al - 1) < 0.15, true);
+let vdNelBuco = 0;
+for (const pass of vdAcceso) for (const r of pass) for (const pt of r) if (Math.hypot(pt.x - 50, pt.y - 45) < 10) vdNelBuco++;
+check('aree vuote: acceso, nessun punto dentro il buco', vdNelBuco, 0);
+check('aree vuote: acceso, senza buchi non cambia niente', JSON.stringify(rg.generatePasses(vdRect, [], { ...vdParams, voidDensityBoost: true }, [1.5])) === JSON.stringify(rg.generatePasses(vdRect, [], vdParams, [1.5])), true);
+check('aree vuote: acceso, il filo resta continuo (un tratto solo)', vdAcceso[0].length, 1);
+
 // interlace — DIVIETI DI TRANSITO (matrice filo × zona, `zoneBans`): un filo vietato in una zona non ci
 // cuce E non ci passa nemmeno di transito. Sulla stessa immagine metà rossa (x<60) / metà blu (x>60):
 // vietare il rosso nella zona blu deve lasciare la metà destra SENZA un solo punto rosso.

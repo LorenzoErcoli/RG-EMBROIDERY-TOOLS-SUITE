@@ -304,6 +304,19 @@
           "$ref": "#/$defs/toneSoftness",
           "default": 4,
           "x-id": "toneSoftness"
+        },
+        "voidDensityBoost": {
+          "$ref": "#/$defs/voidDensityBoost",
+          "default": false
+        },
+        "voidDensityFactor": {
+          "$ref": "#/$defs/voidDensityFactor",
+          "default": 2
+        },
+        "voidDensityFadeMm": {
+          "$ref": "#/$defs/voidDensityFade",
+          "default": 8,
+          "x-id": "voidDensityFade"
         }
       }
     },
@@ -3135,6 +3148,34 @@
       "minimum": 0,
       "x-passo": 1,
       "x-concetto": "immagine"
+    },
+    "voidDensityBoost": {
+      "type": "boolean",
+      "title": "Più fitto intorno alle aree vuote",
+      "description": "spento, la densità è uguale ovunque. Acceso, il filo si addensa attorno a ogni area vuota del cartamodello e torna alla densità normale allontanandosi. Il bordo esterno non conta.",
+      "x-regole": [
+        "R5"
+      ],
+      "x-concetto": "densita"
+    },
+    "voidDensityFactor": {
+      "type": "number",
+      "title": "Quanto più fitto vicino al vuoto",
+      "description": "volte la densità normale, proprio a ridosso del vuoto (2 = il doppio del filo; massimo 5).",
+      "x-unita": "rapporto",
+      "minimum": 1,
+      "maximum": 5,
+      "x-passo": 0.1,
+      "x-concetto": "densita"
+    },
+    "voidDensityFade": {
+      "type": "number",
+      "title": "In quanti mm torna normale",
+      "description": "la sfumatura da molto fitto a normale: oltre questa distanza dal vuoto la densità è quella di sempre.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "densita"
     },
     "panelWidth": {
       "type": "number",
@@ -6586,6 +6627,9 @@
       "descrizione": "Spaziatura TRASVERSALE in mm fra file di filo adiacenti (R22).",
       "parametri": [
         "density",
+        "voidDensityBoost",
+        "voidDensityFactor",
+        "voidDensityFade",
         "densitySpacingMm",
         "targetDensityPct",
         "fillSpacingMm",

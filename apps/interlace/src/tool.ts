@@ -188,6 +188,25 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
           </div>
         </div>
         <div id="params" class="rg-param-grid"></div>
+        <div class="rg-param-grid">
+          <div class="rg-field rg-param-grid__wide">
+            <label class="rg-choice">
+              <input type="checkbox" id="voidDensityBoost" />
+              <span>Più fitto intorno alle aree vuote</span>
+            </label>
+            <small class="rg-field__help">spento, la densità è uguale ovunque. Acceso, il filo si addensa attorno a ogni area vuota del cartamodello e torna alla densità normale allontanandosi. Il bordo esterno non conta.</small>
+          </div>
+          <label class="rg-field" id="voidDensityFactorField" hidden>
+            <span class="rg-field__label">Quanto più fitto vicino al vuoto</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="voidDensityFactor" type="number" min="1" max="5" step="0.1" value="2"><span>×</span></span>
+            <small class="rg-field__help">volte la densità normale, proprio a ridosso del vuoto (2 = il doppio del filo; massimo 5).</small>
+          </label>
+          <label class="rg-field" id="voidDensityFadeField" hidden>
+            <span class="rg-field__label">In quanti mm torna normale</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="voidDensityFade" type="number" min="0" step="1" value="8"><span>mm</span></span>
+            <small class="rg-field__help">la sfumatura da molto fitto a normale: oltre questa distanza dal vuoto la densità è quella di sempre.</small>
+          </label>
+        </div>
       </details>
 
       <section class="rg-param-section">
@@ -798,6 +817,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     syncCap();
     syncBackground();
     syncTone();
+    syncVoidDensity();
     syncCluster(); // switch agglomerati + visibilità intensità
     buildParamUI();
     buildPaletteUI();
@@ -915,6 +935,30 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     ($('bgPickBtn') as HTMLButtonElement).disabled = !refImage;
     ($('bgPickBtn') as HTMLButtonElement).title = refImage ? 'Prendi il colore dello sfondo dall’immagine' : 'Serve un’immagine di riferimento';
   }
+  const voidCheck = $('voidDensityBoost') as HTMLInputElement;
+  const voidFactor = $('voidDensityFactor') as HTMLInputElement;
+  const voidFade = $('voidDensityFade') as HTMLInputElement;
+  function syncVoidDensity() {
+    voidCheck.checked = params.voidDensityBoost;
+    voidFactor.value = String(params.voidDensityFactor);
+    voidFade.value = String(params.voidDensityFadeMm);
+    ($('voidDensityFactorField') as HTMLElement).hidden = !params.voidDensityBoost;
+    ($('voidDensityFadeField') as HTMLElement).hidden = !params.voidDensityBoost;
+  }
+  syncVoidDensity();
+  voidCheck.addEventListener('change', () => { params.voidDensityBoost = voidCheck.checked; syncVoidDensity(); render(); });
+  voidFactor.addEventListener('change', () => {
+    const v = parseFloat(voidFactor.value);
+    params.voidDensityFactor = Number.isNaN(v) ? 2 : Math.max(1, Math.min(5, v));
+    syncVoidDensity();
+    if (params.voidDensityBoost) render();
+  });
+  voidFade.addEventListener('change', () => {
+    const v = parseFloat(voidFade.value);
+    params.voidDensityFadeMm = Number.isNaN(v) ? 8 : Math.max(0, v);
+    syncVoidDensity();
+    if (params.voidDensityBoost) render();
+  });
   const toneCheck = $('toneBlend') as HTMLInputElement;
   const toneSoft = $('toneSoftness') as HTMLInputElement;
   function syncTone() {

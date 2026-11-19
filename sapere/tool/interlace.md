@@ -71,5 +71,29 @@ il difetto dei 300 punti resta lì, perché correggerlo cambierebbe i lavori gi�
 **La voce C4 (densità per zona) resta aperta:** qui il filo totale è pari, mentre C4 chiede densità diverse
 per regione.
 
+## Più fitto intorno alle aree vuote (2026-11-19)
+
+Lorenzo: *«la costruzione di aglomerati intorno alle aree vuote. vorrei avere la possibilità di decidere la densità intorno alle aree vuote e anche per quanto estendere la sfumatura che da molto intenso torna al noramle. è una cosa che si attiva, normalmente tutta la densità è uguale, ma posso avere questo controllo.»* Alla domanda su quali aree vuote ha risposto **i buchi della forma** (non il bordo
+esterno, non lo sfondo senza ricamo), e ha scelto di dire l'intensità in **volte la densità**.
+
+**Com'è fatta** (`voidDensityBoost`, `voidDensityFactor`, `voidDensityFadeMm`; spenta di serie): l'obiettivo di
+ogni cella si moltiplica per un fattore che vale `voidDensityFactor` sul bordo del buco e scende a 1 a
+`voidDensityFadeMm` di distanza, con una curva morbida senza scalino. Vale in tutti i modi (mélange, agglomerati,
+sfumatura dai toni). La distanza si misura dai soli buchi. Il fattore si ferma a 5.
+
+**Misurato** su un rettangolo 140×90 con un buco tondo di raggio 10, un colore, punto 2–4, densità 1,5. I valori
+sono il filo vicino al buco diviso per quello lontano:
+
+| | 0–2 mm | 2–4 mm | 4–6 mm | 6–8 mm | oltre 8 mm |
+|---|---|---|---|---|---|
+| Spento | 1,50 | 1,50 | 1,09 | 1,08 | ~1 |
+| Fattore 2, 8 mm | 2,34 | 2,04 | 1,24 | 1,05 | ~1 |
+| Fattore 3, 8 mm | 2,96 | 2,40 | 1,59 | 1,19 | ~1 |
+| Fattore 3, 15 mm | 2,66 | 2,58 | 1,93 | 1,70 | 1,38 a 8–10, 1,15 a 10–12, ~1 da 12 mm |
+
+**Da sapere:** già spento il filo si addensa un po' attorno al buco (×1,5 nei primi 4 mm), perché ci gira
+attorno. Il filo totale cresce poco (16,0 → 16,2–16,7 m), perché la corona attorno al buco è piccola rispetto al
+pezzo, e resta un tratto solo. **Non visto da Lorenzo** al momento di questa nota.
+
 Cosa resta da fare sta in `STATO.md` (C4 densità per zona, C5 vuoto dello stesso colore, C6 modello
 densità unificato, A5 i nomi dei parametri "movimento").

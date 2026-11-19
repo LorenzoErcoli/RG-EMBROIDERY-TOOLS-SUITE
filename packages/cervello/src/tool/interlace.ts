@@ -84,5 +84,20 @@ export const scheda: SchedaParametri = {
       aiuto: 'quanto si sfoca l’immagine prima di leggerne il tono: poco = segue ogni variazione, tanto = passaggi larghi.',
       tipo: 'num', unita: 'mm', min: 0, passo: 1, predefinito: 4, concetto: 'immagine',
     },
+    {
+      id: 'voidDensityBoost', nome: 'voidDensityBoost', etichetta: 'Più fitto intorno alle aree vuote',
+      aiuto: 'spento, la densità è uguale ovunque. Acceso, il filo si addensa attorno a ogni area vuota del cartamodello e torna alla densità normale allontanandosi. Il bordo esterno non conta.',
+      tipo: 'bool', unita: '', predefinito: false, regole: ['R5'], concetto: 'densita',
+    },
+    {
+      id: 'voidDensityFactor', nome: 'voidDensityFactor', etichetta: 'Quanto più fitto vicino al vuoto',
+      aiuto: 'volte la densità normale, proprio a ridosso del vuoto (2 = il doppio del filo; massimo 5).',
+      tipo: 'num', unita: 'rapporto', min: 1, max: 5, passo: 0.1, predefinito: 2, concetto: 'densita',
+    },
+    {
+      id: 'voidDensityFade', nome: 'voidDensityFadeMm', etichetta: 'In quanti mm torna normale',
+      aiuto: 'la sfumatura da molto fitto a normale: oltre questa distanza dal vuoto la densità è quella di sempre.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 1, predefinito: 8, concetto: 'densita',
+    },
   ],
 };
