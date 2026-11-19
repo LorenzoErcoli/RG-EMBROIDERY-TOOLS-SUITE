@@ -317,6 +317,31 @@
           "$ref": "#/$defs/voidDensityFade",
           "default": 8,
           "x-id": "voidDensityFade"
+        },
+        "veinsOn": {
+          "$ref": "#/$defs/veinsOn",
+          "default": false
+        },
+        "veinsColor": {
+          "$ref": "#/$defs/veinsColor",
+          "default": "#c4845c"
+        },
+        "veinsBundles": {
+          "$ref": "#/$defs/veinsBundles",
+          "default": 5
+        },
+        "veinsThin": {
+          "$ref": "#/$defs/veinsThin",
+          "default": 52
+        },
+        "veinsAngleDeg": {
+          "$ref": "#/$defs/veinsAngle",
+          "default": 82,
+          "x-id": "veinsAngle"
+        },
+        "veinsSeed": {
+          "$ref": "#/$defs/veinsSeed",
+          "default": 8
         }
       }
     },
@@ -3176,6 +3201,50 @@
       "minimum": 0,
       "x-passo": 1,
       "x-concetto": "densita"
+    },
+    "veinsOn": {
+      "type": "boolean",
+      "title": "Venature sopra",
+      "description": "venature di filo cucite per ultime, sopra al ricamo, come le pieghe chiare della pelle: fasci di venature spesse (andata e ritorno) e venature fini (solo andata), tutte in un giro senza salti.",
+      "x-concetto": "colori"
+    },
+    "veinsColor": {
+      "type": "string",
+      "title": "Colore delle venature",
+      "description": "il colore del filo delle venature, cucito sopra a tutto.",
+      "x-concetto": "colori"
+    },
+    "veinsBundles": {
+      "type": "integer",
+      "title": "Fasci di venature spesse",
+      "description": "quanti fasci di 2-3 venature spesse a fuso.",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "colori"
+    },
+    "veinsThin": {
+      "type": "integer",
+      "title": "Venature fini",
+      "description": "quante venature fini si provano a tracciare: si fanno solo quelle che partono da una venatura e ne incontrano un’altra.",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "colori"
+    },
+    "veinsAngle": {
+      "type": "number",
+      "title": "Direzione delle venature",
+      "description": "90 = scendono dritte, 0 = in orizzontale.",
+      "x-unita": "deg",
+      "x-passo": 5,
+      "x-concetto": "colori"
+    },
+    "veinsSeed": {
+      "type": "integer",
+      "title": "Variante delle venature",
+      "description": "stessa variante = stesso disegno delle venature.",
+      "minimum": 1,
+      "x-passo": 1,
+      "x-concetto": "seme"
     },
     "panelWidth": {
       "type": "number",
@@ -6922,6 +6991,7 @@
       "parametri": [
         "variationSeed",
         "seed",
+        "veinsSeed",
         "seed2"
       ]
     },
@@ -6989,6 +7059,11 @@
         "paletteCycles",
         "clusterMode",
         "clusterStrength",
+        "veinsOn",
+        "veinsColor",
+        "veinsBundles",
+        "veinsThin",
+        "veinsAngle",
         "paletteMode",
         "colorCount",
         "color2",

@@ -95,5 +95,46 @@ sono il filo vicino al buco diviso per quello lontano:
 attorno. Il filo totale cresce poco (16,0 → 16,2–16,7 m), perché la corona attorno al buco è piccola rispetto al
 pezzo, e resta un tratto solo. **Non visto da Lorenzo** al momento di questa nota.
 
+## Le venature della pelle sopra Interlace (2026-11-19)
+
+Lorenzo: *«vorrei simulare attraverso l'interance una grafica delle venature della pelle. per questo vorrei che iniziassimo a fare un po' di riceerca insieme»* La ricerca, con le sue scelte a ogni passo, è andata così:
+
+1. Ha scelto il tipo **crepe / craquelé** e la strada **«il filo segue le venature»**. Poi ha portato una foto di pelle
+   color cuoio con venature chiare (misurato: fondo circa `#874325`, venature circa `#B46F4E`, quindi più chiare).
+2. *«bastano le venature lunghe, il fondo resta mélange»*.
+3. Dopo una ricerca più ampia: *«il sotto lascialo stare, faremo si un interace normale. ma sopra le venature devono essere fatte di filo, con imbastiture andata e ritorno dove lo vogliamo più spesso, solo andata sul più fimo»*.
+4. Sui salti ha scelto **«Un giro solo, raddoppia»**: dove il filo dovrebbe staccare, ripassa un tratto.
+5. *«rifalle che attraversano. Rendili anche più naturali se riesci»*; *«più venature e falle fermare prima del bordo»*;
+   poi, visto il risultato, *«l'ultimo un po' meno naturale di prima»*, e fra quattro disegni ha scelto **la A**,
+   **«A così, fino al bordo»**.
+
+**Cosa si è imparato** (la ricerca intera, coi suoi schizzi, è nelle note della chat, fuori dal repo):
+
+- Nessuno ricama l'aspetto della pelle con le venature: in rete c'è solo il ricamo *su* pelle. La cosa più vicina è il
+  ricamo cinese a punti casuali di Changzhou, cioè la famiglia di Interlace.
+- Nella pelle "pull-up" le venature chiare sono **pieghe**: lì olio e cera si spostano e il colore schiarisce. Nascono a
+  famiglie quasi parallele. Una venatura vera **non è una curva liscia**: è spezzata.
+- **Scartate:** la rete a celle chiuse (*«più venature rami che pelle»*, per gli alberi); le fasce riempite di filo chiaro
+  (il filo si ammucchia, 148 salti); la foto usata come immagine della sfumatura (rifà la patina, ma le venature non si
+  vedono: l'immagine è ridotta a 256 px); fini quasi parallele ai fasci (non trovano incroci e spariscono).
+- **I salti:** un filo a passata singola che finisce nel vuoto lascia un'estremità libera, cioè un nodo dispari, e lì
+  deve tornare indietro. Attraversare da solo non basta: i ripassi si mandano sulle spesse (le fini costano 25 volte).
+
+**Com'è fatta** (`venature.ts`, spenta di serie; `veinsOn`, `veinsColor`, `veinsBundles`, `veinsThin`,
+`veinsAngleDeg`, `veinsSeed`). È la A portata nel motore, con le sue misure:
+
+- fasci di 2-3 **spesse a fuso**: il ritorno corre a 0,35 mm dall'andata nel mezzo e la raggiunge alle punte, a punti
+  da 2,2-3,6 mm. Ogni quinto fascio è coricato di 66°;
+- **fini** a filo singolo, punti da 1,8-3,2 mm: partono da una vena (70% da una spessa), ne attraversano 0-2 e si
+  fermano sulla vena dopo almeno 8 mm, oppure arrivano al bordo;
+- **ponti**: se la rete resta in più pezzi (pochi fasci su un pezzo grande, o nessuna fine) una fine li collega,
+  così il giro resta unico. Questo nella A non c'era: l'ho aggiunto perché sul cartamodello demo la rete si spezzava;
+- **fusione**: i nodi a meno di 1 mm si uniscono, per il punto minimo (sono gli incroci doppi dove una fine taglia un fuso);
+- **un giro solo**: i nodi dispari si appaiano col cammino più economico e quel cammino si ripassa.
+
+**Misurato** sul rettangolo 120×80 (variante 8): un tratto, 1734 punti, 4,31 m, nessun punto sotto 1 mm, punto più
+lungo 5,1 mm, fini 1,09 m di cui ripassate 0,30 m. Nel giro completo con Interlace sotto: da 2 a 3 stop, +4,3 m.
+**Spente, la cucitura è identica byte per byte** a prima. **Non visto cucito.**
+
 Cosa resta da fare sta in `STATO.md` (C4 densità per zona, C5 vuoto dello stesso colore, C6 modello
 densità unificato, A5 i nomi dei parametri "movimento").

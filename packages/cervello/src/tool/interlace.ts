@@ -99,5 +99,35 @@ export const scheda: SchedaParametri = {
       aiuto: 'la sfumatura da molto fitto a normale: oltre questa distanza dal vuoto la densità è quella di sempre.',
       tipo: 'num', unita: 'mm', min: 0, passo: 1, predefinito: 8, concetto: 'densita',
     },
+    {
+      id: 'veinsOn', nome: 'veinsOn', etichetta: 'Venature sopra',
+      aiuto: 'venature di filo cucite per ultime, sopra al ricamo, come le pieghe chiare della pelle: fasci di venature spesse (andata e ritorno) e venature fini (solo andata), tutte in un giro senza salti.',
+      tipo: 'bool', unita: '', predefinito: false, concetto: 'colori',
+    },
+    {
+      id: 'veinsColor', nome: 'veinsColor', etichetta: 'Colore delle venature',
+      aiuto: 'il colore del filo delle venature, cucito sopra a tutto.',
+      tipo: 'testo', unita: '', predefinito: '#c4845c', concetto: 'colori',
+    },
+    {
+      id: 'veinsBundles', nome: 'veinsBundles', etichetta: 'Fasci di venature spesse',
+      aiuto: 'quanti fasci di 2-3 venature spesse a fuso.',
+      tipo: 'int', unita: '', min: 0, passo: 1, predefinito: 5, concetto: 'colori',
+    },
+    {
+      id: 'veinsThin', nome: 'veinsThin', etichetta: 'Venature fini',
+      aiuto: 'quante venature fini si provano a tracciare: si fanno solo quelle che partono da una venatura e ne incontrano un\u2019altra.',
+      tipo: 'int', unita: '', min: 0, passo: 1, predefinito: 52, concetto: 'colori',
+    },
+    {
+      id: 'veinsAngle', nome: 'veinsAngleDeg', etichetta: 'Direzione delle venature',
+      aiuto: '90 = scendono dritte, 0 = in orizzontale.',
+      tipo: 'num', unita: 'deg', passo: 5, predefinito: 82, concetto: 'colori',
+    },
+    {
+      id: 'veinsSeed', nome: 'veinsSeed', etichetta: 'Variante delle venature',
+      aiuto: 'stessa variante = stesso disegno delle venature.',
+      tipo: 'int', unita: '', min: 1, passo: 1, predefinito: 8, concetto: 'seme',
+    },
   ],
 };

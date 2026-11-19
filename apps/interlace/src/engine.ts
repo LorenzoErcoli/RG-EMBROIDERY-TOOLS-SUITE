@@ -91,6 +91,15 @@ export interface InterlaceParams {
   voidDensityFactor: number;
   /** In quanti mm dal buco la densità torna normale: la sfumatura da molto fitto a normale. */
   voidDensityFadeMm: number;
+  /** VENATURE di filo sopra il ricamo (il disegno «A» scelto da Lorenzo il 2026-11-19): fasci di venature spesse a
+   *  fuso, andata e ritorno, e venature fini a filo singolo, tutte in un giro senza salti. Spente di serie.
+   *  Il motore sta in `venature.ts`. */
+  veinsOn: boolean;
+  veinsColor: string;
+  veinsBundles: number;
+  veinsThin: number;
+  veinsAngleDeg: number;
+  veinsSeed: number;
 }
 
 export const defaultInterlaceParams: InterlaceParams = {
@@ -117,6 +126,12 @@ export const defaultInterlaceParams: InterlaceParams = {
   voidDensityBoost: false, // false = densità uguale ovunque (comportamento storico)
   voidDensityFactor: 2,
   voidDensityFadeMm: 8,
+  veinsOn: false, // false = nessuna venatura (comportamento storico)
+  veinsColor: '#c4845c',
+  veinsBundles: 5,
+  veinsThin: 52,
+  veinsAngleDeg: 82,
+  veinsSeed: 8,
 };
 
 // --- Costanti interne (implementazione, non parametri utente): il "movimento" del filo.
@@ -136,7 +151,7 @@ const MAX_POINTS = 200000;  // guardia anti-runaway
 const MAX_MASK_CELLS = 4_000_000; // tetto memoria maschera fine
 
 // RNG deterministico (mulberry32): anteprima ripetibile a parità di seed.
-function mulberry32(seed: number): () => number {
+export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) | 0;
@@ -222,9 +237,9 @@ function chamferDT(source0: Uint8Array, gw: number, gh: number, res: number): Fl
  * non a una maschera sì/no: così `clear=0` lascia il filo arrivare esattamente al bordo, e un valore
  * di clearance è rispettato con precisione (a meno della risoluzione della griglia). O(1) per query.
  */
-interface Mask { gw: number; gh: number; x0: number; y0: number; res: number; sdf(x: number, y: number): number; }
+export interface Mask { gw: number; gh: number; x0: number; y0: number; res: number; sdf(x: number, y: number): number; }
 
-function buildMask(boundary: Polyline, voids: Polyline[], res0: number): Mask {
+export function buildMask(boundary: Polyline, voids: Polyline[], res0: number): Mask {
   const bb = bounds(boundary);
   const w = bb.maxX - bb.minX, h = bb.maxY - bb.minY;
   let res = res0;

@@ -17,6 +17,7 @@ const entry = join(outDir, 'entry.ts');
 writeFileSync(entry, `
 export { parseImportedBoundarySource, generatePattern, generateFinalPatternPoints, parseSvgTransform } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
 export { generateFill, generatePasses, stitchBudget, defaultInterlaceParams } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
+export { generateVeins } from ${JSON.stringify(posix('apps/interlace/src/venature.ts'))};
 export { generateStitch, stitchSteps, reinsertPoints, analyzeBitmap, buildSelectionMask, buildPalette, groupByPalette, defaultBitmapParams } from ${JSON.stringify(posix('apps/bitmap/src/engine.ts'))};
 export { buildRawLevels, computeGridCounts, moduleFromPolylines, parseModuleSvg, defaultObliqueParams, resolveBoundaries, buildLaserExport, filterLevelByHoles, rectBoundaryOf, boundaryFromFormat, boundaryFromPoints, contourBoundary, simplifyLoop, isInside, applyModuleClipMode, cleanupPolylines, subtractExclusions, cleanupVoids, applyVoids, generateOblique, connectLayerContinuity, connectTechnicalDiagonals, enforceMinimumStitch, reconnectCutFragmentsOnBoundary, offsetPolygonBoundary, insetAnyBoundary, removeIsolatedSpikes } from ${JSON.stringify(posix('apps/oblique/src/engine.ts'))};
 export { runBitmapPreview, runBitmapPipeline, PREVIEW_MAX_DOTS } from ${JSON.stringify(posix('apps/bitmap/src/pipeline.ts'))};
@@ -533,6 +534,40 @@ for (const pass of vdAcceso) for (const r of pass) for (const pt of r) if (Math.
 check('aree vuote: acceso, nessun punto dentro il buco', vdNelBuco, 0);
 check('aree vuote: acceso, senza buchi non cambia niente', JSON.stringify(rg.generatePasses(vdRect, [], { ...vdParams, voidDensityBoost: true }, [1.5])) === JSON.stringify(rg.generatePasses(vdRect, [], vdParams, [1.5])), true);
 check('aree vuote: acceso, il filo resta continuo (un tratto solo)', vdAcceso[0].length, 1);
+
+// interlace — VENATURE sopra il ricamo (`veinsOn`), il disegno «A» scelto da Lorenzo: fasci di spesse a fuso (andata e
+// ritorno), fini a filo singolo, un giro solo senza salti, incroci sotto 1 mm uniti.
+console.log('\ninterlace — venature sopra il ricamo');
+const vnRect = [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 80 }, { x: 0, y: 80 }];
+const vnBuco = Array.from({ length: 48 }, (_, k) => ({ x: 60 + 9 * Math.cos(k / 48 * 2 * Math.PI), y: 40 + 9 * Math.sin(k / 48 * 2 * Math.PI) }));
+const vnParams = { ...rg.defaultInterlaceParams, voidClearanceMm: 0, veinsOn: true };
+const vnLen = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+check('venature: spente di serie', rg.defaultInterlaceParams.veinsOn, false);
+check('venature: spente, nessun filo', rg.generateVeins(vnRect, [], { ...vnParams, veinsOn: false }).runs.length, 0);
+for (const seed of [8, 3, 21]) {
+  const v = rg.generateVeins(vnRect, [], { ...vnParams, veinsSeed: seed });
+  let corti = 0, punti = 0;
+  for (const r of v.runs) for (let i = 1; i < r.length; i++) { punti++; if (vnLen(r[i - 1], r[i]) < 1) corti++; }
+  const spesse = v.edges.filter((e) => e.thick).reduce((s, e) => s + e.passes * vnLen(e.a, e.b), 0);
+  const fini = v.edges.filter((e) => !e.thick), finiMm = fini.reduce((s, e) => s + vnLen(e.a, e.b), 0);
+  const finiRip = fini.reduce((s, e) => s + (e.repassed ? vnLen(e.a, e.b) : 0), 0);
+  check(`venature (variante ${seed}): un giro solo, nessun salto`, v.runs.length, 1);
+  check(`venature (variante ${seed}): un disegno vero (più di 800 punti)`, punti > 800, true);
+  check(`venature (variante ${seed}): nessun punto sotto 1 mm, gli incroci vicini sono uniti`, corti, 0);
+  check(`venature (variante ${seed}): le spesse sono andata e ritorno (filo almeno 1,9 volte l'andata)`, spesse >= 1.9 * v.thickOneWayMm, true);
+  check(`venature (variante ${seed}): più di metà delle fini resta a filo singolo`, finiRip < 0.5 * finiMm, true);
+}
+// Senza fini i fasci sarebbero staccati, e su un pezzo grande lo stesso può succedere: ci pensano i ponti.
+check('venature: anche senza fini un giro solo (i fasci si collegano con un ponte)', rg.generateVeins(vnRect, [], { ...vnParams, veinsThin: 0 }).runs.length, 1);
+const vnGrande = [{ x: 0, y: 0 }, { x: 220, y: 0 }, { x: 220, y: 180 }, { x: 0, y: 180 }];
+for (const seed of [2862, 5]) check(`venature: pezzo grande 220×180 (variante ${seed}), un giro solo`, rg.generateVeins(vnGrande, [], { ...vnParams, veinsSeed: seed }).runs.length, 1);
+const vnA = rg.generateVeins(vnRect, [], vnParams), vnB = rg.generateVeins(vnRect, [], vnParams);
+check('venature: stessa variante, stesso identico disegno', JSON.stringify(vnA.runs) === JSON.stringify(vnB.runs), true);
+const vnH = rg.generateVeins(vnRect, [vnBuco], vnParams);
+let vnNel = 0, vnFuori = 0;
+for (const r of vnH.runs) for (const q of r) { if (Math.hypot(q.x - 60, q.y - 40) < 9) vnNel++; if (q.x < 0 || q.x > 120 || q.y < 0 || q.y > 80) vnFuori++; }
+check('venature: nessun punto nel buco', vnNel, 0);
+check('venature: nessun punto fuori dalla sagoma', vnFuori, 0);
 
 // interlace — DIVIETI DI TRANSITO (matrice filo × zona, `zoneBans`): un filo vietato in una zona non ci
 // cuce E non ci passa nemmeno di transito. Sulla stessa immagine metà rossa (x<60) / metà blu (x>60):

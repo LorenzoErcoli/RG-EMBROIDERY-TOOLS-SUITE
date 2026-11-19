@@ -191,6 +191,44 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
         <div class="rg-param-grid">
           <div class="rg-field rg-param-grid__wide">
             <label class="rg-choice">
+              <input type="checkbox" id="veinsOn" />
+              <span>Venature sopra</span>
+            </label>
+            <small class="rg-field__help">venature di filo cucite per ultime, sopra al ricamo, come le pieghe chiare della pelle: fasci di venature spesse (andata e ritorno) e venature fini (solo andata), tutte in un giro senza salti. Spento, il ricamo è quello di sempre.</small>
+          </div>
+          <div class="rg-field rg-param-grid__wide" id="veinsFields" hidden>
+            <span class="rg-field__label">Colore delle venature</span>
+            <div class="rg-cluster">
+              <label class="rg-color-map__swatch" id="veinsSwatch">
+                <input type="color" id="veinsColor" class="rg-u-visually-hidden" aria-label="Colore delle venature" />
+              </label>
+              <span class="rg-color-map__code" id="veinsCode">#C4845C</span>
+            </div>
+          </div>
+          <label class="rg-field" id="veinsBundlesField" hidden>
+            <span class="rg-field__label">Fasci di venature spesse</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="veinsBundles" type="number" min="0" step="1" value="5"><span>#</span></span>
+          </label>
+          <label class="rg-field" id="veinsThinField" hidden>
+            <span class="rg-field__label">Venature fini</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="veinsThin" type="number" min="0" step="1" value="52"><span>#</span></span>
+          </label>
+          <label class="rg-field" id="veinsAngleField" hidden>
+            <span class="rg-field__label">Direzione delle venature</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="veinsAngle" type="number" step="5" value="82"><span>°</span></span>
+            <small class="rg-field__help">90 = scendono dritte, 0 = in orizzontale.</small>
+          </label>
+          <div class="rg-field" id="veinsSeedField" hidden>
+            <span class="rg-field__label">Variante delle venature</span>
+            <div class="rg-cluster">
+              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="veinsSeed" type="number" min="1" step="1" value="8"><span>#</span></span>
+              <button type="button" id="veinsNewSeedBtn" class="rg-button rg-button--outline rg-button--small">Nuova</button>
+            </div>
+          </div>
+        </div>
+        <div class="rg-param-grid">
+          <div class="rg-field rg-param-grid__wide">
+            <label class="rg-choice">
               <input type="checkbox" id="voidDensityBoost" />
               <span>Più fitto intorno alle aree vuote</span>
             </label>
@@ -818,6 +856,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     syncBackground();
     syncTone();
     syncVoidDensity();
+    syncVeins();
     syncCluster(); // switch agglomerati + visibilità intensità
     buildParamUI();
     buildPaletteUI();
@@ -935,6 +974,31 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     ($('bgPickBtn') as HTMLButtonElement).disabled = !refImage;
     ($('bgPickBtn') as HTMLButtonElement).title = refImage ? 'Prendi il colore dello sfondo dall’immagine' : 'Serve un’immagine di riferimento';
   }
+  const veinsCheck = $('veinsOn') as HTMLInputElement;
+  const veinsNum: Array<[string, 'veinsBundles' | 'veinsThin' | 'veinsAngleDeg' | 'veinsSeed', number]> = [
+    ['veinsBundles', 'veinsBundles', 5], ['veinsThin', 'veinsThin', 52], ['veinsAngle', 'veinsAngleDeg', 82], ['veinsSeed', 'veinsSeed', 8],
+  ];
+  function syncVeins() {
+    veinsCheck.checked = params.veinsOn;
+    for (const id of ['veinsFields', 'veinsBundlesField', 'veinsThinField', 'veinsAngleField', 'veinsSeedField']) ($(id) as HTMLElement).hidden = !params.veinsOn;
+    ($('veinsColor') as HTMLInputElement).value = params.veinsColor;
+    ($('veinsSwatch') as HTMLElement).style.setProperty('--rg-swatch-color', params.veinsColor);
+    ($('veinsSwatch') as HTMLElement).style.background = params.veinsColor;
+    $('veinsCode').textContent = params.veinsColor.toUpperCase();
+    for (const [id, key] of veinsNum) ($(id) as HTMLInputElement).value = String(params[key]);
+  }
+  syncVeins();
+  veinsCheck.addEventListener('change', () => { params.veinsOn = veinsCheck.checked; syncVeins(); render(); });
+  $('veinsColor').addEventListener('input', () => { params.veinsColor = ($('veinsColor') as HTMLInputElement).value; syncVeins(); render(); });
+  for (const [id, key, def] of veinsNum) {
+    $(id).addEventListener('change', () => {
+      const v = parseFloat(($(id) as HTMLInputElement).value);
+      params[key] = Number.isNaN(v) ? def : key === 'veinsAngleDeg' ? v : Math.max(key === 'veinsSeed' ? 1 : 0, Math.round(v));
+      syncVeins();
+      if (params.veinsOn) render();
+    });
+  }
+  $('veinsNewSeedBtn').addEventListener('click', () => { params.veinsSeed = Math.floor(Math.random() * 9999) + 1; syncVeins(); if (params.veinsOn) render(); });
   const voidCheck = $('voidDensityBoost') as HTMLInputElement;
   const voidFactor = $('voidDensityFactor') as HTMLInputElement;
   const voidFade = $('voidDensityFade') as HTMLInputElement;

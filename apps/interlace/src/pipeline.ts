@@ -6,6 +6,7 @@ import {
   THREAD_STROKE_MM, SHAPE_STROKE_MM,
 } from '@rg/core';
 import { generatePasses, stitchBudget, type InterlaceParams, type ImageColorAt, type StitchBudget } from './engine';
+import { generateVeins } from './venature';
 
 export type RoleAssignment = Record<string, Role | undefined>;
 
@@ -95,7 +96,7 @@ export function runPipeline(
   const densities: number[] = [];
   for (let i = 0; i < P; i++) { const d = cd[i % palette.length]; densities.push(d && d > 0 ? d : params.densitySpacingMm); }
 
-  const stops: { color: string; polylines: Polyline[] }[] = [];
+  const stops: { color: string; polylines: Polyline[]; veins?: boolean }[] = [];
   let threadMm = 0;
   let runCount = 0;
   let idx = 0;
@@ -110,13 +111,25 @@ export function runPipeline(
     }
   }
 
+  // VENATURE sopra a tutto: cucite per ultime, in un tratto per sagoma (la rete è collegata, quindi senza salti).
+  if (params.veinsOn) {
+    const vene: Polyline[] = [];
+    for (const m of master) {
+      const innerVoids = exclusions.filter((v) => v.length > 0 && pointInPolygon(v[0], m.points));
+      for (const r of generateVeins(m.points, innerVoids, params).runs) { vene.push(r); threadMm += pathLength(r); }
+    }
+    runCount += vene.length;
+    if (vene.length) stops.push({ color: params.veinsColor || '#c4845c', polylines: vene, veins: true });
+  }
+
   // --- ANTEPRIMA: raggruppa per colore (più leggibile a schermo). Il filo si disegna sottile (R15). ---
   const byColor = new Map<string, Polyline[]>();
-  for (const s of stops) { const l = byColor.get(s.color) ?? []; l.push(...s.polylines); byColor.set(s.color, l); }
+  for (const s of stops) { if (s.veins) continue; const l = byColor.get(s.color) ?? []; l.push(...s.polylines); byColor.set(s.color, l); }
   palette.forEach((col, i) => {
     const list = byColor.get(col);
     if (list && list.length) layers.push({ id: `fill-${i}`, color: col, polylines: list, strokeMm: THREAD_STROKE_MM });
   });
+  for (const s of stops) if (s.veins) layers.push({ id: 'veins', color: s.color, polylines: s.polylines, strokeMm: THREAD_STROKE_MM });
   // Contorno dei void (tenue) in anteprima, per mostrare che vengono rispettati.
   if (exclusions.length) {
     layers.push({ id: 'void', color: COLORS.voidOutline, polylines: exclusions, strokeMm: SHAPE_STROKE_MM, shapeOnly: true });
