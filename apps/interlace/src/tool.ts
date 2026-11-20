@@ -12,7 +12,7 @@ import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { collegaStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import { runPipeline, type RoleAssignment } from './pipeline';
-import { defaultInterlaceParams, type InterlaceParams } from './engine';
+import { defaultInterlaceParams, DENSITY_MIN_MM, DENSITY_MAX_MM, type InterlaceParams } from './engine';
 import { sampleContours } from './sample';
 import { campionatoreImmagine } from './motore';
 
@@ -23,7 +23,7 @@ interface Field { key: keyof InterlaceParams; label: string; unit: string; step:
 const PARAMS: Field[] = [
   { key: 'minStitchMm', label: 'Punto minimo', unit: 'mm', step: 0.5, help: 'lunghezza minima di un passaggio' },
   { key: 'maxStitchMm', label: 'Lunghezza massima del punto', unit: 'mm', step: 0.5, help: 'i passaggi non superano questa misura' },
-  { key: 'densitySpacingMm', label: 'Densità (distanza tra le file di filo)', unit: 'mm', step: 0.1, help: 'densità di ogni colore, ~0.8–4 mm: piccola = fitto; ~3 è il più rado ancora omogeneo (oltre si ammassa)' },
+  { key: 'densitySpacingMm', label: 'Densità (distanza tra le file di filo)', unit: 'mm', step: 0.1, help: 'densità di ogni colore, 0,8–10 mm: piccola = fitto, grande = rado; fino a ~8 il filo cala, oltre non si dirada più' },
   { key: 'voidClearanceMm', label: 'Distanza di sicurezza da bordi e vuoti', unit: 'mm', step: 0.1 },
 ];
 
@@ -506,7 +506,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       const dens = document.createElement('input');
       dens.type = 'number';
       dens.className = 'rg-input rg-input--numeric';
-      dens.min = '0.8'; dens.max = '3.2'; dens.step = '0.1';
+      dens.min = String(DENSITY_MIN_MM); dens.max = String(DENSITY_MAX_MM); dens.step = '0.1';
       dens.inputMode = 'decimal';
       dens.placeholder = String(params.densitySpacingMm);
       const dv = params.colorDensities[i];
@@ -515,7 +515,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       dens.addEventListener('change', () => {
         const v = parseFloat(dens.value);
         if (dens.value.trim() === '' || Number.isNaN(v)) { params.colorDensities[i] = 0; dens.value = ''; }
-        else { const c = Math.max(0.8, Math.min(3.2, v)); params.colorDensities[i] = c; dens.value = String(c); }
+        else { const c = Math.max(DENSITY_MIN_MM, Math.min(DENSITY_MAX_MM, v)); params.colorDensities[i] = c; dens.value = String(c); }
         render();
       });
       const dunit = document.createElement('span');

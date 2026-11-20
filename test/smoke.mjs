@@ -16,7 +16,7 @@ const posix = (p) => join(root, p).replace(/\\/g, '/');
 const entry = join(outDir, 'entry.ts');
 writeFileSync(entry, `
 export { parseImportedBoundarySource, generatePattern, generateFinalPatternPoints, parseSvgTransform } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
-export { generateFill, generatePasses, stitchBudget, defaultInterlaceParams } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
+export { generateFill, generatePasses, stitchBudget, defaultInterlaceParams, DENSITY_MAX_MM } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
 export { generateVeins } from ${JSON.stringify(posix('apps/interlace/src/venature.ts'))};
 export { generateStitch, stitchSteps, reinsertPoints, analyzeBitmap, buildSelectionMask, buildPalette, groupByPalette, defaultBitmapParams } from ${JSON.stringify(posix('apps/bitmap/src/engine.ts'))};
 export { buildRawLevels, computeGridCounts, moduleFromPolylines, parseModuleSvg, defaultObliqueParams, resolveBoundaries, buildLaserExport, filterLevelByHoles, rectBoundaryOf, boundaryFromFormat, boundaryFromPoints, contourBoundary, simplifyLoop, isInside, applyModuleClipMode, cleanupPolylines, subtractExclusions, cleanupVoids, applyVoids, generateOblique, connectLayerContinuity, connectTechnicalDiagonals, enforceMinimumStitch, reconnectCutFragmentsOnBoundary, offsetPolygonBoundary, insetAnyBoundary, removeIsolatedSpikes } from ${JSON.stringify(posix('apps/oblique/src/engine.ts'))};
@@ -329,6 +329,15 @@ check('nessun punto dentro il vuoto (R5)', iInVoid, 0);
 check('nessun punto fuori dal bordo', iOut, 0);
 check('nessun segmento sotto il punto minimo (R3)', iShort, 0);
 check('nessun segmento oltre max+2 (R4, tolleranza escape)', iOverEscape, 0);
+// Il tetto della densità era 4 mm: oltre, la cella restava 4 e il filo non calava più. Lorenzo (2026-11-20) ha chiesto
+// di andare molto oltre: ora a 8 mm il filo è meno che a 4, e il tetto è 10.
+{
+  const dRect = [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 80 }, { x: 0, y: 80 }];
+  const dFilo = (d) => rg.generateFill(dRect, [], { ...rg.defaultInterlaceParams, minStitchMm: 2, maxStitchMm: 5, voidClearanceMm: 0, seed: 3, densitySpacingMm: d })
+    .reduce((s, r) => { for (let i = 1; i < r.length; i++) s += Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y); return s; }, 0);
+  check('densità oltre 4 mm: a 8 mm il filo è meno di due terzi che a 4', dFilo(8) < dFilo(4) * 0.67, true);
+  check('densità: il tetto è 10 mm', rg.DENSITY_MAX_MM, 10);
+}
 check('segmenti oltre max solo negli escape (<1%)', iLong <= Math.ceil(iN * 0.01), true);
 
 // interlace — AGGLOMERATI (clusterMode): zone di colore, ma NIENTE runaway (le zone hanno una base ovunque

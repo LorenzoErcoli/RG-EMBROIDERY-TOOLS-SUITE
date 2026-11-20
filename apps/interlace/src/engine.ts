@@ -106,7 +106,7 @@ export const defaultInterlaceParams: InterlaceParams = {
   realWidthMm: 0,
   minStitchMm: 6,
   maxStitchMm: 15,
-  densitySpacingMm: 2.0, // spaziatura file (mm) di OGNI colore ≈ 0.8–3.2; piccola = fitto/più filo
+  densitySpacingMm: 2.0, // spaziatura file (mm) di OGNI colore, DENSITY_MIN_MM–DENSITY_MAX_MM; piccola = fitto/più filo
   voidClearanceMm: 0.6,
   seed: 1,
   colors: ['#1f3a5f', '#c0392b', '#e0a41f', '#3b7d4f'],
@@ -566,9 +566,15 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
 function cellForSpacing(spacing: number, _maxS: number): number {
   // La cella = spaziatura fra le file. Fino a ~3mm la densità è regolare e OMOGENEA; verso 4 inizia a
   // farsi rada ma un po' disomogenea. Oltre ~4 il filo continuo, per restare tale, rimbalza in tragitti
-  // che si AMMASSANO (zone iper-dense) invece di diradarsi → tetto a 4 (limite pratico dell'omogeneità).
-  return Math.max(0.8, Math.min(4, spacing));
+  // che si AMMASSANO (zone iper-dense) invece di diradarsi. Il tetto era 4; Lorenzo (2026-11-20) ha chiesto di
+  // poter andare molto oltre → DENSITY_MAX_MM. Misurato (120×80, punti 2-5 mm): fino a 10 il filo resta in un tratto
+  // e si dirada; a 12 si ammassa (una zona 10×10 mm 13 volte più piena della media).
+  return Math.max(DENSITY_MIN_MM, Math.min(DENSITY_MAX_MM, spacing));
 }
+
+/** Limiti della densità (spaziatura fra le file, mm), uguali per la densità globale e per quella di ogni colore. */
+export const DENSITY_MIN_MM = 0.8;
+export const DENSITY_MAX_MM = 10;
 
 /** Copertura per cella (quante attraversate): FISSA. La densità è governata dalla dimensione della cella,
  * non da questo numero — così a densità bassa NON si moltiplicano i tragitti (il difetto del vecchio modello). */
