@@ -380,6 +380,24 @@ Filo di traverso nel vuoto (fuori dalle zone e dalle striature), pannello di pro
 saliva da 2,41 a 2,67 m e i passaggi tornavano a fare giri. Con 2 il filo in vista è 0,97 m a grandezza 22 (prima del 2026-11-20 1,19)
 e 2,41 m a grandezza 8 (prima 2,15): il prezzo di meno traverso. Nella simulazione del pezzo finito il traverso in vista va da 0,38 a 0,23 m.
 
+**Verticali fuori dalle macchie, e il percorso** (Lorenzo, provando il tool: *«ci sono diversi passaggi soprattutto verticali che non si
+muovono sotto le macchie»*; *«puoi lavorare meglio anche nel calcolo del percorso. su questo swatch a stop credo abbia fatto dei buoni
+miglioramenti»*). La causa: fra le striature da cucire il verticale costava 1 come sotto una zona, e il filo correva lungo le colonne da
+una zona all'altra. Ora costa 4 (`COSTO_VERTICALE_FRA_STRIATURE`; provati 1, 2, 4, 8, 25: da 8 in su il traverso tornava a crescere).
+E l'ordine delle file come nella Ricetta: il costo fra due file è quello della strada vera, cercata sulla griglia dei costi da ogni capo
+(primo e ultimo trattino) fino ai capi delle 12 file vicine (o 100 mm di filo scoperto); prima si stimava su una griglia tre volte più
+larga e fra file, non fra capi. Poi il verso di ogni fila si sceglie su tutto l'ordine (programmazione dinamica, `ordinaConVersi`):
+prima la strada sceglieva il verso fila per fila, e l'ordine non sapeva da che parte si sarebbe usciti.
+
+| pannello di prova, variante 1 | Grandezza 22 | Grandezza 8 |
+|---|---|---|
+| passaggi verticali fuori dalle macchie | 0,71 → 0,42 m | 1,57 → 0,88 m |
+| di traverso fuori dalle macchie | 0,22 → 0,25 m | 0,75 → 0,81 m |
+| filo in vista | 0,97 → 0,70 m | 2,41 → 1,78 m |
+| metri di passaggi | 4,56 → 3,99 | 11,17 → 9,41 |
+
+Calcolo: a grandezza 22 da 0,9 a 1,9 s, due livelli da 4,3 a 5,4 s.
+
 **I valori da un DST** (Lorenzo: *«dammi la possibilità di inserire i valori a partire da un dst»*; `stima.ts`). Nato da un pannello vero
 in Stilista con due striature, stop 4 e 5, di cui non si sapevano i parametri: letti i punti in sola lettura (`GET /punti-cuciti`),
 misurati, e rigenerate col motore alcune combinazioni sullo stesso rettangolo per vedere quale torna. Dai punti:
