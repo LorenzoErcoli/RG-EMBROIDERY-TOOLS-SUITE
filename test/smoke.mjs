@@ -6757,7 +6757,9 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     return { filo, mediana: dal[dal.length >> 1], entro1: dal.filter((x) => Math.abs(x) <= 1).length / dal.length, salti: rr.saltiFra.raso.reduce((a, b) => a + b, 0) };
   };
   const pr = passaggiDentro(r);
-  check('i passaggi dentro le macchie costeggiano il bordo: mediana entro 0,3 mm, almeno il 90% entro 1 mm (misurati 0,21 mm e 93%; prima 0,31 e 77%; Stilista 0,23 e 91%)', [pr.mediana <= 0.3, pr.entro1 >= 0.9], [true, true]);
+  // (fino al 2026-11-17 costeggiavano il bordo, come nel DST di Stilista: mediana 0,21 mm, il 93% entro 1 mm. Ora un millimetro
+  // dentro, R17: «si deve entrare per essere nascosto»)
+  check(`i passaggi dentro le macchie stanno vicini al bordo ma un millimetro dentro (R17): mediana ${pr.mediana.toFixed(2)} mm dal bordo`, [pr.mediana >= 0.6 && pr.mediana <= 1.6], [true]);
   // «la freccia blu presenta un passaggio da macchia a macchia, ma poi lì viene ricamata e quel filo si incastrerà
   // sicuramente sotto il ricamo» (Lorenzo, 2026-10-26): il filo dritto di un salto, tolto un millimetro ai capi, non
   // entra mai più di 0,3 mm in una macchia della sua zona (le altre zone si cuciono dopo uno stop) — erano 32 su 83
@@ -6784,7 +6786,7 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   // (Stilista, misurato sul suo DST: passaggi 237 mm, salti 52 mm)
   const nove = [0, 1, 2, 3, 4, 5, 7, 8, 9];
   const p9 = passaggiDentro(rg.pmCostruisci(pannello, nove.map((i) => macchie[i]), squame, pmSerie));
-  check('le nove macchie di Stilista: passaggi entro 310 mm e salti entro 40 mm (misurati 303 e 33; prima 269 e 44)', [p9.filo <= 310, p9.salti <= 40], [true, true]);
+  check(`le nove macchie di Stilista: passaggi entro 460 mm e salti entro 40 mm (misurati ${p9.filo.toFixed(0)} e ${p9.salti.toFixed(0)}; prima di R17 303 e 33: la linea spezzata allunga il filo)`, [p9.filo <= 460, p9.salti <= 40], [true, true]);
   // «da sinistra a destra» (Lorenzo, 2026-10-09): l'ordine delle macchie torna a sinistra molto meno di quello
   // coi salti più corti
   const indietro = (rr) => { const cx = rr.forme.map((f) => (Math.min(...f.map((q) => q.x)) + Math.max(...f.map((q) => q.x))) / 2); let t = 0; for (let k = 1; k < rr.ordine.length; k++) t += Math.max(0, cx[rr.ordine[k - 1]] - cx[rr.ordine[k]]); return t; };
