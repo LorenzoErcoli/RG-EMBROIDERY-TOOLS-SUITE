@@ -2,6 +2,7 @@
 // Serve a una cosa sola ma importante: accorgersi quando due tool rispondono
 // in modo diverso alla STESSA domanda geometrica (vedi COSTITUZIONE R28).
 import { readFileSync, mkdirSync, rmSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -15,7 +16,7 @@ const posix = (p) => join(root, p).replace(/\\/g, '/');
 const entry = join(outDir, 'entry.ts');
 writeFileSync(entry, `
 export { parseImportedBoundarySource, generatePattern, generateFinalPatternPoints, parseSvgTransform } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
-export { generateFill, generatePasses, stitchBudget, defaultInterlaceParams } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
+export { generateFill, generatePasses, stitchBudget, defaultInterlaceParams, DENSITY_MAX_MM } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
 export { generateStitch, stitchSteps, reinsertPoints, analyzeBitmap, buildSelectionMask, buildPalette, groupByPalette, defaultBitmapParams } from ${JSON.stringify(posix('apps/bitmap/src/engine.ts'))};
 export { buildRawLevels, computeGridCounts, moduleFromPolylines, parseModuleSvg, defaultObliqueParams, resolveBoundaries, buildLaserExport, filterLevelByHoles, rectBoundaryOf, boundaryFromFormat, boundaryFromPoints, contourBoundary, simplifyLoop, isInside, applyModuleClipMode, cleanupPolylines, subtractExclusions, cleanupVoids, applyVoids, generateOblique, connectLayerContinuity, connectTechnicalDiagonals, enforceMinimumStitch, reconnectCutFragmentsOnBoundary, offsetPolygonBoundary, insetAnyBoundary, removeIsolatedSpikes } from ${JSON.stringify(posix('apps/oblique/src/engine.ts'))};
 export { runBitmapPreview, runBitmapPipeline, PREVIEW_MAX_DOTS } from ${JSON.stringify(posix('apps/bitmap/src/pipeline.ts'))};
@@ -78,7 +79,7 @@ export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RET
 export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm, anelliOvali as rtsAnelliOvali, puntoDelNodo as rtsPuntoDelNodo, cimeDelleColonne as rtsCimeDelleColonne, ceIlNodo as rtsCeIlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
 export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, avanza as rtsAvanza, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
 export { senzaDatiDiProgetto } from ${JSON.stringify(posix('packages/ui/src/save.ts'))};
-export { origineStilista, coloreForiStilista, puntiDaPolilinee, svgForiAiLoroColori, primoColoreStilista, agoStilista, impacchettaProgetto, spacchettaProgetto, progettoDaInviare } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
+export { origineStilista, coloreForiStilista, puntiDaPolilinee, svgForiAiLoroColori, primoColoreStilista, agoStilista, impacchettaProgetto, spacchettaProgetto, progettoDaInviare, inviaAStilista } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -327,6 +328,15 @@ check('nessun punto dentro il vuoto (R5)', iInVoid, 0);
 check('nessun punto fuori dal bordo', iOut, 0);
 check('nessun segmento sotto il punto minimo (R3)', iShort, 0);
 check('nessun segmento oltre max+2 (R4, tolleranza escape)', iOverEscape, 0);
+// Il tetto della densità era 4 mm: oltre, la cella restava 4 e il filo non calava più. Lorenzo (2026-11-20) ha chiesto
+// di andare molto oltre: ora a 8 mm il filo è meno che a 4, e il tetto è 10.
+{
+  const dRect = [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 80 }, { x: 0, y: 80 }];
+  const dFilo = (d) => rg.generateFill(dRect, [], { ...rg.defaultInterlaceParams, minStitchMm: 2, maxStitchMm: 5, voidClearanceMm: 0, seed: 3, densitySpacingMm: d })
+    .reduce((s, r) => { for (let i = 1; i < r.length; i++) s += Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y); return s; }, 0);
+  check('densità oltre 4 mm: a 8 mm il filo è meno di due terzi che a 4', dFilo(8) < dFilo(4) * 0.67, true);
+  check('densità: il tetto è 10 mm', rg.DENSITY_MAX_MM, 10);
+}
 check('segmenti oltre max solo negli escape (<1%)', iLong <= Math.ceil(iN * 0.01), true);
 
 // interlace — AGGLOMERATI (clusterMode): zone di colore, ma NIENTE runaway (le zone hanno una base ovunque
@@ -3100,6 +3110,45 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
       sorgente.includes("v === scalaImport.scaleMode ? ' selected' : ''"), true);
   }
 
+  // RG STILISTA LINK, POST /oggetti (2026-11-17, sapere/codice/stilista-oggetti-esatti.md). Il plugin non gira senza
+  // Stilista: qui si controlla che nel sorgente C# non tornino i tre difetti silenziosi, misurati su un pannello grande.
+  {
+    const ponte = (f) => readFileSync(join(root, 'strumenti-sviluppo/stilista-link/bridge', f), 'utf8');
+    const json = ponte('JsonBridge.cs');
+    const punzone = ponte('CodexTab.NativePunch.cs');
+    const sequenza = ponte('CodexTab.Sequence.cs');
+    const lotto = ponte('CodexTab.BatchImport.cs');
+    // 1. senza UseSimpleDictionaryFormat un Dictionary letto da { "PIx": 1 } resta vuoto, in silenzio
+    check('Stilista Link /oggetti: managed_overrides_int non è un Dictionary (si leggerebbe vuoto)',
+      [/public\s+Dictionary<[^>]*>\s+ManagedOverridesInt/.test(json), /public ParametriInteri ManagedOverridesInt/.test(json),
+        /class ParametriInteri : ISerializable/.test(json)], [false, true, true]);
+    // 2. il contorno passa dal clic a mano solo come copia, poi si riscrive al micron prima del ricalcolo
+    const riscrive = punzone.indexOf('RiscriviContornoEsatto(');
+    check('Stilista Link /oggetti: si immette la copia, e il contorno esatto si scrive prima del ricalcolo',
+      [/Feed\w+\(\s*nativeBox,\s*\w+,\s*spec\.Geometry\.Outer/.test(punzone), punzone.includes('CopiaDaImmettere('),
+        riscrive > 0 && riscrive < punzone.indexOf('ApplyTranslationPlanToDesignObject(createdObject, plan, true)'),
+        punzone.includes('scarto <= ScartoMassimoContornoMm') || punzone.includes('scarto > ScartoMassimoContornoMm')],
+      [false, true, true, true]);
+    // 3. l'ago si applica sempre quando c'è, senza la bandiera della sequenza
+    check('Stilista Link /oggetti: machine.needle non dipende da apply_native_needle_changes',
+      [sequenza.includes('native needle assignment disabled'), /if \(!applyChanges\)/.test(sequenza)], [false, false]);
+    // il motivo arriva nella risposta come messaggio di un'eccezione senza eccezione interna (Control.Invoke darebbe quella)
+    // 4. i fori (2026-11-17): diventano aree vuote prima del ricalcolo, e si ricontrollano dopo; mai un riempimento pieno
+    const fori = ponte('CodexTab.ForiEsatti.cs');
+    const scriveFori = punzone.indexOf('ScriviFori(createdObject');
+    check('Stilista Link /oggetti: i fori diventano aree vuote prima del ricalcolo e si ricontrollano',
+      [lotto.includes('non si sa ancora applicare'), /ControllaFori\(esterno, fori\)/.test(lotto),
+        scriveFori > 0 && scriveFori < punzone.indexOf('ApplyTranslationPlanToDesignObject(createdObject, plan, true)'),
+        punzone.includes('VerificaFori(createdObject, foriScritti)'), lotto.includes('VerificaFori('),
+        /proprieta\.SetValue\(designObject, percorsi, null\)/.test(fori), /"Stitches"/.test(fori)],
+      [false, true, true, true, true, true, true]);
+    const lancio = lotto.match(/throw new InvalidOperationException\([\s\S]*?\);/)?.[0] ?? '';
+    check('Stilista Link /oggetti: un programma da JSON che fallisce lancia il motivo, senza eccezione interna',
+      [/if \(batch == null \|\| !batch\.ArrivatoDaJson\)/.test(lotto), lancio.includes('"/oggetti non ha creato niente: " + motivo'),
+        (lancio.match(/\bnew\b/g) || []).length, /,\s*ex\s*\)/.test(lancio), /\[OnDeserializing\]\s*private void LettoDaJson/.test(json)],
+      [true, true, 1, false, true]);
+  }
+
   // RG STILISTA LINK (ramo stilista-link, 2026-10-21): la selezione arriva come l'SVG del plugin
   // (Collegamento.cs, SelezioneSvg) — mm dichiarati, un colore per il filo, i FORI a parte col colore
   // dichiarato in data-rg-stilista-fori — e si legge con l'import di sempre. Il ricamo torna coi salti
@@ -3187,6 +3236,72 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
     check('Esporta senza dati: l\'SVG perde ogni <metadata>, il disegno resta',
       [rg.senzaDatiDiProgetto(svgConDati).includes('metadata'), rg.senzaDatiDiProgetto(svgConDati).includes('cliente'), rg.senzaDatiDiProgetto(svgConDati).includes('<path d="M0 0L1 1"/>')], [false, false, true]);
     check('Esporta senza dati: un testo che non è un SVG non si tocca', rg.senzaDatiDiProgetto('{"metadata":"<metadata>x</metadata>"}'), '{"metadata":"<metadata>x</metadata>"}');
+    // LE TRACCE RG (2026-11-12): con l'interruttore spento non parte niente di nostro verso il documento
+    {
+      const plugin = readdirSync(join(root, 'strumenti-sviluppo/stilista-link')).filter((f) => f.endsWith('.cs'))
+        .map((f) => [f, readFileSync(join(root, 'strumenti-sviluppo/stilista-link', f), 'utf8')]);
+      const tutto = plugin.map(([, s]) => s).join('\n');
+      const ritorno = plugin.find(([f]) => f === 'Collegamento.Ritorno.cs')[1];
+      const imposta = ritorno.slice(ritorno.indexOf('private static void ImpostaDescrizione('), ritorno.indexOf('private static void ScriviDescrizione('));
+      check('Tracce RG: la descrizione si scrive in un posto solo, e ImpostaDescrizione passa dall\'interruttore',
+        [(tutto.match(/GetProperty\("Description"\)/g) || []).length, imposta.includes('Tracce.DaScrivere('),
+          plugin.filter(([f, s]) => /ScriviDescrizione\(/.test(s)).map(([f]) => f).sort(), (tutto.match(/ScriviDescrizione\(oggetto, ""\)/g) || []).length],
+        [1, true, ['Collegamento.Ritorno.cs', 'Collegamento.Tracce.cs'], 1]);
+      check('Tracce RG: «rg-tools» nel programma del bridge solo con le tracce accese', /Role = "rg-tools"|Id = ricamo\.Nome \?\? "rg-tools"/.test(ritorno), false);
+      check('Tracce RG: le strade passano prima dell\'elenco, e i parametri di un DST aperto guardano l\'interruttore',
+        [readFileSync(join(root, 'strumenti-sviluppo/stilista-link/ServerLocale.cs'), 'utf8').includes('CodexTab.StradaDelleTracce(richiesta) ?? _gestore(richiesta)'),
+          /if \(!Tracce\.Accese\)[\s\S]{0,120}File\.Delete\(file\)/.test(plugin.find(([f]) => f === 'Collegamento.Parametri.cs')[1])], [true, true]);
+      // il tool, contro un plugin finto: cosa parte verso Stilista con le tracce spente e accese
+      const prima = { fetch: globalThis.fetch, location: globalThis.location };
+      const giro = async (accese, conCartamodello) => {
+        const mandati = [];
+        globalThis.location = { search: '?stilista=5370' };
+        globalThis.fetch = async (url, opz = {}) => {
+          const u = new URL(url);
+          const rispondi = (j, stato = 200) => new Response(JSON.stringify(j), { status: stato, headers: { 'Content-Type': 'application/json' } });
+          if (u.pathname === '/stato') return rispondi({ ok: true, documento: 'GMI Stilista 3 - C:\\prova\\finto.emg3', oggetti: 1, selezionati: 1, attiva_alle: 1 });
+          if (u.pathname === '/tracce') return rispondi({ ok: true, accese, di_serie: false });
+          const corpo = opz.body instanceof Uint8Array ? opz.body : String(opz.body ?? '');
+          mandati.push({ strada: u.pathname + u.search, corpo });
+          if (u.pathname === '/punti') return rispondi({ ok: true, punti_chiesti: 3, punti_letti: 3, salti: 0, tipo_dopo: 'manual', ago: '1', parametri_salvati: JSON.parse(corpo).parametri !== undefined });
+          if (u.pathname === '/dst') return rispondi({ ok: true, parametri_salvati: u.searchParams.has('parametri') });
+          return rispondi({ ok: false }, 404);
+        };
+        let stato = '';
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" data-rg-stilista-origine="0 0" data-rg-stilista-ago="1"></svg>';
+        await rg.inviaAStilista({ tool: 'net-45', sorgente: () => (conCartamodello ? svg : null), strati: () => [{ nome: 'raso', polylines: [[{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }]] }],
+          dst: () => ({ bytes: dstProva, nome: 'cliente-prova' }), carica() {}, stato: (t) => { stato = t; } });
+        return { mandati, stato };
+      };
+      try {
+        const spento = await giro(false, true);
+        const corpoSpento = JSON.parse(spento.mandati[0].corpo);
+        const acceso = await giro(true, true);
+        const dstSpento = await giro(false, false);
+        const dstAcceso = await giro(true, false);
+        const coda = (m) => new TextDecoder('latin1').decode(m.corpo);
+        check('Tracce RG spente: al suo posto parte il ricamo senza parametri, e la barra lo dice',
+          [corpoSpento.parametri, corpoSpento.punti.length, /tracce RG spente/.test(spento.stato)], [undefined, 3, true]);
+        check('Tracce RG accese: i parametri partono come prima', [typeof JSON.parse(acceso.mandati[0].corpo).parametri, /parametri salvati/.test(acceso.stato)], ['string', true]);
+        check('Tracce RG spente: il DST per un documento nuovo esce senza busta, senza parametri e col nome neutro',
+          [coda(dstSpento.mandati[0]).includes('RGPROJ01'), dstSpento.mandati[0].strada.includes('parametri='), dstSpento.mandati[0].strada.includes('cliente'), dstSpento.mandati[0].strada.includes('nome=ricamo')],
+          [false, false, false, true]);
+        check('Tracce RG accese: il DST porta la busta e i parametri come prima',
+          [coda(dstAcceso.mandati[0]).includes('RGPROJ01'), dstAcceso.mandati[0].strada.includes('parametri=')], [true, true]);
+      } finally {
+        globalThis.fetch = prima.fetch;
+        globalThis.location = prima.location;
+      }
+      // l'interruttore nel plugin, provato da solo in C# (se c'è dotnet: sul PC di Lorenzo sì, in CI forse no)
+      const dotnet = spawnSync('dotnet', ['--version'], { encoding: 'utf8' });
+      if (dotnet.status === 0) {
+        const prova = spawnSync('dotnet', ['run', '--project', join(root, 'strumenti-sviluppo/stilista-link-prove'), '-c', 'Release'], { encoding: 'utf8' });
+        check('Tracce RG: le prove C# dell\'interruttore (spente: niente nella descrizione; «Pulisci» riconosce solo le nostre)',
+          [prova.status, /tracce: tutto ok/.test(prova.stdout)], [0, true]);
+      } else {
+        console.log('  --   Tracce RG: prove C# saltate, qui non c\'è dotnet');
+      }
+    }
     check('Stilista Link: un DST senza busta non ferma l\'invio, lo dice',
       (await rg.progettoDaInviare({ dst: () => ({ bytes: new Uint8Array(600), nome: 'x' }), sorgente: () => null })).dati, undefined);
     check('Stilista Link: per oblique i fori di un plugin vecchio (senza «di chi») vanno al colore del primo filo',

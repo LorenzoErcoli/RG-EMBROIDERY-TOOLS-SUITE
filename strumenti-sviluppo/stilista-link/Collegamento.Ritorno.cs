@@ -88,7 +88,8 @@ namespace StilistaHostSkeleton
                     (tolto ? " · tolto dal documento" : "")));
             }
             sb.Append(",\"indice\":").Append(esito.Posizione);
-            sb.Append(",\"parametri_salvati\":").Append(string.IsNullOrEmpty(ricamo.Parametri) ? "false" : "true");
+            sb.Append(",\"parametri_salvati\":").Append(string.IsNullOrEmpty(ricamo.Parametri) || !Tracce.Accese ? "false" : "true");
+            sb.Append(",\"tracce\":").Append(Tracce.Accese ? "true" : "false");
             sb.Append(",\"tipo_prima\":").Append(Json.Stringa(esito.TipoPrima));
             sb.Append(",\"tipo_dopo\":").Append(Json.Stringa(misura?.Tipo));
             sb.Append(",\"manuale\":").Append(Json.Stringa(esito.ComeManuale));
@@ -205,6 +206,7 @@ namespace StilistaHostSkeleton
                 copia.SetValue(contorno, punti.Clone(), null);
             }
             ImpostaDescrizione(manuale, ConParametri(PrefissoDescrizione + (ricamo.Nome ?? "ricamo"), ricamo.Parametri));
+            RicordaNostro(manuale); // con le tracce spente la sentinella lo riconosce da qui, non dal nome
             TrySetBoolMember(manuale, "LockRecalc", true);
             TrySetBoolMember(manuale, "NeedRestitching", false);
 
@@ -402,11 +404,14 @@ namespace StilistaHostSkeleton
             // nella tavolozza del documento, e un colore diverso ricolorerebbe tutto quell'ago
             var ago = ricamo.Ago ?? _agoSelezione ?? 1;
             var colore = ricamo.Colore ?? ColoreDellAgo(embroidery, ago); // null = il colore dell'ago non si tocca
+            // i nomi del programma del bridge vanno solo nel registro; con le tracce spente anche lì sono neutri
+            var etichetta = Tracce.Accese ? ricamo.Nome ?? "rg-tools" : "ricamo";
+            var ruolo = Tracce.Accese ? "rg-tools" : "ricamo";
             var batch = new JsonBatchSpec
             {
                 Type = "batch",
                 CreateNew = true,
-                Id = ricamo.Nome ?? "rg-tools",
+                Id = etichetta,
                 Sequence = new JsonSequenceSpec { ApplyNativeNeedleChanges = true, RequirePersistentNeedleChanges = true },
                 Objects = new List<JsonObjectSpec>
                 {
@@ -414,9 +419,9 @@ namespace StilistaHostSkeleton
                     {
                         CreateNew = true,
                         Type = "running",
-                        Id = ricamo.Nome ?? "rg-tools",
-                        Role = "rg-tools",
-                        ColorRole = "rg-tools",
+                        Id = etichetta,
+                        Role = ruolo,
+                        ColorRole = ruolo,
                         Geometry = new JsonGeometrySpec
                         {
                             Kind = "open_path",
@@ -435,7 +440,16 @@ namespace StilistaHostSkeleton
             return tutti.Count == primaDi + 1 ? tutti[tutti.Count - 1] : null;
         }
 
+        /// <summary>
+        /// Ogni descrizione che il plugin scrive passa da qui, e con le tracce spente resta vuota (Tracce.cs). Solo
+        /// «Pulisci documento» scrive senza passare dall'interruttore, ed è per vuotare.
+        /// </summary>
         private static void ImpostaDescrizione(object oggetto, string testo)
+        {
+            ScriviDescrizione(oggetto, Tracce.DaScrivere(testo));
+        }
+
+        private static void ScriviDescrizione(object oggetto, string testo)
         {
             try
             {
