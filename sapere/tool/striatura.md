@@ -367,6 +367,36 @@ Sul rettangolo dei test, con una zona sola, la striatura sotto la zona va dall'8
 cucito in un livello e 2–4 nel secondo (salti dentro una fila dove il primo livello copre tutta l'altezza in comune). Non provati:
 Stilista, la macchina.
 
+### Il traverso e i valori da un DST (2026-11-20)
+
+**Il traverso.** Coi costi della Ricetta il filo dei passaggi in vista andava di più di traverso (simulazione del pezzo finito, pannello
+di prova a grandezza 22: da 0,08 a 0,38 m). Lorenzo: *«si fallo»*. Due regole:
+- fra le striature che si cuciono dopo, fuori dalle zone, quella della Ricetta che non era stata portata (`frangia`,
+  `verticaleNellaFrangia`): in verticale costa 1, di traverso 6;
+- dove il filo resta scoperto il traverso costa di più: 25 × (1 + 2 × la parte orizzontale del passo) (`TRAVERSO_SCOPERTO`).
+
+Filo di traverso nel vuoto (fuori dalle zone e dalle striature), pannello di prova, variante 1, grandezza 22 / 8: senza le regole
+0,20 / 0,50 m; con 2 → 0,10 / 0,31 m (prima del 2026-11-20 era 0,04 / 0,30); con 4 → 0,07 / 0,27, ma a grandezza 8 il filo in vista
+saliva da 2,41 a 2,67 m e i passaggi tornavano a fare giri. Con 2 il filo in vista è 0,97 m a grandezza 22 (prima del 2026-11-20 1,19)
+e 2,41 m a grandezza 8 (prima 2,15): il prezzo di meno traverso. Nella simulazione del pezzo finito il traverso in vista va da 0,38 a 0,23 m.
+
+**I valori da un DST** (Lorenzo: *«dammi la possibilità di inserire i valori a partire da un dst»*; `stima.ts`). Nato da un pannello vero
+in Stilista con due striature, stop 4 e 5, di cui non si sapevano i parametri: letti i punti in sola lettura (`GET /punti-cuciti`),
+misurati, e rigenerate col motore alcune combinazioni sullo stesso rettangolo per vedere quale torna. Dai punti:
+- **punto**: il 97° percentile dei punti verticali (picchi netti sotto 2,5 → 2,5);
+- **minimo**: il punto più corto con almeno l'1% dei punti sotto (1,2 sui due stop; la moda dei punti corti dava 1,7 su un DST fatto qui);
+- **collegamenti**: il 95° percentile dei punti non verticali, a mezzo millimetro;
+- **distanza fra i trattini**: la distanza più frequente fra colonne vicine (0,6);
+- **grandezza**: dal trattino tipico (mediana), col rapporto 0,78 del motore (22 → 17 mm, 18 → 14, 10 → 7,5, 9 → 7, 8 → 6);
+- **lunghezza massima** dei trattini: per le macchie da 22 in su, dal 90° percentile meno 4;
+- **distanza fra le macchie**: non si legge dai punti (né il numero né la distanza dei gruppi vanno col parametro): si rigenera col motore
+  su un pezzo fino a 150 × 150 mm con distanze da 2 a 13 e si tiene quella che copre come l'originale (striatura per mm²).
+
+Sui due stop: grandezza 23 e 9, distanza 5 e 6, trattini 0,6, punto 2,5, minimo 1,2, collegamenti 2,5, in 0,1–0,2 s. Riletto un DST
+fatto qui (22/5 e 9/5): grandezza 22 e 9, distanza 5 e 5, minimo 1,4 e 1,2. Non si ricavano la variante, il frastaglio e la
+differenza fra piccole e grandi. Un livello per ogni ago con della striatura (almeno 20 trattini che vanno su e giù, più punti
+verticali che no): il primo è il primo livello, il secondo accende il secondo livello.
+
 **Provato il 2026-11-04 e il 2026-11-05 e tolto:**
 - finire la macchia che si vede, poi uscire (l'idea di togliere del tutto il legame con le righe): in vista 1,04–1,28 m contro
   0,86–1,03 a grandezza 22, 2,6–2,8 contro 1,9 a grandezza 8;

@@ -454,7 +454,16 @@ interface Fila { trattini: Trattino[]; }
 // - sopra il cucito 80, cioè mai: le macchie già cucite e il livello prima. Quella appena finita no: da lì si esce.
 // Prima (fino al 2026-11-09) i costi erano 0,05 sotto, 1 nel vuoto (20 volte in orizzontale), 0,3 fra i trattini, e un ripasso
 // che faceva costare di più i corridoi già usati: il filo faceva giri lunghissimi pur di stare sotto.
-const COSTO = { coperto: 1, bordo: 4, scoperto: 25, sopraCucito: 80 };
+const COSTO = { coperto: 1, bordo: 4, frangia: 6, scoperto: 25, sopraCucito: 80 };
+// Dove il filo resta scoperto, andare di traverso costa di più (Lorenzo, 2026-11-20, visto il traverso in vista salito da 0,08 a
+// 0,38 m coi costi della Ricetta: «si fallo»): lo scoperto vale (1 + questo × la parte orizzontale del passo). Così nel vuoto il filo
+// torna verticale, e si legge come una striatura. Sotto e fra le macchie da cucire no (lì vale la frangia, qui sotto). Provati sul
+// pannello di prova, col filo di traverso nel vuoto (fuori dalle zone e dalle striature) a grandezza 22 / 8: 0 → 0,20 / 0,50 m;
+// 2 → 0,10 / 0,31 m (prima del 2026-11-20: 0,04 / 0,30); 4 → 0,07 / 0,27 m, ma a grandezza 8 il filo in vista da 2,41 a 2,67 m e i
+// passaggi tornavano a fare giri.
+const TRAVERSO_SCOPERTO = 2;
+// Fra le striature che si cuciono dopo, fuori dalle zone, come nello sfrangiato della Ricetta (`frangia`, `verticaleNellaFrangia`):
+// in verticale il filo si mescola con le striature e costa come coperto, di traverso le taglia e costa `COSTO.frangia`.
 // le zone si restringono di tanto: coperto vuol dire davvero sotto, non sul bordo
 const STRINGI_ZONE_MM = 0.5;
 // la linea spezzata sotto: passo lungo la strada e scostamento di lato, mm, a caso fra min e max (come nella Ricetta)
@@ -899,6 +908,13 @@ function cuciSottoLeZone(
     if (cucita[idx] && !inUscita[idx]) return COSTO.coperto;
     return COSTO.scoperto;
   };
+  /** Il costo di un passo nella cella, secondo quanto va di traverso (0 in verticale, 1 in orizzontale). */
+  const costoPasso = (idx: number, traverso: number) => {
+    const c = costoCella(idx);
+    if (c === COSTO.scoperto) return c * (1 + TRAVERSO_SCOPERTO * traverso);
+    if (c === COSTO.coperto && g.dentroZona[idx] < STRINGI_ZONE_MM && traverso > 0.27) return COSTO.frangia;
+    return c;
+  };
   /** Il costo di una cella che riconosce il nascosto (meno dello scoperto): lì il filo va a linea spezzata. */
   const nascostoCella = (idx: number) => costoCella(idx) < COSTO.scoperto;
   /** Quanto costa il filo dritto da a a b. I primi e gli ultimi 1,5 mm non contano il cucito: sono quelli da cui parte e a cui arriva. */
@@ -913,7 +929,7 @@ function cuciSottoLeZone(
       const lontana = t * d > 1.5 && (1 - t) * d > 1.5;
       if (!percorribile[idx] && lontana) somma += 100;
       else if (sopraCucito[idx] && !lontana) somma += COSTO.scoperto;
-      else somma += costoCella(idx);
+      else somma += costoPasso(idx, Math.abs(b.x - a.x) / d);
     }
     return somma * (d / n);
   };
@@ -1022,7 +1038,7 @@ function cuciSottoLeZone(
           // da centro a centro in verticale non si incrocia nessuna colonna
           if (dx !== 0 || daSorgente || aMeta) sopra = sopraCuciti(daSorgente ? sorgenti.get(testa.idx)! : centro(testa.idx), aMeta ? mete.get(n)! : centro(n));
         }
-        const nuovo = gg[testa.idx] + l * cella * costoCella(n) + COSTO_SOPRA_GIA_CUCITI * sopra;
+        const nuovo = gg[testa.idx] + l * cella * costoPasso(n, Math.abs(dx) / l) + COSTO_SOPRA_GIA_CUCITI * sopra;
         if (visita[n] === giro && gg[n] <= nuovo) continue;
         gg[n] = nuovo; prima[n] = testa.idx; visita[n] = giro;
         coda.metti(n, nuovo);

@@ -4,7 +4,7 @@ import {
   type Role, type ImportResult, type Contour,
   ROLE_LABELS, polygonArea, pointInPolygon,
   buildSvg, buildSvgInSourceFrame, dstFromExportLayers, DST_FILE,
-  parseSvgToContours, parseDxfToContours, readProjectMetadata, readDstMetadata,
+  parseSvgToContours, parseDxfToContours, readProjectMetadata, readDstMetadata, readDst,
   applyRealWidth, importResultFromContours, measureContours, conBusta,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
@@ -17,6 +17,7 @@ import {
 import { runPipeline, type RoleAssignment } from './pipeline';
 import { defaultStriaturaParams, type StriaturaParams } from './engine';
 import { sampleContours } from './sample';
+import { stimaDaDst } from './stima';
 
 /** Un campo numerico. L'unità va nello slot del DS, mai nell'etichetta (REVISIONE-PARAMETRI). */
 interface Field { key: keyof StriaturaParams; label: string; unit: string; step: number; min?: number; help?: string; }
@@ -79,9 +80,10 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
           <div class="rg-file-input rg-param-grid__wide">
             <label class="rg-file-input__control">
               <input type="file" id="fileInput" accept=".svg,.dxf,.dst" />
-              <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
+              <span class="rg-button rg-button--outline">Carica DXF, SVG o DST…</span>
             </label>
             <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file: uso la sagoma demo.</p>
+            <small class="rg-field__help">Un DST non cambia la sagoma: dà i valori. Se viene da qui li rimette; se è una striatura fatta altrove li ricava dai punti, un livello per ogni colore con della striatura.</small>
           </div>
           <label class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Larghezza reale (0 = auto)</span>
@@ -459,6 +461,28 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     return true;
   }
 
+  /** I valori ricavati dai punti di un DST: il primo colore con striatura fa il primo livello, il secondo il secondo. */
+  function applicaStima(blocchi: Parameters<typeof stimaDaDst>[0], nome: string): string {
+    const stime = stimaDaDst(blocchi);
+    if (!stime.length) return `${nome}: nessuna striatura riconosciuta nei punti`;
+    const [a, b] = stime;
+    Object.assign(params, a.valori);
+    params.secondLevel = !!b;
+    if (b) {
+      params.blobSizeMm2 = b.valori.blobSizeMm;
+      params.blobSpacingMm2 = b.valori.blobSpacingMm;
+      params.densitySpacingMm2 = b.valori.densitySpacingMm;
+      params.striaturaLengthMm2 = b.valori.striaturaLengthMm;
+    }
+    syncMode();
+    syncSecondo();
+    buildAllParams();
+    const dice = (s: (typeof stime)[number]) =>
+      `colore ${s.ago}: grandezza ${s.valori.blobSizeMm}, distanza ${s.valori.blobSpacingMm}, trattini ogni ${s.valori.densitySpacingMm} mm`;
+    const altri = stime.length > 2 ? ` (${stime.length} colori con striatura: usati i primi due)` : '';
+    return `${nome}: valori ricavati dai punti — ${dice(a)}${b ? ' · secondo livello, ' + dice(b) : ''}; punto ${a.valori.maxStitchMm}, minimo ${a.valori.minStitchMm}, collegamenti ${a.valori.travelStitchMm} mm${altri}. La variante non si ricava.`;
+  }
+
   $('fileInput').addEventListener('change', (ev) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
@@ -469,11 +493,19 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
         // Un .dst uscito da qui non è un cartamodello: è un PROGETTO. Si legge il footer e si
         // rimettono i parametri, senza toccare il disegno che c'è già.
         if (isDst) {
-          const meta = readDstMetadata(new Uint8Array(reader.result as ArrayBuffer));
-          $('fileStatus').textContent = meta && applyImportedProject(meta)
-            ? `${file.name}: parametri ripristinati dal DST`
-            : `${file.name}: nessun parametro di questo tool nel DST`;
-          if (meta) render();
+          const bytes = new Uint8Array(reader.result as ArrayBuffer);
+          const meta = readDstMetadata(bytes);
+          if (meta && applyImportedProject(meta)) {
+            $('fileStatus').textContent = `${file.name}: parametri ripristinati dal DST`;
+            render();
+            return;
+          }
+          // Lorenzo, 2026-11-20: «dammi la possibilità di inserire i valori a partire da un dst»
+          $('fileStatus').textContent = `${file.name}: ricavo i valori dai punti…`;
+          setTimeout(() => {
+            $('fileStatus').textContent = applicaStima(readDst(bytes).blocks, file.name);
+            render();
+          }, 20);
           return;
         }
         const text = String(reader.result);
