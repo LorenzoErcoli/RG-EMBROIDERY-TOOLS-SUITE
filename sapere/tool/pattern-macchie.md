@@ -288,6 +288,19 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    colleghi a un'altra (con la sfrangiatura di serie il filo sta a 0,8 mm dentro le nere, e molte nere sono strette). Il
    livello più alto non cambia (nessuno sopra). Coi ponti accesi, i ponti del livello più alto si decidono ancora
    sull'ordine di prima dei livelli sotto (`pontiDellaCima`). Non provato a macchina né in Stilista.
+45. (2026-11-20) **Dove una strada nascosta non c'è, sotto fin dove si può e poi un salto solo.** Lorenzo, sul suo disegno
+   a tre livelli: *«le macchie livello 2 fanno un sacco di salti. i salti devono essere a zero e fare i passaggi sotto le
+   macchie di livello 3. quando impossibile arrivano al limite della macchia livello 3 e fanno un salto fino alla macchia
+   successiva. In Swatch a stop questo già lo fa bene»*. Prima, se la strada nascosta non arrivava fino alla macchia dopo,
+   il salto partiva dritto dalla fine del raso. Ora (`SottoIlSecondo.finoAlSalto`) il filo va coperto sotto i livelli sopra
+   (con le stesse regole: a vista al più «a vista al più» mm per volta, mai sopra il raso già cucito) fino al punto da cui
+   il salto costa meno, e un millimetro di salto pesa come un millimetro a vista (25 di filo coperto). Il salto può anche
+   atterrare sotto una nera e di lì andare coperto fino alla macchia, purché la strada ci sia davvero: sempre un salto
+   solo. Anche l'uscita dalla macchia prima si sceglie dove comincia quella strada. Si fa solo se il salto si accorcia
+   almeno di 2 mm. Sul suo disegno (parametri di serie): salti delle rosse 15 → 14, i loro mm 343 → 175, quelli oltre
+   10 mm 8 → 3; filo a vista 402 → 469 mm (ogni tratto entro 12 mm). I tre salti lunghi che restano (63, 42 e 29 mm) sono
+   fra rosse chiuse tutte e due nell'arancione già cucito: nessuna nera da usare né di qua né di là. L'ordine stima ancora
+   un salto come la distanza dritta fra le macchie. Non provato a macchina né in Stilista.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso
