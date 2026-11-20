@@ -1736,13 +1736,22 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   const sSenza = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE' }, sP);
   const sSotto = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE', '#00ff00': 'COVER_AREA' }, sP);
   const sFiloDi = (r) => r.exportLayers.find((l) => l.id === 'striatura').polylines;
-  // lontano dalla zona i trattini restano gli stessi. Si confrontano i trattini, non i punti: i collegamenti fra un trattino e
-  // l'altro cambiano con l'ordine di cucitura. Le colonne dei denti non contano: senza zona ci sono le linee rade, con la zona no.
-  const sColonnaDente = (t) => Math.round(t.x / sP.densitySpacingMm - 0.5) % Math.round(sP.fillSpacingMm / sP.densitySpacingMm) === 0;
-  const sLontani = (pls) => sTrattini(pls).filter((t) => (t.x < 28 || t.x > 92) && !sColonnaDente(t)).map((t) => `${t.x.toFixed(3)}:${t.alto.toFixed(1)}`);
-  const sConZonaTratt = new Set(sLontani(rg.generateStriatura({ outline: sRect, voids: [], coperte: [sZona] }, sP)[0].polylines));
-  const sSenzaTratt = sLontani(rg.generateStriatura({ outline: sRect, voids: [] }, sP)[0].polylines);
-  check('lontano dalla zona i trattini sono gli stessi, con la zona o senza', sSenzaTratt.length > 50 && sSenzaTratt.filter((k) => !sConZonaTratt.has(k)).length, 0);
+  // Le macchie di striatura non sotto le zone (dalla Ricetta; Lorenzo, 2026-11-20: «porta sì il modo di mettere le striature non sotto
+  // le macchie»): con una zona sola la striatura sotto la zona era l'8,7%, ora il 5,7%. Fino ad allora la striatura non si accorgeva
+  // delle zone e lontano da una zona i trattini restavano identici; ora una macchia spostata cambia i numeri a caso di quelle dopo.
+  const sSottoZone = (pls, zone) => {
+    let v = 0, s = 0;
+    for (const pl of pls) for (let i = 1; i < pl.length; i++) {
+      const a = pl[i - 1], b = pl[i];
+      if (Math.abs(a.x - b.x) > 1e-6) continue;
+      const L = Math.abs(b.y - a.y), n = Math.max(1, Math.ceil(L / 0.5));
+      for (let q = 0; q < n; q++) { const p = { x: a.x, y: a.y + ((b.y - a.y) * (q + 0.5)) / n }; v += L / n; if (zone.some((z) => rg.pointInPolygon(p, z))) s += L / n; }
+    }
+    return s / v;
+  };
+  const sUnaSotto = sSottoZone(rg.generateStriatura({ outline: sRect, voids: [], coperte: [sZona] }, sP)[0].polylines, [sZona]);
+  console.log(`   (striatura sotto la zona: ${(100 * sUnaSotto).toFixed(1)}%; era 8,7% prima di metterle attorno alle zone)`);
+  check('le macchie di striatura stanno attorno alla zona, non sotto', sUnaSotto < 0.07, true);
   check('il ricamo continua dentro la zona (non è un vuoto)', sFiloDi(sSotto).flat().some((q) => rg.pointInPolygon(q, sZona)), true);
   check('nessun salto in più', sFiloDi(sSotto).length, sFiloDi(sSenza).length);
   // Il filo sta sotto (Lorenzo, 2026-11-05: «linee che passano così in mezzo sono inaccettabili, deve passare sempre sotto
@@ -1839,6 +1848,15 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   })();
   console.log(`   (passaggi che incrociano una striatura fuori dalle zone: sotto una che viene dopo ${sSopra.sotto}, sopra una già cucita ${sSopra.sopra})`);
   check('i passaggi non passano mai sopra una striatura già cucita', sSopra.sotto > 20 && sSopra.sopra, 0);
+  // Zone sovrapposte = una macchia sola (Lorenzo, 2026-11-20: «deve vederli come macchie uniche se sono sovrapposte»). La stessa zona
+  // intera o divisa in due pezzi che si sovrappongono di 4 mm: lo stesso ricamo. Zona per zona la giunta contava come bordo, e lungo la
+  // giunta restavano 26 cm di striatura cuciti sotto la grafica.
+  const sRet = (x0, y0, x1, y1) => [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+  const sIntera = rg.generateStriatura({ outline: sRect, voids: [], coperte: [sRet(-5, -5, 125, 155)] }, sP)[0].polylines;
+  const sDivisa = rg.generateStriatura({ outline: sRect, voids: [], coperte: [sRet(-5, -5, 62, 155), sRet(58, -5, 125, 155)] }, sP)[0].polylines;
+  const sMezza = rg.generateStriatura({ outline: sRect, voids: [], coperte: [sRet(30, 40, 90, 110)] }, sP)[0].polylines;
+  const sMezzaDivisa = rg.generateStriatura({ outline: sRect, voids: [], coperte: [sRet(30, 40, 62, 110), sRet(58, 40, 90, 110), sRet(40, 60, 80, 90)] }, sP)[0].polylines;
+  check('zone sovrapposte come una sola: il ricamo è lo stesso, intera o in pezzi', [JSON.stringify(sIntera) === JSON.stringify(sDivisa), JSON.stringify(sMezza) === JSON.stringify(sMezzaDivisa)], [true, true]);
   // Le uscite dalle punte (Lorenzo, 2026-11-05: «magari si esce su una striatura più vicina ad un punto coperto»): stessi trattini, un filo solo.
   const sDaCapo = rg.generateStriatura({ outline: sRect, voids: [], coperte: sMacchie }, { ...sP, usciteDallePunte: false })[0];
   check('dalle punte: gli stessi trattini, un filo solo', [sTrattini(sSenzaPassaggi(sTante)).length, sTante.polylines.length], [sTrattini(sSenzaPassaggi(sDaCapo)).length, 1]);
@@ -1848,16 +1866,19 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   check('a zone il ricamo procede dall\'alto in basso, o da sinistra a destra', [sOriz[0] < sOriz[1] && sOriz[1] < sOriz[2], sVert[0] < sVert[1] && sVert[1] < sVert[2]], [true, true]);
   check('senza ricamo sopra le zone non cambiano nulla', JSON.stringify(sGen({ ...sP, stopZones: 1 })), JSON.stringify(sGen({ ...sP, stopZones: 5 })));
   check('con tante zone il filo resta continuo, e dentro la sagoma', [sTante.polylines.length, sMeasure(sTante.polylines, sRect, []).fuori], [1, 0]);
-  // La striatura non si deve accorgere delle zone: i trattini che si vedono sono interi, identici a quelli senza zone.
-  const sTratSenza = sTrattini(sGen(sP));
-  const sTratZone = new Set(sTrattini(sTante.polylines).map((t) => `${t.x.toFixed(3)}:${t.alto.toFixed(1)}`));
-  const sVisibili = sTrattini(sGen(sP)).length;
-  const sUguali = sTratSenza.filter((t) => sTratZone.has(`${t.x.toFixed(3)}:${t.alto.toFixed(1)}`)).length;
-  check('i trattini rimasti sono quelli di sempre, non tagliati dal bordo delle zone', sUguali >= sTratZone.size * 0.85 && sTratZone.size < sVisibili, true);
+  // I trattini che si vedono sono interi, non tagliati dal bordo delle zone: alti come senza zone (mediana entro il 10%) e senza più
+  // pezzetti corti. Fino al 2026-11-20 erano proprio gli stessi; ora le macchie si spostano attorno alle zone (vedi sopra).
+  const sTratSenza = sTrattini(sGen(sP)).map((t) => t.alto);
+  const sTratZone = sTrattini(sTante.polylines).map((t) => t.alto);
+  const sMedS = sMediana(sTratSenza), sMedZ = sMediana(sTratZone);
+  const sCorti = (a) => a.filter((h) => h < 0.4 * sMedS).length / a.length;
+  const sSotteTante = sSottoZone(sTante.polylines, sMacchie);
+  console.log(`   (trattini: mediana ${sMedS.toFixed(1)} senza zone, ${sMedZ.toFixed(1)} con; corti ${(100 * sCorti(sTratSenza)).toFixed(1)}% e ${(100 * sCorti(sTratZone)).toFixed(1)}%; sotto le zone ${(100 * sSotteTante).toFixed(0)}%, era 51%)`);
+  check('i trattini rimasti sono interi, non tagliati dal bordo delle zone, e meno sotto le zone', [Math.abs(sMedZ - sMedS) <= 0.1 * sMedS, sCorti(sTratZone) <= sCorti(sTratSenza) + 0.01, sTratZone.length < sTratSenza.length, sSotteTante < 0.45], [true, true, true, true]);
   // Lo sfrangiato aiuta (Lorenzo, 2026-11-03: «allungare… lo sfrangiato e far partire o finire nelle vicinanze di parti
   // coperte»): nessun trattino cresce oltre il frastaglio, così non si nota.
   const sAlti = sTrattini(sSenzaPassaggi(sTante)).map((t) => t.alto);
-  const sAltiSenza = sTratSenza.map((t) => t.alto);
+  const sAltiSenza = sTratSenza;
   check('allungato per arrivare sotto una zona, un trattino resta nella misura dello sfrangiato', Math.max(...sAlti) <= Math.max(...sAltiSenza) + sP.jaggedLengthMm + 1, true);
   check('sotto la zona i passaggi ci sono, e misurati', sSotto.passaggiCopertiMm > 0, true);
   const sMisuraSenza = (() => { let v = 0; for (const pl of sSenza.passaggi) for (let i = 1; i < pl.length; i++) { const a = pl[i - 1], b = pl[i]; const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.5)); for (let k = 0; k < n; k++) { const t = (k + 0.5) / n; const q = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; if (!rg.pointInPolygon(q, sZona)) v += Math.hypot(b.x - a.x, b.y - a.y) / n; } } return v; })();

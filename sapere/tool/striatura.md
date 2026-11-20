@@ -322,6 +322,51 @@ girare attorno al primo. Il test «il secondo ha i suoi trattini» ora guarda l'
 passaggi pesano più dei trattini (prima passava per 2 cm su 17,7 m).
 Immagine: `striatura-passaggi-sopra-prima-dopo.png` nelle note della sessione (fuori dal repo). Non provati: Stilista, il ricamo in macchina.
 
+### Passaggi puliti, i modi della Ricetta, le zone unite (2026-11-09 e 2026-11-20)
+
+Lorenzo, 2026-11-09, provando il ricamo: *«i passaggi anche se coperti sono troppo sporchi. Bisogna provare a rendere il ricamo più
+pulito. Anche i passaggi sotto le macchie non sono positivi, fanno avanti e indietro strani, deve essere tutto più pulito e omogeneo»*.
+Misurato: a 0,05 sotto le zone, 1 mm in orizzontale nel vuoto valeva 420 mm sotto una zona, e un passaggio faceva 172 mm per arrivare a
+26 mm. Prima prova (non unita da sola): costi 0,8 / 2 e il filo tirato dritto dove la griglia faceva scalini.
+
+Poi Lorenzo, 2026-11-20, dalla chat della Ricetta a livelli (nota `ricetta-ciuffi-e-passaggi-per-punto-striato.md` nelle note
+delle sessioni): *«le modifiche apportate per la costruzione dei ciuffi in particolare per i passaggi, ti chiedo di poterli riportare
+anche su punto striato [...] più gruppi saranno ricami sotto cui passare, e [...] deve vederli come macchie uniche se sono
+sovrapposte»*. Alle domande: *«no sempre cucito il filo in striato. si spezza. porta si il modo di mettere le striature non sotto le
+macchie. usa i costi della ricetta»*. Quindi:
+- **le zone sono l'unione** (`distanzaDentroUnione`): la distanza dal bordo dell'unione di tutte le zone «Ricamo sopra», di qualsiasi
+  colore, su una griglia da 0,2 mm con la trasformata di distanza esatta. Zona per zona la giunta fra due zone sovrapposte contava come
+  bordo: la stessa zona divisa in due pezzi sovrapposti di 4 mm lasciava 26 cm di striatura cuciti lungo la giunta; ora il ricamo è
+  identico. Il ruolo «Ricamo sopra» si poteva già dare a più colori;
+- **i costi della Ricetta** (`COSTO`): coperto 1 (sotto una zona almeno 0,5 mm + il margine dentro, o sotto le macchie che si cuciono
+  dopo), bordo 4 (entro il margine), scoperto 25, sopra il cucito 80 (le file già cucite e il livello prima; quella appena finita no,
+  da lì si esce). Tolti: l'orizzontale più caro nel vuoto, il ripasso, il passaggio rifatto senza preferenza. Gli incroci sopra un
+  trattino già cucito restano contati uno per uno (1000);
+- **il filo sempre cucito**, anche in vista: i salti col taglio della Ricetta no;
+- **sotto, a linea spezzata** (`cuciStrada`, `spezza`): dove il passaggio è nascosto un punto ogni 1,8–2,6 mm spostato di lato di
+  0,6–1,2 mm, da una parte e dall'altra; lo spostamento si dimezza o si annulla dove uscirebbe da quello che lo nasconde o passerebbe
+  sopra il cucito. I pezzi verticali restano dritti;
+- **le macchie non sotto le zone** (`scatterBlobs`, dalla `mettiCiuffi` della Ricetta): il centro al più 3 mm dentro l'unione delle zone,
+  al più il 65% della macchia sotto. Una macchia che non va si sposta nella sua cella (12 tentativi), se no salta. Il limite di 9 mm fuori
+  della Ricetta non c'è: la striatura copre tutto il pezzo, non solo attorno alle zone. Una macchia spostata cambia i numeri a caso di
+  quelle dopo: lontano dalle zone i trattini non sono più identici a quelli senza zone (fino ad ora sì, e un test lo controllava);
+- resta dalla prova del 2026-11-09 il filo tirato dritto dove la griglia fa scalini, se non resta più filo in vista.
+
+**Pannello laser, 3 zone, variante 1, un livello:**
+
+| | Grandezza 22 | Grandezza 8 |
+|---|---|---|
+| metri di passaggi | 5,15 → 3,93 | 10,55 → 9,95 |
+| passaggi in vista | 1,19 → 0,82 m | 2,15 → 2,09 m |
+| di cui di traverso | 0,07 → 0,39 m | 0,56 → 1,31 m |
+| striatura sotto le zone | 53% → 49% | 51% → 36% |
+| calcolo, due livelli a grandezza 22 | 8,6 → 4,3 s | |
+
+Sul rettangolo dei test, con una zona sola, la striatura sotto la zona va dall'8,7 al 5,7%. Punto più lungo 3,00 mm, 0 salti.
+**Da guardare:** il filo in vista va di più di traverso (i costi della Ricetta non pesano l'orizzontale); restano 0–2 incroci sopra il
+cucito in un livello e 2–4 nel secondo (salti dentro una fila dove il primo livello copre tutta l'altezza in comune). Non provati:
+Stilista, la macchina.
+
 **Provato il 2026-11-04 e il 2026-11-05 e tolto:**
 - finire la macchia che si vede, poi uscire (l'idea di togliere del tutto il legame con le righe): in vista 1,04–1,28 m contro
   0,86–1,03 a grandezza 22, 2,6–2,8 contro 1,9 a grandezza 8;
