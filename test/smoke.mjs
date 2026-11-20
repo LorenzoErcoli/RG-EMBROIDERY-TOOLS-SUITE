@@ -1812,19 +1812,22 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
       colonne.set(k, [Math.min(v[0], t[i].y, t[i - 1].y), Math.max(v[1], t[i].y, t[i - 1].y)]);
     }
     const inPunta = (q) => { const v = colonne.get(q.x.toFixed(2)); return !v || q.y - v[0] < 0.5 || v[1] - q.y < 0.5; };
+    // Il dente è il salto CORTO fra due trattini vicini: dal 2026-11-20 i passaggi partono anche dalle punte e vanno a linea spezzata, e
+    // dopo il punto minimo i loro punti non sono più quelli di `passaggi`: contati qui sembravano denti (61 su 418, poi 67 su 421)
     let tutti = 0, corti = 0, denti = 0;
     for (const t of tratti) for (let i = 1; i < t.length; i++) {
       const a = t[i - 1], b = t[i];
       if (Math.abs(b.x - a.x) <= 1e-6) continue;
       tutti++;
-      if (Math.hypot(b.x - a.x, b.y - a.y) <= sP.minStitchMm * 1.1) corti++;
+      if (Math.hypot(b.x - a.x, b.y - a.y) > sP.minStitchMm * 1.1) continue;
+      corti++;
       if (inPunta(a) || inPunta(b)) denti++;
     }
     return { tutti, corti, denti };
   })();
   console.log(`   (collegamenti dentro le macchie: ${sDenti.tutti}, corti ${sDenti.corti}, in punta ${sDenti.denti})`);
   check('dentro le macchie i collegamenti sono un punto corto, non scarabocchi', sDenti.tutti > 50 && sDenti.corti >= sDenti.tutti * 0.75, true);
-  check('dentro le macchie il salto non sta in punta: niente denti', sDenti.denti <= sDenti.tutti * 0.15, true);
+  check('dentro le macchie il salto non sta in punta: niente denti', sDenti.denti <= sDenti.corti * 0.15, true);
   // Niente passaggi sopra le striature già cucite (Lorenzo, 2026-11-06, in macchina: «le impunture di passaggio orizzontali a volte
   // vanno sopra il punto striato ricamato. E lasciano il segno»). Sotto un trattino che viene dopo il filo resta nascosto; sopra uno
   // già cucito si vede. Si segue il filo nell'ordine in cui si cuce; sotto una zona non conta.

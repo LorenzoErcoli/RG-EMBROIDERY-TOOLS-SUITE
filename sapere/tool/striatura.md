@@ -398,6 +398,21 @@ prima la strada sceglieva il verso fila per fila, e l'ordine non sapeva da che p
 
 Calcolo: a grandezza 22 da 0,9 a 1,9 s, due livelli da 4,3 a 5,4 s.
 
+**Spezzati anche i verticali sotto le zone** (Lorenzo, su un passaggio verticale lungo sotto una macchia: *«riesci a evitare questi passaggi
+così dritti ma creare comunque delle linee spezzate?»*). La Ricetta lascia dritti i pezzi verticali, perché vanno nel verso della
+striatura; sotto una zona però non si vedono e non si mescolano con niente: lì ora la linea spezzata vale in ogni direzione. Il passaggio
+si divide in pezzi sotto una zona, fra le striature da cucire (dove il verticale resta dritto: va lungo le colonne) e scoperti (dritti).
+Passaggi da 3,99 a 4,06 m a grandezza 22, in vista uguale.
+
+**La fila si attraversa sotto** (Lorenzo: *«se dopo la macchia devo ripartire da dietro (verso il lato di inizio) inverto la macchia ma
+prima faccio il passaggio che passa sotto e va dal lato opposto. quindi passaggio al centro lato opposto della macchia, poi macchia
+striato che torna indietro. e ripresa»*). Il filo che va a una fila le può passare sotto in ogni direzione al costo del coperto (la
+striatura lo copre subito); fra gli arrivi c'è la metà altezza del primo trattino; nella scelta dei versi entrare dal lato lontano costa
+come arrivare al vicino più la larghezza della fila. Pannello di prova, grandezza 22 / 8: passaggi da 4,06 / 9,41 a 3,84 / 9,03 m,
+inversioni di marcia da 7 / 22 a 3 / 13, traverso nel vuoto da 0,08 / 0,20 a 0,07 / 0,18 m; filo in vista 0,69 → 0,76 m a grandezza 22,
+uguale (1,78) a grandezza 8. Il test dei denti ora conta solo i salti corti fra trattini (5 in punta su 351): i passaggi che partono dalle
+punte, dopo il punto minimo, sembravano denti.
+
 **I valori da un DST** (Lorenzo: *«dammi la possibilità di inserire i valori a partire da un dst»*; `stima.ts`). Nato da un pannello vero
 in Stilista con due striature, stop 4 e 5, di cui non si sapevano i parametri: letti i punti in sola lettura (`GET /punti-cuciti`),
 misurati, e rigenerate col motore alcune combinazioni sullo stesso rettangolo per vedere quale torna. Dai punti:
