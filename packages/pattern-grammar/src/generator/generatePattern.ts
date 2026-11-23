@@ -431,12 +431,13 @@ export function generateFinalPatternPoints(config: PatternConfig, opzioni: Opzio
   // R3 — il punto minimo per ULTIMO, sul filo già connesso e suddiviso, misurato anche sulla griglia del
   // DST (`puntoMinimo.ts`). Le pulizie di prima tengono sempre i vertici del modulo, gli angoli e i capi dei
   // pezzi tagliati: misurato su un pannello con buchi a minimo 0,97, 111 punti su 1.208 sotto il millimetro.
+  // Due misure (Lorenzo, 2026-11-23): `minStitchMm` sui contorni, `patternMinStitchMm` dentro il pattern.
   const sagomaFinale = clippedToShape
     ? { width, height, inset, shapeType: clipShape, importedBoundary: boundaryPerRitaglio }
     : { width, height, inset, shapeType: "none" as const };
   const visualPolylines = oriented.polylines
     .map((polyline) => removeConsecutiveDuplicatePoints(subdivideLongSegments(polyline, grammar.maxStitchLength)))
-    .map((polyline) => opzioni.puntoMinimoFinale === false ? polyline : puntoMinimoFinale(polyline, grammar.minPointDistance, grammar.maxStitchLength, sagomaFinale))
+    .map((polyline) => opzioni.puntoMinimoFinale === false ? polyline : puntoMinimoFinale(polyline, { contorni: grammar.minPointDistance, pattern: grammar.patternMinStitchMm }, grammar.maxStitchLength, sagomaFinale))
     .filter((polyline) => polyline.length > 1);
   const visualPathGroups = clippedToShape
     ? [{ subpaths: visualPolylines }]

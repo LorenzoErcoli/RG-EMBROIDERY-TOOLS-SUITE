@@ -612,6 +612,28 @@ function raccordoFraGliAnelli(
   return passi.map((point) => connectorPoint(point, to));
 }
 
+/**
+ * LA STRADA SUL BORDO fra due punti dello stesso anello (il perimetro o un'area vuota): i vertici dell'anello
+ * che stanno in mezzo, dal lato più corto, come raccordi. Serve al punto minimo finale per rifare un tratto di
+ * contorno che esce dalla sagoma (Lorenzo, 2026-11-23: «devo evitare sbavature… che siano aree vuote o
+ * contorni»): misurato un raccordo che tagliava la punta di un vuoto stretto, 0,55 mm dentro il vuoto.
+ * `undefined` se i due punti non stanno sullo stesso anello, o se la sagoma non è fatta di anelli.
+ */
+export function stradaSulBordo(da: GeneratedPoint, a: GeneratedPoint, options: BoundaryOptions): GeneratedPoint[] | undefined {
+  let anelli: Point[][];
+  if (options.shapeType === "imported") {
+    const { outer, holes } = importedBoundaryParts(options);
+    if (!outer.length && !holes.length) return undefined;
+    anelli = [perimetroImportato(outer, options), ...holes];
+  } else if (options.shapeType === "rectangle") anelli = [closePolygon(rectangleVertices(options))];
+  else if (options.shapeType === "diamond") anelli = [closePolygon(diamondVertices(options))];
+  else return undefined;
+  const tolleranza = (options.inset ?? 0) + 0.5;
+  const x = anelloDelPunto(da, anelli), y = anelloDelPunto(a, anelli);
+  if (x.indice !== y.indice || x.distanza > tolleranza || y.distanza > tolleranza) return undefined;
+  return lungoIlBordo(anelli[x.indice], da, a).slice(1, -1).map((p) => connectorPoint(p, a));
+}
+
 /** L'anello (perimetro = 0, poi i vuoti) più vicino a un punto, e quanto dista. */
 function anelloDelPunto(point: Point, anelli: Point[][]): { indice: number; distanza: number } {
   let best = { indice: 0, distanza: Number.POSITIVE_INFINITY };
@@ -1176,8 +1198,10 @@ function polygonSegmentInterval(a: Point, b: Point, options: BoundaryOptions): [
     if (end - start <= EPSILON) continue;
     if (drawable(pointOnSegment(a, b, (start + end) / 2))) intervals.push([start, end]);
   }
-  if (drawable(a)) intervals.unshift([0, sorted[1] ?? 1]);
-  if (drawable(b)) intervals.push([sorted.at(-2) ?? 0, 1]);
+  // (Qui si aggiungeva il primo e l'ultimo pezzo quando il CAPO era ricamabile, anche se il pezzo no: un
+  // vertice del modulo che cade proprio sul bordo teneva tutto il tratto che va fuori — misurato 3,8 mm
+  // oltre la punta di una sagoma a stella, 2026-11-23. Il pezzo che conta è quello col punto di mezzo
+  // dentro, già nel ciclo sopra.)
   const unique = intervals
     .map(([start, end]) => [Math.max(0, start), Math.min(1, end)] as [number, number])
     .filter(([start, end]) => end - start > EPSILON)

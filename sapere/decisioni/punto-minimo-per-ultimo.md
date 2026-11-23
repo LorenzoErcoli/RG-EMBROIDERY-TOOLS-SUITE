@@ -1,15 +1,23 @@
 ---
-titolo: Il punto minimo si impone per ultimo su tutti i punti, e si misura sulla griglia del DST
+titolo: Il punto minimo si impone per ultimo, con due misure (contorni e pattern), sulla griglia del DST e senza sbavature
 tipo: decisione
 tool: [pattern-grammar, pattern-macchie]
 data: 2026-11-23
 ---
 
 Nel motore del Generatore pattern (`@rg/pattern-grammar`, `generateFinalPatternPoints`) il punto minimo
-è **l'ultimo passo**, sul filo già tagliato, connesso e suddiviso (R3), e vale **per tutti i punti**:
-vertici del modulo, angoli, capi dei pezzi tagliati, raccordi sul bordo. Un tratto deve essere lungo
-almeno `minStitchMm` **com'è e anche sui nodi da 0,1 mm del DST**. Il codice è
-`packages/pattern-grammar/src/generator/puntoMinimo.ts`.
+è **l'ultimo passo**, sul filo già tagliato, connesso e suddiviso (R3). Ha **due misure** (Lorenzo,
+2026-11-23: *«un conto è il pattern un conto è nei contorni. io devo evitare sbavature e punti troppo
+corti nei contorni, in tutti, che siano aree vuote o contorni»*):
+
+- **«Punto minimo»** (`minStitchMm`, il campo di sempre) vale **sui contorni**: ogni tratto che tocca
+  il perimetro o un'area vuota (il taglio sul bordo, il raccordo che ci cammina sopra, il vertice del
+  modulo accanto al taglio);
+- **«Punto minimo del pattern»** (`patternMinStitchMm`, nuovo) vale **dentro**, fra due punti del
+  modulo. Di serie **0: il disegno resta com'è**; i preset e i DST di prima lo riaprono a 0.
+
+Un tratto deve essere lungo almeno il suo minimo **com'è e anche sui nodi da 0,1 mm del DST**. E sui
+contorni **il filo non esce dalla sagoma**. Il codice è `packages/pattern-grammar/src/generator/puntoMinimo.ts`.
 
 ## Perché
 
@@ -22,8 +30,8 @@ cause, tutte vere:
    una suddivisione o un punto di bordo «togliibile». Un taglio che cade a 0,1 mm da un vertice del
    modulo lasciava un punto da 0,1 mm (i 66 da circa 0,1 mm sul bordo alto e basso). Era un
    compromesso **dichiarato** del motore migrato, rimasto aperto come decisione A6(a) di `STATO.md`
-   (*«vince la macchina o vince il disegno?»*). Per il Generatore l'ha chiusa la lamentela di Lorenzo:
-   vince la macchina.
+   (*«vince la macchina o vince il disegno?»*). Lorenzo l'ha chiusa per il Generatore dividendo: sui
+   contorni vince la macchina, nel pattern decide lui col suo campo.
 2. **Il DST arrotonda ogni punto ai decimi di millimetro** (`decimiDst` nel core): un tratto da 0,97
    può uscire a 0,9 (i 25 fra 0,85 e 0,99). Pelle di razza l'aveva già trovato
    ([razza](../tool/razza.md)) e si teneva un margine; qui il margine non va bene, perché
@@ -36,35 +44,50 @@ cause, tutte vere:
    (misurato sui raccordi dritti lungo il bordo, col punto massimo spento). Ora il motore divide da
    solo in parti uguali ogni tratto oltre 12,0 mm (`PUNTO_MAX_DST_MM` meno un passo di griglia).
 
-Trovato strada facendo: la deduplica dei punti di bordo (`removeNearDuplicateBoundaryPoints`)
-toglieva un punto di bordo vicino al precedente **senza guardare la sagoma**: l'angolo di un buco a
-0,9 mm dal capo del pezzo spariva e il filo tagliava dentro il vuoto (misurato 0,79 mm su un
-contorno inventato). Ora lo toglie solo se il tratto che resta sta nella sagoma.
+## Niente sbavature sui contorni
+
+Tre difetti che portavano il filo fuori dalla sagoma, tutti già su master:
+
+- **La deduplica dei punti di bordo** (`removeNearDuplicateBoundaryPoints`) toglieva un punto di bordo
+  vicino al precedente senza guardare la sagoma: l'angolo di un buco spariva e il filo tagliava dentro
+  il vuoto (0,79 mm). Ora lo toglie solo se il tratto che resta sta nella sagoma.
+- **Il ritaglio** (`polygonSegmentInterval`) teneva il tratto intero quando un suo capo cadeva proprio
+  sul bordo: misurato 3,8 mm fuori dalla punta di una sagoma a stella. Era il «difetto nel clipper
+  condiviso» annotato in `STATO.md`. Ora conta solo il pezzo col punto di mezzo dentro.
+- **I raccordi** tagliavano la punta stretta di un vuoto (0,55 mm). Ora un tratto di contorno che esce
+  si rifà camminando sul bordo del suo anello, coi vertici (`senzaSbavature` e `stradaSulBordo`).
+
+Fondere due punti, poi, non porta mai fuori: il controllo guarda il tratto ogni 0,1 mm, e se nessuna
+fusione semplice sta dentro si tolgono anche i punti prima (fino a 5). Se nemmeno così (una punta più
+stretta del punto minimo) **il punto corto resta**: meglio un punto corto che il filo sul vuoto.
 
 ## Come si fonde
 
 Due punti davvero troppo vicini diventano uno, **anche quando uno dei due è un angolo**. Resta il più
 importante: il punto sul bordo (taglio, raccordo), poi il vertice del modulo, poi i punti messi solo
-per dividere una linea; a pari importanza il primo. Solo se il tratto che ne esce sta nella sagoma;
-altrimenti si prova a togliere l'altro. Il primo e l'ultimo punto del filo restano.
+per dividere una linea; a pari importanza il primo. Il primo e l'ultimo punto del filo restano.
 
-Misurato su un contorno inventato con due buchi (minimo 0,97, «Elimina», spostamento 0), su master →
-ora: punto canvas 129 → 0 punti sotto il minimo (159 → 0 nel DST), nastro a squame 131 → 0, cannage
-piena 473 → 0; il filo che esce dalla sagoma da 0,72–0,79 mm a 0 (un tratto da 0,13 mm resta col
-nastro classico, ma c'era già: è il ritaglio del modulo sull'angolo del buco, non la fusione).
+## Misure (contorni inventati, minimo 0,97 o 1, «Elimina», spostamento 0)
+
+- Due buchi (uno quadrato, uno storto): su master punto canvas 129 punti sotto il minimo (159 nel
+  DST), nastro a squame 131, cannage piena 473. Ora 0 sui contorni; coi due minimi a 0,97, 0 anche nel
+  DST. Filo fuori dalla sagoma: da 0,72–0,79 mm a 0.
+- Stella con un buco tondo, tutti i preset: su master 24–121 punti corti sui contorni e il filo fuori
+  fino a 3,8 mm; ora 0 punti corti sui contorni e al più 0,01 mm fuori.
+- Un vuoto a punta strettissima (circa 11°) resta il caso limite: al più 0,07 mm fuori e un punto
+  corto (0,29 mm) tenuto per non uscire.
 
 ## Cosa cambia da vedere
 
-- **Cannage base — leggero** ha uno zig-zag verticale stretto (largo 0,5, interlinea 0,4: punti da
-  circa 0,64 mm). Col minimo 1 dei preset quei punti ora si fondono: su un pannello 120 × 160, 2.162
-  punti sotto il minimo diventano 0. A occhio la trama resta quella; se a Lorenzo servisse lo zig-zag
-  fitto, il punto minimo di quel pattern va abbassato.
+- Col «Punto minimo del pattern» a 0 il pattern è quello di prima: il *Cannage base — leggero* tiene
+  il suo zig-zag verticale da circa 0,64 mm. Alzandolo, quei punti si fondono e le linee verticali si
+  inclinano di circa mezzo millimetro (figura nelle note della chat madre, 2026-11-23).
 - Vale nel **Generatore pattern** e in **Pattern a macchie** (la sua base è la base del Generatore,
   punto per punto, e il punto sopra la riprende). **Non** vale nel motore delle zone (Pattern a zone,
   basi di Cannage rafia): lì `fillZone` chiama il motore con `{ puntoMinimoFinale: false }`, perché i
   punti vengono ruotati indietro dopo (la griglia non vale più) e perché per quei tool Lorenzo ha già
-  scelto: la «pulizia punti» finale, a 0 vince il disegno (decisione A6a di `STATO.md`). Estenderlo lì è
-  una scelta sua.
+  scelto la «pulizia punti» finale (decisione A6a di `STATO.md`). Estenderlo lì è una scelta sua. La
+  correzione del ritaglio e della deduplica invece vale anche lì: è lo stesso motore.
 - **Solo il DST del Generatore** è scritto sulla griglia. Pattern a macchie tiene il minimo nel
   tracciato della base, ma il suo export DST centra ancora a metà nodo e può ri-arrotondare di un decimo.
 

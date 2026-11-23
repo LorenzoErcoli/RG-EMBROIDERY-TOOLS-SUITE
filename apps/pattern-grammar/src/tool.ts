@@ -33,6 +33,8 @@ type DisegnoSalvato = {
 const NEUTRI = {
   variationSidesPercent: 100, variationCenterPercent: 100, variationIrregularityPercent: 0, strokeAngleJitterDeg: 0, variationSeed: 1,
   horizontalZigzagPassCount: 0, variationPassCountSides: 0, variationPassCountCenter: 0,
+  // il punto minimo del pattern (2026-11-23): un progetto di prima non lo dice, e il suo pattern resta com'era
+  patternMinStitchMm: 0,
 };
 
 /** Tetto al disegno incorporato nel DST, come negli altri tool: oltre, il file porta i soli parametri. */

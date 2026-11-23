@@ -2806,6 +2806,8 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   const buchi = [anello(30, 40, 60, 70), [{ x: 70, y: 90 }, { x: 95, y: 100 }, { x: 85, y: 125 }, { x: 62, y: 115 }, { x: 70, y: 90 }]];
   const sagoma = { id: 'b', sourceFileName: 't.svg', sourceType: 'svg', bounds: { minX: 0, minY: 0, maxX: 120, maxY: 160 },
     paths: [{ id: 'p', points: perim, closed: true }, ...buchi.map((h, i) => ({ id: `h${i}`, points: h, closed: true, hole: true }))] };
+  // Due misure (Lorenzo, 2026-11-23: «un conto è il pattern un conto è nei contorni»): «Punto minimo» sui
+  // contorni, «Punto minimo del pattern» fra i punti del modulo (di serie 0: il disegno resta com'è).
   const MIN = 0.97;
   const genera = (nome, extra = {}) => rg.generateFinalPatternPoints({ ...condivisi[nome], totalWidth: 120, totalHeight: 160, minStitchMm: MIN,
     boundaryCleanupMode: 'delete', maxBoundaryAdjustment: 0, shapeType: 'imported', voidStitchMm: 0, importedBoundary: sagoma, ...extra }).visualPolylines;
@@ -2818,16 +2820,41 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   const fuori = (p) => Math.max(inPoly(p, perim) ? 0 : dBordo(p, perim), ...buchi.map((h) => (inPoly(p, h) ? dBordo(p, h) : 0)));
   const uscita = (linee) => { let w = 0; for (const l of linee) for (let i = 1; i < l.length; i++) for (let k = 0; k <= 10; k++) w = Math.max(w, fuori({ x: l[i - 1].x + (l[i].x - l[i - 1].x) * k / 10, y: l[i - 1].y + (l[i].y - l[i - 1].y) * k / 10 })); return w; };
   const preset = ['Base rete', 'RG-PUNTO CANVAS CLASSICO', 'RG-PUNTO NASTRO — SQUAME', 'CANNAGE BASE — PIENA'];
-  const linee = Object.fromEntries(preset.map((n) => [n, genera(n)]));
-  check('nessun punto sotto il minimo, né nel tracciato né nel DST (4 preset, pannello con due buchi)',
+  // un punto del contorno: il taglio sul bordo, il raccordo che ci cammina sopra, i punti che lo dividono
+  const sulContorno = (p) => p.role === 'boundary' || p.role === 'boundaryConnector' || (p.role === 'subdivision' && p.source === 'connector');
+  const cortiSul = (linee, min, contorno) => linee.reduce((n, l) => n + l.slice(1).filter((p, i) =>
+    (sulContorno(p) || sulContorno(l[i])) === contorno && Math.hypot(p.x - l[i].x, p.y - l[i].y) < min - 1e-9).length, 0);
+  const soloContorni = Object.fromEntries(preset.map((n) => [n, genera(n)]));
+  check('col solo «Punto minimo»: nessun punto corto sui contorni, e il pattern del cannage resta coi suoi punti fitti',
+    [preset.map((n) => cortiSul(soloContorni[n], MIN, true)), cortiSul(soloContorni['CANNAGE BASE — PIENA'], MIN, false) > 100], [preset.map(() => 0), true]);
+  const linee = Object.fromEntries(preset.map((n) => [n, genera(n, { patternMinStitchMm: MIN })]));
+  check('coi due minimi: nessun punto sotto, né nel tracciato né nel DST (4 preset, pannello con due buchi)',
     preset.map((n) => [corti(linee[n], MIN), corti(comeNelDst(linee[n]), MIN)]), preset.map(() => [0, 0]));
+  // le due misure sono davvero due: il pattern a 2 mm, i contorni a 0,97
+  const dueMisure = genera('CANNAGE BASE — PIENA', { patternMinStitchMm: 2 });
+  check('il minimo del pattern vale dentro, quello dei contorni sui contorni',
+    [cortiSul(dueMisure, 2, false), cortiSul(dueMisure, MIN, true), cortiSul(dueMisure, 2, true) > 0], [0, 0, true]);
   check('nel DST ogni punto resta uno solo: nessun punto oltre 12,1 mm spezzato in un resto corto',
     preset.map((n) => comeNelDst(linee[n]).reduce((t, l) => t + l.length - 1, 0) === linee[n].reduce((t, l) => t + l.length - 1, 0)), preset.map(() => true));
   // fondere due punti non porta il filo fuori: misurato su master 0,72 e 0,79 mm dentro un buco
   check('il filo non esce dalla sagoma, né taglia l\'angolo di un buco',
-    preset.map((n) => uscita(linee[n]) <= 1e-3), preset.map(() => true));
+    preset.map((n) => [uscita(soloContorni[n]) <= 1e-3, uscita(linee[n]) <= 1e-3]), preset.map(() => [true, true]));
+  // NIENTE SBAVATURE (Lorenzo, 2026-11-23: «devo evitare sbavature e punti troppo corti nei contorni, che siano
+  // aree vuote o contorni»). Una stella con un buco tondo: punte strette e spigoli rientranti. Su master il
+  // nastro classico usciva di 3,8 mm (un vertice del modulo sul bordo teneva il tratto fuori, nel ritaglio) e i
+  // raccordi fino a 0,55 mm; i punti corti sui contorni erano 24–121 per preset.
+  {
+    const tondo = Array.from({ length: 49 }, (_, i) => ({ x: 60 + 12 * Math.cos(Math.PI * i / 24), y: 75 + 12 * Math.sin(Math.PI * i / 24) }));
+    const stella = [[60, 5], [75, 50], [118, 55], [80, 85], [95, 150], [60, 110], [25, 150], [40, 85], [3, 55], [45, 50], [60, 5]].map(([x, y]) => ({ x, y }));
+    const sagomaS = { ...sagoma, paths: [{ id: 'p', points: stella, closed: true }, { id: 'h', points: tondo, closed: true, hole: true }] };
+    const fuoriS = (p) => Math.max(inPoly(p, stella) ? 0 : dBordo(p, stella), inPoly(p, tondo) ? dBordo(p, tondo) : 0);
+    const uscitaS = (ll) => { let w = 0; for (const l of ll) for (let i = 1; i < l.length; i++) for (let k = 0; k <= 10; k++) w = Math.max(w, fuoriS({ x: l[i - 1].x + (l[i].x - l[i - 1].x) * k / 10, y: l[i - 1].y + (l[i].y - l[i - 1].y) * k / 10 })); return w; };
+    const tutti = Object.keys(condivisi).map((n) => genera(n, { importedBoundary: sagomaS }));
+    check('stella con un buco tondo, tutti i preset: nessun punto corto sui contorni, e il filo esce al più di 0,01 mm',
+      tutti.map((ll) => [cortiSul(ll, MIN, true), uscitaS(ll) <= 0.01]), tutti.map(() => [0, true]));
+  }
   // col punto massimo il minimo vale lo stesso, e il massimo tiene (qui non litigano: 4 > 2 × 0,97)
-  const conMassimo = genera('RG-PUNTO CANVAS CLASSICO', { maxStitchMm: 4 });
+  const conMassimo = genera('RG-PUNTO CANVAS CLASSICO', { maxStitchMm: 4, patternMinStitchMm: MIN });
   const piuLungo = Math.max(...conMassimo.flatMap((l) => l.slice(1).map((p, i) => Math.hypot(p.x - l[i].x, p.y - l[i].y))));
   check('col punto massimo a 4 mm: nessun punto sotto il minimo né oltre i 4 mm',
     [corti(conMassimo, MIN), corti(comeNelDst(conMassimo), MIN), piuLungo <= 4 + 1e-9], [0, 0, true]);
@@ -3068,8 +3095,9 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
       [c.angoloMediano, s.angoloMediano > 0.5, s.angoloQuasiMassimo <= 3.6], [0, true, true]);
     // la paura di Lorenzo: troppi punti. Il nastro a squame resta quasi uguale al classico, e senza punti minuscoli
     check('a squame quasi gli stessi punti e lo stesso filo del classico, e quasi nessun punto sotto 1 mm',
-      // (dal 2026-11-23 il punto minimo vale per tutti i punti: di solito sono zero tutti e due, da qui il «<=»)
-      [Math.abs(s.punti / c.punti - 1) < 0.08, Math.abs(s.filo / c.filo - 1) < 0.08, s.corti <= c.corti * 3], [true, true, true]);
+      // (dal 2026-11-23 i punti corti sui contorni non ci sono più, in tutti e due: restano solo quelli che la
+      // variazione fa dentro il pattern, misurati 25 su ~3.000, e il punto minimo del pattern di serie è 0)
+      [Math.abs(s.punti / c.punti - 1) < 0.08, Math.abs(s.filo / c.filo - 1) < 0.08, s.corti <= Math.max(c.corti * 3, s.punti * 0.02)], [true, true, true]);
     // stesso seme, stesso ricamo (si riapre uguale); un altro seme, un'altra pelle
     const firma = (cfg) => JSON.stringify(rg.generateFinalPatternPoints(cfg).visualPolylines.flat().slice(0, 400).map((p) => [p.x.toFixed(3), p.y.toFixed(3)]));
     check('stessa variante = stesso ricamo; un\'altra variante = un altro disegno',

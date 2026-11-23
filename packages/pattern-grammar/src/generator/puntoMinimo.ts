@@ -1,6 +1,6 @@
 import { decimiDst, GRIGLIA_DST_MM, PUNTO_MAX_DST_MM } from "@rg/core";
 import type { GeneratedPoint, Point } from "../grammar/types.ts";
-import { isInsideBoundary, type BoundaryOptions } from "./applyBoundary.ts";
+import { isInsideBoundary, stradaSulBordo, type BoundaryOptions } from "./applyBoundary.ts";
 import { subdivideLongSegments } from "./subdivideLongSegments.ts";
 
 /**
@@ -13,8 +13,15 @@ import { subdivideLongSegments } from "./subdivideLongSegments.ts";
  * lasciava così un punto da 0,1 mm, e nel DST i punti giusti per un soffio (0,97) uscivano a 0,9 perché il
  * file arrotonda ogni punto ai decimi di millimetro.
  *
- * Qui il filo, già connesso, si percorre una volta e ogni punto deve stare ad almeno `minMm` dall'ultimo
+ * Qui il filo, già connesso, si percorre una volta e ogni punto deve stare abbastanza lontano dall'ultimo
  * tenuto, sia com'è sia sul suo nodo della griglia del DST (`decimiDst`, lo stesso arrotondamento del file).
+ *
+ * DUE MISURE (Lorenzo, 2026-11-23: «un conto è il pattern un conto è nei contorni… devo evitare sbavature e
+ * punti troppo corti nei contorni, che siano aree vuote o contorni»): un tratto che tocca un contorno (un
+ * taglio sul bordo, un raccordo che ci cammina sopra, il vertice del modulo accanto al taglio) deve essere
+ * lungo almeno `minimi.contorni`, il «Punto minimo»; un tratto fra due punti del modulo almeno
+ * `minimi.pattern`, il «Punto minimo del pattern» (0 = il disegno resta com'è).
+ *
  * Il primo e l'ultimo punto restano. Quando due punti sono troppo vicini:
  * - se lo sono solo sulla griglia, il punto si sposta sul nodo vicino più prossimo che tiene il minimo e
  *   sta nella sagoma (al massimo 0,15 mm, sotto lo spessore del filo);
@@ -50,8 +57,21 @@ function peso(p: GeneratedPoint): number {
   return 1;
 }
 
-/** Il tratto a→b è lungo almeno `minMm` com'è e anche nel DST. */
+/** Un punto del contorno: il taglio sul bordo, il raccordo che ci cammina sopra, e i punti che lo dividono. */
+function sulContorno(p: GeneratedPoint): boolean {
+  return p.role === "boundary" || p.role === "boundaryConnector" || (p.role === "subdivision" && p.source === "connector");
+}
+
+/** Le due misure del punto minimo: sui contorni e dentro il pattern. */
+export type Minimi = { contorni: number; pattern: number };
+
+/** Il minimo che vale per il tratto a→b: quello dei contorni se uno dei due capi ci sta, se no quello del pattern. */
+const minimoDel = (a: GeneratedPoint, b: GeneratedPoint, minimi: Minimi): number =>
+  (sulContorno(a) || sulContorno(b) ? minimi.contorni : minimi.pattern);
+
+/** Il tratto a→b è lungo almeno `minMm` com'è e anche nel DST (0 = nessun minimo). */
 export function trattoAlMinimo(a: Point, b: Point, minMm: number): boolean {
+  if (!(minMm > 0)) return true;
   return distanza(a, b) >= minMm - EPS && distanzaSullaGriglia(a, b) >= minMm - EPS;
 }
 
@@ -61,7 +81,8 @@ function dentro(p: Point, sagoma: BoundaryOptions): boolean {
 
 function trattoDentro(a: Point, b: Point, sagoma: BoundaryOptions): boolean {
   if (sagoma.shapeType === "none") return true;
-  const passi = Math.max(2, Math.ceil(distanza(a, b) / 0.5));
+  // fitto, ogni 0,1 mm: la punta stretta di un vuoto sta in pochi decimi
+  const passi = Math.max(4, Math.ceil(distanza(a, b) / 0.1));
   for (let i = 0; i <= passi; i++) {
     const t = i / passi;
     if (!dentro({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, sagoma)) return false;
@@ -70,7 +91,8 @@ function trattoDentro(a: Point, b: Point, sagoma: BoundaryOptions): boolean {
 }
 
 /** Il nodo della griglia più vicino a `p` (entro 0,15 mm) che sta ad almeno `minMm` da `prima`, nella sagoma. */
-function nodoVicino(prima: Point, p: GeneratedPoint, minMm: number, sagoma: BoundaryOptions): GeneratedPoint | undefined {
+function nodoVicino(prima: GeneratedPoint, p: GeneratedPoint, minimi: Minimi, sagoma: BoundaryOptions): GeneratedPoint | undefined {
+  const minMm = minimoDel(prima, p, minimi);
   const nx = decimiDst(p.x), ny = decimiDst(p.y);
   const nodi: Array<{ q: GeneratedPoint; d: number }> = [];
   for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) {
@@ -83,23 +105,24 @@ function nodoVicino(prima: Point, p: GeneratedPoint, minMm: number, sagoma: Boun
   return nodi.find(({ q }) => trattoAlMinimo(prima, q, minMm) && dentro(q, sagoma) && trattoDentro(prima, q, sagoma))?.q;
 }
 
-/** Una passata: nessun tratto sotto `minMm`, né com'è né sulla griglia del DST. Gli estremi restano. */
-export function imponiPuntoMinimo(path: GeneratedPoint[], minMm: number, sagoma: BoundaryOptions): GeneratedPoint[] {
-  if (!(minMm > 0) || path.length < 2) return path.slice();
+/** Una passata: nessun tratto sotto il suo minimo (`minimoDel`), né com'è né sulla griglia del DST. Gli estremi restano. */
+export function imponiPuntoMinimo(path: GeneratedPoint[], minimi: Minimi, sagoma: BoundaryOptions): GeneratedPoint[] {
+  if (!(minimi.contorni > 0 || minimi.pattern > 0) || path.length < 2) return path.slice();
+  const basta = (a: GeneratedPoint, b: GeneratedPoint) => trattoAlMinimo(a, b, minimoDel(a, b, minimi));
   const out: GeneratedPoint[] = [path[0]];
   for (let i = 1; i < path.length; i++) {
     const p = path[i];
     const ultimo = out[out.length - 1];
-    if (trattoAlMinimo(ultimo, p, minMm)) { out.push(p); continue; }
+    if (basta(ultimo, p)) { out.push(p); continue; }
     if (i === path.length - 1) {
       // l'ultimo punto del filo resta: si tolgono i punti tenuti prima, finché il tratto basta
-      while (out.length > 1 && !trattoAlMinimo(out[out.length - 1], p, minMm)) out.pop();
-      if (trattoAlMinimo(out[out.length - 1], p, minMm)) out.push(p);
+      while (out.length > 1 && !basta(out[out.length - 1], p)) out.pop();
+      if (basta(out[out.length - 1], p)) out.push(p);
       // un filo intero più corto del minimo non si cuce: resta il solo primo punto e chi chiama lo scarta
       continue;
     }
-    if (distanza(ultimo, p) >= minMm - EPS) {
-      const q = nodoVicino(ultimo, p, minMm, sagoma);
+    if (distanza(ultimo, p) >= minimoDel(ultimo, p, minimi) - EPS) {
+      const q = nodoVicino(ultimo, p, minimi, sagoma);
       if (q) { out.push(q); continue; }
     }
     // due punti quasi coincidenti: se ne tiene uno, il più importante (`peso`); a pari peso se ne va il
@@ -108,7 +131,7 @@ export function imponiPuntoMinimo(path: GeneratedPoint[], minMm: number, sagoma:
     const dopo = path[i + 1];
     const prima = out[out.length - 2];
     const togliQuesto = () => trattoDentro(ultimo, dopo, sagoma);
-    const togliIlPrecedente = () => Boolean(prima) && trattoAlMinimo(prima, p, minMm) && trattoDentro(prima, p, sagoma);
+    const togliIlPrecedente = () => Boolean(prima) && basta(prima, p) && trattoDentro(prima, p, sagoma);
     if (peso(p) > peso(ultimo)) {
       if (togliIlPrecedente()) { out[out.length - 1] = p; continue; }
       if (togliQuesto()) continue;
@@ -116,8 +139,17 @@ export function imponiPuntoMinimo(path: GeneratedPoint[], minMm: number, sagoma:
       if (togliQuesto()) continue;
       if (togliIlPrecedente()) { out[out.length - 1] = p; continue; }
     }
-    // nessuna delle due strade sta nella sagoma (un angolo rientrante stretto): il minimo vince, lo scarto
-    // resta sotto la distanza fra i due punti
+    // nessuna delle due strade sta nella sagoma (la punta stretta di un vuoto): si torna indietro di qualche
+    // punto, finché il tratto fino a questo basta e sta dentro
+    let indietro = 0;
+    for (let k = 2; k <= 6 && k < out.length + 1; k++) {
+      const da = out[out.length - k];
+      if (da && basta(da, p) && trattoDentro(da, p, sagoma)) { indietro = k - 1; break; }
+    }
+    if (indietro) { out.length -= indietro; out.push(p); continue; }
+    // nemmeno così: il punto resta, corto, piuttosto che portare il filo fuori dalla sagoma (succede solo su
+    // una punta più stretta del punto minimo: lì nessuna strada è insieme dentro e abbastanza lunga)
+    out.push(p);
   }
   return out;
 }
@@ -135,9 +167,39 @@ const PUNTO_LUNGO_MAX_MM = PUNTO_MAX_DST_MM - GRIGLIA_DST_MM;
  * Il minimo viene per ultimo: se i due limiti litigano (un punto massimo sotto il doppio del minimo) vince
  * lui, come vuole R3.
  */
-export function puntoMinimoFinale(path: GeneratedPoint[], minMm: number, maxMm: number, sagoma: BoundaryOptions): GeneratedPoint[] {
+export function puntoMinimoFinale(path: GeneratedPoint[], minimi: Minimi, maxMm: number, sagoma: BoundaryOptions): GeneratedPoint[] {
   const massimo = maxMm > 0 ? Math.min(maxMm, PUNTO_LUNGO_MAX_MM) : PUNTO_LUNGO_MAX_MM;
-  const primo = minMm > 0 ? imponiPuntoMinimo(path, minMm, sagoma) : path;
-  const suddiviso = subdivideLongSegments(primo, massimo);
-  return minMm > 0 ? imponiPuntoMinimo(suddiviso, minMm, sagoma) : suddiviso;
+  const riparato = senzaSbavature(path, sagoma);
+  return imponiPuntoMinimo(subdivideLongSegments(imponiPuntoMinimo(riparato, minimi, sagoma), massimo), minimi, sagoma);
+}
+
+/** Un tratto esce dalla sagoma? Si guarda fitto (ogni 0,1 mm): una punta stretta di un vuoto sta in pochi decimi. */
+function esce(a: Point, b: Point, sagoma: BoundaryOptions): boolean {
+  if (sagoma.shapeType === "none") return false;
+  const passi = Math.max(4, Math.ceil(distanza(a, b) / 0.1));
+  for (let i = 1; i < passi; i++) {
+    const t = i / passi;
+    if (!dentro({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }, sagoma)) return true;
+  }
+  return false;
+}
+
+/**
+ * NIENTE SBAVATURE SUI CONTORNI (Lorenzo, 2026-11-23). Un tratto che tocca un contorno ed esce dalla sagoma
+ * (un raccordo che taglia la punta di un vuoto, un angolo perso per strada) si rifà camminando sul bordo del
+ * suo anello, coi vertici in mezzo (`stradaSulBordo`). I tratti del pattern non si toccano: se escono, è il
+ * ritaglio che va corretto.
+ */
+export function senzaSbavature(path: GeneratedPoint[], sagoma: BoundaryOptions): GeneratedPoint[] {
+  if (sagoma.shapeType === "none" || sagoma.shapeType === "circle" || path.length < 2) return path;
+  const out: GeneratedPoint[] = [path[0]];
+  for (let i = 1; i < path.length; i++) {
+    const a = path[i - 1], b = path[i];
+    if ((sulContorno(a) || sulContorno(b)) && esce(a, b, sagoma)) {
+      const strada = stradaSulBordo(a, b, sagoma);
+      if (strada) for (const p of strada) out.push(p);
+    }
+    out.push(b);
+  }
+  return out;
 }
