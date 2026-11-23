@@ -165,5 +165,23 @@ Lorenzo, provando su un pezzo di 309×219 mm con 201 fori (un pezzo di prova pre
   e si incrociano. Fasci e fini sono il numero **per riquadro**; con un riquadro solo è la A. Sul suo pezzo (3×3
   riquadri): circa 33 m, un tratto, nelle varianti 8, 3 e 21. Lorenzo: *«sì meglio»*.
 
+## L'anello intorno ai fori (2026-11-23)
+
+Lorenzo: *«quando si attiva la densità è importante che intorno ai fori deve passare bene il filo per evidenziare il foro»*. Visto da vicino, prima il filo si addensava ma nessun punto seguiva il bordo: arrivava a ~1 mm e
+girava via, e il bordo del foro restava frastagliato. Fra le strade (anello, fitto fino al bordo, tutte e due) ha
+scelto **«un anello che lo contorna»**.
+
+**Com'è fatto:** con «più fitto intorno alle aree vuote» acceso, quando il filo di un colore passa vicino a un foro
+che non ha ancora contornato, ci arriva con un punto, gli gira intorno a ridosso del bordo (0,15 mm oltre il
+distacco) e riparte nel fondo da lì: niente stacchi. L'anello è un poligono coi lati tangenti al bordo, tanti lati
+quanti ne stanno col punto minimo (almeno 3); ogni colore lo ruota un po'.
+
+**Misurato** sul pezzo con 201 fori, tre marroni, densità 1,5 di tutti i fili insieme, più fitto ×3 su 4 mm:
+
+- punti 2-5 mm: 199-200 fori su 201 hanno l'anello, per ogni colore (almeno 7 punti entro 1,4 mm dal bordo;
+  senza anelli 129-138). I tratti non aumentano, anzi: semi 1, 2, 5 → 3, 3, 3 tratti (senza anelli 4, 3, 8).
+- punti 6-15 mm: gli anelli sono quadrati o triangoli (col punto minimo di 6 mm intorno a un foro di 5 mm non ci
+  stanno più lati) e il filo fa 1-2 salti in più (semi 1, 2, 5 → 6, 5, 4 tratti; senza 4, 4, 3). **Limite noto.**
+
 Cosa resta da fare sta in `STATO.md` (C4 densità per zona, C5 vuoto dello stesso colore, C6 modello
 densità unificato, A5 i nomi dei parametri "movimento").

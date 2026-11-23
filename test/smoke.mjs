@@ -547,6 +547,37 @@ for (const pass of vdAcceso) for (const r of pass) for (const pt of r) if (Math.
 check('aree vuote: acceso, nessun punto dentro il buco', vdNelBuco, 0);
 check('aree vuote: acceso, senza buchi non cambia niente', JSON.stringify(rg.generatePasses(vdRect, [], { ...vdParams, voidDensityBoost: true }, [1.5])) === JSON.stringify(rg.generatePasses(vdRect, [], vdParams, [1.5])), true);
 check('aree vuote: acceso, il filo resta continuo (un tratto solo)', vdAcceso[0].length, 1);
+// L'ANELLO intorno al foro (Lorenzo, 2026-11-23: «intorno ai fori deve passare bene il filo per evidenziare il foro»,
+// scelto «un anello che lo contorna»): nel filo c'è una fila di punti di fila tutti a ridosso del foro che gli gira
+// intorno per intero. Si misura l'angolo percorso dalla più lunga fila di punti entro 2,5 mm dal bordo.
+{
+  const giro = (pass, cx, cy, r) => {
+    let best = 0;
+    for (const run of pass) {
+      let ang = 0, prev = null;
+      for (const q of run) {
+        const d = Math.hypot(q.x - cx, q.y - cy) - r;
+        if (d < 0 || d > 2.5) { best = Math.max(best, ang); ang = 0; prev = null; continue; }
+        const a = Math.atan2(q.y - cy, q.x - cx);
+        if (prev !== null) { let da = a - prev; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI; ang += Math.abs(da); }
+        prev = a;
+      }
+      best = Math.max(best, ang);
+    }
+    return best / (2 * Math.PI);
+  };
+  check('anello: acceso, il filo gira intorno al foro per intero, a meno di 2,5 mm dal bordo', giro(vdAcceso[0], 50, 45, 10) >= 0.99, true);
+  check('anello: spento, nessun giro intero intorno al foro', giro(vdSpento[0], 50, 45, 10) < 0.99, true);
+  // tanti fori piccoli, tre colori: ogni colore contorna ogni foro, e il filo resta un tratto per colore
+  const fori = [];
+  for (let j = 0; j < 4; j++) for (let i = 0; i < 6; i++) fori.push({ cx: 15 + i * 22 + (j % 2) * 8, cy: 14 + j * 21, r: 2.5 });
+  const poli = fori.map((f) => Array.from({ length: 24 }, (_, k) => ({ x: f.cx + f.r * Math.cos(k / 24 * 2 * Math.PI), y: f.cy + f.r * Math.sin(k / 24 * 2 * Math.PI) })));
+  const tre = rg.generatePasses(vdRect, poli, { ...vdParams, colors: ['#874325', '#5c2e1a', '#b46f4e'], voidDensityBoost: true, voidDensityFactor: 3, voidDensityFadeMm: 4 }, [4, 4, 4]);
+  let contornati = 0, tratti = 0;
+  for (const pass of tre) { tratti += pass.length; for (const f of fori) if (giro(pass, f.cx, f.cy, f.r) >= 0.99) contornati++; }
+  check(`anello: ${fori.length} fori × 3 colori, ognuno contornato da ogni colore`, contornati, fori.length * 3);
+  check('anello: con gli anelli ogni colore resta un tratto solo', tratti, 3);
+}
 
 // interlace — VENATURE sopra il ricamo (`veinsOn`), il disegno «A» scelto da Lorenzo: fasci di spesse a fuso (andata e
 // ritorno), fini a filo singolo, un giro solo senza salti, incroci sotto 1 mm uniti.

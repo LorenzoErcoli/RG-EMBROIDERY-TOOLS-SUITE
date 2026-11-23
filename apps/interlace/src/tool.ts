@@ -248,7 +248,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
               <input type="checkbox" id="voidDensityBoost" />
               <span>Più fitto intorno alle aree vuote</span>
             </label>
-            <small class="rg-field__help">spento, la densità è uguale ovunque. Acceso, il filo si addensa attorno a ogni area vuota del cartamodello e torna alla densità normale allontanandosi. Il bordo esterno non conta.</small>
+            <small class="rg-field__help">spento, la densità è uguale ovunque. Acceso, il filo si addensa attorno a ogni area vuota del cartamodello e torna alla densità normale allontanandosi, e ogni colore contorna ogni foro con un anello a ridosso del bordo. Il bordo esterno non conta.</small>
           </div>
           <label class="rg-field" id="voidDensityFactorField" hidden>
             <span class="rg-field__label">Quanto più fitto vicino al vuoto</span>

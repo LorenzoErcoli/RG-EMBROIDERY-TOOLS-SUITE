@@ -364,7 +364,10 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
  *  pannello avvisa già. */
 interface PenGrid { arr: Uint16Array; gx: number; gy: number; x0: number; y0: number; cap: number; }
 
-function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null, pen: PenGrid | null = null, transit: Uint8Array | null = null, flow = 1): Point[][] {
+/** Un ANELLO intorno a un foro: poligono chiuso di punti a ridosso del bordo (lati fra punto minimo e massimo). */
+interface Anello { cx: number; cy: number; reach: number; pts: Point[]; }
+
+function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null, pen: PenGrid | null = null, transit: Uint8Array | null = null, flow = 1, anelli: Anello[] | null = null): Point[][] {
   const tone = transit !== null;
   const { bb, cell, gx, gy, ci, cj, cpx, cpy, minS, maxS, inRegion, segOk } = ctx;
   const { mgw, mgh, mx0, my0, mres } = ctx;
@@ -495,6 +498,38 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
     cx = nx; cy = ny; dir = ang; totalPts++; runMoves++;
     penAdd(nx, ny);
   };
+  // ANELLI INTORNO AI FORI (con «più fitto intorno alle aree vuote»). Lorenzo, 2026-11-23: «intorno ai fori deve
+  // passare bene il filo per evidenziare il foro»; fra le strade ha scelto «un anello che lo contorna». Quando il filo
+  // passa vicino a un foro che in questa passata non ha ancora contornato, ci va con un punto, gli gira intorno a
+  // ridosso del bordo e riparte nel fondo da lì: niente stacchi. Ogni colore fa il suo anello.
+  const fatti = anelli ? new Uint8Array(anelli.length) : null;
+  const contorna = (): void => {
+    for (let r = 0; r < anelli!.length; r++) {
+      if (fatti![r]) continue;
+      const A = anelli![r];
+      if (Math.hypot(A.cx - cx, A.cy - cy) > A.reach) continue;
+      // il punto d'attacco: il vertice raggiungibile con un punto valido, il più vicino
+      let k = -1, bestD = Infinity;
+      for (let i = 0; i < A.pts.length; i++) {
+        const d = Math.hypot(A.pts[i].x - cx, A.pts[i].y - cy);
+        if (d < minS || d > maxS || d >= bestD) continue;
+        if (!segOk(cx, cy, A.pts[i].x, A.pts[i].y) || crossesBan(cx, cy, A.pts[i].x, A.pts[i].y)) continue;
+        k = i; bestD = d;
+      }
+      if (k < 0) continue;
+      const m = A.pts.length;
+      let vietato = false;
+      // vietato anche se un suo punto cade in un mm² già al tetto dei buchi d'ago: lì l'anello toglierebbe al fondo
+      // l'ultimo posto e il filo resterebbe murato (misurato: 1-2 salti in più coi punti 6-15 mm)
+      for (let i = 0; i < m && !vietato; i++) { const a = A.pts[i], b = A.pts[(i + 1) % m]; if (crossesBan(a.x, a.y, b.x, b.y) || penFull(a.x, a.y)) vietato = true; }
+      fatti![r] = 1;
+      if (vietato) continue;
+      const aim = (q: Point) => Math.atan2(q.y - cy, q.x - cx);
+      commit(A.pts[k].x, A.pts[k].y, aim(A.pts[k]));
+      for (let i = 1; i <= m; i++) { const q = A.pts[(k + i) % m]; commit(q.x, q.y, aim(q)); }
+      return; // un foro per volta: poi il filo riprende il fondo
+    }
+  };
   const openRunAt = (x: number, y: number, id: number): void => {
     if (run.length >= 2) runs.push(run);
     run = [{ x, y }];
@@ -561,6 +596,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
     }
     const gained = coveredCells;
     commit(nxt.x, nxt.y, nxt.ang);
+    if (anelli) contorna();
     sinceGain = coveredCells > gained ? 0 : sinceGain + 1;
   }
 
@@ -782,6 +818,62 @@ export function stitchBudget(p: InterlaceParams, densities: number[]): StitchBud
 function flowOf(p: InterlaceParams): number {
   const v = Number(p.flowStrength);
   return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) / 100 : 1;
+}
+
+/**
+ * Gli anelli intorno ai fori per una passata. Per ogni foro: dal suo centro si misura, in 72 direzioni, dove comincia
+ * la zona cucibile (il bordo del foro più il distacco); l'anello è il poligono che gira intorno a quel bordo con i lati
+ * tangenti, tanti lati quanti ne stanno con il punto minimo (almeno 3, cioè un triangolo intorno a un foro piccolo con
+ * punti lunghi). Ogni passata lo ruota un po' (`pIdx`), così gli anelli dei colori non si sovrappongono punto per
+ * punto. Un foro che non si riesce a contornare (troppo vicino al bordo o a un altro foro, forma strana) resta senza.
+ */
+function anelliDeiFori(ctx: FillCtx, voids: Polyline[], pIdx: number): Anello[] {
+  const { minS, maxS, inRegion, segOk } = ctx;
+  const N = 72, STEP = 0.05, MARGINE = 0.15;
+  const out: Anello[] = [];
+  for (const v of voids) {
+    if (v.length < 3) continue;
+    let cx = 0, cy = 0;
+    for (const q of v) { cx += q.x; cy += q.y; }
+    cx /= v.length; cy /= v.length;
+    const rho: number[] = [];
+    let ok = true;
+    for (let a = 0; a < N && ok; a++) {
+      const th = (a / N) * Math.PI * 2, c = Math.cos(th), s = Math.sin(th);
+      let t = 0;
+      while (t < 40 && !inRegion(cx + c * t, cy + s * t)) t += STEP;
+      if (t >= 40) ok = false; else rho.push(t + MARGINE);
+    }
+    if (!ok) continue;
+    const rAt = (th: number) => {
+      const u = ((th / (Math.PI * 2)) % 1 + 1) % 1 * N, i = Math.floor(u) % N, f = u - Math.floor(u);
+      return rho[i] * (1 - f) + rho[(i + 1) % N] * f;
+    };
+    const rMin = Math.min(...rho);
+    const fase = ((pIdx * 0.618034) % 1) * Math.PI * 2;
+    let anello: Point[] | null = null;
+    for (let m = Math.max(3, Math.min(48, Math.floor(Math.PI / Math.atan(minS / (2 * rMin))))); m >= 3 && !anello; m--) {
+      for (let gonfia = 1; gonfia <= 1.3 && !anello; gonfia += 0.1) {
+        const pts: Point[] = [];
+        for (let k = 0; k < m; k++) {
+          const th = fase + (k / m) * Math.PI * 2;
+          const R = rAt(th) * gonfia / Math.cos(Math.PI / m);
+          pts.push({ x: cx + Math.cos(th) * R, y: cy + Math.sin(th) * R });
+        }
+        let buono = true;
+        for (let k = 0; k < m && buono; k++) {
+          const a = pts[k], b = pts[(k + 1) % m], L = Math.hypot(b.x - a.x, b.y - a.y);
+          if (L < minS - 1e-6 || L > maxS || !inRegion(a.x, a.y) || !segOk(a.x, a.y, b.x, b.y)) buono = false;
+        }
+        if (buono) anello = pts;
+      }
+    }
+    if (!anello) continue;
+    let rMax = 0;
+    for (const q of anello) rMax = Math.max(rMax, Math.hypot(q.x - cx, q.y - cy));
+    out.push({ cx, cy, reach: rMax + maxS, pts: anello });
+  }
+  return out;
 }
 
 function voidFactorMax(p: InterlaceParams): number {
@@ -1079,7 +1171,8 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
         targetArr[id] = Math.max(1, Math.min(255, Math.floor(tg * f + hash(gi + pIdx * 104729 + 17, gj + base * 53))));
       }
     }
-    passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr, banArr, pen, transitArr, flowOf(p)));
+    const anelli = voidFactorAt ? anelliDeiFori(ctx, voids, pIdx) : null;
+    passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr, banArr, pen, transitArr, flowOf(p), anelli));
   }
   return passes;
 }
