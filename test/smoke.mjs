@@ -661,17 +661,30 @@ check('venature: nessun punto fuori dalla sagoma', vnFuori, 0);
     // Lorenzo (2026-11-23): «evitiamo il ritorno sullo stesso punto per non creare punti battuti evidenti». Prima metà
     // dei punti cadeva a meno di 0,3 mm da un buco già fatto (il ritorno del fuso fuso con l'andata, gli incroci, i ripassi).
     const pts = v.runs.flat(), visti = new Map();
-    let battuti = 0, corti = 0;
+    // …e poi «devi proprio sfalsarlo, così sono ancora in linea … doveva avere tipo una fase»: due buchi a meno di
+    // 0,9 mm e allo stesso livello lungo la vena (meno di 0,4 mm) sono affiancati. Con lo spostamento di traverso erano
+    // il 40% dei punti.
+    let battuti = 0, corti = 0, affiancati = 0;
     for (let i = 0; i < pts.length; i++) {
       const q = pts[i], gx = Math.floor(q.x / 0.5), gy = Math.floor(q.y / 0.5);
-      let hit = false;
-      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const o of visti.get(`${gx + dx},${gy + dy}`) || []) if (Math.hypot(o.x - q.x, o.y - q.y) < 0.3) hit = true;
+      const a = pts[i - 1] || q, b = pts[i + 1] || q;
+      let tx = b.x - a.x, ty = b.y - a.y;
+      if (Math.hypot(tx, ty) < 1e-6) { tx = q.x - a.x; ty = q.y - a.y; }
+      const L = Math.hypot(tx, ty) || 1; tx /= L; ty /= L;
+      let hit = false, aff = false;
+      for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) for (const o of visti.get(`${gx + dx},${gy + dy}`) || []) {
+        if (o === pts[i - 1]) continue;
+        const d = Math.hypot(o.x - q.x, o.y - q.y);
+        if (d < 0.3) hit = true; else if (d < 0.9 && Math.abs((o.x - q.x) * tx + (o.y - q.y) * ty) < 0.4) aff = true;
+      }
       if (hit) battuti++;
+      if (aff) affiancati++;
       const k = `${gx},${gy}`; if (!visti.has(k)) visti.set(k, []); visti.get(k).push(q);
       if (i > 0 && Math.hypot(q.x - pts[i - 1].x, q.y - pts[i - 1].y) < 1 - 1e-9) corti++;
     }
     check(`venature su 309×219 (variante ${seed}): nessun punto battuto (a meno di 0,3 mm da un buco già fatto)`, battuti, 0);
     check(`venature su 309×219 (variante ${seed}): e nessun punto sotto 1 mm`, corti, 0);
+    check(`venature su 309×219 (variante ${seed}): buchi affiancati allo stesso livello meno del 10% (erano il 40%)`, affiancati < pts.length * 0.1, true);
     check(`venature su 309×219 (variante ${seed}): ogni nono del pezzo ha almeno 1 m di venature`, Math.min(...noni) > 1000, true);
   }
 }

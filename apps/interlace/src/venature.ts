@@ -55,16 +55,22 @@ const THIN_TURN = [-22, -7, 18, 38, 58, 78];
 const RAD = Math.PI / 180;
 /** Due buchi d'ago più vicini di così sono lo stesso buco battuto due volte. */
 const BATTUTO_MM = 0.3;
-/** Dove si sposta un punto battuto: [di traverso, lungo] la vena, in mm. Prima di traverso (resta sulla vena),
- *  poi tutt'intorno a distanze crescenti fino a 1,4 mm, dove le vene si affollano (incroci, fasci vicini). */
+/** Dove si sposta un punto battuto o affiancato: [di traverso, lungo] la vena, in mm. Lorenzo (2026-11-23), visto lo
+ *  spostamento di traverso: «devi proprio sfalsarlo, così sono ancora in linea … doveva soprattutto non essere allo
+ *  stesso livello, doveva avere tipo una fase». Quindi prima LUNGO la vena, avanti o indietro (il buco cade fra due
+ *  buchi dell'altra passata), appena di lato; poi più lontano; di traverso puro solo come ultima risorsa. */
 const SCOSTA: Array<[number, number]> = (() => {
-  const out: Array<[number, number]> = [[0.45, 0], [-0.45, 0]];
-  for (const r of [0.45, 0.65, 0.9, 1.15, 1.4]) for (let k = 0; k < 12; k++) {
-    const a = (k / 12) * Math.PI * 2;
-    out.push([Math.round(r * Math.cos(a) * 1000) / 1000, Math.round(r * Math.sin(a) * 1000) / 1000]);
+  const out: Array<[number, number]> = [];
+  for (const v of [0.6, 0.8, 1.0, 0.45, 1.2]) for (const u of [0.2, -0.2]) { out.push([u, v]); out.push([u, -v]); }
+  for (const r of [0.65, 0.9, 1.15, 1.4]) for (let k = 0; k < 12; k++) {
+    const t = (k / 12) * Math.PI * 2;
+    out.push([Math.round(r * Math.cos(t) * 1000) / 1000, Math.round(r * Math.sin(t) * 1000) / 1000]);
   }
   return out;
 })();
+/** Due buchi di passate diverse sono "allo stesso livello" se distano meno di questo e, lungo la vena, meno di FASE_MM. */
+const AFFIANCATO_MM = 0.9;
+const FASE_MM = 0.4;
 /** Davanti a un foro la vena gira di questi angoli (radianti, prima a un lato poi all'altro) e prosegue: si ferma solo al bordo. */
 const SCARTO_FORO = [0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.25, -1.25];
 /** La A era disegnata su 120×80 (120 di traverso alle vene, 80 lungo): i pezzi più grandi si dividono in riquadri così. */
@@ -425,28 +431,42 @@ export function generateVeins(boundary: Polyline, voids: Polyline[], p: VeinPara
   const scosta = (pts: Point[]): Point[] => {
     const G2 = 0.5, grid = new Map<number, Point[]>();
     const key = (x: number, y: number) => Math.floor((y - bb.minY) / G2 + 4) * 100003 + Math.floor((x - bb.minX) / G2 + 4);
-    const libero = (x: number, y: number) => {
+    // libero = nessun buco già fatto a meno di BATTUTO_MM, e nessuno a meno di AFFIANCATO_MM che stia allo stesso
+    // livello lungo la vena (meno di FASE_MM lungo la direzione tx,ty): due buchi affiancati si leggono in linea
+    const libero = (x: number, y: number, tx: number, ty: number, salta: Point | null) => {
       const i0 = Math.floor((x - bb.minX) / G2 + 4), j0 = Math.floor((y - bb.minY) / G2 + 4);
-      for (let j = j0 - 1; j <= j0 + 1; j++) for (let i = i0 - 1; i <= i0 + 1; i++) for (const o of grid.get(j * 100003 + i) || []) if (Math.hypot(o.x - x, o.y - y) < BATTUTO_MM) return false;
+      for (let j = j0 - 2; j <= j0 + 2; j++) for (let i = i0 - 2; i <= i0 + 2; i++) for (const o of grid.get(j * 100003 + i) || []) {
+        if (o === salta) continue;
+        const d = Math.hypot(o.x - x, o.y - y);
+        if (d < BATTUTO_MM) return false;
+        if ((tx || ty) && d < AFFIANCATO_MM && Math.abs((o.x - x) * tx + (o.y - y) * ty) < FASE_MM) return false;
+      }
       return true;
     };
     const out: Point[] = [];
     for (let k = 0; k < pts.length; k++) {
       let q = pts[k];
-      if (!libero(q.x, q.y)) {
-        const a = out.length ? out[out.length - 1] : q, b = k + 1 < pts.length ? pts[k + 1] : q;
-        // la direzione della vena qui: dal punto prima al punto dopo; in un "va e torna" i due coincidono, allora
-        // dal punto prima a questo
-        let tx = b.x - a.x, ty = b.y - a.y;
-        if (Math.hypot(tx, ty) < 1e-6) { tx = q.x - a.x; ty = q.y - a.y; }
-        if (Math.hypot(tx, ty) < 1e-6) { tx = 1; ty = 0; }
-        const L = Math.hypot(tx, ty); tx /= L; ty /= L;
-        for (const [u, v] of SCOSTA) {
-          const x = q.x - ty * u + tx * v, y = q.y + tx * u + ty * v;
-          if (!inside(x, y) || !libero(x, y)) continue;
-          if (out.length && Math.hypot(x - a.x, y - a.y) < FUSE_MM) continue;
-          if (k + 1 < pts.length && Math.hypot(x - b.x, y - b.y) < FUSE_MM) continue;
-          q = { x, y }; break;
+      const a = out.length ? out[out.length - 1] : q, b = k + 1 < pts.length ? pts[k + 1] : q;
+      // la direzione della vena qui: dal punto prima al punto dopo; in un "va e torna" i due coincidono, allora
+      // dal punto prima a questo
+      let tx = b.x - a.x, ty = b.y - a.y;
+      if (Math.hypot(tx, ty) < 1e-6) { tx = q.x - a.x; ty = q.y - a.y; }
+      if (Math.hypot(tx, ty) < 1e-6) { tx = 1; ty = 0; }
+      const L = Math.hypot(tx, ty); tx /= L; ty /= L;
+      // il punto appena prima nella stessa passata non conta come "affiancato": è il suo vicino lungo il filo
+      const prima = out.length ? out[out.length - 1] : null;
+      if (!libero(q.x, q.y, tx, ty, prima)) {
+        // prima si cerca un posto sfasato; se non c'è (vene affollate), almeno fuori da ogni buco già fatto
+        let trovato = false;
+        for (const severo of [true, false]) {
+          if (trovato || (!severo && libero(q.x, q.y, 0, 0, prima))) break;
+          for (const [u, v] of SCOSTA) {
+            const x = q.x - ty * u + tx * v, y = q.y + tx * u + ty * v;
+            if (!inside(x, y) || !libero(x, y, severo ? tx : 0, severo ? ty : 0, prima)) continue;
+            if (out.length && Math.hypot(x - a.x, y - a.y) < FUSE_MM) continue;
+            if (k + 1 < pts.length && Math.hypot(x - b.x, y - b.y) < FUSE_MM) continue;
+            q = { x, y }; trovato = true; break;
+          }
         }
       }
       out.push(q);

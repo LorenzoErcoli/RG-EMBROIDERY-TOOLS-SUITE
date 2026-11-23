@@ -215,5 +215,13 @@ contro la sua andata; poi, nell'ordine di cucitura, ogni punto che cade a meno d
 sposta di lato (prima di traverso alla vena, poi tutt'intorno fino a 1,4 mm), dentro la sagoma e senza punti sotto
 1 mm. **Dopo: 0 punti battuti** in tutte le prove (3 varianti, 120×80 e 309×219), nessun punto sotto 1 mm, un tratto.
 
+Visto il risultato, Lorenzo: *«devi proprio sfalsarlo, così sono ancora in linea. il problema non era spostarlo e
+metterlo vicino, ma è che doveva soprattutto orizzontalmente non essere allo stesso livello, doveva avere tipo una
+fase»*. **Misurato:** spostati di traverso, il **40%** dei punti restava affiancato a un altro (a meno di 0,9 mm e
+a meno di 0,4 mm lungo la vena: allo stesso livello). **Ora** il punto si sposta prima LUNGO la vena, avanti o
+indietro di 0,45-1,2 mm e appena di lato (0,2 mm), così cade fra due buchi dell'altra passata; un posto si accetta
+solo se non è né battuto né affiancato; se non ce n'è (vene affollate) almeno fuori dai buchi già fatti. **Dopo:**
+affiancati 3-6,5% (sono vene diverse che corrono vicine), 0 battuti, nessun punto sotto 1 mm, un tratto.
+
 Cosa resta da fare sta in `STATO.md` (C4 densità per zona, C5 vuoto dello stesso colore, C6 modello
 densità unificato, A5 i nomi dei parametri "movimento").
