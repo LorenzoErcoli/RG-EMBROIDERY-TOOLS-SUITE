@@ -48,11 +48,14 @@ const distanzaSullaGriglia = (a: Point, b: Point): number =>
   Math.hypot(decimiDst(b.x) - decimiDst(a.x), decimiDst(b.y) - decimiDst(a.y)) * GRIGLIA_DST_MM;
 
 /**
- * Quale dei due punti resta, quando si fondono: quelli sul bordo (il taglio, il raccordo) contano più dei
- * vertici del modulo, che contano più dei punti messi solo per dividere una linea (intermedi, suddivisioni).
+ * Quale dei due punti resta, quando si fondono. Di serie quelli sul bordo (il taglio, il raccordo) contano più
+ * dei vertici del modulo, che contano più dei punti messi solo per dividere una linea (intermedi, suddivisioni):
+ * nel Generatore il filo corre sul contorno. Con `tieni: "dentro"` il punto sul bordo conta meno del vertice:
+ * la linea tagliata si ferma all'ago prima del bordo invece di piegare la linea verso il taglio (il punto
+ * sopra di Pattern a macchie, che sul bordo della macchia non cammina).
  */
-function peso(p: GeneratedPoint): number {
-  if (p.role === "boundary" || p.role === "boundaryConnector") return 2;
+function peso(p: GeneratedPoint, tieni: "bordo" | "dentro"): number {
+  if (p.role === "boundary" || p.role === "boundaryConnector") return tieni === "dentro" ? 0.5 : 2;
   if (p.role === "intermediate" || p.role === "subdivision") return 0;
   return 1;
 }
@@ -106,7 +109,7 @@ function nodoVicino(prima: GeneratedPoint, p: GeneratedPoint, minimi: Minimi, sa
 }
 
 /** Una passata: nessun tratto sotto il suo minimo (`minimoDel`), né com'è né sulla griglia del DST. Gli estremi restano. */
-export function imponiPuntoMinimo(path: GeneratedPoint[], minimi: Minimi, sagoma: BoundaryOptions): GeneratedPoint[] {
+export function imponiPuntoMinimo(path: GeneratedPoint[], minimi: Minimi, sagoma: BoundaryOptions, tieni: "bordo" | "dentro" = "bordo"): GeneratedPoint[] {
   if (!(minimi.contorni > 0 || minimi.pattern > 0) || path.length < 2) return path.slice();
   const basta = (a: GeneratedPoint, b: GeneratedPoint) => trattoAlMinimo(a, b, minimoDel(a, b, minimi));
   const out: GeneratedPoint[] = [path[0]];
@@ -132,7 +135,7 @@ export function imponiPuntoMinimo(path: GeneratedPoint[], minimi: Minimi, sagoma
     const prima = out[out.length - 2];
     const togliQuesto = () => trattoDentro(ultimo, dopo, sagoma);
     const togliIlPrecedente = () => Boolean(prima) && basta(prima, p) && trattoDentro(prima, p, sagoma);
-    if (peso(p) > peso(ultimo)) {
+    if (peso(p, tieni) > peso(ultimo, tieni)) {
       if (togliIlPrecedente()) { out[out.length - 1] = p; continue; }
       if (togliQuesto()) continue;
     } else {

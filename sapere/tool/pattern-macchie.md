@@ -671,10 +671,17 @@ nodo, scegliendo per ogni punto il nodo vicino che tiene il minimo del suo stop 
 punti oltre 12 mm. Anche il simulatore cuce quel DST. Dettagli in
 [punto minimo per ultimo](../decisioni/punto-minimo-per-ultimo.md).
 
-**Ancora aperto:** il punto sopra ha già nel tracciato molti punti sotto 1 mm, quasi tutti **sul bordo della
-macchia** (pannello di prova: 1.347 su 1.677 col nastro a squame, 892 su 901 col canvas). Il motore li lascia
-apposta (il test ne ammette fino al 12%); l'export non li tocca. Se Lorenzo li vuole fuori come sui contorni del
-Generatore, va fatto nel motore.
+## Niente punti corti sul bordo della macchia (2026-11-23)
+
+Il punto sopra aveva già nel tracciato molti punti sotto 1 mm, quasi tutti **sul bordo della macchia** (pannello di
+prova: 1.347 su 1.677 col nastro a squame, 892 su 901 col canvas): i tagli della base che cadono vicino a un suo
+vertice. `senzaPuntiCorti` li toglieva solo se togliere l'ago spostava il filo al più di mezzo minimo. Lorenzo:
+*«sì, togli i punti corti sul bordo delle macchie»*. Ora vale la stessa regola dei contorni del Generatore
+(`imponiPuntoMinimo` di `@rg/pattern-grammar`, R28): un tratto che tocca il bordo è lungo almeno `sopraPuntoMin` e
+il filo non esce dalla macchia. Fra il taglio sul bordo e l'ago prima **resta l'ago prima** (`tieni: 'dentro'`):
+la linea si ferma lì e le colonne restano dritte (tenendo il taglio, la colonna piegava verso il bordo). Poi la
+pulizia di dentro ripassa, per gli aghi che il puntino tolto lasciava a pochi decimi uno dall'altro. Sul pannello
+di prova: sul bordo 1.347 → 0 (squame) e 892 → 0 (canvas); dentro 330 → 333 e 9 → 11, il disegno della base.
 
 ## Da guardare a macchina
 - (2026-11-04) i ponti sul secondo livello: se quello largo 2 mm copre davvero il filo che ci passa sotto, e dove entra

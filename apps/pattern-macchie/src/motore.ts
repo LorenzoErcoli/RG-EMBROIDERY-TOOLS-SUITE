@@ -18,7 +18,7 @@
 // pannello e tagliata sul contorno di ogni macchia. Così dentro la macchia il punto riprende esattamente il
 // disegno di fuori, al millesimo.
 import { buildParallelFill, clipSegmentToPolygon, distanceToBoundary, enforceMinStitch, pointInPolygon, polygonArea, simplifyPolyline, type Point, type Polyline } from '@rg/core';
-import { generateFinalPatternPoints, type ImportedBoundary, type PatternConfig } from '@rg/pattern-grammar';
+import { generateFinalPatternPoints, imponiPuntoMinimo, type GeneratedPoint, type ImportedBoundary, type PatternConfig } from '@rg/pattern-grammar';
 
 export type ParametriMacchie = {
   /**
@@ -3296,9 +3296,41 @@ function sopraComeLaBase(base: Polyline[], macchia: Polyline, da: Point | undefi
     }
   }
   // nessun punto più corto del minimo: si toglie l'ago, se il filo si sposta al più di mezzo minimo e resta dentro (gli
-  // incroci fra barrette e zig-zag, i tagli sul bordo)
-  return { tratti: tratti.map((t) => senzaPuntiCorti(t, minimo, macchia)), tolto };
+  // incroci fra barrette e zig-zag, i tagli sul bordo); poi, sul bordo della macchia, il minimo vale sempre; poi di nuovo
+  // la pulizia di dentro, per gli aghi che il puntino tolto sul bordo lasciava a pochi decimi uno dall'altro
+  return { tratti: tratti.map((t) => senzaPuntiCorti(senzaPuntiCortiSulBordo(senzaPuntiCorti(t, minimo, macchia), minimo, macchia), minimo, macchia)), tolto };
 }
+
+/** La macchia come sagoma del motore del Generatore, una volta per macchia. */
+const sagomeDelleMacchie = new WeakMap<Polyline, { width: number; height: number; shapeType: 'imported'; importedBoundary: ImportedBoundary }>();
+function sagomaDellaMacchia(macchia: Polyline) {
+  const gia = sagomeDelleMacchie.get(macchia);
+  if (gia) return gia;
+  const b = ingombro(macchia);
+  const sagoma = {
+    width: b.x1 + 1, height: b.y1 + 1, shapeType: 'imported' as const,
+    importedBoundary: { id: 'macchia', sourceFileName: 'macchia', sourceType: 'svg' as const, paths: [{ id: 'macchia', points: macchia, closed: true }], bounds: { minX: b.x0, minY: b.y0, maxX: b.x1, maxY: b.y1 } },
+  };
+  sagomeDelleMacchie.set(macchia, sagoma);
+  return sagoma;
+}
+
+/**
+ * NIENTE PUNTI CORTI SUL BORDO DELLA MACCHIA (Lorenzo, 2026-11-23: «sì, togli i punti corti sul bordo delle macchie»,
+ * come sui contorni del Generatore). Il punto sopra è la base tagliata sulla macchia: i tagli che cadono vicino a un
+ * vertice della base lasciavano punti corti sul bordo (pannello di prova: 1.347 sotto 1 mm col nastro a squame, 892 col
+ * canvas), e `senzaPuntiCorti` non li toglie quando togliere l'ago sposta il filo troppo o lo porta fuori. Qui vale la
+ * stessa regola del Generatore (`imponiPuntoMinimo`, R28): un tratto che tocca il bordo è lungo almeno `minimo`, due
+ * punti vicini si fondono tenendo l'ago prima del bordo, e il filo non esce dalla macchia. Dentro, niente cambia.
+ */
+function senzaPuntiCortiSulBordo(t: Polyline, minimo: number, macchia: Polyline): Polyline {
+  if (t.length < 3) return t;
+  const conRuoli: GeneratedPoint[] = t.map((p) => ({ x: p.x, y: p.y, role: distanceToBoundary(p, macchia) < SUL_BORDO_MM ? 'boundary' : 'structural' }));
+  // (fra il taglio sul bordo e l'ago prima resta l'ago prima: la linea si ferma lì, come dice `sopraPuntoMin`)
+  return imponiPuntoMinimo(conRuoli, { contorni: minimo, pattern: 0 }, sagomaDellaMacchia(macchia), 'dentro').map((p) => ({ x: p.x, y: p.y }));
+}
+/** Quanto vicino al bordo un ago conta come «sul bordo» della macchia: i tagli ci stanno sopra, al calcolo. */
+const SUL_BORDO_MM = 0.05;
 
 /** Gli aghi che fanno un punto più corto del minimo, via: dove il filo si sposta al più di mezzo minimo e resta dentro. */
 function senzaPuntiCorti(t: Polyline, minimo: number, macchia: Polyline): Polyline {

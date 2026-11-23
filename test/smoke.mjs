@@ -6839,6 +6839,17 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     });
     check('il DST delle macchie: nessun punto accorciato sotto il minimo del suo stop, e nessun punto spezzato in più',
       accorciati, strati.map(() => 0));
+    // NIENTE PUNTI CORTI SUL BORDO DELLE MACCHIE (Lorenzo, 2026-11-23: «sì, togli i punti corti sul bordo delle
+    // macchie»). Prima, su questo pannello, 1.347 punti sopra sotto 1 mm toccavano il bordo; dentro la macchia
+    // restano quelli di prima (330), che sono del disegno della base.
+    const sulBordo = (p) => r.forme.some((f) => rg.distanceToBoundary(p, f) < 0.05);
+    let cortiBordo = 0, cortiDentro = 0;
+    for (const st of r.stop.filter((s) => s.tipo === 'sopra')) for (const l of st.livello.tratti) for (let i = 1; i < l.length; i++) {
+      if (Math.hypot(l[i].x - l[i - 1].x, l[i].y - l[i - 1].y) >= pmSerie.sopraPuntoMin - 1e-9) continue;
+      if (sulBordo(l[i]) || sulBordo(l[i - 1])) cortiBordo++; else cortiDentro++;
+    }
+    check('punto sopra: nessun punto sotto il minimo sul bordo della macchia, e dentro non ne nascono di nuovi (misurati 333)',
+      [cortiBordo, cortiDentro <= 360], [0, true]);
     const pmToolDst = readFileSync(join(root, 'apps/pattern-macchie/src/tool.ts'), 'utf8');
     check('...e il tool lo scrive così (sulla griglia, col minimo di ogni stop, `center: false`)',
       [/stratiSullaGrigliaDst\(strati\(\), \{\s*minimoDi: \(l\) => minimoDelloStop\(l\.id, par, pattern\.config\), dividiPuntiLunghi: true/.test(pmToolDst),

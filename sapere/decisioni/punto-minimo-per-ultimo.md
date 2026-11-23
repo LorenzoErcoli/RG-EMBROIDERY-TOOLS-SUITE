@@ -98,6 +98,11 @@ per dividere una linea; a pari importanza il primo. Il primo e l'ultimo punto de
   prova delle macchie: punti accorciati sotto il minimo dall'arrotondamento, col punto canvas 44 nel punto
   sopra e 1 nel raso, ora 0; col nastro a squame 5 e 1, ora 0.
 
+- **Sul bordo delle macchie** (Pattern a macchie, 2026-11-23, Lorenzo: *«sì, togli i punti corti sul bordo
+  delle macchie»*): il punto sopra usa la stessa funzione (`imponiPuntoMinimo`) col bordo della macchia come
+  contorno, ma con `tieni: 'dentro'`: fra il taglio e l'ago prima resta l'ago prima, perché il punto sopra sul
+  bordo non cammina e la colonna deve restare dritta. Vedi [pattern-macchie](../tool/pattern-macchie.md).
+
 ## Come si applica
 
 - Un controllo sul punto minimo si fa sul DST riletto (`readDst`), non sul tracciato: il tracciato

@@ -4,6 +4,9 @@ export { generatePattern, generateFinalPatternPoints, createExportReport } from 
 // Il ritaglio al contorno serve anche fuori dal generatore: chi posa un MODULO dentro una zona
 // deve rifilarlo allo stesso identico modo (R28: stessa domanda, stessa risposta).
 export { clipPathToBoundaryChunks, isInsideBoundary } from './generator/applyBoundary.ts';
+// Il punto minimo sui contorni (2026-11-23): lo usa anche Pattern a macchie sul bordo delle macchie (R28).
+export { imponiPuntoMinimo } from './generator/puntoMinimo.ts';
+export type { Minimi } from './generator/puntoMinimo.ts';
 export type { BoundaryOptions, ClippedPathChunk } from './generator/applyBoundary.ts';
 export { parseImportedBoundarySource, parseSvgPolylines, parseSvgTransform } from './importer/importBoundary.ts';
 export type { PatternConfig, Point, GeneratedPoint, ShapeType, ViewBox, BoundaryPath, ImportedBoundary } from './grammar/types.ts';
