@@ -71,7 +71,7 @@ export { sagomaDaZone, sagomaDaAnello, sagomaDaAnelli } from ${JSON.stringify(po
 export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordatura, stratiProgramma, conPuntoMinimo, unisciTratti } from ${JSON.stringify(posix('apps/cannage-rafia/src/programma.ts'))};
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
-export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_DI_SERIE, fermaSottoIlSecondo as pmFerma, macchiePerStilista as pmPerStilista, tagliDeiSalti as pmTagli, rigaSfrangiata as pmSfrangiata } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
+export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_DI_SERIE, fermaSottoIlSecondo as pmFerma, macchiePerStilista as pmPerStilista, tagliDeiSalti as pmTagli, rigaSfrangiata as pmSfrangiata, minimoDelloStop as pmMinimoDelloStop } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
 export { lineePerStilista as rcLineeStilista, scegliModelli as rcScegliModelli, oggettiDaMandare as rcOggettiDaMandare, oggettiMancanti as rcOggettiMancanti } from ${JSON.stringify(posix('apps/rete-catenella/src/stilista-psil.ts'))};
 export { aggiungiModulo as rcAggiungiModulo, leggiElenco as rcLeggiElenco, leggiModulo as rcLeggiModulo, scriviElenco as rcScriviElenco, togliModulo as rcTogliModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/elenco-moduli.ts'))};
 export { griglia as rcGriglia, riquadroRete as rcRiquadro, costruisciRete as rcCostruisci, latoSuperioreDritto as rcLatoDritto, filoSopra as rcFiloSopraIntero, stratiRete as rcStrati, catenella as rcCatenella, pezziDentro as rcPezzi, maschera as rcMaschera, PARAMETRI_RETE as RC_PARAMETRI, motore as rcMotore } from ${JSON.stringify(posix('apps/rete-catenella/src/motore.ts'))};
@@ -6824,6 +6824,26 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
   const formato = { totalWidth: Math.ceil(Math.max(...pannello.map((p) => p.x))) + 1, totalHeight: Math.ceil(Math.max(...pannello.map((p) => p.y))) + 1 };
   const intera = rg.generateFinalPatternPoints({ ...squame, ...formato, shapeType: 'imported', voidStitchMm: 0, importedBoundary: { id: 'p', sourceFileName: 'p', sourceType: 'svg', paths: [{ id: 'p', points: pannello, closed: true }], bounds: { minX: 0, minY: 0, maxX: formato.totalWidth, maxY: formato.totalHeight } } }).visualPolylines;
   check('...ed è la base del Generatore, punto per punto', r.base.punti, intera.reduce((t, l) => t + l.length, 0));
+  // IL DST SULLA GRIGLIA (2026-11-23, dopo il Generatore): ogni stop col suo punto minimo (base: quello del pattern;
+  // raso 0,3; punto sopra `sopraPuntoMin`). Nessun punto che nel tracciato tiene il minimo esce più corto dal DST:
+  // prima, sul punto canvas, 44 punti sopra e 1 del raso scendevano sotto arrotondando ai decimi di millimetro.
+  {
+    const strati = [{ id: 'base', color: '#000', polylines: r.base.tratti },
+      ...r.stop.map((st) => ({ id: `${st.tipo}${st.strato > 1 ? st.strato : ''}-${st.zona + 1}`, color: '#000', polylines: st.livello.tratti }))].filter((l) => l.polylines.length);
+    const letto = rg.readDst(rg.dstFromExportLayers(rg.stratiSullaGrigliaDst(strati, { minimoDi: (l) => rg.pmMinimoDelloStop(l.id, pmSerie, squame), dividiPuntiLunghi: true }).layers, { center: false }));
+    const accorciati = strati.map((l, k) => {
+      const min = rg.pmMinimoDelloStop(l.id, pmSerie, squame);
+      const tracciato = l.polylines.flatMap((pl) => pl.slice(1).map((q, i) => Math.hypot(q.x - pl[i].x, q.y - pl[i].y)));
+      const nelDst = letto.blocks.filter((b) => b.needle === k + 1).flatMap((b) => b.points_mm.slice(1).map((q, i) => Math.hypot(q[0] - b.points_mm[i][0], q[1] - b.points_mm[i][1])));
+      return tracciato.length !== nelDst.length ? 'punti diversi' : tracciato.filter((d, i) => d >= min - 1e-9 && nelDst[i] < min - 1e-9).length;
+    });
+    check('il DST delle macchie: nessun punto accorciato sotto il minimo del suo stop, e nessun punto spezzato in più',
+      accorciati, strati.map(() => 0));
+    const pmToolDst = readFileSync(join(root, 'apps/pattern-macchie/src/tool.ts'), 'utf8');
+    check('...e il tool lo scrive così (sulla griglia, col minimo di ogni stop, `center: false`)',
+      [/stratiSullaGrigliaDst\(strati\(\), \{\s*minimoDi: \(l\) => minimoDelloStop\(l\.id, par, pattern\.config\), dividiPuntiLunghi: true/.test(pmToolDst),
+        (pmToolDst.match(/center: false,/g) ?? []).length], [true, 2]);
+  }
   // quanto un punto è fuori dalle macchie (0 se è dentro)
   const fuoriDa = (p, forme) => (forme.some((m) => rg.pointInPolygon(p, m)) ? 0 : Math.min(...forme.map((m) => rg.distanceToBoundary(p, m))));
   const peggiore = (linee, forme) => { let w = 0; for (const t of linee) for (let i = 1; i < t.length; i++) w = Math.max(w, fuoriDa({ x: (t[i - 1].x + t[i].x) / 2, y: (t[i - 1].y + t[i].y) / 2 }, forme)); return w; };

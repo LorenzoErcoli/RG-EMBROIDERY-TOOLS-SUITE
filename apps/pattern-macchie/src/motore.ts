@@ -3394,6 +3394,18 @@ function sulContorno(p: Point, c: Polyline): Point {
 }
 
 /**
+ * IL PUNTO MINIMO DI UNO STOP, come lo tiene il motore: la base col «Punto minimo» del suo pattern, il punto sopra con
+ * `sopraPuntoMin` (mai sotto 0,3), il raso con `RASO_PUNTO_MIN`. Serve all'export DST (`stratiSullaGrigliaDst`): un punto
+ * lungo almeno così non deve uscire più corto dall'arrotondamento ai decimi di millimetro (2026-11-23).
+ */
+export function minimoDelloStop(id: string, par: ParametriMacchie, pattern: PatternConfig): number {
+  if (id === 'base') return Math.max(0, pattern.minStitchMm ?? pattern.minPointDistance ?? 0);
+  if (id.startsWith('sopra')) return Math.max(0.3, par.sopraPuntoMin);
+  if (id.startsWith('raso')) return RASO_PUNTO_MIN;
+  return 0;
+}
+
+/**
  * I tagli di uno stop: per ogni tratto, se prima di lui il filo si taglia (`ExportLayer.trims`). Si taglia dove il salto
  * dal tratto prima è più lungo di `oltre` mm; il primo tratto no (lo stop comincia col suo cambio ago). 0 = mai.
  */

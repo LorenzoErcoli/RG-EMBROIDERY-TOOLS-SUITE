@@ -662,6 +662,20 @@ Le strade provate prima di cucire partono dalla macchia, non dall'uscita vera: u
 - Il punto sopra fuori dalla striscia del ponte (tagliato sulla macchia senza ponte): i suoi pezzetti tenevano collegate
   le parti della macchia, e i salti dentro salivano da 6 a 18.
 
+## Il DST sulla griglia (2026-11-23)
+
+Lorenzo: *«sistema anche il DST di pattern a macchie»*, dopo il punto minimo del Generatore. Il DST arrotonda
+ogni punto ai decimi di millimetro e così poteva portare sotto il minimo punti che nel tracciato lo tenevano
+(col punto canvas: 44 nel punto sopra, 1 nel raso). Ora l'export mette ogni punto su un nodo, col centro su un
+nodo, scegliendo per ogni punto il nodo vicino che tiene il minimo del suo stop (`minimoDelloStop`), e divide i
+punti oltre 12 mm. Anche il simulatore cuce quel DST. Dettagli in
+[punto minimo per ultimo](../decisioni/punto-minimo-per-ultimo.md).
+
+**Ancora aperto:** il punto sopra ha già nel tracciato molti punti sotto 1 mm, quasi tutti **sul bordo della
+macchia** (pannello di prova: 1.347 su 1.677 col nastro a squame, 892 su 901 col canvas). Il motore li lascia
+apposta (il test ne ammette fino al 12%); l'export non li tocca. Se Lorenzo li vuole fuori come sui contorni del
+Generatore, va fatto nel motore.
+
 ## Da guardare a macchina
 - (2026-11-04) i ponti sul secondo livello: se quello largo 2 mm copre davvero il filo che ci passa sotto, e dove entra
   nella macchia dopo se il filo in più si sente;

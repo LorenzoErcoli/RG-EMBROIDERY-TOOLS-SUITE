@@ -4,14 +4,14 @@ import {
   generateFinalPatternPoints, parseImportedBoundarySource,
   type BoundaryChoice, type ImportedBoundaryModel, type ImportScaleMode, type PatternConfig,
 } from '@rg/pattern-grammar';
-import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, polygonArea, readDstMetadata, readProjectMetadata, type ExportLayer, type Polyline } from '@rg/core';
+import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, polygonArea, readDstMetadata, readProjectMetadata, refertoDaStrati, stratiSullaGrigliaDst, type ExportLayer, type Polyline } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';
-import { costruisciMacchie, macchiePerStilista, tagliDeiSalti, PARAMETRI_MACCHIE, type ParametriMacchie, type Riempimento, type RisultatoMacchie, type Strato } from './motore';
+import { costruisciMacchie, macchiePerStilista, minimoDelloStop, tagliDeiSalti, PARAMETRI_MACCHIE, type ParametriMacchie, type Riempimento, type RisultatoMacchie, type Strato } from './motore';
 
 /** I pattern pronti: la libreria condivisa del Generatore pattern, e quelli salvati nel Generatore su questo computer. */
 const PRESET_CONDIVISI: Record<string, PatternConfig> = (() => {
@@ -731,7 +731,14 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
 
   // uno strato per stop: la base, il raso delle macchie, il punto sopra (lo stesso filo), quelli richiesti.
   // Lo usano «Esporta DST» e «Invia a Stilista».
-  const costruisciDst = (layers = strati()) => dstFromExportLayers(layers, { label: nomeBase().toUpperCase().slice(0, 16), metadata: conBusta(progetto(), { strati: layers, sorgente: sorgenteBusta() }) });
+  // Nel DST ogni punto va su un nodo da 0,1 mm, col centro su un nodo (`center: false`), e un punto lungo almeno il
+  // minimo del suo stop non esce più corto dall'arrotondamento; i punti oltre 12 mm si dividono in parti uguali
+  // (2026-11-23: prima il DST poteva portare un punto da 1 mm a 0,9, e spezzare un punto lungo in 12,1 più un resto).
+  const stratiDst = (): ExportLayer[] => stratiSullaGrigliaDst(strati(), {
+    minimoDi: (l) => minimoDelloStop(l.id, par, pattern.config), dividiPuntiLunghi: true,
+  }).layers;
+  const costruisciDst = (layers = stratiDst()) => dstFromExportLayers(layers, { label: nomeBase().toUpperCase().slice(0, 16), center: false,
+    metadata: conBusta(progetto(), { strati: layers, sorgente: sorgenteBusta(), misure: refertoDaStrati(layers, { centra: false }) }) });
 
   // ---- Stilista (RG Stilista Link, @rg/ui/stilista): la selezione è il disegno — il colore più grande il
   // pannello, gli altri le macchie, come per un file. Le macchie non hanno aree vuote: i fori restano fuori.
@@ -780,7 +787,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
 
   /** Il DST di adesso, cucito sullo schermo (lo stesso simulatore del Pettine e di Cannage rafia). */
   function simula(): boolean {
-    const layers = strati();
+    const layers = stratiDst();
     if (!layers.length) return false;
     let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
     for (const l of layers) for (const pl of l.polylines) for (const p of pl) {
@@ -788,7 +795,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     }
     const margine = 5, w = x1 - x0 + 2 * margine, h = y1 - y0 + 2 * margine;
     try {
-      const bytes = dstFromExportLayers(layers, { label: nomeBase().toUpperCase().slice(0, 16), metadata: progetto() });
+      const bytes = dstFromExportLayers(layers, { label: nomeBase().toUpperCase().slice(0, 16), center: false, metadata: progetto() });
       simulatore = montaSimulatore($('layer'), $('simControlli'), bytes, layers.map((l) => l.color), w, h,
         (t) => { $('status').textContent = t; }, { x: -w / 2, y: -h / 2 });
       return true;

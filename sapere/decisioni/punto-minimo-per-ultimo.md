@@ -88,8 +88,15 @@ per dividere una linea; a pari importanza il primo. Il primo e l'ultimo punto de
   punti vengono ruotati indietro dopo (la griglia non vale più) e perché per quei tool Lorenzo ha già
   scelto la «pulizia punti» finale (decisione A6a di `STATO.md`). Estenderlo lì è una scelta sua. La
   correzione del ritaglio e della deduplica invece vale anche lì: è lo stesso motore.
-- **Solo il DST del Generatore** è scritto sulla griglia. Pattern a macchie tiene il minimo nel
-  tracciato della base, ma il suo export DST centra ancora a metà nodo e può ri-arrotondare di un decimo.
+- ~~**Solo il DST del Generatore** è scritto sulla griglia. Pattern a macchie tiene il minimo nel
+  tracciato della base, ma il suo export DST centra ancora a metà nodo e può ri-arrotondare di un decimo.~~
+  Dal 2026-11-23 (sera, Lorenzo: *«sistema anche il DST di pattern a macchie»*) anche il DST di Pattern a
+  macchie è sulla griglia. Lì il motore non misura sui nodi, quindi lo fa l'export: `stratiSullaGrigliaDst`
+  con `minimoDi` (il minimo di ogni stop, `minimoDelloStop`: base col «Punto minimo» del pattern, raso 0,3,
+  punto sopra `sopraPuntoMin`) mette un punto che nel tracciato tiene il minimo sul nodo vicino che lo tiene
+  ancora (entro 0,15 mm), e con `dividiPuntiLunghi` divide i punti oltre 12 mm. Misurato sul pannello di
+  prova delle macchie: punti accorciati sotto il minimo dall'arrotondamento, col punto canvas 44 nel punto
+  sopra e 1 nel raso, ora 0; col nastro a squame 5 e 1, ora 0.
 
 ## Come si applica
 

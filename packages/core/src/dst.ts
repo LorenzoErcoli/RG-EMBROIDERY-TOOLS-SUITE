@@ -210,12 +210,24 @@ export const decimiDst = (mm: number): number => Math.round(mm * 10);
  */
 export const PUNTO_MAX_DST_MM = 12.1;
 
+export interface OpzioniGrigliaDst {
+  /**
+   * Il punto minimo di ogni strato. Con questo, un punto che nel tracciato è lungo almeno il minimo non esce
+   * più corto dall'arrotondamento: il punto va sul nodo vicino (entro 0,15 mm) che lo tiene, invece che sul
+   * più vicino. I punti già più corti del minimo (voluti dal tool) si arrotondano come sempre. Serve ai tool
+   * che non misurano sui nodi nel motore (Pattern a macchie, 2026-11-23).
+   */
+  minimoDi?: (layer: ExportLayer, indice: number) => number;
+  /** Divide in parti uguali i punti oltre 12 mm: `buildDst` li spezzerebbe in 12,1 mm più un resto corto. */
+  dividiPuntiLunghi?: boolean;
+}
+
 /**
  * Gli strati con ogni punto già sul suo nodo della griglia e l'origine (il centro dei punti cuciti) spostata
  * su un nodo anche lei. Se no il centraggio di `dstFromExportLayers` sposta tutto di una frazione di passo e
  * ri-arrotonda, e le distanze misurate sui nodi non tengono più. Da usare con `center: false`.
  */
-export function stratiSullaGrigliaDst(layers: ExportLayer[]): { layers: ExportLayer[]; cx: number; cy: number } {
+export function stratiSullaGrigliaDst(layers: ExportLayer[], opz: OpzioniGrigliaDst = {}): { layers: ExportLayer[]; cx: number; cy: number } {
   let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
   for (const l of layers) if (!l.shapeOnly) for (const pl of l.polylines || []) for (const p of pl) {
     if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
@@ -223,10 +235,49 @@ export function stratiSullaGrigliaDst(layers: ExportLayer[]): { layers: ExportLa
   }
   if (!Number.isFinite(minX)) return { layers, cx: 0, cy: 0 };
   const cx = decimiDst((minX + maxX) / 2), cy = decimiDst((minY + maxY) / 2);
+  const lunghi = opz.dividiPuntiLunghi ? PUNTO_MAX_DST_MM - GRIGLIA_DST_MM : 0;
   return {
-    layers: layers.map((l) => ({ ...l, polylines: (l.polylines || []).map((pl) => pl.map((p) => ({ x: (decimiDst(p.x) - cx) / 10, y: (decimiDst(p.y) - cy) / 10 }))) })),
+    layers: layers.map((l, k) => {
+      const minimo = opz.minimoDi ? Math.max(0, opz.minimoDi(l, k)) : 0;
+      return { ...l, polylines: (l.polylines || []).map((pl) => nodiDellaLinea(lunghi ? dividiLunghi(pl, lunghi) : pl, minimo)
+        .map(([x, y]) => ({ x: (x - cx) / 10, y: (y - cy) / 10 }))) };
+    }),
     cx: cx / 10, cy: cy / 10,
   };
+}
+
+/** I punti di una linea oltre `maxMm` divisi in parti uguali (gli altri punti restano dove sono). */
+function dividiLunghi(pl: Array<{ x: number; y: number }>, maxMm: number): Array<{ x: number; y: number }> {
+  const out = pl.length ? [pl[0]] : [];
+  for (let i = 1; i < pl.length; i++) {
+    const a = pl[i - 1], b = pl[i], n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / maxMm);
+    for (let k = 1; k < n; k++) out.push({ x: a.x + ((b.x - a.x) * k) / n, y: a.y + ((b.y - a.y) * k) / n });
+    out.push(b);
+  }
+  return out;
+}
+
+/**
+ * I nodi (in decimi di mm) dei punti di una linea. Senza minimo è l'arrotondamento di `buildDst`. Col minimo, un
+ * punto che com'è sta ad almeno `minimoMm` dal precedente e sul nodo più vicino no, va sul nodo più vicino che lo
+ * tiene (entro 0,15 mm); se non ce n'è, resta l'arrotondamento.
+ */
+function nodiDellaLinea(pl: Array<{ x: number; y: number }>, minimoMm: number): Array<[number, number]> {
+  const out: Array<[number, number]> = [];
+  const m = minimoMm * 10 - 1e-6;
+  for (let i = 0; i < pl.length; i++) {
+    const p = pl[i], nx = decimiDst(p.x), ny = decimiDst(p.y);
+    const prima = out[out.length - 1];
+    if (!prima || !(m > 0) || Math.hypot(nx - prima[0], ny - prima[1]) >= m
+      || Math.hypot(p.x - pl[i - 1].x, p.y - pl[i - 1].y) * 10 < m) { out.push([nx, ny]); continue; }
+    let scelto: [number, number] = [nx, ny], d = Infinity;
+    for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) {
+      const qx = nx + dx, qy = ny + dy, e = Math.hypot(qx - p.x * 10, qy - p.y * 10);
+      if (e <= 1.5 + 1e-9 && e < d && Math.hypot(qx - prima[0], qy - prima[1]) >= m) { scelto = [qx, qy]; d = e; }
+    }
+    out.push(scelto);
+  }
+  return out;
 }
 
 /** Opzioni per il salvataggio di un .dst, uguali per tutti i tool (passale a `saveBinaryFile`). */
