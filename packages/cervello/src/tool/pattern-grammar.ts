@@ -42,7 +42,8 @@ const P: DichiarazioneParametro[] = [
 
   // --- Percorso e confine ---
   { id: 'repeatBack', etichetta: 'Andata e ritorno (serpentina)', aiuto: 'Percorre le colonne a serpentina, in andata e ritorno, senza cambiare le coordinate del modulo.', tipo: 'bool', unita: '', predefinito: false, concetto: 'ordine-cucitura' },
-  { id: 'minStitch', nome: 'minStitchMm', etichetta: 'Punto minimo', aiuto: 'Lunghezza minima del punto.', tipo: 'num', unita: 'mm', min: 0, passo: 0.01, predefinito: 0, concetto: 'punto-minimo', regole: ['R3'] },
+  { id: 'minStitch', nome: 'minStitchMm', etichetta: 'Punto minimo', aiuto: 'Sui contorni: ogni punto che tocca il perimetro o un’area vuota (tagli, raccordi, il punto accanto al taglio).', tipo: 'num', unita: 'mm', min: 0, passo: 0.01, predefinito: 0, concetto: 'punto-minimo', regole: ['R3'] },
+  { id: 'patternMinStitchMm', etichetta: 'Punto minimo del pattern', aiuto: 'Dentro il pattern, fra due punti del modulo lontani dai contorni; 0 = il disegno resta com’è.', tipo: 'num', unita: 'mm', min: 0, passo: 0.01, predefinito: 0, concetto: 'punto-minimo', regole: ['R3'] },
   { id: 'maxStitch', nome: 'maxStitchMm', etichetta: 'Lunghezza massima del punto', aiuto: 'Oltre questa lunghezza il punto si suddivide in punti uguali; 0 = non suddivide.', tipo: 'num', unita: 'mm', min: 0, passo: 0.1, predefinito: 0, concetto: 'punto-massimo', regole: ['R4'] },
   { id: 'constructionStroke', etichetta: 'Spessore di costruzione', aiuto: 'Regola rientri, margini e raccordi — non è il filo disegnato.', tipo: 'num', unita: 'mm', min: 0.05, passo: 0.05, predefinito: 0.3, concetto: 'altro' },
   { id: 'boundaryCleanupMode', etichetta: 'Punti fuori dal contorno', aiuto: 'Cosa fare dei punti che cadono fuori dal contorno.', tipo: 'enum', unita: '', opzioni: ['adjust-then-delete', 'delete'], predefinito: 'adjust-then-delete', concetto: 'tolleranza' },

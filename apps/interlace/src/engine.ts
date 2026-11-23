@@ -83,6 +83,31 @@ export interface InterlaceParams {
   /** Morbidezza della sfumatura (mm, solo con `toneBlend`): di quanto si sfoca il tono dell'immagine prima
    *  di leggerlo. Poco = segue ogni variazione, tanto = passaggi larghi e macchie più grandi. */
   toneSoftnessMm: number;
+  /** DENSITÀ DEL TOTALE (Lorenzo, 2026-11-23: «la densità ora tocca singolarmente ogni filo, mai nel complesso»):
+   *  acceso, la densità (globale e per colore) è quella di tutti i fili insieme. Con N passate ognuna cuce a
+   *  N volte la distanza, così il filo complessivo è quello di un filo solo a quella densità. Spento = ogni filo
+   *  alla sua densità, come prima. */
+  densityTotal: boolean;
+  /** VORTICI DEL FONDO 0–100: quanto il campo di flusso curva la camminata (nuvole e vortici). 100 = come è
+   *  sempre stato; 0 = nessun vortice, il fondo resta uniforme. */
+  flowStrength: number;
+  /** PIÙ FITTO INTORNO AI BUCHI (le aree vuote del cartamodello): acceso, il filo si addensa attorno a ogni
+   *  buco e torna alla densità normale allontanandosi. Spento = densità uguale ovunque, come prima.
+   *  Il bordo esterno e lo sfondo senza ricamo non contano: Lorenzo ha scelto solo i buchi. */
+  voidDensityBoost: boolean;
+  /** Quante volte la densità normale proprio a ridosso del buco (2 = il doppio del filo). */
+  voidDensityFactor: number;
+  /** In quanti mm dal buco la densità torna normale: la sfumatura da molto fitto a normale. */
+  voidDensityFadeMm: number;
+  /** VENATURE di filo sopra il ricamo (il disegno «A» scelto da Lorenzo il 2026-11-19): fasci di venature spesse a
+   *  fuso, andata e ritorno, e venature fini a filo singolo, tutte in un giro senza salti. Spente di serie.
+   *  Il motore sta in `venature.ts`. */
+  veinsOn: boolean;
+  veinsColor: string;
+  veinsBundles: number;
+  veinsThin: number;
+  veinsAngleDeg: number;
+  veinsSeed: number;
 }
 
 export const defaultInterlaceParams: InterlaceParams = {
@@ -106,6 +131,17 @@ export const defaultInterlaceParams: InterlaceParams = {
   backgroundToleranceRgb: 30,
   toneBlend: false, // false = agglomerati a zone nette (comportamento storico)
   toneSoftnessMm: 4,
+  densityTotal: false, // false = ogni filo alla sua densità (comportamento storico)
+  flowStrength: 100, // 100 = vortici come sempre
+  voidDensityBoost: false, // false = densità uguale ovunque (comportamento storico)
+  voidDensityFactor: 2,
+  voidDensityFadeMm: 8,
+  veinsOn: false, // false = nessuna venatura (comportamento storico)
+  veinsColor: '#c4845c',
+  veinsBundles: 5,
+  veinsThin: 52,
+  veinsAngleDeg: 82,
+  veinsSeed: 8,
 };
 
 // --- Costanti interne (implementazione, non parametri utente): il "movimento" del filo.
@@ -125,7 +161,7 @@ const MAX_POINTS = 200000;  // guardia anti-runaway
 const MAX_MASK_CELLS = 4_000_000; // tetto memoria maschera fine
 
 // RNG deterministico (mulberry32): anteprima ripetibile a parità di seed.
-function mulberry32(seed: number): () => number {
+export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) | 0;
@@ -211,9 +247,9 @@ function chamferDT(source0: Uint8Array, gw: number, gh: number, res: number): Fl
  * non a una maschera sì/no: così `clear=0` lascia il filo arrivare esattamente al bordo, e un valore
  * di clearance è rispettato con precisione (a meno della risoluzione della griglia). O(1) per query.
  */
-interface Mask { gw: number; gh: number; x0: number; y0: number; res: number; sdf(x: number, y: number): number; }
+export interface Mask { gw: number; gh: number; x0: number; y0: number; res: number; sdf(x: number, y: number): number; }
 
-function buildMask(boundary: Polyline, voids: Polyline[], res0: number): Mask {
+export function buildMask(boundary: Polyline, voids: Polyline[], res0: number): Mask {
   const bb = bounds(boundary);
   const w = bb.maxX - bb.minX, h = bb.maxY - bb.minY;
   let res = res0;
@@ -328,7 +364,7 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
  *  pannello avvisa già. */
 interface PenGrid { arr: Uint16Array; gx: number; gy: number; x0: number; y0: number; cap: number; }
 
-function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null, pen: PenGrid | null = null, transit: Uint8Array | null = null): Point[][] {
+function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null, pen: PenGrid | null = null, transit: Uint8Array | null = null, flow = 1): Point[][] {
   const tone = transit !== null;
   const { bb, cell, gx, gy, ci, cj, cpx, cpy, minS, maxS, inRegion, segOk } = ctx;
   const { mgw, mgh, mx0, my0, mres } = ctx;
@@ -428,7 +464,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
     for (let k = 0; k < CANDIDATES; k++) {
       const len = minS + rng() * (hi - minS);
       let ang = head + (rng() * 2 - 1) * spread;
-      ang += FLOW_INFLUENCE * angDelta(ang, fdir);
+      ang += FLOW_INFLUENCE * flow * angDelta(ang, fdir);
       const nx = cx + Math.cos(ang) * len, ny = cy + Math.sin(ang) * len;
       if (!inRegion(nx, ny) || !segOk(cx, cy, nx, ny)) continue;
       const destId = cj(ny) * gx + ci(nx);
@@ -702,7 +738,7 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
   if (!ctx) return [];
   const targetArr = new Uint8Array(ctx.gx * ctx.gy);
   for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = COVER_TARGET;
-  return runOneFill(ctx, p.seed || 1, targetArr);
+  return runOneFill(ctx, p.seed || 1, targetArr, null, null, null, flowOf(p));
 }
 
 /** Quanti punti al mm² chiede il lavoro, e quanto vale il tetto automatico. */
@@ -734,8 +770,48 @@ export function stitchBudget(p: InterlaceParams, densities: number[]): StitchBud
     }
     if (sum > needMax) needMax = sum;
   }
+  // Attorno ai buchi si chiede di più: il tetto automatico deve lasciarlo fare, altrimenti lo taglierebbe.
+  if (p.voidDensityBoost) needMax *= voidFactorMax(p);
   const needed = Math.max(1, Math.ceil(needMax / avgStitch));
   return { needed, auto: Math.max(4, Math.ceil(PEAK_FACTOR * needMax / avgStitch)) };
+}
+
+/** Le volte della densità a ridosso del buco, dentro limiti sani: oltre 5 le celle vicine al buco
+ *  chiederebbero più punti di quanti ne stanno, e il tetto le lascerebbe scoperte. */
+/** Vortici del fondo come moltiplicatore del campo di flusso: 100 (o assente, nei progetti vecchi) = 1. */
+function flowOf(p: InterlaceParams): number {
+  const v = Number(p.flowStrength);
+  return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) / 100 : 1;
+}
+
+function voidFactorMax(p: InterlaceParams): number {
+  return Math.max(1, Math.min(5, Number(p.voidDensityFactor) || 1));
+}
+
+/**
+ * Quante volte la densità normale in un punto, per la densità intorno ai buchi: il fattore pieno sul bordo
+ * del buco, che scende morbido (senza scalino) fino a 1 a `fadeMm` di distanza. La distanza si misura dai
+ * BUCHI soli, su una griglia da 0,5 mm fatta una volta: il bordo esterno non conta.
+ */
+function voidFactorField(boundary: Polyline, voids: Polyline[], factor: number, fadeMm: number): (x: number, y: number) => number {
+  if (!voids.length || factor <= 1 || fadeMm <= 0) return () => 1;
+  const bb = bounds(boundary);
+  const res = 0.5;
+  const x0 = bb.minX - res, y0 = bb.minY - res;
+  const gw = Math.ceil((bb.maxX - bb.minX) / res) + 3, gh = Math.ceil((bb.maxY - bb.minY) / res) + 3;
+  if (gw * gh > MAX_MASK_CELLS) return () => 1;
+  const holes = new Uint8Array(gw * gh);
+  for (const v of voids) fillPolygon(holes, gw, gh, x0, y0, res, v, 1);
+  const dist = chamferDT(holes, gw, gh, res);
+  return (x: number, y: number): number => {
+    let i = Math.floor((x - x0) / res), j = Math.floor((y - y0) / res);
+    if (i < 0) i = 0; else if (i > gw - 1) i = gw - 1;
+    if (j < 0) j = 0; else if (j > gh - 1) j = gh - 1;
+    const t = dist[j * gw + i] / fadeMm;
+    if (t >= 1) return 1;
+    const near = 1 - t * t * (3 - 2 * t); // 1 sul bordo del buco, 0 a fine sfumatura, senza spigoli
+    return 1 + (factor - 1) * near;
+  };
 }
 
 /**
@@ -926,6 +1002,9 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
     cellAreaByCtx.set(ctx, a);
     return a;
   };
+  const voidFactorAt = p.voidDensityBoost
+    ? voidFactorField(boundary, voids, voidFactorMax(p), Math.max(0, Number(p.voidDensityFadeMm) || 0))
+    : null;
   const toneTotal = COVER_TARGET + Math.round(Math.max(0, Math.min(100, p.clusterStrength)) / 100 * 8) + (nCol - 1);
   // La densità PER-COLORE è la dimensione della cella → ogni densità ha una sua griglia. La maschera si
   // ricostruisce solo quando la cella cambia (cache per valore di cella): densità uguali → una sola build.
@@ -987,7 +1066,20 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
     } else {
       for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = COVER_TARGET;
     }
-    passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr, banArr, pen, transitArr));
+    if (voidFactorAt) {
+      // Più fitto intorno ai buchi: si moltiplica l'obiettivo che la cella ha già (qualunque sia il modo),
+      // col resto assegnato dal rumore come nella sfumatura, così la media è quella chiesta. Le celle solo
+      // di passaggio restano tali: lì quel colore non deve coprire.
+      for (let id = 0; id < targetArr.length; id++) {
+        const tg = targetArr[id];
+        if (tg === 0 || (transitArr && transitArr[id])) continue;
+        const gi = id % ctx.gx, gj = (id / ctx.gx) | 0;
+        const f = voidFactorAt(ctx.cellX(gi), ctx.cellY(gj));
+        if (f <= 1) continue;
+        targetArr[id] = Math.max(1, Math.min(255, Math.floor(tg * f + hash(gi + pIdx * 104729 + 17, gj + base * 53))));
+      }
+    }
+    passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr, banArr, pen, transitArr, flowOf(p)));
   }
   return passes;
 }

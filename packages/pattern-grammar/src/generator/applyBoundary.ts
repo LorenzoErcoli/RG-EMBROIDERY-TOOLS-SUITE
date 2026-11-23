@@ -381,7 +381,7 @@ export function cleanupBoundaryConnectedPath(points: GeneratedPoint[], options: 
   const minPointDistance = Math.max(0, options.minPointDistance ?? 0);
   const mode = options.boundaryCleanupMode ?? "adjust-then-delete";
   const maxAdjustment = Math.max(0, options.maxBoundaryAdjustment ?? minPointDistance);
-  const deduped = removeNearDuplicateBoundaryPoints(points, Math.max(0.0001, minPointDistance || 0.0001));
+  const deduped = removeNearDuplicateBoundaryPoints(points, Math.max(0.0001, minPointDistance || 0.0001), options);
   if (minPointDistance === 0 || deduped.length <= 2) return deduped;
 
   const cleaned: GeneratedPoint[] = [deduped[0]];
@@ -410,12 +410,21 @@ export function cleanupBoundaryConnectedPath(points: GeneratedPoint[], options: 
   return cleaned;
 }
 
-function removeNearDuplicateBoundaryPoints(points: GeneratedPoint[], tolerance: number): GeneratedPoint[] {
+/**
+ * Due punti di bordo più vicini del minimo: il secondo se ne va, ma solo se il tratto che resta sta nella
+ * sagoma. Prima non lo si guardava: l'angolo di un vuoto a 0,9 mm dal capo del pezzo spariva e il filo
+ * tagliava dentro il vuoto (misurato il 2026-11-23: 0,79 mm). Se il tratto esce, il punto resta qui e lo
+ * decide il punto minimo finale (`puntoMinimo.ts`), che sa scegliere quale dei due tenere.
+ */
+function removeNearDuplicateBoundaryPoints(points: GeneratedPoint[], tolerance: number, options: BoundaryOptions): GeneratedPoint[] {
   if (points.length <= 1) return points.slice();
   const result: GeneratedPoint[] = [points[0]];
-  for (const point of points.slice(1)) {
+  for (let index = 1; index < points.length; index++) {
+    const point = points[index];
     const previous = result.at(-1)!;
-    if (distance(previous, point) < tolerance && boundaryLike(previous) && boundaryLike(point)) {
+    const next = points[index + 1];
+    if (distance(previous, point) < tolerance && boundaryLike(previous) && boundaryLike(point)
+      && (!next || segmentStaysInside(previous, next, options))) {
       continue;
     }
     result.push(point);
@@ -601,6 +610,28 @@ function raccordoFraGliAnelli(
   const passi = way.length && samePoint(way[0], from) ? way.slice(1) : way;
   if (!passi.length || !samePoint(passi[passi.length - 1], to)) passi.push(to);
   return passi.map((point) => connectorPoint(point, to));
+}
+
+/**
+ * LA STRADA SUL BORDO fra due punti dello stesso anello (il perimetro o un'area vuota): i vertici dell'anello
+ * che stanno in mezzo, dal lato più corto, come raccordi. Serve al punto minimo finale per rifare un tratto di
+ * contorno che esce dalla sagoma (Lorenzo, 2026-11-23: «devo evitare sbavature… che siano aree vuote o
+ * contorni»): misurato un raccordo che tagliava la punta di un vuoto stretto, 0,55 mm dentro il vuoto.
+ * `undefined` se i due punti non stanno sullo stesso anello, o se la sagoma non è fatta di anelli.
+ */
+export function stradaSulBordo(da: GeneratedPoint, a: GeneratedPoint, options: BoundaryOptions): GeneratedPoint[] | undefined {
+  let anelli: Point[][];
+  if (options.shapeType === "imported") {
+    const { outer, holes } = importedBoundaryParts(options);
+    if (!outer.length && !holes.length) return undefined;
+    anelli = [perimetroImportato(outer, options), ...holes];
+  } else if (options.shapeType === "rectangle") anelli = [closePolygon(rectangleVertices(options))];
+  else if (options.shapeType === "diamond") anelli = [closePolygon(diamondVertices(options))];
+  else return undefined;
+  const tolleranza = (options.inset ?? 0) + 0.5;
+  const x = anelloDelPunto(da, anelli), y = anelloDelPunto(a, anelli);
+  if (x.indice !== y.indice || x.distanza > tolleranza || y.distanza > tolleranza) return undefined;
+  return lungoIlBordo(anelli[x.indice], da, a).slice(1, -1).map((p) => connectorPoint(p, a));
 }
 
 /** L'anello (perimetro = 0, poi i vuoti) più vicino a un punto, e quanto dista. */
@@ -1167,8 +1198,10 @@ function polygonSegmentInterval(a: Point, b: Point, options: BoundaryOptions): [
     if (end - start <= EPSILON) continue;
     if (drawable(pointOnSegment(a, b, (start + end) / 2))) intervals.push([start, end]);
   }
-  if (drawable(a)) intervals.unshift([0, sorted[1] ?? 1]);
-  if (drawable(b)) intervals.push([sorted.at(-2) ?? 0, 1]);
+  // (Qui si aggiungeva il primo e l'ultimo pezzo quando il CAPO era ricamabile, anche se il pezzo no: un
+  // vertice del modulo che cade proprio sul bordo teneva tutto il tratto che va fuori — misurato 3,8 mm
+  // oltre la punta di una sagoma a stella, 2026-11-23. Il pezzo che conta è quello col punto di mezzo
+  // dentro, già nel ciclo sopra.)
   const unique = intervals
     .map(([start, end]) => [Math.max(0, start), Math.min(1, end)] as [number, number])
     .filter(([start, end]) => end - start > EPSILON)
