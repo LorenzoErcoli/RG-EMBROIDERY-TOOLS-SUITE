@@ -335,6 +335,22 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    una scheggia) si tolgono. Sul disegno: nel 3° livello le due aree vuote, nel 1° tre (le stesse coppie); filo cucito
    dentro le aree vuote del 3° 34 → 0 mm. Una scheggia di 7 mm² lungo un bordo dritto, dentro un'altra macchia del 3°, ora
    è un buco anche lei. Non provato a macchina né in Stilista.
+48. (2026-11-23) **Fra una copertura e l'altra un salto senza punti, appoggiato 1 mm dentro.** Lorenzo: *«Tutte le macchie i
+   passaggi, soprattutto i livello sotto a un livello di macchia ricamata, quando escono appunto dai ricami coperti non
+   devono avere punti sui "ponti". Il punto deve rimanere nella macchia che poi viene ricamata sopra e essere libero come
+   un salto, in modo da poter essere tagliato dopo»*; chiesto se salto vero o un punto lungo, e quanto dentro: *«salto
+   vero, 1 mm dentro va bene»*. Prima, dove il filo usciva da quello che copre, attraversava lo spazio scoperto cucito a
+   vista, un punto ogni 3 mm («a vista al più» 12 mm per volta: decisioni del 2026-11-03, «andando a zero di salti»). Ora
+   in ogni strada fra le macchie (`SottoIlSecondo`, sia quella senza salti lunghi sia `conSalti`) ogni tratto scoperto è
+   un salto: l'ultimo punto prima e il primo dopo stanno almeno 1 mm dentro la parte che il ricamo sopra copre davvero
+   (`MARGINE_COPERTURA`, oltre la fascia della sfrangiatura); se entro 3 mm lungo la strada non c'è tanto spazio (una
+   copertura stretta, `APPOGGIO_MAX`), il punto più dentro di quelli. Il salto non passa sopra il fondo di un'altra
+   copertura. «A vista al più» resta il massimo di spazio scoperto per un salto corto così; oltre, la strada coi salti lunghi
+   (decisione 46). Nel DST sono salti: oltre 10 mm col taglio di serie, sotto da rifilare a mano. I salti del 1° livello
+   quindi non sono più zero: sul pannello di prova sono 18, nessuno oltre 5,4 mm. I tratti di un punto solo (un passaggio
+   del salto) non restano nel livello: il DST li saltava, e con loro il loro taglio. Sul disegno della 5375: punti dell'ago
+   in mezzo ai passaggi fuori da ogni macchia 205 → 0; salti del 1° livello 0 → 115 (328 mm), del 2° 40 → 61. Non provato
+   a macchina né in Stilista.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso
