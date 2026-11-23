@@ -11,6 +11,7 @@ import { pointBounds } from "./layoutPoints.ts";
 import { splitTravelJumps } from "./splitTravelJumps.ts";
 import { adjustVerticalConnectorDiagonals } from "./adjustVerticalConnectors.ts";
 import { subdivideLongSegments } from "./subdivideLongSegments.ts";
+import { puntoMinimoFinale } from "./puntoMinimo.ts";
 import { orientPolylinesFromTopLeft, type StartOrientation } from "./orientStartPoint.ts";
 import { insideRelief, reliefIntervalsAlongVertical, relievedPasses, usableReliefRings } from "./relief.ts";
 import { IRREGOLARITA_PIENA, variationActive, variationField } from "./variation.ts";
@@ -75,7 +76,14 @@ function sagomaSenzaVuoti(boundary: ImportedBoundary): ImportedBoundary {
   return senza;
 }
 
-export function generateFinalPatternPoints(config: PatternConfig): FinalPatternPoints {
+/**
+ * `puntoMinimoFinale` (di serie acceso): il punto minimo per ultimo su tutti i punti, misurato anche sulla
+ * griglia del DST (`puntoMinimo.ts`, 2026-11-23). Lo spegne il motore delle zone, che ruota i punti dopo
+ * (la griglia non vale più) e dove il disegno intatto o la pulizia punti finale li sceglie Lorenzo (A6a).
+ */
+export type OpzioniGenerazione = { puntoMinimoFinale?: boolean };
+
+export function generateFinalPatternPoints(config: PatternConfig, opzioni: OpzioniGenerazione = {}): FinalPatternPoints {
   const grammar = resolvePatternGrammar(config);
   const marginX = grammar.moduleWidth * 1.6;
   const marginY = grammar.constructionStroke * 3;
@@ -420,8 +428,16 @@ export function generateFinalPatternPoints(config: PatternConfig): FinalPatternP
   // uscivano segmenti da 7.9mm. Suddividere **non sposta nessun punto esistente** — la forma
   // disegnata resta identica al millesimo, cambia solo quanto è fitta la punzonatura.
   // Con `maxStitchLength` a 0 (default) la funzione restituisce la lista invariata.
+  // R3 — il punto minimo per ULTIMO, sul filo già connesso e suddiviso, misurato anche sulla griglia del
+  // DST (`puntoMinimo.ts`). Le pulizie di prima tengono sempre i vertici del modulo, gli angoli e i capi dei
+  // pezzi tagliati: misurato su un pannello con buchi a minimo 0,97, 111 punti su 1.208 sotto il millimetro.
+  // Due misure (Lorenzo, 2026-11-23): `minStitchMm` sui contorni, `patternMinStitchMm` dentro il pattern.
+  const sagomaFinale = clippedToShape
+    ? { width, height, inset, shapeType: clipShape, importedBoundary: boundaryPerRitaglio }
+    : { width, height, inset, shapeType: "none" as const };
   const visualPolylines = oriented.polylines
     .map((polyline) => removeConsecutiveDuplicatePoints(subdivideLongSegments(polyline, grammar.maxStitchLength)))
+    .map((polyline) => opzioni.puntoMinimoFinale === false ? polyline : puntoMinimoFinale(polyline, { contorni: grammar.minPointDistance, pattern: grammar.patternMinStitchMm }, grammar.maxStitchLength, sagomaFinale))
     .filter((polyline) => polyline.length > 1);
   const visualPathGroups = clippedToShape
     ? [{ subpaths: visualPolylines }]
