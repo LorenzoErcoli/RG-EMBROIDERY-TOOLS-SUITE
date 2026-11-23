@@ -11,6 +11,7 @@ export const scheda: SchedaParametri = {
     { id: 'corsie-bordo', descrizione: 'I passaggi lunghi lasciati dal taglio sul contorno: vanno fuori dal bordo, ognuno sulla sua corsia, per non battere negli stessi punti.' },
   ],
   parametri: [
+    { id: 'realWidth', nome: 'realWidthMm', etichetta: 'Larghezza reale', aiuto: '0 = usa la misura letta dal file.', tipo: 'num', unita: 'mm', min: 0, passo: 1, predefinito: 0, regole: ['R11'], concetto: 'misura-reale' },
     { id: 'catenellaGridOffsetX', nome: 'spostaXMm', etichetta: 'Sposta la griglia, X', aiuto: 'Dove cadono i moduli rispetto al contorno. I passi restano fissi.', tipo: 'num', unita: 'mm', min: -200, max: 200, predefinito: 0, concetto: 'griglia-moduli' },
     { id: 'catenellaGridOffsetY', nome: 'spostaYMm', etichetta: 'Sposta la griglia, Y', aiuto: 'Dove cadono i moduli rispetto al contorno. I passi restano fissi.', senzaAiuto: true, tipo: 'num', unita: 'mm', min: -100, max: 100, predefinito: 0, concetto: 'griglia-moduli' },
     { id: 'catenellaMinModule', nome: 'moduloMinimoPct', etichetta: 'Tieni i pezzi di modulo da', aiuto: 'Sul bordo un modulo tagliato si cuce solo se ha dentro almeno questa parte della sua catenella. Il file di riferimento taglia fra il 21% e il 24%. Con 0 riempie fino al bordo.', tipo: 'num', unita: '%', min: 0, max: 100, predefinito: 22, concetto: 'griglia-moduli' },

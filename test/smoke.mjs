@@ -76,6 +76,7 @@ export { lineePerStilista as rcLineeStilista, scegliModelli as rcScegliModelli, 
 export { aggiungiModulo as rcAggiungiModulo, leggiElenco as rcLeggiElenco, leggiModulo as rcLeggiModulo, scriviElenco as rcScriviElenco, togliModulo as rcTogliModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/elenco-moduli.ts'))};
 export { griglia as rcGriglia, riquadroRete as rcRiquadro, costruisciRete as rcCostruisci, latoSuperioreDritto as rcLatoDritto, filoSopra as rcFiloSopraIntero, stratiRete as rcStrati, catenella as rcCatenella, pezziDentro as rcPezzi, maschera as rcMaschera, PARAMETRI_RETE as RC_PARAMETRI, motore as rcMotore } from ${JSON.stringify(posix('apps/rete-catenella/src/motore.ts'))};
 export { moduloDiEsempio as rcModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/esempio.ts'))};
+export { scalaDelFile as rcScalaDelFile, fattoreLarghezza as rcFattoreLarghezza } from ${JSON.stringify(posix('apps/rete-catenella/src/misura.ts'))};
 export { pezzoAMisure as rtsPezzoAMisure, stratiPerDst as rtsStratiPerDst } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RETE as RTS_PARAMETRI, motore as rtsMotore, costruisciReteRadiale as rtsRadiale } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/motore.ts'))};
 export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm, anelliOvali as rtsAnelliOvali, puntoDelNodo as rtsPuntoDelNodo, cimeDelleColonne as rtsCimeDelleColonne, ceIlNodo as rtsCeIlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
@@ -7727,6 +7728,19 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   check('dentro un tratto continuo nessun passo è lungo: i passaggi stanno nel filo', passi.length, 0);
   const dst = rg.dstFromExportLayers(s, { label: 'RETE', metadata: { rgProject: 'rete-catenella', params: P } });
   check('il DST si riapre coi parametri', [rg.readDst(dst).colorChanges, rg.readDstMetadata(dst)?.rgProject, rg.readDstMetadata(dst)?.params?.psilPassoMm], [s.length - 1, 'rete-catenella', P.psilPassoMm]);
+
+  // la misura del contorno (Lorenzo, 2026-11-17: «sembra non prendere le dimensioni svg giuste»): un SVG di Illustrator ha solo il viewBox, in punti
+  const illustrator = '<?xml version="1.0"?><svg id="Livello_1" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1219.9 738"><!-- Generator: Adobe Illustrator 31.0.0 --><rect fill="none" stroke="#e52421" x=".5" y=".5" width="1218.9" height="737"/></svg>';
+  const larghezzaLetta = (testo) => {
+    const xs = rg.parseImportedBoundarySource(testo, 'contorno.svg', { scaleMode: rg.rcScalaDelFile(testo) }).choices.flatMap((c) => c.boundary.paths.flatMap((p) => p.points.map((q) => q.x)));
+    return Math.round((Math.max(...xs) - Math.min(...xs)) * 10) / 10;
+  };
+  check('contorno da Illustrator senza unità: letto in punti, 72 per pollice (1218,9 pt = 430 mm, non 1219 mm)', [rg.rcScalaDelFile(illustrator), larghezzaLetta(illustrator)], ['illustrator-72dpi', 430]);
+  const conMm = '<svg xmlns="http://www.w3.org/2000/svg" width="420mm" height="280mm" viewBox="0 0 420 280"><path fill="none" stroke="#c0392b" d="M10 10 L410 10 L340 270 L80 270 Z"/></svg>';
+  check('un SVG che dichiara i mm (anche di Illustrator, o del plugin) si legge com\'è', [rg.rcScalaDelFile(conMm), larghezzaLetta(conMm), rg.rcScalaDelFile(illustrator.replace('viewBox=', 'width="300mm" height="181.5mm" viewBox='))], ['auto', 400, 'auto']);
+  check('larghezza reale: il fattore che porta il contorno alla misura scritta; 0 lascia il file com\'è', [rg.rcFattoreLarghezza(500, 250), rg.rcFattoreLarghezza(0, 250), rg.rcFattoreLarghezza(500, 0)], [2, 1, 1]);
+  const srcRete = readFileSync(join(root, 'apps/rete-catenella/src/tool.ts'), 'utf8');
+  check('rete-catenella: contorno e zona si leggono con la stessa regola, e c\'è la larghezza reale', [/scaleMode: 'auto'/.test(srcRete), (srcRete.match(/scaleMode: scalaDelFile\(/g) ?? []).length, /larghezzaReale: false/.test(srcRete), /\$\('realWidth'\)[^\n]*addEventListener\('change'/.test(srcRete)], [false, 2, false, true]);
 }
 
 // rete-testa-speciale — la rete a serpentine (Lorenzo, 2026-10-15, decisa sulla simulazione): la linea scende a

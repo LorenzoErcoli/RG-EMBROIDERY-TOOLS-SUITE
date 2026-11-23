@@ -66,6 +66,8 @@ export interface ParametriRete {
   corsie: boolean;
   primaCorsiaMm: number;
   passoCorsiaMm: number;
+  /** La larghezza vera del contorno: il pannello scala il disegno in proporzione prima del calcolo. 0 = la misura letta dal file. Il motore non la legge. */
+  realWidthMm: number;
 }
 
 /** I valori di serie sono quelli misurati sul file di riferimento. */
@@ -75,6 +77,7 @@ export const PARAMETRI_RETE: ParametriRete = {
   margineMm: 0, spostaXMm: 0, spostaYMm: 0, moduloMinimoPct: 22, passaggiInterni: false, allineaLato: true, pezziSulBordo: true, pezzoMinimoMm: 30, collegaModuli: false, uscitaFuoriMm: 20, psilVero: true, catenellaDiProva: false,
   infittisci: false, magliaMassimaMm2: 20, infittisciVariante: 1,
   corsie: true, primaCorsiaMm: 1, passoCorsiaMm: 1,
+  realWidthMm: 0,
 };
 
 const d = (a: Xy, b: Xy): number => Math.hypot(a[0] - b[0], a[1] - b[1]);

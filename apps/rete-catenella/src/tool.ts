@@ -15,6 +15,7 @@ import { coloreForiStilista, collegaStilista, inviaAStilista, origineStilista, s
 import { reteAStilista } from './stilista-psil';
 import { costruisciRete, stratiRete, PARAMETRI_RETE, type EsitoRete, type ModuloRete, type ParametriRete, type Xy, type ZonaTrama, riquadroRete } from './motore';
 import { moduloDiEsempio } from './esempio';
+import { fattoreLarghezza, scalaDelFile } from './misura';
 import { aggiungiModulo, leggiElenco, leggiModulo, scriviElenco, togliModulo, type Memoria } from './elenco-moduli';
 
 type CampoNum = { [K in keyof ParametriRete]: ParametriRete[K] extends number ? K : never }[keyof ParametriRete];
@@ -26,6 +27,10 @@ const LIMITI: Array<{ key: CampoNum; passo: number; min: number; max: number }> 
   { key: 'margineMm', passo: 0.5, min: 0, max: 20 }, { key: 'primaCorsiaMm', passo: 0.5, min: 0, max: 10 }, { key: 'passoCorsiaMm', passo: 0.1, min: 0.3, max: 3 },
 ];
 const COLORI = { base: '#7fb0e6', passaggio: '#1f9a55', catenella: '#a5432f', uscita: '#d6009a', contorno: '#2c2b28' };
+const ingombro = (q: Xy[]): { w: number; h: number } => {
+  const xs = q.map((p) => p[0]), ys = q.map((p) => p[1]);
+  return { w: Math.max(...xs) - Math.min(...xs), h: Math.max(...ys) - Math.min(...ys) };
+};
 const n0 = (v: number): string => Math.round(v).toLocaleString('it-IT');
 
 /** Un contorno di esempio inventato: un trapezio coi lati un po' curvi. */
@@ -51,7 +56,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
     classe: 'rete-catenella-workspace',
     topbar: topbar('Rete a catenella', opts.backHref),
     pannello: [
-      sezioneSorgente({ tipo: 'cartamodello', accetta: '.svg,.dxf', statoIniziale: 'Nessun contorno: c’è quello di esempio.', larghezzaReale: false, demo: 'Contorno di esempio', stilista: true }),
+      sezioneSorgente({ tipo: 'cartamodello', accetta: '.svg,.dxf', statoIniziale: 'Nessun contorno: c’è quello di esempio.', demo: 'Contorno di esempio', stilista: true }),
       sezione({ indice: 2, titolo: 'Modulo', contenuto: `<div class="rg-param-grid">
         <select class="rg-select rg-param-grid__wide" id="moduloScelta" aria-label="Modulo in uso"></select>
         <div class="rg-file-input rg-param-grid__wide">
@@ -101,9 +106,13 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
   const stato = (t: string): void => { $('status').textContent = t; };
   const par: ParametriRete = { ...PARAMETRI_RETE };
   let modulo: ModuloRete = moduloDiEsempio();
+  // la zona e gli anelli dei colori come li dice il file (`grezzi`) e come entrano nel calcolo, scalati alla larghezza reale
+  let zonaGrezza: Xy[] | null = null;
   let zona: Xy[] | null = null;
   // Lorenzo, 2026-11-04: «da stilista arriva un laser colorato e quindi identifica un'area specifica»: una riga per colore, come negli altri tool
-  let colori: Array<{ colore: string; ruolo: 'contorno' | 'area' | ''; soglia: number; anelli: Xy[][] }> = [];
+  let colori: Array<{ colore: string; ruolo: 'contorno' | 'area' | ''; soglia: number; grezzi: Xy[][]; anelli: Xy[][] }> = [];
+  // Lorenzo, 2026-11-17: «la larghezza dell'svg inserito e si allarga o ristringe in proporzione». Scala dal punto 0,0 del file.
+  let scala = 1, larghezzaFile = 0, notaMisura = '';
   let model: ImportedBoundaryModel | null = null;
   let anello: Xy[] = [];
   let sorgente: { text: string; name: string } | null = null;
@@ -123,32 +132,52 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
   // ---- il contorno ------------------------------------------------------------
   const anelliDi = (m: ImportedBoundaryModel) => m.choices.flatMap((c) => c.boundary.paths.filter((p) => p.points.length >= 3).map((p) => p.points));
   function caricaContorno(text: string, name: string): void {
-    model = parseImportedBoundarySource(text, name, { scaleMode: 'auto' });
+    model = parseImportedBoundarySource(text, name, { scaleMode: scalaDelFile(text) });
     const anelli = anelliDi(model);
     if (!anelli.length) { $('fileStatus').textContent = `${name}: nessun contorno chiuso.`; return; }
     anelli.sort((a, b) => Math.abs(polygonArea(b)) - Math.abs(polygonArea(a)));
     sorgente = { text, name };
+    // un file nuovo riparte dalla sua misura: una larghezza scritta per il contorno di prima lo storcerebbe
+    par.realWidthMm = 0;
+    impostaNumero($('realWidth') as HTMLInputElement, 0);
+    const modo = model.source?.effectiveScaleMode;
+    notaMisura = modo === 'illustrator-72dpi' ? ' · file di Illustrator senza unità: letto in punti, 72 per pollice'
+      : modo === 'viewbox-mm' ? ' · il file non dice l’unità: letto 1 = 1 mm. Se la misura è sbagliata, scrivi la larghezza reale' : '';
     // il colore del contorno più grande è il cartamodello; gli altri colori tutti dentro di lui sono aree da infittire. I fori dei riempimenti non contano. Si corregge dal menu.
     const fori = coloreForiStilista(text), grande = anelli[0];
     colori = model.choices.map((c) => {
       const suoi = c.boundary.paths.filter((p) => p.closed && p.points.length >= 3).map((p) => p.points);
       const ilContorno = suoi.includes(grande);
       const area = !ilContorno && c.color !== fori && suoi.length > 0 && suoi.every((q) => pointInPolygon(q[0], grande));
-      return { colore: c.color ?? 'none', ruolo: ilContorno ? 'contorno' as const : area ? 'area' as const : '' as const, soglia: par.magliaMassimaMm2, anelli: suoi.map((q) => q.map((p): Xy => [p.x, p.y])) };
-    }).filter((c) => c.anelli.length);
+      const grezzi = suoi.map((q) => q.map((p): Xy => [p.x, p.y]));
+      return { colore: c.color ?? 'none', ruolo: ilContorno ? 'contorno' as const : area ? 'area' as const : '' as const, soglia: par.magliaMassimaMm2, grezzi, anelli: grezzi };
+    }).filter((c) => c.grezzi.length);
     if (colori.some((c) => c.ruolo === 'area')) { par.infittisci = true; ($('infittisci') as HTMLInputElement).checked = true; }
-    scegliAnello();
+    applicaScala();
     mostraColori();
-    const xs = anello.map((p) => p[0]), ys = anello.map((p) => p[1]), contorni = colori.filter((c) => c.ruolo === 'contorno').reduce((n, c) => n + c.anelli.length, 0);
-    $('fileStatus').textContent = `${name}: ${(Math.max(...xs) - Math.min(...xs)).toFixed(0)} × ${(Math.max(...ys) - Math.min(...ys)).toFixed(0)} mm${contorni > 1 ? ` · uso l’anello più grande, gli altri ${contorni - 1} no` : ''}.`;
     adattaDopo = true;
     genera();
   }
-  /** Il contorno: l'anello più grande fra i colori che fanno da contorno. */
-  function scegliAnello(): void {
+  /**
+   * Il contorno è l'anello più grande fra i colori che fanno da contorno. Con la larghezza reale tutto quello che
+   * viene dai file (contorno, aree, zona) si scala dello stesso fattore, così resta al suo posto rispetto al contorno.
+   */
+  function applicaScala(): void {
     let meglio: Xy[] | null = null, area = 0;
-    for (const c of colori) if (c.ruolo === 'contorno') for (const q of c.anelli) { const a = Math.abs(polygonArea(q.map(([x, y]) => ({ x, y })))); if (a > area) { area = a; meglio = q; } }
-    if (meglio) anello = meglio;
+    for (const c of colori) if (c.ruolo === 'contorno') for (const q of c.grezzi) { const a = Math.abs(polygonArea(q.map(([x, y]) => ({ x, y })))); if (a > area) { area = a; meglio = q; } }
+    larghezzaFile = meglio ? ingombro(meglio).w : 0;
+    scala = fattoreLarghezza(par.realWidthMm, larghezzaFile);
+    const scalato = (q: Xy[]): Xy[] => (scala === 1 ? q : q.map(([x, y]): Xy => [x * scala, y * scala]));
+    for (const c of colori) c.anelli = c.grezzi.map(scalato);
+    zona = zonaGrezza ? scalato(zonaGrezza) : null;
+    if (meglio) anello = scalato(meglio);
+    scriviMisura();
+  }
+  function scriviMisura(): void {
+    if (!sorgente || !anello.length) return;
+    const { w, h } = ingombro(anello), contorni = colori.filter((c) => c.ruolo === 'contorno').reduce((n, c) => n + c.anelli.length, 0);
+    const misura = scala === 1 ? notaMisura : ` · nel file è largo ${larghezzaFile.toFixed(0)} mm, scalato in proporzione`;
+    $('fileStatus').textContent = `${sorgente.name}: ${w.toFixed(0)} × ${h.toFixed(0)} mm${misura}${contorni > 1 ? ` · uso l’anello più grande, gli altri ${contorni - 1} no` : ''}.`;
   }
   function zoneAttive(): ZonaTrama[] {
     const aree = colori.filter((c) => c.ruolo === 'area').flatMap((c) => c.anelli.map((q) => ({ anello: q, magliaMassimaMm2: c.soglia })));
@@ -191,7 +220,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
       scelta.addEventListener('change', () => {
         c.ruolo = scelta.value as 'contorno' | 'area' | '';
         if (c.ruolo === 'area') { par.infittisci = true; ($('infittisci') as HTMLInputElement).checked = true; }
-        scegliAnello();
+        applicaScala();
         mostraColori();
         adattaDopo = true;
         genera();
@@ -252,15 +281,17 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
   ($('zonaInput') as HTMLInputElement).addEventListener('change', async (e) => {
     const f = (e.target as HTMLInputElement).files?.[0];
     if (!f) return;
-    const anelli = anelliDi(parseImportedBoundarySource(await f.text(), f.name, { scaleMode: 'auto' }));
+    const testo = await f.text(), anelli = anelliDi(parseImportedBoundarySource(testo, f.name, { scaleMode: scalaDelFile(testo) }));
     if (!anelli.length) { $('zonaStatus').textContent = `${f.name}: nessun contorno chiuso.`; return; }
     anelli.sort((a, b) => Math.abs(polygonArea(b)) - Math.abs(polygonArea(a)));
-    zona = anelli[0].map((p): Xy => [p.x, p.y]);
+    zonaGrezza = anelli[0].map((p): Xy => [p.x, p.y]);
+    applicaScala();
     $('zonaStatus').textContent = `Solo dentro ${f.name}.`;
     $('zonaViaBtn').hidden = false;
     genera();
   });
   $('zonaViaBtn').addEventListener('click', () => {
+    zonaGrezza = null;
     zona = null;
     $('zonaStatus').textContent = 'Dappertutto.';
     $('zonaViaBtn').hidden = true;
@@ -296,6 +327,15 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
       genera();
     });
   }
+  ($('realWidth') as HTMLInputElement).addEventListener('change', (e) => {
+    const el = e.target as HTMLInputElement, v = leggiCampo(el);
+    par.realWidthMm = Number.isFinite(v) && v > 0 ? v : 0;
+    impostaNumero(el, par.realWidthMm);
+    applicaScala();
+    mostraColori();
+    adattaDopo = true;
+    genera();
+  });
   for (const k of ['corsie', 'passaggiInterni', 'allineaLato', 'pezziSulBordo', 'collegaModuli', 'psilVero', 'catenellaDiProva', 'infittisci'] as const) ($(k) as HTMLInputElement).addEventListener('change', (e) => { par[k] = (e.target as HTMLInputElement).checked; genera(); });
   for (const id of ['vBasi', 'vPassaggi', 'vCatenelle', 'vUscite', 'vMaglie']) $(id).addEventListener('change', () => { sim?.ferma(); disegna(); });
 
@@ -352,13 +392,18 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
     Object.assign(par, m.params as Partial<ParametriRete>);
     for (const l of LIMITI) impostaNumero($(l.key) as HTMLInputElement, par[l.key]);
     for (const k of ['corsie', 'passaggiInterni', 'allineaLato', 'pezziSulBordo', 'collegaModuli', 'psilVero', 'catenellaDiProva', 'infittisci'] as const) ($(k) as HTMLInputElement).checked = par[k];
-    zona = Array.isArray(m.zona) ? m.zona as Xy[] : null;
+    // un progetto di prima della larghezza reale non la porta: vale la misura del file
+    if (!(typeof par.realWidthMm === 'number' && par.realWidthMm > 0)) par.realWidthMm = 0;
+    impostaNumero($('realWidth') as HTMLInputElement, par.realWidthMm);
+    applicaScala();
+    // zona e aree il progetto le porta già scalate: si riportano alla misura del file, così seguono la larghezza reale
+    const alFile = (q: Xy[]): Xy[] => q.map(([x, y]): Xy => [x / scala, y / scala]);
+    zonaGrezza = Array.isArray(m.zona) ? alFile(m.zona as Xy[]) : null;
+    if (Array.isArray(m.aree)) colori = [...colori.filter((c) => c.ruolo !== 'area'), ...(m.aree as Array<{ colore: string; soglia: number; anelli: Xy[][] }>).map((a) => ({ ...a, grezzi: a.anelli.map(alFile), ruolo: 'area' as const }))];
+    applicaScala();
+    mostraColori();
     $('zonaStatus').textContent = zona ? 'Solo dentro la zona del progetto.' : 'Dappertutto.';
     $('zonaViaBtn').hidden = !zona;
-    if (Array.isArray(m.aree)) {
-      colori = [...colori.filter((c) => c.ruolo !== 'area'), ...(m.aree as Array<{ colore: string; soglia: number; anelli: Xy[][] }>).map((a) => ({ ...a, ruolo: 'area' as const }))];
-      mostraColori();
-    }
     // il progetto dice il nome del modulo, non il modulo: se è nell'elenco si riprende, se no si dice
     const suo = elenco.moduli.find((x) => x.nome === m.modulo);
     if (suo) usaModulo(suo.id);
