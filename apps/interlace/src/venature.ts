@@ -53,6 +53,18 @@ const MAX_THIN_MM = 90;
 const BUNDLE_TURN = [0, -4, 4, -2, 66];
 const THIN_TURN = [-22, -7, 18, 38, 58, 78];
 const RAD = Math.PI / 180;
+/** Due buchi d'ago più vicini di così sono lo stesso buco battuto due volte. */
+const BATTUTO_MM = 0.3;
+/** Dove si sposta un punto battuto: [di traverso, lungo] la vena, in mm. Prima di traverso (resta sulla vena),
+ *  poi tutt'intorno a distanze crescenti fino a 1,4 mm, dove le vene si affollano (incroci, fasci vicini). */
+const SCOSTA: Array<[number, number]> = (() => {
+  const out: Array<[number, number]> = [[0.45, 0], [-0.45, 0]];
+  for (const r of [0.45, 0.65, 0.9, 1.15, 1.4]) for (let k = 0; k < 12; k++) {
+    const a = (k / 12) * Math.PI * 2;
+    out.push([Math.round(r * Math.cos(a) * 1000) / 1000, Math.round(r * Math.sin(a) * 1000) / 1000]);
+  }
+  return out;
+})();
 /** Davanti a un foro la vena gira di questi angoli (radianti, prima a un lato poi all'altro) e prosegue: si ferma solo al bordo. */
 const SCARTO_FORO = [0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.25, -1.25];
 /** La A era disegnata su 120×80 (120 di traverso alle vene, 80 lungo): i pezzi più grandi si dividono in riquadri così. */
@@ -239,19 +251,27 @@ export function generateVeins(boundary: Polyline, voids: Polyline[], p: VeinPara
       const andata = traccia(sx, sy, a0, uni(45, 95), s);
       const n = andata.length;
       if (n < 6) continue;
+      // Il RITORNO non ripassa nei buchi dell'andata. Lorenzo (2026-11-23): «per le venature, evitiamo il ritorno
+      // sullo stesso punto per non creare punti battuti evidenti». Prima il ritorno stava sugli stessi indici
+      // dell'andata, a 0,35 mm, e l'unione degli incroci sotto 1 mm lo fondeva con l'andata: metà dei punti delle
+      // venature cadevano in un buco già fatto. Ora ogni punto del ritorno sta A METÀ fra due punti dell'andata
+      // (a più di 1 mm da entrambi), scostato di lato, e il ritorno non si cuce contro la sua andata: si incrociano
+      // senza punto comune. Si chiude sul primo punto dell'andata, dove il fuso è a punta.
       const ritorno: Array<[number, number]> = [];
-      for (let i = n - 2; i >= 1; i--) {
-        const [px, py] = andata[i]; const [qx, qy] = andata[i + 1]; const [rx, ry] = andata[i - 1];
-        const tx = qx - rx, ty = qy - ry, L = Math.hypot(tx, ty) || 1;
-        const off = SPINDLE_MM * Math.pow(Math.max(0, Math.sin(Math.PI * i / (n - 1))), 1.2);
-        const cx = px - ty / L * off, cy = py + tx / L * off;
-        ritorno.push(inside(cx, cy) ? [cx, cy] : [px, py]);
+      for (let i = n - 2; i >= 0; i--) {
+        const [ax, ay] = andata[i], [bx, by] = andata[i + 1];
+        const mx = (ax + bx) / 2, my = (ay + by) / 2, tx = bx - ax, ty = by - ay, L = Math.hypot(tx, ty) || 1;
+        const off = SPINDLE_MM * Math.pow(Math.max(0, Math.sin(Math.PI * (i + 0.5) / (n - 1))), 1.2);
+        const cx = mx - ty / L * off, cy = my + tx / L * off;
+        ritorno.push(inside(cx, cy) ? [cx, cy] : [mx, my]);
       }
       for (let i = 1; i < n; i++) thickOneWayMm += Math.hypot(andata[i][0] - andata[i - 1][0], andata[i][1] - andata[i - 1][1]);
       const nodi = cuci(andata, true, null);
       const last = nodi[nodi.length - 1];
-      const nodiR = cuci([[X[last], Y[last]], ...ritorno], true, last);
-      lato(nodiR[nodiR.length - 1], nodi[0], 1, true);
+      const nodiR: number[] = [];
+      let cur = last;
+      for (const [x, y] of ritorno) { const q = nodo(x, y); lato(cur, q, 1, true); nodiR.push(q); cur = q; }
+      lato(cur, nodi[0], 1, true);
       for (const q of nodi) thickNodes.add(q);
       for (const q of nodiR) thickNodes.add(q);
     }
@@ -398,6 +418,42 @@ export function generateVeins(boundary: Polyline, voids: Polyline[], p: VeinPara
       for (let v = b; v !== a;) { const st = prev.get(v)!; rip[st.e]++; v = st.u; }
     }
   }
+  // NIENTE PUNTI BATTUTI. Il giro passa più volte dagli incroci e ripassa i tratti scelti per non staccare: ogni
+  // volta l'ago tornerebbe nello stesso buco. Si percorre il giro nell'ordine di cucitura e ogni punto che cade a
+  // meno di BATTUTO_MM da un buco già fatto si sposta di lato (prima di traverso alla vena, poi lungo), restando
+  // nella sagoma e senza fare punti sotto 1 mm; se non c'è posto resta dov'è.
+  const scosta = (pts: Point[]): Point[] => {
+    const G2 = 0.5, grid = new Map<number, Point[]>();
+    const key = (x: number, y: number) => Math.floor((y - bb.minY) / G2 + 4) * 100003 + Math.floor((x - bb.minX) / G2 + 4);
+    const libero = (x: number, y: number) => {
+      const i0 = Math.floor((x - bb.minX) / G2 + 4), j0 = Math.floor((y - bb.minY) / G2 + 4);
+      for (let j = j0 - 1; j <= j0 + 1; j++) for (let i = i0 - 1; i <= i0 + 1; i++) for (const o of grid.get(j * 100003 + i) || []) if (Math.hypot(o.x - x, o.y - y) < BATTUTO_MM) return false;
+      return true;
+    };
+    const out: Point[] = [];
+    for (let k = 0; k < pts.length; k++) {
+      let q = pts[k];
+      if (!libero(q.x, q.y)) {
+        const a = out.length ? out[out.length - 1] : q, b = k + 1 < pts.length ? pts[k + 1] : q;
+        // la direzione della vena qui: dal punto prima al punto dopo; in un "va e torna" i due coincidono, allora
+        // dal punto prima a questo
+        let tx = b.x - a.x, ty = b.y - a.y;
+        if (Math.hypot(tx, ty) < 1e-6) { tx = q.x - a.x; ty = q.y - a.y; }
+        if (Math.hypot(tx, ty) < 1e-6) { tx = 1; ty = 0; }
+        const L = Math.hypot(tx, ty); tx /= L; ty /= L;
+        for (const [u, v] of SCOSTA) {
+          const x = q.x - ty * u + tx * v, y = q.y + tx * u + ty * v;
+          if (!inside(x, y) || !libero(x, y)) continue;
+          if (out.length && Math.hypot(x - a.x, y - a.y) < FUSE_MM) continue;
+          if (k + 1 < pts.length && Math.hypot(x - b.x, y - b.y) < FUSE_MM) continue;
+          q = { x, y }; break;
+        }
+      }
+      out.push(q);
+      const kk = key(q.x, q.y); let s = grid.get(kk); if (!s) grid.set(kk, s = []); s.push(q);
+    }
+    return out;
+  };
   // Hierholzer per ogni pezzo collegato: un tratto per pezzo (di norma uno solo)
   const usati = new Array<number>(lati.length).fill(0);
   const quante = lati.map((e, i) => e.m + rip[i]);
@@ -420,7 +476,7 @@ export function generateVeins(boundary: Polyline, voids: Polyline[], p: VeinPara
       if (i < lista.length) { usati[lista[i].e]++; st.push(lista[i].v); }
       else giro.push(st.pop()!);
     }
-    if (giro.length >= 2) runs.push(giro.reverse().map((n) => ({ x: X[n], y: Y[n] })));
+    if (giro.length >= 2) runs.push(scosta(giro.reverse().map((n) => ({ x: X[n], y: Y[n] }))));
   }
   const edges: VeinEdge[] = lati.map((e, i) => ({ a: { x: X[e.a], y: Y[e.a] }, b: { x: X[e.b], y: Y[e.b] }, passes: quante[i], thick: e.thick, repassed: rip[i] }));
   return { runs, edges, fused, bridges, thickOneWayMm };

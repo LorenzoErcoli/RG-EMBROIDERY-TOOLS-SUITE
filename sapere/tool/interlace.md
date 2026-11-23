@@ -203,5 +203,17 @@ più non contano nella copertura del fondo, così il fondo resta uniforme.
 **Misurato dopo** (stessi parametri): punti 2-5 mm da 2,79 a 3,71, nessun foro sotto 1,3, 3 tratti; punti 6-15 mm
 da 1,47 a 2,81, 3 tratti, e il fitto non si spande più su tutto il pezzo (filo da 399 a 281 m).
 
+## Venature senza punti battuti (2026-11-23)
+
+Lorenzo: *«per le venature, evitiamo il ritorno sullo stesso punto per non creare punti battuti evidenti»*. **Misurato:** prima circa **metà dei punti** delle venature cadeva a meno di 0,3 mm da un buco già
+fatto (120×80: 697 su 1396; 309×219: ~6000 su ~12.600). Il grosso veniva dal fuso: il ritorno stava sugli stessi
+indici dell'andata a 0,35 mm, si cuciva contro di lei, e l'unione degli incroci sotto 1 mm lo fondeva con l'andata.
+Il resto: gli incroci attraversati più volte dal giro e i tratti ripassati per non staccare.
+
+**Ora:** ogni punto del ritorno sta a metà fra due punti dell'andata, scostato di lato, e il ritorno non si cuce
+contro la sua andata; poi, nell'ordine di cucitura, ogni punto che cade a meno di 0,3 mm da un buco già fatto si
+sposta di lato (prima di traverso alla vena, poi tutt'intorno fino a 1,4 mm), dentro la sagoma e senza punti sotto
+1 mm. **Dopo: 0 punti battuti** in tutte le prove (3 varianti, 120×80 e 309×219), nessun punto sotto 1 mm, un tratto.
+
 Cosa resta da fare sta in `STATO.md` (C4 densità per zona, C5 vuoto dello stesso colore, C6 modello
 densità unificato, A5 i nomi dei parametri "movimento").

@@ -658,6 +658,20 @@ check('venature: nessun punto fuori dalla sagoma', vnFuori, 0);
       noni[Math.min(2, Math.floor(my / 73)) * 3 + Math.min(2, Math.floor(mx / 103))] += Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y);
     }
     check(`venature su 309×219 (variante ${seed}): un giro solo`, v.runs.length, 1);
+    // Lorenzo (2026-11-23): «evitiamo il ritorno sullo stesso punto per non creare punti battuti evidenti». Prima metà
+    // dei punti cadeva a meno di 0,3 mm da un buco già fatto (il ritorno del fuso fuso con l'andata, gli incroci, i ripassi).
+    const pts = v.runs.flat(), visti = new Map();
+    let battuti = 0, corti = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const q = pts[i], gx = Math.floor(q.x / 0.5), gy = Math.floor(q.y / 0.5);
+      let hit = false;
+      for (let dx = -1; dx <= 1; dx++) for (let dy = -1; dy <= 1; dy++) for (const o of visti.get(`${gx + dx},${gy + dy}`) || []) if (Math.hypot(o.x - q.x, o.y - q.y) < 0.3) hit = true;
+      if (hit) battuti++;
+      const k = `${gx},${gy}`; if (!visti.has(k)) visti.set(k, []); visti.get(k).push(q);
+      if (i > 0 && Math.hypot(q.x - pts[i - 1].x, q.y - pts[i - 1].y) < 1 - 1e-9) corti++;
+    }
+    check(`venature su 309×219 (variante ${seed}): nessun punto battuto (a meno di 0,3 mm da un buco già fatto)`, battuti, 0);
+    check(`venature su 309×219 (variante ${seed}): e nessun punto sotto 1 mm`, corti, 0);
     check(`venature su 309×219 (variante ${seed}): ogni nono del pezzo ha almeno 1 m di venature`, Math.min(...noni) > 1000, true);
   }
 }
