@@ -80,7 +80,7 @@
         "minStitchMm": {
           "$ref": "#/$defs/minStitch",
           "default": 0,
-          "description": "Lunghezza minima del punto.",
+          "description": "Sui contorni: ogni punto che tocca il perimetro o un’area vuota (tagli, raccordi, il punto accanto al taglio).",
           "minimum": 0,
           "x-id": "minStitch"
         },
@@ -193,6 +193,10 @@
         "repeatBack": {
           "$ref": "#/$defs/repeatBack",
           "default": false
+        },
+        "patternMinStitchMm": {
+          "$ref": "#/$defs/patternMinStitchMm",
+          "default": 0
         },
         "maxStitchMm": {
           "$ref": "#/$defs/maxStitch",
@@ -2987,6 +2991,18 @@
       "title": "Andata e ritorno (serpentina)",
       "description": "Percorre le colonne a serpentina, in andata e ritorno, senza cambiare le coordinate del modulo.",
       "x-concetto": "ordine-cucitura"
+    },
+    "patternMinStitchMm": {
+      "type": "number",
+      "title": "Punto minimo del pattern",
+      "description": "Dentro il pattern, fra due punti del modulo lontani dai contorni; 0 = il disegno resta com’è.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.01,
+      "x-regole": [
+        "R3"
+      ],
+      "x-concetto": "punto-minimo"
     },
     "maxStitch": {
       "type": "number",
@@ -6764,6 +6780,7 @@
       "descrizione": "Lunghezza minima di un punto; si applica dopo il routing (R3).",
       "parametri": [
         "minStitch",
+        "patternMinStitchMm",
         "minimumSegmentLength",
         "cutBorderStitchLength",
         "minStitchMm",

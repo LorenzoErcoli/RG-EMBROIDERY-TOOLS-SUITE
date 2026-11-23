@@ -2,10 +2,11 @@
 // 2026-10-06). Zig-zag perpendicolare all'asse, una riga ogni `densitySpacingMm`, largo quanto dice il profilo
 // ma mai meno del minimo: nessun punto sotto `minStitchMm` (R3), neppure dopo l'arrotondamento del DST.
 import type { Point } from '@rg/core';
+import { GRIGLIA_DST_MM } from '@rg/core';
 import type { ParametriRazza, Tondino } from './tipi';
 
-/** Il DST porta le coordinate a 0,1 mm: due punti da 0,80 possono diventare 0,72. */
-export const GRIGLIA_DST_MM = 0.1;
+/** Il DST porta le coordinate a 0,1 mm: due punti da 0,80 possono diventare 0,72. Il passo sta nel core (R28). */
+export { GRIGLIA_DST_MM };
 
 /**
  * Si progetta con un margine di 1,5 passi di griglia, cosi' il minimo tiene anche DOPO l'arrotondamento (trovato

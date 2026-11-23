@@ -28,6 +28,8 @@ export type ResolvedPatternGrammar = {
   repeatBack: boolean;
   minSegmentLength: number;
   minPointDistance: number;
+  /** Il punto minimo dentro il pattern, fra punti del modulo (0 = il disegno com'è). */
+  patternMinStitchMm: number;
   maxStitchLength: number;
   preserveSharpAngles: boolean;
   angleThresholdDeg: number;
@@ -135,6 +137,7 @@ export function resolvePatternGrammar(config: PatternConfig): ResolvedPatternGra
     repeatBack: config.repeatBack ?? false,
     minSegmentLength: minPointDistance,
     minPointDistance,
+    patternMinStitchMm: scaled(Math.max(0, Number.isFinite(config.patternMinStitchMm) ? config.patternMinStitchMm! : 0)),
     maxStitchLength,
     preserveSharpAngles: config.preserveSharpAngles ?? true,
     angleThresholdDeg: config.angleThresholdDeg ?? 35,
