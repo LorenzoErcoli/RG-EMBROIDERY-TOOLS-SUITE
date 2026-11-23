@@ -56,7 +56,7 @@ namespace StilistaHostSkeleton
                 foreach (var oggetto in SnapshotObjects(GetReadableMemberValue(Ricamo(), "Objects")))
                 {
                     var descrizione = Convert.ToString(GetReadableMemberValue(oggetto, "Description"));
-                    if (descrizione == null || !descrizione.StartsWith(PrefissoDescrizione, StringComparison.Ordinal))
+                    if (!ENostro(oggetto, descrizione))
                     {
                         continue;
                     }

@@ -21,7 +21,7 @@ export const scheda: SchedaParametri = {
     },
     {
       id: 'density', nome: 'densitySpacingMm', etichetta: 'Densità (distanza tra le file di filo)',
-      aiuto: 'densità di ogni colore, ~0.8–4 mm: piccola = fitto; ~3 è il più rado ancora omogeneo (oltre si ammassa)',
+      aiuto: 'densità di ogni colore, 0,8–10 mm: piccola = fitto, grande = rado; fino a ~8 il filo cala, oltre non si dirada più',
       tipo: 'num', unita: 'mm', passo: 0.1, predefinito: 2, regole: ['R22'], concetto: 'densita',
     },
     {

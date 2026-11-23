@@ -2,6 +2,7 @@
 // Serve a una cosa sola ma importante: accorgersi quando due tool rispondono
 // in modo diverso alla STESSA domanda geometrica (vedi COSTITUZIONE R28).
 import { readFileSync, mkdirSync, rmSync, writeFileSync, readdirSync, existsSync } from 'node:fs';
+import { spawnSync } from 'node:child_process';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { dirname, join } from 'node:path';
 
@@ -15,7 +16,7 @@ const posix = (p) => join(root, p).replace(/\\/g, '/');
 const entry = join(outDir, 'entry.ts');
 writeFileSync(entry, `
 export { parseImportedBoundarySource, generatePattern, generateFinalPatternPoints, parseSvgTransform } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
-export { generateFill, generatePasses, stitchBudget, defaultInterlaceParams } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
+export { generateFill, generatePasses, stitchBudget, defaultInterlaceParams, DENSITY_MAX_MM } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
 export { generateStitch, stitchSteps, reinsertPoints, analyzeBitmap, buildSelectionMask, buildPalette, groupByPalette, defaultBitmapParams } from ${JSON.stringify(posix('apps/bitmap/src/engine.ts'))};
 export { buildRawLevels, computeGridCounts, moduleFromPolylines, parseModuleSvg, defaultObliqueParams, resolveBoundaries, buildLaserExport, filterLevelByHoles, rectBoundaryOf, boundaryFromFormat, boundaryFromPoints, contourBoundary, simplifyLoop, isInside, applyModuleClipMode, cleanupPolylines, subtractExclusions, cleanupVoids, applyVoids, generateOblique, connectLayerContinuity, connectTechnicalDiagonals, enforceMinimumStitch, reconnectCutFragmentsOnBoundary, offsetPolygonBoundary, insetAnyBoundary, removeIsolatedSpikes } from ${JSON.stringify(posix('apps/oblique/src/engine.ts'))};
 export { runBitmapPreview, runBitmapPipeline, PREVIEW_MAX_DOTS } from ${JSON.stringify(posix('apps/bitmap/src/pipeline.ts'))};
@@ -78,7 +79,7 @@ export { costruisciRete as rtsCostruisci, stratiRete as rtsStrati, PARAMETRI_RET
 export { anelliRadiali as rtsAnelli, formaSacca as rtsFormaSacca, raggioMinimo as rtsRaggioMinimo, lenteAlNodo as rtsLenteAlNodo, sovrapposizioneAlNodo as rtsSovrapposizioneAlNodo, aggancioPerMm as rtsAggancioPerMm, anelliOvali as rtsAnelliOvali, puntoDelNodo as rtsPuntoDelNodo, cimeDelleColonne as rtsCimeDelleColonne, ceIlNodo as rtsCeIlNodo } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca.ts'))};
 export { creaSaccaAppesa as rtsAppesa, assesta as rtsAssesta, avanza as rtsAvanza, misureAppesa as rtsMisureAppesa } from ${JSON.stringify(posix('apps/rete-testa-speciale/src/sacca3d.ts'))};
 export { senzaDatiDiProgetto } from ${JSON.stringify(posix('packages/ui/src/save.ts'))};
-export { origineStilista, coloreForiStilista, puntiDaPolilinee, svgForiAiLoroColori, primoColoreStilista, agoStilista, impacchettaProgetto, spacchettaProgetto, progettoDaInviare } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
+export { origineStilista, coloreForiStilista, puntiDaPolilinee, svgForiAiLoroColori, primoColoreStilista, agoStilista, impacchettaProgetto, spacchettaProgetto, progettoDaInviare, inviaAStilista } from ${JSON.stringify(posix('packages/ui/src/stilista.ts'))};
 `);
 const bundle = join(outDir, 'bundle.mjs');
 const esbuild = await import('esbuild');
@@ -327,6 +328,15 @@ check('nessun punto dentro il vuoto (R5)', iInVoid, 0);
 check('nessun punto fuori dal bordo', iOut, 0);
 check('nessun segmento sotto il punto minimo (R3)', iShort, 0);
 check('nessun segmento oltre max+2 (R4, tolleranza escape)', iOverEscape, 0);
+// Il tetto della densità era 4 mm: oltre, la cella restava 4 e il filo non calava più. Lorenzo (2026-11-20) ha chiesto
+// di andare molto oltre: ora a 8 mm il filo è meno che a 4, e il tetto è 10.
+{
+  const dRect = [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 80 }, { x: 0, y: 80 }];
+  const dFilo = (d) => rg.generateFill(dRect, [], { ...rg.defaultInterlaceParams, minStitchMm: 2, maxStitchMm: 5, voidClearanceMm: 0, seed: 3, densitySpacingMm: d })
+    .reduce((s, r) => { for (let i = 1; i < r.length; i++) s += Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y); return s; }, 0);
+  check('densità oltre 4 mm: a 8 mm il filo è meno di due terzi che a 4', dFilo(8) < dFilo(4) * 0.67, true);
+  check('densità: il tetto è 10 mm', rg.DENSITY_MAX_MM, 10);
+}
 check('segmenti oltre max solo negli escape (<1%)', iLong <= Math.ceil(iN * 0.01), true);
 
 // interlace — AGGLOMERATI (clusterMode): zone di colore, ma NIENTE runaway (le zone hanno una base ovunque
@@ -1726,13 +1736,22 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   const sSenza = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE' }, sP);
   const sSotto = rg.runStriaturaPipeline(sConZona, { '#000000': 'MASTER_OUTLINE', '#00ff00': 'COVER_AREA' }, sP);
   const sFiloDi = (r) => r.exportLayers.find((l) => l.id === 'striatura').polylines;
-  // lontano dalla zona i trattini restano gli stessi. Si confrontano i trattini, non i punti: i collegamenti fra un trattino e
-  // l'altro cambiano con l'ordine di cucitura. Le colonne dei denti non contano: senza zona ci sono le linee rade, con la zona no.
-  const sColonnaDente = (t) => Math.round(t.x / sP.densitySpacingMm - 0.5) % Math.round(sP.fillSpacingMm / sP.densitySpacingMm) === 0;
-  const sLontani = (pls) => sTrattini(pls).filter((t) => (t.x < 28 || t.x > 92) && !sColonnaDente(t)).map((t) => `${t.x.toFixed(3)}:${t.alto.toFixed(1)}`);
-  const sConZonaTratt = new Set(sLontani(rg.generateStriatura({ outline: sRect, voids: [], coperte: [sZona] }, sP)[0].polylines));
-  const sSenzaTratt = sLontani(rg.generateStriatura({ outline: sRect, voids: [] }, sP)[0].polylines);
-  check('lontano dalla zona i trattini sono gli stessi, con la zona o senza', sSenzaTratt.length > 50 && sSenzaTratt.filter((k) => !sConZonaTratt.has(k)).length, 0);
+  // Le macchie di striatura non sotto le zone (dalla Ricetta; Lorenzo, 2026-11-20: «porta sì il modo di mettere le striature non sotto
+  // le macchie»): con una zona sola la striatura sotto la zona era l'8,7%, ora il 5,7%. Fino ad allora la striatura non si accorgeva
+  // delle zone e lontano da una zona i trattini restavano identici; ora una macchia spostata cambia i numeri a caso di quelle dopo.
+  const sSottoZone = (pls, zone) => {
+    let v = 0, s = 0;
+    for (const pl of pls) for (let i = 1; i < pl.length; i++) {
+      const a = pl[i - 1], b = pl[i];
+      if (Math.abs(a.x - b.x) > 1e-6) continue;
+      const L = Math.abs(b.y - a.y), n = Math.max(1, Math.ceil(L / 0.5));
+      for (let q = 0; q < n; q++) { const p = { x: a.x, y: a.y + ((b.y - a.y) * (q + 0.5)) / n }; v += L / n; if (zone.some((z) => rg.pointInPolygon(p, z))) s += L / n; }
+    }
+    return s / v;
+  };
+  const sUnaSotto = sSottoZone(rg.generateStriatura({ outline: sRect, voids: [], coperte: [sZona] }, sP)[0].polylines, [sZona]);
+  console.log(`   (striatura sotto la zona: ${(100 * sUnaSotto).toFixed(1)}%; era 8,7% prima di metterle attorno alle zone)`);
+  check('le macchie di striatura stanno attorno alla zona, non sotto', sUnaSotto < 0.07, true);
   check('il ricamo continua dentro la zona (non è un vuoto)', sFiloDi(sSotto).flat().some((q) => rg.pointInPolygon(q, sZona)), true);
   check('nessun salto in più', sFiloDi(sSotto).length, sFiloDi(sSenza).length);
   // Il filo sta sotto (Lorenzo, 2026-11-05: «linee che passano così in mezzo sono inaccettabili, deve passare sempre sotto
@@ -1829,6 +1848,15 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   })();
   console.log(`   (passaggi che incrociano una striatura fuori dalle zone: sotto una che viene dopo ${sSopra.sotto}, sopra una già cucita ${sSopra.sopra})`);
   check('i passaggi non passano mai sopra una striatura già cucita', sSopra.sotto > 20 && sSopra.sopra, 0);
+  // Zone sovrapposte = una macchia sola (Lorenzo, 2026-11-20: «deve vederli come macchie uniche se sono sovrapposte»). La stessa zona
+  // intera o divisa in due pezzi che si sovrappongono di 4 mm: lo stesso ricamo. Zona per zona la giunta contava come bordo, e lungo la
+  // giunta restavano 26 cm di striatura cuciti sotto la grafica.
+  const sRet = (x0, y0, x1, y1) => [{ x: x0, y: y0 }, { x: x1, y: y0 }, { x: x1, y: y1 }, { x: x0, y: y1 }];
+  const sIntera = rg.generateStriatura({ outline: sRect, voids: [], coperte: [sRet(-5, -5, 125, 155)] }, sP)[0].polylines;
+  const sDivisa = rg.generateStriatura({ outline: sRect, voids: [], coperte: [sRet(-5, -5, 62, 155), sRet(58, -5, 125, 155)] }, sP)[0].polylines;
+  const sMezza = rg.generateStriatura({ outline: sRect, voids: [], coperte: [sRet(30, 40, 90, 110)] }, sP)[0].polylines;
+  const sMezzaDivisa = rg.generateStriatura({ outline: sRect, voids: [], coperte: [sRet(30, 40, 62, 110), sRet(58, 40, 90, 110), sRet(40, 60, 80, 90)] }, sP)[0].polylines;
+  check('zone sovrapposte come una sola: il ricamo è lo stesso, intera o in pezzi', [JSON.stringify(sIntera) === JSON.stringify(sDivisa), JSON.stringify(sMezza) === JSON.stringify(sMezzaDivisa)], [true, true]);
   // Le uscite dalle punte (Lorenzo, 2026-11-05: «magari si esce su una striatura più vicina ad un punto coperto»): stessi trattini, un filo solo.
   const sDaCapo = rg.generateStriatura({ outline: sRect, voids: [], coperte: sMacchie }, { ...sP, usciteDallePunte: false })[0];
   check('dalle punte: gli stessi trattini, un filo solo', [sTrattini(sSenzaPassaggi(sTante)).length, sTante.polylines.length], [sTrattini(sSenzaPassaggi(sDaCapo)).length, 1]);
@@ -1838,16 +1866,19 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   check('a zone il ricamo procede dall\'alto in basso, o da sinistra a destra', [sOriz[0] < sOriz[1] && sOriz[1] < sOriz[2], sVert[0] < sVert[1] && sVert[1] < sVert[2]], [true, true]);
   check('senza ricamo sopra le zone non cambiano nulla', JSON.stringify(sGen({ ...sP, stopZones: 1 })), JSON.stringify(sGen({ ...sP, stopZones: 5 })));
   check('con tante zone il filo resta continuo, e dentro la sagoma', [sTante.polylines.length, sMeasure(sTante.polylines, sRect, []).fuori], [1, 0]);
-  // La striatura non si deve accorgere delle zone: i trattini che si vedono sono interi, identici a quelli senza zone.
-  const sTratSenza = sTrattini(sGen(sP));
-  const sTratZone = new Set(sTrattini(sTante.polylines).map((t) => `${t.x.toFixed(3)}:${t.alto.toFixed(1)}`));
-  const sVisibili = sTrattini(sGen(sP)).length;
-  const sUguali = sTratSenza.filter((t) => sTratZone.has(`${t.x.toFixed(3)}:${t.alto.toFixed(1)}`)).length;
-  check('i trattini rimasti sono quelli di sempre, non tagliati dal bordo delle zone', sUguali >= sTratZone.size * 0.85 && sTratZone.size < sVisibili, true);
+  // I trattini che si vedono sono interi, non tagliati dal bordo delle zone: alti come senza zone (mediana entro il 10%) e senza più
+  // pezzetti corti. Fino al 2026-11-20 erano proprio gli stessi; ora le macchie si spostano attorno alle zone (vedi sopra).
+  const sTratSenza = sTrattini(sGen(sP)).map((t) => t.alto);
+  const sTratZone = sTrattini(sTante.polylines).map((t) => t.alto);
+  const sMedS = sMediana(sTratSenza), sMedZ = sMediana(sTratZone);
+  const sCorti = (a) => a.filter((h) => h < 0.4 * sMedS).length / a.length;
+  const sSotteTante = sSottoZone(sTante.polylines, sMacchie);
+  console.log(`   (trattini: mediana ${sMedS.toFixed(1)} senza zone, ${sMedZ.toFixed(1)} con; corti ${(100 * sCorti(sTratSenza)).toFixed(1)}% e ${(100 * sCorti(sTratZone)).toFixed(1)}%; sotto le zone ${(100 * sSotteTante).toFixed(0)}%, era 51%)`);
+  check('i trattini rimasti sono interi, non tagliati dal bordo delle zone, e meno sotto le zone', [Math.abs(sMedZ - sMedS) <= 0.1 * sMedS, sCorti(sTratZone) <= sCorti(sTratSenza) + 0.01, sTratZone.length < sTratSenza.length, sSotteTante < 0.45], [true, true, true, true]);
   // Lo sfrangiato aiuta (Lorenzo, 2026-11-03: «allungare… lo sfrangiato e far partire o finire nelle vicinanze di parti
   // coperte»): nessun trattino cresce oltre il frastaglio, così non si nota.
   const sAlti = sTrattini(sSenzaPassaggi(sTante)).map((t) => t.alto);
-  const sAltiSenza = sTratSenza.map((t) => t.alto);
+  const sAltiSenza = sTratSenza;
   check('allungato per arrivare sotto una zona, un trattino resta nella misura dello sfrangiato', Math.max(...sAlti) <= Math.max(...sAltiSenza) + sP.jaggedLengthMm + 1, true);
   check('sotto la zona i passaggi ci sono, e misurati', sSotto.passaggiCopertiMm > 0, true);
   const sMisuraSenza = (() => { let v = 0; for (const pl of sSenza.passaggi) for (let i = 1; i < pl.length; i++) { const a = pl[i - 1], b = pl[i]; const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.5)); for (let k = 0; k < n; k++) { const t = (k + 0.5) / n; const q = { x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t }; if (!rg.pointInPolygon(q, sZona)) v += Math.hypot(b.x - a.x, b.y - a.y) / n; } } return v; })();
@@ -3079,6 +3110,45 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
       sorgente.includes("v === scalaImport.scaleMode ? ' selected' : ''"), true);
   }
 
+  // RG STILISTA LINK, POST /oggetti (2026-11-17, sapere/codice/stilista-oggetti-esatti.md). Il plugin non gira senza
+  // Stilista: qui si controlla che nel sorgente C# non tornino i tre difetti silenziosi, misurati su un pannello grande.
+  {
+    const ponte = (f) => readFileSync(join(root, 'strumenti-sviluppo/stilista-link/bridge', f), 'utf8');
+    const json = ponte('JsonBridge.cs');
+    const punzone = ponte('CodexTab.NativePunch.cs');
+    const sequenza = ponte('CodexTab.Sequence.cs');
+    const lotto = ponte('CodexTab.BatchImport.cs');
+    // 1. senza UseSimpleDictionaryFormat un Dictionary letto da { "PIx": 1 } resta vuoto, in silenzio
+    check('Stilista Link /oggetti: managed_overrides_int non è un Dictionary (si leggerebbe vuoto)',
+      [/public\s+Dictionary<[^>]*>\s+ManagedOverridesInt/.test(json), /public ParametriInteri ManagedOverridesInt/.test(json),
+        /class ParametriInteri : ISerializable/.test(json)], [false, true, true]);
+    // 2. il contorno passa dal clic a mano solo come copia, poi si riscrive al micron prima del ricalcolo
+    const riscrive = punzone.indexOf('RiscriviContornoEsatto(');
+    check('Stilista Link /oggetti: si immette la copia, e il contorno esatto si scrive prima del ricalcolo',
+      [/Feed\w+\(\s*nativeBox,\s*\w+,\s*spec\.Geometry\.Outer/.test(punzone), punzone.includes('CopiaDaImmettere('),
+        riscrive > 0 && riscrive < punzone.indexOf('ApplyTranslationPlanToDesignObject(createdObject, plan, true)'),
+        punzone.includes('scarto <= ScartoMassimoContornoMm') || punzone.includes('scarto > ScartoMassimoContornoMm')],
+      [false, true, true, true]);
+    // 3. l'ago si applica sempre quando c'è, senza la bandiera della sequenza
+    check('Stilista Link /oggetti: machine.needle non dipende da apply_native_needle_changes',
+      [sequenza.includes('native needle assignment disabled'), /if \(!applyChanges\)/.test(sequenza)], [false, false]);
+    // il motivo arriva nella risposta come messaggio di un'eccezione senza eccezione interna (Control.Invoke darebbe quella)
+    // 4. i fori (2026-11-17): diventano aree vuote prima del ricalcolo, e si ricontrollano dopo; mai un riempimento pieno
+    const fori = ponte('CodexTab.ForiEsatti.cs');
+    const scriveFori = punzone.indexOf('ScriviFori(createdObject');
+    check('Stilista Link /oggetti: i fori diventano aree vuote prima del ricalcolo e si ricontrollano',
+      [lotto.includes('non si sa ancora applicare'), /ControllaFori\(esterno, fori\)/.test(lotto),
+        scriveFori > 0 && scriveFori < punzone.indexOf('ApplyTranslationPlanToDesignObject(createdObject, plan, true)'),
+        punzone.includes('VerificaFori(createdObject, foriScritti)'), lotto.includes('VerificaFori('),
+        /proprieta\.SetValue\(designObject, percorsi, null\)/.test(fori), /"Stitches"/.test(fori)],
+      [false, true, true, true, true, true, true]);
+    const lancio = lotto.match(/throw new InvalidOperationException\([\s\S]*?\);/)?.[0] ?? '';
+    check('Stilista Link /oggetti: un programma da JSON che fallisce lancia il motivo, senza eccezione interna',
+      [/if \(batch == null \|\| !batch\.ArrivatoDaJson\)/.test(lotto), lancio.includes('"/oggetti non ha creato niente: " + motivo'),
+        (lancio.match(/\bnew\b/g) || []).length, /,\s*ex\s*\)/.test(lancio), /\[OnDeserializing\]\s*private void LettoDaJson/.test(json)],
+      [true, true, 1, false, true]);
+  }
+
   // RG STILISTA LINK (ramo stilista-link, 2026-10-21): la selezione arriva come l'SVG del plugin
   // (Collegamento.cs, SelezioneSvg) — mm dichiarati, un colore per il filo, i FORI a parte col colore
   // dichiarato in data-rg-stilista-fori — e si legge con l'import di sempre. Il ricamo torna coi salti
@@ -3166,6 +3236,72 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
     check('Esporta senza dati: l\'SVG perde ogni <metadata>, il disegno resta',
       [rg.senzaDatiDiProgetto(svgConDati).includes('metadata'), rg.senzaDatiDiProgetto(svgConDati).includes('cliente'), rg.senzaDatiDiProgetto(svgConDati).includes('<path d="M0 0L1 1"/>')], [false, false, true]);
     check('Esporta senza dati: un testo che non è un SVG non si tocca', rg.senzaDatiDiProgetto('{"metadata":"<metadata>x</metadata>"}'), '{"metadata":"<metadata>x</metadata>"}');
+    // LE TRACCE RG (2026-11-12): con l'interruttore spento non parte niente di nostro verso il documento
+    {
+      const plugin = readdirSync(join(root, 'strumenti-sviluppo/stilista-link')).filter((f) => f.endsWith('.cs'))
+        .map((f) => [f, readFileSync(join(root, 'strumenti-sviluppo/stilista-link', f), 'utf8')]);
+      const tutto = plugin.map(([, s]) => s).join('\n');
+      const ritorno = plugin.find(([f]) => f === 'Collegamento.Ritorno.cs')[1];
+      const imposta = ritorno.slice(ritorno.indexOf('private static void ImpostaDescrizione('), ritorno.indexOf('private static void ScriviDescrizione('));
+      check('Tracce RG: la descrizione si scrive in un posto solo, e ImpostaDescrizione passa dall\'interruttore',
+        [(tutto.match(/GetProperty\("Description"\)/g) || []).length, imposta.includes('Tracce.DaScrivere('),
+          plugin.filter(([f, s]) => /ScriviDescrizione\(/.test(s)).map(([f]) => f).sort(), (tutto.match(/ScriviDescrizione\(oggetto, ""\)/g) || []).length],
+        [1, true, ['Collegamento.Ritorno.cs', 'Collegamento.Tracce.cs'], 1]);
+      check('Tracce RG: «rg-tools» nel programma del bridge solo con le tracce accese', /Role = "rg-tools"|Id = ricamo\.Nome \?\? "rg-tools"/.test(ritorno), false);
+      check('Tracce RG: le strade passano prima dell\'elenco, e i parametri di un DST aperto guardano l\'interruttore',
+        [readFileSync(join(root, 'strumenti-sviluppo/stilista-link/ServerLocale.cs'), 'utf8').includes('CodexTab.StradaDelleTracce(richiesta) ?? _gestore(richiesta)'),
+          /if \(!Tracce\.Accese\)[\s\S]{0,120}File\.Delete\(file\)/.test(plugin.find(([f]) => f === 'Collegamento.Parametri.cs')[1])], [true, true]);
+      // il tool, contro un plugin finto: cosa parte verso Stilista con le tracce spente e accese
+      const prima = { fetch: globalThis.fetch, location: globalThis.location };
+      const giro = async (accese, conCartamodello) => {
+        const mandati = [];
+        globalThis.location = { search: '?stilista=5370' };
+        globalThis.fetch = async (url, opz = {}) => {
+          const u = new URL(url);
+          const rispondi = (j, stato = 200) => new Response(JSON.stringify(j), { status: stato, headers: { 'Content-Type': 'application/json' } });
+          if (u.pathname === '/stato') return rispondi({ ok: true, documento: 'GMI Stilista 3 - C:\\prova\\finto.emg3', oggetti: 1, selezionati: 1, attiva_alle: 1 });
+          if (u.pathname === '/tracce') return rispondi({ ok: true, accese, di_serie: false });
+          const corpo = opz.body instanceof Uint8Array ? opz.body : String(opz.body ?? '');
+          mandati.push({ strada: u.pathname + u.search, corpo });
+          if (u.pathname === '/punti') return rispondi({ ok: true, punti_chiesti: 3, punti_letti: 3, salti: 0, tipo_dopo: 'manual', ago: '1', parametri_salvati: JSON.parse(corpo).parametri !== undefined });
+          if (u.pathname === '/dst') return rispondi({ ok: true, parametri_salvati: u.searchParams.has('parametri') });
+          return rispondi({ ok: false }, 404);
+        };
+        let stato = '';
+        const svg = '<svg xmlns="http://www.w3.org/2000/svg" data-rg-stilista-origine="0 0" data-rg-stilista-ago="1"></svg>';
+        await rg.inviaAStilista({ tool: 'net-45', sorgente: () => (conCartamodello ? svg : null), strati: () => [{ nome: 'raso', polylines: [[{ x: 0, y: 0 }, { x: 5, y: 0 }, { x: 5, y: 5 }]] }],
+          dst: () => ({ bytes: dstProva, nome: 'cliente-prova' }), carica() {}, stato: (t) => { stato = t; } });
+        return { mandati, stato };
+      };
+      try {
+        const spento = await giro(false, true);
+        const corpoSpento = JSON.parse(spento.mandati[0].corpo);
+        const acceso = await giro(true, true);
+        const dstSpento = await giro(false, false);
+        const dstAcceso = await giro(true, false);
+        const coda = (m) => new TextDecoder('latin1').decode(m.corpo);
+        check('Tracce RG spente: al suo posto parte il ricamo senza parametri, e la barra lo dice',
+          [corpoSpento.parametri, corpoSpento.punti.length, /tracce RG spente/.test(spento.stato)], [undefined, 3, true]);
+        check('Tracce RG accese: i parametri partono come prima', [typeof JSON.parse(acceso.mandati[0].corpo).parametri, /parametri salvati/.test(acceso.stato)], ['string', true]);
+        check('Tracce RG spente: il DST per un documento nuovo esce senza busta, senza parametri e col nome neutro',
+          [coda(dstSpento.mandati[0]).includes('RGPROJ01'), dstSpento.mandati[0].strada.includes('parametri='), dstSpento.mandati[0].strada.includes('cliente'), dstSpento.mandati[0].strada.includes('nome=ricamo')],
+          [false, false, false, true]);
+        check('Tracce RG accese: il DST porta la busta e i parametri come prima',
+          [coda(dstAcceso.mandati[0]).includes('RGPROJ01'), dstAcceso.mandati[0].strada.includes('parametri=')], [true, true]);
+      } finally {
+        globalThis.fetch = prima.fetch;
+        globalThis.location = prima.location;
+      }
+      // l'interruttore nel plugin, provato da solo in C# (se c'è dotnet: sul PC di Lorenzo sì, in CI forse no)
+      const dotnet = spawnSync('dotnet', ['--version'], { encoding: 'utf8' });
+      if (dotnet.status === 0) {
+        const prova = spawnSync('dotnet', ['run', '--project', join(root, 'strumenti-sviluppo/stilista-link-prove'), '-c', 'Release'], { encoding: 'utf8' });
+        check('Tracce RG: le prove C# dell\'interruttore (spente: niente nella descrizione; «Pulisci» riconosce solo le nostre)',
+          [prova.status, /tracce: tutto ok/.test(prova.stdout)], [0, true]);
+      } else {
+        console.log('  --   Tracce RG: prove C# saltate, qui non c\'è dotnet');
+      }
+    }
     check('Stilista Link: un DST senza busta non ferma l\'invio, lo dice',
       (await rg.progettoDaInviare({ dst: () => ({ bytes: new Uint8Array(600), nome: 'x' }), sorgente: () => null })).dati, undefined);
     check('Stilista Link: per oblique i fori di un plugin vecchio (senza «di chi») vanno al colore del primo filo',
