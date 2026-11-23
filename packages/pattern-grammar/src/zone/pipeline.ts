@@ -222,7 +222,9 @@ export function fillZone(
     totalHeight: area.height,
     columns: undefined,
     rows: undefined,
-  }).visualPolylines;
+    // il punto minimo finale del Generatore (2026-11-23) qui resta spento: i punti si ruotano indietro (la
+    // griglia del DST non vale più) e il minimo sui punti del modulo lo decide la pulizia punti (A6a)
+  }, { puntoMinimoFinale: false }).visualPolylines;
 
   return drawn.map((polyline) => {
     const back = polyline.map((point) => ({ x: point.x - shift.x, y: point.y - shift.y }));

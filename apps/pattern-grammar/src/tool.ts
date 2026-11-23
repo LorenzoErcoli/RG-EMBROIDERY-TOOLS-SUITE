@@ -4,7 +4,7 @@ import {
   generatePattern, generateFinalPatternPoints, parseImportedBoundarySource,
   type PatternConfig, type ImportedBoundaryModel, type ImportScaleMode,
 } from '@rg/pattern-grammar';
-import { conBusta, dstFromExportLayers, DST_FILE, readDstMetadata, type ExportLayer } from '@rg/core';
+import { conBusta, dstFromExportLayers, DST_FILE, readDstMetadata, refertoDaStrati, stratiSullaGrigliaDst, type ExportLayer } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
@@ -678,7 +678,9 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
    */
   function costruisciDst(): { bytes: Uint8Array; base: string | undefined } {
     const base = boundarySource?.name.replace(/\.[^.]+$/, '');
-    const layer: ExportLayer = stratoPattern(cfg as PatternConfig);
+    // Ogni punto sul suo nodo da 0,1 mm e il centro su un nodo (`center: false` sotto): il punto minimo,
+    // che il motore misura già sulla griglia del DST, tiene anche nel file (2026-11-23).
+    const layer: ExportLayer = stratiSullaGrigliaDst([stratoPattern(cfg as PatternConfig)]).layers[0];
     // I parametri viaggiano ANCHE nel DST (R27), nel footer dopo l'END: la macchina legge fino all'END
     // e lo ignora, noi lo rileggiamo. Ci va anche il DISEGNO, come testo del file caricato, con la sua
     // scala e i ruoli dei colori: così un DST riaperto rigenera il programma intero (2026-10-07). Sopra
@@ -692,8 +694,10 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       : ` · disegno troppo pesante (${Math.round(boundarySource.text.length / 1024)} kB): nel file solo i parametri`;
     const bytes = dstFromExportLayers([layer], {
       label: (base || 'PATTERN').toUpperCase().slice(0, 16),
+      center: false,
       metadata: conBusta({ rgProject: 'pattern-grammar', version: '0.1.0', params: saved, ...(disegno ? { drawing: disegno } : {}) }, {
         strati: [layer],
+        misure: refertoDaStrati([layer], { centra: false }),
         // il cartamodello caricato (misura reale in mm = il riquadro della sagoma scalata)
         sorgente: boundarySource ? {
           tipo: /\.dxf$/i.test(boundarySource.name) ? 'dxf' : 'svg', nome: boundarySource.name,

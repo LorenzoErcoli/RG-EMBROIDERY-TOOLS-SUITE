@@ -381,7 +381,7 @@ export function cleanupBoundaryConnectedPath(points: GeneratedPoint[], options: 
   const minPointDistance = Math.max(0, options.minPointDistance ?? 0);
   const mode = options.boundaryCleanupMode ?? "adjust-then-delete";
   const maxAdjustment = Math.max(0, options.maxBoundaryAdjustment ?? minPointDistance);
-  const deduped = removeNearDuplicateBoundaryPoints(points, Math.max(0.0001, minPointDistance || 0.0001));
+  const deduped = removeNearDuplicateBoundaryPoints(points, Math.max(0.0001, minPointDistance || 0.0001), options);
   if (minPointDistance === 0 || deduped.length <= 2) return deduped;
 
   const cleaned: GeneratedPoint[] = [deduped[0]];
@@ -410,12 +410,21 @@ export function cleanupBoundaryConnectedPath(points: GeneratedPoint[], options: 
   return cleaned;
 }
 
-function removeNearDuplicateBoundaryPoints(points: GeneratedPoint[], tolerance: number): GeneratedPoint[] {
+/**
+ * Due punti di bordo più vicini del minimo: il secondo se ne va, ma solo se il tratto che resta sta nella
+ * sagoma. Prima non lo si guardava: l'angolo di un vuoto a 0,9 mm dal capo del pezzo spariva e il filo
+ * tagliava dentro il vuoto (misurato il 2026-11-23: 0,79 mm). Se il tratto esce, il punto resta qui e lo
+ * decide il punto minimo finale (`puntoMinimo.ts`), che sa scegliere quale dei due tenere.
+ */
+function removeNearDuplicateBoundaryPoints(points: GeneratedPoint[], tolerance: number, options: BoundaryOptions): GeneratedPoint[] {
   if (points.length <= 1) return points.slice();
   const result: GeneratedPoint[] = [points[0]];
-  for (const point of points.slice(1)) {
+  for (let index = 1; index < points.length; index++) {
+    const point = points[index];
     const previous = result.at(-1)!;
-    if (distance(previous, point) < tolerance && boundaryLike(previous) && boundaryLike(point)) {
+    const next = points[index + 1];
+    if (distance(previous, point) < tolerance && boundaryLike(previous) && boundaryLike(point)
+      && (!next || segmentStaysInside(previous, next, options))) {
       continue;
     }
     result.push(point);
