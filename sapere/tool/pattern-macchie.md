@@ -221,14 +221,15 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    quelli sopra di*. I progetti salvati prima si riaprono con la casella spenta, come erano; i parametri ricordati dalla pagina
    no, prendono quella di serie.
 39. (2026-11-06) **Il taglio sui salti lunghi.** *«Manca la gestione dei salti sui passaggi sopra un tot, sia un dst che nel
-   rimandalo a stilista»*; alla domanda ha scelto «salto lungo → taglio». Campo `tagliaOltre` in *Cosa ricamare*, di serie 3 mm
-   (scelto da me, da confermare): nel DST un salto più lungo porta il taglio del filo (`ExportLayer.trims`), uno più corto
+   rimandalo a stilista»*; alla domanda ha scelto «salto lungo → taglio». Campo `tagliaOltre` in *Cosa ricamare*, di serie 10 mm
+   (2026-11-09: prima erano 3, e a un suo amico il ricamo è uscito spezzettato e pieno di tagli; Lorenzo: *«mettilo a 10 mm»*): nel DST un salto più lungo porta il taglio del filo (`ExportLayer.trims`), uno più corto
    resta salto. Non cambia il ricamo, quindi si cambia senza rigenerare; il *Programma* dice quanti salti di ogni stop hanno il
    taglio. Vale per *Esporta DST*, per *Simula* e per *Invia a Stilista* quando il disegno non viene da Stilista (va il DST).
    **Non vale** per il ritorno in Stilista al suo posto: il plugin manda solo il salto, non il taglio, e per aggiungerlo va
    capito come Stilista segna un taglio nei punti. I progetti salvati prima si riaprono con 0, senza tagli, come erano. Sul suo
-   disegno (tre livelli divisi per grandezza): oltre 3 mm 7 tagli su 8 salti nel 2° livello e 71 su 87 nel 3°; a due livelli
-   135 su 175.
+   disegno (tre livelli divisi per grandezza): oltre 10 mm 7 tagli su 8 salti nel 2° livello e 18 su 87 nel 3°; a due livelli
+   33 su 175 (oltre 3 mm erano 135). La pagina ricorda gli ultimi parametri: dove si era già usato il tool il campo può restare
+   a 3 finché non lo si cambia una volta.
 40. (2026-11-06) **Il riempimento sfrangiato.** *«ora le macchie che creo di def sono riempimenti raso. Invece vorrei poter
    scegliere il riempimento o raso o riempimento con punto sfrangiato, quello che usiamo appunto nel tools punto sfrangiato, ma
    che segua e riempia le macchie.»* Precisato: *«è fondamentalmente un andata e ritorno con il centro al centro della macchia
@@ -243,6 +244,113 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    livelli col 2° sfrangiato: salti uguali (0/175), filo a vista uguale (282 mm), punti del 2° da 60.523 a 191.009, punte fino
    a 6,5 mm fuori, nessun punto oltre il punto massimo (4 mm). Non provato a macchina; l'interlinea di serie (0,4 mm) col
    doppio passaggio può essere fitta.
+41. (2026-11-06) **La prova su un pezzo.** *«ogni volta che genero ci mette tanto, non c'è modo di fare una simulazione rapida
+   per vedere come viene su un campione più piccolo e poi generare tutto il piazzato?»* Pulsante *Prova qui*, accanto a
+   *Genera*: calcola solo le macchie che toccano il pezzo che si vede nell'anteprima (intere), con la base, se c'è, sul
+   riquadro. Una prova non si esporta: DST, SVG e Stilista vogliono *Genera*, e la riga in basso lo dice. Con *Ricalcola da
+   solo* acceso, dopo una prova ogni campo cambiato rifà la prova lì, non tutto. Sulla pagina, 14 macchie su 120 in 0,1 s.
+   Il ricamo di una prova può differire ai bordi del pezzo da quello di *Genera*: le macchie fuori non ci sono, quindi
+   l'ordine e i passaggi lì cambiano.
+42. (2026-11-06) **I campi del raso e dello sfrangiato.** *«i parametri tra raso e sfrangiato non sono molto chiari, rendili più
+   chiari anche in base alla differenza»*. Il pannellino del livello si chiama *Raso* o *Sfrangiato* secondo il riempimento, e
+   i campi cambiano parole: col raso *righe da un bordo all'altro* (*Distanza fra le righe*, *Bordo irregolare*…), con lo
+   sfrangiato *colonne dal centro* (*Distanza fra una colonna e l'altra*, *Punto massimo, nelle andate e ritorno*, *Punte
+   oltre il bordo: almeno / al più*, *Da dove partono le punte*). Le punte si vedono solo con lo sfrangiato. I parametri sono
+   gli stessi: un progetto si riapre uguale.
+43. (2026-11-17) **I passaggi nascosti a linea spezzata, e un millimetro dentro** (Costituzione R17,
+   `sapere/decisioni/passaggi-linea-spezzata.md`). *«queste regole di passaggi devono essere globali nella suite, in
+   particolare è importante ritrovarle in pattern a macchie»*; mandate dalla chat della Ricetta a livelli. Sotto il raso della
+   macchia (`SottoIlRaso.strada`) e sotto i livelli sopra (`SottoIlSecondo`) il passaggio cammina a linea spezzata
+   (`lineaSpezzata`: un punto ogni 1,8–2,6 mm, spostato di lato di 0,6–1,2 mm, alternato; lo spostamento si dimezza o si
+   toglie dove il filo uscirebbe da quello che copre o taglierebbe le righe cucite). Restano dritti i tratti nel verso del
+   raso che copre (entro 15°) e i tratti a vista. La fascia di 1 mm lungo il bordo di quello che copre costa 4 invece di 1.
+   **Cambia la decisione del 2026-10-26** (i passaggi costeggiano il bordo, dal DST di Stilista): ora costeggiano a un
+   millimetro dentro (mediana 0,70 mm dal bordo sul pannello di prova, prima 0,21). La regola dello sfrangiato in diagonale
+   (costo 6) non serve qui: lo sfrangiato è verticale e i passaggi non ci passano. Sul suo disegno, a due livelli: salti
+   uguali (0/175), filo a vista uguale (282 mm); tratto dritto non verticale più lungo sotto il raso 17,7 → 15,5 mm (oltre 5
+   mm: 39 → 7), fra le macchie 28,2 → 11,6 mm (68 → 24); filo dei passaggi fra le macchie 1.154 → 1.272 mm. A tre livelli:
+   salti uguali (0/8/87), sotto il raso 15,3 → 8,6 mm (54 → 10), fra le macchie 28,2 → 11,9 mm (137 → 60). I verticali restano
+   dritti fino a 34–40 mm. Sulle nove macchie di prova il filo sotto il raso va da 303 a 436 mm (lo zig-zag allunga), i
+   salti da 33 a 29. Non provato a macchina né in Stilista.
+44. (2026-11-17) **L'ordine di un livello segue i livelli sopra.** Lorenzo, sul suo disegno a tre livelli: *«Ho un dubbio
+   sulle macchie di livello 2 che fanno un sacco di salti invece di spostarsi sotto le macchie superiori»*; poi, fra le strade
+   proposte: *«scegli l'ordine delle rosse in base alle nere»*. L'ordine guardava solo la distanza fra le macchie: metteva in
+   fila due rosse vicine anche dove fra loro c'è il raso arancione già cucito e nessuna nera sopra, e il filo non poteva
+   passare. Ora, per ogni livello con livelli sopra, `costiNascosti` stima per ogni coppia di macchie se il filo può andare
+   dall'una all'altra nascosto (con le regole di `SottoIlSecondo`: coperto dai livelli sopra a «distanza dal bordo», a vista
+   al più «a vista al più» mm per volta, mai sopra il raso già cucito che nessuno copre, dentro la finestra che la strada vera
+   guarda) e quanto costa; `ordinaMacchie` usa quel costo al posto del salto, e un salto costa 20 in più (con 1.000,
+   cioè prima i salti e poi il resto, l'ordine univa gruppi lontani con salti lunghi: stessi salti, quasi il doppio dei mm). Oltre alla fila del più vicino prova le file di macchie legate (allungate verso la macchia
+   con meno legami liberi, 30–400 tentativi a caso col seme fisso: lo stesso disegno dà sempre lo stesso ordine) e tiene la
+   migliore. Sul suo disegno (33 arancioni, 49 rosse, 116 nere, parametri di serie): salti 2/22/115 → 1/15/115, i mm dei
+   salti delle rosse 516 → 343, quelli oltre 10 mm (col taglio) 12 → 8, filo a vista 335 → 402 mm (ogni tratto sempre entro
+   12 mm), passaggi 56 → 64, tempo uguale (circa 60 s). Sul pannello di prova a due livelli: 21 salti e 183 mm → 11 e 79. Il minimo stimato è 13 salti: 12 rosse non hanno nessuna nera che le
+   colleghi a un'altra (con la sfrangiatura di serie il filo sta a 0,8 mm dentro le nere, e molte nere sono strette). Il
+   livello più alto non cambia (nessuno sopra). Coi ponti accesi, i ponti del livello più alto si decidono ancora
+   sull'ordine di prima dei livelli sotto (`pontiDellaCima`). Non provato a macchina né in Stilista.
+45. (2026-11-20) **Dove una strada nascosta non c'è, sotto fin dove si può e poi un salto solo.** Lorenzo, sul suo disegno
+   a tre livelli: *«le macchie livello 2 fanno un sacco di salti. i salti devono essere a zero e fare i passaggi sotto le
+   macchie di livello 3. quando impossibile arrivano al limite della macchia livello 3 e fanno un salto fino alla macchia
+   successiva. In Swatch a stop questo già lo fa bene»*. Prima, se la strada nascosta non arrivava fino alla macchia dopo,
+   il salto partiva dritto dalla fine del raso. Ora (`SottoIlSecondo.finoAlSalto`) il filo va coperto sotto i livelli sopra
+   (con le stesse regole: a vista al più «a vista al più» mm per volta, mai sopra il raso già cucito) fino al punto da cui
+   il salto costa meno, e un millimetro di salto pesa come un millimetro a vista (25 di filo coperto). Il salto può anche
+   atterrare sotto una nera e di lì andare coperto fino alla macchia, purché la strada ci sia davvero: sempre un salto
+   solo. Anche l'uscita dalla macchia prima si sceglie dove comincia quella strada. Si fa solo se il salto si accorcia
+   almeno di 2 mm. Sul suo disegno (parametri di serie): salti delle rosse 15 → 14, i loro mm 343 → 175, quelli oltre
+   10 mm 8 → 3; filo a vista 402 → 469 mm (ogni tratto entro 12 mm). I tre salti lunghi che restano (63, 42 e 29 mm) sono
+   fra rosse chiuse tutte e due nell'arancione già cucito: nessuna nera da usare né di qua né di là. L'ordine stima ancora
+   un salto come la distanza dritta fra le macchie. Non provato a macchina né in Stilista. **Sostituita lo stesso giorno
+   dalla 46**: quel salto dritto passava sopra il livello più alto, che si cuce dopo.
+46. (2026-11-20) **Mai un salto sopra quello che si cucirà dopo; anche il livello più alto passa sotto le sue macchie.**
+   Lorenzo, su un programma in Stilista con gli stop 4-5-6 fatti col tool (i tre livelli): *«ci sono un sacco di salti che
+   passano sopra punti che poi verranno ricamati. inaccettabile ti ricordo che il filo deve seguire i passaggi. Se la
+   macchia si trova in un vicolo cieco usa la modalità di entrare con il passaggio fino in fondo alla macchia e poi tornare
+   indietro. non devono esserci passaggi lunghi. in swatch a stop lavora meglio»*. Letti i punti dalla finestra di
+   Stilista: lo stop 5 aveva salti di 49, 51 e 68 mm sopra le macchie del 3° livello; lo stop 6 (il 3°, il più alto)
+   nessun passaggio, un salto fra ogni macchia e la dopo, anche sopra le sue macchie ancora da cucire. Ora, come in
+   Swatch a stop, dove una strada tutta coperta fino alla macchia non c'è (`SottoIlSecondo.conSalti`, al posto di
+   `finoAlSalto`): una ricerca sola fino alla macchia, coperto dove si può (1 al mm), a vista dove serve (25 al mm, al più
+   «a vista al più» mm per volta), e i salti solo sopra il tessuto libero o sopra il raso già cucito (80 al mm): sopra
+   quello che si cucirà dopo il filo va sotto, non salta. I salti possono essere più d'uno, ognuno da bordo a bordo, a
+   pezzi dritti che non passano sopra niente da cucire dopo; dentro la macchia d'arrivo si arriva sempre, anche sopra il
+   già cucito (il suo raso lo copre subito). Il livello più alto, se ce ne sono sotto, ha anche lui i passaggi: sotto le sue
+   macchie ancora da cucire (prima nessuno). Il vicolo cieco: la strada può tornare per dove è venuta finché quello che la
+   copre non è ancora cucito, e il piano del raso finisce dove comincia la strada verso la macchia dopo, anche se è
+   accanto all'ingresso; l'ordine delle macchie non è stato cambiato per questo. Sul programma ricostruito dai contorni
+   di Stilista (parametri di serie, i suoi non li so): 1° livello salti 1 → 2 (17 → 13 mm); 2° livello 14 → 15 salti ma
+   133 → 23 mm, oltre 10 mm 2 → 0, sopra quello che si cuce dopo 61 → 5 mm (tutti dentro mezzo millimetro dal bordo);
+   3° livello 115 → 9 salti, 753 → 71 mm, oltre 10 mm 20 → 3, sopra quello che si cuce dopo 24 → 1 mm (anche lui al bordo). Filo a vista
+   457 → 770 mm (ogni tratto entro 12 mm): sul 3° livello gli spazi fra le macchie prima erano salti, ora sono
+   attraversati a vista. Sul disegno a tre livelli della 45: salti delle rosse lunghi al più 4 mm (prima 63). Non provato
+   a macchina né in Stilista.
+47. (2026-11-23) **Un contorno dentro un altro dello stesso livello è un'area vuota, non un'altra macchia.** Lorenzo:
+   *«Il livello 3 delle macchie aveva 2 oggetti con le aree vuote. il sistema ha visto 2 contorni e ha disegnato 2 macchie,
+   c'è quindi passato sopra e ha creato problemi»*. Letti gli oggetti dalla finestra di Stilista: il contorno dell'area
+   vuota arriva come un oggetto a sé, dello stesso colore (`GET /fori` non trova buchi); il tool ne faceva una macchia, e
+   il raso di quella fuori ci passava sopra. Ora (`conIBuchi`, all'inizio di `costruisciMacchie`, per ogni livello) vale la
+   regola dei disegni vettoriali, pari e dispari: dentro un numero dispari di contorni dello stesso livello è un buco di
+   quello che lo contiene più da vicino, ed entra nella macchia con un taglio nel verso del raso (`conBuco`, lo stesso dei
+   livelli fermati sotto quelli sopra); dentro un numero pari è un'isola, una macchia. I contorni sotto 0,05 mm² (un punto,
+   una scheggia) si tolgono. Sul disegno: nel 3° livello le due aree vuote, nel 1° tre (le stesse coppie); filo cucito
+   dentro le aree vuote del 3° 34 → 0 mm. Una scheggia di 7 mm² lungo un bordo dritto, dentro un'altra macchia del 3°, ora
+   è un buco anche lei. Non provato a macchina né in Stilista.
+48. (2026-11-23) **Fra una copertura e l'altra un salto senza punti, appoggiato 1 mm dentro.** Lorenzo: *«Tutte le macchie i
+   passaggi, soprattutto i livello sotto a un livello di macchia ricamata, quando escono appunto dai ricami coperti non
+   devono avere punti sui "ponti". Il punto deve rimanere nella macchia che poi viene ricamata sopra e essere libero come
+   un salto, in modo da poter essere tagliato dopo»*; chiesto se salto vero o un punto lungo, e quanto dentro: *«salto
+   vero, 1 mm dentro va bene»*. Prima, dove il filo usciva da quello che copre, attraversava lo spazio scoperto cucito a
+   vista, un punto ogni 3 mm («a vista al più» 12 mm per volta: decisioni del 2026-11-03, «andando a zero di salti»). Ora
+   in ogni strada fra le macchie (`SottoIlSecondo`, sia quella senza salti lunghi sia `conSalti`) ogni tratto scoperto è
+   un salto: l'ultimo punto prima e il primo dopo stanno almeno 1 mm dentro la parte che il ricamo sopra copre davvero
+   (`MARGINE_COPERTURA`, oltre la fascia della sfrangiatura); se entro 3 mm lungo la strada non c'è tanto spazio (una
+   copertura stretta, `APPOGGIO_MAX`), il punto più dentro di quelli. Il salto non passa sopra il fondo di un'altra
+   copertura. «A vista al più» resta il massimo di spazio scoperto per un salto corto così; oltre, la strada coi salti lunghi
+   (decisione 46). Nel DST sono salti: oltre 10 mm col taglio di serie, sotto da rifilare a mano. I salti del 1° livello
+   quindi non sono più zero: sul pannello di prova sono 18, nessuno oltre 5,4 mm. I tratti di un punto solo (un passaggio
+   del salto) non restano nel livello: il DST li saltava, e con loro il loro taglio. Sul disegno della 5375: punti dell'ago
+   in mezzo ai passaggi fuori da ogni macchia 205 → 0; salti del 1° livello 0 → 115 (328 mm), del 2° 40 → 61. Non provato
+   a macchina né in Stilista.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso
