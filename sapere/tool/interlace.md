@@ -71,5 +71,99 @@ il difetto dei 300 punti resta lì, perché correggerlo cambierebbe i lavori gi�
 **La voce C4 (densità per zona) resta aperta:** qui il filo totale è pari, mentre C4 chiede densità diverse
 per regione.
 
+## Più fitto intorno alle aree vuote (2026-11-19)
+
+Lorenzo: *«la costruzione di aglomerati intorno alle aree vuote. vorrei avere la possibilità di decidere la densità intorno alle aree vuote e anche per quanto estendere la sfumatura che da molto intenso torna al noramle. è una cosa che si attiva, normalmente tutta la densità è uguale, ma posso avere questo controllo.»* Alla domanda su quali aree vuote ha risposto **i buchi della forma** (non il bordo
+esterno, non lo sfondo senza ricamo), e ha scelto di dire l'intensità in **volte la densità**.
+
+**Com'è fatta** (`voidDensityBoost`, `voidDensityFactor`, `voidDensityFadeMm`; spenta di serie): l'obiettivo di
+ogni cella si moltiplica per un fattore che vale `voidDensityFactor` sul bordo del buco e scende a 1 a
+`voidDensityFadeMm` di distanza, con una curva morbida senza scalino. Vale in tutti i modi (mélange, agglomerati,
+sfumatura dai toni). La distanza si misura dai soli buchi. Il fattore si ferma a 5.
+
+**Misurato** su un rettangolo 140×90 con un buco tondo di raggio 10, un colore, punto 2–4, densità 1,5. I valori
+sono il filo vicino al buco diviso per quello lontano:
+
+| | 0–2 mm | 2–4 mm | 4–6 mm | 6–8 mm | oltre 8 mm |
+|---|---|---|---|---|---|
+| Spento | 1,50 | 1,50 | 1,09 | 1,08 | ~1 |
+| Fattore 2, 8 mm | 2,34 | 2,04 | 1,24 | 1,05 | ~1 |
+| Fattore 3, 8 mm | 2,96 | 2,40 | 1,59 | 1,19 | ~1 |
+| Fattore 3, 15 mm | 2,66 | 2,58 | 1,93 | 1,70 | 1,38 a 8–10, 1,15 a 10–12, ~1 da 12 mm |
+
+**Da sapere:** già spento il filo si addensa un po' attorno al buco (×1,5 nei primi 4 mm), perché ci gira
+attorno. Il filo totale cresce poco (16,0 → 16,2–16,7 m), perché la corona attorno al buco è piccola rispetto al
+pezzo, e resta un tratto solo. **Non visto da Lorenzo** al momento di questa nota.
+
+## Le venature della pelle sopra Interlace (2026-11-19)
+
+Lorenzo: *«vorrei simulare attraverso l'interance una grafica delle venature della pelle. per questo vorrei che iniziassimo a fare un po' di riceerca insieme»* La ricerca, con le sue scelte a ogni passo, è andata così:
+
+1. Ha scelto il tipo **crepe / craquelé** e la strada **«il filo segue le venature»**. Poi ha portato una foto di pelle
+   color cuoio con venature chiare (misurato: fondo circa `#874325`, venature circa `#B46F4E`, quindi più chiare).
+2. *«bastano le venature lunghe, il fondo resta mélange»*.
+3. Dopo una ricerca più ampia: *«il sotto lascialo stare, faremo si un interace normale. ma sopra le venature devono essere fatte di filo, con imbastiture andata e ritorno dove lo vogliamo più spesso, solo andata sul più fimo»*.
+4. Sui salti ha scelto **«Un giro solo, raddoppia»**: dove il filo dovrebbe staccare, ripassa un tratto.
+5. *«rifalle che attraversano. Rendili anche più naturali se riesci»*; *«più venature e falle fermare prima del bordo»*;
+   poi, visto il risultato, *«l'ultimo un po' meno naturale di prima»*, e fra quattro disegni ha scelto **la A**,
+   **«A così, fino al bordo»**.
+
+**Cosa si è imparato** (la ricerca intera, coi suoi schizzi, è nelle note della chat, fuori dal repo):
+
+- Nessuno ricama l'aspetto della pelle con le venature: in rete c'è solo il ricamo *su* pelle. La cosa più vicina è il
+  ricamo cinese a punti casuali di Changzhou, cioè la famiglia di Interlace.
+- Nella pelle "pull-up" le venature chiare sono **pieghe**: lì olio e cera si spostano e il colore schiarisce. Nascono a
+  famiglie quasi parallele. Una venatura vera **non è una curva liscia**: è spezzata.
+- **Scartate:** la rete a celle chiuse (*«più venature rami che pelle»*, per gli alberi); le fasce riempite di filo chiaro
+  (il filo si ammucchia, 148 salti); la foto usata come immagine della sfumatura (rifà la patina, ma le venature non si
+  vedono: l'immagine è ridotta a 256 px); fini quasi parallele ai fasci (non trovano incroci e spariscono).
+- **I salti:** un filo a passata singola che finisce nel vuoto lascia un'estremità libera, cioè un nodo dispari, e lì
+  deve tornare indietro. Attraversare da solo non basta: i ripassi si mandano sulle spesse (le fini costano 25 volte).
+
+**Com'è fatta** (`venature.ts`, spenta di serie; `veinsOn`, `veinsColor`, `veinsBundles`, `veinsThin`,
+`veinsAngleDeg`, `veinsSeed`). È la A portata nel motore, con le sue misure:
+
+- fasci di 2-3 **spesse a fuso**: il ritorno corre a 0,35 mm dall'andata nel mezzo e la raggiunge alle punte, a punti
+  da 2,2-3,6 mm. Ogni quinto fascio è coricato di 66°;
+- **fini** a filo singolo, punti da 1,8-3,2 mm: partono da una vena (70% da una spessa), ne attraversano 0-2 e si
+  fermano sulla vena dopo almeno 8 mm, oppure arrivano al bordo;
+- **ponti**: se la rete resta in più pezzi (pochi fasci su un pezzo grande, o nessuna fine) una fine li collega,
+  così il giro resta unico. Questo nella A non c'era: l'ho aggiunto perché sul cartamodello demo la rete si spezzava;
+- **fusione**: i nodi a meno di 1 mm si uniscono, per il punto minimo (sono gli incroci doppi dove una fine taglia un fuso);
+- **un giro solo**: i nodi dispari si appaiano col cammino più economico e quel cammino si ripassa.
+
+**Misurato** sul rettangolo 120×80 (variante 8): un tratto, 1734 punti, 4,31 m, nessun punto sotto 1 mm, punto più
+lungo 5,1 mm, fini 1,09 m di cui ripassate 0,30 m. Nel giro completo con Interlace sotto: da 2 a 3 stop, +4,3 m.
+**Spente, la cucitura è identica byte per byte** a prima. **Non visto cucito.**
+
+## Provato su un pezzo vero con 201 fori (2026-11-23)
+
+Lorenzo, provando su un pezzo di 309×219 mm con 201 fori (un pezzo di prova preso da Stilista): *«L'obiettivo è avere 3 fili che si intrecciano con una copertura media, ma rimane un problema: la densità ora tocca singolarmente ogni filo, mai nel complesso. In più si creano degli agglomerati strani anche quando non richiesti. cioè io vorrei tutto normale e poi agglomerati solo intorno ai fori. La parte delle venature poi non funziona»*.
+(Le sue parole, corrette solo negli errori di battitura.) Misurato su quel pezzo, tre marroni:
+
+- **La densità era per filo.** Ora c'è **«La densità è di tutti i fili insieme»** (`densityTotal`, spenta di
+  serie). Il filo di una passata **non** scende con l'inverso della distanza: un colore, punti 6-15 mm, da 1 a 6 mm
+  fa 480 → 278 → 148 → 78 → 37,5 → 22,4 m (scende con la distanza alla 1,8); con punti 2-5 mm, alla 1,5. Allora ogni
+  passata va a N^(1/1,7) volte la distanza: con 3 colori 1,9 volte. Densità 1,5 del totale: 258 m contro 278 di un
+  filo solo.
+- **Gli agglomerati strani** vengono dai **vortici** del motore (il campo di flusso che curva la camminata): a
+  densità alta si vedono come nuvole a spirale. Ora c'è **«Vortici del fondo»** (`flowStrength`, 100 = come sempre,
+  0 = fondo senza vortici).
+- **Gli agglomerati intorno ai fori con i punti lunghi non restano lì.** Con i punti di serie (6-15 mm), più fitto
+  ×3 su 4 mm: vicino ai fori 5,16, lontano 4,26 (filo per mm², fondo), e il lontano era 2,79 senza: **cresce tutto il
+  pezzo**, perché un punto di 6-15 mm che parte da un foro finisce lontano. Con **punti 2-5 mm** restano intorno ai fori:
+  vicino 3,34, lontano 1,55 (era 1,48). **Da dire a Lorenzo; non cambiato nel motore.**
+- **Le venature si fermavano al primo foro**: 2,8 m su tutto il pezzo, e i ponti attraversavano il pezzo dritti. Ora
+  davanti a un foro girano (fino a 72°, prima da un lato poi dall'altro) e proseguono; si fermano solo al bordo. Sul
+  pezzo più lungo della A si allungano in proporzione (la A era 120×80). Dopo: 8,7 m, un tratto solo.
+- *«perchè le venature sono solo a destra? Serve un algoritmo in grado di crearle su tutta la superficie»*. Gli
+  inizi dei fasci erano pescati a caso e i coricati partivano sempre a destra, come nella A. Prima prova: la
+  larghezza divisa in fette, un fascio per fetta, fasci e fini in proporzione → 13 strisce quasi parallele dall'alto
+  in basso. Lorenzo: *«a me ancora così non mi sembra troppa pelle magari mi sbaglio»*: nella A i fasci si incrociano
+  in direzioni diverse. Seconda prova, quella tenuta: il pezzo si divide in **riquadri della misura della A** (120 di
+  traverso, 80 lungo le vene), ognuno con la sua composizione A girata un po' (16° di scarto tipo); i fasci sconfinano
+  e si incrociano. Fasci e fini sono il numero **per riquadro**; con un riquadro solo è la A. Sul suo pezzo (3×3
+  riquadri): circa 33 m, un tratto, nelle varianti 8, 3 e 21. Lorenzo: *«sì meglio»*.
+
 Cosa resta da fare sta in `STATO.md` (C4 densità per zona, C5 vuoto dello stesso colore, C6 modello
 densità unificato, A5 i nomi dei parametri "movimento").

@@ -17,6 +17,8 @@ const entry = join(outDir, 'entry.ts');
 writeFileSync(entry, `
 export { parseImportedBoundarySource, generatePattern, generateFinalPatternPoints, parseSvgTransform } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
 export { generateFill, generatePasses, stitchBudget, defaultInterlaceParams, DENSITY_MAX_MM } from ${JSON.stringify(posix('apps/interlace/src/engine.ts'))};
+export { generateVeins } from ${JSON.stringify(posix('apps/interlace/src/venature.ts'))};
+export { runPipeline as runInterlacePipeline } from ${JSON.stringify(posix('apps/interlace/src/pipeline.ts'))};
 export { generateStitch, stitchSteps, reinsertPoints, analyzeBitmap, buildSelectionMask, buildPalette, groupByPalette, defaultBitmapParams } from ${JSON.stringify(posix('apps/bitmap/src/engine.ts'))};
 export { buildRawLevels, computeGridCounts, moduleFromPolylines, parseModuleSvg, defaultObliqueParams, resolveBoundaries, buildLaserExport, filterLevelByHoles, rectBoundaryOf, boundaryFromFormat, boundaryFromPoints, contourBoundary, simplifyLoop, isInside, applyModuleClipMode, cleanupPolylines, subtractExclusions, cleanupVoids, applyVoids, generateOblique, connectLayerContinuity, connectTechnicalDiagonals, enforceMinimumStitch, reconnectCutFragmentsOnBoundary, offsetPolygonBoundary, insetAnyBoundary, removeIsolatedSpikes } from ${JSON.stringify(posix('apps/oblique/src/engine.ts'))};
 export { runBitmapPreview, runBitmapPipeline, PREVIEW_MAX_DOTS } from ${JSON.stringify(posix('apps/bitmap/src/pipeline.ts'))};
@@ -519,6 +521,116 @@ let tonoNelVietato = 0;
 const tonoDiv = rg.generatePasses(imgSquare, [], { ...tonoParams, toneBlend: true, zoneBans: [[false, false], [true, false]], zoneOverlapMm: 0 }, [1.5, 1.5], (x) => tonoSample(x));
 for (const r of tonoDiv[1]) for (const pt of r) if (pt.x < 50) tonoNelVietato++;
 check('sfumatura: i divieti valgono ancora (lo scuro non scende nella zona chiara)', tonoNelVietato, 0);
+
+// interlace — PIÙ FITTO INTORNO ALLE AREE VUOTE (`voidDensityBoost`). Lorenzo: «la costruzione di agglomerati
+// intorno alle aree vuote … è una cosa che si attiva, normalmente tutta la densità è uguale». Acceso, il filo
+// si addensa attorno ai buchi del cartamodello e torna normale a `voidDensityFadeMm` di distanza.
+console.log('\ninterlace — più fitto intorno alle aree vuote');
+const vdRect = [{ x: 0, y: 0 }, { x: 140, y: 0 }, { x: 140, y: 90 }, { x: 0, y: 90 }];
+const vdHole = Array.from({ length: 72 }, (_, k) => ({ x: 50 + 10 * Math.cos(k / 72 * 2 * Math.PI), y: 45 + 10 * Math.sin(k / 72 * 2 * Math.PI) }));
+const vdParams = { ...rg.defaultInterlaceParams, minStitchMm: 2, maxStitchMm: 4, densitySpacingMm: 1.5, voidClearanceMm: 0.3, colors: ['#d0c5b1'] };
+const vdFasce = (passes) => { const mm = [0, 0, 0]; for (const pass of passes) for (const r of pass) for (let i = 1; i < r.length; i++) { const L = Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y), n = Math.max(1, Math.ceil(L / 0.2)); for (let s = 0; s < n; s++) { const t = (s + 0.5) / n, x = r[i - 1].x + (r[i].x - r[i - 1].x) * t, y = r[i - 1].y + (r[i].y - r[i - 1].y) * t; if (x >= 100 || y < 5 || y >= 85) continue; const d = Math.hypot(x - 50, y - 45) - 10; if (d >= 0 && d < 4) mm[0] += L / n; else if (d >= 12 && d < 20) mm[1] += L / n; else if (d >= 20) mm[2] += L / n; } } return mm; };
+// aree delle fasce, per avere mm di filo al mm²: anello 0-4, anello 12-20, il resto della parte misurata
+const vdArea = [Math.PI * (14 * 14 - 10 * 10), Math.PI * (30 * 30 - 22 * 22), 100 * 80 - Math.PI * 30 * 30];
+const vdDens = (passes) => vdFasce(passes).map((v, i) => v / vdArea[i]);
+const vdSpento = rg.generatePasses(vdRect, [vdHole], vdParams, [1.5]);
+const vdAcceso = rg.generatePasses(vdRect, [vdHole], { ...vdParams, voidDensityBoost: true, voidDensityFactor: 2, voidDensityFadeMm: 8 }, [1.5]);
+const [sv, sm, sl] = vdDens(vdSpento), [av, am, al] = vdDens(vdAcceso);
+check('aree vuote: spento di suo', rg.defaultInterlaceParams.voidDensityBoost, false);
+check('aree vuote: spento, i numeri del fattore non cambiano niente', JSON.stringify(rg.generatePasses(vdRect, [vdHole], { ...vdParams, voidDensityFactor: 5, voidDensityFadeMm: 30 }, [1.5])) === JSON.stringify(vdSpento), true);
+check('aree vuote: acceso, vicino al buco il filo cresce di almeno il 30% rispetto a spento', av > sv * 1.3, true);
+check('aree vuote: acceso, vicino al buco è almeno 1,7 volte il lontano', av > al * 1.7, true);
+check('aree vuote: oltre la sfumatura torna normale (entro il 15% del lontano)', Math.abs(am / al - 1) < 0.15, true);
+let vdNelBuco = 0;
+for (const pass of vdAcceso) for (const r of pass) for (const pt of r) if (Math.hypot(pt.x - 50, pt.y - 45) < 10) vdNelBuco++;
+check('aree vuote: acceso, nessun punto dentro il buco', vdNelBuco, 0);
+check('aree vuote: acceso, senza buchi non cambia niente', JSON.stringify(rg.generatePasses(vdRect, [], { ...vdParams, voidDensityBoost: true }, [1.5])) === JSON.stringify(rg.generatePasses(vdRect, [], vdParams, [1.5])), true);
+check('aree vuote: acceso, il filo resta continuo (un tratto solo)', vdAcceso[0].length, 1);
+
+// interlace — VENATURE sopra il ricamo (`veinsOn`), il disegno «A» scelto da Lorenzo: fasci di spesse a fuso (andata e
+// ritorno), fini a filo singolo, un giro solo senza salti, incroci sotto 1 mm uniti.
+console.log('\ninterlace — venature sopra il ricamo');
+const vnRect = [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 80 }, { x: 0, y: 80 }];
+const vnBuco = Array.from({ length: 48 }, (_, k) => ({ x: 60 + 9 * Math.cos(k / 48 * 2 * Math.PI), y: 40 + 9 * Math.sin(k / 48 * 2 * Math.PI) }));
+const vnParams = { ...rg.defaultInterlaceParams, voidClearanceMm: 0, veinsOn: true };
+const vnLen = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
+check('venature: spente di serie', rg.defaultInterlaceParams.veinsOn, false);
+check('venature: spente, nessun filo', rg.generateVeins(vnRect, [], { ...vnParams, veinsOn: false }).runs.length, 0);
+for (const seed of [8, 3, 21]) {
+  const v = rg.generateVeins(vnRect, [], { ...vnParams, veinsSeed: seed });
+  let corti = 0, punti = 0;
+  for (const r of v.runs) for (let i = 1; i < r.length; i++) { punti++; if (vnLen(r[i - 1], r[i]) < 1) corti++; }
+  const spesse = v.edges.filter((e) => e.thick).reduce((s, e) => s + e.passes * vnLen(e.a, e.b), 0);
+  const fini = v.edges.filter((e) => !e.thick), finiMm = fini.reduce((s, e) => s + vnLen(e.a, e.b), 0);
+  const finiRip = fini.reduce((s, e) => s + (e.repassed ? vnLen(e.a, e.b) : 0), 0);
+  check(`venature (variante ${seed}): un giro solo, nessun salto`, v.runs.length, 1);
+  check(`venature (variante ${seed}): un disegno vero (più di 800 punti)`, punti > 800, true);
+  check(`venature (variante ${seed}): nessun punto sotto 1 mm, gli incroci vicini sono uniti`, corti, 0);
+  check(`venature (variante ${seed}): le spesse sono andata e ritorno (filo almeno 1,9 volte l'andata)`, spesse >= 1.9 * v.thickOneWayMm, true);
+  check(`venature (variante ${seed}): più di metà delle fini resta a filo singolo`, finiRip < 0.5 * finiMm, true);
+}
+// Senza fini i fasci sarebbero staccati, e su un pezzo grande lo stesso può succedere: ci pensano i ponti.
+check('venature: anche senza fini un giro solo (i fasci si collegano con un ponte)', rg.generateVeins(vnRect, [], { ...vnParams, veinsThin: 0 }).runs.length, 1);
+const vnGrande = [{ x: 0, y: 0 }, { x: 220, y: 0 }, { x: 220, y: 180 }, { x: 0, y: 180 }];
+for (const seed of [2862, 5]) check(`venature: pezzo grande 220×180 (variante ${seed}), un giro solo`, rg.generateVeins(vnGrande, [], { ...vnParams, veinsSeed: seed }).runs.length, 1);
+const vnA = rg.generateVeins(vnRect, [], vnParams), vnB = rg.generateVeins(vnRect, [], vnParams);
+check('venature: stessa variante, stesso identico disegno', JSON.stringify(vnA.runs) === JSON.stringify(vnB.runs), true);
+const vnH = rg.generateVeins(vnRect, [vnBuco], vnParams);
+let vnNel = 0, vnFuori = 0;
+for (const r of vnH.runs) for (const q of r) { if (Math.hypot(q.x - 60, q.y - 40) < 9) vnNel++; if (q.x < 0 || q.x > 120 || q.y < 0 || q.y > 80) vnFuori++; }
+check('venature: nessun punto nel buco', vnNel, 0);
+check('venature: nessun punto fuori dalla sagoma', vnFuori, 0);
+// Il pezzo di Lorenzo del 2026-11-23 aveva 201 fori: le vene si fermavano al primo foro (2,8 m su 309×219, ponti dritti
+// attraverso il pezzo). Ora davanti a un foro girano e proseguono; si fermano solo al bordo.
+{
+  const forato = [{ x: 0, y: 0 }, { x: 200, y: 0 }, { x: 200, y: 150 }, { x: 0, y: 150 }];
+  const fori = [];
+  for (let j = 0; j < 8; j++) for (let i = 0; i < 11; i++) {
+    const cx = 10 + i * 18 + (j % 2) * 9, cy = 10 + j * 18.5;
+    if (cx > 195) continue;
+    fori.push(Array.from({ length: 24 }, (_, k) => ({ x: cx + 2.5 * Math.cos(k / 24 * 2 * Math.PI), y: cy + 2.5 * Math.sin(k / 24 * 2 * Math.PI) })));
+  }
+  const filo = (v) => v.runs.reduce((s, r) => { for (let i = 1; i < r.length; i++) s += Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y); return s; }, 0);
+  const conFori = rg.generateVeins(forato, fori, vnParams), senza = rg.generateVeins(forato, [], vnParams);
+  let neiFori = 0;
+  for (const r of conFori.runs) for (const q of r) for (const f of fori) if (Math.hypot(q.x - f[0].x + 2.5, q.y - f[0].y) < 2.5) neiFori++;
+  check(`venature con ${fori.length} fori: un giro solo`, conFori.runs.length, 1);
+  check('venature con i fori: almeno 3/5 del filo che avrebbero senza (non si fermano al primo foro)', filo(conFori) > 0.6 * filo(senza), true);
+  check('venature con i fori: nessun punto in un foro', neiFori, 0);
+}
+// Lorenzo (2026-11-23): «perchè le venature sono solo a destra? Serve un algoritmo in grado di crearle su tutta la
+// superficie». Su un pezzo 309×219 (3×3 riquadri della A) ogni nono del pezzo ha le sue venature.
+{
+  const grande = [{ x: 0, y: 0 }, { x: 309, y: 0 }, { x: 309, y: 219 }, { x: 0, y: 219 }];
+  for (const seed of [8, 3]) {
+    const v = rg.generateVeins(grande, [], { ...vnParams, veinsSeed: seed });
+    const noni = new Array(9).fill(0);
+    for (const r of v.runs) for (let i = 1; i < r.length; i++) {
+      const mx = (r[i].x + r[i - 1].x) / 2, my = (r[i].y + r[i - 1].y) / 2;
+      noni[Math.min(2, Math.floor(my / 73)) * 3 + Math.min(2, Math.floor(mx / 103))] += Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y);
+    }
+    check(`venature su 309×219 (variante ${seed}): un giro solo`, v.runs.length, 1);
+    check(`venature su 309×219 (variante ${seed}): ogni nono del pezzo ha almeno 1 m di venature`, Math.min(...noni) > 1000, true);
+  }
+}
+
+// interlace — LA DENSITÀ DI TUTTI I FILI INSIEME e I VORTICI DEL FONDO (Lorenzo, 2026-11-23).
+console.log('\ninterlace — densità del totale e vortici del fondo');
+{
+  const rect = [{ x: 0, y: 0 }, { x: 120, y: 0 }, { x: 120, y: 80 }, { x: 0, y: 80 }];
+  const base = { ...rg.defaultInterlaceParams, minStitchMm: 2, maxStitchMm: 5, voidClearanceMm: 0, densitySpacingMm: 1.5, seed: 3 };
+  const ruoli = { '#e30613': 'MASTER_OUTLINE' };
+  const filo = (p) => rg.runInterlacePipeline([{ points: rect, closed: true, color: '#e30613' }], ruoli, p).threadMm;
+  const uno = filo({ ...base, colors: ['#874325'] });
+  const treSpento = filo({ ...base, colors: ['#874325', '#5c2e1a', '#b46f4e'] });
+  const treTotale = filo({ ...base, colors: ['#874325', '#5c2e1a', '#b46f4e'], densityTotal: true });
+  check('densità di ogni filo (spenta): 3 colori fanno più del doppio del filo di uno', treSpento > 2 * uno, true);
+  check('densità di tutti i fili insieme: 3 colori fanno il filo di uno, ±20%', Math.abs(treTotale / uno - 1) < 0.2, true);
+  const senzaCampo = { ...base }; delete senzaCampo.flowStrength;
+  check('vortici del fondo a 100 = come prima (progetti senza il campo)',
+    JSON.stringify(rg.generateFill(rect, [], { ...base, flowStrength: 100 })) === JSON.stringify(rg.generateFill(rect, [], senzaCampo)), true);
+  check('vortici del fondo a 0: il ricamo cambia', JSON.stringify(rg.generateFill(rect, [], { ...base, flowStrength: 0 })) !== JSON.stringify(rg.generateFill(rect, [], base)), true);
+}
 
 // interlace — DIVIETI DI TRANSITO (matrice filo × zona, `zoneBans`): un filo vietato in una zona non ci
 // cuce E non ci passa nemmeno di transito. Sulla stessa immagine metà rossa (x<60) / metà blu (x>60):
