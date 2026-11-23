@@ -74,7 +74,7 @@ const FILI = [
   { chiave: 'sopra', nome: 'Punto sopra', colore: '#c8952e' },
   { chiave: 'sotto', nome: 'Passaggi sotto il raso', colore: '#3b78c4' },
   { chiave: 'fra', nome: 'Passaggi fra le macchie, livelli sotto', colore: '#0a9396' },
-  { chiave: 'aVista', nome: 'Passaggi a vista, da rifilare', colore: '#e0115f' },
+  { chiave: 'aVista', nome: 'Salti dei passaggi fra una copertura e l’altra, da rifilare', colore: '#e0115f' },
 ] as const;
 type ChiaveFilo = typeof FILI[number]['chiave'];
 /** I salti nell'anteprima: quelli del raso viola (del secondo livello arancio, del terzo verdi), quelli del punto sopra rossi. */
@@ -143,7 +143,7 @@ const CAMPI_FRA_I_LIVELLI: Campo[] = [
   { nome: 'secondoMargine', etichetta: 'Un livello entra sotto quelli sopra di', unita: 'mm', passo: 0.1, min: 0,
     aiuto: 'Solo coi livelli sotto non interi: dove una macchia sta sotto una di un livello più alto si ferma, e ci entra solo di tanto.' },
   { nome: 'secondoVista', etichetta: 'Fra le macchie dei livelli sotto, a vista al più', unita: 'mm', passo: 0.5, min: 0,
-    aiuto: 'Il filo da una macchia alla dopo corre sotto i livelli più alti e sotto le macchie ancora da cucire. Dove nessuna lo copre attraversa lo spazio a vista, il meno possibile e al più di tanto per volta: così non si salta. Mai sopra il raso già cucito. 0 = mai a vista: lì si salta.' },
+    aiuto: 'Il filo da una macchia alla dopo corre sotto i livelli più alti e sotto le macchie ancora da cucire. Dove nessuna lo copre attraversa lo spazio con un salto senza punti, appoggiato almeno 1 mm dentro quello che copre, da rifilare dopo: il meno possibile e al più di tanto per volta. Mai sopra il raso già cucito. 0 = nessun salto corto: lì la strada va coi salti lunghi.' },
   { nome: 'vistaVicini', etichetta: 'I passaggi a vista si avvicinano a quelli già fatti, entro', unita: 'mm', passo: 1, min: 0,
     aiuto: 'Per rifilare a mano più in fretta: attraversare lo spazio entro questa distanza da un altro passaggio a vista costa meno, e il filo ci va se può arrivarci coperto. Non è forzato. 0 = ognuno dove è più corto.' },
 ];
@@ -442,7 +442,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
         + ` · dentro le macchie: raso ${r.passaggiScoperti}, punto sopra ${r.saltiDentro}` + (r.ponti ? ` · ponti: ${r.ponti}` : '')
         + (r.tolto > 0.5 ? ` · punto sopra tolto: ${r.tolto.toFixed(0)} mm` : '') + '</p>'
       + (r.sottoIlSecondo.collegate ? `<p class="rg-field__help rg-param-grid__wide">Livelli sotto: ${r.sottoIlSecondo.collegate} passaggi invece di un salto, ${r.sottoIlSecondo.mm.toFixed(0)} mm di filo`
-        + (r.sottoIlSecondo.attraversamenti ? `, di cui a vista ${r.sottoIlSecondo.aVista.toFixed(0)} mm in ${r.sottoIlSecondo.attraversamenti} attraversamenti (il giro per rifilarli a mano: ${r.sottoIlSecondo.giro.toFixed(0)} mm)` : ', tutti coperti')
+        + (r.sottoIlSecondo.attraversamenti ? `, di cui salti senza punti fra una copertura e l’altra ${r.sottoIlSecondo.aVista.toFixed(0)} mm in ${r.sottoIlSecondo.attraversamenti} salti da rifilare (il giro per rifilarli a mano: ${r.sottoIlSecondo.giro.toFixed(0)} mm)` : ', tutti coperti')
         + (r.sottoIlSecondo.versoIlSalto ? `; dove una strada tutta coperta non c'è, ${r.sottoIlSecondo.versoIlSalto} volte coperti dove si può e i salti solo sopra il tessuto libero o il già cucito (${r.sottoIlSecondo.saltoAccorciato.toFixed(0)} mm di salto in meno)` : '')
         + (par.rasoDiStilista ? ' (non col raso di Stilista: lì si salta)' : '') + '</p>' : '')
       : '';
