@@ -181,7 +181,27 @@ quanti ne stanno col punto minimo (almeno 3); ogni colore lo ruota un po'.
 - punti 2-5 mm: 199-200 fori su 201 hanno l'anello, per ogni colore (almeno 7 punti entro 1,4 mm dal bordo;
   senza anelli 129-138). I tratti non aumentano, anzi: semi 1, 2, 5 → 3, 3, 3 tratti (senza anelli 4, 3, 8).
 - punti 6-15 mm: gli anelli sono quadrati o triangoli (col punto minimo di 6 mm intorno a un foro di 5 mm non ci
-  stanno più lati) e il filo fa 1-2 salti in più (semi 1, 2, 5 → 6, 5, 4 tratti; senza 4, 4, 3). **Limite noto.**
+  stanno più lati) e il filo fa 1-2 salti in più (semi 1, 2, 5 → 6, 5, 4 tratti; senza 4, 4, 3). Questo limite è
+  sparito col cambio qui sotto (3 tratti).
+
+## Lo stesso agglomerato per ogni foro (2026-11-23)
+
+Lorenzo, provando in macchina: *«è strano come gli agglomerati intorno alle aree vuote non sono uguali e a volte ci sono altre volte per niente»*. **Misurato** (filo nella fascia 0-3 mm da ogni foro diviso per il filo
+lontano, sui 192 fori lontani dal bordo): coi punti 2-5 mm andava da 1,56 a 2,85 (5°-95° percentile), coi punti
+6-15 mm da 1,09 a 2,40 e 37 fori sotto 1,3. **Perché:** il più fitto si chiedeva alle celle della copertura (~3 mm
+con la densità di tutti i fili insieme) valutando la sfumatura al centro della cella; con una sfumatura di 4 mm
+contava come la griglia cadeva sul foro.
+
+**Ora:** le celle non c'entrano più. Ogni foro riceve **la stessa dose** di filo in più, posata quando il filo gli
+passa accanto, insieme all'anello: prima l'anello intero, poi punti che girano intorno al foro un passo alla volta
+con l'estremo a una distanza dal bordo pescata con la sfumatura, poi il fondo riprende (con l'anello dopo
+l'agglomerato, 9 anelli su 72 saltavano: dal punto dove l'agglomerato finiva nessun vertice era a un punto di
+distanza). Se il filo passa vicino a un foro senza poterlo agganciare, per qualche passo punta verso di lui. La dose = (volte − 1) × filo al mm² del fondo × area pesata
+della sfumatura; il filo al mm² del fondo si misura facendo la passata una volta senza i fori in più. I punti in
+più non contano nella copertura del fondo, così il fondo resta uniforme.
+
+**Misurato dopo** (stessi parametri): punti 2-5 mm da 2,79 a 3,71, nessun foro sotto 1,3, 3 tratti; punti 6-15 mm
+da 1,47 a 2,81, 3 tratti, e il fitto non si spande più su tutto il pezzo (filo da 399 a 281 m).
 
 Cosa resta da fare sta in `STATO.md` (C4 densità per zona, C5 vuoto dello stesso colore, C6 modello
 densità unificato, A5 i nomi dei parametri "movimento").

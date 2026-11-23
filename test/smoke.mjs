@@ -577,6 +577,22 @@ check('aree vuote: acceso, il filo resta continuo (un tratto solo)', vdAcceso[0]
   for (const pass of tre) { tratti += pass.length; for (const f of fori) if (giro(pass, f.cx, f.cy, f.r) >= 0.99) contornati++; }
   check(`anello: ${fori.length} fori × 3 colori, ognuno contornato da ogni colore`, contornati, fori.length * 3);
   check('anello: con gli anelli ogni colore resta un tratto solo', tratti, 3);
+  // Lorenzo (2026-11-23): «gli agglomerati intorno alle aree vuote non sono uguali e a volte ci sono altre volte per
+  // niente». Ora ogni foro riceve la stessa dose: il filo nella fascia 0-3 mm dal bordo, foro per foro, sta entro
+  // 1,6 volte fra il foro più povero e il più ricco (prima, sul pezzo vero: da 1,1 a 2,4 volte il fondo).
+  const dose = fori.map((f) => {
+    let mm = 0;
+    for (const pass of tre) for (const r of pass) for (let i = 1; i < r.length; i++) {
+      const L = Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y), n = Math.max(1, Math.ceil(L / 0.25));
+      for (let s = 0; s < n; s++) {
+        const t = (s + 0.5) / n, x = r[i - 1].x + (r[i].x - r[i - 1].x) * t, y = r[i - 1].y + (r[i].y - r[i - 1].y) * t;
+        const d = Math.hypot(x - f.cx, y - f.cy) - f.r;
+        if (d >= 0 && d < 3) mm += L / n;
+      }
+    }
+    return mm;
+  });
+  check('agglomerato: la stessa dose per ogni foro (il più ricco entro 1,6 volte il più povero)', Math.max(...dose) / Math.min(...dose) < 1.6, true);
 }
 
 // interlace — VENATURE sopra il ricamo (`veinsOn`), il disegno «A» scelto da Lorenzo: fasci di spesse a fuso (andata e
