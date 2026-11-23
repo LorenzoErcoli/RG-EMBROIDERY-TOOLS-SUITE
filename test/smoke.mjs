@@ -6973,6 +6973,20 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     const soloBuco = rg.pmCostruisci([], [q(0, 0, 30)], {}, FERMI, [q(10, 10, 10)]);
     const nelBuco = soloBuco.stop[0].livello.tratti.flat().filter((p) => p.x > 12 && p.x < 18 && p.y > 12 && p.y < 18);
     check('...e il raso di quella col buco non ci entra', [soloBuco.stop[0].livello.punti > 100, nelBuco.length], [true, 0]);
+    // LE AREE VUOTE DI UN LIVELLO (Lorenzo, 2026-11-23: «Il livello 3 delle macchie aveva 2 oggetti con le aree vuote. il
+    // sistema ha visto 2 contorni e ha disegnato 2 macchie, c'è quindi passato sopra»): da Stilista il buco arriva come un
+    // contorno a sé; dentro un altro dello stesso livello è un buco, non una macchia. Il filo dentro, campionato lungo i tratti.
+    const filoNelBuco = (r, strato) => r.stop.filter((s) => s.strato === strato).flatMap((s) => s.livello.tratti).reduce((mm, t) => {
+      for (let k = 1; k < t.length; k++) {
+        const a = t[k - 1], b = t[k], L = Math.hypot(b.x - a.x, b.y - a.y);
+        for (let s = 0.1; s < L; s += 0.2) { const x = a.x + ((b.x - a.x) * s) / L, y = a.y + ((b.y - a.y) * s) / L; if (x > 11 && x < 19 && y > 11 && y < 19) mm += 0.2; }
+      }
+      return mm;
+    }, 0);
+    const conVuota = rg.pmCostruisci([], [q(0, 0, 30), q(10, 10, 10)], {}, FERMI);
+    const vuotaInCima = rg.pmCostruisci([], [q(40, 0, 10)], {}, FERMI, [], [q(0, 0, 30), q(10, 10, 10)]);
+    check(`un contorno dentro un altro dello stesso livello è un'area vuota: una macchia sola, niente filo dentro (da solo ${filoNelBuco(conVuota, 1).toFixed(1)} mm, sul 3° livello ${filoNelBuco(vuotaInCima, 3).toFixed(1)} mm)`,
+      [conVuota.stop[0].indici.length, filoNelBuco(conVuota, 1) < 0.5, vuotaInCima.stop.filter((s) => s.strato === 3).flatMap((s) => s.indici).length, filoNelBuco(vuotaInCima, 3) < 0.5], [1, true, 1, true]);
   }
   const pmTool = readFileSync(join(root, 'apps/pattern-macchie/src/tool.ts'), 'utf8');
   const pmWorker = readFileSync(join(root, 'apps/pattern-macchie/src/macchie.worker.ts'), 'utf8');

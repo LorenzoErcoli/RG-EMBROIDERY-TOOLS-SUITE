@@ -324,6 +324,17 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    457 → 770 mm (ogni tratto entro 12 mm): sul 3° livello gli spazi fra le macchie prima erano salti, ora sono
    attraversati a vista. Sul disegno a tre livelli della 45: salti delle rosse lunghi al più 4 mm (prima 63). Non provato
    a macchina né in Stilista.
+47. (2026-11-23) **Un contorno dentro un altro dello stesso livello è un'area vuota, non un'altra macchia.** Lorenzo:
+   *«Il livello 3 delle macchie aveva 2 oggetti con le aree vuote. il sistema ha visto 2 contorni e ha disegnato 2 macchie,
+   c'è quindi passato sopra e ha creato problemi»*. Letti gli oggetti dalla finestra di Stilista: il contorno dell'area
+   vuota arriva come un oggetto a sé, dello stesso colore (`GET /fori` non trova buchi); il tool ne faceva una macchia, e
+   il raso di quella fuori ci passava sopra. Ora (`conIBuchi`, all'inizio di `costruisciMacchie`, per ogni livello) vale la
+   regola dei disegni vettoriali, pari e dispari: dentro un numero dispari di contorni dello stesso livello è un buco di
+   quello che lo contiene più da vicino, ed entra nella macchia con un taglio nel verso del raso (`conBuco`, lo stesso dei
+   livelli fermati sotto quelli sopra); dentro un numero pari è un'isola, una macchia. I contorni sotto 0,05 mm² (un punto,
+   una scheggia) si tolgono. Sul disegno: nel 3° livello le due aree vuote, nel 1° tre (le stesse coppie); filo cucito
+   dentro le aree vuote del 3° 34 → 0 mm. Una scheggia di 7 mm² lungo un bordo dritto, dentro un'altra macchia del 3°, ora
+   è un buco anche lei. Non provato a macchina né in Stilista.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso

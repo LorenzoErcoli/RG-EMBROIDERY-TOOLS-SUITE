@@ -1771,6 +1771,42 @@ function conBuco(anello: Polyline, buco: Polyline, verso: Point): Polyline {
   return [...anello.slice(0, lato + 1), x, ...b.slice(h), ...b.slice(0, h), o, x, ...anello.slice(lato + 1)];
 }
 
+/** Un contorno con meno area di così (mm²) non è una macchia né un buco: un punto, una scheggia lungo un bordo. */
+const AREA_MINIMA_CONTORNO = 0.05;
+
+/**
+ * LE AREE VUOTE DI UN LIVELLO (Lorenzo, 2026-11-23: «Il livello 3 delle macchie aveva 2 oggetti con le aree vuote. il
+ * sistema ha visto 2 contorni e ha disegnato 2 macchie, c'è quindi passato sopra»): da Stilista il contorno dell'area vuota
+ * arriva come un contorno a sé. Come in un disegno vettoriale (pari e dispari): un contorno dentro un numero dispari di
+ * altri dello stesso livello è un buco di quello che lo contiene più da vicino, ed entra nella macchia con `conBuco`; dentro
+ * un numero pari (un'isola nel buco) è una macchia. Le macchie senza buchi restano com'erano, nel loro ordine.
+ */
+export function conIBuchi(anelli: Polyline[], verso: Point): Polyline[] {
+  const r = anelli.filter((a) => a.length >= 3 && Math.abs(polygonArea(a)) >= AREA_MINIMA_CONTORNO);
+  if (r.length < 2) return r;
+  const area = r.map((a) => Math.abs(polygonArea(a))), bb = r.map(ingombro);
+  // (dentro: la maggior parte di alcuni punti del contorno, non solo il primo, che può stare proprio sul bordo dell'altro)
+  const dentro = (i: number, j: number) => {
+    const a = bb[i], b = bb[j];
+    if (area[i] >= area[j] || a.x0 < b.x0 || a.x1 > b.x1 || a.y0 < b.y0 || a.y1 > b.y1) return false;
+    const n = Math.min(9, r[i].length);
+    let si = 0;
+    for (let k = 0; k < n; k++) if (pointInPolygon(r[i][Math.floor((k * r[i].length) / n)], r[j])) si++;
+    return si * 2 > n;
+  };
+  const padri = r.map((_, i) => r.map((_, j) => j).filter((j) => dentro(i, j)));
+  const pezzi = new Map<number, Polyline>();
+  r.forEach((a, i) => { if (padri[i].length % 2 === 0) pezzi.set(i, a); });
+  if (pezzi.size === r.length) return r;
+  r.map((_, i) => i).sort((p, q) => area[q] - area[p]).forEach((i) => {
+    if (padri[i].length % 2 === 0) return;
+    const padre = padri[i].reduce((m, j) => (area[j] < area[m] ? j : m));
+    const prima = pezzi.get(padre);
+    if (prima) pezzi.set(padre, conBuco(prima, r[i], verso));
+  });
+  return [...pezzi.values()];
+}
+
 /**
  * Una macchia del primo livello, fermata sotto quelle del secondo: entra sotto ognuna solo di `margine` mm (Lorenzo: il
  * chiaro si ferma sotto lo scuro). Una macchia che non ci finisce sotto resta esattamente com'è; una tagliata in due fa
@@ -2180,6 +2216,11 @@ export function costruisciMacchie(
   pannello: Polyline, macchie: Polyline[], pattern: PatternConfig, par: ParametriMacchie = PARAMETRI_MACCHIE, secondo: Polyline[] = [], terzo: Polyline[] = [],
 ): RisultatoMacchie {
   const t0 = Date.now();
+  // (le aree vuote: un contorno dentro un altro dello stesso livello è un buco, non un'altra macchia; il taglio nel verso del raso)
+  const versoDi = (gradi: number) => ({ x: Math.cos((gradi * Math.PI) / 180), y: Math.sin((gradi * Math.PI) / 180) });
+  macchie = conIBuchi(macchie, versoDi(par.rasoAngolo));
+  secondo = conIBuchi(secondo, versoDi(par.rasoAngolo2));
+  terzo = conIBuchi(terzo, versoDi(par.rasoAngolo3));
   // (solo le macchie, senza base né punto sopra, il pannello può mancare: basta il loro ingombro per le zone)
   const bbP = ingombro(pannello.length ? pannello : [...macchie, ...secondo, ...terzo].flat());
   const formato = { totalWidth: Math.ceil(bbP.x1) + 1, totalHeight: Math.ceil(bbP.y1) + 1 };
