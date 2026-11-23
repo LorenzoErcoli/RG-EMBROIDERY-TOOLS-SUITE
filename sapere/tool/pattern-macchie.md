@@ -300,7 +300,41 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    almeno di 2 mm. Sul suo disegno (parametri di serie): salti delle rosse 15 → 14, i loro mm 343 → 175, quelli oltre
    10 mm 8 → 3; filo a vista 402 → 469 mm (ogni tratto entro 12 mm). I tre salti lunghi che restano (63, 42 e 29 mm) sono
    fra rosse chiuse tutte e due nell'arancione già cucito: nessuna nera da usare né di qua né di là. L'ordine stima ancora
-   un salto come la distanza dritta fra le macchie. Non provato a macchina né in Stilista.
+   un salto come la distanza dritta fra le macchie. Non provato a macchina né in Stilista. **Sostituita lo stesso giorno
+   dalla 46**: quel salto dritto passava sopra il livello più alto, che si cuce dopo.
+46. (2026-11-20) **Mai un salto sopra quello che si cucirà dopo; anche il livello più alto passa sotto le sue macchie.**
+   Lorenzo, su un programma in Stilista con gli stop 4-5-6 fatti col tool (i tre livelli): *«ci sono un sacco di salti che
+   passano sopra punti che poi verranno ricamati. inaccettabile ti ricordo che il filo deve seguire i passaggi. Se la
+   macchia si trova in un vicolo cieco usa la modalità di entrare con il passaggio fino in fondo alla macchia e poi tornare
+   indietro. non devono esserci passaggi lunghi. in swatch a stop lavora meglio»*. Letti i punti dalla finestra di
+   Stilista: lo stop 5 aveva salti di 49, 51 e 68 mm sopra le macchie del 3° livello; lo stop 6 (il 3°, il più alto)
+   nessun passaggio, un salto fra ogni macchia e la dopo, anche sopra le sue macchie ancora da cucire. Ora, come in
+   Swatch a stop, dove una strada tutta coperta fino alla macchia non c'è (`SottoIlSecondo.conSalti`, al posto di
+   `finoAlSalto`): una ricerca sola fino alla macchia, coperto dove si può (1 al mm), a vista dove serve (25 al mm, al più
+   «a vista al più» mm per volta), e i salti solo sopra il tessuto libero o sopra il raso già cucito (80 al mm): sopra
+   quello che si cucirà dopo il filo va sotto, non salta. I salti possono essere più d'uno, ognuno da bordo a bordo, a
+   pezzi dritti che non passano sopra niente da cucire dopo; dentro la macchia d'arrivo si arriva sempre, anche sopra il
+   già cucito (il suo raso lo copre subito). Il livello più alto, se ce ne sono sotto, ha anche lui i passaggi: sotto le sue
+   macchie ancora da cucire (prima nessuno). Il vicolo cieco: la strada può tornare per dove è venuta finché quello che la
+   copre non è ancora cucito, e il piano del raso finisce dove comincia la strada verso la macchia dopo, anche se è
+   accanto all'ingresso; l'ordine delle macchie non è stato cambiato per questo. Sul programma ricostruito dai contorni
+   di Stilista (parametri di serie, i suoi non li so): 1° livello salti 1 → 2 (17 → 13 mm); 2° livello 14 → 15 salti ma
+   133 → 23 mm, oltre 10 mm 2 → 0, sopra quello che si cuce dopo 61 → 5 mm (tutti dentro mezzo millimetro dal bordo);
+   3° livello 115 → 9 salti, 753 → 71 mm, oltre 10 mm 20 → 3, sopra quello che si cuce dopo 24 → 1 mm (anche lui al bordo). Filo a vista
+   457 → 770 mm (ogni tratto entro 12 mm): sul 3° livello gli spazi fra le macchie prima erano salti, ora sono
+   attraversati a vista. Sul disegno a tre livelli della 45: salti delle rosse lunghi al più 4 mm (prima 63). Non provato
+   a macchina né in Stilista.
+47. (2026-11-23) **Un contorno dentro un altro dello stesso livello è un'area vuota, non un'altra macchia.** Lorenzo:
+   *«Il livello 3 delle macchie aveva 2 oggetti con le aree vuote. il sistema ha visto 2 contorni e ha disegnato 2 macchie,
+   c'è quindi passato sopra e ha creato problemi»*. Letti gli oggetti dalla finestra di Stilista: il contorno dell'area
+   vuota arriva come un oggetto a sé, dello stesso colore (`GET /fori` non trova buchi); il tool ne faceva una macchia, e
+   il raso di quella fuori ci passava sopra. Ora (`conIBuchi`, all'inizio di `costruisciMacchie`, per ogni livello) vale la
+   regola dei disegni vettoriali, pari e dispari: dentro un numero dispari di contorni dello stesso livello è un buco di
+   quello che lo contiene più da vicino, ed entra nella macchia con un taglio nel verso del raso (`conBuco`, lo stesso dei
+   livelli fermati sotto quelli sopra); dentro un numero pari è un'isola, una macchia. I contorni sotto 0,05 mm² (un punto,
+   una scheggia) si tolgono. Sul disegno: nel 3° livello le due aree vuote, nel 1° tre (le stesse coppie); filo cucito
+   dentro le aree vuote del 3° 34 → 0 mm. Una scheggia di 7 mm² lungo un bordo dritto, dentro un'altra macchia del 3°, ora
+   è un buco anche lei. Non provato a macchina né in Stilista.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso

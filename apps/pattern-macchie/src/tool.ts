@@ -443,7 +443,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
         + (r.tolto > 0.5 ? ` · punto sopra tolto: ${r.tolto.toFixed(0)} mm` : '') + '</p>'
       + (r.sottoIlSecondo.collegate ? `<p class="rg-field__help rg-param-grid__wide">Livelli sotto: ${r.sottoIlSecondo.collegate} passaggi invece di un salto, ${r.sottoIlSecondo.mm.toFixed(0)} mm di filo`
         + (r.sottoIlSecondo.attraversamenti ? `, di cui a vista ${r.sottoIlSecondo.aVista.toFixed(0)} mm in ${r.sottoIlSecondo.attraversamenti} attraversamenti (il giro per rifilarli a mano: ${r.sottoIlSecondo.giro.toFixed(0)} mm)` : ', tutti coperti')
-        + (r.sottoIlSecondo.versoIlSalto ? `; dove una strada non c'è, ${r.sottoIlSecondo.versoIlSalto} salti accorciati andando sotto fin dove si può (${r.sottoIlSecondo.saltoAccorciato.toFixed(0)} mm di salto in meno)` : '')
+        + (r.sottoIlSecondo.versoIlSalto ? `; dove una strada tutta coperta non c'è, ${r.sottoIlSecondo.versoIlSalto} volte coperti dove si può e i salti solo sopra il tessuto libero o il già cucito (${r.sottoIlSecondo.saltoAccorciato.toFixed(0)} mm di salto in meno)` : '')
         + (par.rasoDiStilista ? ' (non col raso di Stilista: lì si salta)' : '') + '</p>' : '')
       : '';
     const caselle = FILI.map((l) => `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-livello="${l.chiave}"${visibili[l.chiave] ? ' checked' : ''}>`

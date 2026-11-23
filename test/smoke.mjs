@@ -6965,6 +6965,26 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
       const vicini = rg.pmCostruisci([], uno, {}, { ...FERMI, vistaVicini: 10 }, due3, tre);
       check(`i passaggi a vista vicini fra loro: non fanno più salti, il raso resta nei suoi stop (giro del rifilo ${r3.sottoIlSecondo.giro.toFixed(0)} → ${vicini.sottoIlSecondo.giro.toFixed(0)} mm, a vista ${r3.sottoIlSecondo.aVista.toFixed(0)} → ${vicini.sottoIlSecondo.aVista.toFixed(0)} mm)`,
         [saltiDi(vicini) <= saltiDi(r3), vicini.stop.map((s) => s.indici.length)], [true, r3.stop.map((s) => s.indici.length)]);
+      // I SALTI MAI SOPRA QUELLO CHE SI CUCE DOPO (Lorenzo, 2026-11-20, sugli stop 4-5-6: «ci sono un sacco di salti che passano
+      // sopra punti che poi verranno ricamati. inaccettabile ti ricordo che il filo deve seguire i passaggi»): per ogni salto,
+      // quanta linea dritta sta più di mezzo millimetro dentro una macchia dei livelli sopra o del suo ancora da cucire. E il
+      // livello più alto passa sotto le sue macchie ancora da cucire: meno salti che macchie.
+      let sopraDopo = 0, saltiCima = 0;
+      for (const st of r3.stop.filter((s) => s.tipo === 'raso')) {
+        const proprie = st.indici.map((i) => r3.forme[i]), sopra = r3.stop.filter((s) => s.strato > st.strato).flatMap((s) => s.indici).map((i) => r3.forme[i]);
+        const tr = st.livello.tratti, primo = proprie.map((m) => tr.findIndex((t) => t.some((p) => rg.pointInPolygon(p, m))));
+        for (let k = 1; k < tr.length; k++) {
+          const a = tr[k - 1].at(-1), b = tr[k][0], L = Math.hypot(b.x - a.x, b.y - a.y);
+          if (st.strato === 3 && L > 0.5) saltiCima++;
+          const dopo = [...sopra, ...proprie.filter((_, f) => primo[f] >= k)];
+          for (let s = 0.25; s < L; s += 0.25) {
+            const q = { x: a.x + ((b.x - a.x) * s) / L, y: a.y + ((b.y - a.y) * s) / L };
+            if (dopo.some((m) => rg.pointInPolygon(q, m) && rg.distanceToBoundary(q, m) > 0.5)) sopraDopo += 0.25;
+          }
+        }
+      }
+      check(`tre livelli: nessun salto sopra quello che si cuce dopo (misurati ${sopraDopo.toFixed(2)} mm); il livello più alto passa sotto le sue macchie da cucire (${saltiCima} salti, ${tre.length} macchie)`,
+        [sopraDopo <= 1, saltiCima < tre.length - 1], [true, true]);
     }
     const fermate = chiare.flatMap((m) => rg.pmFerma(m, scure, margine, giu));
     const prima = rg.pmCostruisci([], fermate, {}, FERMI);
@@ -7039,9 +7059,10 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     const tre = [q(0, 0, 10), q(13, 0, 10), q(40, 0, 10)], sporgono = [q(2, -5, 6), q(15, -5, 6)];
     const senzaPonte = rg.pmCostruisci([], sporgono, {}, { ...FERMI, sfrangiatura: 0, sfrangiatura2: 0 }, tre);
     const unPonte = rg.pmCostruisci([], sporgono, {}, { ...FERMI, sfrangiatura: 0, sfrangiatura2: 0, ponti: 5 }, tre);
+    // (senza ponti, dal 2026-11-20 il livello più alto attraversa a vista i 3 mm invece di saltarli: resta il salto dei 17 mm)
     check('due macchie a 3 mm si uniscono, quella a 17 mm no: il salto resta; le macchie del primo livello senza ponte',
       [senzaPonte.ponti, senzaPonte.stop[1].livello.salti, unPonte.ponti, unPonte.stop[1].livello.salti, unPonte.stop[0].livello.salti, unPonte.forme.slice(0, 2).every((f) => Math.max(...f.map((p) => p.x)) - Math.min(...f.map((p) => p.x)) < 7)],
-      [0, 2, 1, 1, 0, true]);
+      [0, 1, 1, 1, 0, true]);
     check('il filo del primo livello passa sotto il ponte: niente più a vista', [senzaPonte.sottoIlSecondo.aVista > 2, unPonte.sottoIlSecondo.aVista], [true, 0]);
     const fuori = q(100, 100, 5), sola = rg.pmFerma(fuori, [q(0, 0, 10)], 1, giu);
     const coperta = rg.pmFerma(q(2, 2, 2), [q(0, 0, 10)], 1, giu);
@@ -7089,6 +7110,20 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     const soloBuco = rg.pmCostruisci([], [q(0, 0, 30)], {}, FERMI, [q(10, 10, 10)]);
     const nelBuco = soloBuco.stop[0].livello.tratti.flat().filter((p) => p.x > 12 && p.x < 18 && p.y > 12 && p.y < 18);
     check('...e il raso di quella col buco non ci entra', [soloBuco.stop[0].livello.punti > 100, nelBuco.length], [true, 0]);
+    // LE AREE VUOTE DI UN LIVELLO (Lorenzo, 2026-11-23: «Il livello 3 delle macchie aveva 2 oggetti con le aree vuote. il
+    // sistema ha visto 2 contorni e ha disegnato 2 macchie, c'è quindi passato sopra»): da Stilista il buco arriva come un
+    // contorno a sé; dentro un altro dello stesso livello è un buco, non una macchia. Il filo dentro, campionato lungo i tratti.
+    const filoNelBuco = (r, strato) => r.stop.filter((s) => s.strato === strato).flatMap((s) => s.livello.tratti).reduce((mm, t) => {
+      for (let k = 1; k < t.length; k++) {
+        const a = t[k - 1], b = t[k], L = Math.hypot(b.x - a.x, b.y - a.y);
+        for (let s = 0.1; s < L; s += 0.2) { const x = a.x + ((b.x - a.x) * s) / L, y = a.y + ((b.y - a.y) * s) / L; if (x > 11 && x < 19 && y > 11 && y < 19) mm += 0.2; }
+      }
+      return mm;
+    }, 0);
+    const conVuota = rg.pmCostruisci([], [q(0, 0, 30), q(10, 10, 10)], {}, FERMI);
+    const vuotaInCima = rg.pmCostruisci([], [q(40, 0, 10)], {}, FERMI, [], [q(0, 0, 30), q(10, 10, 10)]);
+    check(`un contorno dentro un altro dello stesso livello è un'area vuota: una macchia sola, niente filo dentro (da solo ${filoNelBuco(conVuota, 1).toFixed(1)} mm, sul 3° livello ${filoNelBuco(vuotaInCima, 3).toFixed(1)} mm)`,
+      [conVuota.stop[0].indici.length, filoNelBuco(conVuota, 1) < 0.5, vuotaInCima.stop.filter((s) => s.strato === 3).flatMap((s) => s.indici).length, filoNelBuco(vuotaInCima, 3) < 0.5], [1, true, 1, true]);
   }
   const pmTool = readFileSync(join(root, 'apps/pattern-macchie/src/tool.ts'), 'utf8');
   const pmWorker = readFileSync(join(root, 'apps/pattern-macchie/src/macchie.worker.ts'), 'utf8');
