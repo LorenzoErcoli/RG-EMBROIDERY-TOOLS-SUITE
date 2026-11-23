@@ -5,7 +5,7 @@
 // dove il filo dovrebbe staccare ripassa un tratto, scelto sulle spesse (le fini costano 25 volte di più), così le fini
 // restano a filo singolo il più possibile.
 // Motore puro (nessun DOM), locale all'app come engine.ts.
-import { type Point, type Polyline, bounds } from '@rg/core';
+import { type Point, type Polyline, bounds, pointInPolygon } from '@rg/core';
 import { buildMask, mulberry32 } from './engine';
 
 export interface VeinParams {
@@ -53,6 +53,11 @@ const MAX_THIN_MM = 90;
 const BUNDLE_TURN = [0, -4, 4, -2, 66];
 const THIN_TURN = [-22, -7, 18, 38, 58, 78];
 const RAD = Math.PI / 180;
+/** Davanti a un foro la vena gira di questi angoli (radianti, prima a un lato poi all'altro) e prosegue: si ferma solo al bordo. */
+const SCARTO_FORO = [0.3, -0.3, 0.6, -0.6, 0.9, -0.9, 1.25, -1.25];
+/** La A era disegnata su 120×80 (120 di traverso alle vene, 80 lungo): i pezzi più grandi si dividono in riquadri così. */
+const LUNG_A_MM = 80;
+const LARGO_A_MM = 120;
 
 /** Le venature dentro una sagoma (con i suoi vuoti). Pura e deterministica: stesso seme = stesso disegno. */
 export function generateVeins(boundary: Polyline, voids: Polyline[], p: VeinParams): VeinResult {
@@ -72,6 +77,18 @@ export function generateVeins(boundary: Polyline, voids: Polyline[], p: VeinPara
     return true;
   };
   const D = p.veinsAngleDeg * RAD;
+  /** Un passo della vena da (x,y) con angolo `a`: se finisce fuori dalla sagoma la vena si ferma (null); se va in un
+   *  foro, gira di poco a un lato o all'altro e prosegue. Senza fori è il passo dritto di sempre. */
+  const passo = (x: number, y: number, a: number, L: number): [number, number] | null => {
+    const nx = x + Math.cos(a) * L, ny = y + Math.sin(a) * L;
+    if (inside(nx, ny) && segInside(x, y, nx, ny)) return [nx, ny];
+    if (!voids.length || !pointInPolygon({ x: nx, y: ny }, boundary)) return null;
+    for (const da of SCARTO_FORO) {
+      const mx = x + Math.cos(a + da) * L, my = y + Math.sin(a + da) * L;
+      if (inside(mx, my) && segInside(x, y, mx, my)) return [mx, my];
+    }
+    return null;
+  };
   const campo = (x: number, y: number, a0: number, s: number) => {
     const u = x - bb.minX, v = y - bb.minY;
     return a0 + 0.42 * Math.sin(u / 33 + 0.9 * Math.sin(v / 24) + s) + 0.18 * Math.sin(v / 12 + u / 39 + 2 * s);
@@ -155,8 +172,9 @@ export function generateVeins(boundary: Polyline, voids: Polyline[], p: VeinPara
     while (fatto < lung) {
       const L = uni(THICK_STEP[0], THICK_STEP[1]);
       const a = campo(x, y, a0, s) + gauss(0.08);
-      const nx = x + Math.cos(a) * L, ny = y + Math.sin(a) * L;
-      if (!inside(nx, ny) || !segInside(x, y, nx, ny)) break;
+      const q = passo(x, y, a, L);
+      if (!q) break;
+      const [nx, ny] = q;
       pts.push([nx, ny]); x = nx; y = ny; fatto += L;
     }
     return pts;
@@ -173,17 +191,46 @@ export function generateVeins(boundary: Polyline, voids: Polyline[], p: VeinPara
     return null;
   };
 
-  // 1) fasci di spesse a fuso. Quelli nella direzione principale partono dal lato "a monte" (nella A: dall'alto),
-  //    quelli coricati più in là, nel pezzo (nella A: a destra, a metà altezza).
+  // 1) fasci di spesse a fuso, come nella A. Lorenzo (2026-11-23), sul suo pezzo grande: prima «perchè le venature
+  //    sono solo a destra? Serve un algoritmo in grado di crearle su tutta la superficie», poi, con i fasci sparsi in
+  //    strisce parallele dall'alto in basso, «a me ancora così non mi sembra troppa pelle». La A era 120×80: lì i fasci
+  //    si incrociano in direzioni diverse. Allora il pezzo è diviso in RIQUADRI della misura della A (di traverso e
+  //    lungo la direzione delle vene) e ogni riquadro ha la sua composizione A, con la direzione girata un po'
+  //    (tranne quando il riquadro è uno solo: allora è la A). I fasci sconfinano nei riquadri vicini e si incrociano.
+  //    Nel riquadro: i fasci nella direzione principale partono dal lato "a monte", ognuno nella sua fetta di
+  //    larghezza; i coricati dentro il riquadro. `veinsBundles` e `veinsThin` sono i numeri per riquadro.
+  const tx = Math.cos(D), ty = Math.sin(D), nx = -ty, ny = tx;
+  const angoli = [[bb.minX, bb.minY], [bb.maxX, bb.minY], [bb.minX, bb.maxY], [bb.maxX, bb.maxY]];
+  const tP = angoli.map(([x, y]) => x * tx + y * ty), nP = angoli.map(([x, y]) => x * nx + y * ny);
+  const tMin = Math.min(...tP), tMax = Math.max(...tP), nMin = Math.min(...nP), nMax = Math.max(...nP);
+  const riqN = Math.max(1, Math.round((nMax - nMin) / LARGO_A_MM)), riqT = Math.max(1, Math.round((tMax - tMin) / LUNG_A_MM));
+  const dn = (nMax - nMin) / riqN, dt = (tMax - tMin) / riqT;
+  const perRiquadro = Math.round(Math.max(0, p.veinsBundles));
+  const partenza = (n0: number, n1: number, t0: number, t1: number, allarga: boolean): [number, number] | null => {
+    for (let k = 0; k < 80; k++) {
+      // se la fascia a monte cade fuori dalla sagoma (bordi tondi, forme strane, fori) la si allarga verso l'interno
+      const hi = allarga ? t1 + dt * 0.6 * (k / 80) : t1;
+      const n = uni(n0, n1), t = uni(t0, hi);
+      const x = t * tx + n * nx, y = t * ty + n * ny;
+      if (inside(x, y)) return [x, y];
+    }
+    return null;
+  };
   const thickNodes = new Set<number>();
   let thickOneWayMm = 0;
-  for (let f = 0; f < Math.max(0, Math.round(p.veinsBundles)); f++) {
-    const turn = BUNDLE_TURN[f % BUNDLE_TURN.length];
-    const a0 = D + turn * RAD, s = f;
+  let f = 0;
+  for (let rt = 0; rt < riqT; rt++) for (let rn = 0; rn < riqN; rn++) {
+    const giro = riqN * riqT > 1 ? gauss(16 * RAD) : 0;
+    const n0r = nMin + rn * dn, t0r = tMin + rt * dt;
+    const fetta = (dn - 10) / Math.max(1, perRiquadro);
+    for (let q = 0; q < perRiquadro; q++, f++) {
+    const turn = BUNDLE_TURN[q % BUNDLE_TURN.length];
+    const a0 = D + giro + turn * RAD, s = f;
     const coricato = turn > 30;
+    const n0 = n0r + 5 + q * fetta, n1 = n0 + fetta;
     const start = coricato
-      ? puntoDentro(bb.minX + 0.58 * W, bb.maxX - 5, bb.minY + 15, bb.maxY - 15)
-      : puntoDentro(bb.minX + 8, bb.maxX - 8, bb.minY + 1, bb.minY + 10);
+      ? partenza(n0, n1, t0r + 15, t0r + dt - 15, false)
+      : partenza(n0, n1, t0r + 1, t0r + 10, true);
     if (!start) continue;
     const linee = 2 + Math.floor(rnd() * 2);
     for (let k = 0; k < linee; k++) {
@@ -208,12 +255,15 @@ export function generateVeins(boundary: Polyline, voids: Polyline[], p: VeinPara
       for (const q of nodi) thickNodes.add(q);
       for (const q of nodiR) thickNodes.add(q);
     }
+    }
   }
   if (E.size === 0) return empty;
 
   // 2) fini: da una vena (70% da una spessa), camminano finché incontrano un'altra vena dopo almeno 8 mm; spesso
   //    la attraversano (0-2 volte) e vanno avanti; finiscono su una vena, o al bordo come nella A.
-  for (let k = 0; k < Math.max(0, Math.round(p.veinsThin)); k++) {
+  // anche le fini sono per riquadro, come i fasci
+  const fini = Math.round(Math.max(0, p.veinsThin)) * riqN * riqT;
+  for (let k = 0; k < fini; k++) {
     const pool = rnd() < 0.7 && thickNodes.size ? [...thickNodes] : X.map((_, i) => i);
     let cur = pool[Math.floor(rnd() * pool.length)];
     if (!E.size) break;
@@ -224,8 +274,9 @@ export function generateVeins(boundary: Polyline, voids: Polyline[], p: VeinPara
     while (fatto < MAX_THIN_MM) {
       const L = uni(THIN_STEP[0], THIN_STEP[1]);
       const a = campo(x, y, a0, 7 + k) + (verso > 0 ? 0 : Math.PI) + gauss(0.22);
-      const nx = x + Math.cos(a) * L, ny = y + Math.sin(a) * L;
-      if (!inside(nx, ny) || !segInside(x, y, nx, ny)) break;
+      const q0 = passo(x, y, a, L);
+      if (!q0) break;
+      const [nx, ny] = q0;
       const h = taglia(cur, x, y, nx, ny);
       if (h) {
         const qx = x + (nx - x) * h.t, qy = y + (ny - y) * h.t;

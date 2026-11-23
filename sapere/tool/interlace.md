@@ -136,5 +136,34 @@ Lorenzo: *«vorrei simulare attraverso l'interance una grafica delle venature de
 lungo 5,1 mm, fini 1,09 m di cui ripassate 0,30 m. Nel giro completo con Interlace sotto: da 2 a 3 stop, +4,3 m.
 **Spente, la cucitura è identica byte per byte** a prima. **Non visto cucito.**
 
+## Provato su un pezzo vero con 201 fori (2026-11-23)
+
+Lorenzo, provando su un pezzo di 309×219 mm con 201 fori (un pezzo di prova preso da Stilista): *«L'obiettivo è avere 3 fili che si intrecciano con una copertura media, ma rimane un problema: la densità ora tocca singolarmente ogni filo, mai nel complesso. In più si creano degli agglomerati strani anche quando non richiesti. cioè io vorrei tutto normale e poi agglomerati solo intorno ai fori. La parte delle venature poi non funziona»*.
+(Le sue parole, corrette solo negli errori di battitura.) Misurato su quel pezzo, tre marroni:
+
+- **La densità era per filo.** Ora c'è **«La densità è di tutti i fili insieme»** (`densityTotal`, spenta di
+  serie). Il filo di una passata **non** scende con l'inverso della distanza: un colore, punti 6-15 mm, da 1 a 6 mm
+  fa 480 → 278 → 148 → 78 → 37,5 → 22,4 m (scende con la distanza alla 1,8); con punti 2-5 mm, alla 1,5. Allora ogni
+  passata va a N^(1/1,7) volte la distanza: con 3 colori 1,9 volte. Densità 1,5 del totale: 258 m contro 278 di un
+  filo solo.
+- **Gli agglomerati strani** vengono dai **vortici** del motore (il campo di flusso che curva la camminata): a
+  densità alta si vedono come nuvole a spirale. Ora c'è **«Vortici del fondo»** (`flowStrength`, 100 = come sempre,
+  0 = fondo senza vortici).
+- **Gli agglomerati intorno ai fori con i punti lunghi non restano lì.** Con i punti di serie (6-15 mm), più fitto
+  ×3 su 4 mm: vicino ai fori 5,16, lontano 4,26 (filo per mm², fondo), e il lontano era 2,79 senza: **cresce tutto il
+  pezzo**, perché un punto di 6-15 mm che parte da un foro finisce lontano. Con **punti 2-5 mm** restano intorno ai fori:
+  vicino 3,34, lontano 1,55 (era 1,48). **Da dire a Lorenzo; non cambiato nel motore.**
+- **Le venature si fermavano al primo foro**: 2,8 m su tutto il pezzo, e i ponti attraversavano il pezzo dritti. Ora
+  davanti a un foro girano (fino a 72°, prima da un lato poi dall'altro) e proseguono; si fermano solo al bordo. Sul
+  pezzo più lungo della A si allungano in proporzione (la A era 120×80). Dopo: 8,7 m, un tratto solo.
+- *«perchè le venature sono solo a destra? Serve un algoritmo in grado di crearle su tutta la superficie»*. Gli
+  inizi dei fasci erano pescati a caso e i coricati partivano sempre a destra, come nella A. Prima prova: la
+  larghezza divisa in fette, un fascio per fetta, fasci e fini in proporzione → 13 strisce quasi parallele dall'alto
+  in basso. Lorenzo: *«a me ancora così non mi sembra troppa pelle magari mi sbaglio»*: nella A i fasci si incrociano
+  in direzioni diverse. Seconda prova, quella tenuta: il pezzo si divide in **riquadri della misura della A** (120 di
+  traverso, 80 lungo le vene), ognuno con la sua composizione A girata un po' (16° di scarto tipo); i fasci sconfinano
+  e si incrociano. Fasci e fini sono il numero **per riquadro**; con un riquadro solo è la A. Sul suo pezzo (3×3
+  riquadri): circa 33 m, un tratto, nelle varianti 8, 3 e 21. Lorenzo: *«sì meglio»*.
+
 Cosa resta da fare sta in `STATO.md` (C4 densità per zona, C5 vuoto dello stesso colore, C6 modello
 densità unificato, A5 i nomi dei parametri "movimento").

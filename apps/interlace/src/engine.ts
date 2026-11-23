@@ -83,6 +83,14 @@ export interface InterlaceParams {
   /** Morbidezza della sfumatura (mm, solo con `toneBlend`): di quanto si sfoca il tono dell'immagine prima
    *  di leggerlo. Poco = segue ogni variazione, tanto = passaggi larghi e macchie più grandi. */
   toneSoftnessMm: number;
+  /** DENSITÀ DEL TOTALE (Lorenzo, 2026-11-23: «la densità ora tocca singolarmente ogni filo, mai nel complesso»):
+   *  acceso, la densità (globale e per colore) è quella di tutti i fili insieme. Con N passate ognuna cuce a
+   *  N volte la distanza, così il filo complessivo è quello di un filo solo a quella densità. Spento = ogni filo
+   *  alla sua densità, come prima. */
+  densityTotal: boolean;
+  /** VORTICI DEL FONDO 0–100: quanto il campo di flusso curva la camminata (nuvole e vortici). 100 = come è
+   *  sempre stato; 0 = nessun vortice, il fondo resta uniforme. */
+  flowStrength: number;
   /** PIÙ FITTO INTORNO AI BUCHI (le aree vuote del cartamodello): acceso, il filo si addensa attorno a ogni
    *  buco e torna alla densità normale allontanandosi. Spento = densità uguale ovunque, come prima.
    *  Il bordo esterno e lo sfondo senza ricamo non contano: Lorenzo ha scelto solo i buchi. */
@@ -123,6 +131,8 @@ export const defaultInterlaceParams: InterlaceParams = {
   backgroundToleranceRgb: 30,
   toneBlend: false, // false = agglomerati a zone nette (comportamento storico)
   toneSoftnessMm: 4,
+  densityTotal: false, // false = ogni filo alla sua densità (comportamento storico)
+  flowStrength: 100, // 100 = vortici come sempre
   voidDensityBoost: false, // false = densità uguale ovunque (comportamento storico)
   voidDensityFactor: 2,
   voidDensityFadeMm: 8,
@@ -354,7 +364,7 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
  *  pannello avvisa già. */
 interface PenGrid { arr: Uint16Array; gx: number; gy: number; x0: number; y0: number; cap: number; }
 
-function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null, pen: PenGrid | null = null, transit: Uint8Array | null = null): Point[][] {
+function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null, pen: PenGrid | null = null, transit: Uint8Array | null = null, flow = 1): Point[][] {
   const tone = transit !== null;
   const { bb, cell, gx, gy, ci, cj, cpx, cpy, minS, maxS, inRegion, segOk } = ctx;
   const { mgw, mgh, mx0, my0, mres } = ctx;
@@ -454,7 +464,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
     for (let k = 0; k < CANDIDATES; k++) {
       const len = minS + rng() * (hi - minS);
       let ang = head + (rng() * 2 - 1) * spread;
-      ang += FLOW_INFLUENCE * angDelta(ang, fdir);
+      ang += FLOW_INFLUENCE * flow * angDelta(ang, fdir);
       const nx = cx + Math.cos(ang) * len, ny = cy + Math.sin(ang) * len;
       if (!inRegion(nx, ny) || !segOk(cx, cy, nx, ny)) continue;
       const destId = cj(ny) * gx + ci(nx);
@@ -728,7 +738,7 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
   if (!ctx) return [];
   const targetArr = new Uint8Array(ctx.gx * ctx.gy);
   for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = COVER_TARGET;
-  return runOneFill(ctx, p.seed || 1, targetArr);
+  return runOneFill(ctx, p.seed || 1, targetArr, null, null, null, flowOf(p));
 }
 
 /** Quanti punti al mm² chiede il lavoro, e quanto vale il tetto automatico. */
@@ -768,6 +778,12 @@ export function stitchBudget(p: InterlaceParams, densities: number[]): StitchBud
 
 /** Le volte della densità a ridosso del buco, dentro limiti sani: oltre 5 le celle vicine al buco
  *  chiederebbero più punti di quanti ne stanno, e il tetto le lascerebbe scoperte. */
+/** Vortici del fondo come moltiplicatore del campo di flusso: 100 (o assente, nei progetti vecchi) = 1. */
+function flowOf(p: InterlaceParams): number {
+  const v = Number(p.flowStrength);
+  return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) / 100 : 1;
+}
+
 function voidFactorMax(p: InterlaceParams): number {
   return Math.max(1, Math.min(5, Number(p.voidDensityFactor) || 1));
 }
@@ -1063,7 +1079,7 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
         targetArr[id] = Math.max(1, Math.min(255, Math.floor(tg * f + hash(gi + pIdx * 104729 + 17, gj + base * 53))));
       }
     }
-    passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr, banArr, pen, transitArr));
+    passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr, banArr, pen, transitArr, flowOf(p)));
   }
   return passes;
 }

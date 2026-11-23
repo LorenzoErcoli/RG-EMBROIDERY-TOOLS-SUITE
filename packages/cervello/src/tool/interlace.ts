@@ -85,6 +85,16 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: 0, passo: 1, predefinito: 4, concetto: 'immagine',
     },
     {
+      id: 'densityTotal', nome: 'densityTotal', etichetta: 'La densità è di tutti i fili insieme',
+      aiuto: 'spento, ogni filo ha la sua densità e aggiungere un colore infittisce. Acceso, la densità (anche quella di ogni colore) vale per tutti i fili insieme: con 3 colori ognuno cuce a 3 volte la distanza.',
+      tipo: 'bool', unita: '', predefinito: false, regole: ['R22'], concetto: 'densita',
+    },
+    {
+      id: 'flowStrength', nome: 'flowStrength', etichetta: 'Vortici del fondo',
+      aiuto: 'quanto il filo gira in nuvole e vortici. 100 = come sempre; 0 = nessun vortice, il fondo resta uniforme.',
+      tipo: 'num', unita: '%', min: 0, max: 100, passo: 10, predefinito: 100, concetto: 'densita',
+    },
+    {
       id: 'voidDensityBoost', nome: 'voidDensityBoost', etichetta: 'Più fitto intorno alle aree vuote',
       aiuto: 'spento, la densità è uguale ovunque. Acceso, il filo si addensa attorno a ogni area vuota del cartamodello e torna alla densità normale allontanandosi. Il bordo esterno non conta.',
       tipo: 'bool', unita: '', predefinito: false, regole: ['R5'], concetto: 'densita',
@@ -111,12 +121,12 @@ export const scheda: SchedaParametri = {
     },
     {
       id: 'veinsBundles', nome: 'veinsBundles', etichetta: 'Fasci di venature spesse',
-      aiuto: 'quanti fasci di 2-3 venature spesse a fuso.',
+      aiuto: 'quanti fasci di 2-3 venature spesse a fuso per riquadro di 120×80 mm (la misura della A): un pezzo più grande si divide in riquadri, ognuno con i suoi fasci, girati un po\u2019.',
       tipo: 'int', unita: '', min: 0, passo: 1, predefinito: 5, concetto: 'colori',
     },
     {
       id: 'veinsThin', nome: 'veinsThin', etichetta: 'Venature fini',
-      aiuto: 'quante venature fini si provano a tracciare: si fanno solo quelle che partono da una venatura e ne incontrano un\u2019altra.',
+      aiuto: 'quante venature fini si provano a tracciare: si fanno solo quelle che partono da una venatura e ne incontrano un\u2019altra. Per riquadro, come i fasci.',
       tipo: 'int', unita: '', min: 0, passo: 1, predefinito: 52, concetto: 'colori',
     },
     {

@@ -8,6 +8,9 @@ import {
 import { generatePasses, stitchBudget, type InterlaceParams, type ImageColorAt, type StitchBudget } from './engine';
 import { generateVeins } from './venature';
 
+/** Densità del totale: il filo di una passata scende con la distanza alla TOTAL_EXP (misurato, vedi sotto). */
+const TOTAL_EXP = 1.7;
+
 export type RoleAssignment = Record<string, Role | undefined>;
 
 export interface PipelineResult {
@@ -95,6 +98,11 @@ export function runPipeline(
   const cd = params.colorDensities || [];
   const densities: number[] = [];
   for (let i = 0; i < P; i++) { const d = cd[i % palette.length]; densities.push(d && d > 0 ? d : params.densitySpacingMm); }
+  // Densità del totale: le P passate coprono tutte l'intero pezzo, e insieme devono dare il filo di una passata sola
+  // alla densità scritta. Il filo NON scende col semplice inverso della distanza: misurato (pezzo 309×219 con 201
+  // fori, un colore) scende con la distanza alla 1,5-1,8 (1,8 coi punti 6-15 mm, 1,5 coi punti 2-5). Con 1,7 ogni
+  // passata va a P^(1/1,7) volte la distanza: con 3 colori 1,9 volte, ±5% di filo rispetto a un filo solo.
+  if (params.densityTotal && P > 1) { const k = Math.pow(P, 1 / TOTAL_EXP); for (let i = 0; i < P; i++) densities[i] *= k; }
 
   const stops: { color: string; polylines: Polyline[]; veins?: boolean }[] = [];
   let threadMm = 0;
