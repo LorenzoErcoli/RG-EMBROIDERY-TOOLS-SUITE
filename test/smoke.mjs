@@ -69,7 +69,7 @@ export { sagomaDaZone, sagomaDaAnello, sagomaDaAnelli } from ${JSON.stringify(po
 export { stopContorno, stopGriglia, stopBase, stopLinee, stopCornice, stopBordatura, stratiProgramma, conPuntoMinimo, unisciTratti } from ${JSON.stringify(posix('apps/cannage-rafia/src/programma.ts'))};
 export { generaCornice, divisioniCornice, latoDelReticolo, PARAMETRI_CORNICE } from ${JSON.stringify(posix('apps/cannage-rafia/src/cornice.ts'))};
 export { generaBordatura, latiDelContorno, lineeDaLati, stessoLato, PARAMETRI_BORDATURA } from ${JSON.stringify(posix('apps/cannage-rafia/src/bordatura.ts'))};
-export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_DI_SERIE, fermaSottoIlSecondo as pmFerma, macchiePerStilista as pmPerStilista, tagliDeiSalti as pmTagli, rigaSfrangiata as pmSfrangiata } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
+export { costruisciMacchie as pmCostruisci, reteDelPunto as pmRete, restringi as pmRestringi, ordinaMacchie as pmOrdina, PARAMETRI_MACCHIE as PM_DI_SERIE, fermaSottoIlSecondo as pmFerma, macchiePerStilista as pmPerStilista, tagliDeiSalti as pmTagli, rigaSfrangiata as pmSfrangiata, nelRiquadro as pmNelRiquadro } from ${JSON.stringify(posix('apps/pattern-macchie/src/motore.ts'))};
 export { lineePerStilista as rcLineeStilista, scegliModelli as rcScegliModelli, oggettiDaMandare as rcOggettiDaMandare, oggettiMancanti as rcOggettiMancanti } from ${JSON.stringify(posix('apps/rete-catenella/src/stilista-psil.ts'))};
 export { aggiungiModulo as rcAggiungiModulo, leggiElenco as rcLeggiElenco, leggiModulo as rcLeggiModulo, scriviElenco as rcScriviElenco, togliModulo as rcTogliModulo } from ${JSON.stringify(posix('apps/rete-catenella/src/elenco-moduli.ts'))};
 export { griglia as rcGriglia, riquadroRete as rcRiquadro, costruisciRete as rcCostruisci, latoSuperioreDritto as rcLatoDritto, filoSopra as rcFiloSopraIntero, stratiRete as rcStrati, catenella as rcCatenella, pezziDentro as rcPezzi, maschera as rcMaschera, PARAMETRI_RETE as RC_PARAMETRI, motore as rcMotore } from ${JSON.stringify(posix('apps/rete-catenella/src/motore.ts'))};
@@ -7137,6 +7137,18 @@ console.log('\npattern-macchie — base intera, raso e punto sopra in due stop, 
     const vuotaInCima = rg.pmCostruisci([], [q(40, 0, 10)], {}, FERMI, [], [q(0, 0, 30), q(10, 10, 10)]);
     check(`un contorno dentro un altro dello stesso livello è un'area vuota: una macchia sola, niente filo dentro (da solo ${filoNelBuco(conVuota, 1).toFixed(1)} mm, sul 3° livello ${filoNelBuco(vuotaInCima, 3).toFixed(1)} mm)`,
       [conVuota.stop[0].indici.length, filoNelBuco(conVuota, 1) < 0.5, vuotaInCima.stop.filter((s) => s.strato === 3).flatMap((s) => s.indici).length, filoNelBuco(vuotaInCima, 3) < 0.5], [1, true, 1, true]);
+    // ...ANCHE IN «PROVA QUI» (Lorenzo, 2026-11-23: «il nero deve bucare il nero. nel tool non succede»): guardando da
+    // vicino l'area vuota, o la macchia lontano dall'area vuota, la macchia si prende con l'area vuota; e guardando dentro
+    // una macchia grande, senza il suo bordo, la macchia c'è. Un'altra macchia lontana resta fuori.
+    {
+      const livello = [q(0, 0, 30), q(10, 10, 10), q(60, 0, 10)];
+      const riq = (x0, y0, x1, y1) => rg.pmNelRiquadro(livello, { x0, y0, x1, y1 }).map((m) => livello.indexOf(m)).join(',');
+      check('Prova qui: la macchia con la sua area vuota, comunque la si guardi',
+        [riq(12, 12, 18, 18), riq(0, 24, 8, 30), riq(2, 2, 8, 8), riq(55, 0, 75, 10), riq(28, 0, 62, 5)],
+        ['0,1', '0,1', '0,1', '2', '0,1,2']);
+      const vicino = rg.pmCostruisci([], rg.pmNelRiquadro(livello, { x0: 12, y0: 12, x1: 18, y1: 18 }), {}, FERMI);
+      check(`...e guardando l'area vuota da vicino, niente filo dentro (${filoNelBuco(vicino, 1).toFixed(1)} mm)`, [vicino.stop[0].indici.length, filoNelBuco(vicino, 1) < 0.5], [1, true]);
+    }
   }
   const pmTool = readFileSync(join(root, 'apps/pattern-macchie/src/tool.ts'), 'utf8');
   const pmWorker = readFileSync(join(root, 'apps/pattern-macchie/src/macchie.worker.ts'), 'utf8');

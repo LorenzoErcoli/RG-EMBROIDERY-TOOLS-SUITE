@@ -1775,6 +1775,41 @@ function conBuco(anello: Polyline, buco: Polyline, verso: Point): Polyline {
 const AREA_MINIMA_CONTORNO = 0.05;
 
 /**
+ * Il contorno `a` sta dentro `b` (ingombri dati): la maggior parte di alcuni suoi punti, non solo il primo, che può stare
+ * proprio sul bordo dell'altro.
+ */
+function contornoDentro(a: Polyline, ia: Ingombro, b: Polyline, ib: Ingombro): boolean {
+  if (ia.x0 < ib.x0 || ia.x1 > ib.x1 || ia.y0 < ib.y0 || ia.y1 > ib.y1) return false;
+  const n = Math.min(9, a.length);
+  let si = 0;
+  for (let k = 0; k < n; k++) if (pointInPolygon(a[Math.floor((k * a.length) / n)], b)) si++;
+  return si * 2 > n;
+}
+
+/**
+ * LE MACCHIE DI «PROVA QUI», CON LE LORO AREE VUOTE (Lorenzo, 2026-11-23, su una macchia del 1° livello con un'area
+ * vuota: «il nero deve bucare il nero. nel tool non succede»). Prima si prendevano i contorni con almeno un punto nel
+ * riquadro: guardando da vicino l'area vuota il contorno della macchia restava fuori, e l'area vuota si cuciva come una
+ * macchia; guardando la macchia lontano dall'area vuota, si cuciva piena. Ora un contorno conta se il suo ingombro tocca
+ * il riquadro (anche guardando dentro una macchia grande, senza il suo bordo), e con lui vengono i contorni dello stesso
+ * livello che stanno dentro uno preso: le sue aree vuote e le isole dentro di loro. `conIBuchi` fa il resto, come per
+ * Genera.
+ */
+export function nelRiquadro(anelli: Polyline[], z: Ingombro): Polyline[] {
+  const bb = anelli.map(ingombro);
+  const presi = bb.map((b) => b.x1 >= z.x0 && b.x0 <= z.x1 && b.y1 >= z.y0 && b.y0 <= z.y1);
+  for (let altri = true; altri;) {
+    altri = false;
+    anelli.forEach((a, i) => {
+      if (presi[i] || !anelli.some((b, j) => presi[j] && contornoDentro(a, bb[i], b, bb[j]))) return;
+      presi[i] = true;
+      altri = true;
+    });
+  }
+  return anelli.filter((_, i) => presi[i]);
+}
+
+/**
  * LE AREE VUOTE DI UN LIVELLO (Lorenzo, 2026-11-23: «Il livello 3 delle macchie aveva 2 oggetti con le aree vuote. il
  * sistema ha visto 2 contorni e ha disegnato 2 macchie, c'è quindi passato sopra»): da Stilista il contorno dell'area vuota
  * arriva come un contorno a sé. Come in un disegno vettoriale (pari e dispari): un contorno dentro un numero dispari di
@@ -1785,15 +1820,7 @@ export function conIBuchi(anelli: Polyline[], verso: Point): Polyline[] {
   const r = anelli.filter((a) => a.length >= 3 && Math.abs(polygonArea(a)) >= AREA_MINIMA_CONTORNO);
   if (r.length < 2) return r;
   const area = r.map((a) => Math.abs(polygonArea(a))), bb = r.map(ingombro);
-  // (dentro: la maggior parte di alcuni punti del contorno, non solo il primo, che può stare proprio sul bordo dell'altro)
-  const dentro = (i: number, j: number) => {
-    const a = bb[i], b = bb[j];
-    if (area[i] >= area[j] || a.x0 < b.x0 || a.x1 > b.x1 || a.y0 < b.y0 || a.y1 > b.y1) return false;
-    const n = Math.min(9, r[i].length);
-    let si = 0;
-    for (let k = 0; k < n; k++) if (pointInPolygon(r[i][Math.floor((k * r[i].length) / n)], r[j])) si++;
-    return si * 2 > n;
-  };
+  const dentro = (i: number, j: number) => area[i] < area[j] && contornoDentro(r[i], bb[i], r[j], bb[j]);
   const padri = r.map((_, i) => r.map((_, j) => j).filter((j) => dentro(i, j)));
   const pezzi = new Map<number, Polyline>();
   r.forEach((a, i) => { if (padri[i].length % 2 === 0) pezzi.set(i, a); });

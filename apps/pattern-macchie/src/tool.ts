@@ -11,7 +11,7 @@ import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';
-import { costruisciMacchie, macchiePerStilista, tagliDeiSalti, PARAMETRI_MACCHIE, type ParametriMacchie, type Riempimento, type RisultatoMacchie, type Strato } from './motore';
+import { costruisciMacchie, macchiePerStilista, nelRiquadro, tagliDeiSalti, PARAMETRI_MACCHIE, type ParametriMacchie, type Riempimento, type RisultatoMacchie, type Strato } from './motore';
 
 /** I pattern pronti: la libreria condivisa del Generatore pattern, e quelli salvati nel Generatore su questo computer. */
 const PRESET_CONDIVISI: Record<string, PatternConfig> = (() => {
@@ -586,9 +586,8 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     if (!macchie.length && !secondo.length && !terzo.length) { $('status').textContent = 'Dai a un colore il ruolo «Macchie».'; return; }
     const tutte = macchie.length + secondo.length + terzo.length;
     if (zona) {
-      // (le macchie che toccano il riquadro, intere; il pannello della base, se c'è, è il riquadro)
-      const tocca = (m: Polyline) => m.some((p) => p.x >= zona.x0 && p.x <= zona.x1 && p.y >= zona.y0 && p.y <= zona.y1);
-      macchie = macchie.filter(tocca); secondo = secondo.filter(tocca); terzo = terzo.filter(tocca);
+      // (le macchie che toccano il riquadro, intere e con le loro aree vuote; il pannello della base, se c'è, è il riquadro)
+      macchie = nelRiquadro(macchie, zona); secondo = nelRiquadro(secondo, zona); terzo = nelRiquadro(terzo, zona);
       if (!macchie.length && !secondo.length && !terzo.length) { $('status').textContent = 'Nel pezzo che vedi non ci sono macchie: avvicinati a una parte del disegno e riprova.'; return; }
       if (pannello) pannello = [{ x: zona.x0, y: zona.y0 }, { x: zona.x1, y: zona.y0 }, { x: zona.x1, y: zona.y1 }, { x: zona.x0, y: zona.y1 }];
     }
