@@ -66,7 +66,8 @@ export const CORPO: Group[] = [
   {
     title: 'Percorso e confine', collapsible: true, open: false, fields: [
       { kind: 'check', name: 'repeatBack', label: 'Andata e ritorno (serpentina)', value: false },
-      { kind: 'num', name: 'minStitchMm', label: 'Punto minimo', unit: 'mm', min: 0, step: 0.01, value: 0 },
+      { kind: 'num', name: 'minStitchMm', label: 'Punto minimo', unit: 'mm', min: 0, step: 0.01, value: 0, help: 'sui contorni: ogni punto che tocca il perimetro o un’area vuota (tagli, raccordi, il punto accanto al taglio)' },
+      { kind: 'num', name: 'patternMinStitchMm', label: 'Punto minimo del pattern', unit: 'mm', min: 0, step: 0.01, value: 0, help: 'dentro il pattern, fra due punti del modulo lontani dai contorni; 0 = il disegno resta com’è' },
       { kind: 'num', name: 'maxStitchMm', label: 'Lunghezza massima del punto', unit: 'mm', min: 0, step: 0.1, value: 0 },
       { kind: 'num', name: 'constructionStroke', label: 'Spessore di costruzione', unit: 'mm', min: 0.05, step: 0.05, value: 0.3, help: 'regola rientri, margini e raccordi — non è il filo disegnato' },
       { kind: 'select', name: 'boundaryCleanupMode', label: 'Punti fuori dal contorno', value: 'adjust-then-delete', options: [['adjust-then-delete', 'Avvicina al bordo, poi elimina'], ['delete', 'Elimina']] },

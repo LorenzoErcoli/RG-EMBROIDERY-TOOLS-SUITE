@@ -80,7 +80,7 @@
         "minStitchMm": {
           "$ref": "#/$defs/minStitch",
           "default": 0,
-          "description": "Lunghezza minima del punto.",
+          "description": "Sui contorni: ogni punto che tocca il perimetro o un’area vuota (tagli, raccordi, il punto accanto al taglio).",
           "minimum": 0,
           "x-id": "minStitch"
         },
@@ -194,6 +194,10 @@
           "$ref": "#/$defs/repeatBack",
           "default": false
         },
+        "patternMinStitchMm": {
+          "$ref": "#/$defs/patternMinStitchMm",
+          "default": 0
+        },
         "maxStitchMm": {
           "$ref": "#/$defs/maxStitch",
           "default": 0,
@@ -304,6 +308,52 @@
           "$ref": "#/$defs/toneSoftness",
           "default": 4,
           "x-id": "toneSoftness"
+        },
+        "densityTotal": {
+          "$ref": "#/$defs/densityTotal",
+          "default": false
+        },
+        "flowStrength": {
+          "$ref": "#/$defs/flowStrength",
+          "default": 100
+        },
+        "voidDensityBoost": {
+          "$ref": "#/$defs/voidDensityBoost",
+          "default": false
+        },
+        "voidDensityFactor": {
+          "$ref": "#/$defs/voidDensityFactor",
+          "default": 2
+        },
+        "voidDensityFadeMm": {
+          "$ref": "#/$defs/voidDensityFade",
+          "default": 8,
+          "x-id": "voidDensityFade"
+        },
+        "veinsOn": {
+          "$ref": "#/$defs/veinsOn",
+          "default": false
+        },
+        "veinsColor": {
+          "$ref": "#/$defs/veinsColor",
+          "default": "#c4845c"
+        },
+        "veinsBundles": {
+          "$ref": "#/$defs/veinsBundles",
+          "default": 5
+        },
+        "veinsThin": {
+          "$ref": "#/$defs/veinsThin",
+          "default": 52
+        },
+        "veinsAngleDeg": {
+          "$ref": "#/$defs/veinsAngle",
+          "default": 82,
+          "x-id": "veinsAngle"
+        },
+        "veinsSeed": {
+          "$ref": "#/$defs/veinsSeed",
+          "default": 8
         }
       }
     },
@@ -1654,6 +1704,12 @@
     "rete-catenella": {
       "type": "object",
       "properties": {
+        "realWidthMm": {
+          "$ref": "#/$defs/realWidth",
+          "default": 0,
+          "title": "Larghezza reale",
+          "x-id": "realWidth"
+        },
         "spostaXMm": {
           "$ref": "#/$defs/catenellaGridOffsetX",
           "default": 0,
@@ -2942,6 +2998,18 @@
       "description": "Percorre le colonne a serpentina, in andata e ritorno, senza cambiare le coordinate del modulo.",
       "x-concetto": "ordine-cucitura"
     },
+    "patternMinStitchMm": {
+      "type": "number",
+      "title": "Punto minimo del pattern",
+      "description": "Dentro il pattern, fra due punti del modulo lontani dai contorni; 0 = il disegno resta com’è.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 0.01,
+      "x-regole": [
+        "R3"
+      ],
+      "x-concetto": "punto-minimo"
+    },
     "maxStitch": {
       "type": "number",
       "title": "Lunghezza massima del punto",
@@ -3135,6 +3203,97 @@
       "minimum": 0,
       "x-passo": 1,
       "x-concetto": "immagine"
+    },
+    "densityTotal": {
+      "type": "boolean",
+      "title": "La densità è di tutti i fili insieme",
+      "description": "spento, ogni filo ha la sua densità e aggiungere un colore infittisce. Acceso, la densità (anche quella di ogni colore) vale per tutti i fili insieme: con 3 colori ognuno cuce a 3 volte la distanza.",
+      "x-regole": [
+        "R22"
+      ],
+      "x-concetto": "densita"
+    },
+    "flowStrength": {
+      "type": "number",
+      "title": "Vortici del fondo",
+      "description": "quanto il filo gira in nuvole e vortici. 100 = come sempre; 0 = nessun vortice, il fondo resta uniforme.",
+      "x-unita": "%",
+      "minimum": 0,
+      "maximum": 100,
+      "x-passo": 10,
+      "x-concetto": "densita"
+    },
+    "voidDensityBoost": {
+      "type": "boolean",
+      "title": "Più fitto intorno alle aree vuote",
+      "description": "spento, la densità è uguale ovunque. Acceso, il filo si addensa attorno a ogni area vuota del cartamodello e torna alla densità normale allontanandosi, e ogni colore contorna ogni foro con un anello a ridosso del bordo. Il bordo esterno non conta.",
+      "x-regole": [
+        "R5"
+      ],
+      "x-concetto": "densita"
+    },
+    "voidDensityFactor": {
+      "type": "number",
+      "title": "Quanto più fitto vicino al vuoto",
+      "description": "volte la densità normale, proprio a ridosso del vuoto (2 = il doppio del filo; massimo 5).",
+      "x-unita": "rapporto",
+      "minimum": 1,
+      "maximum": 5,
+      "x-passo": 0.1,
+      "x-concetto": "densita"
+    },
+    "voidDensityFade": {
+      "type": "number",
+      "title": "In quanti mm torna normale",
+      "description": "la sfumatura da molto fitto a normale: oltre questa distanza dal vuoto la densità è quella di sempre.",
+      "x-unita": "mm",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "densita"
+    },
+    "veinsOn": {
+      "type": "boolean",
+      "title": "Venature sopra",
+      "description": "venature di filo cucite per ultime, sopra al ricamo, come le pieghe chiare della pelle: fasci di venature spesse (andata e ritorno) e venature fini (solo andata), tutte in un giro senza salti.",
+      "x-concetto": "colori"
+    },
+    "veinsColor": {
+      "type": "string",
+      "title": "Colore delle venature",
+      "description": "il colore del filo delle venature, cucito sopra a tutto.",
+      "x-concetto": "colori"
+    },
+    "veinsBundles": {
+      "type": "integer",
+      "title": "Fasci di venature spesse",
+      "description": "quanti fasci di 2-3 venature spesse a fuso per riquadro di 120×80 mm (la misura della A): un pezzo più grande si divide in riquadri, ognuno con i suoi fasci, girati un po’.",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "colori"
+    },
+    "veinsThin": {
+      "type": "integer",
+      "title": "Venature fini",
+      "description": "quante venature fini si provano a tracciare: si fanno solo quelle che partono da una venatura e ne incontrano un’altra. Per riquadro, come i fasci.",
+      "minimum": 0,
+      "x-passo": 1,
+      "x-concetto": "colori"
+    },
+    "veinsAngle": {
+      "type": "number",
+      "title": "Direzione delle venature",
+      "description": "90 = scendono dritte, 0 = in orizzontale.",
+      "x-unita": "deg",
+      "x-passo": 5,
+      "x-concetto": "colori"
+    },
+    "veinsSeed": {
+      "type": "integer",
+      "title": "Variante delle venature",
+      "description": "stessa variante = stesso disegno delle venature.",
+      "minimum": 1,
+      "x-passo": 1,
+      "x-concetto": "seme"
     },
     "panelWidth": {
       "type": "number",
@@ -6586,6 +6745,11 @@
       "descrizione": "Spaziatura TRASVERSALE in mm fra file di filo adiacenti (R22).",
       "parametri": [
         "density",
+        "densityTotal",
+        "flowStrength",
+        "voidDensityBoost",
+        "voidDensityFactor",
+        "voidDensityFade",
         "densitySpacingMm",
         "targetDensityPct",
         "fillSpacingMm",
@@ -6622,6 +6786,7 @@
       "descrizione": "Lunghezza minima di un punto; si applica dopo il routing (R3).",
       "parametri": [
         "minStitch",
+        "patternMinStitchMm",
         "minimumSegmentLength",
         "cutBorderStitchLength",
         "minStitchMm",
@@ -6878,6 +7043,7 @@
       "parametri": [
         "variationSeed",
         "seed",
+        "veinsSeed",
         "seed2"
       ]
     },
@@ -6945,6 +7111,11 @@
         "paletteCycles",
         "clusterMode",
         "clusterStrength",
+        "veinsOn",
+        "veinsColor",
+        "veinsBundles",
+        "veinsThin",
+        "veinsAngle",
         "paletteMode",
         "colorCount",
         "color2",

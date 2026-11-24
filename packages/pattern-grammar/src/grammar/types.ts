@@ -123,6 +123,12 @@ export type PatternConfig = {
   /** Canonico (§3.1): punto minimo. `minPointDistance`/`minSegmentLength` restano come alias legacy. */
   minStitchMm?: number;
   minPointDistance?: number;
+  /**
+   * Il punto minimo DENTRO il pattern, fra due punti del modulo (Lorenzo, 2026-11-23: «un conto è il pattern
+   * un conto è nei contorni»). `minStitchMm` vale sui contorni (perimetro e aree vuote); questo fra i punti
+   * del modulo lontani dal bordo. 0 (di serie) = il disegno resta com'è.
+   */
+  patternMinStitchMm?: number;
   /** Canonico (§3.1): lunghezza massima del punto. `maxStitchLength` resta come alias legacy. */
   maxStitchMm?: number;
   /** Adds evenly spaced stitch points on visible segments longer than this mm value. 0 disables it. */

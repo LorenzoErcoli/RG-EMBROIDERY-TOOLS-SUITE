@@ -195,6 +195,40 @@ export function readDstMetadata(dst: Uint8Array): Record<string, unknown> | null
   }
 }
 
+/**
+ * LA GRIGLIA DEL DST: i record portano le coordinate in decimi di millimetro, quindi ogni punto finisce
+ * su un nodo da 0,1 mm. Due punti da 0,97 mm possono uscire a 0,9: chi vuole tenere il punto minimo anche
+ * nel file deve misurare sui nodi, non sui punti com'erano (Pelle di razza, 2026-10-06; Generatore pattern,
+ * 2026-11-23). `decimiDst` è l'arrotondamento che fa `buildDst`, uno solo per tutti.
+ */
+export const GRIGLIA_DST_MM = 0.1;
+export const decimiDst = (mm: number): number => Math.round(mm * 10);
+/**
+ * Il punto più lungo che sta in un record: 12,1 mm per asse. Un punto più lungo `buildDst` lo spezza in
+ * 12,1 mm più il resto, e il resto può venire di 0,2 mm: chi tiene il punto minimo divide prima lui i punti
+ * lunghi in parti uguali.
+ */
+export const PUNTO_MAX_DST_MM = 12.1;
+
+/**
+ * Gli strati con ogni punto già sul suo nodo della griglia e l'origine (il centro dei punti cuciti) spostata
+ * su un nodo anche lei. Se no il centraggio di `dstFromExportLayers` sposta tutto di una frazione di passo e
+ * ri-arrotonda, e le distanze misurate sui nodi non tengono più. Da usare con `center: false`.
+ */
+export function stratiSullaGrigliaDst(layers: ExportLayer[]): { layers: ExportLayer[]; cx: number; cy: number } {
+  let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+  for (const l of layers) if (!l.shapeOnly) for (const pl of l.polylines || []) for (const p of pl) {
+    if (p.x < minX) minX = p.x; if (p.x > maxX) maxX = p.x;
+    if (p.y < minY) minY = p.y; if (p.y > maxY) maxY = p.y;
+  }
+  if (!Number.isFinite(minX)) return { layers, cx: 0, cy: 0 };
+  const cx = decimiDst((minX + maxX) / 2), cy = decimiDst((minY + maxY) / 2);
+  return {
+    layers: layers.map((l) => ({ ...l, polylines: (l.polylines || []).map((pl) => pl.map((p) => ({ x: (decimiDst(p.x) - cx) / 10, y: (decimiDst(p.y) - cy) / 10 }))) })),
+    cx: cx / 10, cy: cy / 10,
+  };
+}
+
 /** Opzioni per il salvataggio di un .dst, uguali per tutti i tool (passale a `saveBinaryFile`). */
 export const DST_FILE = { mime: 'application/octet-stream', extension: '.dst', description: 'Ricamo Tajima DST' } as const;
 

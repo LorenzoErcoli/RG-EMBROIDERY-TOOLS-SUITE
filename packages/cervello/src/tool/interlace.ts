@@ -84,5 +84,60 @@ export const scheda: SchedaParametri = {
       aiuto: 'quanto si sfoca l’immagine prima di leggerne il tono: poco = segue ogni variazione, tanto = passaggi larghi.',
       tipo: 'num', unita: 'mm', min: 0, passo: 1, predefinito: 4, concetto: 'immagine',
     },
+    {
+      id: 'densityTotal', nome: 'densityTotal', etichetta: 'La densità è di tutti i fili insieme',
+      aiuto: 'spento, ogni filo ha la sua densità e aggiungere un colore infittisce. Acceso, la densità (anche quella di ogni colore) vale per tutti i fili insieme: con 3 colori ognuno cuce a 3 volte la distanza.',
+      tipo: 'bool', unita: '', predefinito: false, regole: ['R22'], concetto: 'densita',
+    },
+    {
+      id: 'flowStrength', nome: 'flowStrength', etichetta: 'Vortici del fondo',
+      aiuto: 'quanto il filo gira in nuvole e vortici. 100 = come sempre; 0 = nessun vortice, il fondo resta uniforme.',
+      tipo: 'num', unita: '%', min: 0, max: 100, passo: 10, predefinito: 100, concetto: 'densita',
+    },
+    {
+      id: 'voidDensityBoost', nome: 'voidDensityBoost', etichetta: 'Più fitto intorno alle aree vuote',
+      aiuto: 'spento, la densità è uguale ovunque. Acceso, il filo si addensa attorno a ogni area vuota del cartamodello e torna alla densità normale allontanandosi, e ogni colore contorna ogni foro con un anello a ridosso del bordo. Il bordo esterno non conta.',
+      tipo: 'bool', unita: '', predefinito: false, regole: ['R5'], concetto: 'densita',
+    },
+    {
+      id: 'voidDensityFactor', nome: 'voidDensityFactor', etichetta: 'Quanto più fitto vicino al vuoto',
+      aiuto: 'volte la densità normale, proprio a ridosso del vuoto (2 = il doppio del filo; massimo 5).',
+      tipo: 'num', unita: 'rapporto', min: 1, max: 5, passo: 0.1, predefinito: 2, concetto: 'densita',
+    },
+    {
+      id: 'voidDensityFade', nome: 'voidDensityFadeMm', etichetta: 'In quanti mm torna normale',
+      aiuto: 'la sfumatura da molto fitto a normale: oltre questa distanza dal vuoto la densità è quella di sempre.',
+      tipo: 'num', unita: 'mm', min: 0, passo: 1, predefinito: 8, concetto: 'densita',
+    },
+    {
+      id: 'veinsOn', nome: 'veinsOn', etichetta: 'Venature sopra',
+      aiuto: 'venature di filo cucite per ultime, sopra al ricamo, come le pieghe chiare della pelle: fasci di venature spesse (andata e ritorno) e venature fini (solo andata), tutte in un giro senza salti.',
+      tipo: 'bool', unita: '', predefinito: false, concetto: 'colori',
+    },
+    {
+      id: 'veinsColor', nome: 'veinsColor', etichetta: 'Colore delle venature',
+      aiuto: 'il colore del filo delle venature, cucito sopra a tutto.',
+      tipo: 'testo', unita: '', predefinito: '#c4845c', concetto: 'colori',
+    },
+    {
+      id: 'veinsBundles', nome: 'veinsBundles', etichetta: 'Fasci di venature spesse',
+      aiuto: 'quanti fasci di 2-3 venature spesse a fuso per riquadro di 120×80 mm (la misura della A): un pezzo più grande si divide in riquadri, ognuno con i suoi fasci, girati un po\u2019.',
+      tipo: 'int', unita: '', min: 0, passo: 1, predefinito: 5, concetto: 'colori',
+    },
+    {
+      id: 'veinsThin', nome: 'veinsThin', etichetta: 'Venature fini',
+      aiuto: 'quante venature fini si provano a tracciare: si fanno solo quelle che partono da una venatura e ne incontrano un\u2019altra. Per riquadro, come i fasci.',
+      tipo: 'int', unita: '', min: 0, passo: 1, predefinito: 52, concetto: 'colori',
+    },
+    {
+      id: 'veinsAngle', nome: 'veinsAngleDeg', etichetta: 'Direzione delle venature',
+      aiuto: '90 = scendono dritte, 0 = in orizzontale.',
+      tipo: 'num', unita: 'deg', passo: 5, predefinito: 82, concetto: 'colori',
+    },
+    {
+      id: 'veinsSeed', nome: 'veinsSeed', etichetta: 'Variante delle venature',
+      aiuto: 'stessa variante = stesso disegno delle venature.',
+      tipo: 'int', unita: '', min: 1, passo: 1, predefinito: 8, concetto: 'seme',
+    },
   ],
 };

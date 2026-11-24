@@ -6,6 +6,10 @@ import {
   THREAD_STROKE_MM, SHAPE_STROKE_MM,
 } from '@rg/core';
 import { generatePasses, stitchBudget, type InterlaceParams, type ImageColorAt, type StitchBudget } from './engine';
+import { generateVeins } from './venature';
+
+/** Densità del totale: il filo di una passata scende con la distanza alla TOTAL_EXP (misurato, vedi sotto). */
+const TOTAL_EXP = 1.7;
 
 export type RoleAssignment = Record<string, Role | undefined>;
 
@@ -94,8 +98,13 @@ export function runPipeline(
   const cd = params.colorDensities || [];
   const densities: number[] = [];
   for (let i = 0; i < P; i++) { const d = cd[i % palette.length]; densities.push(d && d > 0 ? d : params.densitySpacingMm); }
+  // Densità del totale: le P passate coprono tutte l'intero pezzo, e insieme devono dare il filo di una passata sola
+  // alla densità scritta. Il filo NON scende col semplice inverso della distanza: misurato (pezzo 309×219 con 201
+  // fori, un colore) scende con la distanza alla 1,5-1,8 (1,8 coi punti 6-15 mm, 1,5 coi punti 2-5). Con 1,7 ogni
+  // passata va a P^(1/1,7) volte la distanza: con 3 colori 1,9 volte, ±5% di filo rispetto a un filo solo.
+  if (params.densityTotal && P > 1) { const k = Math.pow(P, 1 / TOTAL_EXP); for (let i = 0; i < P; i++) densities[i] *= k; }
 
-  const stops: { color: string; polylines: Polyline[] }[] = [];
+  const stops: { color: string; polylines: Polyline[]; veins?: boolean }[] = [];
   let threadMm = 0;
   let runCount = 0;
   let idx = 0;
@@ -110,13 +119,25 @@ export function runPipeline(
     }
   }
 
+  // VENATURE sopra a tutto: cucite per ultime, in un tratto per sagoma (la rete è collegata, quindi senza salti).
+  if (params.veinsOn) {
+    const vene: Polyline[] = [];
+    for (const m of master) {
+      const innerVoids = exclusions.filter((v) => v.length > 0 && pointInPolygon(v[0], m.points));
+      for (const r of generateVeins(m.points, innerVoids, params).runs) { vene.push(r); threadMm += pathLength(r); }
+    }
+    runCount += vene.length;
+    if (vene.length) stops.push({ color: params.veinsColor || '#c4845c', polylines: vene, veins: true });
+  }
+
   // --- ANTEPRIMA: raggruppa per colore (più leggibile a schermo). Il filo si disegna sottile (R15). ---
   const byColor = new Map<string, Polyline[]>();
-  for (const s of stops) { const l = byColor.get(s.color) ?? []; l.push(...s.polylines); byColor.set(s.color, l); }
+  for (const s of stops) { if (s.veins) continue; const l = byColor.get(s.color) ?? []; l.push(...s.polylines); byColor.set(s.color, l); }
   palette.forEach((col, i) => {
     const list = byColor.get(col);
     if (list && list.length) layers.push({ id: `fill-${i}`, color: col, polylines: list, strokeMm: THREAD_STROKE_MM });
   });
+  for (const s of stops) if (s.veins) layers.push({ id: 'veins', color: s.color, polylines: s.polylines, strokeMm: THREAD_STROKE_MM });
   // Contorno dei void (tenue) in anteprima, per mostrare che vengono rispettati.
   if (exclusions.length) {
     layers.push({ id: 'void', color: COLORS.voidOutline, polylines: exclusions, strokeMm: SHAPE_STROKE_MM, shapeOnly: true });

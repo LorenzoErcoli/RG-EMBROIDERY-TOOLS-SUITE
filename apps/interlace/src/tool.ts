@@ -188,6 +188,79 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
           </div>
         </div>
         <div id="params" class="rg-param-grid"></div>
+        <div class="rg-param-grid">
+          <div class="rg-field rg-param-grid__wide">
+            <label class="rg-choice">
+              <input type="checkbox" id="veinsOn" />
+              <span>Venature sopra</span>
+            </label>
+            <small class="rg-field__help">venature di filo cucite per ultime, sopra al ricamo, come le pieghe chiare della pelle: fasci di venature spesse (andata e ritorno) e venature fini (solo andata), tutte in un giro senza salti. Spento, il ricamo è quello di sempre.</small>
+          </div>
+          <div class="rg-field rg-param-grid__wide" id="veinsFields" hidden>
+            <span class="rg-field__label">Colore delle venature</span>
+            <div class="rg-cluster">
+              <label class="rg-color-map__swatch" id="veinsSwatch">
+                <input type="color" id="veinsColor" class="rg-u-visually-hidden" aria-label="Colore delle venature" />
+              </label>
+              <span class="rg-color-map__code" id="veinsCode">#C4845C</span>
+            </div>
+          </div>
+          <label class="rg-field" id="veinsBundlesField" hidden>
+            <span class="rg-field__label">Fasci di venature spesse</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="veinsBundles" type="number" min="0" step="1" value="5"><span>#</span></span>
+            <small class="rg-field__help">per riquadro di 120×80 mm (la misura della A): un pezzo più grande si divide in riquadri, ognuno con i suoi fasci, girati un po'.</small>
+          </label>
+          <label class="rg-field" id="veinsThinField" hidden>
+            <span class="rg-field__label">Venature fini</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="veinsThin" type="number" min="0" step="1" value="52"><span>#</span></span>
+            <small class="rg-field__help">per riquadro, come i fasci.</small>
+          </label>
+          <label class="rg-field" id="veinsAngleField" hidden>
+            <span class="rg-field__label">Direzione delle venature</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="veinsAngle" type="number" step="5" value="82"><span>°</span></span>
+            <small class="rg-field__help">90 = scendono dritte, 0 = in orizzontale.</small>
+          </label>
+          <div class="rg-field" id="veinsSeedField" hidden>
+            <span class="rg-field__label">Variante delle venature</span>
+            <div class="rg-cluster">
+              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="veinsSeed" type="number" min="1" step="1" value="8"><span>#</span></span>
+              <button type="button" id="veinsNewSeedBtn" class="rg-button rg-button--outline rg-button--small">Nuova</button>
+            </div>
+          </div>
+        </div>
+        <div class="rg-param-grid">
+          <div class="rg-field rg-param-grid__wide">
+            <label class="rg-choice">
+              <input type="checkbox" id="densityTotal" />
+              <span>La densità è di tutti i fili insieme</span>
+            </label>
+            <small class="rg-field__help">spento, ogni filo ha la sua densità e aggiungere un colore infittisce. Acceso, la densità (anche quella di ogni colore) vale per tutti i fili insieme: con 3 colori ognuno cuce a 3 volte la distanza.</small>
+          </div>
+          <label class="rg-field">
+            <span class="rg-field__label">Vortici del fondo</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="flowStrength" type="number" min="0" max="100" step="10" value="100"><span>%</span></span>
+            <small class="rg-field__help">quanto il filo gira in nuvole e vortici. 100 = come sempre; 0 = nessun vortice, il fondo resta uniforme.</small>
+          </label>
+        </div>
+        <div class="rg-param-grid">
+          <div class="rg-field rg-param-grid__wide">
+            <label class="rg-choice">
+              <input type="checkbox" id="voidDensityBoost" />
+              <span>Più fitto intorno alle aree vuote</span>
+            </label>
+            <small class="rg-field__help">spento, la densità è uguale ovunque. Acceso, il filo si addensa attorno a ogni area vuota del cartamodello e torna alla densità normale allontanandosi, e ogni colore contorna ogni foro con un anello a ridosso del bordo. Il bordo esterno non conta.</small>
+          </div>
+          <label class="rg-field" id="voidDensityFactorField" hidden>
+            <span class="rg-field__label">Quanto più fitto vicino al vuoto</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="voidDensityFactor" type="number" min="1" max="5" step="0.1" value="2"><span>×</span></span>
+            <small class="rg-field__help">volte la densità normale, proprio a ridosso del vuoto (2 = il doppio del filo; massimo 5).</small>
+          </label>
+          <label class="rg-field" id="voidDensityFadeField" hidden>
+            <span class="rg-field__label">In quanti mm torna normale</span>
+            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="voidDensityFade" type="number" min="0" step="1" value="8"><span>mm</span></span>
+            <small class="rg-field__help">la sfumatura da molto fitto a normale: oltre questa distanza dal vuoto la densità è quella di sempre.</small>
+          </label>
+        </div>
       </details>
 
       <section class="rg-param-section">
@@ -798,6 +871,9 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     syncCap();
     syncBackground();
     syncTone();
+    syncVoidDensity();
+    syncTotalFlow();
+    syncVeins();
     syncCluster(); // switch agglomerati + visibilità intensità
     buildParamUI();
     buildPaletteUI();
@@ -915,6 +991,69 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     ($('bgPickBtn') as HTMLButtonElement).disabled = !refImage;
     ($('bgPickBtn') as HTMLButtonElement).title = refImage ? 'Prendi il colore dello sfondo dall’immagine' : 'Serve un’immagine di riferimento';
   }
+  const veinsCheck = $('veinsOn') as HTMLInputElement;
+  const veinsNum: Array<[string, 'veinsBundles' | 'veinsThin' | 'veinsAngleDeg' | 'veinsSeed', number]> = [
+    ['veinsBundles', 'veinsBundles', 5], ['veinsThin', 'veinsThin', 52], ['veinsAngle', 'veinsAngleDeg', 82], ['veinsSeed', 'veinsSeed', 8],
+  ];
+  function syncVeins() {
+    veinsCheck.checked = params.veinsOn;
+    for (const id of ['veinsFields', 'veinsBundlesField', 'veinsThinField', 'veinsAngleField', 'veinsSeedField']) ($(id) as HTMLElement).hidden = !params.veinsOn;
+    ($('veinsColor') as HTMLInputElement).value = params.veinsColor;
+    ($('veinsSwatch') as HTMLElement).style.setProperty('--rg-swatch-color', params.veinsColor);
+    ($('veinsSwatch') as HTMLElement).style.background = params.veinsColor;
+    $('veinsCode').textContent = params.veinsColor.toUpperCase();
+    for (const [id, key] of veinsNum) ($(id) as HTMLInputElement).value = String(params[key]);
+  }
+  syncVeins();
+  veinsCheck.addEventListener('change', () => { params.veinsOn = veinsCheck.checked; syncVeins(); render(); });
+  $('veinsColor').addEventListener('input', () => { params.veinsColor = ($('veinsColor') as HTMLInputElement).value; syncVeins(); render(); });
+  for (const [id, key, def] of veinsNum) {
+    $(id).addEventListener('change', () => {
+      const v = parseFloat(($(id) as HTMLInputElement).value);
+      params[key] = Number.isNaN(v) ? def : key === 'veinsAngleDeg' ? v : Math.max(key === 'veinsSeed' ? 1 : 0, Math.round(v));
+      syncVeins();
+      if (params.veinsOn) render();
+    });
+  }
+  $('veinsNewSeedBtn').addEventListener('click', () => { params.veinsSeed = Math.floor(Math.random() * 9999) + 1; syncVeins(); if (params.veinsOn) render(); });
+  const totalCheck = $('densityTotal') as HTMLInputElement;
+  const flowInput = $('flowStrength') as HTMLInputElement;
+  function syncTotalFlow() {
+    totalCheck.checked = !!params.densityTotal;
+    flowInput.value = String(params.flowStrength ?? 100);
+  }
+  syncTotalFlow();
+  totalCheck.addEventListener('change', () => { params.densityTotal = totalCheck.checked; render(); });
+  flowInput.addEventListener('change', () => {
+    const v = parseFloat(flowInput.value);
+    params.flowStrength = Number.isNaN(v) ? 100 : Math.max(0, Math.min(100, v));
+    syncTotalFlow();
+    render();
+  });
+  const voidCheck = $('voidDensityBoost') as HTMLInputElement;
+  const voidFactor = $('voidDensityFactor') as HTMLInputElement;
+  const voidFade = $('voidDensityFade') as HTMLInputElement;
+  function syncVoidDensity() {
+    voidCheck.checked = params.voidDensityBoost;
+    voidFactor.value = String(params.voidDensityFactor);
+    voidFade.value = String(params.voidDensityFadeMm);
+    ($('voidDensityFactorField') as HTMLElement).hidden = !params.voidDensityBoost;
+    ($('voidDensityFadeField') as HTMLElement).hidden = !params.voidDensityBoost;
+  }
+  syncVoidDensity();
+  voidCheck.addEventListener('change', () => { params.voidDensityBoost = voidCheck.checked; syncVoidDensity(); render(); });
+  voidFactor.addEventListener('change', () => {
+    const v = parseFloat(voidFactor.value);
+    params.voidDensityFactor = Number.isNaN(v) ? 2 : Math.max(1, Math.min(5, v));
+    syncVoidDensity();
+    if (params.voidDensityBoost) render();
+  });
+  voidFade.addEventListener('change', () => {
+    const v = parseFloat(voidFade.value);
+    params.voidDensityFadeMm = Number.isNaN(v) ? 8 : Math.max(0, v);
+    syncVoidDensity();
+    if (params.voidDensityBoost) render();
+  });
   const toneCheck = $('toneBlend') as HTMLInputElement;
   const toneSoft = $('toneSoftness') as HTMLInputElement;
   function syncTone() {

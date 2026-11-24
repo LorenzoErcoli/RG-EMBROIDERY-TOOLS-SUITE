@@ -83,6 +83,31 @@ export interface InterlaceParams {
   /** Morbidezza della sfumatura (mm, solo con `toneBlend`): di quanto si sfoca il tono dell'immagine prima
    *  di leggerlo. Poco = segue ogni variazione, tanto = passaggi larghi e macchie più grandi. */
   toneSoftnessMm: number;
+  /** DENSITÀ DEL TOTALE (Lorenzo, 2026-11-23: «la densità ora tocca singolarmente ogni filo, mai nel complesso»):
+   *  acceso, la densità (globale e per colore) è quella di tutti i fili insieme. Con N passate ognuna cuce a
+   *  N volte la distanza, così il filo complessivo è quello di un filo solo a quella densità. Spento = ogni filo
+   *  alla sua densità, come prima. */
+  densityTotal: boolean;
+  /** VORTICI DEL FONDO 0–100: quanto il campo di flusso curva la camminata (nuvole e vortici). 100 = come è
+   *  sempre stato; 0 = nessun vortice, il fondo resta uniforme. */
+  flowStrength: number;
+  /** PIÙ FITTO INTORNO AI BUCHI (le aree vuote del cartamodello): acceso, il filo si addensa attorno a ogni
+   *  buco e torna alla densità normale allontanandosi. Spento = densità uguale ovunque, come prima.
+   *  Il bordo esterno e lo sfondo senza ricamo non contano: Lorenzo ha scelto solo i buchi. */
+  voidDensityBoost: boolean;
+  /** Quante volte la densità normale proprio a ridosso del buco (2 = il doppio del filo). */
+  voidDensityFactor: number;
+  /** In quanti mm dal buco la densità torna normale: la sfumatura da molto fitto a normale. */
+  voidDensityFadeMm: number;
+  /** VENATURE di filo sopra il ricamo (il disegno «A» scelto da Lorenzo il 2026-11-19): fasci di venature spesse a
+   *  fuso, andata e ritorno, e venature fini a filo singolo, tutte in un giro senza salti. Spente di serie.
+   *  Il motore sta in `venature.ts`. */
+  veinsOn: boolean;
+  veinsColor: string;
+  veinsBundles: number;
+  veinsThin: number;
+  veinsAngleDeg: number;
+  veinsSeed: number;
 }
 
 export const defaultInterlaceParams: InterlaceParams = {
@@ -106,6 +131,17 @@ export const defaultInterlaceParams: InterlaceParams = {
   backgroundToleranceRgb: 30,
   toneBlend: false, // false = agglomerati a zone nette (comportamento storico)
   toneSoftnessMm: 4,
+  densityTotal: false, // false = ogni filo alla sua densità (comportamento storico)
+  flowStrength: 100, // 100 = vortici come sempre
+  voidDensityBoost: false, // false = densità uguale ovunque (comportamento storico)
+  voidDensityFactor: 2,
+  voidDensityFadeMm: 8,
+  veinsOn: false, // false = nessuna venatura (comportamento storico)
+  veinsColor: '#c4845c',
+  veinsBundles: 5,
+  veinsThin: 52,
+  veinsAngleDeg: 82,
+  veinsSeed: 8,
 };
 
 // --- Costanti interne (implementazione, non parametri utente): il "movimento" del filo.
@@ -125,7 +161,7 @@ const MAX_POINTS = 200000;  // guardia anti-runaway
 const MAX_MASK_CELLS = 4_000_000; // tetto memoria maschera fine
 
 // RNG deterministico (mulberry32): anteprima ripetibile a parità di seed.
-function mulberry32(seed: number): () => number {
+export function mulberry32(seed: number): () => number {
   let a = seed >>> 0;
   return () => {
     a = (a + 0x6d2b79f5) | 0;
@@ -211,9 +247,9 @@ function chamferDT(source0: Uint8Array, gw: number, gh: number, res: number): Fl
  * non a una maschera sì/no: così `clear=0` lascia il filo arrivare esattamente al bordo, e un valore
  * di clearance è rispettato con precisione (a meno della risoluzione della griglia). O(1) per query.
  */
-interface Mask { gw: number; gh: number; x0: number; y0: number; res: number; sdf(x: number, y: number): number; }
+export interface Mask { gw: number; gh: number; x0: number; y0: number; res: number; sdf(x: number, y: number): number; }
 
-function buildMask(boundary: Polyline, voids: Polyline[], res0: number): Mask {
+export function buildMask(boundary: Polyline, voids: Polyline[], res0: number): Mask {
   const bb = bounds(boundary);
   const w = bb.maxX - bb.minX, h = bb.maxY - bb.minY;
   let res = res0;
@@ -328,7 +364,21 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
  *  pannello avvisa già. */
 interface PenGrid { arr: Uint16Array; gx: number; gy: number; x0: number; y0: number; cap: number; }
 
-function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null, pen: PenGrid | null = null, transit: Uint8Array | null = null): Point[][] {
+/** Un ANELLO intorno a un foro: poligono chiuso di punti a ridosso del bordo (lati fra punto minimo e massimo). */
+/** 0→0, 1→1, morbida agli estremi (la sfumatura del più fitto intorno ai fori). */
+function smoothstep(t: number): number { const u = Math.max(0, Math.min(1, t)); return u * u * (3 - 2 * u); }
+
+interface Anello {
+  cx: number; cy: number; reach: number; pts: Point[];
+  /** Distanza media dal centro a cui comincia la zona cucibile (bordo del foro + distacco), mm. */
+  r0: number;
+  /** In quanti mm dal bordo l'agglomerato sfuma a niente. */
+  fade: number;
+  /** Quanti mm di filo in più l'agglomerato posa intorno a questo foro (0 = solo l'anello). */
+  extra: number;
+}
+
+function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null, pen: PenGrid | null = null, transit: Uint8Array | null = null, flow = 1, anelli: Anello[] | null = null): Point[][] {
   const tone = transit !== null;
   const { bb, cell, gx, gy, ci, cj, cpx, cpy, minS, maxS, inRegion, segOk } = ctx;
   const { mgw, mgh, mx0, my0, mres } = ctx;
@@ -428,7 +478,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
     for (let k = 0; k < CANDIDATES; k++) {
       const len = minS + rng() * (hi - minS);
       let ang = head + (rng() * 2 - 1) * spread;
-      ang += FLOW_INFLUENCE * angDelta(ang, fdir);
+      ang += FLOW_INFLUENCE * flow * angDelta(ang, fdir);
       const nx = cx + Math.cos(ang) * len, ny = cy + Math.sin(ang) * len;
       if (!inRegion(nx, ny) || !segOk(cx, cy, nx, ny)) continue;
       const destId = cj(ny) * gx + ci(nx);
@@ -458,6 +508,74 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
     run.push({ x: nx, y: ny });
     cx = nx; cy = ny; dir = ang; totalPts++; runMoves++;
     penAdd(nx, ny);
+  };
+  // ANELLI INTORNO AI FORI (con «più fitto intorno alle aree vuote»). Lorenzo, 2026-11-23: «intorno ai fori deve
+  // passare bene il filo per evidenziare il foro»; fra le strade ha scelto «un anello che lo contorna». Quando il filo
+  // passa vicino a un foro che in questa passata non ha ancora contornato, ci va con un punto, gli gira intorno a
+  // ridosso del bordo e riparte nel fondo da lì: niente stacchi. Ogni colore fa il suo anello.
+  const fatti = anelli ? new Uint8Array(anelli.length) : null;
+  // Un foro vicino che non si è riusciti ad agganciare (nessun vertice dell'anello a un punto di distanza): per
+  // qualche passo il filo punta verso di lui, così nessun foro resta senza (prima 8 anelli su 72 mancavano).
+  let mira = -1, miraPassi = 0;
+  const contorna = (): void => {
+    for (let r = 0; r < anelli!.length; r++) {
+      if (fatti![r]) continue;
+      const A = anelli![r];
+      if (Math.hypot(A.cx - cx, A.cy - cy) > A.reach) continue;
+      // il punto d'attacco: il vertice raggiungibile con un punto valido, il più vicino
+      let k = -1, bestD = Infinity;
+      for (let i = 0; i < A.pts.length; i++) {
+        const d = Math.hypot(A.pts[i].x - cx, A.pts[i].y - cy);
+        if (d < minS || d > maxS || d >= bestD) continue;
+        if (!segOk(cx, cy, A.pts[i].x, A.pts[i].y) || crossesBan(cx, cy, A.pts[i].x, A.pts[i].y)) continue;
+        k = i; bestD = d;
+      }
+      if (k < 0) { if (mira < 0 || fatti![mira]) { mira = r; miraPassi = 0; } continue; }
+      if (mira === r) mira = -1;
+      const m = A.pts.length;
+      let vietato = false;
+      // vietato anche se un suo punto cade in un mm² già al tetto dei buchi d'ago: lì l'anello toglierebbe al fondo
+      // l'ultimo posto e il filo resterebbe murato (misurato: 1-2 salti in più coi punti 6-15 mm)
+      for (let i = 0; i < m && !vietato; i++) { const a = A.pts[i], b = A.pts[(i + 1) % m]; if (crossesBan(a.x, a.y, b.x, b.y) || penFull(a.x, a.y)) vietato = true; }
+      fatti![r] = 1;
+      if (vietato) continue;
+      const aim = (q: Point) => Math.atan2(q.y - cy, q.x - cx);
+      // I punti dell'agglomerato e dell'anello sono IN PIÙ del fondo: non contano nella sua copertura, così il
+      // fondo intorno al foro resta quello di ovunque e l'agglomerato ci si aggiunge sopra, uguale per ogni foro.
+      const extra = (x: number, y: number): void => { run.push({ x, y }); dir = aim({ x, y }); cx = x; cy = y; totalPts++; runMoves++; penAdd(x, y); };
+      // prima l'ANELLO, intero: così c'è sempre (se lo si chiudeva dopo l'agglomerato, a volte dal punto dove questo
+      // finiva nessun vertice era a un punto di distanza e l'anello saltava: 9 fori su 72)
+      extra(A.pts[k].x, A.pts[k].y);
+      for (let i = 1; i <= m; i++) { const q = A.pts[(k + i) % m]; extra(q.x, q.y); }
+      // AGGLOMERATO (Lorenzo, 2026-11-23: «è strano come gli agglomerati intorno alle aree vuote non sono uguali e a
+      // volte ci sono altre volte per niente»). Prima il più fitto si chiedeva alle celle della copertura (~3 mm)
+      // e dipendeva da come la griglia cadeva sul foro. Ora ogni foro riceve la stessa dose: punti che girano
+      // intorno al foro con l'estremo a una distanza dal bordo pescata con la sfumatura (fitto a ridosso, niente
+      // a `fade` mm), finché il filo posato arriva a `A.extra`.
+      if (A.extra > 0 && A.fade > 0) {
+        let posato = 0;
+        const tentMax = Math.ceil(A.extra / minS) * 2 + 50;
+        for (let tent = 0; posato < A.extra && tent < tentMax; tent++) {
+          let ok = false;
+          const thQui = Math.atan2(cy - A.cy, cx - A.cx);
+          for (let c = 0; c < 24 && !ok; c++) {
+            let d = 0;
+            for (let s = 0; s < 20; s++) { const t = rng(); d = t * A.fade; const w = 1 - smoothstep(t); if (rng() < w) break; }
+            const R = A.r0 + d;
+            // vicino a dove è il filo (un punto di distanza), così gira intorno al foro un passo alla volta anche su
+            // un foro grande; prima si pescava in tutto il giro e quasi tutti i punti erano troppo lunghi
+            const th = thQui + (rng() * 2 - 1) * Math.min(Math.PI, (maxS * 1.3) / R);
+            const nx = A.cx + Math.cos(th) * R, ny = A.cy + Math.sin(th) * R;
+            const L = Math.hypot(nx - cx, ny - cy);
+            if (L < minS || L > maxS) continue;
+            if (!inRegion(nx, ny) || !segOk(cx, cy, nx, ny) || crossesBan(cx, cy, nx, ny) || penFull(nx, ny)) continue;
+            extra(nx, ny); posato += L; ok = true;
+          }
+          if (!ok) break;
+        }
+      }
+      return; // un foro per volta: poi il filo riprende il fondo
+    }
   };
   const openRunAt = (x: number, y: number, id: number): void => {
     if (run.length >= 2) runs.push(run);
@@ -504,6 +622,10 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
       if (!g) break; // niente più vuoti → passata finita
       head = Math.atan2(g.y - cy, g.x - cx); spread = 1.0; // punta al vuoto, restando continuo
     }
+    if (mira >= 0) {
+      if (fatti![mira] || miraPassi++ > 8) mira = -1;
+      else { const A = anelli![mira]; head = Math.atan2(A.cy - cy, A.cx - cx); spread = 0.7; }
+    }
     // 1) passo normale (preferisce il vuoto, rispetta il tetto).
     let nxt = advance(head, spread, CLUMP_CAP, maxS);
     if (!nxt) {
@@ -525,6 +647,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
     }
     const gained = coveredCells;
     commit(nxt.x, nxt.y, nxt.ang);
+    if (anelli) contorna();
     sinceGain = coveredCells > gained ? 0 : sinceGain + 1;
   }
 
@@ -702,7 +825,7 @@ export function generateFill(boundary: Polyline, voids: Polyline[], p: Interlace
   if (!ctx) return [];
   const targetArr = new Uint8Array(ctx.gx * ctx.gy);
   for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = COVER_TARGET;
-  return runOneFill(ctx, p.seed || 1, targetArr);
+  return runOneFill(ctx, p.seed || 1, targetArr, null, null, null, flowOf(p));
 }
 
 /** Quanti punti al mm² chiede il lavoro, e quanto vale il tetto automatico. */
@@ -734,8 +857,78 @@ export function stitchBudget(p: InterlaceParams, densities: number[]): StitchBud
     }
     if (sum > needMax) needMax = sum;
   }
+  // Attorno ai buchi si chiede di più: il tetto automatico deve lasciarlo fare, altrimenti lo taglierebbe.
+  if (p.voidDensityBoost) needMax *= voidFactorMax(p);
   const needed = Math.max(1, Math.ceil(needMax / avgStitch));
   return { needed, auto: Math.max(4, Math.ceil(PEAK_FACTOR * needMax / avgStitch)) };
+}
+
+/** Le volte della densità a ridosso del buco, dentro limiti sani: oltre 5 le celle vicine al buco
+ *  chiederebbero più punti di quanti ne stanno, e il tetto le lascerebbe scoperte. */
+/** Vortici del fondo come moltiplicatore del campo di flusso: 100 (o assente, nei progetti vecchi) = 1. */
+function flowOf(p: InterlaceParams): number {
+  const v = Number(p.flowStrength);
+  return Number.isFinite(v) ? Math.max(0, Math.min(100, v)) / 100 : 1;
+}
+
+/**
+ * Gli anelli intorno ai fori per una passata. Per ogni foro: dal suo centro si misura, in 72 direzioni, dove comincia
+ * la zona cucibile (il bordo del foro più il distacco); l'anello è il poligono che gira intorno a quel bordo con i lati
+ * tangenti, tanti lati quanti ne stanno con il punto minimo (almeno 3, cioè un triangolo intorno a un foro piccolo con
+ * punti lunghi). Ogni passata lo ruota un po' (`pIdx`), così gli anelli dei colori non si sovrappongono punto per
+ * punto. Un foro che non si riesce a contornare (troppo vicino al bordo o a un altro foro, forma strana) resta senza.
+ */
+function anelliDeiFori(ctx: FillCtx, voids: Polyline[], pIdx: number, fade: number): Anello[] {
+  const { minS, maxS, inRegion, segOk } = ctx;
+  const N = 72, STEP = 0.05, MARGINE = 0.15;
+  const out: Anello[] = [];
+  for (const v of voids) {
+    if (v.length < 3) continue;
+    let cx = 0, cy = 0;
+    for (const q of v) { cx += q.x; cy += q.y; }
+    cx /= v.length; cy /= v.length;
+    const rho: number[] = [];
+    let ok = true;
+    for (let a = 0; a < N && ok; a++) {
+      const th = (a / N) * Math.PI * 2, c = Math.cos(th), s = Math.sin(th);
+      let t = 0;
+      while (t < 40 && !inRegion(cx + c * t, cy + s * t)) t += STEP;
+      if (t >= 40) ok = false; else rho.push(t + MARGINE);
+    }
+    if (!ok) continue;
+    const rAt = (th: number) => {
+      const u = ((th / (Math.PI * 2)) % 1 + 1) % 1 * N, i = Math.floor(u) % N, f = u - Math.floor(u);
+      return rho[i] * (1 - f) + rho[(i + 1) % N] * f;
+    };
+    const rMin = Math.min(...rho);
+    const fase = ((pIdx * 0.618034) % 1) * Math.PI * 2;
+    let anello: Point[] | null = null;
+    for (let m = Math.max(3, Math.min(48, Math.floor(Math.PI / Math.atan(minS / (2 * rMin))))); m >= 3 && !anello; m--) {
+      for (let gonfia = 1; gonfia <= 1.3 && !anello; gonfia += 0.1) {
+        const pts: Point[] = [];
+        for (let k = 0; k < m; k++) {
+          const th = fase + (k / m) * Math.PI * 2;
+          const R = rAt(th) * gonfia / Math.cos(Math.PI / m);
+          pts.push({ x: cx + Math.cos(th) * R, y: cy + Math.sin(th) * R });
+        }
+        let buono = true;
+        for (let k = 0; k < m && buono; k++) {
+          const a = pts[k], b = pts[(k + 1) % m], L = Math.hypot(b.x - a.x, b.y - a.y);
+          if (L < minS - 1e-6 || L > maxS || !inRegion(a.x, a.y) || !segOk(a.x, a.y, b.x, b.y)) buono = false;
+        }
+        if (buono) anello = pts;
+      }
+    }
+    if (!anello) continue;
+    let rMax = 0;
+    for (const q of anello) rMax = Math.max(rMax, Math.hypot(q.x - cx, q.y - cy));
+    out.push({ cx, cy, reach: rMax + maxS, pts: anello, r0: rho.reduce((s, v) => s + v, 0) / N, fade, extra: 0 });
+  }
+  return out;
+}
+
+function voidFactorMax(p: InterlaceParams): number {
+  return Math.max(1, Math.min(5, Number(p.voidDensityFactor) || 1));
 }
 
 /**
@@ -987,7 +1180,33 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
     } else {
       for (let id = 0; id < targetArr.length; id++) if (ctx.cfill[id]) targetArr[id] = COVER_TARGET;
     }
-    passes.push(runOneFill(ctx, (base + pIdx * 0x9e3779b1) >>> 0, targetArr, banArr, pen, transitArr));
+    const seedP = (base + pIdx * 0x9e3779b1) >>> 0;
+    let anelli: Anello[] | null = null;
+    if (p.voidDensityBoost && voids.length) {
+      // Più fitto intorno ai buchi: ogni foro riceve la stessa dose di filo in più, posata quando il filo gli passa
+      // accanto (vedi `contorna` in runOneFill). La dose = (volte − 1) × il filo che il fondo di questa passata mette
+      // in un mm² × l'area della sfumatura intorno al foro. Il filo al mm² del fondo si misura facendo la passata
+      // una volta senza fori in più (stesso seme, senza toccare il tetto condiviso dei buchi d'ago).
+      const fade = Math.max(0, Number(p.voidDensityFadeMm) || 0), f = voidFactorMax(p);
+      anelli = anelliDeiFori(ctx, voids, pIdx, fade);
+      if (f > 1 && fade > 0 && anelli.length) {
+        const pilota = runOneFill(ctx, seedP, targetArr.slice(), banArr, null, transitArr, flowOf(p), null);
+        let filo = 0;
+        for (const r of pilota) for (let i = 1; i < r.length; i++) filo += Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y);
+        const area = cellAreaOf(ctx);
+        let mm2 = 0;
+        for (let id = 0; id < targetArr.length; id++) if (targetArr[id] > 0 && !(transitArr && transitArr[id])) mm2 += area[id] * ctx.cell * ctx.cell;
+        const rho = mm2 > 0 ? filo / mm2 : 0;
+        for (const A of anelli) {
+          // area pesata della sfumatura intorno a un foro tondo di raggio r0: ∫ 2π(r0+d)·(1 − smoothstep(d/fade)) dd
+          let a = 0;
+          const NS = 40;
+          for (let s = 0; s < NS; s++) { const t = (s + 0.5) / NS; a += 2 * Math.PI * (A.r0 + t * fade) * (1 - smoothstep(t)) * (fade / NS); }
+          A.extra = (f - 1) * rho * a;
+        }
+      }
+    }
+    passes.push(runOneFill(ctx, seedP, targetArr, banArr, pen, transitArr, flowOf(p), anelli));
   }
   return passes;
 }
