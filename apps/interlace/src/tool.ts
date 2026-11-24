@@ -260,6 +260,13 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="voidDensityFade" type="number" min="0" step="1" value="8"><span>mm</span></span>
             <small class="rg-field__help">la sfumatura da molto fitto a normale: oltre questa distanza dal vuoto la densità è quella di sempre.</small>
           </label>
+          <div class="rg-field rg-param-grid__wide" id="voidsFirstField" hidden>
+            <label class="rg-choice">
+              <input type="checkbox" id="voidsFirst" />
+              <span>Prima i fori, poi il resto</span>
+            </label>
+            <small class="rg-field__help">il filo entra dal bordo esterno, va prima di foro in foro a fare anello e agglomerato, così il materiale è fermato lì, e solo dopo cuce tutto il resto. Spento, i fori si contornano quando il filo ci passa accanto.</small>
+          </div>
         </div>
       </details>
 
@@ -1033,15 +1040,19 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   const voidCheck = $('voidDensityBoost') as HTMLInputElement;
   const voidFactor = $('voidDensityFactor') as HTMLInputElement;
   const voidFade = $('voidDensityFade') as HTMLInputElement;
+  const voidsFirst = $('voidsFirst') as HTMLInputElement;
   function syncVoidDensity() {
     voidCheck.checked = params.voidDensityBoost;
     voidFactor.value = String(params.voidDensityFactor);
     voidFade.value = String(params.voidDensityFadeMm);
     ($('voidDensityFactorField') as HTMLElement).hidden = !params.voidDensityBoost;
     ($('voidDensityFadeField') as HTMLElement).hidden = !params.voidDensityBoost;
+    voidsFirst.checked = !!params.voidsFirst;
+    ($('voidsFirstField') as HTMLElement).hidden = !params.voidDensityBoost;
   }
   syncVoidDensity();
   voidCheck.addEventListener('change', () => { params.voidDensityBoost = voidCheck.checked; syncVoidDensity(); render(); });
+  voidsFirst.addEventListener('change', () => { params.voidsFirst = voidsFirst.checked; if (params.voidDensityBoost) render(); });
   voidFactor.addEventListener('change', () => {
     const v = parseFloat(voidFactor.value);
     params.voidDensityFactor = Number.isNaN(v) ? 2 : Math.max(1, Math.min(5, v));

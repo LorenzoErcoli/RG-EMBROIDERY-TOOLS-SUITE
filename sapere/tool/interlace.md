@@ -223,5 +223,23 @@ indietro di 0,45-1,2 mm e appena di lato (0,2 mm), così cade fra due buchi dell
 solo se non è né battuto né affiancato; se non ce n'è (vene affollate) almeno fuori dai buchi già fatti. **Dopo:**
 affiancati 3-6,5% (sono vene diverse che corrono vicine), 0 battuti, nessun punto sotto 1 mm, un tratto.
 
+## Prima i fori, poi il resto (2026-11-24)
+
+Lorenzo: *«integriamo una nuova funzione, se sono attive le aree vuote e le densità il filo deve prima andare a fare i punti intorno alle aree vuote per fermare il materiale in quei punti e poi riprendere con tutto il resto. l'ingresso però sempre dai lati»*.
+
+**Ora:** casella «Prima i fori, poi il resto», sotto «più fitto intorno alle aree vuote» (vale solo con quella accesa;
+spenta di serie, e spenta il ricamo non cambia). Accesa, ogni filo entra dal **bordo esterno**, nel punto più vicino
+a uno dei fori più vicini al bordo (ogni colore uno diverso dei primi tre, così le code non cadono una sull'altra);
+poi va **di foro in foro**, sempre al più vicino non ancora fatto, e a ognuno fa anello e agglomerato. Il tragitto
+fra un foro e l'altro è fondo cucito come sempre, quindi niente salti. Finiti i fori, il filo cuce il resto.
+
+**Misurato sul pezzo di prova** (201 fori, 3 colori, densità 1,5 del totale, 3 volte, 4 mm):
+- punti 6-15 mm: ingresso a 0,8 mm dal bordo (spento: 1,4 / 66 / 73 mm); i fori finiscono intorno al
+  **21-22%** della cucitura di ogni colore; un tratto per colore; filo 289 m contro 279 (+3,6%);
+- punti 2-5 mm: ingresso a 2,7 mm dal bordo; i fori finiscono intorno al **38-40%**, perché coi punti corti il
+  tragitto fra i fori è più lungo in punti; un tratto per colore; filo uguale (149 m);
+- anelli saltati perché cadono dove il tetto dei buchi d'ago è già pieno per gli altri colori: 12 contro 20 da
+  spento (punti 2-5), 0 contro 1 (punti 6-15).
+
 Cosa resta da fare sta in `STATO.md` (C4 densità per zona, C5 vuoto dello stesso colore, C6 modello
 densità unificato, A5 i nomi dei parametri "movimento").

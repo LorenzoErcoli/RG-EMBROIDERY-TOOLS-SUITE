@@ -330,6 +330,10 @@
           "default": 8,
           "x-id": "voidDensityFade"
         },
+        "voidsFirst": {
+          "$ref": "#/$defs/voidsFirst",
+          "default": false
+        },
         "veinsOn": {
           "$ref": "#/$defs/veinsOn",
           "default": false
@@ -3249,6 +3253,12 @@
       "x-unita": "mm",
       "minimum": 0,
       "x-passo": 1,
+      "x-concetto": "densita"
+    },
+    "voidsFirst": {
+      "type": "boolean",
+      "title": "Prima i fori, poi il resto",
+      "description": "il filo entra dal bordo esterno, va prima di foro in foro a fare anello e agglomerato, così il materiale è fermato lì, e solo dopo cuce tutto il resto. Spento, i fori si contornano quando il filo ci passa accanto. Vale solo con «più fitto intorno alle aree vuote» acceso.",
       "x-concetto": "densita"
     },
     "veinsOn": {
@@ -6750,6 +6760,7 @@
         "voidDensityBoost",
         "voidDensityFactor",
         "voidDensityFade",
+        "voidsFirst",
         "densitySpacingMm",
         "targetDensityPct",
         "fillSpacingMm",

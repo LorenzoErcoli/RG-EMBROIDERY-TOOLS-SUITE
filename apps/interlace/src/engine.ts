@@ -99,6 +99,11 @@ export interface InterlaceParams {
   voidDensityFactor: number;
   /** In quanti mm dal buco la densità torna normale: la sfumatura da molto fitto a normale. */
   voidDensityFadeMm: number;
+  /** PRIMA I FORI (Lorenzo, 2026-11-24: «il filo deve prima andare a fare i punti intorno alle aree vuote per fermare
+   *  il materiale in quei punti e poi riprendere con tutto il resto. L'ingresso però sempre dai lati»). Vale solo con
+   *  «più fitto intorno alle aree vuote» acceso e almeno un foro: ogni filo entra dal bordo esterno, va di foro in
+   *  foro (il più vicino ogni volta) facendo anello e agglomerato, e solo dopo cuce il resto. Spento = come prima. */
+  voidsFirst: boolean;
   /** VENATURE di filo sopra il ricamo (il disegno «A» scelto da Lorenzo il 2026-11-19): fasci di venature spesse a
    *  fuso, andata e ritorno, e venature fini a filo singolo, tutte in un giro senza salti. Spente di serie.
    *  Il motore sta in `venature.ts`. */
@@ -136,6 +141,7 @@ export const defaultInterlaceParams: InterlaceParams = {
   voidDensityBoost: false, // false = densità uguale ovunque (comportamento storico)
   voidDensityFactor: 2,
   voidDensityFadeMm: 8,
+  voidsFirst: false, // false = i fori si contornano quando il filo ci passa accanto (comportamento storico)
   veinsOn: false, // false = nessuna venatura (comportamento storico)
   veinsColor: '#c4845c',
   veinsBundles: 5,
@@ -378,7 +384,7 @@ interface Anello {
   extra: number;
 }
 
-function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null, pen: PenGrid | null = null, transit: Uint8Array | null = null, flow = 1, anelli: Anello[] | null = null): Point[][] {
+function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null, pen: PenGrid | null = null, transit: Uint8Array | null = null, flow = 1, anelli: Anello[] | null = null, ingresso: Point | null = null): Point[][] {
   const tone = transit !== null;
   const { bb, cell, gx, gy, ci, cj, cpx, cpy, minS, maxS, inRegion, segOk } = ctx;
   const { mgw, mgh, mx0, my0, mres } = ctx;
@@ -456,8 +462,10 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
   const rng = mulberry32(seed >>> 0 || 1);
   const flowAng = (x: number, y: number): number => vnoise(x * FLOW_FREQ, y * FLOW_FREQ) * Math.PI * 2 * SWIRL;
 
-  // Avvio: la prima cella assegnata a questa passata (partendo da un punto casuale).
-  const g0 = nearestGap(bb.minX + rng() * (bb.maxX - bb.minX), bb.minY + rng() * (bb.maxY - bb.minY));
+  // Avvio: la prima cella assegnata a questa passata (partendo da un punto casuale). Con «prima i fori» si entra
+  // dal bordo esterno: la cella più vicina al punto d'ingresso, che sta sul bordo.
+  const r0x = rng(), r0y = rng();
+  const g0 = ingresso ? nearestGap(ingresso.x, ingresso.y) : nearestGap(bb.minX + r0x * (bb.maxX - bb.minX), bb.minY + r0y * (bb.maxY - bb.minY));
   if (!g0) return [];
 
   const runs: Point[][] = [];
@@ -577,6 +585,21 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
       return; // un foro per volta: poi il filo riprende il fondo
     }
   };
+  // PRIMA I FORI: finché resta un foro da contornare il filo punta a quello più vicino (fissato finché non è fatto),
+  // cucendo il fondo lungo la strada: il tragitto è riempimento come sempre, niente salti. Un foro che il filo non
+  // raggiunge entro un tetto di passi (dietro un divieto, troppo stretto) si lascia: poi si riprende il resto.
+  const primaFori = ingresso !== null && anelli !== null && anelli.length > 0;
+  let meta = -1, metaPassi = 0, metaMax = 0;
+  const prossimoForo = (): number => {
+    let best = -1, bd = Infinity;
+    for (let r = 0; r < anelli!.length; r++) {
+      if (fatti![r]) continue;
+      const d = Math.hypot(anelli![r].cx - cx, anelli![r].cy - cy);
+      if (d < bd) { bd = d; best = r; }
+    }
+    if (best >= 0) { metaPassi = 0; metaMax = Math.ceil(bd / minS) * 4 + 30; }
+    return best;
+  };
   const openRunAt = (x: number, y: number, id: number): void => {
     if (run.length >= 2) runs.push(run);
     run = [{ x, y }];
@@ -616,13 +639,19 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
     }
     const cc = cj(cy) * gx + ci(cx);
     let head = dir, spread = TURN_SPREAD;
+    if (primaFori && meta >= 0 && (fatti![meta] || metaPassi++ > metaMax)) { fatti![meta] = 1; meta = -1; }
+    if (primaFori && meta < 0) meta = prossimoForo();
+    const versoForo = primaFori && meta >= 0;
     const covered = targetArr[cc] === 0 || cov[cc] >= targetArr[cc] || (transit !== null && transit[cc] === 1);
-    if (covered) {
+    if (versoForo) {
+      const A = anelli![meta];
+      head = Math.atan2(A.cy - cy, A.cx - cx); spread = 0.6;
+    } else if (covered) {
       const g = nearestGap(cx, cy);
       if (!g) break; // niente più vuoti → passata finita
       head = Math.atan2(g.y - cy, g.x - cx); spread = 1.0; // punta al vuoto, restando continuo
     }
-    if (mira >= 0) {
+    if (mira >= 0 && !versoForo) {
       if (fatti![mira] || miraPassi++ > 8) mira = -1;
       else { const A = anelli![mira]; head = Math.atan2(A.cy - cy, A.cx - cx); spread = 0.7; }
     }
@@ -633,7 +662,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
       //    SOLO qui (l'escape ha bisogno di un filo di raggio in più per non arenarsi in mille passi corti,
       //    che squilibrerebbero i colori; il minimo NON cambia mai). A GRADINI: prima senza superare il
       //    tetto-densità (i tragitti NON creano autostrade iper-dense), poi tetto doppio, poi ultima spiaggia.
-      const g = nearestGap(cx, cy);
+      const g = versoForo ? { x: anelli![meta].cx, y: anelli![meta].cy } : nearestGap(cx, cy);
       const h2 = g ? Math.atan2(g.y - cy, g.x - cx) : dir + (rng() * 2 - 1) * 2;
       nxt = advance(h2, Math.PI, CLUMP_CAP, maxS + 2) || advance(h2, Math.PI, CLUMP_CAP * 2, maxS + 2) || advance(h2, Math.PI, Infinity, maxS + 2);
     }
@@ -927,6 +956,28 @@ function anelliDeiFori(ctx: FillCtx, voids: Polyline[], pIdx: number, fade: numb
   return out;
 }
 
+/**
+ * Dove entra il filo con «prima i fori»: il punto del bordo esterno più vicino a un foro (Lorenzo: «l'ingresso però
+ * sempre dai lati»). I fori si mettono in fila per distanza dal bordo e ogni colore prende uno dei primi tre, così i
+ * fili non entrano tutti nello stesso punto (tre code una sull'altra).
+ */
+function ingressoDalBordo(boundary: Polyline, anelli: Anello[], pIdx: number): Point | null {
+  if (boundary.length < 2) return null;
+  const vicino = (x: number, y: number): { q: Point; d: number } => {
+    let best: Point = boundary[0], bd = Infinity;
+    for (let i = 0; i < boundary.length; i++) {
+      const a = boundary[i], b = boundary[(i + 1) % boundary.length];
+      const vx = b.x - a.x, vy = b.y - a.y, L2 = vx * vx + vy * vy;
+      const t = L2 > 0 ? Math.max(0, Math.min(1, ((x - a.x) * vx + (y - a.y) * vy) / L2)) : 0;
+      const qx = a.x + vx * t, qy = a.y + vy * t, d = Math.hypot(qx - x, qy - y);
+      if (d < bd) { bd = d; best = { x: qx, y: qy }; }
+    }
+    return { q: best, d: bd };
+  };
+  const fila = anelli.map((A) => vicino(A.cx, A.cy)).sort((u, v) => u.d - v.d);
+  return fila[pIdx % Math.min(3, fila.length)].q;
+}
+
 function voidFactorMax(p: InterlaceParams): number {
   return Math.max(1, Math.min(5, Number(p.voidDensityFactor) || 1));
 }
@@ -1206,7 +1257,8 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
         }
       }
     }
-    passes.push(runOneFill(ctx, seedP, targetArr, banArr, pen, transitArr, flowOf(p), anelli));
+    const ingresso = p.voidsFirst && anelli && anelli.length ? ingressoDalBordo(boundary, anelli, pIdx) : null;
+    passes.push(runOneFill(ctx, seedP, targetArr, banArr, pen, transitArr, flowOf(p), anelli, ingresso));
   }
   return passes;
 }
