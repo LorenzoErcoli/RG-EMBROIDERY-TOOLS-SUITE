@@ -165,5 +165,63 @@ Lorenzo, provando su un pezzo di 309×219 mm con 201 fori (un pezzo di prova pre
   e si incrociano. Fasci e fini sono il numero **per riquadro**; con un riquadro solo è la A. Sul suo pezzo (3×3
   riquadri): circa 33 m, un tratto, nelle varianti 8, 3 e 21. Lorenzo: *«sì meglio»*.
 
+## L'anello intorno ai fori (2026-11-23)
+
+Lorenzo: *«quando si attiva la densità è importante che intorno ai fori deve passare bene il filo per evidenziare il foro»*. Visto da vicino, prima il filo si addensava ma nessun punto seguiva il bordo: arrivava a ~1 mm e
+girava via, e il bordo del foro restava frastagliato. Fra le strade (anello, fitto fino al bordo, tutte e due) ha
+scelto **«un anello che lo contorna»**.
+
+**Com'è fatto:** con «più fitto intorno alle aree vuote» acceso, quando il filo di un colore passa vicino a un foro
+che non ha ancora contornato, ci arriva con un punto, gli gira intorno a ridosso del bordo (0,15 mm oltre il
+distacco) e riparte nel fondo da lì: niente stacchi. L'anello è un poligono coi lati tangenti al bordo, tanti lati
+quanti ne stanno col punto minimo (almeno 3); ogni colore lo ruota un po'.
+
+**Misurato** sul pezzo con 201 fori, tre marroni, densità 1,5 di tutti i fili insieme, più fitto ×3 su 4 mm:
+
+- punti 2-5 mm: 199-200 fori su 201 hanno l'anello, per ogni colore (almeno 7 punti entro 1,4 mm dal bordo;
+  senza anelli 129-138). I tratti non aumentano, anzi: semi 1, 2, 5 → 3, 3, 3 tratti (senza anelli 4, 3, 8).
+- punti 6-15 mm: gli anelli sono quadrati o triangoli (col punto minimo di 6 mm intorno a un foro di 5 mm non ci
+  stanno più lati) e il filo fa 1-2 salti in più (semi 1, 2, 5 → 6, 5, 4 tratti; senza 4, 4, 3). Questo limite è
+  sparito col cambio qui sotto (3 tratti).
+
+## Lo stesso agglomerato per ogni foro (2026-11-23)
+
+Lorenzo, provando in macchina: *«è strano come gli agglomerati intorno alle aree vuote non sono uguali e a volte ci sono altre volte per niente»*. **Misurato** (filo nella fascia 0-3 mm da ogni foro diviso per il filo
+lontano, sui 192 fori lontani dal bordo): coi punti 2-5 mm andava da 1,56 a 2,85 (5°-95° percentile), coi punti
+6-15 mm da 1,09 a 2,40 e 37 fori sotto 1,3. **Perché:** il più fitto si chiedeva alle celle della copertura (~3 mm
+con la densità di tutti i fili insieme) valutando la sfumatura al centro della cella; con una sfumatura di 4 mm
+contava come la griglia cadeva sul foro.
+
+**Ora:** le celle non c'entrano più. Ogni foro riceve **la stessa dose** di filo in più, posata quando il filo gli
+passa accanto, insieme all'anello: prima l'anello intero, poi punti che girano intorno al foro un passo alla volta
+con l'estremo a una distanza dal bordo pescata con la sfumatura, poi il fondo riprende (con l'anello dopo
+l'agglomerato, 9 anelli su 72 saltavano: dal punto dove l'agglomerato finiva nessun vertice era a un punto di
+distanza). Se il filo passa vicino a un foro senza poterlo agganciare, per qualche passo punta verso di lui. La dose = (volte − 1) × filo al mm² del fondo × area pesata
+della sfumatura; il filo al mm² del fondo si misura facendo la passata una volta senza i fori in più. I punti in
+più non contano nella copertura del fondo, così il fondo resta uniforme.
+
+**Misurato dopo** (stessi parametri): punti 2-5 mm da 2,79 a 3,71, nessun foro sotto 1,3, 3 tratti; punti 6-15 mm
+da 1,47 a 2,81, 3 tratti, e il fitto non si spande più su tutto il pezzo (filo da 399 a 281 m).
+
+## Venature senza punti battuti (2026-11-23)
+
+Lorenzo: *«per le venature, evitiamo il ritorno sullo stesso punto per non creare punti battuti evidenti»*. **Misurato:** prima circa **metà dei punti** delle venature cadeva a meno di 0,3 mm da un buco già
+fatto (120×80: 697 su 1396; 309×219: ~6000 su ~12.600). Il grosso veniva dal fuso: il ritorno stava sugli stessi
+indici dell'andata a 0,35 mm, si cuciva contro di lei, e l'unione degli incroci sotto 1 mm lo fondeva con l'andata.
+Il resto: gli incroci attraversati più volte dal giro e i tratti ripassati per non staccare.
+
+**Ora:** ogni punto del ritorno sta a metà fra due punti dell'andata, scostato di lato, e il ritorno non si cuce
+contro la sua andata; poi, nell'ordine di cucitura, ogni punto che cade a meno di 0,3 mm da un buco già fatto si
+sposta di lato (prima di traverso alla vena, poi tutt'intorno fino a 1,4 mm), dentro la sagoma e senza punti sotto
+1 mm. **Dopo: 0 punti battuti** in tutte le prove (3 varianti, 120×80 e 309×219), nessun punto sotto 1 mm, un tratto.
+
+Visto il risultato, Lorenzo: *«devi proprio sfalsarlo, così sono ancora in linea. il problema non era spostarlo e
+metterlo vicino, ma è che doveva soprattutto orizzontalmente non essere allo stesso livello, doveva avere tipo una
+fase»*. **Misurato:** spostati di traverso, il **40%** dei punti restava affiancato a un altro (a meno di 0,9 mm e
+a meno di 0,4 mm lungo la vena: allo stesso livello). **Ora** il punto si sposta prima LUNGO la vena, avanti o
+indietro di 0,45-1,2 mm e appena di lato (0,2 mm), così cade fra due buchi dell'altra passata; un posto si accetta
+solo se non è né battuto né affiancato; se non ce n'è (vene affollate) almeno fuori dai buchi già fatti. **Dopo:**
+affiancati 3-6,5% (sono vene diverse che corrono vicine), 0 battuti, nessun punto sotto 1 mm, un tratto.
+
 Cosa resta da fare sta in `STATO.md` (C4 densità per zona, C5 vuoto dello stesso colore, C6 modello
 densità unificato, A5 i nomi dei parametri "movimento").
