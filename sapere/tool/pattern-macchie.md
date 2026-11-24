@@ -351,6 +351,14 @@ coi salti ridotti al minimo; *«dove le macchie si toccano conviene mettere in c
    del salto) non restano nel livello: il DST li saltava, e con loro il loro taglio. Sul disegno della 5375: punti dell'ago
    in mezzo ai passaggi fuori da ogni macchia 205 → 0; salti del 1° livello 0 → 115 (328 mm), del 2° 40 → 61. Non provato
    a macchina né in Stilista.
+49. (2026-11-23) **Anche in «Prova qui» la macchia si prende con le sue aree vuote.** Lorenzo, selezionata in Stilista una
+   macchia del 1° livello con un'area vuota (e le due macchie sopra): *«il nero deve bucare il nero. nel tool non
+   succede»*. Genera, sul disegno intero, la bucava già (decisione 47); «Prova qui» no: prendeva i contorni con almeno un
+   punto nel riquadro che si vede. Guardando da vicino l'area vuota, il contorno della macchia restava fuori e l'area
+   vuota si cuciva come una macchia nera; guardando la macchia lontano dall'area vuota, si cuciva piena. Ora
+   (`nelRiquadro`) un contorno conta se il suo ingombro tocca il riquadro (così c'è anche guardando dentro una macchia
+   grande, senza il suo bordo), e con lui vengono i contorni dello stesso livello che stanno dentro uno preso: le sue aree
+   vuote e le isole dentro di loro. Non provato a macchina né in Stilista.
 
 ## Come è fatto, e perché
 - **I due livelli** (2026-11-03). `costruisciMacchie(…, secondo)` lavora un livello alla volta (`unLivello`), con lo stesso
