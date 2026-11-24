@@ -8,10 +8,11 @@ import { conBusta, dstFromExportLayers, DST_FILE, readDstMetadata, refertoDaStra
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { collegaStilista, prendiSelezioneStilista, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
+import { collegaStilista, prendiSelezioneStilista, BOTTONE_PRENDI_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import { FORMATO, CORPO, ALL_FIELD_GROUPS, SCALE_MODES, type Field, type Group } from './fields';
 import { stratoPattern } from './motore';
 import sharedPresetsRaw from './presets.shared.json?raw';
+import { barraAnteprima, barraStato, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero } from '@rg/ui/anatomia';
 
 const PRESET_KEY = 'pattern-grammar-engine-presets';
 
@@ -72,24 +73,14 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
   <div class="rg-workspace pg-workspace">
     <aside class="rg-workspace__panel" id="panel"></aside>
     <div class="rg-workspace__stage">
-      <header class="rg-workspace__stage-header">
-        <h2 class="rg-h3">Anteprima</h2>
-        <div class="rg-cluster">
-          <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
-          ${BOTTONE_INVIA_STILISTA()}
-          <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
-          <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Scarica SVG</button>
-        </div>
-      </header>
+      ${barraAnteprima({ inviaStilista: true })}
       <div class="rg-workspace__canvas" id="canvas">
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
       </div>
-      <footer class="rg-workspace__statusbar">
-        <span><span id="status">Pronto</span><span id="points" class="rg-mono"></span></span>
-        <span id="zoom" class="rg-mono">zoom 100%</span>
-      </footer>
+      ${barraStato()}
     </div>
   </div>`;
+  attivaCampiNumero(root);
 
   const $ = (id: string) => root.querySelector<HTMLElement>('#' + id)!;
   const cfg = initialConfig() as Record<string, unknown>;
@@ -123,51 +114,40 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       return lab;
     }
 
+    if (f.kind === 'num') {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = campoNumero({
+        id: 'f-' + f.name, etichetta: f.label, unita: f.unit ?? '', valore: Number(cfg[f.name] ?? f.value),
+        passo: f.step, min: f.min, aiuto: f.help,
+      });
+      const campo = tpl.content.firstElementChild as HTMLElement;
+      const inp = campo.querySelector('input')!;
+      inp.addEventListener('change', () => {
+        const v = leggiCampo(inp);
+        if (!Number.isNaN(v)) { cfg[f.name] = v; render(); }
+      });
+      return campo;
+    }
+
     const lab = document.createElement('label');
-    lab.className = 'rg-field' + (f.kind === 'select' ? ' rg-param-grid__wide' : (f.help ? ' rg-param-grid__wide' : ''));
+    lab.className = 'rg-field rg-param-grid__wide';
     const name = document.createElement('span');
     name.className = 'rg-field__label';
     name.textContent = f.label;
     lab.appendChild(name);
 
-    if (f.kind === 'select') {
-      const sel = document.createElement('select');
-      sel.className = 'rg-select';
-      sel.id = 'f-' + f.name;
-      for (const [v, l] of f.options) {
-        const o = document.createElement('option');
-        o.value = v; o.textContent = l;
-        if (v === String(cfg[f.name])) o.selected = true;
-        sel.appendChild(o);
-      }
-      sel.addEventListener('change', () => { cfg[f.name] = sel.value; render(); });
-      lab.appendChild(sel);
-      return lab;
+    // il menu (f.kind === 'select')
+    const sel = document.createElement('select');
+    sel.className = 'rg-select';
+    sel.id = 'f-' + f.name;
+    for (const [v, l] of f.options) {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = l;
+      if (v === String(cfg[f.name])) o.selected = true;
+      sel.appendChild(o);
     }
-
-    const wrap = document.createElement('span');
-    wrap.className = 'rg-field-with-unit';
-    const inp = document.createElement('input');
-    inp.type = 'number';
-    inp.className = 'rg-input rg-input--numeric';
-    inp.id = 'f-' + f.name;
-    inp.step = String(f.step);
-    if (f.min !== undefined) inp.min = String(f.min);
-    inp.value = String(cfg[f.name] ?? f.value);
-    inp.addEventListener('change', () => {
-      const v = parseFloat(inp.value);
-      if (!Number.isNaN(v)) { cfg[f.name] = v; render(); }
-    });
-    const unit = document.createElement('span');
-    unit.textContent = f.unit ?? '';
-    wrap.append(inp, unit);
-    lab.appendChild(wrap);
-    if (f.help) {
-      const help = document.createElement('small');
-      help.className = 'rg-field__help';
-      help.textContent = f.help;
-      lab.appendChild(help);
-    }
+    sel.addEventListener('change', () => { cfg[f.name] = sel.value; render(); });
+    lab.appendChild(sel);
     return lab;
   }
 
@@ -214,10 +194,8 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       </div>
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Scala del file importato</span>
         <select id="scaleMode" class="rg-select">${SCALE_MODES.map(([v, l]) => `<option value="${v}"${v === scalaImport.scaleMode ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
-      <label class="rg-field"><span class="rg-field__label">Larghezza import</span>
-        <span class="rg-field-with-unit"><input id="customW" class="rg-input rg-input--numeric" type="number" min="0.001" step="0.1" value="${scalaImport.customW}"><span>mm</span></span></label>
-      <label class="rg-field"><span class="rg-field__label">Altezza import</span>
-        <span class="rg-field-with-unit"><input id="customH" class="rg-input rg-input--numeric" type="number" min="0.001" step="0.1" value="${scalaImport.customH}"><span>mm</span></span></label>`;
+      ${campoNumero({ id: 'customW', etichetta: 'Larghezza import', unita: 'mm', valore: scalaImport.customW, passo: 0.1, min: 0.001 })}
+      ${campoNumero({ id: 'customH', etichetta: 'Altezza import', unita: 'mm', valore: scalaImport.customH, passo: 0.1, min: 0.001 })}`;
     return box;
   }
 
@@ -373,7 +351,7 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       cfg.totalHeight = Math.ceil(fineY) + 1;
       for (const [campo, valore] of [['totalWidth', cfg.totalWidth], ['totalHeight', cfg.totalHeight]] as const) {
         const input = root.querySelector<HTMLInputElement>(`#f-${campo}`);
-        if (input) input.value = String(valore);
+        if (input) impostaNumero(input, valore as number);
       }
     }
     const formato = Number.isFinite(fineX) ? ` Formato del pattern ${cfg.totalWidth} × ${cfg.totalHeight} mm, per coprire tutto il pezzo.` : '';
@@ -558,8 +536,8 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
     $('fromStilista').addEventListener('click', () => { void prendiDaStilista(); });
     const leggiScala = () => {
       scalaImport.scaleMode = ($('scaleMode') as HTMLSelectElement).value;
-      scalaImport.customW = parseFloat(($('customW') as HTMLInputElement).value) || scalaImport.customW;
-      scalaImport.customH = parseFloat(($('customH') as HTMLInputElement).value) || scalaImport.customH;
+      scalaImport.customW = leggiCampo($('customW') as HTMLInputElement) || scalaImport.customW;
+      scalaImport.customH = leggiCampo($('customH') as HTMLInputElement) || scalaImport.customH;
       reparseBoundary();
     };
     for (const id of ['scaleMode', 'customW', 'customH']) $(id).addEventListener('change', leggiScala);
@@ -657,10 +635,10 @@ export function mountPatternGrammar(root: HTMLElement, opts: { backHref?: string
       $('status').textContent = `${w ?? '?'} × ${h ?? '?'} mm`;
       // Punti effettivamente cuciti: già nei metadati dell'SVG (pointCount.exported = final.points.length).
       const n = /"exported":(\d+)/.exec(lastSvg)?.[1];
-      $('points').textContent = n ? ` · ${Number(n).toLocaleString('it-IT')} punti` : '';
+      $('misure').textContent = n ? `${Number(n).toLocaleString('it-IT')} punti` : '';
     } catch (e) {
       $('status').textContent = 'Errore: ' + (e as Error).message;
-      $('points').textContent = '';
+      $('misure').textContent = '';
       console.error(e);
     }
   }

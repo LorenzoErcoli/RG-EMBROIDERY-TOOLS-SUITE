@@ -6,10 +6,11 @@ import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
+import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import { costruisciRete, costruisciReteRadiale, passoDellaSpirale, pezzoAMisure, stratiPerDst, stratiRete, COLORE_RETE, PARAMETRI_RETE, type ParametriRete, type PuntoAgo, type RisultatoRete } from './motore';
 import { angoloDelRombo, formaSacca, puntoDelNodo, raggioMinimo, type Anelli } from './sacca';
 import { montaVista3d } from './vista3d';
+import { barraAnteprima, barraStato, campoNumero, attivaCampiNumero, leggiCampo } from '@rg/ui/anatomia';
 
 /** Il disegno nel file riapribile, se non pesa troppo (come negli altri tool). */
 const MAX_DRAWING_KB = 256;
@@ -145,29 +146,16 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   <div class="rg-workspace rete-workspace">
     <aside class="rg-workspace__panel" id="panel"></aside>
     <div class="rg-workspace__stage">
-      <header class="rg-workspace__stage-header">
-        <h2 class="rg-h3">Anteprima</h2>
-        <div class="rg-cluster">
-          <button id="sacca3dBtn" class="rg-button rg-button--ghost rg-button--small" aria-pressed="false" hidden title="La sacca appesa, in 3D: la rete coi fili morbidi, tenuta per la bocca o per due punti">Sacca 3D</button>
-          <button id="simulaBtn" class="rg-button rg-button--ghost rg-button--small" aria-pressed="false" title="Il simulatore: il filo si cuce sullo schermo nell'ordine del DST">Simula</button>
-          <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
-          <button id="genBtn" class="rg-button rg-button--secondary rg-button--small">Genera</button>
-          ${BOTTONE_INVIA_STILISTA()}
-          <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
-          <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Scarica SVG</button>
-        </div>
-      </header>
+      ${barraAnteprima({ viste: '<button id="sacca3dBtn" class="rg-button rg-button--ghost rg-button--small" aria-pressed="false" hidden title="La sacca appesa, in 3D: la rete coi fili morbidi, tenuta per la bocca o per due punti">Sacca 3D</button>', genera: true, simula: true, inviaStilista: true })}
       <div class="rg-workspace__canvas" id="canvas">
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
       </div>
       <div id="vista3d" class="rete-vista3d" hidden></div>
       <div id="simControlli" class="sim-controlli" hidden></div>
-      <footer class="rg-workspace__statusbar">
-        <span><span id="status">Carica un SVG o DXF: un colore per il contorno del cartamodello, uno per le aree vuote.</span><span id="points" class="rg-mono"></span></span>
-        <span id="zoom" class="rg-mono">zoom 100%</span>
-      </footer>
+      ${barraStato({ messaggio: 'Carica un SVG o DXF: un colore per il contorno del cartamodello, uno per le aree vuote.' })}
     </div>
   </div>`;
+  attivaCampiNumero(root); // (anche i campi della Sacca 3D, che nasce dentro #vista3d)
 
   const $ = (id: string) => root.querySelector<HTMLElement>('#' + id)!;
   const pz = hookPanZoom($('canvas'), $('layer'), (z) => { $('zoom').textContent = `zoom ${Math.round(z * 100)}%`; });
@@ -253,37 +241,18 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         if (f.aiuto) { const help = document.createElement('small'); help.className = 'rg-field__help rg-param-grid__wide'; help.textContent = f.aiuto; grid.appendChild(help); }
         continue;
       }
-      const lab = document.createElement('label');
-      lab.className = 'rg-field rg-param-grid__wide';
-      lab.innerHTML = `<span class="rg-field__label">${f.etichetta}</span>`;
-      const wrap = document.createElement('span');
-      wrap.className = 'rg-field-with-unit';
-      const inp = document.createElement('input');
-      inp.type = 'number';
-      inp.className = 'rg-input rg-input--numeric';
-      inp.id = 'f-' + f.nome;
-      inp.step = String(f.passo);
-      inp.min = String(f.min);
-      if (f.max !== undefined) inp.max = String(f.max);
-      inp.value = String(par[f.nome]);
+      grid.insertAdjacentHTML('beforeend', campoNumero({
+        id: 'f-' + f.nome, etichetta: f.etichetta, unita: f.unita, valore: Number(par[f.nome]),
+        passo: f.passo, min: f.min, max: f.max, aiuto: f.aiuto, largo: true,
+      }));
+      const inp = grid.lastElementChild!.querySelector('input')!;
       inp.addEventListener('change', () => {
-        const v = parseFloat(inp.value);
+        const v = leggiCampo(inp);
         if (!Number.isFinite(v)) return;
         (par as Record<string, unknown>)[f.nome] = Math.min(f.max ?? Infinity, Math.max(f.min, v));
         if (f.nome === 'totalWidth' || f.nome === 'totalHeight' || f.nome === 'fieldMm') disegnaContorni(); // il pezzo cambia: si riadatta la vista
         genera();
       });
-      const unit = document.createElement('span');
-      unit.textContent = f.unita;
-      wrap.append(inp, unit);
-      lab.appendChild(wrap);
-      if (f.aiuto) {
-        const help = document.createElement('small');
-        help.className = 'rg-field__help';
-        help.textContent = f.aiuto;
-        lab.appendChild(help);
-      }
-      grid.appendChild(lab);
     }
     return grid;
   }
@@ -294,10 +263,10 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
     const bloccoRiapri = `
       <div class="rg-file-input rg-param-grid__wide">
         <label class="rg-file-input__control">
-          <input type="file" id="reopenFile" accept=".dst,.svg" />
-          <span class="rg-button rg-button--ghost">Riapri un progetto (DST o SVG)…</span>
+          <input type="file" id="progettoInput" accept=".dst,.svg" />
+          <span class="rg-button rg-button--ghost">Apri progetto o DST…</span>
         </label>
-        <p class="rg-file-input__status" id="reopenStatus" role="status">Un file uscito da qui torna com'era: pezzo, ruoli e parametri.</p>
+        <p class="rg-file-input__status" id="progettoStatus" role="status">Un file uscito da qui torna com'era: pezzo, ruoli e parametri.</p>
       </div>`;
     if (radiale()) {
       // il fondo tondo ha il raggio, quello ovale lunghezza e larghezza
@@ -482,7 +451,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         const N = Math.round(par.radialCount), ultimo = r.anelli.punti ? Array.from({ length: N }, (_, k) => puntoDelNodo(r.anelli, N, r.cime ? r.cime[k] : r.anelli.rho.length - 1, k)) : undefined, larg = (f: (q: { x: number; y: number }) => number) => (ultimo ? Math.max(...ultimo.map(f)) - Math.min(...ultimo.map(f)) : 0);
         const nn = r.anelli.rho.length - 1, disco = ultimo ? `rete ${larg((q) => q.x).toFixed(0)} × ${larg((q) => q.y).toFixed(0)} mm` : `disco Ø ${(2 * r.anelli.rho[nn - (nn % 2)]).toFixed(0)} mm`;
         $('status').textContent = r.avviso ?? `Sacca: ${disco} · ${r.blocchi.length} parti · ${r.misure.salti} salti · ${r.misure.tempoMs} ms`;
-        $('points').textContent = r.blocchi.length ? ` · ${r.misure.punti.toLocaleString('it-IT')} punti` : '';
+        $('misure').textContent = r.blocchi.length ? `${r.misure.punti.toLocaleString('it-IT')} punti` : '';
         buildPanel();
         disegna();
         if (vista3d) apriVista3d(); // la sacca appesa segue i parametri nuovi
@@ -504,7 +473,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         + (r.avviso ? ` · ${r.avviso}` : '');
       // i punti del file da cucire: con le parti contano anche ingressi, uscite, passaggi e i punti ripetuti della travetta
       const nPunti = r.parti ? r.parti.reduce((s, pt) => s + (pt.ingresso?.length ?? 0) + (pt.uscita?.length ?? 0) + pt.tratti.reduce((u, pl) => u + pl.length, 0), 0) : r.misure.punti;
-      $('points').textContent = ` · ${nPunti.toLocaleString('it-IT')} punti`;
+      $('misure').textContent = `${nPunti.toLocaleString('it-IT')} punti`;
       buildPanel();
       disegna();
     }, 30);
@@ -693,7 +662,7 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
       });
     });
     root.querySelector('#scaleMode')?.addEventListener('change', () => { scala.scaleMode = ($('scaleMode') as HTMLSelectElement).value; reparse(); });
-    $('reopenFile').addEventListener('change', (ev) => {
+    $('progettoInput').addEventListener('change', (ev) => {
       const input = ev.target as HTMLInputElement;
       const file = input.files?.[0];
       if (!file) return;
@@ -702,15 +671,15 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
         try {
           const meta = isDst ? readDstMetadata(new Uint8Array(letto as ArrayBuffer)) : (readProjectMetadata(String(letto)) as Record<string, unknown> | null);
           if (meta?.rgProject !== 'rete-testa-speciale') {
-            $('reopenStatus').textContent = meta
+            $('progettoStatus').textContent = meta
               ? `Questo file viene da "${String(meta.rgProject ?? 'un altro tool')}", non da qui.`
               : 'Nessun progetto dentro questo file: non è uscito dalla suite.';
             return;
           }
           riapri(meta);
-          $('reopenStatus').textContent = `${file.name}: riaperto` + (meta.drawing ? ' col disegno.' : ' — senza disegno: caricalo a parte.');
+          $('progettoStatus').textContent = `${file.name}: riaperto` + (meta.drawing ? ' col disegno.' : ' — senza disegno: caricalo a parte.');
         } catch (e) {
-          $('reopenStatus').textContent = 'Errore: ' + (e as Error).message;
+          $('progettoStatus').textContent = 'Errore: ' + (e as Error).message;
         }
         input.value = '';
       });
@@ -738,9 +707,9 @@ export function mountReteTestaSpeciale(root: HTMLElement, opts: { backHref?: str
   // ---- azioni fisse ----
   $('fitBtn').addEventListener('click', () => pz.fit());
   $('genBtn').addEventListener('click', genera);
-  $('simulaBtn').addEventListener('click', () => {
+  $('simBtn').addEventListener('click', () => {
     simulando = !simulando;
-    $('simulaBtn').setAttribute('aria-pressed', String(simulando));
+    $('simBtn').setAttribute('aria-pressed', String(simulando));
     ($('simControlli') as HTMLElement).hidden = !simulando;
     disegna(true);
   });

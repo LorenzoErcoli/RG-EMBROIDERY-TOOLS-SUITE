@@ -9,23 +9,25 @@ import {
   PARAMETRI_MAGLIA, VERSIONE_MAGLIA, cerchio, cuci, latoInternoCi, curva, eChiuso, leggiProgetto, lineaTratto, progetto, strati,
   type Colonne, type ParametriMaglia, type Pt, type Risultato, type Tratto,
 } from './motore';
+import {
+  attivaCampiNumero, barraAnteprima, barraStato, campoNumero, campoNumeroInline, impostaNumero, leggiCampo, sezione, sezioneSorgente,
+} from '@rg/ui/anatomia';
 
 // ---------------------------------------------------------------- i campi del pannello
 
-interface Campo { chiave: keyof ParametriMaglia; etichetta: string; unita?: string; min: number; max: number; intero?: boolean; aiuto?: string; largo?: boolean }
+interface Campo { chiave: keyof ParametriMaglia; etichetta: string; unita?: string; min: number; max: number; passo: number; intero?: boolean; aiuto?: string; largo?: boolean }
 // Etichette e limiti come nel registro (packages/cervello/src/tool/punto-maglia.ts). I default sono quelli del campione.
 const CAMPI: Campo[] = [
-  { chiave: 'larghezzaVMm', etichetta: 'Larghezza V', unita: 'mm', min: 1, max: 6 },
-  { chiave: 'altezzaVMm', etichetta: 'Altezza V', unita: 'mm', min: 1, max: 8 },
-  { chiave: 'passoMm', etichetta: 'Passo', unita: 'mm', min: 0.5, max: 8 },
-  { chiave: 'rientroMm', etichetta: 'Rientro dei lati', unita: 'mm', min: 0, max: 2 },
-  { chiave: 'passateCentro', etichetta: 'Passate del centro', min: 2, max: 8, intero: true, aiuto: 'per gamba; pari, così si torna sulla punta' },
-  { chiave: 'passateLati', etichetta: 'Passate dei lati', min: 1, max: 6, intero: true },
-  { chiave: 'margineIncrocioMm', etichetta: 'Margine negli incroci', unita: 'mm', min: -3, max: 5, largo: true, aiuto: 'oltre il bordo del tratto sopra si tolgono le righe di quello sotto' },
+  { chiave: 'larghezzaVMm', etichetta: 'Larghezza V', unita: 'mm', min: 1, max: 6, passo: 0.1 },
+  { chiave: 'altezzaVMm', etichetta: 'Altezza V', unita: 'mm', min: 1, max: 8, passo: 0.1 },
+  { chiave: 'passoMm', etichetta: 'Passo', unita: 'mm', min: 0.5, max: 8, passo: 0.1 },
+  { chiave: 'rientroMm', etichetta: 'Rientro dei lati', unita: 'mm', min: 0, max: 2, passo: 0.1 },
+  { chiave: 'passateCentro', etichetta: 'Passate del centro', min: 2, max: 8, passo: 2, intero: true, aiuto: 'per gamba; pari, così si torna sulla punta' },
+  { chiave: 'passateLati', etichetta: 'Passate dei lati', min: 1, max: 6, passo: 1, intero: true },
+  { chiave: 'margineIncrocioMm', etichetta: 'Margine negli incroci', unita: 'mm', min: -3, max: 5, passo: 0.1, largo: true, aiuto: 'oltre il bordo del tratto sopra si tolgono le righe di quello sotto' },
 ];
 
 const fmt = (v: number): string => String(Math.round(v * 1000) / 1000).replace('.', ',');
-const leggi = (s: string): number => parseFloat(s.trim().replace(',', '.'));
 const esc = (s: string): string => s.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/"/g, '&quot;');
 
 type Modo = 'modifica' | 'nuovo' | 'cerchio' | 'aggiungi' | 'punti';
@@ -48,9 +50,20 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
   ${topbar('Punto maglia', opts.backHref)}
   <div class="rg-workspace pm-workspace">
     <aside class="rg-workspace__panel">
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">01</span><h3 class="rg-param-section__title">Disegno</h3></div>
-        <div class="rg-param-grid">
+      ${sezioneSorgente({
+        tipo: 'immagine', accetta: 'image/*', statoIniziale: 'Nessuna immagine.', larghezzaReale: false, demo: 'Disegno di esempio',
+        extra: `${campoNumero({ id: 'realWidth', etichetta: 'Larghezza', unita: 'mm', valore: 110, passo: 1, aiuto: 'La misura vera del logo: la V resta di 2,5 mm, il disegno si proporziona alla V.' })}
+          <label class="rg-field rg-param-grid__wide">
+            <span class="rg-field__label">Opacità</span>
+            <span class="pm-range"><input type="range" id="rifOpacita" min="0" max="100" step="5" value="50"><output class="rg-mono" for="rifOpacita" id="rifOpacitaVal">50 %</output></span>
+          </label>
+          <div class="rg-cluster rg-param-grid__wide">
+            <label class="rg-choice"><input type="checkbox" id="rifMostra" checked><span>Mostra</span></label>
+            <button id="rifTogli" class="rg-button rg-button--ghost rg-button--small" type="button">Togli</button>
+          </div>`,
+      })}
+
+      ${sezione({ indice: 2, titolo: 'Disegno', contenuto: `<div class="rg-param-grid">
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label" id="lblStrumento">Strumento sull’anteprima</span>
             <div class="rg-segmented pm-segmented" id="strumenti" role="group" aria-labelledby="lblStrumento" aria-describedby="aiutoStrumento">
@@ -71,37 +84,9 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
           </div>
           <div class="rg-cluster rg-param-grid__wide">
             <button id="annullaBtn" class="rg-button rg-button--ghost rg-button--small" type="button" disabled>Annulla</button>
-            <button id="esempioBtn" class="rg-button rg-button--ghost rg-button--small" type="button">Esempio</button>
             <button id="svuotaBtn" class="rg-button rg-button--ghost rg-button--small" type="button">Svuota</button>
           </div>
-        </div>
-      </section>
-
-      <details class="rg-param-section rg-disclosure" data-sez="riferimento" open>
-        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">02</span><span class="rg-param-section__title">Immagine di riferimento</span></summary>
-        <div class="rg-param-grid">
-          <div class="rg-file-input rg-param-grid__wide">
-            <label class="rg-file-input__control">
-              <input type="file" id="rifFile" accept="image/*" hidden>
-              <span class="rg-button rg-button--outline">Carica immagine…</span>
-            </label>
-            <p class="rg-file-input__status" id="rifStatus" role="status">Nessuna immagine.</p>
-          </div>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Larghezza</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="rifLarghezza" type="text" inputmode="decimal" value="110"><span>mm</span></span>
-            <span class="rg-field__help">La misura vera del logo: la V resta di 2,5 mm, il disegno si proporziona alla V.</span>
-          </label>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Opacità</span>
-            <span class="pm-range"><input type="range" id="rifOpacita" min="0" max="100" step="5" value="50"><output class="rg-mono" for="rifOpacita" id="rifOpacitaVal">50 %</output></span>
-          </label>
-          <div class="rg-cluster rg-param-grid__wide">
-            <label class="rg-choice"><input type="checkbox" id="rifMostra" checked><span>Mostra</span></label>
-            <button id="rifTogli" class="rg-button rg-button--ghost rg-button--small" type="button">Togli</button>
-          </div>
-        </div>
-      </details>
+        </div>` })}
 
       <details class="rg-param-section rg-disclosure" data-sez="tratti" open>
         <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">03</span><span class="rg-param-section__title">Tratti</span></summary>
@@ -140,11 +125,7 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
                 <button type="button" class="rg-segmented__item" data-v="sinistra" aria-pressed="false">Sinistra</button>
               </div><span class="rg-field__help">guardando verso le punte</span></div>
             <label class="rg-choice" id="rigaChiuso"><input type="checkbox" id="trattoChiuso"><span>Tratto chiuso</span></label>
-            <label class="rg-field" id="rigaRaggio" hidden>
-              <span class="rg-field__label">Raggio del cerchio</span>
-              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="raggio" type="text" inputmode="decimal"><span>mm</span></span>
-              <span class="rg-field__help">sulla linea centrale; il quadratino dice dove si comincia</span>
-            </label>
+            <div id="rigaRaggio" hidden>${campoNumero({ id: 'raggio', etichetta: 'Raggio del cerchio', unita: 'mm', valore: '', passo: 0.5, aiuto: 'sulla linea centrale; il quadratino dice dove si comincia', largo: false })}</div>
             <label class="rg-choice" id="rigaAngolo" hidden><input type="checkbox" id="puntoAngolo"><span>Punto scelto ad angolo</span></label>
             <div class="rg-cluster" id="rigaPunto" hidden>
               <button id="eliminaPunto" class="rg-button rg-button--ghost rg-button--small" type="button">Elimina il punto scelto</button>
@@ -158,7 +139,7 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
                   <button type="button" class="rg-segmented__item" data-v="1.5" aria-pressed="false">1,5</button>
                   <button type="button" class="rg-segmented__item" data-v="2" aria-pressed="false">2</button>
                 </div>
-                <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="strettoMm${c}" type="text" inputmode="decimal" aria-label="Da quanti mm prima del ${c.toLowerCase()} comincia a stringersi"><span>mm</span></span>
+                <span data-stretto-mm="${c}">${campoNumeroInline({ aria: `Da quanti mm prima del ${c.toLowerCase()} comincia a stringersi`, unita: 'mm', valore: '', passo: 1, min: 0 })}</span>
                 <label class="rg-choice"><input type="checkbox" id="strettoSecco${c}"><span>Secco (senza passi di mezza colonna)</span></label>
                 <span class="rg-field__help">comincia a cambiare a questa distanza dal ${c.toLowerCase()}</span></div>`).join('')}
             </div>
@@ -207,31 +188,18 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
     </aside>
 
     <div class="rg-workspace__stage">
-      <header class="rg-workspace__stage-header">
-        <h2 class="rg-h3">Anteprima</h2>
-        <div class="rg-cluster">
-          <label class="rg-choice" title="Lati (mezze catene) in ocra e centro rialzato in blu, come lo schema approvato; spenta = il filo tutto di un colore."><input type="checkbox" id="schema" checked><span>Schema a colori</span></label>
-          <label class="rg-choice"><input type="checkbox" id="mostraPassaggi"><span>Mostra i passaggi</span></label>
-          <label class="rg-choice"><input type="checkbox" id="mostraLinee" checked><span>Mostra le linee</span></label>
-          <label class="rg-choice" title="Dove comincia (numero) e finisce (quadratino) ogni tratto, e il salto col taglio da un tratto al successivo."><input type="checkbox" id="mostraOrdine" checked><span>Mostra l’ordine</span></label>
-          <label class="rg-file-input__control"><input type="file" id="apriProgetto" accept=".svg,.dst" hidden><span class="rg-button rg-button--ghost rg-button--small">Apri progetto…</span></label>
-          <button id="exportBtn" class="rg-button rg-button--outline rg-button--small" type="button" disabled>Esporta SVG</button>
-          <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small" type="button" disabled>Esporta DST</button>
-          <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small" type="button">Adatta</button>
-        </div>
-      </header>
+      ${barraAnteprima({ viste: '<div class="rg-cluster"><label class="rg-choice" title="Lati (mezze catene) in ocra e centro rialzato in blu, come lo schema approvato; spenta = il filo tutto di un colore."><input type="checkbox" id="schema" checked><span>Schema a colori</span></label> <label class="rg-choice"><input type="checkbox" id="mostraPassaggi"><span>Mostra i passaggi</span></label> <label class="rg-choice"><input type="checkbox" id="mostraLinee" checked><span>Mostra le linee</span></label> <label class="rg-choice" title="Dove comincia (numero) e finisce (quadratino) ogni tratto, e il salto col taglio da un tratto al successivo."><input type="checkbox" id="mostraOrdine" checked><span>Mostra l’ordine</span></label></div>', esportaSpenti: true })}
       <div class="rg-workspace__canvas" id="canvas">
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
       </div>
-      <footer class="rg-workspace__statusbar">
-        <span id="status" role="status">Pronto</span>
-        <span id="punti" class="rg-mono">0 punti</span>
-        <span id="zoom" class="rg-mono">zoom 100%</span>
-      </footer>
+      ${barraStato()}
     </div>
   </div>`;
 
   const $ = <T extends HTMLElement = HTMLElement>(id: string): T => root.querySelector<T>('#' + id)!;
+  attivaCampiNumero(root);
+  /** Il campo dei mm del tratto che si stringe al capo o alla coda (un campo compatto, senza un'etichetta sua). */
+  const campoStretto = (c: 'Capo' | 'Coda'): HTMLInputElement => root.querySelector<HTMLInputElement>(`[data-stretto-mm="${c}"] input`)!;
 
   // ---------------------------------------------------------------- lo stato
   let tratti: Tratto[] = [];
@@ -270,20 +238,16 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
   function costruisciCampi(): void {
     const host = $('campi'); host.innerHTML = '';
     for (const c of CAMPI) {
-      const lab = document.createElement('label');
-      lab.className = 'rg-field' + (c.largo || c.aiuto ? ' rg-param-grid__wide' : '');
-      const inp = `<input class="rg-input rg-input--numeric" data-chiave="${c.chiave}" type="text" inputmode="${c.intero ? 'numeric' : 'decimal'}" value="${fmt(par[c.chiave])}">`;
-      lab.innerHTML = `<span class="rg-field__label">${c.etichetta}</span>${c.unita ? `<span class="rg-field-with-unit">${inp}<span>${c.unita}</span></span>` : inp}${c.aiuto ? `<span class="rg-field__help">${c.aiuto}</span>` : ''}`;
-      host.appendChild(lab);
+      host.insertAdjacentHTML('beforeend', campoNumero({ id: c.chiave, etichetta: c.etichetta, unita: c.unita ?? '', valore: par[c.chiave], passo: c.passo, min: c.min, max: c.max, aiuto: c.aiuto, largo: Boolean(c.largo || c.aiuto), attributi: `data-chiave="${c.chiave}"` }));
     }
   }
   $('campi').addEventListener('change', (e) => {
     const inp = e.target as HTMLInputElement; const c = CAMPI.find((q) => q.chiave === inp.dataset.chiave); if (!c) return;
-    let v = leggi(inp.value);
+    let v = leggiCampo(inp);
     if (Number.isNaN(v)) v = par[c.chiave];
     v = Math.min(c.max, Math.max(c.min, c.intero ? Math.round(v) : v));
     if (c.chiave === 'passateCentro' && v % 2) v += v < c.max ? 1 : -1; // pari: si torna sulla punta
-    par[c.chiave] = v; inp.value = fmt(v);
+    par[c.chiave] = v; impostaNumero(inp, v);
     ricalcola();
   });
 
@@ -340,7 +304,7 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
     $('rigaChiuso').hidden = cerchio;
     ($('trattoChiuso') as HTMLInputElement).checked = !!t?.chiuso;
     $('rigaRaggio').hidden = !cerchio;
-    if (cerchio) ($('raggio') as HTMLInputElement).value = fmt(Math.round(raggioDi(t) * 100) / 100);
+    if (cerchio) impostaNumero($('raggio') as HTMLInputElement, Math.round(raggioDi(t) * 100) / 100);
     $('rigaAngolo').hidden = !t || cerchio || selPunto < 0;
     $('rigaPunto').hidden = !t || selPunto < 0 || modo === 'punti';
     ($('eliminaPunto') as HTMLButtonElement).hidden = !t || cerchio || t.punti.length <= 2;
@@ -356,7 +320,7 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
     for (const c of ['Capo', 'Coda'] as const) {
       const st = t?.[c === 'Capo' ? 'strettoCapo' : 'strettoCoda'];
       impostaSegmented(root.querySelector<HTMLElement>(`[data-stretto="${c}"]`)!, st ? String(st.colonne) : '');
-      const inp = $(`strettoMm${c}`) as HTMLInputElement; inp.value = st ? fmt(st.mm) : ''; inp.disabled = !st; inp.placeholder = st ? '' : '—';
+      const inp = campoStretto(c); if (st) impostaNumero(inp, st.mm); else inp.value = ''; inp.disabled = !st; inp.placeholder = st ? '' : '—';
       const sec = $(`strettoSecco${c}`) as HTMLInputElement; sec.checked = !!st?.secco; sec.disabled = !st;
     }
     impostaSegmented(root.querySelector<HTMLElement>('[data-passate]')!, t?.passateCentro ? String(t.passateCentro) : '');
@@ -417,7 +381,7 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
   $('trattoChiuso').addEventListener('change', () => { const t = tratti[sel]; if (!t) return; ricorda(); t.chiuso = ($('trattoChiuso') as HTMLInputElement).checked; ricalcola(); });
   $('raggio').addEventListener('change', () => {
     const t = tratti[sel]; if (t?.forma !== 'cerchio') return;
-    const r = leggi(($('raggio') as HTMLInputElement).value), r0 = raggioDi(t);
+    const r = leggiCampo($('raggio') as HTMLInputElement), r0 = raggioDi(t);
     if (Number.isNaN(r) || r <= 0 || r0 <= 0) { costruisciTrattoSel(); return; }
     ricorda();
     const [c, p] = t.punti; t.punti[1] = [c[0] + ((p[0] - c[0]) * r) / r0, c[1] + ((p[1] - c[1]) * r) / r0]; // stessa direzione: il capo resta lì
@@ -431,9 +395,9 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
     const t = tratti[sel]; const st = t?.[c === 'Capo' ? 'strettoCapo' : 'strettoCoda']; if (!st) return;
     ricorda(); if (($(`strettoSecco${c}`) as HTMLInputElement).checked) st.secco = true; else delete st.secco; ricalcola();
   });
-  for (const c of ['Capo', 'Coda'] as const) $(`strettoMm${c}`).addEventListener('change', () => {
+  for (const c of ['Capo', 'Coda'] as const) campoStretto(c).addEventListener('change', () => {
     const t = tratti[sel]; const st = t?.[c === 'Capo' ? 'strettoCapo' : 'strettoCoda']; if (!st) return;
-    const v = leggi(($(`strettoMm${c}`) as HTMLInputElement).value);
+    const v = leggiCampo(campoStretto(c));
     if (!Number.isNaN(v) && v >= 0) { ricorda(); st.mm = v; }
     ricalcola();
   });
@@ -481,7 +445,7 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
   function ricalcola(): void {
     risultato = tratti.length ? cuci(tratti, par) : null;
     const n = risultato?.punti ?? 0;
-    $('punti').textContent = `${n.toLocaleString('it-IT')} punti`;
+    $('misure').textContent = `${n.toLocaleString('it-IT')} punti`;
     ($('exportBtn') as HTMLButtonElement).disabled = !n; ($('exportDstBtn') as HTMLButtonElement).disabled = !n;
     $('status').textContent = risultato?.avvisi.length ? risultato.avvisi.join(' · ') : tratti.length ? `${tratti.length} tratti` : 'Pronto';
     costruisciLista(); disegna();
@@ -770,7 +734,7 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
   $('fitBtn').addEventListener('click', () => pz.fit());
   $('annullaBtn').addEventListener('click', annulla);
   $('svuotaBtn').addEventListener('click', () => { if (!tratti.length) return; ricorda(); tratti = []; sel = -1; selPunto = -1; ricalcola(); });
-  $('esempioBtn').addEventListener('click', () => {
+  $('demoBtn').addEventListener('click', () => {
     ricorda();
     const T = (nome: string, punti: Pt[], o: Partial<Tratto> = {}): Tratto => ({ nome, punti, chiuso: false, colonne: 1, versoV: 'avanti', inizio: 'capo', mezza: 'destra', ...o });
     // una «D» (la gamba sotto, l'arco sopra), una «o» a cerchio, una «i» che si stringe ai capi e una «z» ad angoli
@@ -780,26 +744,26 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
 
   // ---------------------------------------------------------------- l'immagine di riferimento
   const aggiornaRif = (): void => {
-    $('rifStatus').textContent = rif.url ? `${nomeImmagine} · ${fmt(rif.larghezzaMm)} × ${fmt(Math.round(rif.larghezzaMm * rif.aspetto * 10) / 10)} mm` : 'Nessuna immagine.';
+    $('fileStatus').textContent = rif.url ? `${nomeImmagine} · ${fmt(rif.larghezzaMm)} × ${fmt(Math.round(rif.larghezzaMm * rif.aspetto * 10) / 10)} mm` : 'Nessuna immagine.';
     disegna();
   };
   let nomeImmagine = '';
-  $('rifFile').addEventListener('change', () => {
-    const f = ($('rifFile') as HTMLInputElement).files?.[0]; if (!f) return;
+  $('fileInput').addEventListener('change', () => {
+    const f = ($('fileInput') as HTMLInputElement).files?.[0]; if (!f) return;
     const fr = new FileReader();
     fr.onload = () => {
       const url = String(fr.result); const im = new Image();
       im.onload = () => { rif.url = url; rif.aspetto = im.naturalHeight / Math.max(1, im.naturalWidth); nomeImmagine = f.name; aggiornaRif(); pz.fit(); };
-      im.onerror = () => { $('rifStatus').textContent = 'Immagine non leggibile.'; };
+      im.onerror = () => { $('fileStatus').textContent = 'Immagine non leggibile.'; };
       im.src = url;
     };
     fr.readAsDataURL(f);
-    ($('rifFile') as HTMLInputElement).value = '';
+    ($('fileInput') as HTMLInputElement).value = '';
   });
-  $('rifLarghezza').addEventListener('change', () => {
-    const v = leggi(($('rifLarghezza') as HTMLInputElement).value);
+  $('realWidth').addEventListener('change', () => {
+    const v = leggiCampo($('realWidth') as HTMLInputElement);
     if (!Number.isNaN(v) && v > 0) rif.larghezzaMm = v;
-    ($('rifLarghezza') as HTMLInputElement).value = fmt(rif.larghezzaMm); aggiornaRif();
+    impostaNumero($('realWidth') as HTMLInputElement, rif.larghezzaMm); aggiornaRif();
   });
   $('rifOpacita').addEventListener('input', () => {
     const v = Number(($('rifOpacita') as HTMLInputElement).value); rif.opacita = v / 100; $('rifOpacitaVal').textContent = `${v} %`;
@@ -837,19 +801,19 @@ export function mountPuntoMaglia(root: HTMLElement, opts: { backHref?: string } 
     $('status').textContent = `${saveOutcomeMessage(outcome, name)} · ${risultato.punti.toLocaleString('it-IT')} punti · ${(bytes.length / 1024).toFixed(1)} KB`;
   });
 
-  $('apriProgetto').addEventListener('change', async () => {
-    const f = ($('apriProgetto') as HTMLInputElement).files?.[0]; if (!f) return;
-    ($('apriProgetto') as HTMLInputElement).value = '';
+  $('progettoInput').addEventListener('change', async () => {
+    const f = ($('progettoInput') as HTMLInputElement).files?.[0]; if (!f) return;
+    ($('progettoInput') as HTMLInputElement).value = '';
     const meta = f.name.toLowerCase().endsWith('.dst') ? readDstMetadata(new Uint8Array(await f.arrayBuffer())) : readProjectMetadata(await f.text());
     const p = leggiProgetto(meta);
-    if (!p) { $('status').textContent = `«${f.name}» non è un progetto Punto maglia (un SVG o un DST usciti da qui).`; return; }
+    if (!p) { $('status').textContent = $('progettoStatus').textContent = `«${f.name}» non è un progetto Punto maglia (un SVG o un DST usciti da qui).`; return; }
     ricorda();
     Object.assign(par, p.params); tratti = p.tratti; sel = tratti.length ? 0 : -1; selPunto = -1;
     nomeFile = f.name.replace(/\.(svg|dst)$/i, '');
     const im = (meta as { immagine?: { larghezzaMm?: number } }).immagine;
-    if (im?.larghezzaMm) { rif.larghezzaMm = im.larghezzaMm; ($('rifLarghezza') as HTMLInputElement).value = fmt(im.larghezzaMm); }
+    if (im?.larghezzaMm) { rif.larghezzaMm = im.larghezzaMm; impostaNumero($('realWidth') as HTMLInputElement, im.larghezzaMm); }
     costruisciCampi(); ricalcola(); pz.fit();
-    $('status').textContent = `Aperto «${f.name}»: ${tratti.length} tratti${im ? ' (l’immagine di riferimento non è nel file: ricaricala)' : ''}.`;
+    $('status').textContent = $('progettoStatus').textContent = `Aperto «${f.name}»: ${tratti.length} tratti${im ? ' (l’immagine di riferimento non è nel file: ricaricala)' : ''}.`;
   });
 
   // ---------------------------------------------------------------- i preset (solo i parametri del cordoncino)

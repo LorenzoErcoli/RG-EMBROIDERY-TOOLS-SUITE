@@ -271,6 +271,8 @@ export interface OpzioniBarraAnteprima {
   /** La casella «Ricalcola da solo»: acceso o spento all'avvio. Assente = il tool ricalcola sempre. */
   ricalcolaDaSolo?: { acceso: boolean; aiuto?: string };
   genera?: boolean;
+  /** I bottoni propri del tool che lavorano come Genera (HTML: per esempio «Prova qui» di pattern-macchie), subito dopo Genera. */
+  dopoGenera?: string;
   simula?: boolean;
   /** Default sì. */
   adatta?: boolean;
@@ -285,7 +287,7 @@ export interface OpzioniBarraAnteprima {
 
 /**
  * L'intestazione dell'anteprima, nell'ordine fisso (U-D1, U-D4): titolo e viste a sinistra; a destra
- * «Ricalcola da solo» · Genera · Simula · Adatta · [Invia a Stilista] · Esporta SVG · **Esporta DST** (pieno). Un tool che non ha una
+ * «Ricalcola da solo» · Genera · [i bottoni del tool che lavorano come Genera] · Simula · Adatta · [Invia a Stilista] · Esporta SVG · **Esporta DST** (pieno). Un tool che non ha una
  * cosa lascia il posto vuoto, non riordina. Gli id sono fissi: `autoCalcolo`, `genBtn`, `simBtn`, `fitBtn`,
  * `exportBtn` (SVG), `exportDstBtn`.
  */
@@ -297,6 +299,7 @@ export function barraAnteprima(o: OpzioniBarraAnteprima = {}): string {
     b.push(`<label class="rg-choice"${aiuto}><input type="checkbox" id="autoCalcolo"${o.ricalcolaDaSolo.acceso ? ' checked' : ''}><span>Ricalcola da solo</span></label>`);
   }
   if (o.genera) b.push('<button id="genBtn" class="rg-button rg-button--outline rg-button--small" type="button">Genera</button>');
+  if (o.dopoGenera) b.push(o.dopoGenera);
   if (o.simula) b.push('<button id="simBtn" class="rg-button rg-button--ghost rg-button--small" type="button">Simula</button>');
   if (o.adatta !== false) b.push('<button id="fitBtn" class="rg-button rg-button--ghost rg-button--small" type="button">Adatta</button>');
   if (o.inviaStilista) b.push(BOTTONE_INVIA_STILISTA());
@@ -307,10 +310,10 @@ export function barraAnteprima(o: OpzioniBarraAnteprima = {}): string {
 
 /**
  * La barra di stato: a sinistra il messaggio (`#status`), poi lo spazio del referto (`#misure`: punti · metri di
- * filo · salti, dalla K3) e lo zoom (`#zoom`).
+ * filo · salti, dalla K3) e lo zoom (`#zoom`). `messaggio` è il testo di partenza (default «Pronto»).
  */
-export function barraStato(): string {
-  return `<footer class="rg-workspace__statusbar">\n        <span id="status">Pronto</span>\n        <span id="misure" class="rg-mono"></span>\n        <span id="zoom" class="rg-mono">zoom 100%</span>\n      </footer>`;
+export function barraStato(o: { messaggio?: string } = {}): string {
+  return `<footer class="rg-workspace__statusbar">\n        <span id="status" role="status">${esc(o.messaggio ?? 'Pronto')}</span>\n        <span id="misure" class="rg-mono"></span>\n        <span id="zoom" class="rg-mono">zoom 100%</span>\n      </footer>`;
 }
 
 export interface OpzioniScheletro {

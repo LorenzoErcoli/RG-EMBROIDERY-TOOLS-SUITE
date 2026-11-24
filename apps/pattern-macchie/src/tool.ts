@@ -9,9 +9,10 @@ import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
+import { collegaStilista, prendiSelezioneStilista, stratiCuciti, type AggancioStilista } from '@rg/ui/stilista';
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';
 import { costruisciMacchie, macchiePerStilista, nelRiquadro, tagliDeiSalti, PARAMETRI_MACCHIE, type ParametriMacchie, type Riempimento, type RisultatoMacchie, type Strato } from './motore';
+import { barraAnteprima, barraStato, campoNumero, sezioneSorgente, attivaCampiNumero, leggiCampo } from '@rg/ui/anatomia';
 
 /** I pattern pronti: la libreria condivisa del Generatore pattern, e quelli salvati nel Generatore su questo computer. */
 const PRESET_CONDIVISI: Record<string, PatternConfig> = (() => {
@@ -180,29 +181,15 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   <div class="rg-workspace macchie-workspace">
     <aside class="rg-workspace__panel" id="panel"></aside>
     <div class="rg-workspace__stage">
-      <header class="rg-workspace__stage-header">
-        <h2 class="rg-h3">Anteprima</h2>
-        <div class="rg-cluster">
-          <button id="simulaBtn" class="rg-button rg-button--ghost rg-button--small" aria-pressed="false" title="Il simulatore: il filo si cuce sullo schermo nell'ordine del DST">Simula</button>
-          <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
-          <label class="rg-choice" title="Se è spenta, il ricamo si rifà solo quando premi Genera: così cambi i campi senza aspettare il calcolo."><input type="checkbox" id="autoCalcolo"><span>Ricalcola da solo</span></label>
-          <button id="provaBtn" class="rg-button rg-button--ghost rg-button--small" title="Calcola solo le macchie che si vedono adesso nell’anteprima: avvicinati a un pezzo e prova i parametri in pochi secondi. Il DST e Stilista vogliono Genera, su tutto.">Prova qui</button>
-          <button id="genBtn" class="rg-button rg-button--secondary rg-button--small">Genera</button>
-          ${BOTTONE_INVIA_STILISTA()}
-          <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
-          <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Scarica SVG</button>
-        </div>
-      </header>
+      ${barraAnteprima({ ricalcolaDaSolo: { acceso: false, aiuto: 'Se è spenta, il ricamo si rifà solo quando premi Genera: così cambi i campi senza aspettare il calcolo.' }, genera: true, dopoGenera: '<button id="provaBtn" class="rg-button rg-button--ghost rg-button--small" title="Calcola solo le macchie che si vedono adesso nell’anteprima: avvicinati a un pezzo e prova i parametri in pochi secondi. Il DST e Stilista vogliono Genera, su tutto.">Prova qui</button>', simula: true, inviaStilista: true })}
       <div class="rg-workspace__canvas" id="canvas">
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
       </div>
       <div id="simControlli" class="sim-controlli" hidden></div>
-      <footer class="rg-workspace__statusbar">
-        <span><span id="status">Carica un SVG o DXF: un colore per il pannello, uno per le macchie.</span><span id="points" class="rg-mono"></span></span>
-        <span id="zoom" class="rg-mono">zoom 100%</span>
-      </footer>
+      ${barraStato({ messaggio: 'Carica un SVG o DXF: un colore per il pannello, uno per le macchie.' })}
     </div>
   </div>`;
+  attivaCampiNumero(root);
 
   const $ = (id: string) => root.querySelector<HTMLElement>('#' + id)!;
   const pz = hookPanZoom($('canvas'), $('layer'), (z) => { $('zoom').textContent = `zoom ${Math.round(z * 100)}%`; });
@@ -235,12 +222,6 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
   }
 
   // ---- il pannello dei parametri ----
-  function headSection(index: string, title: string): HTMLElement {
-    const sec = document.createElement('section');
-    sec.className = 'rg-param-section';
-    sec.innerHTML = `<div class="rg-param-section__header"><span class="rg-param-section__index">${index}</span><h3 class="rg-param-section__title">${title}</h3></div>`;
-    return sec;
-  }
   function accordionSection(index: string, title: string, body: HTMLElement, open: boolean): HTMLDetailsElement {
     const det = document.createElement('details');
     det.className = 'rg-param-section rg-disclosure';
@@ -285,67 +266,39 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
         if (f.aiuto) { const help = document.createElement('small'); help.className = 'rg-field__help rg-param-grid__wide'; help.textContent = f.aiuto; grid.appendChild(help); }
         continue;
       }
-      const lab = document.createElement('label');
-      lab.className = 'rg-field rg-param-grid__wide';
-      lab.innerHTML = `<span class="rg-field__label">${f.etichetta}</span>`;
-      const wrap = document.createElement('span');
-      wrap.className = 'rg-field-with-unit';
-      const inp = document.createElement('input');
-      inp.type = 'number';
-      inp.className = 'rg-input rg-input--numeric';
-      inp.id = 'f-' + f.nome;
-      inp.step = String(f.passo);
-      inp.min = String(f.min);
-      inp.value = String(par[f.nome]);
+      grid.insertAdjacentHTML('beforeend', campoNumero({
+        id: 'f-' + f.nome, etichetta: f.etichetta, unita: f.unita, valore: Number(par[f.nome]),
+        passo: f.passo, min: f.min, max: f.max, aiuto: f.aiuto, largo: true,
+      }));
+      const inp = grid.lastElementChild!.querySelector('input')!;
       inp.addEventListener('change', () => {
-        const v = parseFloat(inp.value);
+        const v = leggiCampo(inp);
         if (Number.isFinite(v)) { (par as Record<string, unknown>)[f.nome] = Math.min(f.max ?? Infinity, Math.max(f.min, v)); if (f.nome === 'tagliaOltre') aggiornaProgramma(); else daRifare(); }
       });
-      const unit = document.createElement('span');
-      unit.textContent = f.unita;
-      wrap.append(inp, unit);
-      lab.appendChild(wrap);
-      if (f.aiuto) {
-        const help = document.createElement('small');
-        help.className = 'rg-field__help';
-        help.textContent = f.aiuto;
-        lab.appendChild(help);
-      }
-      grid.appendChild(lab);
     }
     return grid;
   }
 
-  function disegnoGrid(): HTMLElement {
-    const box = document.createElement('div');
-    box.className = 'rg-param-grid';
-    box.innerHTML = `
-      <div class="rg-file-input rg-param-grid__wide">
-        <label class="rg-file-input__control">
-          <input type="file" id="fileInput" accept=".svg,.dxf" />
-          <span class="rg-button rg-button--outline">Carica SVG o DXF…</span>
-        </label>
-        ${BOTTONE_PRENDI_STILISTA()}
-        <p class="rg-file-input__status" id="fileStatus" role="status">${testoDisegno}</p>
-      </div>
+  /**
+   * 01 Cartamodello: la sezione comune (carica, «Apri progetto o DST…» che riapre tutto, Stilista). Qui in più la scala,
+   * i colori coi loro ruoli e «Pattern e parametri da un progetto…», che da un file uscito da qui prende SOLO pattern e
+   * parametri e lascia il disegno di adesso.
+   */
+  function sezioneCartamodello(): string {
+    return sezioneSorgente({
+      tipo: 'cartamodello', accetta: '.svg,.dxf', etichettaCarica: 'Carica SVG o DXF…', statoIniziale: testoDisegno,
+      larghezzaReale: false, stilista: true, extra: `
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Scala del file</span>
         <select id="scaleMode" class="rg-select">${SCALE_MODES.map(([v, l]) => `<option value="${v}"${v === scala.scaleMode ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
       <ul class="rg-color-map rg-param-grid__wide" id="colori"></ul>
-      <div class="rg-file-input rg-param-grid__wide">
-        <label class="rg-file-input__control">
-          <input type="file" id="reopenFile" accept=".dst,.svg" />
-          <span class="rg-button rg-button--ghost">Riapri un progetto (DST o SVG)…</span>
-        </label>
-        <p class="rg-file-input__status" id="reopenStatus" role="status">Un file uscito da qui torna com'era: disegno, ruoli, pattern e parametri.</p>
-      </div>
       <div class="rg-file-input rg-param-grid__wide">
         <label class="rg-file-input__control">
           <input type="file" id="puntoFile" accept=".dst,.svg" />
           <span class="rg-button rg-button--ghost">Pattern e parametri da un progetto…</span>
         </label>
         <p class="rg-file-input__status" id="puntoStatus" role="status">Da un file uscito da qui prende solo pattern e parametri: il disegno resta questo. L'ultimo punto usato resta per la volta dopo.</p>
-      </div>`;
-    return box;
+      </div>`,
+    });
   }
 
   function renderColori() {
@@ -463,9 +416,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     const cerano = new Set([...panel.querySelectorAll<HTMLDetailsElement>('details[data-sezione^="raso"]')].map((x) => x.dataset.sezione!));
     const scroll = panel.scrollTop;
     panel.innerHTML = '';
-    const disegno = headSection('01', 'Disegno');
-    disegno.appendChild(disegnoGrid());
-    panel.appendChild(disegno);
+    panel.insertAdjacentHTML('beforeend', sezioneCartamodello());
     const g = geometria();
     const piuLivelli = [g.macchie, g.secondo, g.terzo].filter((m) => m.length).length > 1;
     const sezioni: Array<[string, string, HTMLElement]> = [
@@ -572,7 +523,7 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     if (occupato) { worker?.terminate(); worker = null; occupato = false; }
     superato = true;
     exportPronti(false);
-    $('genBtn').classList.replace('rg-button--secondary', 'rg-button--primary');
+    $('genBtn').classList.replace('rg-button--outline', 'rg-button--primary');
     if (!model) return;
     $('status').textContent = !risultato ? 'Premi Genera per fare il ricamo, o Prova qui per vedere solo il pezzo che hai davanti.'
       : ultimaProva ? "Cambiato qualcosa: premi Prova qui per rivedere il pezzo, o Genera per tutto (l'anteprima è quella di prima)."
@@ -607,15 +558,15 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
       occupato = false;
       // (una prova non si esporta: per il DST serve Genera, su tutto)
       superato = !!zona;
-      if (zona) $('genBtn').classList.replace('rg-button--secondary', 'rg-button--primary');
-      else $('genBtn').classList.replace('rg-button--primary', 'rg-button--secondary');
+      if (zona) $('genBtn').classList.replace('rg-button--outline', 'rg-button--primary');
+      else $('genBtn').classList.replace('rg-button--primary', 'rg-button--outline');
       exportPronti(!zona);
       risultato = r;
       if (!r) { $('status').textContent = 'Errore: ' + errore; return; }
       const punti = r.base.punti + r.raso.punti + r.sopra.punti;
       $('status').textContent = (zona ? `Prova qui: ${macchie.length + secondo.length + terzo.length} macchie di ${tutte} (per il DST premi Genera) · ` : `${tutte} macchie · `) + `${(par.conBase ? 1 : 0) + r.stop.length} stop · salti: ${livelliDi(r).length > 1 ? 'raso ' + livelliDi(r).map((n) => `${n}° livello ${saltiDelRaso(r, n)}`).join(', ') : `raso ${r.raso.salti}`}` + (par.conSopra ? `, punto sopra ${r.sopra.salti}` : '')
         + (r.ponti ? ` · ${r.ponti} ponti` : '') + ` · ${(r.tempoMs / 1000).toFixed(1)} s`;
-      $('points').textContent = ` · ${punti.toLocaleString('it-IT')} punti`;
+      $('misure').textContent = `${punti.toLocaleString('it-IT')} punti`;
       aggiornaProgramma();
       disegna();
     };
@@ -891,9 +842,9 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
         });
       });
     };
-    leggiProgetto('reopenFile', 'reopenStatus', (meta, nome) => {
+    leggiProgetto('progettoInput', 'progettoStatus', (meta, nome) => {
       riapri(meta);
-      $('reopenStatus').textContent = `${nome}: riaperto` + (meta.drawing ? ' col disegno.' : ' — senza disegno: caricalo a parte.');
+      $('progettoStatus').textContent = `${nome}: riaperto` + (meta.drawing ? ' col disegno.' : ' — senza disegno: caricalo a parte.');
     });
     leggiProgetto('puntoFile', 'puntoStatus', (meta, nome) => {
       riapri(meta, true);
@@ -943,9 +894,9 @@ export function mountPatternMacchie(root: HTMLElement, opts: { backHref?: string
     try { localStorage.setItem('pattern-macchie.auto', autoCalcolo ? '1' : '0'); } catch { /* idem */ }
     if (autoCalcolo && superato) genera(ultimaProva);
   });
-  $('simulaBtn').addEventListener('click', () => {
+  $('simBtn').addEventListener('click', () => {
     simulando = !simulando;
-    $('simulaBtn').setAttribute('aria-pressed', String(simulando));
+    $('simBtn').setAttribute('aria-pressed', String(simulando));
     ($('simControlli') as HTMLElement).hidden = !simulando;
     disegna(true);
   });

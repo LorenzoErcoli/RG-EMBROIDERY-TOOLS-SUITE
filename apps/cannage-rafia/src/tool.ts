@@ -6,7 +6,7 @@ import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { montaSimulatore, type Simulatore } from '@rg/ui/simulatore';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
+import { collegaStilista, prendiSelezioneStilista, stratiCuciti, type AggancioStilista } from '@rg/ui/stilista';
 // La libreria dei pattern è quella del Generatore pattern, letta dal suo file (come fa Pattern a zone):
 // un preset pubblicato lì è subito disponibile per le basi, senza un doppione da tenere allineato.
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';
@@ -27,6 +27,7 @@ import {
   BASI_FIELDS, BASI_PREDEFINITE, BASI_VALORI, PROGRAMMA_VALORI, BORDATURA_FIELDS, CORNICE_FIELDS, LINEE_FIELDS, PRESET_LINEE, PROGRAMMA_FIELDS, SCALE_MODES, STOP_FIELDS,
   valoriCorniceDa, valoriDa, type Field, type Valori,
 } from './fields';
+import { barraAnteprima, barraStato, campoNumero, sezioneSorgente, attivaCampiNumero, leggiCampo } from '@rg/ui/anatomia';
 
 const RUOLI: [Ruolo, string][] = [
   ['', '— (ignora)'],
@@ -52,26 +53,15 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
   <div class="rg-workspace cannage-workspace">
     <aside class="rg-workspace__panel" id="panel"></aside>
     <div class="rg-workspace__stage">
-      <header class="rg-workspace__stage-header">
-        <h2 class="rg-h3">Anteprima</h2>
-        <div class="rg-cluster">
-          <button id="simulaBtn" class="rg-button rg-button--ghost rg-button--small" aria-pressed="false" title="Il simulatore: il filo si cuce sullo schermo nell'ordine del DST">Simula</button>
-          <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
-          ${BOTTONE_INVIA_STILISTA()}
-          <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
-          <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Scarica SVG</button>
-        </div>
-      </header>
+      ${barraAnteprima({ simula: true, inviaStilista: true })}
       <div class="rg-workspace__canvas" id="canvas">
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
       </div>
       <div id="simControlli" class="sim-controlli" hidden></div>
-      <footer class="rg-workspace__statusbar">
-        <span><span id="status">Carica il disegno a zone (SVG o DXF).</span><span id="points" class="rg-mono"></span></span>
-        <span id="zoom" class="rg-mono">zoom 100%</span>
-      </footer>
+      ${barraStato({ messaggio: 'Carica il disegno a zone (SVG o DXF).' })}
     </div>
   </div>`;
+  attivaCampiNumero(root);
 
   const $ = (id: string) => root.querySelector<HTMLElement>('#' + id)!;
   const cfg: Valori = valoriDa(PARAMETRI_DAVANTI);
@@ -142,36 +132,19 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
       lab.append(inp, document.createTextNode(' ' + f.label));
       return lab;
     }
-    const lab = document.createElement('label');
-    lab.className = 'rg-field' + (f.help ? ' rg-param-grid__wide' : '');
-    const name = document.createElement('span');
-    name.className = 'rg-field__label';
-    name.textContent = f.label;
-    const wrap = document.createElement('span');
-    wrap.className = 'rg-field-with-unit';
-    const inp = document.createElement('input');
-    inp.type = 'number';
-    inp.className = 'rg-input rg-input--numeric';
-    inp.id = 'f-' + prefisso + f.name;
-    inp.step = String(f.step);
-    if (f.min !== undefined) inp.min = String(f.min);
-    inp.value = String(store[f.name]);
+    const tpl = document.createElement('template');
+    tpl.innerHTML = campoNumero({
+      id: 'f-' + prefisso + f.name, etichetta: f.label, unita: f.unit ?? '', valore: Number(store[f.name]),
+      passo: f.step, min: f.min, aiuto: f.help,
+    });
+    const lab = tpl.content.firstElementChild as HTMLElement;
+    const inp = lab.querySelector('input')!;
     inp.addEventListener('change', () => {
-      const v = parseFloat(inp.value);
+      const v = leggiCampo(inp);
       if (Number.isNaN(v)) return;
       store[f.name] = v;
       onChange();
     });
-    const unit = document.createElement('span');
-    unit.textContent = f.unit ?? '';
-    wrap.append(inp, unit);
-    lab.append(name, wrap);
-    if (f.help) {
-      const help = document.createElement('small');
-      help.className = 'rg-field__help';
-      help.textContent = f.help;
-      lab.appendChild(help);
-    }
     return lab;
   }
 
@@ -194,26 +167,16 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     return det;
   }
 
-  // ---- 01 Disegno ----
-  function disegnoGrid(): HTMLElement {
-    const box = document.createElement('div');
-    box.className = 'rg-param-grid';
-    box.innerHTML = `
-      <div class="rg-file-input rg-param-grid__wide">
-        <label class="rg-file-input__control">
-          <input type="file" id="zoneFile" accept=".svg,.dxf" />
-          <span class="rg-button rg-button--outline">Carica SVG o DXF a zone…</span>
-        </label>
-        ${BOTTONE_PRENDI_STILISTA()}
-        <p class="rg-file-input__status" id="zoneStatus" role="status">${zoneStatusText}</p>
-      </div>
-      <div class="rg-file-input rg-param-grid__wide">
-        <label class="rg-file-input__control">
-          <input type="file" id="reopenFile" accept=".dst,.svg" />
-          <span class="rg-button rg-button--ghost">Riapri un progetto (SVG o DST)…</span>
-        </label>
-        <p class="rg-file-input__status" id="reopenStatus" role="status">Un file uscito da qui torna com'era: parametri, ruoli e disegno.</p>
-      </div>
+  // ---- 01 Cartamodello: la sezione comune (carica, «Apri progetto o DST…», Stilista); qui in più la scala ----
+  function sezioneCartamodello(): string {
+    return sezioneSorgente({
+      tipo: 'cartamodello', accetta: '.svg,.dxf', etichettaCarica: 'Carica SVG o DXF a zone…', statoIniziale: zoneStatusText,
+      larghezzaReale: false, stilista: true, extra: scalaImport(),
+    });
+  }
+
+  function scalaImport(): string {
+    return `
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Scala del file importato</span>
         <select id="scaleMode" class="rg-select">${SCALE_MODES.map(([v, l]) => `<option value="${v}"${v === importa.scaleMode ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">La zona è definita da</span>
@@ -221,11 +184,8 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
           <option value="fill"${importa.paintPriority === 'fill' ? ' selected' : ''}>Riempimento (zone piene)</option>
           <option value="stroke"${importa.paintPriority === 'stroke' ? ' selected' : ''}>Tratto (contorni)</option>
         </select></label>
-      <label class="rg-field"><span class="rg-field__label">Larghezza import</span>
-        <span class="rg-field-with-unit"><input id="customW" class="rg-input rg-input--numeric" type="number" min="0.001" step="0.1" value="${importa.customW}"><span>mm</span></span></label>
-      <label class="rg-field"><span class="rg-field__label">Altezza import</span>
-        <span class="rg-field-with-unit"><input id="customH" class="rg-input rg-input--numeric" type="number" min="0.001" step="0.1" value="${importa.customH}"><span>mm</span></span></label>`;
-    return box;
+      ${campoNumero({ id: 'customW', etichetta: 'Larghezza import', unita: 'mm', valore: importa.customW, passo: 0.1, min: 0.001 })}
+      ${campoNumero({ id: 'customH', etichetta: 'Altezza import', unita: 'mm', valore: importa.customH, passo: 0.1, min: 0.001 })}`;
   }
 
   // ---- 02 Colori e ruoli ----
@@ -404,9 +364,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     const panel = $('panel');
     const aperte = new Map([...panel.querySelectorAll<HTMLDetailsElement>('details[data-sezione]')].map((d) => [d.dataset.sezione!, d.open]));
     panel.innerHTML = '';
-    const disegno = headSection('01', 'Disegno');
-    disegno.appendChild(disegnoGrid());
-    panel.appendChild(disegno);
+    panel.insertAdjacentHTML('beforeend', sezioneCartamodello());
     const colori = headSection('02', 'Colori e ruoli');
     colori.appendChild(coloriGrid());
     panel.appendChild(colori);
@@ -461,7 +419,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     zoneStatusText = zone.length
       ? `${source.name}: ${zone.length} zone, ${tinte.length} tinte${misura}`
       : `${source.name}: nessuna zona chiusa trovata — prova a cambiare "La zona è definita da".`;
-    root.querySelector('#zoneStatus')!.textContent = zoneStatusText;
+    root.querySelector('#fileStatus')!.textContent = zoneStatusText;
     renderColorMap();
     aggiorna(true);
   }
@@ -492,7 +450,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
   function scriviStato() {
     if (!zone.length) {
       $('status').textContent = source ? zoneStatusText : 'Carica il disegno a zone (SVG o DXF).';
-      $('points').textContent = '';
+      $('misure').textContent = '';
       return;
     }
     const pieni = stop.filter((s) => s.punti > 0);
@@ -500,7 +458,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     const aree = zone.filter((z) => ruoli[z.color ?? ''] === 'scarico').length;
     const previsti = pieni.some((s) => s.numero > 6) ? 10 : 6;
     $('status').textContent = `${pieni.length} stop su ${previsti}` + (aree ? ` · ${aree} aree di scarico` : '') + (avviso ? ` · ${avviso}` : '');
-    $('points').textContent = ` · ${totale.toLocaleString('it-IT')} punti`;
+    $('misure').textContent = `${totale.toLocaleString('it-IT')} punti`;
   }
 
   // ---- anteprima: le zone chiare sotto, gli stop coi loro colori, le aree di scarico tratteggiate sopra ----
@@ -664,7 +622,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
 
   function wirePanel() {
     root.querySelector('#fromStilista')?.addEventListener('click', () => { void prendiSelezioneStilista(aggancio); });
-    $('zoneFile').addEventListener('change', (ev) => {
+    $('fileInput').addEventListener('change', (ev) => {
       const file = (ev.target as HTMLInputElement).files?.[0];
       if (!file) return;
       const reader = new FileReader();
@@ -676,7 +634,7 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
           source = { text, name: file.name };
           reparse();
         } catch (e) {
-          $('zoneStatus').textContent = 'Errore import: ' + (e as Error).message;
+          $('fileStatus').textContent = 'Errore import: ' + (e as Error).message;
         }
       };
       reader.readAsText(file);
@@ -684,13 +642,13 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
     const leggiImport = () => {
       importa.scaleMode = (root.querySelector('#scaleMode') as HTMLSelectElement).value;
       importa.paintPriority = (root.querySelector('#paintPriority') as HTMLSelectElement).value;
-      importa.customW = parseFloat((root.querySelector('#customW') as HTMLInputElement).value) || importa.customW;
-      importa.customH = parseFloat((root.querySelector('#customH') as HTMLInputElement).value) || importa.customH;
+      importa.customW = leggiCampo(root.querySelector('#customW') as HTMLInputElement) || importa.customW;
+      importa.customH = leggiCampo(root.querySelector('#customH') as HTMLInputElement) || importa.customH;
       reparse();
     };
     for (const id of ['scaleMode', 'paintPriority', 'customW', 'customH']) $(id).addEventListener('change', leggiImport);
 
-    $('reopenFile').addEventListener('change', (ev) => {
+    $('progettoInput').addEventListener('change', (ev) => {
       const input = ev.target as HTMLInputElement;
       const file = input.files?.[0];
       if (!file) return;
@@ -702,16 +660,16 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
             ? readDstMetadata(new Uint8Array(reader.result as ArrayBuffer))
             : (readProjectMetadata(String(reader.result)) as Record<string, unknown> | null);
           if (metadata?.rgProject !== 'cannage-rafia') {
-            $('reopenStatus').textContent = metadata
+            $('progettoStatus').textContent = metadata
               ? `Questo file viene da "${String(metadata.rgProject ?? 'un altro tool')}", non da qui.`
               : 'Nessun progetto dentro questo file: non è uscito dalla suite.';
             return;
           }
           const conDisegno = ((metadata.drawing as { zones?: unknown[] } | undefined)?.zones?.length ?? 0) > 0;
           restore(metadata);
-          $('reopenStatus').textContent = `${file.name}: riaperto` + (conDisegno ? ' col disegno.' : ' — senza disegno: caricalo a parte.');
+          $('progettoStatus').textContent = `${file.name}: riaperto` + (conDisegno ? ' col disegno.' : ' — senza disegno: caricalo a parte.');
         } catch (e) {
-          $('reopenStatus').textContent = 'Errore: ' + (e as Error).message;
+          $('progettoStatus').textContent = 'Errore: ' + (e as Error).message;
         }
         input.value = '';
       };
@@ -740,9 +698,9 @@ export function mountCannageRafia(root: HTMLElement, opts: { backHref?: string }
   }
 
   $('fitBtn').addEventListener('click', () => pz.fit());
-  $('simulaBtn').addEventListener('click', () => {
+  $('simBtn').addEventListener('click', () => {
     simulando = !simulando;
-    $('simulaBtn').setAttribute('aria-pressed', String(simulando));
+    $('simBtn').setAttribute('aria-pressed', String(simulando));
     ($('simControlli') as HTMLElement).hidden = !simulando;
     disegna(true);
   });

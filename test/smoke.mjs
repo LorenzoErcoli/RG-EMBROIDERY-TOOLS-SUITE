@@ -49,7 +49,7 @@ export { costruisci as rzCostruisci, pezzoDa as rzPezzoDa, rettangolo as rzRetta
 export { documentoVuoto as cmpVuoto, documentoEsempio as cmpEsempio, aggiungiDst as cmpAggiungi, apriDst as cmpApri, documentoDaDst as cmpDaDst, componi as cmpComponi, dstNudo as cmpNudo, dstDocumento as cmpDst, controlla as cmpControlla, contaGiunti as cmpContaGiunti, ordineProposto as cmpOrdine, refertoDi as cmpReferto, puntiDi as cmpPunti, sposta as cmpSposta } from ${JSON.stringify(posix('apps/compositore/src/documento.ts'))};
 export * from ${JSON.stringify(posix('packages/core/src/index.ts'))};
 export * as ui from ${JSON.stringify(posix('packages/ui/src/anatomia.ts'))};
-export { DEBITO_ANATOMIA } from ${JSON.stringify(posix('packages/ui/src/debito-anatomia.ts'))};
+export { DEBITO_ANATOMIA, DEBITO_CAMPI_A_MANO } from ${JSON.stringify(posix('packages/ui/src/debito-anatomia.ts'))};
 export { DEBITO_SIMULA, DEBITO_ESEMPIO } from ${JSON.stringify(posix('packages/ui/src/debito-simula-esempio.ts'))};
 export { DEBITO_ETICHETTE, DEBITO_TESTI_A_MANO } from ${JSON.stringify(posix('packages/ui/src/debito-etichette.ts'))};
 export { datiDaStrati } from ${JSON.stringify(posix('packages/ui/src/simulatore.ts'))};
@@ -1352,8 +1352,8 @@ console.log('\ninterlace — riaprire un .dst rimette anche la tavola e l’imma
   check('entrambi gli export usano lo stesso progetto', (src.match(/projectMetadata\(\)/g) || []).length >= 3, true);
   // Il carico del progetto sta in FONDO al pannello, con la sua sezione, come negli altri tool: in alto
   // c'e' solo il cartamodello. Prima erano lo stesso campo e non si capiva quale file volesse.
-  check('la sezione "Carica parametri" c’e’ ed accetta .dst e .svg', /id="loadParams" accept="\.dst,\.svg"/.test(src), true);
-  check('in alto resta il solo cartamodello (niente .dst)', /id="fileInput" accept="\.svg,\.dxf"/.test(src), true);
+  check('il progetto si riapre da «Apri progetto o DST…» della sezione 01 comune (accetta .dst e .svg)', /sezioneSorgente\(/.test(src) && /\$\('progettoInput'\)[\s\S]{0,400}restoreProjectFromFile/.test(src), true);
+  check('in alto il cartamodello prende solo .svg e .dxf (niente .dst)', /accetta: '\.svg,\.dxf'/.test(src), true);
   check('lo sfondo si puo’ lasciare senza ricamo', /id="excludeBackground"/.test(src) && /excludeBackground = bgCheck\.checked/.test(src), true);
 }
 
@@ -8419,7 +8419,7 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
     [senza.punti.some((p) => p[0] === via[0] && p[1] === via[1]), senza.punti.every((p, i) => i === 0 || p[0] !== senza.punti[i - 1][0] || p[1] !== senza.punti[i - 1][1]), senza.originali.length === senza.punti.length], [false, true, true]);
   const src = readFileSync(join(root, 'apps/punto-maglia/src/tool.ts'), 'utf8');
   const call = src.indexOf('dstFromExportLayers(');
-  check('tool: il DST esce coi parametri, sa rileggerli e accetta un .dst (R27)', [call >= 0 && /metadata:/.test(src.slice(call, call + 600)), /rgProject|progetto\(/.test(src), /readDstMetadata/.test(src), /accept="[^"]*\.dst/.test(src)], [true, true, true, true]);
+  check('tool: il DST esce coi parametri, sa rileggerli e accetta un .dst (R27)', [call >= 0 && /metadata:/.test(src.slice(call, call + 600)), /rgProject|progetto\(/.test(src), /readDstMetadata/.test(src), (/accept="[^"]*\.dst/.test(src) || (/sezioneSorgente\(/.test(src) && !/progetto: false/.test(src)))], [true, true, true, true]);
 }
 
 // ---- U1 — l'anatomia di un tool RG: i componenti comuni e il loro cricchetto ---------------------------------------
@@ -8493,13 +8493,16 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
   };
   const tools = readdirSync(join(radice, 'apps')).filter((d) => d !== 'shell' && existsSync(join(radice, 'apps', d, 'src/tool.ts'))).sort();
   const aMano = Object.fromEntries(tools.map((t) => { const s = readFileSync(join(radice, 'apps', t, 'src/tool.ts'), 'utf8'); return [t, Object.entries(COSE).filter(([, f]) => f(s)).map(([n]) => n)]; }));
-  const DEBITO_ANATOMIA_ATTUALE = 39;
+  const DEBITO_ANATOMIA_ATTUALE = 4;
   const debito = rg.DEBITO_ANATOMIA;
   check(`il debito dell'interfaccia è ${DEBITO_ANATOMIA_ATTUALE} voci (può solo scendere: se è sceso, abbassa DEBITO_ANATOMIA_ATTUALE)`, Object.values(debito).reduce((n, v) => n + v.length, 0), DEBITO_ANATOMIA_ATTUALE);
   check('nessun tool scrive a mano un pezzo che ha un componente, se non è nel debito (un tool nuovo deve usare anatomia.ts)',
     tools.flatMap((t) => aMano[t].filter((c) => !(debito[t] ?? []).includes(c)).map((c) => `${t}: ${c}`)), []);
   check('nessuna voce di debito che il tool non scrive più (va tolta) né tool che non esiste',
     [...Object.entries(debito).flatMap(([t, v]) => v.filter((c) => !(aMano[t] ?? []).includes(c)).map((c) => `${t}: ${c}`)), ...Object.keys(debito).filter((t) => !tools.includes(t))], []);
+  const campiAMano = Object.fromEntries(tools.map((t) => [t, (readFileSync(join(radice, 'apps', t, 'src/tool.ts'), 'utf8').match(/rg-input--numeric/g) ?? []).length]).filter(([, n]) => n > 0));
+  check('i campi numerici scritti a mano, tool per tool, sono quanti dice DEBITO_CAMPI_A_MANO: se salgono il test fallisce (usa campoNumero), se scendono abbassa il numero',
+    campiAMano, rg.DEBITO_CAMPI_A_MANO);
   check('il tool di prova (net-45) usa i componenti: scheletro, sezione 01, campo numerico, e non ha niente nel debito',
     [/from '@rg\/ui\/anatomia'/.test(readFileSync(join(radice, 'apps/net-45/src/tool.ts'), 'utf8')), aMano['net-45'], debito['net-45']], [true, [], undefined]);
 
@@ -8544,7 +8547,7 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
   // documento (nome, spostamento, come si arriva a un oggetto). Gli altri cricchetti dell'interfaccia (U1, U3, U4) li passa.
   const toolsU5 = tools.filter((t) => t !== 'compositore');
   const fuoriRegistro = Object.fromEntries(toolsU5.map((t) => [t, etichetteDi(sorgenteDi(t)).filter((e) => !delRegistro(t).has(e))]));
-  const DEBITO_ETICHETTE_ATTUALE = 65;
+  const DEBITO_ETICHETTE_ATTUALE = 64;
   const debitoEt = rg.DEBITO_ETICHETTE;
   check(`il debito delle etichette è ${DEBITO_ETICHETTE_ATTUALE} (può solo scendere: se è sceso, abbassa DEBITO_ETICHETTE_ATTUALE)`, Object.values(debitoEt).reduce((n, v) => n + v.length, 0), DEBITO_ETICHETTE_ATTUALE);
   check('un\'etichetta nel pannello che il registro non ha deve stare nel debito (le parole del pannello e del registro non si separano di nuovo)',
