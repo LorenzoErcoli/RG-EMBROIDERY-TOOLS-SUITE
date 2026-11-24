@@ -368,7 +368,21 @@ function prepare(boundary: Polyline, voids: Polyline[], minS: number, maxS: numb
  *  della palette ne prendono meno (misurato a tetto 2: 35/50/33/32/32 m contro 36/39/39/37/36 col tetto
  *  automatico). Si vede solo quando il tetto scende sotto il necessario — cioè nel caso in cui il
  *  pannello avvisa già. */
-interface PenGrid { arr: Uint16Array; gx: number; gy: number; x0: number; y0: number; cap: number; }
+interface PenGrid {
+  arr: Uint16Array; gx: number; gy: number; x0: number; y0: number; cap: number;
+  /** Buchi d'ago TENUTI DA PARTE per gli anelli intorno ai fori, di tutti i colori (vedi `prenotaAnelli`): il fondo
+   *  e gli agglomerati si fermano prima, così quando arriva l'anello di un colore il suo posto c'è ancora. */
+  riserva?: Uint16Array;
+  /** Col tetto automatico i posti degli anelli sono IN PIÙ del tetto, mm² per mm² (una copia della prenotazione
+   *  iniziale): l'anello non toglie niente al fondo. Col tetto scritto a mano non c'è, e la prenotazione sta dentro. */
+  inPiu?: Uint16Array;
+}
+function penIdx(pen: PenGrid, x: number, y: number): number {
+  let i = Math.floor(x - pen.x0), j = Math.floor(y - pen.y0);
+  if (i < 0) i = 0; else if (i > pen.gx - 1) i = pen.gx - 1;
+  if (j < 0) j = 0; else if (j > pen.gy - 1) j = pen.gy - 1;
+  return j * pen.gx + i;
+}
 
 /** Un ANELLO intorno a un foro: poligono chiuso di punti a ridosso del bordo (lati fra punto minimo e massimo). */
 /** 0→0, 1→1, morbida agli estremi (la sfumatura del più fitto intorno ai fori). */
@@ -382,19 +396,48 @@ interface Anello {
   fade: number;
   /** Quanti mm di filo in più l'agglomerato posa intorno a questo foro (0 = solo l'anello). */
   extra: number;
+  /** I suoi punti hanno ancora il posto tenuto da parte nel tetto dei buchi d'ago. */
+  prenotato?: boolean;
+}
+
+/** Tiene da parte nel tetto dei buchi d'ago un posto per ogni punto di ogni anello (Lorenzo, 2026-11-24, sugli anelli
+ *  saltati: «c'è modo di gestire meglio questa cosa dei fori coperti? in automatico in base ai punti?»). Quanti posti
+ *  dipende da sé dalla lunghezza dei punti: con i punti corti l'anello ha più punti e prenota di più. */
+function prenotaAnelli(pen: PenGrid, tutti: Array<Anello[] | null>, inPiu: boolean): void {
+  pen.riserva = new Uint16Array(pen.arr.length);
+  for (const anelli of tutti) if (anelli) for (const A of anelli) {
+    A.prenotato = true;
+    for (const q of A.pts) pen.riserva[penIdx(pen, q.x, q.y)]++;
+  }
+  if (inPiu) pen.inPiu = pen.riserva.slice();
+}
+/** Dove provare a spostare un punto dell'anello caduto in un mm² pieno: [in fuori, di lato] in mm. */
+const SPOSTA_ANELLO: Array<[number, number]> = [[0.6, 0], [0.4, 0.5], [0.4, -0.5], [1.0, 0], [0.8, 0.8], [0.8, -0.8], [0, 0.8], [0, -0.8], [1.4, 0], [1.2, 1.0], [1.2, -1.0]];
+function liberaAnello(pen: PenGrid | null, A: Anello): void {
+  if (!pen || !pen.riserva || !A.prenotato) return;
+  A.prenotato = false;
+  for (const q of A.pts) { const k = penIdx(pen, q.x, q.y); if (pen.riserva[k] > 0) pen.riserva[k]--; }
 }
 
 function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: Uint8Array | null = null, pen: PenGrid | null = null, transit: Uint8Array | null = null, flow = 1, anelli: Anello[] | null = null, ingresso: Point | null = null): Point[][] {
   const tone = transit !== null;
   const { bb, cell, gx, gy, ci, cj, cpx, cpy, minS, maxS, inRegion, segOk } = ctx;
   const { mgw, mgh, mx0, my0, mres } = ctx;
-  /** Il mm² di un punto è già al tetto? Allora l'ago lì non ci scende più. */
+  /** Il mm² di un punto è già al tetto? Allora l'ago lì non ci scende più. I posti tenuti da parte per gli anelli
+   *  non contano come liberi: col tetto automatico sono in più del tetto (`inPiu`), col tetto a mano stanno dentro
+   *  (al più metà, perché il fondo deve comunque poterci passare). */
   const penFull = (x: number, y: number): boolean => {
     if (!pen) return false;
-    let i = Math.floor(x - pen.x0), j = Math.floor(y - pen.y0);
-    if (i < 0) i = 0; else if (i > pen.gx - 1) i = pen.gx - 1;
-    if (j < 0) j = 0; else if (j > pen.gy - 1) j = pen.gy - 1;
-    return pen.arr[j * pen.gx + i] >= pen.cap;
+    const k = penIdx(pen, x, y);
+    if (!pen.riserva) return pen.arr[k] >= pen.cap;
+    if (pen.inPiu) return pen.arr[k] >= pen.cap + pen.inPiu[k] - pen.riserva[k];
+    return pen.arr[k] >= pen.cap - Math.min(pen.riserva[k], pen.cap >> 1);
+  };
+  /** Per i punti dell'anello: lui usa il posto tenuto da parte, quindi conta solo il tetto vero (più i posti in più). */
+  const penPieno = (x: number, y: number): boolean => {
+    if (!pen) return false;
+    const k = penIdx(pen, x, y);
+    return pen.arr[k] >= pen.cap + (pen.inPiu ? pen.inPiu[k] : 0);
   };
   const penAdd = (x: number, y: number): void => {
     if (!pen) return;
@@ -541,11 +584,36 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
       if (k < 0) { if (mira < 0 || fatti![mira]) { mira = r; miraPassi = 0; } continue; }
       if (mira === r) mira = -1;
       const m = A.pts.length;
-      let vietato = false;
-      // vietato anche se un suo punto cade in un mm² già al tetto dei buchi d'ago: lì l'anello toglierebbe al fondo
-      // l'ultimo posto e il filo resterebbe murato (misurato: 1-2 salti in più coi punti 6-15 mm)
-      for (let i = 0; i < m && !vietato; i++) { const a = A.pts[i], b = A.pts[(i + 1) % m]; if (crossesBan(a.x, a.y, b.x, b.y) || penFull(a.x, a.y)) vietato = true; }
       fatti![r] = 1;
+      liberaAnello(pen, A);
+      // Un punto dell'anello che cade in un mm² già al tetto dei buchi d'ago (nonostante il posto tenuto da parte:
+      // succede dove più anelli prenotano lo stesso mm²) si sposta un po' in fuori o di lato, in un mm² libero,
+      // tenendo i lati fra punto minimo e massimo. Prima l'anello intero si saltava.
+      const pts = A.pts.slice();
+      for (let i = 0; i < m; i++) {
+        const q = pts[i];
+        if (!penPieno(q.x, q.y)) continue;
+        const prev = pts[(i + m - 1) % m], next = pts[(i + 1) % m];
+        let ux = q.x - A.cx, uy = q.y - A.cy; const L = Math.hypot(ux, uy) || 1; ux /= L; uy /= L;
+        for (const [d, t] of SPOSTA_ANELLO) {
+          const x = q.x + ux * d - uy * t, y = q.y + uy * d + ux * t;
+          const lp = Math.hypot(x - prev.x, y - prev.y), ln = Math.hypot(x - next.x, y - next.y);
+          if (lp < minS || lp > maxS || ln < minS || ln > maxS) continue;
+          if (!inRegion(x, y) || penPieno(x, y) || !segOk(prev.x, prev.y, x, y) || !segOk(x, y, next.x, next.y)) continue;
+          pts[i] = { x, y };
+          break;
+        }
+      }
+      let vietato = false;
+      // vietato se un punto resta in un mm² già al tetto: lì l'anello toglierebbe al fondo l'ultimo posto e il filo
+      // resterebbe murato (misurato: 1-2 salti in più coi punti 6-15 mm); o se un lato è cambiato e non va più bene
+      for (let i = 0; i < m && !vietato; i++) {
+        const a = pts[i], b = pts[(i + 1) % m], L = Math.hypot(b.x - a.x, b.y - a.y);
+        if (crossesBan(a.x, a.y, b.x, b.y) || penPieno(a.x, a.y) || L < minS - 1e-6 || L > maxS || !segOk(a.x, a.y, b.x, b.y)) vietato = true;
+      }
+      // il punto d'attacco può essersi spostato: il primo punto dell'anello deve restare a un punto di distanza
+      const La = Math.hypot(pts[k].x - cx, pts[k].y - cy);
+      if (La < minS || La > maxS || !segOk(cx, cy, pts[k].x, pts[k].y) || crossesBan(cx, cy, pts[k].x, pts[k].y)) vietato = true;
       if (vietato) continue;
       const aim = (q: Point) => Math.atan2(q.y - cy, q.x - cx);
       // I punti dell'agglomerato e dell'anello sono IN PIÙ del fondo: non contano nella sua copertura, così il
@@ -553,8 +621,8 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
       const extra = (x: number, y: number): void => { run.push({ x, y }); dir = aim({ x, y }); cx = x; cy = y; totalPts++; runMoves++; penAdd(x, y); };
       // prima l'ANELLO, intero: così c'è sempre (se lo si chiudeva dopo l'agglomerato, a volte dal punto dove questo
       // finiva nessun vertice era a un punto di distanza e l'anello saltava: 9 fori su 72)
-      extra(A.pts[k].x, A.pts[k].y);
-      for (let i = 1; i <= m; i++) { const q = A.pts[(k + i) % m]; extra(q.x, q.y); }
+      extra(pts[k].x, pts[k].y);
+      for (let i = 1; i <= m; i++) { const q = pts[(k + i) % m]; extra(q.x, q.y); }
       // AGGLOMERATO (Lorenzo, 2026-11-23: «è strano come gli agglomerati intorno alle aree vuote non sono uguali e a
       // volte ci sono altre volte per niente»). Prima il più fitto si chiedeva alle celle della copertura (~3 mm)
       // e dipendeva da come la griglia cadeva sul foro. Ora ogni foro riceve la stessa dose: punti che girano
@@ -681,6 +749,7 @@ function runOneFill(ctx: FillCtx, seed: number, targetArr: Uint8Array, banArr: U
   }
 
   if (run.length >= 2) runs.push(run);
+  if (anelli) for (const A of anelli) liberaAnello(pen, A); // i fori che questo colore non ha raggiunto
   return runs;
 }
 
@@ -1175,6 +1244,19 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
   // ricostruisce solo quando la cella cambia (cache per valore di cella): densità uguali → una sola build.
   const ctxByCell = new Map<number, FillCtx | null>();
   const passes: Point[][][] = [];
+  // Gli anelli di tutti i colori si calcolano prima di cucire, così i loro posti nel tetto dei buchi d'ago si tengono
+  // da parte dall'inizio (prima il terzo colore trovava a volte il posto già preso dal fondo dei primi due).
+  const fadeFori = Math.max(0, Number(p.voidDensityFadeMm) || 0);
+  const anelliPer: Array<Anello[] | null> = densities.map(() => null);
+  if (p.voidDensityBoost && voids.length) {
+    for (let pIdx = 0; pIdx < densities.length; pIdx++) {
+      const cell = cellForSpacing(densities[pIdx], maxS);
+      let ctx = ctxByCell.get(cell);
+      if (ctx === undefined) { ctx = prepare(boundary, voids, minS, maxS, clear, cell); ctxByCell.set(cell, ctx); }
+      if (ctx) anelliPer[pIdx] = anelliDeiFori(ctx, voids, pIdx, fadeFori);
+    }
+    if (pen) prenotaAnelli(pen, anelliPer, capWanted == null);
+  }
   for (let pIdx = 0; pIdx < densities.length; pIdx++) {
     const cell = cellForSpacing(densities[pIdx], maxS);
     let ctx = ctxByCell.get(cell);
@@ -1238,8 +1320,8 @@ export function generatePasses(boundary: Polyline, voids: Polyline[], p: Interla
       // accanto (vedi `contorna` in runOneFill). La dose = (volte − 1) × il filo che il fondo di questa passata mette
       // in un mm² × l'area della sfumatura intorno al foro. Il filo al mm² del fondo si misura facendo la passata
       // una volta senza fori in più (stesso seme, senza toccare il tetto condiviso dei buchi d'ago).
-      const fade = Math.max(0, Number(p.voidDensityFadeMm) || 0), f = voidFactorMax(p);
-      anelli = anelliDeiFori(ctx, voids, pIdx, fade);
+      const fade = fadeFori, f = voidFactorMax(p);
+      anelli = anelliPer[pIdx] ?? [];
       if (f > 1 && fade > 0 && anelli.length) {
         const pilota = runOneFill(ctx, seedP, targetArr.slice(), banArr, null, transitArr, flowOf(p), null);
         let filo = 0;

@@ -241,5 +241,27 @@ fra un foro e l'altro è fondo cucito come sempre, quindi niente salti. Finiti i
 - anelli saltati perché cadono dove il tetto dei buchi d'ago è già pieno per gli altri colori: 12 contro 20 da
   spento (punti 2-5), 0 contro 1 (punti 6-15).
 
+## Nessun anello saltato (2026-11-24)
+
+Lorenzo, sugli anelli saltati (riportato dalla chat madre): *«C'è modo di gestire meglio questa cosa dei fori coperti? In automatico in base ai punti?»*. Un anello si saltava quando un suo punto cadeva
+in un mm² dove gli altri colori avevano già messo tutti i buchi d'ago del tetto.
+
+**Ora, in automatico:**
+1. prima di cucire si calcolano gli anelli di **tutti** i colori e i loro punti si tengono da parte nel tetto dei buchi
+   d'ago. Quanti posti dipende da sé dalla lunghezza dei punti: punti corti, anelli con più punti, più posti;
+2. col **tetto automatico** quei posti sono **in più** del tetto, solo per gli anelli: il fondo non perde niente (la
+   prima prova li toglieva al fondo e l'ultimo colore restava murato: 3 salti in più su una prova). Col tetto
+   **scritto a mano** il tetto resta quello e i posti stanno dentro (al più metà);
+3. se un punto dell'anello cade comunque in un mm² pieno, si sposta di poco in fuori o di lato (fino a 1,4 mm) in un
+   mm² libero, coi lati sempre fra punto minimo e massimo. L'anello si salta solo se nessuno spostamento va.
+
+**Misurato sul pezzo di prova** (201 fori, 3 colori, densità 1,5 del totale, 3 volte, 4 mm; 4 semi, con e senza
+«prima i fori»):
+- anelli saltati, **punti 2-5 mm**: prima 12-20 per prova, **ora 0**; **punti 6-15 mm**: prima 0-1, **ora 0**;
+- tratti: 51 in tutto sulle 16 prove, prima 52; filo coi punti lunghi in media uguale (285 m, da un seme all'altro
+  fra -6% e +4%), coi corti +0,8% (da 149 a 150 m);
+- il prezzo: coi punti corti vicino ai fori qualche mm² ha più buchi d'ago (massimo 9 invece di 7; mm² oltre 6
+  buchi: 71 invece di 6, su tutto il pezzo). Col tetto scritto a mano il massimo resta quello di prima.
+
 Cosa resta da fare sta in `STATO.md` (C4 densità per zona, C5 vuoto dello stesso colore, C6 modello
 densità unificato, A5 i nomi dei parametri "movimento").

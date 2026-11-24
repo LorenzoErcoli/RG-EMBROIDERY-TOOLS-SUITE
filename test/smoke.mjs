@@ -611,9 +611,9 @@ check('aree vuote: acceso, il filo resta continuo (un tratto solo)', vdAcceso[0]
   }
   check('prima i fori: ogni colore resta un tratto solo', primaTratti, 3);
   check('prima i fori: ogni colore entra dal bordo (a meno di 4 mm)', primaIngresso < 4, true);
-  // misurato: spento, nella prima metà del filo 54 anelli su 72; acceso 70 (i 2 che mancano cadono dove il tetto dei
-  // buchi d'ago è già pieno per gli altri colori e si saltano, come da spento)
-  check(`prima i fori: nella prima metà del filo almeno il 92% dei fori contornati (${primaPresto} su ${fori.length * 3})`, primaPresto >= fori.length * 3 * 0.92, true);
+  // misurato: spento, nella prima metà del filo 52 anelli su 72; acceso tutti (prima dei posti tenuti da parte per gli
+  // anelli erano 70: il terzo colore ne saltava 2 perché il tetto dei buchi d'ago lì era già pieno)
+  check(`prima i fori: nella prima metà del filo tutti i fori contornati da ogni colore (${primaPresto} su ${fori.length * 3})`, primaPresto, fori.length * 3);
 }
 
 // interlace — VENATURE sopra il ricamo (`veinsOn`), il disegno «A» scelto da Lorenzo: fasci di spesse a fuso (andata e
