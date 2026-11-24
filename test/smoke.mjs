@@ -34,6 +34,7 @@ export { readPatternSvg, readEmbeddedConfig, measureConstruction, migrateLegacyN
 export { PATTERN_FIELD_NAMES, PATTERN_FIELD_KIND } from ${JSON.stringify(posix('apps/zone-pattern/src/fields.ts'))};
 export { parseSvgPolylines } from ${JSON.stringify(posix('packages/pattern-grammar/src/index.ts'))};
 export { runPipeline as runStriaturaPipeline } from ${JSON.stringify(posix('apps/striatura/src/pipeline.ts'))};
+export { stimaDaDst as striaturaStima } from ${JSON.stringify(posix('apps/striatura/src/stima.ts'))};
 export { harmonicField, radialField, concentricField, constantField, meanFieldAngleDeg } from ${JSON.stringify(posix('apps/pittorico/src/field.ts'))};
 export { buildCurvedFill, buildNaiveCurvedFill } from ${JSON.stringify(posix('apps/pittorico/src/curved-fill.ts'))};
 export { coverageStats, neighbourSpacing, containment } from ${JSON.stringify(posix('apps/pittorico/src/coverage.ts'))};
@@ -2000,19 +2001,22 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
       colonne.set(k, [Math.min(v[0], t[i].y, t[i - 1].y), Math.max(v[1], t[i].y, t[i - 1].y)]);
     }
     const inPunta = (q) => { const v = colonne.get(q.x.toFixed(2)); return !v || q.y - v[0] < 0.5 || v[1] - q.y < 0.5; };
+    // Il dente è il salto CORTO fra due trattini vicini: dal 2026-11-20 i passaggi partono anche dalle punte e vanno a linea spezzata, e
+    // dopo il punto minimo i loro punti non sono più quelli di `passaggi`: contati qui sembravano denti (61 su 418, poi 67 su 421)
     let tutti = 0, corti = 0, denti = 0;
     for (const t of tratti) for (let i = 1; i < t.length; i++) {
       const a = t[i - 1], b = t[i];
       if (Math.abs(b.x - a.x) <= 1e-6) continue;
       tutti++;
-      if (Math.hypot(b.x - a.x, b.y - a.y) <= sP.minStitchMm * 1.1) corti++;
+      if (Math.hypot(b.x - a.x, b.y - a.y) > sP.minStitchMm * 1.1) continue;
+      corti++;
       if (inPunta(a) || inPunta(b)) denti++;
     }
     return { tutti, corti, denti };
   })();
   console.log(`   (collegamenti dentro le macchie: ${sDenti.tutti}, corti ${sDenti.corti}, in punta ${sDenti.denti})`);
   check('dentro le macchie i collegamenti sono un punto corto, non scarabocchi', sDenti.tutti > 50 && sDenti.corti >= sDenti.tutti * 0.75, true);
-  check('dentro le macchie il salto non sta in punta: niente denti', sDenti.denti <= sDenti.tutti * 0.15, true);
+  check('dentro le macchie il salto non sta in punta: niente denti', sDenti.denti <= sDenti.corti * 0.15, true);
   // Niente passaggi sopra le striature già cucite (Lorenzo, 2026-11-06, in macchina: «le impunture di passaggio orizzontali a volte
   // vanno sopra il punto striato ricamato. E lasciano il segno»). Sotto un trattino che viene dopo il filo resta nascosto; sopra uno
   // già cucito si vede. Si segue il filo nell'ordine in cui si cuce; sotto una zona non conta.
@@ -2046,6 +2050,24 @@ console.log('\noblique — dentro un vuoto non si cuce (R5): i raccordi ci giran
   const sMezza = rg.generateStriatura({ outline: sRect, voids: [], coperte: [sRet(30, 40, 90, 110)] }, sP)[0].polylines;
   const sMezzaDivisa = rg.generateStriatura({ outline: sRect, voids: [], coperte: [sRet(30, 40, 62, 110), sRet(58, 40, 90, 110), sRet(40, 60, 80, 90)] }, sP)[0].polylines;
   check('zone sovrapposte come una sola: il ricamo è lo stesso, intera o in pezzi', [JSON.stringify(sIntera) === JSON.stringify(sDivisa), JSON.stringify(sMezza) === JSON.stringify(sMezzaDivisa)], [true, true]);
+  // I valori da un DST (Lorenzo, 2026-11-20: «dammi la possibilità di inserire i valori a partire da un dst»): una striatura a due
+  // livelli fatta qui, riletta dal DST senza i parametri, dà indietro le sue misure (la variante no).
+  {
+    const noti = { ...sP, maxStitchMm: 2.5, minStitchMm: 1.2, travelStitchMm: 2.5, blobSizeMm: 22, blobSpacingMm: 5, secondLevel: true, blobSizeMm2: 9, blobSpacingMm2: 5, densitySpacingMm2: 0.6 };
+    const r = rg.runStriaturaPipeline([{ points: sRect, closed: true, color: '#000000' }], { '#000000': 'MASTER_OUTLINE' }, noti);
+    const letto = rg.readDst(rg.dstFromExportLayers(r.exportLayers, { label: 'PROVA' }));
+    const st = rg.striaturaStima(letto.blocks);
+    console.log('   (dal DST: ' + st.map((x) => `ago ${x.ago}: grandezza ${x.valori.blobSizeMm}, distanza ${x.valori.blobSpacingMm}, trattini ${x.valori.densitySpacingMm}, punto ${x.valori.maxStitchMm}, minimo ${x.valori.minStitchMm}, collegamenti ${x.valori.travelStitchMm}`).join(' · ') + ')');
+    const vicino = (v, atteso, tol) => Math.abs(v - atteso) <= tol;
+    check('dai punti di un DST si ricavano i valori, un livello per colore', [
+      st.length,
+      st.every((x) => x.valori.maxStitchMm === 2.5 && x.valori.densitySpacingMm === 0.6 && x.valori.stitchMode === 'retrace'),
+      st.every((x) => vicino(x.valori.minStitchMm, 1.2, 0.3) && vicino(x.valori.travelStitchMm, 2.5, 0.5)),
+      vicino(st[0]?.valori.blobSizeMm, 22, 2) && vicino(st[1]?.valori.blobSizeMm, 9, 2),
+      st.every((x) => vicino(x.valori.blobSpacingMm, 5, 2)),
+    ], [2, true, true, true, true]);
+    check('un DST senza striatura non dà valori', rg.striaturaStima([{ needle: 1, points_mm: [[0, 0], [10, 0], [10, 10], [0, 10], [0, 0]] }]).length, 0);
+  }
   // Le uscite dalle punte (Lorenzo, 2026-11-05: «magari si esce su una striatura più vicina ad un punto coperto»): stessi trattini, un filo solo.
   const sDaCapo = rg.generateStriatura({ outline: sRect, voids: [], coperte: sMacchie }, { ...sP, usciteDallePunte: false })[0];
   check('dalle punte: gli stessi trattini, un filo solo', [sTrattini(sSenzaPassaggi(sTante)).length, sTante.polylines.length], [sTrattini(sSenzaPassaggi(sDaCapo)).length, 1]);

@@ -454,7 +454,19 @@ interface Fila { trattini: Trattino[]; }
 // - sopra il cucito 80, cioè mai: le macchie già cucite e il livello prima. Quella appena finita no: da lì si esce.
 // Prima (fino al 2026-11-09) i costi erano 0,05 sotto, 1 nel vuoto (20 volte in orizzontale), 0,3 fra i trattini, e un ripasso
 // che faceva costare di più i corridoi già usati: il filo faceva giri lunghissimi pur di stare sotto.
-const COSTO = { coperto: 1, bordo: 4, scoperto: 25, sopraCucito: 80 };
+const COSTO = { coperto: 1, bordo: 4, frangia: 6, scoperto: 25, sopraCucito: 80 };
+// Dove il filo resta scoperto, andare di traverso costa di più (Lorenzo, 2026-11-20, visto il traverso in vista salito da 0,08 a
+// 0,38 m coi costi della Ricetta: «si fallo»): lo scoperto vale (1 + questo × la parte orizzontale del passo). Così nel vuoto il filo
+// torna verticale, e si legge come una striatura. Sotto e fra le macchie da cucire no (lì vale la frangia, qui sotto). Provati sul
+// pannello di prova, col filo di traverso nel vuoto (fuori dalle zone e dalle striature) a grandezza 22 / 8: 0 → 0,20 / 0,50 m;
+// 2 → 0,10 / 0,31 m (prima del 2026-11-20: 0,04 / 0,30); 4 → 0,07 / 0,27 m, ma a grandezza 8 il filo in vista da 2,41 a 2,67 m e i
+// passaggi tornavano a fare giri.
+const TRAVERSO_SCOPERTO = 2;
+// Fra le striature che si cuciono dopo, fuori dalle zone, come nello sfrangiato della Ricetta (`frangia`, `verticaleNellaFrangia`):
+// in verticale il filo si mescola con le striature, di traverso le taglia e costa `COSTO.frangia`. In verticale costava come sotto una zona
+// (1): il filo correva lungo le colonne da una zona all'altra invece di passare sotto (Lorenzo, 2026-11-20: «ci sono diversi passaggi
+// soprattutto verticali che non si muovono sotto le macchie»).
+const COSTO_VERTICALE_FRA_STRIATURE = 4;
 // le zone si restringono di tanto: coperto vuol dire davvero sotto, non sul bordo
 const STRINGI_ZONE_MM = 0.5;
 // la linea spezzata sotto: passo lungo la strada e scostamento di lato, mm, a caso fra min e max (come nella Ricetta)
@@ -464,6 +476,8 @@ const SALTO_SOTTO_ENTRO_MM = 3;
 // un passaggio sopra un trattino già cucito lascia il segno: costa come un metro di filo, così si fa solo se non c'è altra via
 const COSTO_SOPRA_GIA_CUCITI = 1000;
 const CANDIDATE_VICINE = 12;
+// la ricerca per l'ordine si ferma qui: 100 mm di filo scoperto. Oltre, il filo dritto basta a dire che è lontano
+const COSTO_LIMITE_ORDINE = 25 * 100;
 const PASSAGGIO_COSTOSO = 15;
 const PASSAGGIO_MOLTO_COSTOSO = 60;
 // il filo può uscire dalla sua fascia di poco: quanto basta per un trattino a cavallo del confine
@@ -899,6 +913,20 @@ function cuciSottoLeZone(
     if (cucita[idx] && !inUscita[idx]) return COSTO.coperto;
     return COSTO.scoperto;
   };
+  /** Il costo di un passo nella cella, secondo quanto va di traverso (0 in verticale, 1 in orizzontale). */
+  // LA FILA SI ATTRAVERSA SOTTO (Lorenzo, 2026-11-20: «se dopo la macchia devo ripartire da dietro inverto la macchia ma prima faccio
+  // il passaggio che passa sotto e va dal lato opposto. quindi passaggio al centro lato opposto della macchia, poi macchia striato che torna
+  // indietro. e ripresa»). Il filo che va a una fila può passarle sotto in ogni direzione al costo del coperto: la striatura lo copre subito.
+  const filaDi = new Int32Array(gcols * grows).fill(-1);
+  file.forEach((f, k) => { for (const t of f.trattini) for (let y = t.y0; y <= t.y1; y += cella / 2) { const i = gIdx(t.x, y); if (filaDi[i] < 0) filaDi[i] = k; } });
+  let filaInArrivo = -1;
+  const costoPasso = (idx: number, traverso: number) => {
+    if (filaInArrivo >= 0 && filaDi[idx] === filaInArrivo && !sopraCucito[idx]) return COSTO.coperto;
+    const c = costoCella(idx);
+    if (c === COSTO.scoperto) return c * (1 + TRAVERSO_SCOPERTO * traverso);
+    if (c === COSTO.coperto && g.dentroZona[idx] < STRINGI_ZONE_MM) return traverso > 0.27 ? COSTO.frangia : COSTO_VERTICALE_FRA_STRIATURE;
+    return c;
+  };
   /** Il costo di una cella che riconosce il nascosto (meno dello scoperto): lì il filo va a linea spezzata. */
   const nascostoCella = (idx: number) => costoCella(idx) < COSTO.scoperto;
   /** Quanto costa il filo dritto da a a b. I primi e gli ultimi 1,5 mm non contano il cucito: sono quelli da cui parte e a cui arriva. */
@@ -913,7 +941,7 @@ function cuciSottoLeZone(
       const lontana = t * d > 1.5 && (1 - t) * d > 1.5;
       if (!percorribile[idx] && lontana) somma += 100;
       else if (sopraCucito[idx] && !lontana) somma += COSTO.scoperto;
-      else somma += costoCella(idx);
+      else somma += costoPasso(idx, Math.abs(b.x - a.x) / d);
     }
     return somma * (d / n);
   };
@@ -1022,7 +1050,7 @@ function cuciSottoLeZone(
           // da centro a centro in verticale non si incrocia nessuna colonna
           if (dx !== 0 || daSorgente || aMeta) sopra = sopraCuciti(daSorgente ? sorgenti.get(testa.idx)! : centro(testa.idx), aMeta ? mete.get(n)! : centro(n));
         }
-        const nuovo = gg[testa.idx] + l * cella * costoCella(n) + COSTO_SOPRA_GIA_CUCITI * sopra;
+        const nuovo = gg[testa.idx] + l * cella * costoPasso(n, Math.abs(dx) / l) + COSTO_SOPRA_GIA_CUCITI * sopra;
         if (visita[n] === giro && gg[n] <= nuovo) continue;
         gg[n] = nuovo; prima[n] = testa.idx; visita[n] = giro;
         coda.metti(n, nuovo);
@@ -1037,66 +1065,68 @@ function cuciSottoLeZone(
   let pen: Point | null = null;
   if (!file.length) return { polylines, passaggi };
 
-  // da fila a fila, per l'ordine: il filo meno costoso fra i capi dei due trattini estremi di ognuna
-  const capi = file.map((f) => [f.trattini[0], f.trattini[f.trattini.length - 1]]
-    .flatMap((t) => { const q = quoteCoperte(t); return (q.length ? q : [t.y0, t.y1]).map((y) => ({ x: t.x, y })); }));
-  const memo = new Float64Array(file.length * file.length).fill(-1);
-  const costoFile = (a: number, b: number): number => {
-    const k = a < b ? a * file.length + b : b * file.length + a;
-    if (memo[k] >= 0) return memo[k];
-    let m = Infinity;
-    for (const p of capi[a]) for (const q of capi[b]) { const c = costoLinea(p, q); if (c < m) m = c; }
-    memo[k] = m;
-    return m;
+  // DA FILA A FILA, SUL COSTO VERO E COL VERSO (come nella Ricetta, `ordinaConVersi`; Lorenzo, 2026-11-20: «puoi lavorare meglio anche
+  // nel calcolo del percorso»). Una fila ha due capi, il primo e l'ultimo trattino: si entra da uno e si esce dall'altro. Da ogni capo
+  // una ricerca sulla stessa griglia dei costi della strada, fino ai capi delle file vicine, senza uscire dalla fascia. Prima si
+  // stimava su una griglia tre volte più larga, fra file e non fra capi: l'ordine non sapeva da che parte si sarebbe usciti.
+  const nF = file.length;
+  const puntiCapo = (f: number, c: number): Point[] => {
+    const t = c === 0 ? file[f].trattini[0] : file[f].trattini[file[f].trattini.length - 1];
+    const q = quoteCoperte(t);
+    return (q.length ? q : [t.y0, t.y1]).map((y) => ({ x: t.x, y }));
   };
-  // Il filo dritto non dice quanto costa davvero andare da una fila all'altra: sotto le zone si gira quasi gratis. Si misura
-  // su una griglia più larga, da ogni fila fino alle sue vicine in costo, senza uscire dalla sua fascia.
-  const noto = new Uint8Array(file.length * file.length);
+  const capi = file.map((_, f) => [...puntiCapo(f, 0), ...puntiCapo(f, 1)]);
+  const costoCapi = new Map<number, number>();
+  const chiaveCapi = (a: number, ca: number, b: number, cb: number) => (a * 2 + ca) * 2 * nF + (b * 2 + cb);
   {
-    const K = 3, cw = Math.ceil(gcols / K), ch = Math.ceil(grows / K);
-    const somma = new Float32Array(cw * ch), quanti = new Uint16Array(cw * ch);
-    for (let gy = 0; gy < grows; gy++) for (let gx = 0; gx < gcols; gx++) {
-      const i = gy * gcols + gx;
-      if (!percorribile[i]) continue;
-      const b = Math.floor(gy / K) * cw + Math.floor(gx / K);
-      somma[b] += costoCella(i); quanti[b]++;
+    const dove = new Map<number, number[]>();
+    for (let f = 0; f < nF; f++) for (let c = 0; c < 2; c++) for (const p of puntiCapo(f, c)) {
+      const i = gIdx(p.x, p.y), v = dove.get(i);
+      if (!v) dove.set(i, [f * 2 + c]); else if (!v.includes(f * 2 + c)) v.push(f * 2 + c);
     }
-    const costoB = new Float32Array(cw * ch).fill(-1);
-    for (let b = 0; b < costoB.length; b++) if (quanti[b] * 2 >= K * K) costoB[b] = (somma[b] / quanti[b]) * K * cella;
-    const blocco = (p: Point) => { const i = gIdx(p.x, p.y); return Math.floor(Math.floor(i / gcols) / K) * cw + Math.floor((i % gcols) / K); };
-    const qui = new Map<number, number[]>();
-    capi.forEach((lista, i) => { for (const p of lista) { const b = blocco(p); const v = qui.get(b); if (!v) qui.set(b, [i]); else if (v[v.length - 1] !== i) v.push(i); } });
-    const dist = new Float64Array(cw * ch);
-    const visto = new Int32Array(cw * ch).fill(-1);
-    for (let a = 0; a < file.length; a++) {
-      const coda = codaMinima();
-      for (const p of capi[a]) { const b = blocco(p); visto[b] = a; dist[b] = 0; coda.metti(b, 0); }
-      let trovate = 0;
-      while (!coda.vuota() && trovate < 30) {
+    const dist = new Float64Array(gcols * grows), visto = new Int32Array(gcols * grows).fill(-1);
+    for (let f = 0; f < nF; f++) for (let c = 0; c < 2; c++) {
+      const sorg = f * 2 + c, coda = codaMinima();
+      for (const p of puntiCapo(f, c)) { const i = gIdx(p.x, p.y); visto[i] = sorg; dist[i] = 0; coda.metti(i, 0); }
+      const trovate = new Set<number>();
+      while (!coda.vuota() && trovate.size < CANDIDATE_VICINE) {
         const t = coda.togli();
-        if (t.f > dist[t.idx]) continue;
-        for (const o of qui.get(t.idx) ?? []) {
-          if (o === a) continue;
-          const k = a < o ? a * file.length + o : o * file.length + a;
-          if (!noto[k]) { noto[k] = 1; memo[k] = t.f; trovate++; } else if (t.f < memo[k]) memo[k] = t.f;
+        if (t.f > dist[t.idx] || t.f > COSTO_LIMITE_ORDINE) continue;
+        for (const o of dove.get(t.idx) ?? []) {
+          const fo = o >> 1;
+          if (fo === f) continue;
+          const k = chiaveCapi(f, c, fo, o & 1);
+          if (!costoCapi.has(k) || t.f < costoCapi.get(k)!) costoCapi.set(k, t.f);
+          trovate.add(fo);
         }
-        const x = t.idx % cw, y = Math.floor(t.idx / cw);
+        const cx = t.idx % gcols, cy = Math.floor(t.idx / gcols);
         for (const [dx, dy, l] of VICINI) {
-          const nx = x + dx, ny = y + dy;
-          if (nx < 0 || ny < 0 || nx >= cw || ny >= ch) continue;
-          const n = ny * cw + nx;
-          if (costoB[n] < 0 || !nelleFasce(bb.minX + (nx + 0.5) * K * cella, bb.minY + (ny + 0.5) * K * cella, fasciaFila[a], fasciaFila[a])) continue;
-          const nuovo = t.f + l * costoB[n];
-          if (visto[n] === a && dist[n] <= nuovo) continue;
-          visto[n] = a; dist[n] = nuovo; coda.metti(n, nuovo);
+          const nx = cx + dx, ny = cy + dy;
+          if (nx < 0 || ny < 0 || nx >= gcols || ny >= grows) continue;
+          const n = ny * gcols + nx;
+          if (!percorribile[n] && !dove.has(n)) continue;
+          if (!nelleFasce(bb.minX + (nx + 0.5) * cella, bb.minY + (ny + 0.5) * cella, fasciaFila[f], fasciaFila[f])) continue;
+          const nuovo = t.f + l * cella * costoPasso(n, Math.abs(dx) / l);
+          if (visto[n] === sorg && dist[n] <= nuovo) continue;
+          visto[n] = sorg; dist[n] = nuovo; coda.metti(n, nuovo);
         }
       }
     }
   }
+  /** Da un capo all'altro: il costo trovato (nei due sensi, il minore), se no il filo dritto fra i punti dei capi. */
+  const daCapoACapo = (a: number, ca: number, b: number, cb: number): number => {
+    const x = costoCapi.get(chiaveCapi(a, ca, b, cb)), y = costoCapi.get(chiaveCapi(b, cb, a, ca));
+    if (x !== undefined || y !== undefined) return Math.min(x ?? Infinity, y ?? Infinity);
+    let m = Infinity;
+    for (const p of puntiCapo(a, ca)) for (const q of puntiCapo(b, cb)) { const v = costoLinea(p, q); if (v < m) m = v; }
+    costoCapi.set(chiaveCapi(a, ca, b, cb), m);
+    return m;
+  };
+  const conosciuto = (a: number, b: number) => [0, 1].some((ca) => [0, 1].some((cb) => costoCapi.has(chiaveCapi(a, ca, b, cb)) || costoCapi.has(chiaveCapi(b, cb, a, ca))));
+  const costoFile = (a: number, b: number): number => Math.min(daCapoACapo(a, 0, b, 0), daCapoACapo(a, 0, b, 1), daCapoACapo(a, 1, b, 0), daCapoACapo(a, 1, b, 1));
   /** Per scegliere le vicine: il costo vero al quadrato, se si conosce; le altre vengono dopo, per distanza. */
   const distanzaFile = (a: number, b: number): number => {
-    const k = a < b ? a * file.length + b : b * file.length + a;
-    if (noto[k]) return memo[k] * memo[k];
+    if (conosciuto(a, b)) { const c = costoFile(a, b); return c * c; }
     let m = Infinity;
     for (const p of capi[a]) for (const q of capi[b]) { const d = (p.x - q.x) ** 2 + (p.y - q.y) ** 2; if (d < m) m = d; }
     return 1e6 + m;
@@ -1117,6 +1147,26 @@ function cuciSottoLeZone(
     }
     ordine.push(...ordinaFile(qui.length, (a, b) => costoFile(qui[a], qui[b]), (a, b) => distanzaFile(qui[a], qui[b]), inizio).map((k) => qui[k]));
   }
+  // IL VERSO di ogni fila, scelto su tutto l'ordine (programmazione dinamica, come `ordinaConVersi` della Ricetta): verso 0 entra dal
+  // primo trattino ed esce dall'ultimo, verso 1 il contrario. Con le uscite dalle punte la fila va e torna: il verso lo sceglie la strada.
+  const versi: number[] = ordine.map(() => 0);
+  /** Da un capo di a all'entrata cb di b: dritti, o al capo vicino e poi sotto la fila fino al lato opposto (al costo del coperto). */
+  const larghezza = (f: number) => Math.abs(file[f].trattini[file[f].trattini.length - 1].x - file[f].trattini[0].x);
+  const entrata = (a: number, ca: number, b: number, cb: number) =>
+    Math.min(daCapoACapo(a, ca, b, cb), daCapoACapo(a, ca, b, 1 - cb) + larghezza(b) * COSTO.coperto * 1.2);
+  if (!params.usciteDallePunte && ordine.length > 1) {
+    let meglio: { c: number; da: number[] }[] = [{ c: 0, da: [0] }, { c: 0, da: [1] }];
+    for (let k = 1; k < ordine.length; k++) {
+      const a = ordine[k - 1], b = ordine[k];
+      meglio = [0, 1].map((vb) => {
+        const c0 = meglio[0].c + entrata(a, 1, b, vb), c1 = meglio[1].c + entrata(a, 0, b, vb);
+        return c0 <= c1 ? { c: c0, da: [...meglio[0].da, vb] } : { c: c1, da: [...meglio[1].da, vb] };
+      });
+    }
+    const scelto = meglio[0].c <= meglio[1].c ? meglio[0].da : meglio[1].da;
+    scelto.forEach((v, k) => { versi[k] = v; });
+  }
+  const nelVerso = (k: number) => (versi[k] === 0 ? file[ordine[k]].trattini : file[ordine[k]].trattini.slice().reverse());
 
   // NIENTE DENTI (Lorenzo, 2026-11-06: «prova a togliere il dente»). Il salto da un trattino al prossimo stava in punta, all'altezza
   // della punta più corta: un dente in cima alle striature. Ora sta dentro la macchia, dove i due trattini ci sono tutti e due, a
@@ -1149,9 +1199,22 @@ function cuciSottoLeZone(
     return true;
   };
   /** Un pezzo nascosto, da a a b, a linea spezzata (b compreso). Falso se è verticale o troppo corto: allora va dritto. */
-  const spezza = (a: Point, b: Point, fuori: Point[]): boolean => {
+  /** Il filo dritto da a a b sta tutto sotto una zona del ricamo sopra (a escluso). */
+  const sottoZonaTratto = (a: Point, b: Point) => {
+    const n = Math.max(1, Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / (cella / 2)));
+    for (let k = 1; k <= n; k++) {
+      const i = gIdx(a.x + ((b.x - a.x) * k) / n, a.y + ((b.y - a.y) * k) / n);
+      if (g.dentroZona[i] < STRINGI_ZONE_MM || sopraCucito[i]) return false;
+    }
+    return true;
+  };
+  // Sotto una zona anche i pezzi verticali vanno a linea spezzata (Lorenzo, 2026-11-20, su un passaggio verticale lungo sotto una macchia:
+  // «riesci a evitare questi passaggi così dritti ma creare comunque delle linee spezzate?»). Fra le striature da cucire il verticale
+  // resta dritto: va lungo le colonne, e spezzato le taglierebbe.
+  const spezza = (a: Point, b: Point, fuori: Point[], sottoZona: boolean): boolean => {
     const L = Math.hypot(b.x - a.x, b.y - a.y);
-    if (Math.abs(b.x - a.x) < 0.27 * Math.abs(b.y - a.y) || L < ZIGZAG.passoMin * 1.5) return false;
+    if ((!sottoZona && Math.abs(b.x - a.x) < 0.27 * Math.abs(b.y - a.y)) || L < ZIGZAG.passoMin * 1.5) return false;
+    const resta = sottoZona ? sottoZonaTratto : nascostoTratto;
     const ux = (b.x - a.x) / L, uy = (b.y - a.y) / L;
     let lato = zigRng() < 0.5 ? 1 : -1, s = 0;
     for (;;) {
@@ -1163,7 +1226,7 @@ function cuciSottoLeZone(
       let scelto: Point | null = null;
       for (const k of [1, 0.5]) {
         const p = { x: base.x - uy * amp * k * lato, y: base.y + ux * amp * k * lato };
-        if (percorribile[gIdx(p.x, p.y)] && nascostoTratto(prec, p) && !sopraCuciti(prec, p)) { scelto = p; break; }
+        if (percorribile[gIdx(p.x, p.y)] && resta(prec, p) && !sopraCuciti(prec, p)) { scelto = p; break; }
       }
       if (!scelto && !sopraCuciti(prec, base)) scelto = base;
       if (scelto) fuori.push(scelto);
@@ -1177,14 +1240,16 @@ function cuciSottoLeZone(
   /** Il passaggio lungo la strada: a linea spezzata dove è nascosto, dritto altrove, mai un punto più lungo del passo. */
   const cuciStrada = (pts: Point[], via: Point[]) => {
     for (let i = 1; i < via.length; i++) {
-      // il tratto si divide nei pezzi nascosti e no (ogni 0,25 mm): i nascosti a linea spezzata, gli altri dritti
+      // il tratto si divide nei pezzi sotto una zona (2), fra le striature da cucire (1) e scoperti (0), ogni 0,25 mm: i primi due a
+      // linea spezzata, gli scoperti dritti
       const a = pts[pts.length - 1], b = via[i], L = Math.hypot(b.x - a.x, b.y - a.y);
       const n = Math.max(1, Math.ceil(L / 0.25));
       const su = (t: number): Point => ({ x: a.x + (b.x - a.x) * t, y: a.y + (b.y - a.y) * t });
-      let inizio = 0, era = nascostoCella(gIdx(su(0.5 / n).x, su(0.5 / n).y));
-      const pezzi: [number, number, boolean][] = [];
+      const tipo = (q: Point) => { const c = gIdx(q.x, q.y); return g.dentroZona[c] >= STRINGI_ZONE_MM && !sopraCucito[c] ? 2 : nascostoCella(c) ? 1 : 0; };
+      let inizio = 0, era = tipo(su(0.5 / n));
+      const pezzi: [number, number, number][] = [];
       for (let k = 1; k < n; k++) {
-        const q = su((k + 0.5) / n), ora = nascostoCella(gIdx(q.x, q.y));
+        const q = su((k + 0.5) / n), ora = tipo(q);
         if (ora !== era) { pezzi.push([inizio, k / n, era]); inizio = k / n; era = ora; }
       }
       pezzi.push([inizio, 1, era]);
@@ -1192,7 +1257,7 @@ function cuciSottoLeZone(
         const p = pts[pts.length - 1], q = t1 >= 1 ? b : su(t1);
         if (t1 - t0 < 1e-9) continue;
         const tratto: Point[] = [p];
-        if (nasc && spezza(p, q, tratto)) { for (let k = 1; k < tratto.length; k++) pushTravel(pts, tratto[k - 1], tratto[k], passo); }
+        if (nasc > 0 && spezza(p, q, tratto, nasc === 2)) { for (let k = 1; k < tratto.length; k++) pushTravel(pts, tratto[k - 1], tratto[k], passo); }
         else pushStrada(pts, [p, q], passo, (x, y) => sopraCuciti(x, y) > 0);
       }
     }
@@ -1310,18 +1375,21 @@ function cuciSottoLeZone(
       segnaCucito(t);
     });
   };
-  cuci(file[ordine[0]].trattini, null);
-  let ultimo = file[ordine[0]].trattini[file[ordine[0]].trattini.length - 1];
+  const primaFila = nelVerso(0);
+  cuci(primaFila, null);
+  let ultimo = primaFila[primaFila.length - 1];
   for (let o = 1; o < ordine.length; o++) {
     const f = file[ordine[o]];
     const uscite: Point[] = [pen!, ...[ultimo.y0, ultimo.y1, ...quoteCoperte(ultimo)].map((y) => ({ x: ultimo.x, y }))];
     const arrivi: (Point & { seq: Trattino[] })[] = [];
-    for (const seq of [f.trattini, f.trattini.slice().reverse()]) {
+    for (const seq of params.usciteDallePunte ? [f.trattini, f.trattini.slice().reverse()] : [nelVerso(o)]) {
       const t = seq[0];
-      for (const y of [t.pts[0].y, t.y0, t.y1, ...quoteCoperte(t)]) arrivi.push({ x: t.x, y, seq });
+      for (const y of [t.pts[0].y, t.y0, t.y1, (t.y0 + t.y1) / 2, ...quoteCoperte(t)]) arrivi.push({ x: t.x, y, seq });
     }
     const z0 = Math.min(fasciaFila[ordine[o]], fasciaFila[ordine[o - 1]]), z1 = Math.max(fasciaFila[ordine[o]], fasciaFila[ordine[o - 1]]);
+    filaInArrivo = ordine[o];
     const r = strada(uscite, arrivi, z0, z1) ?? strada(uscite, arrivi, 0, nFasce - 1);
+    filaInArrivo = -1;
     chiudiFila();                                   // scelto il passaggio, la fila da cui esce è cucita
     if (r) {
       // esce lungo il trattino, sugli stessi buchi; poi il passaggio; poi entra lungo il trattino nuovo. Un'uscita più corta del punto
@@ -1338,9 +1406,9 @@ function cuciSottoLeZone(
       if (cur.length > 1) polylines.push(cur);       // niente strada: un vuoto taglia in due il pezzo. Salto onesto.
       cur = [];
       pen = null;
-      cuci(f.trattini, null);
+      cuci(nelVerso(o), null);
     }
-    const seq = r ? r.arrivo.seq : f.trattini;
+    const seq = r ? r.arrivo.seq : nelVerso(o);
     ultimo = seq[seq.length - 1];
   }
   if (cur.length > 1) polylines.push(cur);

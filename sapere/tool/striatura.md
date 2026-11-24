@@ -367,6 +367,69 @@ Sul rettangolo dei test, con una zona sola, la striatura sotto la zona va dall'8
 cucito in un livello e 2–4 nel secondo (salti dentro una fila dove il primo livello copre tutta l'altezza in comune). Non provati:
 Stilista, la macchina.
 
+### Il traverso e i valori da un DST (2026-11-20)
+
+**Il traverso.** Coi costi della Ricetta il filo dei passaggi in vista andava di più di traverso (simulazione del pezzo finito, pannello
+di prova a grandezza 22: da 0,08 a 0,38 m). Lorenzo: *«si fallo»*. Due regole:
+- fra le striature che si cuciono dopo, fuori dalle zone, quella della Ricetta che non era stata portata (`frangia`,
+  `verticaleNellaFrangia`): in verticale costa 1, di traverso 6;
+- dove il filo resta scoperto il traverso costa di più: 25 × (1 + 2 × la parte orizzontale del passo) (`TRAVERSO_SCOPERTO`).
+
+Filo di traverso nel vuoto (fuori dalle zone e dalle striature), pannello di prova, variante 1, grandezza 22 / 8: senza le regole
+0,20 / 0,50 m; con 2 → 0,10 / 0,31 m (prima del 2026-11-20 era 0,04 / 0,30); con 4 → 0,07 / 0,27, ma a grandezza 8 il filo in vista
+saliva da 2,41 a 2,67 m e i passaggi tornavano a fare giri. Con 2 il filo in vista è 0,97 m a grandezza 22 (prima del 2026-11-20 1,19)
+e 2,41 m a grandezza 8 (prima 2,15): il prezzo di meno traverso. Nella simulazione del pezzo finito il traverso in vista va da 0,38 a 0,23 m.
+
+**Verticali fuori dalle macchie, e il percorso** (Lorenzo, provando il tool: *«ci sono diversi passaggi soprattutto verticali che non si
+muovono sotto le macchie»*; *«puoi lavorare meglio anche nel calcolo del percorso. su questo swatch a stop credo abbia fatto dei buoni
+miglioramenti»*). La causa: fra le striature da cucire il verticale costava 1 come sotto una zona, e il filo correva lungo le colonne da
+una zona all'altra. Ora costa 4 (`COSTO_VERTICALE_FRA_STRIATURE`; provati 1, 2, 4, 8, 25: da 8 in su il traverso tornava a crescere).
+E l'ordine delle file come nella Ricetta: il costo fra due file è quello della strada vera, cercata sulla griglia dei costi da ogni capo
+(primo e ultimo trattino) fino ai capi delle 12 file vicine (o 100 mm di filo scoperto); prima si stimava su una griglia tre volte più
+larga e fra file, non fra capi. Poi il verso di ogni fila si sceglie su tutto l'ordine (programmazione dinamica, `ordinaConVersi`):
+prima la strada sceglieva il verso fila per fila, e l'ordine non sapeva da che parte si sarebbe usciti.
+
+| pannello di prova, variante 1 | Grandezza 22 | Grandezza 8 |
+|---|---|---|
+| passaggi verticali fuori dalle macchie | 0,71 → 0,42 m | 1,57 → 0,88 m |
+| di traverso fuori dalle macchie | 0,22 → 0,25 m | 0,75 → 0,81 m |
+| filo in vista | 0,97 → 0,70 m | 2,41 → 1,78 m |
+| metri di passaggi | 4,56 → 3,99 | 11,17 → 9,41 |
+
+Calcolo: a grandezza 22 da 0,9 a 1,9 s, due livelli da 4,3 a 5,4 s.
+
+**Spezzati anche i verticali sotto le zone** (Lorenzo, su un passaggio verticale lungo sotto una macchia: *«riesci a evitare questi passaggi
+così dritti ma creare comunque delle linee spezzate?»*). La Ricetta lascia dritti i pezzi verticali, perché vanno nel verso della
+striatura; sotto una zona però non si vedono e non si mescolano con niente: lì ora la linea spezzata vale in ogni direzione. Il passaggio
+si divide in pezzi sotto una zona, fra le striature da cucire (dove il verticale resta dritto: va lungo le colonne) e scoperti (dritti).
+Passaggi da 3,99 a 4,06 m a grandezza 22, in vista uguale.
+
+**La fila si attraversa sotto** (Lorenzo: *«se dopo la macchia devo ripartire da dietro (verso il lato di inizio) inverto la macchia ma
+prima faccio il passaggio che passa sotto e va dal lato opposto. quindi passaggio al centro lato opposto della macchia, poi macchia
+striato che torna indietro. e ripresa»*). Il filo che va a una fila le può passare sotto in ogni direzione al costo del coperto (la
+striatura lo copre subito); fra gli arrivi c'è la metà altezza del primo trattino; nella scelta dei versi entrare dal lato lontano costa
+come arrivare al vicino più la larghezza della fila. Pannello di prova, grandezza 22 / 8: passaggi da 4,06 / 9,41 a 3,84 / 9,03 m,
+inversioni di marcia da 7 / 22 a 3 / 13, traverso nel vuoto da 0,08 / 0,20 a 0,07 / 0,18 m; filo in vista 0,69 → 0,76 m a grandezza 22,
+uguale (1,78) a grandezza 8. Il test dei denti ora conta solo i salti corti fra trattini (5 in punta su 351): i passaggi che partono dalle
+punte, dopo il punto minimo, sembravano denti.
+
+**I valori da un DST** (Lorenzo: *«dammi la possibilità di inserire i valori a partire da un dst»*; `stima.ts`). Nato da un pannello vero
+in Stilista con due striature, stop 4 e 5, di cui non si sapevano i parametri: letti i punti in sola lettura (`GET /punti-cuciti`),
+misurati, e rigenerate col motore alcune combinazioni sullo stesso rettangolo per vedere quale torna. Dai punti:
+- **punto**: il 97° percentile dei punti verticali (picchi netti sotto 2,5 → 2,5);
+- **minimo**: il punto più corto con almeno l'1% dei punti sotto (1,2 sui due stop; la moda dei punti corti dava 1,7 su un DST fatto qui);
+- **collegamenti**: il 95° percentile dei punti non verticali, a mezzo millimetro;
+- **distanza fra i trattini**: la distanza più frequente fra colonne vicine (0,6);
+- **grandezza**: dal trattino tipico (mediana), col rapporto 0,78 del motore (22 → 17 mm, 18 → 14, 10 → 7,5, 9 → 7, 8 → 6);
+- **lunghezza massima** dei trattini: per le macchie da 22 in su, dal 90° percentile meno 4;
+- **distanza fra le macchie**: non si legge dai punti (né il numero né la distanza dei gruppi vanno col parametro): si rigenera col motore
+  su un pezzo fino a 150 × 150 mm con distanze da 2 a 13 e si tiene quella che copre come l'originale (striatura per mm²).
+
+Sui due stop: grandezza 23 e 9, distanza 5 e 6, trattini 0,6, punto 2,5, minimo 1,2, collegamenti 2,5, in 0,1–0,2 s. Riletto un DST
+fatto qui (22/5 e 9/5): grandezza 22 e 9, distanza 5 e 5, minimo 1,4 e 1,2. Non si ricavano la variante, il frastaglio e la
+differenza fra piccole e grandi. Un livello per ogni ago con della striatura (almeno 20 trattini che vanno su e giù, più punti
+verticali che no): il primo è il primo livello, il secondo accende il secondo livello.
+
 **Provato il 2026-11-04 e il 2026-11-05 e tolto:**
 - finire la macchia che si vede, poi uscire (l'idea di togliere del tutto il legame con le righe): in vista 1,04–1,28 m contro
   0,86–1,03 a grandezza 22, 2,6–2,8 contro 1,9 a grandezza 8;
