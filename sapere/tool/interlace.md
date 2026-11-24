@@ -223,5 +223,45 @@ indietro di 0,45-1,2 mm e appena di lato (0,2 mm), così cade fra due buchi dell
 solo se non è né battuto né affiancato; se non ce n'è (vene affollate) almeno fuori dai buchi già fatti. **Dopo:**
 affiancati 3-6,5% (sono vene diverse che corrono vicine), 0 battuti, nessun punto sotto 1 mm, un tratto.
 
+## Prima i fori, poi il resto (2026-11-24)
+
+Lorenzo: *«integriamo una nuova funzione, se sono attive le aree vuote e le densità il filo deve prima andare a fare i punti intorno alle aree vuote per fermare il materiale in quei punti e poi riprendere con tutto il resto. l'ingresso però sempre dai lati»*.
+
+**Ora:** casella «Prima i fori, poi il resto», sotto «più fitto intorno alle aree vuote» (vale solo con quella accesa;
+spenta di serie, e spenta il ricamo non cambia). Accesa, ogni filo entra dal **bordo esterno**, nel punto più vicino
+a uno dei fori più vicini al bordo (ogni colore uno diverso dei primi tre, così le code non cadono una sull'altra);
+poi va **di foro in foro**, sempre al più vicino non ancora fatto, e a ognuno fa anello e agglomerato. Il tragitto
+fra un foro e l'altro è fondo cucito come sempre, quindi niente salti. Finiti i fori, il filo cuce il resto.
+
+**Misurato sul pezzo di prova** (201 fori, 3 colori, densità 1,5 del totale, 3 volte, 4 mm):
+- punti 6-15 mm: ingresso a 0,8 mm dal bordo (spento: 1,4 / 66 / 73 mm); i fori finiscono intorno al
+  **21-22%** della cucitura di ogni colore; un tratto per colore; filo 289 m contro 279 (+3,6%);
+- punti 2-5 mm: ingresso a 2,7 mm dal bordo; i fori finiscono intorno al **38-40%**, perché coi punti corti il
+  tragitto fra i fori è più lungo in punti; un tratto per colore; filo uguale (149 m);
+- anelli saltati perché cadono dove il tetto dei buchi d'ago è già pieno per gli altri colori: 12 contro 20 da
+  spento (punti 2-5), 0 contro 1 (punti 6-15).
+
+## Nessun anello saltato (2026-11-24)
+
+Lorenzo, sugli anelli saltati (riportato dalla chat madre): *«C'è modo di gestire meglio questa cosa dei fori coperti? In automatico in base ai punti?»*. Un anello si saltava quando un suo punto cadeva
+in un mm² dove gli altri colori avevano già messo tutti i buchi d'ago del tetto.
+
+**Ora, in automatico:**
+1. prima di cucire si calcolano gli anelli di **tutti** i colori e i loro punti si tengono da parte nel tetto dei buchi
+   d'ago. Quanti posti dipende da sé dalla lunghezza dei punti: punti corti, anelli con più punti, più posti;
+2. col **tetto automatico** quei posti sono **in più** del tetto, solo per gli anelli: il fondo non perde niente (la
+   prima prova li toglieva al fondo e l'ultimo colore restava murato: 3 salti in più su una prova). Col tetto
+   **scritto a mano** il tetto resta quello e i posti stanno dentro (al più metà);
+3. se un punto dell'anello cade comunque in un mm² pieno, si sposta di poco in fuori o di lato (fino a 1,4 mm) in un
+   mm² libero, coi lati sempre fra punto minimo e massimo. L'anello si salta solo se nessuno spostamento va.
+
+**Misurato sul pezzo di prova** (201 fori, 3 colori, densità 1,5 del totale, 3 volte, 4 mm; 4 semi, con e senza
+«prima i fori»):
+- anelli saltati, **punti 2-5 mm**: prima 12-20 per prova, **ora 0**; **punti 6-15 mm**: prima 0-1, **ora 0**;
+- tratti: 51 in tutto sulle 16 prove, prima 52; filo coi punti lunghi in media uguale (285 m, da un seme all'altro
+  fra -6% e +4%), coi corti +0,8% (da 149 a 150 m);
+- il prezzo: coi punti corti vicino ai fori qualche mm² ha più buchi d'ago (massimo 9 invece di 7; mm² oltre 6
+  buchi: 71 invece di 6, su tutto il pezzo). Col tetto scritto a mano il massimo resta quello di prima.
+
 Cosa resta da fare sta in `STATO.md` (C4 densità per zona, C5 vuoto dello stesso colore, C6 modello
 densità unificato, A5 i nomi dei parametri "movimento").

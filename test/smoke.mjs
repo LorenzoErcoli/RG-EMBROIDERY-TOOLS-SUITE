@@ -594,6 +594,26 @@ check('aree vuote: acceso, il filo resta continuo (un tratto solo)', vdAcceso[0]
     return mm;
   });
   check('agglomerato: la stessa dose per ogni foro (il più ricco entro 1,6 volte il più povero)', Math.max(...dose) / Math.min(...dose) < 1.6, true);
+  // PRIMA I FORI (`voidsFirst`). Lorenzo (2026-11-24): «il filo deve prima andare a fare i punti intorno alle aree
+  // vuote per fermare il materiale in quei punti e poi riprendere con tutto il resto. L'ingresso però sempre dai lati».
+  check('prima i fori: spento di suo', rg.defaultInterlaceParams.voidsFirst, false);
+  check('prima i fori: senza «più fitto» non cambia niente',
+    JSON.stringify(rg.generatePasses(vdRect, poli, { ...vdParams, voidsFirst: true }, [4])) === JSON.stringify(rg.generatePasses(vdRect, poli, vdParams, [4])), true);
+  const prima = rg.generatePasses(vdRect, poli, { ...vdParams, colors: ['#874325', '#5c2e1a', '#b46f4e'], voidDensityBoost: true, voidDensityFactor: 3, voidDensityFadeMm: 4, voidsFirst: true }, [4, 4, 4]);
+  let primaTratti = 0, primaIngresso = 0, primaPresto = 0;
+  for (const pass of prima) {
+    primaTratti += pass.length;
+    const pts = pass.flat(), q = pts[0];
+    primaIngresso = Math.max(primaIngresso, Math.min(q.x, q.y, 140 - q.x, 90 - q.y));
+    // i fori già contornati nella prima metà della cucitura
+    const meta = [pts.slice(0, pts.length >> 1)];
+    for (const f of fori) if (giro(meta, f.cx, f.cy, f.r) >= 0.99) primaPresto++;
+  }
+  check('prima i fori: ogni colore resta un tratto solo', primaTratti, 3);
+  check('prima i fori: ogni colore entra dal bordo (a meno di 4 mm)', primaIngresso < 4, true);
+  // misurato: spento, nella prima metà del filo 52 anelli su 72; acceso tutti (prima dei posti tenuti da parte per gli
+  // anelli erano 70: il terzo colore ne saltava 2 perché il tetto dei buchi d'ago lì era già pieno)
+  check(`prima i fori: nella prima metà del filo tutti i fori contornati da ogni colore (${primaPresto} su ${fori.length * 3})`, primaPresto, fori.length * 3);
 }
 
 // interlace — VENATURE sopra il ricamo (`veinsOn`), il disegno «A» scelto da Lorenzo: fasci di spesse a fuso (andata e

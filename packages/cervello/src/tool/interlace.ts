@@ -110,6 +110,11 @@ export const scheda: SchedaParametri = {
       tipo: 'num', unita: 'mm', min: 0, passo: 1, predefinito: 8, concetto: 'densita',
     },
     {
+      id: 'voidsFirst', nome: 'voidsFirst', etichetta: 'Prima i fori, poi il resto',
+      aiuto: 'il filo entra dal bordo esterno, va prima di foro in foro a fare anello e agglomerato, così il materiale è fermato lì, e solo dopo cuce tutto il resto. Spento, i fori si contornano quando il filo ci passa accanto. Vale solo con «più fitto intorno alle aree vuote» acceso.',
+      tipo: 'bool', unita: '', predefinito: false, concetto: 'densita',
+    },
+    {
       id: 'veinsOn', nome: 'veinsOn', etichetta: 'Venature sopra',
       aiuto: 'venature di filo cucite per ultime, sopra al ricamo, come le pieghe chiare della pelle: fasci di venature spesse (andata e ritorno) e venature fini (solo andata), tutte in un giro senza salti.',
       tipo: 'bool', unita: '', predefinito: false, concetto: 'colori',
