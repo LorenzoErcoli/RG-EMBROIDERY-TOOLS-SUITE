@@ -23,3 +23,8 @@ immagine, ordine dei fili) si misura contro la **resa maglia**, non solo contro 
 anche [ripassi o filo in vista](../decisioni/cross-stitch-ripassi.md) e [il gruppo è un
 confine](../decisioni/cross-stitch-gruppi-confine.md). Sul Fair Isle a moduli e strisce vedi
 [modulo, strisce, ordine dei fili](../decisioni/cross-stitch-fair-isle-strisce.md).
+
+**La fascia (2026-11-24).** Lorenzo lavora anche a **fasce**: un modulo alto quanto il disegno, che si ripete solo in
+larghezza, messo a un'altezza scelta su un pezzo (un DXF) ricamato tutto di base; lo stesso modulo va su pezzi diversi
+coi margini che servono. Il disegno lo fa lui: il tool deve dare l'interfaccia e gli strumenti, non disegnare. Vedi
+[il modulo a fascia](../decisioni/cross-stitch-modulo-a-fascia.md).

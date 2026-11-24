@@ -42,7 +42,7 @@ export const paramsRoute = (s: Pick<StatoCross, 'threads' | 'route'>): RoutePara
   ({ ...s.route, passesByColor: Object.fromEntries(s.threads.map((_, i) => [i, passesDi(s, i)])) });
 
 /** Il modulo come percorso: pezzi e riga d'ingresso di ogni filo (il primo pezzo dice dove). */
-export const modulePathOf = (m: KnitModule): ModulePath => ({ cols: m.cols, rows: m.rows, marks: m.marks, pieceOf: m.seq, entryRow: entryRows({ cols: m.cols, marks: m.marks, pieceOf: m.seq, starts: m.starts }), cuts: m.cuts, forced: m.forced, bands: m.bands, bandAt: m.bandAt, ordered: m.ordered, offset: m.offset });
+export const modulePathOf = (m: KnitModule): ModulePath => ({ cols: m.cols, rows: m.rows, marks: m.marks, pieceOf: m.seq, entryRow: entryRows({ cols: m.cols, marks: m.marks, pieceOf: m.seq, starts: m.starts }), cuts: m.cuts, forced: m.forced, bands: m.bands, bandAt: m.bandAt, ordered: m.ordered, offset: m.offset, repeat: m.repeat });
 
 /** Il ricamo è proprio il modulo ripetuto (nessuna V ritoccata su una copia sola)? */
 export const designIsTiled = (s: Pick<StatoCross, 'grid' | 'cells' | 'module'>): boolean => {

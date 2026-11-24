@@ -21,7 +21,7 @@ import {
 } from './routing';
 import { autoRoles, cellMask, normalizeContours, subMask, type PieceShape, type ShapeRole } from './shape';
 import { entryRows, routeAll, routeModuleBands, stripRanges, type BandRoute, type ModulePath } from './strips';
-import { bandsOf, cellStep, editsOnAllCopies, findModule, moveBandBreak, moveShapeBand, toggleBandBreak, movePiece, piecesOf, resizeModule, seamShift, shiftModule, tileModule, type KnitModule } from './module';
+import { bandsOf, cellStep, editsOnAllCopies, findModule, isBand, parseKnitModule, moduleFile, readModuleFile, type ModuleFile, moveBandBreak, moveShapeBand, toggleBandBreak, movePiece, piecesOf, resizeModule, seamShift, shiftModule, tileModule, type KnitModule } from './module';
 import { DEFAULT_ZONES, inGroup, shiftGroup, type ZoneGroup } from './zones';
 import { extractStamp, fitStamp, flipStamp, proposeColorMap, stampColors, stampEdits, type Stamp } from './stamp';
 import { areaFromMm, clampArea, subGrid, type TestArea } from './area';
@@ -51,7 +51,7 @@ const MODE_HELP: Record<Mode, string> = {
   reroute: 'Ridisegna passaggio: clicca un passaggio, poi i punti da cui deve passare, in ordine. Invio o Spazio lo fissano (poi clicchi il prossimo), Esc toglie i punti appena messi, Canc rimette il passaggio automatico.',
   bands: 'Fasce: il filo scelto si cuce a fasce orizzontali, dall’alto, a serpentina lungo tutte le copie. Clic su una V del filo: la sua forma passa alla fascia sotto (Maiusc+clic: sopra). Clic su una riga vuota del filo: lì comincia una fascia nuova. Clic su un confine: lo togli. Trascina un confine per spostarlo.',
   order: 'Ordine pezzi: clicca i pezzi del filo scelto nell’ordine in cui vuoi cucirli (il primo clic è il primo pezzo). Da quel momento, per quel filo, dentro ogni fascia vale il tuo ordine invece di quello del tool.',
-  pick: 'Scegli modulo: sull’immagine intera trascina un riquadro intorno a un modulo. Il riquadro si aggancia alle V che trova; colonne e righe si correggono in «Griglia». Esc torna al pennello.',
+  pick: 'Scegli modulo: sull’immagine intera trascina un riquadro intorno a un modulo (per una fascia: dalla prima all’ultima riga del disegno, largo una ripetizione). Il riquadro si aggancia alle V che trova; colonne e righe si correggono in «Griglia». Esc torna al pennello.',
   image: 'Sposta immagine: trascina l’immagine sotto la griglia finché il motivo cade giusto sulle V del modulo.',
   group: 'Gruppi: trascina un rettangolo, oppure clicca i punti di un contorno (Invio lo chiude, Backspace toglie l’ultimo punto, Esc annulla): dentro ogni filo quella parte si cuce tutta insieme, nell’ordine della lista in 04 Passaggi. Clic sul bordo di un gruppo: lo selezioni e ne modifichi il contorno.',
   stamp: 'Timbro: il pezzo preso da un altro progetto segue il mouse; un clic lo posa (anche più volte). Frecce: lo spostano di una V; X: a specchio; Y: sottosopra; Invio: lo posa dov’è; Esc: finisci.',
@@ -132,6 +132,16 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
               <button type="button" id="moduleOffBtn" class="rg-button rg-button--ghost rg-button--small">Maglia normale dall'immagine</button>
             </div>
           </div>
+          <div class="rg-file-input rg-param-grid__wide">
+            <div class="rg-cluster">
+              <label class="rg-file-input__control">
+                <input type="file" id="moduleFileInput" accept=".json,.dst,.svg" />
+                <span class="rg-button rg-button--outline rg-button--small">Carica modulo…</span>
+              </label>
+              <span class="rg-tooltip"><button type="button" id="moduleSaveBtn" class="rg-button rg-button--outline rg-button--small" aria-describedby="tip-modsave" hidden>Salva modulo…</button><span class="rg-tooltip__text" role="tooltip" id="tip-modsave">Il modulo in un file a sé, coi suoi fili e la misura della cella: si carica in un altro pezzo</span></span>
+            </div>
+            <p class="rg-file-input__status" id="moduleFileStatus" role="status">Un modulo salvato (o un DST o SVG fatto qui con un modulo) si mette su questo pezzo: le misure e la forma restano.</p>
+          </div>
           <details class="rg-disclosure rg-param-grid__wide">
             <summary class="rg-disclosure__trigger">Altro</summary>
             <div class="rg-disclosure__content rg-param-grid">
@@ -173,6 +183,13 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             </div>
             <span class="rg-field__help" id="patternPosInfo">Sposta le copie del modulo sul pezzo, una V alla volta: il modulo non cambia.</span>
           </div>
+          <div class="rg-param-grid rg-param-grid__wide" id="bandPosBox" hidden>
+            <label class="rg-field"><span class="rg-field__label">Margine sopra</span>
+              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="bandTop" type="text" inputmode="decimal" aria-describedby="h-bandpos"><span>mm</span></span></label>
+            <label class="rg-field"><span class="rg-field__label">Margine sotto</span>
+              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="bandBottom" type="text" inputmode="decimal" aria-describedby="h-bandpos"><span>mm</span></span></label>
+            <span class="rg-field__help rg-param-grid__wide" id="h-bandpos">La base sopra e sotto la fascia, dal punto più alto e più basso della forma (o del ricamo). Scrivi un margine: l'altro segue. A righe intere</span>
+          </div>
           <label class="rg-field"><span class="rg-field__label">Larghezza</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="sizeW" type="text" inputmode="decimal"><span>mm</span></span></label>
           <label class="rg-field"><span class="rg-field__label">Altezza</span>
@@ -191,49 +208,108 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         </div>
       </section>
 
-      <section class="rg-param-section" id="ed-immagine" hidden>
-        <div class="rg-param-section__header"><span class="rg-param-section__index">01</span><h3 class="rg-param-section__title">Immagine</h3></div>
-        <div class="rg-param-grid">
-          <div class="rg-cluster rg-param-grid__wide">
-            <button type="button" id="edLoadBtn" class="rg-button rg-button--outline rg-button--small">Carica immagine…</button>
-            <span class="rg-tooltip" id="edFindWrap" hidden><button type="button" id="edFindBtn" class="rg-button rg-button--outline rg-button--small" aria-describedby="tip-edfind">Trova da solo</button><span class="rg-tooltip__text" role="tooltip" id="tip-edfind">Il tool trova il motivo che si ripete, sistema griglia e immagine e ricopia i colori (qualche secondo)</span></span>
-            <button type="button" id="edPaletteBtn" class="rg-button rg-button--ghost rg-button--small">Colori dall'immagine</button>
-          </div>
-          <label class="rg-field"><span class="rg-field__label">Opacità immagine</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edOpacity" type="text" inputmode="numeric"><span>%</span></span></label>
-          <output class="rg-technical rg-param-grid__wide" id="edImageInfo" aria-live="polite"></output>
-        </div>
-      </section>
-
-      <section class="rg-param-section" id="ed-griglia" hidden>
-        <div class="rg-param-section__header"><span class="rg-param-section__index">02</span><h3 class="rg-param-section__title">Griglia</h3></div>
-        <div class="rg-param-grid">
-          <label class="rg-field"><span class="rg-field__label">Larghezza cella</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edCellW" type="text" inputmode="decimal"><span>mm</span></span></label>
-          <label class="rg-field"><span class="rg-field__label">Altezza cella</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edCellH" type="text" inputmode="decimal"><span>mm</span></span></label>
-          <label class="rg-field"><span class="rg-field__label">Sormonto righe</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edOverlap" type="text" inputmode="numeric"><span>%</span></span></label>
-          <span></span>
-          <label class="rg-field"><span class="rg-field__label">Colonne del modulo</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edCols" type="text" inputmode="numeric"><span>V</span></span></label>
-          <label class="rg-field"><span class="rg-field__label">Righe del modulo</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edRows" type="text" inputmode="numeric"><span>V</span></span></label>
-          <label class="rg-field"><span class="rg-field__label">Ingrandisci</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edScale" type="text" inputmode="decimal" value="100" aria-describedby="h-edscale"><span>%</span></span></label>
-          <div class="rg-field"><span class="rg-field__label">&nbsp;</span><button type="button" id="edScaleBtn" class="rg-button rg-button--outline rg-button--small">Applica</button></div>
-          <span class="rg-field__help rg-param-grid__wide" id="h-edscale">Celle, immagine e disegno insieme, coi passaggi: il ricamo cresce allo stesso modo (stesse copie). 100 = com’è; sotto 100 rimpicciolisce. Invio o Applica.</span>
-          <output class="rg-technical rg-param-grid__wide" id="edScaleInfo" aria-live="polite"></output>
-          <span class="rg-field__help rg-param-grid__wide">L'immagine si aggancia alla griglia: quanti pixel è una V, e dove comincia il modulo. Si sposta anche trascinandola con «Sposta immagine».</span>
-          <label class="rg-field"><span class="rg-field__label">Una V nell'immagine</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edVpx" type="text" inputmode="decimal"><span>px</span></span></label>
-          <label class="rg-field"><span class="rg-field__label">Una riga nell'immagine</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edRowPx" type="text" inputmode="decimal"><span>px</span></span></label>
-          <label class="rg-field"><span class="rg-field__label">Inizio x</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edX" type="text" inputmode="decimal"><span>px</span></span></label>
-          <label class="rg-field"><span class="rg-field__label">Inizio y</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edY" type="text" inputmode="decimal"><span>px</span></span></label>
-        </div>
+      <!-- L'EDITOR DEL MODULO IN TRE PASSI (Lorenzo, 2026-11-24: «molto poco intuitivo come poter usare un'immagine di
+           base, identificare il modulo e poi iniziare a disegnare»): rg-steps del DS, si apre da solo il passo da fare. -->
+      <section class="rg-param-section" id="ed-percorso" hidden>
+        <div class="rg-param-section__header"><span class="rg-param-section__index">01</span><h3 class="rg-param-section__title">Il modulo in tre passi</h3></div>
+        <ol class="rg-steps">
+          <li class="rg-step">
+            <div class="rg-step__head">
+              <button class="rg-step__toggle" type="button" aria-expanded="true" aria-controls="edStep1Body" id="edStep1Toggle" data-step="1">
+                <span class="rg-step__num">1</span>
+                <span class="rg-step__headline"><span class="rg-step__title">L'immagine sotto</span><span class="rg-step__meta" id="edStep1Meta"><span>nessuna</span></span></span>
+                <span class="rg-step__aside" id="edStep1Aside"></span>
+              </button>
+            </div>
+            <div class="rg-step__body" id="edStep1Body" role="region" aria-labelledby="edStep1Toggle">
+              <div class="rg-param-grid">
+                <p class="rg-field__help rg-param-grid__wide">La foto o il disegno da ricopiare: sta sotto le V come guida. Si può anche disegnare senza.</p>
+                <div class="rg-cluster rg-param-grid__wide">
+                  <button type="button" id="edLoadBtn" class="rg-button rg-button--primary rg-button--small">Carica immagine…</button>
+                </div>
+                <label class="rg-field"><span class="rg-field__label">Opacità immagine</span>
+                  <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edOpacity" type="text" inputmode="numeric"><span>%</span></span></label>
+              </div>
+            </div>
+          </li>
+          <li class="rg-step">
+            <div class="rg-step__head">
+              <button class="rg-step__toggle" type="button" aria-expanded="false" aria-controls="edStep2Body" id="edStep2Toggle" data-step="2">
+                <span class="rg-step__num">2</span>
+                <span class="rg-step__headline"><span class="rg-step__title">Il modulo</span><span class="rg-step__meta" id="edStep2Meta"></span></span>
+                <span class="rg-step__aside" id="edStep2Aside"></span>
+              </button>
+            </div>
+            <div class="rg-step__body" id="edStep2Body" role="region" aria-labelledby="edStep2Toggle" hidden>
+              <div class="rg-param-grid">
+                <div class="rg-field rg-param-grid__wide">
+                  <span class="rg-field__label" id="lbl-repeat">Il modulo si ripete</span>
+                  <div class="rg-segmented" id="repeatSel" role="group" aria-labelledby="lbl-repeat">
+                    <button type="button" class="rg-segmented__item" data-repeat="xy">In larghezza e in altezza</button>
+                    <button type="button" class="rg-segmented__item" data-repeat="x">Solo in larghezza</button>
+                  </div>
+                  <span class="rg-field__help" id="h-repeat">Solo in larghezza: una fascia alta quanto il modulo; sopra e sotto c'è la base, e la fascia si mette all'altezza che vuoi sul pezzo</span>
+                </div>
+                <label class="rg-field"><span class="rg-field__label">Larghezza cella</span>
+                  <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edCellW" type="text" inputmode="decimal"><span>mm</span></span></label>
+                <label class="rg-field"><span class="rg-field__label">Altezza cella</span>
+                  <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edCellH" type="text" inputmode="decimal"><span>mm</span></span></label>
+                <label class="rg-field"><span class="rg-field__label">Sormonto righe</span>
+                  <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edOverlap" type="text" inputmode="numeric"><span>%</span></span></label>
+                <span></span>
+                <p class="rg-field__help rg-param-grid__wide" id="edFindHelp">Sull'immagine: <b>Trova da solo</b>, oppure <b>Scegli sull'immagine</b> e trascina un riquadro intorno a una ripetizione (per una fascia: dalla prima all'ultima riga del disegno). Il riquadro si aggancia alle V.</p>
+                <div class="rg-cluster rg-param-grid__wide">
+                  <span class="rg-tooltip" id="edFindWrap" hidden><button type="button" id="edFindBtn" class="rg-button rg-button--primary rg-button--small" aria-describedby="tip-edfind">Trova da solo</button><span class="rg-tooltip__text" role="tooltip" id="tip-edfind">Il tool trova il motivo che si ripete e sistema griglia e immagine (qualche secondo). Il disegno non lo tocca: lo fai tu</span></span>
+                  <button type="button" id="edPickBtn" class="rg-button rg-button--outline rg-button--small" hidden>Scegli sull'immagine</button>
+                  <button type="button" id="edPaletteBtn" class="rg-button rg-button--ghost rg-button--small">Colori dall'immagine</button>
+                </div>
+                <output class="rg-technical rg-param-grid__wide" id="edImageInfo" aria-live="polite"></output>
+                <label class="rg-field"><span class="rg-field__label">Colonne del modulo</span>
+                  <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edCols" type="text" inputmode="numeric"><span>V</span></span></label>
+                <label class="rg-field"><span class="rg-field__label">Righe del modulo</span>
+                  <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edRows" type="text" inputmode="numeric"><span>V</span></span></label>
+                <details class="rg-disclosure rg-param-grid__wide">
+                  <summary class="rg-disclosure__trigger">Aggancio fine e grandezza</summary>
+                  <div class="rg-disclosure__content rg-param-grid">
+                    <span class="rg-field__help rg-param-grid__wide">L'immagine si aggancia alla griglia: quanti pixel è una V, e dove comincia il modulo. Si sposta anche trascinandola con «Sposta immagine».</span>
+                    <label class="rg-field"><span class="rg-field__label">Una V nell'immagine</span>
+                      <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edVpx" type="text" inputmode="decimal"><span>px</span></span></label>
+                    <label class="rg-field"><span class="rg-field__label">Una riga nell'immagine</span>
+                      <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edRowPx" type="text" inputmode="decimal"><span>px</span></span></label>
+                    <label class="rg-field"><span class="rg-field__label">Inizio x</span>
+                      <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edX" type="text" inputmode="decimal"><span>px</span></span></label>
+                    <label class="rg-field"><span class="rg-field__label">Inizio y</span>
+                      <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edY" type="text" inputmode="decimal"><span>px</span></span></label>
+                    <label class="rg-field"><span class="rg-field__label">Ingrandisci</span>
+                      <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edScale" type="text" inputmode="decimal" value="100" aria-describedby="h-edscale"><span>%</span></span></label>
+                    <div class="rg-field"><span class="rg-field__label">&nbsp;</span><button type="button" id="edScaleBtn" class="rg-button rg-button--outline rg-button--small">Applica</button></div>
+                    <span class="rg-field__help rg-param-grid__wide" id="h-edscale">Celle, immagine e disegno insieme, coi passaggi: il ricamo cresce allo stesso modo (stesse copie). 100 = com’è; sotto 100 rimpicciolisce. Invio o Applica.</span>
+                    <output class="rg-technical rg-param-grid__wide" id="edScaleInfo" aria-live="polite"></output>
+                  </div>
+                </details>
+              </div>
+            </div>
+          </li>
+          <li class="rg-step">
+            <div class="rg-step__head">
+              <button class="rg-step__toggle" type="button" aria-expanded="false" aria-controls="edStep3Body" id="edStep3Toggle" data-step="3">
+                <span class="rg-step__num">3</span>
+                <span class="rg-step__headline"><span class="rg-step__title">Disegna</span><span class="rg-step__meta" id="edStep3Meta"></span></span>
+                <span class="rg-step__aside" id="edStep3Aside"></span>
+              </button>
+            </div>
+            <div class="rg-step__body" id="edStep3Body" role="region" aria-labelledby="edStep3Toggle" hidden>
+              <div class="rg-param-grid">
+                <p class="rg-field__help rg-param-grid__wide">Scegli il filo (qui sotto, in «Fili», o nella barra) e disegna col <b>Pennello</b> sul modulo al centro: ogni V vale in tutte le copie. Rotella = ingrandisci, Spazio + trascina = sposta la vista. Finito: <b>Ripeti nel ricamo</b>, in alto a destra.</p>
+                <div class="rg-cluster rg-param-grid__wide">
+                  <button type="button" id="edDrawBtn" class="rg-button rg-button--primary rg-button--small">Pennello</button>
+                  <button type="button" id="edSaveBtn" class="rg-button rg-button--outline rg-button--small">Salva modulo…</button>
+                  <span class="rg-tooltip" id="edCopyWrap" hidden><button type="button" id="edCopyBtn" class="rg-button rg-button--ghost rg-button--small" aria-describedby="tip-edcopy">Ricopia il disegno</button><span class="rg-tooltip__text" role="tooltip" id="tip-edcopy">Riempie il modulo coi colori dell’immagine, V per V. Il disegno fatto a mano si perde</span></span>
+                </div>
+              </div>
+            </div>
+          </li>
+        </ol>
       </section>
 
       <section class="rg-param-section" id="sec-fili">
@@ -731,16 +807,18 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   };
   const cutKeyNorm = (i1: number, j1: number, i2: number, j2: number) => (i1 < i2 || (i1 === i2 && j1 <= j2) ? `${i1},${j1},${i2},${j2}` : `${i2},${j2},${i1},${j1}`);
   /** I salti a mano come chiavi; in vista modulo, riportati sul modulo al centro. */
+  /** In vista modulo, la prima riga del modulo al centro: sotto le copie di sopra, o 0 per la fascia (niente copie sopra). */
+  const viewRow0 = (): number => (st.module && !isBand(st.module) ? st.module.rows : 0);
   /** Un vertice del modulo (indice del suo reticolo) nella vista, sul modulo al centro, e ritorno. */
-  const modToView = (v: number) => { const m = st.module!, Wm = 2 * m.cols + 1, Wv = 2 * (3 * m.cols) + 1; const i = Math.floor(v / Wm), j = v - i * Wm; return (i + m.rows) * Wv + j + 2 * m.cols; };
-  const viewToMod = (v: number) => { const m = st.module!, Wm = 2 * m.cols + 1, Wv = 2 * (3 * m.cols) + 1; const i = Math.floor(v / Wv) - m.rows, j = v % Wv - 2 * m.cols; return i < 0 || i > m.rows || j < 0 || j > 2 * m.cols ? -1 : i * Wm + j; };
+  const modToView = (v: number) => { const m = st.module!, Wm = 2 * m.cols + 1, Wv = 2 * (3 * m.cols) + 1; const i = Math.floor(v / Wm), j = v - i * Wm; return (i + viewRow0()) * Wv + j + 2 * m.cols; };
+  const viewToMod = (v: number) => { const m = st.module!, Wm = 2 * m.cols + 1, Wv = 2 * (3 * m.cols) + 1; const i = Math.floor(v / Wv) - viewRow0(), j = v % Wv - 2 * m.cols; return i < 0 || i > m.rows || j < 0 || j > 2 * m.cols ? -1 : i * Wm + j; };
   const cutSet = () => {
     if (editorOpen && st.module) {
       const Wv = 2 * (3 * st.module.cols) + 1;
       return new Set((st.module.cuts ?? []).map(([a, b]) => { const va = modToView(a), vb = modToView(b); return cutKeyNorm(Math.floor(va / Wv), va % Wv, Math.floor(vb / Wv), vb % Wv); }));
     }
     if (moduleView && st.module) {
-      const R = st.module.rows, C = st.module.cols;
+      const R = viewRow0(), C = st.module.cols;
       return new Set(st.cuts.map(([i1, j1, i2, j2]) => { const a = moduleRel(i1, j1, i2, j2); return cutKeyNorm(a[0] + R, a[1] + 2 * C, a[2] + R, a[3] + 2 * C); }));
     }
     return new Set(st.cuts.map(([i1, j1, i2, j2]) => cutKeyNorm(i1, j1, i2, j2)));
@@ -748,15 +826,17 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   /** Un passaggio (vertici del ricamo) relativo alla sua copia del modulo: la copia del primo vertice. */
   const moduleRel = (i1: number, j1: number, i2: number, j2: number): [number, number, number, number] => {
     const R = st.module!.rows, C = st.module!.cols;
-    const s0 = Math.floor(Math.min(i1, i2) / R), k0 = Math.floor(Math.min(j1, j2) / (2 * C));
-    return [i1 - s0 * R, j1 - 2 * C * k0, i2 - s0 * R, j2 - 2 * C * k0];
+    // la fascia non si ripete in verticale: le righe contano dalla sua prima riga
+    const top = isBand(st.module) ? st.module!.offset?.dr ?? 0 : Math.floor(Math.min(i1, i2) / R) * R, k0 = Math.floor(Math.min(j1, j2) / (2 * C));
+    return [i1 - top, j1 - 2 * C * k0, i2 - top, j2 - 2 * C * k0];
   };
   /** Lo stesso passaggio (relativo al modulo) in ogni copia del ricamo vero. */
   const allCopiesOf = (rel: [number, number, number, number]): Array<[number, number, number, number]> => {
     const g0 = moduleView && realDesign ? realDesign.grid : st.grid;
     const R = st.module!.rows, C = st.module!.cols, out: Array<[number, number, number, number]> = [];
-    for (let s0 = 0; s0 * R <= g0.rows; s0++) for (let k0 = 0; k0 * C <= g0.cols; k0++) {
-      const q: [number, number, number, number] = [rel[0] + s0 * R, rel[1] + 2 * C * k0, rel[2] + s0 * R, rel[3] + 2 * C * k0];
+    const tops = isBand(st.module) ? [st.module!.offset?.dr ?? 0] : Array.from({ length: Math.floor(g0.rows / R) + 1 }, (_, s0) => s0 * R);
+    for (const top of tops) for (let k0 = 0; k0 * C <= g0.cols; k0++) {
+      const q: [number, number, number, number] = [rel[0] + top, rel[1] + 2 * C * k0, rel[2] + top, rel[3] + 2 * C * k0];
       if (q[0] >= 0 && q[2] >= 0 && q[0] <= g0.rows && q[2] <= g0.rows && q[1] >= 0 && q[3] >= 0 && q[1] <= 2 * g0.cols && q[3] <= 2 * g0.cols) out.push(q);
     }
     return out;
@@ -918,7 +998,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         const gd = st.module.guide, pa = rowPitch(g);
         const mw = st.module.cols * g.cellW, mh = st.module.rows * pa;
         ctx.globalAlpha = imageOpacity > 0 ? imageOpacity : 0.5;
-        for (let y0 = 0; y0 < h; y0 += mh) for (let x0 = 0; x0 < w; x0 += mw) ctx.drawImage(source.img, gd.x, gd.y, gd.w, gd.h, X(x0), Y(y0), mw * k, mh * k);
+        // la fascia: una riga sola di copie, dove sta (nella vista modulo in cima)
+        const ys = isBand(st.module) ? [moduleView ? 0 : (st.module.offset?.dr ?? 0) * pa] : Array.from({ length: Math.ceil(h / mh) }, (_, i) => i * mh);
+        const dx = isBand(st.module) && !moduleView ? ((((st.module.offset?.dc ?? 0) % st.module.cols) - st.module.cols) % st.module.cols) * g.cellW : 0;
+        for (const y0 of ys) for (let x0 = dx; x0 < w; x0 += mw) ctx.drawImage(source.img, gd.x, gd.y, gd.w, gd.h, X(x0), Y(y0), mw * k, mh * k);
       }
       ctx.restore();
     }
@@ -934,7 +1017,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     }
     // fuori dall'area di prova il disegno resta, velato
     const area = moduleView && st.module
-      ? { r0: st.module.rows, c0: st.module.cols, r1: st.module.rows * 2, c1: st.module.cols * 2 }
+      ? { r0: viewRow0(), c0: st.module.cols, r1: viewRow0() + st.module.rows, c1: st.module.cols * 2 }
       : clampArea(g, st.area);
     if (area) {
       const pa = rowPitch(g);
@@ -946,6 +1029,18 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       ctx.rect(X(0), Y(0), w * k, h * k);
       ctx.rect(X(ax0), Y(ay0), (ax1 - ax0) * k, (ay1 - ay0) * k);
       ctx.fill('evenodd');
+      ctx.restore();
+    }
+    // LA FASCIA SUL PEZZO: due linee dove comincia e dove finisce, per vedere i margini di base sopra e sotto
+    if (!moduleView && st.module && isBand(st.module)) {
+      const pa = rowPitch(g), dr = st.module.offset?.dr ?? 0;
+      ctx.save();
+      ctx.strokeStyle = token('--rg-color-focus', '#0b57d0');
+      ctx.lineWidth = 1.5 * screenPx;
+      ctx.setLineDash([6 * screenPx, 4 * screenPx]);
+      ctx.beginPath();
+      for (const y of [dr * pa, (dr + st.module.rows - 1) * pa + g.cellH]) if (y > 0 && y < h) { ctx.moveTo(X(0), Y(y)); ctx.lineTo(X(w), Y(y)); }
+      ctx.stroke();
       ctx.restore();
     }
     // i passaggi (dei fili accesi), con la larghezza fissa sullo schermo
@@ -1044,7 +1139,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       + (area ? ` · area di prova ${area.c1 - area.c0} × ${area.r1 - area.r0} celle, ${fmtNum(Math.round(subGrid(g, new Map(), area).grid.cols * g.cellW))} × ${fmtNum(Math.round(gridHeight(subGrid(g, new Map(), area).grid)))} mm: passaggi ed export solo lì` : '');
     $('areaAllBtn').hidden = !area || moduleView;
     drawEditorMarks();
-    if (moduleView && st.module) $('formatInfo').textContent = `Vista modulo: ${st.module.cols} × ${st.module.rows} V al centro, intorno le copie vicine. Ogni modifica vale su tutto il ricamo.`;
+    if (moduleView && st.module) $('formatInfo').textContent = isBand(st.module)
+      ? `Vista modulo: la fascia ${st.module.cols} × ${st.module.rows} V al centro, a destra e a sinistra le copie vicine (sopra e sotto c'è la base). Ogni modifica vale su tutto il ricamo.`
+      : `Vista modulo: ${st.module.cols} × ${st.module.rows} V al centro, intorno le copie vicine. Ogni modifica vale su tutto il ricamo.`;
     showStatus();
   }
 
@@ -1090,7 +1187,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const nAreas = (st.route.areas ?? []).length;
     const nStrips = st.route.strips && !nAreas ? new Set(result.colors.map((c) => c.strip ?? 0)).size : 0;
     const stops = result.colors.length;
-    $('status').textContent = (nAreas ? `${nAreas} blocch${nAreas === 1 ? 'o' : 'i'}, ${stops} stop · ` : nStrips > 1 ? `${nStrips} strisce, ${stops} stop · ` : '') + `${stitchCount(result).toLocaleString('it-IT')} punti · ${m.legs} diagonali · passaggi in vista ${mm(m.visibleMm)} · ripassi ${mm(m.retraceMm)} · vertice-vertice ${mm(m.verticalMm)} · nascosti ${mm(m.hiddenMm)} · ${m.jumps} salt${m.jumps === 1 ? 'o' : 'i'}`;
+    $('status').textContent = (nAreas ? `${nAreas} blocch${nAreas === 1 ? 'o' : 'i'}, ${stops} stop · ` : nStrips > 1 ? `${nStrips} strisce, ${stops} stop · ` : '') + `${stitchCount(result).toLocaleString('it-IT')} punti · ${Math.round(m.legs).toLocaleString('it-IT')} diagonali · passaggi in vista ${mm(m.visibleMm)} · ripassi ${mm(m.retraceMm)} · vertice-vertice ${mm(m.verticalMm)} · nascosti ${mm(m.hiddenMm)} · ${m.jumps} salt${m.jumps === 1 ? 'o' : 'i'}`;
   }
 
   // ---- I passaggi in un processo a parte (Web Worker) ----------------------------
@@ -1142,10 +1239,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   /** Ricalcola e ridisegna: i punti subito, i passaggi quando il worker ha finito. */
   function update(): void {
-    if (editorOpen) { editorRoute(); draw(); return; } // nell'editor: solo il modulo, pochi millesimi
+    if (editorOpen) { editorRoute(); draw(); syncSteps(false); return; } // nell'editor: solo il modulo, pochi millesimi
     if (moduleView) { result = null; recompute(); draw(); return; }
     recompute();
     draw();
+    if (st.module) patternPosNote(); // i margini della fascia cambiano con le misure e con la forma
   }
 
   // Ridisegna nitido dopo uno zoom (quando la rotella si ferma) e quando la tela cambia misura.
@@ -1224,12 +1322,24 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     else if (image || shapeDims) $<HTMLInputElement>('keepRatio').checked = false; // l'altezza scritta a mano sblocca la proporzione
     resizeTo(w, h);
   }
+  /** La fascia al centro del pezzo, in altezza, sulla griglia `g` (con la forma: fra la sua prima e ultima riga). */
+  function centerBand(g: GridSpec): void {
+    const m = st.module;
+    if (!m) return;
+    const mask = pieceShape ? cellMask(g, pieceShape) : null;
+    let r0 = -1, r1 = -1;
+    for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) if (!mask || mask[r * g.cols + c]) { if (r0 < 0) r0 = r; r1 = r; break; }
+    if (r0 >= 0) m.offset = { dr: Math.round((r0 + r1 + 1) / 2 - m.rows / 2), dc: m.offset?.dc ?? 0 };
+  }
+  /** Alla prossima griglia, la fascia va al centro del pezzo (una forma appena caricata). */
+  let centerBandOnNextResize = false;
   /** Il ricamo a w × h mm: la griglia si rifà, col modulo, l'immagine o il disegno di prima. */
   function resizeTo(w: number, h: number): void {
     if (moduleView) exitModuleView();
     target = { w, h };
     const next = gridForSize(w, h, readNum('cellW') || st.grid.cellW, readNum('cellH') || st.grid.cellH, readNum('overlap') || 0);
     pushUndo();
+    if (st.module && centerBandOnNextResize) { centerBandOnNextResize = false; centerBand(next); }
     if (st.module) st.cells = tileModule(next, st.module);
     else if (image && fromImage) st.cells = knitFromImage(next, image.px, threadRgb(), knitOpts());
     else st.cells = resizeCells(st.grid, next, st.cells);
@@ -1253,6 +1363,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     buildShapeRoles();
     // il ricamo prende la misura della forma
     $<HTMLInputElement>('keepRatio').checked = true;
+    // la fascia, su una forma nuova, al centro del pezzo (in altezza): poi i margini si scelgono
+    if (fresh && st.module && isBand(st.module)) centerBandOnNextResize = true;
     resizeTo(n.w, n.h);
     shapeNote();
   }
@@ -1319,9 +1431,35 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   // ---- SPOSTA E CENTRA (Lorenzo, 2026-10-07: «spostare dx/sx alto/basso il ricalcolo del pattern composto
   // dei moduli per fare i centraggi»): la griglia delle copie si sposta sul pezzo, una V o una riga alla
   // volta; il modulo resta quello (Inizio, nella vista modulo, invece lo ruota).
+  /** Le righe del pezzo: dalla prima all'ultima con almeno una cella dentro la forma (senza forma, tutto il ricamo). */
+  const pieceRows = (): [number, number] => {
+    const g = realGrid(), mask = maskFor(g);
+    if (!mask) return [0, g.rows - 1];
+    let r0 = -1, r1 = -1;
+    for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) if (mask[r * g.cols + c]) { if (r0 < 0) r0 = r; r1 = r; break; }
+    return r0 < 0 ? [0, g.rows - 1] : [r0, r1];
+  };
+  /** I margini della fascia sul pezzo, in righe: sopra (dalla prima riga del pezzo) e sotto (fino all'ultima). */
+  const bandMargins = (): { top: number; bottom: number } => {
+    const m = st.module!, [r0, r1] = pieceRows(), dr = m.offset?.dr ?? 0;
+    return { top: dr - r0, bottom: r1 + 1 - (dr + m.rows) };
+  };
   const patternPosNote = () => {
     const m = st.module;
     if (!m) return;
+    $('bandPosBox').hidden = !isBand(m);
+    if (isBand(m)) {
+      const p = rowPitch(realGrid()), mm = (rows: number) => fmtNum(Math.round(rows * p * 10) / 10);
+      const { top, bottom } = bandMargins();
+      const dc = m.offset?.dc ?? 0, sdc = dc > m.cols / 2 ? dc - m.cols : dc;
+      if (document.activeElement !== num('bandTop')) num('bandTop').value = mm(top);
+      if (document.activeElement !== num('bandBottom')) num('bandBottom').value = mm(bottom);
+      const hMm = fmtNum(Math.round(((m.rows - 1) * p + realGrid().cellH) * 10) / 10);
+      $('patternPosInfo').textContent = `Fascia di ${m.rows} righe (${hMm} mm): sopra ${top} righe di base, sotto ${bottom}`
+        + (top < 0 || bottom < 0 ? ' — la fascia esce dal pezzo e lì è tagliata' : '')
+        + (sdc ? `; spostata di ${Math.abs(sdc)} V ${sdc < 0 ? 'a sinistra' : 'a destra'}.` : '.');
+      return;
+    }
     const sgn = (v: number, n: number) => (v > n / 2 ? v - n : v);
     const dc = sgn(m.offset?.dc ?? 0, m.cols), dr = sgn(m.offset?.dr ?? 0, m.rows);
     $('patternPosInfo').textContent = !dc && !dr
@@ -1333,7 +1471,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (!m) return;
     if (moduleView) exitModuleView();
     pushUndo();
-    m.offset = { dr: ((Math.round(dr) % m.rows) + m.rows) % m.rows, dc: ((Math.round(dc) % m.cols) + m.cols) % m.cols };
+    // la fascia non gira: la sua riga è quella, e può uscire dal pezzo solo finché ne resta una riga dentro
+    const rr = isBand(m) ? Math.max(1 - m.rows, Math.min(st.grid.rows - 1, Math.round(dr))) : ((Math.round(dr) % m.rows) + m.rows) % m.rows;
+    m.offset = { dr: rr, dc: ((Math.round(dc) % m.cols) + m.cols) % m.cols };
     st.cells = tileModule(st.grid, m);
     update();
     patternPosNote();
@@ -1357,6 +1497,17 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     }
     setPatternOffset(Math.round((r0 + r1 + 1) / 2 - m.rows / 2), Math.round((c0 + c1 + 1) / 2 - m.cols / 2));
   });
+  /** Un margine della fascia scritto in mm: la fascia si sposta a righe intere, l'altro margine segue. */
+  const onBandMargin = (which: 'top' | 'bottom') => {
+    const m = st.module;
+    if (!m || !isBand(m)) return;
+    const v = readNum(which === 'top' ? 'bandTop' : 'bandBottom');
+    if (!Number.isFinite(v)) { patternPosNote(); return; }
+    const rows = Math.round(v / rowPitch(realGrid())), [r0, r1] = pieceRows();
+    setPatternOffset(which === 'top' ? r0 + rows : r1 + 1 - rows - m.rows, m.offset?.dc ?? 0);
+  };
+  num('bandTop').addEventListener('change', () => onBandMargin('top'));
+  num('bandBottom').addEventListener('change', () => onBandMargin('bottom'));
   $<HTMLInputElement>('keepRatio').addEventListener('change', () => { if ($<HTMLInputElement>('keepRatio').checked) onSizeChange(); });
 
   num('jumpMm').addEventListener('change', () => { st.route.jumpMm = Math.max(0, readNum('jumpMm') || 0); syncFields(); update(); });
@@ -1740,7 +1891,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     ? { grid: { ...realDesign.grid }, cells: tileModule(realDesign.grid, st.module), module: cloneModule(st.module), forced: cloneForced() }
     : { grid: { ...st.grid }, cells: cloneCells(st.cells), module: cloneModule(st.module), forced: cloneForced() });
   const cloneForced = () => st.forced.map((q) => ({ from: [...q.from] as [number, number], to: [...q.to] as [number, number], via: q.via.map((v) => [...v] as [number, number]) }));
-  const cloneModule = (m: KnitModule | null): KnitModule | null => (m ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x ? { ...x } : null)), guide: m.guide ? { ...m.guide } : m.guide, drawn: m.drawn, seq: m.seq ? [...m.seq] : m.seq, starts: m.starts ? { ...m.starts } : m.starts, cuts: m.cuts ? m.cuts.map((q) => [q[0], q[1]] as [number, number]) : m.cuts, forced: m.forced ? m.forced.map((q) => ({ from: q.from, to: q.to, via: [...q.via] })) : m.forced, bands: m.bands ? Object.fromEntries(Object.entries(m.bands).map(([k, v]) => [k, [...v]])) : m.bands, bandAt: m.bandAt ? Object.fromEntries(Object.entries(m.bandAt).map(([k, v]) => [k, { ...v }])) : m.bandAt, ordered: m.ordered ? [...m.ordered] : m.ordered, offset: m.offset ? { ...m.offset } : m.offset } : null);
+  const cloneModule = (m: KnitModule | null): KnitModule | null => (m ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x ? { ...x } : null)), guide: m.guide ? { ...m.guide } : m.guide, drawn: m.drawn, seq: m.seq ? [...m.seq] : m.seq, starts: m.starts ? { ...m.starts } : m.starts, cuts: m.cuts ? m.cuts.map((q) => [q[0], q[1]] as [number, number]) : m.cuts, forced: m.forced ? m.forced.map((q) => ({ from: q.from, to: q.to, via: [...q.via] })) : m.forced, bands: m.bands ? Object.fromEntries(Object.entries(m.bands).map(([k, v]) => [k, [...v]])) : m.bands, bandAt: m.bandAt ? Object.fromEntries(Object.entries(m.bandAt).map(([k, v]) => [k, { ...v }])) : m.bandAt, ordered: m.ordered ? [...m.ordered] : m.ordered, offset: m.offset ? { ...m.offset } : m.offset, repeat: m.repeat } : null);
   function pushUndo(): void {
     undo.push(snapshot());
     if (undo.length > 100) undo.shift();
@@ -2262,6 +2413,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       const img = new Image();
       img.onload = () => {
         source = { img, name: file.name };
+        guideSnapped = false; // un'immagine nuova: la guida di prima non vale più
         crop = null;
         // SOPRA UN DISEGNO GIÀ FATTO (Lorenzo, 2026-10-13: «una volta caricato il DST poter inserire l'immagine
         // senza che il sistema mi ricalcoli tutto»): l'immagine è solo il riferimento, il ricamo resta com'è
@@ -2292,6 +2444,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       root.querySelector<HTMLButtonElement>('#modeSel [data-mode="pick"]')!.hidden = false;
       refreshEditorView();
       setMode('pick');
+      syncSteps(true);
       return;
     }
     const { img } = source;
@@ -2890,7 +3043,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const had = cuts.has(best.key);
     if (st.module && (moduleView || $<HTMLInputElement>('editAllCopies').checked)) {
       // con un modulo il salto vale in ogni copia: si toglie o si mette in tutte
-      const R = st.module.rows, C = st.module.cols;
+      const R = viewRow0(), C = st.module.cols;
       const rel: [number, number, number, number] = moduleView ? [i1 - R, j1 - 2 * C, i2 - R, j2 - 2 * C] : moduleRel(i1, j1, i2, j2);
       const keys = new Set(allCopiesOf(rel).map((q) => cutKeyNorm(...q)));
       st.cuts = had ? st.cuts.filter((c) => !keys.has(cutKeyOf2(c))) : [...st.cuts.filter((c) => !keys.has(cutKeyOf2(c))), ...allCopiesOf(rel)];
@@ -3088,13 +3241,15 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   function showModulePasses(): void {
     if (!moduleView || !st.module || !realDesign || !lastReal || editorOpen) { result = null; return; } // nell'editor niente passaggi (sarebbero vecchi)
     const m = st.module, rg = realDesign.grid, geom = lastReal.geom;
-    const R = m.rows, C = m.cols;
+    const R = m.rows, C = m.cols, band = isBand(m);
+    // la fascia: le sue righe nel ricamo cominciano da dr, e nella vista dalla prima riga
+    const top = band ? m.offset?.dr ?? 0 : 0, v0 = viewRow0();
     const full = Math.floor(rg.cols / C);
-    if (rg.rows < R || full < 1 || geom.grid.cols !== rg.cols || geom.i0 !== 0) { result = null; moduleCopyNote = 'Vista modulo: i passaggi si vedono con almeno un modulo intero nel ricamo (e senza area di prova).'; return; }
+    if ((band ? top < 0 || top + R > rg.rows : rg.rows < R) || full < 1 || geom.grid.cols !== rg.cols || geom.i0 !== 0) { result = null; moduleCopyNote = 'Vista modulo: i passaggi si vedono con almeno un modulo intero nel ricamo (e senza area di prova).'; return; }
     const kc = full >= 4 ? 2 : Math.max(0, full - 2);
     shownCopy = kc;
     const Wr = 2 * rg.cols + 1, Wv = 2 * (3 * C) + 1;
-    const toView = (v: number) => { const i = Math.floor(v / Wr), j = v % Wr; return (i + R) * Wv + (j - 2 * C * kc + 2 * C); };
+    const toView = (v: number) => { const i = Math.floor(v / Wr), j = v % Wr; return (i - top + v0) * Wv + (j - 2 * C * kc + 2 * C); };
     const copyOf = (sg: { from: number; to: number }) => Math.floor(Math.min(sg.from % Wr, sg.to % Wr) / 2 / C);
     const rowOf = (sg: { from: number; to: number }) => Math.min(Math.floor(sg.from / Wr), Math.floor(sg.to / Wr));
     const colors: RouteResult['colors'] = [];
@@ -3103,7 +3258,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       const segs: RouteSeg[] = []; let pend: RouteSeg[] = [];
       for (const sg of cr.segs) {
         if (sg.kind !== 'stitch') { pend.push(sg); continue; }
-        if (copyOf(sg) === kc && rowOf(sg) < R) for (const t of [...pend, sg]) segs.push({ kind: t.kind, from: toView(t.from), to: toView(t.to) });
+        if (copyOf(sg) === kc && rowOf(sg) >= top && rowOf(sg) < top + R) for (const t of [...pend, sg]) segs.push({ kind: t.kind, from: toView(t.from), to: toView(t.to) });
         pend = [];
       }
       if (segs.length) colors.push({ color: cr.color, segs });
@@ -3113,7 +3268,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     moduleCopyNote = `Vista modulo: i passaggi di una copia del ricamo (la ${kc + 1}ª della prima striscia). I salti messi qui valgono su tutte le copie.`;
   }
   let realDesign: { grid: GridSpec; cells: Cells } | null = null;
-  const viewGridOf = (g: GridSpec, m: KnitModule): GridSpec => ({ ...g, cols: m.cols * 3, rows: m.rows * 3 });
+  /**
+   * La tela della vista modulo: il modulo al centro e le copie vicine. Il modulo a fascia ha le copie solo a destra e a
+   * sinistra (Lorenzo, 2026-11-24: «essendo molto alto disegno molto male perché si moltiplica il modulo anche sopra»).
+   */
+  const viewGridOf = (g: GridSpec, m: KnitModule): GridSpec => ({ ...g, cols: m.cols * 3, rows: isBand(m) ? m.rows : m.rows * 3 });
   function enterModuleView(): void {
     if (!st.module || moduleView) return;
     realDesign = { grid: st.grid, cells: st.cells };
@@ -3178,15 +3337,48 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       + (sh.cutCols || sh.cutRows ? ' (meno di così non si può: i motivi attraversano tutto il modulo).' : '.');
   });
 
+  // IL MODULO A FASCIA (Lorenzo, 2026-11-24): si ripete solo in larghezza. La fascia va al centro del pezzo; tornando
+  // a «in larghezza e in altezza» la riga dove cominciava resta l'inizio delle copie.
+  root.querySelectorAll<HTMLButtonElement>('#repeatSel [data-repeat]').forEach((b) => b.addEventListener('click', () => {
+    const m = st.module;
+    if (!m) return;
+    const band = b.dataset.repeat === 'x';
+    if (band === isBand(m)) return;
+    pushUndo();
+    const dc = m.offset?.dc ?? 0;
+    if (band) {
+      m.repeat = 'x';
+      const [r0, r1] = pieceRows();
+      m.offset = { dr: Math.round((r0 + r1 + 1) / 2 - m.rows / 2), dc };
+    } else {
+      m.repeat = undefined;
+      m.offset = { dr: (((m.offset?.dr ?? 0) % m.rows) + m.rows) % m.rows, dc };
+    }
+    if (moduleView) { st.grid = viewGridOf(realDesign!.grid, m); st.cells = tileModule(st.grid, m, null); }
+    else st.cells = tileModule(st.grid, m);
+    if (editorSnap) editorSnap.changed = true;
+    syncModuleUI();
+    update();
+    requestAnimationFrame(() => pz.fit());
+  }));
+
   /** Le V del motivo nell'immagine per V del modulo (2 se il modulo è metà del motivo): per le correzioni a mano. */
   let moduleFactor = { c: 1, r: 1 };
   function syncModuleUI(): void {
     const m = st.module;
     $('moduleBox').hidden = !m;
+    $('moduleSaveBtn').hidden = !m;
     $('patternPosBox').hidden = !m;
     if (m) patternPosNote();
     $('moduleEditGroup').hidden = !m;
     $('moduleStartGroup').hidden = !m || !moduleView;
+    // la fascia non gira in verticale: l'inizio si sposta solo di lato
+    for (const d of ['up', 'down']) root.querySelector<HTMLElement>(`[data-shift="${d}"]`)!.closest('.rg-tooltip')!.toggleAttribute('hidden', isBand(m));
+    root.querySelectorAll<HTMLButtonElement>('#repeatSel [data-repeat]').forEach((b) => {
+      const on = (b.dataset.repeat === 'x') === isBand(m);
+      b.classList.toggle('rg-segmented__item--active', on);
+      b.setAttribute('aria-pressed', on ? 'true' : 'false');
+    });
     root.querySelectorAll<HTMLButtonElement>('#moduleViewSel .rg-segmented__item').forEach((b) => {
       const on = (b.dataset.view === 'modulo') === moduleView;
       b.classList.toggle('rg-segmented__item--active', on);
@@ -3215,40 +3407,88 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const d = ctx.getImageData(0, 0, cnv.width, cnv.height);
     return { rgba: d.data, width: cnv.width, height: cnv.height, scale, cr };
   }
-  function runModule(force?: { cols: number; rows: number }): void {
+  /**
+   * La guida del modulo è agganciata alle V dell'immagine (da Trova da solo o Scegli modulo)? Quella di un modulo nuovo
+   * è l'immagine intera, con righe a caso: lì Trova da solo cerca da capo.
+   */
+  let guideSnapped = false;
+  /** Il modulo ha un disegno (V di un filo che non è la base, o pezzi disegnati)? */
+  const moduleHasDrawing = (m: KnitModule): boolean => {
+    const b = st.route.base?.color ?? 0;
+    return (m.seq ?? []).some((v) => v > 0) || m.marks.some((mk) => !!mk && mk.color !== b);
+  };
+  /**
+   * TROVA DA SOLO. Trova il modulo nell'immagine: quante V, dove comincia, la guida. Il disegno NON si tocca
+   * (Lorenzo, 2026-11-24: «il disegno lo faccio io»): un modulo vuoto prende i colori dei fili dall'immagine, uno già
+   * disegnato cambia solo misura. `fill` = ricopia anche il disegno dall'immagine (Ricopia il disegno), come prima.
+   * Per la fascia il periodo si cerca solo in larghezza, nella striscia d'immagine della guida (o in tutta l'immagine).
+   */
+  function runModule(fill = false): void {
     if (moduleView && !editorOpen) exitModuleView();
-    const px = sourcePixels();
+    const band = isBand(st.module);
+    let px: ReturnType<typeof sourcePixels>;
+    const gd0 = st.module?.guide;
+    // la fascia con la guida: si cerca nella sua striscia, con le sue righe (la trama letta su un pezzo più basso
+    // sbagliava l'altezza delle righe: sulla fascia di prova 9,2 px invece di 11,6)
+    let forceRows: number | undefined;
+    if (band && gd0 && guideSnapped && source && st.module) {
+      const H0 = source.img.naturalHeight, y0 = Math.max(0, gd0.y), rowPx = gd0.h / st.module.rows;
+      const rowsIn = Math.max(2, Math.min(st.module.rows, Math.floor((H0 - y0) / rowPx)));
+      const saved = crop;
+      crop = { x: 0, y: y0, w: source.img.naturalWidth, h: rowsIn * rowPx };
+      px = sourcePixels();
+      crop = saved;
+      forceRows = rowsIn;
+    } else px = sourcePixels();
     if (!px) { $('imageStatus').textContent = 'Carica prima un’immagine.'; return; }
     const info = editorOpen ? $('edImageInfo') : $('moduleInfo');
     info.hidden = false;
     info.textContent = 'Cerco il modulo… (qualche secondo)';
     $<HTMLButtonElement>('edFindBtn').disabled = true;
     window.setTimeout(() => {
-      const found = findModule(px, { colors: 7, cols: force?.cols, rows: force?.rows });
+      const found = findModule(px!, { colors: 7, band, rows: forceRows });
       moduleFactor = { c: found.imageCells.cols / found.cols, r: found.imageCells.rows / found.rows };
       pushUndo();
       const stitch = knit.stitch === 'cross' || knit.stitch === 'down' || knit.stitch === 'up' || knit.stitch === 'lambda' ? knit.stitch : 'v';
       const gp = found.guidePx;
-      st.module = { cols: found.cols, rows: found.rows, marks: found.map.map((k) => ({ stitch, color: k })), guide: { x: px.cr.x + gp.x / px.scale, y: px.cr.y + gp.y / px.scale, w: gp.w / px.scale, h: gp.h / px.scale }, drawn: false };
-      st.threads = found.palette.map((hex, i) => ({ hex, passes: passesOf(i) }));
-      st.route.base = { color: 0, stitch: 'v' };
-      st.route.strips = { rows: found.rows, shiftMm: st.route.strips?.shiftMm ?? 0 };
+      const guide = { x: px!.cr.x + gp.x / px!.scale, y: px!.cr.y + gp.y / px!.scale, w: gp.w / px!.scale, h: gp.h / px!.scale };
+      const m0 = st.module;
+      const keep = !fill && !!m0 && moduleHasDrawing(m0);
+      if (fill || !m0) {
+        st.module = { cols: found.cols, rows: found.rows, marks: found.map.map((k) => ({ stitch, color: k })), guide, drawn: false, repeat: m0?.repeat, offset: m0?.offset };
+      } else {
+        // solo la misura e la guida: il disegno resta com'è (un modulo vuoto resta tutto base)
+        st.module = resizeModule(m0, found.cols, found.rows, { stitch: 'v', color: st.route.base?.color ?? 0 });
+        st.module.guide = guide;
+        st.module.drawn = true;
+      }
+      if (!keep) { st.threads = found.palette.map((hex, i) => ({ hex, passes: passesOf(i) })); st.route.base = { color: 0, stitch: 'v' }; }
+      if (!band) st.route.strips = { rows: found.rows, shiftMm: st.route.strips?.shiftMm ?? 0 };
+      guideSnapped = true;
       const rgrid = realGrid();
       fromImage = false;
       $<HTMLButtonElement>('edFindBtn').disabled = false;
       const rx = (rgrid.cols / found.cols), ry = (rgrid.rows / found.rows);
       const fmt1 = (v: number) => fmtNum(Math.round(v * 10) / 10);
-      info.textContent = `Modulo ${found.cols} × ${found.rows} V (nell'immagine il motivo è ${found.imageCells.cols} × ${found.imageCells.rows} V, ${found.periodPx.w} × ${found.periodPx.h} px), ripetuto ${fmt1(rx)} × ${fmt1(ry)}; ${found.palette.length} fili, base il più diffuso`
-        + (found.removed ? `; tolt${found.removed === 1 ? 'o 1 colore' : `i ${found.removed} colori`} di bordo` : '')
-        + `. Strisce di ${found.rows} righe.`;
+      info.textContent = (band
+        ? `Fascia di ${found.cols} × ${found.rows} V (nell'immagine si ripete ogni ${found.periodPx.w} px)`
+          + (found.trimmed && (found.trimmed.top || found.trimmed.bottom) ? `; tolte ${found.trimmed.top} righe di base sopra e ${found.trimmed.bottom} sotto` : '')
+        : `Modulo ${found.cols} × ${found.rows} V (nell'immagine il motivo è ${found.imageCells.cols} × ${found.imageCells.rows} V, ${found.periodPx.w} × ${found.periodPx.h} px), ripetuto ${fmt1(rx)} × ${fmt1(ry)}`)
+        + (fill ? `; disegno ricopiato dall'immagine, ${found.palette.length} fili` : keep ? '; il tuo disegno è rimasto' : `; ${found.palette.length} fili dall'immagine, il modulo è da disegnare`)
+        + (found.removed && (fill || !keep) ? `; tolt${found.removed === 1 ? 'o 1 colore' : `i ${found.removed} colori`} di bordo` : '')
+        + '. Se il riquadro non torna, trascinane uno con «Scegli sull’immagine».';
       buildThreads();
       syncFields();
       syncModuleUI();
-      if (editorOpen) refreshEditorView();
+      if (editorOpen) { refreshEditorView(); syncSteps(true); }
       else { st.cells = tileModule(st.grid, st.module); update(); }
     }, 30);
   }
   $('edFindBtn').addEventListener('click', () => runModule());
+  $('edCopyBtn').addEventListener('click', () => {
+    if (st.module && moduleHasDrawing(st.module) && !window.confirm('Il modulo prende il disegno dell’immagine: quello che hai disegnato si perde (Annulla lo rimette). Continuare?')) return;
+    runModule(true);
+  });
 
   /**
    * NUOVO MODULO (Lorenzo, 2026-10-01: «costruire un modulo da zero. Metto un'immagine sotto…
@@ -3291,6 +3531,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       }
     }
     st.module = { cols, rows, marks: Array.from({ length: cols * rows }, () => ({ stitch: 'v' as const, color: 0 })), guide: cr ? { ...cr } : null, drawn: true };
+    guideSnapped = false;
     st.route.base = { color: 0, stitch: 'v' };
     st.route.strips = { rows, shiftMm: st.route.strips?.shiftMm ?? 0 };
     fromImage = false;
@@ -3320,8 +3561,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     editorEntry = mp.entryRow;
     let res: RouteResult;
     try { const rb = routeModuleBands(realGrid(), mp, routeParams()); res = rb; editorBands = rb.bands; } catch { result = null; editorBands = new Map(); return; }
-    const R = m.rows, Wv = 2 * (3 * m.cols) + 1;
-    const toView = (v: number) => v + R * Wv;
+    const Wv = 2 * (3 * m.cols) + 1;
+    const toView = (v: number) => v + viewRow0() * Wv;
     result = { colors: res.colors.map((cr) => ({ color: cr.color, segs: cr.segs.map((sg) => ({ kind: sg.kind, from: toView(sg.from), to: toView(sg.to) })) })), metrics: res.metrics };
     editorVisible = res.metrics.visibleMm;
     routeGeom = { grid: st.grid, dx: 0, dy: 0, i0: 0, j0: 0 };
@@ -3421,6 +3662,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       st.route.strips = { rows, shiftMm: st.route.strips?.shiftMm ?? 0 };
     }
     st.module!.guide = { x: x0, y: y0, w: cols * sx, h: rows * sy };
+    guideSnapped = !!st0.x;
     // un modulo ancora vuoto prende i colori del pezzo scelto
     if (empty) { paletteFromGuide(); buildThreads(); }
     const r2 = (v: number) => fmtNum(Math.round(v * 100) / 100);
@@ -3429,6 +3671,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       : `Nell’immagine non trovo le V: il modulo è il riquadro com’è, ${cols} × ${rows} V. Correggi Colonne e Righe in «Griglia».`;
     setMode('paint');
     refreshEditorView();
+    syncSteps(true);
   }
   /** I segni dell'editor per il filo scelto: ingresso (pieno) a sinistra, arrivo (anello) a destra, numeri dei pezzi. */
   function drawEditorMarks(): void {
@@ -3437,7 +3680,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     svg.querySelector('#cs-ed-marks')?.remove();
     const m = st.module;
     if (!editorOpen || !m) return;
-    const g = st.grid, pa = rowPitch(g), R = m.rows, C = m.cols;
+    const g = st.grid, pa = rowPitch(g), R = viewRow0(), C = m.cols;
     const ns = 'http://www.w3.org/2000/svg';
     const layer = document.createElementNS(ns, 'g');
     layer.id = 'cs-ed-marks';
@@ -3481,7 +3724,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             if (qr < Math.floor(top / C) || (qr === Math.floor(top / C) && qc < top % C)) top = q;
             for (let dr = -1; dr <= 1; dr++) for (let dc = -1; dc <= 1; dc++) {
               const nr = qr + dr, nc = qc + dc, j = nr * C + nc;
-              if (nr >= 0 && nr < R && nc >= 0 && nc < C && set.has(j) && !seen.has(j)) { seen.add(j); stack.push(j); }
+              if (nr >= 0 && nr < m.rows && nc >= 0 && nc < C && set.has(j) && !seen.has(j)) { seen.add(j); stack.push(j); }
             }
           }
           const tx = (C + (top % C) + 0.5) * g.cellW, ty = (R + Math.floor(top / C)) * pa + g.cellH / 2;
@@ -3523,12 +3766,47 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     update();
     if (editorSnap) editorSnap.changed = true;
   }
+  // ---- I TRE PASSI DELL'EDITOR (rg-steps): cosa è fatto, e si apre da solo il primo da fare ----
+  const stepDone = (): [boolean, boolean, boolean] => {
+    const m = st.module;
+    const s1 = !!source;
+    const s2 = !!m && guideSnapped; // agganciato all'immagine (senza immagine colonne e righe si scrivono a mano)
+    const s3 = !!m && moduleHasDrawing(m);
+    return [s1, s2, s3];
+  };
+  function openStep(n: number, open: boolean): void {
+    const t = $(`edStep${n}Toggle`);
+    t.setAttribute('aria-expanded', open ? 'true' : 'false');
+    $(`edStep${n}Body`).hidden = !open;
+  }
+  /** I dati di ogni passo; con `auto` si apre il primo passo da fare e si chiudono gli altri. */
+  function syncSteps(auto: boolean): void {
+    const m = st.module, done = stepDone();
+    const meta = (n: number, parts: string[]) => { $(`edStep${n}Meta`).innerHTML = parts.map((x) => `<span>${x.replace(/[<>&]/g, '')}</span>`).join(''); };
+    meta(1, source ? [source.name, `${source.img.naturalWidth} × ${source.img.naturalHeight} px`] : ['nessuna: si può disegnare anche senza']);
+    meta(2, m ? [`${isBand(m) ? 'fascia' : 'modulo'} ${m.cols} × ${m.rows} V`, isBand(m) ? 'solo in larghezza' : 'in larghezza e in altezza'] : []);
+    const nP = m ? piecesOf(m, activeThread).length : 0;
+    meta(3, m ? (done[2] ? [`${st.threads.length} fili`, `filo scelto: ${nP} pezz${nP === 1 ? 'o' : 'i'}`] : ['ancora tutto base']) : []);
+    done.forEach((d, i) => { $(`edStep${i + 1}Aside`).innerHTML = d ? '<span class="rg-badge rg-badge--validated">Fatto</span>' : ''; });
+    if (auto) {
+      const first = done[0] ? (done[1] ? 3 : 2) : 1;
+      for (const n of [1, 2, 3]) openStep(n, n === first);
+    }
+  }
+  root.querySelectorAll<HTMLButtonElement>('#ed-percorso .rg-step__toggle').forEach((t) => t.addEventListener('click', () => {
+    openStep(Number(t.dataset.step), t.getAttribute('aria-expanded') !== 'true');
+  }));
+  $('edPickBtn').addEventListener('click', () => setMode('pick'));
+  $('edDrawBtn').addEventListener('click', () => setMode('paint'));
   function syncEditorFields(): void {
     const g = realGrid(), m = st.module;
     num('edCellW').value = fmtNum(g.cellW); num('edCellH').value = fmtNum(g.cellH); num('edOverlap').value = fmtNum(g.overlapPct ?? 0);
     num('edOpacity').value = String(Math.round((imageOpacity > 0 ? imageOpacity : 0.5) * 100));
     $('edFindWrap').hidden = !source;
+    $<HTMLButtonElement>('edPickBtn').hidden = !source;
     $<HTMLButtonElement>('edPaletteBtn').hidden = !source;
+    syncSteps(false);
+    $('edCopyWrap').hidden = !source;
     if (!m) return;
     num('edCols').value = String(m.cols); num('edRows').value = String(m.rows);
     const gd = m.guide;
@@ -3545,7 +3823,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $('edScaleInfo').textContent = '';
     if (!st.module) { newModule(); buildThreads(); syncFields(); }
     for (const id of ['sec-immagine', 'sec-misure', 'sec-passaggi', 'sec-macchina', 'sec-carica']) $(id).hidden = true;
-    for (const id of ['ed-immagine', 'ed-griglia']) $(id).hidden = false;
+    for (const id of ['ed-percorso']) $(id).hidden = false;
     $('stageTitle').textContent = 'Modulo';
     $('stageActions').hidden = true; $('editorActions').hidden = false;
     document.title = 'Modulo · Punto croce';
@@ -3566,6 +3844,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     enterModuleView();
     setMode('paint');
     syncEditorFields();
+    syncSteps(true);
     update();
     $('stageTitle').focus();
   }
@@ -3574,7 +3853,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (!apply && editorSnap?.changed && !window.confirm('Le modifiche fatte al modulo si perdono. Tornare al ricamo?')) return;
     editorOpen = false;
     for (const id of ['sec-immagine', 'sec-misure', 'sec-passaggi', 'sec-macchina', 'sec-carica']) $(id).hidden = false;
-    for (const id of ['ed-immagine', 'ed-griglia']) $(id).hidden = true;
+    for (const id of ['ed-percorso']) $(id).hidden = true;
     $('stageTitle').textContent = 'Disegno';
     $('stageActions').hidden = false; $('editorActions').hidden = true;
     document.title = 'Punto croce — RG Tools';
@@ -3589,7 +3868,16 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
     if (mode === 'image' || mode === 'order' || mode === 'reroute' || mode === 'pick' || mode === 'bands') setMode('paint');
     reroute = null;
-    if (apply) { exitModuleView(); }
+    if (apply) {
+      exitModuleView();
+      const m = st.module;
+      if (m) {
+        $('moduleInfo').hidden = false;
+        $('moduleInfo').textContent = isBand(m)
+          ? `Fascia ${m.cols} × ${m.rows} V, ripetuta in larghezza: dove sta e i margini di base sopra e sotto si scelgono in «Misure del ricamo». «Editor modulo» per cambiarla.`
+          : `Modulo ${m.cols} × ${m.rows} V, ripetuto su tutto il ricamo. «Editor modulo» per cambiarlo.`;
+      }
+    }
     else if (editorSnap) {
       // si torna com'era all'apertura
       moduleView = false; realDesign = null;
@@ -3720,20 +4008,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     st.cells = cellsFromJson(st.grid, meta.cells);
     st.area = clampArea(st.grid, meta.area as Partial<TestArea> | null);
     {
-      const m = meta.module as KnitModule | null | undefined;
-      st.module = m && Number.isInteger(m.cols) && Number.isInteger(m.rows) && Array.isArray(m.marks) && m.marks.length === m.cols * m.rows
-        ? { cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x && typeof x === 'object' ? { stitch: x.stitch, color: Number(x.color) } : null)),
-          guide: m.guide && typeof m.guide === 'object' && [m.guide.x, m.guide.y, m.guide.w, m.guide.h].every((v) => Number.isFinite(Number(v))) ? { x: Number(m.guide.x), y: Number(m.guide.y), w: Number(m.guide.w), h: Number(m.guide.h) } : null,
-          drawn: !!m.drawn,
-          seq: Array.isArray(m.seq) && m.seq.length === m.cols * m.rows ? m.seq.map((v) => Math.max(0, Math.round(Number(v) || 0))) : undefined,
-          starts: m.starts && typeof m.starts === 'object' ? Object.fromEntries(Object.entries(m.starts).map(([k, v]) => [Number(k), Number(v)])) : undefined,
-          cuts: Array.isArray(m.cuts) ? m.cuts.filter((q) => Array.isArray(q) && q.length === 2).map((q) => [Number(q[0]), Number(q[1])] as [number, number]) : undefined,
-          forced: Array.isArray(m.forced) ? m.forced.filter((q) => q && Array.isArray(q.via)).map((q) => ({ from: Number(q.from), to: Number(q.to), via: q.via.map(Number) })) : undefined,
-          bands: m.bands && typeof m.bands === 'object' ? Object.fromEntries(Object.entries(m.bands).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [Number(k), (v as unknown[]).map(Number)])) : undefined,
-          ordered: Array.isArray(m.ordered) ? m.ordered.map(Number) : undefined,
-          offset: m.offset && typeof m.offset === 'object' ? { dr: Math.round(Number(m.offset.dr) || 0), dc: Math.round(Number(m.offset.dc) || 0) } : undefined,
-          bandAt: m.bandAt && typeof m.bandAt === 'object' ? Object.fromEntries(Object.entries(m.bandAt).filter(([, v]) => v && typeof v === 'object').map(([k, v]) => [Number(k), Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([i, d]) => [Number(i), Number(d)]))])) : undefined }
-        : null;
+      st.module = parseKnitModule(meta.module);
     }
     {
       // la forma salvata: già alla sua misura, coi suoi ruoli
@@ -3776,6 +4051,64 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     update();
     requestAnimationFrame(() => pz.fit());
   }
+
+  // ---- IL MODULO IN UN FILE A SÉ (Lorenzo, 2026-11-24: «il modulo dovrò poterlo usare anche in altre parti dove i
+  // margini sopra e sotto cambiano») ----
+  async function saveModule(): Promise<void> {
+    const m = st.module;
+    if (!m) return;
+    const file = moduleFile(m, st.threads, st.route.base ?? null, realGrid());
+    const name = `${sourceName || 'modulo'}-modulo-${m.cols}x${m.rows}.json`;
+    const outcome = await saveTextFile(JSON.stringify(file), { suggestedName: name, mime: 'application/json', extension: '.json', description: 'Modulo del Punto croce' });
+    const msg = saveOutcomeMessage(outcome, name);
+    $(editorOpen ? 'edScaleInfo' : 'moduleFileStatus').textContent = msg;
+  }
+  $('moduleSaveBtn').addEventListener('click', () => { void saveModule(); });
+  $('edSaveBtn').addEventListener('click', () => { void saveModule(); });
+  /** Il modulo letto da un file su questo pezzo: misure e forma restano, la fascia va al centro del pezzo. */
+  function applyModuleFile(mf: ModuleFile, name: string): void {
+    if (moduleView) exitModuleView();
+    pushUndo();
+    st.module = mf.module;
+    st.threads = mf.threads.map((t) => ({ hex: t.hex, passes: t.passes }));
+    st.route.base = mf.base;
+    guideSnapped = false;
+    fromImage = false;
+    // la cella del modulo (così resta degli stessi mm), sulle misure del ricamo di adesso
+    const next = gridForSize(target.w, target.h, mf.cell.cellW, mf.cell.cellH, mf.cell.overlapPct);
+    if (isBand(st.module)) centerBand(next);
+    st.grid = next;
+    st.cells = tileModule(next, st.module);
+    st.area = clampArea(st.grid, st.area);
+    syncFields();
+    update();
+    buildThreads();
+    syncModuleUI();
+    const m = st.module;
+    $('moduleFileStatus').textContent = `${name}: ${isBand(m) ? 'fascia' : 'modulo'} ${m.cols} × ${m.rows} V, ${st.threads.length} fili, cella ${fmtNum(mf.cell.cellW)} × ${fmtNum(mf.cell.cellH)} mm.`
+      + (isBand(m) ? ' La fascia è al centro del pezzo: i margini si scelgono in «Misure del ricamo».' : '');
+  }
+  $<HTMLInputElement>('moduleFileInput').addEventListener('change', (ev) => {
+    const input = ev.target as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = '';
+    if (!file) return;
+    const isDst = /\.dst$/i.test(file.name);
+    const reader = new FileReader();
+    reader.onload = () => {
+      try {
+        const meta = isDst ? readDstMetadata(new Uint8Array(reader.result as ArrayBuffer))
+          : /\.json$/i.test(file.name) ? JSON.parse(String(reader.result)) as Record<string, unknown>
+            : readProjectMetadata(String(reader.result));
+        const mf = readModuleFile(meta as Record<string, unknown> | null);
+        if (!mf) { $('moduleFileStatus').textContent = `${file.name}: qui dentro non c'è un modulo del Punto croce.`; return; }
+        applyModuleFile(mf, file.name);
+      } catch (e) {
+        $('moduleFileStatus').textContent = `${file.name}: non leggibile (${(e as Error).message}).`;
+      }
+    };
+    if (isDst) reader.readAsArrayBuffer(file); else reader.readAsText(file);
+  });
 
   $<HTMLInputElement>('projectInput').addEventListener('change', (ev) => {
     const input = ev.target as HTMLInputElement;

@@ -838,34 +838,56 @@ grigio chiaro. Serve per vedere i blocchi e i gruppi: una zona lasciata a metà 
 riconosce subito (due colori lontani nella stessa zona).
 
 **L'editor del modulo** (in *01 Immagine*, **Editor modulo**): una schermata a sé per fare il modulo
-che si ripete, per esempio un Fair Isle. Il titolo diventa *Modulo*; a destra **Torna al ricamo** (lascia
-le modifiche fatte nell'editor; chiede conferma se hai cambiato qualcosa) e **Ripeti nel ricamo** (il
-ricamo diventa il modulo ripetuto, a strisce alte un modulo). Nell'editor **i passaggi non si
-calcolano**, così ogni tocco è immediato: si vedono tornando al ricamo.
-- **01 Immagine**: *Carica immagine…*: la tela mostra l'**immagine intera** con lo strumento **Scegli
-  modulo**: trascina un riquadro intorno a un modulo. Il riquadro si **aggancia alle V** dell'immagine
-  (il tool misura quanti pixel è una V e una riga e dove cadono i bordi) e il modulo prende quelle
-  colonne e righe; il pezzo fuori resta velato, dentro si vedono le V. Se il modulo è ancora vuoto,
-  prende anche i colori del pezzo. Per scegliere un altro pezzo, di nuovo *Scegli modulo* e un altro
-  riquadro; se il conto delle V non torna, correggi *Colonne* e *Righe* in *02 Griglia*. **Esc** torna
-  al pennello. Oppure **Trova da solo** (qualche secondo): il tool trova il motivo che
-  si ripete, aggancia l'immagine alla griglia e ricopia il colore di ogni V. Se il motivo è fatto di copie
-  uguali, il modulo è una copia sola; i **colori finti** (un colore fatto quasi solo di V isolate lungo
-  i bordi: la sfumatura fra due colori) vengono tolti. *Colori dall'immagine* propone i fili dal pezzo
-  d'immagine del modulo (la base è il più diffuso, poi dal chiaro allo scuro). *Opacità immagine*.
-- **02 Griglia**: la cella (larghezza, altezza, sormonto) e la misura del modulo in V (colonne, righe:
-  cambiandole il modulo si allarga o si accorcia e quello che hai disegnato resta). **Ingrandisci** (%,
-  poi *Applica*) allarga tutto insieme: celle, immagine e disegno, coi passaggi uguali (sono in V, non
-  in mm); il ricamo cresce della stessa percentuale con le stesse copie. Sotto 100 rimpicciolisce;
-  *Torna al ricamo* annulla anche questo. Poi l'**immagine
-  agganciata alla griglia**: quanti pixel è *una V* e *una riga* nell'immagine, e dove comincia il
-  modulo (*Inizio x, y*). Si regola anche col nuovo strumento **Sposta immagine** (tasto M):
-  trascinando, l'immagine scorre sotto la griglia finché il motivo cade giusto sulle V.
+che si ripete, per esempio un Fair Isle o una fascia di motivi. Il titolo diventa *Modulo*; a destra **Torna al
+ricamo** (lascia le modifiche fatte nell'editor; chiede conferma se hai cambiato qualcosa) e **Ripeti nel ricamo** (il
+ricamo diventa il modulo ripetuto). Nell'editor **i passaggi del ricamo non si calcolano**, così ogni tocco è
+immediato: si vedono tornando al ricamo. Il pannello è fatto di **tre passi numerati**: si apre da solo il primo da
+fare, e quelli fatti hanno il segno *Fatto* (si riaprono con un clic sul titolo).
+- **1 L'immagine sotto**: *Carica immagine…* (la foto o il disegno da ricopiare: sta sotto le V come guida; si può
+  anche disegnare senza) e *Opacità immagine*.
+- **2 Il modulo**:
+  - **Il modulo si ripete**: *In larghezza e in altezza* (il modulo di sempre) o **Solo in larghezza**: una **fascia**
+    alta quanto il modulo, ripetuta solo a destra e a sinistra; sopra e sotto c'è la base, e sul pezzo la fascia si
+    mette all'altezza che vuoi (vedi *La fascia sul pezzo* più sotto). Nella fascia l'editor mostra le copie solo ai
+    lati, così un modulo alto si disegna grande.
+  - La **cella** (larghezza, altezza, sormonto).
+  - **Trova da solo** (qualche secondo): il tool trova il motivo che si ripete e aggancia l'immagine alla griglia.
+    **Il disegno non lo tocca**: un modulo ancora vuoto prende i colori dei fili dall'immagine (la base è il più
+    diffuso), uno già disegnato cambia solo misura. Per la fascia cerca la ripetizione solo in larghezza e **toglie le
+    righe di sola base** sopra e sotto. Se il motivo è fatto di copie uguali, il modulo è una copia sola; i **colori
+    finti** (un colore fatto quasi solo di V isolate lungo i bordi: la sfumatura fra due colori) vengono tolti.
+  - Oppure **Scegli sull'immagine** (lo strumento *Scegli modulo*): la tela mostra l'immagine intera, trascina un
+    riquadro intorno a una ripetizione (per una fascia: dalla prima all'ultima riga del disegno, largo una
+    ripetizione). Il riquadro si **aggancia alle V** dell'immagine e il modulo prende quelle colonne e righe; il pezzo
+    fuori resta velato. **Esc** torna al pennello.
+  - *Colori dall'immagine* propone i fili dal pezzo d'immagine del modulo. *Colonne* e *Righe del modulo*: cambiandole
+    il modulo si allarga o si accorcia e quello che hai disegnato resta.
+  - **Aggancio fine e grandezza** (si apre col clic): quanti pixel è *una V* e *una riga* nell'immagine e dove comincia
+    il modulo (*Inizio x, y*); si regola anche con lo strumento **Sposta immagine** (tasto M), trascinando l'immagine
+    sotto la griglia. **Ingrandisci** (%, poi *Applica*) allarga tutto insieme: celle, immagine e disegno, coi passaggi
+    uguali; il ricamo cresce della stessa percentuale con le stesse copie. *Torna al ricamo* annulla anche questo.
+- **3 Disegna**: scegli il filo e disegna col **Pennello** sul modulo al centro: ogni V vale in tutte le copie.
+  **Salva modulo…** lo mette in un file a sé (vedi sotto). **Ricopia il disegno** riempie il modulo coi colori
+  dell'immagine, V per V: quello che hai disegnato si perde (chiede conferma; *Annulla* lo rimette).
 - **Fili**: gli stessi del ricamo; la *Base* (il filo che riempie tutto sotto) si sceglie lì.
 - Sulla tela: il modulo al centro con le copie vicine, l'immagine sopra la base e **sotto** i fili
   disegnati (*Vista → Immagine*), la griglia. I tratti hanno un bordo di contrasto (scuro sotto i fili
   chiari, chiaro sotto gli scuri), così si leggono su qualunque immagine. Pennello, riempi e gomma cambiano il modulo; le frecce
-  di *Inizio* e *Giunture sulla base* come nella vista Modulo.
+  di *Inizio* e *Giunture sulla base* come nella vista Modulo (per la fascia solo di lato).
+
+**La fascia sul pezzo.** Con un modulo *Solo in larghezza*, il ricamo è la base su tutto il pezzo (cucita intera, in
+un solo stop, dall'alto in basso) e la fascia ripetuta in larghezza a un'altezza. Sulla tela due linee tratteggiate
+dicono dove comincia e dove finisce. In *02 Misure del ricamo*, sotto *Posizione del pattern*: **Margine sopra** e
+**Margine sotto** in mm, dal punto più alto e più basso della forma (o del ricamo, senza forma). Scrivi un margine: la
+fascia si sposta a righe intere e l'altro segue. Le frecce su e giù la spostano di una riga, **Centra** la mette al
+centro. Caricando una forma, la fascia va da sola al centro del pezzo. Dove la forma taglia la fascia (ai lati, in una
+scollatura) le copie sono tagliate come sempre.
+
+**Il modulo in un file a sé** (in *01 Immagine*). **Salva modulo…** scrive un file `.json` col modulo (anche la fascia),
+i suoi fili, la base e la misura della cella; non la posizione sul pezzo, che si sceglie in ogni pezzo. **Carica
+modulo…** mette sul pezzo aperto un modulo salvato, o quello di un DST o SVG fatto qui: le misure del ricamo e la forma
+restano, la cella diventa quella del modulo (così resta degli stessi mm), una fascia va al centro del pezzo. *Annulla*
+torna a prima. Così lo stesso modulo va su più pezzi (davanti, dietro, manica) coi margini che servono a ognuno.
 
 **Il percorso del modulo** (nell'editor). Ogni tratto di pennello o riempimento è un **pezzo**, numerato
 nell'ordine in cui lo disegni, e il filo cuce i pezzi di ogni colore in quell'ordine (la gomma toglie

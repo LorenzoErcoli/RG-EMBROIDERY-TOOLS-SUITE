@@ -206,6 +206,8 @@ export interface ModulePath {
   ordered?: number[];
   /** Dove sta il modulo sul pezzo: la sua V (0, 0) è la V (dr, dc) del ricamo (Sposta pattern). */
   offset?: { dr: number; dc: number };
+  /** 'x' = modulo a fascia: una striscia sola, alla riga dr; sopra e sotto solo la base (module.ts, isBand). */
+  repeat?: 'xy' | 'x';
 }
 
 /** Il percorso di ogni filo sul modulo da solo (la base, se c'è, non è nel modulo: va sotto tutto). */
@@ -525,14 +527,18 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
   // SPOSTA PATTERN (Lorenzo, 2026-10-07: «spostare dx/sx alto/basso il pattern composto dei moduli per fare
   // i centraggi»): il modulo comincia alla V (dr, dc) del ricamo; prima di lì, a sinistra e in alto, ci sono
   // copie e una striscia tagliate. Strisce e copie partono da lì, un modulo alla volta.
-  const dr = ((Math.round(mp.offset?.dr ?? 0) % Rm) + Rm) % Rm, dc = ((Math.round(mp.offset?.dc ?? 0) % C) + C) % C;
+  // IL MODULO A FASCIA (Lorenzo, 2026-11-24): una striscia sola, dove sta la fascia (anche tagliata dal bordo);
+  // la base, sopra e sotto, è intera e in un solo stop («una base più grande che viene ricamata intera»).
+  const band = mp.repeat === 'x';
+  const dr = band ? Math.round(mp.offset?.dr ?? 0) : ((Math.round(mp.offset?.dr ?? 0) % Rm) + Rm) % Rm, dc = ((Math.round(mp.offset?.dc ?? 0) % C) + C) % C;
   const colOrigins: number[] = [];
   for (let oc = dc > 0 ? dc - C : 0; oc < g.cols; oc += C) colOrigins.push(oc);
   const rowOrigins: number[] = [];
-  for (let or = dr > 0 ? dr - Rm : 0; or < g.rows; or += Rm) rowOrigins.push(or);
+  if (band) { if (dr < g.rows && dr + Rm > 0) rowOrigins.push(dr); }
+  else for (let or = dr > 0 ? dr - Rm : 0; or < g.rows; or += Rm) rowOrigins.push(or);
   const mask = params.mask && params.mask.length === g.rows * g.cols ? params.mask : null;
   // la base in un solo stop, su tutto il ricamo, prima delle strisce
-  const whole = baseWholeRoute(g, cells, params);
+  const whole = baseWholeRoute(g, cells, band ? { ...params, baseWhole: true } : params);
   if (whole) { colors.push(whole.route); addMetrics(metrics, whole.metrics); }
   rowOrigins.forEach((o, strip) => {
     const s0 = Math.max(0, o), s1 = Math.min(g.rows, o + Rm);
