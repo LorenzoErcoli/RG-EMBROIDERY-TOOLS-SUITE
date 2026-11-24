@@ -495,7 +495,13 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
         if (isDst) {
           const bytes = new Uint8Array(reader.result as ArrayBuffer);
           const meta = readDstMetadata(bytes);
+          const ruoliDiPrima = roles;
           if (meta && applyImportedProject(meta)) {
+            // Il DST non porta la sagoma: i suoi ruoli valgono solo se i loro colori sono nella sagoma caricata. Se no l'area da ricamare
+            // spariva e l'anteprima restava vuota, come se il DST non avesse dato niente (Lorenzo, 2026-11-24: «non posso ricaricare un dst
+            // con i valori? perchè?»)
+            const presenti = new Set(uniqueColors());
+            if (!Object.keys(roles).some((c) => presenti.has(c) && roles[c] === 'MASTER_OUTLINE')) { roles = ruoliDiPrima; buildRoleUI(); }
             $('fileStatus').textContent = `${file.name}: parametri ripristinati dal DST`;
             render();
             return;
