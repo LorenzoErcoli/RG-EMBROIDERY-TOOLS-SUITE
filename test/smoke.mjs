@@ -547,6 +547,53 @@ for (const pass of vdAcceso) for (const r of pass) for (const pt of r) if (Math.
 check('aree vuote: acceso, nessun punto dentro il buco', vdNelBuco, 0);
 check('aree vuote: acceso, senza buchi non cambia niente', JSON.stringify(rg.generatePasses(vdRect, [], { ...vdParams, voidDensityBoost: true }, [1.5])) === JSON.stringify(rg.generatePasses(vdRect, [], vdParams, [1.5])), true);
 check('aree vuote: acceso, il filo resta continuo (un tratto solo)', vdAcceso[0].length, 1);
+// L'ANELLO intorno al foro (Lorenzo, 2026-11-23: «intorno ai fori deve passare bene il filo per evidenziare il foro»,
+// scelto «un anello che lo contorna»): nel filo c'è una fila di punti di fila tutti a ridosso del foro che gli gira
+// intorno per intero. Si misura l'angolo percorso dalla più lunga fila di punti entro 2,5 mm dal bordo.
+{
+  const giro = (pass, cx, cy, r) => {
+    let best = 0;
+    for (const run of pass) {
+      let ang = 0, prev = null;
+      for (const q of run) {
+        const d = Math.hypot(q.x - cx, q.y - cy) - r;
+        if (d < 0 || d > 2.5) { best = Math.max(best, ang); ang = 0; prev = null; continue; }
+        const a = Math.atan2(q.y - cy, q.x - cx);
+        if (prev !== null) { let da = a - prev; while (da > Math.PI) da -= 2 * Math.PI; while (da < -Math.PI) da += 2 * Math.PI; ang += Math.abs(da); }
+        prev = a;
+      }
+      best = Math.max(best, ang);
+    }
+    return best / (2 * Math.PI);
+  };
+  check('anello: acceso, il filo gira intorno al foro per intero, a meno di 2,5 mm dal bordo', giro(vdAcceso[0], 50, 45, 10) >= 0.99, true);
+  check('anello: spento, nessun giro intero intorno al foro', giro(vdSpento[0], 50, 45, 10) < 0.99, true);
+  // tanti fori piccoli, tre colori: ogni colore contorna ogni foro, e il filo resta un tratto per colore
+  const fori = [];
+  for (let j = 0; j < 4; j++) for (let i = 0; i < 6; i++) fori.push({ cx: 15 + i * 22 + (j % 2) * 8, cy: 14 + j * 21, r: 2.5 });
+  const poli = fori.map((f) => Array.from({ length: 24 }, (_, k) => ({ x: f.cx + f.r * Math.cos(k / 24 * 2 * Math.PI), y: f.cy + f.r * Math.sin(k / 24 * 2 * Math.PI) })));
+  const tre = rg.generatePasses(vdRect, poli, { ...vdParams, colors: ['#874325', '#5c2e1a', '#b46f4e'], voidDensityBoost: true, voidDensityFactor: 3, voidDensityFadeMm: 4 }, [4, 4, 4]);
+  let contornati = 0, tratti = 0;
+  for (const pass of tre) { tratti += pass.length; for (const f of fori) if (giro(pass, f.cx, f.cy, f.r) >= 0.99) contornati++; }
+  check(`anello: ${fori.length} fori × 3 colori, ognuno contornato da ogni colore`, contornati, fori.length * 3);
+  check('anello: con gli anelli ogni colore resta un tratto solo', tratti, 3);
+  // Lorenzo (2026-11-23): «gli agglomerati intorno alle aree vuote non sono uguali e a volte ci sono altre volte per
+  // niente». Ora ogni foro riceve la stessa dose: il filo nella fascia 0-3 mm dal bordo, foro per foro, sta entro
+  // 1,6 volte fra il foro più povero e il più ricco (prima, sul pezzo vero: da 1,1 a 2,4 volte il fondo).
+  const dose = fori.map((f) => {
+    let mm = 0;
+    for (const pass of tre) for (const r of pass) for (let i = 1; i < r.length; i++) {
+      const L = Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y), n = Math.max(1, Math.ceil(L / 0.25));
+      for (let s = 0; s < n; s++) {
+        const t = (s + 0.5) / n, x = r[i - 1].x + (r[i].x - r[i - 1].x) * t, y = r[i - 1].y + (r[i].y - r[i - 1].y) * t;
+        const d = Math.hypot(x - f.cx, y - f.cy) - f.r;
+        if (d >= 0 && d < 3) mm += L / n;
+      }
+    }
+    return mm;
+  });
+  check('agglomerato: la stessa dose per ogni foro (il più ricco entro 1,6 volte il più povero)', Math.max(...dose) / Math.min(...dose) < 1.6, true);
+}
 
 // interlace — VENATURE sopra il ricamo (`veinsOn`), il disegno «A» scelto da Lorenzo: fasci di spesse a fuso (andata e
 // ritorno), fini a filo singolo, un giro solo senza salti, incroci sotto 1 mm uniti.
@@ -611,6 +658,33 @@ check('venature: nessun punto fuori dalla sagoma', vnFuori, 0);
       noni[Math.min(2, Math.floor(my / 73)) * 3 + Math.min(2, Math.floor(mx / 103))] += Math.hypot(r[i].x - r[i - 1].x, r[i].y - r[i - 1].y);
     }
     check(`venature su 309×219 (variante ${seed}): un giro solo`, v.runs.length, 1);
+    // Lorenzo (2026-11-23): «evitiamo il ritorno sullo stesso punto per non creare punti battuti evidenti». Prima metà
+    // dei punti cadeva a meno di 0,3 mm da un buco già fatto (il ritorno del fuso fuso con l'andata, gli incroci, i ripassi).
+    const pts = v.runs.flat(), visti = new Map();
+    // …e poi «devi proprio sfalsarlo, così sono ancora in linea … doveva avere tipo una fase»: due buchi a meno di
+    // 0,9 mm e allo stesso livello lungo la vena (meno di 0,4 mm) sono affiancati. Con lo spostamento di traverso erano
+    // il 40% dei punti.
+    let battuti = 0, corti = 0, affiancati = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const q = pts[i], gx = Math.floor(q.x / 0.5), gy = Math.floor(q.y / 0.5);
+      const a = pts[i - 1] || q, b = pts[i + 1] || q;
+      let tx = b.x - a.x, ty = b.y - a.y;
+      if (Math.hypot(tx, ty) < 1e-6) { tx = q.x - a.x; ty = q.y - a.y; }
+      const L = Math.hypot(tx, ty) || 1; tx /= L; ty /= L;
+      let hit = false, aff = false;
+      for (let dx = -2; dx <= 2; dx++) for (let dy = -2; dy <= 2; dy++) for (const o of visti.get(`${gx + dx},${gy + dy}`) || []) {
+        if (o === pts[i - 1]) continue;
+        const d = Math.hypot(o.x - q.x, o.y - q.y);
+        if (d < 0.3) hit = true; else if (d < 0.9 && Math.abs((o.x - q.x) * tx + (o.y - q.y) * ty) < 0.4) aff = true;
+      }
+      if (hit) battuti++;
+      if (aff) affiancati++;
+      const k = `${gx},${gy}`; if (!visti.has(k)) visti.set(k, []); visti.get(k).push(q);
+      if (i > 0 && Math.hypot(q.x - pts[i - 1].x, q.y - pts[i - 1].y) < 1 - 1e-9) corti++;
+    }
+    check(`venature su 309×219 (variante ${seed}): nessun punto battuto (a meno di 0,3 mm da un buco già fatto)`, battuti, 0);
+    check(`venature su 309×219 (variante ${seed}): e nessun punto sotto 1 mm`, corti, 0);
+    check(`venature su 309×219 (variante ${seed}): buchi affiancati allo stesso livello meno del 10% (erano il 40%)`, affiancati < pts.length * 0.1, true);
     check(`venature su 309×219 (variante ${seed}): ogni nono del pezzo ha almeno 1 m di venature`, Math.min(...noni) > 1000, true);
   }
 }

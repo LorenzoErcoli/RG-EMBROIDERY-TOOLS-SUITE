@@ -96,7 +96,7 @@ export const scheda: SchedaParametri = {
     },
     {
       id: 'voidDensityBoost', nome: 'voidDensityBoost', etichetta: 'Più fitto intorno alle aree vuote',
-      aiuto: 'spento, la densità è uguale ovunque. Acceso, il filo si addensa attorno a ogni area vuota del cartamodello e torna alla densità normale allontanandosi. Il bordo esterno non conta.',
+      aiuto: 'spento, la densità è uguale ovunque. Acceso, il filo si addensa attorno a ogni area vuota del cartamodello e torna alla densità normale allontanandosi, e ogni colore contorna ogni foro con un anello a ridosso del bordo. Il bordo esterno non conta.',
       tipo: 'bool', unita: '', predefinito: false, regole: ['R5'], concetto: 'densita',
     },
     {
