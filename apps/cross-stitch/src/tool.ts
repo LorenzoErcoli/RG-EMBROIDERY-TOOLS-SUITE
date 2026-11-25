@@ -12,7 +12,7 @@ import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import { collegaStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
 import {
   type Button, type CellEdit, type Cells, type GridSpec, type Leg, type Stitch, type Thread, type Tool,
-  type Pixels, type BrushStitch, type KnitStitch, DEFAULT_GRID, applyEdits, brushArea, brushEdits, fillEdits, knitFromImage, gridForSize, refinePalette, paletteShares, DEFAULT_KNIT, cellIndex, cellsFromJson, cellsToJson, editsFor, fromThreadRoute, fromTwoColumnV, stitchLegs,
+  type Pixels, type BrushStitch, type KnitStitch, DEFAULT_GRID, applyEdits, brushArea, brushEdits, fillEdits, knitFromImage, gridForSize, refinePalette, paletteShares, DEFAULT_KNIT, cellIndex, cellsFromJson, cellsToJson, editsFor, fromThreadRoute, fromTwoColumnV, stitchLegs, halfEdits, isHalfStitch,
   resizeCells, pointInRow, segmentPoints, rowPitch, gridHeight,
 } from './model';
 import {
@@ -517,9 +517,13 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           <div class="cs-editbar__group" role="group" aria-labelledby="eb-pt"><span class="rg-label" id="eb-pt">Punto</span>
             <div class="rg-segmented" id="stitchSel">
               <button type="button" class="rg-segmented__item" data-stitch="v" title="V. Clic destro: Λ">V</button>
+              <button type="button" class="rg-segmented__item" data-stitch="lambda" title="Λ, la V capovolta. Clic destro: V">Λ</button>
               <button type="button" class="rg-segmented__item" data-stitch="cross" title="Croce">Croce</button>
               <button type="button" class="rg-segmented__item" data-stitch="diag" title="Diagonale. Sinistro «\\», destro «/»">Diagonale</button>
-            </div></div>
+            </div>
+            <label class="rg-toggle" title="La V o la Λ spostata di mezza cella di lato, a cavallo di due celle: per rifinire i bordi ad angolo. Il filo entra ed esce dal centro della cella accanto">
+              <input type="checkbox" id="halfGrid"><span class="rg-toggle__track"></span><span>A metà griglia</span>
+            </label></div>
           <div class="cs-editbar__group" role="group" aria-labelledby="eb-fi"><span class="rg-label" id="eb-fi">Filo</span>
             <div class="rg-segmented cs-swatch-seg" id="editThreads"></div></div>
           <div class="rg-action-group">
@@ -1008,7 +1012,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const byColor = new Map<number, number[]>();
     for (const [key, mark] of st.cells) {
       if (mask && !mask[key]) continue; // fuori dalla forma
-      if (base && mark.color === base.color && !(mark.stitch === 'cross' && base.stitch !== 'cross')) continue; // già coperta dalla base (salvo la croce sopra)
+      if (base && mark.color === base.color && !(mark.stitch === 'cross' && base.stitch !== 'cross') && !isHalfStitch(mark.stitch)) continue; // già coperta dalla base (salvo la croce sopra e i punti a metà)
       const list = byColor.get(mark.color);
       if (list) list.push(key); else byColor.set(mark.color, [key]);
     }
@@ -2011,8 +2015,59 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     return applyUserEdits(brushEdits(st.grid, st.cells, r, c, brushSize, activeThread, brushStitch, painting.button, painting.erase));
   }
 
+  /** A metà griglia: il pennello prende il lato fra due celle più vicino al mouse (la riga e il lato, 1…cols − 1). */
+  const halfOn = () => $<HTMLInputElement>('halfGrid').checked && (mode === 'paint' || mode === 'erase');
+  function halfAt(e: PointerEvent): { r: number; line: number } | null {
+    const at = cellAt(e), p = mmAt(e);
+    if (!at || !p) return null;
+    const line = Math.round(p.x / st.grid.cellW);
+    return line >= 1 && line < st.grid.cols ? { r: at.r, line } : null;
+  }
+  /** L'impronta del pennello a metà griglia: una cella centrata sul lato. */
+  function showHalfBrush(h: { r: number; line: number } | null): void {
+    const svg = $('layer').querySelector('svg');
+    if (!svg) return;
+    let rect = svg.querySelector<SVGRectElement>('#cs-brush');
+    if (!h) { rect?.remove(); return; }
+    if (!rect) {
+      rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rect.id = 'cs-brush';
+      rect.setAttribute('vector-effect', 'non-scaling-stroke');
+      rect.setAttribute('pointer-events', 'none');
+      svg.appendChild(rect);
+    }
+    rect.setAttribute('x', String((h.line - 0.5) * st.grid.cellW));
+    rect.setAttribute('y', String(h.r * rowPitch(st.grid)));
+    rect.setAttribute('width', String(st.grid.cellW));
+    rect.setAttribute('height', String(st.grid.cellH));
+    rect.setAttribute('style', mode === 'erase'
+      ? 'fill:none;stroke:var(--rg-color-danger);stroke-width:2;stroke-dasharray:4 3'
+      : 'fill:none;stroke:var(--rg-color-focus);stroke-width:2');
+  }
+  /** Il pennello a metà griglia: un punto per lato, anche trascinando. */
+  function paintHalf(e: PointerEvent): void {
+    if (!painting) return;
+    const h = halfAt(e);
+    showHalfBrush(h);
+    if (!h) return;
+    const key = h.r * (st.grid.cols + 1) + h.line;
+    if (key === painting.last) return;
+    painting.last = key;
+    const edits = halfEdits(st.grid, st.cells, h.r, h.line, activeThread, brushStitch, painting.button, painting.erase);
+    if (!edits.length) {
+      if (!painting.erase) $('status').textContent = 'A metà griglia: qui le due celle sono già occupate da altri punti. Serve una cella libera accanto (o una a metà da cambiare).';
+      return;
+    }
+    if (!applyUserEdits(edits)) return;
+    painting.changed = true;
+    fromImage = false;
+    result = null;
+    draw();
+  }
+
   function paintAt(e: PointerEvent): void {
     if (!painting) return;
+    if (halfOn()) { paintHalf(e); return; }
     const at = cellAt(e);
     if (!at) return;
     // Il mouse veloce salta delle celle fra un evento e l'altro: si riempiono tutte quelle sulla
@@ -2259,7 +2314,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       if (p) { const at = { r: Math.floor(p.y / rowPitch(st.grid)), c: Math.floor(p.x / st.grid.cellW) }; if (!stampSel.at || at.r !== stampSel.at.r || at.c !== stampSel.at.c) stampSel.hidden = false; stampSel.at = at; drawStamp(); }
       return;
     }
-    if (!painting) { showBrush(spaceDown ? null : cellAt(e)); return; }
+    if (!painting) { if (halfOn() && !spaceDown) showHalfBrush(halfAt(e)); else showBrush(spaceDown ? null : cellAt(e)); return; }
     e.stopPropagation();
     paintAt(e);
   }, true);

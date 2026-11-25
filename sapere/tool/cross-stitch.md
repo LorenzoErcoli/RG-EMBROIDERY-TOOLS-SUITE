@@ -33,3 +33,7 @@ coi margini che servono. Il disegno lo fa lui: il tool deve dare l'interfaccia e
 cuce a pezzi, una spalla e poi l'altra, e da un pezzo all'altro va con un'impuntura dentro la forma, sotto la base che
 viene dopo. Scelta di Lorenzo, fra un salto col taglio a ogni riga e una spalla per volta: «un'impuntura continua».
 Stesso file della fascia.
+
+**La V e la Λ a metà griglia (2026-11-25).** Per rifinire i bordi ad angolo la V (o la Λ) si può spostare di mezza
+cella di lato, a cavallo di due celle; il filo entra ed esce dal centro della cella accanto, dove la V vicina lo copre.
+La Λ ha il suo bottone. Vedi [la V a metà griglia](../decisioni/cross-stitch-v-a-meta-griglia.md).

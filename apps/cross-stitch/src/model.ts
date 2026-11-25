@@ -22,9 +22,20 @@ export type Leg = 'down' | 'up';
 
 /**
  * Il punto che sta in una cella: la diagonale «\» o «/», la croce (prima la gamba sotto, poi
- * quella sopra), la V e la Λ (la V capovolta), ognuna dentro la sua cella.
+ * quella sopra), la V e la Λ (la V capovolta), ognuna dentro la sua cella; e la V o la Λ A METÀ
+ * GRIGLIA (HalfStitch).
  */
-export type Stitch = Leg | 'cross' | 'v' | 'lambda';
+export type Stitch = Leg | 'cross' | 'v' | 'lambda' | HalfStitch;
+
+/**
+ * LA V A METÀ GRIGLIA (Lorenzo, 2026-11-25: «una funzione di incastro a metà della griglia… per rifinire alcuni
+ * punti V finali ad angolo»): una V o una Λ spostata di mezza cella di lato, sulla stessa riga, a cavallo di due
+ * celle. Sta in una delle due: `L` = centrata sul lato sinistro della cella (prende la metà destra della cella a
+ * sinistra), `R` = sul lato destro (la metà sinistra della cella a destra). Il filo entra ed esce dal braccio che
+ * cade al centro dell'altra cella («dal centro della cella», dove lo copre la V vicina): `halfEntry`.
+ */
+export type HalfStitch = 'vL' | 'vR' | 'lambdaL' | 'lambdaR';
+export const isHalfStitch = (s: Stitch | string | undefined): s is HalfStitch => s === 'vL' || s === 'vR' || s === 'lambdaL' || s === 'lambdaR';
 
 export interface GridSpec {
   cols: number;
@@ -162,7 +173,25 @@ export function stitchLegs(g: GridSpec, r: number, c: number, stitch: Stitch, to
   const diag = (leg: Leg) => (leg === 'down' ? { a: V(r, j), b: V(r + 1, j + 2) } : { a: V(r + 1, j), b: V(r, j + 2) });
   if (stitch === 'v') return [{ a: V(r, j), b: V(r + 1, j + 1) }, { a: V(r + 1, j + 1), b: V(r, j + 2) }];
   if (stitch === 'lambda') return [{ a: V(r + 1, j), b: V(r, j + 1) }, { a: V(r, j + 1), b: V(r + 1, j + 2) }];
+  if (isHalfStitch(stitch)) {
+    // a metà griglia: i due bracci al centro delle due celle, la punta sul lato fra le due
+    const j0 = stitch === 'vL' || stitch === 'lambdaL' ? j - 1 : j + 1;
+    if (j0 < 0 || j0 + 2 > 2 * g.cols) return [];
+    if (stitch === 'vL' || stitch === 'vR') return [{ a: V(r, j0), b: V(r + 1, j0 + 1) }, { a: V(r + 1, j0 + 1), b: V(r, j0 + 2) }];
+    return [{ a: V(r + 1, j0), b: V(r, j0 + 1) }, { a: V(r, j0 + 1), b: V(r + 1, j0 + 2) }];
+  }
   return legsOf(stitch, topLeg).map(diag);
+}
+
+/**
+ * Da dove entra ed esce il filo in un punto a metà griglia: il capo del braccio che cade al centro dell'ALTRA
+ * cella (non quella dove il punto sta), dove lo copre la V vicina. -1 = non è un punto a metà, o non ci sta.
+ */
+export function halfEntry(g: GridSpec, r: number, c: number, stitch: Stitch): number {
+  if (!isHalfStitch(stitch)) return -1;
+  const legs = stitchLegs(g, r, c, stitch, 'down');
+  if (legs.length !== 2) return -1;
+  return stitch === 'vL' || stitch === 'lambdaL' ? legs[0].a : legs[1].b;
 }
 
 // ------------------------------------------------------------
@@ -223,10 +252,10 @@ export function resizeCells(from: GridSpec, to: GridSpec, cells: Cells): Cells {
 // Serializzazione (nel metadata di SVG e DST, R27)
 // ------------------------------------------------------------
 
-const STITCH_CODE: Record<Stitch, string> = { down: 'd', up: 'u', cross: 'x', v: 'v', lambda: 'l' };
-const CODE_STITCH: Record<string, Stitch> = { d: 'down', u: 'up', x: 'cross', v: 'v', l: 'lambda' };
+const STITCH_CODE: Record<Stitch, string> = { down: 'd', up: 'u', cross: 'x', v: 'v', lambda: 'l', vL: 'vl', vR: 'vr', lambdaL: 'll', lambdaR: 'lr' };
+const CODE_STITCH: Record<string, Stitch> = { d: 'down', u: 'up', x: 'cross', v: 'v', l: 'lambda', vl: 'vL', vr: 'vR', ll: 'lambdaL', lr: 'lambdaR' };
 
-/** Le celle in forma compatta: `[r, c, 'd'|'u'|'x'|'v'|'l', colore]`. */
+/** Le celle in forma compatta: `[r, c, 'd'|'u'|'x'|'v'|'l'|'vl'|'vr'|'ll'|'lr', colore]`. */
 export function cellsToJson(g: GridSpec, cells: Cells): Array<[number, number, string, number]> {
   return [...cells.entries()].sort((a, b) => a[0] - b[0]).map(([k, m]) => {
     const r = Math.floor(k / g.cols);
@@ -464,13 +493,34 @@ export function gridForSize(widthMm: number, heightMm: number, cellW: number, ce
 // ------------------------------------------------------------
 
 /** Il punto che il pennello mette su una cella vuota. */
-export type BrushStitch = 'v' | 'diag' | 'cross';
+export type BrushStitch = 'v' | 'lambda' | 'diag' | 'cross';
 
-/** Il punto del pennello: V/Λ, «\»/«/», o croce, secondo il tasto. */
+/** Il punto del pennello: V/Λ (col destro l'altra), «\»/«/», o croce, secondo il tasto. */
 function freshStitch(stitch: BrushStitch, button: Button): Stitch {
   if (stitch === 'cross') return 'cross';
   if (stitch === 'diag') return button === 'left' ? 'down' : 'up';
+  if (stitch === 'lambda') return button === 'left' ? 'lambda' : 'v';
   return button === 'left' ? 'v' : 'lambda';
+}
+
+/**
+ * Il pennello A METÀ GRIGLIA: la V (o la Λ) centrata sul lato `line` fra le celle `line − 1` e `line` della
+ * riga r (line da 1 a cols − 1). Va nella cella libera delle due (prima quella a destra), o dove ce n'è già una
+ * a metà su quel lato (cambia filo e forma). Tutte e due occupate da altri punti: niente (non c'è posto).
+ * `erase`: toglie il punto a metà su quel lato. Col destro la forma opposta (V ↔ Λ), come il pennello.
+ */
+export function halfEdits(g: GridSpec, cells: Cells, r: number, line: number, color: number, stitch: BrushStitch, button: Button, erase: boolean): CellEdit[] {
+  if (r < 0 || r >= g.rows || line < 1 || line >= g.cols) return [];
+  const a = line - 1, b = line;
+  const ma = cells.get(cellIndex(g, r, a)), mb = cells.get(cellIndex(g, r, b));
+  const onLeft = (m?: CellMark) => !!m && (m.stitch === 'vL' || m.stitch === 'lambdaL'); // in b, sul lato sinistro
+  const onRight = (m?: CellMark) => !!m && (m.stitch === 'vR' || m.stitch === 'lambdaR'); // in a, sul lato destro
+  if (erase) return [...(onLeft(mb) ? [{ r, c: b, mark: null }] : []), ...(onRight(ma) ? [{ r, c: a, mark: null }] : [])];
+  const lambda = (stitch === 'lambda') !== (button === 'right');
+  const L: Stitch = lambda ? 'lambdaL' : 'vL', R: Stitch = lambda ? 'lambdaR' : 'vR';
+  if (onLeft(mb) || !mb) return [{ r, c: b, mark: { stitch: L, color } }];
+  if (onRight(ma) || !ma) return [{ r, c: a, mark: { stitch: R, color } }];
+  return [];
 }
 
 /** Le celle sotto un pennello di `size` × `size` punti, centrato sulla cella (r, c). */

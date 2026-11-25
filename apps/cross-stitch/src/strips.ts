@@ -13,7 +13,7 @@
 // Nessun DOM.
 
 import type { Cells, GridSpec, Stitch } from './model';
-import { rowPitch, segmentPoints, vertexIndex } from './model';
+import { isHalfStitch, rowPitch, segmentPoints, vertexIndex } from './model';
 import { routeCells, type ColorRoute, type RouteMetrics, type RouteParams, type RouteResult, type RouteSeg } from './routing';
 import { bandCells } from './module';
 import { areaOfCell, shiftGroup } from './zones';
@@ -78,7 +78,7 @@ function baseWholeRoute(g: GridSpec, cells: Cells, params: RouteParams): { route
   const over: Cells = new Map(), rest: Cells = new Map();
   for (const [k, m] of cells) {
     if (m.color !== base.color) rest.set(k, m);
-    else if (m.stitch === 'cross' && base.stitch !== 'cross') over.set(k, m);
+    else if ((m.stitch === 'cross' && base.stitch !== 'cross') || isHalfStitch(m.stitch)) over.set(k, m);
   }
   // DALL'ALTO IN BASSO (Lorenzo, 2026-10-13: «la base deve sempre lavorare da sopra a sotto»): fasce di
   // BASE_BAND_ROWS righe, a serpentina (la prima da sinistra a destra, la seconda da destra a sinistra…);
@@ -393,7 +393,7 @@ export function routeModule(g: GridSpec, mp: ModulePath, params: RouteParams): R
   const mg: GridSpec = { ...g, cols: mp.cols, rows: mp.rows };
   const baseColor = params.base?.color;
   const cells: Cells = new Map();
-  mp.marks.forEach((m, i) => { if (m && (m.color !== baseColor || (m.stitch === 'cross' && params.base?.stitch !== 'cross'))) cells.set(i, { ...m }); });
+  mp.marks.forEach((m, i) => { if (m && (m.color !== baseColor || (m.stitch === 'cross' && params.base?.stitch !== 'cross') || isHalfStitch(m.stitch))) cells.set(i, { ...m }); });
   const startAt: Record<number, number> = {}, endAt: Record<number, number> = {};
   for (const [c, row] of Object.entries(mp.entryRow)) {
     const rr = Math.max(0, Math.min(mp.rows - 1, row));
@@ -729,7 +729,7 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
       const over: Cells = new Map();
       for (let rr = s0; rr < s1; rr++) for (let c = 0; c < g.cols; c++) {
         const m = cells.get(rr * g.cols + c);
-        if (m && m.color === baseC && m.stitch === 'cross' && params.base!.stitch !== 'cross' && (!mask || mask[rr * g.cols + c])) over.set((rr - s0) * g.cols + c, m);
+        if (m && m.color === baseC && ((m.stitch === 'cross' && params.base!.stitch !== 'cross') || isHalfStitch(m.stitch)) && (!mask || mask[rr * g.cols + c])) over.set((rr - s0) * g.cols + c, m);
       }
       const res = routeCells(grid, over, stripParams);
       addMetrics(metrics, res.metrics);

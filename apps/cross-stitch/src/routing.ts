@@ -36,7 +36,7 @@
 // Nessun DOM.
 
 import type { Cells, GridSpec, Leg, Stitch } from './model';
-import { latticeWidth, pointInRow, rowPitch, segmentPoints, stitchLegs, vertexCount, vertexIndex } from './model';
+import { halfEntry, isHalfStitch, latticeWidth, pointInRow, rowPitch, segmentPoints, stitchLegs, vertexCount, vertexIndex } from './model';
 import { groupOfCell, zonesOf, type ZoneGroup, type ZoneOptions } from './zones';
 
 export interface TravelCosts {
@@ -366,7 +366,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   const base = params.base ?? null;
   const entries: Array<[number, { stitch: Stitch; color: number }]> = [];
   /** Una cella col filo della base che la base copre (tutte, salvo la croce sopra una base non a croce). */
-  const coveredByBase = (m: { stitch: Stitch; color: number }) => !!base && m.color === base.color && !(m.stitch === 'cross' && base.stitch !== 'cross');
+  const coveredByBase = (m: { stitch: Stitch; color: number }) => !!base && m.color === base.color && !(m.stitch === 'cross' && base.stitch !== 'cross') && !isHalfStitch(m.stitch);
   const mask = params.mask && params.mask.length === g.rows * g.cols ? params.mask : null;
   if (base) for (let k = 0; k < g.rows * g.cols; k++) if (!mask || mask[k]) entries.push([k, { stitch: base.stitch, color: base.color }]);
   const nBase = entries.length; // le prime nBase voci sono la base
@@ -490,10 +490,15 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     let prev = -1;
     const isCross = m.stitch === 'cross';
     const perStitch = perStitchOf(m.color);
+    // A METÀ GRIGLIA: il filo entra dal braccio al centro della cella accanto e torna lì (Lorenzo: «i passaggi
+    // in quei casi arrivano sempre dal centro per non farli mai vedere»), quindi le passate sono pari (una in
+    // più se il filo ne ha dispari) e l'unità è una sola, come una V cucita tutta insieme
+    const half = isHalfStitch(m.stitch) ? halfEntry(g, r, c, m.stitch) : -1;
+    const legReps = half >= 0 && reps % 2 === 1 ? reps + 1 : reps;
     for (const { a, b } of stitchLegs(g, r, c, m.stitch, params.topLeg)) {
       const id = legs.length;
       // nella croce la gamba sopra aspetta quella sotto; nella V le due gambe sono libere
-      legs.push({ color: m.color, a, b, remaining: reps, extra: 0, prereq: isCross ? prev : -1, block, zone, run });
+      legs.push({ color: m.color, a, b, remaining: legReps, extra: 0, prereq: isCross ? prev : -1, block, zone, run });
       const ek = edgeKey(a, b);
       const onEdge = legAt.get(ek);
       if (onEdge) onEdge.push(id); else legAt.set(ek, [id]);
@@ -501,12 +506,15 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       if (Math.abs(ja - jb) === 2) for (const v of [a, b]) { const l = longAt.get(v); if (l) l.push(id); else longAt.set(v, [id]); }
       mine.push(id);
       // Direzione fissa: le passate vanno avanti e indietro (a→b, b→a, …) come nella vecchia app.
-      if (!perStitch) for (let p = 0; p < reps; p++) units.push({ leg: id, fixedEntry: params.fixedDirection ? (p % 2 === 0 ? a : b) : -1, passes: 1, done: false });
+      if (!perStitch && half < 0) for (let p = 0; p < reps; p++) units.push({ leg: id, fixedEntry: params.fixedDirection ? (p % 2 === 0 ? a : b) : -1, passes: 1, done: false });
       prev = id;
     }
     const inCell = cellLegs.get(k);
     if (inCell) inCell.push(...mine); else cellLegs.set(k, mine);
-    if (perStitch) {
+    if (half >= 0 && mine.length === 2) {
+      const [l1, l2] = mine, L1 = legs[l1], L2 = legs[l2];
+      units.push({ leg: l1, fixedEntry: half, passes: legReps, pair: { leg2: l2, mid: L1.b, a: L1.a, b: L2.b }, done: false });
+    } else if (perStitch) {
       // Tutte le passate sullo stesso punto: la V (e la Λ) è UNA unità, angolo → punta → angolo;
       // croce e diagonale una unità per gamba.
       if (m.stitch === 'v' || m.stitch === 'lambda') {

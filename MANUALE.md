@@ -639,10 +639,18 @@ pennello, i fili e Annulla/Rifai.
 - **Sposta** (H): trascini la vista, il ricamo non si tocca. Rotella = ingrandisci.
 - **Pennello** (B): trascinando, i punti sotto il pennello passano al filo scelto — per pulire
   l'interno di una scritta, bianco sopra il nero. Lavora a celle intere, una cella = un punto. Mette il punto scelto nella
-  barra, alla voce *Punto* (V, Croce, Diagonale; col clic destro Λ o «/»), anche dove c'era già un
+  barra, alla voce *Punto* (V, Λ, Croce, Diagonale; col clic destro l'altra: con V la Λ, con Λ la V,
+  con Diagonale la «/»), anche dove c'era già un
   punto: una croce sopra la base a V diventa croce. Anche col filo della base: la croce si cuce nello
-  stop della base, dopo tutte le sue V, e sta sopra (solo la croce: gli altri punti col filo della base
-  restano coperti dalla base, per non cucirli due volte).
+  stop della base, dopo tutte le sue V, e sta sopra (solo la croce e i punti a metà griglia: gli altri punti
+  col filo della base restano coperti dalla base, per non cucirli due volte).
+- **A metà griglia** (interruttore accanto a *Punto*, per Pennello e Gomma): la V o la Λ si sposta di
+  **mezza cella di lato**, a cavallo di due celle, per rifinire i bordi ad angolo (il bordo scende a mezze V
+  invece che a V intere) o per mettere una Λ sopra, in mezzo a due V. Il pennello prende il lato fra due celle
+  più vicino al mouse (il riquadro azzurro è centrato lì). Il punto va nella cella libera delle due: se sono
+  piene tutte e due non si mette, e la barra in basso lo dice. Con la gomma toglie il punto a metà su quel lato.
+  **Il filo entra ed esce dal centro della cella accanto** (il braccio che cade nella V intera vicina, dove la
+  copre), mai dal braccio di fuori: per tornare lì le passate sono pari, quindi con 1 passata quel punto ne fa 2.
 - **Riempi** (F): un clic passa al filo scelto tutta la zona COLLEGATA dello stesso colore. Attento:
   segue tutto quello che si tocca, quindi va usato su zone chiuse (l'interno di una lettera); per i
   ritocchi c'è il pennello.

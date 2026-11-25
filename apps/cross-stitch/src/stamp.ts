@@ -60,8 +60,9 @@ export function fitStamp(s: Stamp, g: GridSpec): { stamp: Stamp; exact: boolean 
   return { stamp: { rows, cols, marks, cellW: g.cellW, cellH: g.cellH, overlapPct: g.overlapPct ?? 0 }, exact: false };
 }
 
-const flipH: Record<Stitch, Stitch> = { down: 'up', up: 'down', v: 'v', lambda: 'lambda', cross: 'cross' };
-const flipV: Record<Stitch, Stitch> = { down: 'up', up: 'down', v: 'lambda', lambda: 'v', cross: 'cross' };
+// a metà griglia: a specchio il lato cambia (la cella si specchia con lui), sottosopra la V diventa Λ
+const flipH: Record<Stitch, Stitch> = { down: 'up', up: 'down', v: 'v', lambda: 'lambda', cross: 'cross', vL: 'vR', vR: 'vL', lambdaL: 'lambdaR', lambdaR: 'lambdaL' };
+const flipV: Record<Stitch, Stitch> = { down: 'up', up: 'down', v: 'lambda', lambda: 'v', cross: 'cross', vL: 'lambdaL', vR: 'lambdaR', lambdaL: 'vL', lambdaR: 'vR' };
 
 /** Il pezzo capovolto: a specchio (sinistra-destra) o sottosopra. Le diagonali e le V girano con lui. */
 export function flipStamp(s: Stamp, axis: 'h' | 'v'): Stamp {
