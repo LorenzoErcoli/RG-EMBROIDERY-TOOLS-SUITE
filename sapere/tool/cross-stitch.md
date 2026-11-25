@@ -38,3 +38,29 @@ Stesso file della fascia.
 cella di lato, a cavallo di due celle; i passaggi sono quelli di una V qualunque (il filo forzato dal centro della cella
 accanto, provato, spezzava i passaggi).
 La Λ ha il suo bottone. Vedi [la V a metà griglia](../decisioni/cross-stitch-v-a-meta-griglia.md).
+
+**Ridisegna passaggio coi pallini da trascinare (2026-11-25).** Lorenzo, sull'editor dei passaggi: «impossibile da
+usare, non si capisce come spostare, e poi le linee sono spezzate… invece di essere tutte sempre unite. Io vorrei poter
+spostare i pallini e vedere come si muove». Ora i punti del passaggio scelto si trascinano (il passaggio si ricalcola a
+ogni vertice nuovo), un clic sulla linea ne aggiunge uno, il doppio clic lo toglie. Le linee spezzate erano
+dell'anteprima: col sormonto lo stesso vertice sta un filo più su o più giù secondo il tratto (la punta della V o
+l'angolo), e ogni tratto si disegnava da solo; ora ogni tratto parte da dove è finito il precedente, come già faceva il
+DST (`colorPolylinesTrim`). Due cose ancora, lo stesso giorno. *«Ancora infinitamente lento»*: trascinando si ridisegnava tutta la tela a
+ogni spostamento e ogni spostamento mandava un calcolo al worker, che li faceva tutti in fila; ora trascinando si
+ridisegnano solo i pallini e una linea tratteggiata, il worker tiene solo l'ultima richiesta, e il passaggio vero si
+rifà lasciando il mouse (e intanto ogni 250 ms, se la tela si ridisegna in meno di 40 ms). *«Non capisco perché si
+pinna in dei punti ma il filo passa in altri»*: il pallino si disegnava sulla riga, il filo in fondo alla V della riga
+sopra (col sormonto sono due posti); ora il pallino sta dove l'anteprima disegna il filo di quel passaggio, e il
+trascinamento si aggancia alle stesse posizioni (`pointOnRoute`, `knitVertex`). *«Ma perché fa tutti questi
+scalini»*: fra due pallini il motore cercava la strada più nascosta sul reticolo (gambe, lati, verticali), a gradini
+dove sotto non c'era niente, più i dentini del sormonto. Scelta di Lorenzo fra «dritto» e «strada più nascosta»:
+**dritto**. Ora fra due pallini il tratto è uno solo, in linea retta (`straightKind` in routing.ts: nascosto se ogni cella
+che attraversa ha un punto ancora da cucire, o di un filo dopo); nel DST si divide in punti di impuntura. Un tratto
+lungo più di una riga prende i capi dove stanno nella maglia (`segmentPoints` con `knitVertex`): dentro una riga sola il
+sormonto sbagliava il capo lontano di 1,5 mm per riga (valeva anche per i salti nell'anteprima). *«Mi serve molto più
+veloce ancora»*: ogni gesto (scegliere un passaggio, lasciare un pallino) rifaceva il calcolo di tutti i passaggi e
+ridisegnava tutta la tela. Ma un passaggio a mano non cambia niente del resto (nel motore `forced` è l'ultimo ritocco):
+ora scegliere un passaggio ridisegna solo i pallini, e spostare un pallino cambia nel risultato che c'è solo i tratti di
+quel passaggio (`patchPassage`), poi un disegno; il calcolo completo (che riconta filo in vista e nascosto) parte da
+solo dopo 0,9 s di calma. Misurato su 400 × 300 mm con la base piena: scegliere 2 ms, aggiungere un pallino 17 ms,
+trascinare ≤ 3 ms a spostamento, lasciare 4 ms.

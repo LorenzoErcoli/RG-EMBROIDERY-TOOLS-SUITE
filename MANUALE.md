@@ -960,11 +960,18 @@ copia sola, senza gruppi a mano e senza area di prova); altrimenti si torna al c
 
 **I passaggi a mano** (nell'editor). Due strumenti lavorano sui passaggi del modulo al centro, e quello
 che fai vale in ogni copia. **Salti** (T): un clic su un passaggio lo trasforma in salto (la macchina
-taglia il filo); un altro clic lo rimette. **Ridisegna passaggio**: un clic sceglie il passaggio, poi
-clicchi i punti da cui deve passare, in ordine (si agganciano al vertice più vicino; il passaggio
-scelto mostra i suoi capi come anelli e i punti pieni). Fra un punto e l'altro il filo prende la
-strada più nascosta; i punti cuciti e il resto del percorso non cambiano. **Invio** o **Spazio** fissano il
-passaggio (e il clic dopo ne sceglie un altro, senza cambiare strumento), **Esc** toglie i punti messi adesso, **Canc** rimette il passaggio automatico. Se cambi l'ordine dei pezzi o
+taglia il filo); un altro clic lo rimette. **Ridisegna passaggio**: un clic sceglie il passaggio: i suoi capi
+sono due anelli, i punti da cui passa sono **pallini pieni**. **Trascina un pallino** (sopra un pallino il
+mouse diventa la mano): si aggancia al vertice più vicino e il passaggio lo segue mentre lo sposti. **Clic sulla
+linea del passaggio** = un pallino nuovo lì, che trascini subito; **doppio clic su un pallino** = lo togli. Fra un
+pallino e l'altro il filo va **dritto**, a punti di impuntura: dove lo vuoi nascosto, metti i pallini sotto le V (il
+tratto è «nascosto» se tutte le celle che attraversa hanno punti ancora da cucire, altrimenti «in vista»). I punti
+cuciti e il resto del percorso non cambiano. Mentre trascini si muovono il pallino e una linea tratteggiata; il
+passaggio vero si rifà quando lasci il mouse, subito (cambiano solo i tratti di quel passaggio); i conti del filo in
+vista e nascosto si aggiornano da soli quando ti fermi per un momento.
+**Invio** o **Spazio** (o un clic fuori dai passaggi) = fatto, e il clic dopo ne sceglie un altro senza cambiare
+strumento; **Esc** = com'era prima di sceglierlo; **Canc** = di nuovo automatico. Le linee dei passaggi sono sempre
+unite, anche col sormonto: ogni tratto parte da dove è finito il precedente, come nel DST. Se cambi l'ordine dei pezzi o
 ridisegni, un passaggio forzato che non esiste più resta inattivo finché il filo non torna a
 collegare gli stessi due vertici.
 

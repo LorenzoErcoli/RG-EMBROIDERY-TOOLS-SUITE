@@ -631,6 +631,24 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   };
 
   const pt = (v: number) => { const i = Math.floor(v / W); return { x: (v - i * W) * half, y: i * g.cellH }; };
+  /** Un tratto dritto fra due vertici qualunque (i passaggi a mano): la sua lunghezza, mm, come la cuce il DST. */
+  const straightMm = (a: number, b: number) => { const [p, q] = segmentPoints(g, a, b); return Math.hypot(q.x - p.x, q.y - p.y); };
+  /**
+   * Nascosto o in vista, un tratto dritto: nascosto se ogni cella che attraversa ha un punto ancora da cucire (di questo
+   * filo) o di un filo che viene dopo, che lo copre; altrimenti in vista.
+   */
+  const straightKind = (a: number, b: number, k: number): SegKind => {
+    const pa = pt(a), pb = pt(b);
+    const n = Math.max(1, Math.ceil(Math.hypot(pb.x - pa.x, pb.y - pa.y) / (half / 2)));
+    for (let s = 1; s < n; s++) {
+      const x = pa.x + ((pb.x - pa.x) * s) / n, y = pa.y + ((pb.y - pa.y) * s) / n;
+      const c = Math.min(g.cols - 1, Math.max(0, Math.floor(x / g.cellW))), r = Math.min(g.rows - 1, Math.max(0, Math.floor(y / g.cellH)));
+      const ids = cellLegs.get(r * g.cols + c);
+      const covered = !!ids && ids.some((id) => (legs[id].color === k ? legs[id].remaining > 0 : (rank.get(legs[id].color) ?? -1) > (rank.get(k) ?? 0)));
+      if (!covered) return 'visible';
+    }
+    return 'hidden';
+  };
   /** Le unità della base ancora da fare: i punti col filo della base sopra la base aspettano. */
   let baseLeft = 0;
   for (const u of units) if (legs[u.leg].block === -1) baseLeft++;
@@ -1269,19 +1287,14 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
         const f = params.forced.find((q) => (q.from === from && q.to === to) || (q.from === to && q.to === from));
         const pts = f ? [from, ...(f.from === from ? f.via : [...f.via].reverse()), to] : null;
         let route: RouteSeg[] | null = null;
-        if (pts) {
-          route = [];
-          for (let q = 1; q < pts.length && route; q++) {
-            const leg = shortestPath(pts[q - 1], pts[q], k);
-            if (!leg) { route = null; break; }
-            let a = pts[q - 1];
-            for (const v of leg) { route.push({ kind: edgeKind(a, v, k).kind, from: a, to: v }); a = v; }
-          }
-        }
+        // DRITTO DA UN PALLINO ALL'ALTRO (Lorenzo, 2026-11-25: «ma perché fa tutti questi scalini»; scelta: «dritto»):
+        // prima fra due punti la strada più nascosta sul reticolo, a gradini dove sotto non c'era niente; ora il filo
+        // va in linea retta, a punti di impuntura, ed è nascosto solo se sotto ha punti ancora da cucire
+        if (pts) route = pts.slice(1).map((v, q) => ({ kind: straightKind(pts[q], v, k), from: pts[q], to: v }));
         if (route) {
           const tally = (list: RouteSeg[], sign: number) => {
             for (const t of list) {
-              const mm = edgeKind(t.from, t.to, k).mm * sign;
+              const mm = straightMm(t.from, t.to) * sign;
               if (t.kind === 'hidden') metrics.hiddenMm += mm; else if (t.kind === 'vertical') metrics.verticalMm += mm; else if (t.kind === 'retrace') metrics.retraceMm += mm; else metrics.visibleMm += mm;
             }
           };

@@ -13,7 +13,7 @@ import { collegaStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_S
 import {
   type Button, type CellEdit, type Cells, type GridSpec, type Leg, type Stitch, type Thread, type Tool,
   type Pixels, type BrushStitch, type KnitStitch, DEFAULT_GRID, applyEdits, brushArea, brushEdits, fillEdits, knitFromImage, gridForSize, refinePalette, paletteShares, DEFAULT_KNIT, cellIndex, cellsFromJson, cellsToJson, editsFor, fromThreadRoute, fromTwoColumnV, stitchLegs, halfEdits, isHalfStitch,
-  resizeCells, pointInRow, segmentPoints, rowPitch, gridHeight,
+  resizeCells, pointInRow, segmentPoints, knitVertex, rowPitch, gridHeight,
 } from './model';
 import {
   type RouteParams, type RouteResult, type RouteSeg, type SegKind, type StitchParams,
@@ -48,7 +48,7 @@ const MODE_HELP: Record<Mode, string> = {
   fill: 'Riempi: un clic passa al filo scelto tutta la zona collegata dello stesso colore — per esempio l’interno di una lettera.',
   erase: 'Gomma: trascina per cancellare; lì non si cuce niente.',
   cut: 'Salti: clicca un passaggio e diventa un salto (la macchina taglia il filo); clicca un salto fatto a mano e torna passaggio. Si tolgono tutti in 04 Passaggi.',
-  reroute: 'Ridisegna passaggio: clicca un passaggio, poi i punti da cui deve passare, in ordine. Invio o Spazio lo fissano (poi clicchi il prossimo), Esc toglie i punti appena messi, Canc rimette il passaggio automatico.',
+  reroute: 'Ridisegna passaggio: clicca un passaggio per sceglierlo. Poi trascina i pallini pieni: il passaggio li segue mentre li sposti. Clic sulla linea del passaggio = un pallino nuovo lì (e lo trascini), doppio clic su un pallino = lo togli. Invio o Spazio = fatto, Esc = com’era prima, Canc = di nuovo automatico.',
   bands: 'Fasce: il filo scelto si cuce a fasce orizzontali, dall’alto, a serpentina lungo tutte le copie. Clic su una V del filo: la sua forma passa alla fascia sotto (Maiusc+clic: sopra). Clic su una riga vuota del filo: lì comincia una fascia nuova. Clic su un confine: lo togli. Trascina un confine per spostarlo.',
   order: 'Ordine pezzi: clicca i pezzi del filo scelto nell’ordine in cui vuoi cucirli (il primo clic è il primo pezzo). Da quel momento, per quel filo, dentro ogni fascia vale il tuo ordine invece di quello del tool.',
   pick: 'Scegli modulo: sull’immagine intera trascina un riquadro intorno a un modulo (per una fascia: dalla prima all’ultima riga del disegno, largo una ripetizione). Il riquadro si aggancia alle V che trova; colonne e righe si correggono in «Griglia». Esc torna al pennello.',
@@ -636,7 +636,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const i0 = Math.round(p.y / pa), j0 = Math.round(p.x / (g.cellW / 2));
     for (let i = i0 - 2; i <= i0 + 2; i++) for (let j = j0 - 2; j <= j0 + 2; j++) {
       if (i < 0 || i > g.rows || j < 0 || j > 2 * g.cols) continue;
-      const v = i * W + j, q = segmentPoints(g, v, v)[0];
+      const v = i * W + j, q = knitVertex(g, v);
       const d = Math.hypot(q.x - p.x, q.y - p.y);
       if (d < bd) { bd = d; best = v; }
     }
@@ -665,29 +665,185 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       outside: 'Il passaggio non è dentro il ricamo.',
     };
   }
+  /**
+   * I PALLINI DEL PASSAGGIO che si ridisegna, in mm sulla tela: il capo di partenza, i punti da cui passa, il capo
+   * d'arrivo (Lorenzo, 2026-11-25: «impossibile da usare, non si capisce come spostare… vorrei poter spostare i pallini
+   * e vedere come si muove»). null = nessun passaggio scelto.
+   */
+  function rerouteHandles(): Array<{ x: number; y: number }> | null {
+    const sp = rerouteSpace();
+    if (!reroute || !sp) return null;
+    const via = sp.list.find((q) => q.from === reroute!.from && q.to === reroute!.to)?.via ?? [];
+    // il vertice nel reticolo dei passaggi calcolati (nell'editor la vista; fuori il disegno, meno l'area di prova)
+    const Wf = 2 * st.grid.cols + 1, Wr = 2 * routeGeom.grid.cols + 1;
+    const toRoute = (v: number) => (editorOpen ? modToView(v) : (Math.floor(v / Wf) - routeGeom.i0) * Wr + (v % Wf) - routeGeom.j0);
+    const A = toRoute(reroute.from), B = toRoute(reroute.to);
+    // le posizioni dai tratti di QUESTO passaggio (lo stesso vertice, toccato da un altro tratto, può stare altrove)
+    const local = new Map<number, { x: number; y: number }>();
+    if (result) for (const cr of result.colors) {
+      const segs = cr.segs;
+      for (let q = 0; q < segs.length; q++) {
+        if (segs[q].kind === 'stitch' || segs[q].kind === 'jump' || segs[q].from !== A) continue;
+        let e = q; while (e < segs.length && segs[e].kind !== 'stitch' && segs[e].kind !== 'jump') e++;
+        if (segs[e - 1].to !== B) continue;
+        if (q > 0 && segs[q - 1].to === A) local.set(A, segmentPoints(routeGeom.grid, segs[q - 1].from, A)[1]);
+        for (let k = q; k < e; k++) if (!local.has(segs[k].to)) local.set(segs[k].to, segmentPoints(routeGeom.grid, segs[k].from, segs[k].to)[1]);
+        break;
+      }
+      if (local.size) break;
+    }
+    return [reroute.from, ...via, reroute.to].map((v) => {
+      const rv = toRoute(v), q = local.get(rv);
+      return q ? { x: q.x + routeGeom.dx, y: q.y + routeGeom.dy } : pointOnRoute(rv);
+    });
+  }
+  /**
+   * DOVE PASSA IL FILO in un vertice (Lorenzo, 2026-11-25: «non capisco perché si pinna in dei punti ma il filo passa
+   * in altri»): col sormonto lo stesso vertice sta sulla riga o in fondo alla V della riga sopra, secondo il tratto; il
+   * pallino va dove l'anteprima disegna il filo che ci arriva. Un vertice che il percorso non tocca (ancora): la punta
+   * della V a metà cella, l'angolo sugli angoli. mm sulla tela.
+   */
+  let routePoints: { res: RouteResult | null; map: Map<number, { x: number; y: number }> } = { res: null, map: new Map() };
+  function pointOnRoute(v: number): { x: number; y: number } {
+    const g = routeGeom.grid;
+    if (result && routePoints.res !== result) {
+      const map = new Map<number, { x: number; y: number }>();
+      for (const cr of result.colors) for (const sg of cr.segs) if (sg.kind !== 'jump' && !map.has(sg.to)) map.set(sg.to, segmentPoints(g, sg.from, sg.to)[1]);
+      routePoints = { res: result, map };
+    }
+    const q = (result ? routePoints.map.get(v) : undefined) ?? knitVertex(g, v);
+    return { x: q.x + routeGeom.dx, y: q.y + routeGeom.dy };
+  }
+  /** Il pallino sotto il mouse (entro 9 px): l'indice fra i pallini, -1 = nessuno. */
+  function handleAt(p: { x: number; y: number }): number {
+    const hs = rerouteHandles();
+    if (!hs) return -1;
+    const { w } = sizeMm();
+    const tol = 9 / (($('layer').querySelector('svg')!.getBoundingClientRect().width || 1) / (w + 2 * margin()));
+    let best = -1, bd = tol;
+    hs.forEach((q, k) => { const d = Math.hypot(q.x - p.x, q.y - p.y); if (d <= bd) { bd = d; best = k; } });
+    return best;
+  }
+  /** Il pallino che si trascina: il suo posto fra i punti da cui passa il passaggio. */
+  let rerouteDrag: { k: number } | null = null;
+  /** Sposta (o mette) un punto del passaggio: si ricalcola subito, così il passaggio segue il pallino. */
+  function setVia(edit: (via: number[]) => void): void {
+    const sp = rerouteSpace();
+    if (!sp || !reroute) return;
+    const list = sp.list;
+    let cur = list.find((q) => q.from === reroute!.from && q.to === reroute!.to);
+    if (!cur) { cur = { from: reroute.from, to: reroute.to, via: [] }; list.push(cur); }
+    edit(cur.via);
+    if (!cur.via.length) list.splice(list.indexOf(cur), 1);
+    sp.save(list);
+    if (!rerouteDrag) { rerouteRefresh(); return; }
+    // TRASCINANDO (Lorenzo, 2026-11-25: «ancora infinitamente lento»): si ridisegnano solo i pallini e la linea
+    // tratteggiata, che non costano niente; la tela intera (su un ricamo grande decine o centinaia di ms) si rifà
+    // lasciando il mouse, e intanto al più ogni 250 ms se è veloce
+    if (editorOpen) drawEditorMarks(); else drawGroups();
+    if (lastDrawMs < 40 && !rerouteTimer) rerouteTimer = window.setTimeout(() => { rerouteTimer = 0; if (rerouteDrag) rerouteRefresh(); }, 250);
+  }
+  let rerouteTimer = 0, rerouteFull = 0;
+  /**
+   * SUBITO, SENZA RICALCOLARE (Lorenzo, 2026-11-25: «mi serve molto più veloce ancora»): un passaggio ridisegnato a
+   * mano non cambia niente del resto (punti, ordine, altri passaggi: nel motore è l'ultimo ritocco, `forced`), quindi
+   * nel risultato che c'è si cambiano solo i tratti di quel passaggio: dritti da un pallino all'altro. Poi la tela si
+   * ridisegna una volta; il calcolo completo (che conta di nuovo filo in vista e nascosto) parte da solo quando ci si
+   * ferma per un momento. Se il passaggio non si trova nel risultato, il calcolo completo subito.
+   */
+  function rerouteRefresh(): void {
+    if (!patchPassage()) { update(); return; }
+    draw();
+    window.clearTimeout(rerouteFull);
+    rerouteFull = window.setTimeout(() => { rerouteFull = 0; if (!rerouteDrag) update(); }, 900);
+  }
+  function patchPassage(): boolean {
+    const sp = rerouteSpace();
+    if (!result || !reroute || !sp) return false;
+    const via = sp.list.find((q) => q.from === reroute!.from && q.to === reroute!.to)?.via ?? [];
+    const Wf = 2 * st.grid.cols + 1, Wr = 2 * routeGeom.grid.cols + 1;
+    const toRoute = (v: number) => (editorOpen ? modToView(v) : (Math.floor(v / Wf) - routeGeom.i0) * Wr + (v % Wf) - routeGeom.j0);
+    const pts = [reroute.from, ...via, reroute.to].map(toRoute);
+    const A = pts[0], B = pts[pts.length - 1];
+    for (const cr of result.colors) {
+      const segs = cr.segs;
+      for (let q = 0; q < segs.length; q++) {
+        if (segs[q].kind === 'stitch' || segs[q].kind === 'jump') continue;
+        let e = q; while (e < segs.length && segs[e].kind !== 'stitch' && segs[e].kind !== 'jump') e++;
+        const from = segs[q].from, to = segs[e - 1].to;
+        const order = from === A && to === B ? pts : from === B && to === A ? [...pts].reverse() : null;
+        if (!order) { q = e - 1; continue; }
+        const kind = segs[q].kind;
+        segs.splice(q, e - q, ...order.slice(1).map((v, n) => ({ kind, from: order[n], to: v })));
+        routePoints = { res: null, map: new Map() };
+        return true;
+      }
+    }
+    return false;
+  }
   function rerouteClick(p: { x: number; y: number }): void {
     // col modulo ripetuto il percorso è quello del modulo: si ridisegna lì
     if (!editorOpen && routeInput().params.modulePath) { $('status').textContent = 'Il ricamo è il modulo ripetuto: i suoi passaggi si ridisegnano nel modulo (Modifica modulo), e valgono in ogni copia.'; return; }
     const sp = rerouteSpace();
     if (!sp) return;
     const list = sp.list;
-    if (!reroute) {
-      const t = travelAt(p);
-      if (!t) { $('status').textContent = editorOpen ? 'Clicca sopra una linea di passaggio del modulo al centro.' : 'Clicca sopra una linea di passaggio.'; return; }
-      const a = sp.fromView(t.from), b = sp.fromView(t.to);
-      if (a < 0 || b < 0) { $('status').textContent = sp.outside; return; }
-      const f = list.find((q) => (q.from === a && q.to === b) || (q.from === b && q.to === a));
-      reroute = { from: f ? f.from : a, to: f ? f.to : b, before: f ? [...f.via] : [] };
-      update();
+    const t = travelAt(p);
+    const tA = t ? sp.fromView(t.from) : -1, tB = t ? sp.fromView(t.to) : -1;
+    if (reroute) {
+      // un pallino pieno: si trascina
+      const hs = rerouteHandles()!;
+      const k = handleAt(p);
+      if (k > 0 && k < hs.length - 1) { pushUndo(); rerouteDrag = { k: k - 1 }; draw(); return; }
+      // sulla linea del passaggio scelto: un pallino nuovo lì, fra i due pallini più vicini, e lo si trascina
+      const same = t && ((tA === reroute.from && tB === reroute.to) || (tA === reroute.to && tB === reroute.from));
+      if (same) {
+        const v = sp.fromView(vertexNear(p));
+        if (v < 0) { $('status').textContent = editorOpen ? 'Il punto deve stare nel modulo al centro.' : 'Il punto deve stare nel ricamo.'; return; }
+        // dove va: dopo il pallino da cui il tratto dritto verso il successivo passa più vicino al clic
+        let at = 0, bd = Infinity;
+        for (let q = 0; q + 1 < hs.length; q++) {
+          const a = hs[q], b = hs[q + 1], vx = b.x - a.x, vy = b.y - a.y, L = vx * vx + vy * vy;
+          const u = L ? Math.max(0, Math.min(1, ((p.x - a.x) * vx + (p.y - a.y) * vy) / L)) : 0;
+          const d = Math.hypot(a.x + u * vx - p.x, a.y + u * vy - p.y);
+          if (d < bd) { bd = d; at = q; }
+        }
+        pushUndo();
+        setVia((via) => via.splice(at, 0, v));
+        rerouteDrag = { k: at };
+        return;
+      }
+    }
+    // un altro passaggio: si sceglie quello; fuori da ogni passaggio: si finisce
+    if (!t) {
+      if (reroute) { reroute = null; if (editorOpen) drawEditorMarks(); else drawGroups(); $('status').textContent = 'Fatto. Clicca un altro passaggio da ridisegnare.'; return; }
+      $('status').textContent = editorOpen ? 'Clicca sopra una linea di passaggio del modulo al centro.' : 'Clicca sopra una linea di passaggio.';
       return;
     }
+    if (tA < 0 || tB < 0) { $('status').textContent = sp.outside; return; }
+    const f = list.find((q) => (q.from === tA && q.to === tB) || (q.from === tB && q.to === tA));
+    reroute = { from: f ? f.from : tA, to: f ? f.to : tB, before: f ? [...f.via] : [] };
+    if (editorOpen) drawEditorMarks(); else drawGroups();
+    showStatus();
+  }
+  /** Trascinando: il pallino va sul vertice più vicino, e il passaggio si rifà solo quando cambia vertice. */
+  function rerouteMove(p: { x: number; y: number }): void {
+    const sp = rerouteSpace();
+    if (!rerouteDrag || !sp || !reroute) return;
     const v = sp.fromView(vertexNear(p));
-    if (v < 0) { $('status').textContent = editorOpen ? 'Il punto deve stare nel modulo al centro.' : 'Il punto deve stare nel ricamo.'; return; }
+    if (v < 0) return;
+    const k = rerouteDrag.k;
+    const via = sp.list.find((q) => q.from === reroute!.from && q.to === reroute!.to)?.via;
+    if (!via || via[k] === v) return;
+    setVia((vv) => { vv[k] = v; });
+  }
+  /** Doppio clic su un pallino pieno: lo toglie. */
+  function rerouteRemoveAt(p: { x: number; y: number }): boolean {
+    const hs = rerouteHandles();
+    const k = handleAt(p);
+    if (!hs || k <= 0 || k >= hs.length - 1) return false;
     pushUndo();
-    const cur = list.find((q) => q.from === reroute!.from && q.to === reroute!.to);
-    if (cur) cur.via.push(v); else list.push({ from: reroute.from, to: reroute.to, via: [v] });
-    sp.save(list);
-    update();
+    setVia((via) => via.splice(k - 1, 1));
+    return true;
   }
   function rerouteKey(k: string): boolean {
     const sp = rerouteSpace();
@@ -700,8 +856,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     // che sto modificando si blocca, altrimenti non posso andare a cambiare qualcos'altro»)
     else if (k !== 'Enter' && k !== ' ') return false;
     sp.save(list);
-    reroute = null;
-    update();
+    // Invio: niente è cambiato, solo i pallini spariscono; Esc e Canc cambiano il passaggio: il calcolo completo
+    if (k === 'Enter' || k === ' ') { reroute = null; if (editorOpen) drawEditorMarks(); else drawGroups(); }
+    else { reroute = null; update(); }
     $('status').textContent = k === 'Escape' ? 'Punti tolti. Clicca un passaggio da ridisegnare.' : k === 'Delete' || k === 'Backspace' ? 'Passaggio automatico. Clicca un altro passaggio da ridisegnare.' : 'Passaggio fissato. Clicca un altro passaggio da ridisegnare.';
     return true;
   }
@@ -875,7 +1032,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     return { cssW: natW * k, cssH: natH * k };
   }
 
+  /** Quanto è durato l'ultimo disegno della tela (ms): su un ricamo grande trascinando non si ridisegna. */
+  let lastDrawMs = 0;
   function draw(): void {
+    const t0 = performance.now();
+    drawScene();
+    lastDrawMs = performance.now() - t0;
+  }
+  function drawScene(): void {
     const g = st.grid;
     const { w, h } = sizeMm();
     const m = margin();
@@ -1063,20 +1227,28 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           if (st.threads[cr.color]?.hidden) continue;
           // i passaggi nascosti dritti (prova): le corse lungo la riga, a metà altezza
           const straight = st.stitch.straightHidden ? straightHiddenRuns(rg0, cr.segs) : null;
+          // LE LINEE UNITE (Lorenzo, 2026-11-25: «le linee sono spezzate, non si capisce perché, invece di essere
+          // tutte sempre unite»): col sormonto lo stesso vertice sta un filo più su o più giù secondo il tratto
+          // (punta della V o angolo); come nel DST ogni tratto parte da dove è finito il precedente
+          let prevTo = -1, prevEnd: { x: number; y: number } | null = null;
           for (let qi = 0; qi < cr.segs.length; qi++) {
             const sg = cr.segs[qi];
             const run = straight?.get(qi);
             if (run) {
               if (kind === 'hidden' && n < upTo) { ctx.moveTo(X(run.pts[0].x + odx), Y(run.pts[0].y + ody)); for (const pt of run.pts.slice(1)) ctx.lineTo(X(pt.x + odx), Y(pt.y + ody)); }
+              prevTo = cr.segs[run.end - 1].to; prevEnd = run.pts[run.pts.length - 1];
               qi = run.end - 1;
               continue;
             }
+            const [pa, pb] = segmentPoints(rg0, sg.from, sg.to);
+            const start = sg.kind !== 'jump' && prevEnd && prevTo === sg.from ? prevEnd : pa;
+            prevTo = sg.to; prevEnd = pb;
             if (sg.kind === 'stitch') { n++; continue; }
             if (n >= upTo) continue;
             const isCut = sg.kind === 'jump' && cutsNow.has(cutKeyOf(sg.from, sg.to));
             if (kind === 'cut' ? !isCut : sg.kind !== kind || isCut) continue;
-            const [pa, pb] = segmentPoints(rg0, sg.from, sg.to);
-            ctx.moveTo(X(pa.x + odx), Y(pa.y + ody));
+            ctx.moveTo(X(start.x + odx), Y(start.y + ody));
+            if (start !== pa) ctx.lineTo(X(pa.x + odx), Y(pa.y + ody));
             ctx.lineTo(X(pb.x + odx), Y(pb.y + ody));
           }
         }
@@ -1178,9 +1350,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (zoneSel && (mode === 'group' || mode === 'area')) { $('status').textContent = `${zoneSel.kind === 'area' ? 'Blocco' : 'Gruppo'} ${zoneSel.i + 1} selezionato: trascina un vertice per spostarlo, il pallino a metà di un lato per aggiungerne uno, tasto destro su un vertice per toglierlo; trascina dentro per spostare tutto. Esc per finire.`; return; }
     if (eyedrop >= 0) { $('status').textContent = `Clicca sull’immagine il colore del filo ${eyedrop + 1} (Esc annulla). L’immagine si vede intera mentre scegli.`; return; }
     if (editorOpen && st.module && mode === 'pick') { $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V. Trascina un riquadro intorno a un modulo dell’immagine: si aggancia alle V che trova.`; return; }
-    if (editorOpen && st.module && reroute) { $('status').textContent = `Ridisegni un passaggio (filo in vista ${Math.round(editorVisible)} mm per modulo): clicca i punti da cui deve passare, in ordine. Invio o Spazio lo fissano, Esc toglie i punti messi, Canc rimette il passaggio automatico.`; return; }
+    if (editorOpen && st.module && reroute) { $('status').textContent = `Ridisegni un passaggio (filo in vista ${Math.round(editorVisible)} mm per modulo): trascina i pallini pieni, clic sulla linea per aggiungerne uno, doppio clic su un pallino per toglierlo. Invio o Spazio = fatto, Esc = com’era prima, Canc = automatico.`; return; }
     if (editorOpen && st.module) { const g0 = realGrid(); const nP = piecesOf(st.module, activeThread).length; $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V · ${fmtNum(Math.round(st.module.cols * g0.cellW))} × ${fmtNum(Math.round(st.module.rows * rowPitch(g0)))} mm · filo in vista ${Math.round(editorVisible)} mm per modulo · filo scelto: ${nP} pezz${nP === 1 ? 'o' : 'i'}, ${bandNote()}; pieno = ingresso, anello = dove finire`; return; }
-    if (reroute && !editorOpen) { $('status').textContent = 'Ridisegni un passaggio: clicca i punti da cui deve passare, in ordine. Invio o Spazio lo fissano, Esc toglie i punti messi, Canc rimette il passaggio automatico.'; return; }
+    if (reroute && !editorOpen) { $('status').textContent = 'Ridisegni un passaggio: trascina i pallini pieni, clic sulla linea per aggiungerne uno, doppio clic su un pallino per toglierlo. Invio o Spazio = fatto, Esc = com’era prima, Canc = automatico.'; return; }
     if (routing) { $('status').textContent = 'Calcolo dei passaggi…'; return; }
     if (moduleView) { $('status').textContent = moduleCopyNote; return; }
     if (!result) return;
@@ -1200,10 +1372,24 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   // Una richiesta vecchia che arriva dopo una nuova si scarta.
   let routing = false;
   let routeRequest = 0;
+  /**
+   * UNA RICHIESTA ALLA VOLTA (Lorenzo, 2026-11-25, trascinando i pallini di Ridisegna passaggio: «è ancora molto
+   * lento»): ogni spostamento mandava un calcolo al worker, che li faceva tutti in fila, anche quelli già vecchi. Ora
+   * mentre il worker lavora si tiene solo l'ultima richiesta, e parte quando arriva il risultato.
+   */
+  let routeInFlight = false, routePending = false;
   let worker: Worker | null = null;
   try {
     worker = new Worker(new URL('./routing.worker.ts', import.meta.url), { type: 'module' });
     worker.onmessage = (e: MessageEvent<{ id: number; result?: RouteResult; error?: string }>) => {
+      routeInFlight = false;
+      // c'è una richiesta più nuova in attesa: si mostra questo risultato (il passaggio intanto si muove) e si parte con quella
+      if (routePending) {
+        routePending = false;
+        if (!e.data.error && e.data.result && !editorOpen) { result = e.data.result; lastReal = { result, geom: { ...requestGeom } }; if (moduleView) showModulePasses(); draw(); }
+        recompute();
+        return;
+      }
       if (e.data.id !== routeRequest) return;
       routing = false;
       if (e.data.error) { result = null; $('status').textContent = 'Errore nei passaggi: ' + e.data.error; return; }
@@ -1217,6 +1403,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
 
   function recompute(): void {
     routeRequest++;
+    if (worker && routeInFlight) { routePending = true; routing = true; return; }
     // in vista modulo si calcola il ricamo vero (il modulo ripetuto), non la vista
     const saved = moduleView && realDesign && st.module ? { grid: st.grid, cells: st.cells } : null;
     if (saved) { st.grid = realDesign!.grid; st.cells = tileModule(realDesign!.grid, st.module!); }
@@ -1227,6 +1414,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     requestGeom = { ...routeGeom };
     if (worker) {
       routing = true;
+      routeInFlight = true;
       worker.postMessage({ id: routeRequest, grid: inp.grid, cells: inp.cells, params: inp.params });
       return;
     }
@@ -2179,6 +2367,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       if (!p || e.button !== 0) return;
       e.stopPropagation(); e.preventDefault();
       rerouteClick(p);
+      if (rerouteDrag) { canvas.style.cursor = 'grabbing'; try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ } }
       return;
     }
     if (mode === 'cut') {
@@ -2247,6 +2436,17 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     paintAt(e);
   }, true);
   canvas.addEventListener('pointermove', (e) => {
+    if (rerouteDrag) {
+      e.stopPropagation();
+      const p = mmAt(e);
+      if (p) rerouteMove(p);
+      return;
+    }
+    if (mode === 'reroute') {
+      // sopra un pallino pieno la mano: si può trascinare
+      const p = mmAt(e), hs = p ? rerouteHandles() : null, k = p && hs ? handleAt(p) : -1;
+      canvas.style.cursor = hs && k > 0 && k < hs.length - 1 ? 'grab' : '';
+    }
     if (areaDrag) {
       e.stopPropagation();
       const p = mmAt(e);
@@ -2320,6 +2520,14 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   }, true);
   canvas.addEventListener('pointerleave', () => { if (!painting) hideBrush(); });
   const endPaint = (e: PointerEvent) => {
+    if (rerouteDrag) {
+      e.stopPropagation();
+      rerouteDrag = null;
+      canvas.style.cursor = 'grab';
+      try { canvas.releasePointerCapture(e.pointerId); } catch { /* ignore */ }
+      rerouteRefresh();
+      return;
+    }
     if (areaDrag) {
       e.stopPropagation();
       const d = areaDrag;
@@ -2404,6 +2612,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     update();
   };
   canvas.addEventListener('pointerup', endPaint, true);
+  canvas.addEventListener('dblclick', (e) => {
+    if (mode !== 'reroute') return;
+    const p = mmAt(e as unknown as PointerEvent);
+    if (p && rerouteRemoveAt(p)) { e.stopPropagation(); e.preventDefault(); }
+  }, true);
   canvas.addEventListener('pointercancel', endPaint, true);
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -2702,13 +2915,20 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (rr) {
       const Wf = 2 * st.grid.cols + 1;
       const enc = ([i, j]: [number, number]) => i * Wf + j;
-      const f = st.forced.find((q) => enc(q.from) === rr.from && enc(q.to) === rr.to);
-      const pts = [rr.from, ...(f ? f.via.map(enc) : []), rr.to];
-      pts.forEach((v, n) => {
-        const pt = segmentPoints(st.grid, v, v)[0], end = n === 0 || n === pts.length - 1;
+      const xy = rerouteHandles() ?? [];
+      const pts = xy;
+      if (rerouteDrag) {
+        const pl = document.createElementNS(ns, 'polyline');
+        pl.setAttribute('points', xy.map((q) => `${q.x},${q.y}`).join(' '));
+        pl.setAttribute('style', 'fill:none;stroke:var(--rg-color-focus);stroke-dasharray:5 4');
+        pl.setAttribute('stroke-width', '1.5'); pl.setAttribute('vector-effect', 'non-scaling-stroke');
+        layer.appendChild(pl);
+      }
+      pts.forEach((pt, n) => {
+        const end = n === 0 || n === pts.length - 1;
         const c = document.createElementNS(ns, 'circle');
-        c.setAttribute('cx', String(pt.x)); c.setAttribute('cy', String(pt.y)); c.setAttribute('r', String(fs * (end ? 0.3 : 0.2)));
-        c.setAttribute('style', `fill:${end ? 'none' : 'var(--rg-color-focus)'};stroke:var(--rg-color-focus)`);
+        c.setAttribute('cx', String(pt.x)); c.setAttribute('cy', String(pt.y)); c.setAttribute('r', String(fs * (end ? 0.3 : 0.28)));
+        c.setAttribute('style', end ? 'fill:none;stroke:var(--rg-color-focus)' : 'fill:var(--rg-color-focus);stroke:var(--rg-color-white)');
         c.setAttribute('stroke-width', '2'); c.setAttribute('vector-effect', 'non-scaling-stroke');
         layer.appendChild(c);
       });
@@ -3803,9 +4023,11 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       layer.insertAdjacentHTML('beforeend', `<text x="${x}" y="${y}" font-size="${fs}" text-anchor="middle" dominant-baseline="middle" style="fill:var(--rg-color-black);font-family:var(--rg-font-mono);font-weight:600;paint-order:stroke;stroke:var(--rg-color-white);stroke-width:2.5px;stroke-linejoin:round">${pc.position}</text>`);
     }
     if (reroute) {
-      const pts = [reroute.from, ...((m.forced ?? []).find((q) => q.from === reroute!.from && q.to === reroute!.to)?.via ?? []), reroute.to];
-      const xy = pts.map((v) => segmentPoints(g, modToView(v), modToView(v))[0]);
-      layer.insertAdjacentHTML('beforeend', xy.map((q, n) => `<circle cx="${q.x}" cy="${q.y}" r="${rad * (n === 0 || n === xy.length - 1 ? 0.8 : 0.55)}" fill="${n === 0 || n === xy.length - 1 ? 'none' : 'var(--rg-color-focus)'}" style="stroke:var(--rg-color-focus)" stroke-width="2" vector-effect="non-scaling-stroke"/>`).join(''));
+      const xy = rerouteHandles() ?? [];
+      if (rerouteDrag) layer.insertAdjacentHTML('beforeend', `<polyline points="${xy.map((q) => `${q.x},${q.y}`).join(' ')}" fill="none" style="stroke:var(--rg-color-focus)" stroke-width="1.5" stroke-dasharray="5 4" vector-effect="non-scaling-stroke"/>`);
+      layer.insertAdjacentHTML('beforeend', xy.map((q, n) => (n === 0 || n === xy.length - 1
+        ? `<circle cx="${q.x}" cy="${q.y}" r="${rad * 0.8}" fill="none" style="stroke:var(--rg-color-focus)" stroke-width="2" vector-effect="non-scaling-stroke"/>`
+        : `<circle cx="${q.x}" cy="${q.y}" r="${rad * (rerouteDrag && rerouteDrag.k === n - 1 ? 0.95 : 0.75)}" style="fill:var(--rg-color-focus);stroke:var(--rg-color-white)" stroke-width="2" vector-effect="non-scaling-stroke"/>`)).join(''));
     }
     svg.appendChild(layer);
   }

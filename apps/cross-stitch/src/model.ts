@@ -127,6 +127,9 @@ export function segmentPoints(g: GridSpec, from: number, to: number): [{ x: numb
   // punta di una V alla punta della V sotto (o da angolo ad angolo), lungo quanto il passo della
   // riga, senza scarti.
   if (j1 === j2 && i1 !== i2) return [knitVertex(g, from), knitVertex(g, to)];
+  // più di una riga (un passaggio a mano dritto, un salto): dentro una riga sola il sormonto sbaglierebbe il capo
+  // lontano di (1 − passo) per ogni riga in più; i due capi dove stanno nella maglia
+  if (Math.abs(i1 - i2) > 1) return [knitVertex(g, from), knitVertex(g, to)];
   // diagonale: la riga è quella fra i due; bordo orizzontale: la riga che parte lì
   const r = i1 !== i2 ? Math.min(i1, i2) : Math.min(i1, g.rows - 1);
   return [pointInRow(g, from, r), pointInRow(g, to, r)];
