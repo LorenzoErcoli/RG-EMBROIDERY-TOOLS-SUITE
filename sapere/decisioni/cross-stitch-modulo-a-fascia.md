@@ -59,13 +59,26 @@ si ripete, la cella, *Trova da solo* o *Scegli sull'immagine*, colonne e righe; 
 disclosure) · *3 Disegna*. Ogni passo dice cosa c'è e ha il badge *Fatto*; si apre da solo il primo da fare (all'apertura,
 dopo l'immagine, dopo aver trovato o scelto il modulo).
 
-**Trovato e non toccato (da decidere con Lorenzo).** La base in un solo stop si cuce riga per riga dall'alto; dove la
-forma spezza una riga (una scollatura) il filo va da una parte all'altra **a vista sopra il vuoto**, fuori dal pezzo.
-Sul davanti di prova (400 × 460 mm, cella 5 × 6) sono 44 tratti, circa 1 m in vista. Succedeva già con ogni modulo dentro
-una forma; con la fascia è la strada di sempre. Si può risolvere in due modi: saltare (col taglio) fra le parti della
-riga, o cucire prima una spalla tutta e poi l'altra.
+**La base sulla scollatura (2026-11-25).** La base in un solo stop si cuceva riga per riga dall'alto; dove la forma
+spezza una riga (una scollatura) il filo andava da una parte all'altra **sopra il vuoto**, fuori dal pezzo: sul davanti
+di prova (400 × 460 mm, cella 5 × 6) 44 tratti sul vuoto, più salti fra le spalle. Succedeva con ogni modulo dentro una
+forma. Le due strade mostrate a Lorenzo: (a) a ogni riga un salto col taglio; (b) prima una spalla tutta, poi l'altra.
+Lorenzo: «facciamo un'impuntura continua nei punti in cui c'è la scollatura». Fatto così (`baseWholeRoute`, strips.ts):
+- **la base a pezzi** (`basePieces`): ogni fascia della base si divide nei pezzi che la forma lascia staccati; un pezzo
+  continua quello di sopra se si toccano solo fra loro. Si cuce il pezzo più in alto fra quelli che hanno già cucito
+  tutto quello che toccano sopra: la spalla sinistra tutta, la destra tutta, poi le righe intere sotto. Ognuno dall'alto
+  in basso, a serpentina, col verso che parte più vicino a dove si è e finisce più vicino al pezzo dopo;
+- **l'impuntura** (`baseTravel`): da un pezzo all'altro, la strada più corta sui lati e sui verticali del reticolo che
+  **resta dentro la forma**, meglio dove la base non è ancora cucita (la copre dopo) e mezza cella dentro dal bordo;
+  sopra la base già cucita costa sei volte, sopra il vuoto mai. Due pezzi staccati del tutto: lì si salta;
+- senza forma, o con una forma che non spezza le righe, la base è un pezzo solo e il percorso è quello di prima.
 
-**Le prove** in `test/cross-stitch-fascia.mjs` (12 asserzioni): righe della fascia, fascia fuori dal pezzo, copie solo
-in larghezza, giunture, percorso (una base, fili solo nella fascia), tracce fino al DST su una forma, ricerca su
-un'immagine con righe di base, file del modulo (andata e ritorno, da un progetto, file sbagliati). Rotte apposta in sei
+Misurato sul davanti di prova con la fascia in alto: prima 44 tratti sopra il vuoto, 610 mm di salti e 308 mm in vista
+nella base; ora 0, 0 e 0, un'impuntura di 160 mm dentro la spalla destra ancora da cucire. I fili del disegno, dove la
+forma li interrompe, saltavano già col taglio (*Taglio a ogni salto*): non cambiano.
+
+**Le prove** in `test/cross-stitch-fascia.mjs` (13 asserzioni): righe della fascia, fascia fuori dal pezzo, copie solo
+in larghezza, giunture, percorso (una base, fili solo nella fascia), la base sulla scollatura (uno stop, nessun salto,
+niente sul vuoto, una spalla poi l'altra, l'impuntura fra le due), tracce fino al DST su una forma, ricerca su
+un'immagine con righe di base, file del modulo (andata e ritorno, da un progetto, file sbagliati). Rotte apposta in nove
 modi (su una copia in `.lab`): tutte rosse nel punto giusto.

@@ -41,6 +41,38 @@ export function proveFascia(rg, check) {
     [baseStops.length, stitchRows(baseStops[0]).length, [...new Set(design.flatMap(stitchRows))].sort((a, b) => a - b), design.length > 0],
     [1, 12, [4, 5, 6], true]);
 
+  // LA SCOLLATURA (Lorenzo, 2026-11-25: «facciamo un'impuntura continua nei punti in cui c'è la scollatura»): una
+  // forma con un vuoto in alto al centro (colonne 3-6 delle righe 0-3). La base cuce tutta la spalla sinistra,
+  // poi va con un'impuntura dentro la forma alla destra, poi il resto: mai un tratto sopra il vuoto, nessun salto
+  {
+    const mask = new Uint8Array(g.rows * g.cols).fill(1);
+    for (let r = 0; r < 4; r++) for (let c = 3; c <= 6; c++) mask[r * g.cols + c] = 0;
+    const isIn = (r, c) => r >= 0 && r < g.rows && c >= 0 && c < g.cols && mask[r * g.cols + c] === 1;
+    // un tratto è sopra il vuoto se nessuna delle celle che tocca è dentro la forma
+    const overVoid = (sg) => {
+      const a = Math.min(sg.from, sg.to), b = Math.max(sg.from, sg.to);
+      const i1 = Math.floor(a / W), j1 = a % W, i2 = Math.floor(b / W), j2 = b % W;
+      if (i1 === i2) {
+        for (let j = Math.min(j1, j2); j < Math.max(j1, j2); j++) if (!isIn(i1 - 1, j >> 1) && !isIn(i1, j >> 1)) return true;
+        return false;
+      }
+      if (j1 === j2) return j1 % 2 ? !isIn(i1, (j1 - 1) / 2) : !isIn(i1, j1 / 2 - 1) && !isIn(i1, j1 / 2);
+      return !isIn(Math.min(i1, i2), Math.min(j1, j2) >> 1);
+    };
+    const nb = rg.csRouteAll(g, tb, { ...route, mask, modulePath: mp });
+    const bs = nb.colors.filter((cr) => cr.color === 0);
+    const segs = bs[0]?.segs ?? [];
+    const st = segs.map((sg, k) => ({ k, sg })).filter(({ sg }) => sg.kind === 'stitch');
+    const colOf = (sg) => (Math.min(sg.from % W, sg.to % W) >> 1);
+    const top = (sg) => Math.floor(Math.min(sg.from, sg.to) / W) < 4;
+    const lastLeft = Math.max(...st.filter(({ sg }) => top(sg) && colOf(sg) < 3).map(({ k }) => k));
+    const firstRight = Math.min(...st.filter(({ sg }) => top(sg) && colOf(sg) > 6).map(({ k }) => k));
+    const firstBelow = Math.min(...st.filter(({ sg }) => !top(sg)).map(({ k }) => k));
+    check('scollatura: la base è uno stop, senza salti e senza tratti sopra il vuoto; la spalla sinistra tutta, poi la destra, poi le righe sotto; fra le spalle un’impuntura che resta dentro la forma',
+      [bs.length, segs.filter((sg) => sg.kind === 'jump').length, segs.filter((sg) => sg.kind !== 'jump' && overVoid(sg)).length, lastLeft < firstRight && firstRight < firstBelow, segs.slice(lastLeft + 1, firstRight).some((sg) => sg.kind === 'hidden')],
+      [1, 0, 0, true, true]);
+  }
+
   // fino alle tracce da cucire (la strada del DST e dell'SVG), su una forma a trapezio: la base dentro la forma, il
   // disegno solo nelle righe della fascia, ripetuto in larghezza e tagliato dalla forma
   {

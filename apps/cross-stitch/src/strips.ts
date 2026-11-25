@@ -83,39 +83,71 @@ function baseWholeRoute(g: GridSpec, cells: Cells, params: RouteParams): { route
   // DALL'ALTO IN BASSO (Lorenzo, 2026-10-13: «la base deve sempre lavorare da sopra a sotto»): fasce di
   // BASE_BAND_ROWS righe, a serpentina (la prima da sinistra a destra, la seconda da destra a sinistra…);
   // ogni fascia finisce sull'angolo in basso da cui parte la fascia dopo, così lo stop resta uno e continuo.
+  // DOVE LA FORMA SPEZZA LE RIGHE (Lorenzo, 2026-11-25, sulla scollatura: «facciamo un'impuntura continua nei
+  // punti in cui c'è la scollatura»): la base si cuce a pezzi (basePieces), una spalla tutta e poi l'altra,
+  // ognuno dall'alto in basso; da un pezzo all'altro il filo va con un'impuntura dentro la forma, dove la base
+  // non è ancora cucita (baseTravel): la copre la base che viene dopo. Prima passava a vista sopra il vuoto.
   const W = 2 * g.cols + 1;
   const mask = params.mask && params.mask.length === g.rows * g.cols ? params.mask : null;
   const segs: RouteSeg[] = [];
   const metrics = emptyMetrics();
-  /** Il vertice in basso della riga r, verso sinistra o verso destra, sul primo punto dentro la forma. */
-  const cornerOf = (r: number, right: boolean): number | null => {
-    for (let q = 0; q < g.cols; q++) {
-      const c = right ? g.cols - 1 - q : q;
-      if (!mask || mask[r * g.cols + c]) return (r + 1) * W + 2 * (right ? c + 1 : c);
-    }
-    return null;
+  const pieces = basePieces(g, mask, params.baseBandRows ?? BASE_BAND_ROWS);
+  const done = new Uint8Array(g.rows * g.cols);
+  const pitch = rowPitch(g);
+  const dist = (a: number, b: number) => {
+    const ia = Math.floor(a / W), ib = Math.floor(b / W);
+    return Math.hypot((a - ia * W - (b - ib * W)) * g.cellW / 2, (ia - ib) * pitch);
   };
-  let at = cornerOf(0, false) === null ? -1 : cornerOf(0, false)! - W; // in alto a sinistra
-  stripRanges(g, params.baseBandRows ?? BASE_BAND_ROWS).forEach(([r0, r1], n) => {
-    const grid: GridSpec = { ...g, rows: r1 - r0 };
-    const shift = r0 * W;
-    const sub: Cells = new Map(); // le croci col filo della base vengono dopo tutta la base (sotto)
-    const end = cornerOf(r1 - 1, n % 2 === 0);
-    const startLocal = at >= shift ? at - shift : -1;
-    const res = routeCells(grid, sub, {
-      ...params, strips: null, modulePath: null, areas: null, cuts: [], forced: [],
-      groups: params.groups?.map((q) => shiftGroup(q, 0, r0 * rowPitch(g))),
-      mask: mask ? mask.subarray(r0 * g.cols, r1 * g.cols) : null,
-      startAt: startLocal >= 0 ? { [base.color]: startLocal } : undefined,
-      endAt: end !== null ? { [base.color]: end - shift } : undefined,
+  let at = -1;
+  pieces.forEach((piece, p) => {
+    const next = pieces[p + 1];
+    // il verso della prima fascia: quello che parte più vicino a dove siamo e finisce più vicino al pezzo dopo
+    const plan = (right: boolean) => {
+      const start = partCorner(g, piece[0], false, right);
+      const lastRight = piece.length % 2 === 1 ? !right : right;
+      const end = partCorner(g, piece[piece.length - 1], true, lastRight);
+      const goal = next ? partCorner(g, next[0], false, false) : -1;
+      return { right, start, cost: (at >= 0 ? dist(at, start) : 0) + (goal >= 0 ? dist(end, goal) : 0) };
+    };
+    const a = plan(false), b = plan(true);
+    const best = b.cost < a.cost - 1e-6 ? b : a;
+    if (at < 0) at = best.start;
+    else if (at !== best.start) {
+      const travel = baseTravel(g, mask, done, at, best.start);
+      if (travel) {
+        for (const sg of travel) {
+          const [p0, q0] = segmentPoints(g, sg.from, sg.to);
+          const mm = Math.hypot(q0.x - p0.x, q0.y - p0.y);
+          if (sg.kind === 'hidden') metrics.hiddenMm += mm; else metrics.visibleMm += mm;
+        }
+        segs.push(...travel);
+        at = best.start;
+      }
+    }
+    piece.forEach((part, k) => {
+      const [r0, r1] = part.rows;
+      const grid: GridSpec = { ...g, rows: r1 - r0 };
+      const shift = r0 * W;
+      const sub: Cells = new Map(); // le croci col filo della base vengono dopo tutta la base (sotto)
+      const startRight = k % 2 === 0 ? best.right : !best.right;
+      const end = partCorner(g, part, true, !startRight);
+      const startLocal = at >= shift && at < shift + (grid.rows + 1) * W ? at - shift : -1;
+      const res = routeCells(grid, sub, {
+        ...params, strips: null, modulePath: null, areas: null, cuts: [], forced: [],
+        groups: params.groups?.map((q) => shiftGroup(q, 0, r0 * pitch)),
+        mask: part.mask ?? (mask ? mask.subarray(r0 * g.cols, r1 * g.cols) : null),
+        startAt: startLocal >= 0 ? { [base.color]: startLocal } : undefined,
+        endAt: end >= 0 ? { [base.color]: end - shift } : undefined,
+      });
+      for (const c of part.cells) done[c] = 1;
+      const bc = res.colors.find((cr) => cr.color === base.color);
+      if (!bc || !bc.segs.length) return;
+      addMetrics(metrics, res.metrics);
+      const moved = bc.segs.map((s) => ({ ...s, from: s.from + shift, to: s.to + shift }));
+      if (segs.length && moved[0].from !== segs[segs.length - 1].to) segs.push({ kind: 'jump', from: segs[segs.length - 1].to, to: moved[0].from });
+      segs.push(...moved);
+      at = segs[segs.length - 1].to;
     });
-    const bc = res.colors.find((cr) => cr.color === base.color);
-    if (!bc || !bc.segs.length) return;
-    addMetrics(metrics, res.metrics);
-    const moved = bc.segs.map((s) => ({ ...s, from: s.from + shift, to: s.to + shift }));
-    if (segs.length && moved[0].from !== segs[segs.length - 1].to) segs.push({ kind: 'jump', from: segs[segs.length - 1].to, to: moved[0].from });
-    segs.push(...moved);
-    at = segs[segs.length - 1].to;
   });
   // le croci col filo della base: sopra tutta la base (la riga sotto, col sormonto, le coprirebbe), nello stesso stop
   if (over.size) {
@@ -136,6 +168,152 @@ function baseWholeRoute(g: GridSpec, cells: Cells, params: RouteParams): { route
  * 0 in vista (con 4 righe per fascia 54 m di ripassi, con 2 righe 107 m).
  */
 export const BASE_BAND_ROWS = 1;
+
+/**
+ * Un pezzo di una fascia della base: le sue celle (dentro la forma, unite fra loro) e, se la fascia ne ha più
+ * di uno, la maschera della fascia con solo quelle (null = la maschera della fascia così com'è).
+ */
+interface BasePart { rows: [number, number]; cells: number[]; mask: Uint8Array | null; }
+
+/**
+ * I PEZZI DELLA BASE, nell'ordine in cui si cuciono. Ogni fascia si divide nei pezzi che la forma lascia
+ * staccati (sopra la scollatura: la spalla sinistra e la destra). Un pezzo continua quello di sopra se tocca
+ * solo lui e lui tocca solo questo; altrimenti comincia un pezzo nuovo, che si cuce dopo tutti quelli che
+ * tocca sopra. Senza forma, o con una forma che non spezza le righe, il pezzo è uno: tutta la base.
+ */
+function basePieces(g: GridSpec, mask: Uint8Array | null, bandRows: number): BasePart[][] {
+  const C = g.cols;
+  const isIn = (i: number) => !mask || mask[i] === 1;
+  const comp = new Int32Array(g.rows * C).fill(-1);
+  const parts: Array<BasePart & { up: number[]; down: number[] }> = [];
+  stripRanges(g, bandRows).forEach(([r0, r1], b) => {
+    const first = parts.length;
+    for (let r = r0; r < r1; r++) for (let c = 0; c < C; c++) {
+      const i0 = r * C + c;
+      if (!isIn(i0) || comp[i0] >= 0) continue;
+      const id = parts.length, cells: number[] = [], stack = [i0];
+      comp[i0] = id;
+      while (stack.length) {
+        const i = stack.pop()!;
+        cells.push(i);
+        const rr = Math.floor(i / C), cc = i - rr * C;
+        for (const [nr, nc] of [[rr - 1, cc], [rr + 1, cc], [rr, cc - 1], [rr, cc + 1]]) {
+          if (nr < r0 || nr >= r1 || nc < 0 || nc >= C) continue;
+          const j = nr * C + nc;
+          if (isIn(j) && comp[j] < 0) { comp[j] = id; stack.push(j); }
+        }
+      }
+      parts.push({ rows: [r0, r1], cells: cells.sort((x, y) => x - y), mask: null, up: [], down: [] });
+    }
+    if (parts.length - first > 1) for (let q = first; q < parts.length; q++) {
+      const m = new Uint8Array((r1 - r0) * C);
+      for (const i of parts[q].cells) m[i - r0 * C] = 1;
+      parts[q].mask = m;
+    }
+    if (b > 0) for (let c = 0; c < C; c++) {
+      const a = comp[(r0 - 1) * C + c], d = comp[r0 * C + c];
+      if (a >= 0 && d >= 0 && !parts[d].up.includes(a)) { parts[d].up.push(a); parts[a].down.push(d); }
+    }
+  });
+  const pieceOf = new Int32Array(parts.length).fill(-1);
+  const pieces: Array<{ parts: number[]; deps: number[] }> = [];
+  parts.forEach((pt, id) => {
+    if (pt.up.length === 1 && parts[pt.up[0]].down.length === 1) { pieceOf[id] = pieceOf[pt.up[0]]; pieces[pieceOf[id]].parts.push(id); }
+    else { pieceOf[id] = pieces.length; pieces.push({ parts: [id], deps: pt.up.map((u) => pieceOf[u]) }); }
+  });
+  // l'ordine: il pezzo più in alto fra quelli che hanno già cucito tutto quello che toccano sopra; a pari
+  // altezza il più vicino a dove si è finito (all'inizio, il più a sinistra)
+  const colOf = (id: number) => parts[id].cells[0] % C;
+  const used = new Uint8Array(pieces.length), order: number[] = [];
+  let lastCol = -Infinity;
+  while (order.length < pieces.length) {
+    let best = -1, bestKey: [number, number] = [Infinity, Infinity];
+    pieces.forEach((pc, k) => {
+      if (used[k] || pc.deps.some((d) => !used[d])) return;
+      const key: [number, number] = [parts[pc.parts[0]].rows[0], Math.abs(colOf(pc.parts[0]) - lastCol)];
+      if (key[0] < bestKey[0] || (key[0] === bestKey[0] && key[1] < bestKey[1])) { best = k; bestKey = key; }
+    });
+    used[best] = 1; order.push(best);
+    const last = pieces[best].parts[pieces[best].parts.length - 1];
+    lastCol = parts[last].cells.reduce((s, i) => s + (i % C), 0) / parts[last].cells.length;
+  }
+  return order.map((k) => pieces[k].parts.map((id) => parts[id]));
+}
+
+/** Il vertice d'angolo di un pezzo: in alto (la sua prima riga) o in basso (l'ultima), a sinistra o a destra. */
+function partCorner(g: GridSpec, part: BasePart, bottom: boolean, right: boolean): number {
+  if (!part.cells.length) return -1;
+  const C = g.cols, W = 2 * C + 1;
+  const r = Math.floor((bottom ? part.cells[part.cells.length - 1] : part.cells[0]) / C);
+  let c0 = Infinity, c1 = -Infinity;
+  for (const i of part.cells) if (Math.floor(i / C) === r) { c0 = Math.min(c0, i % C); c1 = Math.max(c1, i % C); }
+  return (bottom ? r + 1 : r) * W + 2 * (right ? c1 + 1 : c0);
+}
+
+/**
+ * L'IMPUNTURA da un pezzo della base al dopo: la strada più corta sul reticolo (lati e verticali) che resta
+ * dentro la forma, meglio dove la base non è ancora cucita (lì la copre dopo: 'hidden') e un po' dentro dal
+ * bordo; sopra la base già cucita si può, ma costa sei volte ('visible'). Mai sopra il vuoto. null = i due
+ * vertici non sono uniti dentro la forma (due pezzi staccati): lì si salta.
+ */
+function baseTravel(g: GridSpec, mask: Uint8Array | null, done: Uint8Array, from: number, to: number): RouteSeg[] | null {
+  const C = g.cols, W = 2 * C + 1, N = (g.rows + 1) * W;
+  const half = g.cellW / 2, pitch = rowPitch(g);
+  const isIn = (r: number, c: number) => r >= 0 && r < g.rows && c >= 0 && c < C && (!mask || mask[r * C + c] === 1);
+  const cost = (adj: Array<[number, number]>, len: number): { w: number; hidden: boolean } | null => {
+    let any = false, all = true, future = false;
+    for (const [r, c] of adj) {
+      if (isIn(r, c)) { any = true; if (!done[r * C + c]) future = true; } else all = false;
+    }
+    return any ? { w: len * (future ? (all ? 1 : 1.5) : 6), hidden: future } : null;
+  };
+  const dist = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), hid = new Uint8Array(N);
+  const heap: Array<[number, number]> = [];
+  const push = (d: number, v: number) => {
+    heap.push([d, v]);
+    for (let k = heap.length - 1; k > 0;) {
+      const p = (k - 1) >> 1;
+      if (heap[p][0] <= heap[k][0]) break;
+      [heap[p], heap[k]] = [heap[k], heap[p]]; k = p;
+    }
+  };
+  const pop = (): [number, number] => {
+    const top = heap[0], last = heap.pop()!;
+    if (heap.length) {
+      heap[0] = last;
+      for (let k = 0; ;) {
+        const l = 2 * k + 1, r = l + 1;
+        let m = k;
+        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+        if (m === k) break;
+        [heap[m], heap[k]] = [heap[k], heap[m]]; k = m;
+      }
+    }
+    return top;
+  };
+  dist[from] = 0; push(0, from);
+  while (heap.length) {
+    const [d, v] = pop();
+    if (d > dist[v]) continue;
+    if (v === to) break;
+    const i = Math.floor(v / W), j = v - i * W;
+    const steps: Array<[number, { w: number; hidden: boolean } | null]> = [];
+    if (j + 1 < W) steps.push([v + 1, cost([[i - 1, j >> 1], [i, j >> 1]], half)]);
+    if (j > 0) steps.push([v - 1, cost([[i - 1, (j - 1) >> 1], [i, (j - 1) >> 1]], half)]);
+    const vert = (r: number): Array<[number, number]> => (j % 2 ? [[r, (j - 1) / 2]] : [[r, j / 2 - 1], [r, j / 2]]);
+    if (i < g.rows) steps.push([v + W, cost(vert(i), pitch)]);
+    if (i > 0) steps.push([v - W, cost(vert(i - 1), pitch)]);
+    for (const [u, e] of steps) {
+      if (!e || d + e.w >= dist[u]) continue;
+      dist[u] = d + e.w; prev[u] = v; hid[u] = e.hidden ? 1 : 0; push(dist[u], u);
+    }
+  }
+  if (!Number.isFinite(dist[to])) return null;
+  const out: RouteSeg[] = [];
+  for (let v = to; v !== from; v = prev[v]) out.push({ kind: hid[v] ? 'hidden' : 'visible', from: prev[v], to: v });
+  return out.reverse();
+}
 
 /**
  * I BLOCCHI DI RICAMO: la base unica per prima, poi blocco per blocco (nell'ordine della lista) tutti i fili

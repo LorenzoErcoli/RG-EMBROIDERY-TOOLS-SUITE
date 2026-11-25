@@ -881,7 +881,12 @@ dicono dove comincia e dove finisce. In *02 Misure del ricamo*, sotto *Posizione
 **Margine sotto** in mm, dal punto più alto e più basso della forma (o del ricamo, senza forma). Scrivi un margine: la
 fascia si sposta a righe intere e l'altro segue. Le frecce su e giù la spostano di una riga, **Centra** la mette al
 centro. Caricando una forma, la fascia va da sola al centro del pezzo. Dove la forma taglia la fascia (ai lati, in una
-scollatura) le copie sono tagliate come sempre.
+scollatura) le copie sono tagliate come sempre, e i fili del disegno saltano col taglio.
+
+**La base sulla scollatura.** Dove la forma spezza le righe (una scollatura) la base non passa sopra il vuoto: cuce
+prima tutta una spalla, poi va all'altra con un'**impuntura** che resta dentro la forma, dove la base non è ancora
+cucita (così poi la copre), cuce l'altra spalla e poi le righe intere sotto. Sempre in un solo stop, senza salti. Vale
+per ogni base intera dentro una forma, con o senza fascia.
 
 **Il modulo in un file a sé** (in *01 Immagine*). **Salva modulo…** scrive un file `.json` col modulo (anche la fascia),
 i suoi fili, la base e la misura della cella; non la posizione sul pezzo, che si sceglie in ogni pezzo. **Carica

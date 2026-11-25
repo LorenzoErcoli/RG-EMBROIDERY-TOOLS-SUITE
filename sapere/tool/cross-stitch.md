@@ -28,3 +28,8 @@ confine](../decisioni/cross-stitch-gruppi-confine.md). Sul Fair Isle a moduli e 
 larghezza, messo a un'altezza scelta su un pezzo (un DXF) ricamato tutto di base; lo stesso modulo va su pezzi diversi
 coi margini che servono. Il disegno lo fa lui: il tool deve dare l'interfaccia e gli strumenti, non disegnare. Vedi
 [il modulo a fascia](../decisioni/cross-stitch-modulo-a-fascia.md).
+
+**La base non passa sopra il vuoto (2026-11-25).** Dove una forma spezza le righe (la scollatura) la base intera si
+cuce a pezzi, una spalla e poi l'altra, e da un pezzo all'altro va con un'impuntura dentro la forma, sotto la base che
+viene dopo. Scelta di Lorenzo, fra un salto col taglio a ogni riga e una spalla per volta: «un'impuntura continua».
+Stesso file della fascia.
