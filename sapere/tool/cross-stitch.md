@@ -63,4 +63,10 @@ ridisegnava tutta la tela. Ma un passaggio a mano non cambia niente del resto (n
 ora scegliere un passaggio ridisegna solo i pallini, e spostare un pallino cambia nel risultato che c'è solo i tratti di
 quel passaggio (`patchPassage`), poi un disegno; il calcolo completo (che riconta filo in vista e nascosto) parte da
 solo dopo 0,9 s di calma. Misurato su 400 × 300 mm con la base piena: scegliere 2 ms, aggiungere un pallino 17 ms,
-trascinare ≤ 3 ms a spostamento, lasciare 4 ms.
+trascinare ≤ 3 ms a spostamento, lasciare 4 ms. *«Ora a volte mi perde le modifiche nel ricalcolarlo più tardi»*: il
+calcolo completo non applicava i passaggi a mano in due casi (la base in un solo stop, `baseWholeRoute`, li riceveva
+vuoti; a strisce un passaggio con un punto fuori dalla sua striscia si buttava via), e un risultato partito prima
+dell'ultima modifica la copriva arrivando dopo. Ora i passaggi a mano sono l'ultimo ritocco su tutto il percorso finito
+(`applyForced` in strips.ts, in `routeAll`: vale anche per il DST), e ogni risultato che arriva nel tool li prende come
+sono in quel momento (`withForcedNow`). Prove in `test/cross-stitch-passaggi-a-mano.mjs` (3): col codice di prima le due
+sulla perdita sono rosse.

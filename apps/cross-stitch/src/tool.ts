@@ -20,7 +20,7 @@ import {
   DEFAULT_ROUTE, DEFAULT_STITCH, RETRACE_PRESETS, colorPolylines, colorPolylinesTrim, routeCells, straightHiddenRuns, type RetracePreset,
 } from './routing';
 import { autoRoles, cellMask, normalizeContours, subMask, type PieceShape, type ShapeRole } from './shape';
-import { entryRows, routeAll, routeModuleBands, stripRanges, type BandRoute, type ModulePath } from './strips';
+import { applyForced, entryRows, routeAll, routeModuleBands, stripRanges, type BandRoute, type ModulePath } from './strips';
 import { bandsOf, cellStep, editsOnAllCopies, findModule, isBand, parseKnitModule, moduleFile, readModuleFile, type ModuleFile, moveBandBreak, moveShapeBand, toggleBandBreak, movePiece, piecesOf, resizeModule, seamShift, shiftModule, tileModule, type KnitModule } from './module';
 import { DEFAULT_ZONES, inGroup, shiftGroup, type ZoneGroup } from './zones';
 import { extractStamp, fitStamp, flipStamp, proposeColorMap, stampColors, stampEdits, type Stamp } from './stamp';
@@ -757,6 +757,18 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     window.clearTimeout(rerouteFull);
     rerouteFull = window.setTimeout(() => { rerouteFull = 0; if (!rerouteDrag) update(); }, 900);
   }
+  /**
+   * Un risultato coi passaggi a mano COME SONO ADESSO: un calcolo partito prima dell'ultima modifica, arrivato dopo,
+   * la coprirebbe (Lorenzo: «a volte mi perde le modifiche nel ricalcolarlo più tardi»). Nel reticolo dei passaggi.
+   */
+  function withForcedNow(res: RouteResult): RouteResult {
+    const sp = rerouteSpace();
+    if (!sp || !sp.list.length) return res;
+    const Wf = 2 * st.grid.cols + 1, Wr = 2 * routeGeom.grid.cols + 1;
+    const toRoute = (v: number) => (editorOpen ? modToView(v) : (Math.floor(v / Wf) - routeGeom.i0) * Wr + (v % Wf) - routeGeom.j0);
+    routePoints = { res: null, map: new Map() };
+    return applyForced(res, sp.list.map((q) => ({ from: toRoute(q.from), to: toRoute(q.to), via: q.via.map(toRoute) })));
+  }
   function patchPassage(): boolean {
     const sp = rerouteSpace();
     if (!result || !reroute || !sp) return false;
@@ -1383,6 +1395,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     worker = new Worker(new URL('./routing.worker.ts', import.meta.url), { type: 'module' });
     worker.onmessage = (e: MessageEvent<{ id: number; result?: RouteResult; error?: string }>) => {
       routeInFlight = false;
+      if (e.data.result) e.data.result = withForcedNow(e.data.result);
       // c'è una richiesta più nuova in attesa: si mostra questo risultato (il passaggio intanto si muove) e si parte con quella
       if (routePending) {
         routePending = false;
@@ -3838,7 +3851,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     try { const rb = routeModuleBands(realGrid(), mp, routeParams()); res = rb; editorBands = rb.bands; } catch { result = null; editorBands = new Map(); return; }
     const Wv = 2 * (3 * m.cols) + 1;
     const toView = (v: number) => v + viewRow0() * Wv;
-    result = { colors: res.colors.map((cr) => ({ color: cr.color, segs: cr.segs.map((sg) => ({ kind: sg.kind, from: toView(sg.from), to: toView(sg.to) })) })), metrics: res.metrics };
+    result = withForcedNow({ colors: res.colors.map((cr) => ({ color: cr.color, segs: cr.segs.map((sg) => ({ kind: sg.kind, from: toView(sg.from), to: toView(sg.to) })) })), metrics: res.metrics });
     editorVisible = res.metrics.visibleMm;
     routeGeom = { grid: st.grid, dx: 0, dy: 0, i0: 0, j0: 0 };
   }

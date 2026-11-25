@@ -344,10 +344,39 @@ export function routeAreas(g: GridSpec, cells: Cells, params: RouteParams): Rout
 
 /** I passaggi: a strisce se richiesto, altrimenti tutto il ricamo insieme. */
 export function routeAll(g: GridSpec, cells: Cells, params: RouteParams): RouteResult {
-  if (params.areas && params.areas.length) return routeAreas(g, cells, params);
+  if (params.areas && params.areas.length) return applyForced(routeAreas(g, cells, params), params.forced);
   if (params.modulePath && params.modulePath.cols <= g.cols) return routeModuleTiled(g, cells, params, params.modulePath);
   const s = params.strips;
-  return s && s.rows > 0 && s.rows < g.rows ? routeStrips(g, cells, params, s) : routeCells(g, cells, params);
+  return applyForced(s && s.rows > 0 && s.rows < g.rows ? routeStrips(g, cells, params, s) : routeCells(g, cells, params), params.forced);
+}
+
+/**
+ * I PASSAGGI A MANO SUL PERCORSO FINITO (Lorenzo, 2026-11-25: «a volte mi perde le modifiche nel ricalcolarlo più
+ * tardi»): il motore li applica filo per filo, ma la base in un solo stop non li riceveva, e a strisce un passaggio
+ * con un punto fuori dalla sua striscia si buttava via. Qui, per ultimi, su tutto il percorso: ogni passaggio che va
+ * da `from` a `to` (o al contrario) diventa dritto da un punto all'altro; uno già così resta com'è (coi suoi tipi). I
+ * tratti nuovi prendono il tipo del primo tratto di prima; i conti del filo non cambiano.
+ */
+export function applyForced(res: RouteResult, forced: RouteParams['forced']): RouteResult {
+  if (!forced || !forced.length) return res;
+  for (const cr of res.colors) {
+    const segs = cr.segs, out: RouteSeg[] = [];
+    let changed = false;
+    for (let i = 0; i < segs.length;) {
+      if (segs[i].kind === 'stitch' || segs[i].kind === 'jump') { out.push(segs[i]); i++; continue; }
+      let j = i;
+      while (j < segs.length && segs[j].kind !== 'stitch' && segs[j].kind !== 'jump') j++;
+      const from = segs[i].from, to = segs[j - 1].to;
+      const f = forced.find((q) => (q.from === from && q.to === to) || (q.from === to && q.to === from));
+      const pts = f ? [from, ...(f.from === from ? f.via : [...f.via].reverse()), to] : null;
+      const same = !pts || (j - i === pts.length - 1 && pts.slice(1).every((v, n) => segs[i + n].from === pts[n] && segs[i + n].to === v));
+      if (same) for (let q = i; q < j; q++) out.push(segs[q]);
+      else { const kind = segs[i].kind; for (let n = 1; n < pts!.length; n++) out.push({ kind, from: pts![n - 1], to: pts![n] }); changed = true; }
+      i = j;
+    }
+    if (changed) cr.segs = out;
+  }
+  return res;
 }
 
 // ------------------------------------------------------------
