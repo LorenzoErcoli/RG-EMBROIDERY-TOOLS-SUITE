@@ -521,7 +521,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
               <button type="button" class="rg-segmented__item" data-stitch="cross" title="Croce">Croce</button>
               <button type="button" class="rg-segmented__item" data-stitch="diag" title="Diagonale. Sinistro «\\», destro «/»">Diagonale</button>
             </div>
-            <label class="rg-toggle" title="La V o la Λ spostata di mezza cella di lato, a cavallo di due celle: per rifinire i bordi ad angolo. Il filo entra ed esce dal centro della cella accanto">
+            <label class="rg-toggle" title="La V o la Λ spostata di mezza cella di lato, a cavallo di due celle: per rifinire i bordi ad angolo. I passaggi come per le altre V">
               <input type="checkbox" id="halfGrid"><span class="rg-toggle__track"></span><span>A metà griglia</span>
             </label></div>
           <div class="cs-editbar__group" role="group" aria-labelledby="eb-fi"><span class="rg-label" id="eb-fi">Filo</span>

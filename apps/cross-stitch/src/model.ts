@@ -31,8 +31,8 @@ export type Stitch = Leg | 'cross' | 'v' | 'lambda' | HalfStitch;
  * LA V A METÀ GRIGLIA (Lorenzo, 2026-11-25: «una funzione di incastro a metà della griglia… per rifinire alcuni
  * punti V finali ad angolo»): una V o una Λ spostata di mezza cella di lato, sulla stessa riga, a cavallo di due
  * celle. Sta in una delle due: `L` = centrata sul lato sinistro della cella (prende la metà destra della cella a
- * sinistra), `R` = sul lato destro (la metà sinistra della cella a destra). Il filo entra ed esce dal braccio che
- * cade al centro dell'altra cella («dal centro della cella», dove lo copre la V vicina): `halfEntry`.
+ * sinistra), `R` = sul lato destro (la metà sinistra della cella a destra). I passaggi come per la V intera, sotto le V
+ * disegnate.
  */
 export type HalfStitch = 'vL' | 'vR' | 'lambdaL' | 'lambdaR';
 export const isHalfStitch = (s: Stitch | string | undefined): s is HalfStitch => s === 'vL' || s === 'vR' || s === 'lambdaL' || s === 'lambdaR';
@@ -181,17 +181,6 @@ export function stitchLegs(g: GridSpec, r: number, c: number, stitch: Stitch, to
     return [{ a: V(r + 1, j0), b: V(r, j0 + 1) }, { a: V(r, j0 + 1), b: V(r + 1, j0 + 2) }];
   }
   return legsOf(stitch, topLeg).map(diag);
-}
-
-/**
- * Da dove entra ed esce il filo in un punto a metà griglia: il capo del braccio che cade al centro dell'ALTRA
- * cella (non quella dove il punto sta), dove lo copre la V vicina. -1 = non è un punto a metà, o non ci sta.
- */
-export function halfEntry(g: GridSpec, r: number, c: number, stitch: Stitch): number {
-  if (!isHalfStitch(stitch)) return -1;
-  const legs = stitchLegs(g, r, c, stitch, 'down');
-  if (legs.length !== 2) return -1;
-  return stitch === 'vL' || stitch === 'lambdaL' ? legs[0].a : legs[1].b;
 }
 
 // ------------------------------------------------------------

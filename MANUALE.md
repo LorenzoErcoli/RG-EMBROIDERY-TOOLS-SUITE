@@ -649,8 +649,7 @@ pennello, i fili e Annulla/Rifai.
   invece che a V intere) o per mettere una Λ sopra, in mezzo a due V. Il pennello prende il lato fra due celle
   più vicino al mouse (il riquadro azzurro è centrato lì). Il punto va nella cella libera delle due: se sono
   piene tutte e due non si mette, e la barra in basso lo dice. Con la gomma toglie il punto a metà su quel lato.
-  **Il filo entra ed esce dal centro della cella accanto** (il braccio che cade nella V intera vicina, dove la
-  copre), mai dal braccio di fuori: per tornare lì le passate sono pari, quindi con 1 passata quel punto ne fa 2.
+  I passaggi sono quelli di una V qualunque: passano sotto le V disegnate, con le passate del filo.
 - **Riempi** (F): un clic passa al filo scelto tutta la zona COLLEGATA dello stesso colore. Attento:
   segue tutto quello che si tocca, quindi va usato su zone chiuse (l'interno di una lettera); per i
   ritocchi c'è il pennello.

@@ -1,6 +1,6 @@
 // LA V A METÀ GRIGLIA del Punto croce (Lorenzo, 2026-11-25: «una funzione di incastro a metà della griglia… per
-// rifinire alcuni punti V finali ad angolo. Ovviamente i passaggi in quei casi arrivano sempre dal centro per non farli
-// mai vedere»; il centro è quello della cella accanto, «provalo anche con una V invertita, sopra al centro delle due»).
+// rifinire alcuni punti V finali ad angolo», «provalo anche con una V invertita, sopra al centro delle due»; i passaggi
+// come per la V intera, sotto le V disegnate).
 // Un blocco di prove che smoke.mjs chiama con il suo bundle (`rg`) e il suo `check`.
 export function proveMetaGriglia(rg, check) {
   console.log('\nPunto croce — la V e la Λ a metà griglia');
@@ -27,35 +27,29 @@ export function proveMetaGriglia(rg, check) {
     [rg.csStitchLegs(g, 1, 2, 'vL', 'down').flatMap(({ a, b }) => [at(a), at(b)]), rg.csStitchLegs(g, 0, 1, 'lambdaR', 'down').flatMap(({ a, b }) => [at(a), at(b)]), rg.csStitchLegs(g, 0, 0, 'vL', 'down').length, rg.csStitchLegs(g, 0, 3, 'vR', 'down').length],
     [[[1, 3], [2, 4], [2, 4], [1, 5]], [[1, 3], [0, 4], [0, 4], [1, 5]], 0, 0]);
 
-  // il percorso: il filo entra nella V a metà dal centro della cella accanto (1,3) e ci torna; con 1 o 3 passate
-  // ne fa una in più (pari), con 2 le sue
-  const halfRun = (res) => {
-    const segs = res.colors[0].segs;
-    const isHalf = (sg) => sg.kind === 'stitch' && [sg.from, sg.to].some((v) => at(v)[1] === 5 || (at(v)[0] === 2 && at(v)[1] === 4));
-    const k0 = segs.findIndex(isHalf);
-    if (k0 < 0) return null;
-    let k1 = k0; while (k1 + 1 < segs.length && isHalf(segs[k1 + 1])) k1++;
-    return [at(segs[k0].from), at(segs[k1].to), k1 - k0 + 1];
-  };
-  check('a metà griglia, il filo entra ed esce dal centro della cella accanto; passate pari (1 → 2, 2 → 2, 3 → 4)',
-    [1, 2, 3].map((reps) => halfRun(rg.csRouteCells(g, cells, { ...rg.CS_DEFAULT_ROUTE, repetitions: reps }))),
-    [[[1, 3], [1, 3], 4], [[1, 3], [1, 3], 4], [[1, 3], [1, 3], 8]]);
-  // e sul bordo sinistro (V nelle celle 1 e 2, la V a metà nella cella 0 sul suo lato destro): dal centro della cella 1
+  // IL PERCORSO come per la V intera (Lorenzo, 2026-11-25: l'entrata forzata dal centro della cella accanto spezzava i
+  // passaggi, «ripristina la gestione dei passaggi come era all'inizio… i passaggi passano sotto le V disegnate come
+  // sempre»): le passate del filo (1 → 2 tratti, 2 → 4, 3 → 6), nessun salto, niente in vista
+  const halfStitches = (res, isHalf) => res.colors.flatMap((cr) => cr.segs).filter((sg) => sg.kind === 'stitch' && isHalf(sg)).length;
+  const isRightHalf = (sg) => [sg.from, sg.to].some((v) => at(v)[1] === 5 || (at(v)[0] === 2 && at(v)[1] === 4));
+  const runs = [1, 2, 3].map((reps) => rg.csRouteCells(g, cells, { ...rg.CS_DEFAULT_ROUTE, repetitions: reps }));
+  check('a metà griglia, i passaggi come la V intera: le passate del filo (1 → 2 tratti, 2 → 4, 3 → 6), nessun salto, niente in vista',
+    runs.map((res) => [halfStitches(res, isRightHalf), res.metrics.jumps, res.metrics.visibleMm]), [[2, 0, 0], [4, 0, 0], [6, 0, 0]]);
+  // e sul bordo sinistro (V nelle celle 1 e 2, la V a metà nella cella 0 sul suo lato destro)
   const leftEdge = new Map([[5, { stitch: 'v', color: 0 }], [6, { stitch: 'v', color: 0 }]]);
   for (const x of leftFree) leftEdge.set(x.r * g.cols + x.c, x.mark);
-  const le = rg.csRouteCells(g, leftEdge, { ...rg.CS_DEFAULT_ROUTE, repetitions: 1 }).colors[0].segs;
-  const leHalf = le.map((sg, k) => ({ sg, k })).filter(({ sg }) => sg.kind === 'stitch' && [sg.from, sg.to].some((v) => at(v)[1] === 1 || (at(v)[0] === 2 && at(v)[1] === 2)));
-  check('a metà griglia sul bordo sinistro: il filo entra ed esce da (1,3), il centro della cella 1 accanto, non dal braccio fuori',
-    leHalf.length ? [at(leHalf[0].sg.from), at(leHalf[leHalf.length - 1].sg.to), leHalf.length] : null, [[1, 3], [1, 3], 4]);
+  const le = rg.csRouteCells(g, leftEdge, { ...rg.CS_DEFAULT_ROUTE, repetitions: 1 });
+  check('a metà griglia sul bordo sinistro: cucita, nessun salto, niente in vista',
+    [halfStitches(le, (sg) => [sg.from, sg.to].some((v) => at(v)[1] === 1 || (at(v)[0] === 2 && at(v)[1] === 2))), le.metrics.jumps, le.metrics.visibleMm], [2, 0, 0]);
 
-  // la Λ a metà sopra, al centro delle due V: entra ed esce dal piede nel centro della cella sotto
+  // la Λ a metà sopra, al centro delle due V: dai piedi nei centri delle due celle sotto alla punta sul lato fra le due
   const withL = twoV();
   const e2 = rg.csHalfEdits(g, withL, 0, 1, 1, 'lambda', 'left', false);
   for (const x of e2) withL.set(x.r * g.cols + x.c, x.mark);
   const lam = rg.csRouteCells(g, withL, { ...rg.CS_DEFAULT_ROUTE, repetitions: 1 }).colors.find((cr) => cr.color === 1).segs;
-  check('la Λ a metà sopra due V: nella cella 1 (lato sinistro), il filo entra ed esce da (1,1), il centro della cella 0 sotto',
-    [e2.map((x) => [x.r, x.c, x.mark.stitch]), at(lam[0].from), at(lam[lam.length - 1].to), lam.filter((sg) => sg.kind === 'stitch').length],
-    [[[0, 1, 'lambdaL']], [1, 1], [1, 1], 4]);
+  check('la Λ a metà sopra due V: nella cella 1 (lato sinistro), dai piedi (1,1) e (1,3) alla punta (0,2), una passata',
+    [e2.map((x) => [x.r, x.c, x.mark.stitch]), lam.filter((sg) => sg.kind === 'stitch').flatMap((sg) => [at(sg.from), at(sg.to)]).map(String).sort()],
+    [[[0, 1, 'lambdaL']], ['0,2', '0,2', '1,1', '1,3']]);
 
   // col filo della base: si cuce (sopra la base), non è coperto come la V intera della base
   const onBase = rg.csRouteCells(g, new Map([[6, { stitch: 'vL', color: 0 }]]), { ...rg.CS_DEFAULT_ROUTE, base: { color: 0, stitch: 'v' } });
