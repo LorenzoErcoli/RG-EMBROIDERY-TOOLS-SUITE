@@ -73,7 +73,19 @@ function sullaLineaPiuVicina(q: Xy, copie: Array<{ variante: 'A' | 'B'; dx: numb
   return meglio;
 }
 
-export function infittisciModulo(m: ModuloRete, magliaMassimaMm2: number, seme: number): EsitoInfittimento {
+/** Il capo di arrivo allungato di `mm` nella direzione dell'ultimo tratto: il vecchio capo resta un vertice. */
+export function oltreIlCapo(t: Xy[], mm: number): Xy[] {
+  if (!(mm > 0) || t.length < 2) return t;
+  const a = t[t.length - 2], b = t[t.length - 1], l = d(a, b);
+  return l ? [...t, [b[0] + ((b[0] - a[0]) * mm) / l, b[1] + ((b[1] - a[1]) * mm) / l]] : t;
+}
+
+/**
+ * `oltreMm`: quanto la linea nuova passa oltre la linea dove si aggancia (Lorenzo, 2026-11-26: «la linea che poi si trasforma in psil deve
+ * oltrepassare la linea di aggancio»). Lo psil di Stilista fa la prima maglia 0,6 mm dopo l'inizio disegnato: una linea che parte proprio sul
+ * centro dell'aggancio resta staccata. Lo fanno passaggio e catenella; la deviazione della base no, finisce sull'aggancio come prima.
+ */
+export function infittisciModulo(m: ModuloRete, magliaMassimaMm2: number, seme: number, oltreMm = 0): EsitoInfittimento {
   let stato = (Math.abs(Math.round(seme)) * 2654435761 + 1424) % 2147483648;
   const caso = (): number => (stato = (stato * 1103515245 + 12345) % 2147483648) / 2147483648;
   const tra = (a: number, b: number): number => a + (b - a) * caso();
@@ -257,7 +269,8 @@ export function infittisciModulo(m: ModuloRete, magliaMassimaMm2: number, seme: 
       oggetti.push(deviazioni.length ? { ...o, deviazioni } : o);
       for (const l of delle) {
         if (l.dopoOggetto !== i) continue;
-        oggetti.push({ tipo: 'passaggio', t: l.t, nuovo: true, magliaMm2: l.magliaMm2 }, { tipo: 'catenella', t: [...l.t].reverse(), nuovo: true, magliaMm2: l.magliaMm2 });
+        const t = oltreIlCapo(l.t, oltreMm);
+        oggetti.push({ tipo: 'passaggio', t, nuovo: true, magliaMm2: l.magliaMm2 }, { tipo: 'catenella', t: [...t].reverse(), nuovo: true, magliaMm2: l.magliaMm2 });
       }
     });
     return { oggetti };
