@@ -727,7 +727,11 @@ piena risoluzione; Esc annulla). Poi **Maglia coi miei colori** (in *01 Immagine
 questi fili, senza ricalcolarli: ogni V va al filo più vicino **come lo vede l'occhio** (Lab: fra blu
 vicini sbaglia meno dell'RGB), e il fondo è il filo di base. **Dal chiaro allo scuro** (sotto i fili)
 li mette in ordine di cucitura: la base per prima, poi dal più chiaro. Riordinare i fili (anche con la
-freccia su) sposta tutto con loro, modulo compreso.
+freccia su) sposta tutto con loro, modulo compreso. **Ordine consigliato** prova gli ordini dei fili (in un processo a
+parte: su un modulo grande una quarantina di secondi) e mostra i migliori, ognuno coi suoi **salti** e quanto mette lo
+**scuro sotto il chiaro** (la regola: chiaro sotto, scuro sopra; un salto vale circa 4 punti di luminosità invertiti).
+Il primo è il consigliato; **Usa** lo mette, **Annulla** torna indietro. Non cambia niente da solo. Conta perché ogni
+filo si nasconde sotto i fili che vengono dopo: sul modulo di prova da 30 a 56 salti secondo l'ordine.
 
 **La forma del pezzo (DXF o SVG).** In *02 Misure del ricamo*, **Carica forma (DXF o SVG)…**: il ricamo
 prende la misura della forma (con *Larghezza reale* la scali; 0 = la misura del file) e si cuciono solo
@@ -1016,6 +1020,16 @@ avvicina. L'anteprima mostra il disegno com'è, senza lo spostamento. 0 righe = 
 come primo stop, e poi vengono le strisce degli altri fili; la base non si sposta col ritiro. La base unica si cuce
 sempre **dall'alto in basso**, riga per riga a serpentina: ogni riga di V di filato, poi si scende all'angolo. Spento:
 ogni striscia ha la sua base, prima dei suoi colori.
+
+**Mai passaggi in vista** (acceso di partenza, anche aprendo un file di prima; in *04 Passaggi*, e come **Mai in vista** nella barra sopra la tela, anche nell'editor del modulo). I salti si vedono come linee scure tratteggiate. Il filo va da un
+punto all'altro solo **nascosto**: sotto i punti ancora da cucire, suoi o dei fili che vengono dopo, sopra i suoi punti
+già cuciti, o in verticale al centro delle V che lo coprono. Dove una strada così non c'è, **salta** (col taglio). Nel
+modulo vale anche fra le copie: un motivo staccato si unisce alla copia accanto se ci si arriva nascosti, altrimenti
+salta. I passaggi ridisegnati a mano restano come li hai disegnati, anche se vanno in vista. **Togliere un salto del
+tool**: con **Ridisegna passaggio** clicca il salto (la linea a puntini) e metti un pallino: diventa un passaggio
+disegnato da te, dritto da un pallino all'altro; **Canc** lo rimette salto. (I salti messi a mano con *Salti* si
+tolgono con *Salti*, cliccandoli di nuovo.) Fra una copia e l'altra del modulo il salto non si ridisegna. Spento: come prima, un
+passaggio in vista se costa meno del salto.
 
 **Ottimizza l'ordine dei passaggi** (spento di partenza; in *04 Passaggi*, sotto *Taglio a ogni salto*). Il tool
 sceglie il pezzo dopo un passo alla volta, e a volte lascia indietro qualcosa (le croci di una finestra, un dente di

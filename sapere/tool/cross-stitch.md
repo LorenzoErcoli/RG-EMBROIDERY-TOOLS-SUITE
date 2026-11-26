@@ -95,3 +95,18 @@ passaggio d'ingresso in vista); e le V della fascia nella copia accanto, che si 
 passaggio d'uscita lungo la giuntura ci passa sotto). Sul suo modulo il bianco in cima: 0 mm in vista. *«Quando ci sono
 una serie di V orizzontali coperte allora mettiamo una linea… il primo V destra e sinistra lo facciamo a V»*: i passaggi
 nascosti dritti (`straightHiddenRuns`) tengono a V la prima e l'ultima V della corsa, e nel tool sono accesi di base.
+*«I passaggi a vista non devono esistere»* (dopo che gli avevo proposto di misurarli): `RouteParams.noVisible`, acceso
+di base nel tool, toglie dal Dijkstra ogni tratto in vista (anche gli orizzontali sul bordo della cella); dove non c'è
+strada nascosta il filo salta. Nel modulo una fascia di motivi staccati prova anche a unirsi alla copia accanto
+(`joinAnyway` in `routeBandAt`): la tiene se non aggiunge filo in vista né salti. Sul suo modulo: 0 mm in vista (i 115
+del ricamo intero sono tutti dei suoi passaggi disegnati a mano), e i salti dipendono dall'ordine dei fili (30 con il
+suo ordine, 56 dal chiaro allo scuro alla lettera). *«Valutare quale filo far passare prima e quale dopo in base al minor
+numero di salti… chiaro sotto scuro sopra»*: `ordine.ts`, bottone **Ordine consigliato**. Costo = salti + punti di
+luminosità di scuro sotto il chiaro / 4 (con 4, sul suo modulo vince bianco, grigio, rosa, malva, marrone, verde: 42
+salti e solo malva/marrone, quasi uguali, invertiti). Nel modulo i salti di un filo dipendono solo da QUALI fili vengono
+dopo, non dal loro ordine: si tengono in memoria per gruppo (109 s → 35 s). Si cerca scambiando due fili alla volta,
+dall'ordine di adesso e da quello dal chiaro allo scuro, al più 60 ordini; propone, non cambia. *«Come posso rimuovere
+un salto? vorrei provare a toglierne alcuni»*: i salti del tool non si potevano toccare (Salti toglie solo quelli messi a
+mano). Ora **Ridisegna passaggio** prende anche un salto del tool (`travelAt(p, true)`), e un passaggio a mano sui due
+capi di un salto lo fa diventare quel passaggio nel motore (`routeCells`, parte dei passaggi a mano: il salto toglie
+un salto dai conti). Non vale per il salto fra le copie del modulo (il capo sta nella copia accanto).

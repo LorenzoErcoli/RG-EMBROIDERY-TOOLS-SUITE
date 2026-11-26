@@ -229,6 +229,13 @@ export interface RouteParams {
    * che vengono dopo (il passaggio sotto è nascosto) e non entrano nel percorso.
    */
   cover?: Cells;
+  /**
+   * MAI PASSAGGI IN VISTA (Lorenzo, 2026-11-26: «i passaggi a vista non devono esistere»): il filo va da un punto
+   * all'altro solo nascosto (sotto i punti ancora da cucire, suoi o dei fili che vengono dopo), sui punti già cuciti
+   * del suo colore, o in verticale al centro delle V che lo coprono; dove una strada così non c'è, salta (col
+   * taglio). Il tool lo accende di base; assente = come prima (in vista se costa meno del salto).
+   */
+  noVisible?: boolean;
 }
 
 // Salti quasi mai: a macchina un salto lascia un filo che attraversa gli altri colori (Lorenzo).
@@ -627,22 +634,25 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   const shortDiag = Math.hypot(half, g.cellH), longDiag = Math.hypot(g.cellW, g.cellH);
 
   /** I vicini di `v` nel reticolo, col costo del tratto. */
-  const forEachNeighbour = (v: number, k: number, fn: (w: number, cost: number) => void): void => {
+  const noVisible = !!params.noVisible;
+  const forEachNeighbour = (v: number, k: number, fn0: (w: number, cost: number) => void): void => {
     const i = Math.floor(v / W), j = v - i * W;
-    // orizzontali (da evitare) e verticali (vertice-vertice)
-    if (j > 0) fn(v - 1, half * costs.border);
-    if (j < JMAX) fn(v + 1, half * costs.border);
-    if (i > 0) fn(v - W, pitch * verticalClass(i - 1, j, k).w);
-    if (i < g.rows) fn(v + W, pitch * verticalClass(i, j, k).w);
+    // un tratto in vista, con `noVisible`, non è una strada
+    const fn = (w: number, len: number, cl: { w: number; kind: SegKind }) => { if (!(noVisible && cl.kind === 'visible')) fn0(w, len * cl.w); };
+    // orizzontali (da evitare: sul bordo della cella, in vista) e verticali (vertice-vertice)
+    if (!noVisible && j > 0) fn0(v - 1, half * costs.border);
+    if (!noVisible && j < JMAX) fn0(v + 1, half * costs.border);
+    if (i > 0) fn(v - W, pitch, verticalClass(i - 1, j, k));
+    if (i < g.rows) fn(v + W, pitch, verticalClass(i, j, k));
     // diagonali di mezza cella (le gambe della V, o un filo storto nel vuoto)
-    if (i < g.rows && j < JMAX) fn(v + W + 1, shortDiag * legClass(legAt.get(edgeKey(v, v + W + 1)), k).w);
-    if (i > 0 && j > 0) fn(v - W - 1, shortDiag * legClass(legAt.get(edgeKey(v, v - W - 1)), k).w);
-    if (i < g.rows && j > 0) fn(v + W - 1, shortDiag * legClass(legAt.get(edgeKey(v, v + W - 1)), k).w);
-    if (i > 0 && j < JMAX) fn(v - W + 1, shortDiag * legClass(legAt.get(edgeKey(v, v - W + 1)), k).w);
+    if (i < g.rows && j < JMAX) fn(v + W + 1, shortDiag, legClass(legAt.get(edgeKey(v, v + W + 1)), k));
+    if (i > 0 && j > 0) fn(v - W - 1, shortDiag, legClass(legAt.get(edgeKey(v, v - W - 1)), k));
+    if (i < g.rows && j > 0) fn(v + W - 1, shortDiag, legClass(legAt.get(edgeKey(v, v + W - 1)), k));
+    if (i > 0 && j < JMAX) fn(v - W + 1, shortDiag, legClass(legAt.get(edgeKey(v, v - W + 1)), k));
     // diagonali di cella intera: solo dove c'è una gamba (croce, diagonale)
     for (const id of longAt.get(v) ?? []) {
       const l = legs[id];
-      fn(l.a === v ? l.b : l.a, longDiag * legClass(legAt.get(edgeKey(l.a, l.b)), k).w);
+      fn(l.a === v ? l.b : l.a, longDiag, legClass(legAt.get(edgeKey(l.a, l.b)), k));
     }
   };
 
@@ -1311,12 +1321,30 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     if (params.forced && params.forced.length) {
       const out: RouteSeg[] = [];
       let i = 0;
+      const forcedOf = (from: number, to: number) => params.forced!.find((q) => (q.from === from && q.to === to) || (q.from === to && q.to === from));
       while (i < segs.length) {
+        // UN SALTO RIDISEGNATO A MANO (Lorenzo, 2026-11-26: «come posso rimuovere un salto? vorrei provare a toglierne
+        // alcuni»): coi passaggi mai in vista il filo salta dove non c'è strada nascosta; un salto del tool che ha un
+        // passaggio a mano diventa quel passaggio, dritto da un pallino all'altro (anche se va in vista: l'ha voluto lui)
+        if (i > 0 && segs[i].kind === 'jump' && !segs[i].trim && forcedOf(segs[i].from, segs[i].to)) {
+          const sg = segs[i], f = forcedOf(sg.from, sg.to)!;
+          const pts = [sg.from, ...(f.from === sg.from ? f.via : [...f.via].reverse()), sg.to];
+          const a = pt(sg.from), b = pt(sg.to);
+          metrics.jumps--; metrics.jumpMm -= Math.hypot(b.x - a.x, b.y - a.y);
+          for (let q = 1; q < pts.length; q++) {
+            const t: RouteSeg = { kind: straightKind(pts[q - 1], pts[q], k), from: pts[q - 1], to: pts[q] };
+            const mm = straightMm(t.from, t.to);
+            if (t.kind === 'hidden') metrics.hiddenMm += mm; else metrics.visibleMm += mm;
+            out.push(t);
+          }
+          i++;
+          continue;
+        }
         if (segs[i].kind === 'stitch' || segs[i].kind === 'jump') { out.push(segs[i]); i++; continue; }
         let j = i;
         while (j < segs.length && segs[j].kind !== 'stitch' && segs[j].kind !== 'jump') j++;
         const from = segs[i].from, to = segs[j - 1].to;
-        const f = params.forced.find((q) => (q.from === from && q.to === to) || (q.from === to && q.to === from));
+        const f = forcedOf(from, to);
         const pts = f ? [from, ...(f.from === from ? f.via : [...f.via].reverse()), to] : null;
         let route: RouteSeg[] | null = null;
         // DRITTO DA UN PALLINO ALL'ALTRO (Lorenzo, 2026-11-25: «ma perché fa tutti questi scalini»; scelta: «dritto»):

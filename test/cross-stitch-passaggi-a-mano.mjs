@@ -105,6 +105,29 @@ export function provePassaggiAMano(rg, check) {
       [Math.round(vis), hid > 10], [0, true]);
   }
 
+  // MAI IN VISTA (Lorenzo, 2026-11-26: «i passaggi a vista non devono esistere»): due pezzi del filo 1 lontani, nel
+  // vuoto. Senza la regola il filo ci va in vista (il salto costa di più); con la regola salta. Col filo 2 (dopo) in
+  // mezzo, la strada nascosta c'è: niente salto e niente in vista
+  {
+    const gv = { cols: 14, rows: 4, cellW: 2.5, cellH: 3, overlapPct: 0 };
+    const vuoto = new Map(), coperto = new Map();
+    for (const c of [0, 1, 12, 13]) { vuoto.set(1 * 14 + c, { stitch: 'v', color: 1 }); coperto.set(1 * 14 + c, { stitch: 'v', color: 1 }); }
+    for (let c = 2; c < 12; c++) coperto.set(1 * 14 + c, { stitch: 'v', color: 2 });
+    const m = (cells, nv) => { const r = rg.csRouteAll(gv, cells, { ...route, noVisible: nv }).metrics; return [Math.round(r.visibleMm), r.jumps]; };
+    const [a1, a2, b1, b2] = [m(vuoto, false), m(vuoto, true), m(coperto, false), m(coperto, true)];
+    check('mai in vista: nel vuoto il filo salta invece di andare in vista; sotto un filo che viene dopo passa nascosto, senza salti',
+      [a1[0] > 0, a1[1], a2, b2], [true, 0, [0, 1], [0, 0]]);
+    // il salto si toglie ridisegnandolo (Lorenzo: «come posso rimuovere un salto? vorrei provare a toglierne alcuni»):
+    // un passaggio a mano sui due capi del salto lo fa diventare quel passaggio, dritto da un pallino all'altro
+    const conSalto = rg.csRouteAll(gv, vuoto, { ...route, noVisible: true }).colors.find((cr) => cr.color === 1).segs;
+    const salto = conSalto.find((sg, n) => n > 0 && sg.kind === 'jump');
+    const via = 3 * (2 * 14 + 1) + 14;
+    const tolto = salto ? rg.csRouteAll(gv, vuoto, { ...route, noVisible: true, forced: [{ from: salto.from, to: salto.to, via: [via] }] }) : null;
+    const segT = tolto ? tolto.colors.find((cr) => cr.color === 1).segs : [];
+    check('mai in vista: un salto del tool con un passaggio ridisegnato a mano diventa quel passaggio (niente salto, passa dal pallino)',
+      [!!salto, tolto ? tolto.metrics.jumps : null, segT.some((sg) => sg.kind !== 'stitch' && sg.kind !== 'jump' && sg.to === via)], [true, 0, true]);
+  }
+
   // I PALLINI LIBERI (Lorenzo, 2026-11-26: «i passaggi sono pinnati e non posso spostarli dove voglio»): un pallino
   // sta dove lo si lascia, non sul vertice più vicino; il filo ci passa esattamente, anche nei punti del DST, e
   // spostato nel modulo (in una copia, a strisce) resta lo stesso punto

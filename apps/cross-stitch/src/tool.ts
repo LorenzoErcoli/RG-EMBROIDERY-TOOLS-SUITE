@@ -21,6 +21,7 @@ import {
 } from './routing';
 import { autoRoles, cellMask, normalizeContours, subMask, type PieceShape, type ShapeRole } from './shape';
 import { applyForced, entryRows, routeAll, routeModuleBands, stripRanges, type BandRoute, type ModulePath } from './strips';
+import type { OrderInput, OrderResult } from './ordine';
 import { bandsOf, cellStep, editsOnAllCopies, findModule, isBand, parseKnitModule, moduleFile, readModuleFile, type ModuleFile, moveBandBreak, moveShapeBand, toggleBandBreak, movePiece, piecesOf, resizeModule, seamShift, shiftModule, tileModule, type KnitModule } from './module';
 import { DEFAULT_ZONES, inGroup, shiftGroup, type ZoneGroup } from './zones';
 import { extractStamp, fitStamp, flipStamp, proposeColorMap, stampColors, stampEdits, type Stamp } from './stamp';
@@ -64,7 +65,7 @@ const SEG_STYLE: Record<Exclude<SegKind, 'stitch'>, string> = {
   retrace: 'stroke:var(--rg-color-warning);stroke-width:2',
   vertical: 'stroke:var(--rg-color-info);stroke-width:2',
   hidden: 'stroke:var(--rg-color-neutral-600);stroke-width:1;stroke-dasharray:3 2',
-  jump: 'stroke:var(--rg-color-neutral-400);stroke-width:1;stroke-dasharray:1 3',
+  jump: 'stroke:var(--rg-color-neutral-800);stroke-width:1.5;stroke-dasharray:4 3',
 };
 /** Il salto messo a mano: si distingue da quello automatico anche per il tratteggio. */
 const CUT_STYLE = 'stroke:var(--rg-color-accent-blue);stroke-width:2;stroke-dasharray:6 3';
@@ -319,7 +320,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           <div class="rg-cluster rg-param-grid__wide">
             <button type="button" id="addThread" class="rg-button rg-button--outline rg-button--small"><svg class="rg-icon" aria-hidden="true" focusable="false"><use href="${ICONS}#rg-icon-aggiungi"></use></svg>Aggiungi filo</button>
             <button type="button" id="lightToDarkBtn" class="rg-button rg-button--ghost rg-button--small">Dal chiaro allo scuro</button>
+            <button type="button" id="orderBtn" class="rg-button rg-button--ghost rg-button--small" aria-describedby="h-orderBtn">Ordine consigliato</button>
           </div>
+          <span class="rg-field__help rg-param-grid__wide" id="h-orderBtn">Prova gli ordini dei fili: meno salti, chiaro sotto e scuro sopra. Propone, non cambia niente da solo</span>
+          <div class="rg-stack rg-param-grid__wide" id="orderOut" aria-live="polite" hidden></div>
           <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Filo di base</span>
             <select class="rg-select" id="baseSel" aria-describedby="h-base"></select>
             <span class="rg-field__help" id="h-base">Riempie tutta la griglia, sotto al disegno</span></label>
@@ -373,6 +377,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           <label class="rg-field"><span class="rg-field__label">Ritiro fra strisce</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="stripShift" type="text" inputmode="decimal" aria-describedby="h-stripShift"><span>mm</span></span>
             <span class="rg-field__help" id="h-stripShift">Sposta ogni striscia nel file: + allontana, − avvicina</span></label>
+          <label class="rg-toggle rg-param-grid__wide">
+            <input type="checkbox" id="noVisible" checked aria-describedby="h-noVisible"><span class="rg-toggle__track"></span><span>Mai passaggi in vista</span>
+          </label>
+          <span class="rg-field__help rg-param-grid__wide" id="h-noVisible">Il filo passa solo nascosto: sotto i punti ancora da cucire, suoi o dei fili che vengono dopo. Dove non si può, salto col taglio. Spento: un passaggio in vista se costa meno del salto</span>
           <label class="rg-toggle rg-param-grid__wide">
             <input type="checkbox" id="baseWhole" checked aria-describedby="h-baseWhole"><span class="rg-toggle__track"></span><span>Base in un solo stop</span>
           </label>
@@ -507,6 +515,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <span class="rg-tooltip rg-tooltip--below"><button type="button" id="areaBtn" class="rg-button rg-button--outline rg-button--small" aria-pressed="false" aria-describedby="tip-area">Area di prova</button><span class="rg-tooltip__text" role="tooltip" id="tip-area">Trascina un rettangolo: passaggi ed export solo lì, il disegno fuori resta</span></span>
             <button type="button" id="areaAllBtn" class="rg-button rg-button--ghost rg-button--small" hidden>Tutto il disegno</button>
           </div>
+          <div class="cs-editbar__group" role="group" aria-labelledby="eb-pass"><span class="rg-label" id="eb-pass">Passaggi</span>
+            <span class="rg-tooltip rg-tooltip--below"><label class="rg-toggle" aria-describedby="tip-novis"><input type="checkbox" id="noVisibleBar" checked><span class="rg-toggle__track"></span><span>Mai in vista</span></label><span class="rg-tooltip__text" role="tooltip" id="tip-novis">Il filo passa solo nascosto; dove non può, salta. Spento: passaggi in vista dove costano meno del salto</span></span>
+          </div>
           <div class="cs-editbar__group" role="group" aria-labelledby="eb-gr"><span class="rg-label" id="eb-gr">Grandezza</span>
             <div class="rg-segmented" id="sizeSel">
               <button type="button" class="rg-segmented__item" data-size="1">1</button>
@@ -577,7 +588,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     grid: { ...DEFAULT_GRID },
     cells: new Map(),
     threads: DEFAULT_THREADS.map((t) => ({ ...t })),
-    route: { ...DEFAULT_ROUTE },
+    route: { ...DEFAULT_ROUTE, noVisible: true }, // mai passaggi in vista: di base (Lorenzo, 2026-11-26)
     stitch: { ...DEFAULT_STITCH, straightHidden: true }, // i passaggi nascosti dritti: di base (Lorenzo, 2026-11-26)
     area: null,
     cuts: [],
@@ -793,7 +804,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const sp = rerouteSpace();
     if (!sp) return;
     const list = sp.list;
-    const t = travelAt(p);
+    const t = travelAt(p, true);
     const tA = t ? sp.fromView(t.from) : -1, tB = t ? sp.fromView(t.to) : -1;
     if (reroute) {
       // un pallino pieno: si trascina
@@ -961,7 +972,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     retrace: { color: token('--rg-color-warning', '#b7791f'), width: 2, dash: [] },
     vertical: { color: token('--rg-color-info', '#2b6cb0'), width: 2, dash: [] },
     hidden: { color: token('--rg-color-neutral-600', '#555555'), width: 1, dash: [3, 2] },
-    jump: { color: token('--rg-color-neutral-400', '#999999'), width: 1, dash: [1, 3] },
+    // i salti si vedono bene (Lorenzo, 2026-11-26, coi passaggi mai in vista: «ora ci sono solo salti e non riesco a vederli»)
+    jump: { color: token('--rg-color-neutral-800', '#333333'), width: 1.5, dash: [4, 3] },
   };
   const BG = token('--rg-color-neutral-200', '#e6e6e6');
   const CUT_PATH = { color: token('--rg-color-accent-blue', '#6f8fa6'), width: 2, dash: [6, 3] };
@@ -1478,6 +1490,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $<HTMLInputElement>('fixedDir').checked = st.route.fixedDirection;
     $<HTMLInputElement>('byBlocks').checked = st.route.blocks !== false;
     $<HTMLInputElement>('baseWhole').checked = st.route.baseWhole !== false;
+    $<HTMLInputElement>('noVisible').checked = st.route.noVisible === true;
+    $<HTMLInputElement>('noVisibleBar').checked = st.route.noVisible === true;
     $<HTMLInputElement>('trimJumps').checked = st.route.trimJumps !== false;
     $<HTMLInputElement>('relocate').checked = st.route.relocate === true;
     num('zoneGap').value = fmtNum(st.route.zones?.gapMm ?? DEFAULT_ZONES.gapMm);
@@ -1727,6 +1741,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   $<HTMLInputElement>('trimJumps').addEventListener('change', (e) => { st.route.trimJumps = (e.target as HTMLInputElement).checked; syncFields(); });
   $<HTMLInputElement>('relocate').addEventListener('change', (e) => { st.route.relocate = (e.target as HTMLInputElement).checked; syncFields(); update(); });
   $<HTMLInputElement>('baseWhole').addEventListener('change', (e) => { st.route.baseWhole = (e.target as HTMLInputElement).checked; syncFields(); update(); });
+  // anche nella barra (nell'editor del modulo i parametri del ricamo non si vedono: Lorenzo, «non riesco a sbloccarli»)
+  for (const id of ['noVisible', 'noVisibleBar']) $<HTMLInputElement>(id).addEventListener('change', (e) => { st.route.noVisible = (e.target as HTMLInputElement).checked; syncFields(); update(); });
   $<HTMLInputElement>('byBlocks').addEventListener('change', (e) => { st.route.blocks = (e.target as HTMLInputElement).checked; syncFields(); update(); });
   const setZones = () => {
     st.route.zones = {
@@ -2070,6 +2086,75 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     pushUndo();
     permuteThreads(order);
   });
+
+  /**
+   * L'ORDINE CONSIGLIATO (ordine.ts; Lorenzo, 2026-11-26: «valutare quale filo far passare prima e quale dopo in base
+   * al minor numero di salti… chiaro sotto scuro sopra»). Si provano gli ordini in un processo a parte e si mostrano
+   * i migliori, coi loro salti; «Usa» li mette (si torna indietro con Annulla).
+   */
+  let orderWorker: Worker | null = null, orderReq = 0;
+  $('orderBtn').addEventListener('click', () => {
+    const out = $('orderOut');
+    const hex = st.threads.map((t) => asHex6(t.hex));
+    const inp = routeInput();
+    const input: OrderInput = { grid: inp.grid, cells: inp.cells, params: { ...inp.params, ...(st.module ? routeParams() : {}) }, module: st.module ? cloneModule(st.module) : null, realGrid: realGrid(), hex };
+    out.hidden = false;
+    out.textContent = 'Provo gli ordini dei fili…';
+    const id = ++orderReq;
+    try { orderWorker?.terminate(); orderWorker = new Worker(new URL('./ordine.worker.ts', import.meta.url), { type: 'module' }); } catch { out.textContent = 'Questo browser non riesce a provare gli ordini.'; return; }
+    orderWorker.onmessage = (e: MessageEvent<{ id: number; progress?: [number, number]; result?: OrderResult[]; error?: string }>) => {
+      if (e.data.id !== orderReq) return;
+      if (e.data.progress) { out.textContent = `Provo gli ordini dei fili… ${e.data.progress[0]} prove`; return; }
+      if (e.data.error || !e.data.result) { out.textContent = 'Errore: ' + (e.data.error ?? 'nessun risultato'); return; }
+      orderWorker?.terminate(); orderWorker = null;
+      showOrders(e.data.result, hex);
+    };
+    orderWorker.postMessage({ id, input });
+  });
+  function showOrders(res: OrderResult[], hex: string[]): void {
+    const out = $('orderOut');
+    out.replaceChildren();
+    const base = st.route.base?.color;
+    const here = res.find((r) => r.order.every((o, i) => o === i));
+    res.forEach((r, n) => {
+      const row = document.createElement('div');
+      row.className = 'rg-cluster';
+      for (const o of r.order) {
+        if (o === base) continue;
+        const sw = document.createElement('span');
+        sw.className = 'rg-color-map__swatch';
+        sw.style.setProperty('--swatch', hex[o]);
+        sw.title = hex[o];
+        row.appendChild(sw);
+      }
+      const txt = document.createElement('span');
+      txt.className = 'rg-field__help';
+      const same = r.order.every((o, i) => o === i);
+      txt.textContent = `${r.jumps} salti${r.darkUnder >= 1 ? ` · scuro sotto il chiaro: ${Math.round(r.darkUnder)}` : ' · chiaro sotto, scuro sopra'}${n === 0 ? ' · consigliato' : ''}${same ? ' · è quello di adesso' : ''}`;
+      row.appendChild(txt);
+      if (!same) {
+        const b = document.createElement('button');
+        b.type = 'button';
+        b.className = 'rg-button rg-button--outline rg-button--small';
+        b.textContent = 'Usa';
+        b.addEventListener('click', () => {
+          // i fili cambiati intanto: l'ordine non vale più
+          if (st.threads.length !== hex.length || st.threads.some((t, i) => asHex6(t.hex) !== hex[i])) { $('orderOut').textContent = 'I fili sono cambiati: premi di nuovo «Ordine consigliato».'; return; }
+          pushUndo();
+          permuteThreads(r.order);
+          $('orderOut').textContent = `Ordine messo: ${r.jumps} salti. Annulla per tornare a quello di prima.`;
+        });
+        row.appendChild(b);
+      }
+      out.appendChild(row);
+    });
+    if (!here) {
+      const p = document.createElement('span');
+      p.className = 'rg-field__help';
+      p.textContent = 'L’ordine di adesso non è fra i migliori provati.';
+      out.appendChild(p);
+    }
+  }
 
   function removeThread(i: number): void {
     pushUndo();
@@ -3252,7 +3337,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
    * diventa salto, un salto a mano torna passaggio.
    */
   /** Il passaggio (o salto a mano) più vicino al clic, entro 8 px: i vertici che collega (reticolo di routeGeom). */
-  function travelAt(p: { x: number; y: number }): { from: number; to: number; key: string } | null {
+  /** Il passaggio sotto il mouse; `jumps`: anche i salti del tool (Ridisegna passaggio li trasforma in passaggi). */
+  function travelAt(p: { x: number; y: number }, jumps = false): { from: number; to: number; key: string } | null {
     if (!result) return null;
     const { w } = sizeMm();
     const pxPerMm = ($('layer').querySelector('svg')!.getBoundingClientRect().width || 1) / (w + 2 * margin());
@@ -3270,7 +3356,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       for (let i = 0; i < segs.length; i++) {
         if (segs[i].kind === 'stitch') continue;
         let j = i, d = Infinity;
-        if (segs[i].kind === 'jump') { j = i + 1; if (!cuts.has(cutKeyOf(segs[i].from, segs[i].to))) continue; }
+        if (segs[i].kind === 'jump') { j = i + 1; if (cuts.has(cutKeyOf(segs[i].from, segs[i].to)) === jumps || (jumps && i === 0)) continue; }
         else while (j < segs.length && segs[j].kind !== 'stitch' && segs[j].kind !== 'jump') j++;
         for (let q = i; q < j; q++) {
           const [a, b] = segmentPoints(routeGeom.grid, segs[q].from, segs[q].to);
@@ -4284,7 +4370,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const repsOld = Math.max(1, Math.round(Number((meta.route as { repetitions?: number } | undefined)?.repetitions) || 1));
     // le passate per filo; nei progetti di prima c'era un valore solo per tutti
     if (Array.isArray(meta.threads) && meta.threads.length) st.threads = (meta.threads as Thread[]).map((t) => ({ hex: asHex6(String(t.hex)), passes: Math.max(1, Math.round(Number(t.passes) || repsOld)) }));
-    if (meta.route && typeof meta.route === 'object') st.route = { ...DEFAULT_ROUTE, ...(meta.route as Partial<RouteParams>) };
+    // mai passaggi in vista è di base: un file di prima, senza la scelta, la prende accesa
+    if (meta.route && typeof meta.route === 'object') st.route = { ...DEFAULT_ROUTE, noVisible: true, ...(meta.route as Partial<RouteParams>) };
     // Le versioni prima saltavano oltre 12 (0.1.0) o 30 (0.2.0): erano i default di allora, non
     // scelte. Da 0.3.0 niente salti (Lorenzo: si vedono, passano sopra gli altri colori).
     const old = { '0.1.0': 12, '0.2.0': 30 } as Record<string, number>;

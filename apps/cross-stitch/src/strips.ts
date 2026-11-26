@@ -576,6 +576,16 @@ const bandRedo = new WeakMap<BandRoute, (mp: ModulePath) => BandRoute>();
 function routeBand(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1): BandRoute {
   const a = routeBandAt(g, mp, color, params, band, dir, true);
   if (a.joined) return a;
+  // UNITA LO STESSO (Lorenzo, 2026-11-26: «valutare anche dove proprio non è possibile fare i salti»): un motivo
+  // staccato dal bordo saltava sempre alla copia accanto; ora che il filo passa sotto i fili che vengono dopo, se la
+  // strada fino alla copia accanto non aggiunge filo in vista né salti, si tiene unito (il salto fra le copie sparisce)
+  const iso = routeBandIsolated(g, mp, color, params, band, dir);
+  const joinedAnyway = routeBandAt(g, mp, color, params, band, dir, true, undefined, undefined, true);
+  return joinedAnyway.metrics.visibleMm <= iso.metrics.visibleMm + 1e-6 && joinedAnyway.metrics.jumps <= iso.metrics.jumps ? joinedAnyway : iso;
+}
+
+/** Un elemento isolato: si salta alla copia accanto. */
+function routeBandIsolated(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1): BandRoute {
   // UN ELEMENTO ISOLATO: si provano alcuni ingressi sul lato da cui si arriva e alcune uscite sul lato verso la
   // copia dopo (in cima, in fondo, a metà; e l'uscita libera, come prima) e si tiene la coppia che costa meno
   // fra ripassi, filo in vista e metà del salto alla copia accanto (che entra dallo stesso ingresso)
@@ -598,12 +608,12 @@ function routeBand(g: GridSpec, mp: ModulePath, color: number, params: RoutePara
   return best;
 }
 
-function routeBandAt(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1, sideExit: boolean, exitAt?: ModVertex, entryAt?: ModVertex): BandRoute {
-  const r = routeBandAtOnce(g, mp, color, params, band, dir, sideExit, exitAt, entryAt);
-  bandRedo.set(r, (mp2) => routeBandAtOnce(g, mp2, color, params, band, dir, sideExit, exitAt, entryAt));
+function routeBandAt(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1, sideExit: boolean, exitAt?: ModVertex, entryAt?: ModVertex, joinAnyway = false): BandRoute {
+  const r = routeBandAtOnce(g, mp, color, params, band, dir, sideExit, exitAt, entryAt, joinAnyway);
+  bandRedo.set(r, (mp2) => routeBandAtOnce(g, mp2, color, params, band, dir, sideExit, exitAt, entryAt, joinAnyway));
   return r;
 }
-function routeBandAtOnce(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1, sideExit: boolean, exitAt?: ModVertex, entryAt?: ModVertex): BandRoute {
+function routeBandAtOnce(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1, sideExit: boolean, exitAt?: ModVertex, entryAt?: ModVertex, joinAnyway = false): BandRoute {
   const C = mp.cols, R = mp.rows, Wm = 2 * C + 1, W2 = 4 * C + 1;
   const g2: GridSpec = { ...g, cols: 2 * C, rows: R };
   {
@@ -629,7 +639,7 @@ function routeBandAtOnce(g: GridSpec, mp: ModulePath, color: number, params: Rou
       rowLo.set(rr, Math.min(rowLo.get(rr) ?? C, c)); rowHi.set(rr, Math.max(rowHi.get(rr) ?? -1, c));
       lo = Math.min(lo, c); hi = Math.max(hi, c);
     }
-    const joined = C - 1 - hi + lo <= BAND_JOIN_V;
+    const joined = C - 1 - hi + lo <= BAND_JOIN_V || joinAnyway;
     let start: ModVertex;
     let exitIso: ModVertex | null = null;
     if (joined) {
