@@ -1031,10 +1031,11 @@ almeno due in più, quel va-e-torna si toglie: la diagonale torna al numero gius
 sviluppati calano. Una sola passata in più (4 invece di 3) resta: toglierla farebbe finire il filo dall'altra parte
 della diagonale.
 
-**Passaggi nascosti dritti (prova)** (spento di partenza; in *05 Macchina*). Un passaggio nascosto che corre lungo una
-riga, sotto le V di un filo che lo copre dopo, di solito segue le gambe di quelle V: uno zig zag. Acceso, diventa una
-**linea dritta a impuntura a metà altezza della riga**, coi punti al **centro di ogni V** che passa sopra. Valgono solo
-le corse orizzontali (almeno due mezze V di fila, nella stessa riga e nello stesso verso); il resto non cambia. Cambia
+**Passaggi nascosti dritti** (acceso di partenza, anche aprendo un file di prima; in *05 Macchina*). Un passaggio
+nascosto che corre lungo una riga, sotto le V di un filo che lo copre dopo, di solito segue le gambe di quelle V: uno zig
+zag. Acceso, diventa una **linea dritta a impuntura a metà altezza della riga**, coi punti al **centro di ogni V** che
+passa sopra; la **prima e l'ultima V restano a V**, perché il passaggio non si veda dove esce. Valgono solo le corse
+orizzontali (almeno sei mezze V di fila, nella stessa riga e nello stesso verso); il resto non cambia. Cambia
 solo come si cuce il passaggio (anteprima, SVG, DST, punti sviluppati), non il percorso. Si salva nel progetto.
 
 **Stop accesi e spenti.** Nella riga di ogni filo, **Vedi** accende o spegne quello stop

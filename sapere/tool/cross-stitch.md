@@ -82,4 +82,16 @@ ripassi e salti; nel conto entravano anche i passaggi a mano, e uno che aggiunge
 un'altra strada, dove quel passaggio non c'era più (tornava automatico, e cambiavano anche gli altri). Misurato su moduli
 a caso: 769 passaggi a mano persi su 1370. Ora le strade si scelgono senza i passaggi a mano e solo quelle scelte si
 rifanno con loro (`bandRedo`): 0 persi su circa 10.500. Vale anche per il ricamo col modulo ripetuto. Prova: la quarta
-in `test/cross-stitch-passaggi-a-mano.mjs` (col codice di prima 20 persi).
+in `test/cross-stitch-passaggi-a-mano.mjs` (col codice di prima 20 persi). *«Vorrei che il bianco passasse sotto il rosso e
+sotto il marrone»* (2026-11-26, sul suo modulo a fascia): ogni filo di una fascia si calcolava con le sole V di quel
+filo, quindi non sapeva che sopra verranno altri fili e passava in vista sopra di loro (sul suo modulo, il bianco nella
+fascia in cima: 158 mm in vista). Ora `routeBandAt` passa al motore le V dei fili cuciti dopo (`RouteParams.cover`,
+colore più alto, base esclusa, nelle due copie): coprono come gli altri fili che vengono dopo, ma non si cuciono. Sul suo
+modulo il bianco in cima va a 5 mm, il filo in vista di tutto il modulo da 1779 a 513 mm. Vale anche per il ricamo col
+modulo ripetuto. I fili spenti (Vedi) contano lo stesso: nel modulo si calcolano comunque. Poi, lo stesso giorno: *«l'ingresso deve
+sempre essere dall'alto»* — una fascia unita fra le copie entra (ed esce, alla stessa riga) dalla riga più in alto del
+motivo sulla prima o sull'ultima colonna, non più dove il disegno è più vicino ai due bordi (spesso a metà motivo, col
+passaggio d'ingresso in vista); e le V della fascia nella copia accanto, che si cuce subito dopo, coprono anche loro (il
+passaggio d'uscita lungo la giuntura ci passa sotto). Sul suo modulo il bianco in cima: 0 mm in vista. *«Quando ci sono
+una serie di V orizzontali coperte allora mettiamo una linea… il primo V destra e sinistra lo facciamo a V»*: i passaggi
+nascosti dritti (`straightHiddenRuns`) tengono a V la prima e l'ultima V della corsa, e nel tool sono accesi di base.

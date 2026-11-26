@@ -87,6 +87,24 @@ export function provePassaggiAMano(rg, check) {
   check('modulo a fasce: un passaggio ridisegnato a mano resta dopo il ricalcolo (prima la fascia cambiava strada e lo perdeva)',
     [provati > 5, persi], [true, 0]);
 
+  // SOTTO I FILI CHE VENGONO DOPO, nel modulo a fasce (Lorenzo, 2026-11-26: «vorrei che il bianco passasse sotto il
+  // rosso e sotto il marrone»): ogni filo si calcolava da solo, senza sapere che sopra di lui verranno altri fili, e
+  // andava in vista sopra di loro. Due colonne del filo 1 (colonne 0 e 6), tutto intorno il filo 2, che viene dopo:
+  // da una colonna all'altra il filo 1 passa sotto il 2, niente in vista
+  {
+    const Cc = 12, Rr = 6;
+    const mk = Array.from({ length: Cc * Rr }, (_, i) => {
+      const r = Math.floor(i / Cc), c = i % Cc;
+      if ((c === 0 || c === 6) && r >= 1 && r <= 4) return { stitch: 'v', color: 1 };
+      return { stitch: 'v', color: 2 };
+    });
+    const gs = { cols: 4 * Cc, rows: Rr, cellW: 2.5, cellH: 3, overlapPct: 30 };
+    const bands = rg.csRouteBands(gs, { cols: Cc, rows: Rr, marks: mk, entryRow: {} }, 1, route);
+    const vis = bands.reduce((t, b) => t + b.metrics.visibleMm, 0), hid = bands.reduce((t, b) => t + b.metrics.hiddenMm, 0);
+    check('modulo a fasce: il filo passa sotto i fili che vengono dopo (niente in vista fra le due colonne, prima 33 mm)',
+      [Math.round(vis), hid > 10], [0, true]);
+  }
+
   // I PALLINI LIBERI (Lorenzo, 2026-11-26: «i passaggi sono pinnati e non posso spostarli dove voglio»): un pallino
   // sta dove lo si lascia, non sul vertice più vicino; il filo ci passa esattamente, anche nei punti del DST, e
   // spostato nel modulo (in una copia, a strisce) resta lo stesso punto

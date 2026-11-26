@@ -428,9 +428,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           <label class="rg-field"><span class="rg-field__label">Punto dei passaggi</span>
             <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="travelStitch" type="text" inputmode="decimal"><span>mm</span></span></label>
           <label class="rg-toggle rg-param-grid__wide">
-            <input type="checkbox" id="straightHidden" aria-describedby="h-straightHidden"><span class="rg-toggle__track"></span><span>Passaggi nascosti dritti (prova)</span>
+            <input type="checkbox" id="straightHidden" aria-describedby="h-straightHidden"><span class="rg-toggle__track"></span><span>Passaggi nascosti dritti</span>
           </label>
-          <span class="rg-field__help rg-param-grid__wide" id="h-straightHidden">I passaggi nascosti che corrono lungo una riga, invece dello zig zag sulle gambe delle V che li coprono, diventano una linea dritta a metà altezza, coi punti al centro di ogni V. Cambia solo come sono cuciti, non il percorso</span>
+          <span class="rg-field__help rg-param-grid__wide" id="h-straightHidden">I passaggi nascosti che corrono lungo una riga, invece dello zig zag sulle gambe delle V che li coprono, diventano una linea dritta a metà altezza, coi punti al centro di ogni V; la prima e l'ultima V restano a V, perché il passaggio non si veda dove esce. Cambia solo come sono cuciti, non il percorso</span>
         </div>
       </details>
 
@@ -578,7 +578,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     cells: new Map(),
     threads: DEFAULT_THREADS.map((t) => ({ ...t })),
     route: { ...DEFAULT_ROUTE },
-    stitch: { ...DEFAULT_STITCH },
+    stitch: { ...DEFAULT_STITCH, straightHidden: true }, // i passaggi nascosti dritti: di base (Lorenzo, 2026-11-26)
     area: null,
     cuts: [],
     forced: [],
@@ -1242,7 +1242,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         const upTo = byOrder ? Math.min(orderUpTo, orderTotal) : Infinity;
         for (const cr of result.colors) {
           if (st.threads[cr.color]?.hidden) continue;
-          // i passaggi nascosti dritti (prova): le corse lungo la riga, a metà altezza
+          // i passaggi nascosti dritti: le corse lungo la riga, a metà altezza (la prima e l'ultima V restano a V)
           const straight = st.stitch.straightHidden ? straightHiddenRuns(rg0, cr.segs) : null;
           // LE LINEE UNITE (Lorenzo, 2026-11-25: «le linee sono spezzate, non si capisce perché, invece di essere
           // tutte sempre unite»): col sormonto lo stesso vertice sta un filo più su o più giù secondo il tratto
@@ -4289,7 +4289,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     // scelte. Da 0.3.0 niente salti (Lorenzo: si vedono, passano sopra gli altri colori).
     const old = { '0.1.0': 12, '0.2.0': 30 } as Record<string, number>;
     if (typeof meta.version === 'string' && old[meta.version] === st.route.jumpMm) st.route.jumpMm = DEFAULT_ROUTE.jumpMm;
-    if (meta.stitch && typeof meta.stitch === 'object') st.stitch = { ...DEFAULT_STITCH, ...(meta.stitch as Partial<StitchParams>) };
+    // i passaggi nascosti dritti sono di base: un file di prima, senza la scelta, li ha accesi
+    if (meta.stitch && typeof meta.stitch === 'object') st.stitch = { ...DEFAULT_STITCH, straightHidden: true, ...(meta.stitch as Partial<StitchParams>) };
     // una base che punta a un filo che non c'è (file ritoccato a mano, fili tolti): niente base
     if (st.route.base && !(Number.isInteger(st.route.base.color) && st.route.base.color >= 0 && st.route.base.color < st.threads.length)) st.route.base = null;
     if (meta.knit && typeof meta.knit === 'object') {

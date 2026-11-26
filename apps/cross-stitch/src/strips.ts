@@ -611,6 +611,16 @@ function routeBandAtOnce(g: GridSpec, mp: ModulePath, color: number, params: Rou
     const offC = dir > 0 ? 0 : C, off = 2 * offC;
     const cells: Cells = new Map();
     for (const i of band.cells) cells.set(Math.floor(i / C) * 2 * C + (i % C) + offC, { ...mp.marks[i]! });
+    // le V dei fili cuciti dopo (i fili vanno in ordine d'ago, la base prima di tutti), nelle due copie: il filo ci
+    // passa sotto, nascosto (Lorenzo, 2026-11-26: «vorrei che il bianco passasse sotto il rosso e sotto il marrone»)
+    const cover: Cells = new Map();
+    mp.marks.forEach((mk, i) => {
+      if (!mk || mk.color <= color || mk.color === params.base?.color) return;
+      const rr = Math.floor(i / C), c = i % C;
+      for (const o of [0, C]) cover.set(rr * 2 * C + c + o, { ...mk });
+    });
+    // e le V di questa fascia nella copia accanto, che si cuce subito dopo: il passaggio d'uscita ci passa sotto
+    for (const i of band.cells) cover.set(Math.floor(i / C) * 2 * C + (i % C) + (offC === 0 ? C : 0), { ...mp.marks[i]! });
     // il vuoto attraverso la giuntura, riga per riga e in tutto
     const rowLo = new Map<number, number>(), rowHi = new Map<number, number>();
     let lo = C, hi = -1;
@@ -623,8 +633,13 @@ function routeBandAtOnce(g: GridSpec, mp: ModulePath, color: number, params: Rou
     let start: ModVertex;
     let exitIso: ModVertex | null = null;
     if (joined) {
-      // la riga dove il disegno è più vicino ai due bordi: lì si entra e si esce
-      const row = [...rowLo].map(([rr, l]) => [rr, C - 1 - rowHi.get(rr)! + l] as [number, number]).sort((q, w) => q[1] - w[1] || q[0] - w[0])[0][0];
+      // DALL'ALTO (Lorenzo, 2026-11-26: «l'ingresso deve sempre essere dall'alto»): si entra e si esce alla riga più
+      // in alto del motivo che sta sul bordo (prima colonna o ultima: per la copia accanto sono lo stesso motivo), e
+      // il motivo si cuce scendendo. Prima: la riga dove il disegno è più vicino ai due bordi, spesso a metà del
+      // motivo, col passaggio d'ingresso in vista. Senza V sui bordi, come prima.
+      const edgeRows = band.cells.filter((i) => i % C === 0 || i % C === C - 1).map((i) => Math.floor(i / C));
+      const row = edgeRows.length ? Math.min(...edgeRows)
+        : [...rowLo].map(([rr, l]) => [rr, C - 1 - rowHi.get(rr)! + l] as [number, number]).sort((q, w) => q[1] - w[1] || q[0] - w[0])[0][0];
       start = [row, dir > 0 ? 0 : 2 * C];
     } else {
       // GLI ELEMENTI ISOLATI (Lorenzo, 2026-10-13: «quando gli elementi sono isolati non partono e finiscono
@@ -664,7 +679,7 @@ function routeBandAtOnce(g: GridSpec, mp: ModulePath, color: number, params: Rou
       [first, ...middle, ...(lastSh ? [lastSh] : [])].forEach((sh, k) => { for (const i of sh) pieceOf[at2(i)] = k + 1; });
     }
     const res = routeCells(g2, cells, {
-      ...params, base: null, strips: null, modulePath: null, groups: [], mask: null,
+      ...params, base: null, strips: null, modulePath: null, groups: [], mask: null, cover,
       cuts: (mp.cuts ?? []).map(([x, y]) => [fromMod(x), fromMod(y)] as [number, number]),
       forced: (mp.forced ?? []).map((q) => ({ from: fromMod(q.from), to: fromMod(q.to), via: q.via.map(fromMod) })),
       pieceOf, startAt: { [color]: v2(start) }, ...(joined || sideExit ? { endAt: { [color]: v2(joined ? next : exitIso!) } } : {}),

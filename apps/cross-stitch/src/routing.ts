@@ -222,6 +222,13 @@ export interface RouteParams {
    * Il percorso non cambia, cambia solo come si va da un punto all'altro.
    */
   cuts?: Array<[number, number]>;
+  /**
+   * LE V DEI FILI CUCITI DOPO, che qui non si cuciono (Lorenzo, 2026-11-26, nel modulo: «vorrei che il bianco
+   * passasse sotto il rosso e sotto il marrone»): nel modulo a fasce ogni filo si calcola da solo, e senza queste
+   * non sapeva che sopra di lui verranno altri fili: passava in vista, sopra tutto. Coprono come gli altri fili
+   * che vengono dopo (il passaggio sotto è nascosto) e non entrano nel percorso.
+   */
+  cover?: Cells;
 }
 
 // Salti quasi mai: a macchina un salto lascia un filo che attraversa gli altri colori (Lorenzo).
@@ -269,6 +276,8 @@ interface LegState {
   zone: number;
   /** Il tratto di riga a cui appartiene. */
   run: number;
+  /** Una V di un filo cucito dopo, che qui non si cuce (`RouteParams.cover`): copre e basta. */
+  cover?: boolean;
 }
 
 /**
@@ -532,13 +541,33 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     }
   }
 
-  const present = [...new Set(legs.map((l) => l.color))];
+  // le V dei fili cuciti dopo (`cover`): gambe che coprono, senza passate da fare
+  const nSewn = legs.length;
+  if (params.cover) for (const [k, m] of params.cover) {
+    if ((mask && !mask[k]) || cells.has(k)) continue;
+    const r = Math.floor(k / g.cols), c = k - r * g.cols, mine: number[] = [];
+    for (const { a, b } of stitchLegs(g, r, c, m.stitch, params.topLeg)) {
+      const id = legs.length;
+      legs.push({ color: m.color, a, b, remaining: 1, extra: 0, prereq: -1, block: -3, zone: -3, run: -3, cover: true });
+      const ek = edgeKey(a, b);
+      const onEdge = legAt.get(ek);
+      if (onEdge) onEdge.push(id); else legAt.set(ek, [id]);
+      if (Math.abs((a % W) - (b % W)) === 2) for (const v of [a, b]) { const l = longAt.get(v); if (l) l.push(id); else longAt.set(v, [id]); }
+      mine.push(id);
+    }
+    const inCell = cellLegs.get(k);
+    if (inCell) inCell.push(...mine); else cellLegs.set(k, mine);
+  }
+
+  const present = [...new Set(legs.slice(0, nSewn).map((l) => l.color))];
   // la base è sempre il primo ago: sta sotto a tutto
   const sorted = colorOrder ?? [...present].sort((x, y) => x - y);
   const order = (base ? [base.color, ...sorted.filter((c) => c !== base.color)] : sorted).filter((c) => present.includes(c));
   const rank = new Map<number, number>(order.map((c, i) => [c, i]));
+  // i fili che coprono vengono dopo tutti quelli che si cuciono qui
+  for (const l of legs.slice(nSewn)) if (!rank.has(l.color)) rank.set(l.color, order.length + l.color);
 
-  const metrics: RouteMetrics = { legs: legs.length, hiddenMm: 0, verticalMm: 0, retraceMm: 0, visibleMm: 0, jumps: 0, jumpMm: 0, maxExtra: 0 };
+  const metrics: RouteMetrics = { legs: nSewn, hiddenMm: 0, verticalMm: 0, retraceMm: 0, visibleMm: 0, jumps: 0, jumpMm: 0, maxExtra: 0 };
   const colors: ColorRoute[] = [];
 
   // --- stato del Dijkstra, riusato ---
@@ -1344,7 +1373,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     colors.push({ color: k, segs });
   }
 
-  for (const l of legs) if (l.extra > metrics.maxExtra) metrics.maxExtra = l.extra;
+  for (const l of legs.slice(0, nSewn)) if (l.extra > metrics.maxExtra) metrics.maxExtra = l.extra;
   return { colors, metrics };
 }
 
@@ -1407,13 +1436,18 @@ export function straightHiddenRuns(g: GridSpec, segs: RouteSeg[]): Map<number, {
     if (!a) { i++; continue; }
     let j = i + 1;
     while (j < segs.length) { const b = info(segs[j]); if (!b || b.r !== a.r || b.dir !== a.dir) break; j++; }
-    if (j - i >= 2) {
+    // LE V AI DUE CAPI (Lorenzo, 2026-11-26: «il primo V destra e sinistra lo facciamo a V, altrimenti rischio di
+    // vedere il passaggio, ma quando ci sono una serie di V orizzontali coperte allora mettiamo una linea»): la prima V
+    // e l'ultima della corsa (due tratti ciascuna) restano sulle gambe; dritta solo la parte in mezzo, di almeno due
+    // tratti
+    const s0 = i + 2, e0 = j - 2;
+    if (e0 - s0 >= 2) {
       const r = a.r, ymid = r * rowPitch(g) + g.cellH / 2;
-      const j0 = segs[i].from % W, j1 = segs[j - 1].to % W;
-      const pts = [pointInRow(g, segs[i].from, r)];
+      const j0 = segs[s0].from % W, j1 = segs[e0 - 1].to % W;
+      const pts = [pointInRow(g, segs[s0].from, r)];
       for (let jj = j0; a.dir > 0 ? jj <= j1 : jj >= j1; jj += a.dir) if (jj % 2 === 1) pts.push({ x: jj * half, y: ymid });
-      pts.push(pointInRow(g, segs[j - 1].to, r));
-      out.set(i, { pts, end: j });
+      pts.push(pointInRow(g, segs[e0 - 1].to, r));
+      out.set(s0, { pts, end: e0 });
     }
     i = j;
   }
