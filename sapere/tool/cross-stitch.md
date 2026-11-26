@@ -118,4 +118,11 @@ l'ordine di adesso). Fatto il terzo: `shortenJumps` in strips.ts rifà ogni bloc
 nascosto o in ripasso), coprono i fili dopo e gli altri blocchi del filo; si tiene se i salti si accorciano senza
 aumentare né mettere niente in vista. Si fa solo sulle strade di fascia già scelte (`bandRedo`): farlo su ogni strada
 provata triplicava il tempo (4,5 s → 1,6 s, come senza). Risultato: 777 → 568 mm, ripassi 3,65 → 4,23 m. Tool:
-**Salti corti**, acceso di base (`RouteParams.shortJumps`).
+**Salti corti**, acceso di base (`RouteParams.shortJumps`). *«Non so che sta succedendo ma qui ora ci sono 100 salti a
+caso»* (sul DST del ricamo intero, 96 salti, il più lungo 181 mm): coi passaggi mai in vista il numero è quello (prima
+60 salti ma 761 mm in vista); a caso sembravano per due motivi del ricamo a modulo ripetuto: (1) `routeBands` girava una
+fascia nel verso opposto se le costava un salto in meno, rompendo la serpentina, e la fascia dopo ricominciava
+dall'altro lato del ricamo (salti lunghi quanto il ricamo); ora dalla seconda fascia il verso opposto deve risparmiare
+anche quel salto (30 + metà della larghezza del ricamo nel conto); (2) nelle copie tagliate un pezzo che cominciava con
+un salto ne faceva due di fila (`join`, e un'unione finale in `routeModuleTiled`). Sul suo DST: il più lungo 181 → 108
+mm, salti in tutto 3,6 → 2,7 m (con salti corti).

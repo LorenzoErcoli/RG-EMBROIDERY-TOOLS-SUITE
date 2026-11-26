@@ -150,6 +150,23 @@ export function provePassaggiAMano(rg, check) {
     check('salti corti: su 6 moduli a caso mai salti più lunghi o di più, e su qualcuno più corti', [peggio, meglio > 0], [0, true]);
   }
 
+  // IL RICAMO A MODULO RIPETUTO, mai in vista (Lorenzo, 2026-11-26: «ora ci sono 100 salti a caso»): mai due salti di
+  // fila (le copie tagliate dal bordo ne facevano due), su moduli a caso in un ricamo con l'ultima copia tagliata
+  {
+    let sd = 11; const rn = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    let doppi = 0, salti = 0;
+    for (let t = 0; t < 4; t++) {
+      const Cm = 10, Rm = 6;
+      const mk = Array.from({ length: Cm * Rm }, () => { const x = rn(); return x < 0.2 ? { stitch: 'v', color: 1 } : x < 0.32 ? { stitch: 'v', color: 2 } : null; });
+      const gr = { cols: 25, rows: 12, cellW: 2.5, cellH: 3, overlapPct: 30 };
+      const cellsR = new Map();
+      for (let r = 0; r < gr.rows; r++) for (let c = 0; c < gr.cols; c++) { const m = mk[(r % Rm) * Cm + (c % Cm)]; if (m) cellsR.set(r * gr.cols + c, m); }
+      const res = rg.csRouteAll(gr, cellsR, { ...route, noVisible: true, shortJumps: true, modulePath: { cols: Cm, rows: Rm, marks: mk, entryRow: {} } });
+      for (const cr of res.colors) cr.segs.forEach((sg, n) => { if (sg.kind === 'jump') { salti++; if (n > 0 && cr.segs[n - 1].kind === 'jump') doppi++; } });
+    }
+    check('modulo ripetuto, mai in vista: mai due salti di fila (ce ne sono, ma uno alla volta)', [salti > 0, doppi], [true, 0]);
+  }
+
   // I PALLINI LIBERI (Lorenzo, 2026-11-26: «i passaggi sono pinnati e non posso spostarli dove voglio»): un pallino
   // sta dove lo si lascia, non sul vertice più vicino; il filo ci passa esattamente, anche nei punti del DST, e
   // spostato nel modulo (in una copia, a strisce) resta lo stesso punto

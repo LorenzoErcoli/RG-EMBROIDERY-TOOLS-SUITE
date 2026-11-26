@@ -547,7 +547,11 @@ export function routeBands(g: GridSpec, mp0: ModulePath, color: number, params: 
     // il verso opposto, se costa chiaramente meno (il motore non è simmetrico: una fascia può avere filo in
     // vista in un verso e niente nell'altro); fra una fascia e l'altra si salta comunque
     const alt = routeBand(g, mp, color, params, band, dir > 0 ? -1 : 1);
-    if (score(alt) + 15 + 0.05 * g.cols * g.cellW < score(best[0])) { best = [alt]; dir = alt.dir; }
+    // LA SERPENTINA (Lorenzo, 2026-11-26, sul suo DST: «ora ci sono 100 salti a caso»): girare una fascia rompe la
+    // serpentina, e la fascia dopo ricomincia dall'altro lato del ricamo (un salto lungo quanto il ricamo); dalla
+    // seconda fascia in poi il verso opposto deve risparmiare anche quello
+    const flip = out.length ? 30 + 0.5 * g.cols * g.cellW : 15 + 0.05 * g.cols * g.cellW;
+    if (score(alt) + flip < score(best[0])) { best = [alt]; dir = alt.dir; }
     const single = score(best[0]);
     if (best[0].joined && best[0].metrics.retraceMm > 2 * g.cellW && !mp.ordered?.includes(color)) {
       for (let split = band.rows[0] + 1; split <= band.rows[1]; split++) {
@@ -742,11 +746,14 @@ function addMetrics(to: RouteMetrics, m: RouteMetrics, times = 1): void {
 }
 /** Accoda un pezzo di percorso: se non comincia dove finisce il precedente, un salto (senza taglio). */
 function join(g: GridSpec, segs: RouteSeg[], piece: RouteSeg[], metrics: RouteMetrics): void {
+  // un pezzo che comincia con un salto: si salta una volta sola, da dove si è (niente due salti di fila)
+  let trim = false;
+  while (piece.length && piece[0].kind === 'jump' && segs.length) { trim = trim || !!piece[0].trim; piece = piece.slice(1); }
   if (!piece.length) return;
   const last = segs[segs.length - 1];
   if (last && last.to !== piece[0].from) {
     const [p, q] = segmentPoints(g, last.to, piece[0].from);
-    segs.push({ kind: 'jump', from: last.to, to: piece[0].from });
+    segs.push({ kind: 'jump', from: last.to, to: piece[0].from, ...(trim ? { trim: true } : {}) });
     metrics.jumps++; metrics.jumpMm += Math.hypot(q.x - p.x, q.y - p.y);
   }
   for (const sg of piece) segs.push(sg);
@@ -856,6 +863,16 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
       if (segs.length) colors.push({ color, strip, segs });
     }
   });
+  // due salti di fila: uno solo, dal primo capo all'ultimo
+  for (const cr of colors) {
+    const out: RouteSeg[] = [];
+    for (const sg of cr.segs) {
+      const prev = out[out.length - 1];
+      if (sg.kind === 'jump' && prev?.kind === 'jump') { out[out.length - 1] = { ...prev, to: sg.to, trim: prev.trim || sg.trim }; if (prev.from === sg.to) out.pop(); }
+      else out.push(sg);
+    }
+    cr.segs = out;
+  }
   // i salti contati sul percorso finito (le copie tagliate ne hanno una parte)
   metrics.jumps = 0; metrics.jumpMm = 0;
   for (const cr of colors) for (const sg of cr.segs) if (sg.kind === 'jump') { const [p0, q0] = segmentPoints(g, sg.from, sg.to); metrics.jumps++; metrics.jumpMm += Math.hypot(q0.x - p0.x, q0.y - p0.y); }
