@@ -962,8 +962,9 @@ copia sola, senza gruppi a mano e senza area di prova); altrimenti si torna al c
 che fai vale in ogni copia. **Salti** (T): un clic su un passaggio lo trasforma in salto (la macchina
 taglia il filo); un altro clic lo rimette. **Ridisegna passaggio**: un clic sceglie il passaggio: i suoi capi
 sono due anelli, i punti da cui passa sono **pallini pieni**. **Trascina un pallino** (sopra un pallino il
-mouse diventa la mano): si aggancia al vertice più vicino e il passaggio lo segue mentre lo sposti. **Clic sulla
-linea del passaggio** = un pallino nuovo lì, che trascini subito; **doppio clic su un pallino** = lo togli. Fra un
+mouse diventa la mano): sta **esattamente dove lo lasci** (non si aggancia alla griglia) e il passaggio lo segue
+mentre lo sposti. **Clic sulla
+linea del passaggio** = un pallino nuovo lì, che trascini subito; **doppio clic** o **clic destro su un pallino** = lo togli. Fra un
 pallino e l'altro il filo va **dritto**, a punti di impuntura: dove lo vuoi nascosto, metti i pallini sotto le V (il
 tratto è «nascosto» se tutte le celle che attraversa hanno punti ancora da cucire, altrimenti «in vista»). I punti
 cuciti e il resto del percorso non cambiano. Mentre trascini si muovono il pallino e una linea tratteggiata; il

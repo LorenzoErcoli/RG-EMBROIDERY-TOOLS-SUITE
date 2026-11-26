@@ -110,8 +110,43 @@ export function gridHeight(g: GridSpec): number {
   return g.rows > 0 ? (g.rows - 1) * rowPitch(g) + g.cellH : 0;
 }
 
+// ------------------------------------------------------------
+// I PUNTI LIBERI (Lorenzo, 2026-11-26, Ridisegna passaggio: «il fatto che i passaggi sono pinnati e non posso
+// spostarli dove voglio è super fastidioso»). Un pallino messo a mano sta dove lo si lascia, non sul vertice più
+// vicino. Resta un numero come i vertici, così passa per tutti i conti che spostano i vertici (modulo, copie, area di
+// prova, strisce: sempre riga · larghezza + colonna, più uno scarto intero): la parte intera è il vertice più vicino,
+// la parte decimale lo scarto in centesimi di mezza cella (in orizzontale) e di passo di riga (in verticale). Un
+// vertice vero è sempre intero; un punto libero non lo è mai.
+// ------------------------------------------------------------
+
+/** Un punto libero è un numero non intero. */
+export const isFreePoint = (v: number): boolean => !Number.isInteger(v);
+
+/** Il punto libero più vicino a (x, y) mm (riga sulla linea della riga, senza la V sopra). */
+export function freePoint(g: GridSpec, x: number, y: number): number {
+  const W = latticeWidth(g), hx = g.cellW / 2, p = rowPitch(g);
+  const i = Math.max(0, Math.min(g.rows, Math.round(y / p))), j = Math.max(0, Math.min(W - 1, Math.round(x / hx)));
+  const q = (d: number) => Math.max(0, Math.min(99, Math.round(d * 100) + 50));
+  return i * W + j + (q(x / hx - j) * 100 + q(y / p - i) + 0.5) / 10000;
+}
+
+/** Riga e colonna (con la parte decimale) di un punto libero, nel reticolo. */
+export function freeCoords(g: GridSpec, v: number): { i: number; j: number } {
+  const W = latticeWidth(g);
+  const i = Math.floor(v / W), rest = v - i * W, j = Math.floor(rest);
+  const n = Math.max(0, Math.min(9999, Math.round((rest - j) * 10000 - 0.5)));
+  return { i: i + ((n % 100) - 50) / 100, j: j + (Math.floor(n / 100) - 50) / 100 };
+}
+
+/** Dove sta un punto libero, mm. */
+export function freePos(g: GridSpec, v: number): { x: number; y: number } {
+  const c = freeCoords(g, v);
+  return { x: c.j * (g.cellW / 2), y: c.i * rowPitch(g) };
+}
+
 /** Il vertice `v` visto dalla riga `r` (in alto se è sulla riga r, in basso se è sulla r+1). */
 export function pointInRow(g: GridSpec, v: number, r: number): { x: number; y: number } {
+  if (isFreePoint(v)) return freePos(g, v);
   const W = latticeWidth(g);
   const i = Math.floor(v / W);
   return { x: (v - i * W) * (g.cellW / 2), y: r * rowPitch(g) + (i - r) * g.cellH };
@@ -119,6 +154,7 @@ export function pointInRow(g: GridSpec, v: number, r: number): { x: number; y: n
 
 /** I due capi in mm di un tratto fra due vertici del reticolo, ognuno nella riga giusta. */
 export function segmentPoints(g: GridSpec, from: number, to: number): [{ x: number; y: number }, { x: number; y: number }] {
+  if (isFreePoint(from) || isFreePoint(to)) return [knitVertex(g, from), knitVertex(g, to)];
   const W = latticeWidth(g);
   const i1 = Math.floor(from / W), i2 = Math.floor(to / W);
   const j1 = from - i1 * W, j2 = to - i2 * W;
@@ -141,6 +177,7 @@ export function segmentPoints(g: GridSpec, from: number, to: number): [{ x: numb
  * dell'ultima riga.
  */
 export function knitVertex(g: GridSpec, v: number): { x: number; y: number } {
+  if (isFreePoint(v)) return freePos(g, v);
   const W = latticeWidth(g);
   const i = Math.floor(v / W), j = v - i * W;
   const p = rowPitch(g);

@@ -36,7 +36,7 @@
 // Nessun DOM.
 
 import type { Cells, GridSpec, Leg, Stitch } from './model';
-import { isHalfStitch, latticeWidth, pointInRow, rowPitch, segmentPoints, stitchLegs, vertexCount, vertexIndex } from './model';
+import { freeCoords, isFreePoint, isHalfStitch, latticeWidth, pointInRow, rowPitch, segmentPoints, stitchLegs, vertexCount, vertexIndex } from './model';
 import { groupOfCell, zonesOf, type ZoneGroup, type ZoneOptions } from './zones';
 
 export interface TravelCosts {
@@ -630,7 +630,10 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     for (const id of legAt.get(edgeKey(v, w)) ?? []) legs[id].extra++;
   };
 
-  const pt = (v: number) => { const i = Math.floor(v / W); return { x: (v - i * W) * half, y: i * g.cellH }; };
+  const pt = (v: number) => {
+    if (isFreePoint(v)) { const c = freeCoords(g, v); return { x: c.j * half, y: c.i * g.cellH }; } // un pallino libero
+    const i = Math.floor(v / W); return { x: (v - i * W) * half, y: i * g.cellH };
+  };
   /** Un tratto dritto fra due vertici qualunque (i passaggi a mano): la sua lunghezza, mm, come la cuce il DST. */
   const straightMm = (a: number, b: number) => { const [p, q] = segmentPoints(g, a, b); return Math.hypot(q.x - p.x, q.y - p.y); };
   /**
@@ -1393,7 +1396,7 @@ export function colorPolylines(g: GridSpec, route: ColorRoute, sp: StitchParams)
 export function straightHiddenRuns(g: GridSpec, segs: RouteSeg[]): Map<number, { pts: { x: number; y: number }[]; end: number }> {
   const W = latticeWidth(g), half = g.cellW / 2, out = new Map<number, { pts: { x: number; y: number }[]; end: number }>();
   const info = (sg: RouteSeg) => {
-    if (sg.kind !== 'hidden') return null;
+    if (sg.kind !== 'hidden' || isFreePoint(sg.from) || isFreePoint(sg.to)) return null; // un pallino libero: dritto com'è
     const i1 = Math.floor(sg.from / W), i2 = Math.floor(sg.to / W), j1 = sg.from - i1 * W, j2 = sg.to - i2 * W;
     if (Math.abs(i1 - i2) !== 1 || Math.abs(j1 - j2) !== 1) return null;
     return { r: Math.min(i1, i2), dir: Math.sign(j2 - j1) };

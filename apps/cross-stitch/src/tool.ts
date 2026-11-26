@@ -13,7 +13,7 @@ import { collegaStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_S
 import {
   type Button, type CellEdit, type Cells, type GridSpec, type Leg, type Stitch, type Thread, type Tool,
   type Pixels, type BrushStitch, type KnitStitch, DEFAULT_GRID, applyEdits, brushArea, brushEdits, fillEdits, knitFromImage, gridForSize, refinePalette, paletteShares, DEFAULT_KNIT, cellIndex, cellsFromJson, cellsToJson, editsFor, fromThreadRoute, fromTwoColumnV, stitchLegs, halfEdits, isHalfStitch,
-  resizeCells, pointInRow, segmentPoints, knitVertex, rowPitch, gridHeight,
+  resizeCells, pointInRow, segmentPoints, knitVertex, rowPitch, gridHeight, freePoint,
 } from './model';
 import {
   type RouteParams, type RouteResult, type RouteSeg, type SegKind, type StitchParams,
@@ -48,7 +48,7 @@ const MODE_HELP: Record<Mode, string> = {
   fill: 'Riempi: un clic passa al filo scelto tutta la zona collegata dello stesso colore — per esempio l’interno di una lettera.',
   erase: 'Gomma: trascina per cancellare; lì non si cuce niente.',
   cut: 'Salti: clicca un passaggio e diventa un salto (la macchina taglia il filo); clicca un salto fatto a mano e torna passaggio. Si tolgono tutti in 04 Passaggi.',
-  reroute: 'Ridisegna passaggio: clicca un passaggio per sceglierlo. Poi trascina i pallini pieni: il passaggio li segue mentre li sposti. Clic sulla linea del passaggio = un pallino nuovo lì (e lo trascini), doppio clic su un pallino = lo togli. Invio o Spazio = fatto, Esc = com’era prima, Canc = di nuovo automatico.',
+  reroute: 'Ridisegna passaggio: clicca un passaggio per sceglierlo. Poi trascina i pallini pieni: il passaggio li segue mentre li sposti. Clic sulla linea del passaggio = un pallino nuovo lì (e lo trascini), doppio clic o clic destro su un pallino = lo togli. Invio o Spazio = fatto, Esc = com’era prima, Canc = di nuovo automatico.',
   bands: 'Fasce: il filo scelto si cuce a fasce orizzontali, dall’alto, a serpentina lungo tutte le copie. Clic su una V del filo: la sua forma passa alla fascia sotto (Maiusc+clic: sopra). Clic su una riga vuota del filo: lì comincia una fascia nuova. Clic su un confine: lo togli. Trascina un confine per spostarlo.',
   order: 'Ordine pezzi: clicca i pezzi del filo scelto nell’ordine in cui vuoi cucirli (il primo clic è il primo pezzo). Da quel momento, per quel filo, dentro ogni fascia vale il tuo ordine invece di quello del tool.',
   pick: 'Scegli modulo: sull’immagine intera trascina un riquadro intorno a un modulo (per una fascia: dalla prima all’ultima riga del disegno, largo una ripetizione). Il riquadro si aggancia alle V che trova; colonne e righe si correggono in «Griglia». Esc torna al pennello.',
@@ -629,18 +629,12 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   /** Il passaggio che si sta ridisegnando (vertici del modulo), e i suoi punti all'inizio (per Esc). */
   let reroute: { from: number; to: number; before: number[] } | null = null;
   /** Il vertice del reticolo della vista più vicino a un punto (mm). */
-  function vertexNear(p: { x: number; y: number }): number {
-    const g = routeGeom.grid, W = 2 * g.cols + 1, pa = rowPitch(g);
-    p = { x: p.x - routeGeom.dx, y: p.y - routeGeom.dy };
-    let best = -1, bd = Infinity;
-    const i0 = Math.round(p.y / pa), j0 = Math.round(p.x / (g.cellW / 2));
-    for (let i = i0 - 2; i <= i0 + 2; i++) for (let j = j0 - 2; j <= j0 + 2; j++) {
-      if (i < 0 || i > g.rows || j < 0 || j > 2 * g.cols) continue;
-      const v = i * W + j, q = knitVertex(g, v);
-      const d = Math.hypot(q.x - p.x, q.y - p.y);
-      if (d < bd) { bd = d; best = v; }
-    }
-    return best;
+  /**
+   * Il pallino dove sta il mouse, libero (Lorenzo, 2026-11-26: «i passaggi sono pinnati e non posso spostarli dove
+   * voglio»): non più il vertice più vicino, il punto stesso (model.ts, `freePoint`), nel reticolo dei passaggi.
+   */
+  function pinAt(p: { x: number; y: number }): number {
+    return freePoint(routeGeom.grid, p.x - routeGeom.dx, p.y - routeGeom.dy);
   }
   type Forced = { from: number; to: number; via: number[] };
   /**
@@ -805,11 +799,20 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       // un pallino pieno: si trascina
       const hs = rerouteHandles()!;
       const k = handleAt(p);
-      if (k > 0 && k < hs.length - 1) { pushUndo(); rerouteDrag = { k: k - 1 }; draw(); return; }
+      if (k > 0 && k < hs.length - 1) {
+        // IL DOPPIO CLIC LO CONTA IL TOOL (Lorenzo, 2026-11-26: «non riesco a eliminare dei punti in più»): coi pallini
+        // liberi il primo clic sposta già il pallino sotto il mouse e la tela si ridisegna fra i due clic, e il
+        // doppio clic del browser a volte non arrivava. Due clic sullo stesso pallino entro mezzo secondo: via.
+        const now = performance.now();
+        if (pinDown && pinDown.k === k && now - pinDown.t < 500) { pinDown = null; rerouteRemoveAt(p); return; }
+        pinDown = { k, t: now };
+        pushUndo(); rerouteDrag = { k: k - 1 }; draw(); return;
+      }
+      pinDown = null;
       // sulla linea del passaggio scelto: un pallino nuovo lì, fra i due pallini più vicini, e lo si trascina
       const same = t && ((tA === reroute.from && tB === reroute.to) || (tA === reroute.to && tB === reroute.from));
       if (same) {
-        const v = sp.fromView(vertexNear(p));
+        const v = sp.fromView(pinAt(p));
         if (v < 0) { $('status').textContent = editorOpen ? 'Il punto deve stare nel modulo al centro.' : 'Il punto deve stare nel ricamo.'; return; }
         // dove va: dopo il pallino da cui il tratto dritto verso il successivo passa più vicino al clic
         let at = 0, bd = Infinity;
@@ -841,14 +844,16 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   function rerouteMove(p: { x: number; y: number }): void {
     const sp = rerouteSpace();
     if (!rerouteDrag || !sp || !reroute) return;
-    const v = sp.fromView(vertexNear(p));
+    const v = sp.fromView(pinAt(p));
     if (v < 0) return;
     const k = rerouteDrag.k;
     const via = sp.list.find((q) => q.from === reroute!.from && q.to === reroute!.to)?.via;
     if (!via || via[k] === v) return;
     setVia((vv) => { vv[k] = v; });
   }
-  /** Doppio clic su un pallino pieno: lo toglie. */
+  /** L'ultimo clic su un pallino pieno: quale e quando (per il doppio clic). */
+  let pinDown: { k: number; t: number } | null = null;
+  /** Doppio clic (o clic destro) su un pallino pieno: lo toglie. */
   function rerouteRemoveAt(p: { x: number; y: number }): boolean {
     const hs = rerouteHandles();
     const k = handleAt(p);
@@ -984,7 +989,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   const viewRow0 = (): number => (st.module && !isBand(st.module) ? st.module.rows : 0);
   /** Un vertice del modulo (indice del suo reticolo) nella vista, sul modulo al centro, e ritorno. */
   const modToView = (v: number) => { const m = st.module!, Wm = 2 * m.cols + 1, Wv = 2 * (3 * m.cols) + 1; const i = Math.floor(v / Wm), j = v - i * Wm; return (i + viewRow0()) * Wv + j + 2 * m.cols; };
-  const viewToMod = (v: number) => { const m = st.module!, Wm = 2 * m.cols + 1, Wv = 2 * (3 * m.cols) + 1; const i = Math.floor(v / Wv) - viewRow0(), j = v % Wv - 2 * m.cols; return i < 0 || i > m.rows || j < 0 || j > 2 * m.cols ? -1 : i * Wm + j; };
+  const viewToMod = (v: number) => { const m = st.module!, Wm = 2 * m.cols + 1, Wv = 2 * (3 * m.cols) + 1; const i = Math.floor(v / Wv) - viewRow0(), j = v % Wv - 2 * m.cols; return i < 0 || i > m.rows || j < 0 || Math.floor(j) > 2 * m.cols ? -1 : i * Wm + j; };
   const cutSet = () => {
     if (editorOpen && st.module) {
       const Wv = 2 * (3 * st.module.cols) + 1;
@@ -1362,9 +1367,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (zoneSel && (mode === 'group' || mode === 'area')) { $('status').textContent = `${zoneSel.kind === 'area' ? 'Blocco' : 'Gruppo'} ${zoneSel.i + 1} selezionato: trascina un vertice per spostarlo, il pallino a metà di un lato per aggiungerne uno, tasto destro su un vertice per toglierlo; trascina dentro per spostare tutto. Esc per finire.`; return; }
     if (eyedrop >= 0) { $('status').textContent = `Clicca sull’immagine il colore del filo ${eyedrop + 1} (Esc annulla). L’immagine si vede intera mentre scegli.`; return; }
     if (editorOpen && st.module && mode === 'pick') { $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V. Trascina un riquadro intorno a un modulo dell’immagine: si aggancia alle V che trova.`; return; }
-    if (editorOpen && st.module && reroute) { $('status').textContent = `Ridisegni un passaggio (filo in vista ${Math.round(editorVisible)} mm per modulo): trascina i pallini pieni, clic sulla linea per aggiungerne uno, doppio clic su un pallino per toglierlo. Invio o Spazio = fatto, Esc = com’era prima, Canc = automatico.`; return; }
+    if (editorOpen && st.module && reroute) { $('status').textContent = `Ridisegni un passaggio (filo in vista ${Math.round(editorVisible)} mm per modulo): trascina i pallini pieni, clic sulla linea per aggiungerne uno, doppio clic o clic destro su un pallino per toglierlo. Invio o Spazio = fatto, Esc = com’era prima, Canc = automatico.`; return; }
     if (editorOpen && st.module) { const g0 = realGrid(); const nP = piecesOf(st.module, activeThread).length; $('status').textContent = `Modulo ${st.module.cols} × ${st.module.rows} V · ${fmtNum(Math.round(st.module.cols * g0.cellW))} × ${fmtNum(Math.round(st.module.rows * rowPitch(g0)))} mm · filo in vista ${Math.round(editorVisible)} mm per modulo · filo scelto: ${nP} pezz${nP === 1 ? 'o' : 'i'}, ${bandNote()}; pieno = ingresso, anello = dove finire`; return; }
-    if (reroute && !editorOpen) { $('status').textContent = 'Ridisegni un passaggio: trascina i pallini pieni, clic sulla linea per aggiungerne uno, doppio clic su un pallino per toglierlo. Invio o Spazio = fatto, Esc = com’era prima, Canc = automatico.'; return; }
+    if (reroute && !editorOpen) { $('status').textContent = 'Ridisegni un passaggio: trascina i pallini pieni, clic sulla linea per aggiungerne uno, doppio clic o clic destro su un pallino per toglierlo. Invio o Spazio = fatto, Esc = com’era prima, Canc = automatico.'; return; }
     if (routing) { $('status').textContent = 'Calcolo dei passaggi…'; return; }
     if (moduleView) { $('status').textContent = moduleCopyNote; return; }
     if (!result) return;
@@ -2377,6 +2382,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     }
     if (mode === 'reroute') {
       const p = mmAt(e);
+      // clic destro su un pallino: lo toglie
+      if (p && e.button === 2) { if (rerouteRemoveAt(p)) { e.stopPropagation(); e.preventDefault(); } return; }
       if (!p || e.button !== 0) return;
       e.stopPropagation(); e.preventDefault();
       rerouteClick(p);
@@ -2625,11 +2632,6 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     update();
   };
   canvas.addEventListener('pointerup', endPaint, true);
-  canvas.addEventListener('dblclick', (e) => {
-    if (mode !== 'reroute') return;
-    const p = mmAt(e as unknown as PointerEvent);
-    if (p && rerouteRemoveAt(p)) { e.stopPropagation(); e.preventDefault(); }
-  }, true);
   canvas.addEventListener('pointercancel', endPaint, true);
   canvas.addEventListener('contextmenu', (e) => e.preventDefault());
 
@@ -4313,7 +4315,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       shapeVersion++;
     }
     const vx = (v: unknown): v is [number, number] => Array.isArray(v) && v.length === 2 && v.every((x) => Number.isInteger(x));
-    st.forced = Array.isArray(meta.forced) ? (meta.forced as Array<{ from: unknown; to: unknown; via: unknown }>).filter((q) => q && vx(q.from) && vx(q.to) && Array.isArray(q.via) && q.via.every(vx)) as State['forced'] : [];
+    // i pallini possono essere liberi: la colonna con la parte decimale (model.ts, `freePoint`)
+    const vf = (v: unknown): v is [number, number] => Array.isArray(v) && v.length === 2 && Number.isInteger(v[0]) && Number.isFinite(v[1]);
+    st.forced = Array.isArray(meta.forced) ? (meta.forced as Array<{ from: unknown; to: unknown; via: unknown }>).filter((q) => q && vx(q.from) && vx(q.to) && Array.isArray(q.via) && q.via.every(vf)) as State['forced'] : [];
     st.cuts = Array.isArray(meta.cuts) ? (meta.cuts as unknown[]).filter((c): c is [number, number, number, number] => Array.isArray(c) && c.length === 4 && c.every((x) => Number.isInteger(x))) : [];
     // Fino a 0.3.0 la V occupava due colonne: si converte a «un punto per colonna».
     if (typeof meta.version === 'string' && ['0.1.0', '0.2.0', '0.3.0'].includes(meta.version)) {

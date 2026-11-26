@@ -77,7 +77,7 @@ export function ingressoPassaggi(s: StatoCross, cells: Cells = s.cells, maskFor:
   const a = clampArea(s.grid, s.area);
   const toIndex = (grid: GridSpec, i0: number, j0: number) => (i: number, j: number) => {
     const ii = i - i0, jj = j - j0;
-    return ii < 0 || ii > grid.rows || jj < 0 || jj > 2 * grid.cols ? -1 : ii * (2 * grid.cols + 1) + jj;
+    return ii < 0 || ii > grid.rows || jj < 0 || Math.floor(jj) > 2 * grid.cols ? -1 : ii * (2 * grid.cols + 1) + jj; // un pallino libero ha la colonna col decimale
   };
   const withCuts = (grid: GridSpec, i0: number, j0: number) => {
     const ix = toIndex(grid, i0, j0);

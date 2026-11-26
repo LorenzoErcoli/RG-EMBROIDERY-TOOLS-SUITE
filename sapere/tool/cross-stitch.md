@@ -51,7 +51,13 @@ ridisegnano solo i pallini e una linea tratteggiata, il worker tiene solo l'ulti
 rifà lasciando il mouse (e intanto ogni 250 ms, se la tela si ridisegna in meno di 40 ms). *«Non capisco perché si
 pinna in dei punti ma il filo passa in altri»*: il pallino si disegnava sulla riga, il filo in fondo alla V della riga
 sopra (col sormonto sono due posti); ora il pallino sta dove l'anteprima disegna il filo di quel passaggio, e il
-trascinamento si aggancia alle stesse posizioni (`pointOnRoute`, `knitVertex`). *«Ma perché fa tutti questi
+trascinamento si aggancia alle stesse posizioni (`pointOnRoute`, `knitVertex`). *«Il fatto che i passaggi sono pinnati
+e non posso spostarli dove voglio è super fastidioso… troppo ballerino»* (2026-11-26): ora i pallini sono **liberi**,
+stanno dove si lasciano (`freePoint` in model.ts). Restano numeri come i vertici, così passano per tutti i conti che
+spostano i vertici fra modulo, copie, area di prova e strisce (riga · larghezza + colonna più uno scarto intero): la
+parte intera è il vertice più vicino, la parte decimale lo scarto in centesimi di mezza cella e di passo di riga (meno
+di 0,02 mm di errore). Un vertice vero è sempre intero (`isFreePoint`). Il ballare veniva dall'aggancio: il pallino
+saltava da un vertice all'altro, e col sormonto i vertici vicini stanno ad altezze diverse. *«Ma perché fa tutti questi
 scalini»*: fra due pallini il motore cercava la strada più nascosta sul reticolo (gambe, lati, verticali), a gradini
 dove sotto non c'era niente, più i dentini del sormonto. Scelta di Lorenzo fra «dritto» e «strada più nascosta»:
 **dritto**. Ora fra due pallini il tratto è uno solo, in linea retta (`straightKind` in routing.ts: nascosto se ogni cella

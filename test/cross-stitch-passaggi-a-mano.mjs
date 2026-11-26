@@ -86,4 +86,22 @@ export function provePassaggiAMano(rg, check) {
   }
   check('modulo a fasce: un passaggio ridisegnato a mano resta dopo il ricalcolo (prima la fascia cambiava strada e lo perdeva)',
     [provati > 5, persi], [true, 0]);
+
+  // I PALLINI LIBERI (Lorenzo, 2026-11-26: «i passaggi sono pinnati e non posso spostarli dove voglio»): un pallino
+  // sta dove lo si lascia, non sul vertice più vicino; il filo ci passa esattamente, anche nei punti del DST, e
+  // spostato nel modulo (in una copia, a strisce) resta lo stesso punto
+  if (rg.csFreePoint) {
+    const libero = rg.csFreePoint(g, 7.3, 5.1);
+    const conLibero = pathOf(rg.csRouteAll(g, cells, { ...route, forced: [{ from: free.from, to: free.to, via: [libero] }] }));
+    const doveSta = conLibero ? rg.csSegmentPoints(g, conLibero.segs[0].from, conLibero.segs[0].to)[1] : null;
+    const linee = rg.csColorPolylines(g, rg.csRouteAll(g, cells, { ...route, forced: [{ from: free.from, to: free.to, via: [libero] }] }).colors.find((cr) => cr.color === 1), { maxStitchMm: 7, travelStitchMm: 2.5 });
+    const nelDst = linee.some((pl) => pl.some((q) => Math.hypot(q.x - 7.3, q.y - 5.1) < 0.03));
+    // nel modulo: lo stesso punto in un'altra copia è il punto spostato di una copia
+    const Wb = 2 * 3 * g.cols + 1, spost = (v) => { const i = Math.floor(v / W); return i * Wb + (v - i * W) + 2 * g.cols; };
+    const gb = { ...g, cols: 3 * g.cols };
+    const qa = rg.csSegmentPoints(g, free.from, libero)[1], qb = rg.csSegmentPoints(gb, spost(free.from), spost(libero))[1];
+    check('pallino libero: il filo ci passa dove lo lasci (entro 0,03 mm), anche nei punti del DST, e una copia più in là è lo stesso punto',
+      [conLibero ? conLibero.segs.length : 0, !!doveSta && Math.hypot(doveSta.x - 7.3, doveSta.y - 5.1) < 0.03, nelDst, Math.abs(qb.x - qa.x - g.cols * g.cellW) < 1e-6 && Math.abs(qb.y - qa.y) < 1e-6],
+      [2, true, true, true]);
+  }
 }
