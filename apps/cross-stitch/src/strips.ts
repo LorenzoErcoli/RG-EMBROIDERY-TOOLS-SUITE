@@ -524,8 +524,14 @@ function shapesOf(cells: number[], C: number): number[][] {
 }
 
 /** Le fasce di un filo, già calcolate, a serpentina (la prima da sinistra). */
-export function routeBands(g: GridSpec, mp: ModulePath, color: number, params: RouteParams): BandRoute[] {
-  const C = mp.cols;
+export function routeBands(g: GridSpec, mp0: ModulePath, color: number, params: RouteParams): BandRoute[] {
+  const C = mp0.cols;
+  // LE SCELTE SENZA I PASSAGGI A MANO (Lorenzo, 2026-11-26, nel modulo: «cambio un passaggio, poi passo a quelli
+  // successivi, succede che nel ricalcolo mi cambia quelli precedenti»): verso, divisione, ingressi e uscite si
+  // scelgono contando filo in vista e ripassi; contando anche i passaggi ridisegnati a mano, uno che aggiunge filo in
+  // vista faceva scegliere un'altra strada, in cui quel passaggio non c'era più (tornava automatico, e con lui gli
+  // altri). Ora si sceglie come se non ci fossero, e solo le strade scelte si rifanno coi passaggi a mano.
+  const mp: ModulePath = mp0.forced && mp0.forced.length ? { ...mp0, forced: undefined } : mp0;
   // ANDATA E RITORNO (Lorenzo, 2026-10-13: «quando il modulo si ripete non sfrutta il fatto che le varie
   // fasce sono consecutive: ne finisce una, magari tornando anche indietro nel modulo, poi ripassa sopra
   // tutto e va avanti»): una fascia che continua fra le copie si può cucire in due passate lungo tutta la
@@ -557,11 +563,14 @@ export function routeBands(g: GridSpec, mp: ModulePath, color: number, params: R
         }
       }
     }
-    out.push(...best);
+    out.push(...(mp === mp0 ? best : best.map((b) => bandRedo.get(b)!(mp0))));
     dir = best[best.length - 1].dir > 0 ? -1 : 1;
   }
   return out;
 }
+
+/** Come rifare una strada di fascia già scelta con un altro modulo (lo stesso, coi passaggi a mano). */
+const bandRedo = new WeakMap<BandRoute, (mp: ModulePath) => BandRoute>();
 
 /** Il percorso di una fascia (o di una sua passata) nel verso `dir`. */
 function routeBand(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1): BandRoute {
@@ -590,6 +599,11 @@ function routeBand(g: GridSpec, mp: ModulePath, color: number, params: RoutePara
 }
 
 function routeBandAt(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1, sideExit: boolean, exitAt?: ModVertex, entryAt?: ModVertex): BandRoute {
+  const r = routeBandAtOnce(g, mp, color, params, band, dir, sideExit, exitAt, entryAt);
+  bandRedo.set(r, (mp2) => routeBandAtOnce(g, mp2, color, params, band, dir, sideExit, exitAt, entryAt));
+  return r;
+}
+function routeBandAtOnce(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1, sideExit: boolean, exitAt?: ModVertex, entryAt?: ModVertex): BandRoute {
   const C = mp.cols, R = mp.rows, Wm = 2 * C + 1, W2 = 4 * C + 1;
   const g2: GridSpec = { ...g, cols: 2 * C, rows: R };
   {

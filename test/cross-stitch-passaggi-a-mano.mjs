@@ -47,4 +47,43 @@ export function provePassaggiAMano(rg, check) {
   const base1 = bRun ? rg.csRouteAll(g, cells, { ...conBase, forced: [{ from: bRun.from, to: bRun.to, via: [viaB] }] }) : null;
   check('passaggio a mano sulla base in un solo stop: resta (la base non riceveva i passaggi a mano)',
     base1 ? base1.colors.find((cr) => cr.color === 0).segs.some((sg) => sg.kind !== 'stitch' && sg.to === viaB) : null, true);
+
+  // NEL MODULO A FASCE (Lorenzo, 2026-11-26: «cambio un passaggio, poi passo a quelli successivi, succede che nel
+  // ricalcolo mi cambia quelli precedenti»): verso, divisione, ingressi e uscite di una fascia si sceglievano contando
+  // anche i passaggi a mano; uno che aggiungeva filo in vista faceva cambiare strada, e lì non c'era più. Un modulo
+  // fisso, due fili: ogni passaggio dentro il modulo, ridisegnato da solo con un pallino in alto a sinistra, deve
+  // esserci dopo il ricalcolo, dritto dal suo capo al pallino all'altro capo
+  let seed = 1; const rnd = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const C = 10, R = 8, Wm = 2 * C + 1;
+  const marks = Array.from({ length: R * C }, () => { const x = rnd(); return x < 0.3 ? { stitch: 'v', color: 1 } : x < 0.45 ? { stitch: 'v', color: 2 } : null; });
+  const gm = { cols: 4 * C, rows: R, cellW: 2.5, cellH: 3, overlapPct: 30 };
+  const mod = (q) => q[0] * Wm + q[1];
+  const runsOf = (bands) => {
+    const out = [];
+    for (const b of bands) {
+      const s = [...b.body, ...b.tail];
+      for (let i = 0; i < s.length; i++) {
+        if (s[i].kind === 'stitch' || s[i].kind === 'jump') continue;
+        let j = i; while (j < s.length && s[j].kind !== 'stitch' && s[j].kind !== 'jump') j++;
+        const pts = [s[i].from, ...s.slice(i, j).map((q) => q.to)];
+        if (pts.every((q) => q[1] >= 0 && q[1] <= 2 * C) && mod(pts[0]) !== mod(pts[pts.length - 1])) out.push(pts.map(mod));
+        i = j - 1;
+      }
+    }
+    return out;
+  };
+  let provati = 0, persi = 0;
+  for (const color of [1, 2]) {
+    const mp = { cols: C, rows: R, marks, entryRow: {} };
+    for (const run of runsOf(rg.csRouteBands(gm, mp, color, route))) {
+      const via = [Wm + 1];
+      if (run.includes(via[0])) continue;
+      const want = [run[0], ...via, run[run.length - 1]];
+      const dopo = runsOf(rg.csRouteBands(gm, { ...mp, forced: [{ from: want[0], to: want[2], via }] }, color, route));
+      provati++;
+      if (!dopo.some((r) => JSON.stringify(r) === JSON.stringify(want) || JSON.stringify(r) === JSON.stringify([...want].reverse()))) persi++;
+    }
+  }
+  check('modulo a fasce: un passaggio ridisegnato a mano resta dopo il ricalcolo (prima la fascia cambiava strada e lo perdeva)',
+    [provati > 5, persi], [true, 0]);
 }

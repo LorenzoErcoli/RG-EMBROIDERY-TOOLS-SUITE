@@ -69,4 +69,11 @@ vuoti; a strisce un passaggio con un punto fuori dalla sua striscia si buttava v
 dell'ultima modifica la copriva arrivando dopo. Ora i passaggi a mano sono l'ultimo ritocco su tutto il percorso finito
 (`applyForced` in strips.ts, in `routeAll`: vale anche per il DST), e ogni risultato che arriva nel tool li prende come
 sono in quel momento (`withForcedNow`). Prove in `test/cross-stitch-passaggi-a-mano.mjs` (3): col codice di prima le due
-sulla perdita sono rosse.
+sulla perdita sono rosse. *«Nel modulo, cambio un passaggio, poi passo a quelli successivi, succede che nel ricalcolo mi
+cambia quelli precedenti»* (2026-11-26): nel modulo a fasce (`routeBands`) per ogni fascia si provano più strade (verso,
+divisione in due passate, ingressi e uscite degli elementi isolati) e si tiene quella che costa meno fra filo in vista,
+ripassi e salti; nel conto entravano anche i passaggi a mano, e uno che aggiungeva filo in vista faceva scegliere
+un'altra strada, dove quel passaggio non c'era più (tornava automatico, e cambiavano anche gli altri). Misurato su moduli
+a caso: 769 passaggi a mano persi su 1370. Ora le strade si scelgono senza i passaggi a mano e solo quelle scelte si
+rifanno con loro (`bandRedo`): 0 persi su circa 10.500. Vale anche per il ricamo col modulo ripetuto. Prova: la quarta
+in `test/cross-stitch-passaggi-a-mano.mjs` (col codice di prima 20 persi).
