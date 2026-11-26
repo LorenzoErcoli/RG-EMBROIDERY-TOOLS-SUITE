@@ -563,14 +563,16 @@ export function routeBands(g: GridSpec, mp0: ModulePath, color: number, params: 
         }
       }
     }
-    out.push(...(mp === mp0 ? best : best.map((b) => bandRedo.get(b)!(mp0))));
+    // le strade scelte si rifanno coi passaggi a mano e, se chiesto, coi salti accorciati (solo loro: farlo su ogni
+    // strada provata costava tre volte il tempo)
+    out.push(...(mp === mp0 && !params.shortJumps ? best : best.map((b) => bandRedo.get(b)!(mp0, !!params.shortJumps))));
     dir = best[best.length - 1].dir > 0 ? -1 : 1;
   }
   return out;
 }
 
 /** Come rifare una strada di fascia già scelta con un altro modulo (lo stesso, coi passaggi a mano). */
-const bandRedo = new WeakMap<BandRoute, (mp: ModulePath) => BandRoute>();
+const bandRedo = new WeakMap<BandRoute, (mp: ModulePath, shorten: boolean) => BandRoute>();
 
 /** Il percorso di una fascia (o di una sua passata) nel verso `dir`. */
 function routeBand(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1): BandRoute {
@@ -610,10 +612,10 @@ function routeBandIsolated(g: GridSpec, mp: ModulePath, color: number, params: R
 
 function routeBandAt(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1, sideExit: boolean, exitAt?: ModVertex, entryAt?: ModVertex, joinAnyway = false): BandRoute {
   const r = routeBandAtOnce(g, mp, color, params, band, dir, sideExit, exitAt, entryAt, joinAnyway);
-  bandRedo.set(r, (mp2) => routeBandAtOnce(g, mp2, color, params, band, dir, sideExit, exitAt, entryAt, joinAnyway));
+  bandRedo.set(r, (mp2, shorten) => routeBandAtOnce(g, mp2, color, params, band, dir, sideExit, exitAt, entryAt, joinAnyway, shorten));
   return r;
 }
-function routeBandAtOnce(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1, sideExit: boolean, exitAt?: ModVertex, entryAt?: ModVertex, joinAnyway = false): BandRoute {
+function routeBandAtOnce(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1, sideExit: boolean, exitAt?: ModVertex, entryAt?: ModVertex, joinAnyway = false, shorten = false): BandRoute {
   const C = mp.cols, R = mp.rows, Wm = 2 * C + 1, W2 = 4 * C + 1;
   const g2: GridSpec = { ...g, cols: 2 * C, rows: R };
   {
@@ -688,12 +690,14 @@ function routeBandAtOnce(g: GridSpec, mp: ModulePath, color: number, params: Rou
       const middle = shapes.filter((sh) => sh !== first && sh !== lastSh).sort((q, w) => pos(q) - pos(w));
       [first, ...middle, ...(lastSh ? [lastSh] : [])].forEach((sh, k) => { for (const i of sh) pieceOf[at2(i)] = k + 1; });
     }
-    const res = routeCells(g2, cells, {
+    const bandParams: RouteParams = {
       ...params, base: null, strips: null, modulePath: null, groups: [], mask: null, cover,
       cuts: (mp.cuts ?? []).map(([x, y]) => [fromMod(x), fromMod(y)] as [number, number]),
       forced: (mp.forced ?? []).map((q) => ({ from: fromMod(q.from), to: fromMod(q.to), via: q.via.map(fromMod) })),
       pieceOf, startAt: { [color]: v2(start) }, ...(joined || sideExit ? { endAt: { [color]: v2(joined ? next : exitIso!) } } : {}),
-    });
+    };
+    const res0 = routeCells(g2, cells, bandParams);
+    const res = shorten ? shortenJumps(g2, cells, cover, bandParams, color, res0) : res0;
     const segs = res.colors.find((cr) => cr.color === color)?.segs ?? [];
     let last = segs.length - 1;
     while (last >= 0 && segs[last].kind !== 'stitch') last--;
@@ -885,4 +889,51 @@ function applyCuts(g: GridSpec, res: RouteResult, cuts: Array<[number, number]>)
     cr.segs = out;
   }
   return res;
+}
+
+/**
+ * I SALTI PIÙ CORTI (Lorenzo, 2026-11-26: «come poter accorciare i salti facendo lavorare i vari blocchi in maniera che
+ * le uscite e le entrate dei successivi siano vicine… magari facendo dei passaggi lineari prima e poi iniziando a
+ * ricamare le V dal punto più conveniente»). Coi passaggi mai in vista il filo lavora a blocchi (le V che raggiunge
+ * nascosto) e salta dall'uno all'altro; il blocco finiva dove capitava. Qui ogni blocco si rifà: si entra nel punto più
+ * vicino a dove è finito quello prima, si cuce, e alla fine un passaggio nascosto (sotto le V ancora da cucire, o in
+ * ripasso sulle sue) porta al punto più vicino al blocco dopo: di lì il salto è corto. Si tiene solo se i salti si
+ * accorciano, non aumentano e non compare niente in vista. Sul suo modulo: 777 → 580 mm di salti, ripassi +14%.
+ * I salti a mano (Salti) restano dentro il loro blocco.
+ */
+function shortenJumps(g: GridSpec, cells: Cells, cover: Cells, params: RouteParams, color: number, res: RouteResult): RouteResult {
+  const cr = res.colors.find((c) => c.color === color);
+  if (!cr) return res;
+  const W = 2 * g.cols + 1;
+  const blocks: RouteSeg[][] = [];
+  let cur: RouteSeg[] = [];
+  for (const sg of cr.segs) { if (sg.kind === 'jump' && !sg.trim) { if (cur.some((x) => x.kind === 'stitch')) blocks.push(cur); cur = []; } else cur.push(sg); }
+  if (cur.some((x) => x.kind === 'stitch')) blocks.push(cur);
+  if (blocks.length < 2) return res;
+  const cellOf = (sg: RouteSeg) => { const i1 = Math.floor(sg.from / W), i2 = Math.floor(sg.to / W), j1 = sg.from % W, j2 = sg.to % W; return Math.min(i1, i2) * g.cols + Math.floor(Math.min(j1, j2) / 2); };
+  const bCells = blocks.map((b) => { const m: Cells = new Map(); for (const sg of b) if (sg.kind === 'stitch') { const k = cellOf(sg); const mk = cells.get(k); if (mk) m.set(k, mk); } return m; });
+  const verts = blocks.map((b) => [...new Set(b.filter((x) => x.kind === 'stitch').flatMap((x) => [x.from, x.to]))]);
+  const P = (v: number) => { const i = Math.floor(v / W), j = v - i * W; return { x: j * g.cellW / 2, y: i * rowPitch(g) }; };
+  const dist = (a: number, b: number) => { const p = P(a), q = P(b); return Math.hypot(p.x - q.x, p.y - q.y); };
+  const closest = (from: number[], to: number[]) => { let best = from[0], bd = Infinity; for (const a of from) for (const b of to) { const d = dist(a, b); if (d < bd) { bd = d; best = a; } } return best; };
+  const startAt = params.startAt?.[color], endAt = params.endAt?.[color];
+  const out: RouteSeg[] = [];
+  const metrics = { legs: 0, hiddenMm: 0, verticalMm: 0, retraceMm: 0, visibleMm: 0, jumps: 0, jumpMm: 0, maxExtra: 0 };
+  let prevExit = -1;
+  for (let b = 0; b < blocks.length; b++) {
+    const entry = b === 0 && startAt !== undefined ? startAt : closest(verts[b], [prevExit]);
+    const exit = b + 1 < blocks.length ? closest(verts[b], verts[b + 1]) : endAt;
+    // coprono: i fili dopo, e le V degli altri blocchi di questo filo
+    const cov: Cells = new Map(cover);
+    bCells.forEach((m, o) => { if (o !== b) for (const [k, v] of m) cov.set(k, v); });
+    const r = routeCells(g, bCells[b], { ...params, cover: cov, startAt: { [color]: entry }, ...(exit !== undefined ? { endAt: { [color]: exit } } : { endAt: undefined }) });
+    const sg = r.colors.find((c) => c.color === color)?.segs ?? [];
+    if (b > 0) { out.push({ kind: 'jump', from: prevExit, to: sg.length ? sg[0].from : entry }); metrics.jumps++; metrics.jumpMm += dist(prevExit, sg.length ? sg[0].from : entry); }
+    out.push(...sg);
+    metrics.legs += r.metrics.legs; metrics.hiddenMm += r.metrics.hiddenMm; metrics.verticalMm += r.metrics.verticalMm; metrics.retraceMm += r.metrics.retraceMm; metrics.visibleMm += r.metrics.visibleMm; metrics.jumps += r.metrics.jumps; metrics.jumpMm += r.metrics.jumpMm;
+    prevExit = sg.length ? sg[sg.length - 1].to : entry;
+  }
+  const old = res.metrics;
+  if (metrics.jumps > old.jumps || metrics.jumpMm >= old.jumpMm - 1e-6 || metrics.visibleMm > old.visibleMm + 1e-6) return res;
+  return { colors: res.colors.map((c) => (c.color === color ? { ...c, segs: out } : c)), metrics };
 }

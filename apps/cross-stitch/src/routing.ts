@@ -236,6 +236,11 @@ export interface RouteParams {
    * taglio). Il tool lo accende di base; assente = come prima (in vista se costa meno del salto).
    */
   noVisible?: boolean;
+  /**
+   * SALTI PIÙ CORTI nel modulo a fasce (strips.ts, `shortenJumps`): ogni blocco fra due salti entra vicino a dove è
+   * finito il blocco prima ed esce, con un passaggio nascosto, vicino al blocco dopo. Il tool lo accende di base.
+   */
+  shortJumps?: boolean;
 }
 
 // Salti quasi mai: a macchina un salto lascia un filo che attraversa gli altri colori (Lorenzo).

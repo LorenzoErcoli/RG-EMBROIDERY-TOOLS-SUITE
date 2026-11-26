@@ -109,4 +109,13 @@ dall'ordine di adesso e da quello dal chiaro allo scuro, al più 60 ordini; prop
 un salto? vorrei provare a toglierne alcuni»*: i salti del tool non si potevano toccare (Salti toglie solo quelli messi a
 mano). Ora **Ridisegna passaggio** prende anche un salto del tool (`travelAt(p, true)`), e un passaggio a mano sui due
 capi di un salto lo fa diventare quel passaggio nel motore (`routeCells`, parte dei passaggi a mano: il salto toglie
-un salto dai conti). Non vale per il salto fra le copie del modulo (il capo sta nella copia accanto).
+un salto dai conti). Non vale per il salto fra le copie del modulo (il capo sta nella copia accanto). *«Come poter accorciare i salti facendo
+lavorare i vari blocchi in maniera che le uscite e le entrate dei successivi siano vicine… passaggi lineari prima e poi
+le V dal punto più conveniente»*: misurato prima sul suo modulo (ordine consigliato, 38 salti): 777 mm di salti; solo
+cambiando ordine e verso dei blocchi 633; entrando e uscendo nei punti più vicini fra blocchi 435 (il minimo con
+l'ordine di adesso). Fatto il terzo: `shortenJumps` in strips.ts rifà ogni blocco (fra due salti del tool) con
+`startAt` = il punto più vicino al blocco prima ed `endAt` = il punto più vicino al blocco dopo (il passaggio d'uscita è
+nascosto o in ripasso), coprono i fili dopo e gli altri blocchi del filo; si tiene se i salti si accorciano senza
+aumentare né mettere niente in vista. Si fa solo sulle strade di fascia già scelte (`bandRedo`): farlo su ogni strada
+provata triplicava il tempo (4,5 s → 1,6 s, come senza). Risultato: 777 → 568 mm, ripassi 3,65 → 4,23 m. Tool:
+**Salti corti**, acceso di base (`RouteParams.shortJumps`).

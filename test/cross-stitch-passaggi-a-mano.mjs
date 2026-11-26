@@ -128,6 +128,28 @@ export function provePassaggiAMano(rg, check) {
       [!!salto, tolto ? tolto.metrics.jumps : null, segT.some((sg) => sg.kind !== 'stitch' && sg.kind !== 'jump' && sg.to === via)], [true, 0, true]);
   }
 
+  // SALTI PIÙ CORTI (Lorenzo, 2026-11-26: «accorciare i salti facendo lavorare i vari blocchi in maniera che le uscite
+  // e le entrate dei successivi siano vicine»): su moduli a caso, coi passaggi mai in vista, i salti non sono mai più
+  // lunghi né di più, niente in vista in più, e su qualcuno si accorciano
+  {
+    let sd = 7; const rn = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    let peggio = 0, meglio = 0;
+    for (let t = 0; t < 6; t++) {
+      const Cm = 12, Rm = 8;
+      const mk = Array.from({ length: Cm * Rm }, () => { const x = rn(); return x < 0.18 ? { stitch: 'v', color: 1 } : x < 0.3 ? { stitch: 'v', color: 2 } : null; });
+      const gs = { cols: 3 * Cm, rows: Rm, cellW: 2.5, cellH: 3, overlapPct: 30 };
+      const tot = (sj) => {
+        let n = 0, mm = 0, vis = 0;
+        for (const color of [1, 2]) for (const b of rg.csRouteBands(gs, { cols: Cm, rows: Rm, marks: mk, entryRow: {} }, color, { ...route, noVisible: true, shortJumps: sj })) { n += b.metrics.jumps; mm += b.metrics.jumpMm; vis += b.metrics.visibleMm; }
+        return { n, mm, vis };
+      };
+      const a0 = tot(false), a1 = tot(true);
+      if (a1.n > a0.n || a1.mm > a0.mm + 1e-6 || a1.vis > a0.vis + 1e-6) peggio++;
+      if (a1.mm < a0.mm - 1) meglio++;
+    }
+    check('salti corti: su 6 moduli a caso mai salti più lunghi o di più, e su qualcuno più corti', [peggio, meglio > 0], [0, true]);
+  }
+
   // I PALLINI LIBERI (Lorenzo, 2026-11-26: «i passaggi sono pinnati e non posso spostarli dove voglio»): un pallino
   // sta dove lo si lascia, non sul vertice più vicino; il filo ci passa esattamente, anche nei punti del DST, e
   // spostato nel modulo (in una copia, a strisce) resta lo stesso punto

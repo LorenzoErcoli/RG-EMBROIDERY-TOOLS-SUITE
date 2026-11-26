@@ -1031,6 +1031,13 @@ disegnato da te, dritto da un pallino all'altro; **Canc** lo rimette salto. (I s
 tolgono con *Salti*, cliccandoli di nuovo.) Fra una copia e l'altra del modulo il salto non si ridisegna. Spento: come prima, un
 passaggio in vista se costa meno del salto.
 
+**Salti corti** (acceso di partenza, anche aprendo un file di prima; in *04 Passaggi*; vale nel modulo). Coi passaggi
+mai in vista il filo lavora a **blocchi**: le V che raggiunge senza uscire allo scoperto. Da un blocco all'altro salta.
+Acceso, ogni blocco **entra nel punto più vicino a dove è finito il blocco prima** e, finite le sue V, fa un
+**passaggio nascosto** (sotto le V ancora da cucire, o in ripasso sulle sue) fino al punto **più vicino al blocco dopo**:
+di lì il salto è corto. Si tiene solo se i salti si accorciano, non aumentano e non compare niente in vista. Sul modulo
+di prova: salti 777 → 568 mm in tutto, ripassi +16%.
+
 **Ottimizza l'ordine dei passaggi** (spento di partenza; in *04 Passaggi*, sotto *Taglio a ogni salto*). Il tool
 sceglie il pezzo dopo un passo alla volta, e a volte lascia indietro qualcosa (le croci di una finestra, un dente di
 muro) per tornarci alla fine con un giro lungo. Acceso, rilegge il percorso di ogni filo e sposta questi pezzi nel
