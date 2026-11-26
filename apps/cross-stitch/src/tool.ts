@@ -286,6 +286,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
                     <div class="rg-field"><span class="rg-field__label">&nbsp;</span><button type="button" id="edScaleBtn" class="rg-button rg-button--outline rg-button--small">Applica</button></div>
                     <span class="rg-field__help rg-param-grid__wide" id="h-edscale">Celle, immagine e disegno insieme, coi passaggi: il ricamo cresce allo stesso modo (stesse copie). 100 = com’è; sotto 100 rimpicciolisce. Invio o Applica.</span>
                     <output class="rg-technical rg-param-grid__wide" id="edScaleInfo" aria-live="polite"></output>
+                    <label class="rg-field"><span class="rg-field__label">Larghezza reale</span>
+                      <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edModW" type="text" inputmode="decimal" aria-describedby="h-edmodw"><span>mm</span></span></label>
+                    <div class="rg-field"><span class="rg-field__label">&nbsp;</span><span class="rg-cluster"><button type="button" id="edModWBtn" class="rg-button rg-button--outline rg-button--small">Misura il modulo</button><button type="button" id="edRegridBtn" class="rg-button rg-button--ghost rg-button--small">Rifai la griglia</button></span></div>
+                    <span class="rg-field__help rg-param-grid__wide" id="h-edmodw">Quanto è largo il modulo vero (tutte le sue V in larghezza). <b>Misura il modulo</b>: le V prendono quella misura, alte in proporzione; disegno e passaggi restano. <b>Rifai la griglia</b>: le V restano come sono, il modulo diventa largo così con più V (alto come l'immagine): il disegno va rifatto sopra l'immagine (Annulla per tornare).</span>
                   </div>
                 </details>
               </div>
@@ -4205,6 +4209,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     editorSnap = { grid: { ...st.grid }, cells: cloneCells(st.cells), module: cloneModule(st.module), threads: st.threads.map((t) => ({ ...t })), route: JSON.parse(JSON.stringify(st.route)), changed: false };
     editorOpen = true;
     $('edScaleInfo').textContent = '';
+    if (st.module) num('edModW').placeholder = fmtNum(Math.round(st.module.cols * realGrid().cellW * 10) / 10);
     if (!st.module) { newModule(); buildThreads(); syncFields(); }
     for (const id of ['sec-immagine', 'sec-misure', 'sec-passaggi', 'sec-macchina', 'sec-carica']) $(id).hidden = true;
     for (const id of ['ed-percorso']) $(id).hidden = false;
@@ -4322,6 +4327,43 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $('edScaleInfo').textContent = `${fmtNum(pct)}%: una V da ${fmtNum(before.cw)} × ${fmtNum(before.ch)} a ${fmtNum(next.cellW)} × ${fmtNum(next.cellH)} mm; il ricamo da ${fmtNum(Math.round(before.w))} × ${fmtNum(Math.round(before.h))} a ${fmtNum(Math.round(target.w))} × ${fmtNum(Math.round(target.h))} mm. Annulla per tornare indietro.`;
   };
   $('edScaleBtn').addEventListener('click', applyScale);
+  // MISURA IL MODULO (Lorenzo, 2026-11-26: «la dimensione reale dell'immagine è più grande di come abbiamo disegnato…
+  // è largo 120 mm, aggiungi il bottone»): la grandezza delle V viene dai campi della cella, non dall'immagine; qui si
+  // dice quanto è largo il modulo vero e si ingrandisce (Ingrandisci) della percentuale giusta
+  const applyModW = () => {
+    const w = readNum('edModW');
+    if (!st.module || !(w > 0)) return;
+    const now = st.module.cols * realGrid().cellW;
+    num('edScale').value = fmtNum(Math.round((w / now) * 100000) / 1000);
+    applyScale();
+    num('edModW').value = '';
+    num('edModW').placeholder = fmtNum(Math.round(st.module.cols * realGrid().cellW * 10) / 10);
+  };
+  $('edModWBtn').addEventListener('click', applyModW);
+  // RIFAI LA GRIGLIA (Lorenzo, 2026-11-26: «io voglio ridisegnare con le misure 3,8 × 5 ma a grandezza reale 120»):
+  // la V resta quella dei campi della cella; il modulo diventa largo quanto quello vero, con più V, e alto quanto
+  // l'immagine in proporzione; l'immagine resta lo stesso pezzo, sotto tutta la griglia nuova. Il disegno (e i salti,
+  // i passaggi a mano, le fasce del modulo) non vale più su un'altra griglia: si riparte dalla base, con conferma
+  const regrid = () => {
+    const m = st.module, w = readNum('edModW') || 0;
+    if (!m || !(w > 0)) { $('edScaleInfo').textContent = 'Scrivi prima quanto è largo il modulo vero (Larghezza reale, mm).'; return; }
+    const g0 = realGrid(), gd = m.guide;
+    const hMm = gd && gd.w > 0 ? (w * gd.h) / gd.w : gridHeight({ ...g0, cols: m.cols, rows: m.rows }) * (w / (m.cols * g0.cellW));
+    const cols = Math.max(2, Math.round(w / g0.cellW));
+    const pitch = rowPitch(g0), rows = Math.max(2, Math.round((hMm - g0.cellH) / pitch) + 1);
+    if (cols === m.cols && rows === m.rows) { $('edScaleInfo').textContent = `La griglia è già ${cols} × ${rows} V.`; return; }
+    if (moduleHasDrawing(m) && !window.confirm(`Il modulo diventa ${cols} × ${rows} V (V da ${fmtNum(g0.cellW)} × ${fmtNum(g0.cellH)} mm): il disegno di adesso si perde e lo rifai sopra l'immagine (Annulla lo rimette). Continuare?`)) return;
+    pushUndo();
+    const base = st.route.base?.color ?? 0;
+    st.module = { cols, rows, marks: Array.from({ length: cols * rows }, () => ({ stitch: 'v' as const, color: base })), guide: gd, drawn: m.drawn, offset: m.offset, repeat: m.repeat };
+    st.route.strips = { rows, shiftMm: st.route.strips?.shiftMm ?? 0 };
+    num('edModW').value = '';
+    refreshEditorView();
+    $('edScaleInfo').textContent = `Griglia rifatta: ${cols} × ${rows} V, modulo ${fmtNum(Math.round(cols * g0.cellW * 10) / 10)} × ${fmtNum(Math.round(gridHeight({ ...g0, cols, rows }) * 10) / 10)} mm. Disegna sopra l'immagine, oppure Ricopia il disegno per partire dai suoi colori. Annulla per tornare.`;
+  };
+  $('edRegridBtn').addEventListener('click', regrid);
+  // il campo da solo non fa niente: scritto 120 e cliccato «Rifai la griglia», il cambio del campo partiva prima del clic e
+  // faceva «Misura il modulo» (Lorenzo: «la griglia non cambia, aumentano solo le misure della cella»)
   num('edScale').addEventListener('change', applyScale);
   const edSize = () => {
     if (!st.module) return;

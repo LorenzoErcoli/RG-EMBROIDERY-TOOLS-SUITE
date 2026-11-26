@@ -877,6 +877,14 @@ fare, e quelli fatti hanno il segno *Fatto* (si riaprono con un clic sul titolo)
     il modulo (*Inizio x, y*); si regola anche con lo strumento **Sposta immagine** (tasto M), trascinando l'immagine
     sotto la griglia. **Ingrandisci** (%, poi *Applica*) allarga tutto insieme: celle, immagine e disegno, coi passaggi
     uguali; il ricamo cresce della stessa percentuale con le stesse copie. *Torna al ricamo* annulla anche questo.
+    **Larghezza reale** (mm) + **Misura il modulo**: scrivi quanto è largo il modulo vero (tutte le sue V in larghezza) e
+    il tool ingrandisce della percentuale giusta (le V prendono quella larghezza, alte in proporzione). Serve perché la
+    grandezza delle V viene dai campi della cella, non dall'immagine: un'immagine inserita alla misura giusta non dà da
+    sola la misura alle V. Poi, se il pezzo ha un'altra misura, rimetti Larghezza/Altezza del ricamo (02 Misure).
+    **Rifai la griglia** (accanto): il contrario. Le V restano come sono (es. 3,8 × 5 mm) e il modulo diventa largo
+    quanto quello vero con **più V** (alto come l'immagine, in proporzione): 120 mm con V da 3,8 → 32 V. L'immagine
+    resta sotto tutta la griglia nuova; il disegno di prima si perde (chiede conferma; Annulla lo rimette) e lo rifai
+    sopra l'immagine, o parti da *Ricopia il disegno*.
 - **3 Disegna**: scegli il filo e disegna col **Pennello** sul modulo al centro: ogni V vale in tutte le copie.
   **Salva modulo…** lo mette in un file a sé (vedi sotto). **Ricopia il disegno** riempie il modulo coi colori
   dell'immagine, V per V: quello che hai disegnato si perde (chiede conferma; *Annulla* lo rimette).

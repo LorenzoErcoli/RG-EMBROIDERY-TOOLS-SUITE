@@ -125,4 +125,13 @@ fascia nel verso opposto se le costava un salto in meno, rompendo la serpentina,
 dall'altro lato del ricamo (salti lunghi quanto il ricamo); ora dalla seconda fascia il verso opposto deve risparmiare
 anche quel salto (30 + metà della larghezza del ricamo nel conto); (2) nelle copie tagliate un pezzo che cominciava con
 un salto ne faceva due di fila (`join`, e un'unione finale in `routeModuleTiled`). Sul suo DST: il più lungo 181 → 108
-mm, salti in tutto 3,6 → 2,7 m (con salti corti).
+mm, salti in tutto 3,6 → 2,7 m (con salti corti). *«Il modulo, la dimensione reale dell'immagine è più grande di come
+abbiamo disegnato… è largo 120 mm»*: l'immagine (331 × 846 px) era un modulo intero, 24 × 93 V; le V però prendono la
+misura dai campi della cella (3,8 × 5 mm, sormonto 50%), non dall'immagine, quindi il modulo era largo 91,2 mm, e nel
+ricamo l'immagine si stende su tutta la misura del ricamo (160 mm). Nessun errore di calcolo: manca il legame
+immagine → misura delle V. Aggiunto **Misura il modulo** (editor, Aggancio fine e grandezza, campo «Larghezza reale»: le stesse parole del campo della forma, perché un'etichetta nuova andrebbe nel debito delle etichette, fermo fino alla PR #50): larghezza vera → la
+percentuale di Ingrandisci (120 / 91,2 = 131,6%: V 5 × 6,58 mm, modulo 120 × 306 mm); disegno e passaggi restano.
+E, per la seconda versione (*«voglio ridisegnare con le misure 3,8 × 5 ma a grandezza reale 120»*), **Rifai la
+griglia**: V invariata, colonne = larghezza / cellW (32), righe dall'altezza dell'immagine in proporzione (122); stesso
+pezzo d'immagine sotto la griglia nuova; modulo nuovo tutto base (disegno, salti e passaggi a mano non valgono su
+un'altra griglia), con conferma e Annulla.
