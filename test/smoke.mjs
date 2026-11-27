@@ -7809,8 +7809,15 @@ console.log('\nrete-catenella — moduli che si attaccano, maglia misurata, tagl
   // Lorenzo, 2026-11-05: «dubbi sui punti di infittimento che non siano ben collegati. Sarebbe un problema perché significa che si sgancia la rete»
   const distDaSegmento = (p, a, b) => { const dx = b[0] - a[0], dy = b[1] - a[1], Q = dx * dx + dy * dy, f = Q ? Math.max(0, Math.min(1, ((p[0] - a[0]) * dx + (p[1] - a[1]) * dy) / Q)) : 0; return Math.hypot(p[0] - a[0] - f * dx, p[1] - a[1] - f * dy); };
   const lineeCatenella = fitta.oggetti.filter((o) => o.tipo === 'catenella'), dentroQuadrato = (q) => q[0] > 8 && q[0] < 292 && q[1] > 8 && q[1] < 192; // vicino al bordo la linea dove arriva può essere tagliata via
-  const capiStaccati = lineeCatenella.filter((o) => o.nuovo && dentroQuadrato(o.t[0])).filter((o) => { let m = 9; for (const x of lineeCatenella) { if (x === o) continue; for (let i = 1; i < x.t.length; i++) m = Math.min(m, distDaSegmento(o.t[0], x.t[i - 1], x.t[i])); } return m > 0.05; });
-  check('ogni linea nuova parte dal centro di una linea', capiStaccati.length, 0);
+  const dallaRete = (q, o, linee) => { let m = 9; for (const x of linee) { if (x === o) continue; for (let i = 1; i < x.t.length; i++) m = Math.min(m, distDaSegmento(q, x.t[i - 1], x.t[i])); } return m; };
+  // Lorenzo, 2026-11-26: «la linea che poi si trasforma in psil deve oltrepassare la linea di aggancio»: il capo sul centro dell'aggancio resta un vertice, la linea va oltre di 0,4 mm
+  const nuoveDentro = lineeCatenella.filter((o) => o.nuovo && dentroQuadrato(o.t[0]));
+  check('ogni linea nuova si aggancia sul centro di una linea', nuoveDentro.filter((o) => dallaRete(o.t[1], o, lineeCatenella) > 0.05).length, 0);
+  check('e la passa di 0,4 mm, come le linee del modulo', nuoveDentro.filter((o) => Math.abs(Math.hypot(o.t[0][0] - o.t[1][0], o.t[0][1] - o.t[1][1]) - P.oltreAggancioMm) > 1e-9).length, 0);
+  const senzaOltre = rg.rcCostruisci(m, quadrato, { ...P, infittisci: true, magliaMassimaMm2: 40, oltreAggancioMm: 0 }), lineeSenza = senzaOltre.oggetti.filter((o) => o.tipo === 'catenella');
+  check("con 0 la linea nuova parte proprio dal centro dell'aggancio, come prima", [lineeSenza.filter((o) => o.nuovo && dentroQuadrato(o.t[0]) && dallaRete(o.t[0], o, lineeSenza) > 0.05).length, senzaOltre.conti.lineeNuove], [0, fitta.conti.lineeNuove]);
+  const deviazioniUguali = (a, b) => JSON.stringify(a.oggetti.filter((o) => o.tipo === 'base').map((o) => o.t)) === JSON.stringify(b.oggetti.filter((o) => o.tipo === 'base').map((o) => o.t));
+  check("le basi non vanno oltre: la loro deviazione finisce sull'aggancio", deviazioniUguali(fitta, senzaOltre), true);
   const capiLontani = lineeCatenella.filter((o) => o.nuovo && dentroQuadrato(o.t.at(-1))).filter((o) => { let m = 9; for (const x of lineeCatenella) { if (x === o) continue; for (let i = 1; i < x.t.length; i++) m = Math.min(m, distDaSegmento(o.t.at(-1), x.t[i - 1], x.t[i])); } return m > 0.05; });
   check('il capo lontano di ogni linea nuova cade sul centro della linea dove arriva', capiLontani.length, 0);
   const i1 = fitta.oggetti.findIndex((o) => o.nuovo && !o.pezzo), cat = fitta.oggetti[i1], pas = fitta.oggetti[i1 - 1];

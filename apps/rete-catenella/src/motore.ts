@@ -63,6 +63,8 @@ export interface ParametriRete {
   infittisci: boolean;
   magliaMassimaMm2: number;
   infittisciVariante: number;
+  /** Quanto la linea nuova passa oltre la linea dove si aggancia, come le linee del modulo. */
+  oltreAggancioMm: number;
   corsie: boolean;
   primaCorsiaMm: number;
   passoCorsiaMm: number;
@@ -75,7 +77,7 @@ export const PARAMETRI_RETE: ParametriRete = {
   passate: 3, puntoBaseMm: 2.5, puntoPassaggioMm: 2.5,
   psilLunghezzaMm: 2.5, psilLarghezzaMm: 1.3, psilPassoMm: 1.7, psilInizioMm: 0.6, psilGiri: 2,
   margineMm: 0, spostaXMm: 0, spostaYMm: 0, moduloMinimoPct: 22, passaggiInterni: false, allineaLato: true, pezziSulBordo: true, pezzoMinimoMm: 30, collegaModuli: false, uscitaFuoriMm: 20, psilVero: true, catenellaDiProva: false,
-  infittisci: false, magliaMassimaMm2: 20, infittisciVariante: 1,
+  infittisci: false, magliaMassimaMm2: 20, infittisciVariante: 1, oltreAggancioMm: 0.4,
   corsie: true, primaCorsiaMm: 1, passoCorsiaMm: 1,
   realWidthMm: 0,
 };
@@ -578,12 +580,12 @@ function strada(prima: OggettoRete[], dopo: OggettoRete[], da: Xy, a: Xy, dentro
 
 const infittiti = new WeakMap<ModuloRete, Map<string, EsitoInfittimento>>();
 /** Il calcolo delle maglie costa: per ogni modulo e valori si fa una volta sola. */
-function moduloInfittito(modulo: ModuloRete, soglia: number, variante: number): EsitoInfittimento {
+function moduloInfittito(modulo: ModuloRete, soglia: number, variante: number, oltreMm: number): EsitoInfittimento {
   let m = infittiti.get(modulo);
   if (!m) { m = new Map(); infittiti.set(modulo, m); }
-  const k = `${soglia}|${variante}`;
+  const k = `${soglia}|${variante}|${oltreMm}`;
   let e = m.get(k);
-  if (!e) { e = infittisciModulo(modulo, soglia, variante); m.set(k, e); }
+  if (!e) { e = infittisciModulo(modulo, soglia, variante, oltreMm); m.set(k, e); }
   return e;
 }
 
@@ -775,7 +777,7 @@ export function costruisciRete(modulo: ModuloRete, anello: Xy[], p: ParametriRet
   const bordo = preparaBordo(anello);
   const aree = (zone ?? []).filter((z) => z.anello.length >= 3).map((z) => ({ dentro: maschera(z.anello, 0), soglia: z.magliaMassimaMm2 }));
   // si divide fino alla soglia più bassa: una linea vale in un'area se la maglia che divide era più grande della soglia di quell'area, e le maglie più piccole nascono solo da linee già valide
-  const piu = p.infittisci ? moduloInfittito(modulo, aree.length ? Math.min(...aree.map((a) => a.soglia)) : p.magliaMassimaMm2, p.infittisciVariante) : null;
+  const piu = p.infittisci ? moduloInfittito(modulo, aree.length ? Math.min(...aree.map((a) => a.soglia)) : p.magliaMassimaMm2, p.infittisciVariante, p.oltreAggancioMm ?? PARAMETRI_RETE.oltreAggancioMm) : null;
   const lavoro = piu ? piu.modulo : modulo;
   const catenellaIntera = (v: { oggetti: OggettoModulo[] }): number => v.oggetti.reduce((s, o) => s + (o.tipo === 'catenella' && !o.nuovo ? lunghezza(o.t) : 0), 0);
   const intere = { A: catenellaIntera(modulo.varianti.A), B: catenellaIntera(modulo.varianti.B) };
