@@ -10,11 +10,25 @@ import {
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { collegaStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
+import { collegaStilista, stratiCuciti, type AggancioStilista } from '@rg/ui/stilista';
 import { runPipeline, type RoleAssignment } from './pipeline';
 import { defaultInterlaceParams, DENSITY_MIN_MM, DENSITY_MAX_MM, type InterlaceParams } from './engine';
 import { sampleContours } from './sample';
 import { campionatoreImmagine } from './motore';
+import {
+  barraAnteprima, barraStato, sezioneSorgente, campoNumero, campoNumeroInline,
+  attivaCampiNumero, leggiCampo, impostaNumero, scriviNumero,
+} from '@rg/ui/anatomia';
+
+/** `campoNumeroInline` non ha id (sta nelle righe di lista): i campi compatti che il tool cerca per id lo ricevono qui. */
+const conId = (html: string, id: string): string => html.replace('<input ', `<input id="${id}" `);
+
+/** Un pezzo di HTML (un solo elemento) come elemento, per le righe costruite col DOM. */
+function elementoDa(html: string): HTMLElement {
+  const t = document.createElement('template');
+  t.innerHTML = html.trim();
+  return t.content.firstElementChild as HTMLElement;
+}
 
 /** Un campo numerico del gruppo "Riempimento". L'unità va nello slot del DS, mai nell'etichetta. */
 interface Field { key: keyof InterlaceParams; label: string; unit: string; step: number; help?: string; }
@@ -42,34 +56,19 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   ${topbar('Interlace', opts.backHref)}
   <div class="rg-workspace interlace-workspace">
     <aside class="rg-workspace__panel">
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">01</span><h3 class="rg-param-section__title">Cartamodello</h3></div>
-        <div class="rg-param-grid">
-          <div class="rg-file-input rg-param-grid__wide">
-            <label class="rg-file-input__control">
-              <input type="file" id="fileInput" accept=".svg,.dxf" />
-              <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
-            </label>
-            <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file: uso il cartamodello demo.</p>
-            <small class="rg-field__help">La sagoma da riempire. Per riaprire un lavoro già fatto c’è “Carica parametri” in fondo al pannello.</small>
-          </div>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Larghezza reale (0 = auto)</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="realWidth" type="number" min="0" step="1" value="0"><span>mm</span></span>
-            <small class="rg-field__help">0 = usa la misura letta dal file.</small>
-          </label>
-          <div class="rg-cluster rg-param-grid__wide"><button id="sampleBtn" class="rg-button rg-button--ghost" type="button">Cartamodello demo</button></div>
-          <div class="rg-field rg-param-grid__wide">
+      ${sezioneSorgente({
+        tipo: 'cartamodello', accetta: '.svg,.dxf', statoIniziale: 'Nessun file: uso il cartamodello demo.',
+        demo: 'Cartamodello demo', stilista: true,
+        extra: `<div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Oggetto pieno (senza fori)</span>
             <div class="rg-cluster">
-              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="objW" type="number" min="1" step="1" value="100"><span>mm</span></span>
-              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="objH" type="number" min="1" step="1" value="100"><span>mm</span></span>
+              ${conId(campoNumeroInline({ aria: 'Larghezza dell’oggetto pieno', unita: 'mm', valore: 100, passo: 1, min: 1 }), 'objW')}
+              ${conId(campoNumeroInline({ aria: 'Altezza dell’oggetto pieno', unita: 'mm', valore: 100, passo: 1, min: 1 }), 'objH')}
             </div>
-            <div class="rg-cluster"><button type="button" id="objBtn" class="rg-button rg-button--outline rg-button--small">Genera oggetto</button>${BOTTONE_PRENDI_STILISTA()}</div>
+            <div class="rg-cluster"><button type="button" id="objBtn" class="rg-button rg-button--outline rg-button--small">Genera oggetto</button></div>
             <small class="rg-field__help">larghezza × altezza: crea un rettangolo pieno da riempire, senza importare un file</small>
-          </div>
-        </div>
-      </section>
+          </div>`,
+      })}
 
       <section class="rg-param-section">
         <div class="rg-param-section__header"><span class="rg-param-section__index">02</span><h3 class="rg-param-section__title">Colori e ruoli</h3></div>
@@ -83,11 +82,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
           <button type="button" id="addColorBtn" class="rg-button rg-button--ghost rg-button--small">Aggiungi colore</button>
         </div>
         <div class="rg-param-grid">
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Ripetizioni della sequenza</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="paletteCycles" type="number" min="1" step="1" value="1"><span>cicli</span></span>
-            <small class="rg-field__help">quante volte l’intera sequenza di colori si ripete lungo il tracciato (genera i cambi-ago)</small>
-          </label>
+          ${campoNumero({ id: 'paletteCycles', etichetta: 'Ripetizioni della sequenza', unita: 'cicli', valore: 1, passo: 1, min: 1, aiuto: 'quante volte l’intera sequenza di colori si ripete lungo il tracciato (genera i cambi-ago)' })}
         </div>
       </details>
 
@@ -120,7 +115,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
               </div>
             </div>
             <div class="rg-cluster" id="autoColorControls">
-              <span class="rg-field-with-unit" style="--rg-input-numeric-width:6ch"><input class="rg-input rg-input--numeric" id="colorCount" type="number" min="1" max="12" step="1" value="4"><span>col</span></span>
+              ${conId(campoNumeroInline({ aria: 'Numero colori', unita: 'col', valore: 4, passo: 1, min: 1, max: 12, larghezza: '6ch' }), 'colorCount')}
               <button type="button" id="captureColorsBtn" class="rg-button rg-button--outline rg-button--small" disabled>Cattura colori</button>
             </div>
             <div id="imagePicker" hidden>
@@ -144,44 +139,29 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
               </label>
               <span class="rg-color-map__code" id="bgCode">#FFFFFF</span>
               <button type="button" id="bgPickBtn" class="rg-icon-button" aria-label="Prendi il colore dello sfondo dall’immagine"></button>
-              <span class="interlace-tol"><span class="interlace-tol__pre">±</span><input class="rg-input rg-input--numeric interlace-tol__input" id="bgTolerance" type="number" min="0" step="5" aria-label="Tolleranza dello sfondo (distanza RGB)" /></span>
+              <span class="interlace-tol"><span class="interlace-tol__pre">±</span>${conId(campoNumeroInline({ aria: 'Tolleranza dello sfondo (distanza RGB)', unita: '', valore: '', passo: 5, min: 0 }), 'bgTolerance')}</span>
             </div>
             <label class="rg-choice">
               <input type="checkbox" id="toneBlend" />
               <span>Sfumatura dai toni</span>
             </label>
-            <label class="rg-field" id="toneSoftnessField" hidden>
-              <span class="rg-field__label">Morbidezza della sfumatura</span>
-              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="toneSoftness" type="number" min="0" step="1" value="4"><span>mm</span></span>
-            </label>
+            ${campoNumero({ id: 'toneSoftness', etichetta: 'Morbidezza della sfumatura', unita: 'mm', valore: 4, passo: 1, min: 0, largo: false })}
             <small class="rg-field__help" id="toneHelp">spunta per non dare più ogni punto a un colore solo: i fili si dividono il ricamo in proporzione al tono dell’immagine e il filo totale resta pari ovunque. I divieti della tabella valgono ancora: il filo vietato sfuma avvicinandosi alla zona vietata. La morbidezza è quanto si sfoca l’immagine: poco = segue ogni variazione, tanto = passaggi larghi. Serve un’immagine.</small>
             <small class="rg-field__help" id="bgHelp" hidden>i punti dell’immagine vicini a questo colore restano <strong>tessuto a vista</strong>: nessun filo ci cuce e nessuno ci passa sopra. Il bordo del disegno resta netto (lì il sormonto non si applica: il vuoto è voluto). La tolleranza è quanto largo è il raggio attorno al colore.</small>
           </div>
-          <label class="rg-field rg-param-grid__wide" id="clusterStrengthField" hidden>
-            <span class="rg-field__label">Intensità agglomerati</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="clusterStrength" type="number" min="0" max="100" step="5" value="60"><span>%</span></span>
-            <small class="rg-field__help">quanto i colori si separano in zone: basso = appena accennate, alto = molto marcate. Con la sfumatura dai toni: quanto filo in tutto (la proporzione la decide l’immagine).</small>
-          </label>
+          ${campoNumero({ id: 'clusterStrength', etichetta: 'Intensità agglomerati', unita: '%', valore: 60, passo: 5, min: 0, max: 100, aiuto: 'quanto i colori si separano in zone: basso = appena accennate, alto = molto marcate. Con la sfumatura dai toni: quanto filo in tutto (la proporzione la decide l’immagine).' })}
           <div class="rg-field rg-param-grid__wide" id="zoneBanField" hidden>
             <span class="rg-field__label">Dove passa ogni filo</span>
             <div class="rg-table-wrap" id="zoneBanTable"></div>
             <div class="rg-cluster"><button type="button" id="zoneBanResetBtn" class="rg-button rg-button--ghost rg-button--small">Consenti tutto</button></div>
             <small class="rg-field__help">righe = fili, colonne = zone. Spegni una casella perché quel filo NON entri in quella zona: lì non cuce e non ci passa nemmeno di transito, quindi può costare qualche stacco in più (i tratti sono contati in basso). Spegnendo un’intera colonna quella zona resta nuda, tessuto a vista.</small>
           </div>
-          <label class="rg-field rg-param-grid__wide" id="zoneOverlapField" hidden>
-            <span class="rg-field__label">Sormonto ai bordi delle zone</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="zoneOverlap" type="number" min="0" step="0.1" placeholder="auto"><span>mm</span></span>
-            <small class="rg-field__help">due colori che si fermano testa a testa lasciano una fessura: a ridosso del confine nessuno dei due riesce più a cucire. Qui ogni filo sconfina di tanto oltre il bordo vietato, posandoci una passata, e i due lati si accavallano. Vuoto = automatico (una fila di celle, cioè 0,6 × la densità: il difetto cresce con la densità, quindi un numero fisso non andrebbe bene a tutte). 0 = confine netto, come prima.</small>
-          </label>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Tetto ai punti (buchi d’ago per mm²)</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="maxStitches" type="number" min="0" step="1" placeholder="auto"><span>pt/mm²</span></span>
-            <small class="rg-field__help" id="maxStitchesHelp">quanti punti al massimo può prendere lo stesso millimetro quadro, contando tutti i colori insieme: è lì che il filo si spezza e l’ago soffre. Vuoto = automatico. 0 = nessun tetto.</small>
-          </label>
+          ${campoNumero({ id: 'zoneOverlap', etichetta: 'Sormonto ai bordi delle zone', unita: 'mm', valore: '', passo: 0.1, min: 0, attributi: 'placeholder="auto"', aiuto: 'due colori che si fermano testa a testa lasciano una fessura: a ridosso del confine nessuno dei due riesce più a cucire. Qui ogni filo sconfina di tanto oltre il bordo vietato, posandoci una passata, e i due lati si accavallano. Vuoto = automatico (una fila di celle, cioè 0,6 × la densità: il difetto cresce con la densità, quindi un numero fisso non andrebbe bene a tutte). 0 = confine netto, come prima.' })}
+          ${campoNumero({ id: 'maxStitches', etichetta: 'Tetto ai punti (buchi d’ago per mm²)', unita: 'pt/mm²', valore: '', passo: 1, min: 0, attributi: 'placeholder="auto"', aiuto: 'quanti punti al massimo può prendere lo stesso millimetro quadro, contando tutti i colori insieme: è lì che il filo si spezza e l’ago soffre. Vuoto = automatico. 0 = nessun tetto.' })}
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Variante</span>
             <div class="rg-cluster">
-              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="seed" type="number" min="1" step="1" value="1"><span>#</span></span>
+              ${conId(campoNumeroInline({ aria: 'Variante', unita: '#', valore: 1, passo: 1, min: 1 }), 'seed')}
               <button type="button" id="newSeedBtn" class="rg-button rg-button--outline rg-button--small">Nuova variante</button>
             </div>
             <small class="rg-field__help">stessa variante = stesso identico pattern; cambiala per una disposizione diversa (riproducibile, non casuale)</small>
@@ -205,25 +185,13 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
               <span class="rg-color-map__code" id="veinsCode">#C4845C</span>
             </div>
           </div>
-          <label class="rg-field" id="veinsBundlesField" hidden>
-            <span class="rg-field__label">Fasci di venature spesse</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="veinsBundles" type="number" min="0" step="1" value="5"><span>#</span></span>
-            <small class="rg-field__help">per riquadro di 120×80 mm (la misura della A): un pezzo più grande si divide in riquadri, ognuno con i suoi fasci, girati un po'.</small>
-          </label>
-          <label class="rg-field" id="veinsThinField" hidden>
-            <span class="rg-field__label">Venature fini</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="veinsThin" type="number" min="0" step="1" value="52"><span>#</span></span>
-            <small class="rg-field__help">per riquadro, come i fasci.</small>
-          </label>
-          <label class="rg-field" id="veinsAngleField" hidden>
-            <span class="rg-field__label">Direzione delle venature</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="veinsAngle" type="number" step="5" value="82"><span>°</span></span>
-            <small class="rg-field__help">90 = scendono dritte, 0 = in orizzontale.</small>
-          </label>
+          ${campoNumero({ id: 'veinsBundles', etichetta: 'Fasci di venature spesse', unita: '#', valore: 5, passo: 1, min: 0, largo: false, aiuto: 'per riquadro di 120×80 mm (la misura della A): un pezzo più grande si divide in riquadri, ognuno con i suoi fasci, girati un po\'.' })}
+          ${campoNumero({ id: 'veinsThin', etichetta: 'Venature fini', unita: '#', valore: 52, passo: 1, min: 0, largo: false, aiuto: 'per riquadro, come i fasci.' })}
+          ${campoNumero({ id: 'veinsAngle', etichetta: 'Direzione delle venature', unita: '°', valore: 82, passo: 5, largo: false, aiuto: '90 = scendono dritte, 0 = in orizzontale.' })}
           <div class="rg-field" id="veinsSeedField" hidden>
             <span class="rg-field__label">Variante delle venature</span>
             <div class="rg-cluster">
-              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="veinsSeed" type="number" min="1" step="1" value="8"><span>#</span></span>
+              ${conId(campoNumeroInline({ aria: 'Variante delle venature', unita: '#', valore: 8, passo: 1, min: 1 }), 'veinsSeed')}
               <button type="button" id="veinsNewSeedBtn" class="rg-button rg-button--outline rg-button--small">Nuova</button>
             </div>
           </div>
@@ -236,11 +204,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
             </label>
             <small class="rg-field__help">spento, ogni filo ha la sua densità e aggiungere un colore infittisce. Acceso, la densità (anche quella di ogni colore) vale per tutti i fili insieme: con 3 colori ognuno cuce a 3 volte la distanza.</small>
           </div>
-          <label class="rg-field">
-            <span class="rg-field__label">Vortici del fondo</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="flowStrength" type="number" min="0" max="100" step="10" value="100"><span>%</span></span>
-            <small class="rg-field__help">quanto il filo gira in nuvole e vortici. 100 = come sempre; 0 = nessun vortice, il fondo resta uniforme.</small>
-          </label>
+          ${campoNumero({ id: 'flowStrength', etichetta: 'Vortici del fondo', unita: '%', valore: 100, passo: 10, min: 0, max: 100, largo: false, aiuto: 'quanto il filo gira in nuvole e vortici. 100 = come sempre; 0 = nessun vortice, il fondo resta uniforme.' })}
         </div>
         <div class="rg-param-grid">
           <div class="rg-field rg-param-grid__wide">
@@ -250,16 +214,8 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
             </label>
             <small class="rg-field__help">spento, la densità è uguale ovunque. Acceso, il filo si addensa attorno a ogni area vuota del cartamodello e torna alla densità normale allontanandosi, e ogni colore contorna ogni foro con un anello a ridosso del bordo. Il bordo esterno non conta.</small>
           </div>
-          <label class="rg-field" id="voidDensityFactorField" hidden>
-            <span class="rg-field__label">Quanto più fitto vicino al vuoto</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="voidDensityFactor" type="number" min="1" max="5" step="0.1" value="2"><span>×</span></span>
-            <small class="rg-field__help">volte la densità normale, proprio a ridosso del vuoto (2 = il doppio del filo; massimo 5).</small>
-          </label>
-          <label class="rg-field" id="voidDensityFadeField" hidden>
-            <span class="rg-field__label">In quanti mm torna normale</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="voidDensityFade" type="number" min="0" step="1" value="8"><span>mm</span></span>
-            <small class="rg-field__help">la sfumatura da molto fitto a normale: oltre questa distanza dal vuoto la densità è quella di sempre.</small>
-          </label>
+          ${campoNumero({ id: 'voidDensityFactor', etichetta: 'Quanto più fitto vicino al vuoto', unita: '×', valore: 2, passo: 0.1, min: 1, max: 5, largo: false, aiuto: 'volte la densità normale, proprio a ridosso del vuoto (2 = il doppio del filo; massimo 5).' })}
+          ${campoNumero({ id: 'voidDensityFade', etichetta: 'In quanti mm torna normale', unita: 'mm', valore: 8, passo: 1, min: 0, largo: false, aiuto: 'la sfumatura da molto fitto a normale: oltre questa distanza dal vuoto la densità è quella di sempre.' })}
           <div class="rg-field rg-param-grid__wide" id="voidsFirstField" hidden>
             <label class="rg-choice">
               <input type="checkbox" id="voidsFirst" />
@@ -269,40 +225,48 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
           </div>
         </div>
       </details>
-
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><h3 class="rg-param-section__title">Carica parametri</h3></div>
-        <div class="rg-file-input">
-          <label class="rg-file-input__control">
-            <input type="file" id="loadParams" accept=".dst,.svg" />
-            <span class="rg-button rg-button--outline rg-button--small">Carica da .dst o .svg…</span>
-          </label>
-          <p class="rg-file-input__status" id="loadParamsStatus" role="status">Riapre un lavoro esportato da qui: parametri, colori, tavola e immagine di riferimento. Il cartamodello importato no — quello si ricarica in alto.</p>
-        </div>
-      </section>
     </aside>
 
     <div class="rg-workspace__stage">
-      <header class="rg-workspace__stage-header">
-        <h2 class="rg-h3">Anteprima</h2>
-        <div class="rg-cluster">
-          <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
-          ${BOTTONE_INVIA_STILISTA()}
-          <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
-          <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Esporta SVG</button>
-        </div>
-      </header>
+      ${barraAnteprima({ inviaStilista: true })}
       <div class="rg-workspace__canvas" id="canvas">
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
       </div>
-      <footer class="rg-workspace__statusbar">
-        <span id="status">Pronto</span>
-        <span id="zoom" class="rg-mono">zoom 100%</span>
-      </footer>
+      ${barraStato()}
     </div>
   </div>`;
 
   const $ = (id: string) => root.querySelector<HTMLElement>('#' + id)!;
+
+  // I campi che si vedono solo con la loro opzione: il contenitore del campo (fatto da `campoNumero`) prende
+  // l'id di sempre (`…Field`), con cui lo accendono i `sync…`, e parte nascosto.
+  for (const id of ['toneSoftness', 'clusterStrength', 'zoneOverlap', 'veinsBundles', 'veinsThin', 'veinsAngle', 'voidDensityFactor', 'voidDensityFade']) {
+    const f = $(id).closest('.rg-field') as HTMLElement;
+    f.id = `${id}Field`;
+    f.hidden = true;
+  }
+
+  // I campi dove VUOTO vuol dire «automatico» (o «eredita», «nessun limite»): `attivaCampiNumero`, uscendo da un
+  // campo vuoto, lo rimetterebbe all'ultimo numero e il tool non vedrebbe il cambio. Qui il vuoto passa prima:
+  // questo ascoltatore è registrato PRIMA (stessa fase di cattura, stesso nodo), quindi gira prima, e chiama
+  // l'handler del campo, che legge NaN (`leggiCampo('')`) e lo tratta come vuoto, come prima.
+  const suVuoto = new WeakMap<HTMLInputElement, () => void>();
+  root.addEventListener('change', (e) => {
+    const el = e.target;
+    if (!(el instanceof HTMLInputElement) || el.value.trim() !== '') return;
+    const fai = suVuoto.get(el);
+    if (!fai) return;
+    e.stopImmediatePropagation();
+    el.value = '';
+    el.dataset.ultimo = '';
+    fai();
+  }, true);
+  attivaCampiNumero(root);
+  /** Collega un campo dove il vuoto ha un senso: l'handler gira anche quando lo si svuota. */
+  function campoVuotoAuto(el: HTMLInputElement, fai: () => void) {
+    suVuoto.set(el, fai);
+    el.addEventListener('change', fai);
+  }
 
   let imported: ImportResult = importResultFromContours(sampleContours());
   let roles: RoleAssignment = {};
@@ -389,22 +353,13 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
 
   function buildParamUI() {
     const host = $('params');
-    host.innerHTML = '';
+    host.innerHTML = PARAMS.map((f) => campoNumero({
+      id: f.key, etichetta: f.label, unita: f.unit, valore: params[f.key] as number, passo: f.step, aiuto: f.help,
+    })).join('');
     for (const f of PARAMS) {
-      const lab = document.createElement('label');
-      lab.className = 'rg-field' + (f.help ? ' rg-param-grid__wide' : '');
-      const name = document.createElement('span');
-      name.className = 'rg-field__label';
-      name.textContent = f.label;
-      const wrap = document.createElement('span');
-      wrap.className = 'rg-field-with-unit';
-      const inp = document.createElement('input');
-      inp.type = 'number';
-      inp.className = 'rg-input rg-input--numeric';
-      inp.step = String(f.step);
-      inp.value = String(params[f.key]);
+      const inp = $(f.key) as HTMLInputElement;
       inp.addEventListener('change', () => {
-        const v = parseFloat(inp.value);
+        const v = leggiCampo(inp);
         if (!Number.isNaN(v)) {
           (params[f.key] as number) = v;
           // la densità globale è il placeholder "eredita" di ogni riga colore → riallinealo
@@ -412,17 +367,6 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
           render();
         }
       });
-      const unit = document.createElement('span');
-      unit.textContent = f.unit;
-      wrap.append(inp, unit);
-      lab.append(name, wrap);
-      if (f.help) {
-        const help = document.createElement('small');
-        help.className = 'rg-field__help';
-        help.textContent = f.help;
-        lab.appendChild(help);
-      }
-      host.appendChild(lab);
     }
   }
 
@@ -517,33 +461,24 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
         render();
       });
 
-      // Densità PER-COLORE (spaziatura file, mm): vuoto = usa la densità globale. Campo compatto con le
-      // sole classi DS v1.6.0 (`rg-field-with-unit` + `rg-input--numeric`), stretto via il token DS
-      // `--rg-input-numeric-width` (nessuna classe inventata). Vedi proposta DS `ds/color-map-aside` (§7).
+      // Densità PER-COLORE (spaziatura file, mm): vuoto = usa la densità globale. Il campo compatto della suite
+      // (`campoNumeroInline`), stretto via il token DS `--rg-input-numeric-width`. Vedi proposta DS `ds/color-map-aside` (§7).
       const dpre = document.createElement('span');
       dpre.className = 'interlace-tol__pre';
       dpre.textContent = 'densità';
-      const dwrap = document.createElement('span');
-      dwrap.className = 'rg-field-with-unit';
-      dwrap.style.setProperty('--rg-input-numeric-width', '4ch');
-      const dens = document.createElement('input');
-      dens.type = 'number';
-      dens.className = 'rg-input rg-input--numeric';
-      dens.min = String(DENSITY_MIN_MM); dens.max = String(DENSITY_MAX_MM); dens.step = '0.1';
-      dens.inputMode = 'decimal';
-      dens.placeholder = String(params.densitySpacingMm);
       const dv = params.colorDensities[i];
-      dens.value = dv && dv > 0 ? String(dv) : '';
-      dens.setAttribute('aria-label', `Densità per ${col.toUpperCase()} in mm (vuoto: usa la densità globale ${params.densitySpacingMm} mm)`);
-      dens.addEventListener('change', () => {
-        const v = parseFloat(dens.value);
-        if (dens.value.trim() === '' || Number.isNaN(v)) { params.colorDensities[i] = 0; dens.value = ''; }
-        else { const c = Math.max(DENSITY_MIN_MM, Math.min(DENSITY_MAX_MM, v)); params.colorDensities[i] = c; dens.value = String(c); }
+      const dwrap = elementoDa(campoNumeroInline({
+        aria: `Densità per ${col.toUpperCase()} in mm (vuoto: usa la densità globale ${params.densitySpacingMm} mm)`,
+        unita: 'mm', valore: dv && dv > 0 ? dv : '', passo: 0.1, min: DENSITY_MIN_MM, max: DENSITY_MAX_MM, larghezza: '4ch',
+      }));
+      const dens = dwrap.querySelector('input')!;
+      dens.placeholder = scriviNumero(params.densitySpacingMm);
+      campoVuotoAuto(dens, () => {
+        const v = leggiCampo(dens);
+        if (Number.isNaN(v)) { params.colorDensities[i] = 0; impostaNumero(dens, NaN); }
+        else { const c = Math.max(DENSITY_MIN_MM, Math.min(DENSITY_MAX_MM, v)); params.colorDensities[i] = c; impostaNumero(dens, c); }
         render();
       });
-      const dunit = document.createElement('span');
-      dunit.textContent = 'mm';
-      dwrap.append(dens, dunit);
 
       // RAGGIO DI CATTURA (distanza RGB), come la tolleranza del contagocce di bitmap: vuoto = nessun
       // limite (vince il più vicino). Con due colori simili per una sfumatura, stringerlo su entrambi
@@ -554,21 +489,22 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       const tolPre = document.createElement('span');
       tolPre.className = 'interlace-tol__pre';
       tolPre.textContent = 'cattura ±';
-      const tol = document.createElement('input');
-      tol.type = 'number'; tol.min = '0'; tol.step = '5';
-      tol.className = 'rg-input rg-input--numeric interlace-tol__input';
-      tol.placeholder = '∞';
       const tv = params.colorTolerances[i];
-      tol.value = tv && tv > 0 ? String(tv) : '';
-      tol.setAttribute('aria-label', `Raggio di cattura di ${col.toUpperCase()} (distanza RGB; vuoto = nessun limite)`);
-      tol.title = 'Raggio di cattura: quanto lontano da questo colore l’immagine è ancora “sua”. Vuoto = nessun limite.';
-      tol.addEventListener('change', () => {
-        const v = parseFloat(tol.value);
-        if (tol.value.trim() === '' || Number.isNaN(v) || v <= 0) { params.colorTolerances[i] = 0; tol.value = ''; }
-        else { params.colorTolerances[i] = Math.max(0, v); tol.value = String(params.colorTolerances[i]); }
+      const tolWrap = elementoDa(campoNumeroInline({
+        aria: `Raggio di cattura di ${col.toUpperCase()} (distanza RGB; vuoto = nessun limite)`,
+        titolo: 'Raggio di cattura: quanto lontano da questo colore l’immagine è ancora “sua”. Vuoto = nessun limite.',
+        unita: '', valore: tv && tv > 0 ? tv : '', passo: 5, min: 0,
+      }));
+      const tol = tolWrap.querySelector('input')!;
+      tol.classList.add('interlace-tol__input');
+      tol.placeholder = '∞';
+      campoVuotoAuto(tol, () => {
+        const v = leggiCampo(tol);
+        if (Number.isNaN(v) || v <= 0) { params.colorTolerances[i] = 0; impostaNumero(tol, NaN); }
+        else { params.colorTolerances[i] = Math.max(0, v); impostaNumero(tol, params.colorTolerances[i]); }
         render();
       });
-      tolGroup.append(tolPre, tol);
+      tolGroup.append(tolPre, tolWrap);
 
       // Contagocce: prende il colore dall'immagine di riferimento con la lente sul pixel (come bitmap).
       const pick = document.createElement('button');
@@ -782,7 +718,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
         : cap < budget.needed ? ` · attenzione: tetto ${cap} sotto il minimo ${budget.needed} — restano zone scoperte`
         : cap < budget.auto ? ` · tetto ${cap} sotto l’automatico ${budget.auto} — qualche zona può restare scoperta`
         : '';
-      $('maxStitchesHelp').textContent =
+      $('maxStitches-aiuto').textContent =
         `quanti punti al massimo può prendere lo stesso millimetro quadro, contando tutti i colori insieme: è lì che il filo si spezza e l’ago soffre. `
         + `Con queste impostazioni servono almeno ${budget.needed} pt/mm² perché la copertura esista, e l’automatico è ${budget.auto}. `
         + `Sotto il minimo restano zone scoperte. Vuoto = automatico. 0 = nessun tetto.`;
@@ -870,10 +806,10 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     }
     if (meta.roles && typeof meta.roles === 'object') roles = { ...(meta.roles as RoleAssignment) };
     // riallinea i controlli statici e ricostruisci i gruppi guidati dai parametri
-    ($('realWidth') as HTMLInputElement).value = String(params.realWidthMm);
-    ($('paletteCycles') as HTMLInputElement).value = String(params.paletteCycles);
-    ($('seed') as HTMLInputElement).value = String(params.seed);
-    ($('clusterStrength') as HTMLInputElement).value = String(params.clusterStrength);
+    impostaNumero($('realWidth') as HTMLInputElement, params.realWidthMm);
+    impostaNumero($('paletteCycles') as HTMLInputElement, params.paletteCycles);
+    impostaNumero($('seed') as HTMLInputElement, params.seed);
+    impostaNumero($('clusterStrength') as HTMLInputElement, params.clusterStrength);
     syncOverlap();
     syncCap();
     syncBackground();
@@ -895,7 +831,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     return true;
   }
 
-  // --- 01: il CARTAMODELLO. Solo la sagoma; per riaprire un lavoro c'è "Carica parametri" in fondo. ---
+  // --- 01: il CARTAMODELLO. Solo la sagoma; per riaprire un lavoro c'è «Apri progetto o DST…» qui sotto. ---
   $('fileInput').addEventListener('change', (ev) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
@@ -951,14 +887,15 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     if (isDst) reader.readAsArrayBuffer(file); else reader.readAsText(file);
   }
 
-  $('loadParams').addEventListener('change', (ev) => {
+  // «Apri progetto o DST…» della sezione 01: riapre un lavoro esportato da qui (prima era «Carica parametri» in fondo).
+  $('progettoInput').addEventListener('change', (ev) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
-    restoreProjectFromFile(file, (msg) => { $('loadParamsStatus').textContent = msg; });
+    restoreProjectFromFile(file, (msg) => { $('progettoStatus').textContent = msg; });
   });
 
   $('realWidth').addEventListener('change', () => {
-    const v = parseFloat(($('realWidth') as HTMLInputElement).value);
+    const v = leggiCampo($('realWidth') as HTMLInputElement);
     params.realWidthMm = Number.isNaN(v) ? 0 : Math.max(0, v);
     render();
     updateFileStatus(sourceName || 'Cartamodello');
@@ -972,9 +909,9 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     buildPaletteUI();
     render();
   });
-  ($('paletteCycles') as HTMLInputElement).value = String(params.paletteCycles);
+  impostaNumero($('paletteCycles') as HTMLInputElement, params.paletteCycles);
   $('paletteCycles').addEventListener('change', () => {
-    const v = parseInt(($('paletteCycles') as HTMLInputElement).value, 10);
+    const v = Math.trunc(leggiCampo($('paletteCycles') as HTMLInputElement));
     params.paletteCycles = Number.isNaN(v) ? 1 : Math.max(1, v);
     render();
   });
@@ -994,7 +931,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     bgColor.value = hex;
     $('bgSwatch').style.setProperty('--swatch', hex);
     $('bgCode').textContent = hex.toUpperCase();
-    bgTol.value = String(params.backgroundToleranceRgb);
+    impostaNumero(bgTol, params.backgroundToleranceRgb);
     ($('bgPickBtn') as HTMLButtonElement).disabled = !refImage;
     ($('bgPickBtn') as HTMLButtonElement).title = refImage ? 'Prendi il colore dello sfondo dall’immagine' : 'Serve un’immagine di riferimento';
   }
@@ -1009,14 +946,14 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     ($('veinsSwatch') as HTMLElement).style.setProperty('--rg-swatch-color', params.veinsColor);
     ($('veinsSwatch') as HTMLElement).style.background = params.veinsColor;
     $('veinsCode').textContent = params.veinsColor.toUpperCase();
-    for (const [id, key] of veinsNum) ($(id) as HTMLInputElement).value = String(params[key]);
+    for (const [id, key] of veinsNum) impostaNumero($(id) as HTMLInputElement, params[key]);
   }
   syncVeins();
   veinsCheck.addEventListener('change', () => { params.veinsOn = veinsCheck.checked; syncVeins(); render(); });
   $('veinsColor').addEventListener('input', () => { params.veinsColor = ($('veinsColor') as HTMLInputElement).value; syncVeins(); render(); });
   for (const [id, key, def] of veinsNum) {
     $(id).addEventListener('change', () => {
-      const v = parseFloat(($(id) as HTMLInputElement).value);
+      const v = leggiCampo($(id) as HTMLInputElement);
       params[key] = Number.isNaN(v) ? def : key === 'veinsAngleDeg' ? v : Math.max(key === 'veinsSeed' ? 1 : 0, Math.round(v));
       syncVeins();
       if (params.veinsOn) render();
@@ -1027,12 +964,12 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   const flowInput = $('flowStrength') as HTMLInputElement;
   function syncTotalFlow() {
     totalCheck.checked = !!params.densityTotal;
-    flowInput.value = String(params.flowStrength ?? 100);
+    impostaNumero(flowInput, params.flowStrength ?? 100);
   }
   syncTotalFlow();
   totalCheck.addEventListener('change', () => { params.densityTotal = totalCheck.checked; render(); });
   flowInput.addEventListener('change', () => {
-    const v = parseFloat(flowInput.value);
+    const v = leggiCampo(flowInput);
     params.flowStrength = Number.isNaN(v) ? 100 : Math.max(0, Math.min(100, v));
     syncTotalFlow();
     render();
@@ -1043,8 +980,8 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   const voidsFirst = $('voidsFirst') as HTMLInputElement;
   function syncVoidDensity() {
     voidCheck.checked = params.voidDensityBoost;
-    voidFactor.value = String(params.voidDensityFactor);
-    voidFade.value = String(params.voidDensityFadeMm);
+    impostaNumero(voidFactor, params.voidDensityFactor);
+    impostaNumero(voidFade, params.voidDensityFadeMm);
     ($('voidDensityFactorField') as HTMLElement).hidden = !params.voidDensityBoost;
     ($('voidDensityFadeField') as HTMLElement).hidden = !params.voidDensityBoost;
     voidsFirst.checked = !!params.voidsFirst;
@@ -1054,13 +991,13 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   voidCheck.addEventListener('change', () => { params.voidDensityBoost = voidCheck.checked; syncVoidDensity(); render(); });
   voidsFirst.addEventListener('change', () => { params.voidsFirst = voidsFirst.checked; if (params.voidDensityBoost) render(); });
   voidFactor.addEventListener('change', () => {
-    const v = parseFloat(voidFactor.value);
+    const v = leggiCampo(voidFactor);
     params.voidDensityFactor = Number.isNaN(v) ? 2 : Math.max(1, Math.min(5, v));
     syncVoidDensity();
     if (params.voidDensityBoost) render();
   });
   voidFade.addEventListener('change', () => {
-    const v = parseFloat(voidFade.value);
+    const v = leggiCampo(voidFade);
     params.voidDensityFadeMm = Number.isNaN(v) ? 8 : Math.max(0, v);
     syncVoidDensity();
     if (params.voidDensityBoost) render();
@@ -1069,13 +1006,13 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   const toneSoft = $('toneSoftness') as HTMLInputElement;
   function syncTone() {
     toneCheck.checked = params.toneBlend;
-    toneSoft.value = String(params.toneSoftnessMm);
+    impostaNumero(toneSoft, params.toneSoftnessMm);
     ($('toneSoftnessField') as HTMLElement).hidden = !params.toneBlend;
   }
   syncTone();
   toneCheck.addEventListener('change', () => { params.toneBlend = toneCheck.checked; syncTone(); render(); });
   toneSoft.addEventListener('change', () => {
-    const v = parseFloat(toneSoft.value);
+    const v = leggiCampo(toneSoft);
     params.toneSoftnessMm = Number.isNaN(v) ? 4 : Math.max(0, v);
     syncTone();
     if (params.toneBlend) render();
@@ -1083,7 +1020,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   bgCheck.addEventListener('change', () => { params.excludeBackground = bgCheck.checked; syncBackground(); render(); });
   bgColor.addEventListener('input', () => { params.backgroundColor = bgColor.value; syncBackground(); render(); });
   bgTol.addEventListener('change', () => {
-    const v = parseFloat(bgTol.value);
+    const v = leggiCampo(bgTol);
     params.backgroundToleranceRgb = Number.isNaN(v) ? 30 : Math.max(0, v);
     syncBackground();
     if (params.excludeBackground) render();
@@ -1113,29 +1050,29 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   }));
   syncCluster();
 
-  ($('clusterStrength') as HTMLInputElement).value = String(params.clusterStrength);
+  impostaNumero($('clusterStrength') as HTMLInputElement, params.clusterStrength);
   $('clusterStrength').addEventListener('change', () => {
-    const v = parseFloat(($('clusterStrength') as HTMLInputElement).value);
+    const v = leggiCampo($('clusterStrength') as HTMLInputElement);
     params.clusterStrength = Number.isNaN(v) ? 60 : Math.max(0, Math.min(100, v));
     if (params.clusterMode) render();
   });
 
   const capInput = $('maxStitches') as HTMLInputElement;
-  const syncCap = () => { capInput.value = params.maxStitchesPerMm2 == null ? '' : String(params.maxStitchesPerMm2); };
+  const syncCap = () => { impostaNumero(capInput, params.maxStitchesPerMm2 ?? NaN); }; // NaN = vuoto = automatico
   syncCap();
-  capInput.addEventListener('change', () => {
-    const v = parseFloat(capInput.value);
-    params.maxStitchesPerMm2 = capInput.value.trim() === '' || Number.isNaN(v) ? null : Math.max(0, Math.round(v));
+  campoVuotoAuto(capInput, () => {
+    const v = leggiCampo(capInput);
+    params.maxStitchesPerMm2 = Number.isNaN(v) ? null : Math.max(0, Math.round(v));
     syncCap();
     render();
   });
 
   const overlapInput = $('zoneOverlap') as HTMLInputElement;
-  const syncOverlap = () => { overlapInput.value = params.zoneOverlapMm == null ? '' : String(params.zoneOverlapMm); };
+  const syncOverlap = () => { impostaNumero(overlapInput, params.zoneOverlapMm ?? NaN); }; // NaN = vuoto = automatico
   syncOverlap();
-  overlapInput.addEventListener('change', () => {
-    const v = parseFloat(overlapInput.value);
-    params.zoneOverlapMm = overlapInput.value.trim() === '' || Number.isNaN(v) ? null : Math.max(0, v);
+  campoVuotoAuto(overlapInput, () => {
+    const v = leggiCampo(overlapInput);
+    params.zoneOverlapMm = Number.isNaN(v) ? null : Math.max(0, v);
     syncOverlap();
     render();
   });
@@ -1147,15 +1084,15 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   });
 
   // Variante = seed: pattern DIVERSO ma RIPRODUCIBILE (stesso seed → stesso identico risultato).
-  ($('seed') as HTMLInputElement).value = String(params.seed);
+  impostaNumero($('seed') as HTMLInputElement, params.seed);
   $('seed').addEventListener('change', () => {
-    const v = parseInt(($('seed') as HTMLInputElement).value, 10);
+    const v = Math.trunc(leggiCampo($('seed') as HTMLInputElement));
     params.seed = Number.isNaN(v) ? 1 : Math.max(1, v);
     render();
   });
   $('newSeedBtn').addEventListener('click', () => {
     params.seed = (params.seed % 999999) + 1; // avanza a una variante nuova, deterministica
-    ($('seed') as HTMLInputElement).value = String(params.seed);
+    impostaNumero($('seed') as HTMLInputElement, params.seed);
     render();
   });
 
@@ -1185,7 +1122,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
       // l'immagine mappa 1:1 senza deformarsi. Solo su tavola generata: un cartamodello importato si rispetta.
       const aspect = img.height / img.width;
       if (!imported.frame && aspect > 0 && Number.isFinite(aspect)) {
-        const bw = Math.max(1, parseFloat(($('objW') as HTMLInputElement).value) || 100);
+        const bw = Math.max(1, leggiCampo($('objW') as HTMLInputElement) || 100);
         generateObject(bw, Math.max(1, Math.round(bw * aspect))); // fa già render()
       } else {
         render();
@@ -1196,7 +1133,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   });
   $('captureColorsBtn').addEventListener('click', () => {
     if (!refImage) return;
-    const n = Math.max(1, Math.min(12, parseInt(($('colorCount') as HTMLInputElement).value, 10) || 4));
+    const n = Math.max(1, Math.min(12, Math.trunc(leggiCampo($('colorCount') as HTMLInputElement)) || 4));
     const cols = extractPalette(refImage.data, n);
     if (!cols.length) { $('clusterImageStatus').textContent = 'Nessun colore catturato (immagine tutta sfondo?)'; return; }
     params.colors = cols;
@@ -1263,7 +1200,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
   });
   syncColorMode();
 
-  $('sampleBtn').addEventListener('click', () => { roles = {}; sourceName = ''; generated = null; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
+  $('demoBtn').addEventListener('click', () => { roles = {}; sourceName = ''; generated = null; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
 
   // Oggetto pieno: genera un rettangolo largo×alto (mm) senza fori, da riempire subito (nessun file).
   function generateObject(w: number, h: number, opts: { keepRoles?: boolean } = {}) {
@@ -1271,14 +1208,14 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     if (!opts.keepRoles) { roles = {}; params.realWidthMm = 0; }
     sourceName = `oggetto-${w}x${h}`;
     generated = { w, h };
-    ($('realWidth') as HTMLInputElement).value = String(params.realWidthMm);
-    ($('objW') as HTMLInputElement).value = String(w);
-    ($('objH') as HTMLInputElement).value = String(h);
+    impostaNumero($('realWidth') as HTMLInputElement, params.realWidthMm);
+    impostaNumero($('objW') as HTMLInputElement, w);
+    impostaNumero($('objH') as HTMLInputElement, h);
     loadImport(importResultFromContours(rect), `Oggetto pieno ${w}×${h} mm`);
   }
   $('objBtn').addEventListener('click', () => {
-    const w = Math.max(1, parseFloat(($('objW') as HTMLInputElement).value) || 100);
-    const h = Math.max(1, parseFloat(($('objH') as HTMLInputElement).value) || 100);
+    const w = Math.max(1, leggiCampo($('objW') as HTMLInputElement) || 100);
+    const h = Math.max(1, leggiCampo($('objH') as HTMLInputElement) || 100);
     generateObject(w, h);
   });
   $('fitBtn').addEventListener('click', () => pz.fit());
@@ -1331,7 +1268,7 @@ export function mountInterlace(root: HTMLElement, opts: { backHref?: string } = 
     carica(svg, nome) {
       // l'SVG dichiara le sue misure: una larghezza reale lo riscalerebbe e il ritorno non cadrebbe più al suo posto
       params.realWidthMm = 0;
-      ($('realWidth') as HTMLInputElement).value = '0';
+      impostaNumero($('realWidth') as HTMLInputElement, 0);
       roles = {};
       generated = null;
       sourceName = nome.replace(/\.[^.]+$/, '');

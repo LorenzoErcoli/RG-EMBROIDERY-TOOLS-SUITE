@@ -12,15 +12,14 @@
 //   barra-stato     'rg-workspace__statusbar'      → barraStato() / scheletro()
 // La migrazione (U2) porta un tool alla volta e svuota la sua riga.
 export const DEBITO_ANATOMIA: Record<string, string[]> = {
-  'cannage-rafia': ['intestazione', 'campo-numerico', 'barra-stato'],
   'cross-stitch': ['intestazione', 'campo-numerico', 'sezione-01', 'barra-stato'],
-  'interlace': ['intestazione', 'campo-numerico', 'sezione-01', 'barra-stato'],
-  'oblique': ['intestazione', 'campo-numerico', 'sezione-01', 'barra-stato'],
-  'pattern-grammar': ['intestazione', 'campo-numerico', 'barra-stato'],
-  'pattern-macchie': ['intestazione', 'campo-numerico', 'barra-stato'],
-  'punto-maglia': ['intestazione', 'campo-numerico', 'sezione-01', 'barra-stato'],
-  'razza': ['intestazione', 'campo-numerico', 'sezione-01', 'barra-stato'],
-  'rete-testa-speciale': ['intestazione', 'campo-numerico', 'barra-stato'],
-  'striatura': ['intestazione', 'campo-numerico', 'sezione-01', 'barra-stato'],
-  'zone-pattern': ['intestazione', 'campo-numerico', 'barra-stato'],
+};
+
+// Quanti campi numerici scritti a mano (le volte che 'rg-input--numeric' compare in tool.ts) ha ancora ogni tool
+// del debito. La lista sopra dice solo SE un tool ne scrive, non QUANTI: così un tool già nel debito poteva
+// aggiungerne di nuovi senza che nessun test se ne accorgesse, ed è successo (pulizia del 2026-11-24). Il
+// cricchetto in test/smoke.mjs vuole il numero esatto: se sale, il test fallisce (usa campoNumero di anatomia.ts);
+// se scende, abbassa il numero qui.
+export const DEBITO_CAMPI_A_MANO: Record<string, number> = {
+  'cross-stitch': 27,
 };

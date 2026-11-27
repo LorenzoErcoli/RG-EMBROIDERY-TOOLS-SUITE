@@ -18,7 +18,7 @@ export const DEBITO_ETICHETTE: Record<string, string[]> = {
   'pettine': ["Larghezza reale del pannello", "Da sinistra", "Dall'alto", "Larghezza", "Altezza", "Strumento"],
   'pittorico': ["Fili trovati, nell'ordine di cucitura"],
   'punto-maglia': ["Larghezza V", "Altezza V", "Passo", "Larghezza", "Opacità", "Tratto selezionato", "Raggio del cerchio", "Nome del preset", "Preset salvati"],
-  'razza': ["Larghezza reale (0 = auto)", "Diametro del prossimo pallino fisso", "Pallini fissi", "Linee di sfumatura", "Nome del preset", "Preset salvati"],
+  'razza': ["Diametro del prossimo pallino fisso", "Pallini fissi", "Linee di sfumatura", "Nome del preset", "Preset salvati"],
   'rete-testa-speciale': ["Scala del file"],
   'sfrangiatura': ["Strumento"],
   'striatura': ["Oggetto pieno (senza fori)"],

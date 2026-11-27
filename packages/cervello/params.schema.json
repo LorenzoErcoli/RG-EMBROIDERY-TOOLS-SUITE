@@ -1819,6 +1819,11 @@
           "default": 1,
           "x-id": "catenellaDensifyVariant"
         },
+        "oltreAggancioMm": {
+          "$ref": "#/$defs/catenellaDensifyOvershoot",
+          "default": 0.4,
+          "x-id": "catenellaDensifyOvershoot"
+        },
         "margineMm": {
           "$ref": "#/$defs/catenellaContourMargin",
           "default": 0,
@@ -5474,6 +5479,16 @@
       "maximum": 99,
       "x-concetto": "infittimento"
     },
+    "catenellaDensifyOvershoot": {
+      "type": "number",
+      "title": "Le linee nuove passano oltre l’aggancio di",
+      "description": "Come le linee del modulo: lo psil di Stilista fa la prima maglia 0,6 mm dopo l’inizio, e una linea che parte proprio sull’aggancio si stacca. Con 0,4 passano l’ultima passata della base di 0,25 mm in mediana, come le linee del modulo sul file di riferimento (0,27).",
+      "x-unita": "mm",
+      "minimum": 0,
+      "maximum": 2,
+      "x-passo": 0.1,
+      "x-concetto": "infittimento"
+    },
     "catenellaContourMargin": {
       "type": "number",
       "title": "Si tiene anche fuori dal contorno",
@@ -7385,7 +7400,8 @@
       "parametri": [
         "catenellaDensify",
         "catenellaMaxCell",
-        "catenellaDensifyVariant"
+        "catenellaDensifyVariant",
+        "catenellaDensifyOvershoot"
       ]
     },
     "corsie-bordo": {

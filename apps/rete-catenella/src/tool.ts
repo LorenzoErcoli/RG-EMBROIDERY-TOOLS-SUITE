@@ -20,7 +20,7 @@ import { aggiungiModulo, leggiElenco, leggiModulo, scriviElenco, togliModulo, ty
 
 type CampoNum = { [K in keyof ParametriRete]: ParametriRete[K] extends number ? K : never }[keyof ParametriRete];
 const LIMITI: Array<{ key: CampoNum; passo: number; min: number; max: number }> = [
-  { key: 'spostaXMm', passo: 1, min: -200, max: 200 }, { key: 'spostaYMm', passo: 1, min: -100, max: 100 }, { key: 'moduloMinimoPct', passo: 1, min: 0, max: 100 }, { key: 'pezzoMinimoMm', passo: 5, min: 0, max: 500 }, { key: 'uscitaFuoriMm', passo: 1, min: 2, max: 150 }, { key: 'magliaMassimaMm2', passo: 5, min: 12, max: 500 }, { key: 'infittisciVariante', passo: 1, min: 1, max: 99 },
+  { key: 'spostaXMm', passo: 1, min: -200, max: 200 }, { key: 'spostaYMm', passo: 1, min: -100, max: 100 }, { key: 'moduloMinimoPct', passo: 1, min: 0, max: 100 }, { key: 'pezzoMinimoMm', passo: 5, min: 0, max: 500 }, { key: 'uscitaFuoriMm', passo: 1, min: 2, max: 150 }, { key: 'magliaMassimaMm2', passo: 5, min: 12, max: 500 }, { key: 'infittisciVariante', passo: 1, min: 1, max: 99 }, { key: 'oltreAggancioMm', passo: 0.1, min: 0, max: 2 },
   { key: 'passate', passo: 1, min: 1, max: 3 }, { key: 'puntoBaseMm', passo: 0.1, min: 1, max: 6 }, { key: 'puntoPassaggioMm', passo: 0.1, min: 1, max: 6 },
   { key: 'psilLunghezzaMm', passo: 0.05, min: 1, max: 6 }, { key: 'psilLarghezzaMm', passo: 0.05, min: 0.4, max: 4 }, { key: 'psilPassoMm', passo: 0.05, min: 0.8, max: 5 },
   { key: 'psilInizioMm', passo: 0.05, min: 0, max: 3 }, { key: 'psilGiri', passo: 1, min: 1, max: 3 },
@@ -76,7 +76,7 @@ export function mountReteCatenella(root: HTMLElement, opts: { backHref?: string 
         <label class="rg-choice rg-param-grid__wide" title="${tPsil.aiuto ?? ''}"><input type="checkbox" id="psilVero" checked> ${tPsil.etichetta}</label>
         <label class="rg-choice rg-param-grid__wide"><input type="checkbox" id="catenellaDiProva"> ${tProva.etichetta}</label>
         ${tProva.aiuto ? `<small class="rg-field__help rg-param-grid__wide">${tProva.aiuto}</small>` : ''}`) }),
-      sezione({ indice: 6, titolo: 'Trama', apribile: true, aperta: true, contenuto: griglia(['magliaMassimaMm2', 'infittisciVariante'], `
+      sezione({ indice: 6, titolo: 'Trama', apribile: true, aperta: true, contenuto: griglia(['magliaMassimaMm2', 'infittisciVariante', 'oltreAggancioMm'], `
         <label class="rg-choice rg-param-grid__wide" title="${tInfittisci.aiuto ?? ''}"><input type="checkbox" id="infittisci"> ${tInfittisci.etichetta}</label>
         <div class="rg-param-grid__wide" id="ruoliBox" hidden><ul class="rg-color-map" id="ruoli"></ul><small class="rg-field__help">Un laser di un altro colore, dentro il contorno, è un’area da infittire. Ogni colore ha la sua soglia: più è bassa, più la trama è fitta.</small></div>
         <div class="rg-file-input rg-param-grid__wide">

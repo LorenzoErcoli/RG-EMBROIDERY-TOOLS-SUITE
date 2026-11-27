@@ -1,7 +1,7 @@
 // Schema del pannello di "Pattern a zone".
 // Struttura canonica DS (patterns/workspace.md, Testa A "sorgente-guidata"): la misura del
 // prodotto NASCE DAL DISEGNO, quindi niente gruppo Formato —
-//   TESTA sempre aperta → 01 Disegno · 02 Colori e ruoli (le costruisce tool.ts).
+//   TESTA sempre aperta → 01 Cartamodello (sezioneSorgente di @rg/ui/anatomia) · 02 Colori e ruoli (le costruisce tool.ts).
 //   CORPO in accordion → un gruppo per ogni pattern in uso (A, B, C…) · Zone e sequenza.
 //   CODA in accordion → Preset.
 // Etichette e unità come in REVISIONE-PARAMETRI.md: unità sempre nello slot, mai nel testo.
