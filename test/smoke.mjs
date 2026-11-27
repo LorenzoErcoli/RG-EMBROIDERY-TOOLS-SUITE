@@ -63,6 +63,7 @@ export { extractStamp as csExtractStamp, fitStamp as csFitStamp, flipStamp as cs
 export { findModule as csFindModule, tileModule as csTileModule, editsOnAllCopies as csEditsOnAllCopies, shiftModule as csShiftModule, seamShift as csSeamShift, resizeModule as csResizeModule, movePiece as csMovePiece, piecesOf as csPiecesOf, cellStep as csCellStep, bandsOf as csBandsOf, toggleBandBreak as csToggleBandBreak, moveBandBreak as csMoveBandBreak, bandCells as csBandCells, moveShapeBand as csMoveShapeBand } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
 export { zonesOf as csZonesOf, groupOfCell as csGroupOfCell } from ${JSON.stringify(posix('apps/cross-stitch/src/zones.ts'))};
 export { cellMask as csCellMask, autoRoles as csAutoRoles, normalizeContours as csNormalizeContours } from ${JSON.stringify(posix('apps/cross-stitch/src/shape.ts'))};
+export { overSewnMm as csOverSewnMm } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
 export { DEFAULT_STITCH as CS_DEFAULT_STITCH } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
 export { moduleFile as csModuleFile, readModuleFile as csReadModuleFile } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
 export { stratiCross as csStratiCross } from ${JSON.stringify(posix('apps/cross-stitch/src/motore.ts'))};

@@ -142,6 +142,14 @@ export interface RouteParams {
    * non si sposta niente (default 40); relocateMax: gruppi per catena (8); relocateMs: tempo per filo e blocco (2500).
    */
   relocate?: boolean;
+  /**
+   * PRIMA IL PASSAGGIO, POI LE V (Lorenzo, 2026-11-27: «deve ragionare al contrario, se deve fare un passaggio deve
+   * capire di farlo prima il passaggio e poi muoversi con le V»). Il percorso di un filo di sole V si cerca anche
+   * all'indietro, dall'ultimo punto al primo: quello che all'indietro è un passaggio sopra le V già fatte, nel ricamo
+   * vero è un passaggio sotto le V che si cuciono dopo. Si tiene il verso che passa meno sopra le V già cucite (a
+   * parità di salti e di filo in vista). Solo con `noVisible`. Default vero; false = solo in avanti.
+   */
+  backward?: boolean;
   /** Toglie i va-e-torna sulla stessa diagonale dove le passate (punti + ripassi) sono almeno due più di quelle chieste (default vero). */
   exactPasses?: boolean;
   relocateMm?: number;
@@ -230,6 +238,12 @@ export interface RouteParams {
    */
   cover?: Cells;
   /**
+   * LE V DI QUESTO FILO GIÀ CUCITE PRIMA, che qui non si cuciono (i blocchi prima, quando si rifà un blocco alla
+   * volta per i salti corti): ci si ripassa sopra come sui propri punti fatti, e un verticale lì sopra è sopra V già
+   * cucite. Prima si contavano fra quelle che coprono, anche se erano già fatte.
+   */
+  sewn?: Cells;
+  /**
    * MAI PASSAGGI IN VISTA (Lorenzo, 2026-11-26: «i passaggi a vista non devono esistere»): il filo va da un punto
    * all'altro solo nascosto (sotto i punti ancora da cucire, suoi o dei fili che vengono dopo), sui punti già cuciti
    * del suo colore, o in verticale al centro delle V che lo coprono; dove una strada così non c'è, salta (col
@@ -290,6 +304,8 @@ interface LegState {
   run: number;
   /** Una V di un filo cucito dopo, che qui non si cuce (`RouteParams.cover`): copre e basta. */
   cover?: boolean;
+  /** Una V di questo filo già cucita prima (`RouteParams.sewn`): non copre, ci si ripassa. */
+  before?: boolean;
 }
 
 /**
@@ -359,6 +375,82 @@ class MinHeap {
  * degli aghi). `colorOrder` permette un ordine diverso; i colori senza celle si saltano.
  */
 export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, colorOrder?: number[]): RouteResult {
+  const fw = routeCellsOnce(g, cells, params, colorOrder, null);
+  // con «mai in vista» (di base): coi passaggi in vista permessi un verticale sopra le proprie V non si conta in vista
+  if (params.backward === false || !params.noVisible || params.fixedDirection) return fw;
+  // i fili dove in avanti il filo passa in verticale sopra le V già cucite: per loro si prova all'indietro
+  const bad = fw.colors.map((cr) => overSewnMm(g, cells, params.cover, fw.colors, cr));
+  // (con passaggi o salti a mano, sempre: possono stare sulla strada all'indietro)
+  const hand = !!(params.forced?.length || params.cuts?.length);
+  const tryK = new Set(fw.colors.filter((cr, i) => (bad[i] > 0 || hand) && !(params.base && cr.color === params.base.color)).map((cr) => cr.color));
+  if (!tryK.size) return fw;
+  const bw = routeCellsOnce(g, cells, params, colorOrder, tryK);
+  const colors = fw.colors.map((cr, i) => {
+    const alt = bw.colors.find((x) => x.color === cr.color);
+    if (!alt || !bw.reversed?.has(cr.color)) return cr;
+    const a = fw.perColor![cr.color], b = bw.perColor![cr.color];
+    // all'indietro solo se non aggiunge salti né filo in vista, e passa meno sopra le V già cucite
+    // i passaggi e i salti fatti a mano valgono sulla strada dove sono stati disegnati: si tiene il verso dove ce ne sono di più
+    const hf = handHits(params, cr), hb = handHits(params, alt);
+    if (hf !== hb) return hb > hf ? alt : cr;
+    const badB = overSewnMm(g, cells, params.cover, fw.colors.map((x) => (x.color === cr.color ? alt : x)), alt);
+    return b.jumps <= a.jumps && b.visibleMm <= a.visibleMm + 0.01 && badB < bad[i] - 0.01 ? alt : cr;
+  });
+  if (colors.every((cr, i) => cr === fw.colors[i])) return fw;
+  const metrics: RouteMetrics = { legs: fw.metrics.legs, hiddenMm: 0, verticalMm: 0, retraceMm: 0, visibleMm: 0, jumps: 0, jumpMm: 0, maxExtra: Math.max(fw.metrics.maxExtra, bw.metrics.maxExtra) };
+  for (const cr of colors) {
+    const m = (cr === fw.colors.find((x) => x.color === cr.color) ? fw : bw).perColor![cr.color];
+    for (const key of ['hiddenMm', 'verticalMm', 'retraceMm', 'visibleMm', 'jumps', 'jumpMm'] as const) metrics[key] += m[key];
+  }
+  return { colors, metrics };
+}
+
+/** Quanti passaggi a mano (`forced`) e salti a mano (`cuts`) si ritrovano nel percorso del filo. */
+function handHits(params: RouteParams, cr: ColorRoute): number {
+  let n = 0;
+  const pair = (s: RouteSeg, a: number, b: number) => (s.from === a && s.to === b) || (s.from === b && s.to === a);
+  for (const f of params.forced ?? []) if (cr.segs.some((s) => s.kind !== 'stitch' && pair(s, f.from, f.via.length ? f.via[0] : f.to))) n++;
+  for (const [a, b] of params.cuts ?? []) if (cr.segs.some((s) => s.kind === 'jump' && s.trim && pair(s, a, b))) n++;
+  return n;
+}
+
+/**
+ * Quanti mm di passaggio in verticale di `cr` corrono sopra V già cucite: nessuna V intorno (di questo filo) si cuce
+ * dopo, né c'è una V di un filo che viene dopo (o che copre, `cover`). Il conto in ordine di tempo, sul percorso vero.
+ */
+export function overSewnMm(g: GridSpec, cells: Cells, cover: Cells | undefined, all: ColorRoute[], cr: ColorRoute): number {
+  return overSewnOf(g, cells, cover, new Set(all.slice(all.indexOf(cr) + 1).map((x) => x.color)), cr.color, cr.segs);
+}
+
+function overSewnOf(g: GridSpec, cells: Cells, cover: Cells | undefined, after: Set<number>, color: number, segs: RouteSeg[]): number {
+  const W = latticeWidth(g), C = g.cols, pitch = rowPitch(g);
+  const isV = (m: { stitch: Stitch } | undefined) => !!m && (m.stitch === 'v' || isHalfStitch(m.stitch));
+  const cr = { color, segs };
+  // quando si cuce, per l'ultima volta, ogni cella di questo filo (indice del tratto)
+  const last = new Map<number, number>();
+  cr.segs.forEach((sg, n) => {
+    if (sg.kind !== 'stitch' || isFreePoint(sg.from) || isFreePoint(sg.to)) return;
+    const i = Math.min(Math.floor(sg.from / W), Math.floor(sg.to / W)), jj = Math.min(sg.from % W, sg.to % W);
+    const c = Math.floor(jj / 2);
+    if (c < C && cells.get(i * C + c)?.color === cr.color) last.set(i * C + c, n);
+  });
+  let mm = 0;
+  cr.segs.forEach((sg, n) => {
+    if (sg.kind !== 'vertical' || isFreePoint(sg.from) || isFreePoint(sg.to)) return;
+    const i = Math.min(Math.floor(sg.from / W), Math.floor(sg.to / W)), j = sg.from % W;
+    const around = (j % 2 === 1 ? [(j - 1) / 2] : [j / 2 - 1, j / 2]).filter((c) => c >= 0 && c < C);
+    const later = (c: number) => {
+      const k = i * C + c, m = cells.get(k), cv = cover?.get(k);
+      if (isV(cv)) return true;
+      if (!isV(m)) return false;
+      return m!.color === cr.color ? (last.get(k) ?? -1) > n : after.has(m!.color);
+    };
+    if (around.length && !around.every(later)) mm += pitch;
+  });
+  return mm;
+}
+
+function routeCellsOnce(g: GridSpec, cells: Cells, params: RouteParams, colorOrder: number[] | undefined, backwardColors: Set<number> | null): RouteResult & { perColor?: Record<number, RouteMetrics>; reversed?: Set<number> } {
   const costs: TravelCosts = { ...DEFAULT_COSTS, ...(params.costs ?? {}) };
   const repsOf = (color: number) => Math.max(1, Math.round(params.passesByColor?.[color] ?? params.repetitions));
   const W = latticeWidth(g);            // vertici per riga: angoli e metà dei lati
@@ -555,12 +647,15 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
 
   // le V dei fili cuciti dopo (`cover`): gambe che coprono, senza passate da fare
   const nSewn = legs.length;
-  if (params.cover) for (const [k, m] of params.cover) {
+  const fixedLegs: Array<[number, { stitch: Stitch; color: number }, boolean]> = [];
+  if (params.cover) for (const [k, m] of params.cover) fixedLegs.push([k, m, false]);
+  if (params.sewn) for (const [k, m] of params.sewn) fixedLegs.push([k, m, true]);
+  for (const [k, m, before] of fixedLegs) {
     if ((mask && !mask[k]) || cells.has(k)) continue;
     const r = Math.floor(k / g.cols), c = k - r * g.cols, mine: number[] = [];
     for (const { a, b } of stitchLegs(g, r, c, m.stitch, params.topLeg)) {
       const id = legs.length;
-      legs.push({ color: m.color, a, b, remaining: 1, extra: 0, prereq: -1, block: -3, zone: -3, run: -3, cover: true });
+      legs.push({ color: m.color, a, b, remaining: before ? 0 : 1, extra: 0, prereq: -1, block: -3, zone: -3, run: -3, cover: true, before });
       const ek = edgeKey(a, b);
       const onEdge = legAt.get(ek);
       if (onEdge) onEdge.push(id); else legAt.set(ek, [id]);
@@ -593,6 +688,12 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
    * Il costo per mm e la classe di un tratto lungo una diagonale, per il colore `k`: nel vuoto se
    * non c'è nessuna gamba, altrimenti la migliore fra quelle che ci stanno (basta che UNA la copra).
    */
+  /**
+   * La gamba di questo filo si cuce DOPO, nel ricamo vero? In avanti: se resta da fare. All'indietro (`backNow`, vedi
+   * `backward`): se all'indietro è già fatta, perché il percorso si rovescia alla fine.
+   */
+  let backNow = false;
+  const ownLater = (leg: LegState) => (leg.cover ? !leg.before : backNow ? leg.remaining === 0 : leg.remaining > 0);
   const legClass = (ids: number[] | undefined, k: number): { w: number; kind: SegKind } => {
     if (!ids || !ids.length) return { w: costs.open, kind: 'visible' };
     let best = oneLegClass(ids[0], k);
@@ -602,7 +703,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   const oneLegClass = (id: number, k: number): { w: number; kind: SegKind } => {
     const leg = legs[id];
     const more = leg.extra > 0 ? costs.extra * leg.extra : 1;
-    if (leg.color === k) return leg.remaining > 0 ? { w: costs.hidden * more, kind: 'hidden' } : { w: costs.retrace * more, kind: 'retrace' };
+    if (leg.color === k) return ownLater(leg) ? { w: costs.hidden * more, kind: 'hidden' } : { w: costs.retrace * more, kind: 'retrace' };
     return (rank.get(leg.color) ?? 0) > (rank.get(k) ?? 0)
       ? { w: costs.hidden * more, kind: 'hidden' }
       : { w: costs.over, kind: 'visible' };
@@ -618,21 +719,34 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   const verticalClass = (i: number, j: number, k: number): { w: number; kind: SegKind } => {
     // Con la base, sotto ogni cella c'è un punto già cucito: il verticale si vede solo se intorno
     // NON c'è nessun punto di questo filo o di uno che viene dopo (che lo copre o lo accompagna).
-    let mineOrLater = false, earlier = false;
-    const around = j % 2 === 1 ? [(j - 1) / 2] : [j / 2 - 1, j / 2];
+    // PRIMA IL PASSAGGIO, POI LE V (Lorenzo, 2026-11-27: «a volte i passaggi passano lateralmente alle V… rischia di
+    // vedersi, soprattutto se viene fatto dopo che le V sotto sono state realizzate… i passaggi vengano fatti prima e
+    // le V sempre dopo. Niente passaggio in verticale sopra le V, altrimenti conviene replicare il punto delle V»): il
+    // verticale è nascosto solo sotto V che si cuciono DOPO (di questo filo, ancora da fare, o di un filo che viene
+    // dopo); sopra una V già cucita, anche dello stesso filo, è in vista, e la strada buona è ripassare le gambe della
+    // V. Sul lato della cella le V devono venire dopo da tutte e due le parti: con una già cucita il filo le corre accanto
+    let covered = true, mineOrLater = false, earlier = false;
+    const around = (j % 2 === 1 ? [(j - 1) / 2] : [j / 2 - 1, j / 2]).filter((c) => c >= 0 && c < g.cols);
     for (const c of around) {
-      if (c < 0 || c >= g.cols) continue;
+      let later = false;
       for (const id of cellLegs.get(i * g.cols + c) ?? []) {
         const leg = legs[id];
         // copre il verticale solo una V (gambe di mezza cella): la croce e la diagonale no, il filo
         // attraverserebbe la X e si vedrebbe (Lorenzo, 2026-10-07: «i passaggi del punto croce devono
         // passare sulle stanghette della X, non possono andare in verticale»)
         if (Math.abs((leg.a % W) - (leg.b % W)) !== 1) continue;
-        if (leg.color === k || (rank.get(leg.color) ?? 0) > (rank.get(k) ?? 0)) mineOrLater = true;
-        else earlier = true;
+        const mine = leg.color === k;
+        if (mine || (rank.get(leg.color) ?? 0) > (rank.get(k) ?? 0)) mineOrLater = true; else earlier = true;
+        if (mine ? ownLater(leg) : (rank.get(leg.color) ?? 0) > (rank.get(k) ?? 0)) later = true;
       }
+      if (!later) covered = false;
     }
     if (!mineOrLater) return earlier ? { w: costs.over, kind: 'visible' } : { w: costs.open, kind: 'visible' };
+    // Con «mai in vista» (`noVisible`, di base): sopra V già cucite costa come un passaggio in vista, ma resta una strada
+    // (in un disegno di sole V per scendere di riga a volte non c'è altro). Coi passaggi in vista permessi resta come
+    // prima: lì un verticale sopra le proprie V costa meno del filo in vista sul bianco (misurato: 17 mm di verticali
+    // contro 11 mm in vista)
+    if (!covered && params.noVisible) return { w: costs.over, kind: 'vertical' };
     return { w: j % 2 === 1 ? costs.vertical : costs.verticalSide, kind: 'vertical' };
   };
 
@@ -691,7 +805,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       const x = pa.x + ((pb.x - pa.x) * s) / n, y = pa.y + ((pb.y - pa.y) * s) / n;
       const c = Math.min(g.cols - 1, Math.max(0, Math.floor(x / g.cellW))), r = Math.min(g.rows - 1, Math.max(0, Math.floor(y / g.cellH)));
       const ids = cellLegs.get(r * g.cols + c);
-      const covered = !!ids && ids.some((id) => (legs[id].color === k ? legs[id].remaining > 0 : (rank.get(legs[id].color) ?? -1) > (rank.get(k) ?? 0)));
+      const covered = !!ids && ids.some((id) => (legs[id].color === k ? ownLater(legs[id]) : (rank.get(legs[id].color) ?? -1) > (rank.get(k) ?? 0)));
       if (!covered) return 'visible';
     }
     return 'hidden';
@@ -829,6 +943,17 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       return out;
     };
     reindex();
+    // la lista dei punti, ricostruita dall'ordine corrente
+    const build = (): RouteSeg[] => {
+      const out: RouteSeg[] = [...head];
+      for (let p = 0; p < order.length; p++) {
+        const q = order[p];
+        for (const sg of g_(q).body) out.push(sg);
+        if (p + 1 < order.length) { const l = linkOut(q, order[p + 1]); if (l) for (const sg of l.segs) out.push(sg); else out.push({ kind: 'jump', from: en(g_(q)), to: st(g_(order[p + 1])) }); }
+        else for (const sg of between[q].filter(() => !rev[q] && q === grps.length - 1)) out.push(sg);
+      }
+      return out;
+    };
     while (improved && Date.now() - t0 < budget) {
       improved = false;
       for (let p = 1; p + 1 < order.length && Date.now() - t0 < budget; p++) {
@@ -872,14 +997,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
         }
       }
     }
-    // la lista dei punti, ricostruita
-    const out: RouteSeg[] = [...head];
-    for (let p = 0; p < order.length; p++) {
-      const q = order[p];
-      out.push(...g_(q).body);
-      if (p + 1 < order.length) { const l = linkOut(q, order[p + 1]); if (l) out.push(...l.segs); else out.push({ kind: 'jump', from: en(g_(q)), to: st(g_(order[p + 1])) }); }
-      else out.push(...between[q].filter(() => !rev[q] && q === grps.length - 1));
-    }
+    const out = build();
     // le misure dei passaggi: via le vecchie, dentro le nuove
     const tally = (list: RouteSeg[], sign: number) => { for (const t of list) { const mm = segMm(t) * sign; if (t.kind === 'hidden') metrics.hiddenMm += mm; else if (t.kind === 'vertical') metrics.verticalMm += mm; else if (t.kind === 'retrace') metrics.retraceMm += mm; else if (t.kind === 'visible') metrics.visibleMm += mm; } };
     tally(segs, -1); tally(out, 1);
@@ -934,7 +1052,11 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
   const cutKey = (a: number, b: number) => (a < b ? a + ':' + b : b + ':' + a);
   const cutKeys = new Set((params.cuts ?? []).map(([a, b]) => cutKey(a, b)));
 
+  const perColor: Record<number, RouteMetrics> = {};
+  const reversed = new Set<number>();
   for (const k of order) {
+    if (backwardColors && !backwardColors.has(k)) continue;
+    const m0 = { ...metrics };
     const mine: number[] = [];
     /** vertice → unità di questo colore che lo toccano. */
     const byVertex = new Map<number, number[]>();
@@ -1136,8 +1258,19 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     // E in tutti e due i casi da un capo DISPARI, se c'è (Eulero): un vertice dove si incontrano
     // due gambe è il mezzo di un percorso, e partendo da lì una metà resta da riprendere con un
     // salto. Visto in anteprima sulla riga di Λ rossa, che partiva dal centro.
-    if (left > 0 && params.startAt && params.startAt[k] !== undefined) {
-      at = params.startAt[k];
+    // ALL'INDIETRO (vedi `backward`): solo un filo di V e mezze V, una passata, non la base; si parte dall'uscita e si
+    // arriva all'ingresso, i gruppi in ordine rovescio, poi il percorso si rovescia
+    backNow = !!backwardColors && !(base && k === base.color) && mine.every((id) => {
+      const u = units[id], l = legs[u.leg], l2 = u.pair ? legs[u.pair.leg2] : l;
+      return u.passes === 1 && u.fixedEntry < 0 && !u.overBase && !u.phase && l.prereq < 0 && l.remaining === 1 && l2.remaining === 1
+        && Math.abs((l.a % W) - (l.b % W)) === 1 && Math.abs((l2.a % W) - (l2.b % W)) === 1;
+    });
+    if (backwardColors && !backNow) continue;
+    if (backNow) groupZones.reverse();
+    const startK = backNow ? params.endAt?.[k] : params.startAt?.[k];
+    const endK = backNow ? params.startAt?.[k] : params.endAt?.[k];
+    if (left > 0 && startK !== undefined) {
+      at = startK;
     } else if (left > 0) {
       const degree = new Map<number, number>();
       for (const id of mine) if (available(id) && inBlock(id)) for (const e of entriesOf(id)) degree.set(e, (degree.get(e) ?? 0) + 1);
@@ -1273,7 +1406,7 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     // dopo si sposta in un momento in cui l'ago passava proprio dal suo capo (anche al rovescio); lì si cuce, si
     // torna indietro sopra di lui, e il giro lungo sparisce. Si tiene lo spostamento solo se il filo dei passaggi
     // si accorcia e non ne aggiunge in vista.
-    if (params.relocate === true && segs.length && !(base && k === base.color)) relocateDetours(segs, k);
+    if (params.relocate === true && !backNow && segs.length && !(base && k === base.color)) relocateDetours(segs, k);
 
     // IL NUMERO GIUSTO DI PASSATE (Lorenzo, 2026-10-15: «se un colore ripassa sopra se stesso può togliere un
     // passaggio del sotto, così rimane sempre il numero giusto»). Contando punti e ripassi, una diagonale può avere
@@ -1281,10 +1414,10 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
     // punti o fra un passaggio e un punto) e lì le passate sono almeno due in più, quel va-e-torna si toglie: il
     // filo resta continuo e la diagonale torna al numero giusto. Una passata sola in più non si può togliere così
     // (il filo finirebbe dall'altra parte).
-    if (params.exactPasses !== false && segs.length && !(base && k === base.color)) trimExtraPasses(segs, k);
+    if (params.exactPasses !== false && !backNow && segs.length && !(base && k === base.color)) trimExtraPasses(segs, k);
 
     // l'arrivo: dall'ultimo punto all'uscita data (il percorso più economico; senza strada, salto)
-    const endV = params.endAt?.[k];
+    const endV = endK;
     if (endV !== undefined && at >= 0 && at !== endV && segs.length) {
       for (const t of touched) { dist[t] = Infinity; prevV[t] = -1; }
       touched.length = 0;
@@ -1320,6 +1453,15 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
         segs.push({ kind: 'jump', from: at, to: endV });
       }
       at = endV;
+    }
+
+    // all'indietro: il percorso si rovescia (e un salto in testa, che all'indietro non si contava, ora conta: è l'arrivo)
+    if (backNow && segs.length) {
+      if (segs[0].kind === 'jump') { const a = pt(segs[0].from), b = pt(segs[0].to); metrics.jumps++; metrics.jumpMm += Math.hypot(b.x - a.x, b.y - a.y); }
+      segs.reverse();
+      for (let q = 0; q < segs.length; q++) segs[q] = { ...segs[q], from: segs[q].to, to: segs[q].from };
+      if (params.exactPasses !== false) trimExtraPasses(segs, k);
+      reversed.add(k);
     }
 
     // i passaggi ridisegnati a mano: la strada passa per i punti dati, in ordine
@@ -1402,12 +1544,18 @@ export function routeCells(g: GridSpec, cells: Cells, params: RouteParams, color
       for (const sg of out) segs.push(sg); // (non push(...out): sui ricami grandi supera lo stack)
     }
     // il primo tratto di un colore che parte con un salto non è un salto: è il cambio colore
-    if (segs.length && segs[0].kind === 'jump' && !(params.startAt && params.startAt[k] !== undefined)) segs.shift();
+    if (segs.length && segs[0].kind === 'jump' && !(params.startAt && params.startAt[k] !== undefined)) {
+      if (backNow) { const a = pt(segs[0].from), b = pt(segs[0].to); metrics.jumps--; metrics.jumpMm -= Math.hypot(b.x - a.x, b.y - a.y); }
+      segs.shift();
+    }
     colors.push({ color: k, segs });
+    const mk = { ...metrics };
+    for (const key of ['hiddenMm', 'verticalMm', 'retraceMm', 'visibleMm', 'jumps', 'jumpMm'] as const) mk[key] -= m0[key];
+    perColor[k] = mk;
   }
 
   for (const l of legs.slice(0, nSewn)) if (l.extra > metrics.maxExtra) metrics.maxExtra = l.extra;
-  return { colors, metrics };
+  return { colors, metrics, perColor, reversed };
 }
 
 // ------------------------------------------------------------

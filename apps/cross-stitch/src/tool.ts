@@ -388,6 +388,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
           </label>
           <span class="rg-field__help rg-param-grid__wide" id="h-shortJumps">Nel modulo: ogni blocco entra vicino a dove è finito quello prima ed esce, con un passaggio nascosto, vicino al blocco dopo. Salti più corti, qualche ripasso in più</span>
           <label class="rg-toggle rg-param-grid__wide">
+            <input type="checkbox" id="backward" checked aria-describedby="h-backward"><span class="rg-toggle__track"></span><span>Prima il passaggio, poi le V</span>
+          </label>
+          <span class="rg-field__help rg-param-grid__wide" id="h-backward">Il percorso si cerca anche dalla fine: dove il filo deve passare, ci passa prima, sotto le V che cuce dopo, invece di tornare in verticale sopra le V già fatte. Più filo nascosto sotto, meno passaggi che si vedono accanto alle V. Con «Mai passaggi in vista»</span>
+          <label class="rg-toggle rg-param-grid__wide">
             <input type="checkbox" id="baseWhole" checked aria-describedby="h-baseWhole"><span class="rg-toggle__track"></span><span>Base in un solo stop</span>
           </label>
           <span class="rg-field__help rg-param-grid__wide" id="h-baseWhole">A strisce: la base intera per prima, poi le strisce degli altri fili. Spento: una base per striscia</span>
@@ -1499,6 +1503,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     $<HTMLInputElement>('noVisible').checked = st.route.noVisible === true;
     $<HTMLInputElement>('noVisibleBar').checked = st.route.noVisible === true;
     $<HTMLInputElement>('shortJumps').checked = st.route.shortJumps === true;
+    $<HTMLInputElement>('backward').checked = st.route.backward !== false;
     $<HTMLInputElement>('trimJumps').checked = st.route.trimJumps !== false;
     $<HTMLInputElement>('relocate').checked = st.route.relocate === true;
     num('zoneGap').value = fmtNum(st.route.zones?.gapMm ?? DEFAULT_ZONES.gapMm);
@@ -1750,6 +1755,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   $<HTMLInputElement>('baseWhole').addEventListener('change', (e) => { st.route.baseWhole = (e.target as HTMLInputElement).checked; syncFields(); update(); });
   // anche nella barra (nell'editor del modulo i parametri del ricamo non si vedono: Lorenzo, «non riesco a sbloccarli»)
   $<HTMLInputElement>('shortJumps').addEventListener('change', (e) => { st.route.shortJumps = (e.target as HTMLInputElement).checked; syncFields(); update(); });
+  $<HTMLInputElement>('backward').addEventListener('change', (e) => { st.route.backward = (e.target as HTMLInputElement).checked; syncFields(); update(); });
   for (const id of ['noVisible', 'noVisibleBar']) $<HTMLInputElement>(id).addEventListener('change', (e) => { st.route.noVisible = (e.target as HTMLInputElement).checked; syncFields(); update(); });
   $<HTMLInputElement>('byBlocks').addEventListener('change', (e) => { st.route.blocks = (e.target as HTMLInputElement).checked; syncFields(); update(); });
   const setZones = () => {

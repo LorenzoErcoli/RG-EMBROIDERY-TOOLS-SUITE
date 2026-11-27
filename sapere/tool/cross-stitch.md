@@ -118,6 +118,27 @@ l'ordine di adesso). Fatto il terzo: `shortenJumps` in strips.ts rifà ogni bloc
 nascosto o in ripasso), coprono i fili dopo e gli altri blocchi del filo; si tiene se i salti si accorciano senza
 aumentare né mettere niente in vista. Si fa solo sulle strade di fascia già scelte (`bandRedo`): farlo su ogni strada
 provata triplicava il tempo (4,5 s → 1,6 s, come senza). Risultato: 777 → 568 mm, ripassi 3,65 → 4,23 m. Tool:
+**Prima il passaggio, poi le V**, acceso di base (`RouteParams.backward`). *«A volte i passaggi per tornare indietro
+passano lateralmente alle V… rischia di vedersi, soprattutto se viene fatto dopo che le V sotto sono state realizzate…
+niente passaggio in verticale sopra le V, altrimenti conviene replicare il punto delle V»*, e poi *«deve ragionare al
+contrario, se deve fare un passaggio deve capire di farlo prima il passaggio e poi muoversi con le V»*. Misurato sul
+suo ricamo (39 × 119 V, modulo 24 × 99): su 2.144 verticali solo 468 stavano sotto V cucite dopo, 809 (2,0 m) sopra V
+già cucite, 799 sul lato con una V già fatta da una parte. Tre cose. (1) `verticalClass`: il verticale è coperto solo
+da V che si cuciono dopo (dello stesso filo ancora da fare, o di un filo dopo), sul lato da tutte e due le parti; sopra
+V già cucite costa come in vista (`over`) ma resta una strada (classe `vertical`) — solo con «mai in vista»: coi
+passaggi in vista permessi è un baratto vero (sul caso del recinto: 17 mm di verticali sopra le V contro 11 mm in
+vista sul bianco), lì tutto resta come prima, anche il verso all'indietro è spento —, perché in un disegno di sole V
+scendere di una riga vuole per forza un verticale: vietarlo dava 596 salti invece di 92. Ripassare le gambe della V non
+basta: sul reticolo le gambe non scendono di riga. (2) **All'indietro** (`routeCells` → `routeCellsOnce` due volte): per
+i fili di V con verticali sopra V cucite, il percorso si cerca dalla fine (dall'uscita, con l'ingresso come arrivo,
+l'ordine dei gruppi rovescio) contando «cucita dopo» quello che all'indietro è già fatto, poi si rovescia; si tiene se
+non aggiunge salti né filo in vista e passa meno sopra le V cucite (`overSewnMm`). Ottimizza l'ordine (`relocate`) lì
+non si fa: non guarda il tempo e rimetteva i passaggi sopra le V (provato: 0,64 → 1,49 m); con passaggi o salti a mano
+vince il verso dove si ritrovano. (3) **Salti corti** rifaceva un blocco alla volta contando i blocchi PRIMA dello
+stesso filo fra le V che coprono: ora sono `sewn`, cucite prima. Sul suo ricamo: verticali sopra V cucite (anche di
+lato) 4,0 → 1,9 m, del tutto sopra 2,0 → 0,63 m; salti 92 → 83; ripassi 5,9 → 2,0 m; passaggi nascosti 7,4 → 19,4 m
+(il filo sotto le V cresce di 8 m); il calcolo 16 → 19 s.
+
 **Salti corti**, acceso di base (`RouteParams.shortJumps`). *«Non so che sta succedendo ma qui ora ci sono 100 salti a
 caso»* (sul DST del ricamo intero, 96 salti, il più lungo 181 mm): coi passaggi mai in vista il numero è quello (prima
 60 salti ma 761 mm in vista); a caso sembravano per due motivi del ricamo a modulo ripetuto: (1) `routeBands` girava una

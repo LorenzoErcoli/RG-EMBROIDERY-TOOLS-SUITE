@@ -1046,6 +1046,15 @@ Acceso, ogni blocco **entra nel punto più vicino a dove è finito il blocco pri
 di lì il salto è corto. Si tiene solo se i salti si accorciano, non aumentano e non compare niente in vista. Sul modulo
 di prova: salti 777 → 568 mm in tutto, ripassi +16%.
 
+**Prima il passaggio, poi le V** (acceso di partenza; in *04 Passaggi*; vale con *Mai passaggi in vista*). Un passaggio in verticale fra le V si vede se
+le V lì intorno sono già cucite: il filo ci corre sopra, accanto alle V. Si nasconde solo se le V vengono **dopo** e lo
+coprono. Acceso, il percorso di ogni filo di V si cerca anche **dalla fine**: dove il filo deve passare, ci passa
+prima, sotto le V che cucirà dopo, invece di cucirle e poi tornare in verticale sopra di loro. Per ogni filo il tool
+tiene il verso che passa meno sopra le V già fatte, se non aggiunge salti né filo in vista. Un verticale sopra V già
+cucite ora costa come un passaggio in vista: il filo preferisce ripassare le gambe delle V. Più filo nascosto sotto le V,
+meno ripassi. Sul ricamo di prova: verticali sopra V già cucite 4,0 → 1,9 m, salti 92 → 83, ripassi 5,9 → 2,0 m,
+passaggi nascosti 7,4 → 19,4 m.
+
 **Ottimizza l'ordine dei passaggi** (spento di partenza; in *04 Passaggi*, sotto *Taglio a ogni salto*). Il tool
 sceglie il pezzo dopo un passo alla volta, e a volte lascia indietro qualcosa (le croci di una finestra, un dente di
 muro) per tornarci alla fine con un giro lungo. Acceso, rilegge il percorso di ogni filo e sposta questi pezzi nel

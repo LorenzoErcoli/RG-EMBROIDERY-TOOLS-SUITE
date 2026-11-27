@@ -167,6 +167,27 @@ export function provePassaggiAMano(rg, check) {
     check('modulo ripetuto, mai in vista: mai due salti di fila (ce ne sono, ma uno alla volta)', [salti > 0, doppi], [true, 0]);
   }
 
+  // PRIMA IL PASSAGGIO, POI LE V (Lorenzo, 2026-11-27: «deve ragionare al contrario, se deve fare un passaggio deve
+  // capire di farlo prima il passaggio e poi muoversi con le V»): su disegni a caso, cercando anche all'indietro, meno
+  // verticali sopra V già cucite, senza più salti né filo in vista
+  {
+    let sd = 7; const rn = () => (sd = (sd * 16807) % 2147483647) / 2147483647;
+    const tot = { f: 0, b: 0, fj: 0, bj: 0, fv: 0, bv: 0, giri: 0 };
+    for (let t = 0; t < 6; t++) {
+      const gr = { cols: 14, rows: 12, cellW: 2.5, cellH: 3, overlapPct: 50 };
+      const cl = new Map();
+      for (let k = 0; k < gr.cols * gr.rows; k++) { const x = rn(); if (x < 0.3) cl.set(k, { stitch: 'v', color: 1 }); else if (x < 0.5) cl.set(k, { stitch: 'v', color: 2 }); }
+      for (const backward of [false, true]) {
+        const res = rg.csRouteCells(gr, cl, { ...route, jumpMm: 30, noVisible: true, backward });
+        const o = res.colors.reduce((a, cr) => a + rg.csOverSewnMm(gr, cl, undefined, res.colors, cr), 0);
+        if (backward) { tot.b += o; tot.bj += res.metrics.jumps; tot.bv += res.metrics.visibleMm; } else { tot.f += o; tot.fj += res.metrics.jumps; tot.fv += res.metrics.visibleMm; }
+      }
+      tot.giri++;
+    }
+    check("prima il passaggio, poi le V: all'indietro meno verticali sopra V già cucite (almeno un quarto in meno), salti e filo in vista non di più",
+      [tot.b < tot.f * 0.75, tot.bj <= tot.fj, tot.bv <= tot.fv + 0.01], [true, true, true]);
+  }
+
   // I PALLINI LIBERI (Lorenzo, 2026-11-26: «i passaggi sono pinnati e non posso spostarli dove voglio»): un pallino
   // sta dove lo si lascia, non sul vertice più vicino; il filo ci passa esattamente, anche nei punti del DST, e
   // spostato nel modulo (in una copia, a strisce) resta lo stesso punto

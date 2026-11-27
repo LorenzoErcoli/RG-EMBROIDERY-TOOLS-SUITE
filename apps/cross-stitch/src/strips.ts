@@ -14,7 +14,7 @@
 
 import type { Cells, GridSpec, Stitch } from './model';
 import { isHalfStitch, rowPitch, segmentPoints, vertexIndex } from './model';
-import { routeCells, type ColorRoute, type RouteMetrics, type RouteParams, type RouteResult, type RouteSeg } from './routing';
+import { routeCells, overSewnMm, type ColorRoute, type RouteMetrics, type RouteParams, type RouteResult, type RouteSeg } from './routing';
 import { bandCells } from './module';
 import { areaOfCell, shiftGroup } from './zones';
 
@@ -940,10 +940,11 @@ function shortenJumps(g: GridSpec, cells: Cells, cover: Cells, params: RoutePara
   for (let b = 0; b < blocks.length; b++) {
     const entry = b === 0 && startAt !== undefined ? startAt : closest(verts[b], [prevExit]);
     const exit = b + 1 < blocks.length ? closest(verts[b], verts[b + 1]) : endAt;
-    // coprono: i fili dopo, e le V degli altri blocchi di questo filo
-    const cov: Cells = new Map(cover);
-    bCells.forEach((m, o) => { if (o !== b) for (const [k, v] of m) cov.set(k, v); });
-    const r = routeCells(g, bCells[b], { ...params, cover: cov, startAt: { [color]: entry }, ...(exit !== undefined ? { endAt: { [color]: exit } } : { endAt: undefined }) });
+    // coprono: i fili dopo, e le V dei blocchi dopo di questo filo; quelle dei blocchi prima sono già cucite (prima
+    // contavano anche loro fra quelle che coprono: il filo ci passava sopra in verticale come se venissero dopo)
+    const cov: Cells = new Map(cover), sewn: Cells = new Map();
+    bCells.forEach((m, o) => { if (o !== b) for (const [k, v] of m) (o > b ? cov : sewn).set(k, v); });
+    const r = routeCells(g, bCells[b], { ...params, cover: cov, sewn, startAt: { [color]: entry }, ...(exit !== undefined ? { endAt: { [color]: exit } } : { endAt: undefined }) });
     const sg = r.colors.find((c) => c.color === color)?.segs ?? [];
     if (b > 0) { out.push({ kind: 'jump', from: prevExit, to: sg.length ? sg[0].from : entry }); metrics.jumps++; metrics.jumpMm += dist(prevExit, sg.length ? sg[0].from : entry); }
     out.push(...sg);
@@ -952,5 +953,8 @@ function shortenJumps(g: GridSpec, cells: Cells, cover: Cells, params: RoutePara
   }
   const old = res.metrics;
   if (metrics.jumps > old.jumps || metrics.jumpMm >= old.jumpMm - 1e-6 || metrics.visibleMm > old.visibleMm + 1e-6) return res;
-  return { colors: res.colors.map((c) => (c.color === color ? { ...c, segs: out } : c)), metrics };
+  // e non più passaggi sopra le V già cucite (vedi RouteParams.backward)
+  const colors = res.colors.map((c) => (c.color === color ? { ...c, segs: out } : c));
+  if (overSewnMm(g, cells, cover, colors, colors.find((c) => c.color === color)!) > overSewnMm(g, cells, cover, res.colors, cr) + 0.01) return res;
+  return { colors, metrics };
 }
