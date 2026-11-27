@@ -6,6 +6,7 @@ import {
   parseDxfToContours, parseSvgToContours, applyRealWidth, type ImportResult,
 } from '@rg/core';
 import { topbar } from '@rg/ui/tools';
+import { campoNumero } from '@rg/ui/anatomia';
 import ICONS from '../../../packages/design-system/icons/rg-icons.svg?url';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
@@ -185,10 +186,8 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <span class="rg-field__help" id="patternPosInfo">Sposta le copie del modulo sul pezzo, una V alla volta: il modulo non cambia.</span>
           </div>
           <div class="rg-param-grid rg-param-grid__wide" id="bandPosBox" hidden>
-            <label class="rg-field"><span class="rg-field__label">Margine sopra</span>
-              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="bandTop" type="text" inputmode="decimal" aria-describedby="h-bandpos"><span>mm</span></span></label>
-            <label class="rg-field"><span class="rg-field__label">Margine sotto</span>
-              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="bandBottom" type="text" inputmode="decimal" aria-describedby="h-bandpos"><span>mm</span></span></label>
+            ${campoNumero({ id: 'bandTop', etichetta: 'Margine sopra', unita: 'mm', valore: '', attributi: 'aria-describedby="h-bandpos"' })}
+            ${campoNumero({ id: 'bandBottom', etichetta: 'Margine sotto', unita: 'mm', valore: '', attributi: 'aria-describedby="h-bandpos"' })}
             <span class="rg-field__help rg-param-grid__wide" id="h-bandpos">La base sopra e sotto la fascia, dal punto più alto e più basso della forma (o del ricamo). Scrivi un margine: l'altro segue. A righe intere</span>
           </div>
           <label class="rg-field"><span class="rg-field__label">Larghezza</span>
@@ -286,8 +285,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
                     <div class="rg-field"><span class="rg-field__label">&nbsp;</span><button type="button" id="edScaleBtn" class="rg-button rg-button--outline rg-button--small">Applica</button></div>
                     <span class="rg-field__help rg-param-grid__wide" id="h-edscale">Celle, immagine e disegno insieme, coi passaggi: il ricamo cresce allo stesso modo (stesse copie). 100 = com’è; sotto 100 rimpicciolisce. Invio o Applica.</span>
                     <output class="rg-technical rg-param-grid__wide" id="edScaleInfo" aria-live="polite"></output>
-                    <label class="rg-field"><span class="rg-field__label">Larghezza reale</span>
-                      <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="edModW" type="text" inputmode="decimal" aria-describedby="h-edmodw"><span>mm</span></span></label>
+                    ${campoNumero({ id: 'edModW', etichetta: 'Larghezza reale', unita: 'mm', valore: '', attributi: 'aria-describedby="h-edmodw"' })}
                     <div class="rg-field"><span class="rg-field__label">&nbsp;</span><span class="rg-cluster"><button type="button" id="edModWBtn" class="rg-button rg-button--outline rg-button--small">Misura il modulo</button><button type="button" id="edRegridBtn" class="rg-button rg-button--ghost rg-button--small">Rifai la griglia</button></span></div>
                     <span class="rg-field__help rg-param-grid__wide" id="h-edmodw">Quanto è largo il modulo vero (tutte le sue V in larghezza). <b>Misura il modulo</b>: le V prendono quella misura, alte in proporzione; disegno e passaggi restano. <b>Rifai la griglia</b>: le V restano come sono, il modulo diventa largo così con più V (alto come l'immagine): il disegno va rifatto sopra l'immagine (Annulla per tornare).</span>
                   </div>
