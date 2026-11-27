@@ -10,7 +10,7 @@
 export const DEBITO_ETICHETTE: Record<string, string[]> = {
   'broccato': ["Stessa densità per tutti", "Cattura dall'immagine"],
   'cannage-rafia': ["Scala del file importato", "La zona è definita da", "Larghezza import", "Altezza import", "Pattern della base 1 (stop 3)", "Pattern della base 2 (stop 4)", "Modo di cucire le linee"],
-  'cross-stitch': ["Opacità sotto la griglia", "Larghezza reale", "Larghezza", "Altezza", "Opacità immagine", "Colonne del modulo", "Righe del modulo", "Ingrandisci", "Una V nell'immagine", "Una riga nell'immagine", "Inizio x", "Inizio y", "Filo di base", "Gruppi", "Blocchi di ricamo"],
+  'cross-stitch': ["Opacità sotto la griglia", "Larghezza reale", "Larghezza", "Altezza", "Opacità immagine", "Colonne del modulo", "Righe del modulo", "Ingrandisci", "Una V nell'immagine", "Una riga nell'immagine", "Inizio x", "Inizio y", "Filo di base", "Gruppi", "Blocchi di ricamo", "Margine sopra", "Margine sotto"],
   'interlace': ["Oggetto pieno (senza fori)", "Immagine di riferimento (opzionale)", "Dove passa ogni filo"],
   'oblique': ["Passo spostamento"],
   'pattern-grammar': ["Scala del file importato", "Larghezza import", "Altezza import", "Nome preset", "Preset disponibili"],

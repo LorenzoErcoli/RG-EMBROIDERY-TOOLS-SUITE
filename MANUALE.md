@@ -639,10 +639,17 @@ pennello, i fili e Annulla/Rifai.
 - **Sposta** (H): trascini la vista, il ricamo non si tocca. Rotella = ingrandisci.
 - **Pennello** (B): trascinando, i punti sotto il pennello passano al filo scelto — per pulire
   l'interno di una scritta, bianco sopra il nero. Lavora a celle intere, una cella = un punto. Mette il punto scelto nella
-  barra, alla voce *Punto* (V, Croce, Diagonale; col clic destro Λ o «/»), anche dove c'era già un
+  barra, alla voce *Punto* (V, Λ, Croce, Diagonale; col clic destro l'altra: con V la Λ, con Λ la V,
+  con Diagonale la «/»), anche dove c'era già un
   punto: una croce sopra la base a V diventa croce. Anche col filo della base: la croce si cuce nello
-  stop della base, dopo tutte le sue V, e sta sopra (solo la croce: gli altri punti col filo della base
-  restano coperti dalla base, per non cucirli due volte).
+  stop della base, dopo tutte le sue V, e sta sopra (solo la croce e i punti a metà griglia: gli altri punti
+  col filo della base restano coperti dalla base, per non cucirli due volte).
+- **A metà griglia** (interruttore accanto a *Punto*, per Pennello e Gomma): la V o la Λ si sposta di
+  **mezza cella di lato**, a cavallo di due celle, per rifinire i bordi ad angolo (il bordo scende a mezze V
+  invece che a V intere) o per mettere una Λ sopra, in mezzo a due V. Il pennello prende il lato fra due celle
+  più vicino al mouse (il riquadro azzurro è centrato lì). Il punto va nella cella libera delle due: se sono
+  piene tutte e due non si mette, e la barra in basso lo dice. Con la gomma toglie il punto a metà su quel lato.
+  I passaggi sono quelli di una V qualunque: passano sotto le V disegnate, con le passate del filo.
 - **Riempi** (F): un clic passa al filo scelto tutta la zona COLLEGATA dello stesso colore. Attento:
   segue tutto quello che si tocca, quindi va usato su zone chiuse (l'interno di una lettera); per i
   ritocchi c'è il pennello.
@@ -720,7 +727,11 @@ piena risoluzione; Esc annulla). Poi **Maglia coi miei colori** (in *01 Immagine
 questi fili, senza ricalcolarli: ogni V va al filo più vicino **come lo vede l'occhio** (Lab: fra blu
 vicini sbaglia meno dell'RGB), e il fondo è il filo di base. **Dal chiaro allo scuro** (sotto i fili)
 li mette in ordine di cucitura: la base per prima, poi dal più chiaro. Riordinare i fili (anche con la
-freccia su) sposta tutto con loro, modulo compreso.
+freccia su) sposta tutto con loro, modulo compreso. **Ordine consigliato** prova gli ordini dei fili (in un processo a
+parte: su un modulo grande una quarantina di secondi) e mostra i migliori, ognuno coi suoi **salti** e quanto mette lo
+**scuro sotto il chiaro** (la regola: chiaro sotto, scuro sopra; un salto vale circa 4 punti di luminosità invertiti).
+Il primo è il consigliato; **Usa** lo mette, **Annulla** torna indietro. Non cambia niente da solo. Conta perché ogni
+filo si nasconde sotto i fili che vengono dopo: sul modulo di prova da 30 a 56 salti secondo l'ordine.
 
 **La forma del pezzo (DXF o SVG).** In *02 Misure del ricamo*, **Carica forma (DXF o SVG)…**: il ricamo
 prende la misura della forma (con *Larghezza reale* la scali; 0 = la misura del file) e si cuciono solo
@@ -838,34 +849,69 @@ grigio chiaro. Serve per vedere i blocchi e i gruppi: una zona lasciata a metà 
 riconosce subito (due colori lontani nella stessa zona).
 
 **L'editor del modulo** (in *01 Immagine*, **Editor modulo**): una schermata a sé per fare il modulo
-che si ripete, per esempio un Fair Isle. Il titolo diventa *Modulo*; a destra **Torna al ricamo** (lascia
-le modifiche fatte nell'editor; chiede conferma se hai cambiato qualcosa) e **Ripeti nel ricamo** (il
-ricamo diventa il modulo ripetuto, a strisce alte un modulo). Nell'editor **i passaggi non si
-calcolano**, così ogni tocco è immediato: si vedono tornando al ricamo.
-- **01 Immagine**: *Carica immagine…*: la tela mostra l'**immagine intera** con lo strumento **Scegli
-  modulo**: trascina un riquadro intorno a un modulo. Il riquadro si **aggancia alle V** dell'immagine
-  (il tool misura quanti pixel è una V e una riga e dove cadono i bordi) e il modulo prende quelle
-  colonne e righe; il pezzo fuori resta velato, dentro si vedono le V. Se il modulo è ancora vuoto,
-  prende anche i colori del pezzo. Per scegliere un altro pezzo, di nuovo *Scegli modulo* e un altro
-  riquadro; se il conto delle V non torna, correggi *Colonne* e *Righe* in *02 Griglia*. **Esc** torna
-  al pennello. Oppure **Trova da solo** (qualche secondo): il tool trova il motivo che
-  si ripete, aggancia l'immagine alla griglia e ricopia il colore di ogni V. Se il motivo è fatto di copie
-  uguali, il modulo è una copia sola; i **colori finti** (un colore fatto quasi solo di V isolate lungo
-  i bordi: la sfumatura fra due colori) vengono tolti. *Colori dall'immagine* propone i fili dal pezzo
-  d'immagine del modulo (la base è il più diffuso, poi dal chiaro allo scuro). *Opacità immagine*.
-- **02 Griglia**: la cella (larghezza, altezza, sormonto) e la misura del modulo in V (colonne, righe:
-  cambiandole il modulo si allarga o si accorcia e quello che hai disegnato resta). **Ingrandisci** (%,
-  poi *Applica*) allarga tutto insieme: celle, immagine e disegno, coi passaggi uguali (sono in V, non
-  in mm); il ricamo cresce della stessa percentuale con le stesse copie. Sotto 100 rimpicciolisce;
-  *Torna al ricamo* annulla anche questo. Poi l'**immagine
-  agganciata alla griglia**: quanti pixel è *una V* e *una riga* nell'immagine, e dove comincia il
-  modulo (*Inizio x, y*). Si regola anche col nuovo strumento **Sposta immagine** (tasto M):
-  trascinando, l'immagine scorre sotto la griglia finché il motivo cade giusto sulle V.
+che si ripete, per esempio un Fair Isle o una fascia di motivi. Il titolo diventa *Modulo*; a destra **Torna al
+ricamo** (lascia le modifiche fatte nell'editor; chiede conferma se hai cambiato qualcosa) e **Ripeti nel ricamo** (il
+ricamo diventa il modulo ripetuto). Nell'editor **i passaggi del ricamo non si calcolano**, così ogni tocco è
+immediato: si vedono tornando al ricamo. Il pannello è fatto di **tre passi numerati**: si apre da solo il primo da
+fare, e quelli fatti hanno il segno *Fatto* (si riaprono con un clic sul titolo).
+- **1 L'immagine sotto**: *Carica immagine…* (la foto o il disegno da ricopiare: sta sotto le V come guida; si può
+  anche disegnare senza) e *Opacità immagine*.
+- **2 Il modulo**:
+  - **Il modulo si ripete**: *In larghezza e in altezza* (il modulo di sempre) o **Solo in larghezza**: una **fascia**
+    alta quanto il modulo, ripetuta solo a destra e a sinistra; sopra e sotto c'è la base, e sul pezzo la fascia si
+    mette all'altezza che vuoi (vedi *La fascia sul pezzo* più sotto). Nella fascia l'editor mostra le copie solo ai
+    lati, così un modulo alto si disegna grande.
+  - La **cella** (larghezza, altezza, sormonto).
+  - **Trova da solo** (qualche secondo): il tool trova il motivo che si ripete e aggancia l'immagine alla griglia.
+    **Il disegno non lo tocca**: un modulo ancora vuoto prende i colori dei fili dall'immagine (la base è il più
+    diffuso), uno già disegnato cambia solo misura. Per la fascia cerca la ripetizione solo in larghezza e **toglie le
+    righe di sola base** sopra e sotto. Se il motivo è fatto di copie uguali, il modulo è una copia sola; i **colori
+    finti** (un colore fatto quasi solo di V isolate lungo i bordi: la sfumatura fra due colori) vengono tolti.
+  - Oppure **Scegli sull'immagine** (lo strumento *Scegli modulo*): la tela mostra l'immagine intera, trascina un
+    riquadro intorno a una ripetizione (per una fascia: dalla prima all'ultima riga del disegno, largo una
+    ripetizione). Il riquadro si **aggancia alle V** dell'immagine e il modulo prende quelle colonne e righe; il pezzo
+    fuori resta velato. **Esc** torna al pennello.
+  - *Colori dall'immagine* propone i fili dal pezzo d'immagine del modulo. *Colonne* e *Righe del modulo*: cambiandole
+    il modulo si allarga o si accorcia e quello che hai disegnato resta.
+  - **Aggancio fine e grandezza** (si apre col clic): quanti pixel è *una V* e *una riga* nell'immagine e dove comincia
+    il modulo (*Inizio x, y*); si regola anche con lo strumento **Sposta immagine** (tasto M), trascinando l'immagine
+    sotto la griglia. **Ingrandisci** (%, poi *Applica*) allarga tutto insieme: celle, immagine e disegno, coi passaggi
+    uguali; il ricamo cresce della stessa percentuale con le stesse copie. *Torna al ricamo* annulla anche questo.
+    **Larghezza reale** (mm) + **Misura il modulo**: scrivi quanto è largo il modulo vero (tutte le sue V in larghezza) e
+    il tool ingrandisce della percentuale giusta (le V prendono quella larghezza, alte in proporzione). Serve perché la
+    grandezza delle V viene dai campi della cella, non dall'immagine: un'immagine inserita alla misura giusta non dà da
+    sola la misura alle V. Poi, se il pezzo ha un'altra misura, rimetti Larghezza/Altezza del ricamo (02 Misure).
+    **Rifai la griglia** (accanto): il contrario. Le V restano come sono (es. 3,8 × 5 mm) e il modulo diventa largo
+    quanto quello vero con **più V** (alto come l'immagine, in proporzione): 120 mm con V da 3,8 → 32 V. L'immagine
+    resta sotto tutta la griglia nuova; il disegno di prima si perde (chiede conferma; Annulla lo rimette) e lo rifai
+    sopra l'immagine, o parti da *Ricopia il disegno*.
+- **3 Disegna**: scegli il filo e disegna col **Pennello** sul modulo al centro: ogni V vale in tutte le copie.
+  **Salva modulo…** lo mette in un file a sé (vedi sotto). **Ricopia il disegno** riempie il modulo coi colori
+  dell'immagine, V per V: quello che hai disegnato si perde (chiede conferma; *Annulla* lo rimette).
 - **Fili**: gli stessi del ricamo; la *Base* (il filo che riempie tutto sotto) si sceglie lì.
 - Sulla tela: il modulo al centro con le copie vicine, l'immagine sopra la base e **sotto** i fili
   disegnati (*Vista → Immagine*), la griglia. I tratti hanno un bordo di contrasto (scuro sotto i fili
   chiari, chiaro sotto gli scuri), così si leggono su qualunque immagine. Pennello, riempi e gomma cambiano il modulo; le frecce
-  di *Inizio* e *Giunture sulla base* come nella vista Modulo.
+  di *Inizio* e *Giunture sulla base* come nella vista Modulo (per la fascia solo di lato).
+
+**La fascia sul pezzo.** Con un modulo *Solo in larghezza*, il ricamo è la base su tutto il pezzo (cucita intera, in
+un solo stop, dall'alto in basso) e la fascia ripetuta in larghezza a un'altezza. Sulla tela due linee tratteggiate
+dicono dove comincia e dove finisce. In *02 Misure del ricamo*, sotto *Posizione del pattern*: **Margine sopra** e
+**Margine sotto** in mm, dal punto più alto e più basso della forma (o del ricamo, senza forma). Scrivi un margine: la
+fascia si sposta a righe intere e l'altro segue. Le frecce su e giù la spostano di una riga, **Centra** la mette al
+centro. Caricando una forma, la fascia va da sola al centro del pezzo. Dove la forma taglia la fascia (ai lati, in una
+scollatura) le copie sono tagliate come sempre, e i fili del disegno saltano col taglio.
+
+**La base sulla scollatura.** Dove la forma spezza le righe (una scollatura) la base non passa sopra il vuoto: cuce
+prima tutta una spalla, poi va all'altra con un'**impuntura** che resta dentro la forma, dove la base non è ancora
+cucita (così poi la copre), cuce l'altra spalla e poi le righe intere sotto. Sempre in un solo stop, senza salti. Vale
+per ogni base intera dentro una forma, con o senza fascia.
+
+**Il modulo in un file a sé** (in *01 Immagine*). **Salva modulo…** scrive un file `.json` col modulo (anche la fascia),
+i suoi fili, la base e la misura della cella; non la posizione sul pezzo, che si sceglie in ogni pezzo. **Carica
+modulo…** mette sul pezzo aperto un modulo salvato, o quello di un DST o SVG fatto qui: le misure del ricamo e la forma
+restano, la cella diventa quella del modulo (così resta degli stessi mm), una fascia va al centro del pezzo. *Annulla*
+torna a prima. Così lo stesso modulo va su più pezzi (davanti, dietro, manica) coi margini che servono a ognuno.
 
 **Il percorso del modulo** (nell'editor). Ogni tratto di pennello o riempimento è un **pezzo**, numerato
 nell'ordine in cui lo disegni, e il filo cuce i pezzi di ogni colore in quell'ordine (la gomma toglie
@@ -926,11 +972,19 @@ copia sola, senza gruppi a mano e senza area di prova); altrimenti si torna al c
 
 **I passaggi a mano** (nell'editor). Due strumenti lavorano sui passaggi del modulo al centro, e quello
 che fai vale in ogni copia. **Salti** (T): un clic su un passaggio lo trasforma in salto (la macchina
-taglia il filo); un altro clic lo rimette. **Ridisegna passaggio**: un clic sceglie il passaggio, poi
-clicchi i punti da cui deve passare, in ordine (si agganciano al vertice più vicino; il passaggio
-scelto mostra i suoi capi come anelli e i punti pieni). Fra un punto e l'altro il filo prende la
-strada più nascosta; i punti cuciti e il resto del percorso non cambiano. **Invio** o **Spazio** fissano il
-passaggio (e il clic dopo ne sceglie un altro, senza cambiare strumento), **Esc** toglie i punti messi adesso, **Canc** rimette il passaggio automatico. Se cambi l'ordine dei pezzi o
+taglia il filo); un altro clic lo rimette. **Ridisegna passaggio**: un clic sceglie il passaggio: i suoi capi
+sono due anelli, i punti da cui passa sono **pallini pieni**. **Trascina un pallino** (sopra un pallino il
+mouse diventa la mano): sta **esattamente dove lo lasci** (non si aggancia alla griglia) e il passaggio lo segue
+mentre lo sposti. **Clic sulla
+linea del passaggio** = un pallino nuovo lì, che trascini subito; **doppio clic** o **clic destro su un pallino** = lo togli. Fra un
+pallino e l'altro il filo va **dritto**, a punti di impuntura: dove lo vuoi nascosto, metti i pallini sotto le V (il
+tratto è «nascosto» se tutte le celle che attraversa hanno punti ancora da cucire, altrimenti «in vista»). I punti
+cuciti e il resto del percorso non cambiano. Mentre trascini si muovono il pallino e una linea tratteggiata; il
+passaggio vero si rifà quando lasci il mouse, subito (cambiano solo i tratti di quel passaggio); i conti del filo in
+vista e nascosto si aggiornano da soli quando ti fermi per un momento.
+**Invio** o **Spazio** (o un clic fuori dai passaggi) = fatto, e il clic dopo ne sceglie un altro senza cambiare
+strumento; **Esc** = com'era prima di sceglierlo; **Canc** = di nuovo automatico. Le linee dei passaggi sono sempre
+unite, anche col sormonto: ogni tratto parte da dove è finito il precedente, come nel DST. Se cambi l'ordine dei pezzi o
 ridisegni, un passaggio forzato che non esiste più resta inattivo finché il filo non torna a
 collegare gli stessi due vertici.
 
@@ -975,6 +1029,32 @@ come primo stop, e poi vengono le strisce degli altri fili; la base non si spost
 sempre **dall'alto in basso**, riga per riga a serpentina: ogni riga di V di filato, poi si scende all'angolo. Spento:
 ogni striscia ha la sua base, prima dei suoi colori.
 
+**Mai passaggi in vista** (acceso di partenza, anche aprendo un file di prima; in *04 Passaggi*, e come **Mai in vista** nella barra sopra la tela, anche nell'editor del modulo). I salti si vedono come linee scure tratteggiate. Il filo va da un
+punto all'altro solo **nascosto**: sotto i punti ancora da cucire, suoi o dei fili che vengono dopo, sopra i suoi punti
+già cuciti, o in verticale al centro delle V che lo coprono. Dove una strada così non c'è, **salta** (col taglio). Nel
+modulo vale anche fra le copie: un motivo staccato si unisce alla copia accanto se ci si arriva nascosti, altrimenti
+salta. I passaggi ridisegnati a mano restano come li hai disegnati, anche se vanno in vista. **Togliere un salto del
+tool**: con **Ridisegna passaggio** clicca il salto (la linea a puntini) e metti un pallino: diventa un passaggio
+disegnato da te, dritto da un pallino all'altro; **Canc** lo rimette salto. (I salti messi a mano con *Salti* si
+tolgono con *Salti*, cliccandoli di nuovo.) Fra una copia e l'altra del modulo il salto non si ridisegna. Spento: come prima, un
+passaggio in vista se costa meno del salto.
+
+**Salti corti** (acceso di partenza, anche aprendo un file di prima; in *04 Passaggi*; vale nel modulo). Coi passaggi
+mai in vista il filo lavora a **blocchi**: le V che raggiunge senza uscire allo scoperto. Da un blocco all'altro salta.
+Acceso, ogni blocco **entra nel punto più vicino a dove è finito il blocco prima** e, finite le sue V, fa un
+**passaggio nascosto** (sotto le V ancora da cucire, o in ripasso sulle sue) fino al punto **più vicino al blocco dopo**:
+di lì il salto è corto. Si tiene solo se i salti si accorciano, non aumentano e non compare niente in vista. Sul modulo
+di prova: salti 777 → 568 mm in tutto, ripassi +16%.
+
+**Prima il passaggio, poi le V** (acceso di partenza; in *04 Passaggi*; vale con *Mai passaggi in vista*). Un passaggio in verticale fra le V si vede se
+le V lì intorno sono già cucite: il filo ci corre sopra, accanto alle V. Si nasconde solo se le V vengono **dopo** e lo
+coprono. Acceso, il percorso di ogni filo di V si cerca anche **dalla fine**: dove il filo deve passare, ci passa
+prima, sotto le V che cucirà dopo, invece di cucirle e poi tornare in verticale sopra di loro. Per ogni filo il tool
+tiene il verso che passa meno sopra le V già fatte, se non aggiunge salti né filo in vista. Un verticale sopra V già
+cucite ora costa come un passaggio in vista: il filo preferisce ripassare le gambe delle V. Più filo nascosto sotto le V,
+meno ripassi. Sul ricamo di prova: verticali sopra V già cucite 4,0 → 1,9 m, salti 92 → 83, ripassi 5,9 → 2,0 m,
+passaggi nascosti 7,4 → 19,4 m.
+
 **Ottimizza l'ordine dei passaggi** (spento di partenza; in *04 Passaggi*, sotto *Taglio a ogni salto*). Il tool
 sceglie il pezzo dopo un passo alla volta, e a volte lascia indietro qualcosa (le croci di una finestra, un dente di
 muro) per tornarci alla fine con un giro lungo. Acceso, rilegge il percorso di ogni filo e sposta questi pezzi nel
@@ -989,10 +1069,11 @@ almeno due in più, quel va-e-torna si toglie: la diagonale torna al numero gius
 sviluppati calano. Una sola passata in più (4 invece di 3) resta: toglierla farebbe finire il filo dall'altra parte
 della diagonale.
 
-**Passaggi nascosti dritti (prova)** (spento di partenza; in *05 Macchina*). Un passaggio nascosto che corre lungo una
-riga, sotto le V di un filo che lo copre dopo, di solito segue le gambe di quelle V: uno zig zag. Acceso, diventa una
-**linea dritta a impuntura a metà altezza della riga**, coi punti al **centro di ogni V** che passa sopra. Valgono solo
-le corse orizzontali (almeno due mezze V di fila, nella stessa riga e nello stesso verso); il resto non cambia. Cambia
+**Passaggi nascosti dritti** (acceso di partenza, anche aprendo un file di prima; in *05 Macchina*). Un passaggio
+nascosto che corre lungo una riga, sotto le V di un filo che lo copre dopo, di solito segue le gambe di quelle V: uno zig
+zag. Acceso, diventa una **linea dritta a impuntura a metà altezza della riga**, coi punti al **centro di ogni V** che
+passa sopra; la **prima e l'ultima V restano a V**, perché il passaggio non si veda dove esce. Valgono solo le corse
+orizzontali (almeno sei mezze V di fila, nella stessa riga e nello stesso verso); il resto non cambia. Cambia
 solo come si cuce il passaggio (anteprima, SVG, DST, punti sviluppati), non il percorso. Si salva nel progetto.
 
 **Stop accesi e spenti.** Nella riga di ogni filo, **Vedi** accende o spegne quello stop

@@ -63,6 +63,12 @@ export { extractStamp as csExtractStamp, fitStamp as csFitStamp, flipStamp as cs
 export { findModule as csFindModule, tileModule as csTileModule, editsOnAllCopies as csEditsOnAllCopies, shiftModule as csShiftModule, seamShift as csSeamShift, resizeModule as csResizeModule, movePiece as csMovePiece, piecesOf as csPiecesOf, cellStep as csCellStep, bandsOf as csBandsOf, toggleBandBreak as csToggleBandBreak, moveBandBreak as csMoveBandBreak, bandCells as csBandCells, moveShapeBand as csMoveShapeBand } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
 export { zonesOf as csZonesOf, groupOfCell as csGroupOfCell } from ${JSON.stringify(posix('apps/cross-stitch/src/zones.ts'))};
 export { cellMask as csCellMask, autoRoles as csAutoRoles, normalizeContours as csNormalizeContours } from ${JSON.stringify(posix('apps/cross-stitch/src/shape.ts'))};
+export { overSewnMm as csOverSewnMm } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
+export { DEFAULT_STITCH as CS_DEFAULT_STITCH } from ${JSON.stringify(posix('apps/cross-stitch/src/routing.ts'))};
+export { moduleFile as csModuleFile, readModuleFile as csReadModuleFile } from ${JSON.stringify(posix('apps/cross-stitch/src/module.ts'))};
+export { stratiCross as csStratiCross } from ${JSON.stringify(posix('apps/cross-stitch/src/motore.ts'))};
+export { halfEdits as csHalfEdits, stitchLegs as csStitchLegs, freePoint as csFreePoint } from ${JSON.stringify(posix('apps/cross-stitch/src/model.ts'))};
+export { lumaOf as csLumaOf, evalOrder as csEvalOrder, suggestOrders as csSuggestOrders } from ${JSON.stringify(posix('apps/cross-stitch/src/ordine.ts'))};
 export { costruisciPettine, parametriPettineDefault } from ${JSON.stringify(posix('apps/pettine/src/motore.ts'))};
 export { generaLinee, programmaLinee, pezzoPiuLungo, PARAMETRI_DAVANTI, PARAMETRI_LATO, ROMBO_RIFERIMENTO } from ${JSON.stringify(posix('apps/cannage-rafia/src/linee.ts'))};
 export { reticoloDaZone, contornoDaZone, zoneDaModello, lineeDaModello } from ${JSON.stringify(posix('apps/cannage-rafia/src/reticolo.ts'))};
@@ -8554,7 +8560,8 @@ console.log('\npunto-maglia — il cordoncino del campione, mai spezzato, con gl
   // documento (nome, spostamento, come si arriva a un oggetto). Gli altri cricchetti dell'interfaccia (U1, U3, U4) li passa.
   const toolsU5 = tools.filter((t) => t !== 'compositore');
   const fuoriRegistro = Object.fromEntries(toolsU5.map((t) => [t, etichetteDi(sorgenteDi(t)).filter((e) => !delRegistro(t).has(e))]));
-  const DEBITO_ETICHETTE_ATTUALE = 64;
+  // 64 → 66 (punto croce, «Margine sopra» e «Margine sotto»): controlli, non parametri: posizione della fascia ricavata da module.offset
+  const DEBITO_ETICHETTE_ATTUALE = 66;
   const debitoEt = rg.DEBITO_ETICHETTE;
   check(`il debito delle etichette è ${DEBITO_ETICHETTE_ATTUALE} (può solo scendere: se è sceso, abbassa DEBITO_ETICHETTE_ATTUALE)`, Object.values(debitoEt).reduce((n, v) => n + v.length, 0), DEBITO_ETICHETTE_ATTUALE);
   check('un\'etichetta nel pannello che il registro non ha deve stare nel debito (le parole del pannello e del registro non si separano di nuovo)',
@@ -8871,6 +8878,18 @@ console.log('\nrete-testa-speciale — travetta della testa speciale: compensazi
   check('lato diviso in 3 e in 4: punti da 3,29 e 2,47 mm (oltre l’85%), mai più lunghi; ogni incrocio (91) col punto su tutte e due le linee; senza divisioni quasi nessuno',
     [Math.abs(d3.max - 3.287) < 0.01, d3.lati > 0.85, Math.abs(d4.max - 2.465) < 0.01, d4.lati > 0.85, d3.incroci, d4.incroci, d0.incroci < 20, rg.RTS_PARAMETRI.sideDivisions],
     [true, true, true, true, 91, 91, true, 0]);
+}
+
+// PUNTO CROCE: fascia del modulo, meta-griglia, passaggi a mano, ordine dei fili (prove nei file loro)
+{
+  const { proveFascia } = await import('./cross-stitch-fascia.mjs');
+  const { proveMetaGriglia } = await import('./cross-stitch-meta-griglia.mjs');
+  const { provePassaggiAMano } = await import('./cross-stitch-passaggi-a-mano.mjs');
+  const { proveOrdine } = await import('./cross-stitch-ordine.mjs');
+  proveFascia(rg, check);
+  proveMetaGriglia(rg, check);
+  provePassaggiAMano(rg, check);
+  proveOrdine(rg, check);
 }
 
 // La chiusura sta SEMPRE in fondo: un blocco scritto dopo process.exit non gira (è successo col cartamodello curvo del cannage, 2026-10-14).

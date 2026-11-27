@@ -42,7 +42,7 @@ export const paramsRoute = (s: Pick<StatoCross, 'threads' | 'route'>): RoutePara
   ({ ...s.route, passesByColor: Object.fromEntries(s.threads.map((_, i) => [i, passesDi(s, i)])) });
 
 /** Il modulo come percorso: pezzi e riga d'ingresso di ogni filo (il primo pezzo dice dove). */
-export const modulePathOf = (m: KnitModule): ModulePath => ({ cols: m.cols, rows: m.rows, marks: m.marks, pieceOf: m.seq, entryRow: entryRows({ cols: m.cols, marks: m.marks, pieceOf: m.seq, starts: m.starts }), cuts: m.cuts, forced: m.forced, bands: m.bands, bandAt: m.bandAt, ordered: m.ordered, offset: m.offset });
+export const modulePathOf = (m: KnitModule): ModulePath => ({ cols: m.cols, rows: m.rows, marks: m.marks, pieceOf: m.seq, entryRow: entryRows({ cols: m.cols, marks: m.marks, pieceOf: m.seq, starts: m.starts }), cuts: m.cuts, forced: m.forced, bands: m.bands, bandAt: m.bandAt, ordered: m.ordered, offset: m.offset, repeat: m.repeat });
 
 /** Il ricamo è proprio il modulo ripetuto (nessuna V ritoccata su una copia sola)? */
 export const designIsTiled = (s: Pick<StatoCross, 'grid' | 'cells' | 'module'>): boolean => {
@@ -77,7 +77,7 @@ export function ingressoPassaggi(s: StatoCross, cells: Cells = s.cells, maskFor:
   const a = clampArea(s.grid, s.area);
   const toIndex = (grid: GridSpec, i0: number, j0: number) => (i: number, j: number) => {
     const ii = i - i0, jj = j - j0;
-    return ii < 0 || ii > grid.rows || jj < 0 || jj > 2 * grid.cols ? -1 : ii * (2 * grid.cols + 1) + jj;
+    return ii < 0 || ii > grid.rows || jj < 0 || Math.floor(jj) > 2 * grid.cols ? -1 : ii * (2 * grid.cols + 1) + jj; // un pallino libero ha la colonna col decimale
   };
   const withCuts = (grid: GridSpec, i0: number, j0: number) => {
     const ix = toIndex(grid, i0, j0);

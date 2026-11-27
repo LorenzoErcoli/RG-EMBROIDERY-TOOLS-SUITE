@@ -13,8 +13,8 @@
 // Nessun DOM.
 
 import type { Cells, GridSpec, Stitch } from './model';
-import { rowPitch, segmentPoints, vertexIndex } from './model';
-import { routeCells, type ColorRoute, type RouteMetrics, type RouteParams, type RouteResult, type RouteSeg } from './routing';
+import { isHalfStitch, rowPitch, segmentPoints, vertexIndex } from './model';
+import { routeCells, overSewnMm, type ColorRoute, type RouteMetrics, type RouteParams, type RouteResult, type RouteSeg } from './routing';
 import { bandCells } from './module';
 import { areaOfCell, shiftGroup } from './zones';
 
@@ -78,44 +78,76 @@ function baseWholeRoute(g: GridSpec, cells: Cells, params: RouteParams): { route
   const over: Cells = new Map(), rest: Cells = new Map();
   for (const [k, m] of cells) {
     if (m.color !== base.color) rest.set(k, m);
-    else if (m.stitch === 'cross' && base.stitch !== 'cross') over.set(k, m);
+    else if ((m.stitch === 'cross' && base.stitch !== 'cross') || isHalfStitch(m.stitch)) over.set(k, m);
   }
   // DALL'ALTO IN BASSO (Lorenzo, 2026-10-13: «la base deve sempre lavorare da sopra a sotto»): fasce di
   // BASE_BAND_ROWS righe, a serpentina (la prima da sinistra a destra, la seconda da destra a sinistra…);
   // ogni fascia finisce sull'angolo in basso da cui parte la fascia dopo, così lo stop resta uno e continuo.
+  // DOVE LA FORMA SPEZZA LE RIGHE (Lorenzo, 2026-11-25, sulla scollatura: «facciamo un'impuntura continua nei
+  // punti in cui c'è la scollatura»): la base si cuce a pezzi (basePieces), una spalla tutta e poi l'altra,
+  // ognuno dall'alto in basso; da un pezzo all'altro il filo va con un'impuntura dentro la forma, dove la base
+  // non è ancora cucita (baseTravel): la copre la base che viene dopo. Prima passava a vista sopra il vuoto.
   const W = 2 * g.cols + 1;
   const mask = params.mask && params.mask.length === g.rows * g.cols ? params.mask : null;
   const segs: RouteSeg[] = [];
   const metrics = emptyMetrics();
-  /** Il vertice in basso della riga r, verso sinistra o verso destra, sul primo punto dentro la forma. */
-  const cornerOf = (r: number, right: boolean): number | null => {
-    for (let q = 0; q < g.cols; q++) {
-      const c = right ? g.cols - 1 - q : q;
-      if (!mask || mask[r * g.cols + c]) return (r + 1) * W + 2 * (right ? c + 1 : c);
-    }
-    return null;
+  const pieces = basePieces(g, mask, params.baseBandRows ?? BASE_BAND_ROWS);
+  const done = new Uint8Array(g.rows * g.cols);
+  const pitch = rowPitch(g);
+  const dist = (a: number, b: number) => {
+    const ia = Math.floor(a / W), ib = Math.floor(b / W);
+    return Math.hypot((a - ia * W - (b - ib * W)) * g.cellW / 2, (ia - ib) * pitch);
   };
-  let at = cornerOf(0, false) === null ? -1 : cornerOf(0, false)! - W; // in alto a sinistra
-  stripRanges(g, params.baseBandRows ?? BASE_BAND_ROWS).forEach(([r0, r1], n) => {
-    const grid: GridSpec = { ...g, rows: r1 - r0 };
-    const shift = r0 * W;
-    const sub: Cells = new Map(); // le croci col filo della base vengono dopo tutta la base (sotto)
-    const end = cornerOf(r1 - 1, n % 2 === 0);
-    const startLocal = at >= shift ? at - shift : -1;
-    const res = routeCells(grid, sub, {
-      ...params, strips: null, modulePath: null, areas: null, cuts: [], forced: [],
-      groups: params.groups?.map((q) => shiftGroup(q, 0, r0 * rowPitch(g))),
-      mask: mask ? mask.subarray(r0 * g.cols, r1 * g.cols) : null,
-      startAt: startLocal >= 0 ? { [base.color]: startLocal } : undefined,
-      endAt: end !== null ? { [base.color]: end - shift } : undefined,
+  let at = -1;
+  pieces.forEach((piece, p) => {
+    const next = pieces[p + 1];
+    // il verso della prima fascia: quello che parte più vicino a dove siamo e finisce più vicino al pezzo dopo
+    const plan = (right: boolean) => {
+      const start = partCorner(g, piece[0], false, right);
+      const lastRight = piece.length % 2 === 1 ? !right : right;
+      const end = partCorner(g, piece[piece.length - 1], true, lastRight);
+      const goal = next ? partCorner(g, next[0], false, false) : -1;
+      return { right, start, cost: (at >= 0 ? dist(at, start) : 0) + (goal >= 0 ? dist(end, goal) : 0) };
+    };
+    const a = plan(false), b = plan(true);
+    const best = b.cost < a.cost - 1e-6 ? b : a;
+    if (at < 0) at = best.start;
+    else if (at !== best.start) {
+      const travel = baseTravel(g, mask, done, at, best.start);
+      if (travel) {
+        for (const sg of travel) {
+          const [p0, q0] = segmentPoints(g, sg.from, sg.to);
+          const mm = Math.hypot(q0.x - p0.x, q0.y - p0.y);
+          if (sg.kind === 'hidden') metrics.hiddenMm += mm; else metrics.visibleMm += mm;
+        }
+        segs.push(...travel);
+        at = best.start;
+      }
+    }
+    piece.forEach((part, k) => {
+      const [r0, r1] = part.rows;
+      const grid: GridSpec = { ...g, rows: r1 - r0 };
+      const shift = r0 * W;
+      const sub: Cells = new Map(); // le croci col filo della base vengono dopo tutta la base (sotto)
+      const startRight = k % 2 === 0 ? best.right : !best.right;
+      const end = partCorner(g, part, true, !startRight);
+      const startLocal = at >= shift && at < shift + (grid.rows + 1) * W ? at - shift : -1;
+      const res = routeCells(grid, sub, {
+        ...params, strips: null, modulePath: null, areas: null, cuts: [], forced: [],
+        groups: params.groups?.map((q) => shiftGroup(q, 0, r0 * pitch)),
+        mask: part.mask ?? (mask ? mask.subarray(r0 * g.cols, r1 * g.cols) : null),
+        startAt: startLocal >= 0 ? { [base.color]: startLocal } : undefined,
+        endAt: end >= 0 ? { [base.color]: end - shift } : undefined,
+      });
+      for (const c of part.cells) done[c] = 1;
+      const bc = res.colors.find((cr) => cr.color === base.color);
+      if (!bc || !bc.segs.length) return;
+      addMetrics(metrics, res.metrics);
+      const moved = bc.segs.map((s) => ({ ...s, from: s.from + shift, to: s.to + shift }));
+      if (segs.length && moved[0].from !== segs[segs.length - 1].to) segs.push({ kind: 'jump', from: segs[segs.length - 1].to, to: moved[0].from });
+      segs.push(...moved);
+      at = segs[segs.length - 1].to;
     });
-    const bc = res.colors.find((cr) => cr.color === base.color);
-    if (!bc || !bc.segs.length) return;
-    addMetrics(metrics, res.metrics);
-    const moved = bc.segs.map((s) => ({ ...s, from: s.from + shift, to: s.to + shift }));
-    if (segs.length && moved[0].from !== segs[segs.length - 1].to) segs.push({ kind: 'jump', from: segs[segs.length - 1].to, to: moved[0].from });
-    segs.push(...moved);
-    at = segs[segs.length - 1].to;
   });
   // le croci col filo della base: sopra tutta la base (la riga sotto, col sormonto, le coprirebbe), nello stesso stop
   if (over.size) {
@@ -136,6 +168,152 @@ function baseWholeRoute(g: GridSpec, cells: Cells, params: RouteParams): { route
  * 0 in vista (con 4 righe per fascia 54 m di ripassi, con 2 righe 107 m).
  */
 export const BASE_BAND_ROWS = 1;
+
+/**
+ * Un pezzo di una fascia della base: le sue celle (dentro la forma, unite fra loro) e, se la fascia ne ha più
+ * di uno, la maschera della fascia con solo quelle (null = la maschera della fascia così com'è).
+ */
+interface BasePart { rows: [number, number]; cells: number[]; mask: Uint8Array | null; }
+
+/**
+ * I PEZZI DELLA BASE, nell'ordine in cui si cuciono. Ogni fascia si divide nei pezzi che la forma lascia
+ * staccati (sopra la scollatura: la spalla sinistra e la destra). Un pezzo continua quello di sopra se tocca
+ * solo lui e lui tocca solo questo; altrimenti comincia un pezzo nuovo, che si cuce dopo tutti quelli che
+ * tocca sopra. Senza forma, o con una forma che non spezza le righe, il pezzo è uno: tutta la base.
+ */
+function basePieces(g: GridSpec, mask: Uint8Array | null, bandRows: number): BasePart[][] {
+  const C = g.cols;
+  const isIn = (i: number) => !mask || mask[i] === 1;
+  const comp = new Int32Array(g.rows * C).fill(-1);
+  const parts: Array<BasePart & { up: number[]; down: number[] }> = [];
+  stripRanges(g, bandRows).forEach(([r0, r1], b) => {
+    const first = parts.length;
+    for (let r = r0; r < r1; r++) for (let c = 0; c < C; c++) {
+      const i0 = r * C + c;
+      if (!isIn(i0) || comp[i0] >= 0) continue;
+      const id = parts.length, cells: number[] = [], stack = [i0];
+      comp[i0] = id;
+      while (stack.length) {
+        const i = stack.pop()!;
+        cells.push(i);
+        const rr = Math.floor(i / C), cc = i - rr * C;
+        for (const [nr, nc] of [[rr - 1, cc], [rr + 1, cc], [rr, cc - 1], [rr, cc + 1]]) {
+          if (nr < r0 || nr >= r1 || nc < 0 || nc >= C) continue;
+          const j = nr * C + nc;
+          if (isIn(j) && comp[j] < 0) { comp[j] = id; stack.push(j); }
+        }
+      }
+      parts.push({ rows: [r0, r1], cells: cells.sort((x, y) => x - y), mask: null, up: [], down: [] });
+    }
+    if (parts.length - first > 1) for (let q = first; q < parts.length; q++) {
+      const m = new Uint8Array((r1 - r0) * C);
+      for (const i of parts[q].cells) m[i - r0 * C] = 1;
+      parts[q].mask = m;
+    }
+    if (b > 0) for (let c = 0; c < C; c++) {
+      const a = comp[(r0 - 1) * C + c], d = comp[r0 * C + c];
+      if (a >= 0 && d >= 0 && !parts[d].up.includes(a)) { parts[d].up.push(a); parts[a].down.push(d); }
+    }
+  });
+  const pieceOf = new Int32Array(parts.length).fill(-1);
+  const pieces: Array<{ parts: number[]; deps: number[] }> = [];
+  parts.forEach((pt, id) => {
+    if (pt.up.length === 1 && parts[pt.up[0]].down.length === 1) { pieceOf[id] = pieceOf[pt.up[0]]; pieces[pieceOf[id]].parts.push(id); }
+    else { pieceOf[id] = pieces.length; pieces.push({ parts: [id], deps: pt.up.map((u) => pieceOf[u]) }); }
+  });
+  // l'ordine: il pezzo più in alto fra quelli che hanno già cucito tutto quello che toccano sopra; a pari
+  // altezza il più vicino a dove si è finito (all'inizio, il più a sinistra)
+  const colOf = (id: number) => parts[id].cells[0] % C;
+  const used = new Uint8Array(pieces.length), order: number[] = [];
+  let lastCol = -Infinity;
+  while (order.length < pieces.length) {
+    let best = -1, bestKey: [number, number] = [Infinity, Infinity];
+    pieces.forEach((pc, k) => {
+      if (used[k] || pc.deps.some((d) => !used[d])) return;
+      const key: [number, number] = [parts[pc.parts[0]].rows[0], Math.abs(colOf(pc.parts[0]) - lastCol)];
+      if (key[0] < bestKey[0] || (key[0] === bestKey[0] && key[1] < bestKey[1])) { best = k; bestKey = key; }
+    });
+    used[best] = 1; order.push(best);
+    const last = pieces[best].parts[pieces[best].parts.length - 1];
+    lastCol = parts[last].cells.reduce((s, i) => s + (i % C), 0) / parts[last].cells.length;
+  }
+  return order.map((k) => pieces[k].parts.map((id) => parts[id]));
+}
+
+/** Il vertice d'angolo di un pezzo: in alto (la sua prima riga) o in basso (l'ultima), a sinistra o a destra. */
+function partCorner(g: GridSpec, part: BasePart, bottom: boolean, right: boolean): number {
+  if (!part.cells.length) return -1;
+  const C = g.cols, W = 2 * C + 1;
+  const r = Math.floor((bottom ? part.cells[part.cells.length - 1] : part.cells[0]) / C);
+  let c0 = Infinity, c1 = -Infinity;
+  for (const i of part.cells) if (Math.floor(i / C) === r) { c0 = Math.min(c0, i % C); c1 = Math.max(c1, i % C); }
+  return (bottom ? r + 1 : r) * W + 2 * (right ? c1 + 1 : c0);
+}
+
+/**
+ * L'IMPUNTURA da un pezzo della base al dopo: la strada più corta sul reticolo (lati e verticali) che resta
+ * dentro la forma, meglio dove la base non è ancora cucita (lì la copre dopo: 'hidden') e un po' dentro dal
+ * bordo; sopra la base già cucita si può, ma costa sei volte ('visible'). Mai sopra il vuoto. null = i due
+ * vertici non sono uniti dentro la forma (due pezzi staccati): lì si salta.
+ */
+function baseTravel(g: GridSpec, mask: Uint8Array | null, done: Uint8Array, from: number, to: number): RouteSeg[] | null {
+  const C = g.cols, W = 2 * C + 1, N = (g.rows + 1) * W;
+  const half = g.cellW / 2, pitch = rowPitch(g);
+  const isIn = (r: number, c: number) => r >= 0 && r < g.rows && c >= 0 && c < C && (!mask || mask[r * C + c] === 1);
+  const cost = (adj: Array<[number, number]>, len: number): { w: number; hidden: boolean } | null => {
+    let any = false, all = true, future = false;
+    for (const [r, c] of adj) {
+      if (isIn(r, c)) { any = true; if (!done[r * C + c]) future = true; } else all = false;
+    }
+    return any ? { w: len * (future ? (all ? 1 : 1.5) : 6), hidden: future } : null;
+  };
+  const dist = new Float64Array(N).fill(Infinity), prev = new Int32Array(N).fill(-1), hid = new Uint8Array(N);
+  const heap: Array<[number, number]> = [];
+  const push = (d: number, v: number) => {
+    heap.push([d, v]);
+    for (let k = heap.length - 1; k > 0;) {
+      const p = (k - 1) >> 1;
+      if (heap[p][0] <= heap[k][0]) break;
+      [heap[p], heap[k]] = [heap[k], heap[p]]; k = p;
+    }
+  };
+  const pop = (): [number, number] => {
+    const top = heap[0], last = heap.pop()!;
+    if (heap.length) {
+      heap[0] = last;
+      for (let k = 0; ;) {
+        const l = 2 * k + 1, r = l + 1;
+        let m = k;
+        if (l < heap.length && heap[l][0] < heap[m][0]) m = l;
+        if (r < heap.length && heap[r][0] < heap[m][0]) m = r;
+        if (m === k) break;
+        [heap[m], heap[k]] = [heap[k], heap[m]]; k = m;
+      }
+    }
+    return top;
+  };
+  dist[from] = 0; push(0, from);
+  while (heap.length) {
+    const [d, v] = pop();
+    if (d > dist[v]) continue;
+    if (v === to) break;
+    const i = Math.floor(v / W), j = v - i * W;
+    const steps: Array<[number, { w: number; hidden: boolean } | null]> = [];
+    if (j + 1 < W) steps.push([v + 1, cost([[i - 1, j >> 1], [i, j >> 1]], half)]);
+    if (j > 0) steps.push([v - 1, cost([[i - 1, (j - 1) >> 1], [i, (j - 1) >> 1]], half)]);
+    const vert = (r: number): Array<[number, number]> => (j % 2 ? [[r, (j - 1) / 2]] : [[r, j / 2 - 1], [r, j / 2]]);
+    if (i < g.rows) steps.push([v + W, cost(vert(i), pitch)]);
+    if (i > 0) steps.push([v - W, cost(vert(i - 1), pitch)]);
+    for (const [u, e] of steps) {
+      if (!e || d + e.w >= dist[u]) continue;
+      dist[u] = d + e.w; prev[u] = v; hid[u] = e.hidden ? 1 : 0; push(dist[u], u);
+    }
+  }
+  if (!Number.isFinite(dist[to])) return null;
+  const out: RouteSeg[] = [];
+  for (let v = to; v !== from; v = prev[v]) out.push({ kind: hid[v] ? 'hidden' : 'visible', from: prev[v], to: v });
+  return out.reverse();
+}
 
 /**
  * I BLOCCHI DI RICAMO: la base unica per prima, poi blocco per blocco (nell'ordine della lista) tutti i fili
@@ -166,10 +344,39 @@ export function routeAreas(g: GridSpec, cells: Cells, params: RouteParams): Rout
 
 /** I passaggi: a strisce se richiesto, altrimenti tutto il ricamo insieme. */
 export function routeAll(g: GridSpec, cells: Cells, params: RouteParams): RouteResult {
-  if (params.areas && params.areas.length) return routeAreas(g, cells, params);
+  if (params.areas && params.areas.length) return applyForced(routeAreas(g, cells, params), params.forced);
   if (params.modulePath && params.modulePath.cols <= g.cols) return routeModuleTiled(g, cells, params, params.modulePath);
   const s = params.strips;
-  return s && s.rows > 0 && s.rows < g.rows ? routeStrips(g, cells, params, s) : routeCells(g, cells, params);
+  return applyForced(s && s.rows > 0 && s.rows < g.rows ? routeStrips(g, cells, params, s) : routeCells(g, cells, params), params.forced);
+}
+
+/**
+ * I PASSAGGI A MANO SUL PERCORSO FINITO (Lorenzo, 2026-11-25: «a volte mi perde le modifiche nel ricalcolarlo più
+ * tardi»): il motore li applica filo per filo, ma la base in un solo stop non li riceveva, e a strisce un passaggio
+ * con un punto fuori dalla sua striscia si buttava via. Qui, per ultimi, su tutto il percorso: ogni passaggio che va
+ * da `from` a `to` (o al contrario) diventa dritto da un punto all'altro; uno già così resta com'è (coi suoi tipi). I
+ * tratti nuovi prendono il tipo del primo tratto di prima; i conti del filo non cambiano.
+ */
+export function applyForced(res: RouteResult, forced: RouteParams['forced']): RouteResult {
+  if (!forced || !forced.length) return res;
+  for (const cr of res.colors) {
+    const segs = cr.segs, out: RouteSeg[] = [];
+    let changed = false;
+    for (let i = 0; i < segs.length;) {
+      if (segs[i].kind === 'stitch' || segs[i].kind === 'jump') { out.push(segs[i]); i++; continue; }
+      let j = i;
+      while (j < segs.length && segs[j].kind !== 'stitch' && segs[j].kind !== 'jump') j++;
+      const from = segs[i].from, to = segs[j - 1].to;
+      const f = forced.find((q) => (q.from === from && q.to === to) || (q.from === to && q.to === from));
+      const pts = f ? [from, ...(f.from === from ? f.via : [...f.via].reverse()), to] : null;
+      const same = !pts || (j - i === pts.length - 1 && pts.slice(1).every((v, n) => segs[i + n].from === pts[n] && segs[i + n].to === v));
+      if (same) for (let q = i; q < j; q++) out.push(segs[q]);
+      else { const kind = segs[i].kind; for (let n = 1; n < pts!.length; n++) out.push({ kind, from: pts![n - 1], to: pts![n] }); changed = true; }
+      i = j;
+    }
+    if (changed) cr.segs = out;
+  }
+  return res;
 }
 
 // ------------------------------------------------------------
@@ -206,6 +413,8 @@ export interface ModulePath {
   ordered?: number[];
   /** Dove sta il modulo sul pezzo: la sua V (0, 0) è la V (dr, dc) del ricamo (Sposta pattern). */
   offset?: { dr: number; dc: number };
+  /** 'x' = modulo a fascia: una striscia sola, alla riga dr; sopra e sotto solo la base (module.ts, isBand). */
+  repeat?: 'xy' | 'x';
 }
 
 /** Il percorso di ogni filo sul modulo da solo (la base, se c'è, non è nel modulo: va sotto tutto). */
@@ -213,7 +422,7 @@ export function routeModule(g: GridSpec, mp: ModulePath, params: RouteParams): R
   const mg: GridSpec = { ...g, cols: mp.cols, rows: mp.rows };
   const baseColor = params.base?.color;
   const cells: Cells = new Map();
-  mp.marks.forEach((m, i) => { if (m && (m.color !== baseColor || (m.stitch === 'cross' && params.base?.stitch !== 'cross'))) cells.set(i, { ...m }); });
+  mp.marks.forEach((m, i) => { if (m && (m.color !== baseColor || (m.stitch === 'cross' && params.base?.stitch !== 'cross') || isHalfStitch(m.stitch))) cells.set(i, { ...m }); });
   const startAt: Record<number, number> = {}, endAt: Record<number, number> = {};
   for (const [c, row] of Object.entries(mp.entryRow)) {
     const rr = Math.max(0, Math.min(mp.rows - 1, row));
@@ -315,8 +524,14 @@ function shapesOf(cells: number[], C: number): number[][] {
 }
 
 /** Le fasce di un filo, già calcolate, a serpentina (la prima da sinistra). */
-export function routeBands(g: GridSpec, mp: ModulePath, color: number, params: RouteParams): BandRoute[] {
-  const C = mp.cols;
+export function routeBands(g: GridSpec, mp0: ModulePath, color: number, params: RouteParams): BandRoute[] {
+  const C = mp0.cols;
+  // LE SCELTE SENZA I PASSAGGI A MANO (Lorenzo, 2026-11-26, nel modulo: «cambio un passaggio, poi passo a quelli
+  // successivi, succede che nel ricalcolo mi cambia quelli precedenti»): verso, divisione, ingressi e uscite si
+  // scelgono contando filo in vista e ripassi; contando anche i passaggi ridisegnati a mano, uno che aggiunge filo in
+  // vista faceva scegliere un'altra strada, in cui quel passaggio non c'era più (tornava automatico, e con lui gli
+  // altri). Ora si sceglie come se non ci fossero, e solo le strade scelte si rifanno coi passaggi a mano.
+  const mp: ModulePath = mp0.forced && mp0.forced.length ? { ...mp0, forced: undefined } : mp0;
   // ANDATA E RITORNO (Lorenzo, 2026-10-13: «quando il modulo si ripete non sfrutta il fatto che le varie
   // fasce sono consecutive: ne finisce una, magari tornando anche indietro nel modulo, poi ripassa sopra
   // tutto e va avanti»): una fascia che continua fra le copie si può cucire in due passate lungo tutta la
@@ -332,7 +547,11 @@ export function routeBands(g: GridSpec, mp: ModulePath, color: number, params: R
     // il verso opposto, se costa chiaramente meno (il motore non è simmetrico: una fascia può avere filo in
     // vista in un verso e niente nell'altro); fra una fascia e l'altra si salta comunque
     const alt = routeBand(g, mp, color, params, band, dir > 0 ? -1 : 1);
-    if (score(alt) + 15 + 0.05 * g.cols * g.cellW < score(best[0])) { best = [alt]; dir = alt.dir; }
+    // LA SERPENTINA (Lorenzo, 2026-11-26, sul suo DST: «ora ci sono 100 salti a caso»): girare una fascia rompe la
+    // serpentina, e la fascia dopo ricomincia dall'altro lato del ricamo (un salto lungo quanto il ricamo); dalla
+    // seconda fascia in poi il verso opposto deve risparmiare anche quello
+    const flip = out.length ? 30 + 0.5 * g.cols * g.cellW : 15 + 0.05 * g.cols * g.cellW;
+    if (score(alt) + flip < score(best[0])) { best = [alt]; dir = alt.dir; }
     const single = score(best[0]);
     if (best[0].joined && best[0].metrics.retraceMm > 2 * g.cellW && !mp.ordered?.includes(color)) {
       for (let split = band.rows[0] + 1; split <= band.rows[1]; split++) {
@@ -348,16 +567,31 @@ export function routeBands(g: GridSpec, mp: ModulePath, color: number, params: R
         }
       }
     }
-    out.push(...best);
+    // le strade scelte si rifanno coi passaggi a mano e, se chiesto, coi salti accorciati (solo loro: farlo su ogni
+    // strada provata costava tre volte il tempo)
+    out.push(...(mp === mp0 && !params.shortJumps ? best : best.map((b) => bandRedo.get(b)!(mp0, !!params.shortJumps))));
     dir = best[best.length - 1].dir > 0 ? -1 : 1;
   }
   return out;
 }
 
+/** Come rifare una strada di fascia già scelta con un altro modulo (lo stesso, coi passaggi a mano). */
+const bandRedo = new WeakMap<BandRoute, (mp: ModulePath, shorten: boolean) => BandRoute>();
+
 /** Il percorso di una fascia (o di una sua passata) nel verso `dir`. */
 function routeBand(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1): BandRoute {
   const a = routeBandAt(g, mp, color, params, band, dir, true);
   if (a.joined) return a;
+  // UNITA LO STESSO (Lorenzo, 2026-11-26: «valutare anche dove proprio non è possibile fare i salti»): un motivo
+  // staccato dal bordo saltava sempre alla copia accanto; ora che il filo passa sotto i fili che vengono dopo, se la
+  // strada fino alla copia accanto non aggiunge filo in vista né salti, si tiene unito (il salto fra le copie sparisce)
+  const iso = routeBandIsolated(g, mp, color, params, band, dir);
+  const joinedAnyway = routeBandAt(g, mp, color, params, band, dir, true, undefined, undefined, true);
+  return joinedAnyway.metrics.visibleMm <= iso.metrics.visibleMm + 1e-6 && joinedAnyway.metrics.jumps <= iso.metrics.jumps ? joinedAnyway : iso;
+}
+
+/** Un elemento isolato: si salta alla copia accanto. */
+function routeBandIsolated(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1): BandRoute {
   // UN ELEMENTO ISOLATO: si provano alcuni ingressi sul lato da cui si arriva e alcune uscite sul lato verso la
   // copia dopo (in cima, in fondo, a metà; e l'uscita libera, come prima) e si tiene la coppia che costa meno
   // fra ripassi, filo in vista e metà del salto alla copia accanto (che entra dallo stesso ingresso)
@@ -380,7 +614,12 @@ function routeBand(g: GridSpec, mp: ModulePath, color: number, params: RoutePara
   return best;
 }
 
-function routeBandAt(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1, sideExit: boolean, exitAt?: ModVertex, entryAt?: ModVertex): BandRoute {
+function routeBandAt(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1, sideExit: boolean, exitAt?: ModVertex, entryAt?: ModVertex, joinAnyway = false): BandRoute {
+  const r = routeBandAtOnce(g, mp, color, params, band, dir, sideExit, exitAt, entryAt, joinAnyway);
+  bandRedo.set(r, (mp2, shorten) => routeBandAtOnce(g, mp2, color, params, band, dir, sideExit, exitAt, entryAt, joinAnyway, shorten));
+  return r;
+}
+function routeBandAtOnce(g: GridSpec, mp: ModulePath, color: number, params: RouteParams, band: { rows: [number, number]; cells: number[] }, dir: 1 | -1, sideExit: boolean, exitAt?: ModVertex, entryAt?: ModVertex, joinAnyway = false, shorten = false): BandRoute {
   const C = mp.cols, R = mp.rows, Wm = 2 * C + 1, W2 = 4 * C + 1;
   const g2: GridSpec = { ...g, cols: 2 * C, rows: R };
   {
@@ -388,6 +627,16 @@ function routeBandAt(g: GridSpec, mp: ModulePath, color: number, params: RoutePa
     const offC = dir > 0 ? 0 : C, off = 2 * offC;
     const cells: Cells = new Map();
     for (const i of band.cells) cells.set(Math.floor(i / C) * 2 * C + (i % C) + offC, { ...mp.marks[i]! });
+    // le V dei fili cuciti dopo (i fili vanno in ordine d'ago, la base prima di tutti), nelle due copie: il filo ci
+    // passa sotto, nascosto (Lorenzo, 2026-11-26: «vorrei che il bianco passasse sotto il rosso e sotto il marrone»)
+    const cover: Cells = new Map();
+    mp.marks.forEach((mk, i) => {
+      if (!mk || mk.color <= color || mk.color === params.base?.color) return;
+      const rr = Math.floor(i / C), c = i % C;
+      for (const o of [0, C]) cover.set(rr * 2 * C + c + o, { ...mk });
+    });
+    // e le V di questa fascia nella copia accanto, che si cuce subito dopo: il passaggio d'uscita ci passa sotto
+    for (const i of band.cells) cover.set(Math.floor(i / C) * 2 * C + (i % C) + (offC === 0 ? C : 0), { ...mp.marks[i]! });
     // il vuoto attraverso la giuntura, riga per riga e in tutto
     const rowLo = new Map<number, number>(), rowHi = new Map<number, number>();
     let lo = C, hi = -1;
@@ -396,12 +645,17 @@ function routeBandAt(g: GridSpec, mp: ModulePath, color: number, params: RoutePa
       rowLo.set(rr, Math.min(rowLo.get(rr) ?? C, c)); rowHi.set(rr, Math.max(rowHi.get(rr) ?? -1, c));
       lo = Math.min(lo, c); hi = Math.max(hi, c);
     }
-    const joined = C - 1 - hi + lo <= BAND_JOIN_V;
+    const joined = C - 1 - hi + lo <= BAND_JOIN_V || joinAnyway;
     let start: ModVertex;
     let exitIso: ModVertex | null = null;
     if (joined) {
-      // la riga dove il disegno è più vicino ai due bordi: lì si entra e si esce
-      const row = [...rowLo].map(([rr, l]) => [rr, C - 1 - rowHi.get(rr)! + l] as [number, number]).sort((q, w) => q[1] - w[1] || q[0] - w[0])[0][0];
+      // DALL'ALTO (Lorenzo, 2026-11-26: «l'ingresso deve sempre essere dall'alto»): si entra e si esce alla riga più
+      // in alto del motivo che sta sul bordo (prima colonna o ultima: per la copia accanto sono lo stesso motivo), e
+      // il motivo si cuce scendendo. Prima: la riga dove il disegno è più vicino ai due bordi, spesso a metà del
+      // motivo, col passaggio d'ingresso in vista. Senza V sui bordi, come prima.
+      const edgeRows = band.cells.filter((i) => i % C === 0 || i % C === C - 1).map((i) => Math.floor(i / C));
+      const row = edgeRows.length ? Math.min(...edgeRows)
+        : [...rowLo].map(([rr, l]) => [rr, C - 1 - rowHi.get(rr)! + l] as [number, number]).sort((q, w) => q[1] - w[1] || q[0] - w[0])[0][0];
       start = [row, dir > 0 ? 0 : 2 * C];
     } else {
       // GLI ELEMENTI ISOLATI (Lorenzo, 2026-10-13: «quando gli elementi sono isolati non partono e finiscono
@@ -440,12 +694,14 @@ function routeBandAt(g: GridSpec, mp: ModulePath, color: number, params: RoutePa
       const middle = shapes.filter((sh) => sh !== first && sh !== lastSh).sort((q, w) => pos(q) - pos(w));
       [first, ...middle, ...(lastSh ? [lastSh] : [])].forEach((sh, k) => { for (const i of sh) pieceOf[at2(i)] = k + 1; });
     }
-    const res = routeCells(g2, cells, {
-      ...params, base: null, strips: null, modulePath: null, groups: [], mask: null,
+    const bandParams: RouteParams = {
+      ...params, base: null, strips: null, modulePath: null, groups: [], mask: null, cover,
       cuts: (mp.cuts ?? []).map(([x, y]) => [fromMod(x), fromMod(y)] as [number, number]),
       forced: (mp.forced ?? []).map((q) => ({ from: fromMod(q.from), to: fromMod(q.to), via: q.via.map(fromMod) })),
       pieceOf, startAt: { [color]: v2(start) }, ...(joined || sideExit ? { endAt: { [color]: v2(joined ? next : exitIso!) } } : {}),
-    });
+    };
+    const res0 = routeCells(g2, cells, bandParams);
+    const res = shorten ? shortenJumps(g2, cells, cover, bandParams, color, res0) : res0;
     const segs = res.colors.find((cr) => cr.color === color)?.segs ?? [];
     let last = segs.length - 1;
     while (last >= 0 && segs[last].kind !== 'stitch') last--;
@@ -490,11 +746,14 @@ function addMetrics(to: RouteMetrics, m: RouteMetrics, times = 1): void {
 }
 /** Accoda un pezzo di percorso: se non comincia dove finisce il precedente, un salto (senza taglio). */
 function join(g: GridSpec, segs: RouteSeg[], piece: RouteSeg[], metrics: RouteMetrics): void {
+  // un pezzo che comincia con un salto: si salta una volta sola, da dove si è (niente due salti di fila)
+  let trim = false;
+  while (piece.length && piece[0].kind === 'jump' && segs.length) { trim = trim || !!piece[0].trim; piece = piece.slice(1); }
   if (!piece.length) return;
   const last = segs[segs.length - 1];
   if (last && last.to !== piece[0].from) {
     const [p, q] = segmentPoints(g, last.to, piece[0].from);
-    segs.push({ kind: 'jump', from: last.to, to: piece[0].from });
+    segs.push({ kind: 'jump', from: last.to, to: piece[0].from, ...(trim ? { trim: true } : {}) });
     metrics.jumps++; metrics.jumpMm += Math.hypot(q.x - p.x, q.y - p.y);
   }
   for (const sg of piece) segs.push(sg);
@@ -525,14 +784,18 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
   // SPOSTA PATTERN (Lorenzo, 2026-10-07: «spostare dx/sx alto/basso il pattern composto dei moduli per fare
   // i centraggi»): il modulo comincia alla V (dr, dc) del ricamo; prima di lì, a sinistra e in alto, ci sono
   // copie e una striscia tagliate. Strisce e copie partono da lì, un modulo alla volta.
-  const dr = ((Math.round(mp.offset?.dr ?? 0) % Rm) + Rm) % Rm, dc = ((Math.round(mp.offset?.dc ?? 0) % C) + C) % C;
+  // IL MODULO A FASCIA (Lorenzo, 2026-11-24): una striscia sola, dove sta la fascia (anche tagliata dal bordo);
+  // la base, sopra e sotto, è intera e in un solo stop («una base più grande che viene ricamata intera»).
+  const band = mp.repeat === 'x';
+  const dr = band ? Math.round(mp.offset?.dr ?? 0) : ((Math.round(mp.offset?.dr ?? 0) % Rm) + Rm) % Rm, dc = ((Math.round(mp.offset?.dc ?? 0) % C) + C) % C;
   const colOrigins: number[] = [];
   for (let oc = dc > 0 ? dc - C : 0; oc < g.cols; oc += C) colOrigins.push(oc);
   const rowOrigins: number[] = [];
-  for (let or = dr > 0 ? dr - Rm : 0; or < g.rows; or += Rm) rowOrigins.push(or);
+  if (band) { if (dr < g.rows && dr + Rm > 0) rowOrigins.push(dr); }
+  else for (let or = dr > 0 ? dr - Rm : 0; or < g.rows; or += Rm) rowOrigins.push(or);
   const mask = params.mask && params.mask.length === g.rows * g.cols ? params.mask : null;
   // la base in un solo stop, su tutto il ricamo, prima delle strisce
-  const whole = baseWholeRoute(g, cells, params);
+  const whole = baseWholeRoute(g, cells, band ? { ...params, baseWhole: true } : params);
   if (whole) { colors.push(whole.route); addMetrics(metrics, whole.metrics); }
   rowOrigins.forEach((o, strip) => {
     const s0 = Math.max(0, o), s1 = Math.min(g.rows, o + Rm);
@@ -545,7 +808,7 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
       const over: Cells = new Map();
       for (let rr = s0; rr < s1; rr++) for (let c = 0; c < g.cols; c++) {
         const m = cells.get(rr * g.cols + c);
-        if (m && m.color === baseC && m.stitch === 'cross' && params.base!.stitch !== 'cross' && (!mask || mask[rr * g.cols + c])) over.set((rr - s0) * g.cols + c, m);
+        if (m && m.color === baseC && ((m.stitch === 'cross' && params.base!.stitch !== 'cross') || isHalfStitch(m.stitch)) && (!mask || mask[rr * g.cols + c])) over.set((rr - s0) * g.cols + c, m);
       }
       const res = routeCells(grid, over, stripParams);
       addMetrics(metrics, res.metrics);
@@ -600,6 +863,16 @@ export function routeModuleTiled(g: GridSpec, cells: Cells, params: RouteParams,
       if (segs.length) colors.push({ color, strip, segs });
     }
   });
+  // due salti di fila: uno solo, dal primo capo all'ultimo
+  for (const cr of colors) {
+    const out: RouteSeg[] = [];
+    for (const sg of cr.segs) {
+      const prev = out[out.length - 1];
+      if (sg.kind === 'jump' && prev?.kind === 'jump') { out[out.length - 1] = { ...prev, to: sg.to, trim: prev.trim || sg.trim }; if (prev.from === sg.to) out.pop(); }
+      else out.push(sg);
+    }
+    cr.segs = out;
+  }
   // i salti contati sul percorso finito (le copie tagliate ne hanno una parte)
   metrics.jumps = 0; metrics.jumpMm = 0;
   for (const cr of colors) for (const sg of cr.segs) if (sg.kind === 'jump') { const [p0, q0] = segmentPoints(g, sg.from, sg.to); metrics.jumps++; metrics.jumpMm += Math.hypot(q0.x - p0.x, q0.y - p0.y); }
@@ -633,4 +906,55 @@ function applyCuts(g: GridSpec, res: RouteResult, cuts: Array<[number, number]>)
     cr.segs = out;
   }
   return res;
+}
+
+/**
+ * I SALTI PIÙ CORTI (Lorenzo, 2026-11-26: «come poter accorciare i salti facendo lavorare i vari blocchi in maniera che
+ * le uscite e le entrate dei successivi siano vicine… magari facendo dei passaggi lineari prima e poi iniziando a
+ * ricamare le V dal punto più conveniente»). Coi passaggi mai in vista il filo lavora a blocchi (le V che raggiunge
+ * nascosto) e salta dall'uno all'altro; il blocco finiva dove capitava. Qui ogni blocco si rifà: si entra nel punto più
+ * vicino a dove è finito quello prima, si cuce, e alla fine un passaggio nascosto (sotto le V ancora da cucire, o in
+ * ripasso sulle sue) porta al punto più vicino al blocco dopo: di lì il salto è corto. Si tiene solo se i salti si
+ * accorciano, non aumentano e non compare niente in vista. Sul suo modulo: 777 → 580 mm di salti, ripassi +14%.
+ * I salti a mano (Salti) restano dentro il loro blocco.
+ */
+function shortenJumps(g: GridSpec, cells: Cells, cover: Cells, params: RouteParams, color: number, res: RouteResult): RouteResult {
+  const cr = res.colors.find((c) => c.color === color);
+  if (!cr) return res;
+  const W = 2 * g.cols + 1;
+  const blocks: RouteSeg[][] = [];
+  let cur: RouteSeg[] = [];
+  for (const sg of cr.segs) { if (sg.kind === 'jump' && !sg.trim) { if (cur.some((x) => x.kind === 'stitch')) blocks.push(cur); cur = []; } else cur.push(sg); }
+  if (cur.some((x) => x.kind === 'stitch')) blocks.push(cur);
+  if (blocks.length < 2) return res;
+  const cellOf = (sg: RouteSeg) => { const i1 = Math.floor(sg.from / W), i2 = Math.floor(sg.to / W), j1 = sg.from % W, j2 = sg.to % W; return Math.min(i1, i2) * g.cols + Math.floor(Math.min(j1, j2) / 2); };
+  const bCells = blocks.map((b) => { const m: Cells = new Map(); for (const sg of b) if (sg.kind === 'stitch') { const k = cellOf(sg); const mk = cells.get(k); if (mk) m.set(k, mk); } return m; });
+  const verts = blocks.map((b) => [...new Set(b.filter((x) => x.kind === 'stitch').flatMap((x) => [x.from, x.to]))]);
+  const P = (v: number) => { const i = Math.floor(v / W), j = v - i * W; return { x: j * g.cellW / 2, y: i * rowPitch(g) }; };
+  const dist = (a: number, b: number) => { const p = P(a), q = P(b); return Math.hypot(p.x - q.x, p.y - q.y); };
+  const closest = (from: number[], to: number[]) => { let best = from[0], bd = Infinity; for (const a of from) for (const b of to) { const d = dist(a, b); if (d < bd) { bd = d; best = a; } } return best; };
+  const startAt = params.startAt?.[color], endAt = params.endAt?.[color];
+  const out: RouteSeg[] = [];
+  const metrics = { legs: 0, hiddenMm: 0, verticalMm: 0, retraceMm: 0, visibleMm: 0, jumps: 0, jumpMm: 0, maxExtra: 0 };
+  let prevExit = -1;
+  for (let b = 0; b < blocks.length; b++) {
+    const entry = b === 0 && startAt !== undefined ? startAt : closest(verts[b], [prevExit]);
+    const exit = b + 1 < blocks.length ? closest(verts[b], verts[b + 1]) : endAt;
+    // coprono: i fili dopo, e le V dei blocchi dopo di questo filo; quelle dei blocchi prima sono già cucite (prima
+    // contavano anche loro fra quelle che coprono: il filo ci passava sopra in verticale come se venissero dopo)
+    const cov: Cells = new Map(cover), sewn: Cells = new Map();
+    bCells.forEach((m, o) => { if (o !== b) for (const [k, v] of m) (o > b ? cov : sewn).set(k, v); });
+    const r = routeCells(g, bCells[b], { ...params, cover: cov, sewn, startAt: { [color]: entry }, ...(exit !== undefined ? { endAt: { [color]: exit } } : { endAt: undefined }) });
+    const sg = r.colors.find((c) => c.color === color)?.segs ?? [];
+    if (b > 0) { out.push({ kind: 'jump', from: prevExit, to: sg.length ? sg[0].from : entry }); metrics.jumps++; metrics.jumpMm += dist(prevExit, sg.length ? sg[0].from : entry); }
+    out.push(...sg);
+    metrics.legs += r.metrics.legs; metrics.hiddenMm += r.metrics.hiddenMm; metrics.verticalMm += r.metrics.verticalMm; metrics.retraceMm += r.metrics.retraceMm; metrics.visibleMm += r.metrics.visibleMm; metrics.jumps += r.metrics.jumps; metrics.jumpMm += r.metrics.jumpMm;
+    prevExit = sg.length ? sg[sg.length - 1].to : entry;
+  }
+  const old = res.metrics;
+  if (metrics.jumps > old.jumps || metrics.jumpMm >= old.jumpMm - 1e-6 || metrics.visibleMm > old.visibleMm + 1e-6) return res;
+  // e non più passaggi sopra le V già cucite (vedi RouteParams.backward)
+  const colors = res.colors.map((c) => (c.color === color ? { ...c, segs: out } : c));
+  if (overSewnMm(g, cells, cover, colors, colors.find((c) => c.color === color)!) > overSewnMm(g, cells, cover, res.colors, cr) + 0.01) return res;
+  return { colors, metrics };
 }

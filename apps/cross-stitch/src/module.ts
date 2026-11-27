@@ -33,6 +33,11 @@ export interface ModuleOptions {
   /** Colonne e righe del modulo nell'immagine, se si vogliono imporre (0 = trovale). */
   cols?: number;
   rows?: number;
+  /**
+   * Il modulo a fascia: si ripete solo in larghezza. Il periodo si cerca solo in x; in altezza il modulo è tutto il
+   * pezzo d'immagine, meno le righe di sola base sopra e sotto.
+   */
+  band?: boolean;
 }
 
 export interface FoundModule {
@@ -53,6 +58,8 @@ export interface FoundModule {
   uncertain: number;
   /** Dove sta il modulo nell'immagine (px dell'immagine analizzata): la sua V (0, 0) e la sua misura. */
   guidePx: { x: number; y: number; w: number; h: number };
+  /** Per la fascia: le righe di sola base tolte sopra e sotto. */
+  trimmed?: { top: number; bottom: number };
 }
 
 // ------------------------------------------------------------ colore
@@ -265,7 +272,7 @@ export function findModule(px: Pixels, opts: ModuleOptions): FoundModule {
   for (let i = 0; i < W * H; i++) L[i] = 0.3 * data[4 * i] + 0.59 * data[4 * i + 1] + 0.11 * data[4 * i + 2];
 
   // 1. il periodo
-  const MW = period(L, W, H, 'x'), MH = period(L, W, H, 'y');
+  const MW = period(L, W, H, 'x'), MH = opts.band ? H : period(L, W, H, 'y');
 
   // 2. le colonne
   const sm = smooth(data, W, H);
@@ -286,7 +293,8 @@ export function findModule(px: Pixels, opts: ModuleOptions): FoundModule {
   }
   const ch = MH / MR;
   const ey = colorEdges(sm, W, H, 'y');
-  const oy = alignment(ey, ch).phase;
+  // la fascia con le righe date: il pezzo d'immagine è già la fascia, agganciata alle righe (niente fase)
+  const oy = opts.band && opts.rows ? 0 : alignment(ey, ch).phase;
 
   // 4. il colore di ogni V, in tutte le copie
   const samples: Array<{ key: number; rgb: number[]; lab: Lab }> = [];
@@ -338,6 +346,12 @@ export function findModule(px: Pixels, opts: ModuleOptions): FoundModule {
   samples.forEach((c, i) => { const v = votes[c.key]; v.set(lbl[i], (v.get(lbl[i]) ?? 0) + 1); });
   let map = votes.map((v) => { let b = 0, bn = -1; for (const [k, n] of v) if (n > bn) { bn = n; b = k; } return b; });
   let cols = MC, rows = MR, uncertain = 0;
+  // la fascia non si ripete in altezza: le righe sono solo quelle che stanno intere nell'immagine (l'ultima, a
+  // metà fuori, non ha campioni e usciva di un colore a sé)
+  if (opts.band) {
+    const nj = Math.max(2, Math.floor((H - y0g) / ch));
+    if (nj < rows) { map = map.slice(0, nj * cols); votes.length = nj * cols; rows = nj; }
+  }
 
   // 5. il modulo vero: metà uguali (a meno del rumore) → la metà, per maggioranza
   const reduce = (axis: 'x' | 'y') => {
@@ -371,7 +385,7 @@ export function findModule(px: Pixels, opts: ModuleOptions): FoundModule {
     map = next; cols = nc; rows = nr;
     return true;
   };
-  for (let guard = 0; guard < 6; guard++) { const a = reduce('x'), b = reduce('y'); if (!a && !b) break; }
+  for (let guard = 0; guard < 6; guard++) { const a = reduce('x'), b = opts.band ? false : reduce('y'); if (!a && !b) break; }
 
   // 6. i colori finti: solo pezzetti → prendono il colore intorno
   let removed = 0;
@@ -409,6 +423,23 @@ export function findModule(px: Pixels, opts: ModuleOptions): FoundModule {
     }
   }
 
+  // la fascia: via le righe di sola base sopra e sotto (il margine si sceglie poi sul pezzo); una riga è di base se
+  // almeno il 95% delle sue V ha un colore vicino a quello più diffuso (ΔE < 12: la base di una foto di maglia esce
+  // spesso in due gruppi quasi uguali, sulla fascia di prova #8e9cb6 e #7f8ea8)
+  let trimmed: { top: number; bottom: number } | undefined;
+  if (opts.band) {
+    const cnt0 = new Map<number, number>(); for (const v of map) cnt0.set(v, (cnt0.get(v) ?? 0) + 1);
+    const base0 = [...cnt0].sort((a, b) => b[1] - a[1])[0][0];
+    const labOf = (k: number) => toLab(rgbOf[k][0], rgbOf[k][1], rgbOf[k][2]);
+    const baseLab = labOf(base0);
+    const near = new Set([...cnt0.keys()].filter((k) => d2(labOf(k), baseLab) < 12 * 12));
+    const plain = (r: number) => { let n = 0; for (let c = 0; c < cols; c++) if (near.has(map[r * cols + c])) n++; return n >= 0.95 * cols; };
+    let top = 0, bottom = 0;
+    while (top < rows - 2 && plain(top)) top++;
+    while (bottom < rows - top - 2 && plain(rows - 1 - bottom)) bottom++;
+    if (top || bottom) { map = map.slice(top * cols, (rows - bottom) * cols); rows -= top + bottom; }
+    trimmed = { top, bottom };
+  }
   // i fili: prima il più diffuso (la base), poi dal più chiaro al più scuro
   const count = new Map<number, number>(); for (const v of map) count.set(v, (count.get(v) ?? 0) + 1);
   const lum = (k: number) => 0.3 * rgbOf[k][0] + 0.59 * rgbOf[k][1] + 0.11 * rgbOf[k][2];
@@ -425,7 +456,8 @@ export function findModule(px: Pixels, opts: ModuleOptions): FoundModule {
     imageCells: { cols: MC, rows: MR },
     removed,
     uncertain,
-    guidePx: { x: x0g, y: y0g, w: cols * cw, h: rows * ch },
+    guidePx: { x: x0g, y: y0g + (trimmed?.top ?? 0) * ch, w: cols * cw, h: rows * ch },
+    trimmed,
   };
 }
 
@@ -474,6 +506,28 @@ export interface KnitModule {
    * cambia (a differenza di Inizio, che lo ruota): si sposta la griglia delle copie.
    */
   offset?: { dr: number; dc: number };
+  /**
+   * IL MODULO A FASCIA (Lorenzo, 2026-11-24: «il modulo è un modulo intero per altezza che si replica solo in
+   * orizzontale… si ricama su una base più grande che viene ricamata intera»). 'x' = le copie solo a destra e a
+   * sinistra: sopra e sotto c'è la base. `offset.dr` è allora dove sta la fascia (la sua prima riga è la riga dr
+   * del ricamo), senza giri: può anche uscire dal pezzo. Senza, o 'xy', il modulo si ripete anche in verticale.
+   */
+  repeat?: ModuleRepeat;
+}
+
+/** Come si ripete il modulo: 'xy' in orizzontale e in verticale (di sempre), 'x' solo in orizzontale (fascia). */
+export type ModuleRepeat = 'xy' | 'x';
+/** Il modulo è una fascia (si ripete solo in orizzontale)? */
+export const isBand = (m: { repeat?: ModuleRepeat } | null | undefined): boolean => m?.repeat === 'x';
+
+/**
+ * La riga del modulo per la riga `r` del ricamo (offset `dr`): in giro per il modulo che si ripete in verticale,
+ * -1 fuori dalla fascia per il modulo a fascia.
+ */
+export function moduleRowOf(m: { rows: number; repeat?: ModuleRepeat }, r: number, dr: number): number {
+  const R = m.rows;
+  if (isBand(m)) { const mr = r - dr; return mr >= 0 && mr < R ? mr : -1; }
+  return (((r - dr) % R) + R) % R;
 }
 
 /**
@@ -603,10 +657,14 @@ export function moveShapeBand(mod: KnitModule, color: number, cell: number, dir:
 /** Il ricamo = il modulo ripetuto su tutta la griglia, a partire dall'angolo in alto a sinistra. */
 export function tileModule(g: GridSpec, mod: KnitModule, offset: { dr: number; dc: number } | null = mod.offset ?? null): Cells {
   const out: Cells = new Map();
-  const R = mod.rows, C = mod.cols, dr = offset?.dr ?? 0, dc = offset?.dc ?? 0;
-  for (let r = 0; r < g.rows; r++) for (let c = 0; c < g.cols; c++) {
-    const m = mod.marks[((((r - dr) % R) + R) % R) * C + ((((c - dc) % C) + C) % C)];
-    if (m) out.set(r * g.cols + c, { ...m });
+  const C = mod.cols, dr = offset?.dr ?? 0, dc = offset?.dc ?? 0;
+  for (let r = 0; r < g.rows; r++) {
+    const mr = moduleRowOf(mod, r, dr);
+    if (mr < 0) continue; // fuori dalla fascia: solo la base
+    for (let c = 0; c < g.cols; c++) {
+      const m = mod.marks[mr * C + ((((c - dc) % C) + C) % C)];
+      if (m) out.set(r * g.cols + c, { ...m });
+    }
   }
   return out;
 }
@@ -620,8 +678,10 @@ export function editsOnAllCopies(g: GridSpec, mod: KnitModule, edits: CellEdit[]
   const out: CellEdit[] = [];
   const seen = new Set<number>();
   const dr = offset?.dr ?? 0, dc = offset?.dc ?? 0;
+  const band = isBand(mod);
   for (const e of edits) {
-    const mr = (((e.r - dr) % mod.rows) + mod.rows) % mod.rows, mc = (((e.c - dc) % mod.cols) + mod.cols) % mod.cols;
+    const mr = moduleRowOf(mod, e.r, dr), mc = (((e.c - dc) % mod.cols) + mod.cols) % mod.cols;
+    if (mr < 0) continue; // fuori dalla fascia non c'è modulo: lì c'è la base
     if (seen.has(mr * mod.cols + mc)) continue;
     seen.add(mr * mod.cols + mc);
     mod.marks[mr * mod.cols + mc] = e.mark ? { ...e.mark } : null;
@@ -631,7 +691,8 @@ export function editsOnAllCopies(g: GridSpec, mod: KnitModule, edits: CellEdit[]
       mod.seq[mr * mod.cols + mc] = e.mark ? piece : 0;
       if (e.mark && piece > 0) { if (!mod.starts) mod.starts = {}; if (mod.starts[piece] === undefined) mod.starts[piece] = mr * mod.cols + mc; }
     }
-    for (let r = (mr + dr) % mod.rows; r < g.rows; r += mod.rows) for (let c = (mc + dc) % mod.cols; c < g.cols; c += mod.cols) out.push({ r, c, mark: e.mark ? { ...e.mark } : null });
+    const r0 = band ? mr + dr : ((((mr + dr) % mod.rows) + mod.rows) % mod.rows), rStep = band ? Infinity : mod.rows;
+    for (let r = r0; r >= 0 && r < g.rows; r += rStep) for (let c = (((mc + dc) % mod.cols) + mod.cols) % mod.cols; c < g.cols; c += mod.cols) out.push({ r, c, mark: e.mark ? { ...e.mark } : null });
   }
   return out;
 }
@@ -652,7 +713,7 @@ export function shiftModule(mod: KnitModule, dr: number, dc: number): KnitModule
   const seq = mod.seq ? marks.map((_, i) => mod.seq![((Math.floor(i / C) + sr) % R) * C + ((i % C) + sc) % C]) : mod.seq;
   const starts = mod.starts ? Object.fromEntries(Object.entries(mod.starts).map(([k, v]) => [k, newIdx(v)])) : mod.starts;
   // le fasce a mano non si spostano (una fascia scavalcherebbe il bordo): tornano automatiche
-  return { cols: C, rows: R, marks, guide, drawn: mod.drawn, seq, starts, ordered: mod.ordered, offset: mod.offset };
+  return { cols: C, rows: R, marks, guide, drawn: mod.drawn, seq, starts, ordered: mod.ordered, offset: mod.offset, repeat: mod.repeat };
 }
 
 /**
@@ -671,7 +732,7 @@ export function resizeModule(mod: KnitModule, cols: number, rows: number, fill: 
   const starts = mod.starts ? Object.fromEntries(Object.entries(mod.starts).filter(([, v]) => Math.floor(v / mod.cols) < rows && v % mod.cols < cols).map(([k, v]) => [k, Math.floor(v / mod.cols) * cols + (v % mod.cols)])) : mod.starts;
   const bands = mod.bands ? Object.fromEntries(Object.entries(mod.bands).map(([k, v]) => [k, v.filter((r) => r < rows)])) : mod.bands;
   const bandAt = mod.bandAt ? Object.fromEntries(Object.entries(mod.bandAt).map(([k, v]) => [k, Object.fromEntries(Object.entries(v).filter(([i, rr]) => Math.floor(Number(i) / mod.cols) < rows && Number(i) % mod.cols < cols && rr < rows).map(([i, rr]) => [Math.floor(Number(i) / mod.cols) * cols + (Number(i) % mod.cols), rr]))])) : mod.bandAt;
-  return { cols, rows, marks, guide: mod.guide, drawn: mod.drawn, seq: mod.seq ? seq : undefined, starts, bands, bandAt, ordered: mod.ordered, offset: mod.offset };
+  return { cols, rows, marks, guide: mod.guide, drawn: mod.drawn, seq: mod.seq ? seq : undefined, starts, bands, bandAt, ordered: mod.ordered, offset: mod.offset, repeat: mod.repeat };
 }
 
 /**
@@ -689,7 +750,9 @@ export function seamShift(mod: KnitModule, baseColor: number): { dr: number; dc:
     let n = 0; for (let r = 0; r < R; r++) if (design(r, c - 1) && design(r, c)) n++;
     if (n < cutCols) { cutCols = n; dc = c; }
   }
+  // la fascia non gira in verticale: la giuntura orizzontale resta dov'è
   let dr = 0, cutRows = Infinity;
+  if (isBand(mod)) { cutRows = 0; return { dr, dc, cutCols, cutRows }; }
   for (let r = 0; r < R; r++) {
     let n = 0; for (let c = 0; c < C; c++) if (design(r - 1, c) && design(r, c)) n++;
     if (n < cutRows) { cutRows = n; dr = r; }
@@ -729,4 +792,78 @@ export function piecesOf(mod: KnitModule, color: number): Array<{ piece: number;
   if (!seq) return [];
   const pieces = [...new Set(mod.marks.map((x, i) => (x && x.color === color && seq[i] > 0 ? seq[i] : 0)).filter((v) => v > 0))].sort((a, b) => a - b);
   return pieces.map((piece, k) => ({ piece, position: k + 1, start: mod.starts?.[piece] ?? seq.findIndex((v, i) => v === piece && mod.marks[i]?.color === color) }));
+}
+
+// ------------------------------------------------------------ il modulo letto da un file
+
+/** Il modulo come sta in un file (progetto o file del modulo), controllato: null se non è un modulo. */
+export function parseKnitModule(raw: unknown): KnitModule | null {
+  const m = raw as KnitModule | null | undefined;
+  if (!(m && Number.isInteger(m.cols) && Number.isInteger(m.rows) && m.cols > 0 && m.rows > 0 && Array.isArray(m.marks) && m.marks.length === m.cols * m.rows)) return null;
+  return {
+    cols: m.cols, rows: m.rows, marks: m.marks.map((x) => (x && typeof x === 'object' ? { stitch: x.stitch, color: Number(x.color) } : null)),
+    guide: m.guide && typeof m.guide === 'object' && [m.guide.x, m.guide.y, m.guide.w, m.guide.h].every((v) => Number.isFinite(Number(v))) ? { x: Number(m.guide.x), y: Number(m.guide.y), w: Number(m.guide.w), h: Number(m.guide.h) } : null,
+    drawn: !!m.drawn,
+    seq: Array.isArray(m.seq) && m.seq.length === m.cols * m.rows ? m.seq.map((v) => Math.max(0, Math.round(Number(v) || 0))) : undefined,
+    starts: m.starts && typeof m.starts === 'object' ? Object.fromEntries(Object.entries(m.starts).map(([k, v]) => [Number(k), Number(v)])) : undefined,
+    cuts: Array.isArray(m.cuts) ? m.cuts.filter((q) => Array.isArray(q) && q.length === 2).map((q) => [Number(q[0]), Number(q[1])] as [number, number]) : undefined,
+    forced: Array.isArray(m.forced) ? m.forced.filter((q) => q && Array.isArray(q.via)).map((q) => ({ from: Number(q.from), to: Number(q.to), via: q.via.map(Number) })) : undefined,
+    bands: m.bands && typeof m.bands === 'object' ? Object.fromEntries(Object.entries(m.bands).filter(([, v]) => Array.isArray(v)).map(([k, v]) => [Number(k), (v as unknown[]).map(Number)])) : undefined,
+    ordered: Array.isArray(m.ordered) ? m.ordered.map(Number) : undefined,
+    offset: m.offset && typeof m.offset === 'object' ? { dr: Math.round(Number(m.offset.dr) || 0), dc: Math.round(Number(m.offset.dc) || 0) } : undefined,
+    repeat: m.repeat === 'x' ? 'x' : undefined,
+    bandAt: m.bandAt && typeof m.bandAt === 'object' ? Object.fromEntries(Object.entries(m.bandAt).filter(([, v]) => v && typeof v === 'object').map(([k, v]) => [Number(k), Object.fromEntries(Object.entries(v as Record<string, unknown>).map(([i, d]) => [Number(i), Number(d)]))])) : undefined,
+  };
+}
+
+/**
+ * IL MODULO IN UN FILE A SÉ (Lorenzo, 2026-11-24: «il modulo dovrò poterlo usare anche in altre parti dove i margini
+ * sopra e sotto cambiano»). Il modulo con quello che serve a rimetterlo uguale in un altro pezzo: i fili (colori,
+ * passate), la base e la misura della cella (così il modulo resta degli stessi mm). Non ci sono la posizione sul
+ * pezzo (si sceglie in ogni pezzo) né la guida (sta su un'immagine che l'altro progetto non ha).
+ */
+export interface ModuleFile {
+  rgModule: 'cross-stitch';
+  version: 1;
+  module: KnitModule;
+  threads: Array<{ hex: string; passes?: number }>;
+  base: { color: number; stitch: CellMark['stitch'] } | null;
+  cell: { cellW: number; cellH: number; overlapPct: number };
+}
+
+export function moduleFile(mod: KnitModule, threads: Array<{ hex: string; passes?: number }>, base: ModuleFile['base'], g: Pick<GridSpec, 'cellW' | 'cellH' | 'overlapPct'>): ModuleFile {
+  const { guide: _guide, offset: _offset, ...rest } = mod;
+  return {
+    rgModule: 'cross-stitch', version: 1,
+    module: JSON.parse(JSON.stringify(rest)) as KnitModule,
+    threads: threads.map((t) => ({ hex: t.hex, passes: t.passes })),
+    base: base ? { color: base.color, stitch: base.stitch } : null,
+    cell: { cellW: g.cellW, cellH: g.cellH, overlapPct: g.overlapPct ?? 0 },
+  };
+}
+
+/**
+ * Il modulo da un file: un file del modulo (`rgModule`) o un progetto del tool che ne ha uno (`rgProject` con
+ * `module`, cioè un DST o un SVG esportati da qui). null se nel file non c'è un modulo.
+ */
+export function readModuleFile(meta: Record<string, unknown> | null | undefined): ModuleFile | null {
+  if (!meta || typeof meta !== 'object') return null;
+  const fromProject = meta.rgProject === 'cross-stitch';
+  if (meta.rgModule !== 'cross-stitch' && !fromProject) return null;
+  const mod = parseKnitModule(meta.module);
+  if (!mod) return null;
+  mod.guide = null;
+  mod.offset = undefined;
+  const hex6 = (v: unknown) => (/^#[0-9a-f]{6}$/i.test(String(v)) ? String(v).toLowerCase() : '#000000');
+  const threads = Array.isArray(meta.threads) ? (meta.threads as Array<{ hex?: unknown; passes?: unknown }>).map((t) => ({ hex: hex6(t?.hex), passes: Math.max(1, Math.round(Number(t?.passes) || 1)) })) : [];
+  const used = Math.max(-1, ...mod.marks.map((x) => (x ? x.color : -1)));
+  if (threads.length <= used) return null; // un modulo con fili che il file non ha
+  const rawBase = fromProject ? (meta.route as { base?: unknown } | undefined)?.base : meta.base;
+  const b = rawBase as { color?: unknown; stitch?: unknown } | null | undefined;
+  const base = b && Number.isInteger(Number(b.color)) && Number(b.color) >= 0 && Number(b.color) < threads.length && typeof b.stitch === 'string'
+    ? { color: Number(b.color), stitch: b.stitch as CellMark['stitch'] } : null;
+  const cg = (fromProject ? meta.grid : meta.cell) as { cellW?: unknown; cellH?: unknown; overlapPct?: unknown } | undefined;
+  const cellW = Number(cg?.cellW), cellH = Number(cg?.cellH);
+  if (!(cellW > 0 && cellH > 0)) return null;
+  return { rgModule: 'cross-stitch', version: 1, module: mod, threads, base, cell: { cellW, cellH, overlapPct: Math.min(90, Math.max(0, Number(cg?.overlapPct) || 0)) } };
 }

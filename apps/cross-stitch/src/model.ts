@@ -22,9 +22,20 @@ export type Leg = 'down' | 'up';
 
 /**
  * Il punto che sta in una cella: la diagonale «\» o «/», la croce (prima la gamba sotto, poi
- * quella sopra), la V e la Λ (la V capovolta), ognuna dentro la sua cella.
+ * quella sopra), la V e la Λ (la V capovolta), ognuna dentro la sua cella; e la V o la Λ A METÀ
+ * GRIGLIA (HalfStitch).
  */
-export type Stitch = Leg | 'cross' | 'v' | 'lambda';
+export type Stitch = Leg | 'cross' | 'v' | 'lambda' | HalfStitch;
+
+/**
+ * LA V A METÀ GRIGLIA (Lorenzo, 2026-11-25: «una funzione di incastro a metà della griglia… per rifinire alcuni
+ * punti V finali ad angolo»): una V o una Λ spostata di mezza cella di lato, sulla stessa riga, a cavallo di due
+ * celle. Sta in una delle due: `L` = centrata sul lato sinistro della cella (prende la metà destra della cella a
+ * sinistra), `R` = sul lato destro (la metà sinistra della cella a destra). I passaggi come per la V intera, sotto le V
+ * disegnate.
+ */
+export type HalfStitch = 'vL' | 'vR' | 'lambdaL' | 'lambdaR';
+export const isHalfStitch = (s: Stitch | string | undefined): s is HalfStitch => s === 'vL' || s === 'vR' || s === 'lambdaL' || s === 'lambdaR';
 
 export interface GridSpec {
   cols: number;
@@ -99,8 +110,43 @@ export function gridHeight(g: GridSpec): number {
   return g.rows > 0 ? (g.rows - 1) * rowPitch(g) + g.cellH : 0;
 }
 
+// ------------------------------------------------------------
+// I PUNTI LIBERI (Lorenzo, 2026-11-26, Ridisegna passaggio: «il fatto che i passaggi sono pinnati e non posso
+// spostarli dove voglio è super fastidioso»). Un pallino messo a mano sta dove lo si lascia, non sul vertice più
+// vicino. Resta un numero come i vertici, così passa per tutti i conti che spostano i vertici (modulo, copie, area di
+// prova, strisce: sempre riga · larghezza + colonna, più uno scarto intero): la parte intera è il vertice più vicino,
+// la parte decimale lo scarto in centesimi di mezza cella (in orizzontale) e di passo di riga (in verticale). Un
+// vertice vero è sempre intero; un punto libero non lo è mai.
+// ------------------------------------------------------------
+
+/** Un punto libero è un numero non intero. */
+export const isFreePoint = (v: number): boolean => !Number.isInteger(v);
+
+/** Il punto libero più vicino a (x, y) mm (riga sulla linea della riga, senza la V sopra). */
+export function freePoint(g: GridSpec, x: number, y: number): number {
+  const W = latticeWidth(g), hx = g.cellW / 2, p = rowPitch(g);
+  const i = Math.max(0, Math.min(g.rows, Math.round(y / p))), j = Math.max(0, Math.min(W - 1, Math.round(x / hx)));
+  const q = (d: number) => Math.max(0, Math.min(99, Math.round(d * 100) + 50));
+  return i * W + j + (q(x / hx - j) * 100 + q(y / p - i) + 0.5) / 10000;
+}
+
+/** Riga e colonna (con la parte decimale) di un punto libero, nel reticolo. */
+export function freeCoords(g: GridSpec, v: number): { i: number; j: number } {
+  const W = latticeWidth(g);
+  const i = Math.floor(v / W), rest = v - i * W, j = Math.floor(rest);
+  const n = Math.max(0, Math.min(9999, Math.round((rest - j) * 10000 - 0.5)));
+  return { i: i + ((n % 100) - 50) / 100, j: j + (Math.floor(n / 100) - 50) / 100 };
+}
+
+/** Dove sta un punto libero, mm. */
+export function freePos(g: GridSpec, v: number): { x: number; y: number } {
+  const c = freeCoords(g, v);
+  return { x: c.j * (g.cellW / 2), y: c.i * rowPitch(g) };
+}
+
 /** Il vertice `v` visto dalla riga `r` (in alto se è sulla riga r, in basso se è sulla r+1). */
 export function pointInRow(g: GridSpec, v: number, r: number): { x: number; y: number } {
+  if (isFreePoint(v)) return freePos(g, v);
   const W = latticeWidth(g);
   const i = Math.floor(v / W);
   return { x: (v - i * W) * (g.cellW / 2), y: r * rowPitch(g) + (i - r) * g.cellH };
@@ -108,6 +154,7 @@ export function pointInRow(g: GridSpec, v: number, r: number): { x: number; y: n
 
 /** I due capi in mm di un tratto fra due vertici del reticolo, ognuno nella riga giusta. */
 export function segmentPoints(g: GridSpec, from: number, to: number): [{ x: number; y: number }, { x: number; y: number }] {
+  if (isFreePoint(from) || isFreePoint(to)) return [knitVertex(g, from), knitVertex(g, to)];
   const W = latticeWidth(g);
   const i1 = Math.floor(from / W), i2 = Math.floor(to / W);
   const j1 = from - i1 * W, j2 = to - i2 * W;
@@ -116,6 +163,9 @@ export function segmentPoints(g: GridSpec, from: number, to: number): [{ x: numb
   // punta di una V alla punta della V sotto (o da angolo ad angolo), lungo quanto il passo della
   // riga, senza scarti.
   if (j1 === j2 && i1 !== i2) return [knitVertex(g, from), knitVertex(g, to)];
+  // più di una riga (un passaggio a mano dritto, un salto): dentro una riga sola il sormonto sbaglierebbe il capo
+  // lontano di (1 − passo) per ogni riga in più; i due capi dove stanno nella maglia
+  if (Math.abs(i1 - i2) > 1) return [knitVertex(g, from), knitVertex(g, to)];
   // diagonale: la riga è quella fra i due; bordo orizzontale: la riga che parte lì
   const r = i1 !== i2 ? Math.min(i1, i2) : Math.min(i1, g.rows - 1);
   return [pointInRow(g, from, r), pointInRow(g, to, r)];
@@ -127,6 +177,7 @@ export function segmentPoints(g: GridSpec, from: number, to: number): [{ x: numb
  * dell'ultima riga.
  */
 export function knitVertex(g: GridSpec, v: number): { x: number; y: number } {
+  if (isFreePoint(v)) return freePos(g, v);
   const W = latticeWidth(g);
   const i = Math.floor(v / W), j = v - i * W;
   const p = rowPitch(g);
@@ -162,6 +213,13 @@ export function stitchLegs(g: GridSpec, r: number, c: number, stitch: Stitch, to
   const diag = (leg: Leg) => (leg === 'down' ? { a: V(r, j), b: V(r + 1, j + 2) } : { a: V(r + 1, j), b: V(r, j + 2) });
   if (stitch === 'v') return [{ a: V(r, j), b: V(r + 1, j + 1) }, { a: V(r + 1, j + 1), b: V(r, j + 2) }];
   if (stitch === 'lambda') return [{ a: V(r + 1, j), b: V(r, j + 1) }, { a: V(r, j + 1), b: V(r + 1, j + 2) }];
+  if (isHalfStitch(stitch)) {
+    // a metà griglia: i due bracci al centro delle due celle, la punta sul lato fra le due
+    const j0 = stitch === 'vL' || stitch === 'lambdaL' ? j - 1 : j + 1;
+    if (j0 < 0 || j0 + 2 > 2 * g.cols) return [];
+    if (stitch === 'vL' || stitch === 'vR') return [{ a: V(r, j0), b: V(r + 1, j0 + 1) }, { a: V(r + 1, j0 + 1), b: V(r, j0 + 2) }];
+    return [{ a: V(r + 1, j0), b: V(r, j0 + 1) }, { a: V(r, j0 + 1), b: V(r + 1, j0 + 2) }];
+  }
   return legsOf(stitch, topLeg).map(diag);
 }
 
@@ -223,10 +281,10 @@ export function resizeCells(from: GridSpec, to: GridSpec, cells: Cells): Cells {
 // Serializzazione (nel metadata di SVG e DST, R27)
 // ------------------------------------------------------------
 
-const STITCH_CODE: Record<Stitch, string> = { down: 'd', up: 'u', cross: 'x', v: 'v', lambda: 'l' };
-const CODE_STITCH: Record<string, Stitch> = { d: 'down', u: 'up', x: 'cross', v: 'v', l: 'lambda' };
+const STITCH_CODE: Record<Stitch, string> = { down: 'd', up: 'u', cross: 'x', v: 'v', lambda: 'l', vL: 'vl', vR: 'vr', lambdaL: 'll', lambdaR: 'lr' };
+const CODE_STITCH: Record<string, Stitch> = { d: 'down', u: 'up', x: 'cross', v: 'v', l: 'lambda', vl: 'vL', vr: 'vR', ll: 'lambdaL', lr: 'lambdaR' };
 
-/** Le celle in forma compatta: `[r, c, 'd'|'u'|'x'|'v'|'l', colore]`. */
+/** Le celle in forma compatta: `[r, c, 'd'|'u'|'x'|'v'|'l'|'vl'|'vr'|'ll'|'lr', colore]`. */
 export function cellsToJson(g: GridSpec, cells: Cells): Array<[number, number, string, number]> {
   return [...cells.entries()].sort((a, b) => a[0] - b[0]).map(([k, m]) => {
     const r = Math.floor(k / g.cols);
@@ -464,13 +522,34 @@ export function gridForSize(widthMm: number, heightMm: number, cellW: number, ce
 // ------------------------------------------------------------
 
 /** Il punto che il pennello mette su una cella vuota. */
-export type BrushStitch = 'v' | 'diag' | 'cross';
+export type BrushStitch = 'v' | 'lambda' | 'diag' | 'cross';
 
-/** Il punto del pennello: V/Λ, «\»/«/», o croce, secondo il tasto. */
+/** Il punto del pennello: V/Λ (col destro l'altra), «\»/«/», o croce, secondo il tasto. */
 function freshStitch(stitch: BrushStitch, button: Button): Stitch {
   if (stitch === 'cross') return 'cross';
   if (stitch === 'diag') return button === 'left' ? 'down' : 'up';
+  if (stitch === 'lambda') return button === 'left' ? 'lambda' : 'v';
   return button === 'left' ? 'v' : 'lambda';
+}
+
+/**
+ * Il pennello A METÀ GRIGLIA: la V (o la Λ) centrata sul lato `line` fra le celle `line − 1` e `line` della
+ * riga r (line da 1 a cols − 1). Va nella cella libera delle due (prima quella a destra), o dove ce n'è già una
+ * a metà su quel lato (cambia filo e forma). Tutte e due occupate da altri punti: niente (non c'è posto).
+ * `erase`: toglie il punto a metà su quel lato. Col destro la forma opposta (V ↔ Λ), come il pennello.
+ */
+export function halfEdits(g: GridSpec, cells: Cells, r: number, line: number, color: number, stitch: BrushStitch, button: Button, erase: boolean): CellEdit[] {
+  if (r < 0 || r >= g.rows || line < 1 || line >= g.cols) return [];
+  const a = line - 1, b = line;
+  const ma = cells.get(cellIndex(g, r, a)), mb = cells.get(cellIndex(g, r, b));
+  const onLeft = (m?: CellMark) => !!m && (m.stitch === 'vL' || m.stitch === 'lambdaL'); // in b, sul lato sinistro
+  const onRight = (m?: CellMark) => !!m && (m.stitch === 'vR' || m.stitch === 'lambdaR'); // in a, sul lato destro
+  if (erase) return [...(onLeft(mb) ? [{ r, c: b, mark: null }] : []), ...(onRight(ma) ? [{ r, c: a, mark: null }] : [])];
+  const lambda = (stitch === 'lambda') !== (button === 'right');
+  const L: Stitch = lambda ? 'lambdaL' : 'vL', R: Stitch = lambda ? 'lambdaR' : 'vR';
+  if (onLeft(mb) || !mb) return [{ r, c: b, mark: { stitch: L, color } }];
+  if (onRight(ma) || !ma) return [{ r, c: a, mark: { stitch: R, color } }];
+  return [];
 }
 
 /** Le celle sotto un pennello di `size` × `size` punti, centrato sulla cella (r, c). */
