@@ -654,10 +654,13 @@ pennello, i fili e Annulla/Rifai.
   segue tutto quello che si tocca, quindi va usato su zone chiuse (l'interno di una lettera); per i
   ritocchi c'è il pennello.
 - **Gomma** (E): cancella, lì non si cuce niente. Con qualunque strumento, Maiuscolo cancella.
-- **Seleziona** (S): trascina un riquadro intorno alle V; poi trascinalo dentro e le **V disegnate** si spostano di
+- **Modifica** (S): trascina un riquadro intorno alle V; poi trascinalo dentro e le **V disegnate** si spostano di
   celle intere (in anteprima mentre trascini), la base resta dov'è e dove si liberano torna la base. Le frecce le
-  spostano di una V, Canc le cancella, Esc toglie la selezione, Ctrl+Z annulla. Col modulo vale come il pennello (su
-  tutte le copie, se è acceso).
+  spostano di una V, Canc le cancella, Esc toglie la selezione, Ctrl+Z annulla. **Copia e incolla**: Ctrl+C copia le
+  V disegnate della selezione, Ctrl+X le taglia, Ctrl+V le incolla subito a destra della selezione; **Alt + trascina**
+  sposta una copia e lascia l'originale. Il pezzo incollato resta **sospeso** (riquadro tratteggiato): lo trascini o lo
+  sposti con le frecce, Invio o un clic fuori lo posa (le sue V coprono quello che c'è sotto), Esc lo toglie. Serve per
+  le ripetizioni dentro il modulo. Col modulo vale come il pennello (su tutte le copie, se è acceso).
 - **Salti** (T): clicca un passaggio sull'anteprima e diventa un **salto**: la macchina taglia il filo
   lì, invece di cucire il passaggio. Nel DST il salto a mano porta il **taglio** (la sequenza di taglio dei
   DST Tajima): nel programma di ricamo i due pezzi arrivano staccati, senza collegamento. Con **Taglio a

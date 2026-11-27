@@ -49,7 +49,7 @@ const MODE_HELP: Record<Mode, string> = {
   paint: 'Pennello: trascina per passare le V al filo scelto. Mette il punto scelto qui a fianco (V, croce, diagonale), anche dove c’era già un punto. Maiuscolo + trascina cancella.',
   fill: 'Riempi: un clic passa al filo scelto tutta la zona collegata dello stesso colore — per esempio l’interno di una lettera.',
   erase: 'Gomma: trascina per cancellare; lì non si cuce niente.',
-  select: 'Seleziona: trascina un riquadro intorno alle V; poi trascinalo dentro per spostare le V disegnate (la base resta dov’è), frecce per una V alla volta, Canc per cancellarle, Esc per togliere la selezione. Con un modulo vale su tutte le copie come il pennello.',
+  select: 'Modifica: trascina un riquadro intorno alle V; poi trascinalo dentro per spostare le V disegnate (la base resta dov’è), Alt + trascina per spostarne una copia, frecce per una V alla volta, Canc per cancellarle. Ctrl+C copia, Ctrl+X taglia, Ctrl+V incolla accanto: il pezzo incollato resta sospeso, lo trascini o lo sposti con le frecce, Invio (o un clic fuori) lo posa, Esc lo toglie. Con un modulo vale su tutte le copie come il pennello.',
   cut: 'Salti: clicca un passaggio e diventa un salto (la macchina taglia il filo); clicca un salto fatto a mano e torna passaggio. Si tolgono tutti in 04 Passaggi.',
   reroute: 'Ridisegna passaggio: clicca un passaggio per sceglierlo. Poi trascina i pallini pieni: il passaggio li segue mentre li sposti. Clic sulla linea del passaggio = un pallino nuovo lì (e lo trascini), doppio clic o clic destro su un pallino = lo togli. Invio o Spazio = fatto, Esc = com’era prima, Canc = di nuovo automatico.',
   bands: 'Fasce: il filo scelto si cuce a fasce orizzontali, dall’alto, a serpentina lungo tutte le copie. Clic su una V del filo: la sua forma passa alla fascia sotto (Maiusc+clic: sopra). Clic su una riga vuota del filo: lì comincia una fascia nuova. Clic su un confine: lo togli. Trascina un confine per spostarlo.',
@@ -494,7 +494,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
             <button type="button" class="rg-segmented__item" data-mode="paint" title="Pennello (B)">Pennello</button>
             <button type="button" class="rg-segmented__item" data-mode="fill" title="Riempi (F)">Riempi</button>
             <button type="button" class="rg-segmented__item" data-mode="erase" title="Gomma (E)">Gomma</button>
-            <button type="button" class="rg-segmented__item" data-mode="select" title="Seleziona e sposta (S)">Seleziona</button>
+            <button type="button" class="rg-segmented__item" data-mode="select" title="Modifica: seleziona, sposta, copia e incolla (S)">Modifica</button>
             <button type="button" class="rg-segmented__item" data-mode="group" title="Gruppi (G)">Gruppi</button>
             <button type="button" class="rg-segmented__item" data-mode="area" title="Blocchi di ricamo (K)">Blocchi</button>
             <button type="button" class="rg-segmented__item" data-mode="cut" title="Salti (T)">Salti</button>
@@ -637,7 +637,13 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
   // blocco intero, lo seleziono e lo porto più in alto»): un riquadro di celle; trascinandolo dentro, le V disegnate
   // (non quelle della base) si spostano di celle intere
   let sel: { r0: number; c0: number; r1: number; c1: number } | null = null;
-  let selDrag: { kind: 'new'; a: { x: number; y: number }; b: { x: number; y: number } } | { kind: 'move'; start: { r: number; c: number }; dr: number; dc: number } | null = null;
+  let selDrag: { kind: 'new'; a: { x: number; y: number }; b: { x: number; y: number } } | { kind: 'move'; start: { r: number; c: number }; dr: number; dc: number } | { kind: 'float'; start: { r: number; c: number }; r0: number; c0: number } | null = null;
+  // COPIA E INCOLLA (Lorenzo, 2026-11-27: «copiare parti e incollarle vicino, quando ci sono ripetizioni dentro al
+  // modulo stesso»): le V copiate (posizioni rispetto all'angolo della selezione) e il pezzo incollato, sospeso finché
+  // non si posa
+  type Pezzo = { marks: Array<{ dr: number; dc: number; mark: { stitch: Stitch; color: number } }>; rows: number; cols: number };
+  let clip: Pezzo | null = null;
+  let floating: (Pezzo & { r0: number; c0: number }) | null = null;
   /** Il contorno che si sta disegnando a clic (Gruppi o Blocchi): i suoi punti in mm. */
   let polyDraft: { kind: 'group' | 'area'; pts: Array<{ x: number; y: number }> } | null = null;
   /**
@@ -1400,9 +1406,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (zoneSel && (mode === 'group' || mode === 'area')) { $('status').textContent = `${zoneSel.kind === 'area' ? 'Blocco' : 'Gruppo'} ${zoneSel.i + 1} selezionato: trascina un vertice per spostarlo, il pallino a metà di un lato per aggiungerne uno, tasto destro su un vertice per toglierlo; trascina dentro per spostare tutto. Esc per finire.`; return; }
     if (mode === 'select') {
       const d = selDrag;
-      $('status').textContent = d?.kind === 'move' ? `Sposti le V di ${d.dr} righe e ${d.dc} colonne: lascia per posarle.`
-        : sel ? `Selezione ${sel.c1 - sel.c0 + 1} × ${sel.r1 - sel.r0 + 1} V: trascinala dentro per spostare le V disegnate (la base resta), frecce per una V alla volta, Canc per cancellarle, Esc per togliere la selezione. Ctrl+Z annulla.`
-          : 'Seleziona: trascina un riquadro intorno alle V da spostare.';
+      $('status').textContent = floating ? `Pezzo incollato (${floating.cols} × ${floating.rows} V), sospeso: trascinalo o spostalo con le frecce; Invio o un clic fuori lo posa, Esc lo toglie.`
+        : d?.kind === 'move' ? `Sposti le V di ${d.dr} righe e ${d.dc} colonne: lascia per posarle.`
+        : sel ? `Selezione ${sel.c1 - sel.c0 + 1} × ${sel.r1 - sel.r0 + 1} V: trascinala dentro per spostare le V disegnate (la base resta), Alt + trascina per spostarne una copia, frecce per una V alla volta, Canc per cancellarle; Ctrl+C copia, Ctrl+X taglia, Ctrl+V incolla accanto; Esc toglie la selezione, Ctrl+Z annulla.`
+          : `Modifica: trascina un riquadro intorno alle V da spostare o copiare.${clip ? ' Ctrl+V incolla le V copiate.' : ''}`;
       return;
     }
     if (eyedrop >= 0) { $('status').textContent = `Clicca sull’immagine il colore del filo ${eyedrop + 1} (Esc annulla). L’immagine si vede intera mentre scegli.`; return; }
@@ -1821,7 +1828,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (m === 'order') orderClicks = 0;
     if (m !== 'reroute') reroute = null;
     if (m !== 'group' && m !== 'area') polyDraft = null; // un contorno lasciato a metà si annulla
-    if (m !== 'select') { sel = null; selDrag = null; }
+    if (m !== 'select') { if (floating) commitFloating(); sel = null; selDrag = null; }
     if (zoneSel && zoneSel.kind !== m) { zoneSel = null; zoneEdit = null; }
     bandDrag = null;
     $('bandsAutoBtn').hidden = m !== 'bands';
@@ -2373,7 +2380,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const svg = $('layer').querySelector('svg');
     if (!svg) return;
     svg.querySelector('#cs-sel')?.remove();
-    if (mode !== 'select' || (!sel && !selDrag)) return;
+    if (mode !== 'select' || (!sel && !selDrag && !floating)) return;
     const g = st.grid, pa = rowPitch(g), ns = 'http://www.w3.org/2000/svg';
     const layer = document.createElementNS(ns, 'g');
     layer.id = 'cs-sel';
@@ -2387,7 +2394,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     };
     const box = (q: { r0: number; c0: number; r1: number; c1: number }, dashed: boolean) => rect(q.c0 * g.cellW, q.r0 * pa, (q.c1 - q.c0 + 1) * g.cellW, (q.r1 - q.r0) * pa + g.cellH, dashed);
     if (selDrag?.kind === 'new') { const d = selDrag; rect(Math.min(d.a.x, d.b.x), Math.min(d.a.y, d.b.y), Math.abs(d.b.x - d.a.x), Math.abs(d.b.y - d.a.y), true); }
-    if (sel) box(sel, selDrag?.kind === 'move');
+    if (sel && !floating) box(sel, selDrag?.kind === 'move');
     if (sel && selDrag?.kind === 'move' && (selDrag.dr || selDrag.dc)) {
       const { dr, dc } = selDrag;
       box({ r0: sel.r0 + dr, c0: sel.c0 + dc, r1: sel.r1 + dr, c1: sel.c1 + dc }, false);
@@ -2402,7 +2409,71 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         }
       }
     }
+    if (floating) {
+      box(floatRect(), true);
+      for (const q of floating.marks) {
+        const r = floating.r0 + q.dr, c = floating.c0 + q.dc;
+        if (r < 0 || c < 0 || r >= g.rows || c >= g.cols) continue;
+        for (const { a, b } of stitchLegs(g, r, c, q.mark.stitch, st.route.topLeg)) {
+          const pA = pointInRow(g, a, r), pB = pointInRow(g, b, r), ln = document.createElementNS(ns, 'line');
+          ln.setAttribute('x1', String(pA.x)); ln.setAttribute('y1', String(pA.y)); ln.setAttribute('x2', String(pB.x)); ln.setAttribute('y2', String(pB.y));
+          ln.setAttribute('vector-effect', 'non-scaling-stroke');
+          ln.setAttribute('style', `stroke:${st.threads[q.mark.color]?.hex ?? '#000000'};stroke-width:2;opacity:0.85`);
+          layer.appendChild(ln);
+        }
+      }
+    }
     svg.appendChild(layer);
+  }
+  /** Le V disegnate della selezione come pezzo (posizioni rispetto all'angolo in alto a sinistra). */
+  function pieceOfSel(): Pezzo | null {
+    if (!sel) return null;
+    const marks = selectedMarks().map((q) => ({ dr: q.r - sel!.r0, dc: q.c - sel!.c0, mark: { ...q.mark } }));
+    return marks.length ? { marks, rows: sel.r1 - sel.r0 + 1, cols: sel.c1 - sel.c0 + 1 } : null;
+  }
+  const floatRect = () => ({ r0: floating!.r0, c0: floating!.c0, r1: floating!.r0 + floating!.rows - 1, c1: floating!.c0 + floating!.cols - 1 });
+  /** Ctrl+C (e Ctrl+X: copia e cancella). */
+  function copySelection(cut: boolean): void {
+    const pz = pieceOfSel();
+    if (!pz) { $('status').textContent = sel ? 'Nella selezione non ci sono V disegnate da copiare.' : 'Prima trascina un riquadro intorno alle V da copiare.'; return; }
+    clip = pz;
+    if (cut) eraseSelection();
+    $('status').textContent = `${cut ? 'Tagliate' : 'Copiate'} ${pz.marks.length} V (${pz.cols} × ${pz.rows}): Ctrl+V le incolla accanto.`;
+  }
+  /** Ctrl+V: il pezzo copiato, sospeso subito a destra della selezione (o in alto a sinistra), da posare. */
+  function pasteClip(): void {
+    if (!clip) { $('status').textContent = 'Niente da incollare: prima seleziona delle V e Ctrl+C.'; return; }
+    if (floating) commitFloating();
+    const g = st.grid;
+    let r0 = sel ? sel.r0 : 0, c0 = sel ? sel.c1 + 1 : 0;
+    if (c0 + clip.cols > g.cols) c0 = Math.max(0, sel ? sel.c0 - clip.cols : 0);
+    if (r0 + clip.rows > g.rows) r0 = Math.max(0, g.rows - clip.rows);
+    floating = { ...clip, marks: clip.marks.map((q) => ({ ...q, mark: { ...q.mark } })), r0, c0 };
+    sel = null;
+    drawSelection();
+    showStatus();
+  }
+  /** Posa il pezzo sospeso: le sue V coprono quello che c'è sotto; la selezione diventa il pezzo posato. */
+  function commitFloating(): void {
+    const fl = floating;
+    if (!fl) return;
+    floating = null;
+    const g = st.grid;
+    const place: CellEdit[] = [];
+    for (const q of fl.marks) {
+      const r = fl.r0 + q.dr, c = fl.c0 + q.dc;
+      if (r < 0 || c < 0 || r >= g.rows || c >= g.cols) continue;
+      place.push({ r, c, mark: { ...q.mark } });
+    }
+    const r0 = Math.max(0, fl.r0), c0 = Math.max(0, fl.c0), r1 = Math.min(g.rows - 1, fl.r0 + fl.rows - 1), c1 = Math.min(g.cols - 1, fl.c0 + fl.cols - 1);
+    sel = r1 >= r0 && c1 >= c0 ? { r0, c0, r1, c1 } : null;
+    if (!place.length) { drawSelection(); showStatus(); return; }
+    pushUndo();
+    applyUserEdits(place);
+    fromImage = false;
+    result = null;
+    buildThreads();
+    update();
   }
 
   /** Le modifiche a mano: con un modulo e «Su tutte le copie», in ogni copia (e nel modulo). */
@@ -2612,8 +2683,17 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       if (!p || e.button !== 0) return;
       e.stopPropagation(); e.preventDefault();
       const at = cellAt(e);
-      if (sel && at && at.r >= sel.r0 && at.r <= sel.r1 && at.c >= sel.c0 && at.c <= sel.c1) selDrag = { kind: 'move', start: at, dr: 0, dc: 0 };
-      else { sel = null; selDrag = { kind: 'new', a: p, b: p }; }
+      const inside = (q: { r0: number; c0: number; r1: number; c1: number } | null) => !!q && !!at && at.r >= q.r0 && at.r <= q.r1 && at.c >= q.c0 && at.c <= q.c1;
+      if (floating && at && inside(floatRect())) selDrag = { kind: 'float', start: at, r0: floating.r0, c0: floating.c0 };
+      else {
+        if (floating) commitFloating();
+        if (sel && at && inside(sel) && e.altKey) {
+          // Alt + trascina: si sposta una copia, l'originale resta
+          const pz = pieceOfSel();
+          if (pz) { floating = { ...pz, r0: sel.r0, c0: sel.c0 }; selDrag = { kind: 'float', start: at, r0: sel.r0, c0: sel.c0 }; }
+        } else if (sel && at && inside(sel)) selDrag = { kind: 'move', start: at, dr: 0, dc: 0 };
+        else { sel = null; selDrag = { kind: 'new', a: p, b: p }; }
+      }
       try { canvas.setPointerCapture(e.pointerId); } catch { /* ignore */ }
       drawSelection();
       return;
@@ -2735,8 +2815,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       e.stopPropagation();
       const p = mmAt(e);
       if (!p) return;
+      const pa = rowPitch(st.grid), r = Math.floor(p.y / pa), c = Math.floor(p.x / st.grid.cellW);
       if (selDrag.kind === 'new') selDrag.b = p;
-      else { const pa = rowPitch(st.grid); selDrag.dr = Math.floor(p.y / pa) - selDrag.start.r; selDrag.dc = Math.floor(p.x / st.grid.cellW) - selDrag.start.c; }
+      else if (selDrag.kind === 'float') { if (floating) { floating.r0 = selDrag.r0 + r - selDrag.start.r; floating.c0 = selDrag.c0 + c - selDrag.start.c; } }
+      else { selDrag.dr = r - selDrag.start.r; selDrag.dc = c - selDrag.start.c; }
       drawSelection();
       showStatus();
       return;
@@ -2834,7 +2916,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
         const c0 = Math.max(0, Math.floor(x0 / g.cellW)), c1 = Math.min(g.cols - 1, Math.ceil(x1 / g.cellW) - 1);
         const r0 = Math.max(0, Math.floor(y0 / pa)), r1 = Math.min(g.rows - 1, Math.ceil(y1 / pa) - 1);
         sel = x1 - x0 >= g.cellW * 0.5 && y1 - y0 >= pa * 0.5 && c1 >= c0 && r1 >= r0 ? { r0, c0, r1, c1 } : null;
-      } else if (d.dr || d.dc) moveSelection(d.dr, d.dc);
+      } else if (d.kind === 'move' && (d.dr || d.dc)) moveSelection(d.dr, d.dc);
       drawSelection();
       showStatus();
       return;
@@ -2900,6 +2982,17 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
       if (e.key === 'Escape') { e.preventDefault(); setMode('paint'); return; }
     }
     if (mode === 'reroute' && reroute && !e.ctrlKey && !e.metaKey && !e.altKey && rerouteKey(e.key)) { e.preventDefault(); return; }
+    if (mode === 'select' && (e.ctrlKey || e.metaKey) && !e.altKey) {
+      const kc = e.key.toLowerCase();
+      if (kc === 'c' || kc === 'x') { e.preventDefault(); copySelection(kc === 'x'); return; }
+      if (kc === 'v') { e.preventDefault(); pasteClip(); return; }
+    }
+    if (mode === 'select' && floating && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      const step: Record<string, [number, number]> = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [-1, 0], ArrowDown: [1, 0] };
+      if (step[e.key]) { e.preventDefault(); floating.r0 += step[e.key][0]; floating.c0 += step[e.key][1]; drawSelection(); showStatus(); return; }
+      if (e.key === 'Enter') { e.preventDefault(); commitFloating(); return; }
+      if (e.key === 'Escape') { e.preventDefault(); floating = null; drawSelection(); showStatus(); return; }
+    }
     if (mode === 'select' && sel && !e.ctrlKey && !e.metaKey && !e.altKey) {
       const step: Record<string, [number, number]> = { ArrowLeft: [0, -1], ArrowRight: [0, 1], ArrowUp: [-1, 0], ArrowDown: [1, 0] };
       if (step[e.key]) { e.preventDefault(); moveSelection(step[e.key][0], step[e.key][1]); drawSelection(); showStatus(); return; }

@@ -118,7 +118,10 @@ l'ordine di adesso). Fatto il terzo: `shortenJumps` in strips.ts rifà ogni bloc
 nascosto o in ripasso), coprono i fili dopo e gli altri blocchi del filo; si tiene se i salti si accorciano senza
 aumentare né mettere niente in vista. Si fa solo sulle strade di fascia già scelte (`bandRedo`): farlo su ogni strada
 provata triplicava il tempo (4,5 s → 1,6 s, come senza). Risultato: 777 → 568 mm, ripassi 3,65 → 4,23 m. Tool:
-**Seleziona e sposta** (strumento Seleziona, S). *«Spostare in blocco un blocco di V disegnate… lo seleziono e lo
+**Modifica: seleziona, sposta, copia e incolla** (strumento Modifica, S; *«la sezione sposta chiamiamola tipo editor e
+dammi la possibilità di copiare parti e incollarle vicino, quando ci sono ripetizioni dentro al modulo stesso»*).
+Ctrl+C / Ctrl+X / Ctrl+V e Alt + trascina; il pezzo incollato è sospeso (`floating`) finché non si posa con Invio, un
+clic fuori o cambiando strumento: così si mette a posto prima di toccare il disegno sotto. *«Spostare in blocco un blocco di V disegnate… lo seleziono e lo
 porto più in alto»*: un riquadro di celle; si spostano le V disegnate (non quelle uguali alla base), di celle intere,
 trascinando o con le frecce; dove si liberano, come la gomma. Passa da `applyUserEdits`, quindi col modulo vale su
 tutte le copie (prima i posti d'arrivo, perché in `editsOnAllCopies` su una V del modulo vince il primo cambio).
