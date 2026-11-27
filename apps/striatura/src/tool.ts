@@ -12,12 +12,13 @@ import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
 import {
   collegaStilista, stratiCuciti, trovaStilista, selezioneDaStilista, origineStilista, coloreForiStilista,
-  BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista,
+  type AggancioStilista,
 } from '@rg/ui/stilista';
 import { runPipeline, type RoleAssignment } from './pipeline';
 import { defaultStriaturaParams, type StriaturaParams } from './engine';
 import { sampleContours } from './sample';
 import { stimaDaDst } from './stima';
+import { barraAnteprima, barraStato, sezioneSorgente, campoNumero, campoNumeroInline, attivaCampiNumero, leggiCampo, impostaNumero } from '@rg/ui/anatomia';
 
 /** Un campo numerico. L'unità va nello slot del DS, mai nell'etichetta (REVISIONE-PARAMETRI). */
 interface Field { key: keyof StriaturaParams; label: string; unit: string; step: number; min?: number; help?: string; }
@@ -74,34 +75,20 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
   ${topbar('Punto Striato', opts.backHref)}
   <div class="rg-workspace striatura-workspace">
     <aside class="rg-workspace__panel">
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">01</span><h3 class="rg-param-section__title">Sagoma</h3></div>
-        <div class="rg-param-grid">
-          <div class="rg-file-input rg-param-grid__wide">
-            <label class="rg-file-input__control">
-              <input type="file" id="fileInput" accept=".svg,.dxf,.dst" />
-              <span class="rg-button rg-button--outline">Carica DXF, SVG o DST…</span>
-            </label>
-            <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file: uso la sagoma demo.</p>
-            <small class="rg-field__help">Un DST non cambia la sagoma: dà i valori. Se viene da qui li rimette; se è una striatura fatta altrove li ricava dai punti, un livello per ogni colore con della striatura.</small>
-          </div>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Larghezza reale (0 = auto)</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="realWidth" type="number" min="0" step="1" value="0"><span>mm</span></span>
-            <small class="rg-field__help">0 = usa la misura letta dal file.</small>
-          </label>
-          <div class="rg-cluster rg-param-grid__wide"><button id="sampleBtn" class="rg-button rg-button--ghost" type="button">Sagoma demo</button></div>
+      ${sezioneSorgente({
+        tipo: 'cartamodello', accetta: '.svg,.dxf,.dst', etichettaCarica: 'Carica DXF, SVG o DST…',
+        statoIniziale: 'Nessun file: uso il cartamodello demo.', demo: 'Cartamodello demo', stilista: true,
+        extra: `<small class="rg-field__help rg-param-grid__wide">Un DST non cambia la sagoma: dà i valori. Se viene da qui li rimette; se è una striatura fatta altrove li ricava dai punti, un livello per ogni colore con della striatura.</small>
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Oggetto pieno (senza fori)</span>
-            <div class="rg-cluster">
-              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="objW" type="number" min="1" step="1" value="120"><span>mm</span></span>
-              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="objH" type="number" min="1" step="1" value="150"><span>mm</span></span>
+            <div class="rg-cluster" id="objSize">
+              ${campoNumeroInline({ aria: 'Larghezza dell’oggetto pieno', unita: 'mm', valore: 120, passo: 1, min: 1 })}
+              ${campoNumeroInline({ aria: 'Altezza dell’oggetto pieno', unita: 'mm', valore: 150, passo: 1, min: 1 })}
             </div>
-            <div class="rg-cluster"><button type="button" id="objBtn" class="rg-button rg-button--outline rg-button--small">Genera oggetto</button>${BOTTONE_PRENDI_STILISTA()}</div>
+            <div class="rg-cluster"><button type="button" id="objBtn" class="rg-button rg-button--outline rg-button--small">Genera oggetto</button></div>
             <small class="rg-field__help">larghezza × altezza: crea un rettangolo pieno da riempire, senza importare un file</small>
-          </div>
-        </div>
-      </section>
+          </div>`,
+      })}
 
       <section class="rg-param-section">
         <div class="rg-param-section__header"><span class="rg-param-section__index">02</span><h3 class="rg-param-section__title">Colori e ruoli</h3></div>
@@ -128,8 +115,8 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
           </div>
           <div class="rg-field rg-param-grid__wide">
             <span class="rg-field__label">Variante</span>
-            <div class="rg-cluster">
-              <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="seed" type="number" min="1" step="1" value="1"><span>#</span></span>
+            <div class="rg-cluster" id="seedBox">
+              ${campoNumeroInline({ aria: 'Variante', unita: '#', valore: 1, passo: 1, min: 1 })}
               <button type="button" id="newSeedBtn" class="rg-button rg-button--outline rg-button--small">Nuova variante</button>
             </div>
             <small class="rg-field__help">stessa variante = stesso identico pattern; cambiala per una disposizione diversa (riproducibile)</small>
@@ -188,26 +175,21 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     </aside>
 
     <div class="rg-workspace__stage">
-      <header class="rg-workspace__stage-header">
-        <h2 class="rg-h3">Anteprima</h2>
-        <div class="rg-cluster">
-          <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
-          ${BOTTONE_INVIA_STILISTA()}
-          <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
-          <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Esporta SVG</button>
-        </div>
-      </header>
+      ${barraAnteprima({ inviaStilista: true })}
       <div class="rg-workspace__canvas" id="canvas">
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
       </div>
-      <footer class="rg-workspace__statusbar">
-        <span id="status">Pronto</span>
-        <span id="zoom" class="rg-mono">zoom 100%</span>
-      </footer>
+      ${barraStato()}
     </div>
   </div>`;
 
+  attivaCampiNumero(root);
   const $ = (id: string) => root.querySelector<HTMLElement>('#' + id)!;
+  // I campi compatti non hanno un id: glielo si dà qui, perché il resto del tool li cerca per nome.
+  const [objW, objH] = Array.from($('objSize').querySelectorAll('input'));
+  objW.id = 'objW';
+  objH.id = 'objH';
+  $('seedBox').querySelector('input')!.id = 'seed';
 
   let imported: ImportResult = importResultFromContours(sampleContours());
   // la demo ha un foro di colore suo: mostra le aree vuote
@@ -237,39 +219,19 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     const host = $(hostId);
     host.innerHTML = '';
     for (const f of fields) {
-      const lab = document.createElement('label');
-      lab.className = 'rg-field' + (f.help ? ' rg-param-grid__wide' : '');
-      const name = document.createElement('span');
-      name.className = 'rg-field__label';
-      name.textContent = f.label;
-      const wrap = document.createElement('span');
-      wrap.className = 'rg-field-with-unit';
-      const inp = document.createElement('input');
-      inp.type = 'number';
-      inp.className = 'rg-input rg-input--numeric';
-      inp.step = String(f.step);
-      if (f.min !== undefined) inp.min = String(f.min);
-      inp.value = String(params[f.key]);
+      host.insertAdjacentHTML('beforeend', campoNumero({
+        id: 'p-' + f.key, etichetta: f.label, unita: f.unit, valore: params[f.key] as number, passo: f.step, min: f.min, aiuto: f.help,
+      }));
+      const inp = host.querySelector<HTMLInputElement>('#p-' + f.key)!;
       inp.addEventListener('change', () => {
-        const v = parseFloat(inp.value);
+        const v = leggiCampo(inp);
         if (!Number.isNaN(v)) {
           const clamped = f.min !== undefined ? Math.max(f.min, v) : v;
           (params[f.key] as number) = clamped;
-          inp.value = String(clamped);
+          impostaNumero(inp, clamped);
           render();
         }
       });
-      const unit = document.createElement('span');
-      unit.textContent = f.unit;
-      wrap.append(inp, unit);
-      lab.append(name, wrap);
-      if (f.help) {
-        const help = document.createElement('small');
-        help.className = 'rg-field__help';
-        help.textContent = f.help;
-        lab.appendChild(help);
-      }
-      host.appendChild(lab);
     }
   }
 
@@ -450,8 +412,8 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
       }
     }
     if (meta.roles && typeof meta.roles === 'object') roles = { ...(meta.roles as RoleAssignment) };
-    ($('realWidth') as HTMLInputElement).value = String(params.realWidthMm);
-    ($('seed') as HTMLInputElement).value = String(params.seed);
+    impostaNumero($('realWidth') as HTMLInputElement, params.realWidthMm);
+    impostaNumero($('seed') as HTMLInputElement, params.seed);
     syncMode();
     syncVerso();
     syncUscite();
@@ -483,7 +445,8 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     return `${nome}: valori ricavati dai punti — ${dice(a)}${b ? ' · secondo livello, ' + dice(b) : ''}; punto ${a.valori.maxStitchMm}, minimo ${a.valori.minStitchMm}, collegamenti ${a.valori.travelStitchMm} mm${altri}. La variante non si ricava.`;
   }
 
-  $('fileInput').addEventListener('change', (ev) => {
+  // Lo stesso lettore per «Carica DXF, SVG o DST…» e per «Apri progetto o DST…»: un DST, da qualunque dei due, dà i valori.
+  const apriFile = (ev: Event) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
     const isDst = /\.dst$/i.test(file.name);
@@ -529,36 +492,38 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
       }
     };
     if (isDst) reader.readAsArrayBuffer(file); else reader.readAsText(file);
-  });
+  };
+  $('fileInput').addEventListener('change', apriFile);
+  $('progettoInput').addEventListener('change', apriFile);
 
   $('realWidth').addEventListener('change', () => {
-    const v = parseFloat(($('realWidth') as HTMLInputElement).value);
+    const v = leggiCampo($('realWidth') as HTMLInputElement);
     params.realWidthMm = Number.isNaN(v) ? 0 : Math.max(0, v);
     render();
-    updateFileStatus(sourceName || 'Sagoma');
+    updateFileStatus(sourceName || 'Cartamodello');
   });
 
   // Variante = seed: pattern DIVERSO ma RIPRODUCIBILE.
   $('seed').addEventListener('change', () => {
-    const v = parseInt(($('seed') as HTMLInputElement).value, 10);
+    const v = Math.trunc(leggiCampo($('seed') as HTMLInputElement));
     params.seed = Number.isNaN(v) ? 1 : Math.max(1, v);
     render();
   });
   $('newSeedBtn').addEventListener('click', () => {
     params.seed = (params.seed % 999999) + 1;
-    ($('seed') as HTMLInputElement).value = String(params.seed);
+    impostaNumero($('seed') as HTMLInputElement, params.seed);
     render();
   });
 
-  $('sampleBtn').addEventListener('click', () => { roles = ruoliDemo(); sourceName = ''; sourceFile = null; loadImport(importResultFromContours(sampleContours()), 'Sagoma demo'); });
+  $('demoBtn').addEventListener('click', () => { roles = ruoliDemo(); sourceName = ''; sourceFile = null; loadImport(importResultFromContours(sampleContours()), 'Cartamodello demo'); });
 
   // Oggetto pieno: rettangolo largo×alto (mm) senza fori, da riempire subito (nessun file).
   $('objBtn').addEventListener('click', () => {
-    const w = Math.max(1, parseFloat(($('objW') as HTMLInputElement).value) || 120);
-    const h = Math.max(1, parseFloat(($('objH') as HTMLInputElement).value) || 150);
+    const w = Math.max(1, leggiCampo($('objW') as HTMLInputElement) || 120);
+    const h = Math.max(1, leggiCampo($('objH') as HTMLInputElement) || 150);
     const rect: Contour[] = [{ points: [{ x: 0, y: 0 }, { x: w, y: 0 }, { x: w, y: h }, { x: 0, y: h }], closed: true, color: '#2b6cb0' }];
     roles = {}; sourceName = `oggetto-${w}x${h}`; sourceFile = null; params.realWidthMm = 0;
-    ($('realWidth') as HTMLInputElement).value = '0';
+    impostaNumero($('realWidth') as HTMLInputElement, 0);
     loadImport(importResultFromContours(rect), `Oggetto pieno ${w}×${h} mm`);
   });
   $('fitBtn').addEventListener('click', () => pz.fit());
@@ -600,7 +565,7 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
     carica(svg, nome) {
       // l'SVG dichiara le sue misure: una larghezza reale lo riscalerebbe e il ritorno non cadrebbe più al suo posto
       params.realWidthMm = 0;
-      ($('realWidth') as HTMLInputElement).value = '0';
+      impostaNumero($('realWidth') as HTMLInputElement, 0);
       roles = {};
       sourceName = nome.replace(/\.[^.]+$/, '');
       loadImport(parseSvgToContours(svg), nome);
@@ -678,6 +643,6 @@ export function mountStriatura(root: HTMLElement, opts: { backHref?: string } = 
   syncSecondo();
   buildAllParams();
   buildThreadUI();
-  loadImport(imported, 'Sagoma demo');
+  loadImport(imported, 'Cartamodello demo');
   collegaStilista(aggancio, { prendi: $('fromStilista'), invia: $('toStilistaBtn') });
 }

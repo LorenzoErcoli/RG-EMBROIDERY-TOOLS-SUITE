@@ -8,7 +8,7 @@ import { buildSvg, conBusta, dstFromExportLayers, DST_FILE, readProjectMetadata,
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { collegaStilista, prendiSelezioneStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
+import { collegaStilista, prendiSelezioneStilista, stratiCuciti, type AggancioStilista } from '@rg/ui/stilista';
 // Il motore delle zone vive in @rg/pattern-grammar: lo usa anche Cannage rafia per le basi.
 import {
   readZones, resolveZoneAngles, zonesFromShapes, boundsOfPoints, type Zone, type ZoneShape,
@@ -20,6 +20,7 @@ import { patternOf, pianoDelleZone } from './motore';
 import { generateFinalPatternPoints } from '@rg/pattern-grammar';
 import sharedPresetsRaw from '../../pattern-grammar/src/presets.shared.json?raw';
 import { PATTERN_FIELDS, ZONE_GROUP, patternGroup, SCALE_MODES, type Field, type Group } from './fields';
+import { barraAnteprima, barraStato, campoNumero, campoNumeroInline, sezioneSorgente, attivaCampiNumero, leggiCampo } from '@rg/ui/anatomia';
 
 type Flat = Record<string, number | string | boolean>;
 
@@ -70,25 +71,14 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
   <div class="rg-workspace zone-workspace">
     <aside class="rg-workspace__panel" id="panel"></aside>
     <div class="rg-workspace__stage">
-      <header class="rg-workspace__stage-header">
-        <h2 class="rg-h3">Anteprima</h2>
-        <div class="rg-cluster">
-          <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
-          <button id="genBtn" class="rg-button rg-button--secondary rg-button--small">Genera</button>
-          ${BOTTONE_INVIA_STILISTA()}
-          <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
-          <button id="exportBtn" class="rg-button rg-button--primary rg-button--small">Scarica SVG</button>
-        </div>
-      </header>
+      ${barraAnteprima({ genera: true, inviaStilista: true })}
       <div class="rg-workspace__canvas" id="canvas">
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
       </div>
-      <footer class="rg-workspace__statusbar">
-        <span><span id="status">Carica un disegno a zone (DXF o SVG).</span><span id="points" class="rg-mono"></span></span>
-        <span id="zoom" class="rg-mono">zoom 100%</span>
-      </footer>
+      ${barraStato({ messaggio: 'Carica un disegno a zone (DXF o SVG).' })}
     </div>
   </div>`;
+  attivaCampiNumero(root);
 
   const $ = (id: string) => root.querySelector<HTMLElement>('#' + id)!;
   const cfg = initialConfig();
@@ -142,51 +132,39 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
       return lab;
     }
 
+    if (f.kind === 'num') {
+      const tpl = document.createElement('template');
+      tpl.innerHTML = campoNumero({
+        id: 'f-' + f.name, etichetta: f.label, unita: f.unit ?? '', valore: Number(cfg[f.name] ?? f.value),
+        passo: f.step, min: f.min, aiuto: f.help,
+      });
+      const campo = tpl.content.firstElementChild as HTMLElement;
+      const inp = campo.querySelector('input')!;
+      inp.addEventListener('change', () => {
+        const v = leggiCampo(inp);
+        if (!Number.isNaN(v)) cfg[f.name] = v;
+      });
+      return campo;
+    }
+
+    // il menu (f.kind === 'select')
     const lab = document.createElement('label');
-    lab.className = 'rg-field' + (f.kind === 'select' || f.help ? ' rg-param-grid__wide' : '');
+    lab.className = 'rg-field rg-param-grid__wide';
     const name = document.createElement('span');
     name.className = 'rg-field__label';
     name.textContent = f.label;
     lab.appendChild(name);
-
-    if (f.kind === 'select') {
-      const sel = document.createElement('select');
-      sel.className = 'rg-select';
-      sel.id = 'f-' + f.name;
-      for (const [v, l] of f.options) {
-        const o = document.createElement('option');
-        o.value = v; o.textContent = l;
-        if (v === String(cfg[f.name])) o.selected = true;
-        sel.appendChild(o);
-      }
-      sel.addEventListener('change', () => { cfg[f.name] = sel.value; });
-      lab.appendChild(sel);
-      return lab;
+    const sel = document.createElement('select');
+    sel.className = 'rg-select';
+    sel.id = 'f-' + f.name;
+    for (const [v, l] of f.options) {
+      const o = document.createElement('option');
+      o.value = v; o.textContent = l;
+      if (v === String(cfg[f.name])) o.selected = true;
+      sel.appendChild(o);
     }
-
-    const wrap = document.createElement('span');
-    wrap.className = 'rg-field-with-unit';
-    const inp = document.createElement('input');
-    inp.type = 'number';
-    inp.className = 'rg-input rg-input--numeric';
-    inp.id = 'f-' + f.name;
-    inp.step = String(f.step);
-    if (f.min !== undefined) inp.min = String(f.min);
-    inp.value = String(cfg[f.name] ?? f.value);
-    inp.addEventListener('change', () => {
-      const v = parseFloat(inp.value);
-      if (!Number.isNaN(v)) cfg[f.name] = v;
-    });
-    const unit = document.createElement('span');
-    unit.textContent = f.unit ?? '';
-    wrap.append(inp, unit);
-    lab.appendChild(wrap);
-    if (f.help) {
-      const help = document.createElement('small');
-      help.className = 'rg-field__help';
-      help.textContent = f.help;
-      lab.appendChild(help);
-    }
+    sel.addEventListener('change', () => { cfg[f.name] = sel.value; });
+    lab.appendChild(sel);
     return lab;
   }
 
@@ -217,35 +195,17 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     return det;
   }
 
-  // ---- 01 Disegno: import del file a zone ----
-  function disegnoGrid(): HTMLElement {
-    const box = document.createElement('div');
-    box.className = 'rg-param-grid';
-    box.innerHTML = `
-      <div class="rg-file-input rg-param-grid__wide">
-        <label class="rg-file-input__control">
-          <input type="file" id="zoneFile" accept=".svg,.dxf" />
-          <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
-        </label>
-        ${BOTTONE_PRENDI_STILISTA()}
-        <p class="rg-file-input__status" id="zoneStatus" role="status">${zoneStatusText}</p>
-      </div>
-      <div class="rg-file-input rg-param-grid__wide">
-        <label class="rg-file-input__control">
-          <input type="file" id="reopenFile" accept=".dst,.svg" />
-          <span class="rg-button rg-button--ghost">Riapri un progetto (SVG o DST)…</span>
-        </label>
-        <p class="rg-file-input__status" id="reopenStatus" role="status">Un file uscito da qui torna com'era: parametri, ruoli e disegno.</p>
-      </div>
-      <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Scala del file importato</span>
+  // ---- 01 Cartamodello: la sezione comune (carica, «Apri progetto o DST…», Stilista); qui in più la lettura del file ----
+  function sezioneCartamodello(): string {
+    return sezioneSorgente({
+      tipo: 'cartamodello', accetta: '.svg,.dxf', statoIniziale: zoneStatusText, larghezzaReale: false, stilista: true,
+      extra: `<label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Scala del file importato</span>
         <select id="scaleMode" class="rg-select">${SCALE_MODES.map(([v, l]) => `<option value="${v}"${v === lettura.scaleMode ? ' selected' : ''}>${l}</option>`).join('')}</select></label>
       <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">La zona è definita da</span>
         <select id="paintPriority" class="rg-select"><option value="fill"${lettura.paintPriority === 'fill' ? ' selected' : ''}>Riempimento (zone piene)</option><option value="stroke"${lettura.paintPriority === 'stroke' ? ' selected' : ''}>Tratto (contorni)</option></select></label>
-      <label class="rg-field"><span class="rg-field__label">Larghezza import</span>
-        <span class="rg-field-with-unit"><input id="customW" class="rg-input rg-input--numeric" type="number" min="0.001" step="0.1" value="100"><span>mm</span></span></label>
-      <label class="rg-field"><span class="rg-field__label">Altezza import</span>
-        <span class="rg-field-with-unit"><input id="customH" class="rg-input rg-input--numeric" type="number" min="0.001" step="0.1" value="100"><span>mm</span></span></label>`;
-    return box;
+      ${campoNumero({ id: 'customW', etichetta: 'Larghezza import', unita: 'mm', valore: 100, passo: 0.1, min: 0.001 })}
+      ${campoNumero({ id: 'customH', etichetta: 'Altezza import', unita: 'mm', valore: 100, passo: 0.1, min: 0.001 })}`,
+    });
   }
 
   // ---- 02 Colori e ruoli: una riga per tinta → quale pattern, e a che angolo ----
@@ -323,26 +283,19 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
       // quel colore, e prima era un input appeso a mano in coda alla riga.
       const aside = document.createElement('span');
       aside.className = 'rg-color-map__aside rg-cluster';
-      const unitWrap = document.createElement('span');
-      unitWrap.className = 'rg-field-with-unit rg-field-with-unit--compact';
-      const angle = document.createElement('input');
-      angle.type = 'number';
-      angle.className = 'rg-input rg-input--numeric';
-      angle.inputMode = 'decimal';
-      angle.step = '1';
+      aside.insertAdjacentHTML('beforeend', campoNumeroInline({
+        aria: `Angolo del pattern per ${color.toUpperCase()}, in gradi (0: diritto)`, unita: '°', valore: role.angleDeg, passo: 1,
+        // Un'area di scarico non ha un pattern suo, quindi nemmeno un angolo.
+        disabilitato: role.pattern === RELIEF_ROLE,
+      }));
+      const unitWrap = aside.lastElementChild as HTMLElement;
+      unitWrap.classList.add('rg-field-with-unit--compact');
+      const angle = unitWrap.querySelector('input')!;
       angle.placeholder = '0';
-      angle.value = String(role.angleDeg);
-      angle.setAttribute('aria-label', `Angolo del pattern per ${color.toUpperCase()}, in gradi (vuoto: 0, diritto)`);
-      // Un'area di scarico non ha un pattern suo, quindi nemmeno un angolo.
-      angle.disabled = role.pattern === RELIEF_ROLE;
       angle.addEventListener('change', () => {
-        const v = parseFloat(angle.value);
+        const v = leggiCampo(angle);
         roles[color] = { ...(roles[color] ?? role), angleDeg: Number.isFinite(v) ? v : 0 };
       });
-      const deg = document.createElement('span');
-      deg.textContent = '°';
-      unitWrap.append(angle, deg);
-      aside.appendChild(unitWrap);
 
       // SVUOTA (Lorenzo, 2026-10-21: «se è diverso è un secondo pattern. Importante però che il primo possa
       // essere svuotato»): questa tinta non si ricama sotto le zone delle altre tinte che porta dentro.
@@ -507,9 +460,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     panel.innerHTML = '';
     const n = (i: number) => String(i).padStart(2, '0');
 
-    const disegno = headSection(n(1), 'Disegno');
-    disegno.appendChild(disegnoGrid());
-    panel.appendChild(disegno);
+    panel.insertAdjacentHTML('beforeend', sezioneCartamodello());
 
     const colori = headSection(n(2), 'Colori e ruoli');
     colori.appendChild(colorMap());
@@ -543,18 +494,18 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     model = parseImportedBoundarySource(source.text, source.name, {
       scaleMode: ($('scaleMode') as HTMLSelectElement).value as ImportScaleMode,
       paintPriority: ($('paintPriority') as HTMLSelectElement).value as 'fill' | 'stroke',
-      customWidthMm: parseFloat(($('customW') as HTMLInputElement).value),
-      customHeightMm: parseFloat(($('customH') as HTMLInputElement).value),
+      customWidthMm: leggiCampo($('customW') as HTMLInputElement),
+      customHeightMm: leggiCampo($('customH') as HTMLInputElement),
     });
     shapes = readZones(model).map((z) => ({ id: z.id, color: z.color, points: z.points }));
     refreshZones();
     const bounds = model.source?.finalBoundsMm;
     const size = bounds ? `${(bounds.maxX - bounds.minX).toFixed(1)} × ${(bounds.maxY - bounds.minY).toFixed(1)} mm` : '';
     zoneStatusText = `${source.name}: ${zones.length} zone, ${new Set(zones.map((z) => z.color)).size} tinte · ${size}`;
-    $('zoneStatus').textContent = zoneStatusText;
+    $('fileStatus').textContent = zoneStatusText;
     renderColorMap();
     plan = null;          // il piano di prima non vale più: il disegno è cambiato
-    $('points').textContent = '';
+    $('misure').textContent = '';
     drawZones();          // il cartamodello si vede SUBITO, senza aspettare "Genera"
     $('status').textContent = zones.length
       ? `${zones.length} zone lette. Assegna i pattern in 02, poi premi Genera.`
@@ -602,7 +553,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
     const scarico = plan.relievedZones ? ` · scarico su ${plan.relievedZones} zone` : '';
     $('status').textContent = `${plan.stitches.length} zone · ${plan.layers.length} aghi · filo ${filo}`
       + passaggi + pulizia + scarico + (plan.warnings.length ? ` · ${plan.warnings[0]}` : '');
-    $('points').textContent = ` · ${points.toLocaleString('it-IT')} punti`;
+    $('misure').textContent = `${points.toLocaleString('it-IT')} punti`;
   }
 
   /** L'anteprima: le zone in trasparenza sotto, il ricamo sopra, tinta per ago. */
@@ -723,7 +674,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
       zoneStatusText = `${source.name} (riaperto): ${zones.length} zone, `
         + `${new Set(zones.map((z) => z.color)).size} tinte · ${b.width.toFixed(1)} × ${b.height.toFixed(1)} mm`;
       plan = null;
-      $('points').textContent = '';
+      $('misure').textContent = '';
     }
     buildPanel();
     if (zones.length) {
@@ -735,7 +686,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
 
   function wirePanel() {
     root.querySelector('#fromStilista')?.addEventListener('click', () => { void prendiSelezioneStilista(aggancio); });
-    $('zoneFile').addEventListener('change', (ev) => {
+    $('fileInput').addEventListener('change', (ev) => {
       const file = (ev.target as HTMLInputElement).files?.[0];
       if (!file) return;
       const reader = new FileReader();
@@ -747,7 +698,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
           source = { text, name: file.name };
           reparse();
         } catch (e) {
-          $('zoneStatus').textContent = 'Errore import: ' + (e as Error).message;
+          $('fileStatus').textContent = 'Errore import: ' + (e as Error).message;
         }
       };
       reader.readAsText(file);
@@ -756,7 +707,7 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
 
     // RIAPRI UN PROGETTO. Un `.svg` si legge come testo, un `.dst` come byte: i parametri
     // stanno nel footer dopo il record END, dove la macchina non guarda (R27/R31).
-    $('reopenFile').addEventListener('change', (ev) => {
+    $('progettoInput').addEventListener('change', (ev) => {
       const input = ev.target as HTMLInputElement;
       const file = input.files?.[0];
       if (!file) return;
@@ -768,17 +719,17 @@ export function mountZonePattern(root: HTMLElement, opts: { backHref?: string } 
             ? readDstMetadata(new Uint8Array(reader.result as ArrayBuffer))
             : (readProjectMetadata(String(reader.result)) as Record<string, unknown> | null);
           if (metadata?.rgProject !== 'zone-pattern') {
-            $('reopenStatus').textContent = metadata
+            $('progettoStatus').textContent = metadata
               ? `Questo file viene da "${String(metadata.rgProject ?? 'un altro tool')}", non da qui.`
               : 'Nessun progetto dentro questo file: non è uscito dalla suite.';
             return;
           }
           const drawing = (metadata.drawing as { zones?: unknown[] } | undefined)?.zones?.length ?? 0;
           restore(metadata);
-          $('reopenStatus').textContent = `${file.name}: riaperto`
+          $('progettoStatus').textContent = `${file.name}: riaperto`
             + (drawing ? ` col disegno (${drawing} zone).` : ' — senza disegno: caricalo a parte.');
         } catch (e) {
-          $('reopenStatus').textContent = 'Errore: ' + (e as Error).message;
+          $('progettoStatus').textContent = 'Errore: ' + (e as Error).message;
         }
         input.value = '';
       };

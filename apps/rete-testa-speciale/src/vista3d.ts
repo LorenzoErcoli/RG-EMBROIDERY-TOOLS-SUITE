@@ -4,6 +4,7 @@
 // è un'aggiunta al montaggio, non un ricamo.
 import type { Anelli, RegolaSovrapposizione } from './sacca';
 import { appendi, avanza, creaSaccaAppesa, misureAppesa, rigiditaDalPasso, stringi, type ModoAppesa, type SaccaAppesa } from './sacca3d';
+import { campoNumero, leggiCampo } from '@rg/ui/anatomia';
 
 export interface DatiVista3d { anelli: Anelli; N: number; L: number; giroInCima: boolean; filo: number; passoSpirale: number; legature: number; sovrapposizione: number; regola: RegolaSovrapposizione; cime?: number[] | null }
 
@@ -17,9 +18,12 @@ export function montaVista3d(box: HTMLElement, dati: DatiVista3d): { distruggi: 
     bocca: Math.round(2 * dati.anelli.rho[0]), manici: Math.round(rOut), morbidezza: 30, // (il filo vero è rigido: Lorenzo, 2026-10-16)
     fondo: Math.round(100 * rigiditaDalPasso(dati.passoSpirale, dati.filo)),
   };
+  // Il campo numerico della suite (@rg/ui/anatomia). Lo accende l'attivaCampiNumero del tool, che sta sulla radice e
+  // vede anche questa vista (è dentro il tool): accenderlo qui una seconda volta farebbe due passi per ogni freccia.
+  // L'etichetta ha un id suo, per nasconderla quando il campo non serve.
   const numero = (id: string, etichetta: string, valore: number, min: number, max: number, passo: number, unita: string, nascosto = false) =>
-    `<label class="rg-field" id="${id}-campo"${nascosto ? ' hidden' : ''}><span class="rg-field__label">${etichetta}</span>`
-    + `<span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" type="number" id="${id}" min="${min}" max="${max}" step="${passo}" value="${valore}"><span>${unita}</span></span></label>`;
+    campoNumero({ id, etichetta, unita, valore, passo, min, max })
+      .replace('<label class="rg-field"', `<label class="rg-field" id="${id}-campo"${nascosto ? ' hidden' : ''}`);
   box.innerHTML = `
     <div class="rete-vista3d__controlli rg-cluster">
       <label class="rg-choice"><input type="checkbox" id="v3-cordone" checked> Cordone nell’ultima fila</label>
@@ -120,7 +124,7 @@ export function montaVista3d(box: HTMLElement, dati: DatiVista3d): { distruggi: 
   });
   const leggi = (id: string, min: number, max: number, fatto: (v: number) => void) =>
     $<HTMLInputElement>(id).addEventListener('change', (e) => {
-      const v = parseFloat((e.target as HTMLInputElement).value); if (Number.isFinite(v)) fatto(Math.min(max, Math.max(min, v)));
+      const v = leggiCampo(e.target as HTMLInputElement); if (Number.isFinite(v)) fatto(Math.min(max, Math.max(min, v)));
     });
   leggi('v3-stretta', 0, 100, (v) => { stato.stretta = v; stringi(sacca, v / 100); parti(); });
   leggi('v3-bocca', 20, 2 * rOut, (v) => { stato.bocca = v; riappendi(); });

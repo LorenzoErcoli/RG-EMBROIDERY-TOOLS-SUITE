@@ -1,6 +1,6 @@
 // Schema del pannello di "Cannage rafia".
 // Struttura canonica DS (patterns/workspace.md, Testa A "sorgente-guidata"): la misura nasce dal disegno.
-//   TESTA sempre aperta → 01 Disegno · 02 Colori e ruoli (le costruisce tool.ts).
+//   TESTA sempre aperta → 01 Cartamodello (sezioneSorgente di @rg/ui/anatomia) · 02 Colori e ruoli (le costruisce tool.ts).
 //   CORPO in accordion → 03 Programma · 04 Stop 1 e 2 · 05 Stop 3 e 4 · 06 Stop 5 · 07 Stop 6 · 08 Stop 7-10.
 // Etichette e unità come in REVISIONE-PARAMETRI.md: unità sempre nello slot, mai nel testo.
 import { PARAMETRI_DAVANTI, PARAMETRI_LATO, type ParametriLinee } from './linee';

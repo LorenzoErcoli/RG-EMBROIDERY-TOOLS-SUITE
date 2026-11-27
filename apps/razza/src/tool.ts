@@ -9,52 +9,54 @@ import { topbar } from '@rg/ui/tools';
 import ICONS from '../../../packages/design-system/icons/rg-icons.svg?url';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveBinaryFile, saveOutcomeMessage, saveTextFile } from '@rg/ui/save';
-import { collegaStilista, stratiCuciti, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
+import { collegaStilista, stratiCuciti, type AggancioStilista } from '@rg/ui/stilista';
 import {
   PARAMETRI_RAZZA, VERSIONE_RAZZA, daDiPassaggio, leggiProgetto, pezzoDa, progetto, stratiDaRisultato, stratiPerDst,
   type Fisso, type ParametriRazza, type Pezzo, type Risultato, type Sfumatura,
 } from './motore';
+import {
+  attivaCampiNumero, barraAnteprima, barraStato, campoNumero, campoNumeroInline, impostaNumero, leggiCampo, leggiNumero, sezioneSorgente,
+} from '@rg/ui/anatomia';
 
 // ---------------------------------------------------------------- i campi del pannello
 
-interface CampoNum { chiave: keyof ParametriRazza; etichetta: string; unita?: string; min: number; max: number; aiuto?: string; largo?: boolean }
+interface CampoNum { chiave: keyof ParametriRazza; etichetta: string; unita?: string; min: number; max: number; passo: number; aiuto?: string; largo?: boolean }
 interface CampoSel { chiave: keyof ParametriRazza; etichetta: string; opzioni: Array<[string, string]>; aiuto?: string }
 type Campo = CampoNum | CampoSel;
 
 // Nomi e ordine: parametri canonici della Costituzione §3 dove esistono (minStitchMm, maxStitchMm, densitySpacingMm), il resto
 // con le parole di Lorenzo (2026-10-06: «distanza», «pallino minimo», «pallino massimo»). L'unita' sta nello slot, mai nell'etichetta.
 const PALLINI: Campo[] = [
-  { chiave: 'diamMinMm', etichetta: 'Pallino minimo', unita: 'mm', min: 1, max: 60, aiuto: 'sotto i 3 mm diventa uno zig-zag: ricamato sembra un pallino' },
-  { chiave: 'diamMaxMm', etichetta: 'Pallino massimo', unita: 'mm', min: 1, max: 60, aiuto: 'oltre 8 mm il punto lungo si allenta' },
-  { chiave: 'gapMm', etichetta: 'Distanza fra i pallini', unita: 'mm', min: -1, max: 10, aiuto: 'più è piccola, meno si vedono i passaggi; negativa = si sovrappongono un poco' },
-  { chiave: 'densitySpacingMm', etichetta: 'Spaziatura delle file', unita: 'mm', min: 0.1, max: 2, aiuto: 'tra una riga di filo e la successiva dentro il pallino' },
-  { chiave: 'minStitchMm', etichetta: 'Punto minimo', unita: 'mm', min: 0.3, max: 3 },
-  { chiave: 'maxStitchMm', etichetta: 'Punto massimo', unita: 'mm', min: 1, max: 12.1, aiuto: 'vale anche per i passaggi' },
+  { chiave: 'diamMinMm', etichetta: 'Pallino minimo', unita: 'mm', min: 1, max: 60, passo: 0.1, aiuto: 'sotto i 3 mm diventa uno zig-zag: ricamato sembra un pallino' },
+  { chiave: 'diamMaxMm', etichetta: 'Pallino massimo', unita: 'mm', min: 1, max: 60, passo: 0.1, aiuto: 'oltre 8 mm il punto lungo si allenta' },
+  { chiave: 'gapMm', etichetta: 'Distanza fra i pallini', unita: 'mm', min: -1, max: 10, passo: 0.1, aiuto: 'più è piccola, meno si vedono i passaggi; negativa = si sovrappongono un poco' },
+  { chiave: 'densitySpacingMm', etichetta: 'Spaziatura delle file', unita: 'mm', min: 0.1, max: 2, passo: 0.05, aiuto: 'tra una riga di filo e la successiva dentro il pallino' },
+  { chiave: 'minStitchMm', etichetta: 'Punto minimo', unita: 'mm', min: 0.3, max: 3, passo: 0.1 },
+  { chiave: 'maxStitchMm', etichetta: 'Punto massimo', unita: 'mm', min: 1, max: 12.1, passo: 0.1, aiuto: 'vale anche per i passaggi' },
 ];
 const DISPOSIZIONE: Campo[] = [
   { chiave: 'modoCampo', etichetta: 'Misura dei pallini', opzioni: [['bordo', 'Piccoli ai bordi, grandi al centro'], ['uniforme', 'Tutti uguali']] },
-  { chiave: 'profonditaMm', etichetta: 'Distanza dal bordo del pallino massimo', unita: 'mm', min: 0, max: 500, aiuto: '0 = automatico (quanto è profondo il pezzo)' },
-  { chiave: 'curvaBordo', etichetta: 'Curva della sfumatura', min: 0.3, max: 4, aiuto: '1 = lineare; più alta = piccoli più a lungo vicino al bordo' },
-  { chiave: 'rumoreCampo', etichetta: 'Chiazze', min: 0, max: 1, aiuto: '0 = tutto regolare; più alto = macchie di grandi e piccoli' },
-  { chiave: 'scalaCampoMm', etichetta: 'Dimensione delle chiazze', unita: 'mm', min: 5, max: 400 },
-  { chiave: 'irregolarita', etichetta: 'Irregolarità', min: 0, max: 1, aiuto: 'caso per caso, attorno alla misura voluta' },
-  { chiave: 'pesoSfumature', etichetta: 'Peso delle linee di sfumatura', min: 0, max: 1, aiuto: '1 = comandano loro; 0 = le ignora e conta solo il bordo' },
-  { chiave: 'influenzaFissiMm', etichetta: 'Raggio dei pallini fissi', unita: 'mm', min: 1, max: 500, aiuto: 'fin dove la misura di un fisso tira quella dei vicini' },
+  { chiave: 'profonditaMm', etichetta: 'Distanza dal bordo del pallino massimo', unita: 'mm', min: 0, max: 500, passo: 1, aiuto: '0 = automatico (quanto è profondo il pezzo)' },
+  { chiave: 'curvaBordo', etichetta: 'Curva della sfumatura', min: 0.3, max: 4, passo: 0.1, aiuto: '1 = lineare; più alta = piccoli più a lungo vicino al bordo' },
+  { chiave: 'rumoreCampo', etichetta: 'Chiazze', min: 0, max: 1, passo: 0.05, aiuto: '0 = tutto regolare; più alto = macchie di grandi e piccoli' },
+  { chiave: 'scalaCampoMm', etichetta: 'Dimensione delle chiazze', unita: 'mm', min: 5, max: 400, passo: 5 },
+  { chiave: 'irregolarita', etichetta: 'Irregolarità', min: 0, max: 1, passo: 0.05, aiuto: 'caso per caso, attorno alla misura voluta' },
+  { chiave: 'pesoSfumature', etichetta: 'Peso delle linee di sfumatura', min: 0, max: 1, passo: 0.1, aiuto: '1 = comandano loro; 0 = le ignora e conta solo il bordo' },
+  { chiave: 'influenzaFissiMm', etichetta: 'Raggio dei pallini fissi', unita: 'mm', min: 1, max: 500, passo: 1, aiuto: 'fin dove la misura di un fisso tira quella dei vicini' },
 ];
 const AVANZATE: Campo[] = [
-  { chiave: 'aspetto', etichetta: 'Larghezza / lunghezza', min: 0.3, max: 1.5, aiuto: '1 = tondo' },
-  { chiave: 'profilo', etichetta: 'Forma del profilo', min: 1, max: 6, aiuto: '2 = ellisse, 1 = losanga, più alto = più squadrato' },
+  { chiave: 'aspetto', etichetta: 'Larghezza / lunghezza', min: 0.3, max: 1.5, passo: 0.05, aiuto: '1 = tondo' },
+  { chiave: 'profilo', etichetta: 'Forma del profilo', min: 1, max: 6, passo: 0.1, aiuto: '2 = ellisse, 1 = losanga, più alto = più squadrato' },
   { chiave: 'modoAngolo', etichetta: 'Asse del cordoncino', opzioni: [['percorso', 'Lungo il percorso (passaggi più nascosti)'], ['casuale', 'A caso']] },
   { chiave: 'modoPassaggio', etichetta: 'Passaggio fra i pallini', opzioni: [['scegli', 'Il meno visibile'], ['dentro', 'Dentro il pallino cucito'], ['diretto', 'Dritto']] },
-  { chiave: 'pesoSopra', etichetta: 'Costo del filo sopra il cucito', min: 0, max: 20, aiuto: 'rispetto a 10 per un mm in vista' },
-  { chiave: 'margineMm', etichetta: 'Margine dal bordo', unita: 'mm', min: 0, max: 20 },
-  { chiave: 'crescita', etichetta: 'Crescita oltre la misura voluta', min: 1, max: 3, aiuto: 'quanto un pallino può allargarsi per toccare i vicini' },
-  { chiave: 'rapportoMinimo', etichetta: 'Rimpicciolimento nei buchi', min: 0.1, max: 1, aiuto: 'quanto può restringersi per entrare dove non c’è posto' },
-  { chiave: 'seed', etichetta: 'Seme del caso', min: 0, max: 99999, aiuto: 'stesso seme = stesso ricamo' },
+  { chiave: 'pesoSopra', etichetta: 'Costo del filo sopra il cucito', min: 0, max: 20, passo: 0.5, aiuto: 'rispetto a 10 per un mm in vista' },
+  { chiave: 'margineMm', etichetta: 'Margine dal bordo', unita: 'mm', min: 0, max: 20, passo: 0.1 },
+  { chiave: 'crescita', etichetta: 'Crescita oltre la misura voluta', min: 1, max: 3, passo: 0.05, aiuto: 'quanto un pallino può allargarsi per toccare i vicini' },
+  { chiave: 'rapportoMinimo', etichetta: 'Rimpicciolimento nei buchi', min: 0.1, max: 1, passo: 0.05, aiuto: 'quanto può restringersi per entrare dove non c’è posto' },
+  { chiave: 'seed', etichetta: 'Seme del caso', min: 0, max: 99999, passo: 1, aiuto: 'stesso seme = stesso ricamo' },
 ];
 
 const fmt = (v: number): string => String(Math.round(v * 1000) / 1000).replace('.', ',');
-const leggi = (s: string): number => parseFloat(s.trim().replace(',', '.'));
 
 type Modo = 'seleziona' | 'pallino' | 'sfumatura';
 type Selezione = { tipo: 'fisso' | 'sfumatura'; i: number } | null;
@@ -86,39 +88,16 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
   ${topbar('Punto razza', opts.backHref)}
   <div class="rg-workspace razza-workspace">
     <aside class="rg-workspace__panel">
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">01</span><h3 class="rg-param-section__title">Sagoma</h3></div>
-        <div class="rg-param-grid">
-          <div class="rg-file-input rg-param-grid__wide">
-            <label class="rg-file-input__control">
-              <input type="file" id="fileInput" accept=".dxf,.svg" />
-              <span class="rg-button rg-button--outline">Carica DXF o SVG…</span>
-            </label>
-            ${BOTTONE_PRENDI_STILISTA()}
-            <p class="rg-file-input__status" id="fileStatus" role="status">Nessun file: uso la sagoma demo.</p>
-          </div>
-          <div class="rg-file-input rg-param-grid__wide">
-            <label class="rg-file-input__control">
-              <input type="file" id="progettoInput" accept=".svg,.dst" />
-              <span class="rg-button rg-button--outline">Apri progetto o DST…</span>
-            </label>
-            <p class="rg-field__help" id="progettoStatus" role="status">Un SVG o un DST usciti da qui tornano com’erano (parametri, pallini fissi, sfumature, sagoma). Un DST fatto altrove si vede sotto il ricamo, per confronto.</p>
-          </div>
-          <div class="rg-cluster rg-param-grid__wide" id="riferimentoRiga" hidden>
+      ${sezioneSorgente({
+        tipo: 'cartamodello', accetta: '.dxf,.svg', statoIniziale: 'Nessun file: uso il cartamodello demo.', demo: 'Cartamodello demo', stilista: true,
+        extra: `<div class="rg-cluster rg-param-grid__wide" id="riferimentoRiga" hidden>
             <label class="rg-choice"><input type="checkbox" id="mostraRif" checked><span>Mostra il DST di riferimento</span></label>
             <button id="togliRif" class="rg-button rg-button--ghost rg-button--small" type="button">Togli</button>
           </div>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Larghezza reale (0 = auto)</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="realWidth" type="text" inputmode="decimal" value="0"><span>mm</span></span>
-            <span class="rg-field__help">0 = usa la misura letta dal file.</span>
-          </label>
-          <div class="rg-cluster rg-param-grid__wide">
-            <button id="demoBtn" class="rg-button rg-button--ghost rg-button--small" type="button">Sagoma demo</button>
-            <button id="apertaBtn" class="rg-button rg-button--ghost rg-button--small" type="button" hidden>Usa le linee aperte come sfumature</button>
-          </div>
-        </div>
-      </section>
+          <div class="rg-cluster rg-param-grid__wide" id="apertaRiga" hidden>
+            <button id="apertaBtn" class="rg-button rg-button--ghost rg-button--small" type="button">Usa le linee aperte come sfumature</button>
+          </div>`,
+      })}
 
       <details class="rg-param-section rg-disclosure" data-sez="pallini" open>
         <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">02</span><span class="rg-param-section__title">Pallini</span></summary>
@@ -142,10 +121,7 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
             </div>
             <span class="rg-field__help" id="aiutoStrumento"></span>
           </div>
-          <label class="rg-field rg-param-grid__wide">
-            <span class="rg-field__label">Diametro del prossimo pallino fisso</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" id="nuovoDiam" type="text" inputmode="decimal" value="6"><span>mm</span></span>
-          </label>
+          ${campoNumero({ id: 'nuovoDiam', etichetta: 'Diametro del prossimo pallino fisso', unita: 'mm', valore: 6, passo: 0.5, largo: true })}
           <div class="rg-param-grid__wide">
             <span class="rg-field__label">Pallini fissi</span>
             <ul class="rg-color-map" id="listaFissi"></ul>
@@ -180,29 +156,18 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
     </aside>
 
     <div class="rg-workspace__stage">
-      <header class="rg-workspace__stage-header">
-        <h2 class="rg-h3">Anteprima</h2>
-        <div class="rg-cluster">
-          <label class="rg-choice" title="Se è spenta, il ricamo si rifà solo quando premi Genera: così puoi mettere pallini e sfumature senza aspettare."><input type="checkbox" id="autoCalcolo"><span>Ricalcola da solo</span></label>
-          <button id="genBtn" class="rg-button rg-button--primary rg-button--small" type="button">Genera</button>
-          <button id="exportBtn" class="rg-button rg-button--outline rg-button--small" type="button" disabled>Esporta SVG</button>
-          ${BOTTONE_INVIA_STILISTA()}
-          <button id="exportDstBtn" class="rg-button rg-button--outline rg-button--small" type="button" disabled>Esporta DST</button>
-          <button id="fitBtn" class="rg-button rg-button--ghost rg-button--small" type="button">Adatta</button>
-        </div>
-      </header>
+      ${barraAnteprima({ ricalcolaDaSolo: { acceso: false, aiuto: 'Se è spenta, il ricamo si rifà solo quando premi Genera: così puoi mettere pallini e sfumature senza aspettare.' }, genera: true, esportaSpenti: true, inviaStilista: true })}
       <div class="rg-workspace__canvas" id="canvas">
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px"></div>
       </div>
-      <footer class="rg-workspace__statusbar">
-        <span id="status">Pronto</span>
-        <span id="misure" class="rg-mono"></span>
-        <span id="zoom" class="rg-mono">zoom 100%</span>
-      </footer>
+      ${barraStato()}
     </div>
   </div>`;
 
   const $ = <T extends HTMLElement = HTMLElement>(id: string): T => root.querySelector<T>('#' + id)!;
+  attivaCampiNumero(root);
+  // qui riaprire fa di più che altrove: rimette anche pallini fissi e sfumature, e un DST d'altri lo mostra per confronto
+  $('progettoStatus').textContent = 'Un SVG o un DST usciti da qui tornano com’erano (parametri, pallini fissi, sfumature, sagoma). Un DST fatto altrove si vede sotto il ricamo, per confronto.';
 
   // ---------------------------------------------------------------- lo stato
   let pezzo: Pezzo = pezzoDemo();
@@ -234,38 +199,36 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
   function costruisciCampi(host: HTMLElement, campi: Campo[]): void {
     host.innerHTML = '';
     for (const c of campi) {
-      const lab = document.createElement('label');
-      lab.className = 'rg-field' + (c.aiuto ? ' rg-param-grid__wide' : '');
-      const nome = document.createElement('span'); nome.className = 'rg-field__label'; nome.textContent = c.etichetta;
-      lab.appendChild(nome);
       if ('opzioni' in c) {
-        lab.classList.add('rg-param-grid__wide');
+        const lab = document.createElement('label');
+        lab.className = 'rg-field rg-param-grid__wide';
+        const nome = document.createElement('span'); nome.className = 'rg-field__label'; nome.textContent = c.etichetta;
+        lab.appendChild(nome);
         const sel = document.createElement('select'); sel.className = 'rg-select';
         for (const [v, l] of c.opzioni) { const o = document.createElement('option'); o.value = v; o.textContent = l; if (String(par[c.chiave]) === v) o.selected = true; sel.appendChild(o); }
         sel.addEventListener('change', () => { (par as unknown as Record<string, unknown>)[c.chiave] = sel.value; pianifica(); });
         lab.appendChild(sel);
-      } else {
-        const wrap = document.createElement('span'); wrap.className = 'rg-field-with-unit';
-        const inp = document.createElement('input'); inp.type = 'text'; inp.setAttribute('inputmode', 'decimal'); inp.className = 'rg-input rg-input--numeric';
-        inp.value = fmt(par[c.chiave] as number);
-        const aiuto = document.createElement('span'); aiuto.className = 'rg-field__help';
-        const testoAiuto = c.aiuto ?? '';
-        aiuto.textContent = testoAiuto;
-        inp.addEventListener('change', () => {
-          const v = leggi(inp.value);
-          if (Number.isNaN(v)) { aiuto.textContent = 'Scrivi un numero.'; return; }
-          const k = Math.max(c.min, Math.min(c.max, v));
-          aiuto.textContent = k !== v ? `Va da ${fmt(c.min)} a ${fmt(c.max)}: ho messo ${fmt(k)}.` : testoAiuto;
-          inp.value = fmt(k);
-          (par as unknown as Record<string, number>)[c.chiave] = k;
-          pianifica();
-        });
-        wrap.appendChild(inp);
-        if (c.unita) { const u = document.createElement('span'); u.textContent = c.unita; wrap.appendChild(u); }
-        lab.appendChild(wrap);
-        if (c.aiuto) lab.appendChild(aiuto);
+        host.appendChild(lab);
+        continue;
       }
-      host.appendChild(lab);
+      host.insertAdjacentHTML('beforeend', campoNumero({ id: c.chiave, etichetta: c.etichetta, unita: c.unita ?? '', valore: par[c.chiave] as number, passo: c.passo, min: c.min, max: c.max, aiuto: c.aiuto }));
+      const inp = host.querySelector<HTMLInputElement>('#' + c.chiave)!;
+      const aiuto = host.querySelector<HTMLElement>(`#${c.chiave}-aiuto`);
+      const testoAiuto = c.aiuto ?? '';
+      // il campo comune porta il numero dentro i limiti prima che arrivi qui: quello scritto serve a dire che l'ha cambiato
+      let scritto = '';
+      inp.addEventListener('input', () => { scritto = inp.value; });
+      inp.addEventListener('keydown', (e) => { if (e.key === 'ArrowUp' || e.key === 'ArrowDown') scritto = ''; }); // le frecce restano nei limiti da sole
+      inp.addEventListener('change', () => {
+        const v = leggiCampo(inp), voluto = leggiNumero(scritto);
+        scritto = '';
+        if (Number.isNaN(v)) return;
+        const k = Math.max(c.min, Math.min(c.max, v));
+        if (aiuto) aiuto.textContent = !Number.isNaN(voluto) && voluto !== k ? `Va da ${fmt(c.min)} a ${fmt(c.max)}: ho messo ${fmt(k)}.` : testoAiuto;
+        impostaNumero(inp, k);
+        (par as unknown as Record<string, number>)[c.chiave] = k;
+        pianifica();
+      });
     }
   }
   function costruisciPannello(): void {
@@ -364,7 +327,7 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
     vecchio = true;
     ($('exportBtn') as HTMLButtonElement).disabled = true;
     ($('exportDstBtn') as HTMLButtonElement).disabled = true;
-    $('genBtn').classList.toggle('rg-button--primary', true);
+    $('genBtn').classList.replace('rg-button--outline', 'rg-button--primary');
   }
 
   function pianifica(subito = false): void {
@@ -396,6 +359,7 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
       mostraMisure();
       ($('exportBtn') as HTMLButtonElement).disabled = !risultato.punti.length;
       ($('exportDstBtn') as HTMLButtonElement).disabled = !risultato.punti.length;
+      $('genBtn').classList.replace('rg-button--primary', 'rg-button--outline');
     };
     worker.onerror = (e) => { window.clearInterval(tick); $('status').textContent = 'Errore nel calcolo: ' + e.message; };
     worker.postMessage({ id: mioId, pezzo, par: { ...par }, fissi: fissi.map((f) => ({ ...f })), sfumature: sfumature.map((s) => ({ ...s, a: { ...s.a }, b: { ...s.b } })) });
@@ -412,11 +376,12 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
 
   // ---------------------------------------------------------------- pallini fissi e sfumature: le liste
   const campoCompatto = (valore: number, etichetta: string, onChange: (v: number) => void): HTMLElement => {
-    const w = document.createElement('span'); w.className = 'rg-field-with-unit rg-field-with-unit--compact';
-    const i = document.createElement('input'); i.type = 'text'; i.setAttribute('inputmode', 'decimal'); i.className = 'rg-input rg-input--numeric'; i.value = fmt(valore); i.setAttribute('aria-label', etichetta);
-    i.addEventListener('change', () => { const v = leggi(i.value); if (!Number.isNaN(v) && v > 0) onChange(v); else i.value = fmt(valore); });
-    const u = document.createElement('span'); u.textContent = 'mm';
-    w.append(i, u); return w;
+    const box = document.createElement('span');
+    box.innerHTML = campoNumeroInline({ aria: etichetta, unita: 'mm', valore, passo: 0.5 });
+    const w = box.firstElementChild as HTMLElement; w.classList.add('rg-field-with-unit--compact');
+    const i = w.querySelector('input')!;
+    i.addEventListener('change', () => { const v = leggiCampo(i); if (!Number.isNaN(v) && v > 0) onChange(v); else impostaNumero(i, valore); });
+    return w;
   };
   const bottoneElimina = (etichetta: string, onClick: () => void): HTMLElement => {
     const b = document.createElement('button'); b.type = 'button'; b.className = 'rg-icon-button rg-icon-button--danger rg-icon-button--full'; b.setAttribute('aria-label', etichetta);
@@ -471,7 +436,7 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
   }
   root.querySelectorAll<HTMLElement>('#strumenti .rg-segmented__item').forEach((b) => b.addEventListener('click', () => impostaModo(b.dataset.modo as Modo)));
 
-  const nuovoDiametro = (): number => { const v = leggi(($('nuovoDiam') as HTMLInputElement).value); return Number.isNaN(v) || v <= 0 ? 6 : v; };
+  const nuovoDiametro = (): number => { const v = leggiCampo($('nuovoDiam') as HTMLInputElement); return Number.isNaN(v) || v <= 0 ? 6 : v; };
 
   function aMm(e: PointerEvent): Point {
     const svg = root.querySelector<SVGSVGElement>('#rzSvg')!;
@@ -556,7 +521,7 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
     risultato = null; ($('exportBtn') as HTMLButtonElement).disabled = true; ($('exportDstBtn') as HTMLButtonElement).disabled = true;
     $('misure').textContent = '';
     disegnaAnteprima(); pz.fit();
-    $('apertaBtn').hidden = aperte.length === 0;
+    $('apertaRiga').hidden = aperte.length === 0;
     $('fileStatus').textContent = `${etichetta}: ${Math.round(p.maxX - p.minX)}×${Math.round(p.maxY - p.minY)} mm${p.vuoti.length ? ` · ${p.vuoti.length} aree vuote` : ''}${aperte.length ? ` · ${aperte.length} linee aperte` : ''}`;
     pianifica(true);
   }
@@ -662,19 +627,19 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
   $('togliRif').addEventListener('click', () => { riferimento = null; $('riferimentoRiga').hidden = true; $('progettoStatus').textContent = 'Riferimento tolto.'; disegnaAnteprima(); });
 
   $('realWidth').addEventListener('change', () => {
-    const v = leggi(($('realWidth') as HTMLInputElement).value);
+    const v = leggiCampo($('realWidth') as HTMLInputElement);
     larghezzaReale = Number.isNaN(v) ? 0 : Math.max(0, v);
-    ($('realWidth') as HTMLInputElement).value = fmt(larghezzaReale);
+    impostaNumero($('realWidth') as HTMLInputElement, larghezzaReale);
     applicaImport(nomeFile || 'Sagoma', false);
   });
-  $('demoBtn').addEventListener('click', () => { importato = null; aperte = []; fattoreScala = 1; nomeFile = ''; nuovoPezzo(pezzoDemo(), 'Sagoma demo'); });
+  $('demoBtn').addEventListener('click', () => { importato = null; aperte = []; fattoreScala = 1; nomeFile = ''; nuovoPezzo(pezzoDemo(), 'Cartamodello demo'); });
   $('apertaBtn').addEventListener('click', () => {
     for (const l of aperte) sfumature.push({ a: l[0], b: l[l.length - 1], diamAMm: par.diamMinMm, diamBMm: par.diamMaxMm });
-    aperte = []; $('apertaBtn').hidden = true; costruisciListe(); disegnaSovrapposti(); pianifica();
+    aperte = []; $('apertaRiga').hidden = true; costruisciListe(); disegnaSovrapposti(); pianifica();
   });
   $('genBtn').addEventListener('click', () => pianifica(true));
   $('fitBtn').addEventListener('click', () => pz.fit());
-  ($('nuovoDiam') as HTMLInputElement).addEventListener('change', () => { ($('nuovoDiam') as HTMLInputElement).value = fmt(nuovoDiametro()); });
+  ($('nuovoDiam') as HTMLInputElement).addEventListener('change', () => { impostaNumero($('nuovoDiam') as HTMLInputElement, nuovoDiametro()); });
 
   // ---------------------------------------------------------------- esportare
   const datiProgetto = () => progetto(par, pezzo, fissi, sfumature);
@@ -722,7 +687,7 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
     carica(svg, nome) {
       // l'SVG dichiara le sue misure: una larghezza reale lo riscalerebbe e il ritorno non cadrebbe più al suo posto
       larghezzaReale = 0;
-      ($('realWidth') as HTMLInputElement).value = fmt(0);
+      impostaNumero($('realWidth') as HTMLInputElement, 0);
       nomeFile = nome.replace(/\.[^.]+$/, '');
       importato = parseSvgToContours(svg);
       fattoreScala = 1;
@@ -786,7 +751,7 @@ export function mountRazza(root: HTMLElement, opts: { backHref?: string } = {}):
   // ---------------------------------------------------------------- partenza
   costruisciPannello(); costruisciListe(); elencaPreset(); impostaModo('seleziona');
   disegnaAnteprima(); pz.fit();
-  $('fileStatus').textContent = `Sagoma demo: ${Math.round(pezzo.maxX - pezzo.minX)}×${Math.round(pezzo.maxY - pezzo.minY)} mm · ${pezzo.vuoti.length} area vuota · versione ${VERSIONE_RAZZA}`;
+  $('fileStatus').textContent = `Cartamodello demo: ${Math.round(pezzo.maxX - pezzo.minX)}×${Math.round(pezzo.maxY - pezzo.minY)} mm · ${pezzo.vuoti.length} area vuota · versione ${VERSIONE_RAZZA}`;
   pianifica(true);
   collegaStilista(aggancio, { prendi: $('fromStilista'), invia: $('toStilistaBtn') });
 }
