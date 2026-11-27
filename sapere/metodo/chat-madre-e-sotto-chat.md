@@ -23,6 +23,18 @@ a tenere il filo, e le sotto-chat nascono e finiscono col loro lavoro.
   dice il tool, i file, cosa vuole Lorenzo con le sue parole, cosa vuol dire "finito". Il contesto si
   prende da `sapere/tool/<tool>.md`, da `STATO.md` e da `MANUALE.md`.
 - **Mai due sotto-chat sugli stessi file nello stesso momento.**
+- **Ogni brief dice anche: «quando tocchi l'interfaccia, usa l'anatomia comune e il design system».**
+  Cioè i pezzi di `packages/ui/src/anatomia.ts` (`barraAnteprima`, `campoNumero`, `sezioneSorgente`,
+  `barraStato`, `scheletro`), le regole di `AVVIO-INTERFACCIA-COMUNE.md` (§2 e §3: «Esporta SVG» ·
+  **«Esporta DST»** pieno, sezione 01 *Cartamodello*, un solo «Apri progetto o DST…») e quelle di
+  `packages/design-system/AI_CONTEXT.md` (token, niente colori scritti a mano tranne i fili). Un
+  bottone o un campo nuovo si aggiunge al componente comune, non a mano nel tool. **Perché:** dal 21
+  ottobre al 24 novembre le sotto-chat hanno lavorato su interlace, pattern-macchie, striatura e gli
+  altri tool ancora nel debito, e ognuna ha aggiunto bottoni e campi a modo suo: il bottone pieno era
+  l'SVG in nove tool e «Genera» nella razza, «Scarica» al posto di «Esporta» in cinque, «Invia a Stilista» e «Tracce RG» in ordini diversi. Il
+  cricchetto non se ne accorgeva, perché guardava solo *se* un tool scriveva a mano un pezzo, non
+  *quanti* (ora conta anche i campi numerici, `DEBITO_CAMPI_A_MANO`). Lorenzo l'ha visto il 2026-11-24:
+  «gli ultimi tools modificati hanno completamente perso uniformità».
 - **Quando una sotto-chat ha finito, la madre controlla**: guarda le differenze, fa girare
   `npm run typecheck` e `npm test`, poi apre la PR verso `master` e la unisce (Lorenzo ha autorizzato
   `gh pr merge`). Dopo propone a Lorenzo di archiviare la sotto-chat.

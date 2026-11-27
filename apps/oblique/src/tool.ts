@@ -8,7 +8,7 @@ import {
 import { topbar } from '@rg/ui/tools';
 import { hookPanZoom } from '@rg/ui/panzoom';
 import { saveTextFile, saveBinaryFile, saveOutcomeMessage } from '@rg/ui/save';
-import { collegaStilista, stratiCuciti, svgForiAiLoroColori, primoColoreStilista, BOTTONE_PRENDI_STILISTA, BOTTONE_INVIA_STILISTA, type AggancioStilista } from '@rg/ui/stilista';
+import { collegaStilista, stratiCuciti, svgForiAiLoroColori, primoColoreStilista, type AggancioStilista } from '@rg/ui/stilista';
 import {
   defaultObliqueParams, moduleFromPolylines, parseModuleSvg,
   type ObliqueParams, type ObliqueModule, type ObliqueResult,
@@ -22,6 +22,7 @@ import level0Svg from './modules/level0.svg?raw';
 import level1Svg from './modules/level1.svg?raw';
 import level2Svg from './modules/level2.svg?raw';
 import holesSvg from './modules/holes.svg?raw';
+import { barraAnteprima, barraStato, sezioneSorgente, campoNumero, attivaCampiNumero, leggiCampo, impostaNumero } from '@rg/ui/anatomia';
 
 const ROLE_ORDER: ObliqueRole[] = ['MASTER_OUTLINE', 'PATTERN_REFERENCE', 'LASER_REFERENCE', 'PLACEMENT_REFERENCE'];
 
@@ -65,9 +66,9 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
   const ui = { showPanelShapeOverlay: false, panelShapeOverlayColor: '#e52421', nudgeStep: 1 };
   const layerVisible: Record<string, boolean> = { level0: true, level05: true, level1: true, level2: true, holes: true, travel: false, boundary: false };
 
-  const num = (label: string, key: keyof ObliqueParams, step: string, min?: string): string =>
-    `<label class="rg-field rg-param-grid__wide"><span class="rg-field__label">${label}</span>
-      <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" type="number" step="${step}"${min !== undefined ? ` min="${min}"` : ''} data-param="${key}" value="${params[key]}"><span>mm</span></span></label>`;
+  /** Un campo numerico in mm legato a un parametro dell'engine (`data-param`): il campo della suite, virgola o punto. */
+  const num = (label: string, key: keyof ObliqueParams, step: number, min?: number, largo = true): string =>
+    campoNumero({ id: 'p-' + key, etichetta: label, unita: 'mm', valore: params[key] as number, passo: step, min, largo, attributi: `data-param="${key}"` });
   const check = (label: string, key: string, checked = false): string =>
     `<label class="rg-choice rg-param-grid__wide"><input type="checkbox" data-param="${key}"${checked ? ' checked' : ''}> ${label}</label>`;
   const roleRow = (role: ObliqueRole, label: string): string =>
@@ -82,21 +83,10 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
   <div class="rg-workspace oblique-workspace" style="height: calc(100vh - var(--rg-layout-header))">
     <aside class="rg-workspace__panel">
 
-      <section class="rg-param-section">
-        <div class="rg-param-section__header"><span class="rg-param-section__index">01</span><h3 class="rg-param-section__title">Cartamodello</h3></div>
-        <div class="rg-param-grid">
-          <div class="rg-file-input rg-param-grid__wide">
-            <label class="rg-file-input__control">
-              <input type="file" id="panelInput" accept=".svg,.dxf,image/svg+xml">
-              <span class="rg-button rg-button--outline">Carica SVG o DXF…</span>
-            </label>
-            ${BOTTONE_PRENDI_STILISTA()}
-            <p class="rg-file-input__status" id="panelStatus" role="status">Nessun cartamodello: uso il formato ${params.formatWidth}×${params.formatHeight} mm.</p>
-          </div>
-          <label class="rg-field rg-param-grid__wide"><span class="rg-field__label">Larghezza reale del cartamodello</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" type="number" min="0" step="any" data-param="realWidthMm" value="${params.realWidthMm}"><span>mm</span></span></label>
-          <p class="rg-field__help rg-param-grid__wide">0 = usa la misura letta dal file. Se l'SVG non dichiara <code>width</code>/<code>height</code> la misura è una stima (lo dice la riga qui sopra): scrivi qui la larghezza vera e comanda quella.</p>
-          <div class="rg-cluster rg-param-grid__wide">
+      ${sezioneSorgente({
+        tipo: 'cartamodello', accetta: '.svg,.dxf,image/svg+xml', etichettaCarica: 'Carica SVG o DXF…',
+        statoIniziale: `Nessun cartamodello: uso il formato ${params.formatWidth}×${params.formatHeight} mm.`, stilista: true,
+        extra: `<div class="rg-cluster rg-param-grid__wide">
             <label class="rg-choice"><input type="checkbox" data-param="showPanelShapeOverlay"> Mostra cartamodello</label>
             <input type="color" data-param="panelShapeOverlayColor" value="#e52421" aria-label="Colore anteprima cartamodello">
           </div>
@@ -109,44 +99,38 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
           ${check("Cerchi/zig-zag solo dove c'è il foro", 'pruneFeaturesWithoutHoles')}
           ${check('Diagonali L0/L1 solo dove ci sono fori', 'trimDiagonalsToHoles')}
           ${check('Impuntura di fissaggio prima dei cerchi (Livello 0.5)', 'enableLevel05')}
-          ${num('Lunghezza punto impuntura', 'level05StitchLength', '0.5', '1')}
-          ${num('Tolleranza foro dal perimetro', 'holePerimeterToleranceMm', '0.5')}
-          ${check('Aree di esclusione interne', 'enableExclusionAreas', params.enableExclusionAreas)}
-        </div>
-      </section>
+          ${num('Lunghezza punto impuntura', 'level05StitchLength', 0.5, 1)}
+          ${num('Tolleranza foro dal perimetro', 'holePerimeterToleranceMm', 0.5)}
+          ${check('Aree di esclusione interne', 'enableExclusionAreas', params.enableExclusionAreas)}`,
+      })}
 
       <section class="rg-param-section">
         <div class="rg-param-section__header"><span class="rg-param-section__index">02</span><h3 class="rg-param-section__title">Misure e rientri</h3></div>
         <div class="rg-param-grid">
-          <label class="rg-field"><span class="rg-field__label">Pannello larghezza</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" type="number" min="1" step="1" data-param="formatWidth" value="${params.formatWidth}"><span>mm</span></span></label>
-          <label class="rg-field"><span class="rg-field__label">Pannello altezza</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" type="number" min="1" step="1" data-param="formatHeight" value="${params.formatHeight}"><span>mm</span></span></label>
-          ${num('Rientro taglio pattern', 'patternBorderOffset', '0.5', '0')}
-          ${num('Rientro taglio fori', 'holesMargin', '0.5', '0')}
+          ${num('Pannello larghezza', 'formatWidth', 1, 1, false)}
+          ${num('Pannello altezza', 'formatHeight', 1, 1, false)}
+          ${num('Rientro taglio pattern', 'patternBorderOffset', 0.5, 0)}
+          ${num('Rientro taglio fori', 'holesMargin', 0.5, 0)}
         </div>
       </section>
 
       <details class="rg-param-section rg-disclosure" open>
         <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">03</span><span class="rg-param-section__title">Punti</span></summary>
         <div class="rg-param-grid">
-          ${num('Lunghezza punti passaggi/bordi', 'minimumTravelStitchLength', '0.05', '1')}
-          ${num('Punto minimo globale', 'minimumSegmentLength', '0.1', '1')}
-          ${num('Punto minimo bordi da taglio', 'cutBorderStitchLength', '0.1', '1')}
+          ${num('Lunghezza punti passaggi/bordi', 'minimumTravelStitchLength', 0.05, 1)}
+          ${num('Punto minimo globale', 'minimumSegmentLength', 0.1, 1)}
+          ${num('Punto minimo bordi da taglio', 'cutBorderStitchLength', 0.1, 1)}
           ${check('Partenza dal bordo (scarico filo)', 'startLockEnabled', params.startLockEnabled)}
-          ${num('Punto partenza/ingresso', 'startLockStitchMm', '0.5', '0.5')}
+          ${num('Punto partenza/ingresso', 'startLockStitchMm', 0.5, 0.5)}
         </div>
       </details>
 
       <section class="rg-param-section">
         <div class="rg-param-section__header"><span class="rg-param-section__index">04</span><h3 class="rg-param-section__title">Posizione pattern</h3></div>
         <div class="rg-param-grid">
-          <label class="rg-field"><span class="rg-field__label">Offset X</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" type="number" step="0.1" data-param="globalPatternOffsetX" value="${params.globalPatternOffsetX}"><span>mm</span></span></label>
-          <label class="rg-field"><span class="rg-field__label">Offset Y</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" type="number" step="0.1" data-param="globalPatternOffsetY" value="${params.globalPatternOffsetY}"><span>mm</span></span></label>
-          <label class="rg-field"><span class="rg-field__label">Passo spostamento</span>
-            <span class="rg-field-with-unit"><input class="rg-input rg-input--numeric" type="number" min="0" step="0.1" data-ui="nudgeStep" value="1"><span>mm</span></span></label>
+          ${num('Offset X', 'globalPatternOffsetX', 0.1, undefined, false)}
+          ${num('Offset Y', 'globalPatternOffsetY', 0.1, undefined, false)}
+          ${campoNumero({ id: 'nudgeStep', etichetta: 'Passo spostamento', unita: 'mm', valore: 1, passo: 0.1, min: 0, attributi: 'data-ui="nudgeStep"' })}
           <div class="oblique-nudge" role="group" aria-label="Sposta pattern del passo">
             <button type="button" class="rg-icon-button oblique-nudge__up" data-nudge="0,-1" aria-label="Sposta su">↑</button>
             <button type="button" class="rg-icon-button oblique-nudge__left" data-nudge="-1,0" aria-label="Sposta a sinistra">←</button>
@@ -168,41 +152,24 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
         </div>
       </section>
 
-      <details class="rg-param-section rg-disclosure">
-        <summary class="rg-param-section__header rg-disclosure__trigger"><span class="rg-param-section__index">06</span><span class="rg-param-section__title">Progetto</span></summary>
-        <div class="rg-param-grid">
-          <div class="rg-file-input rg-param-grid__wide">
-            <label class="rg-file-input__control">
-              <input type="file" id="reopenInput" accept=".svg,.dst,image/svg+xml">
-              <span class="rg-button rg-button--outline">Riapri progetto salvato (SVG)…</span>
-            </label>
-            <p class="rg-field__help">Carica un SVG esportato da qui: ripristina parametri e ruoli. L'export vero è coi pulsanti in alto a destra.</p>
-          </div>
-        </div>
-      </details>
-
     </aside>
 
     <section class="rg-workspace__stage">
-      <header class="rg-workspace__stage-header">
-        <h2 class="rg-h3">Anteprima</h2>
-        <div class="rg-cluster">
-          <button type="button" id="exportSvgBtn" class="rg-button rg-button--primary rg-button--small">Esporta SVG</button>
-          ${BOTTONE_INVIA_STILISTA()}
-          <button type="button" id="exportDstBtn" class="rg-button rg-button--outline rg-button--small">Esporta DST</button>
-          <button type="button" id="fitBtn" class="rg-button rg-button--ghost rg-button--small">Adatta</button>
-        </div>
-      </header>
+      ${barraAnteprima({ inviaStilista: true })}
       <div class="rg-workspace__canvas" id="canvas">
         <div class="rg-workspace__layer" id="layer" style="--rg-zoom:1;--rg-pan-x:0px;--rg-pan-y:0px">
           <svg id="preview" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${params.formatWidth} ${params.formatHeight}"></svg>
         </div>
       </div>
-      <footer class="rg-workspace__statusbar"><span id="status">Pronto</span><span id="zoom" class="rg-mono">zoom 100%</span></footer>
+      ${barraStato()}
     </section>
   </div>`;
 
+  attivaCampiNumero(root);
   const $ = (id: string): HTMLElement => root.querySelector('#' + id) as HTMLElement;
+  // La larghezza reale della sezione 01 comune è un parametro dell'engine: la legge e la scrive il giro dei [data-param].
+  $('realWidth').setAttribute('data-param', 'realWidthMm');
+  $('realWidth-aiuto').innerHTML = "0 = usa la misura letta dal file. Se l'SVG non dichiara <code>width</code>/<code>height</code> la misura è una stima (lo dice la riga qui sopra): scrivi qui la larghezza vera e comanda quella.";
   const qp = (name: string): HTMLInputElement | null => root.querySelector(`[data-param="${name}"]`);
   const setStatus = (m: string): void => { $('status').textContent = m; };
 
@@ -214,6 +181,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
       if (!isEngineParam(key)) return;
       const v = params[key];
       if (el instanceof HTMLInputElement && el.type === 'checkbox') el.checked = Boolean(v);
+      else if (el instanceof HTMLInputElement && el.hasAttribute('data-numero')) impostaNumero(el, v as number);
       else el.value = String(v);
     });
   }
@@ -222,13 +190,13 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
       const key = el.dataset.param!;
       if (!isEngineParam(key)) return;
       if (el instanceof HTMLInputElement && el.type === 'checkbox') (params[key] as boolean) = el.checked;
-      else if (el instanceof HTMLInputElement && el.type === 'number') { const n = Number(el.value); if (Number.isFinite(n)) (params[key] as number) = n; }
+      else if (el instanceof HTMLInputElement && el.hasAttribute('data-numero')) { const n = leggiCampo(el); if (Number.isFinite(n)) (params[key] as number) = n; }
       else (params[key] as string) = (el as HTMLInputElement).value;
     });
     // UI-only (preview): overlay cartamodello + passo nudge.
     const ov = qp('showPanelShapeOverlay'); if (ov) ui.showPanelShapeOverlay = ov.checked;
     const oc = qp('panelShapeOverlayColor'); if (oc) ui.panelShapeOverlayColor = oc.value;
-    const ns = root.querySelector<HTMLInputElement>('[data-ui="nudgeStep"]'); if (ns) ui.nudgeStep = Number(ns.value) || 1;
+    const ns = root.querySelector<HTMLInputElement>('[data-ui="nudgeStep"]'); if (ns) ui.nudgeStep = leggiCampo(ns) || 1;
     refreshPanelScale();
   }
 
@@ -247,12 +215,12 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
    * sbagliare di 2,8× (un viewBox in punti letto come mm) e senza questa riga non si vede.
    */
   function updatePanelStatus(): void {
-    if (!panel) { $('panelStatus').textContent = `Nessun cartamodello: uso il formato ${params.formatWidth}×${params.formatHeight} mm.`; return; }
+    if (!panel) { $('fileStatus').textContent = `Nessun cartamodello: uso il formato ${params.formatWidth}×${params.formatHeight} mm.`; return; }
     const f = realWidthFactor();
     const letta = `${round1(panel.widthMm)}×${round1(panel.heightMm)} mm`;
     const come = panel.method === 'declared' ? 'misura dichiarata nel file' : 'stima dal viewBox — controllala';
     const reale = f !== 1 ? ` → reale ${round1(panel.widthMm * f)}×${round1(panel.heightMm * f)} mm` : '';
-    $('panelStatus').textContent = `${panelName} · ${panel.contours.length} contorni · ${letta} (${come})${reale}`;
+    $('fileStatus').textContent = `${panelName} · ${panel.contours.length} contorni · ${letta} (${come})${reale}`;
   }
   const round1 = (v: number): number => Math.round(v * 10) / 10;
 
@@ -324,7 +292,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
     refreshPanelScale();
   }
 
-  $('panelInput').addEventListener('change', (ev) => {
+  $('fileInput').addEventListener('change', (ev) => {
     const file = (ev.target as HTMLInputElement).files?.[0];
     if (!file) return;
     file.text().then((text) => {
@@ -334,10 +302,10 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
       loadPanel(result, file.name);
     });
   });
-  // Riapre un progetto esportato dalla suite: dall'SVG (parametri nel <metadata>, e il disegno si
+  // «Apri progetto o DST…» della sezione 01. Riapre un progetto esportato dalla suite: dall'SVG (parametri nel <metadata>, e il disegno si
   // ricarica come cartamodello) oppure dal .dst (parametri nel footer dopo l'END, R27: il file di
   // macchina si rigenera identico senza avere l'SVG sotto mano).
-  $('reopenInput').addEventListener('change', (ev) => {
+  $('progettoInput').addEventListener('change', (ev) => {
     const input = ev.target as HTMLInputElement;
     const file = input.files?.[0];
     if (!file) return;
@@ -424,7 +392,7 @@ export function mountOblique(root: HTMLElement, opts: { backHref?: string } = {}
     const base = (panelName ? panelName.replace(/\.[^.]+$/, '') : 'oblique') + '.dst';
     setStatus(saveOutcomeMessage(await saveBinaryFile(bytes, { suggestedName: base, ...DST_FILE }), base));
   }
-  $('exportSvgBtn').addEventListener('click', () => { void doExportSvg(); });
+  $('exportBtn').addEventListener('click', () => { void doExportSvg(); });
   $('exportDstBtn').addEventListener('click', () => { void doExportDst(); });
 
   // ---- Interazioni ----
