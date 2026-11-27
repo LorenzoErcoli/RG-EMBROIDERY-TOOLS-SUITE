@@ -1114,7 +1114,10 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     if (image && imageOpacity > 0) {
       // dall'originale a piena risoluzione (prima era la copia ridotta a 600 px per leggere i colori:
       // Lorenzo, 2026-10-01, «è sgranata e non è facile da capire»)
-      if (source && !st.module) {
+      // con un modulo l'immagine è la sua guida (sotto, a copie); un'immagine caricata in 01 sopra un disegno già fatto
+      // è invece il riferimento di tutto il pezzo, anche col modulo (Lorenzo, 2026-11-27: «prima il cartamodello, poi
+      // carica immagine in 01: non compare»)
+      if (source && (!st.module || imageAsReference)) {
         const cr = crop ?? { x: 0, y: 0, w: source.img.naturalWidth, h: source.img.naturalHeight };
         ctx.save();
         ctx.globalAlpha = imageOpacity;
@@ -1194,7 +1197,7 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     // copriva tutta) e SOTTO i fili disegnati: sopra, a metà trasparenza, velava i tratti chiari fino a
     // non leggerli (Lorenzo, 2026-10-02: «non si vedono se li metto chiari»). Mentre si sceglie il
     // ritaglio: l'immagine intera.
-    if (source && st.module) {
+    if (source && st.module && !imageAsReference) {
       ctx.save();
       ctx.beginPath(); ctx.rect(X(0), Y(0), w * k, h * k); ctx.clip();
       ctx.imageSmoothingQuality = 'high';
@@ -2840,7 +2843,9 @@ export function mountCrossStitch(root: HTMLElement, opts: { backHref?: string } 
     const data = ctx.getImageData(0, 0, cnv.width, cnv.height);
     image = { url: cnv.toDataURL('image/png'), w: cr.w, h: cr.h, px: { rgba: data.data, width: cnv.width, height: cnv.height } };
     if (imageAsReference) {
-      // solo il riferimento: misure, disegno, fili e passaggi restano; l'immagine si stende sul ricamo
+      // solo il riferimento: misure, disegno, fili e passaggi restano; l'immagine si stende sul ricamo. Con l'opacità a
+      // 0 (com'è di partenza) non si vedeva: allora a metà
+      if (imageOpacity <= 0) { imageOpacity = 0.5; num('imageOpacity').value = '50'; }
       draw();
       $('imageStatus').textContent = `${source.name}: riferimento sopra il ricamo (il disegno non cambia; «Maglia dall’immagine» lo rifà dall’immagine).`;
       return;
