@@ -118,6 +118,17 @@ l'ordine di adesso). Fatto il terzo: `shortenJumps` in strips.ts rifà ogni bloc
 nascosto o in ripasso), coprono i fili dopo e gli altri blocchi del filo; si tiene se i salti si accorciano senza
 aumentare né mettere niente in vista. Si fa solo sulle strade di fascia già scelte (`bandRedo`): farlo su ogni strada
 provata triplicava il tempo (4,5 s → 1,6 s, come senza). Risultato: 777 → 568 mm, ripassi 3,65 → 4,23 m. Tool:
+**Seleziona e sposta** (strumento Seleziona, S). *«Spostare in blocco un blocco di V disegnate… lo seleziono e lo
+porto più in alto»*: un riquadro di celle; si spostano le V disegnate (non quelle uguali alla base), di celle intere,
+trascinando o con le frecce; dove si liberano, come la gomma. Passa da `applyUserEdits`, quindi col modulo vale su
+tutte le copie (prima i posti d'arrivo, perché in `editsOnAllCopies` su una V del modulo vince il primo cambio).
+**Il modulo nel worker**: *«disegnare nel modulo è molto più lento che disegnare fuori, tanto che disegno fuori e
+attivo il modulo solo per fasce e passaggi»*. Misurato sul suo modulo 24 × 99: lasciando il pennello la pagina stava
+ferma 10 s, perché l'editor calcolava le fasce (`routeModuleBands`) nella pagina; di quei 10–14 s, 7–10 sono
+*Ottimizza l'ordine* (acceso nel suo file), il resto 3,5–4,4 s. Ora il calcolo del modulo va nel worker dei passaggi
+(`kind: 'module'`), una richiesta alla volta: lasciando il pennello la pagina è libera in 12 ms, i passaggi arrivano
+dopo («calcolo dei passaggi…» nella barra).
+
 **Prima il passaggio, poi le V**, acceso di base (`RouteParams.backward`). *«A volte i passaggi per tornare indietro
 passano lateralmente alle V… rischia di vedersi, soprattutto se viene fatto dopo che le V sotto sono state realizzate…
 niente passaggio in verticale sopra le V, altrimenti conviene replicare il punto delle V»*, e poi *«deve ragionare al
